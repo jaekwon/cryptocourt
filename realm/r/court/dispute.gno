@@ -292,12 +292,13 @@ func RedeemWinning(cur realm, courtSlug string, claimID uint64) int64 {
 	cs := mustClaim(c, claimID)
 	var pay int64
 	if cs.feePool == 0 {
-		pay = won * priceScale // no fee charged (failed-quorum, or no dispute path): full backing
+		pay = ccMul(won, priceScale) // no fee charged (failed-quorum, or no dispute path): full backing
 	} else {
 		// A fee was skimmed from the winning collateral, so a winning share pays a
 		// pro-rata slice of what's left: floor(won · (S·priceScale − feePool) / S). The
 		// floor keeps the rounding dust in escrow; winShares is the S frozen at resolution.
-		pay = mulDivFloor(won, cs.winShares*priceScale-cs.feePool, cs.winShares)
+		// ccMul guards the S·priceScale product before mulDivFloor's 128-bit divide.
+		pay = mulDivFloor(won, ccMul(cs.winShares, priceScale)-cs.feePool, cs.winShares)
 	}
 	if pay > 0 {
 		c.coin.Transfer(c.escrow, who, pay)
@@ -312,7 +313,7 @@ func RedeemClosed(cur realm, courtSlug string, claimID uint64) int64 {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	owed := c.shares.RedeemClosed(claimID, who) // in cshares units (already priced)
-	pay := owed * priceScale
+	pay := ccMul(owed, priceScale)
 	if pay > 0 {
 		c.coin.Transfer(c.escrow, who, pay)
 	}

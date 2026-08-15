@@ -48,7 +48,7 @@ func RestBid(cur realm, courtSlug string, claimID uint64, tick int, qty int64) u
 	mustTick(tick)
 	mustOrderSize(c, qty)
 
-	cost := qty * tickbook.Price(uint8(tick)) // CC to escrow
+	cost := ccMul(qty, tickbook.Price(uint8(tick))) // CC to escrow — CHECKED (qty is caller-controlled)
 	c.coin.Transfer(maker, c.escrow, cost)
 	return cs.book.Place(tickbook.Bid, uint8(tick), maker, qty)
 }
@@ -140,7 +140,7 @@ func CancelOrder(cur realm, courtSlug string, claimID, orderID uint64) {
 	// escrowed shares after the claim resolves (Transfer refuses a resolved claim).
 	if side == tickbook.Ask {
 		if filled > 0 {
-			c.coin.Transfer(c.escrow, maker, filled*price) // proceeds of what sold
+			c.coin.Transfer(c.escrow, maker, ccMul(filled, price)) // proceeds of what sold — CHECKED
 		}
 		if refunded > 0 {
 			c.shares.Reclaim(claimID, outcomeYES, c.escrow, maker, refunded) // unsold shares back
@@ -150,7 +150,7 @@ func CancelOrder(cur realm, courtSlug string, claimID, orderID uint64) {
 			c.shares.Reclaim(claimID, outcomeYES, c.escrow, maker, filled) // shares bought
 		}
 		if refunded > 0 {
-			c.coin.Transfer(c.escrow, maker, refunded*price) // unspent escrow back
+			c.coin.Transfer(c.escrow, maker, ccMul(refunded, price)) // unspent escrow back — CHECKED
 		}
 	}
 }

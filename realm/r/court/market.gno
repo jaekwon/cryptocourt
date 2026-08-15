@@ -2,6 +2,7 @@ package court
 
 import (
 	"chain/runtime"
+	"math/overflow"
 
 	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
 )
@@ -18,6 +19,23 @@ const (
 	// priceScale), so it is directly comparable to CC supply, votable, and bonds.
 	priceScale = 100
 )
+
+// ccMul is a CHECKED coin-leg multiply. The court forms its own coin amounts —
+// qty·priceScale, qty·tickPrice, shares·priceScale — from CALLER-CONTROLLED
+// quantities, and gno int64 multiplication WRAPS silently rather than trapping. An
+// unchecked product let a huge qty wrap to a tiny coin leg (e.g. 1.844e17·100 → 84),
+// so a mint credited ~1.8e17 shares for 84 CC and a bid rested against ~nothing —
+// draining the shared escrow. Every court coin-leg product goes through here and
+// aborts on overflow (the /p/ primitives already do this internally; the gap was the
+// court's own arithmetic). The abort message names "quantity" so the caller sees the
+// cause. This does NOT belong in a /p/ package — it is realm glue over qty inputs.
+func ccMul(a, b int64) int64 {
+	p, ok := overflow.Mul64(a, b)
+	if !ok {
+		panic("court: quantity too large — the coin amount would overflow")
+	}
+	return p
+}
 
 // MintSet locks qty units of the court coin as collateral and gives the caller qty
 // YES shares and qty NO shares of a claim — a complete set is worth exactly one
@@ -40,12 +58,14 @@ func MintSet(cur realm, courtSlug string, claimID uint64, qty int64) {
 	}
 	mustMintable(cs)
 
-	collateral := qty * priceScale // CC locked per set
+	collateral := ccMul(qty, priceScale) // CC locked per set — CHECKED (qty is caller-controlled)
 
 	// OI ceiling (§3.5a), all in CC. supply*bps stays in int64 (supply ≤ 9.2e14,
-	// *10000 < 9.2e18); collateral ≤ ceiling ≤ supply, also bounded.
+	// *10000 < 9.2e18). The court OI add is CHECKED too: a large collateral must not
+	// wrap the sum negative and slip under the ceiling.
 	ceiling := c.coin.TotalSupply() * c.params.oiCeilingBps / grc20votes.Bps
-	if c.oi+collateral > ceiling {
+	newOI, ok := overflow.Add64(c.oi, collateral)
+	if !ok || newOI > ceiling {
 		panic("court: the court-wide open-interest ceiling would be breached")
 	}
 
@@ -53,7 +73,7 @@ func MintSet(cur realm, courtSlug string, claimID uint64, qty int64) {
 	// rolls both back, so a set is always exactly priceScale CC of collateral.
 	c.coin.Transfer(who, c.escrow, collateral)
 	c.shares.MintSet(claimID, who, qty)
-	c.oi += collateral
+	c.oi = newOI
 	observeOI(cs, claimX(c, claimID))
 }
 
@@ -72,9 +92,10 @@ func RedeemSet(cur realm, courtSlug string, claimID uint64, qty int64) {
 	}
 	mustMintable(cs)
 
-	owed := c.shares.RedeemSet(claimID, who, qty)   // panics if the caller lacks a full set
-	c.coin.Transfer(c.escrow, who, owed*priceScale) // pay the collateral back out of escrow
-	c.oi -= owed * priceScale
+	owed := c.shares.RedeemSet(claimID, who, qty) // panics if the caller lacks a full set
+	back := ccMul(owed, priceScale)               // CHECKED, though owed ≤ minted collateral
+	c.coin.Transfer(c.escrow, who, back)          // pay the collateral back out of escrow
+	c.oi -= back
 	observeOI(cs, claimX(c, claimID))
 }
 
@@ -89,7 +110,7 @@ func observeOI(cs *claimState, x int64) {
 // claimX is the claim's open interest X in CC (outstanding sets × priceScale) —
 // the unit the quorum floor, the answer bond, and the dispute bond are all in.
 func claimX(c *Court, claimID uint64) int64 {
-	return c.shares.Supply(claimID) * priceScale
+	return ccMul(c.shares.Supply(claimID), priceScale)
 }
 
 // mustMintable refuses a set mint or redeem once a claim has a provisional verdict.

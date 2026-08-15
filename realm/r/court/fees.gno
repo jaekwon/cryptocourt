@@ -68,7 +68,7 @@ func chargeAdjFee(c *Court, cs *claimState, claimID uint64) {
 		// feeSettle earmark — a claim pays one fee, never both). A later reopen that
 		// re-decides finds feeKind==feeAdj and keeps the pool: charged exactly once.
 		cs.winShares = c.shares.Supply(claimID)
-		cs.feePool = adjFee(c, cs.winShares*priceScale)
+		cs.feePool = adjFee(c, ccMul(cs.winShares, priceScale))
 		cs.feeKind = feeAdj
 	}
 	// (Re)attribute the fee to THIS deciding round's electorate: a reopen clobbers
@@ -84,7 +84,7 @@ func chargeAdjFee(c *Court, cs *claimState, claimID uint64) {
 func chargeSettleFee(c *Court, cs *claimState, claimID uint64) {
 	cs.winShares = c.shares.Supply(claimID)
 	cs.feeKind = feeSettle
-	collateral := cs.winShares * priceScale
+	collateral := ccMul(cs.winShares, priceScale)
 	cs.feePool = collateral * c.params.settleFeeBps / grc20votes.Bps / 2 // the answerer's half
 }
 
