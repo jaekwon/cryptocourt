@@ -30,6 +30,12 @@ type Electorate interface {
 	// This realm's token satisfies it exactly, and a test says so after every
 	// operation that moves power. Anything swapped in here needs its own. The
 	// governor cannot check it and cannot recover from it — a clamp was tried.
+	//
+	// It must also stay at or below maxWeighable (MaxInt64/bps): the tally
+	// computes yes*bps, and a supply above that overflows int64 into a negative
+	// tally — a won vote reported as lost. grc20votes caps its supply there
+	// exactly; the governor refuses a proposal whose snapshot supply exceeds it,
+	// so a swapped-in electorate that ignores the ceiling fails loudly at the door.
 	PastTotal(at uint32) int64
 
 	// EngagedTotal is the part of PastTotal that quorum is measured against.
@@ -39,9 +45,11 @@ type Electorate interface {
 	// launch and trivial later, and moving the denominator is the fix that
 	// keeps the bar meaningful at both ends.
 	//
-	// Must be <= PastTotal at the same epoch. Weight outside it can still vote
+	// Should be <= PastTotal at the same epoch. Weight outside it can still vote
 	// — it simply is not counted in the bar — so the governor keeps using
-	// PastTotal for how many votes could still be cast.
+	// PastTotal for how many votes could still be cast. If it exceeds PastTotal
+	// the governor clamps it down to PastTotal, so an electorate that over-reports
+	// engagement makes the bar unreachable-but-valid rather than aborting.
 	//
 	// This realm's token returns PastTotal unchanged: every holder is engaged
 	// by definition, since power is self-delegated by default.

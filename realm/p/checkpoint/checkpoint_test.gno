@@ -244,15 +244,17 @@ func TestEachPageHoldsOneBucket(t *testing.T) {
 
 	pages := 0
 	arch.t.Iterate("", "", func(_ string, v any) bool {
-		p := v.(*page)
+		s := v.(*page).packed
 		pages++
-		bucket := p.epochs[0] / PageEpochs
-		for _, e := range p.epochs {
+		first := rd32(s, 0)
+		bucket := first / PageEpochs
+		for i := 0; i < len(s)/12; i++ {
+			e := rd32(s, i*12)
 			if e/PageEpochs != bucket {
 				t.Errorf("one page holds epoch %d alongside epoch %d, which "+
 					"belong to different buckets — pages are not bounded, and "+
 					"one archive object grows for as long as the account does",
-					p.epochs[0], e)
+					first, e)
 				return true
 			}
 		}

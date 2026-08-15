@@ -104,11 +104,15 @@ func (a *Archive) Size() int { return a.t.Size() }
 
 // page is one bucket of archived checkpoints for one key, ascending.
 //
-// Parallel slices rather than a slice of structs, so the encoding is two
-// packed runs instead of a header per entry.
+// One packed string, not slices: gno stores a []int64 or []uint32 as an array of
+// TypedValues at ~40 bytes an element, but a string (like a []byte) at one byte
+// each. So the entries pack big-endian into a single string — 4 bytes of epoch
+// then 8 of value, 12 bytes per entry — which is ~3x smaller than the two-slice
+// form and is what the archive's locked deposit is charged on. Appending
+// reassigns this *page's field (no tree Set), so a write still dirties exactly one
+// object.
 type page struct {
-	epochs []uint32
-	values []int64
+	packed string // ascending [epoch:4 BE][value:8 BE] entries, 12 bytes each
 }
 
 // Series is one value's history: the two most recent points inline, everything
@@ -213,10 +217,11 @@ func (s *Series) ValueAt(a *Archive, key string, at uint32) int64 {
 	// with end inclusive (bptree tree.gno, "ReverseIterate calls cb"), which is
 	// the floor query — no binary search of our own.
 	a.t.ReverseIterate(key+Sep, pageKey(key, at/PageEpochs), func(_ string, pv any) bool {
-		p := pv.(*page)
-		for i := len(p.epochs) - 1; i >= 0; i-- {
-			if p.epochs[i] <= at {
-				out = p.values[i]
+		s := pv.(*page).packed
+		for i := len(s)/12 - 1; i >= 0; i-- {
+			off := i * 12
+			if rd32(s, off) <= at {
+				out = rd64(s, off+4)
 				return true
 			}
 		}
@@ -230,16 +235,17 @@ func (s *Series) ValueAt(a *Archive, key string, at uint32) int64 {
 
 func (a *Archive) append(key string, e uint32, v int64) {
 	pk := pageKey(key, e/PageEpochs)
+	entry := be32(e) + be64(v) // 12 bytes: epoch then value
 	if pv := a.t.Get(pk); pv != nil {
 		p := pv.(*page)
-		// Mutated through the pointer the tree already holds. No Set, so the
-		// leaf and its whole inner path stay clean. Entries arrive ascending
-		// by construction, so there is nothing to sort.
-		p.epochs = append(p.epochs, e)
-		p.values = append(p.values, v)
+		// Reassign the field on the pointer the tree already holds. No Set, so the
+		// leaf and its whole inner path stay clean and the write dirties only this
+		// *page. Entries arrive ascending by construction, so there is nothing to
+		// sort.
+		p.packed += entry
 		return
 	}
-	a.t.Set(pk, &page{epochs: []uint32{e}, values: []int64{v}})
+	a.t.Set(pk, &page{packed: entry})
 }
 
 // mustBeUsable refuses a key that would collide with another key's pages.
@@ -270,6 +276,32 @@ func mustBeUsable(key string) {
 func be32(u uint32) string {
 	b := [4]byte{byte(u >> 24), byte(u >> 16), byte(u >> 8), byte(u)}
 	return string(b[:])
+}
+
+// be64 packs an int64 value big-endian (via its uint64 bit pattern, so a negative
+// value round-trips through rd64). Together with be32 it forms a page's 12-byte
+// entry.
+func be64(v int64) string {
+	u := uint64(v)
+	var b [8]byte
+	for i := 7; i >= 0; i-- {
+		b[i] = byte(u & 0xff)
+		u >>= 8
+	}
+	return string(b[:])
+}
+
+// rd32 and rd64 read a packed entry's epoch and value back from a page string.
+func rd32(s string, off int) uint32 {
+	return uint32(s[off])<<24 | uint32(s[off+1])<<16 | uint32(s[off+2])<<8 | uint32(s[off+3])
+}
+
+func rd64(s string, off int) int64 {
+	var u uint64
+	for i := 0; i < 8; i++ {
+		u = (u << 8) | uint64(s[off+i])
+	}
+	return int64(u)
 }
 
 func pageKey(key string, page uint32) string { return key + Sep + be32(page) }

@@ -339,7 +339,7 @@ func TestSelfDelegatingFromNothingWritesNothing(t *testing.T) {
 	// funded later.
 	l.Delegate(alice, bob)
 	if got := l.accounts.Size(); got == before {
-		t.Error("delegating to somebody else recorded nothing, so funding "+
+		t.Error("delegating to somebody else recorded nothing, so funding " +
 			"alice later would credit the wrong account")
 	}
 	if got := l.DelegateOf(alice); got != bob {

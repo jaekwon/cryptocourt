@@ -2,8 +2,8 @@ package governor
 
 import (
 	"chain"
-	"crypto/sha256"
 	"chain/runtime"
+	"crypto/sha256"
 	"strconv"
 	"strings"
 
@@ -75,9 +75,21 @@ type Kind interface {
 // separately in each is a number that can come to disagree with itself.
 const bps = int64(10000)
 
+// maxWeighable is the largest snapshot supply a tally can weigh without yes*bps
+// overflowing int64 (and going negative, which reads a won vote as lost). The
+// Electorate contract requires PastTotal to stay within it; grc20votes caps its
+// own supply here exactly, so for that token this ceiling is never approached. It
+// is checked at the Propose door for a swapped-in electorate that does not.
+const maxWeighable = int64(9223372036854775807) / bps
+
 type Rules struct {
-	QuorumBps    int64 // of the snapshot supply, counting abstain as turnout
-	ThresholdBps int64 // of yes+no, excluding abstain
+	QuorumBps int64 // of the snapshot supply, counting abstain as turnout
+
+	// ThresholdBps is the share of yes+no (abstain excluded) that yes must reach.
+	// The comparison is INCLUSIVE — yes*bps >= (yes+no)*ThresholdBps — so at 5000
+	// a 50-50 tie PASSES. A realm wanting a strict majority sets 5001 or more; the
+	// bootstrap and gno's govdao use a 6600 supermajority.
+	ThresholdBps int64
 
 	// ProposeBps is what a proposer must hold, as a fraction of the snapshot
 	// supply, to open a question at all.
@@ -86,7 +98,7 @@ type Rules struct {
 	// new key's worth of deposit. The list is what holders read, and a list
 	// nobody reads is a governor nobody governs. Zero means anyone may
 	// propose — right for a small realm, wrong for a public token.
-	ProposeBps int64
+	ProposeBps   int64
 	VotingBlocks int64
 	DelayBlocks  int64 // succeeded -> executable; the timelock
 	GraceBlocks  int64 // executable -> expired
@@ -123,6 +135,14 @@ type proposal struct {
 	// quorum divides by engaged, and "what could still be cast" divides by
 	// total.
 	engaged int64
+
+	// quorumFloor, when positive, is an ABSOLUTE turnout the proposal needs
+	// instead of the rules' QuorumBps fraction of engaged — a figure the consumer
+	// computed itself (a court's max(5% supply, min(1×X̄, ⅓ votable))) and passed
+	// through ProposeWithQuorum. Snapshotted here like every other bar, so it
+	// cannot move under an open vote. Zero means the bps formula applies, which is
+	// every ordinary caller.
+	quorumFloor int64
 
 	opened int64
 	closes int64
@@ -250,7 +270,6 @@ type Governor struct {
 // reserved names the governor's own kinds. Offer refuses this prefix, so no
 // realm can publish something that renders as a built-in.
 const reserved = "govern:"
-
 
 // isReserved reports whether a name belongs to the governor itself.
 //
@@ -383,8 +402,8 @@ func mustBeUsableName(name string) {
 // ends that item and starts a row of the proposer's own — a forged proposal
 // with a state and a link they choose:
 //
-//	- [#1](:1) **x
-//	- [#999](:999) **Ratified by the foundation** — `govern:minter` · succeeded
+//   - [#1](:1) **x
+//   - [#999](:999) **Ratified by the foundation** — `govern:minter` · succeeded
 //
 // The bootstrap kinds ask for no stake, so that cost nothing but a transaction.
 //
@@ -633,7 +652,29 @@ func (k retireKind) run(g *Governor, dispatch Dispatch, payload string) error {
 
 // Propose opens a question. One maketx call, two strings — which is the whole
 // design and the reason the payload is not a struct.
+//
+// The quorum is the rules' QuorumBps fraction of the engaged weight. A consumer
+// that computes its own absolute bar — a court sizing quorum to a claim's open
+// interest — uses ProposeWithQuorum instead.
 func (g *Governor) Propose(who address, kind, payload, title string) int64 {
+	return g.propose(who, kind, payload, title, 0)
+}
+
+// ProposeWithQuorum is Propose with an ABSOLUTE turnout the question needs,
+// replacing the rules' QuorumBps fraction for this one proposal. The figure is
+// the consumer's to compute (a court's max(5% supply, min(1×X̄, ⅓ votable))) and
+// is snapshotted here, so the bar cannot move under an open vote. A non-positive
+// floor is refused — a caller wanting the bps formula calls Propose.
+//
+// Additive: Propose is unchanged and passes zero, which every existing user does.
+func (g *Governor) ProposeWithQuorum(who address, kind, payload, title string, quorumFloor int64) int64 {
+	if quorumFloor <= 0 {
+		panic("govern: a quorum floor has to be positive; use Propose for the bps bar")
+	}
+	return g.propose(who, kind, payload, title, quorumFloor)
+}
+
+func (g *Governor) propose(who address, kind, payload, title string, quorumFloor int64) int64 {
 	if g.executing {
 		panic("govern: cannot propose from inside an execution")
 	}
@@ -660,15 +701,28 @@ func (g *Governor) Propose(who address, kind, payload, title string) int64 {
 	if total <= 0 {
 		panic("govern: nothing was in issue at that epoch")
 	}
+	if total > maxWeighable {
+		// The ceiling the tally silently assumed. grc20votes caps here so it never
+		// trips; a swapped-in electorate that does not would overflow yes*bps into
+		// a negative tally — a won vote reported as lost. Refused at the door,
+		// where it reads as a misconfigured electorate rather than the governor
+		// miscounting.
+		panic("govern: the snapshot supply exceeds what a tally can weigh")
+	}
 	// Snapshotted with the rest, so a bar cannot move under an open vote.
 	engaged := g.voters.EngagedTotal(at)
-	if engaged <= 0 || engaged > total {
-		// An electorate that engages nobody makes every quorum unreachable, and
-		// one engaging more than exists makes the bar a fiction. Refused at the
-		// door rather than carried into the tally, where it would read as the
-		// governor miscounting.
-		panic("govern: the engaged weight has to be positive and no more than " +
-			"what was in issue")
+	if engaged <= 0 {
+		// An electorate that engages nobody makes every quorum unreachable.
+		panic("govern: the engaged weight has to be positive")
+	}
+	if engaged > total {
+		// Clamp rather than refuse. A court deliberately hosts claims too big for
+		// its electorate to decide, and an EngagedTotal above the snapshot supply
+		// should make the bar unreachable-but-valid, not abort the proposal.
+		// Clamping to total keeps rest = total - cast non-negative in the tally.
+		// The token this ships with returns engaged == total, so this never fires
+		// for it — it is here for a replacement electorate.
+		engaged = total
 	}
 
 	rules := g.rulesOf(kind)
@@ -728,7 +782,8 @@ func (g *Governor) Propose(who address, kind, payload, title string) int64 {
 	p := &proposal{
 		id: g.propSeq, kind: kind, payload: payload, title: title, proposer: who,
 		rules: rules, epoch: at, total: total, engaged: engaged,
-		opened: now, closes: now + rules.VotingBlocks,
+		quorumFloor: quorumFloor,
+		opened:      now, closes: now + rules.VotingBlocks,
 		// The voter roll is bought here, by the proposer, including its first
 		// node — see rollSentinel just below the Set. Whoever asks, pays.
 		//
@@ -949,7 +1004,14 @@ func (g *Governor) wouldBe(p *proposal, now int64) (int8, string) {
 	switch p.state {
 	case stateActive:
 		cast := turnout(p)
-		quorum := cast*bps >= p.engaged*p.rules.QuorumBps
+		// The bar: an absolute floor the consumer set for this proposal, or the
+		// rules' QuorumBps fraction of the engaged weight when it did not.
+		var quorum bool
+		if p.quorumFloor > 0 {
+			quorum = cast >= p.quorumFloor
+		} else {
+			quorum = cast*bps >= p.engaged*p.rules.QuorumBps
+		}
 		// Every vote not yet cast, all of which could still say no. Negative if
 		// an electorate's parts exceed its whole, which this token cannot do
 		// and a replacement might; a clamp here changed no outcome, because a
@@ -1526,7 +1588,15 @@ func (g *Governor) renderOne(path string) string {
 	// Against ENGAGED, because that is what quorum divides by. Equal to total
 	// for this realm; an electorate that drops idle weight would otherwise show
 	// a bar nobody is being measured against.
-	out += ufmt.Sprintf("\nturnout %d of %d, needs %s · ", cast, p.engaged, pct(p.rules.QuorumBps))
+	//
+	// A consumer-set absolute floor is rendered as the count it is, not a
+	// fraction of engaged — the tally compares cast against that number, so the
+	// page must show it or it contradicts the state it is describing.
+	if p.quorumFloor > 0 {
+		out += ufmt.Sprintf("\nturnout %d of %d, needs %d · ", cast, p.engaged, p.quorumFloor)
+	} else {
+		out += ufmt.Sprintf("\nturnout %d of %d, needs %s · ", cast, p.engaged, pct(p.rules.QuorumBps))
+	}
 	// Three cases, not two. The threshold weighs yes against yes+no, so it has
 	// nothing to weigh when every vote was an abstention — but that is not the
 	// same as nobody voting, and collapsing them prints a line that contradicts
@@ -1794,7 +1864,7 @@ const (
 	// announced when it opens and when it settles.
 	kindOfferedEvent = "KindOffered"
 
-	proposalOpenedEvent = "ProposalOpened"
+	proposalOpenedEvent  = "ProposalOpened"
 	votedEvent           = "Voted"
 	proposalSettledEvent = "ProposalSettled"
 )

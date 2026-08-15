@@ -3,7 +3,6 @@ package governor
 import (
 	"strconv"
 	"testing"
-
 )
 
 // council is an electorate that is not a token: one address, one vote.
@@ -33,10 +32,10 @@ func (c *council) Epoch() uint32                { return c.epoch }
 // coin is the minimum a page needs to name what is being voted.
 type coin struct{ supply int64 }
 
-func (coin) Name() string          { return "Test Coin" }
-func (coin) Symbol() string        { return "TEST" }
-func (coin) Decimals() int         { return 6 }
-func (c coin) TotalSupply() int64  { return c.supply }
+func (coin) Name() string         { return "Test Coin" }
+func (coin) Symbol() string       { return "TEST" }
+func (coin) Decimals() int        { return 6 }
+func (c coin) TotalSupply() int64 { return c.supply }
 
 // setFee is a kind that records what it was told, so a test can see whether Do
 // actually ran and with what.
@@ -247,10 +246,10 @@ func TestTheEngineRendersTheTokensOwnScale(t *testing.T) {
 // penny is a token with a scale that is not the one anybody would hardcode.
 type penny struct{}
 
-func (penny) Name() string         { return "Penny" }
-func (penny) Symbol() string       { return "PENNY" }
-func (penny) Decimals() int        { return 2 }
-func (penny) TotalSupply() int64   { return 1234 }
+func (penny) Name() string       { return "Penny" }
+func (penny) Symbol() string     { return "PENNY" }
+func (penny) Decimals() int      { return 2 }
+func (penny) TotalSupply() int64 { return 1234 }
 
 // A governor needs both of its seams filled.
 //

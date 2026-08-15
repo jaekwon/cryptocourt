@@ -182,10 +182,10 @@ func (l *Ledger) SetID(id string) { l.id = id }
 // which answer about a sealed epoch — the distinction the whole design turns
 // on, and the reason these are grouped apart from them.
 
-func (l *Ledger) Name() string     { return l.name }
-func (l *Ledger) Symbol() string   { return l.symbol }
-func (l *Ledger) Decimals() int    { return l.decimals }
-func (l *Ledger) ID() string       { return l.id }
+func (l *Ledger) Name() string       { return l.name }
+func (l *Ledger) Symbol() string     { return l.symbol }
+func (l *Ledger) Decimals() int      { return l.decimals }
+func (l *Ledger) ID() string         { return l.id }
 func (l *Ledger) TotalSupply() int64 { return l.total }
 
 func (l *Ledger) BalanceOf(owner address) int64 {
@@ -462,7 +462,10 @@ func (l *Ledger) move(from, to address, amount int64) {
 
 	// Resolved once each. When both sides vote their own balance — the
 	// overwhelmingly common case — these are the records already in hand, so a
-	// checkpointed transfer dirties exactly the two objects a plain one would.
+	// checkpointed transfer dirties the same two objects a plain one would. The one
+	// exception is a side's FIRST write in a new epoch, which also rolls one point
+	// into the archive (one added page); amortised across the epoch's writes that
+	// is ~nothing, but it is not literally two objects at the boundary.
 	l.addVotes(delegateeOf(from, src), -amount)
 	l.addVotes(delegateeOf(to, dst), amount)
 

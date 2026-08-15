@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CryptoCourt — the ledger of record</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+/* ============================================================================
+   CryptoCourt overlay — a presentation layer over the r/cryptocourt/court realm.
+   The chain carries all the information (every screen here can be served by the
+   realm's own Render); this overlay only makes it prettier, and every button is
+   a signable gnoweb transaction link, never a private API. Self-contained: no
+   external fonts, scripts, or styles — it runs from a file:// or any static host.
+   ========================================================================== */
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body,h1,h2,h3,h4,p,ul,ol,figure,dl,dd{margin:0}
+ul[role=list]{list-style:none;padding:0}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+a{color:inherit}
+img,svg{display:block;max-width:100%}
+
+:root{
+  --paper:#f4f0e7; --surface:#fdfbf6; --surface-2:#efe9dc; --inset:#e9e2d3;
+  --ink:#1b1b21; --ink-2:#56524a; --muted:#8b877d;
+  --line:#e2dccd; --line-2:#d1c9b7;
+  --accent:#9c6f2a; --accent-2:#7f5a20; --accent-wash:#f0e6d2;
+  --yes:#2e6ea6; --yes-wash:#dceaf4; --no:#c0562a; --no-wash:#f6e2d5;
+  --escrow:#a9791c; --escrow-wash:#f2e7cd; --void:#8b877d; --void-wash:#e9e5db;
+  --good:#2f7d54;
+  --shadow-sm:0 1px 2px rgba(27,27,33,.05);
+  --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
+  --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px; --r-sm:7px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#131318; --surface:#1c1c23; --surface-2:#23232c; --inset:#15151b;
+    --ink:#ece7dc; --ink-2:#a9a498; --muted:#726e65;
+    --line:#2c2c36; --line-2:#3a3a46;
+    --accent:#cb9c53; --accent-2:#deb877; --accent-wash:#2a2314;
+    --yes:#5b9bce; --yes-wash:#182634; --no:#d7824f; --no-wash:#31211a;
+    --escrow:#cea343; --escrow-wash:#2a2412; --void:#8b877d; --void-wash:#22222a;
+    --good:#57ad7f;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme=light]{
+  --paper:#f4f0e7; --surface:#fdfbf6; --surface-2:#efe9dc; --inset:#e9e2d3;
+  --ink:#1b1b21; --ink-2:#56524a; --muted:#8b877d; --line:#e2dccd; --line-2:#d1c9b7;
+  --accent:#9c6f2a; --accent-2:#7f5a20; --accent-wash:#f0e6d2;
+  --yes:#2e6ea6; --yes-wash:#dceaf4; --no:#c0562a; --no-wash:#f6e2d5;
+  --escrow:#a9791c; --escrow-wash:#f2e7cd; --void:#8b877d; --void-wash:#e9e5db; --good:#2f7d54;
+  --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
+}
+:root[data-theme=dark]{
+  --paper:#131318; --surface:#1c1c23; --surface-2:#23232c; --inset:#15151b;
+  --ink:#ece7dc; --ink-2:#a9a498; --muted:#726e65; --line:#2c2c36; --line-2:#3a3a46;
+  --accent:#cb9c53; --accent-2:#deb877; --accent-wash:#2a2314;
+  --yes:#5b9bce; --yes-wash:#182634; --no:#d7824f; --no-wash:#31211a;
+  --escrow:#cea343; --escrow-wash:#2a2412; --void:#8b877d; --void-wash:#22222a; --good:#57ad7f;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
+}
+
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr; min-height:100vh;
+}
+.tnum{font-variant-numeric:tabular-nums}
+code,.mono{font-family:var(--mono)}
+
+/* ---- left rail ---------------------------------------------------------- */
+.rail{
+  grid-row:1; border-right:1px solid var(--line); background:var(--surface);
+  display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:auto;
+}
+.brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
+.brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
+.brand .scale{font-size:26px; filter:grayscale(.2)}
+.brand h1{font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.05}
+.brand .tag{color:var(--muted); font-size:12.5px; margin-top:6px; letter-spacing:.02em}
+.nav{padding:14px 12px; display:flex; flex-direction:column; gap:2px}
+.nav a{
+  display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:var(--r-sm);
+  text-decoration:none; color:var(--ink-2); font-size:14px; font-weight:500;
+}
+.nav a .g{width:18px; text-align:center; opacity:.8}
+.nav a:hover{background:var(--surface-2); color:var(--ink)}
+.nav a.on{background:var(--accent-wash); color:var(--accent-2); font-weight:600}
+.nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
+.rail .foot{margin-top:auto; padding:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:10px}
+
+/* ---- node + theme controls --------------------------------------------- */
+.node{font-size:12px}
+.node .row{display:flex; align-items:center; gap:7px; margin-bottom:7px}
+.dot{width:8px; height:8px; border-radius:50%; background:var(--void); flex:none}
+.dot.live{background:var(--good)} .dot.demo{background:var(--escrow)}
+.node select,.node input{
+  width:100%; font:inherit; font-size:12px; color:var(--ink); background:var(--inset);
+  border:1px solid var(--line-2); border-radius:6px; padding:6px 8px;
+}
+.node input.mono{font-family:var(--mono); font-size:11px}
+.node label{color:var(--muted); display:block; margin:6px 0 3px}
+.themebtn{display:flex; align-items:center; gap:8px; color:var(--ink-2); font-size:12.5px; padding:2px}
+.themebtn:hover{color:var(--ink)}
+
+/* ---- main --------------------------------------------------------------- */
+.main{grid-row:1; min-width:0; padding:34px clamp(20px,4vw,56px) 90px; max-width:1080px}
+.crumbs{font-size:13px; color:var(--muted); margin-bottom:18px; display:flex; gap:7px; flex-wrap:wrap; align-items:center}
+.crumbs a{text-decoration:none; color:var(--ink-2)} .crumbs a:hover{color:var(--accent-2)}
+.crumbs .sep{opacity:.5}
+
+.page-h{font-family:var(--serif); font-size:clamp(26px,3.4vw,36px); font-weight:600; letter-spacing:-.015em; line-height:1.08; text-wrap:balance}
+.page-sub{color:var(--ink-2); margin-top:8px; max-width:66ch}
+.lead-row{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap}
+
+section{margin-top:34px}
+.sec-h{font-family:var(--serif); font-size:19px; font-weight:600; margin-bottom:14px; display:flex; align-items:baseline; gap:10px}
+.sec-h .count{font-family:var(--sans); font-size:12.5px; color:var(--muted); font-weight:500}
+
+/* cards + grids */
+.grid{display:grid; gap:14px}
+.grid.courts{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.grid.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.card{
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  padding:18px; box-shadow:var(--shadow-sm); text-decoration:none; color:inherit; display:block;
+}
+a.card{transition:border-color .12s, box-shadow .12s, transform .12s}
+a.card:hover{border-color:var(--line-2); box-shadow:var(--shadow); transform:translateY(-1px)}
+.card .ct-name{font-family:var(--serif); font-size:19px; font-weight:600; letter-spacing:-.01em}
+.card .ct-meta{color:var(--muted); font-size:13px; margin-top:4px}
+.card .ct-price{display:flex; gap:16px; margin-top:14px; padding-top:13px; border-top:1px solid var(--line)}
+.kv .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+.kv .v{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px}
+.kv .v small{font-weight:500; color:var(--ink-2); font-size:12px}
+
+.stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 16px}
+.stat .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+.stat .v{font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:5px; letter-spacing:-.01em}
+.stat .v small,.stat .sub{font-size:12px; color:var(--ink-2); font-weight:500}
+.stat .sub{margin-top:3px}
+.stat.pair{display:flex; gap:18px; align-items:baseline}
+
+/* pills / status */
+.pill{
+  display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600;
+  padding:3px 10px; border-radius:100px; background:var(--void-wash); color:var(--ink-2);
+  border:1px solid transparent; white-space:nowrap;
+}
+.pill .g{font-size:10px}
+.pill.yes{background:var(--yes-wash); color:var(--yes)} .pill.no{background:var(--no-wash); color:var(--no)}
+.pill.escrow{background:var(--escrow-wash); color:var(--escrow)} .pill.void{background:var(--void-wash); color:var(--void)}
+.pill.open{background:var(--accent-wash); color:var(--accent-2)}
+
+/* docket list */
+.docket{border:1px solid var(--line); border-radius:var(--r); overflow:hidden; background:var(--surface)}
+.docket a{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center; padding:14px 18px; text-decoration:none; border-top:1px solid var(--line)}
+.docket a:first-child{border-top:none}
+.docket a:hover{background:var(--surface-2)}
+.docket .t{font-weight:560; color:var(--ink); line-height:1.35}
+.docket .m{font-size:12.5px; color:var(--muted); margin-top:3px; display:flex; gap:12px; flex-wrap:wrap}
+.docket .rt{display:flex; align-items:center; gap:10px}
+
+/* buttons / txlinks */
+.actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px}
+.btn{
+  display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:var(--r-sm);
+  background:var(--surface); border:1px solid var(--line-2); color:var(--ink); font-weight:560; font-size:14px;
+  text-decoration:none; transition:border-color .12s, background .12s;
+}
+.btn:hover{border-color:var(--accent); background:var(--accent-wash)}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+.btn.primary:hover{background:var(--accent-2)}
+.btn.yes{border-color:var(--yes); color:var(--yes)} .btn.yes:hover{background:var(--yes-wash)}
+.btn.no{border-color:var(--no); color:var(--no)} .btn.no:hover{background:var(--no-wash)}
+.btn .g{font-size:13px; opacity:.85}
+.btn small{font-weight:500; color:var(--muted); font-size:11.5px}
+
+/* the four-things primer */
+.primer{background:linear-gradient(180deg,var(--surface),var(--surface)); border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:var(--r); padding:16px 20px}
+.primer h3{font-family:var(--serif); font-size:15px; margin-bottom:10px; color:var(--accent-2)}
+.primer ol{margin:0; padding-left:20px; display:grid; gap:7px}
+.primer li{font-size:13.5px; color:var(--ink-2)} .primer li b{color:var(--ink); font-weight:600}
+
+/* market */
+.market{display:grid; grid-template-columns:1.3fr 1fr; gap:16px}
+@media(max-width:760px){.market{grid-template-columns:1fr}}
+.mkt-panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
+.book2{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px}
+.side{border-radius:var(--r-sm); padding:12px; text-align:center}
+.side.bid{background:var(--yes-wash)} .side.ask{background:var(--no-wash)}
+.side .lab{font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:600}
+.side.bid .lab{color:var(--yes)} .side.ask .lab{color:var(--no)}
+.side .px{font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:4px}
+.side .u{font-size:11px; color:var(--ink-2)}
+.spark{width:100%; height:54px; margin-top:10px}
+.spark .fill{fill:var(--accent-wash)} .spark .ln{fill:none; stroke:var(--accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+.spark .dot{fill:var(--accent)}
+
+/* order ticket */
+.ticket{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
+.ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
+.ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
+.ticket .line{display:flex; justify-content:space-between; padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
+.ticket .line:first-of-type{border-top:none}
+.ticket .line .l{color:var(--ink-2)} .ticket .line .r{font-weight:600; font-variant-numeric:tabular-nums}
+.ticket .line.win .r{color:var(--yes)} .ticket .line.lose .r{color:var(--no)}
+.ticket .never{margin-top:12px; background:var(--inset); border-radius:var(--r-sm); padding:11px 13px; font-size:12.5px; color:var(--ink-2)}
+.ticket .never b{color:var(--ink)}
+
+/* body / untrusted text frame */
+.foreign{background:var(--inset); border:1px solid var(--line); border-radius:var(--r); padding:16px 20px; position:relative}
+.foreign::before{content:"submitted by the claim's author"; position:absolute; top:-9px; left:14px; background:var(--paper); padding:0 8px; font-size:11px; color:var(--muted); letter-spacing:.02em}
+.foreign p{margin:0 0 10px} .foreign p:last-child{margin:0}
+.foreign a{color:var(--accent-2)}
+
+/* generic prose + tables */
+.prose{max-width:70ch} .prose p{margin:0 0 12px} .prose h2{font-family:var(--serif); font-size:20px; margin:22px 0 10px}
+.prose ul{padding-left:22px; margin:0 0 12px}
+table.data{width:100%; border-collapse:collapse; font-size:13.5px}
+table.data th,table.data td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line)}
+table.data th{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600}
+table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:12.5px}
+.scroll-x{overflow-x:auto}
+
+.rawblock{background:var(--inset); border:1px solid var(--line); border-radius:var(--r); padding:18px; font-family:var(--mono); font-size:12.5px; white-space:pre-wrap; line-height:1.5; color:var(--ink-2); overflow-x:auto}
+
+.notice{border-radius:var(--r); padding:13px 16px; font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
+.notice.warn{background:var(--escrow-wash); color:var(--ink)}
+.notice.refuse{background:var(--no-wash); border:1px solid var(--no); color:var(--ink)}
+.notice .g{flex:none}
+.empty{text-align:center; color:var(--muted); padding:50px 20px}
+.empty .g{font-size:34px; opacity:.5}
+
+.addrbar{display:flex; gap:9px; margin:8px 0 20px; flex-wrap:wrap}
+.addrbar input{font-family:var(--mono); font-size:13px; background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-sm); padding:9px 12px; color:var(--ink); min-width:min(360px,80vw)}
+.muted{color:var(--muted)} .small{font-size:12.5px}
+.hr{height:1px; background:var(--line); margin:26px 0}
+.tagrow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px}
+
+/* mobile */
+.railtoggle{display:none}
+@media(max-width:820px){
+  body{grid-template-columns:1fr}
+  .rail{position:static; height:auto; flex-direction:column}
+  .nav{flex-direction:row; flex-wrap:wrap; gap:4px} .nav .sec{width:100%}
+  .rail .foot{border-top:1px solid var(--line)}
+  .main{padding:24px 18px 80px}
+  .market{grid-template-columns:1fr}
+}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<aside class="rail">
+  <div class="brand">
+    <a class="mark" href="#/">
+      <span class="scale">⚖️</span>
+      <span><h1>CryptoCourt</h1></span>
+    </a>
+    <div class="tag">Play-wager on claims of fact, in the court you trust.</div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#/" data-k="dir"><span class="g">▤</span> Directory</a>
+    <div class="sec">You</div>
+    <a href="#/me" data-k="me"><span class="g">◈</span> Your page</a>
+    <a href="#/needs" data-k="needs"><span class="g">!</span> What needs you</a>
+    <div class="sec">Reference</div>
+    <a href="#/about" data-k="about"><span class="g">?</span> How it works</a>
+  </nav>
+  <div class="foot">
+    <div class="node">
+      <div class="row"><span class="dot" id="dot"></span> <b id="nodelab">Demo data</b></div>
+      <label for="modesel">Source</label>
+      <select id="modesel">
+        <option value="demo">Demo (offline sample)</option>
+        <option value="live">Live node (RPC)</option>
+      </select>
+      <div id="rpcwrap" hidden>
+        <label for="rpc">RPC endpoint</label>
+        <input id="rpc" class="mono" placeholder="http://127.0.0.1:26657" spellcheck="false">
+        <label for="gnoweb">gnoweb (for tx links)</label>
+        <input id="gnoweb" class="mono" placeholder="https://gno.land" spellcheck="false">
+      </div>
+    </div>
+    <button class="themebtn" id="themebtn"><span class="g">◐</span> <span id="themelab">Theme</span></button>
+  </div>
+</aside>
+
+<main class="main" id="main" aria-live="polite"></main>
+
+<script>
+"use strict";
+/* ============================ configuration ============================== */
+const PKG = "gno.land/r/cryptocourt/court";
+const CFG = Object.assign(
+  {mode:"demo", rpc:"http://127.0.0.1:26657", gnoweb:"https://gno.land"},
+  JSON.parse(localStorage.getItem("cc.cfg")||"{}")
+);
+const saveCfg = () => localStorage.setItem("cc.cfg", JSON.stringify(CFG));
+
+const DECIMALS = 6;        // court coin metadata; the realm's economic figures are raw CC
+const PRICE_SCALE = 100;   // a full winning share pays this many CC; a tick price is 1..100 CC
+const BLOCK_SECS = 5;      // gno.land block time — how blocks become wall-clock
+
+/* ============================ gno RPC client ============================= */
+/* abci_query(vm/qeval|vm/qrender) over JSON-RPC. data is amino base64; the reply
+   carries the string result in response.Data (sometimes nested in ResponseBase). */
+function b64(s){ return btoa(unescape(encodeURIComponent(s))); }
+function unb64(s){ try{ return decodeURIComponent(escape(atob(s))); }catch(_){ return atob(s); } }
+
+async function abci(path, data){
+  const body = {jsonrpc:"2.0", id:"cc", method:"abci_query",
+    params:{path, data:b64(data), height:"0", prove:false}};
+  const res = await fetch(CFG.rpc, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  if(!res.ok) throw new Error("node HTTP "+res.status);
+  const j = await res.json();
+  if(j.error) throw new Error(j.error.message||"rpc error");
+  const r = (j.result&&j.result.response) || {};
+  const err = r.Error || (r.ResponseBase&&r.ResponseBase.Error);
+  if(err) throw new Error((r.Log||r.ResponseBase&&r.ResponseBase.Log||"query failed"));
+  const d = r.Data!=null ? r.Data : (r.ResponseBase&&r.ResponseBase.Data);
+  return d ? unb64(d) : "";
+}
+const qeval  = expr => abci("vm/qeval",  PKG+"."+expr);
+const qrender = pth => abci("vm/qrender", PKG+":"+pth);
+
+/* qeval returns typed lines like `(123 int64)` or `("orem" string)`, tuples one
+   per line. Parse tolerantly into JS values. */
+function parseTyped(out){
+  const lines = out.trim().split("\n").filter(Boolean);
+  return lines.map(line=>{
+    const m = line.match(/^\((.*)\s+([A-Za-z0-9_./\[\]]+)\)$/s);
+    const raw = m ? m[1] : line, typ = m ? m[2] : "";
+    if(/^".*"$/s.test(raw)) return raw.slice(1,-1);
+    if(raw==="true") return true; if(raw==="false") return false;
+    if(/^-?\d+$/.test(raw)) return parseInt(raw,10);
+    return raw;
+  });
+}
+const one = async expr => parseTyped(await qeval(expr))[0];
+const tup = async expr => parseTyped(await qeval(expr));
+const gstr = s => JSON.stringify(String(s));   // gno string literal
+
+/* ============================ demo dataset ============================== */
+/* A faithful sample so every screen renders offline. Numbers are in the realm's
+   own units: CC raw (a set = PRICE_SCALE CC), GNOT in ugnot (÷1e6 to display). */
+const NOW = 4_800_000; // pretend current block height
+const DEMO = {
+  courts:{
+    orem:{ name:"Orem Truth Court", tier:2,
+      price:118, backing:59, supply:642_000_000, treasury:200_000_000, oi:41_500,
+      claims:[1,2,3,4,5] },
+    ledger:{ name:"The Ledger of Denver", tier:1,
+      price:74, backing:37, supply:210_000_000, treasury:64_000_000, oi:9_800,
+      claims:[1] },
+  },
+  claims:{
+    "orem/1":{ title:"The county certified 12,412 mail ballots on Nov 6, 2025.",
+      body:"The certification memo (linked below) records the figure. Two local outlets reported 12,300 the night before; the memo supersedes them.\n\nSource: county clerk PDF, page 3.",
+      depositor:"g1author4x9q2demo0000000000000000000000", x:22_000, bestBid:63, bestAsk:67,
+      priceHist:[50,52,55,58,57,60,62,64,63,65], answered:false, disputeOpen:false, provisional:-1, finalized:false },
+    "orem/2":{ title:"SpaceX Starship Flight 12 reached orbital velocity.",
+      body:"Telemetry shows a sustained 7.8 km/s at MECO+8:20. Independent trackers concur.",
+      depositor:"g1author4x9q2demo0000000000000000000000", x:14_500, bestBid:82, bestAsk:86,
+      priceHist:[70,73,76,78,80,81,83,84,84,85], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:7_250, settleableAt:NOW+9_000, disputeOpen:false, provisional:-1, finalized:false },
+    "orem/3":{ title:"The bridge inspection rated the north span 'serviceable'.",
+      body:"Inspector's field notes rate it serviceable with monitoring. A dissenting engineer disputes the load model.",
+      depositor:"g1author4x9q2demo0000000000000000000000", x:31_000, bestBid:44, bestAsk:49,
+      priceHist:[60,58,55,52,50,48,47,46,45,45], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:15_500, disputeOpen:true, disputer:"g1disputer0000000000000000000000000000", proposalID:188, provisional:-1, finalized:false },
+    "orem/4":{ title:"Q3 city revenue exceeded the June forecast.",
+      body:"Final receipts came in 4.1% over the June forecast, per the finance dept close.",
+      depositor:"g1author4x9q2demo0000000000000000000000", x:18_000, bestBid:95, bestAsk:0,
+      priceHist:[80,84,88,90,92,95,97,98,99,100], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:9_000, disputeOpen:false, provisional:0, finalized:true, route:"by vote (71%)" },
+    "orem/5":{ title:"The mayor privately opposed the rezoning before the vote.",
+      body:"An anonymous memo alleges private opposition. Three disputes were filed; none reached quorum.",
+      depositor:"g1author4x9q2demo0000000000000000000000", x:26_000, bestBid:41, bestAsk:44,
+      priceHist:[50,48,45,43,42,41,42,43,42,42], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:13_000, disputeOpen:false, provisional:0, provClose:true, finalized:true, failedRounds:3, preAnswerPrice:42 },
+    "ledger/1":{ title:"Denver's 2025 snowfall passed the 60-inch seasonal normal.",
+      body:"NWS station total reached 61.2 inches by Apr 30.",
+      depositor:"g1author4x9q2demo0000000000000000000000", x:9_800, bestBid:71, bestAsk:78,
+      priceHist:[55,58,60,63,66,68,70,72,73,74], answered:false, disputeOpen:false, provisional:-1, finalized:false },
+  },
+  positions:{ // by "slug/id" for the demo "you"
+    "orem/2":{yes:1200, no:0}, "orem/3":{yes:800, no:400}, "orem/4":{yes:2000, no:0},
+  },
+  balances:{ orem:38_400, ledger:0 },
+};
+const DEMO_ME = "g1youdemoholder0000000000000000000000000";
+
+/* ======================= data access (demo | live) ====================== */
+/* Both branches return the SAME shapes, so the views never know which is live.
+   The live directory/docket come from Render() — the chain's own list — and the
+   scalars from qeval, exactly the "chain carries the information" contract. */
+const isLive = () => CFG.mode==="live";
+
+async function listCourts(){
+  if(!isLive()){
+    return Object.entries(DEMO.courts).map(([slug,c])=>({slug, name:c.name, tier:c.tier, claims:c.claims.length}));
+  }
+  const md = await qrender("");
+  // parse "## Featured"/"## Courts" sections and the court links the realm emits
+  const out=[]; let tier=1;
+  for(const line of md.split("\n")){
+    if(/^##\s+Featured/i.test(line)) tier=2;
+    else if(/^##\s+Courts/i.test(line)) tier=1;
+    const m = line.match(/^\-\s*\[([^\]]+)\]\(\/r\/cryptocourt\/court:([a-z0-9-]+)\)\s*—\s*(\d+)/);
+    if(m) out.push({slug:m[2], name:m[1], tier, claims:parseInt(m[3],10)});
+  }
+  return out;
+}
+async function courtStats(slug){
+  if(!isLive()){ const c=DEMO.courts[slug]; if(!c) return null;
+    return {name:c.name, tier:c.tier, price:c.price, backing:c.backing, supply:c.supply, treasury:c.treasury, oi:c.oi, claims:c.claims.length}; }
+  const s=gstr(slug);
+  const [name,price,backing,supply,treasury,oi,tier,claims] = await Promise.all([
+    one(`CourtName(${s})`), one(`CoinPrice(${s})`), one(`CoinBacking(${s})`), one(`CoinSupply(${s})`),
+    one(`Treasury(${s})`), one(`OpenInterest(${s})`), one(`CourtTier(${s})`), one(`ClaimCount(${s})`)]);
+  return {name,price,backing,supply,treasury,oi,tier,claims};
+}
+async function listClaims(slug){
+  if(!isLive()){ const c=DEMO.courts[slug]; if(!c) return [];
+    return c.claims.map(id=>({id, ...claimHead(DEMO.claims[slug+"/"+id])})); }
+  const md = await qrender(slug);
+  const out=[];
+  for(const line of md.split("\n")){
+    const m = line.match(new RegExp("^\\-\\s*\\[([^\\]]+)\\]\\(\\/r\\/cryptocourt\\/court:"+slug+"\\/(\\d+)\\)\\s*—\\s*(.*)$"));
+    if(m) out.push({id:parseInt(m[2],10), title:m[1], statusText:m[3].trim()});
+  }
+  return out;
+}
+async function claimDetail(slug,id){
+  if(!isLive()){ const d=DEMO.claims[slug+"/"+id]; if(!d) return null; return {id, ...d}; }
+  const s=gstr(slug), i=id;
+  const [title,body,x,answered,disputeOpen,provisional,finalized] = await Promise.all([
+    one(`ClaimTitle(${s},${i})`), one(`ClaimBody(${s},${i})`), one(`ClaimX(${s},${i})`),
+    one(`HasAnswer(${s},${i})`), one(`DisputeOpen(${s},${i})`), one(`Provisional(${s},${i})`), one(`Finalized(${s},${i})`)]);
+  const [bb,ba] = await Promise.all([tup(`BestBid(${s},${i})`), tup(`BestAsk(${s},${i})`)]);
+  const d = {id, title, body, x, answered, disputeOpen, provisional, finalized,
+    bestBid: bb[1]? bb[0]+1 : 0, bestAsk: ba[1]? ba[0]+1 : 0, priceHist:null};
+  if(answered){
+    const [ans,answerer,bond,settleAt] = await Promise.all([
+      one(`AnswerVerdict(${s},${i})`), one(`Answerer(${s},${i})`), one(`AnswerBond(${s},${i})`), one(`SettleableAt(${s},${i})`)]);
+    Object.assign(d,{answer:ans, answerer, answerBond:bond, settleableAt:settleAt});
+  }
+  if(disputeOpen) d.proposalID = await one(`DisputeProposal(${s},${i})`);
+  return d;
+}
+async function positionOf(slug,id,addr){
+  if(!isLive()){ const p=DEMO.positions[slug+"/"+id]||{yes:0,no:0}; return {yes:p.yes,no:p.no}; }
+  const s=gstr(slug), a=gstr(addr);
+  const [yes,no] = await Promise.all([one(`SharesOf(${s},${id},0,${a})`), one(`SharesOf(${s},${id},1,${a})`)]);
+  return {yes,no};
+}
+async function balanceOf(slug,addr){
+  if(!isLive()) return DEMO.balances[slug]||0;
+  return one(`CoinBalanceOf(${gstr(slug)},${gstr(addr)})`);
+}
+const rawRender = pth => isLive() ? qrender(pth) : demoRender(pth);
+
+function claimHead(d){ return {title:d.title, statusText:statusText(d)}; }
+function statusText(d){
+  // Mirrors the realm's claimStatus (render.gno), including its ordering: dispute-open
+  // must win over a standing provisional so a reopen's live tally stays sealed.
+  if(d.finalized && d.provClose) return "closed without a decision — redeemed at the pre-answer price";
+  if(d.finalized) return "resolved: "+outcomeName(d.provisional)+(d.route?" — "+d.route:"");
+  if(d.disputeOpen) return "a dispute is under way — the tally is sealed until the vote closes";
+  if(d.provClose) return "closing without a decision (three disputes failed to reach a verdict)";
+  if(d.provisional>=0) return "provisional "+outcomeName(d.provisional)+", in escrow (reopenable)";
+  if(d.answered) return "answered "+outcomeName(d.answer)+" (awaiting a dispute or settlement)";
+  return "open — no answer yet";
+}
+
+/* ============================ formatting ================================ */
+const outcomeName = o => o===0?"YES":o===1?"NO":"—";
+function fmtN(n){ return (n==null?0:n).toLocaleString("en-US"); }
+function cc(n){ return fmtN(n)+" CC"; }
+function gnot(u){ const v=(u||0)/1e6; return (Math.abs(v)>=100? v.toFixed(0): v.toFixed(2))+" GNOT"; }
+function shortAddr(a){ a=String(a||""); return a.length>12? a.slice(0,7)+"…"+a.slice(-4): a; }
+function wall(nowH, targetH){
+  const secs=(targetH-nowH)*BLOCK_SECS, past=secs<0, s=Math.abs(secs);
+  const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
+  let t = d? d+(d===1?" day":" days") : h? h+(h===1?" hour":" hours") : Math.max(1,m)+" min";
+  return past? t+" ago" : "about "+t;
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* Untrusted text (bodies, titles by strangers): escaped, links de-fanged. The
+   realm sanitizes for its own markdown; the overlay must not re-introduce a hole. */
+function safeInline(s){ return esc(s); }
+function safeBlock(s){
+  return esc(s).split(/\n{2,}/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join("");
+}
+
+/* ============================ tx links ================================== */
+/* Every action is a gnoweb $help link with arguments pre-filled — the whole point
+   of the overlay being optional: the transaction is the realm's, not ours. */
+function tx(func, args){
+  const q = Object.entries(args||{}).map(([k,v])=>"&"+k+"="+encodeURIComponent(v)).join("");
+  return CFG.gnoweb.replace(/\/$/,"")+"/r/cryptocourt/court$help&func="+func+q;
+}
+function btn(label, func, args, cls, sub){
+  return `<a class="btn ${cls||""}" target="_blank" rel="noopener" href="${tx(func,args)}">`+
+    `<span class="g">↗</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}</a>`;
+}
+
+/* ============================ sparkline ================================= */
+function sparkline(vals){
+  if(!vals||vals.length<2) return "";
+  const w=260,h=54,pad=3, mn=Math.min(...vals), mx=Math.max(...vals), rng=(mx-mn)||1;
+  const X=i=>pad+i*(w-2*pad)/(vals.length-1), Y=v=>h-pad-((v-mn)/rng)*(h-2*pad);
+  const pts=vals.map((v,i)=>X(i)+","+Y(v));
+  const line="M"+pts.join(" L");
+  const area="M"+X(0)+","+(h-pad)+" L"+pts.join(" L")+" L"+X(vals.length-1)+","+(h-pad)+" Z";
+  const lx=X(vals.length-1), ly=Y(vals[vals.length-1]);
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="price history">`+
+    `<path class="fill" d="${area}"/><path class="ln" d="${line}"/><circle class="dot" cx="${lx}" cy="${ly}" r="3"/></svg>`;
+}
+
+/* ============================ router =================================== */
+const main = document.getElementById("main");
+const routes = [];
+function on(re, fn){ routes.push([re,fn]); }
+async function render(){
+  const hash = location.hash.replace(/^#/,"") || "/";
+  setNav(hash);
+  for(const [re,fn] of routes){
+    const m = hash.match(re);
+    if(m){ try{ await fn(...m.slice(1)); }catch(e){ errorView(e); } return; }
+  }
+  main.innerHTML = notFound("No such page.");
+}
+function setNav(hash){
+  const k = hash==="/"||hash.startsWith("/c")?"dir": hash.startsWith("/me")?"me":
+            hash.startsWith("/needs")?"needs": hash.startsWith("/about")?"about":"";
+  document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on", a.dataset.k===k));
+}
+window.addEventListener("hashchange", render);
+
+function loading(){ main.innerHTML = `<div class="empty"><div class="g">⚖︎</div><p>Reading the chain…</p></div>`; }
+function errorView(e){
+  main.innerHTML = `<div class="crumbs"><a href="#/">Directory</a></div>
+    <h2 class="page-h">Could not read the node</h2>
+    <div class="notice refuse" style="margin-top:16px"><span class="g">⚠</span>
+    <div><b>${esc(e.message||e)}</b><br><span class="small muted">The live source is set to <code>${esc(CFG.rpc)}</code>.
+    Check the node is reachable and has the court realm deployed, or switch the Source back to Demo in the left rail.</span></div></div>`;
+}
+function notFound(msg){ return `<div class="empty"><div class="g">◌</div><p>${esc(msg)}</p><p><a class="btn" href="#/">Back to the directory</a></p></div>`; }
+const crumbs = parts => `<div class="crumbs">`+parts.map((p,i)=>
+  (i?`<span class="sep">/</span>`:"")+(p.href?`<a href="${p.href}">${esc(p.label)}</a>`:`<span>${esc(p.label)}</span>`)).join("")+`</div>`;
+
+/* ============================ views ==================================== */
+
+/* --- directory (screen 1) --- */
+on(/^\/$/, async ()=>{
+  loading();
+  const courts = await listCourts();
+  const featured = courts.filter(c=>c.tier===2), listed = courts.filter(c=>c.tier!==2);
+  const card = c => {
+    return `<a class="card" href="#/c/${c.slug}">
+      <div class="ct-name">${safeInline(c.name)}</div>
+      <div class="ct-meta">${c.claims} claim${c.claims===1?"":"s"} · /${esc(c.slug)}</div>
+      <div class="ct-price" id="cp-${esc(c.slug)}"><span class="small muted">reading price…</span></div></a>`;
+  };
+  main.innerHTML = crumbs([{label:"Directory"}])
+    + `<div class="lead-row"><div><h1 class="page-h">Courts of record</h1>
+       <p class="page-sub">Each court runs its own coin and its own docket of claims. Pick the one whose judgment you trust — a hidden court still works for anyone who holds its link.</p></div>
+       ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary")}</div>`
+    + (featured.length?`<section><div class="sec-h">Featured <span class="count">${featured.length}</span></div><div class="grid courts">${featured.map(card).join("")}</div></section>`:"")
+    + `<section><div class="sec-h">Courts <span class="count">${listed.length}</span></div>`
+    + (listed.length?`<div class="grid courts">${listed.map(card).join("")}</div>`:`<div class="empty"><div class="g">◌</div><p>No courts yet. Be the first to start one.</p></div>`)
+    + `</section>`;
+  // enrich each card with price beside backing (the number a first-time buyer needs)
+  for(const c of courts){
+    courtStats(c.slug).then(s=>{ const el=document.getElementById("cp-"+c.slug); if(el&&s)
+      el.innerHTML = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)} <small>µGNOT</small></div></div>
+        <div class="kv"><div class="k">backing</div><div class="v tnum">${fmtN(s.backing)} <small>µGNOT</small></div></div>`;
+    }).catch(()=>{});
+  }
+});
+
+/* --- a court (screen 2) --- */
+on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
+  loading();
+  const s = await courtStats(slug);
+  if(!s){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No court by that slug."); return; }
+  const claims = await listClaims(slug);
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])
+    + `<div class="lead-row"><div>
+        <h1 class="page-h">${safeInline(s.name)}</h1>
+        <div class="tagrow">${tierPill(s.tier)}<span class="small muted">/${esc(slug)}</span>
+          <a class="small" href="#/raw/${esc(slug)}" style="color:var(--accent-2)">view as the chain serves it →</a></div>
+       </div>
+       <div class="actions">
+         ${btn("Buy the coin","Buy",{slug},"primary","permanent")}
+         ${btn("Open a claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}
+       </div></div>`
+    + `<section><div class="grid stats">
+        <div class="stat pair"><div><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)}<small> µGNOT</small></div></div>
+          <div><div class="k">backing</div><div class="v tnum">${fmtN(s.backing)}</div><div class="sub">per coin — a buyer pays ≈2×</div></div></div>
+        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${fmtN(s.supply)}</div><div class="sub">CC minted on the curve</div></div>
+        <div class="stat"><div class="k">treasury</div><div class="v tnum">${gnot(s.treasury)}</div><div class="sub">GNOT backing, kept</div></div>
+        <div class="stat"><div class="k">open interest</div><div class="v tnum">${cc(s.oi)}</div><div class="sub">across all claims</div></div>
+       </div></section>`
+    + fourThings()
+    + `<section><div class="sec-h">The docket <span class="count">${claims.length} claim${claims.length===1?"":"s"}</span></div>`
+    + (claims.length? `<div class="docket">${claims.map(c=>docketRow(slug,c)).join("")}</div>`
+        : `<div class="empty"><div class="g">◌</div><p>No claims yet.</p><p>${btn("Open the first claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}</p></div>`)
+    + `</section>`;
+});
+function tierPill(t){ return t===2?`<span class="pill open">★ Featured</span>`: t===0?`<span class="pill void">Hidden</span>`:`<span class="pill">Listed</span>`; }
+function docketRow(slug,c){
+  const st = c.statusText||"";
+  let cls="void";
+  if(/closed without/.test(st)) cls="void"; else if(/resolved/.test(st)) cls="yes";
+  else if(/dispute/.test(st)) cls="escrow"; else if(/closing|provisional/.test(st)) cls="escrow";
+  else if(/answered/.test(st)) cls="open"; else if(/^open/.test(st)) cls="void";
+  return `<a href="#/c/${esc(slug)}/${c.id}">
+    <div><div class="t">${safeInline(c.title)}</div><div class="m"><span>claim #${c.id}</span></div></div>
+    <div class="rt"><span class="pill ${cls}">${esc(shortStatus(st))}</span></div></a>`;
+}
+function shortStatus(st){
+  if(/closed without/.test(st)) return "closed · no decision"; if(/closing without/.test(st)) return "closing";
+  if(/resolved:\s*YES/.test(st)) return "resolved YES"; if(/resolved:\s*NO/.test(st)) return "resolved NO";
+  if(/dispute/.test(st)) return "in dispute"; if(/provisional\s*YES/.test(st)) return "settling YES";
+  if(/provisional\s*NO/.test(st)) return "settling NO"; if(/answered\s*YES/.test(st)) return "answered YES";
+  if(/answered\s*NO/.test(st)) return "answered NO"; return "open";
+}
+
+/* --- a claim (screen 5) + its market + order ticket --- */
+on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
+  loading();
+  const id = parseInt(idS,10);
+  const cs = await courtStats(slug); const d = await claimDetail(slug,id);
+  if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
+  const ph = d.priceHist || null;
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
+    + `<h1 class="page-h">${safeInline(d.title)}</h1>`
+    + `<div class="tagrow">${verdictBanner(d)} <a class="small" href="#/raw/${esc(slug)}/${id}" style="color:var(--accent-2)">as the chain serves it →</a></div>`
+    + (d.body? `<section><div class="foreign">${safeBlock(d.body)}</div></section>`:"")
+    + `<section><div class="sec-h">Market <span class="count">open interest ${cc(d.x)}</span></div>
+        <div class="market">
+          <div class="mkt-panel">
+            <div class="book2">
+              <div class="side bid"><div class="lab">best bid · buy YES</div><div class="px tnum">${d.bestBid?fmtN(d.bestBid):"—"}</div><div class="u">${d.bestBid?"CC / share":"no bids"}</div></div>
+              <div class="side ask"><div class="lab">best ask · sell YES</div><div class="px tnum">${d.bestAsk?fmtN(d.bestAsk):"—"}</div><div class="u">${d.bestAsk?"CC / share":"no asks"}</div></div>
+            </div>
+            ${ph?`<div class="small muted" style="margin-top:14px">Traded price — last ${ph.length} samples</div>${sparkline(ph)}`:""}
+            <div class="actions" style="margin-top:14px">
+              ${btn("Mint a set","MintSet",{courtSlug:slug,claimID:id,qty:1000},"","1 YES + 1 NO")}
+              ${btn("Buy YES","TakeBuy",{courtSlug:slug,claimID:id,limitTick:(d.bestAsk||100)-1,demand:1000},"yes")}
+              ${btn("Sell YES","TakeSell",{courtSlug:slug,claimID:id,limitTick:(d.bestBid||1)-1,demand:1000},"no")}
+            </div>
+          </div>
+          ${orderTicket(slug,id,d)}
+        </div></section>`
+    + resolutionSection(slug,id,d);
+});
+
+function verdictBanner(d){
+  if(d.finalized && d.provClose) return `<span class="pill void">closed · no decision</span>`;
+  if(d.finalized) return `<span class="pill yes">✓ resolved ${outcomeName(d.provisional)}${d.route?" · "+esc(d.route):""}</span>`;
+  if(d.disputeOpen) return `<span class="pill escrow">⚖ dispute under way · tally sealed</span>`;
+  if(d.provClose) return `<span class="pill void">closing · no decision</span>`;
+  if(d.provisional>=0) return `<span class="pill escrow">provisional ${outcomeName(d.provisional)} · in escrow · reopenable</span>`;
+  if(d.answered) return `<span class="pill open">answered ${outcomeName(d.answer)}</span>`;
+  return `<span class="pill void">open · no answer yet</span>`;
+}
+
+/* The order ticket (screen 8): what it pays if right, nothing if wrong, and —
+   the thing every prediction market forgets — what happens if it never resolves. */
+function orderTicket(slug,id,d){
+  const px = d.bestAsk || d.bestBid || 50, qty = 1000;
+  const cost = px*qty, ifYes = PRICE_SCALE*qty;
+  return `<div class="ticket">
+    <h3>Order ticket</h3>
+    <div class="hint">Buying YES at the current ask, as an example of ${fmtN(qty)} shares.</div>
+    <div class="line"><span class="l">Shares</span><span class="r tnum">${fmtN(qty)} YES</span></div>
+    <div class="line"><span class="l">Price / share</span><span class="r tnum">${fmtN(px)} CC</span></div>
+    <div class="line"><span class="l">You pay now</span><span class="r tnum">${cc(cost)}</span></div>
+    <div class="line win"><span class="l">Pays if the claim is YES</span><span class="r tnum">${cc(ifYes)}</span></div>
+    <div class="line lose"><span class="l">Pays if the claim is NO</span><span class="r tnum">0 CC</span></div>
+    <div class="never"><b>If it never resolves:</b> your shares are yours to keep or trade — there is <b>no deadline</b>. A matched set (one YES + one NO) can always be redeemed for its ${PRICE_SCALE} CC of collateral, so you are never trapped.</div>
+    <div class="actions" style="margin-top:14px">${btn("Place this order","TakeBuy",{courtSlug:slug,claimID:id,limitTick:px-1,demand:qty},"primary")}</div>
+  </div>`;
+}
+
+/* Resolution: answer / dispute / settlement, showing the verdict's ROUTE and
+   wall-clock timing, and NEVER the live tally while a vote is open. */
+function resolutionSection(slug,id,d){
+  let inner="";
+  if(d.finalized && d.provClose){
+    inner = `<div class="notice warn"><span class="g">◌</span><div><b>Closed without a decision.</b>
+      Three disputes failed to reach a verdict, so every share redeemed at the <b>pre-answer price</b> — the price the market set before any answer, chosen by nobody.
+      <div class="actions" style="margin-top:10px">${btn("Redeem (closed)","RedeemClosed",{courtSlug:slug,claimID:id})}</div></div></div>`;
+  } else if(d.finalized){
+    inner = `<div class="notice warn"><span class="g">✓</span><div><b>Resolved ${outcomeName(d.provisional)}</b>${d.route?" — "+esc(d.route):""}.
+      Winning shares each pay ${PRICE_SCALE} CC (less any fee). ${btn("Redeem winnings","RedeemWinning",{courtSlug:slug,claimID:id},"yes")}</div></div>`;
+  } else if(d.disputeOpen){
+    // The sealed-tally rule: dispute-open must win over a standing provisional (a reopen).
+    inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way.</b>
+      The question on the ballot is <i>“overturn the answer?”</i> — the tally stays <b>sealed until the vote closes</b>, so no one can pile onto a leader.
+      <div class="actions" style="margin-top:10px">
+        ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
+        ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
+        ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div></div></div>`;
+  } else if(d.provClose){
+    inner = `<div class="notice warn"><span class="g">◌</span><div><b>Closing without a decision.</b>
+      Three dispute rounds failed to reach a verdict; once the escrow window passes it settles at the pre-answer price.
+      <div class="actions" style="margin-top:10px">${btn("Finalize","Finalize",{courtSlug:slug,claimID:id})}</div></div></div>`;
+  } else if(d.provisional>=0){
+    inner = `<div class="notice warn"><span class="g">⏳</span><div><b>Provisional ${outcomeName(d.provisional)}, held in escrow.</b>
+      The money waits here so a late dispute can still <b>reopen</b> it before it locks — a reopen goes straight to a vote and does not reset the clock (each failed reopen costs double). Anyone may finalize once the window passes.
+      <div class="actions" style="margin-top:10px">
+        ${btn("Reopen (dispute again)","OpenDispute",{courtSlug:slug,claimID:id},"no")}
+        ${btn("Finalize","Finalize",{courtSlug:slug,claimID:id})}</div></div></div>`;
+  } else if(d.answered){
+    const when = d.settleableAt? " It can settle undisputed "+wall(NOW,d.settleableAt)+" if nobody disputes it.":"";
+    inner = `<div class="notice warn"><span class="g">◷</span><div><b>Answered ${outcomeName(d.answer)}</b> by ${shortAddr(d.answerer)},
+      backed by a bond of ${cc(d.answerBond)} that is forfeit if the answer is overturned.${when}
+      <div class="actions" style="margin-top:10px">
+        ${btn("Dispute this answer","OpenDispute",{courtSlug:slug,claimID:id},"no")}
+        ${btn("Settle (if undisputed & aged)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
+  } else {
+    inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Anyone may post one, with a bond large enough that lying does not pay.
+      An answer is resolved at a scheduled settlement — and silence settles safely, because the money then waits in escrow where it can still be disputed.
+      <div class="actions" style="margin-top:10px">
+        ${btn("Post: YES","PostAnswer",{courtSlug:slug,claimID:id,verdict:0},"yes")}
+        ${btn("Post: NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}</div></div></div>`;
+  }
+  return `<section><div class="sec-h">Resolution</div>${inner}</section>`;
+}
+
+/* The four things every participant must understand (10.1) — nothing hidden here
+   changes a decision; the warmth, floors and bond slices are deliberately omitted. */
+function fourThings(){
+  return `<section><div class="primer"><h3>Four things, before any button</h3><ol>
+    <li>Buying the coin is <b>permanent</b> — there is no sell button, ever.</li>
+    <li>A share pays <b>one coin if YES, nothing if NO</b>, and there is <b>no deadline</b>.</li>
+    <li>Anyone may <b>post an answer</b> with a bond large enough that lying does not pay; answers settle at scheduled sessions, and silence settles safely into escrow.</li>
+    <li>Every button spends real money and is <b>final</b>.</li>
+  </ol></div></section>`;
+}
+
+/* --- your page (screen 9) --- */
+on(/^\/me$/, async ()=>{ meView(DEMO_ME); });
+on(/^\/who\/([a-z0-9-]+)\/(g1[a-z0-9]+)$/, async (slug,addr)=>{ meView(addr, slug); });
+async function meView(addr){
+  loading();
+  const courts = await listCourts();
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"Your page"}])
+    + `<h1 class="page-h">Your page</h1>
+       <p class="page-sub">Render has no idea who is asking, so a court reads holdings by address. Paste yours to see positions, what is claimable, and what is waiting in escrow.</p>
+       <div class="addrbar"><input id="addr" class="mono" value="${esc(addr)}" spellcheck="false" aria-label="your address">
+         <button class="btn" id="addrgo">Read positions</button></div>
+       <div id="holdings"></div>`;
+  const go = ()=>{ const a=document.getElementById("addr").value.trim(); if(a) meHoldings(a,courts); };
+  document.getElementById("addrgo").onclick = go;
+  document.getElementById("addr").addEventListener("keydown",e=>{ if(e.key==="Enter") go(); });
+  meHoldings(addr,courts);
+}
+async function meHoldings(addr,courts){
+  const box=document.getElementById("holdings"); box.innerHTML=`<div class="empty"><div class="g">⚖︎</div><p>Reading your positions…</p></div>`;
+  const blocks=[];
+  for(const c of courts){
+    const bal = await balanceOf(c.slug,addr).catch(()=>0);
+    const claims = await listClaims(c.slug).catch(()=>[]);
+    const rows=[];
+    for(const cl of claims){
+      const p = await positionOf(c.slug,cl.id,addr).catch(()=>({yes:0,no:0}));
+      if(p.yes||p.no) rows.push({cl,p});
+    }
+    if(!bal && !rows.length) continue;
+    blocks.push(`<section><div class="sec-h">${safeInline(c.name)} <span class="count">${cc(bal)} coin balance</span></div>`
+      + (rows.length? `<div class="scroll-x"><table class="data"><thead><tr><th>Claim</th><th>YES</th><th>NO</th><th></th></tr></thead><tbody>`
+          + rows.map(({cl,p})=>`<tr><td><a href="#/c/${esc(c.slug)}/${cl.id}" style="color:var(--accent-2);text-decoration:none">${safeInline(cl.title)}</a></td>
+              <td class="num">${fmtN(p.yes)}</td><td class="num">${fmtN(p.no)}</td>
+              <td class="num"><a class="small" style="color:var(--accent-2)" target="_blank" rel="noopener" href="${tx("RedeemWinning",{courtSlug:c.slug,claimID:cl.id})}">redeem ↗</a></td></tr>`).join("")
+          + `</tbody></table></div>`
+        : `<p class="small muted">Coin only — no open positions in this court.</p>`)
+      + `</section>`);
+  }
+  box.innerHTML = blocks.length? blocks.join("")
+    : `<div class="empty"><div class="g">◌</div><p>No coin and no positions found for <span class="mono">${shortAddr(addr)}</span>.</p><p class="small">Buy a court's coin to begin.</p></div>`;
+}
+
+/* --- what needs you (screen 7): answers on claims YOU hold, flagged if against
+   your side. The security assumption made visible — the court knows exactly whom
+   a false answer would cost, and tells them. --- */
+on(/^\/needs$/, async ()=> needsView(DEMO_ME));
+async function needsView(addr){
+  loading();
+  const courts = await listCourts();
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"What needs you"}])
+    + `<h1 class="page-h">What needs you</h1>
+       <p class="page-sub">Answers posted on claims where you hold a position — flagged when the answer runs <b>against your side</b>. Nobody is more motivated to check a false answer than the people whose money it would make worthless. It is a notification, not a role.</p>
+       <div class="addrbar"><input id="naddr" class="mono" value="${esc(addr)}" spellcheck="false" aria-label="your address">
+         <button class="btn" id="ngo">Check</button></div><div id="needs"></div>`;
+  const go=()=>{ const a=document.getElementById("naddr").value.trim(); if(a) needsList(a,courts); };
+  document.getElementById("ngo").onclick=go;
+  needsList(addr,courts);
+}
+async function needsList(addr,courts){
+  const box=document.getElementById("needs"); box.innerHTML=`<div class="empty"><div class="g">⚖︎</div><p>Checking your claims…</p></div>`;
+  const items=[];
+  for(const c of courts){
+    const claims=await listClaims(c.slug).catch(()=>[]);
+    for(const cl of claims){
+      const d=await claimDetail(c.slug,cl.id).catch(()=>null);
+      if(!d||!d.answered||d.finalized) continue;
+      const p=await positionOf(c.slug,cl.id,addr).catch(()=>({yes:0,no:0}));
+      if(!p.yes && !p.no) continue;
+      // answer 0=YES,1=NO. "against your side" = answer says the side you DON'T hold.
+      const yourSide = p.yes>=p.no?0:1;
+      const against = d.answer!==yourSide && (d.answer===0?p.no>0:p.yes>0);
+      items.push({c,cl,d,p,against});
+    }
+  }
+  if(!items.length){ box.innerHTML=`<div class="empty"><div class="g">✓</div><p>Nothing needs you right now — no live answers on claims you hold.</p></div>`; return; }
+  items.sort((a,b)=>(b.against?1:0)-(a.against?1:0));
+  box.innerHTML = `<div class="docket">`+items.map(({c,cl,d,against})=>
+    `<a href="#/c/${esc(c.slug)}/${cl.id}">
+      <div><div class="t">${safeInline(cl.title)}</div>
+        <div class="m"><span>${safeInline(c.name)}</span><span>answered ${outcomeName(d.answer)}</span></div></div>
+      <div class="rt">${against?`<span class="pill no">⚑ against your side</span>`:`<span class="pill yes">matches you</span>`}</div></a>`
+  ).join("")+`</div>`;
+}
+
+/* --- the chain render (screen 10): the same page as the realm alone serves it,
+   proving the overlay is optional, not load-bearing. --- */
+on(/^\/raw\/([a-z0-9-]+)(?:\/(\d+))?$/, async (slug,id)=>{
+  loading();
+  const path = id!=null? slug+"/"+id : slug;
+  const md = await rawRender(path);
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:"Chain render"}])
+    + `<h1 class="page-h">As the chain serves it</h1>
+       <p class="page-sub">This is exactly what <code>Render(${esc(gstr(path))})</code> returns — plain markdown, no overlay. Everything you need to act is here; the pretty version only rearranges it.</p>
+       <div class="rawblock">${esc(md||"(empty)")}</div>`;
+});
+
+/* --- how it works --- */
+on(/^\/about$/, async ()=>{
+  setNav("/about");
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"How it works"}])
+    + `<h1 class="page-h">How a court works</h1>
+    <div class="prose" style="margin-top:16px">
+      <p>A <b>court</b> is a self-contained market for claims of fact. It mints its own coin on a one-way bonding curve — you buy in with GNOT, and the GNOT stays as the court's treasury. There is no sell-back; the coin's worth is what it can wager.</p>
+      <h2>A claim, and its market</h2>
+      <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small anti-spam deposit. Mint a <b>set</b> (one YES + one NO) for ${PRICE_SCALE} CC of collateral, then trade the halves on a tick order book. A YES share pays ${PRICE_SCALE} CC if the claim is true and nothing if it is false; a matched set is always redeemable, so you are never trapped, and there is no deadline.</p>
+      <h2>Answers, and disputes</h2>
+      <p>Anyone may <b>post an answer</b> with a bond. Left alone, it settles at a scheduled session — silence settles safely, because the money waits in escrow where it can still be disputed. To contest it, open an <b>answer dispute</b>: a token vote on the single question <i>“overturn the answer?”</i> The tally is sealed until the vote closes. A verdict always shows its route — <i>undisputed</i>, or <i>by vote (71%)</i> — because that difference is the whole epistemic product.</p>
+      <h2>The overlay is optional</h2>
+      <p>Everything here is read from the realm's own <code>Render</code> and its public reads, and every button is a normal gnoweb transaction. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore the shape offline.</p>
+    </div>`;
+});
+
+/* ===================== demo Render() (screen-10 sample) ================= */
+function demoRender(path){
+  const parts = path.split("/");
+  if(path===""||path==="/"){
+    let o="# CryptoCourt\n\nPlay-wager on claims of fact in the court you trust.\n\n## Featured\n\n";
+    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===2) o+=`- [${c.name}](/r/cryptocourt/court:${slug}) — ${c.claims.length} claims\n`;
+    o+="\n## Courts\n\n";
+    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier!==2) o+=`- [${c.name}](/r/cryptocourt/court:${slug}) — ${c.claims.length} claims\n`;
+    return o;
+  }
+  const c=DEMO.courts[parts[0]]; if(!c) return "## Not found\nNo court by that slug.";
+  if(parts.length===1){
+    let o=`# ${c.name}\n\n- coin price: ${c.price} · backing: ${c.backing} (per coin)\n- supply: ${c.supply} · treasury: ${Math.round(c.treasury/1e6)} GNOT\n- open interest: ${c.oi} CC\n\n[buy the coin →](/r/cryptocourt/court$help&func=Buy&slug=${parts[0]})\n\n## Claims\n\n`;
+    for(const id of c.claims){ const d=DEMO.claims[parts[0]+"/"+id]; o+=`- [${d.title}](/r/cryptocourt/court:${parts[0]}/${id}) — ${statusText(d)}\n`; }
+    return o;
+  }
+  const d=DEMO.claims[parts[0]+"/"+parts[1]]; if(!d) return "## Not found\nNo claim by that id.";
+  let o=`# ${d.title}\n\n${d.body}\n\n## Market\n\n- open interest X: ${d.x} CC\n`;
+  if(d.bestBid) o+=`- best bid: ${d.bestBid}\n`; if(d.bestAsk) o+=`- best ask: ${d.bestAsk}\n`;
+  o+=`\n## Verdict\n\n${statusText(d)}\n`;
+  return o;
+}
+
+/* ============================ boot ==================================== */
+function applyTheme(t){
+  if(t) document.documentElement.setAttribute("data-theme",t); else document.documentElement.removeAttribute("data-theme");
+  const dark = t? t==="dark" : matchMedia("(prefers-color-scheme:dark)").matches;
+  document.getElementById("themelab").textContent = dark? "Light mode":"Dark mode";
+}
+function initControls(){
+  // node source
+  const modesel=document.getElementById("modesel"), rpcwrap=document.getElementById("rpcwrap"),
+        dot=document.getElementById("dot"), lab=document.getElementById("nodelab"),
+        rpc=document.getElementById("rpc"), gnoweb=document.getElementById("gnoweb");
+  rpc.value=CFG.rpc; gnoweb.value=CFG.gnoweb; modesel.value=CFG.mode;
+  const reflect=()=>{ const live=CFG.mode==="live"; rpcwrap.hidden=!live;
+    dot.className="dot "+(live?"live":"demo"); lab.textContent= live?"Live node":"Demo data"; };
+  modesel.onchange=()=>{ CFG.mode=modesel.value; saveCfg(); reflect(); render(); };
+  rpc.onchange=()=>{ CFG.rpc=rpc.value.trim(); saveCfg(); if(CFG.mode==="live") render(); };
+  gnoweb.onchange=()=>{ CFG.gnoweb=gnoweb.value.trim()||"https://gno.land"; saveCfg(); if(CFG.mode==="live") render(); };
+  reflect();
+  // theme
+  const themebtn=document.getElementById("themebtn");
+  themebtn.onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme");
+    const dark = cur? cur==="dark" : matchMedia("(prefers-color-scheme:dark)").matches;
+    const next = dark? "light":"dark"; CFG.theme=next; saveCfg(); applyTheme(next); };
+}
+applyTheme(CFG.theme);
+initControls();
+render();
+</script>
+</body>
+</html>

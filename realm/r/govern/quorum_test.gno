@@ -688,9 +688,12 @@ func TestQuorumDividesByTheEngagedWeightNotTheWholeSupply(cur realm, t *testing.
 	}
 }
 
-// An electorate that engages nobody, or more than exists, is refused at the
-// door rather than carried into a tally where it reads as miscounting.
-func TestAnImpossibleEngagedWeightIsRefused(cur realm, t *testing.T) {
+// An electorate that engages nobody is refused at the door; one that engages
+// MORE than exists is clamped down to the snapshot supply, so the bar is
+// unreachable-but-valid rather than the proposal aborting. A court deliberately
+// hosts claims too big for its electorate to decide, so an over-large engaged
+// weight must not abort — it must simply make quorum unreachable.
+func TestAnImpossibleEngagedWeightIsClamped(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
 
@@ -699,12 +702,16 @@ func TestAnImpossibleEngagedWeightIsRefused(cur realm, t *testing.T) {
 		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 100,
 	})
 
+	// Engages more than exists: clamped to the total, the proposal proceeds, and
+	// the snapshot reports the clamped figure.
 	engine.SetElectorate(&fakeVotes{weight: map[string]int64{string(a): 10}, total: 100, engaged: 1000, epoch: 9})
 	testing.SetRealm(testing.NewUserRealm(a))
-	uassert.AbortsContains(t, cur, "no more than what was in issue", func() {
-		Propose(cross(cur), "bad/kind", "1", "engages more than exists")
-	})
+	id := Propose(cross(cur), "bad/kind", "1", "engages more than exists")
+	if engaged, _ := engine.Snapshot(id); engaged != 100 {
+		t.Errorf("engaged weight should clamp to the total 100, got %d", engaged)
+	}
 
+	// Engages nobody (non-positive): still refused at the door.
 	engine.SetElectorate(&fakeVotes{weight: map[string]int64{string(a): 10}, total: 100, engaged: -1, epoch: 9})
 	testing.SetRealm(testing.NewUserRealm(a))
 	uassert.AbortsContains(t, cur, "has to be positive", func() {

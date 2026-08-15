@@ -78,6 +78,24 @@ func (g *Governor) Reason(id int64) string { return g.mustProposal(id).reason }
 // question was asked, and the reason buying in afterwards buys nothing.
 func (g *Governor) EpochOf(id int64) uint32 { return g.mustProposal(id).epoch }
 
+// Snapshot is a proposal's engaged weight and the sealed epoch both it and the
+// votes were read at — snapshotted at Propose and reachable no other way (EpochOf
+// gives the epoch alone). Engaged is the turnout DENOMINATOR the pool is shown
+// against; for a proposal opened with an absolute quorum floor the bar is that
+// floor, not a fraction of engaged — read it with QuorumFloor. Scalars, so nothing
+// is handed out to write through.
+func (g *Governor) Snapshot(id int64) (engaged int64, epoch uint32) {
+	p := g.mustProposal(id)
+	return p.engaged, p.epoch
+}
+
+// QuorumFloor is the absolute turnout a proposal needs when it was opened with
+// ProposeWithQuorum, or 0 when the quorum is the rules' QuorumBps fraction of the
+// engaged weight. A court renders a floored proposal's bar from this; the engine
+// already uses it in the tally and on its own page. Snapshotted at Propose, so it
+// is the bar the voters actually face.
+func (g *Governor) QuorumFloor(id int64) int64 { return g.mustProposal(id).quorumFloor }
+
 // RollSize is how many addresses are on a proposal's voter roll.
 //
 // Zero can mean two things and HasRoll separates them: nobody has voted yet, or
