@@ -204,14 +204,14 @@ which is what makes the overlay optional rather than load-bearing.
 
 | path | serves | bound |
 |---|---|---|
-| `` | the directory | promoted ≤ 12, listed paged |
-| `:court` | charter, statistics, docket, recently settled | paged |
-| `:court/s/<slug>` | a section | paged |
-| `:court/c/<id>` | a claim: title, body, arguments, market, resolution | children paged |
-| `:court/c/<id>/history` | the price ring as a table | 108 rows |
-| `:court/v/<id>` | a vote: sealed tally, bar, clock, who-pays-whom | fixed |
-| `:court/who/<address>` | holdings, roll status, positions, claimable fees | paged |
-| `:court/unanswered`, `:court/contested` | the two lists | paged |
+| `` | the directory (courts by tier) | featured, then listed |
+| `:<slug>` | one court: coin stats and its claims docket | — |
+| `:<slug>/<id>` | one claim: title, body, market, verdict | — |
+
+The shipped `Render` serves exactly these three. The richer routes once planned —
+a section `:<slug>/s/<slug>`, a claim's `/c/<id>` form and its `/history`, a vote
+`:<slug>/v/<id>`, `:<slug>/who/<address>`, and the `unanswered` / `contested` lists
+— are **V2 and not yet served**.
 
 ### 8.4 Untrusted text has exactly two homes
 
@@ -306,7 +306,8 @@ showing a superseded rule is more persuasive than the document superseding it.
 1. Buying the coin is **permanent** — there is no sell button, ever.
 2. A share pays **one coin if yes, nothing if no**, and there is **no deadline**.
 3. Anyone may **post an answer** with a bond large enough that lying does not
-   pay; answers are resolved at **scheduled settlement sessions**, and silence
+   pay; in V1 an undisputed answer becomes settleable **72 hours after it is
+   posted** (fixed weekly sessions are a deferred V2 refinement), and silence
    settles — safely, because the money then waits in escrow where it can still be
    disputed.
 4. Every button spends real money and is **final**.

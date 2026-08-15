@@ -258,15 +258,17 @@ The deeper problem was never the bond: **the answerer chose the moment.** A clai
 with no deadline has no scheduled instant when anybody is watching, and an
 attacker picks three in the morning on a holiday.
 
-So a court settles on a **schedule** — **weekly sessions** at a pre-announced time.
-An answer is eligible at the **first session at least 72 hours after it was
-posted**, so an answer posted just before a session cannot slip through before the
-losing side is notified. Watching becomes possible, because there is something to
-attend. The paid-for short window is deleted with it: buying speed meant buying the
-right to pick the moment, which is the advantage being removed.
+So an answer cannot settle the instant it is posted. **In V1 an undisputed answer
+becomes settleable on a rolling clock — a fixed `settleDelay` of 72 hours after it
+was posted — and anybody may then settle it permissionlessly (`SettleUndisputed`).**
+There is no fixed cadence and no paid-for short window: the answerer no longer picks
+the moment, which is the advantage being removed. **Fixed weekly sessions at a
+pre-announced time are a deferred (V2) refinement** that would change only *when* a
+due answer settles, not the accounting. *Throughout this document "settlement
+session" names that deferred cadence; for V1, read it as the rolling 72h clock.*
 
-A disputed claim goes to a **7-day vote**, not to a session — sessions resolve only
-the answers nobody disputed.
+A disputed claim goes to a **7-day vote**, not to the 72h clock — the vote resolves
+the answers somebody disputed; the clock resolves the ones nobody did.
 
 ### 3.3 Disputes
 
@@ -309,6 +311,10 @@ overturn is simply the opposite answer winning, which keeps the question a voter
 sees identical to the question the claim asks, and keeps the correctness slice
 about the truth rather than about deference to whoever answered first.
 
+> **V1 note.** The shipped governor vote and the wireframe frame the ballot as
+> "OVERTURN the answer?" (yes = overturn, no = uphold). Reconciling that with the
+> claim-itself principle above is deferred — a product/epistemic call, not a doc fix.
+
 **The running tally is not shown until voting closes.** With weight sealed
 beforehand and a correctness slice on offer, a live tally makes copying the first
 large voter the EV-maximising move for everybody smaller, which turns one whale's
@@ -331,18 +337,22 @@ vote into a self-fulfilling one.
 
 ### 3.5 The bar
 
-    required(t) = max( 5% of supply , 0.9 × warmth , 1 × the money on the claim ) · fall(t)
+    required = max( 5% of supply , min( 1 × the trailing-average money on the claim , ⅓ of votable weight ) )
+
+The static form above is the shipped `quorumFloor`. The **warmth** bump and the
+**fall(t)** decay described below are **deferred past V1** — V1 neither raises the
+bar by past turnout nor decays it over the vote.
 
 - **The floor** is the security parameter and the answer at launch, when nothing
   has ever been voted on.
 - **The stake term** is the interesting one: *the coin that votes must
   collectively be worth at least what is riding on the claim.* A coalition can
   never profit, because the turnout it must overcome holds more than the prize.
-- **warmth** — an average of turnout on past escalations only, `warmth +=
+- *(Deferred past V1.)* **warmth** — an average of turnout on past escalations only, `warmth +=
   (turnout − warmth)/4`, halving every six months so a dormant court can wake —
   raises the bar above the floor where a court has been turning out. It may only
   ever raise it.
-- **fall** decays the bar over the voting period to 60% of its opening value,
+- *(Deferred past V1.)* **fall** decays the bar over the voting period to 60% of its opening value,
   **but only the floor and warmth terms fall — never the stake term.** The bar
   may never go below 1× the money on the claim.
 
@@ -373,7 +383,10 @@ Two rules are needed, and both are now part of the design:
   the *average* that is read, not the moment. The open-interest average is one
   more ring beside the price ring, so it is nearly free on chain. The same
   trailing average is what the "minimum open interest to answer" threshold reads,
-  so that cannot be flash-crossed either.
+  so that cannot be flash-crossed either. *(V1 uses a 3-hour `answerWindow` for both
+  the quorum stake term and the answer threshold; the seven-day figure is the target,
+  not the shipped value — see §9a. The full week is used only for the pre-answer
+  price, `priceWindow`.)*
 - **Quorum is capped at a fraction of *votable* weight, never gross X.**
   `required = min( 1 × X̄ , θ · votable supply )` with θ well under 1 (say 1/3),
   X̄ the trailing average. Below the cap the mechanical "coin that votes is worth
@@ -444,7 +457,8 @@ needs their money in a hurry.
   winning-side slice, which is what stops abstention being the cheapest way to
   farm it.
 - **The settlement fee splits half to the prevailing answer's author and half to
-  the roll**, claimed pull-style rather than pushed.
+  the roll**, claimed pull-style rather than pushed. **In V1 only the answerer's
+  half is charged** — the roll's half is deferred while CC is unspendable.
 
 ### 3.7 When a vote fails
 
@@ -534,7 +548,7 @@ hold positions have enough at stake to vote without being paid to.
 | the adjudication fee — 60% | everyone who voted, by weight | showing up |
 | the adjudication fee — 40% | the weight that voted with the verdict | being right |
 | a failed dispute's forfeited bond | split: compensate the answerer, and burn the rest | apathy is not free for the disputer, without a self-pay faucet |
-| the settlement fee — **~1% of resolved collateral** | the answerer, and the roll | producing a verdict nobody had to vote on |
+| the settlement fee — **~1% of resolved collateral** (V1: the answerer's half only; the roll's half deferred) | the answerer, and the roll | producing a verdict nobody had to vote on |
 | the public record | answerers and voters | reputation, never a payment weight |
 
 **A claim pays one fee, never both.** An **undisputed** claim pays only the
@@ -678,16 +692,16 @@ statistics may be promised.
 | disputer's bond | max(governance-set min, 20% of X), doubling per failed dispute round on the same claim |
 | the loser's bond | whole, to the party who was right (on a decided vote). On a failed vote the disputer forfeits their escalating bond, split answerer-compensation and burn; the answerer's bond is returned |
 | adjudication fee | min(3% of collateral, 200 GNOT-equiv), charged once per resolution: 60% to everyone who voted, 40% to the weight that voted with the verdict |
-| settlement fee | ~1% of resolved collateral |
-| required turnout | max(5% of supply, min(1× **trailing-avg** money on claim, ⅓ of votable weight)). Only the supply term falls over the 7-day period, to 60%; the stake term never falls |
+| settlement fee | ~1% of resolved collateral, split half to the answerer and half to the roll — **V1 charges only the answerer's half** (the roll's half is deferred while CC is unspendable) |
+| required turnout | max(5% of supply, min(1× **trailing-avg** money on claim, ⅓ of votable weight)) — the shipped `quorumFloor`. The falling-bar decay (supply term to 60% over the vote) is deferred past V1; the stake term never falls |
 | warmth | average of escalation turnout, k = 4, half-life 6 months, fraction 0.9 — *deferred past V1* |
 | delegate cap | 4× own holding — *deferred, and not computable until the ledger checkpoints balances as well as votes* |
-| settlement | weekly sessions; an answer is eligible at the first session ≥ 72h after posting. A disputed claim goes to a 7-day vote instead |
+| settlement | V1: an undisputed answer is settleable 72h after posting (`settleDelay`), then settled permissionlessly; fixed weekly sessions are deferred to V2. A disputed claim goes to a 7-day vote instead |
 | escrow before payout | clamp(1 week + 1 day per 500 GNOT-equiv of X, 1 week, 3 weeks); a reopen does not reset it |
 | open-interest ceiling | 20% of supply, court-wide |
 | min claim deposit | governance-set, refundable, **never zero** — a spam floor |
 | min open interest to answer | governance-set — below it a claim cannot be answered |
-| treasury threshold | 9,000 bps, plus per-payout cap and per-period ceiling |
+| treasury threshold | 9,000 bps, plus per-payout cap and per-period ceiling — **not implemented in V1** (the treasury is unspendable) |
 | verdict threshold | 5001 bps of yes+no (5000 would pass a tie) |
 
 All flat GNOT-equivalent figures (the disputer bond, the fee cap) convert to CC at
@@ -732,12 +746,13 @@ nothing ever resolves. So three rules govern the knobs themselves:
 | min open interest to answer | court vote | realm ceiling, so a court can't make claims unanswerable |
 | answer-bond cap | court vote | realm **floor**, so lying can't be made cheap |
 | dispute-bond minimum | court vote | realm **ceiling**, so policing can't be priced out |
-| treasury threshold / payout cap / period ceiling | court vote | realm floors (already strict) |
+| treasury threshold / payout cap / period ceiling | court vote | realm floors (already strict) — **deferred; the V1 treasury is unspendable** |
 | adjudication fee rate + cap | **realm constant** | not per-court — it decides juror pay and a skim, and neither should be a founder's lever |
 | θ (votable-weight quorum cap) | realm constant | — |
-| trailing-average window for X | realm constant | 7 days — long enough that sustaining a pump locks capital for a week |
+| trailing-average window for X (`answerWindow`) | realm constant | V1: 3h — enough trailing history to block a flash-answer; 7 days is the target as the design hardens |
+| pre-answer price window (`priceWindow`) | realm constant | a full week (168 hourly buckets); a market too young to fill it defaults to the 50/50 split |
 | quorum floor (5% of supply) | realm constant | — |
-| session cadence, 72h minimum, 7-day vote | realm constant | — |
+| 72h settlement minimum (`settleDelay`), 7-day vote | realm constant | weekly session cadence deferred to V2 |
 | escrow shape (1–3 weeks) | realm constant | — |
 | failed-round limit (3) | realm constant | — |
 | verdict threshold (5001 bps) | realm constant | — |

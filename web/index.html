@@ -735,7 +735,7 @@ function resolutionSection(slug,id,d){
         ${btn("Settle (if undisputed & aged)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
   } else {
     inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Anyone may post one, with a bond large enough that lying does not pay.
-      An answer is resolved at a scheduled settlement — and silence settles safely, because the money then waits in escrow where it can still be disputed.
+      An undisputed answer becomes settleable 72 hours after it is posted — and silence settles safely, because the money then waits in escrow where it can still be disputed.
       <div class="actions" style="margin-top:10px">
         ${btn("Post: YES","PostAnswer",{courtSlug:slug,claimID:id,verdict:0},"yes")}
         ${btn("Post: NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}</div></div></div>`;
@@ -749,7 +749,7 @@ function fourThings(){
   return `<section><div class="primer"><h3>Four things, before any button</h3><ol>
     <li>Buying the coin is <b>permanent</b> — there is no sell button, ever.</li>
     <li>A share pays <b>one coin if YES, nothing if NO</b>, and there is <b>no deadline</b>.</li>
-    <li>Anyone may <b>post an answer</b> with a bond large enough that lying does not pay; answers settle at scheduled sessions, and silence settles safely into escrow.</li>
+    <li>Anyone may <b>post an answer</b> with a bond large enough that lying does not pay; an undisputed answer becomes settleable <b>72 hours after it is posted</b>, and silence settles safely into escrow.</li>
     <li>Every button spends real money and is <b>final</b>.</li>
   </ol></div></section>`;
 }
@@ -860,7 +860,7 @@ on(/^\/about$/, async ()=>{
       <h2>A claim, and its market</h2>
       <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small anti-spam deposit. Mint a <b>set</b> (one YES + one NO) for ${PRICE_SCALE} CC of collateral, then trade the halves on a tick order book. A YES share pays ${PRICE_SCALE} CC if the claim is true and nothing if it is false; a matched set is always redeemable, so you are never trapped, and there is no deadline.</p>
       <h2>Answers, and disputes</h2>
-      <p>Anyone may <b>post an answer</b> with a bond. Left alone, it settles at a scheduled session — silence settles safely, because the money waits in escrow where it can still be disputed. To contest it, open an <b>answer dispute</b>: a token vote on the single question <i>“overturn the answer?”</i> The tally is sealed until the vote closes. A verdict always shows its route — <i>undisputed</i>, or <i>by vote (71%)</i> — because that difference is the whole epistemic product.</p>
+      <p>Anyone may <b>post an answer</b> with a bond. Left alone, it becomes settleable 72 hours after it is posted — silence settles safely, because the money waits in escrow where it can still be disputed. To contest it, open an <b>answer dispute</b>: a token vote on the single question <i>“overturn the answer?”</i> The tally is sealed until the vote closes. A verdict always shows its route — <i>undisputed</i>, or <i>by vote (71%)</i> — because that difference is the whole epistemic product.</p>
       <h2>The overlay is optional</h2>
       <p>Everything here is read from the realm's own <code>Render</code> and its public reads, and every button is a normal gnoweb transaction. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore the shape offline.</p>
     </div>`;
