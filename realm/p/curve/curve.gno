@@ -92,12 +92,18 @@ func (c Curve) Cost(from, delta int64) (coin int64, ok bool) {
 	lo2, carry := bits.Add64(lo, m-1, 0)
 	hi2 := hi + carry
 	if hi2 >= m {
-		// The quotient would not fit (and bits.Div64 requires hi < m); unreachable
-		// below the cap for a sane d, but never assume it fits.
+		// The quotient would not fit int64 (and bits.Div64 REQUIRES hi < m). This IS
+		// reachable well below the position cap — for the court's d=1e9 it fires around
+		// s1≈1.9e14, far under cap≈9.2e14 — but only at positions whose fill cost exceeds
+		// MaxInt64 µGNOT, i.e. more GNOT than can exist, so no funded Buy reaches it.
+		// Do NOT delete this as "dead": Minted relies on ok=false meaning "unaffordable",
+		// and without the guard bits.Div64 would violate its hi<m precondition (over-issue).
 		return 0, false
 	}
 	q, _ := bits.Div64(hi2, lo2, m)
 	if q > uint64(maxInt64) {
+		// Same story one step later: the cost is a valid 128-bit value but exceeds int64,
+		// so it is unaffordable (MaxInt64 µGNOT is more than the whole supply's worth).
 		return 0, false
 	}
 	return int64(q), true
@@ -171,7 +177,7 @@ func (c Curve) Backing(s int64) int64 { return s / (2 * c.d) }
 // 128-bit multiply and compares. Division-free and deterministic.
 func isqrt128(hi, lo uint64) uint64 {
 	var ans, lo_ uint64
-	hi_ := uint64(1) << 63 // sqrt(2^126) = 2^63, the largest result an input < 2^128 gives
+	hi_ := uint64(1) << 63 // search bound: covers every result up to sqrt(2^126)=2^63 (our operands stay < 2^100)
 	for lo_ <= hi_ {
 		mid := lo_ + (hi_-lo_)/2
 		mh, ml := bits.Mul64(mid, mid)

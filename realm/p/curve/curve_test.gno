@@ -17,6 +17,60 @@ func TestCostIsTheIntegralRoundedUp(t *testing.T) {
 	}
 }
 
+// TestCostRefusedBelowCap exercises Cost's ok=false paths: a cost that overflows int64
+// even though the position is well below the cap. Both branches (the 128-bit quotient
+// not fitting, and the fitting quotient exceeding int64) were untested, and the code
+// relies on them — Minted reads ok=false as "unaffordable", so they are not dead code.
+func TestCostRefusedBelowCap(t *testing.T) {
+	c := New(1_000_000_000, maxSupply) // the court's exact denom
+	for _, delta := range []int64{140_000_000_000_000, 200_000_000_000_000} {
+		if delta >= maxSupply {
+			t.Fatalf("setup: delta %d must be below the cap %d to prove 'refused below the cap'", delta, maxSupply)
+		}
+		if got, ok := c.Cost(0, delta); ok {
+			t.Fatalf("Cost(0,%d) below the cap should be refused (its cost exceeds int64), got %d,true", delta, got)
+		}
+	}
+}
+
+// TestMintedBackedAtExtremes checks the never-mint-below-backing invariant where the
+// existing fuzz does not reach: coin near MaxInt64, a `from` inside the cost-overflow
+// region, near the cap, and one-below-cost. Every minted delta's canonical cost must be
+// ≤ what was paid, and one more coin must cost strictly more (delta is maximal).
+func TestMintedBackedAtExtremes(t *testing.T) {
+	c := New(1_000_000_000, maxSupply)
+	check := func(from, coin int64) {
+		delta, spent := c.Minted(from, coin)
+		if delta < 0 || spent < 0 || spent > coin {
+			t.Fatalf("Minted(%d,%d)=%d,%d: spent must be in [0,coin]", from, coin, delta, spent)
+		}
+		if delta == 0 {
+			return
+		}
+		cost, ok := c.Cost(from, delta)
+		if !ok || cost != spent || cost > coin {
+			t.Fatalf("Minted(%d,%d) minted %d; its Cost is %d,%v (spent %d, coin %d) — must be ≤ coin (no over-issue)", from, coin, delta, cost, ok, spent, coin)
+		}
+		if cost1, ok1 := c.Cost(from, delta+1); ok1 && cost1 <= coin {
+			t.Fatalf("Minted(%d,%d) minted %d but %d was still affordable (cost %d ≤ %d) — not maximal", from, coin, delta, delta+1, cost1, coin)
+		}
+	}
+	check(0, maxInt64)                   // the whole budget from the origin
+	check(0, maxInt64-1)                 // one below
+	check(100_000_000_000_000, maxInt64) // a `from` inside the cost-overflow region
+	check(maxSupply-1, maxInt64)         // one short of the cap (fills to cap, then stops)
+
+	// Paying one below the exact cost of k coins buys strictly fewer than k.
+	from, k := int64(50_000_000), int64(1000)
+	cost, ok := c.Cost(from, k)
+	if !ok {
+		t.Fatal("setup: Cost(from,k) should be affordable")
+	}
+	if delta, _ := c.Minted(from, cost-1); delta >= k {
+		t.Fatalf("paying one below Cost(%d,%d)=%d should buy < %d, got %d", from, k, cost, k, delta)
+	}
+}
+
 func TestCostFromNonZero(t *testing.T) {
 	c := New(2, maxSupply)
 	// ceil((15²−10²)/4) = ceil(125/4) = 32.
