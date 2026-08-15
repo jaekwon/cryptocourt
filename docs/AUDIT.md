@@ -429,3 +429,87 @@ a later overturn (spec §3.7 literal; conserved, weakens the deterrent). **O3** 
 decide→3-fails→close voids the earned adjudication fee (returns to holders via the full
 `CloseAt`; costly griefing by design). **O4** `ReleaseRoll` before `ClaimAdjFee` strands
 the fee (fails closed; pre-existing).
+
+## Convergence round — systematic bottom-up re-sweep
+
+A fixpoint sweep: one adversarial pass per unit, bottom-up (leaves first), re-running
+until a whole pass finds nothing and changes nothing. Every money/behaviour change was
+vetted by an independent adversarial subagent before commit; `make check` + `make
+txtar-test` stayed green throughout. It found **two real bugs the earlier rounds missed**
+— both in court/tickbook money math, which is where every confirmed bug in this project
+has been.
+
+**CRITICAL — integer-overflow theft in the court's coin legs (FIXED).** gno's int64
+arithmetic WRAPS silently (it does not trap). `MintSet` and `RestBid` multiplied a
+caller-controlled quantity by a price with a bare `*`, so a huge quantity wrapped to a
+tiny coin leg — mint many shares (or rest a large order) for almost nothing. Confirmed
+with a failing regression (a mint credited ~1.8e17 shares for 84 CC). **Fix:** a checked
+`ccMul` (`overflow.Mul64`, panics on overflow) now guards every court coin-leg multiply
+(`MintSet`/`RedeemSet`/`claimX`/`RestBid`/`CancelOrder`/`RedeemWinning`/`RedeemClosed`/the
+fee products), plus a checked `overflow.Add64` on the open-interest ceiling. A full
+money-path re-audit confirmed the fix is COMPLETE — every remaining bare multiply is
+provably bounded by `grc20votes.MaxSupply` (= MaxInt64/Bps) and the frozen, sane-bounded
+`Params` (there is no exported retune path). Regressions in `overflow_test.gno`.
+
+**MED — tickbook survival-fraction freeze via join-after-fill (FIXED).** Distinct from
+the round-1 tickbook `surv` scale freeze: when a maker JOINS a tick that has already been
+partly filled, `surv` could shrink below the tracked resting, so later fills credited the
+joined maker nothing and their coin stranded (fails safe — no insolvency). **Fix:** `Place`
+guards `nrest > s0` so `surv >= resting` always holds. Vetted regression-free and
+solvency-preserving.
+
+**MED — pre-answer price TWAP manipulable (FIXED, with a documented residual).** The
+3-failed-round `CloseAt` settles at a pre-answer price snapshotted from the claim's price
+TWAP. That price was read over the same 3-bucket (3-hour) window as answerability. Open
+interest is safe on a short window (it moves only on real mint/redeem), but the traded
+price moves on every take, so a self-trader could wash-trade to pin a 3-hour window and
+skew the close-price value transfer in a single session on any answerable claim. **Fix:**
+split the window — answerability keeps the 3h `answerWindow`; the pre-answer price now
+reads a new week-long `priceWindow` (the full ring the claim already allocates). Because
+the snapshot is taken at `PostAnswer`, when a claim is typically only hours old, its price
+ring is immature over a week and the price defaults to the safe, unmanipulable 50/50 split
+— which closes the fast single-session pin. Regressions:
+`TestPreAnswerPriceResistsShortWindowPin` (a 3-bucket pin that would have set 99 now yields
+50/50) and `TestPreAnswerPriceUsesRealPriceWhenTheWeekIsMature` (a stable mature week
+yields its real price — guards against an off-by-one silently forcing 50/50 forever).
+Adversarially vetted SOUND. **O5 (residual):** the fix is not a mechanical block — the twap
+carries the last value across idle buckets, so a determined actor can still mature a
+week-long pin with as few as two wash-takes a week apart. What bounds it is economic, not
+the TWAP: conservation (`CloseAt` settles the sides at p and 100−p, summing to 100, so a
+pin only MISALLOCATES, never mints/insolvency), the need for real losing-side
+counterparties (whose own takes are themselves observed into the same ring), and the week
+of latency plus three failed dispute rounds (≥7×base bond) needed to reach `CloseAt`. The
+fully-robust alternative — settle `provClose` at a flat 50/50 always — is a spec (§3.7)
+change left to the owner.
+
+**LOW — unanswered claim strands its deposit (O6, documented residual).** The anti-spam
+deposit is escrowed at `OpenClaim` and refunded only at `Finalize`. A claim that never
+reaches `minAnswerX` is never answerable, never settles, never finalizes — so the deposit
+locks indefinitely. Self-inflicted (no attacker, no insolvency; the opener recovers it only
+by minting enough sets to drive the full answer→settle→finalize cycle). A fix (a
+timeout-gated depositor reclaim, or a refund folded into a `RedeemSet` that drops supply to
+zero) adds a new fund-movement trigger with anti-spam/re-mint design questions, so it is
+left to the owner rather than changed unilaterally.
+
+**Everything else re-verified CLEAN.** The full `/p/` sweep (checkpoint, curve, twap,
+cshares, tickbook, grc20votes, governor) came back sound; only test-coverage/doc gaps were
+closed — a twap maturity-mutation test + `New`/`Load` validation, a checkpoint `be64`
+negative-value round-trip (both were documented-but-unexercised contracts), and a curve
+cost-refused/extremes pair. `grc20votes` and `checkpoint` were re-read directly (delegation
+sum-invariant, epoch-seal anti-flash-loan, `~supply` key collision-safety, `MaxSupply`
+tally bound; BE round-trip, prefix-safe floor query) and needed no change — a clean pass
+with nothing to fix, which is the convergence signal. In the court, the directory's empty
+state was dead code (the header made the length check always false) and is now reachable,
+guarded end-to-end in the lifecycle txtar; the `ListCourts` ordering comment was corrected
+(slug order, not age).
+
+**Wireframe / tokenomics consistency.** A cross-check of `web/index.html` and the tokenomics
+/ structure docs against the code found no wrong user-facing number and no phantom
+entrypoint (every wireframe action resolves to a real exported func; "72h min" =
+`settleDelay`, confirmed). The gaps are doc-honesty ones: the docs and wireframe describe
+"weekly sessions" the V1 code does not implement (it uses a rolling 72h `settleDelay`; the
+weekly boundary is a deferred refinement), and §9 states a 7-day trailing-X window where V1
+uses 3h. One item is a genuine product call left to the owner: §3.4 says the ballot is "the
+claim itself — never 'uphold the answer'", but the shipped governor vote (and the wireframe
+faithfully) frames it as "OVERTURN the answer?" — code and doc-principle disagree, and which
+should win is an epistemic-design decision, not a typo.
