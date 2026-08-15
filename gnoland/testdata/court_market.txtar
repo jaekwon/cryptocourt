@@ -1,0 +1,88 @@
+# The claim market against a real node, with two distinct signing keys: a maker rests
+# a YES ask (escrowing real shares with the realm), a SECOND key crosses it (paying
+# real CC into escrow and taking the shares out), the maker collects the proceeds, and
+# cancels the unfilled remainder to get its shares back. The realm's escrow CC balance
+# is the coin oracle throughout: it moves by exactly the notional, and every share and
+# coin is a real balance in a real account — the escrow accounting a unit harness
+# asserts only against itself.
+
+loadpkg gno.land/p/cryptocourt/checkpoint/v0
+loadpkg gno.land/p/cryptocourt/grc20votes/v0
+loadpkg gno.land/p/cryptocourt/governor/v0
+loadpkg gno.land/p/cryptocourt/twap/v0
+loadpkg gno.land/p/cryptocourt/cshares/v0
+loadpkg gno.land/p/cryptocourt/tickbook/v0
+loadpkg gno.land/p/cryptocourt/curve/v0
+loadpkg gno.land/r/cryptocourt/court
+
+# A second funded key so the crossing fill has a genuinely different counterparty.
+adduser test2
+
+gnoland start
+
+env COURT=g1sf46mrxknexnakkpsx2ju0rpj26qc32a930nlk
+
+# --- Set up: a court, both keys buy the coin, a claim, and a minted position ---
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func StartCourt -args mkt -args 'Market Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func Buy -args mkt -send 60000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func Buy -args mkt -send 60000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test2
+stdout 'OK!'
+
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func OpenClaim -args mkt -args 'Will it trade?' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout '\(1 uint64\)'
+stdout 'OK!'
+
+# test1 mints 3000 sets -> 3000 YES + 3000 NO. Escrow now holds deposit + collateral.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func MintSet -args mkt -args 1 -args 3000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.CoinBalanceOf(\"mkt\",\"${COURT}\")"
+stdout '\(1300000 int64\)'
+
+# --- Rest an ask: shares escrow, coins do not -------------------------------
+# Sell 2000 YES at tick 49 (price 50). The shares move into the realm's escrow; its
+# CC balance is unchanged, because an ask escrows SHARES not COINS.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func RestSell -args mkt -args 1 -args 49 -args 2000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout '\(1 uint64\)'
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.SharesOf(\"mkt\",1,0,\"$test1_user_addr\")"
+stdout '\(1000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.SharesOf(\"mkt\",1,0,\"${COURT}\")"
+stdout '\(2000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.CoinBalanceOf(\"mkt\",\"${COURT}\")"
+stdout '\(1300000 int64\)'
+
+# --- Cross it from the second key -------------------------------------------
+# test2 buys 1000 YES up to tick 49. It fills at the maker's price 50: 1000 shares
+# for 1000*50 = 50000 CC, paid into escrow for the maker to collect.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func TakeBuy -args mkt -args 1 -args 49 -args 1000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test2
+stdout '\(1000 int64\)'
+stdout '\(50000 int64\)'
+stdout 'OK!'
+
+# test2 holds the 1000 bought YES; escrow's resting YES fell to 1000; escrow CC rose
+# by exactly the 50000 notional.
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.SharesOf(\"mkt\",1,0,\"$test2_user_addr\")"
+stdout '\(1000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.SharesOf(\"mkt\",1,0,\"${COURT}\")"
+stdout '\(1000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.CoinBalanceOf(\"mkt\",\"${COURT}\")"
+stdout '\(1350000 int64\)'
+
+# --- The maker collects the proceeds ----------------------------------------
+# The 50000 CC leaves escrow to the maker; escrow CC returns to deposit + collateral.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func Collect -args mkt -args 1 -args 1 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.CoinBalanceOf(\"mkt\",\"${COURT}\")"
+stdout '\(1300000 int64\)'
+
+# --- The maker cancels the unfilled remainder -------------------------------
+# The 1000 unsold YES come back out of escrow; the maker is whole at 2000 YES again.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func CancelOrder -args mkt -args 1 -args 1 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.SharesOf(\"mkt\",1,0,\"$test1_user_addr\")"
+stdout '\(2000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/court.SharesOf(\"mkt\",1,0,\"${COURT}\")"
+stdout '\(0 int64\)'

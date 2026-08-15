@@ -226,6 +226,12 @@ func CoinSupply(slug string) int64   { return mustCourt(slug).coin.TotalSupply()
 func Treasury(slug string) int64     { return mustCourt(slug).treasury }
 func OpenInterest(slug string) int64 { return mustCourt(slug).oi }
 
+// CourtEscrow is the address that holds a court's escrow — collateral, bonds, and
+// fees in CC, and the treasury in GNOT. It is the realm's own address (every court
+// shares it; each court's coin ledger isolates its balances). A client uses it to
+// audit the on-chain coin invariant against the bank balances.
+func CourtEscrow(slug string) address { return mustCourt(slug).escrow }
+
 // mustSlug refuses a slug that is empty, too long (a key bound), or contains a
 // character a path or a render could not carry safely. The charset is URL- and
 // markdown-safe by construction — lowercase letters, digits, and hyphen — so a slug

@@ -1,4 +1,4 @@
-.PHONY: check realm-test chain-test isolation-test selftest fmt vet
+.PHONY: check realm-test chain-test txtar-test isolation-test selftest fmt vet
 
 # Everything that can run without a node.
 #
@@ -55,6 +55,15 @@ realm-test:
 # numbers, which reads as a realm bug and is not one.
 chain-test:
 	REQUIRE_GNODEV=1 go test -tags gnochain -count=1 -p 1 -timeout 40m ./...
+
+# The .txtar integration tests: the realms run against a real (in-memory) gnoland
+# node, exactly as gno.land/pkg/integration/testdata does. Needs no external node —
+# the harness spins one up per script. TestMain stages the realms into
+# GNOROOT/examples (where `loadpkg` looks) and removes them after. This is the only
+# place the on-chain coin invariant — real GNOT to treasury, real CC through escrow —
+# is checkable; the unit harness can only assert internal consistency.
+txtar-test:
+	go test -tags txtar -count=1 -timeout 20m ./gnoland/
 
 # Every realm suite run on its own. A gno test file shares package state and
 # these suites do not rewind the clock, so a test can pass only because of what
