@@ -816,6 +816,7 @@ checkpoints, no delegation — by swapping the one line that names the electorat
 
     realm/p/checkpoint/     gno.land/p/cryptocourt/checkpoint/v0
     realm/p/grc20votes/     gno.land/p/cryptocourt/grc20votes/v0
+    realm/p/governor/       gno.land/p/cryptocourt/governor/v0
     realm/r/govern/         gno.land/r/cryptocourt/govern
     realm/r/offerer/        gno.land/r/cryptocourt/offerer
     internal/chain/         the tests that need a running node
@@ -872,3 +873,40 @@ the other side: the callback cannot name a type it could damage.
 So the rule for anything added here later: a kind may be handed scalars and a
 sub-realm token, and never a pointer to governor or ledger state.
 
+## What is not finished
+
+`r/govern` does not import `p/governor`. It carries its own copy of the engine,
+so those ~1,950 lines exist twice — which is the duplication this repository has
+a written doctrine against, in VERIFYING.md, under the heading about collapsing
+a rule that lives in two places.
+
+Said plainly because it is the sort of thing that reads as finished from a
+distance. The package is complete, has its own tests, and drives a council that
+is not a token at all; what has not happened is the realm being cut over to it.
+
+The two copies have already diverged: the package extracted `BootstrapRules`
+out of `installBuiltins` and gained the introspection surface, and the realm's
+copy has neither. `check-docnumbers` reads the realm's copy, so a change to the
+package's bootstrap terms would be caught by nothing.
+
+What the cut-over needs, in order:
+
+  - the realm becomes entrypoints, `init`, the minter policy and a `Dispatch`
+    that mints `cur.Sub(subpath)` — written and verified to compile, and the
+    part that is done;
+  - its ~72 engine tests are rewritten against the introspection surface, which
+    is what that surface was added for. Most map directly: `openIdx.Size()` to
+    `OpenSlots`, `entryOf` to `KindStatus`, `kinds.Set(&entry{...})` to `Adopt`,
+    `maxLive` and `reserved` to the exported constants;
+  - about eight of them cannot be, because they are about things the engine
+    keeps to itself — packing a ballot, validating a kind name, the sweep
+    cursor's position — and those move into the package;
+  - the test kinds are rewritten to hold their state behind a pointer. A /p/
+    package's state is frozen after init, so a fixture kind that records what it
+    did in a package-level var panics rather than recording it;
+  - `check-docnumbers` and `check-storage` repoint at the package.
+
+Attempted twice and backed out twice, both times because finishing it halfway
+leaves a repository that does not build. The cost is in the tests rather than
+the engine, and it is a few hundred lines of mechanical rewriting rather than
+anything undecided.

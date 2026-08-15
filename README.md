@@ -18,12 +18,19 @@ were inherited, which were refused, and what was measured to decide.
 
     realm/p/checkpoint/     gno.land/p/cryptocourt/checkpoint/v0
     realm/p/grc20votes/     gno.land/p/cryptocourt/grc20votes/v0
+    realm/p/governor/       gno.land/p/cryptocourt/governor/v0
     realm/r/govern/         gno.land/r/cryptocourt/govern
     realm/r/offerer/        gno.land/r/cryptocourt/offerer
 
 The `/p/` packages are the reusable half: any realm can import them and get a
-checkpointed voting token without forking anything. The `/r/` realms are one
-worked consumer of them.
+checkpointed voting token and a governor over it without forking anything. The
+`/r/` realms are one worked consumer.
+
+**One thing is half-done, and it is visible in the tree.** `r/govern` still
+carries its own copy of the engine rather than importing `p/governor` — the
+package is complete and has its own tests, but the realm has not been cut over,
+so the engine source exists twice. Nothing imports the package yet. See
+docs/DESIGN.md, "What is not finished".
 
 **checkpoint** remembers what a number used to be, as of an epoch. Two points
 inline plus a paged archive, so an account whose balance has not moved since it
@@ -41,7 +48,17 @@ above holds the `cur realm`, checks `IsCurrent()`, and passes the address in.
 That is the split, and it is the reason the ledger needs no capability of its
 own.
 
-**govern** is one realm consuming both. It owns what only a realm can: the
+**governor** is the engine: the kind registry, every proposal, the tally
+arithmetic, the rules, the slot sweep and the pages. A `*Governor` the consuming
+realm allocates, over any `Electorate` and `Token` — a ledger, or a council with
+one address and one vote.
+
+It cannot run a kind by itself. Handing a kind its sub-realm token needs a live
+`cur`, which a pure package has none of, so the realm supplies a one-line
+`Dispatch`. What that dispatcher receives is a kind, a subpath and a payload,
+and no pointer into governor or ledger state.
+
+**govern** is one realm consuming these. It owns what only a realm can: the
 entrypoints, the deployer captured at init, the minter policy, and the governor
 that decides by reading the ledger's history at an epoch sealed when the
 question was asked — which is what stops voting weight being bought once a

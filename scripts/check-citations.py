@@ -49,7 +49,7 @@ import sys
 # there is deployed on chain, and this one is a quarter of the govern realm's
 # deploy. It still quotes the gno tree, so it still has to be checked.
 SRC = ["realm/r/govern", "realm/p/checkpoint", "realm/p/grc20votes",
-       "realm/r/offerer", "docs/DESIGN.md"]
+       "realm/p/governor", "realm/r/offerer", "docs/DESIGN.md"]
 
 # (path under GNOROOT, anchor regex, the literal the prose quotes, the claim)
 #
