@@ -4,11 +4,32 @@ import (
 	"chain/runtime"
 )
 
-// answerWindow is the trailing window (in blocks) the answerability X̄ and the
-// pre-answer price are read over. A V1 value: it demands SOME trailing history so a
-// fresh claim cannot be flash-answered, without waiting the tokenomics' full week
-// (raise toward 7 days as the design hardens). 3 hourly buckets.
+// answerWindow is the trailing window (in blocks) the answerability X̄ is read
+// over. A V1 value: it demands SOME trailing history so a fresh claim cannot be
+// flash-answered, without waiting the tokenomics' full week (raise toward 7 days
+// as the design hardens). 3 hourly buckets. This gates ANSWERABILITY only, and X̄
+// reads open interest, which moves only on real mint/redeem — so a short window is
+// safe here (there is nothing to wash-trade).
 const answerWindow = 3 * epochBlocks
+
+// priceWindow is the trailing window the PRE-ANSWER PRICE is read over — the full
+// ring (a week), where answerWindow (3h) gates only answerability. The traded price
+// moves on every take, so a self-trader can wash-trade to set it; over the old
+// 3-bucket window that was a single-session, few-block pin on ANY answerable claim.
+// PostAnswer snapshots preAnswerPrice ONCE, and a claim is answerable after only ~3h
+// of open interest — so a freshly answered market's price ring is immature over a
+// week and preAnswerPrice DEFAULTS to the safe, unmanipulable 50/50 split. That is
+// what closes the fast pin (the confirmed MED).
+//
+// It does NOT make the price un-pinnable: the twap carries the last value across
+// idle buckets, so a determined actor can still mature a week-long pin with as few as
+// two wash-takes a week apart. What defends the residual is economics, not the TWAP —
+// conservation bounds it (CloseAt settles the two sides at p and 100-p, summing to
+// 100 for any p, so a pin only MISALLOCATES, never mints/insolvency); extracting
+// value needs real losing-side counterparties whose own takes are themselves observed
+// into this same ring; and it costs a full week of wall-clock plus surviving three
+// failed dispute rounds (≥7×base bond) to reach CloseAt at all. See docs/AUDIT.md.
+const priceWindow = twapBuckets * epochBlocks
 
 // PostAnswer posts THE answer to a claim — a proposed verdict (YES or NO) backed by
 // a bond. One answer per claim, single-funded. The bond is min(50%·X, cap) in CC,
@@ -53,12 +74,14 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	}
 	c.coin.Transfer(who, c.escrow, bond)
 
-	// Snapshot the pre-answer price ONCE, from the mature price twap (an immature or
-	// never-traded market splits the two sides equally). Kept across rounds.
+	// Snapshot the pre-answer price ONCE, over the full-week priceWindow. A market too
+	// young to fill a week — the usual case, since answerability needs only ~3h of OI —
+	// reads immature and splits 50/50, which defeats the fast short-window wash-trade
+	// pin. Kept across rounds.
 	if !cs.preAnswerSet {
-		p, pm := cs.price.Average(runtime.ChainHeight(), answerWindow)
+		p, pm := cs.price.Average(runtime.ChainHeight(), priceWindow)
 		if !pm {
-			p = priceScale / 2 // no traded price yet → 50/50
+			p = priceScale / 2 // no robust week-long price yet → 50/50
 		}
 		cs.preAnswerPrice = p
 		cs.preAnswerSet = true
