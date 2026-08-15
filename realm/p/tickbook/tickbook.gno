@@ -91,17 +91,23 @@ const (
 	// accScale is the survival fraction's fixed-point unit (1.0), a uint64.
 	//
 	// A fill of f against resting r shrinks a tick's surv by the factor (r-f)/r.
-	// For that shrink to MOVE surv on the smallest fill — one share — surv must
-	// stay at least as large as r. Since surv = accScale·r/T where T is the peak
-	// resting the tick ever held, surv >= r holds exactly when T <= accScale. That
-	// is why a tick's resting is capped at maxTickResting = accScale: beyond it,
-	// surv would freeze and a one-share fill would credit no maker at all (their
-	// coin stranded) — the sub-unit rounding-dominance an order book must not have.
-	// 1e18 is ~1000x the court's entire supply cap (~9.2e14), so the cap never
-	// binds in practice yet guarantees the fraction always resolves a real fill.
+	// For that shrink to MOVE surv on the smallest fill — one share — surv must stay
+	// at least as large as r (surv >= resting). That invariant does NOT hold "by
+	// construction": surv shrinks with fills, and a maker JOINING a partially-filled
+	// tick regrows resting while surv stays shrunken, which can push resting past surv
+	// and freeze the tick (a one-share fill then credits no maker — their coin strands).
+	// So the invariant is ENFORCED, in two places: an empty-tick reset restores
+	// surv = accScale (>= any qty, since maxTickResting = accScale), and Place REFUSES a
+	// join whose new resting would exceed the tick's current surv (see Place). Takes
+	// preserve it (surv and resting shrink together, surv rounding up), and Cancel only
+	// shrinks resting (never touching surv), so surv >= resting holds always. 1e18 is
+	// ~1000x the court's supply cap (~9.2e14), so a fresh
+	// tick's cap never binds in practice; only a heavily-nibbled tick refuses new joins
+	// until it clears.
 	accScale = int64(1_000_000_000_000_000_000)
-	// maxTickResting caps a tick's aggregate resting so the survival fraction can
-	// never freeze (see accScale). A Place that would breach it panics.
+	// maxTickResting caps a FRESH tick's aggregate resting at accScale so a just-reset
+	// surv (= accScale) is >= resting. A join into a nibbled tick is bounded tighter, by
+	// the tick's current surv (Place). A Place that would breach either panics.
 	maxTickResting = accScale
 	// maxLevels caps how many price levels one Take may FILL — the returned
 	// `crossed`. Empty ticks between fills are skipped for free (not counted), and
@@ -195,6 +201,16 @@ func (b *Book) Place(side Side, tick uint8, maker address, qty int64) uint64 {
 	nrest, ok := overflow.Add64(rest, qty)
 	if !ok || nrest > maxTickResting {
 		panic("tickbook: tick resting would exceed the precision bound")
+	}
+	// The survival fraction can only resolve a one-share fill while surv >= resting.
+	// An empty-tick reset sets surv = accScale >= qty, and every fill shrinks surv and
+	// resting together (surv stays >= resting). But a JOIN into a partially-filled tick
+	// regrows resting while surv stays shrunken, so this join must not push resting past
+	// the tick's CURRENT surv (s0) — otherwise the tick freezes and later fills credit the
+	// joined makers nothing, stranding their value. Refuse it; the maker waits for the
+	// tick to clear (surv resets). For a fresh tick s0 == accScale, so this never bites.
+	if nrest > s0 {
+		panic("tickbook: tick precision exhausted by prior fills; wait for it to clear")
 	}
 	putI64(data, restOff(tick), nrest)
 	occSet(data, tick)
