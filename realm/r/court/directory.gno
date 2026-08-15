@@ -38,9 +38,10 @@ func SetTier(cur realm, courtSlug string, tier int) {
 func DirectoryAdmin() address        { return directoryAdmin }
 func CourtTier(courtSlug string) int { return int(mustCourt(courtSlug).tier) }
 
-// ListCourts returns every court's slug in directory order (by age — the be-keyed
-// order the tree holds them in). A value slice; nothing internal escapes. A page
-// filters by CourtTier. Paged callers can slice the result.
+// ListCourts returns every court's slug in slug order — lexicographic by the
+// user-chosen slug, which is the key the tree holds them under, NOT age of
+// creation. A value slice; nothing internal escapes. A page filters by
+// CourtTier. Paged callers can slice the result.
 func ListCourts() []string {
 	out := []string{}
 	courts.Iterate("", "", func(key string, _ any) bool {
