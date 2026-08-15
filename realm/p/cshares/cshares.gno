@@ -178,6 +178,10 @@ func (l *Ledger) Transfer(id uint64, outcome int, from, to address, qty int64) {
 // TransferFrom moves shares on behalf of `owner`, which requires `owner` to have
 // approved `spender` as an operator. There is no per-outcome allowance; approval
 // is all-or-nothing across a holder's claims, the ERC-1155 shape.
+//
+// Like every mutator here it authenticates NOTHING: the realm MUST pass the
+// AUTHENTICATED caller as `spender` (this package only checks that spender is
+// approved by owner — it cannot check who is really calling).
 func (l *Ledger) TransferFrom(spender, owner address, id uint64, outcome int, to address, qty int64) {
 	if spender != owner && !l.IsApproved(owner, spender) {
 		panic("cshares: not approved")
@@ -201,7 +205,9 @@ func (l *Ledger) Reclaim(id uint64, outcome int, from, to address, qty int64) {
 	l.move(id, outcome, from, to, qty)
 }
 
-// SetOperatorApproval lets operator move all of owner's shares, or revokes it.
+// SetOperatorApproval lets operator move all of owner's shares, or revokes it. It
+// authenticates NOTHING: the realm MUST have verified the caller IS `owner` before
+// calling (otherwise anyone could grant an operator over anyone's shares).
 func (l *Ledger) SetOperatorApproval(owner, operator address, approved bool) {
 	key := approvalKey(owner, operator)
 	if approved {
