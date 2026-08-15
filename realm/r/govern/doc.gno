@@ -348,7 +348,7 @@
 //  2. Publish this realm. Whoever sends that transaction becomes the minter,
 //     because init() takes OriginCaller. There is no second chance at that.
 //
-//     Budget for it: about 173 million gas and 10.8 GNOT of storage deposit,
+//     Budget for it: about 68 million gas and 6.6 GNOT of storage deposit,
 //     measured on a chain and asserted by a test. AddPackage compiles AND
 //     stores the source, so both scale with the file — and three quarters of
 //     this file is comments, which is a deliberate trade worth knowing the

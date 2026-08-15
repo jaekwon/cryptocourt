@@ -111,7 +111,12 @@ func TestIntegrationGovernDeploys(t *testing.T) {
 	// and a test that fails on prose gets deleted rather than read. What this
 	// catches is the doubling, and it names the current cost when it fires so
 	// the next person has the number rather than a limit.
-	const gasCeiling = 400_000_000
+	// Halved when the engine moved to /p/: the realm now publishes 68 million
+	// against a ceiling that had been six times that, and a ceiling that loose
+	// catches nothing. 150 million is about double the current cost, which is
+	// what this is for — a doubling is the change worth a build break, and a
+	// few percent of comment drift is not.
+	const gasCeiling = 150_000_000
 	// Both halves of what a launch costs, because a deployer has to fund both
 	// and only one of them is gas. The deposit is permanent and much the larger
 	// number in ugnot; docs/DESIGN.md carries the pair, and doc.gno's launch

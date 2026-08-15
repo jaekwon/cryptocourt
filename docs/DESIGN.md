@@ -569,14 +569,17 @@ The one figure a deployer has to fund before anything else works, measured by
 
 | | |
 | --- | --- |
-| gas to publish the realm | about 173 million |
-| storage deposit | 108,393 bytes — 10,839,300 ugnot at the default price |
+| gas to publish the realm | about 68 million |
+| storage deposit | 65,867 bytes — 6,586,700 ugnot at the default price |
 
-Both fell when the ledger moved to `/p/`: a realm's deploy pays for its own
-source, and roughly a tenth of it is now published once as a package that other
-realms share rather than every time somebody forks this one. The dependency
-deploys are separate transactions with their own deposits, so this is a
-reapportioning rather than a saving — the difference is who pays, and how often.
+That is the REALM. It was 188 million and 117,347 bytes when it carried the
+ledger and the engine itself, and the difference did not evaporate — it moved
+into three packages that are published once and shared, rather than paid for
+again by everybody who forks this.
+
+Which is the whole economic argument for the split, stated as a number: a
+second court costs a realm's deploy and nothing else, because the packages it
+imports are already on chain. The first one pays for both.
 
 Rounded on purpose. The gas moves whenever a comment does — two runs a few
 edits apart measured 187,858,573 and 187,900,714 before the split — so an exact figure written
