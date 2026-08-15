@@ -26,15 +26,21 @@ const (
 	testDecimals    = 6
 )
 
+// The addresses are constants, which they have to be.
+//
+// A /p/ package's state is frozen after init: Realm.DidUpdate panics with
+// "package is immutable post-init" on a write to a real /p/-stamped object
+// outside init, and a test file is part of the package. So NOTHING here may be
+// a mutable package-level var — not a shared fixture, not a high-water clock,
+// not a "who is acting now". Anything that changes during a test is a local.
+//
+// That is the same rule the engine itself is built to, seen from the tests: it
+// is why a Governor is a value the caller allocates rather than package state,
+// and the tests cannot cheat where the code cannot.
 var (
 	gAlice = testutils.TestAddress("galice")
 	gBob   = testutils.TestAddress("gbob")
 	gCarl  = testutils.TestAddress("gcarl")
-
-	// actor is whoever the test is currently acting as. The realm above reads
-	// this from `cur.Previous()`; here it is passed in, so a test says who is
-	// acting by assigning it.
-	actor address
 )
 
 // fresh is a governor with nothing proposed, over a ledger with nothing minted.
@@ -45,10 +51,7 @@ var (
 // catch.
 func fresh() (*Governor, *grc20votes.Ledger) {
 	led := grc20votes.NewLedger(testTokenName, testTokenSymbol, testDecimals, testEpochBlocks)
-	g := New(led, led)
-	actor = gAlice
-	resumeClock()
-	return g, led
+	return New(led, led), led
 }
 
 // dispatch is what a consuming realm supplies to Execute. There is no `cur` in
@@ -60,33 +63,22 @@ func dispatch(k Kind, subpath, payload string) error {
 	return k.Do(0, none, payload)
 }
 
-// The clock only moves forward, because the checkpoints refuse a backwards
-// write. gno resets the height between tests, so the high-water mark is carried
-// here and every test resumes from it rather than from wherever the harness
-// left the height.
-var testHeight int64
-
-func advanceBlocks(n int64) {
-	if h := runtime.ChainHeight(); h > testHeight {
-		testHeight = h
-	}
-	testHeight += n
-	testing.SetHeight(testHeight)
-}
-
-func resumeClock() { advanceBlocks(0) }
+// The clock is read from the chain rather than tracked.
+//
+// The realm's tests carry a high-water mark, because they share one ledger
+// across the suite and its checkpoints refuse a backwards write. Here every
+// test allocates its own, so there is no earlier checkpoint to contradict and
+// nothing to remember — which is just as well, since a package-level int64
+// could not be written to anyway.
+func advanceBlocks(n int64) { testing.SetHeight(runtime.ChainHeight() + n) }
 
 func advanceEpochs(n int64) { advanceBlocks(n * testEpochBlocks) }
 
 func advanceTo(h int64) {
-	if cur := runtime.ChainHeight(); cur > testHeight {
-		testHeight = cur
-	}
-	if h < testHeight {
+	if now := runtime.ChainHeight(); h < now {
 		panic("advanceTo: the clock only moves forward")
 	}
-	testHeight = h
-	testing.SetHeight(testHeight)
+	testing.SetHeight(h)
 }
 
 // mustPanicContains is uassert.AbortsContains without the realm argument, which

@@ -216,3 +216,82 @@ func mustPanic(t *testing.T, want string, fn func()) {
 	}()
 	fn()
 }
+
+// A governor renders the token it was given, not a token it assumed.
+//
+// The decimal scale is computed from Token.Decimals(), because the engine does
+// not know what it is rendering until it is handed one. Hardcoding six works
+// perfectly for every token that has six, which is why this uses two.
+func TestTheEngineRendersTheTokensOwnScale(t *testing.T) {
+	c := &council{members: []address{gAlice}, epoch: 2}
+	two := New(c, penny{})
+	six := New(c, coin{supply: 1234})
+
+	// 1234 base units is 12.34 at two decimals and 0.001234 at six. Chosen
+	// because it has no trailing zeroes: units trims those on purpose, so a
+	// rounder number renders the same at both scales and would let a hardcoded
+	// six pass.
+	if got := two.units(1234); got != "12.34" {
+		t.Errorf("a two-decimal token renders 1234 as %q, want 12.34", got)
+	}
+	if got := six.units(1234); got != "0.001234" {
+		t.Errorf("a six-decimal token renders 1234 as %q, want 0.001234", got)
+	}
+	// And the page carries the same scale, since that is where a holder reads it.
+	if page := two.Render(""); !contains(page, "12.34 PENNY") {
+		t.Errorf("the front page does not render the supply at the token's "+
+			"own scale:\n%s", page)
+	}
+}
+
+// penny is a token with a scale that is not the one anybody would hardcode.
+type penny struct{}
+
+func (penny) Name() string         { return "Penny" }
+func (penny) Symbol() string       { return "PENNY" }
+func (penny) Decimals() int        { return 2 }
+func (penny) TotalSupply() int64   { return 1234 }
+
+// A governor needs both of its seams filled.
+//
+// Neither can be checked later: a nil electorate panics at the first vote, deep
+// inside arithmetic, and a nil token panics when somebody reads the page —
+// both a long way from the line that forgot to supply one.
+func TestAGovernorNeedsAnElectorateAndAToken(t *testing.T) {
+	c := &council{members: []address{gAlice}, epoch: 2}
+	mustPanic(t, "governor: a governor needs an electorate and a token", func() {
+		New(nil, coin{})
+	})
+	mustPanic(t, "governor: a governor needs an electorate and a token", func() {
+		New(c, nil)
+	})
+}
+
+// InstallBuiltin is for powers under the reserved prefix, and refuses anything
+// else.
+//
+// It exists because Offer refuses that prefix — which is what stops a stranger
+// publishing something that renders as a built-in. A realm reaching this with
+// an ordinary name has confused its own power with the governor's, and would
+// be installing a kind nobody voted to adopt.
+func TestInstallBuiltinIsForReservedNamesOnly(t *testing.T) {
+	g, _ := fresh()
+	var ran int64
+	mustPanic(t, "governor: a built-in has to carry the reserved prefix", func() {
+		g.InstallBuiltin(setFee{name: "toll/k", ran: &ran}, Rules{
+			QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
+		})
+	})
+	if g.entryOf("toll/k") != nil {
+		t.Error("the refused built-in was installed anyway")
+	}
+	// And a reserved one goes in, adopted, without a vote — which is the whole
+	// point and why this is the realm's to call and nobody else's.
+	g.InstallBuiltin(setFee{name: reserved + "toll", ran: &ran}, Rules{
+		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
+	})
+	e := g.entryOf(reserved + "toll")
+	if e == nil || !e.live {
+		t.Error("a reserved built-in was not installed live")
+	}
+}

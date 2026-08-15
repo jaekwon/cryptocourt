@@ -833,7 +833,12 @@ can offer is the bookkeeping behind one.
 
 A `/p/` package's own state is **frozen after init** (§3.3): `Realm.DidUpdate`
 panics on a write to a real `/p/`-stamped object outside init. So a library
-holds no package state. Anything durable is a value the consuming realm
+holds no package state — and neither do its TESTS, which are part of the same
+package. No shared fixture, no high-water clock, no "who is acting now": a
+package-level `var` that a test assigns to panics with "package is immutable
+post-init". Everything that changes during a test is a local. The rule the code
+is built to is one the tests cannot cheat around either, which is a good sign
+about the rule. Anything durable is a value the consuming realm
 allocates, which is why `NewLedger` returns a `*Ledger` rather than the package
 being the ledger. The trees inside carry the consumer's storage stamp, the
 storage-realm borrow (§4.2) hands the consumer's authority back for each method
