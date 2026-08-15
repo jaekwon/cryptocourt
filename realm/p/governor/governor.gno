@@ -490,10 +490,11 @@ func saneRules(r Rules) error {
 		return govErr("a decision has to expire; a grace period of zero holds " +
 			"its slot for the life of the realm")
 	}
-	if r.DelayBlocks < 0 || r.GraceBlocks < 0 {
-		// Negative behaves as zero everywhere it is used, so this refuses a
-		// value that means nothing rather than one that does harm — and stops
-		// it being stored and rendered as a term somebody agreed to.
+	if r.DelayBlocks < 0 {
+		// GraceBlocks < 0 needs no test here: the GraceBlocks <= 0 return above
+		// already refuses it. Negative behaves as zero everywhere it is used, so
+		// this refuses a value that means nothing rather than one that does harm —
+		// and stops it being stored and rendered as a term somebody agreed to.
 		return govErr("a period cannot be negative")
 	}
 	return nil
@@ -1767,14 +1768,20 @@ func plural(n int64, unit string) string {
 // hold a millionth of the token or all of it. Both are printed — this for
 // reading, the raw figure for checking.
 //
-// unitScale must stay 10^tokenDecimals. Go has no constant exponentiation, so
-// it cannot be derived the way pct derives its divisor from bps;
-// TestUnitsIsTotal computes the power and compares.
-// scale is 10^decimals, computed rather than a constant: the engine does not
-// know what token it is rendering until it is given one.
+// scale is 10^decimals for the token being rendered — computed, not a constant,
+// because Go has no constant exponentiation and the engine does not know what token
+// it renders until given one (TestTheEngineRendersTheTokensOwnScale checks it).
+// Decimals is CLAMPED to 18 first: 10^19 overflows int64 (and 10^k for k≥64 wraps to
+// 0, which would divide-by-zero in units()), so an unclamped power on a pathological
+// token would corrupt or panic Render. Render is a read, so a clamp on the rare bad
+// token is the right trade; grc20votes reports a small fixed decimals and is unaffected.
 func (g *Governor) scale() int64 {
+	d := g.token.Decimals()
+	if d > 18 {
+		d = 18
+	}
 	out := int64(1)
-	for i := 0; i < g.token.Decimals(); i++ {
+	for i := 0; i < d; i++ {
 		out *= 10
 	}
 	return out

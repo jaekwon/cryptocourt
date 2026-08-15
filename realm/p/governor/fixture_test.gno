@@ -41,6 +41,8 @@ var (
 	gAlice = testutils.TestAddress("galice")
 	gBob   = testutils.TestAddress("gbob")
 	gCarl  = testutils.TestAddress("gcarl")
+	gDave  = testutils.TestAddress("gdave") // a fourth holder, for tests that need a non-voter
+	gNemo  = testutils.TestAddress("gnemo") // never mints, votes, or holds — the "nobody" address
 )
 
 // fresh is a governor with nothing proposed, over a ledger with nothing minted.

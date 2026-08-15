@@ -319,6 +319,56 @@ func TestInstallBuiltinIsForReservedNamesOnly(t *testing.T) {
 // engine with an incomplete API — and a realm's tests are the first consumer to
 // find out. Each of these is a read the front page or a proposal page already
 // publishes in words.
+// TestVoteOfMatchesTallyLeg pins the load-bearing invariant the cryptocourt court's
+// fee split depends on: each voter's VoteOf weight equals their contribution to Tally,
+// and Σ(ballot weights) == yes+no+abstain exactly. If these diverged, the court's
+// ClaimAdjFee bound Σ floor(pool·w/W) ≤ pool would break and over-pay. A big
+// non-voting holder keeps the proposal from early-deciding so all three ballots land.
+func TestVoteOfMatchesTallyLeg(t *testing.T) {
+	g, led := fresh()
+	led.Mint(gDave, 100000) // dominant, never votes → the vote stays open for all three
+	led.Mint(gAlice, 600)
+	led.Mint(gBob, 377)
+	led.Mint(gCarl, 111)
+	advanceEpochs(1)
+
+	var ran int64
+	g.Adopt(setFee{ran: &ran}, Rules{
+		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
+	})
+	id := g.Propose(gAlice, "fee", "250", "set it")
+	g.Vote(gAlice, id, "yes")
+	g.Vote(gBob, id, "no")
+	g.Vote(gCarl, id, "abstain")
+
+	yes, no, abstain, _ := g.Tally(id)
+
+	assertBallot := func(who address, wantChoice string, wantLeg int64) {
+		t.Helper()
+		ch, w, ok := g.VoteOf(id, who)
+		if !ok {
+			t.Fatalf("VoteOf(%s): expected a %s ballot, got ok=false", wantChoice, wantChoice)
+		}
+		if ch != wantChoice {
+			t.Fatalf("VoteOf choice %q != %q", ch, wantChoice)
+		}
+		if w != wantLeg {
+			t.Fatalf("VoteOf %s weight %d != its tally leg %d", wantChoice, w, wantLeg)
+		}
+	}
+	assertBallot(gAlice, "yes", yes)
+	assertBallot(gBob, "no", no)
+	assertBallot(gCarl, "abstain", abstain)
+
+	if yes+no+abstain != 600+377+111 {
+		t.Fatalf("Σ tally %d != cast total 1088 — the VoteOf/Tally identity is broken", yes+no+abstain)
+	}
+	// A non-voter reads back ok=false — no phantom weight, no roll-sentinel leak.
+	if _, _, ok := g.VoteOf(id, gNemo); ok {
+		t.Fatal("a non-voter must read VoteOf ok=false")
+	}
+}
+
 func TestTheEngineAnswersWhatItsPagesPrint(t *testing.T) {
 	g, led := fresh()
 	led.Mint(gAlice, 600)

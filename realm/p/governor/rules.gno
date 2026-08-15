@@ -65,9 +65,7 @@ func (k rulesKind) check(g *Governor, payload string) error {
 	// guard would be unreachable, and unreachable defence reads as a case
 	// somebody thought could happen.
 	next := e.rules
-	if err := applyRules(&next, set); err != nil {
-		return err
-	}
+	applyRules(&next, set)
 	// The same sanity the offering path enforces, and literally the same code:
 	// one function, two callers. A second copy is how the two paths come to
 	// disagree about what a proposer must hold.
@@ -84,9 +82,7 @@ func (k rulesKind) run(g *Governor, dispatch Dispatch, payload string) error {
 		return errNoSuchKind
 	}
 	next := e.rules
-	if err := applyRules(&next, set); err != nil {
-		return err
-	}
+	applyRules(&next, set)
 	// Only the entry changes. Proposals already open kept a COPY of the rules
 	// they were opened under, so this cannot move the bar under a vote that is
 	// already being cast.
@@ -142,7 +138,10 @@ func parseRules(payload string) (string, []field, error) {
 	return name, set, nil
 }
 
-func applyRules(r *Rules, set []field) error {
+// applyRules applies an already-validated change set to r. It cannot fail:
+// parseRules has validated every key and value, so a default/error path here would
+// be unreachable (unreachable defence reads as a case somebody thought could happen).
+func applyRules(r *Rules, set []field) {
 	for _, f := range set {
 		switch f.key {
 		case "quorum":
@@ -159,7 +158,6 @@ func applyRules(r *Rules, set []field) error {
 			r.ProposeBps = f.n
 		}
 	}
-	return nil
 }
 
 // pct renders basis points as a percentage.
