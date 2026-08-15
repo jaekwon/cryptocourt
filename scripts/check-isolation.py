@@ -54,6 +54,7 @@ DEP = (os.path.join(REPO, "realm/p/checkpoint"),
 REALMS = [
     (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/cryptocourt/checkpoint/v0"),
     (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/cryptocourt/grc20votes/v0"),
+    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/cryptocourt/governor/v0"),
     (os.path.join(REPO, "realm/r/govern"), "examples/gno.land/r/cryptocourt/govern"),
     (os.path.join(REPO, "realm/r/offerer"), "examples/gno.land/r/cryptocourt/offerer"),
 ]

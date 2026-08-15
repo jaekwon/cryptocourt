@@ -30,11 +30,11 @@ realm-test:
 	rbase="$$root/examples/gno.land/r/cryptocourt"; \
 	pbase="$$root/examples/gno.land/p/cryptocourt"; \
 	trap 'rm -rf "$$rbase" "$$pbase"' EXIT; \
-	for p in checkpoint grc20votes; do \
+	for p in checkpoint grc20votes governor; do \
 		mkdir -p "$$pbase/$$p/v0" && \
 		cp realm/p/$$p/*.gno realm/p/$$p/gnomod.toml "$$pbase/$$p/v0/" || exit 1; \
 	done; \
-	for p in checkpoint grc20votes; do \
+	for p in checkpoint grc20votes governor; do \
 		( cd "$$pbase/$$p/v0" && gno test . ) || exit 1; \
 	done; \
 	for r in govern offerer; do \

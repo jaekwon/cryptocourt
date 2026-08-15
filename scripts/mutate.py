@@ -68,6 +68,8 @@ PKGS = {
                    "examples/gno.land/p/cryptocourt/checkpoint/v0"),
     "grc20votes": (os.path.join(REPO, "realm/p/grc20votes"),
                    "examples/gno.land/p/cryptocourt/grc20votes/v0"),
+    "governor": (os.path.join(REPO, "realm/p/governor"),
+                 "examples/gno.land/p/cryptocourt/governor/v0"),
 }
 
 
@@ -102,6 +104,22 @@ def run_suite(root):
     return passed, out
 
 
+BAK = ".mutate-backup"
+
+
+def recover_backups():
+    """Put back anything a killed run left mutated."""
+    for src, _ in PKGS.values():
+        for f in os.listdir(src):
+            if not f.endswith(BAK):
+                continue
+            bak = os.path.join(src, f)
+            orig = bak[: -len(BAK)]
+            shutil.move(bak, orig)
+            print(f"mutate: recovered {orig} from a run that did not finish",
+                  file=sys.stderr)
+
+
 def main():
     muts = json.load(sys.stdin)
     root = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
@@ -114,9 +132,24 @@ def main():
             raise SystemExit(f"mutate: no such pkg {pkg!r}; have {sorted(PKGS)}")
         return os.path.join(PKGS[pkg][0], m["file"])
 
+    # Backups on DISK, not just in memory.
+    #
+    # The restore is in a finally, and a finally does not run when the process
+    # is killed — a mutation that hangs the suite gets the whole run timed out,
+    # and the source is left broken. That is bad enough in a tracked tree and
+    # invisible in an untracked one, where `git status` says only that the
+    # directory is new. It cost an hour once: a mutant that recursed forever
+    # was still in the source, and every later run "hung" for no visible reason.
+    #
+    # So the originals are written beside the files, recovered on the next run,
+    # and removed on a clean exit.
+    recover_backups()
     originals = {}
     for m in muts:
-        originals.setdefault(where(m), open(where(m)).read())
+        f = where(m)
+        if f not in originals:
+            originals[f] = open(f).read()
+            open(f + BAK, "w").write(originals[f])
 
     # The baseline, before anything is mutated.
     #
@@ -166,6 +199,10 @@ def main():
             survivors.append(label + " [invalid]")
         else:
             print(f"{label:<46} caught: {hits[0] if hits else 'failed'}")
+
+    for f in originals:
+        if os.path.exists(f + BAK):
+            os.remove(f + BAK)
 
     print(f"\n{len(survivors)} survived or invalid, of {len(muts)}")
     for s in survivors:
