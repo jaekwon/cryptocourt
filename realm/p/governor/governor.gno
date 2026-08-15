@@ -238,9 +238,6 @@ type Governor struct {
 	// Do runs would see a proposal mid-execution.
 	executing bool
 
-	// notes are the consuming realm's own front-page lines. See SetNotes.
-	notes string
-
 	// sweepFrom is where the next slot reclaim starts scanning, and it rotates.
 	// The index is keyed by digest(kind, payload) and a proposer chooses their
 	// payload, so they choose their key: park a few long-running proposals on
@@ -534,25 +531,21 @@ func BootstrapRules() Rules {
 func (g *Governor) installBuiltins() {
 	// The terms the governor governs ITSELF on. See BootstrapRules.
 	bootstrap := BootstrapRules()
-	g.kinds.Set(adoptKind{g}.Name(), &entry{kind: adoptKind{g}, rules: bootstrap, live: true})
-	g.kinds.Set(retireKind{g}.Name(), &entry{kind: retireKind{g}, rules: bootstrap, live: true})
-	g.kinds.Set(rulesKind{g}.Name(), &entry{kind: rulesKind{g}, rules: bootstrap, live: true})
-	g.kinds.Set(batchKind{g}.Name(), &entry{kind: batchKind{g}, rules: bootstrap, live: true})
+	g.kinds.Set(adoptKind{}.Name(), &entry{kind: adoptKind{}, rules: bootstrap, live: true})
+	g.kinds.Set(retireKind{}.Name(), &entry{kind: retireKind{}, rules: bootstrap, live: true})
+	g.kinds.Set(rulesKind{}.Name(), &entry{kind: rulesKind{}, rules: bootstrap, live: true})
+	g.kinds.Set(batchKind{}.Name(), &entry{kind: batchKind{}, rules: bootstrap, live: true})
 }
 
 // adoptKind turns an offered kind live. Its payload is only a name, so what
 // the holders read is exactly what they are approving.
-// adoptKind carries the governor it acts on. A kind is a value in that
-// governor's own registry, so this is a cycle — which gno handles, and which is
-// the price of the built-ins being kinds like any other rather than a special
-// case in Execute.
-type adoptKind struct{ g *Governor }
+type adoptKind struct{}
 
 func (k adoptKind) Name() string { return reserved + "adopt" }
 
-func (k adoptKind) Describe(payload string) string {
+func (k adoptKind) describe(g *Governor, payload string) string {
 	out := "adopt the kind `" + payload + "`, letting it be proposed and executed"
-	e := k.g.entryOf(payload)
+	e := g.entryOf(payload)
 	if e == nil {
 		return out + "\n\n_Nothing has been offered under that name._"
 	}
@@ -581,8 +574,8 @@ func (k adoptKind) Describe(payload string) string {
 	return out
 }
 
-func (k adoptKind) Check(payload string) error {
-	e := k.g.entryOf(payload)
+func (k adoptKind) check(g *Governor, payload string) error {
+	e := g.entryOf(payload)
 	if e == nil {
 		return errNoSuchKind
 	}
@@ -592,8 +585,8 @@ func (k adoptKind) Check(payload string) error {
 	return nil
 }
 
-func (k adoptKind) Do(_ int, rlm realm, payload string) error {
-	e := k.g.entryOf(payload)
+func (k adoptKind) run(g *Governor, dispatch Dispatch, payload string) error {
+	e := g.entryOf(payload)
 	if e == nil {
 		return errNoSuchKind
 	}
@@ -603,15 +596,11 @@ func (k adoptKind) Do(_ int, rlm realm, payload string) error {
 
 // retireKind withdraws one. Offered-but-not-live is the resting state, so a
 // retired kind can be adopted again without the realm re-offering it.
-// retireKind carries the governor it acts on. A kind is a value in that
-// governor's own registry, so this is a cycle — which gno handles, and which is
-// the price of the built-ins being kinds like any other rather than a special
-// case in Execute.
-type retireKind struct{ g *Governor }
+type retireKind struct{}
 
 func (k retireKind) Name() string { return reserved + "retire" }
 
-func (k retireKind) Describe(payload string) string {
+func (k retireKind) describe(g *Governor, payload string) string {
 	return "retire the kind `" + payload + "`, so it can no longer be proposed" +
 		"\n\nThis also kills any proposal of that kind that has already been " +
 		"decided and not yet run: Execute refuses a kind that is no longer " +
@@ -619,8 +608,8 @@ func (k retireKind) Describe(payload string) string {
 		"about the future."
 }
 
-func (k retireKind) Check(payload string) error {
-	e := k.g.entryOf(payload)
+func (k retireKind) check(g *Governor, payload string) error {
+	e := g.entryOf(payload)
 	if e == nil {
 		return errNoSuchKind
 	}
@@ -633,8 +622,8 @@ func (k retireKind) Check(payload string) error {
 	return nil
 }
 
-func (k retireKind) Do(_ int, rlm realm, payload string) error {
-	e := k.g.entryOf(payload)
+func (k retireKind) run(g *Governor, dispatch Dispatch, payload string) error {
+	e := g.entryOf(payload)
 	if e == nil {
 		return errNoSuchKind
 	}
@@ -656,7 +645,7 @@ func (g *Governor) Propose(who address, kind, payload, title string) int64 {
 		panic("govern: that payload is too long")
 	}
 	k := g.kindOf(kind)
-	if err := k.Check(payload); err != nil {
+	if err := g.checkKind(k, payload); err != nil {
 		panic("govern: " + err.Error())
 	}
 
@@ -1107,7 +1096,7 @@ func (g *Governor) Execute(who address, id int64, run Dispatch) {
 
 	// Checked again, against the world as it is now rather than as it was when
 	// the question was asked.
-	if err := k.Check(p.payload); err != nil {
+	if err := g.checkKind(k, p.payload); err != nil {
 		g.setState(p, stateFailed, "no longer valid: "+err.Error())
 		return
 	}
@@ -1133,7 +1122,15 @@ func (g *Governor) Execute(who address, id int64, run Dispatch) {
 	// refuses RealmIssue for a sub-realm outright. A governed realm therefore
 	// gates on the sub-path of the power it granted, which is also more useful
 	// than gating on the governor as a whole.
-	err := run(k, subPathOf(p.kind), p.payload)
+	var err error
+	if b, ok := asBuiltin(k); ok {
+		// The governor's own kinds act on the governor. They are handed it
+		// directly and never a sub-realm: there is no outside world for them
+		// to reach, so there is nothing to grant.
+		err = b.run(g, run, p.payload)
+	} else {
+		err = run(k, subPathOf(p.kind), p.payload)
+	}
 
 	if err != nil {
 		g.setState(p, stateFailed, err.Error())
@@ -1316,8 +1313,8 @@ func (g *Governor) Preview(kind, payload string) string {
 	if e == nil {
 		return "no kind by that name has been offered"
 	}
-	out := e.kind.Describe(payload)
-	if err := e.kind.Check(payload); err != nil {
+	out := g.describeKind(e.kind, payload)
+	if err := g.checkKind(e.kind, payload); err != nil {
 		out += "\n\n_This would be refused: " + err.Error() + "_"
 	}
 	if !e.live {
@@ -1387,7 +1384,7 @@ func (g *Governor) Tally(id int64) (yes, no, abstain, total int64) {
 // Describe and Do consume the same string. That claim is only worth anything
 // if somebody actually reads it, so the description is on the page rather than
 // behind a call nobody makes.
-func (g *Governor) Render(path string) string {
+func (g *Governor) render(path, notes string) string {
 	if path != "" {
 		return g.renderOne(path)
 	}
@@ -1398,7 +1395,7 @@ func (g *Governor) Render(path string) string {
 	// weighed out of it.
 	out += ufmt.Sprintf("- supply: %s %s (%d at %d decimals)\n",
 		g.units(g.token.TotalSupply()), g.token.Symbol(), g.token.TotalSupply(), g.token.Decimals())
-	out += g.notes
+	out += notes
 	out += ufmt.Sprintf("- epoch: %d (votes are weighed at sealed epochs)\n\n", g.voters.Epoch())
 	out += "## governance\n\n"
 
@@ -1919,7 +1916,7 @@ func (g *Governor) describeOf(p *proposal) string {
 			"proposal can no longer describe itself. Its payload was:_\n\n" +
 			g.indented(p.payload)
 	}
-	return k.Describe(p.payload)
+	return g.describeKind(k, p.payload)
 }
 
 // indented puts EVERY line of a payload inside the code block. Four spaces in

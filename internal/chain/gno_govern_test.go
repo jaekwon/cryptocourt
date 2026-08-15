@@ -28,9 +28,10 @@ import (
 // compile, and a realm cannot be redeployed at its path — so getting the order
 // wrong costs the path rather than the transaction.
 const (
-	governPkgPath   = "gno.land/p/cryptocourt/checkpoint/v0"
-	governVotesPath = "gno.land/p/cryptocourt/grc20votes/v0"
-	governRealmPath = "gno.land/r/cryptocourt/govern"
+	governPkgPath    = "gno.land/p/cryptocourt/checkpoint/v0"
+	governVotesPath  = "gno.land/p/cryptocourt/grc20votes/v0"
+	governEnginePath = "gno.land/p/cryptocourt/governor/v0"
+	governRealmPath  = "gno.land/r/cryptocourt/govern"
 )
 
 // governDeps is every /p/ the realm imports, in the order a chain needs them.
@@ -38,6 +39,7 @@ const (
 var governDeps = []struct{ dir, path string }{
 	{"../../realm/p/checkpoint", governPkgPath},
 	{"../../realm/p/grc20votes", governVotesPath},
+	{"../../realm/p/governor", governEnginePath},
 }
 
 func TestIntegrationGovernDeploys(t *testing.T) {

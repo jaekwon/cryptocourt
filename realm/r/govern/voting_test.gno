@@ -1,7 +1,7 @@
 package govern
 
 import (
-	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
+	governor "gno.land/p/cryptocourt/governor/v0"
 	"strconv"
 	"testing"
 
@@ -36,9 +36,9 @@ func TestAVoteCannotBePassedAlongWithTheTokens(cur realm, t *testing.T) {
 	Mint(cross(cur), quiet, 900)
 	advanceEpochs(1)
 
-	kinds.Set("v/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000,
-	}})
+	engine.Adopt(setFee{name: "v/kind"}, Rules{
+		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(vA))
 	id := Propose(cross(cur), "v/kind", "1", "vote once")
 	Vote(cross(cur), id, "yes")
@@ -77,16 +77,16 @@ func TestAVoteMustBeOneOfThreeThings(cur realm, t *testing.T) {
 	Mint(cross(cur), vA, 100)
 	advanceEpochs(1)
 
-	kinds.Set("v/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000,
-	}})
+	engine.Adopt(setFee{name: "v/kind"}, Rules{
+		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(vA))
 	id := Propose(cross(cur), "v/kind", "2", "choices")
 
 	for _, bad := range []string{"", "YES", "yes ", "maybe", "1"} {
 		uassert.AbortsContains(t, cur, "yes, no or abstain", func() {
 			Vote(cross(cur), id, bad)
-		})
+	})
 	}
 	// And a rejected choice did not consume the ballot.
 	Vote(cross(cur), id, "abstain")
@@ -145,17 +145,17 @@ func TestFinishedProposalsGiveTheirSlotsBack(cur realm, t *testing.T) {
 	Mint(cross(cur), quiet, 990) // so nothing vA does is ever decisive
 	advanceEpochs(1)
 
-	kinds.Set("s/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
+	engine.Adopt(setFee{name: "s/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 
 	testing.SetRealm(testing.NewUserRealm(vA))
 	var ids []int64
-	for i := 0; i < maxOpen; i++ {
+	for i := 0; i < governor.MaxOpen; i++ {
 		ids = append(ids, Propose(cross(cur), "s/kind", strconv.Itoa(i), "filler"))
 	}
-	if openIdx.Size() != maxOpen {
-		t.Fatalf("%d slots taken, want %d", openIdx.Size(), maxOpen)
+	if engine.OpenSlots() != governor.MaxOpen {
+		t.Fatalf("%d slots taken, want %d", engine.OpenSlots(), governor.MaxOpen)
 	}
 	uassert.AbortsContains(t, cur, "too many proposals", func() {
 		Propose(cross(cur), "s/kind", "9999", "blocked")
@@ -179,8 +179,24 @@ func TestFinishedProposalsGiveTheirSlotsBack(cur realm, t *testing.T) {
 
 	// Settle does it explicitly too, for anyone who would rather not wait for
 	// a proposer to need the room.
-	Settle(cross(cur), ids[1])
-	if openIdx.Has(digest("s/kind", "1")) {
+	//
+	// On one that is still HOLDING a slot. The Propose above swept, and which
+	// proposals that reached is the sweep's business — settling one it already
+	// freed would assert nothing and fail for the wrong reason.
+	var held int64 = -1
+	for _, cand := range ids {
+		if StoredState(cand) == "active" {
+			held = cand
+			break
+		}
+	}
+	if held < 0 {
+		t.Fatal("the sweep freed every filler, so there is nothing left for " +
+			"Settle to free and this proves nothing")
+	}
+	before := engine.OpenSlots()
+	Settle(cross(cur), held)
+	if engine.OpenSlots() != before-1 {
 		t.Error("a settled proposal is still holding its slot")
 	}
 }
@@ -201,9 +217,9 @@ func TestReadingDoesNotWrite(cur realm, t *testing.T) {
 	Mint(cross(cur), quiet, 990)
 	advanceEpochs(1)
 
-	kinds.Set("r/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
+	engine.Adopt(setFee{name: "r/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(vA))
 	id := Propose(cross(cur), "r/kind", "7", "readable")
 	advanceBlocks(1000) // past its deadline, and unwinnable
@@ -217,20 +233,20 @@ func TestReadingDoesNotWrite(cur realm, t *testing.T) {
 
 	// ...and none of them wrote that down. The stored state is still what the
 	// last transaction left, and the slot is still held.
-	if p := mustProposal(id); p.state != stateActive {
-		t.Errorf("a read changed the stored state to %d", p.state)
+	if StoredState(id) != "active" {
+		t.Errorf("a read changed the stored state to %s", State(id))
 	}
-	if !openIdx.Has(digest("r/kind", "7")) {
+	if engine.OpenSlots() == 0 {
 		t.Error("a read released the proposal's slot, so reading a page is a " +
 			"write and Render is unbounded")
 	}
 
 	// Only a transaction records it.
 	Settle(cross(cur), id)
-	if p := mustProposal(id); p.state != stateDefeated {
-		t.Errorf("Settle left the stored state at %d", p.state)
+	if StoredState(id) != "defeated" {
+		t.Errorf("Settle left the stored state at %s", State(id))
 	}
-	if openIdx.Has(digest("r/kind", "7")) {
+	if engine.OpenSlots() != 0 {
 		t.Error("a settled proposal still holds its slot")
 	}
 }
@@ -252,18 +268,18 @@ func TestTheSweepReclaimsEverythingItLooksAt(cur realm, t *testing.T) {
 	Mint(cross(cur), quiet, 990)
 	advanceEpochs(1)
 
-	kinds.Set("w/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
+	engine.Adopt(setFee{name: "w/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(vA))
-	for i := 0; i < maxOpen; i++ {
+	for i := 0; i < governor.MaxOpen; i++ {
 		Propose(cross(cur), "w/kind", strconv.Itoa(i), "filler")
 	}
 	advanceBlocks(1000) // all of them past their deadline and unwinnable
 
-	before := openIdx.Size()
-	sweep()
-	freed := before - openIdx.Size()
+	before := engine.OpenSlots()
+	engine.Sweep()
+	freed := before - engine.OpenSlots()
 	// One pass looks at a bounded number and must free all of them: they are
 	// every one finished. Fewer means the walk lost its place.
 	if freed != 8 {
@@ -274,10 +290,10 @@ func TestTheSweepReclaimsEverythingItLooksAt(cur realm, t *testing.T) {
 
 	// And repeating it keeps working, rather than stalling on whatever the
 	// first pass disturbed.
-	for openIdx.Size() > 0 {
-		was := openIdx.Size()
-		sweep()
-		if openIdx.Size() >= was {
+	for engine.OpenSlots() > 0 {
+		was := engine.OpenSlots()
+		engine.Sweep()
+		if engine.OpenSlots() >= was {
 			t.Fatalf("a sweep freed nothing with %d still open", was)
 		}
 	}
@@ -302,8 +318,8 @@ func TestTheRealmAssumesOneBlockTime(t *testing.T) {
 	}
 
 	// And the built-in periods are the weeks and days they claim to be.
-	e := entryOf(reserved + "adopt")
-	if e == nil {
+	e, adoptLive := KindRules(governor.Reserved + "adopt")
+	if !adoptLive {
 		t.Fatal("the adoption kind is missing, so this checks nothing")
 	}
 	for _, c := range []struct {
@@ -311,9 +327,9 @@ func TestTheRealmAssumesOneBlockTime(t *testing.T) {
 		got  int64
 		days int64
 	}{
-		{"voting", e.rules.VotingBlocks, 7},
-		{"delay", e.rules.DelayBlocks, 2},
-		{"grace", e.rules.GraceBlocks, 14},
+		{"voting", e.VotingBlocks, 7},
+		{"delay", e.DelayBlocks, 2},
+		{"grace", e.GraceBlocks, 14},
 	} {
 		if want := c.days * 24 * 60 * 60 / secondsPerBlock; c.got != want {
 			t.Errorf("the built-in %s period is %d blocks, want %d — %d days at "+
@@ -328,36 +344,6 @@ func TestTheRealmAssumesOneBlockTime(t *testing.T) {
 // page renders, and the supply ceiling that keeps the tally from overflowing.
 // A number that appears in three files eventually disagrees with itself, which
 // is not a hypothetical here: the block time did exactly that.
-func TestTheBasisPointScaleIsOneNumber(t *testing.T) {
-	// The ceiling is derived from the scale, so the tally cannot overflow
-	// whatever the scale is.
-	if grc20votes.MaxSupply*bps <= 0 {
-		t.Fatalf("a supply at the cap overflows the tally: %d * %d", grc20votes.MaxSupply, bps)
-	}
-	// That the cap is exactly where the arithmetic stops being safe is proved
-	// by the compiler rather than here: writing (grc20votes.MaxSupply+1)*bps is rejected
-	// as "constant 9223372036854780000 of type int64 overflows int64". One
-	// unit over the cap does not fit, which is a stronger statement than any
-	// assertion at runtime could make, and it is why this line is a comment.
-
-	// The rendering is derived from it too, so a percentage is a percentage
-	// however the scale is defined.
-	for _, c := range []struct {
-		n    int64
-		want string
-	}{
-		{bps, "100.00%"},
-		{bps / 2, "50.00%"},
-		{bps / 100, "1.00%"},
-		{1, "0.01%"},
-		{0, "0.00%"},
-	} {
-		if got := pct(c.n); got != c.want {
-			t.Errorf("pct(%d) = %q, want %q", c.n, got, c.want)
-		}
-	}
-}
-
 // Tally's fourth number is the snapshot supply, not the supply now.
 //
 // Three counts without a denominator cannot be checked against anything: every
@@ -407,7 +393,7 @@ func TestTheTallyReportsTheDenominatorItWasWeighedAgainst(cur realm, t *testing.
 	// snapshot is the quorum, so vA's thousand is exactly enough.
 	Vote(cross(cur), id, "yes")
 	yes, _, _, total = Tally(id)
-	if yes*bps < total*5000 {
+	if yes*governor.Bps < total*5000 {
 		t.Errorf("%d yes against a denominator of %d does not reach the 50%% "+
 			"quorum the rules ask for", yes, total)
 	}
@@ -437,12 +423,12 @@ func TestAVoteIsWeighedAtTheProposalsEpochNotTheNewestOne(cur realm, t *testing.
 	Mint(cross(cur), alice, 1000)
 	advanceEpochs(1)
 
-	kinds.Set("snap/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 10 * epochBlocks,
-	}})
+	engine.Adopt(setFee{name: "snap/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 10 * epochBlocks, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := Propose(cross(cur), "snap/kind", "5", "weighed at the first epoch")
-	snapshot := mustProposal(id).epoch
+	snapshot := engine.EpochOf(id)
 
 	// Bob is funded only AFTER the question was asked, and then an epoch seals
 	// so that his holding is a matter of record at a sealed epoch — just not at
@@ -465,9 +451,9 @@ func TestAVoteIsWeighedAtTheProposalsEpochNotTheNewestOne(cur realm, t *testing.
 	uassert.AbortsContains(t, cur, "no voting power at that epoch", func() {
 		Vote(cross(cur), id, "yes")
 	})
-	if p := mustProposal(id); p.yes != 0 {
+	if yes, _, _, _ := Tally(id); yes != 0 {
 		t.Errorf("a balance acquired after the question was asked voted on it: "+
-			"yes = %d", p.yes)
+			"yes = %d", yes)
 	}
 }
 
@@ -486,26 +472,26 @@ func TestAVoteAfterTheDeadlineIsRefusedEvenIfNobodyWroteItDown(cur realm, t *tes
 	Mint(cross(cur), alice, 1000)
 	advanceEpochs(1)
 
-	kinds.Set("late/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
+	engine.Adopt(setFee{name: "late/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := Propose(cross(cur), "late/kind", "5", "closes soon")
 	advanceBlocks(100)
 
 	// The record still says active, which is the state this test needs: the
 	// outcome is decided and unrecorded.
-	if got := mustProposal(id).state; got != stateActive {
+	if got := StoredState(id); got != "active" {
 		t.Fatalf("the stored state is %q, but this test needs an outcome that "+
-			"is true and unwritten", stateName(got))
+			"is true and unwritten", got)
 	}
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "that proposal is closed", func() {
 		Vote(cross(cur), id, "yes")
 	})
-	if p := mustProposal(id); p.yes != 0 {
-		t.Errorf("a vote was counted after the deadline: yes = %d", p.yes)
+	if yes, _, _, _ := Tally(id); yes != 0 {
+		t.Errorf("a vote was counted after the deadline: yes = %d", yes)
 	}
 }
 
@@ -526,9 +512,9 @@ func TestAVoteMayCarryAReasonAndStoreNothing(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 600)
 	Mint(cross(cur), gBob, 400)
 	advanceEpochs(1)
-	kinds.Set("why/k", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100000,
-	}})
+	engine.Adopt(setFee{name: "why/k"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	})
 
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "why/k", "5", "explain yourselves")
@@ -553,7 +539,7 @@ func TestAVoteMayCarryAReasonAndStoreNothing(cur realm, t *testing.T) {
 	// voter's words are theirs and half of them is not.
 	testing.SetRealm(testing.NewUserRealm(gBob))
 	long := ""
-	for len(long) <= maxReason {
+	for len(long) <= governor.MaxReason {
 		long += "x"
 	}
 	uassert.AbortsContains(t, cur, "that reason is too long", func() {
@@ -561,7 +547,7 @@ func TestAVoteMayCarryAReasonAndStoreNothing(cur realm, t *testing.T) {
 	})
 	// Exactly at the bound is allowed, so it is a bound and not an off-by-one.
 	at := ""
-	for len(at) < maxReason {
+	for len(at) < governor.MaxReason {
 		at += "y"
 	}
 	uassert.NotAborts(t, cur, func() {
@@ -574,7 +560,7 @@ func TestAVoteMayCarryAReasonAndStoreNothing(cur realm, t *testing.T) {
 
 // p_voted reports whether an address is recorded against a proposal.
 func p_voted(id int64, who address) bool {
-	return mustProposal(id).voted.Has(string(who))
+	return HasVoted(id, who)
 }
 
 // A voter can ask whether they have voted, and a caller can read the clock.
@@ -592,10 +578,10 @@ func TestAProposalAnswersAboutItselfWithoutBeingActedOn(cur realm, t *testing.T)
 	Mint(cross(cur), gBob, 400)
 	advanceEpochs(1)
 	const window, delay, grace = int64(900), int64(300), int64(1200)
-	kinds.Set("ask/k", &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: "ask/k"}, Rules{
 		QuorumBps: 9000, ThresholdBps: 5000,
 		VotingBlocks: window, DelayBlocks: delay, GraceBlocks: grace,
-	}})
+	})
 
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "ask/k", "5", "ask me anything")
@@ -657,16 +643,23 @@ func TestAProposalAnswersAboutItselfWithoutBeingActedOn(cur realm, t *testing.T)
 		t.Error("VoteOf answers from a released roll")
 	}
 
-	// And a proposal with no grace period never expires, which is the zero
-	// this realm spells out rather than printing.
-	kinds.Set("forever/k", &entry{kind: setFee{}, live: true, rules: Rules{
+	// And every settled proposal reports BOTH a ready height and an expiry.
+	//
+	// This used to check the other case — a grace of zero, meaning never
+	// expires — which nothing can produce any more: saneRules refuses zero,
+	// because a decided proposal that never expires holds its slot for the life
+	// of the realm. The old test reached it only because registering a kind by
+	// hand skipped that check, so it was asserting behaviour for a state the
+	// realm cannot be in. Now it asserts the state the realm is always in.
+	engine.Adopt(setFee{name: "forever/k"}, Rules{
 		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: window,
-	}})
+		GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(gAlice))
-	never := Propose(cross(cur), "forever/k", "6", "no expiry")
+	never := Propose(cross(cur), "forever/k", "6", "a long grace")
 	Vote(cross(cur), never, "yes")
-	if _, _, r, e := Timings(never); r == 0 || e != 0 {
-		t.Errorf("a settled proposal with no grace reports ready=%d expires=%d, "+
-			"want a real ready and a zero expiry meaning never", r, e)
+	if _, _, r, e := Timings(never); r == 0 || e <= r {
+		t.Errorf("a settled proposal reports ready=%d expires=%d, want an "+
+			"expiry after the ready height", r, e)
 	}
 }

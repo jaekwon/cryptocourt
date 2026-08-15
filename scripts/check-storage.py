@@ -38,6 +38,7 @@ REALM = os.path.join(REPO, "realm/r/govern")
 DEPS = [
     (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/cryptocourt/checkpoint/v0"),
     (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/cryptocourt/grc20votes/v0"),
+    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/cryptocourt/governor/v0"),
 ]
 DEST = "examples/gno.land/r/cryptocourt/govern"
 

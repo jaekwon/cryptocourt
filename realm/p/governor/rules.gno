@@ -20,11 +20,7 @@ import (
 // Space-separated key=value because a governance payload has to be readable
 // where it is read — a URL, a wallet's confirmation screen, a forum post. JSON
 // puts a parser between a voter and their intent.
-// rulesKind carries the governor it acts on. A kind is a value in that
-// governor's own registry, so this is a cycle — which gno handles, and which is
-// the price of the built-ins being kinds like any other rather than a special
-// case in Execute.
-type rulesKind struct{ g *Governor }
+type rulesKind struct{}
 
 func (k rulesKind) Name() string { return reserved + "rules" }
 
@@ -34,7 +30,7 @@ func (k rulesKind) Name() string { return reserved + "rules" }
 // voters at different heights would see different questions at the same URL,
 // and a proposal that lands in between would silently rewrite what everyone
 // else is voting on.
-func (k rulesKind) Describe(payload string) string {
+func (k rulesKind) describe(g *Governor, payload string) string {
 	name, set, err := parseRules(payload)
 	if err != nil {
 		return "malformed rules change: " + err.Error()
@@ -46,12 +42,12 @@ func (k rulesKind) Describe(payload string) string {
 	return out
 }
 
-func (k rulesKind) Check(payload string) error {
+func (k rulesKind) check(g *Governor, payload string) error {
 	name, set, err := parseRules(payload)
 	if err != nil {
 		return err
 	}
-	e := k.g.entryOf(name)
+	e := g.entryOf(name)
 	if e == nil {
 		return errNoSuchKind
 	}
@@ -78,12 +74,12 @@ func (k rulesKind) Check(payload string) error {
 	return saneRules(next)
 }
 
-func (k rulesKind) Do(_ int, rlm realm, payload string) error {
+func (k rulesKind) run(g *Governor, dispatch Dispatch, payload string) error {
 	name, set, err := parseRules(payload)
 	if err != nil {
 		return err
 	}
-	e := k.g.entryOf(name)
+	e := g.entryOf(name)
 	if e == nil {
 		return errNoSuchKind
 	}

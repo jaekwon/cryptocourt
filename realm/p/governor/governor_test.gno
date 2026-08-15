@@ -238,7 +238,7 @@ func TestTheEngineRendersTheTokensOwnScale(t *testing.T) {
 		t.Errorf("a six-decimal token renders 1234 as %q, want 0.001234", got)
 	}
 	// And the page carries the same scale, since that is where a holder reads it.
-	if page := two.Render(""); !contains(page, "12.34 PENNY") {
+	if page := two.Render("", ""); !contains(page, "12.34 PENNY") {
 		t.Errorf("the front page does not render the supply at the token's "+
 			"own scale:\n%s", page)
 	}
@@ -265,6 +265,24 @@ func TestAGovernorNeedsAnElectorateAndAToken(t *testing.T) {
 	mustPanic(t, "governor: a governor needs an electorate and a token", func() {
 		New(c, nil)
 	})
+}
+
+// SetElectorate refuses nil, because nothing downstream can.
+//
+// A governor with no electorate does not fail where the mistake was made — it
+// fails at the first vote, inside arithmetic, a long way from the line that
+// dropped it.
+func TestSetElectorateRefusesNothing(t *testing.T) {
+	g, led := fresh()
+	mustPanic(t, "governor: an electorate is required", func() {
+		g.SetElectorate(nil)
+	})
+	// And the old one is still in place, so a refused swap changes nothing.
+	led.Mint(gAlice, 100)
+	advanceEpochs(1)
+	if got := g.voters.PastTotal(led.Epoch() - 1); got != 100 {
+		t.Errorf("the electorate reports %d after a refused swap, want 100", got)
+	}
 }
 
 // InstallBuiltin is for powers under the reserved prefix, and refuses anything

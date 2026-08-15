@@ -28,7 +28,12 @@ import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# doc.gno is the realm's; the numbers it quotes are the engine's. Two trees
+# now, which is the whole reason this guard exists: the table and the code it
+# describes no longer live in the same package, so nothing but this holds them
+# together.
 GOVERN = os.path.join(REPO, "realm/r/govern")
+ENGINE = os.path.join(REPO, "realm/p/governor")
 
 # doc-table name -> the field init sets. propose is absent from the literal on
 # purpose, so its expected value is the Go zero.
@@ -82,7 +87,7 @@ BOUNDS = {
 def const_values():
     out = {}
     for name, (fname, const) in BOUNDS.items():
-        src = open(os.path.join(GOVERN, fname)).read()
+        src = open(os.path.join(ENGINE, fname)).read()
         m = re.search(rf"^const {const} = (?:int64\()?([^\n)]+)\)?$", src, flags=re.M)
         if not m:
             raise SystemExit(f"check-docnumbers: no `const {const}` in {fname}")
@@ -91,9 +96,9 @@ def const_values():
 
 
 def code_values():
-    src = open(os.path.join(GOVERN, "governor.gno")).read()
-    i = src.index("bootstrap := Rules{")
-    body = src[i:src.index("\n\t}", i)]
+    src = open(os.path.join(ENGINE, "governor.gno")).read()
+    i = src.index("func BootstrapRules() Rules {")
+    body = src[i:src.index("\n}", i)]
     out = {f: 0 for f in FIELDS.values()}
     for field in FIELDS.values():
         m = re.search(rf"\b{field}:\s*([^,\n]+),", body)

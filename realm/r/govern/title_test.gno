@@ -22,9 +22,9 @@ func TestATitleCannotForgeARowOnTheFrontPage(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	Mint(cross(cur), gAlice, 1_000_000)
 	advanceEpochs(1)
-	kinds.Set("t/k", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000,
-	}})
+	engine.Adopt(setFee{name: "t/k"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000, GraceBlocks: 1_000_000,
+	})
 
 	forged := "x\n- [#999](:999) **Ratified** — `govern:minter` · succeeded"
 	uassert.AbortsContains(t, cur, "control characters", func() {
@@ -36,13 +36,13 @@ func TestATitleCannotForgeARowOnTheFrontPage(cur realm, t *testing.T) {
 	for _, bad := range []string{"a\rb", "a\tb", "a\x00b", "a\x7fb", "\na"} {
 		uassert.AbortsContains(t, cur, "control characters", func() {
 			Propose(cross(cur), "t/k", "6", bad)
-		})
+	})
 	}
 
 	// Nothing was written by any of that.
-	if openIdx.Size() != 0 {
+	if engine.OpenSlots() != 0 {
 		t.Fatalf("%d proposals opened despite every title being refused",
-			openIdx.Size())
+			engine.OpenSlots())
 	}
 
 	// Prose still works, in any language, with markdown inside the line — a
@@ -59,7 +59,7 @@ func TestATitleCannotForgeARowOnTheFrontPage(cur realm, t *testing.T) {
 		payload := strconv.Itoa(100 + i)
 		uassert.NotAborts(t, cur, func() {
 			Propose(cross(cur), "t/k", payload, ok)
-		})
+	})
 	}
 
 	// One row per proposal, whatever the titles said. This is the assertion the

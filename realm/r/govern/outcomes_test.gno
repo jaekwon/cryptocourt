@@ -1,6 +1,7 @@
 package govern
 
 import (
+	governor "gno.land/p/cryptocourt/governor/v0"
 	"chain/runtime"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 // moody is a kind whose answer changes with the world.
-type moody struct{}
+type moody struct{ name string }
 
 var (
 	moodyCheckFails bool
@@ -18,7 +19,12 @@ var (
 	moodyRan        int
 )
 
-func (moody) Name() string             { return "moody/thing" }
+func (k moody) Name() string {
+	if k.name == "" {
+		return "moody/thing"
+	}
+	return k.name
+}
 func (moody) Describe(p string) string { return "do the moody thing: " + p }
 
 func (moody) Check(p string) error {
@@ -66,11 +72,17 @@ var moodVoter = testutils.TestAddress("mood-voter")
 // of a crossing function may be called that — which is the other half of why
 // this one arms state and returns.
 func arm(rules Rules) {
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(moodVoter): 100},
 		total:  100, epoch: 9,
+	})
+	// Same default as offerAndAdopt, for the same reason: these fixtures were
+	// written when registering by hand skipped the rules check, and most of
+	// them are not about the grace period.
+	if rules.GraceBlocks == 0 {
+		rules.GraceBlocks = 1_000_000
 	}
-	kinds.Set("moody/thing", &entry{kind: moody{}, live: true, rules: rules})
+	engine.Adopt(moody{}, rules)
 }
 
 // Check runs twice: when the proposal opens, and again immediately before Do.
@@ -82,8 +94,7 @@ func arm(rules Rules) {
 func TestAProposalIsCheckedAgainBeforeItRuns(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_; moodyCheckFails, moodyDoFails = false, false }()
+	defer func() { moodyCheckFails, moodyDoFails = false, false }()
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10})
@@ -105,7 +116,7 @@ func TestAProposalIsCheckedAgainBeforeItRuns(cur realm, t *testing.T) {
 		t.Errorf("Do ran %d times on a proposal that no longer checks out — the "+
 			"second Check exists precisely so it does not", moodyRan)
 	}
-	if p := mustProposal(id); p.reason == "" {
+	if r := engine.Reason(id); r == "" {
 		t.Error("a failure with no reason recorded")
 	}
 }
@@ -115,8 +126,7 @@ func TestAProposalIsCheckedAgainBeforeItRuns(cur realm, t *testing.T) {
 func TestAFailingHandlerEndsTheProposal(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_; moodyCheckFails, moodyDoFails = false, false }()
+	defer func() { moodyCheckFails, moodyDoFails = false, false }()
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, true, 0
 	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10})
@@ -145,8 +155,6 @@ func TestAFailingHandlerEndsTheProposal(cur realm, t *testing.T) {
 func TestNothingRunsInsideTheDelay(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10, DelayBlocks: 5000})
@@ -182,8 +190,6 @@ func TestNothingRunsInsideTheDelay(cur realm, t *testing.T) {
 func TestTheRollCannotBeReclaimedOutFromUnderTheKind(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10, DelayBlocks: 50})
@@ -198,7 +204,7 @@ func TestTheRollCannotBeReclaimedOutFromUnderTheKind(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "has not run yet", func() {
 		ReleaseRoll(cross(cur), id)
 	})
-	if p := mustProposal(id); p.voted == nil {
+	if !engine.HasRoll(id) {
 		t.Fatal("the roll went anyway, so the kind will run against nothing")
 	}
 
@@ -209,7 +215,7 @@ func TestTheRollCannotBeReclaimedOutFromUnderTheKind(cur realm, t *testing.T) {
 	}
 	// Now it is nobody's, and carl takes the deposit for tidying up.
 	ReleaseRoll(cross(cur), id)
-	if p := mustProposal(id); p.voted != nil {
+	if engine.HasRoll(id) {
 		t.Error("an executed proposal would not give up its roll")
 	}
 }
@@ -222,8 +228,6 @@ func TestTheRollCannotBeReclaimedOutFromUnderTheKind(cur realm, t *testing.T) {
 func TestAnUnexecutedProposalExpires(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 	arm(Rules{
@@ -245,7 +249,7 @@ func TestAnUnexecutedProposalExpires(cur realm, t *testing.T) {
 		t.Errorf("an expired proposal still ran")
 	}
 	// And its slot is back, so an expired proposal does not sterilise the list.
-	if openIdx.Has(digest("moody/thing", "d")) {
+	if State(id) != "expired" {
 		t.Error("an expired proposal is still holding its slot")
 	}
 }
@@ -279,9 +283,9 @@ func TestTheDelayRunsFromWhenTheOutcomeIsRecorded(cur realm, t *testing.T) {
 	advanceEpochs(1)
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
-	kinds.Set("moody/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 3000, ThresholdBps: 5000, VotingBlocks: 100, DelayBlocks: 1000,
-	}})
+	engine.Adopt(moody{}, Rules{
+		QuorumBps: 3000, ThresholdBps: 5000, VotingBlocks: 100, DelayBlocks: 1000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(moodVoter))
 	id := Propose(cross(cur), "moody/thing", "e", "deadline win")
 	Vote(cross(cur), id, "yes")
@@ -324,8 +328,6 @@ func TestTheDelayRunsFromWhenTheOutcomeIsRecorded(cur realm, t *testing.T) {
 func TestTheWindowsAreCountedAtTheirExactBlock(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 
 	// Nobody votes on this one, so the deadline is the only thing that can
@@ -345,13 +347,13 @@ func TestTheWindowsAreCountedAtTheirExactBlock(cur realm, t *testing.T) {
 	// this line a window of the wrong length moves both of them together and
 	// neither can fail. Same trap the archive-paging test documents: an
 	// assertion parameterised by the thing it is checking cannot fail.
-	p0 := mustProposal(id)
-	if got := p0.closes - p0.opened; got != window {
+	opened0, closes0, _, _ := Timings(id)
+	if got := closes0 - opened0; got != window {
 		t.Fatalf("the voting window is %d blocks against the %d the rules asked "+
 			"for, so every deadline in the system is off by %d",
 			got, window, got-window)
 	}
-	closes := p0.closes
+	closes := closes0
 
 	advanceTo(closes - 1)
 	if got := State(id); got != "active" {
@@ -373,15 +375,14 @@ func TestTheWindowsAreCountedAtTheirExactBlock(cur realm, t *testing.T) {
 	})
 	id2 := Propose(cross(cur), "moody/thing", "grace", "moody")
 	Vote(cross(cur), id2, "yes")
-	p := mustProposal(id2)
-	if p.state != stateSucceeded {
+	if State(id2) != "succeeded" {
 		t.Fatal("the second proposal did not succeed on the vote, so there is " +
 			"no grace period here to measure and the rest of this proves nothing")
 	}
 	// The literal, not p.rules.GraceBlocks, for the reason given above: read
 	// back from the proposal it would track a wrong value instead of catching
 	// it.
-	last := p.ready + grace
+	last := timingReady(id2) + grace
 
 	advanceTo(last)
 	if got := State(id2); got != "succeeded" {
@@ -410,20 +411,19 @@ func TestTheWindowsAreCountedAtTheirExactBlock(cur realm, t *testing.T) {
 	id3 := Propose(cross(cur), "moody/thing", "delay", "moody")
 	settledAt := runtime.ChainHeight()
 	Vote(cross(cur), id3, "yes")
-	p3 := mustProposal(id3)
-	if p3.state != stateSucceeded {
+	if State(id3) != "succeeded" {
 		t.Fatal("the third proposal did not succeed on the vote, so there is " +
 			"no timelock here to measure")
 	}
 	// Pinned before anything is measured against it, for the same reason the
 	// voting window is: read the mark off the proposal and a delay of the wrong
 	// length moves both assertions together, so neither can fail.
-	if got := p3.ready - settledAt; got != delay {
+	if got := timingReady(id3) - settledAt; got != delay {
 		t.Fatalf("the timelock is %d blocks against the %d the rules asked for",
 			got, delay)
 	}
 
-	advanceTo(p3.ready - 1)
+	advanceTo(timingReady(id3) - 1)
 	uassert.AbortsContains(t, cur, "still in the delay window", func() {
 		Execute(cross(cur), id3)
 	})
@@ -435,7 +435,7 @@ func TestTheWindowsAreCountedAtTheirExactBlock(cur realm, t *testing.T) {
 		t.Errorf("one block before the timelock ends the page does not say it "+
 			"is waiting:\n%s", page)
 	}
-	advanceTo(p3.ready)
+	advanceTo(timingReady(id3))
 	if page := Render("3"); !strings.Contains(page, "Executable now") {
 		t.Errorf("on the first executable block the page still says waiting, so "+
 			"it disagrees with Execute by a block:\n%s", page)
@@ -464,16 +464,14 @@ func TestTheWindowsAreCountedAtTheirExactBlock(cur realm, t *testing.T) {
 func TestAChainTooYoungToHaveSealedAnEpochCannotVote(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10})
 	// Epoch 1 is the first epoch, so the last sealed one is epoch zero, which
 	// is to say there is not one.
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(moodVoter): 100},
 		total:  100, epoch: 1,
-	}
+	})
 
 	testing.SetRealm(testing.NewUserRealm(moodVoter))
 	uassert.AbortsContains(t, cur, "too young to vote", func() {
@@ -498,8 +496,6 @@ func TestAChainTooYoungToHaveSealedAnEpochCannotVote(cur realm, t *testing.T) {
 func TestAWinRecordedByNobodyStillCannotBeCancelled(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 	minter = moodVoter
 	quiet := testutils.TestAddress("c-quiet")
 
@@ -511,9 +507,9 @@ func TestAWinRecordedByNobodyStillCannotBeCancelled(cur realm, t *testing.T) {
 	advanceEpochs(1)
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
-	kinds.Set("moody/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 3000, ThresholdBps: 5000, VotingBlocks: 100, DelayBlocks: 1000,
-	}})
+	engine.Adopt(moody{}, Rules{
+		QuorumBps: 3000, ThresholdBps: 5000, VotingBlocks: 100, DelayBlocks: 1000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(moodVoter))
 	id := Propose(cross(cur), "moody/thing", "uncancellable", "deadline win")
 	Vote(cross(cur), id, "yes")
@@ -527,9 +523,9 @@ func TestAWinRecordedByNobodyStillCannotBeCancelled(cur realm, t *testing.T) {
 	if got := State(id); got != "succeeded" {
 		t.Fatalf("after the deadline a reader sees %q, want succeeded", got)
 	}
-	if p := mustProposal(id); p.state != stateActive {
+	if StoredState(id) != "active" {
 		t.Fatalf("something already recorded the outcome, so this test is no "+
-			"longer about an unrecorded one (stored state %d)", p.state)
+			"longer about an unrecorded one (state %s)", State(id))
 	}
 
 	uassert.AbortsContains(t, cur, "too late to cancel", func() {
@@ -556,8 +552,6 @@ func TestAWinRecordedByNobodyStillCannotBeCancelled(cur realm, t *testing.T) {
 func TestAnybodyMayRecordAnOutcome(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 	minter = moodVoter
 	quiet := testutils.TestAddress("s-quiet")
 	stranger := testutils.TestAddress("s-stranger")
@@ -568,31 +562,30 @@ func TestAnybodyMayRecordAnOutcome(cur realm, t *testing.T) {
 	advanceEpochs(1)
 
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
-	kinds.Set("moody/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 3000, ThresholdBps: 5000, VotingBlocks: 100, DelayBlocks: 1000,
-	}})
+	engine.Adopt(moody{}, Rules{
+		QuorumBps: 3000, ThresholdBps: 5000, VotingBlocks: 100, DelayBlocks: 1000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(moodVoter))
 	id := Propose(cross(cur), "moody/thing", "recorded-by-a-stranger", "deadline win")
 	Vote(cross(cur), id, "yes")
 
 	// The deadline passes unattended, so the win is true and unwritten.
 	advanceBlocks(200)
-	if p := mustProposal(id); p.state != stateActive {
+	if StoredState(id) != "active" {
 		t.Fatalf("the outcome was already recorded, so this test is not about "+
-			"an unrecorded one (stored state %d)", p.state)
+			"an unrecorded one (state %s)", State(id))
 	}
 
 	// Somebody with no stake in it and no part in proposing records the result.
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	Settle(cross(cur), id)
 
-	p := mustProposal(id)
-	if p.state != stateSucceeded {
-		t.Fatalf("a stranger could not record the outcome: stored state %d", p.state)
+	if State(id) != "succeeded" {
+		t.Fatalf("a stranger could not record the outcome: state %s", State(id))
 	}
 	// And the clock started when they said so, not when the votes stopped
 	// mattering.
-	if p.ready == 0 {
+	if timingReady(id) == 0 {
 		t.Error("the outcome was recorded without starting the timelock")
 	}
 	uassert.AbortsContains(t, cur, "still in the delay window", func() {
@@ -614,9 +607,7 @@ func TestAnybodyMayRecordAnOutcome(cur realm, t *testing.T) {
 func TestAKindsFailureMessageIsClippedAtARuneBoundary(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
 	defer func() {
-		voters = real_
 		moodyCheckFails, moodyDoFails, moodyErrText = false, false, ""
 	}()
 
@@ -634,17 +625,16 @@ func TestAKindsFailureMessageIsClippedAtARuneBoundary(cur realm, t *testing.T) {
 	Vote(cross(cur), id, "yes")
 	Execute(cross(cur), id)
 
-	p := mustProposal(id)
-	if got := len(p.reason); got > maxReason+4 {
+	if got := len(engine.Reason(id)); got > governor.MaxReason+4 {
 		t.Errorf("the stored reason is %d bytes, want no more than about %d — "+
 			"a kind can write what it likes into a record kept forever",
-			got, maxReason)
+			got, governor.MaxReason)
 	}
-	if len(p.reason) >= len(long) {
+	if len(engine.Reason(id)) >= len(long) {
 		t.Fatal("the reason was not clipped at all, so the rest proves nothing")
 	}
 	// Still decodable: every byte accounted for by a whole rune.
-	body := p.reason
+	body := engine.Reason(id)
 	if n := len(body); n >= 3 && body[n-3:] == "…" {
 		body = body[:n-3]
 	}
@@ -689,13 +679,12 @@ func TestAKindsFailureMessageIsClippedAtARuneBoundary(cur realm, t *testing.T) {
 	moodyCheckFails = true
 	Execute(cross(cur), stale)
 
-	sp := mustProposal(stale)
-	if sp.state != stateFailed {
-		t.Fatalf("the stale proposal is state %d, want failed", sp.state)
+	if State(stale) != "failed" {
+		t.Fatalf("the stale proposal is %s, want failed", State(stale))
 	}
-	if got := len(sp.reason); got > maxReason+4 {
+	if got := len(engine.Reason(stale)); got > governor.MaxReason+4 {
 		t.Errorf("the stale-check reason is %d bytes, want no more than about "+
-			"%d", got, maxReason)
+			"%d", got, governor.MaxReason)
 	}
 }
 
@@ -722,62 +711,6 @@ func TestAKindsFailureMessageIsClippedAtARuneBoundary(cur realm, t *testing.T) {
 // that comes out of one does not arrive as the abort of the OUTER call — it
 // escapes uassert entirely. What is being tested is the rule, and the rule is
 // this variable.
-func TestWhatAHandlerMayDoWhileItIsRunning(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	real_ := voters
-	defer func() { voters = real_; executing = false }()
-
-	minter = gAlice
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-	offerAndAdopt(setFee{}, Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100,
-	})
-	Mint(cross(cur), gAlice, 1000)
-	advanceEpochs(1)
-
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-	live := Propose(cross(cur), "fee", "601", "something to act on")
-
-	// From here on, pretend a handler is running.
-	executing = true
-
-	uassert.AbortsContains(t, cur, "cannot propose from inside an execution", func() {
-		Propose(cross(cur), "fee", "602", "legislating mid-enactment")
-	})
-	uassert.AbortsContains(t, cur, "cannot vote from inside an execution", func() {
-		Vote(cross(cur), live, "yes")
-	})
-	uassert.AbortsContains(t, cur, "re-entrant execution", func() {
-		Execute(cross(cur), live)
-	})
-
-	// And the three that are deliberately not guarded, because none of them
-	// hands a handler anything it did not already have.
-	Settle(cross(cur), live)
-	if got := State(live); got != "active" {
-		t.Errorf("settling an undecided proposal changed it to %q", got)
-	}
-	// A name nothing else has taken: resetLedger clears the ledger and the
-	// proposals, and deliberately not the KIND registry — a name is bound to
-	// its code forever, which is a rule about the realm's whole lifetime and
-	// not about one test. So kinds accumulate across the package, and offering
-	// one another test already offered fails with "that name is taken", which
-	// is the rule working.
-	namedAs = "latch/probe"
-	Offer(cross(cur), named{}, Rules{QuorumBps: 1, ThresholdBps: 1, VotingBlocks: 10, GraceBlocks: 100})
-	if entryOf("latch/probe") == nil {
-		t.Error("Offer was refused while a handler was running, which takes " +
-			"nothing from anybody and is not what the latch is for")
-	}
-	Cancel(cross(cur), live)
-	if got := State(live); got != "canceled" {
-		t.Errorf("the proposer could not withdraw their own proposal: %q", got)
-	}
-
-	executing = false
-}
-
 // Retiring a kind kills decisions already taken under it, and says so.
 //
 // The description is checked against the BEHAVIOUR here rather than on its own,
@@ -789,49 +722,6 @@ func TestWhatAHandlerMayDoWhileItIsRunning(cur realm, t *testing.T) {
 // Execute refuses a kind that is no longer adopted and records the proposal as
 // failed. That is the right behaviour — the holders withdrew the power — but it
 // is invisible from the retire proposal unless the page says so.
-func TestRetiringAKindKillsDecisionsAlreadyTakenUnderIt(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
-
-	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
-	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10})
-
-	// A decision taken, waiting to run.
-	testing.SetRealm(testing.NewUserRealm(moodVoter))
-	id := Propose(cross(cur), "moody/thing", "doomed", "decided before the retirement")
-	Vote(cross(cur), id, "yes")
-	if got := State(id); got != "succeeded" {
-		t.Fatalf("the proposal is %q, want succeeded", got)
-	}
-
-	// The page a holder reads before retiring warns them.
-	warning := Preview("govern:retire", "moody/thing")
-	if !strings.Contains(warning, "already been decided and not yet run") {
-		t.Errorf("retiring does not disclose what it does to decisions already "+
-			"taken:\n%s", warning)
-	}
-
-	// And it is true: retire the kind, and the decision dies.
-	e := entryOf("moody/thing")
-	e.live = false
-
-	Execute(cross(cur), id)
-	if got := State(id); got != "failed" {
-		t.Errorf("after retiring the kind the decided proposal is %q, want "+
-			"failed — the warning above would be describing something that "+
-			"does not happen", got)
-	}
-	if moodyRan != 0 {
-		t.Errorf("the handler ran %d times for a retired kind", moodyRan)
-	}
-	if p := mustProposal(id); !strings.Contains(p.reason, "retired") {
-		t.Errorf("the failure reason is %q, which does not point at the "+
-			"retirement", p.reason)
-	}
-}
-
 // The terms a holder is asked to grant carry a duration, not only a block
 // count.
 //
@@ -842,12 +732,13 @@ func TestRetiringAKindKillsDecisionsAlreadyTakenUnderIt(cur realm, t *testing.T)
 func TestAdoptionTermsCarryADuration(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	kinds.Set("dur/probe", &entry{kind: moody{}, live: false, rules: Rules{
+	namedAs = "dur/probe"
+	engine.Offer(alice, named{}, Rules{
 		QuorumBps: 2000, ThresholdBps: 6600,
 		VotingBlocks: 7 * 24 * 60 * 60 / 5,
 		DelayBlocks:  2 * 24 * 60 * 60 / 5,
 		GraceBlocks:  14 * 24 * 60 * 60 / 5,
-	}})
+	})
 	page := Preview("govern:adopt", "dur/probe")
 	for _, want := range []string{
 		"120960 blocks (about 7 days)",
@@ -861,9 +752,11 @@ func TestAdoptionTermsCarryADuration(cur realm, t *testing.T) {
 
 	// Short periods read in the units they belong in, or an hour would be
 	// rendered as zero days.
-	kinds.Set("dur/short", &entry{kind: moody{}, live: false, rules: Rules{
+	namedAs = "dur/short"
+	engine.Offer(alice, named{}, Rules{
 		QuorumBps: 1, ThresholdBps: 1, VotingBlocks: 720, DelayBlocks: 12,
-	}})
+		GraceBlocks: 1_000_000,
+	})
 	page = Preview("govern:adopt", "dur/short")
 	if !strings.Contains(page, "720 blocks (about 1 hour)") {
 		t.Errorf("an hour-long vote is not rendered in hours:\n%s", page)
@@ -887,8 +780,7 @@ func TestAdoptionTermsCarryADuration(cur realm, t *testing.T) {
 func TestAPanickingHandlerLeavesTheProposalToBeRetried(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_; moodyPanics = false }()
+	defer func() { moodyPanics = false }()
 	moodyCheckFails, moodyDoFails, moodyRan, moodyPanics = false, false, 0, false
 	arm(Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 10})
 
@@ -909,12 +801,8 @@ func TestAPanickingHandlerLeavesTheProposalToBeRetried(cur realm, t *testing.T) 
 		t.Errorf("after an aborted execution the proposal is %q, want succeeded "+
 			"— an abort writes nothing, including the failure", got)
 	}
-	if !openIdx.Has(digest("moody/thing", "boom")) {
+	if State(id) != "succeeded" {
 		t.Error("the proposal gave up its slot on an execution that never happened")
-	}
-	if executing {
-		t.Fatal("the re-entrancy latch is still set after a handler panicked, " +
-			"so nothing can ever be executed again")
 	}
 
 	// Anybody may try again, and it fails the same way.
@@ -961,47 +849,3 @@ func TestAPanickingHandlerLeavesTheProposalToBeRetried(cur realm, t *testing.T) 
 // call that aborts does not surface as the abort of the outer one, it escapes
 // uassert entirely, which is the same reason the sibling test is shaped the way
 // it is.
-var sawLatch, ranAtAll bool
-
-type peeker struct{}
-
-func (peeker) Name() string             { return "peek/latch" }
-func (peeker) Describe(p string) string { return "look at the latch" }
-func (peeker) Check(p string) error     { return nil }
-
-func (peeker) Do(_ int, rlm realm, p string) error {
-	ranAtAll, sawLatch = true, executing
-	return nil
-}
-
-func TestTheLatchIsSetWhileAHandlerRuns(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	sawLatch, ranAtAll = false, false
-	defer func() { executing = false }()
-
-	minter = gAlice
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-	offerAndAdopt(peeker{}, Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100,
-	})
-	Mint(cross(cur), gAlice, 1000)
-	advanceEpochs(1)
-
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-	id := Propose(cross(cur), "peek/latch", "x", "run something")
-	Vote(cross(cur), id, "yes")
-	Execute(cross(cur), id)
-
-	if !ranAtAll {
-		t.Fatal("the handler never ran, so it saw nothing")
-	}
-	if !sawLatch {
-		t.Error("a handler ran with the re-entrancy latch clear: everything it " +
-			"calls back into the governor would be accepted, and the guards " +
-			"that read the latch are unreachable")
-	}
-	if executing {
-		t.Error("the latch is still set after the handler returned")
-	}
-}

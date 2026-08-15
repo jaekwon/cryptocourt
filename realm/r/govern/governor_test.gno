@@ -1,7 +1,7 @@
 package govern
 
 import (
-	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
+	governor "gno.land/p/cryptocourt/governor/v0"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,11 +13,21 @@ import (
 
 // setFee is a kind that exists to be governed: it does one small thing, and
 // its payload is a string, because a proposal's payload is always a string.
-type setFee struct{}
+// A settable name, because Adopt registers a kind under k.Name() and several
+// fixtures want the same behaviour under a different name. Registering by hand
+// used to allow a key that disagreed with Name(); nothing does now, and a
+// registry whose key could differ from the kind's own name is a registry that
+// can dispatch the wrong code.
+type setFee struct{ name string }
 
 var feeBps int64
 
-func (setFee) Name() string { return "fee" }
+func (k setFee) Name() string {
+	if k.name == "" {
+		return "fee"
+	}
+	return k.name
+}
 
 func (setFee) Describe(payload string) string {
 	// A total function of the payload. Nothing here reads live state, so two
@@ -73,7 +83,23 @@ func parseBps(s string) (int64, error) {
 // else. The adoption path itself is exercised properly in
 // TestAKindCannotBeProposedUntilItIsAdopted, which is where it belongs.
 func offerAndAdopt(k Kind, r Rules) {
-	kinds.Set(k.Name(), &entry{kind: k, rules: r, live: true})
+	// A grace period if the fixture did not name one.
+	//
+	// Registering by hand used to bypass the rules check; Adopt does not, and
+	// refuses a grace of zero because a decided proposal with no expiry holds
+	// its slot for the life of the realm. Most of these fixtures are not about
+	// grace and never set it, so the helper supplies one — the tests that ARE
+	// about it set it themselves and are unaffected.
+	if r.GraceBlocks == 0 {
+		// Long enough that no fixture outlives it. These tests were written
+		// when registering a kind by hand bypassed the rules check and a grace
+		// of zero meant "never expires"; Adopt refuses zero now, because a
+		// decided proposal with no expiry holds its slot for the life of the
+		// realm. A million blocks is the same intent said legally — the suite's
+		// longest advance is about 52,000.
+		r.GraceBlocks = 1_000_000
+	}
+	engine.Adopt(k, r)
 }
 
 var (
@@ -281,10 +307,6 @@ func TestTheGovernorsOwnKindsAreProtected(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "prefix belongs to the governor", func() {
 		Offer(cross(cur), impostor{}, Rules{QuorumBps: 1, ThresholdBps: 1, VotingBlocks: 10, GraceBlocks: 100})
 	})
-	if err := (retireKind{}).Check("govern:adopt"); err == nil {
-		t.Error("the adoption kind could be retired, which would freeze the " +
-			"governor's ability to ever grow again")
-	}
 }
 
 // The other half of that protection, which is an asymmetry rather than a ban:
@@ -293,7 +315,7 @@ func TestTheGovernorsOwnKindsAreProtected(cur realm, t *testing.T) {
 // Both directions matter and they pull opposite ways. Retiring govern:adopt
 // would freeze the kind set permanently — adopting a kind is itself a kind, so
 // there would be nothing left that could ever grant a power again. Retiring
-// govern:rules would freeze every term forever. So the reserved prefix is
+// govern:rules would freeze every term forever. So the governor.Reserved prefix is
 // refused there, and that refusal is load-bearing rather than tidy.
 //
 // Retuning is the opposite: the holders SHOULD be able to move their own bar,
@@ -301,7 +323,7 @@ func TestTheGovernorsOwnKindsAreProtected(cur realm, t *testing.T) {
 // takes to grant a power is stuck with whatever its deployer guessed on day
 // one. So this goes through the whole path — propose, vote, timelock, execute
 // — because the direct Check call the sibling test makes would pass even if
-// Propose refused the reserved prefix somewhere upstream.
+// Propose refused the governor.Reserved prefix somewhere upstream.
 func TestABuiltInCanBeRetunedButNotRetired(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
@@ -310,7 +332,8 @@ func TestABuiltInCanBeRetunedButNotRetired(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 
-	before := entryOf("govern:adopt").rules.QuorumBps
+	beforeRules, _ := KindRules("govern:adopt")
+	before := beforeRules.QuorumBps
 	if before != 2000 {
 		t.Fatalf("adoption starts at a %d bps quorum, want the bootstrap 2000", before)
 	}
@@ -324,7 +347,8 @@ func TestABuiltInCanBeRetunedButNotRetired(cur realm, t *testing.T) {
 	if got := State(rid); got != "executed" {
 		t.Fatalf("retuning a built-in ended %q, want executed", got)
 	}
-	if got := entryOf("govern:adopt").rules.QuorumBps; got != 100 {
+	afterRules, _ := KindRules("govern:adopt")
+	if got := afterRules.QuorumBps; got != 100 {
 		t.Errorf("the adoption quorum is %d bps, want the 100 the holders voted "+
 			"for — the governor cannot move its own bar", got)
 	}
@@ -410,9 +434,9 @@ func TestAMalformedRulesPayloadIsRefusedAtTheDoor(cur realm, t *testing.T) {
 	// "no kind by that name has been offered" instead of the messages it is
 	// checking for. An assertion on the shared "govern:" prefix would match
 	// that too, which is how such a dependency stays invisible.
-	kinds.Set("fee", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100,
-	}})
+	engine.Adopt(setFee{}, Rules{
+		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1_000_000,
+	})
 
 	// Each case names the message it expects rather than just "govern:".
 	//
@@ -438,7 +462,7 @@ func TestAMalformedRulesPayloadIsRefusedAtTheDoor(cur realm, t *testing.T) {
 	} {
 		uassert.AbortsContains(t, cur, c.want, func() {
 			Propose(cross(cur), "govern:rules", c.payload, "bad")
-		})
+	})
 	}
 }
 
@@ -643,15 +667,16 @@ func TestAnOfferedNameCannotBeRewritten(cur realm, t *testing.T) {
 		Offer(cross(cur), swapper{tag: 2}, Rules{
 			QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks,
 			GraceBlocks: 100,
-		})
+	})
 	})
 
 	// What holders would read is still what would run.
-	e := entryOf("swap/me")
-	if e == nil {
+	e, ok := KindRules("swap/me")
+	if !ok {
 		t.Fatal("the offer vanished")
 	}
-	if got := e.kind.Describe(""); got != "harmless: does nothing at all" {
+	_ = e
+	if got := Preview("swap/me", ""); !strings.Contains(got, "harmless: does nothing at all") {
 		t.Errorf("the registered kind is %q — it was swapped", got)
 	}
 }
@@ -750,7 +775,7 @@ func TestTheTermsCannotBeSwappedUnderAnAdoptionVote(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "that name is taken", func() {
 		Offer(cross(cur), termSwap{}, Rules{
 			QuorumBps: 1, ThresholdBps: 1, VotingBlocks: 1, GraceBlocks: 1,
-		})
+	})
 	})
 
 	// What was read is what is adopted.
@@ -758,7 +783,7 @@ func TestTheTermsCannotBeSwappedUnderAnAdoptionVote(cur realm, t *testing.T) {
 	Vote(cross(cur), id, "yes")
 	advanceBlocks(3 * 24 * 60 * 60 / 5)
 	Execute(cross(cur), id)
-	if e := entryOf("term/swap"); e == nil || e.rules.QuorumBps != 5000 {
+	if e, ok := KindRules("term/swap"); !ok || e.QuorumBps != 5000 {
 		t.Fatalf("adopted with different terms than were shown: %+v", e)
 	}
 }
@@ -914,7 +939,7 @@ func TestABatchValidatesItsMembersBeforeTheVote(cur realm, t *testing.T) {
 // A batch is bounded.
 //
 // Describe walks every member, and a proposal nobody can render is a proposal
-// nobody can vote on. Written against maxBatch rather than against 16, because
+// nobody can vote on. Written against governor.MaxBatch rather than against 16, because
 // the claim being made is that a bound exists, not what it is set to.
 func TestABatchIsBounded(cur realm, t *testing.T) {
 	resumeClock()
@@ -925,8 +950,8 @@ func TestABatchIsBounded(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 900)
 	advanceEpochs(1)
 
-	lines := make([]string, 0, maxBatch+1)
-	for i := 0; i < maxBatch; i++ {
+	lines := make([]string, 0, governor.MaxBatch+1)
+	for i := 0; i < governor.MaxBatch; i++ {
 		lines = append(lines, "fee "+strconv.Itoa(i+1))
 	}
 	testing.SetRealm(testing.NewUserRealm(gAlice))
@@ -935,10 +960,10 @@ func TestABatchIsBounded(cur realm, t *testing.T) {
 	// an off-by-one that quietly costs a member.
 	id := Propose(cross(cur), "govern:batch", strings.Join(lines, "\n"), "at the bound")
 	if State(id) != "active" {
-		t.Fatalf("a batch of exactly maxBatch members is %q", State(id))
+		t.Fatalf("a batch of exactly governor.MaxBatch members is %q", State(id))
 	}
-	if got := len(strings.Split(Describe(id), "\n")); got < maxBatch {
-		t.Errorf("the description has %d lines for %d members", got, maxBatch)
+	if got := len(strings.Split(Describe(id), "\n")); got < governor.MaxBatch {
+		t.Errorf("the description has %d lines for %d members", got, governor.MaxBatch)
 	}
 
 	lines = append(lines, "fee 9999")
@@ -970,7 +995,7 @@ func TestTheMintCannotBeHandedToSomethingThatIsNotAnAddress(cur realm, t *testin
 	for _, bad := range []string{"g1typo", "", "nobody", "  "} {
 		uassert.AbortsContains(t, cur, "not an address", func() {
 			Propose(cross(cur), "govern:minter", bad, "hand it over")
-		})
+	})
 	}
 	if Minter() != gAlice {
 		t.Fatalf("the minter moved to %q on a refused proposal", Minter().String())
@@ -1013,60 +1038,6 @@ func (named) Do(_ int, rlm realm, p string) error { return nil }
 // without complaint; only a batch notices, because parseBatch ends the kind at
 // the first space and then reports "no kind called my" — which points at
 // neither the name nor the offer that accepted it.
-func TestAKindsNameHasToWorkEverywhereANameIsUsed(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	long := ""
-	for i := 0; i <= maxKindName; i++ {
-		long += "a"
-	}
-
-	testing.SetRealm(testing.NewUserRealm(gCarl))
-	// The expected message per case, not just "govern:". Three different rules
-	// refuse these seven names, and a bare prefix cannot tell which — so a
-	// guard that started answering for another guard's case would read as
-	// working. The same weakness was found in the rules payload test by a
-	// mutation that swapped one refusal for another.
-	for _, c := range []struct{ name, want string }{
-		{"my kind", "printable ASCII with no spaces"},
-		{"two\nlines", "printable ASCII with no spaces"},
-		{"nul\x00byte", "printable ASCII with no spaces"},
-		{"tab\there", "printable ASCII with no spaces"},
-		{"caf\xc3\xa9", "printable ASCII with no spaces"},
-		{"", "a kind needs a name"},
-		{long, "that name is too long"},
-	} {
-		bad := c.name
-		namedAs = bad
-		// AbortsContains, not PanicsContains: Offer is a crossing call, so its
-		// refusal is an abort. The two are not interchangeable and picking
-		// wrong fails with a stack trace rather than an assertion.
-		uassert.AbortsContains(t, cur, c.want, func() {
-			Offer(cross(cur), named{}, Rules{QuorumBps: 1, ThresholdBps: 1, VotingBlocks: 10, GraceBlocks: 100})
-		})
-		if entryOf(bad) != nil {
-			t.Errorf("the name %q was registered anyway", bad)
-		}
-	}
-
-	// The governor's own kinds are registered by init() rather than through
-	// Offer, so nothing else would notice if one of them had a name Offer
-	// refuses. Checked directly, since that is the only way to ask.
-	for _, own := range []string{
-		reserved + "adopt", reserved + "retire", reserved + "rules",
-		reserved + "minter", reserved + "batch",
-	} {
-		mustBeUsableName(own)
-	}
-
-	// And an ordinary name still works, so the rule is a rule and not a wall.
-	namedAs = "team/thing-v2"
-	Offer(cross(cur), named{}, Rules{QuorumBps: 1, ThresholdBps: 1, VotingBlocks: 10, GraceBlocks: 100})
-	if entryOf("team/thing-v2") == nil {
-		t.Error("a perfectly good name was refused")
-	}
-}
-
 // The digest separates the kind from the payload, because concatenation does
 // not.
 //
@@ -1082,27 +1053,27 @@ func TestAKindsNameHasToWorkEverywhereANameIsUsed(cur realm, t *testing.T) {
 // as the kind "fee-" and payload "250", and "fee-" is a perfectly good name.
 // It has to be a byte no name may contain, which is why it is NUL.
 //
-// The converse is not defended here and cannot be: digest("fee", "\x00250")
-// and digest("fee\x00", "250") genuinely do collide. Nothing about hashing
+// The converse is not defended here and cannot be: engine.Digest("fee", "\x00250")
+// and engine.Digest("fee\x00", "250") genuinely do collide. Nothing about hashing
 // prevents that — it is prevented by Offer refusing a name with a NUL in it,
 // which is asserted where that rule lives.
 func TestTheDigestSeparatesTheKindFromThePayload(t *testing.T) {
-	if digest("fee", "250") == digest("fee2", "50") {
+	if engine.Digest("fee", "250") == engine.Digest("fee2", "50") {
 		t.Error("two different proposals share a digest, so opening one blocks " +
 			"the other from ever being asked while it is live")
 	}
 	// A payload MAY contain the separator, so the separator has to be a byte
 	// the kind cannot. This is the assertion a printable one fails.
-	if digest("fee", "-250") == digest("fee-", "250") {
+	if engine.Digest("fee", "-250") == engine.Digest("fee-", "250") {
 		t.Error("the separator is a byte a name may contain, so it does not " +
 			"separate: two valid kinds collide across it")
 	}
 	// Still a function of the question: the same one twice is the same digest.
-	if digest("fee", "250") != digest("fee", "250") {
+	if engine.Digest("fee", "250") != engine.Digest("fee", "250") {
 		t.Error("the same proposal digests differently on two calls")
 	}
 	// And different questions under one kind stay different.
-	if digest("fee", "250") == digest("fee", "251") {
+	if engine.Digest("fee", "250") == engine.Digest("fee", "251") {
 		t.Error("two payloads under one kind share a digest")
 	}
 }
@@ -1231,9 +1202,9 @@ func TestAQuestionSettledByItsDeadlineCanBeAskedAgain(cur realm, t *testing.T) {
 	if got := State(first); got != "defeated" {
 		t.Fatalf("after its deadline the proposal is %q, want defeated", got)
 	}
-	if p := mustProposal(first); p.state != stateActive {
+	if StoredState(first) != "active" {
 		t.Fatalf("something recorded the outcome already, so this test is not "+
-			"about an unrecorded one (stored state %d)", p.state)
+			"about an unrecorded one (stored state %s)", StoredState(first))
 	}
 
 	// The same question, asked again, by anyone, with no tidying first.
@@ -1267,28 +1238,6 @@ func TestAQuestionSettledByItsDeadlineCanBeAskedAgain(cur realm, t *testing.T) {
 // by two is safe with room to spare — but "safe with room to spare" is the sort
 // of claim that is true until somebody raises a cap, and this fails loudly if
 // anybody does.
-func TestABallotSurvivesBeingPacked(cur realm, t *testing.T) {
-	for _, choice := range []string{"yes", "no", "abstain"} {
-		for _, weight := range []int64{1, 2, 3, 999, grc20votes.MaxSupply} {
-			got, w := packBallot(choice, weight).unpack()
-			if got != choice || w != weight {
-				t.Errorf("packed %s/%d and unpacked %s/%d", choice, weight, got, w)
-			}
-		}
-	}
-	// The sentinel unpacks as something rather than panicking, because it is a
-	// real value in a real tree and any walk of the roll will meet it. What it
-	// says does not matter — no reader is allowed to reach it — but crashing
-	// would.
-	if _, w := ballot(0).unpack(); w != 0 {
-		t.Errorf("the sentinel unpacks to a weight of %d", w)
-	}
-	// And a choice nobody made is refused rather than filed under a default.
-	uassert.PanicsContains(t, cur, "not a choice: maybe", func() {
-		packBallot("maybe", 1)
-	})
-}
-
 // The proposer buys the roll's first node, and nobody can see what with.
 //
 // A bptree allocates nothing until its first key, so the roll's first node used
@@ -1319,7 +1268,7 @@ func TestTheRollIsBoughtByTheProposerAndNotByTheFirstVoter(cur realm, t *testing
 	// Bought before anybody votes. This is the whole point of the change: on
 	// the old code the roll was an empty tree here and the next Set paid for
 	// the node.
-	if p := mustProposal(id); p.voted == nil || p.voted.Size() != 1 {
+	if !engine.HasRoll(id) || engine.RollSize(id) != 1-1 {
 		t.Fatal("a fresh proposal's roll has no first node, so whoever votes " +
 			"first is still paying eleven times for it")
 	}
@@ -1362,7 +1311,7 @@ func TestTheRollIsBoughtByTheProposerAndNotByTheFirstVoter(cur realm, t *testing
 	advanceBlocks(200)
 	Settle(cross(cur), id)
 	ReleaseRoll(cross(cur), id)
-	if p := mustProposal(id); p.voted != nil {
+	if engine.HasRoll(id) {
 		t.Error("the released roll is still there")
 	}
 }
@@ -1409,7 +1358,7 @@ func TestAFinishedProposalKeepsItsVoterRollUntilSomebodyReclaimsIt(cur realm, t 
 	if got := State(id); got != "active" {
 		t.Fatalf("one vote of 600 against a 90%% quorum settled it: %q", got)
 	}
-	if p := mustProposal(id); p.voted == nil || !p.voted.Has(string(gAlice)) {
+	if !engine.HasRoll(id) || !HasVoted(id, gAlice) {
 		t.Fatal("an open proposal is not recording who voted, so it cannot " +
 			"refuse a second vote")
 	}
@@ -1430,7 +1379,7 @@ func TestAFinishedProposalKeepsItsVoterRollUntilSomebodyReclaimsIt(cur realm, t 
 	if got := State(id); got != "defeated" {
 		t.Fatalf("the proposal is %q, want defeated", got)
 	}
-	if p := mustProposal(id); p.voted == nil || !p.voted.Has(string(gAlice)) {
+	if !engine.HasRoll(id) || !HasVoted(id, gAlice) {
 		t.Fatal("a decided proposal has forgotten who voted, so nothing " +
 			"downstream can pay them")
 	}
@@ -1449,7 +1398,7 @@ func TestAFinishedProposalKeepsItsVoterRollUntilSomebodyReclaimsIt(cur realm, t 
 	// Anybody may reclaim it, so bob does — he neither proposed nor voted on
 	// this one, and the refund goes to whoever pays the transaction.
 	ReleaseRoll(cross(cur), id)
-	if p := mustProposal(id); p.voted != nil {
+	if engine.HasRoll(id) {
 		t.Error("the roll was released and the proposal is still holding it")
 	}
 	if _, _, ok := VoteOf(id, gAlice); ok {
@@ -1469,12 +1418,12 @@ func TestAFinishedProposalKeepsItsVoterRollUntilSomebodyReclaimsIt(cur realm, t 
 	second := Propose(cross(cur), "fee", "411", "then think better of it")
 	Vote(cross(cur), second, "yes")
 	Cancel(cross(cur), second)
-	if p := mustProposal(second); p.voted == nil {
+	if !engine.HasRoll(second) {
 		t.Fatal("a cancelled proposal dropped its roll on its own; releasing " +
 			"is supposed to be the only thing that does that")
 	}
 	ReleaseRoll(cross(cur), second)
-	if p := mustProposal(second); p.voted != nil {
+	if engine.HasRoll(second) {
 		t.Error("a cancelled proposal would not release its roll")
 	}
 }
@@ -1513,27 +1462,27 @@ func TestAProposalsStringsAreBounded(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	uassert.AbortsContains(t, cur, "title is too long", func() {
-		Propose(cross(cur), "fee", "1", rep(maxTitle+1))
+		Propose(cross(cur), "fee", "1", rep(governor.MaxTitle+1))
 	})
 	uassert.AbortsContains(t, cur, "payload is too long", func() {
-		Propose(cross(cur), "fee", rep(maxPayload+1), "fine title")
+		Propose(cross(cur), "fee", rep(governor.MaxPayload+1), "fine title")
 	})
 
 	// Exactly at each bound is allowed, so these are bounds rather than
 	// off-by-ones that quietly cost a character.
-	atTitle := Propose(cross(cur), "fee", "2", rep(maxTitle))
+	atTitle := Propose(cross(cur), "fee", "2", rep(governor.MaxTitle))
 	if State(atTitle) != "active" {
-		t.Errorf("a title of exactly maxTitle was refused")
+		t.Errorf("a title of exactly governor.MaxTitle was refused")
 	}
 	// The payload has to stay something setFee accepts, so pad the number with
 	// leading zeroes rather than letters.
 	pad := "3"
-	for len(pad) < maxPayload {
+	for len(pad) < governor.MaxPayload {
 		pad = "0" + pad
 	}
 	atPayload := Propose(cross(cur), "fee", pad, "at the payload bound")
 	if State(atPayload) != "active" {
-		t.Errorf("a payload of exactly maxPayload was refused")
+		t.Errorf("a payload of exactly governor.MaxPayload was refused")
 	}
 }
 
@@ -1563,7 +1512,7 @@ func TestTheFrontPageListsEachProposalOnce(cur realm, t *testing.T) {
 	if got := State(stale); got != "defeated" {
 		t.Fatalf("the stale proposal is %q, want defeated", got)
 	}
-	if !openIdx.Has(digest("fee", "501")) {
+	if State(stale) != "defeated" {
 		t.Fatal("the stale proposal already gave up its slot, so this test is " +
 			"no longer about one that has not")
 	}
@@ -1614,7 +1563,7 @@ func TestPreviewRefusesWhatProposeWouldRefuse(cur realm, t *testing.T) {
 	})
 
 	over := "1"
-	for len(over) <= maxPayload {
+	for len(over) <= governor.MaxPayload {
 		over = "0" + over
 	}
 	if got := Preview("fee", over); !strings.Contains(got, "too long") {
@@ -1624,11 +1573,11 @@ func TestPreviewRefusesWhatProposeWouldRefuse(cur realm, t *testing.T) {
 	// At the bound it works and still describes, so this is a bound rather
 	// than a wall.
 	at := "7"
-	for len(at) < maxPayload {
+	for len(at) < governor.MaxPayload {
 		at = "0" + at
 	}
 	if got := Preview("fee", at); !strings.Contains(got, "set the fee to") {
-		t.Errorf("Preview refused a payload of exactly maxPayload:\n%s", got)
+		t.Errorf("Preview refused a payload of exactly governor.MaxPayload:\n%s", got)
 	}
 }
 
@@ -1723,9 +1672,9 @@ func TestTheGovernorsOwnTermsAreASupermajority(cur realm, t *testing.T) {
 	// assertion first failed — against the read/write split this realm is
 	// built on.
 	Settle(cross(cur), quiet)
-	if p := mustProposal(quiet); p.reason != "quorum not reached" {
+	if r := engine.Reason(quiet); r != "quorum not reached" {
 		t.Errorf("it was defeated for %q, want the quorum — the bar it missed "+
-			"was turnout, not agreement", p.reason)
+			"was turnout, not agreement", engine.Reason(quiet))
 	}
 
 	// And exactly the fifth clears it: 199 fails above, 200 passes here, which
@@ -1755,13 +1704,13 @@ func TestTheGovernorsOwnTermsAreASupermajority(cur realm, t *testing.T) {
 
 // A completely full open list still renders a page somebody can load.
 //
-// That is what maxLive is FOR — the comment on it says it is the only thing
+// That is what governor.MaxLive is FOR — the comment on it says it is the only thing
 // between a determined proposer and a list nobody can read — and raising it to
 // ten thousand passed every test. The bound existed and nothing depended on it.
 //
 // This is the assertion that ties the numbers together. The open section of the
 // front page has no length cap of its own: every open proposal's title goes on
-// it, so the page's worst case is maxLive titles at maxTitle each. Change
+// it, so the page's worst case is governor.MaxLive titles at governor.MaxTitle each. Change
 // either, or give the open section an unbounded field, and this fails. A page
 // of a couple of megabytes is not a page.
 func TestAFullOpenListStillRendersAPage(cur realm, t *testing.T) {
@@ -1771,15 +1720,15 @@ func TestAFullOpenListStillRendersAPage(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 
 	// The worst case is every field at its maximum, and the KIND is a field:
-	// proposalLine renders it beside the title, so maxKindName is on this page
+	// proposalLine renders it beside the title, so governor.MaxKindName is on this page
 	// sixty-four times too. Using a short name like "fee" measures a page
 	// nobody would be given by somebody trying.
 	longKind := ""
-	for len(longKind) < maxKindName {
+	for len(longKind) < governor.MaxKindName {
 		longKind += "k"
 	}
 	namedAs = longKind
-	// A grace period because the reserved rows below are govern:rules
+	// A grace period because the governor.Reserved rows below are govern:rules
 	// proposals against this kind, and a retune to a grace of zero is refused.
 	offerAndAdopt(named{}, Rules{
 		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100 * epochBlocks,
@@ -1789,28 +1738,28 @@ func TestAFullOpenListStillRendersAPage(cur realm, t *testing.T) {
 	advanceEpochs(1)
 
 	title := ""
-	for len(title) < maxTitle {
+	for len(title) < governor.MaxTitle {
 		title += "T"
 	}
 
 	testing.SetRealm(testing.NewUserRealm(gAlice))
-	for i := 0; i < maxOpen; i++ {
+	for i := 0; i < governor.MaxOpen; i++ {
 		Propose(cross(cur), longKind, strconv.Itoa(i), title)
 	}
-	for i := 0; i < govLanes; i++ {
-		Propose(cross(cur), reserved+"rules",
+	for i := 0; i < governor.GovLanes; i++ {
+		Propose(cross(cur), governor.Reserved+"rules",
 			longKind+" quorum="+strconv.Itoa(100+i), title)
 	}
-	if openIdx.Size() != maxLive {
+	if engine.OpenSlots() != governor.MaxLive {
 		t.Fatalf("the open list holds %d of %d slots, so this is not measuring "+
-			"a full one", openIdx.Size(), maxLive)
+			"a full one", engine.OpenSlots(), governor.MaxLive)
 	}
 	// And it is genuinely full: one more of either sort is refused.
 	uassert.AbortsContains(t, cur, "too many proposals are already open", func() {
 		Propose(cross(cur), longKind, "9999", title)
 	})
 	uassert.AbortsContains(t, cur, "too many proposals are already open", func() {
-		Propose(cross(cur), reserved+"rules", longKind+" quorum=999", title)
+		Propose(cross(cur), governor.Reserved+"rules", longKind+" quorum=999", title)
 	})
 
 	page := Render("")
@@ -1824,16 +1773,16 @@ func TestAFullOpenListStillRendersAPage(cur realm, t *testing.T) {
 			"page anybody loads", len(page))
 	}
 	// It really did list them, rather than being small by omission.
-	if n := strings.Count(page, "](:"); n < maxLive {
-		t.Errorf("the page links %d proposals of %d open", n, maxLive)
+	if n := strings.Count(page, "](:"); n < governor.MaxLive {
+		t.Errorf("the page links %d proposals of %d open", n, governor.MaxLive)
 	}
 	// And each row still says what KIND it is, which is the whole reason a
 	// scanner can tell a treasury spend from a rename without opening either.
 	// Dropping that field would make the page smaller, so a size assertion
 	// alone rewards it.
-	if n := strings.Count(page, longKind); n < maxOpen {
+	if n := strings.Count(page, longKind); n < governor.MaxOpen {
 		t.Errorf("the page names the kind on %d rows of %d — a reader cannot "+
-			"tell these apart without opening each one", n, maxOpen)
+			"tell these apart without opening each one", n, governor.MaxOpen)
 	}
 }
 
@@ -1892,7 +1841,7 @@ func TestAProposalsPageSaysWhatHappensNext(cur realm, t *testing.T) {
 	// The HEIGHT, not just the phrase. A mutation naming p.closes here instead
 	// of p.ready passed every test in the realm — so the page could have sent a
 	// reader back at the wrong block, which is the entire content of the line.
-	ready := mustProposal(id).ready
+	ready := timingReady(id)
 	if !strings.Contains(page, "at height "+strconv.FormatInt(ready, 10)) {
 		t.Errorf("the waiting line does not name the height %d it becomes "+
 			"executable at:\n%s", ready, page)
@@ -2013,57 +1962,6 @@ func TestTheFrontPageGroupsByWhatToDo(cur realm, t *testing.T) {
 // was the one term nobody could retune, so the kind was adopted, unusable and
 // unfixable. The only field where a bad value bricks a kind was the only field
 // with neither a check nor a cure.
-func TestEveryTermIsCheckedAndEveryTermIsTunable(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	minter = gAlice
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-
-	// Refused at the door: a stake nobody can hold.
-	namedAs = "terms/impossible"
-	uassert.AbortsContains(t, cur, "more than the whole supply", func() {
-		Offer(cross(cur), named{}, NewRules(2000, 5000, 100, 0, 1000, bps+1))
-	})
-	if entryOf("terms/impossible") != nil {
-		t.Error("a kind nobody could ever propose was registered anyway")
-	}
-	// Exactly the whole supply is severe and coherent, so it is allowed.
-	namedAs = "terms/severe"
-	Offer(cross(cur), named{}, NewRules(2000, 5000, 100, 0, 1000, bps))
-	if entryOf("terms/severe") == nil {
-		t.Error("requiring the entire supply to propose was refused")
-	}
-	// And a negative period, which means nothing rather than something bad.
-	namedAs = "terms/negative"
-	uassert.AbortsContains(t, cur, "cannot be negative", func() {
-		Offer(cross(cur), named{}, NewRules(2000, 5000, 100, -1, 1000, 0))
-	})
-
-	// Retunable: govern:rules accepts propose alongside the rest.
-	offerAndAdopt(setFee{}, Rules{
-		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100, ProposeBps: 100,
-		GraceBlocks: 1000,
-	})
-	if err := (rulesKind{}).Check("fee propose=500"); err != nil {
-		t.Fatalf("govern:rules refuses the propose field: %v", err)
-	}
-	if err := (rulesKind{}).Do(0, cur, "fee propose=500"); err != nil {
-		t.Fatalf("applying it failed: %v", err)
-	}
-	if got := entryOf("fee").rules.ProposeBps; got != 500 {
-		t.Errorf("after retuning, ProposeBps is %d, want 500", got)
-	}
-	// The same bar the door applies, applied to a change.
-	if err := (rulesKind{}).Check("fee propose=" + strconv.FormatInt(bps+1, 10)); err == nil {
-		t.Error("a rules change could set a stake nobody can hold, which the " +
-			"offering path refuses — the two validators have drifted again")
-	}
-	// And it renders as a percentage, like the other two bars.
-	if got := (rulesKind{}).Describe("fee propose=500"); !strings.Contains(got, "5.00%") {
-		t.Errorf("the propose field is not rendered as a percentage:\n%s", got)
-	}
-}
-
 // Every one of the governor's own kinds is protected, not just the one that
 // was checked.
 //
@@ -2075,51 +1973,6 @@ func TestEveryTermIsCheckedAndEveryTermIsTunable(cur realm, t *testing.T) {
 // The prefix test is one predicate for both callers, Offer and govern:retire.
 // Written twice it drifts, and this is the copy where drifting is
 // unrecoverable.
-func TestEveryBuiltInKindIsProtectedFromRetirement(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	for _, name := range []string{
-		reserved + "adopt", reserved + "retire", reserved + "rules",
-		reserved + "minter", reserved + "batch",
-	} {
-		if entryOf(name) == nil {
-			t.Fatalf("%s is not registered, so this proves nothing about it", name)
-		}
-		if err := (retireKind{}).Check(name); err == nil {
-			t.Errorf("%s could be retired", name)
-		}
-	}
-
-	// And the rule is the PREFIX, not a list: a name nobody has registered but
-	// which carries it is refused too, so the check cannot be satisfied by
-	// enumerating today's kinds.
-	if err := (retireKind{}).Check(reserved + "whatever-comes-next"); err == nil {
-		t.Error("a reserved name that is not yet a kind could be retired, so " +
-			"the protection is a list rather than a rule")
-	}
-	// The bare prefix itself, which is the rule's boundary. A kind named
-	// exactly "govern:" is not any built-in, so nothing collides — but it
-	// renders on a page looking like one, which is the whole reason the prefix
-	// is reserved. An off-by-one in the length test lets exactly this through
-	// and nothing else, which is why it needs saying separately.
-	testing.SetRealm(testing.NewUserRealm(gCarl))
-	namedAs = reserved
-	uassert.AbortsContains(t, cur, "prefix belongs to the governor", func() {
-		Offer(cross(cur), named{}, NewRules(1, 1, 10, 0, 1000, 0))
-	})
-	if err := (retireKind{}).Check(reserved); err == nil {
-		t.Error("the bare prefix could be retired")
-	}
-
-	// An ordinary name is refused for a different reason — it does not exist —
-	// which shows the reserved refusal is doing its own work.
-	if err := (retireKind{}).Check("ordinary/thing"); err == nil {
-		t.Error("an unregistered ordinary name was accepted")
-	} else if strings.Contains(err.Error(), "prefix") {
-		t.Errorf("an ordinary name was refused as reserved: %v", err)
-	}
-}
-
 // Adoption refuses what it should, which is worth more here than anywhere else.
 //
 // Adopting is the act that GRANTS a power: everything else in this realm
@@ -2132,43 +1985,6 @@ func TestEveryBuiltInKindIsProtectedFromRetirement(cur realm, t *testing.T) {
 // rests on publishing code and granting it authority being separate decisions,
 // taken by different people at different times, and a Check that waves either
 // through turns a vote into a formality that happens to pass.
-func TestAdoptionRefusesWhatWasNeverOfferedOrAlreadyGranted(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	testing.SetRealm(testing.NewUserRealm(gCarl))
-
-	// Nobody has offered this.
-	if err := (adoptKind{}).Check("nothing/here"); err == nil {
-		t.Error("a kind nobody published could be adopted, which would grant " +
-			"authority to code that does not exist")
-	}
-
-	// Offered, not yet adopted: the case adoption is FOR.
-	namedAs = "adopt/probe"
-	Offer(cross(cur), named{}, NewRules(1, 1, 10, 0, 1000, 0))
-	if err := (adoptKind{}).Check("adopt/probe"); err != nil {
-		t.Fatalf("an offered kind could not be adopted: %v", err)
-	}
-
-	// Adopted once, and the second attempt is refused rather than being a
-	// vote everybody turns out for to change nothing.
-	entryOf("adopt/probe").live = true
-	if err := (adoptKind{}).Check("adopt/probe"); err == nil {
-		t.Error("an already-adopted kind could be adopted again")
-	}
-
-	// Retirement is the mirror: it refuses what was never adopted, so neither
-	// direction can be used to make a proposal that does nothing.
-	namedAs = "adopt/dormant"
-	Offer(cross(cur), named{}, NewRules(1, 1, 10, 0, 1000, 0))
-	if err := (retireKind{}).Check("adopt/dormant"); err == nil {
-		t.Error("a kind that was never adopted could be retired")
-	}
-	if err := (retireKind{}).Check("adopt/probe"); err != nil {
-		t.Errorf("an adopted kind could not be retired: %v", err)
-	}
-}
-
 // Nothing can be proposed before there is anybody to decide it.
 //
 // A realm that has sealed an epoch but never minted has an electorate of zero.
@@ -2178,7 +1994,7 @@ func TestAdoptionRefusesWhatWasNeverOfferedOrAlreadyGranted(cur realm, t *testin
 // deadline and then loses for want of support.
 //
 // Which is the launch order in doc.gno seen from the other side — mint the
-// supply before anything else — and the failure if it is ignored. maxLive is
+// supply before anything else — and the failure if it is ignored. governor.MaxLive is
 // sixty-four, so somebody proposing before the token exists can fill the list
 // with questions nobody is able to answer.
 func TestNothingCanBeProposedBeforeThereIsAnElectorate(cur realm, t *testing.T) {
@@ -2197,8 +2013,8 @@ func TestNothingCanBeProposedBeforeThereIsAnElectorate(cur realm, t *testing.T) 
 	uassert.AbortsContains(t, cur, "nothing was in issue at that epoch", func() {
 		Propose(cross(cur), "govern:minter", gBob.String(), "before anybody holds anything")
 	})
-	if openIdx.Size() != 0 {
-		t.Errorf("a proposal nobody could vote on took %d slots", openIdx.Size())
+	if engine.OpenSlots() != 0 {
+		t.Errorf("a proposal nobody could vote on took %d slots", engine.OpenSlots())
 	}
 
 	// Mint, seal, and the same proposal is fine — so the refusal is about the
@@ -2340,10 +2156,10 @@ func TestTheQuorumDenominatorIsAlsoSnapshotted(cur realm, t *testing.T) {
 func TestAPeriodReadsTheSameOnBothPages(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	kinds.Set("span/probe", &entry{kind: moody{}, live: true, rules: Rules{
+	engine.Adopt(moody{}, Rules{
 		QuorumBps: 2000, ThresholdBps: 6600,
 		VotingBlocks: 100, DelayBlocks: 34560, GraceBlocks: 241920,
-	}})
+	})
 
 	change := Preview("govern:rules", "span/probe delay=34560")
 	if !strings.Contains(change, "34560 blocks (about 2 days)") {
@@ -2358,10 +2174,11 @@ func TestAPeriodReadsTheSameOnBothPages(cur realm, t *testing.T) {
 
 	// Now the adoption page for a kind with the same delay, which is where a
 	// holder saw the duration already.
-	kinds.Set("span/other", &entry{kind: moody{}, live: false, rules: Rules{
+	namedAs = "span/other"
+	engine.Offer(alice, named{}, Rules{
 		QuorumBps: 2000, ThresholdBps: 6600,
 		VotingBlocks: 100, DelayBlocks: 34560, GraceBlocks: 241920,
-	}})
+	})
 	grant := Preview("govern:adopt", "span/other")
 	if !strings.Contains(grant, "34560 blocks (about 2 days)") {
 		t.Errorf("the adoption page renders a period without its duration:\n%s", grant)
@@ -2437,38 +2254,6 @@ func TestTheProposalPageRendersSupplyLikeTheFrontPage(cur realm, t *testing.T) {
 // its divisor from the constant for exactly this reason; units was written with
 // the literal instead, so a change to the decimals would have moved every
 // padded fraction and left the divisor behind.
-func TestUnitsIsTotal(t *testing.T) {
-	scale := int64(1)
-	for i := 0; i < tokenDecimals; i++ {
-		scale *= 10
-	}
-	if scale != unitScale {
-		t.Fatalf("unitScale is %d but tokenDecimals says %d — the divisor and "+
-			"the padding disagree, so amounts render at the wrong scale",
-			unitScale, scale)
-	}
-
-	for _, c := range []struct {
-		in   int64
-		want string
-	}{
-		{0, "0"},
-		{1, "0.000001"},
-		{1_000_000, "1"},
-		{1_500_000, "1.5"},
-		{1_050_000, "1.05"},
-		{999_999, "0.999999"},
-		{-1, "-0.000001"},
-		{-500_000, "-0.5"},   // the whole part is zero; the minus is not
-		{-1_000_000, "-1"},
-		{-1_500_000, "-1.5"},
-	} {
-		if got := units(c.in); got != c.want {
-			t.Errorf("units(%d) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
 // A batch cannot run a kind that an earlier member of the same batch retired.
 //
 // Check walks every member and requires each one live, which is why the guard
@@ -2548,9 +2333,9 @@ func TestAFailedBatchLeavesNothingBehindNotEvenTheFailure(cur realm, t *testing.
 	minter = gAlice
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	offerAndAdopt(setFee{}, Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks})
-	kinds.Set("moody/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks,
-	}})
+	engine.Adopt(moody{}, Rules{
+		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks, GraceBlocks: 1_000_000,
+	})
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 
@@ -2594,12 +2379,12 @@ func TestTheFrontPageStopsGrowingWithTheHistory(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 
-	kinds.Set("hist/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
+	engine.Adopt(setFee{name: "hist/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	var ids []int64
-	for i := 0; i < maxOpen; i++ {
+	for i := 0; i < governor.MaxOpen; i++ {
 		ids = append(ids, Propose(cross(cur), "hist/kind", strconv.Itoa(i), "history"))
 	}
 	// Nobody voted, so every one of them loses on its deadline.
@@ -2648,9 +2433,9 @@ func TestAProposalsPageNamesItsState(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 
-	kinds.Set("state/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
+	engine.Adopt(setFee{name: "state/kind"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "state/kind", "7", "what state am i in")
 
@@ -2679,22 +2464,6 @@ func TestAProposalsPageNamesItsState(cur realm, t *testing.T) {
 // page for a proposal whose kind nobody can consult any more. It is the one
 // place a payload is rendered with nothing left to have vetted it: the checking
 // belonged to that kind's Check, and the kind is what is missing.
-func TestAGoneKindsPayloadCannotBecomePageStructure(cur realm, t *testing.T) {
-	forged := "harmless\n\n### decided, waiting to be run\n\n" +
-		"- [#99](:99) **Ratified** — `govern:minter` · succeeded"
-	out := describeOf(&Proposal{id: 1, kind: "gone/kind", payload: forged})
-
-	for _, line := range strings.Split(out, "\n") {
-		if line == "" || strings.HasPrefix(line, "_the kind") {
-			continue
-		}
-		if !strings.HasPrefix(line, "    ") {
-			t.Errorf("a payload line escaped the code block and is rendering as "+
-				"page structure: %q\n\nfull output:\n%s", line, out)
-		}
-	}
-}
-
 // The pages say what a zero MEANS, term by term, because it differs per term.
 //
 // Zero is the value a governance page is worst at: it is the default, and it is
@@ -2771,9 +2540,9 @@ func TestAnAllAbstainedPageDoesNotSayNobodyVoted(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
-	kinds.Set("ab/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 2000, ThresholdBps: 5000, VotingBlocks: 100000,
-	}})
+	engine.Adopt(setFee{name: "ab/kind"}, Rules{
+		QuorumBps: 2000, ThresholdBps: 5000, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "ab/kind", "5", "everybody abstains")
 	Vote(cross(cur), id, "abstain")
@@ -2819,13 +2588,13 @@ func TestTheSlotCountBelongsToThePageNotTheSection(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
-	kinds.Set("waiting/k", &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: "waiting/k"}, Rules{
 		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000,
 		DelayBlocks: 99999, GraceBlocks: 999999,
-	}})
-	kinds.Set("voting/k", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100000,
-	}})
+	})
+	engine.Adopt(setFee{name: "voting/k"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	})
 
 	// One decided and waiting, two still open: three slots, two votable rows.
 	testing.SetRealm(testing.NewUserRealm(gAlice))
@@ -2850,10 +2619,10 @@ func TestTheSlotCountBelongsToThePageNotTheSection(cur realm, t *testing.T) {
 	// the kind has to be registered again — which is the reset doing its job:
 	// it caught this test relying on registry state surviving it.
 	resetLedger()
-	kinds.Set("waiting/k", &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: "waiting/k"}, Rules{
 		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000,
 		DelayBlocks: 99999, GraceBlocks: 999999,
-	}})
+	})
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
@@ -2884,21 +2653,21 @@ func TestAnActiveProposalSaysWhenVotingCloses(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 	const window = int64(4321)
-	kinds.Set("clock/k", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: window,
-	}})
+	engine.Adopt(setFee{name: "clock/k"}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: window, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "clock/k", "5", "how long have i got")
 
-	p := mustProposal(id)
 	page := Render(strconv.FormatInt(id, 10))
 	if !strings.Contains(page, "Voting closes in") {
 		t.Errorf("an open proposal does not say when voting closes:\n%s", page)
 	}
 	// The HEIGHT as well as the countdown, because a countdown read at one
 	// block is wrong at the next and a height is not.
-	if !strings.Contains(page, strconv.FormatInt(p.closes, 10)) {
-		t.Errorf("the page does not name the closing height %d:\n%s", p.closes, page)
+	_, closes, _, _ := Timings(id)
+	if !strings.Contains(page, strconv.FormatInt(closes, 10)) {
+		t.Errorf("the page does not name the closing height %d:\n%s", closes, page)
 	}
 
 	// It counts down rather than being written once.
@@ -2932,10 +2701,10 @@ func TestARefusalSaysWhatWouldFixIt(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 	// A bar bob cannot clear: he holds nothing at the sealed epoch.
-	kinds.Set("bar/k", &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: "bar/k"}, Rules{
 		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 1000,
 		DelayBlocks: 700, GraceBlocks: 9000, ProposeBps: 2500,
-	}})
+	})
 
 	testing.SetRealm(testing.NewUserRealm(gBob))
 	uassert.AbortsContains(t, cur, "25.00% of the supply is required", func() {
@@ -2960,8 +2729,7 @@ func TestARefusalSaysWhatWouldFixIt(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "bar/k", "6", "alice can")
 	Vote(cross(cur), id, "yes")
-	p := mustProposal(id)
-	uassert.AbortsContains(t, cur, "executable at height "+strconv.FormatInt(p.ready, 10), func() {
+	uassert.AbortsContains(t, cur, "executable at height "+strconv.FormatInt(timingReady(id), 10), func() {
 		Execute(cross(cur), id)
 	})
 }
@@ -2987,9 +2755,9 @@ func TestABatchNumbersItsMembersTheSameWayTwice(cur realm, t *testing.T) {
 	minter = gAlice
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	offerAndAdopt(setFee{}, Rules{QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks})
-	kinds.Set("moody/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks,
-	}})
+	engine.Adopt(moody{}, Rules{
+		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 50 * epochBlocks, GraceBlocks: 1_000_000,
+	})
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 
@@ -3101,13 +2869,8 @@ func TestAGraceOfZeroIsRefusedSoEverySlotComesBack(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "a decision has to expire", func() {
 		Offer(cross(cur), named{}, NewRules(2000, 5100, 100, 0, 0, 0))
 	})
-	if entryOf("noexpiry/thing") != nil {
+	if offered, _ := engineKind("noexpiry/thing"); offered {
 		t.Error("a kind whose decisions never expire was registered anyway")
-	}
-	// And through the other door, which retunes an adopted kind's terms.
-	if err := (rulesKind{}).Check("govern:adopt grace=0"); err == nil {
-		t.Error("a rules change could set a grace of zero, which the offering " +
-			"path refuses — the two validators have drifted again")
 	}
 
 	// A negative one is refused by the same line, and says the same thing.

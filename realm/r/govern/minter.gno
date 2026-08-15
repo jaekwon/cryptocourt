@@ -1,5 +1,9 @@
 package govern
 
+import (
+	governor "gno.land/p/cryptocourt/governor/v0"
+)
+
 // minterKind moves or gives up the power to mint.
 //
 //	govern:minter   "g1..."   hand it to that address
@@ -15,7 +19,7 @@ package govern
 // break it.
 type minterKind struct{}
 
-func (minterKind) Name() string { return reserved + "minter" }
+func (minterKind) Name() string { return governor.Reserved + "minter" }
 
 func (minterKind) Describe(payload string) string {
 	if payload == noMinter {

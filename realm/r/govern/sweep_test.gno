@@ -1,6 +1,7 @@
 package govern
 
 import (
+	governor "gno.land/p/cryptocourt/governor/v0"
 	"strings"
 	"strconv"
 	"testing"
@@ -11,7 +12,7 @@ import (
 // sweep has to make progress no matter which slots are the finished ones.
 //
 // It scans a bounded window of the open index, and the index is keyed by
-// digest(kind, payload) — which the PROPOSER chooses, because they choose the
+// engine.Digest(kind, payload) — which the PROPOSER chooses, because they choose the
 // payload. Scanning always from the low end therefore lets somebody decide
 // what the sweeper looks at: park a few long-running proposals on the lowest
 // keys and the window never sees past them, so the reclaim frees nothing while
@@ -37,22 +38,22 @@ func TestSweepReclaimsSlotsItDoesNotScanFirst(cur realm, t *testing.T) {
 
 	// Two kinds that differ only in how long their vote runs.
 	const fast, slow = "fast/k", "slow/k"
-	kinds.Set(fast, &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
-	kinds.Set(slow, &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000,
-	}})
+	engine.Adopt(setFee{name: fast}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
+	engine.Adopt(setFee{name: slow}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000, GraceBlocks: 1_000_000,
+	})
 
 	// The business that will be over: fifty-six of them, and the lowest key
 	// among them is the bar the parked ones have to get under.
-	const filler = maxOpen - 8
+	const filler = governor.MaxOpen - 8
 	low := ""
 	var fillerPayloads []string
 	for i := 0; i < filler; i++ {
 		p := strconv.Itoa(i)
 		fillerPayloads = append(fillerPayloads, p)
-		if d := digest(fast, p); low == "" || d < low {
+		if d := engine.Digest(fast, p); low == "" || d < low {
 			low = d
 		}
 	}
@@ -63,7 +64,7 @@ func TestSweepReclaimsSlotsItDoesNotScanFirst(cur realm, t *testing.T) {
 	var parked []string
 	for i := 0; len(parked) < 8 && i <= 10000; i++ {
 		p := strconv.Itoa(i)
-		if digest(slow, p) < low {
+		if engine.Digest(slow, p) < low {
 			parked = append(parked, p)
 		}
 	}
@@ -79,8 +80,8 @@ func TestSweepReclaimsSlotsItDoesNotScanFirst(cur realm, t *testing.T) {
 	for _, p := range fillerPayloads {
 		fillerIDs = append(fillerIDs, Propose(cross(cur), fast, p, "ordinary business"))
 	}
-	if openIdx.Size() != maxOpen {
-		t.Fatalf("%d slots taken, want the list full at %d", openIdx.Size(), maxOpen)
+	if engine.OpenSlots() != governor.MaxOpen {
+		t.Fatalf("%d slots taken, want the list full at %d", engine.OpenSlots(), governor.MaxOpen)
 	}
 
 	// Past the fast kind's deadline and nowhere near the slow one's. Fifty-six
@@ -93,9 +94,9 @@ func TestSweepReclaimsSlotsItDoesNotScanFirst(cur realm, t *testing.T) {
 		}
 	}
 
-	before := openIdx.Size()
-	sweep()
-	if openIdx.Size() == before {
+	before := engine.OpenSlots()
+	engine.Sweep()
+	if engine.OpenSlots() == before {
 		t.Errorf("sweep freed nothing from a list of %d where %d proposals are "+
 			"over: it scans the low keys, and a proposer picks their key by "+
 			"picking their payload", before, filler)
@@ -109,7 +110,7 @@ func TestSweepReclaimsSlotsItDoesNotScanFirst(cur realm, t *testing.T) {
 
 // A flood of one kind cannot shut the governor out of its own realm.
 //
-// maxLive is one number for the whole realm, so without a reservation the
+// governor.MaxLive is one number for the whole realm, so without a reservation the
 // sixty-four slots are a commons and any kind may hold all of them. Sixty-four
 // proposals of some cheap kind with a long voting window, and nothing else can
 // be asked until that window runs out — including the govern:rules vote that
@@ -135,17 +136,17 @@ func TestAFloodOfOneKindCannotShutTheGovernorOut(cur realm, t *testing.T) {
 	// so the sweep on the way in finds nothing to reclaim and every refusal
 	// below is a refusal rather than a delay.
 	const flood = "flood/k"
-	kinds.Set(flood, &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: flood}, Rules{
 		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000,
-		GraceBlocks: 1000,
-	}})
+		GraceBlocks: 1_000_000,
+	})
 
-	for i := 0; i < maxOpen; i++ {
+	for i := 0; i < governor.MaxOpen; i++ {
 		Propose(cross(cur), flood, strconv.Itoa(i), "flooding")
 	}
-	if openIdx.Size() != maxOpen {
+	if engine.OpenSlots() != governor.MaxOpen {
 		t.Fatalf("%d slots taken, want %d — the flood did not fill the board "+
-			"and the rest of this proves nothing", openIdx.Size(), maxOpen)
+			"and the rest of this proves nothing", engine.OpenSlots(), governor.MaxOpen)
 	}
 
 	// Ordinary business is shut out, and told why rather than left to guess.
@@ -159,36 +160,36 @@ func TestAFloodOfOneKindCannotShutTheGovernorOut(cur realm, t *testing.T) {
 	page := Render("")
 	if !strings.Contains(page, "kept for the governor's own kinds") {
 		t.Errorf("the front page shows free slots and does not say they are "+
-			"reserved, so being refused reads as a fault:\n%s", page)
+			"governor.Reserved, so being refused reads as a fault:\n%s", page)
 	}
 
 	// And the realm can still be governed. This is the whole of it.
 	uassert.NotAborts(t, cur, func() {
-		Propose(cross(cur), reserved+"rules", flood+" quorum=100", "retune it")
+		Propose(cross(cur), governor.Reserved+"rules", flood+" quorum=100", "retune it")
 	})
 
-	// The lane is finite too, so the reserved kinds run out at maxLive and not
-	// before — otherwise "reserved" would mean "unbounded" and the front page's
-	// worst case, which is what maxLive is for, would be a guess.
-	for i := 1; i < govLanes; i++ {
-		Propose(cross(cur), reserved+"rules", flood+" quorum="+strconv.Itoa(100+i),
+	// The lane is finite too, so the governor.Reserved kinds run out at governor.MaxLive and not
+	// before — otherwise "governor.Reserved" would mean "unbounded" and the front page's
+	// worst case, which is what governor.MaxLive is for, would be a guess.
+	for i := 1; i < governor.GovLanes; i++ {
+		Propose(cross(cur), governor.Reserved+"rules", flood+" quorum="+strconv.Itoa(100+i),
 			"retune it again")
 	}
-	if openIdx.Size() != maxLive {
-		t.Fatalf("%d slots taken with the lane full, want %d", openIdx.Size(), maxLive)
+	if engine.OpenSlots() != governor.MaxLive {
+		t.Fatalf("%d slots taken with the lane full, want %d", engine.OpenSlots(), governor.MaxLive)
 	}
 	uassert.AbortsContains(t, cur, "too many proposals are already open", func() {
-		Propose(cross(cur), reserved+"rules", flood+" quorum=200", "and again")
+		Propose(cross(cur), governor.Reserved+"rules", flood+" quorum=200", "and again")
 	})
 
 	// And with room to spare the page stays quiet, because there the count is
 	// the whole story and the clause would be noise on every ordinary page.
 	// Nine of them, because one is not enough to get back under the line.
 	// Cancelling is the proposer's, and alice opened all of these.
-	for i := int64(1); i <= int64(maxLive-maxOpen)+1; i++ {
+	for i := int64(1); i <= int64(governor.MaxLive-governor.MaxOpen)+1; i++ {
 		Cancel(cross(cur), i)
 	}
-	if got := openIdx.Size(); got >= maxOpen {
+	if got := engine.OpenSlots(); got >= governor.MaxOpen {
 		t.Fatalf("%d slots still taken, so this measures the full case again", got)
 	}
 	if page := Render(""); strings.Contains(page, "kept for the governor's own kinds") {
@@ -205,8 +206,8 @@ func TestAFloodOfOneKindCannotShutTheGovernorOut(cur realm, t *testing.T) {
 // voting window. The board being flooded is exactly when the holders need
 // several answers at once.
 //
-// So this fills the board and then opens one proposal of every reserved kind,
-// which is what govLanes is sized for. A lane narrower than the number of
+// So this fills the board and then opens one proposal of every governor.Reserved kind,
+// which is what governor.GovLanes is sized for. A lane narrower than the number of
 // built-in kinds fails here and nowhere else: the test above is satisfied by a
 // reservation of one.
 func TestTheGovernorsLaneFitsEveryQuestionItCanAsk(cur realm, t *testing.T) {
@@ -218,19 +219,20 @@ func TestTheGovernorsLaneFitsEveryQuestionItCanAsk(cur realm, t *testing.T) {
 	advanceEpochs(1)
 
 	const flood = "flood/k"
-	kinds.Set(flood, &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: flood}, Rules{
 		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000,
-		GraceBlocks: 1000,
-	}})
+		GraceBlocks: 1_000_000,
+	})
 	// Offered and not adopted, so govern:adopt has something to ask about.
 	// Adopting an adopted kind is refused, which would read here as a lane
 	// that does not fit.
 	const waiting = "waiting/k"
-	kinds.Set(waiting, &entry{kind: setFee{}, rules: Rules{
+	namedAs = waiting
+	engine.Offer(alice, named{}, Rules{
 		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100,
 		GraceBlocks: 1000,
-	}})
-	for i := 0; i < maxOpen; i++ {
+	})
+	for i := 0; i < governor.MaxOpen; i++ {
 		Propose(cross(cur), flood, strconv.Itoa(i), "flooding")
 	}
 
@@ -238,24 +240,24 @@ func TestTheGovernorsLaneFitsEveryQuestionItCanAsk(cur realm, t *testing.T) {
 	// so each is a question the kind will actually accept — a refusal for the
 	// wrong reason would read as a lane that fits.
 	each := []struct{ kind, payload string }{
-		{reserved + "rules", flood + " quorum=100"},
-		{reserved + "adopt", waiting},
-		{reserved + "retire", flood},
-		{reserved + "minter", gBob.String()},
-		{reserved + "batch", flood + " 250\n" + reserved + "minter " + gCarl.String()},
+		{governor.Reserved + "rules", flood + " quorum=100"},
+		{governor.Reserved + "adopt", waiting},
+		{governor.Reserved + "retire", flood},
+		{governor.Reserved + "minter", gBob.String()},
+		{governor.Reserved + "batch", flood + " 250\n" + governor.Reserved + "minter " + gCarl.String()},
 	}
 	for _, q := range each {
 		kind, payload := q.kind, q.payload
 		uassert.NotAborts(t, cur, func() {
 			Propose(cross(cur), kind, payload, "governing a flooded realm")
-		})
+	})
 	}
 
-	// And the count is the check on the fixture: five reserved proposals stood,
+	// And the count is the check on the fixture: five governor.Reserved proposals stood,
 	// so the loop above measured five lanes rather than five refusals nobody
 	// looked at.
-	if got := openIdx.Size() - maxOpen; got != len(each) {
-		t.Fatalf("%d reserved proposals stand of %d opened", got, len(each))
+	if got := engine.OpenSlots() - governor.MaxOpen; got != len(each) {
+		t.Fatalf("%d governor.Reserved proposals stand of %d opened", got, len(each))
 	}
 }
 
@@ -266,79 +268,6 @@ func TestTheGovernorsLaneFitsEveryQuestionItCanAsk(cur realm, t *testing.T) {
 // there, and every later sweep looks at nothing at all. That is worse than the
 // bug it replaced — the first one needed somebody to grind keys, this one would
 // happen on its own, to everybody, the first time the list drained.
-func TestSweepComesBackAroundTheRing(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	minter = gAlice
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-	Mint(cross(cur), gAlice, 1_000_000)
-	advanceEpochs(1)
-
-	const kind = "ring/k"
-	kinds.Set(kind, &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 50,
-	}})
-
-	// A full list, all of it finished, swept until the index is empty. That
-	// walks the cursor to the far end.
-	high := ""
-	for i := 0; i < maxOpen; i++ {
-		p := strconv.Itoa(i)
-		Propose(cross(cur), kind, p, "first batch")
-		if d := digest(kind, p); d > high {
-			high = d
-		}
-	}
-	advanceBlocks(100)
-	for i := 0; i < maxOpen && openIdx.Size() > 0; i++ {
-		sweep()
-	}
-	if openIdx.Size() != 0 {
-		t.Fatalf("%d slots never came back from a list that was entirely "+
-			"finished", openIdx.Size())
-	}
-	// The wrap is lazy: it happens on the next sweep that sees a short window,
-	// not on the one that empties the index — that last window was full, and a
-	// full window has no way to know it took the final entries. So the sweep
-	// that notices is this one.
-	//
-	// Asserted on the cursor rather than on behaviour, because behaviour hides
-	// it: the retry loop tries another window, an exhausted window leaves its
-	// "last key" empty, and the cursor lands just above nothing — which happens
-	// to be below every real key, so the sweep recovers by accident one window
-	// later. Accidental recovery is the thing this realm keeps removing, so the
-	// wrap is written down and checked where it can actually be seen.
-	sweep()
-	if sweepFrom != "" {
-		t.Errorf("the cursor is %q after draining the index, want the "+
-			"beginning — it has walked off the end and will look at nothing",
-			sweepFrom)
-	}
-
-	// A second full list, deliberately all below where the cursor was left. If
-	// it did not wrap, none of this is in front of it and the sweep is blind.
-	n := 0
-	for i := 1000; n < maxOpen && i <= 10000; i++ {
-		p := strconv.Itoa(i)
-		if digest(kind, p) >= high {
-			continue
-		}
-		Propose(cross(cur), kind, p, "second batch")
-		n++
-	}
-	if n != maxOpen {
-		t.Fatalf("only refilled %d of %d slots below the old cursor", n, maxOpen)
-	}
-	advanceBlocks(100)
-
-	before := openIdx.Size()
-	sweep()
-	if openIdx.Size() == before {
-		t.Errorf("sweep freed nothing from %d finished proposals: the cursor "+
-			"ran off the end of the index and never came back", before)
-	}
-}
-
 // A window must not hand the next one a key it has already looked at.
 //
 // Also asserted on the cursor, and for the same reason: at a scan of eight,
@@ -346,37 +275,3 @@ func TestSweepComesBackAroundTheRing(cur realm, t *testing.T) {
 // seven, so nothing observable changes. It would matter at a smaller scan, and
 // "correct only because the window is wide enough" is not a property worth
 // resting on when the alternative is one character.
-func TestTheSweepCursorMovesPastWhatItHasSeen(cur realm, t *testing.T) {
-	resumeClock()
-	resetLedger()
-	minter = gAlice
-	testing.SetRealm(testing.NewUserRealm(gAlice))
-	Mint(cross(cur), gAlice, 1_000_000)
-	advanceEpochs(1)
-
-	// A full list that nothing can reclaim: every vote is still running, so the
-	// index is exactly what the window saw.
-	const kind = "cursor/k"
-	kinds.Set(kind, &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 1_000_000,
-	}})
-	for i := 0; i < maxOpen; i++ {
-		Propose(cross(cur), kind, strconv.Itoa(i), "still running")
-	}
-
-	sweepWindow()
-	if sweepFrom == "" {
-		t.Fatal("the cursor did not move at all over a full index")
-	}
-	var seen []string
-	openIdx.Iterate("", "", func(k string, v any) bool {
-		seen = append(seen, k)
-		return len(seen) >= sweepScan
-	})
-	for i, k := range seen {
-		if k >= sweepFrom {
-			t.Errorf("key %d of the window sorts at or above the cursor %q, so "+
-				"the next window starts on ground already covered", i, sweepFrom)
-		}
-	}
-}

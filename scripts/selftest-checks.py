@@ -122,11 +122,11 @@ control("a manifest row nothing quotes", CITE,
         "CITATIONS = [\n",
         'CITATIONS = [\n    ("gnovm/pkg/gnolang/store.go", r"func ", "NoProseSaysThis", "x"),\n',
         "UNUSED")
-control("a gno-tree file nobody cited", f"{GOVERN}/clock.gno",
+control("a gno-tree file nobody cited", f"{GOVERN}/errors.gno",
         "package govern\n",
         "package govern\n\n// see `nobody_cited_this.gno` for the rule\n",
         "UNCITED")
-control("a newly written file:line citation", f"{GOVERN}/clock.gno",
+control("a newly written file:line citation", f"{GOVERN}/errors.gno",
         "package govern\n",
         "package govern\n\n// see governor.gno:275\n", "line-number citation")
 
@@ -178,9 +178,9 @@ else:
     # empty when it runs first, so putting the literal back no longer recreates
     # the bug. A control has to fail for the reason it names.
     control("a test that passes only in company", f"{GOVERN}/governor_test.gno",
-            '\tkinds.Set("fee", &entry{kind: setFee{}, live: true, rules: Rules{\n'
-            '\t\tQuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100,\n'
-            '\t}})\n',
+            '\tengine.Adopt(setFee{}, Rules{\n'
+            '\t\tQuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1_000_000,\n'
+            '\t})\n',
             "", "ALONE",
             argv=["python3", "scripts/check-isolation.py",
                   "--only", "TestAMalformedRulesPayloadIsRefusedAtTheDoor"])
@@ -192,11 +192,11 @@ else:
     # two-tree runner can quietly measure the wrong tree.
     print("\nmutate.py")
     feed("an anchor that matches nothing", [{
-        "file": "governor.gno", "label": "x",
+        "pkg": "governor", "file": "governor.gno", "label": "x",
         "find": "no such text exists anywhere in this file",
         "replace": "y"}], "BAD ANCHOR")
     feed("a mutant that cannot build", [{
-        "file": "governor.gno", "label": "x",
+        "pkg": "governor", "file": "governor.gno", "label": "x",
         "find": "\treturn p.yes, p.no, p.abstain, p.total",
         "replace": "\treturn p.yes, p.no, p.abstain, p.thereIsNoSuchField"}], "INVALID")
     # A pkg nobody has is refused rather than defaulted. Silently falling back
@@ -211,7 +211,7 @@ else:
             "func resumeClock() { advanceBlocks(0) }\n\nfunc TestSelfTestDeliberateFailure(t *testing.T) {\n\tt.Error(\"deliberate\")\n}",
             "BASELINE IS RED",
             argv=["python3", os.path.join(REPO, "scripts/mutate.py")],
-            stdin='[{"file":"governor.gno","label":"x","find":"const maxLive = 64","replace":"const maxLive = 63"}]',
+            stdin='[{"pkg":"governor","file":"governor.gno","label":"x","find":"const maxLive = 64","replace":"const maxLive = 63"}]',
             cwd=os.path.join(REPO, GOVERN))
 
 # Every guard in scripts/ must have been pointed at by at least one control.

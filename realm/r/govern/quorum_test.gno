@@ -1,6 +1,7 @@
 package govern
 
 import (
+	governor "gno.land/p/cryptocourt/governor/v0"
 	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
 	"strconv"
 	"strings"
@@ -51,8 +52,6 @@ func (f *fakeVotes) Epoch() uint32                          { return f.epoch }
 func TestTheBarsAreCountedAtTheirExactBoundary(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	yes := testutils.TestAddress("q-yes")
 	no := testutils.TestAddress("q-no")
@@ -63,6 +62,10 @@ func TestTheBarsAreCountedAtTheirExactBoundary(cur realm, t *testing.T) {
 	// in the open index until it is executed, so re-asking the identical
 	// question is refused — correctly, and it would look like a bug here.
 	run := 0
+	// The fake the current run was built over. Kept rather than fished back out
+	// of the engine: the electorate goes in through the constructor now and
+	// there is nothing to type-assert it out of.
+	var fake *fakeVotes
 	newRun := func() int64 {
 		run++
 		f := &fakeVotes{
@@ -71,10 +74,12 @@ func TestTheBarsAreCountedAtTheirExactBoundary(cur realm, t *testing.T) {
 			},
 			total: 1000, epoch: 9,
 		}
-		voters = f
-		kinds.Set("q/kind", &entry{kind: setFee{}, live: true, rules: Rules{
+		fake = f
+		engine = governor.New(f, ledger)
+		engine.Adopt(setFee{name: "q/kind"}, Rules{
 			QuorumBps: 3000, ThresholdBps: 6000, VotingBlocks: 100,
-		}})
+			GraceBlocks: 1_000_000,
+	})
 		testing.SetRealm(testing.NewUserRealm(yes))
 		return Propose(cross(cur), "q/kind", strconv.Itoa(run), "on the line")
 	}
@@ -96,7 +101,7 @@ func TestTheBarsAreCountedAtTheirExactBoundary(cur realm, t *testing.T) {
 	// One vote short of quorum: 299 of 1000. Same yes:no ratio, so only the
 	// turnout differs.
 	id = newRun()
-	f := voters.(*fakeVotes)
+	f := fake
 	f.weight[string(no)] = 119
 	testing.SetRealm(testing.NewUserRealm(yes))
 	Vote(cross(cur), id, "yes")
@@ -110,7 +115,7 @@ func TestTheBarsAreCountedAtTheirExactBoundary(cur realm, t *testing.T) {
 	// Abstain is turnout but not agreement: it carries quorum and stays out
 	// of the threshold entirely.
 	id = newRun()
-	f = voters.(*fakeVotes)
+	f = fake
 	f.weight[string(yes)] = 1
 	f.weight[string(no)] = 0
 	testing.SetRealm(testing.NewUserRealm(yes))
@@ -162,21 +167,19 @@ func (c *council) Epoch() uint32             { return c.epoch }
 func TestTheGovernorWorksOnAnElectorateThatIsNotAToken(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	a := testutils.TestAddress("council-a")
 	b := testutils.TestAddress("council-b")
 	c := testutils.TestAddress("council-c")
-	voters = &council{
+	engine.SetElectorate(&council{
 		members: map[string]bool{string(a): true, string(b): true, string(c): true},
 		epoch:   7,
-	}
+	})
 
 	// Two thirds of three is two, and a third of three is one.
-	kinds.Set("council/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 100,
-	}})
+	engine.Adopt(moody{name: "council/thing"}, Rules{
+		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 100, GraceBlocks: 1_000_000,
+	})
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 
 	testing.SetRealm(testing.NewUserRealm(a))
@@ -252,19 +255,17 @@ func TestTheGovernorWorksOnAnElectorateThatIsNotAToken(cur realm, t *testing.T) 
 func TestADecidedDefeatDoesNotWaitOutTheClock(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	a := testutils.TestAddress("d-a")
 	b := testutils.TestAddress("d-b")
 	c := testutils.TestAddress("d-c")
-	voters = &council{
+	engine.SetElectorate(&council{
 		members: map[string]bool{string(a): true, string(b): true, string(c): true},
 		epoch:   7,
-	}
-	kinds.Set("council/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 100000,
-	}})
+	})
+	engine.Adopt(moody{name: "council/thing"}, Rules{
+		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	})
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 
 	testing.SetRealm(testing.NewUserRealm(a))
@@ -287,14 +288,14 @@ func TestADecidedDefeatDoesNotWaitOutTheClock(cur realm, t *testing.T) {
 		t.Errorf("two against of three is %q, want defeated — the last vote "+
 			"cannot change it", got)
 	}
-	if p := mustProposal(id); p.reason != "threshold can no longer be reached" {
+	if r := engine.Reason(id); r != "threshold can no longer be reached" {
 		t.Errorf("it was defeated for %q, which does not say why it closed "+
-			"early", p.reason)
+			"early", engine.Reason(id))
 	}
 
-	// And the slot came back, which is the point: a list bounded at maxLive
+	// And the slot came back, which is the point: a list bounded at governor.MaxLive
 	// should not be held by settled business.
-	if openIdx.Has(digest("council/thing", "doomed")) {
+	if State(id) == "active" {
 		t.Error("a settled defeat is still holding its slot")
 	}
 
@@ -323,20 +324,18 @@ func TestADecidedDefeatDoesNotWaitOutTheClock(cur realm, t *testing.T) {
 func TestTheTallyHoldsAtTheSupplyCeiling(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	whale := testutils.TestAddress("q-whale")
 	minnow := testutils.TestAddress("q-minnow")
 
 	// The whole supply, at the cap, held by one address.
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(whale): grc20votes.MaxSupply},
 		total:  grc20votes.MaxSupply, epoch: 9,
-	}
-	kinds.Set("ceiling/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 1000,
-	}})
+	})
+	engine.Adopt(moody{name: "ceiling/thing"}, Rules{
+		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 1000, GraceBlocks: 1_000_000,
+	})
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 
 	testing.SetRealm(testing.NewUserRealm(whale))
@@ -357,13 +356,13 @@ func TestTheTallyHoldsAtTheSupplyCeiling(cur realm, t *testing.T) {
 	// thirds against, nothing left to cast.
 	resetLedger()
 	third := grc20votes.MaxSupply / 3
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(whale): grc20votes.MaxSupply - third, string(minnow): third},
 		total:  grc20votes.MaxSupply, epoch: 9,
-	}
-	kinds.Set("ceiling/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 1000,
-	}})
+	})
+	engine.Adopt(moody{name: "ceiling/thing"}, Rules{
+		QuorumBps: 6600, ThresholdBps: 6600, VotingBlocks: 1000, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(minnow))
 	id2 := Propose(cross(cur), "ceiling/thing", "doomed", "a third in favour")
 	Vote(cross(cur), id2, "yes")
@@ -396,19 +395,17 @@ func TestTheTallyHoldsAtTheSupplyCeiling(cur realm, t *testing.T) {
 func TestNothingPassesWithoutSomebodyInFavour(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	a := testutils.TestAddress("ab-a")
 	b := testutils.TestAddress("ab-b")
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(a): 60, string(b): 40},
 		total:  100, epoch: 9,
-	}
+	})
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
-	kinds.Set("ab/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 2000, ThresholdBps: 6600, VotingBlocks: 50,
-	}})
+	engine.Adopt(moody{name: "ab/thing"}, Rules{
+		QuorumBps: 2000, ThresholdBps: 6600, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 
 	// Everybody turns out, nobody supports it.
 	testing.SetRealm(testing.NewUserRealm(a))
@@ -421,9 +418,9 @@ func TestNothingPassesWithoutSomebodyInFavour(cur realm, t *testing.T) {
 		t.Fatalf("with the whole electorate abstaining the proposal is %q, "+
 			"want defeated — nobody voted for it", got)
 	}
-	if p := mustProposal(id); p.reason != "nobody voted in favour" {
+	if r := engine.Reason(id); r != "nobody voted in favour" {
 		t.Errorf("it was defeated for %q, which does not say what happened",
-			p.reason)
+			engine.Reason(id))
 	}
 	// The deadline never arrives; it was settled the moment the last vote
 	// landed, because nothing could change it.
@@ -440,13 +437,13 @@ func TestNothingPassesWithoutSomebodyInFavour(cur realm, t *testing.T) {
 	// Propose is refused with "nothing was in issue at that epoch". The name
 	// says ledger; it resets the governor too.
 	resetLedger()
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(a): 60, string(b): 40},
 		total:  100, epoch: 9,
-	}
-	kinds.Set("ab/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 2000, ThresholdBps: 0, VotingBlocks: 50,
-	}})
+	})
+	engine.Adopt(moody{name: "ab/thing"}, Rules{
+		QuorumBps: 2000, ThresholdBps: 0, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(a))
 	id2 := Propose(cross(cur), "ab/thing", "y", "a bar on the floor")
 	Vote(cross(cur), id2, "abstain")
@@ -466,13 +463,13 @@ func TestNothingPassesWithoutSomebodyInFavour(cur realm, t *testing.T) {
 	// all-abstained test above cannot reach it: there, nothing was left to
 	// cast, so it was settled before the clock mattered.
 	resetLedger()
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(a): 60, string(b): 40},
 		total:  1000, epoch: 9, // most of the electorate never votes
-	}
-	kinds.Set("ab/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 500, ThresholdBps: 6600, VotingBlocks: 50,
-	}})
+	})
+	engine.Adopt(moody{name: "ab/thing"}, Rules{
+		QuorumBps: 500, ThresholdBps: 6600, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(a))
 	idQ := Propose(cross(cur), "ab/thing", "q", "quorum by abstention alone")
 	Vote(cross(cur), idQ, "abstain")
@@ -490,13 +487,13 @@ func TestNothingPassesWithoutSomebodyInFavour(cur realm, t *testing.T) {
 	// And one vote in favour is enough to carry that one, so the guard refuses
 	// nothing it should allow.
 	resetLedger()
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(a): 60, string(b): 40},
 		total:  100, epoch: 9,
-	}
-	kinds.Set("ab/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 2000, ThresholdBps: 0, VotingBlocks: 50,
-	}})
+	})
+	engine.Adopt(moody{name: "ab/thing"}, Rules{
+		QuorumBps: 2000, ThresholdBps: 0, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	testing.SetRealm(testing.NewUserRealm(b))
 	id3 := Propose(cross(cur), "ab/thing", "z", "one voice for")
 	Vote(cross(cur), id3, "yes")
@@ -527,19 +524,17 @@ func TestNothingPassesWithoutSomebodyInFavour(cur realm, t *testing.T) {
 func TestABrokenElectorateSettlesOnItsFirstVote(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	// Every caller holds a hundred; the whole electorate is ten.
 	a := testutils.TestAddress("br-a")
 	b := testutils.TestAddress("br-b")
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(a): 100, string(b): 100},
 		total:  10, epoch: 9,
-	}
-	kinds.Set("broken/thing", &entry{kind: moody{}, live: true, rules: Rules{
-		QuorumBps: 6600, ThresholdBps: 9900, VotingBlocks: 50,
-	}})
+	})
+	engine.Adopt(moody{name: "broken/thing"}, Rules{
+		QuorumBps: 6600, ThresholdBps: 9900, VotingBlocks: 50, GraceBlocks: 1_000_000,
+	})
 	moodyCheckFails, moodyDoFails, moodyRan = false, false, 0
 
 	testing.SetRealm(testing.NewUserRealm(a))
@@ -583,18 +578,16 @@ func TestABrokenElectorateSettlesOnItsFirstVote(cur realm, t *testing.T) {
 func TestAProposalThatCanStillExactlyReachTheThresholdSurvives(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	yes := testutils.TestAddress("edge-yes")
 	no := testutils.TestAddress("edge-no")
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight: map[string]int64{string(yes): 600, string(no): 400},
 		total:  1000, epoch: 9,
-	}
-	kinds.Set("edge/kind", &entry{kind: setFee{}, live: true, rules: Rules{
-		QuorumBps: 3000, ThresholdBps: 6000, VotingBlocks: 100,
-	}})
+	})
+	engine.Adopt(setFee{name: "edge/kind"}, Rules{
+		QuorumBps: 3000, ThresholdBps: 6000, VotingBlocks: 100, GraceBlocks: 1_000_000,
+	})
 
 	testing.SetRealm(testing.NewUserRealm(yes))
 	id := Propose(cross(cur), "edge/kind", "1", "on the line, against")
@@ -635,22 +628,20 @@ func TestAProposalThatCanStillExactlyReachTheThresholdSurvives(cur realm, t *tes
 func TestQuorumDividesByTheEngagedWeightNotTheWholeSupply(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	a := testutils.TestAddress("eng-a")
 	idle := testutils.TestAddress("eng-idle")
 	// A thousand in issue, a hundred of it engaged. A 50% quorum is 500 against
 	// the supply and 50 against the engaged part.
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight:  map[string]int64{string(a): 60, string(idle): 940},
 		total:   1000,
 		engaged: 100,
 		epoch:   9,
-	}
-	kinds.Set("eng/kind", &entry{kind: setFee{}, live: true, rules: Rules{
+	})
+	engine.Adopt(setFee{name: "eng/kind"}, Rules{
 		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 100,
-	}})
+	})
 
 	testing.SetRealm(testing.NewUserRealm(a))
 	id := Propose(cross(cur), "eng/kind", "1", "sixty of a thousand")
@@ -674,12 +665,12 @@ func TestQuorumDividesByTheEngagedWeightNotTheWholeSupply(cur realm, t *testing.
 	// The early-close arithmetic is unchanged: it still asks what the whole
 	// supply could yet do. Idle weight can vote, so a proposal must not settle
 	// on the belief that it cannot.
-	voters = &fakeVotes{
+	engine.SetElectorate(&fakeVotes{
 		weight:  map[string]int64{string(a): 60, string(idle): 940},
 		total:   1000,
 		engaged: 100,
 		epoch:   9,
-	}
+	})
 	testing.SetRealm(testing.NewUserRealm(a))
 	open := Propose(cross(cur), "eng/kind", "2", "still open")
 	Vote(cross(cur), open, "yes")
@@ -702,21 +693,19 @@ func TestQuorumDividesByTheEngagedWeightNotTheWholeSupply(cur realm, t *testing.
 func TestAnImpossibleEngagedWeightIsRefused(cur realm, t *testing.T) {
 	resumeClock()
 	resetLedger()
-	real_ := voters
-	defer func() { voters = real_ }()
 
 	a := testutils.TestAddress("eng-bad")
-	kinds.Set("bad/kind", &entry{kind: setFee{}, live: true, rules: Rules{
+	engine.Adopt(setFee{name: "bad/kind"}, Rules{
 		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 100,
-	}})
+	})
 
-	voters = &fakeVotes{weight: map[string]int64{string(a): 10}, total: 100, engaged: 1000, epoch: 9}
+	engine.SetElectorate(&fakeVotes{weight: map[string]int64{string(a): 10}, total: 100, engaged: 1000, epoch: 9})
 	testing.SetRealm(testing.NewUserRealm(a))
 	uassert.AbortsContains(t, cur, "no more than what was in issue", func() {
 		Propose(cross(cur), "bad/kind", "1", "engages more than exists")
 	})
 
-	voters = &fakeVotes{weight: map[string]int64{string(a): 10}, total: 100, engaged: -1, epoch: 9}
+	engine.SetElectorate(&fakeVotes{weight: map[string]int64{string(a): 10}, total: 100, engaged: -1, epoch: 9})
 	testing.SetRealm(testing.NewUserRealm(a))
 	uassert.AbortsContains(t, cur, "has to be positive", func() {
 		Propose(cross(cur), "bad/kind", "2", "engages nobody")

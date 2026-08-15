@@ -1,0 +1,5 @@
+# scripts/mutate.py writes one of these beside a file while it is mutated, and
+# removes it on a clean exit. One that survives is a run that was killed, and
+# the next run recovers from it — but it must never be committed, because a
+# committed backup is a half-mutated tree that looks like source.
+*.mutate-backup

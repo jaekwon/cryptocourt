@@ -70,6 +70,12 @@ PKGS = {
                    "examples/gno.land/p/cryptocourt/grc20votes/v0"),
     "governor": (os.path.join(REPO, "realm/p/governor"),
                  "examples/gno.land/p/cryptocourt/governor/v0"),
+    # Staged but never mutated: the govern realm's offer filetest imports it,
+    # so leaving it out makes the baseline red for a staging reason and every
+    # mutation reads as caught. That is the same lie as a build failure counted
+    # as a catch, told by omission.
+    "offerer": (os.path.join(REPO, "realm/r/offerer"),
+                "examples/gno.land/r/cryptocourt/offerer"),
 }
 
 
@@ -115,6 +121,16 @@ def recover_backups():
                 continue
             bak = os.path.join(src, f)
             orig = bak[: -len(BAK)]
+            if not os.path.exists(orig):
+                # The original is gone, so this backup is from a tree that no
+                # longer exists — a file deleted deliberately since the run
+                # that left it. Restoring would RESURRECT it, which is worse
+                # than the mutation this was meant to undo: it happened, and
+                # the resurrected file broke a build for an hour.
+                os.remove(bak)
+                print(f"mutate: discarded a stale backup for {orig}, which no "
+                      f"longer exists", file=sys.stderr)
+                continue
             shutil.move(bak, orig)
             print(f"mutate: recovered {orig} from a run that did not finish",
                   file=sys.stderr)

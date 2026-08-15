@@ -26,11 +26,9 @@ The `/p/` packages are the reusable half: any realm can import them and get a
 checkpointed voting token and a governor over it without forking anything. The
 `/r/` realms are one worked consumer.
 
-**One thing is half-done, and it is visible in the tree.** `r/govern` still
-carries its own copy of the engine rather than importing `p/governor` — the
-package is complete and has its own tests, but the realm has not been cut over,
-so the engine source exists twice. Nothing imports the package yet. See
-docs/DESIGN.md, "What is not finished".
+`r/govern` is 432 lines of non-test code: fourteen entrypoints, the deployer
+captured at init, who may mint, and a one-line dispatcher. Everything else it
+used to hold is `p/governor` now, which any other realm can import.
 
 **checkpoint** remembers what a number used to be, as of an epoch. Two points
 inline plus a paged archive, so an account whose balance has not moved since it

@@ -1,11 +1,11 @@
 package govern
 
 import (
+	governor "gno.land/p/cryptocourt/governor/v0"
 	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
 	"chain/runtime"
 	"testing"
 
-	bptree "gno.land/p/nt/bptree/v0"
 )
 
 // The test harness is not a chain, and the difference matters here.
@@ -70,40 +70,11 @@ func advanceTo(h int64) {
 // the checkpoints refuse a backwards write — so the high-water mark carries
 // across, and a fresh ledger simply starts recording at a later epoch.
 func resetLedger() {
-	// A whole new ledger rather than four trees cleared. The token is an
-	// allocated value now, so "empty" is what a constructor returns and there
-	// is no package state left here to forget one of.
+	// A whole new ledger and a whole new governor. Both are values now, so
+	// "empty" is what the constructors return and there is no package state
+	// left here to forget one of.
 	ledger = grc20votes.NewLedger(tokenName, tokenSymbol, tokenDecimals, epochBlocks)
 	ledger.SetID(tokenID)
-
-	proposals = bptree.NewBPTree32()
-	openIdx = bptree.NewBPTree32()
-	propSeq = 0
-	voters = tokenVotes{}
-
-	// The sweep cursor is state like the rest of it. Left behind, it points
-	// into the index a previous test built, so where a sweep starts depends on
-	// which tests ran before.
-	//
-	// Measured, not assumed: with the cursor leaking, two mutations of sweep
-	// survive that are caught with it reset. Leaking state does not change
-	// whether the tests pass — it changes whether they can FAIL, which is the
-	// harder thing to notice and the only thing a test is for.
-	sweepFrom = ""
-
-	// The kind registry, back to the five the realm ships with.
-	//
-	// Without this, a test needing a kind can get one from whatever ran before,
-	// and assert messages about a kind it never registered. With it, an order
-	// dependency fails the ordinary suite instead of needing the isolation
-	// sweep to find it.
-	//
-	// A mutation deleting these two lines survives, and that is correct rather
-	// than a gap: every test registers what it needs now, so nothing depends on
-	// the reset. It closes a class instead of implementing a behaviour, and
-	// there is no test that can tell the difference. The thing that would catch
-	// its absence is a NEW test written to lean on a neighbour, which is
-	// exactly what it exists to stop.
-	kinds = bptree.NewBPTree32()
-	installBuiltins()
+	engine = governor.New(ledger, ledger)
+	engine.InstallBuiltin(minterKind{}, governor.BootstrapRules())
 }

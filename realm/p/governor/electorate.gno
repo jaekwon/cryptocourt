@@ -92,15 +92,6 @@ func New(voters Electorate, token Token) *Governor {
 // true: reaching this needs the *Governor, which the realm keeps to itself.
 // A realm uses it for a power that is its own rather than the engine's — the
 // mint being the example.
-// SetNotes are extra lines the consuming realm puts on the front page, under
-// the token and above the governance.
-//
-// It exists because some of what a reader needs is the realm's and not the
-// engine's — who may mint, most of all, which is the strongest promise a realm
-// makes and cannot be inferred from silence. Plain markdown the realm composes;
-// the engine neither parses it nor holds anything that could produce it.
-func (g *Governor) SetNotes(md string) { g.notes = md }
-
 func (g *Governor) InstallBuiltin(k Kind, r Rules) {
 	name := k.Name()
 	if !isReserved(name) {

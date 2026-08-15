@@ -27,6 +27,24 @@ const (
 	// GovLanes is that difference.
 	GovLanes = govLanes
 
+	// The bounds on a proposal's three strings, which doc.gno publishes as a
+	// table because they decide what a proposer can say before finding out by
+	// transaction.
+	MaxTitle    = maxTitle
+	MaxPayload  = maxPayload
+	MaxKindName = maxKindName
+
+	// MaxBatch is how many members one govern:batch may carry.
+	MaxBatch = maxBatch
+
+	// Bps is the basis-point scale every bar here is expressed in.
+	Bps = bps
+
+	// MaxReason is the longest failure message a kind can put on the record.
+	// A kind returns the string and the governor keeps it for the life of the
+	// realm, so it is clipped rather than trusted.
+	MaxReason = maxReason
+
 	// Reserved is the prefix the governor's own kinds carry, which Offer
 	// refuses so that nothing published can render as a built-in.
 	Reserved = reserved
@@ -38,6 +56,19 @@ func (g *Governor) OpenSlots() int { return g.openIdx.Size() }
 
 // Proposals is how many questions have ever been asked here.
 func (g *Governor) Proposals() int { return g.proposals.Size() }
+
+// StoredState is the state that has been WRITTEN DOWN, which is not always the
+// state a reader is shown.
+//
+// State computes the outcome from the rules and the clock, because a proposal
+// whose deadline passed is decided whether or not anybody has poked it. Only a
+// transaction records that, so between the deadline and the next Settle the two
+// differ — and the difference is the whole reason reading is free: a read works
+// out the answer and stores nothing.
+//
+// A caller wanting to know whether the slot has actually been given back, or
+// whether there is anything left for Settle to do, wants this one.
+func (g *Governor) StoredState(id int64) string { return stateName(g.mustProposal(id).state) }
 
 // Reason is why a proposal ended, or the empty string while it is still open.
 // The page prints it; this is the same string.
@@ -95,6 +126,34 @@ func (g *Governor) KindRules(name string) (Rules, bool) {
 // rotates rather than always starting at the low end.
 func (g *Governor) Digest(kind, payload string) string { return g.digest(kind, payload) }
 
+// Sweep reclaims the slots of proposals that have finished but were never
+// written down.
+//
+// Propose already calls it when the board is full, which is the path that
+// matters. This is the same thing on request, for a caller who would rather
+// free a slot than be refused one — permissionless, like Settle, and for the
+// same reason: it decides nothing, it only writes down what the rules already
+// decided.
+func (g *Governor) Sweep() { g.sweep() }
+
+// SetElectorate changes where voting weight comes from, keeping everything
+// else — the adopted kinds, every proposal, the slot cursor.
+//
+// The consuming realm's, like Adopt, and for a narrow purpose: a realm that
+// wraps its ledger to drop idle weight out of the quorum denominator swaps the
+// wrapper in here rather than rebuilding the governor and losing its registry.
+//
+// Only sensible before anything is open. A proposal snapshots the epoch it is
+// weighed at but reads the electorate live, so changing it under an open vote
+// moves the bar the voters were shown — which is the thing per-proposal rules
+// exist to prevent, arrived at from the other side.
+func (g *Governor) SetElectorate(e Electorate) {
+	if e == nil {
+		panic("governor: an electorate is required")
+	}
+	g.voters = e
+}
+
 // Adopt installs a kind as live without a vote.
 //
 // The consuming realm's, and nobody else's — reaching it needs the *Governor,
@@ -119,3 +178,15 @@ func (g *Governor) Adopt(k Kind, r Rules) {
 	g.mustBeSaneRules(r)
 	g.kinds.Set(name, &entry{kind: k, rules: r, live: true})
 }
+
+// Render is the front page, or one proposal's page when path names an id.
+//
+// notes are extra lines the consuming realm puts under the token and above the
+// governance — who may mint, most of all, which is the realm's fact rather than
+// the engine's and cannot be inferred from silence.
+//
+// Passed in rather than stored. A stored note is a WRITE, and this is a read: a
+// realm calling SetNotes from its own Render turned reading a page into
+// something that costs storage, which is the defect check-storage exists to
+// catch and did.
+func (g *Governor) Render(path, notes string) string { return g.render(path, notes) }

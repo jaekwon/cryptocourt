@@ -24,11 +24,7 @@ import (
 //
 // Single-member kinds keep the other behaviour — record the failure and finish
 // — since there is nothing to be atomic with respect to.
-// batchKind carries the governor it acts on. A kind is a value in that
-// governor's own registry, so this is a cycle — which gno handles, and which is
-// the price of the built-ins being kinds like any other rather than a special
-// case in Execute.
-type batchKind struct{ g *Governor }
+type batchKind struct{}
 
 // maxBatch bounds a batch, because Describe and Check both walk it and a
 // proposal nobody can render is a proposal nobody can vote on.
@@ -36,7 +32,7 @@ const maxBatch = 16
 
 func (k batchKind) Name() string { return reserved + "batch" }
 
-func (k batchKind) Describe(payload string) string {
+func (k batchKind) describe(g *Governor, payload string) string {
 	members, err := parseBatch(payload)
 	if err != nil {
 		return "malformed batch: " + err.Error()
@@ -47,7 +43,7 @@ func (k batchKind) Describe(payload string) string {
 		// same strings their Do will be handed. A batch that summarised its
 		// members in its own words would be the description gap this design
 		// exists to avoid, reintroduced one level up.
-		out += ufmt.Sprintf("\n%d. **%s** — %s", i+1, m.kind, k.g.describeMember(m))
+		out += ufmt.Sprintf("\n%d. **%s** — %s", i+1, m.kind, g.describeMember(m))
 	}
 	return out
 }
@@ -57,16 +53,16 @@ func (g *Governor) describeMember(m member) string {
 	if k == nil {
 		return "_no kind by that name_"
 	}
-	return k.Describe(m.payload)
+	return g.describeKind(k, m.payload)
 }
 
-func (k batchKind) Check(payload string) error {
+func (k batchKind) check(g *Governor, payload string) error {
 	members, err := parseBatch(payload)
 	if err != nil {
 		return err
 	}
 	for _, m := range members {
-		e := k.g.entryOf(m.kind)
+		e := g.entryOf(m.kind)
 		if e == nil {
 			return govErr("no kind called " + m.kind)
 		}
@@ -74,30 +70,40 @@ func (k batchKind) Check(payload string) error {
 			// A batch cannot reach a power the holders have not granted.
 			return govErr(m.kind + " is not adopted")
 		}
-		if m.kind == (batchKind{k.g}).Name() {
+		if m.kind == (batchKind{}).Name() {
 			// No batches of batches. Nesting makes the rendered description a
 			// tree of unbounded depth, and the point of the description is
 			// that somebody reads it.
 			return govErr("a batch cannot contain a batch")
 		}
-		if err := e.kind.Check(m.payload); err != nil {
+		if err := g.checkKind(e.kind, m.payload); err != nil {
 			return govErr(m.kind + ": " + err.Error())
 		}
 	}
 	return nil
 }
 
-func (k batchKind) Do(_ int, rlm realm, payload string) error {
+func (k batchKind) run(g *Governor, dispatch Dispatch, payload string) error {
 	members, err := parseBatch(payload)
 	if err != nil {
 		return err
 	}
 	for i, m := range members {
-		e := k.g.entryOf(m.kind)
+		e := g.entryOf(m.kind)
 		if e == nil || !e.live {
 			panic("govern: batch member " + m.kind + " is no longer adopted")
 		}
-		if err := e.kind.Do(0, rlm, m.payload); err != nil {
+		var err error
+		if b, ok := asBuiltin(e.kind); ok {
+			err = b.run(g, dispatch, m.payload)
+		} else {
+			// Each member gets its OWN sub-realm, named for the power it is,
+			// rather than the batch's. A batch is a way to decide several
+			// things at once, not a way to launder one kind's authority into
+			// another's.
+			err = dispatch(e.kind, subPathOf(m.kind), m.payload)
+		}
+		if err != nil {
 			// Panic, not return. Returning would record a failure and keep
 			// whatever the earlier members already did, which is the one
 			// outcome a batch promises cannot happen.
