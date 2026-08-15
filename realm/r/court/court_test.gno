@@ -47,6 +47,46 @@ func TestParamsSanityBounds(t *testing.T) {
 		p.minClaimDepositCC = 0
 		p.mustSane()
 	})
+	shouldPanic(t, "zero min order", func() {
+		p := defaultParams()
+		p.minOrderShares = 0
+		p.mustSane()
+	})
+	shouldPanic(t, "OI ceiling over Bps", func() {
+		p := defaultParams()
+		p.oiCeilingBps = 10001
+		p.mustSane()
+	})
+	shouldPanic(t, "supply floor over Bps", func() {
+		p := defaultParams()
+		p.floorSupplyBps = 10001
+		p.mustSane()
+	})
+	shouldPanic(t, "malformed escrow window", func() {
+		p := defaultParams()
+		p.escrowMaxBlocks = p.escrowMinBlocks - 1
+		p.mustSane()
+	})
+	shouldPanic(t, "zero voting blocks", func() {
+		p := defaultParams()
+		p.votingBlocks = 0
+		p.mustSane()
+	})
+	shouldPanic(t, "adj fee over 10%", func() {
+		p := defaultParams()
+		p.adjFeeBps = 1001
+		p.mustSane()
+	})
+	shouldPanic(t, "settle fee over 10%", func() {
+		p := defaultParams()
+		p.settleFeeBps = 1001
+		p.mustSane()
+	})
+	shouldPanic(t, "negative fee cap", func() {
+		p := defaultParams()
+		p.adjFeeCapGNOT = -1
+		p.mustSane()
+	})
 	// The defaults are themselves sane.
 	_ = defaultParams().mustSane()
 }

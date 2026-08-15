@@ -168,6 +168,65 @@ func TestAllAbstainUpholdDistributesWholeFee(cur realm, t *testing.T) {
 	}
 }
 
+// TestDisputeUpheldByNoMajority covers the UPHOLD verdict with a real NO voter, and —
+// the point — ClaimAdjFee paying the 40% VERDICT slice to a NO voter (fees.gno's
+// `!overturned && choice=="no"` path with vw=no>0). Every other dispute test overturns,
+// all-abstains (vw=0, folded), or fails quorum, so this path was untested.
+//
+// The governor decides a vote early only when the outcome is certain given the UNCAST
+// weight, so the majority CC is parked with a NON-voting holder (alice): the uncast
+// `rest` stays large, the vote never early-decides, and carol's NO (a moderate slice,
+// ≥ the 5% quorum floor but < 50%) resolves UPHOLD at the deadline.
+func TestDisputeUpheldByNoMajority(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("un-alice") // founder, answerer (YES); holds the majority, does NOT vote
+	carol := testutils.TestAddress("un-carol") // the sole voter: NO (uphold), on the verdict
+	bob := testutils.TestAddress("un-bob")     // disputer
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	StartCourt(cross(cur), "un", "Uphold Court")
+	buyCoin(cur, "un", alice, 1_000_000_000) // dominant, non-voting → keeps `rest` large
+	buyCoin(cur, "un", carol, 300_000_000)   // ~12% of supply: meets quorum, well under 50%
+	buyCoin(cur, "un", bob, 100_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	cid := OpenClaim(cross(cur), "un", "Upheld by NO")
+	matureOI(cur, "un", cid, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "un", cid, outcomeYES)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "un", cid)
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "un", cid, "no") // uphold the YES answer
+
+	testing.SkipHeights(130000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "un", cid)
+	if Provisional("un", cid) != outcomeYES {
+		t.Fatalf("a NO majority should UPHOLD the YES answer, got %d", Provisional("un", cid))
+	}
+	if FeeKind("un", cid) != "adjudication" {
+		t.Fatalf("a decided dispute charges the adjudication fee, got %s", FeeKind("un", cid))
+	}
+	fee := FeePool("un", cid)
+
+	testing.SkipHeights(130000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Finalize(cross(cur), "un", cid)
+
+	// carol voted WITH the verdict (NO/uphold), so her claim is the participation slice
+	// PLUS the 40% verdict slice — the untested path. As the sole voter she draws both
+	// pools, so her fee exceeds the 60% participation pool alone.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	carolFee := ClaimAdjFee(cross(cur), "un", cid)
+	if carolFee <= fee*6000/10000 {
+		t.Fatalf("an on-verdict NO voter should get participation + verdict slice (> 60%% of %d), got %d", fee, carolFee)
+	}
+	if carolFee > fee {
+		t.Fatalf("a claim %d cannot exceed the fee pool %d", carolFee, fee)
+	}
+}
+
 // TestFeeGuards covers the one-fee-never-both rule, double-claim, non-voter, and
 // not-finalized guards on both claim entrypoints.
 func TestFeeGuards(cur realm, t *testing.T) {
