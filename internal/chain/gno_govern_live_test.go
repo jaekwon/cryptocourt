@@ -248,17 +248,28 @@ func TestIntegrationGovernEntrypointsAreCallable(t *testing.T) {
 
 // ---------------------------------------------------------------- helpers --
 
+// deployGovern publishes every /p/ the realm imports, in dependency order, and
+// then the realm itself.
+//
+// The order is not cosmetic and cannot be undone: AddPackage compiles on chain,
+// so an import that does not resolve is a deploy that FAILS, and a realm cannot
+// be redeployed at its path. Splitting the ledger out of the realm added a
+// second dependency here and nothing local noticed — `gno test` resolves from
+// the examples tree, where all of them are staged together. Only a chain says
+// which of them a deploy actually needs.
 func deployGovern(t *testing.T, root *gnoclient.Client, rootAddr crypto.Address) string {
 	t.Helper()
-	pkg, err := gnolang.ReadMemPackage("../../realm/p/checkpoint", governPkgPath, gnolang.MPUserProd)
-	if err != nil {
-		t.Fatalf("read checkpoint package: %v", err)
-	}
-	if _, err := root.AddPackage(baseCfgFor(t, root, rootAddr), vm.MsgAddPackage{
-		Creator: rootAddr, Package: pkg,
-		MaxDeposit: std.MustParseCoins("500000000ugnot"),
-	}); err != nil && !alreadyDeployed(err) {
-		t.Fatalf("addpkg %s: %+v", governPkgPath, err)
+	for _, dep := range governDeps {
+		pkg, err := gnolang.ReadMemPackage(dep.dir, dep.path, gnolang.MPUserProd)
+		if err != nil {
+			t.Fatalf("read %s: %v", dep.path, err)
+		}
+		if _, err := root.AddPackage(baseCfgFor(t, root, rootAddr), vm.MsgAddPackage{
+			Creator: rootAddr, Package: pkg,
+			MaxDeposit: std.MustParseCoins("500000000ugnot"),
+		}); err != nil && !alreadyDeployed(err) {
+			t.Fatalf("addpkg %s: %+v", dep.path, err)
+		}
 	}
 	realmPath := path.Dir(governRealmPath) + "/" + runTag() + "/" + path.Base(governRealmPath)
 	mempkg, err := gnolang.ReadMemPackage("../../realm/r/govern", realmPath, gnolang.MPUserProd)

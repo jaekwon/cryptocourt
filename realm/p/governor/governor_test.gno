@@ -4,13 +4,6 @@ import (
 	"strconv"
 	"testing"
 
-	"gno.land/p/nt/testutils/v0"
-)
-
-var (
-	alice = testutils.TestAddress("galice")
-	bob   = testutils.TestAddress("gbob")
-	carl  = testutils.TestAddress("gcarl")
 )
 
 // council is an electorate that is not a token: one address, one vote.
@@ -74,14 +67,6 @@ func (k setFee) Do(_ int, rlm realm, payload string) error {
 	return nil
 }
 
-// dispatch is what a consuming realm supplies. In a test there is no `cur` to
-// mint a sub-realm from, so the token is nil — which is exactly what the type
-// permits and why Do takes it as a parameter rather than reaching for one.
-func dispatch(k Kind, subpath, payload string) error {
-	var none realm
-	return k.Do(0, none, payload)
-}
-
 func armed(t *testing.T, members ...address) (*Governor, *council, *int64) {
 	t.Helper()
 	c := &council{members: members, epoch: 2}
@@ -100,16 +85,16 @@ func armed(t *testing.T, members ...address) (*Governor, *council, *int64) {
 // This is the seam working: no balances, no checkpoints, no delegation, and
 // every stage of the lifecycle still behaves.
 func TestAGovernorRunsOnAnElectorateThatIsNotAToken(t *testing.T) {
-	g, _, ran := armed(t, alice, bob, carl)
+	g, _, ran := armed(t, gAlice, gBob, gCarl)
 
-	id := g.Propose(alice, "fee", "250", "set it to 250")
+	id := g.Propose(gAlice, "fee", "250", "set it to 250")
 	if got := g.State(id); got != "active" {
 		t.Fatalf("a fresh proposal is %q", got)
 	}
 
 	// Two of three is past a 50% quorum and carries the threshold, so the
 	// arithmetic decides it without waiting for the deadline.
-	g.Vote(alice, id, "yes")
+	g.Vote(gAlice, id, "yes")
 	if got := g.State(id); got != "active" {
 		t.Fatalf("one of three votes settled it: %q", got)
 	}
@@ -118,9 +103,9 @@ func TestAGovernorRunsOnAnElectorateThatIsNotAToken(t *testing.T) {
 	// the roll doing its job. Asked here rather than after it settles, because
 	// a closed proposal refuses everybody for a different reason and would
 	// answer this question by accident.
-	mustPanic(t, "govern: already voted", func() { g.Vote(alice, id, "no") })
+	mustPanic(t, "govern: already voted", func() { g.Vote(gAlice, id, "no") })
 
-	g.Vote(bob, id, "yes")
+	g.Vote(gBob, id, "yes")
 	if got := g.State(id); got != "succeeded" {
 		t.Fatalf("two of three yes votes leaves it %q, want succeeded", got)
 	}
@@ -128,7 +113,7 @@ func TestAGovernorRunsOnAnElectorateThatIsNotAToken(t *testing.T) {
 	// And it runs, through the dispatcher the consumer supplies. No delay to
 	// wait out — the fixture sets DelayBlocks to zero — and the grace period
 	// is what would end it if nobody did.
-	g.Execute(carl, id, dispatch)
+	g.Execute(gCarl, id, dispatch)
 	if got := g.State(id); got != "executed" {
 		t.Fatalf("after Execute the proposal is %q", got)
 	}
@@ -146,13 +131,13 @@ func TestAGovernorRunsOnAnElectorateThatIsNotAToken(t *testing.T) {
 func TestExecuteNeedsADispatcherFromTheConsumer(t *testing.T) {
 	// Three members, so two yes votes are needed and the second is what
 	// decides it — one would settle a two-member council on its own.
-	g, _, _ := armed(t, alice, bob, carl)
-	id := g.Propose(alice, "fee", "7", "seven")
-	g.Vote(alice, id, "yes")
-	g.Vote(bob, id, "yes")
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	id := g.Propose(gAlice, "fee", "7", "seven")
+	g.Vote(gAlice, id, "yes")
+	g.Vote(gBob, id, "yes")
 
 	mustPanic(t, "govern: a dispatcher is required to run a kind", func() {
-		g.Execute(alice, id, nil)
+		g.Execute(gAlice, id, nil)
 	})
 	// And the proposal is untouched, so a missing dispatcher is a refusal
 	// rather than a failed execution nobody can retry.
@@ -167,17 +152,17 @@ func TestExecuteNeedsADispatcherFromTheConsumer(t *testing.T) {
 // several courts needs several governors, and /p/ package state is frozen
 // after init in any case.
 func TestTwoGovernorsAreIndependent(t *testing.T) {
-	a, _, _ := armed(t, alice, bob, carl)
-	b, _, _ := armed(t, carl)
+	a, _, _ := armed(t, gAlice, gBob, gCarl)
+	b, _, _ := armed(t, gCarl)
 
-	ida := a.Propose(alice, "fee", "1", "in a")
-	idb := b.Propose(carl, "fee", "1", "in b")
+	ida := a.Propose(gAlice, "fee", "1", "in a")
+	idb := b.Propose(gCarl, "fee", "1", "in b")
 
 	if ida != idb {
 		t.Errorf("the two governors share a sequence: %d and %d", ida, idb)
 	}
-	a.Vote(alice, ida, "yes")
-	a.Vote(bob, ida, "yes")
+	a.Vote(gAlice, ida, "yes")
+	a.Vote(gBob, ida, "yes")
 	if got := a.State(ida); got != "succeeded" {
 		t.Fatalf("a's proposal is %q", got)
 	}
@@ -192,12 +177,12 @@ func TestTwoGovernorsAreIndependent(t *testing.T) {
 // governor's own registry. Worth a test because a kind holding the WRONG
 // governor would work perfectly in a program with only one.
 func TestABuiltInActsOnItsOwnGovernor(t *testing.T) {
-	a, _, _ := armed(t, alice, bob)
-	b, _, _ := armed(t, carl)
+	a, _, _ := armed(t, gAlice, gBob)
+	b, _, _ := armed(t, gCarl)
 
 	// A kind offered to A only.
 	var ran int64
-	a.Offer(alice, setFee{name: "toll/k", ran: &ran}, Rules{
+	a.Offer(gAlice, setFee{name: "toll/k", ran: &ran}, Rules{
 		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
 	})
 	if a.entryOf("toll/k") == nil {

@@ -569,11 +569,17 @@ The one figure a deployer has to fund before anything else works, measured by
 
 | | |
 | --- | --- |
-| gas to publish the realm | about 188 million |
-| storage deposit | 117,347 bytes — 11,734,700 ugnot at the default price |
+| gas to publish the realm | about 173 million |
+| storage deposit | 108,393 bytes — 10,839,300 ugnot at the default price |
+
+Both fell when the ledger moved to `/p/`: a realm's deploy pays for its own
+source, and roughly a tenth of it is now published once as a package that other
+realms share rather than every time somebody forks this one. The dependency
+deploys are separate transactions with their own deposits, so this is a
+reapportioning rather than a saving — the difference is who pays, and how often.
 
 Rounded on purpose. The gas moves whenever a comment does — two runs a few
-edits apart measured 187,858,573 and 187,900,714 — so an exact figure written
+edits apart measured 187,858,573 and 187,900,714 before the split — so an exact figure written
 here is stale by the next commit, which is how the hand-measured tables this
 document used to carry went wrong. The test logs the current cost on every run
 and names it in the failure when the ceiling fires.

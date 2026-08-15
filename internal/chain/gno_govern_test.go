@@ -29,8 +29,16 @@ import (
 // wrong costs the path rather than the transaction.
 const (
 	governPkgPath   = "gno.land/p/cryptocourt/checkpoint/v0"
+	governVotesPath = "gno.land/p/cryptocourt/grc20votes/v0"
 	governRealmPath = "gno.land/r/cryptocourt/govern"
 )
+
+// governDeps is every /p/ the realm imports, in the order a chain needs them.
+// Listed once, used by deployGovern and by the ordering test below.
+var governDeps = []struct{ dir, path string }{
+	{"../../realm/p/checkpoint", governPkgPath},
+	{"../../realm/p/grc20votes", governVotesPath},
+}
 
 func TestIntegrationGovernDeploys(t *testing.T) {
 	nodeUp(t)
@@ -44,26 +52,31 @@ func TestIntegrationGovernDeploys(t *testing.T) {
 	//
 	// The trailing v0 is allowed even though the package is called checkpoint:
 	// LastPathElement skips a single version suffix before comparing.
-	pkg, err := gnolang.ReadMemPackage("../../realm/p/checkpoint", governPkgPath, gnolang.MPUserProd)
-	if err != nil {
-		t.Fatalf("read checkpoint package: %v", err)
+	// Every dependency, in order, because the realm imports more than one now
+	// and a chain is the only thing that says so: `gno test` resolves from the
+	// examples tree, where they are all staged together, so a missing deploy is
+	// invisible locally and fatal on chain.
+	for _, dep := range governDeps {
+		pkg, err := gnolang.ReadMemPackage(dep.dir, dep.path, gnolang.MPUserProd)
+		if err != nil {
+			t.Fatalf("read %s: %v", dep.path, err)
+		}
+		switch _, err := root.AddPackage(baseCfgFor(t, root, rootAddr), vm.MsgAddPackage{
+			Creator: rootAddr, Package: pkg,
+			MaxDeposit: std.MustParseCoins("500000000ugnot"),
+		}); {
+		case err == nil:
+			t.Logf("deployed %s", dep.path)
+		case alreadyDeployed(err):
+			// Said out loud, because "it passed" reads the same either way and
+			// the re-run branch is the one that is easy to get wrong: if the
+			// matching were too narrow this would pass exactly once per node
+			// and fail forever after, which looks like a real regression.
+			t.Logf("%s was already on chain, which is the expected second-run path", dep.path)
+		default:
+			t.Fatalf("addpkg %s: %+v", dep.path, err)
+		}
 	}
-	switch _, err := root.AddPackage(baseCfgFor(t, root, rootAddr), vm.MsgAddPackage{
-		Creator: rootAddr, Package: pkg,
-		MaxDeposit: std.MustParseCoins("500000000ugnot"),
-	}); {
-	case err == nil:
-		t.Logf("deployed %s", governPkgPath)
-	case alreadyDeployed(err):
-		// Said out loud, because "it passed" reads the same either way and the
-		// re-run branch is the one that is easy to get wrong: if the matching
-		// were too narrow, this test would pass exactly once per node and fail
-		// forever after, which looks like a real regression.
-		t.Logf("%s was already on chain, which is the expected second-run path", governPkgPath)
-	default:
-		t.Fatalf("addpkg %s: %+v", governPkgPath, err)
-	}
-
 	// The realm gets a fresh path every run, so this always compiles the
 	// CURRENT sources rather than silently re-testing what a previous run left
 	// behind. The tag is a parent element: the last one has to equal the

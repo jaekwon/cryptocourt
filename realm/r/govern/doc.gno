@@ -339,7 +339,8 @@
 // The order matters and most of it cannot be undone, so it is written out
 // once here rather than assembled from three files.
 //
-//  1. Publish p/cryptocourt/checkpoint/v0 FIRST. This realm imports it, AddPackage
+//  1. Publish the packages this realm imports FIRST — p/cryptocourt/checkpoint/v0
+//     and p/cryptocourt/grc20votes/v0, in that order. AddPackage
 //     compiles on chain, and an import that does not resolve is a deploy that
 //     fails — which costs the path, because a realm cannot be redeployed at
 //     one.
@@ -347,7 +348,7 @@
 //  2. Publish this realm. Whoever sends that transaction becomes the minter,
 //     because init() takes OriginCaller. There is no second chance at that.
 //
-//     Budget for it: about 188 million gas and 11.7 GNOT of storage deposit,
+//     Budget for it: about 173 million gas and 10.8 GNOT of storage deposit,
 //     measured on a chain and asserted by a test. AddPackage compiles AND
 //     stores the source, so both scale with the file — and three quarters of
 //     this file is comments, which is a deliberate trade worth knowing the
