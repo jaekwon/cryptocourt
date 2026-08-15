@@ -18,9 +18,10 @@ import (
 // This is the design three review rounds converged on. Its load-bearing choices:
 // ThresholdBps=5001 (so a lone floor-sized voter cannot capture the verdict), the
 // tally-based classifier (Succeeded→Expired drift cannot strand a verdict), and the
-// provisional→Finalize deferral (a reopen can overturn before shares lock). V1
-// implements a single dispute round; reopen/doubling/3-round-close reuse the same
-// classifier and are the next increment (the fields are already here).
+// provisional→Finalize deferral (a reopen can overturn before shares lock). The
+// reopen/doubling/3-round-close machine is SHIPPED and reuses the same classifier:
+// the disputer's bond doubles as base<<failedRounds, and three failed rounds close
+// the claim without a decision at the pre-answer price.
 
 const disputeKindName = "dispute" // NON-reserved (a govern: name caps at 8 gov-lanes)
 
@@ -230,8 +231,8 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 // verdict (from a dispute Resolve OR an undisputed session settlement), once the
 // escrow window has passed and no dispute is active: it resolves (or fractionally
 // closes) the claim's shares, after which winners can redeem. Deferring this past
-// escrow is what lets a reopen overturn a wrong provisional verdict first (the
-// reopen path is the next increment; the gate is already here).
+// escrow is what lets a reopen overturn a wrong provisional verdict first — the
+// reopen path is shipped (OpenDispute during the escrow window).
 func Finalize(cur realm, courtSlug string, claimID uint64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

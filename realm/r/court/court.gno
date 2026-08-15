@@ -10,7 +10,9 @@
 //
 // See docs/COURT_REALM_PLAN.md for the converged design and docs/AUDIT.md for the
 // obligations this realm must honor (twap freshness, tickbook minimum order,
-// ThresholdBps>5000, escrow-dust sweep, no returned /p/ interior pointers).
+// ThresholdBps>5000, no returned /p/ interior pointers). The escrow-dust sweep is a
+// deferred tidiness nicety, not a safety must — floored dust only ever accrues in the
+// over-funded escrow (deflationary, never insolvent).
 package court
 
 import (
@@ -41,7 +43,10 @@ type Court struct {
 	id    string
 	name  string
 	tier  uint8
-	admin address // who may retune params within the realm's hard bounds
+	// admin is the court's creator, recorded at StartCourt but currently unused: there is
+	// deliberately NO param-retune entrypoint, and that immutability is what keeps the
+	// overflow bounds sound (Params are frozen at mustSane-clamped defaults).
+	admin address
 
 	coin   *grc20votes.Ledger // the court coin (CC); the curve is its only mint
 	gov    *governor.Governor // the supreme-court arbiter; electorate = coin

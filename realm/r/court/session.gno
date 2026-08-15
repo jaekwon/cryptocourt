@@ -14,8 +14,10 @@ const settleDelay = int64(51840) // 72h at gno's 5-second blocks
 // escrow window so Finalize can resolve it. This is the path a claim takes when
 // nobody contests the answer — the answerer keeps their bond. Permissionless.
 //
-// Once a claim has a provisional verdict, OpenDispute refuses it (V1), so returning
-// the answer bond here cannot be undone by a later overturn.
+// The answerer keeps their bond. A settled claim CAN still be reopened and overturned
+// during its escrow window (see the reopen machine in dispute.gno), so the bond is made
+// safe by DISPOSING IT EXACTLY ONCE — returned and zeroed below — not by any refusal to
+// reopen. The zeroing is load-bearing; do not remove it as "redundant".
 func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
