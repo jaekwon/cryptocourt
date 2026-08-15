@@ -494,15 +494,13 @@ func (g *Governor) mustBeSaneRules(r Rules) {
 // is nothing to bootstrap them with. Everything beyond must be offered and
 // adopted, so not even the deployer can add a power without a vote.
 
-// installBuiltins registers the kinds the governor governs itself with.
-func (g *Governor) installBuiltins() {
-	// The terms the governor governs ITSELF on — the only ones nobody voted
-	// for, since every other kind's rules are chosen by whoever offers it.
-	//
-	// Deliberately the strictest here. What runs under them is adopting a
-	// power, retiring one, retuning terms and moving the mint: the decisions
-	// that change what the governor can do at all.
-	bootstrap := Rules{
+// BootstrapRules are the terms the governor governs ITSELF on.
+//
+// Exported because a consuming realm registering a power of its own —
+// the mint, most of all — should govern it on the same terms rather than
+// inventing a second set that can drift from these.
+func BootstrapRules() Rules {
+	return Rules{
 		// A fifth of the supply has to turn out. Low enough to reach with
 		// dispersed holders, high enough that a handful cannot decide alone
 		// while everybody else is asleep.
@@ -530,6 +528,12 @@ func (g *Governor) installBuiltins() {
 		// because proposals could otherwise sit forever.
 		GraceBlocks: 14 * 24 * 60 * 60 / 5,
 	}
+}
+
+// installBuiltins registers the kinds the governor governs itself with.
+func (g *Governor) installBuiltins() {
+	// The terms the governor governs ITSELF on. See BootstrapRules.
+	bootstrap := BootstrapRules()
 	g.kinds.Set(adoptKind{g}.Name(), &entry{kind: adoptKind{g}, rules: bootstrap, live: true})
 	g.kinds.Set(retireKind{g}.Name(), &entry{kind: retireKind{g}, rules: bootstrap, live: true})
 	g.kinds.Set(rulesKind{g}.Name(), &entry{kind: rulesKind{g}, rules: bootstrap, live: true})

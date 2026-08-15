@@ -295,3 +295,142 @@ func TestInstallBuiltinIsForReservedNamesOnly(t *testing.T) {
 		t.Error("a reserved built-in was not installed live")
 	}
 }
+
+// The introspection surface answers what the pages already print.
+//
+// A consumer that has to scrape markdown for a number the engine holds is an
+// engine with an incomplete API — and a realm's tests are the first consumer to
+// find out. Each of these is a read the front page or a proposal page already
+// publishes in words.
+func TestTheEngineAnswersWhatItsPagesPrint(t *testing.T) {
+	g, led := fresh()
+	led.Mint(gAlice, 600)
+	led.Mint(gBob, 400)
+	advanceEpochs(1)
+
+	var ran int64
+	g.Adopt(setFee{ran: &ran}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
+	})
+	if offered, live := g.KindStatus("fee"); !offered || !live {
+		t.Fatalf("after Adopt the kind reads offered=%v live=%v", offered, live)
+	}
+	if _, ok := g.KindRules("fee"); !ok {
+		t.Error("an adopted kind reports no rules")
+	}
+	if _, ok := g.KindRules("nothing/here"); ok {
+		t.Error("a name nobody published reports rules")
+	}
+	// Offered and adopted are different states, and the distinction is the
+	// whole of what Offer grants: publishing code and letting that code hold
+	// the governor's authority are separate decisions. A KindStatus that
+	// collapsed them would report every published kind as runnable.
+	g.Offer(gBob, setFee{name: "toll/k", ran: &ran}, Rules{
+		QuorumBps: 9000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
+	})
+	if offered, live := g.KindStatus("toll/k"); !offered || live {
+		t.Errorf("an offered, unadopted kind reads offered=%v live=%v", offered, live)
+	}
+	if offered, live := g.KindStatus("nothing/here"); offered || live {
+		t.Errorf("a name nobody published reads offered=%v live=%v", offered, live)
+	}
+
+	if got := g.OpenSlots(); got != 0 {
+		t.Fatalf("a fresh governor holds %d slots", got)
+	}
+	id := g.Propose(gAlice, "fee", "250", "lower it")
+	if got := g.OpenSlots(); got != 1 {
+		t.Errorf("one proposal takes %d slots", got)
+	}
+	if got := g.Proposals(); got != 1 {
+		t.Errorf("one question asked reads as %d", got)
+	}
+	if got := g.EpochOf(id); got != led.Epoch()-1 {
+		t.Errorf("the proposal was weighed at epoch %d, want the last sealed one %d",
+			got, led.Epoch()-1)
+	}
+
+	// The roll is bought at Propose and holds nobody until somebody votes. The
+	// sentinel is not a voter and must not be counted as one.
+	if !g.HasRoll(id) {
+		t.Fatal("a fresh proposal has no roll, so nobody could be refused a second vote")
+	}
+	if got := g.RollSize(id); got != 0 {
+		t.Errorf("a roll nobody has voted on holds %d — the sentinel is being counted", got)
+	}
+	g.Vote(gAlice, id, "yes")
+	if got := g.RollSize(id); got != 1 {
+		t.Errorf("after one vote the roll holds %d", got)
+	}
+
+	// Why it ended, which the page prints and nothing else exposed.
+	if got := g.Reason(id); got != "" {
+		t.Errorf("a proposal that succeeded outright gives the reason %q", got)
+	}
+
+	// And the digest, which is the key a question occupies — the thing a
+	// proposer chooses by choosing their payload.
+	if a, b := g.Digest("fee", "250"), g.Digest("fee", "251"); a == b {
+		t.Error("two different payloads share a key")
+	}
+	if a, b := g.Digest("fee", "250"), g.Digest("fee/x", "250"); a == b {
+		t.Error("the kind and the payload are not separated in the key")
+	}
+
+	// Released, the roll is gone and says so distinctly from holding nobody.
+	advanceBlocks(2000)
+	g.Settle(gCarl, id)
+	g.ReleaseRoll(gCarl, id)
+	if g.HasRoll(id) {
+		t.Error("the roll was released and still reads as held")
+	}
+	if got := g.RollSize(id); got != 0 {
+		t.Errorf("a released roll holds %d", got)
+	}
+}
+
+// Adopt holds its terms to the same sanity Offer does.
+//
+// It is the un-voted path, so nothing downstream will catch a bad value: a
+// grace of zero leaks a slot for the life of the realm, and a proposer bar
+// above the whole supply makes a kind nobody can ever propose under. Refusing
+// at the door is the only place left.
+func TestAdoptChecksItsTermsLikeOfferDoes(t *testing.T) {
+	g, _ := fresh()
+	var ran int64
+	sane := Rules{QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000}
+
+	// A grace of zero: the case where nothing ever ends a decided proposal.
+	bad := sane
+	bad.GraceBlocks = 0
+	mustPanicContains(t, "grace period of zero", func() {
+		g.Adopt(setFee{name: "a/k", ran: &ran}, bad)
+	})
+	if offered, _ := g.KindStatus("a/k"); offered {
+		t.Error("the refused kind was installed anyway")
+	}
+
+	// And a proposer bar nobody can clear.
+	bad = sane
+	bad.ProposeBps = 10001
+	mustPanicContains(t, "more than the whole supply", func() {
+		g.Adopt(setFee{name: "b/k", ran: &ran}, bad)
+	})
+
+	// And the NAME, which is checked the same way and for a longer list of
+	// reasons: it goes in the registry, in a proposal, on a page, and into the
+	// sub-path a kind is handed, so anything unprintable or oversized breaks
+	// one of those far from here.
+	mustPanicContains(t, "printable ASCII", func() {
+		g.Adopt(setFee{name: "bad\nname", ran: &ran}, sane)
+	})
+	mustPanicContains(t, "printable ASCII", func() {
+		g.Adopt(setFee{name: " ", ran: &ran}, sane)
+	})
+
+	// The sane one goes in.
+	g.Adopt(setFee{name: "c/k", ran: &ran}, sane)
+	if _, live := g.KindStatus("c/k"); !live {
+		t.Error("a sane kind was not adopted")
+	}
+}
