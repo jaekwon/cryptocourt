@@ -52,6 +52,37 @@ func TestTheArchiveAnswersForOlderEpochs(t *testing.T) {
 	}
 }
 
+// The package advertises int64 and be64 documents that a NEGATIVE value round-
+// trips through rd64 (it packs the uint64 bit pattern). Every other test uses
+// non-negative values, so the negative half of the range was unexercised — a
+// "simplification" of be64 to a sign-losing shift would pass all of them and
+// silently corrupt a signed series. Drive negatives, -1 (all ones), and MinInt64
+// (the extreme bit pattern) through BOTH inline slots and the archive.
+func TestNegativeValuesRoundTripThroughTheArchive(t *testing.T) {
+	arch := NewArchive()
+	var s Series
+	const minI64 = int64(-9223372036854775808)
+	vals := map[uint32]int64{}
+	for e := uint32(1); e <= 50; e++ { // 50 distinct epochs → epochs 1..48 roll into the archive
+		v := int64(e) - 100 // negative across the whole stretch
+		switch e {
+		case 10:
+			v = minI64 // archived; the extreme two's-complement pattern
+		case 20:
+			v = -1 // archived; all ones
+		case 49:
+			v = minI64 // the inline prev slot
+		}
+		s.SetAt(arch, "k", e, v)
+		vals[e] = v
+	}
+	for at := uint32(1); at <= 50; at++ {
+		if got := s.ValueAt(arch, "k", at); got != vals[at] {
+			t.Errorf("epoch %d = %d, want %d", at, got, vals[at])
+		}
+	}
+}
+
 // One key's history must never be read for another's. The keys share a tree,
 // so this is the property that keeps that safe.
 func TestOneKeysHistoryIsNotAnothers(t *testing.T) {
