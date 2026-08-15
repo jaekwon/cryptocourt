@@ -26,6 +26,13 @@ gnoland start
 # the realm reports, so a typo would query the wrong account and fail loudly here.
 env COURT=g1sf46mrxknexnakkpsx2ju0rpj26qc32a930nlk
 
+# --- A fresh realm has no courts: the directory renders its empty state -------
+# Regression guard: renderDirectory wrote its header before the emptiness check,
+# so "No courts yet" was dead code and never appeared. On a fresh node, before any
+# StartCourt, the directory must say so.
+gnokey query vm/qrender --data "gno.land/r/cryptocourt/court:"
+stdout 'No courts yet'
+
 # --- Start a court ----------------------------------------------------------
 gnokey maketx call -pkgpath gno.land/r/cryptocourt/court -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'

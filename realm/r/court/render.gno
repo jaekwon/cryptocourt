@@ -38,10 +38,14 @@ func Render(path string) string {
 func renderDirectory() string {
 	b := strings.Builder{}
 	b.WriteString("# CryptoCourt\n\nPlay-wager on claims of fact in the court you trust.\n\n")
+	// Measure AFTER the header: the tiers, not the header, decide whether anything
+	// was listed. Checking b.Len() == 0 was dead — the header is always written
+	// first — so the empty state never showed on a realm with no (visible) courts.
+	afterHeader := b.Len()
 	writeTier(&b, "Featured", tierFeatured)
 	writeTier(&b, "Courts", tierListed)
-	if b.Len() == 0 {
-		return "# CryptoCourt\n\nNo courts yet."
+	if b.Len() == afterHeader {
+		b.WriteString("_No courts yet._\n")
 	}
 	return b.String()
 }
