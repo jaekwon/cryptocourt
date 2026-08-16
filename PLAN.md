@@ -664,6 +664,36 @@ earn its place, now that emission also mints and GNOT is burned?**
   rubber-stamping, and the flag lane already makes standalone quality votes
   rare (only flagged, undisputed claims). Not worth the attention dilution.
 
+**Pass 4 (iteration 22) — two structural assumptions of the post-round-2 design.**
+
+- **QUESTIONED: is the emission machinery irreducible?** The design now carries
+  a main reservoir + senior queue + amortized schedule + live-supply d +
+  rate-weighted conviction + min-rule comps + caps. Could a radically simpler
+  scheme (fixed rate, mint-on-demand, no reservoir) do 80% of the job? **No —
+  each piece is load-bearing for a named invariant**: the budget+halving makes
+  total emission FINITE (without it, Σemission grows with participation
+  forever and the `curveCap + Σemission ≤ MaxInt64/Bps` overflow invariant is
+  unprovable); the rate band is the farming-proof (F5); the senior queue is
+  the policing-under-scarcity proof (2A-T1); amortization + rate-weighting
+  delete the boundary races (V2-8/2A-T3); live-d keeps the early court
+  payable (V2-7). The machinery count is the *price of the invariants*, and
+  every component now has a vet finding that dies if it's removed. KEPT, with
+  this paragraph as the tripwire against future "simplification".
+- **QUESTIONED: is the quality layer worth being the largest attack surface?**
+  (A4/A5/A15–A18 and half of round-2 live there.) Alternatives worked:
+  no-tiers (every trivially-true claim earns the full rate — the mill IS the
+  protocol); disputed-only rewards (kills the healthy undisputed path, which
+  is most of a working court); fee-priced claims only (regressive, and F-R2
+  showed in-band p=1 self-staking stays profitable regardless). None survives.
+  The honest insight, recorded as the keystone: **the quality layer is the
+  hidden price of no-loss staking itself.** V1 never needed one — losers'
+  losses priced junk automatically. Once losers lose nothing, "junk pays
+  nothing" requires someone to decide what junk is, and that decision must
+  itself be incentivized and attack-priced. The flag lane's complexity is not
+  a feature's cost; it is THE cost of the design's central legal-economic
+  trade. KEPT; zero design changes from this pass — third consecutive
+  no-change brainstorm (convergence evidence).
+
 **Pass 3 (iteration 12) — assumption questioned: claims are isolated.** The
 court vision's four core actions were answer / answerDispute / **support** /
 **counter** — argument EDGES between claims — and V2's tokenomics has silently
@@ -1192,6 +1222,13 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.22** — (iteration 22) brainstorm pass 4: emission machinery judged
+  irreducible (every component is load-bearing for a named, vetted invariant —
+  paragraph doubles as an anti-"simplification" tripwire); the quality layer
+  recorded as **the hidden price of no-loss staking** (V1 priced junk via
+  losers' losses; remove loss and someone must adjudicate junk, incentivized
+  and attack-priced — the flag lane is that someone). Zero design changes —
+  third consecutive no-change brainstorm.
 - **v0.21** — (iteration 20) **vet 2B landed and independently CONFIRMED the
   v0.20 targets**: analyzing the pre-v0.20 file, its three "decisions wording
   cannot close" were exactly the three v0.20 fixes (unpaid flag voters → paid;
