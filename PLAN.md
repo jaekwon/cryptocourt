@@ -1579,6 +1579,23 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.38 — LAUNCH GATE CLEARED.** The final full-system adversarial audit
+  (whole system, fresh eyes, cross-module + court-global conservation) returned
+  **0 CRITICAL, 0 HIGH, 1 MED, 2 accepted NOTEs**, and re-verified every prior
+  fix holds with no regression — including the highest-value re-check, the
+  court-global emission-conservation invariant `emittedTotal ≤ cumAccrual`
+  across an adversarial multi-claim interleave (proved by disjoint number-line
+  tiling + probe). The one MED, fixed FIX-FIRST: **an overturned (wrong)
+  answerer still drew the 5-point answerer emission slice** — the author slice
+  is gated on winning-side skin but the answerer slice wasn't; on overturn the
+  bond is burned and the record reset, so minting a slice contradicted §3.5 and
+  Appendix B's own worked example. Fix: `drawAnswerer = 0` when
+  `provisional != answer` (unclaimed points stay unminted — conservative). The
+  two NOTEs are accepted/registered: `juniorReserved` monotonicity (§12 row 33,
+  bounded + solvency-safe) and the inherited ~56-concurrent-dispute governor
+  cap (N4). Regression: TestOverturnedAnswererDrawsNoSlice. Green across unit +
+  check + txtar + isolation. **V2 is code-complete and audit-clean — the launch
+  target.** Next: owner-directed continuous single-improvement hunting.
 - **v0.37** — (iterations 16–18) **milestone-3 audit ingested (1C/1H/1M/1L),
   all fixed FIX-FIRST with regressions; full system green (unit + check +
   txtar + isolation 151 tests).**
