@@ -110,8 +110,12 @@ unchanged from V1.
    dispute round** (econ vet F7) — their outcome cannot improve, and releasing
    them defuses the multi-round freeze-hostage (up to ~8 weeks of locked
    capital across 3 rounds).
-6. **Dead claim.** A claim that never reaches an answer unlocks fully after a
-   timeout: all stakes 1×, deposit back (fixes V1 residual O6).
+6. **Dead claim.** Corrected v0.15: pre-answer stakes are never locked (unstake
+   is free until an answer posts), so the 12-week timeout on a never-answered
+   claim disposes only the **deposit and fee** — deposit refunds, fee burns
+   (§3.8, "dies dead") — and closes the claim to new stakes. Nothing else was
+   ever held. (Fixes V1 residual O6; the earlier "unlocks fully" wording
+   implied a lock that doesn't exist.)
 7. **provClose** (3 failed dispute rounds): everyone 1×, no bonus, no author
    reward, deposit back. No price needed — the V1 O5 manipulation surface is gone.
 
@@ -178,6 +182,18 @@ denominator exists to time or to hold hostage.
   rate of return** (legal vet: our own §3.3 "APR-equivalent" language violated
   §7.4's hygiene inside the same file — struck; yield calibration lives in a
   private economics memo).
+- **Multi-court pin (v0.15)**: the rate schedule is ONE realm-level constant
+  table shared by every court, computed at deploy from the ceiling-supply path
+  — never from a court's live supply. Per-court live-supply schedules would
+  differ by court age and size, turning d(n) into a manipulable, court-shaped
+  runtime artifact; the ceiling-supply basis is conservative for every court
+  (real d ≥ ceiling-based d ⇒ real y* ≥ scheduled y* ⇒ the 0.85 anti-farm
+  margin holds everywhere). And the symmetric worry — tiny young courts being
+  over-diluted by a fixed absolute budget — dissolves on inspection: draws are
+  conviction-based, so minted ≤ rate × Σconviction ≤ rate × (staked fraction ×
+  supply) per unit time. **A court can never be diluted faster than its own
+  participation earns** (d ≤ rate × staked-fraction, any size); B only caps
+  throughput, it never forces emission.
 - **Ceiling, not floor**: unearned budget is never minted; the reservoir cap
   banks at most 4 quiet weeks.
 - **Deploy-time invariants** (checked in code, V1-style): `curveCap + Σemission
@@ -922,6 +938,32 @@ Delta map for whoever revises `web/index.html`:
 UX copy rules carried from §7.4: no APR/return language, "accuracy rewards"
 not multipliers, "step-down" not halving, never "backing"/"redeem"/"cash out".
 
+## 12. Owner decision index (v0.15)
+
+Every judgment call the loop made autonomously, consolidated for override.
+"Override cost" = what changes if you reverse it.
+
+| # | Decision | My call & where argued | Override cost |
+|---|---|---|---|
+| 1 | GNOT: burn vs work-pool | **Burn** (§3.7) — capture honeypot, Ooki, AML/tax | Rebuild pool + entity + payment compliance; re-arms three legal hooks |
+| 2 | Emission model | **Reservoir drip** over pro-rata (§3.3, vetted KEEP) | Pro-rata + F11 fix works but pays farmers to equilibrium and re-couples payouts |
+| 3 | Rate | **Frozen schedule 0.85·y*(n)** (§3.3) | Scalar self-defeats by schedule (A14); richer rate re-admits farming; leaner excludes more honest mid-p |
+| 4 | Voting discipline | **Carrot-only, no slashing** (§3.5, your lean) | Slashing hardens against large-value bribery; costs honest-minority chill |
+| 5 | CC transferability | **ON**; reward-vesting lever OFF (§7.2, §8.10) | Vesting = the cheapest big securities cut; OFF-entirely kills OTC + product |
+| 6 | Bonds | **Forfeitable; burn-not-transfer** (§3.6) | Time-lock-only invites answer-slot squatting DoS |
+| 7 | Undisputed quality default | **Mid + flag lane** (§3.4) | Low punishes the healthy path; high is free money |
+| 8 | Tier gates | **Median mid↔low; ⅔+bar for high** (§3.4) | Symmetric median is whale-capturable at ~29% turnout |
+| 9 | Split 80/8/7/5 | Provisional (§3.5) — untuned, caps do the safety work | Retuning is safe within caps; changing cap RULES needs re-vet |
+| 10 | Claim fee | **10%, conditional refund** (§3.8) | Always-burn is regressive on honest thin claims; no-fee removes CC's only sink |
+| 11 | Answer priority | **ON, difficulty-weighted, cold-start-gated** (§3.8) | OFF = pure first-come answers; naive counting re-aligns with the mill (A18) |
+| 12 | Court topology | **Per-court coins** (§3.8 pass 2) | Shared coin pools liquidity but couples every court's legal+economic fate |
+| 13 | minAnswerX | **100 CC** (§8.8) | Lower invites micro-mills; higher walls off the honest long tail |
+| 14 | provClose payout | **1× everyone, no price** (§3.1) | Any price-based close re-opens the V1 O5 manipulation surface |
+| 15 | Entity | **Wyoming DUNA recommended** (§7.3) | Alternatives: DAO LLC (profit OK, weaker fit), Cayman/RMI (offshore optics); none = Ooki exposure stays raw |
+| 16 | Verdict form | **Binary, sealed** (§3.8 pass 1) | Probability verdicts hand adjudicators a nudgeable knob |
+| 17 | Emission cadence | Weekly period, R_max = 4B, step-down every 104 (§3.3/§4) | Cosmetic within bounds; total-emission invariant must re-check |
+| 18 | Round-2 fixes | Slot-reopen, 24h flag-open, rateAtFreeze, participant Finalize (v0.12) | Each reverts to a named, vetted attack (A13, A16, A17) |
+
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
 File-by-file disposition of the audited V1 realm, with the load-bearing couplings
@@ -1011,6 +1053,15 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.15** — (iteration 11, round-2 vet pending) §12 owner decision index: all
+  18 autonomous judgment calls consolidated with override costs. Corrected the
+  dead-claim wording (nothing is locked pre-answer; the timeout disposes only
+  deposit+fee). Pinned the rate schedule as ONE realm-level table from the
+  ceiling-supply path (per-court live-supply schedules would be manipulable),
+  and closed the young-court dilution worry it raised: draws are conviction-
+  based, so **no court can be diluted faster than its own participation earns**
+  (d ≤ rate × staked-fraction, any court size; B caps throughput, never forces
+  emission).
 - **v0.14** — (iteration 10, round-2 vet pending) added §1a "the design at a
   glance" (ten invariant bullets — the doc's top now reflects the v0.13 shape
   without reading the changelog) and §11 product-surface delta map (the V1
