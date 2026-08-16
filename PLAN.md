@@ -119,6 +119,14 @@ must actually commit capital-time, not just capital.
   whether a cheap opt-in "rate this claim" vote is worth the machinery.
 - Tier multipliers: **low = 0×, mid = 1×, high = 2×**. Low-quality claims earn
   *zero* bonus for anyone — junk is pure cost (deposit + lock + dilution).
+- **Implementation shape** (from the §Appendix A sweep): quality does NOT touch
+  `/p/governor`. It is a court-local 3-bucket tally: `VoteQuality(claimID,
+  bucket)` weighs the voter by `PastVotes` at the **same sealed snapshot epoch as
+  the dispute proposal** (same anti-flash-loan property, no second snapshot);
+  state is three weight counters + a voter→(bucket,weight) record (double-vote
+  guard, and the record the voter carrot pays from); the median is computed at
+  close and never rendered before it (sealed, like the verdict tally). No new
+  governor lane, no /p/ change.
 
 ### 3.5 Reward split — `VETTING`
 
@@ -150,8 +158,19 @@ what makes the adjudication game honest; without loss, wrong answers are free).
 This is a **deliberately retained gray area**: a forfeitable bond is stake lost on
 a vote outcome. The distinction we rely on: it prices *your own conduct* (posting
 an answer, filing a dispute) like a court's frivolous-filing sanction or an appeal
-bond — not a wager on someone else's event. Flagged for the legal vet; fallback
-design (bond → longer unbond instead of forfeiture) sketched in §8.
+bond — not a wager on someone else's event. Flagged for the legal vet.
+
+**Fallback considered and REJECTED — time-lock instead of forfeiture.** Sketch: an
+overturned answerer / failed disputer gets the bond back after an extended unbond
+(say 8× the escrow window) with no emission eligibility. Why it fails: PostAnswer
+is one-per-claim, so answering wrong must be *expensive*, not merely slow. With
+loss capped at time-value, a griefer instantly posts a junk answer on every
+answerable claim (first-answerer squat), forcing every claim into dispute votes —
+the adjudication economy DoSes itself for the price of some locked liquidity, and
+honest answerers are crowded out of the slot. Forfeiture is load-bearing for the
+answer game in a way it no longer is for staking (stakers are many per side;
+answerers are one per claim). Recorded here so the next reader doesn't re-derive
+it; the legal exposure of retaining forfeiture stays in §7.2 as accepted.
 
 ### 3.7 GNOT: burn — **the call** — `VETTING`
 
@@ -207,7 +226,7 @@ quality: high"), and the emission drawn. The claim page IS the product.
 | A6 | Whale claim hogs the period pool | Candidate: per-claim draw cap / concave weight | `OPEN` |
 | A7 | Emission-lever capture | No lever exists (frozen constants) | `ACCEPTED (V1 discipline)` |
 | A8 | Unstake-grief (yank stake to flip ratio pre-answer) | Ratio is time-bucketed; answerability reads the trailing average; freeze at answer | `DRAFT` |
-| A9 | Overflow via huge stakes (no caps anymore) | `ccMul`/checked adds everywhere + the supply invariant; the V1 audit's arithmetic discipline is a hard gate | `DRAFT` |
+| A9 | Overflow via huge stakes (no caps anymore) | `ccMul`/checked adds everywhere + the supply invariant; **conviction specifically MUST be a 128-bit accumulator** — stake (≤ MaxSupply ≈ 9.2e14) × blocks (~6.3e6/yr) ≈ 5.8e21 ≫ MaxInt64, so per-staker and per-claim conviction accumulate in uint128 (hi,lo pairs, tickbook-style) and every pro-rata draw goes through the audited 128-bit `mulDivFloor`. No saturation, no silent wrap | `ACCEPTED (design)` |
 
 ## 6. What V2 deliberately gives up
 
@@ -270,11 +289,47 @@ Markets" rule when final.
 1. A1/A2 economics: closed-form on when matched farming is profitable; size B₀.
 2. A6 pool-hogging smoother: cap vs concave vs nothing.
 3. Undisputed default-mid (§3.4): farmable? opt-in quality vote worth it?
-4. Bond-forfeiture fallback: longer-unbond-instead-of-loss — does the adjudication
-   game still hold? (design sketch, then legal weigh-in)
+4. ~~Bond-forfeiture fallback~~ — RESOLVED (rejected; §3.6: time-lock-only bonds
+   invite first-answerer squatting/DoS; forfeiture is load-bearing for the
+   one-per-claim answer slot). Legal color still pending from the legal vet.
 5. Should conviction decay for very long stakes (anti-zombie) or is monotone fine?
-6. Does removing the order book kill any load-bearing V1 behavior we forgot?
-   (systematic sweep against the V1 file list before implementation)
+6. ~~Removal-impact sweep~~ — DONE (Appendix A). Load-bearing catches: X̄ feed
+   must switch to Stake/Unstake events; conviction needs 128-bit accumulators
+   (A9); emission mints at pull-time and never transits escrow, preserving the
+   V1 escrow-conservation invariant and its txtar checks.
+
+## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
+
+File-by-file disposition of the audited V1 realm, with the load-bearing couplings
+that an order-book-ectomy could have silently broken:
+
+| V1 file | V2 disposition |
+|---|---|
+| `court.gno` | ADAPT. Params: drop `oiCeilingBps`, `adjFeeBps`, `adjFeeCapGNOT`, `settleFeeBps`, `minOrderShares`; add emission constants (B₀, halving interval, tiers, split, bonus caps, dead-claim timeout). Keep escrow, curve, coin, gov, frozen `mustSane` discipline. |
+| `buy.gno` | KEEP; destination of GNOT changes treasury → **burn sink**. The `IsUserCall` + `OriginSend` payment guard and self-buy ban survive unchanged. |
+| `claim.gno` | ADAPT. `claimState` drops book/price-twap/preAnswerPrice/winShares/feePool; gains yes/no pool totals, per-staker stake + conviction records (bptree), the two pool-series rings (sparkline), quality fields. Deposit + dead-claim timeout reclaim. |
+| `market.gno` | REPLACED by `stake.gno`: `Stake`/`Unstake` with conviction accounting and the answer-freeze guard. **Load-bearing catch:** the X̄ ring (`cs.oi`) survives — answerability (`answer.gno`) and dispute-bond sizing (`dispute.gno`) both read it — but its feed switches from mint/redeem to stake/unstake events. Same twap machinery, same windows. |
+| `book.gno` | REMOVED. Only consumers of `observePrice` were preAnswerPrice (gone) and render (gone). Nothing else read the book. |
+| `answer.gno` | ADAPT. Answerability gate + bond formula unchanged; DELETE `priceWindow` + the preAnswerPrice snapshot (provClose needs no price in V2). |
+| `session.gno` | ADAPT. 72h `settleDelay` + exactly-once bond return unchanged; settle sets verdict=answer, quality=mid default; no fee skim. |
+| `dispute.gno` | ADAPT. Bond doubling / 3 rounds / escrow windows / reopen / `quorumFloor` all KEPT. The dispute proposal's payload also opens the court-local quality tally (§3.4). `Finalize` computes entitlements and unlocks stakes; `RedeemWinning`/`RedeemClosed` become `WithdrawStake` (always 1×) + pull-claims for bonus slices. |
+| `fees.gno` | REPLACED by `emission.gno`: period budget + halving accounting, entitlement math, pull-claims for the four slices. The audited 128-bit `mulDivFloor` and the `VoteOf`-based voter-split pattern carry over directly. |
+| `directory.gno` | KEEP. |
+| `render.gno` | ADAPT. Sparkline = stake-ratio series; drop BestBid/BestAsk; show tier, route, emission drawn. Sealed-tally rule extends to the quality tally. |
+| `/p/tickbook`, `/p/cshares` | REMOVED from the court's dependency set (packages remain in-repo, unused by V2). |
+| `/p/twap` | KEEP — repurposed: X̄ ring + the two pool-series rings. |
+| `/p/grc20votes`, `/p/governor`, `/p/checkpoint`, `/p/curve` | KEEP unchanged. Quality deliberately avoids touching `/p/governor` (§3.4). |
+
+Cross-cutting invariants preserved (these were the V1 audit's spine):
+- **Escrow conservation**: stakes/deposits/bonds transfer user↔escrow; **emission
+  is minted directly to claimants at pull-time and never transits escrow** — so
+  "escrow balance ≥ Σ outstanding obligations, drains to bounded dust" survives
+  verbatim, and the V1 txtar coin-invariant tests adapt with new names.
+- **Checked arithmetic**: every coin-leg product through `ccMul`/128-bit paths;
+  conviction is 128-bit (A9); the deploy-time supply invariant (§3.3) replaces
+  the removed OI ceiling as the tally-overflow guarantee.
+- **Exactly-once disposal** (bonds, deposits, entitlements) and **sealed tallies**
+  carry over as design rules to every new V2 flow.
 
 ## 9. Changelog
 
@@ -282,3 +337,10 @@ Markets" rule when final.
   emission, quality tiers via weighted median, GNOT burn decision, bonds kept,
   diff table, attack table, regulatory rationale + accepted-risk register.
   Launched vets: economics/attack (A1–A6), legal (no-loss/emission/burn/bonds).
+- **v0.2** — (iteration 1, vets still out) resolved §8.4 and §8.6 in-house:
+  bond-forfeiture fallback REJECTED with reasoning (first-answerer squat DoS —
+  §3.6); Appendix A removal-impact map added with three load-bearing catches
+  (X̄ feed switches to stake events; conviction must be 128-bit — A9 upgraded;
+  emission never transits escrow, preserving the V1 conservation invariant);
+  quality tally concretely specced as court-local 3-bucket median on the dispute
+  proposal's snapshot epoch (§3.4) — no /p/governor change.
