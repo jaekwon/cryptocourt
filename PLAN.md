@@ -1227,6 +1227,13 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
    owner's product call; default OFF at launch.
 ## 10. Implementation & verification plan
 
+- **STATUS (v0.37): BUILT.** All 13 modules exist on branch `courtv2`, V1
+  untouched. Three code audits (money-core M1, dispute M2, quality/crystallize
+  M3) plus the M2-1 design-follow-up landed and are ingested FIX-FIRST; every
+  finding to date is fixed with a named regression. Green across `gno test`
+  (staged), `REQUIRE_GNO=1 make check`, `make txtar-test` (courtv2 money-core
+  script + V1 scripts), and `make isolation-test` (151 tests alone+together).
+  The final full-system adversarial audit is the launch gate (running).
 - **No migration problem exists**: V1 never launched; V2 is the launch target.
   V1 stays fully audited in git history (branch `court-realm`, base `5d2c4ef`).
 - **Build order (refreshed v0.13 for the v0.10–v0.12 mechanics)** — all /p/
