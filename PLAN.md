@@ -401,8 +401,12 @@ denominator exists to time or to hold hostage.
   is deliberately tier-invariant — §3.5) — junk is pure cost (deposit + lock + dilution) for all involved.
 - **Implementation shape** (from the §Appendix A sweep): quality does NOT touch
   `/p/governor`. It is a court-local 3-bucket tally: `VoteQuality(claimID,
-  bucket)` weighs the voter by `PastVotes` at the **same sealed snapshot epoch as
-  the dispute proposal** (same anti-flash-loan property, no second snapshot);
+  bucket)` weighs the voter by `PastVotes` at the claim's **answer-height
+  epoch — one fixed quality electorate per claim on BOTH paths** (v0.23
+  extension: a disputer picks dispute timing exactly as a flagger picks flag
+  timing, so the epoch-shopping attack applies to dispute-ride quality votes
+  too; the verdict tally keeps the governor's own propose-time snapshot — two
+  weight lookups on one ballot, each rule serving its own threat model);
   state is three weight counters + a voter→(bucket,weight) record (double-vote
   guard, and the record the voter carrot pays from); the median is computed at
   close and never rendered before it (sealed, like the verdict tally). No new
@@ -1240,6 +1244,11 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.23b** — (iteration 28) extended the answer-height snapshot pin to
+  dispute-ride quality votes: a disputer epoch-shops exactly as a flagger
+  would, so BOTH quality paths use the claim's one fixed answer-height
+  electorate (the verdict tally keeps the governor's propose-time snapshot —
+  two lookups on one ballot, each serving its own threat model).
 - **v0.23** — (iteration 27, micro-vets running) **deleted my own one-iteration-
   old K = 3 flag cap** — worked through while briefing micro-vet-2: a cap that
   terminates the slot AS MID is a guaranteed mill-immunization recipe (3 dust
