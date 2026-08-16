@@ -303,9 +303,16 @@ denominator exists to time or to hold hostage.
   **the doubling base is the SLOT — per-claim, monotone across flaggers**
   (per-flagger bases reset via sybils → linear-cost suppression chains; per-slot
   makes cycle k cost 2^(k−1)·b₀, exponentially self-limiting at ~2–4 cycles);
-  **hard cap: after K = 3 inconclusive cycles the slot closes permanently as
-  mid** (monolith F-H5b — the reopen-relative window guarantees each cycle a
-  fair flag shot, so an absolute bound must come from the cap, not a race);
+  **v0.23: the K = 3 hard cap is DELETED** — self-found one iteration after
+  adopting it: a cap that closes the slot AS MID after 3 inconclusives hands
+  the mill a guaranteed immunization recipe (3 dust self-flags ≈ 3.5%·X̄ +
+  21 days → permanent mid, no outside weight needed — cheaper than the ~9%·X̄
+  draw it protects). The cap was also unnecessary: per-slot doubling already
+  prices chains exponentially, and because the bounty equals the flagger's
+  OWN (doubled) bond, an honest late flagger at any cycle depth keeps the
+  same q > ½ EV threshold — the doubling prices griefing without ever
+  pricing out honesty. Chains are bounded economically, and a mill can never
+  reach a terminal safe state. (Pending micro-vet-2 confirmation.);
   **an inconclusive outcome burns half the bond and returns half** (full return
   would make chains free — 2A; full burn punishes honest flaggers for the
   electorate's absenteeism — round-2 V2-1; half preserves the exponential
@@ -330,9 +337,18 @@ denominator exists to time or to hold hostage.
   (flag risk cuts both ways; a bad flag against a genuinely good claim pays for
   the delay it caused).
 - **Vote**: the same court-local 3-bucket tally as the dispute-ride version;
-  snapshot = the last sealed `grc20votes` epoch at flag height (identical
-  anti-flash-loan posture to `Propose`); window = `votingBlocks` (7d); sealed
-  until close; one vote per address, weight = `PastVotes`.
+  window = `votingBlocks` (7d); sealed until close; one vote per address,
+  weight = `PastVotes`. **v0.23 snapshot pin: the quality-vote epoch is the
+  last sealed epoch at the ANSWER height — one fixed epoch per claim, set
+  before any flag can exist.** A flag-height snapshot would let the flagger
+  shop epochs (time the flag to when the defender cohort's checkpointed
+  weight is lowest), and the escrow-disenfranchisement would wobble (a
+  staker's PastVotes at an epoch before they staked still shows the
+  pre-stake balance). Anchoring at the answer height makes the electorate
+  identical for every quality vote a claim ever has, seals it before the
+  adversarial game starts, and keeps the rule: capital staked (at escrow) by
+  the answer epoch cannot vote on its own payout multiplier; unstaked
+  holdings can. (Pending micro-vet-3 confirmation.)
 - **Outcome rules (consistent with the F3 ratchet)**: median decides low vs
   mid; **demotion to low additionally requires turnout ≥ ¼ of the claim's
   verdict bar** — a lone griefer with dust turnout cannot zero an honest
@@ -1224,6 +1240,16 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.23** — (iteration 27, micro-vets running) **deleted my own one-iteration-
+  old K = 3 flag cap** — worked through while briefing micro-vet-2: a cap that
+  terminates the slot AS MID is a guaranteed mill-immunization recipe (3 dust
+  self-flags ≈ 3.5%·X̄ ≪ the ~9%·X̄ draw it protects), and it was redundant —
+  per-slot doubling prices chains exponentially while the bounty-equals-own-
+  bond rule keeps honest late flaggers at the same q > ½ threshold at any
+  depth. Also pinned the quality-vote snapshot at the ANSWER height (one
+  fixed epoch per claim, set before any flag exists — kills epoch-shopping
+  and makes the escrow-disenfranchisement rule crisp). Both marked pending
+  micro-vet confirmation.
 - **v0.22** — (iteration 22) brainstorm pass 4: emission machinery judged
   irreducible (every component is load-bearing for a named, vetted invariant —
   paragraph doubles as an anti-"simplification" tripwire); the quality layer
