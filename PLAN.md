@@ -180,8 +180,8 @@ denominator exists to time or to hold hostage.
   extraction-proof). No increase lever, ever.
 - Calibration is a protocol constant; **public documents never express it as a
   rate of return** (legal vet: our own §3.3 "APR-equivalent" language violated
-  §7.4's hygiene inside the same file — struck; yield calibration lives in a
-  private economics memo).
+  §7.4's hygiene inside the same file — struck; yield calibration lives in
+  [ECONOMICS.md](./ECONOMICS.md), the private memo, created v0.17).
 - **Multi-court pin (v0.15)**: the rate schedule is ONE realm-level constant
   table shared by every court, computed at deploy from the ceiling-supply path
   — never from a court's live supply. Per-court live-supply schedules would
@@ -1089,6 +1089,13 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.17** — (iteration 13) created **ECONOMICS.md**, the private calibration
+  memo §3.3 referenced but which didn't exist: symbols, the y*/p_min results,
+  the deploy-computable d(n) ceiling path that makes the rate schedule
+  possible (and shows why a scalar self-defeats), reference launch numbers,
+  the actor-margin table (farmer negative, p=0.59 break-even, p=0.7 ≈
+  +0.10%/wk, mill negative at q ≥ 0.2), and B/R_max sizing. Marked INTERNAL
+  per §7.4 — none of its rates may appear in public copy.
 - **v0.16** — (iteration 12) brainstorm pass 3: **edges (support/counter) stay
   out of the V2 money loop, on the record with a tripwire** — value-coupled
   edges would open cascade draws, support rings, and a graph-shaped cross-claim
