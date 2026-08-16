@@ -1,43 +1,49 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.4 — round-3 vet ingested (3 lenses re-attacked the v0.3 fixes;
-> 0 CRITICAL, 4 HIGH, all breaking a v0.3 disposition with a clean fix; the
-> rest MED/LOW). VETTING continues; round 4 re-attacks the deltas only.**
-> Statuses: `DRAFT` → `VETTING` → `ACCEPTED` / `REVISED`. Additive to
-> launch-cleared V2 (now PLAN v0.40 — see §13.1 sequencing and the drift note
-> below). PLAN/REGULATIONS edits deferred to integration (§15) to avoid racing
-> the active build session.
+> **STATUS: v0.5 — round-4 vet ingested (3 lenses; 3 HIGH + 1 MED-HIGH + spec-
+> consistency MEDs, all breaking a v0.4 disposition or its prose, all with
+> local fixes). VETTING; round 5 is the convergence check on the deltas
+> only.** Trajectory: severity ceiling CRITICAL(r1/r2)→HIGH(r3/r4), counts
+> 40→24→19→16, findings now converging on one root principle (below) + guard-
+> prose tightening. Additive to launch-cleared V2 (PLAN v0.40; see the drift
+> note and §13.1). PLAN/REGULATIONS edits deferred to integration (§15).
 
-> **Drift note (other session, PLAN v0.40):** the live branch adopted a
-> **draw-proportional anti-mill slash** — `slash = min(bond, max(4.5%·X̄,
-> 1.6·midGross))` — and a fix so `SettleUndisputed` no longer resets a
-> conclusive-low tier to mid. Both touch files this plan edits (`quality.gno`
-> `settleSlash`, `session.gno`). §8's settleSlash fix must be re-expressed
-> against the v0.40 slash shape at build time, and every "settleSlash reads
-> params" reference re-read against HEAD first.
+> **The root principle (four rounds earned it):** *address-keyed defenses fall
+> to sybils; only capital-keyed, deadline-keyed, or residency-keyed defenses
+> hold.* The round-2 per-address participation-slice bug, the round-4 election
+> camp, and the round-4 pending-list flood are one bug. Every discovery-surface
+> defense here is therefore priced (capital), ordered by actionable deadline
+> (which a mill cannot manufacture without exposing the row to slashing), or
+> auctioned by bond — never gated by address identity.
+
+> **Drift note (PLAN v0.40):** the live branch adopted a **draw-proportional
+> anti-mill slash** — `slash = min(bond, max(4.5%·X̄, 1.6·midGross))`
+> (`slashSizeFor`, quality.gno) — and a `SettleUndisputed` no-conclusive-low-
+> tier-reset fix. §8's `settleSlash` phantom-params bug is **confirmed still
+> live post-v0.40** (it changed slash *size*, not the top-up base); re-express
+> §8's fix against HEAD's `slashSizeFor` at build. Reuse the other session's
+> just-landed read-only queries: **`SettleDeadline`** (= `answerHeight +
+> settleDelay`) is exactly the strip's deadline key; **`ClaimStatus`** gives
+> most of a strip row's status line (add flag-slot + redaction state).
 
 ## 0. Posture
 
 Owner-directed scope (2026-08-16): a global moderator DAO that can hide courts
 from the front page; per-court moderator sets that can hide items; a META court
-deployed by default that overrides any court's moderators; cheap moderator
-seeding; an edit story for claim text. Owner position overridden with consent:
-**staked-on text is never rewritten** — edits close at first stake; after,
-moderators annotate.
+deployed by default overriding any court's moderators; cheap moderator seeding;
+an edit story for claim text. Owner position overridden with consent: **staked-
+on text is never rewritten** — edits close at first stake; after, annotate.
 
-Three understandings anchor the design (rounds 1–3):
-
-1. **Discovery is economics.** Money paths never read moderation state
-   (I1/I2), and that is insufficient — hiding shapes who polices, and V2's
-   junk defense is discovery-driven. Hence the policing strips (§5.3).
-2. **Visibility dies by flooding, and the flood has three doors.** Ordering
-   by ascending entry height shuts the "manufacture an older row" door;
-   **per-actor sub-caps** shut the "own the target, pre-position blockers"
-   door (round 3); **routing unanswered rows to a separate pending list**
-   shuts the "cheap never-answered row" door (round 3). All three are needed.
-3. **The constitution bends in exactly two places, both legal-hold**: row-level
-   **purge** and the **OpenClaim gate on purged courts** (§3.2). Else
-   discovery only.
+Anchors (rounds 1–4):
+1. **Discovery is economics** — money paths never read moderation state
+   (I1/I2), yet hiding shapes who polices, and V2's junk defense is discovery-
+   driven. Hence the policing surfaces (§5.3).
+2. **Every discovery surface needs the full armature** — deadline ordering +
+   per-actor caps + pagination + a priced entry door. The strip *and* the
+   pending list both carry it (round 4: a half-armored surface just relocates
+   the flood).
+3. **The constitution bends in exactly two places, both legal-hold** — row-
+   level **purge** and the **OpenClaim gate on purged courts** (§3.2).
 
 ## 1. The change in one paragraph
 
@@ -50,530 +56,471 @@ machinery), and sideways (folders, seeding, a polish window). Moderation gains
 one power — controlling *discovery* — plus two legally-forced exceptions, and
 zero power over money.
 
-## 2. The constitution — `REVISED (rounds 1–3)`
+## 2. The constitution — `REVISED (rounds 1–4)`
 
 > **Moderation authority is render-layer authority. No moderation state is
-> ever read by a money path, no moderation entrypoint ever writes one — and no
-> moderation act may remove a claim from ALL discovery surfaces while it is
-> still policeable.**
+> ever read by a money path to change a money outcome, no moderation entrypoint
+> ever writes money state, and no moderation act may remove a claim from ALL
+> discovery surfaces while it is still policeable.**
 
-- Hidden ≠ voided: full lifecycle byte-identical (**I1**). Purge and global
-  redaction touch *text*, never lifecycle: votes proceed on tombstones,
-  refunds and draws run unchanged.
-- Moderation entrypoints never write money state (**I2**), with the enumerated
-  read-side gates and the **one money carve-out**: the election's proposer-bond
-  legs move the *poster's own* CC to escrow and burn it on failure (round 3 —
-  the tally is court-local like the flag lane, whose bond legs are the same
-  shape). Read-only gates: `OpenClaimSeeded` reads set+suspension;
-  `OpenClaim`/`OpenClaimSeeded` refuse on a **purged court** (touching nothing
-  existing); the strips read moderation state to *include*, never exclude.
-  **Build guardrail (round 3):** the purged-court gate touches ONLY
-  `OpenClaim`/`OpenClaimSeeded` — never `PostAnswer`/`Stake`/withdraw, or
-  answered-claim stakers strand (no dead-close exists for answered claims).
+- Hidden ≠ voided: full lifecycle byte-identical (**I1**). Purge/redaction
+  touch *text*, never lifecycle: votes proceed on tombstones; refunds and draws
+  run unchanged.
+- **Direction of dependency (round 4, F5)**: moderation → money is forbidden
+  (I2); **money → moderation is permitted and unavoidable** — Gno has no
+  observer/event hook, so `PostAnswer`/`Crystallize`/`provCloseClaim`/
+  `CloseDeadClaim` must *call into* the moderation module to write strip/
+  pending/parse state and to read the per-target latch. That is
+  constitutional **iff those calls (a) never panic** (a moderation-side
+  invariant must never be able to block a lifecycle transition) **and (b) the
+  one money-gating read — PostAnswer's refuse-if-latch-held — reads only the
+  latch, never a hide bit or a money-derived value.**
+- **Read gates, now four (round 4)**: `OpenClaimSeeded` reads set+suspension;
+  `OpenClaim`/`OpenClaimSeeded` refuse on a **purged court**; the strips read
+  moderation state to *include*, never exclude; **`PostAnswer` on the meta
+  court reads the per-target latch (refuse-if-held) — meta-court-local**.
+  **Build guardrail**: the purged-court gate touches ONLY
+  `OpenClaim`/`OpenClaimSeeded` — never `PostAnswer`/`Stake`/withdraw.
 - Reachability (**I3**): deep links + per-claim positions render under
-  courtMod/meta bits (banner). The **global** bit is stronger — all-surface
-  text redaction (§3.2) — but money state, IDs, and deadlines render
-  everywhere. No on-chain "all my claims" index exists or is added; clients
-  enumerate via claim-lane events (which carry **no user text**).
-- Every act is attributed, **category-coded** (global-bit and purge acts) or
-  reasoned (≤ 200 chars, sanitized; courtMod/meta editorial acts), evented,
-  and rendered in the per-court log (**I6**). Events carry actor, act code,
-  target, height, and a reason **hash** — never reason/annotation/title text
-  (events are unpurgeable; verified no current courtv2 event carries user
-  text; `VoteWithReason` is never exposed).
+  courtMod/meta bits (banner); the **global** bit is all-surface text
+  redaction (§3.2); money state/IDs/deadlines render everywhere. No on-chain
+  "all my claims" index; clients enumerate via claim-lane events (no user
+  text).
+- Every act is attributed, **category-coded** (global-bit + purge) or reasoned
+  (≤200 chars, sanitized; courtMod/meta editorial), evented (actor, act code,
+  target, height, reason **hash** — never text), logged (**I6**).
 - **User-text inventory** (purge must reach every row): claim titles;
   annotations; relabels; mod-log reasons; folder names/descriptions; **court
-  names** (length-capped at StartCourt; the grc20votes ledger name copy is
-  render-dead — names render only from the Court struct). Replacement-vote
-  proposals are **addresses-only, no free text**. Court **slugs** are
-  `[a-z0-9-]` routing keys, unpurgeable by construction — whole-court purge
-  aliases them at render.
+  names** (length-cap **added to the court.gno diff** — round 4 F1). Election
+  proposals: addresses-only. Slugs: unpurgeable routing keys, aliased by
+  whole-court purge.
 
-**Exhaustive audited-file diff** (corrected round 3; none change money math):
+**Exhaustive audited-file diff** (none change money math):
 
 | audited file | edit |
 |---|---|
-| `stake.gno` | polish-window gate on Stake (Unstake needs none — stake is provably 0 in-window; belt-and-braces gate kept, documented redundant) |
-| `court.gno` | `Params.stakeOpenDelayBlocks` + `mustSane` (I7); `StartCourt` grows the delay param + a **burned-GNOT creation fee** (paid via `IsUserCall`+`OriginSend`+refund, sent to the keyless burn sink `…courtv2:burned` — makes StartCourt **direct-user-call only**, a composability change to flag) + reserved-slug `meta` refusal; `startCourt(admin, slug, name)` extraction takes **no payment** (init cannot attach coins) |
-| `answer.gno` | priority re-anchor (§9); **`PostAnswer` writes: strip-index entry, seeded-list→strip move, and the persisted meta-parse** (§3.3/§5.3) |
-| `crystallize.gno` | seeded gate on author draw AND `AuthorBonus` (I5); `openBlocks` re-anchor (§9); strip-index exit in `Crystallize` |
-| `quality.gno` | `settleSlash` bounty base = the claim's actual recorded burns, **reconciled with the v0.40 draw-proportional slash shape** (§8) |
-| `dispute.gno` | strip-index exit in `provCloseClaim` |
-| `claim.gno` | `OpenClaimSeeded` + seeded-list entry; **new title-edit entrypoint** running the full parser+latch+membership acquire/release/refuse block (I4); seeded-list drop in `CloseDeadClaim`; purged-court gate on OpenClaim; claim-lane events |
-| `directory.gno` | `directoryAdmin` → global-DAO set migration; `SetTier` logged + evented (I6) |
-| `moderation.gno` / `modvote.gno` / `folders.gno` / `meta.gno` | new modules (state homes named in §4) |
-| `session.gno` | none (verified: `SettleUndisputed` changes no strip membership, tolerates zero-deposit/seeded/window claims; re-verify against the v0.40 tier-reset fix) |
+| `stake.gno` | polish-window gate on Stake (Unstake redundant, kept as defense) |
+| `court.gno` | `Params.stakeOpenDelayBlocks` + `mustSane` (I7); `StartCourt` grows the delay param + **name length-cap** + a burned-GNOT creation fee (`IsUserCall`+`OriginSend`+refund → keyless sink `…courtv2:burned`; makes StartCourt **user-call-only** — a composability change) + reserved-slug `meta` refusal; `startCourt(admin,slug,name)` extraction takes **no payment** |
+| `answer.gno` | priority re-anchor (§9); **`PostAnswer` writes (non-panicking): strip entry, seeded/pending move, persisted binding parse; and reads the per-target latch (refuse-if-held)** |
+| `crystallize.gno` | seeded gate on author draw AND `AuthorBonus` (I5); `openBlocks` re-anchor; strip exit |
+| `quality.gno` | `settleSlash` bounty base = actual recorded burns, re-expressed vs v0.40 `slashSizeFor` (§8) |
+| `dispute.gno` | strip exit in `provCloseClaim` |
+| `claim.gno` | `OpenClaimSeeded` + pending entry; **title-edit entrypoint** (rewrites stored parse + pending enter/exit — **no latch op**, round 4 F4); pending drop in `CloseDeadClaim`; purged-court gate on OpenClaim; claim-lane events |
+| `directory.gno` | `directoryAdmin`→global-DAO migration; `SetTier` logged/evented |
+| `moderation.gno`/`modvote.gno`/`folders.gno`/`meta.gno` | new modules (state homes §4) |
+| `session.gno` | none (re-verified vs the v0.40 `slotConsumed` tier-reset guard) |
 
-## 3. The three authorities — `REVISED (rounds 1–3)`
+## 3. The three authorities — `REVISED (rounds 1–4)`
 
-Hiding composes as a union of independent bits (courtMod / meta / global) plus
-the per-court suspension flag and purge rows. Each authority sets/clears its
-own bits. Cross-authority: meta clears the courtMod bit by verdict; **the
-global DAO clears any bit AND the per-court suspension flag** (round 2).
-Nobody clears the global bit but the global DAO; nobody reverses a purge.
+Union of bits (courtMod/meta/global) + per-court suspension flag + purge rows.
+Each authority sets/clears its own bits; meta clears the courtMod bit by
+verdict; **global clears any bit AND the suspension flag** (recovery). Nobody
+clears the global bit but global; nobody reverses a purge.
 
 ### 3.1 Court moderators (per court)
 
-- Per-court address set. Render-layer powers: hide/unhide (own bit), annotate/
-  relabel (§6), folders (§7), seeding (§8), polish-window acts (§9).
-- **Appointment**: the creator (`Court.admin`) bootstraps and manages the set
-  until a **replacement election** passes; passage installs the elected set,
-  permanently unseats the creator's appointment power, **clears the suspension
-  flag** (new set starts armed), and **resets the election bond ladder**. Dark
-  elected set → another election (viable because the quorum nets escrow).
-- **The election** (court-local sealed tally in `modvote.gno`; no governor
-  slots; the quality-vote idiom):
-  - proposal: **addresses only**, no free text; **proposer = any address**
-    posting the bond (holder-priced by construction);
-  - weights: `coin.PastVotes` at the epoch **pinned at vote open** (the
-    governor's propose-time pin, not the answer-time qualityEpoch pin);
-    threshold 5001 bps; length `votingBlocks`;
-  - quorum floor: **max(1, 5%·(PastTotal(at) − PastVotes(escrow, at)))** on this
-    court's ledger (escrow = the realm address; netting it is the election's
-    own rule — the dispute floor nets escrow only in its `votable/3` arm, so
-    this is analogous in spirit, not a copy);
-  - bond: `flagMinCC`, **doubling per failed election, frozen at 4×**
-    (per-court ladder, the `flagCycles` idiom; reset only by a passed
-    election); **failed bond half-burned/half-returned** (the dispute
-    failed-quorum disposition — full return would make the ladder lockup-only
-    and the camp free); a passed election returns it; no withdrawal path
-    (quorum-miss and sub-threshold both count as failed);
-  - **anti-camp (round 3):** the per-court ladder is sybil-proof against
-    *challenger* spam, but lets an **incumbent self-fail** elections to ratchet
-    the bond and hold the latch. So the **latch and cooldown are
-    per-proposer-address**: a proposer that just failed cannot re-take the
-    latch until a guaranteed challenger-open window (`flagCooldownBlocks`)
-    elapses **at the current, not-yet-re-doubled bond** — a fresh challenger
-    always finds an open latch at the standing bond. Honest residual: a failed
-    junk election still delays an honest one by one cooldown at half-bond cost,
-    accepted, mirroring the flag lane.
-- Meta may **suspend** a set: bits masked at render (kept); **all set
-  write-entrypoints refuse except clearing own bits** (de-escalatory — no
-  queued masked hides, no poisoned staleness); elections stay proposable;
-  `unsuspend` **requires the voted route** (round 2, three lenses).
+- Per-court set; render-layer powers: hide/unhide (own bit), annotate/relabel
+  (§6), folders (§7), seeding (§8), polish acts (§9).
+- **Appointment**: the creator (`Court.admin`) bootstraps the set until a
+  **replacement election** passes; passage installs the elected set, unseats
+  the creator's appointment power, clears the suspension flag, and resets the
+  bond ladder. Dark set → another election (quorum nets escrow, so viable).
+- **The election** (court-local sealed tally, `modvote.gno`; no governor
+  slots; the quality-vote idiom), rebuilt round 4 (F1) because per-proposer
+  cooldowns fall to address-sybils:
+  - **latch = per-court (exactly one open election)** — pinned; a per-proposer
+    latch would split quorum across concurrent elections.
+  - proposal: **addresses-only**; proposer = any address posting the bond.
+  - weights: `PastVotes` at the epoch **pinned at vote open** (governor idiom,
+    not the answer-time qualityEpoch); threshold 5001 bps; length
+    `votingBlocks`; quorum floor **max(1, 5%·(PastTotal(at) −
+    PastVotes(escrow, at)))** (escrow = the realm address; netting it is the
+    election's own rule, analogous to the dispute floor's votable arm).
+  - **base bond scales with court size**: `max(flagMinCC, β·PastTotal(at))`
+    (round 4: a flat 1-CC bond can't deter camping a large court's governance
+    latch); β a frozen constant.
+  - **slot allocation is a bond auction, not first-come** (round 4, the sybil-
+    proof replacement for per-proposer cooldowns): when the latch is open, a
+    fixed **auction window** (≈1 day) collects competing proposals; the
+    **highest bond wins** the latch and runs the vote, all losers refunded in
+    full. A failed vote re-opens the auction (bond doubles per *failed
+    election*, per-court, frozen at 4×, reset by a passed election); the
+    winner's failed bond is **half-burned/half-returned** (dispute failed-
+    quorum disposition). No withdrawal path; quorum-miss and sub-threshold both
+    count as failed. Camping now costs *out-bidding real challenger demand
+    every window*, which scales with the challenger's stake, not with free
+    addresses.
+  - **I2 carve-out**: the auction's bond legs move the poster's *own* CC to
+    escrow and burn on failure — the one money write a moderation-adjacent
+    entrypoint makes (the flag lane's bond legs are identical).
+- Meta may **suspend** a set: bits masked at render (kept); **all set writes
+  refuse except clearing own bits**; elections stay proposable; `unsuspend`
+  requires the voted route.
 
 ### 3.2 The global moderator DAO (realm-wide)
 
-Generalizes `directoryAdmin` into a small set; admin-managed membership. Verbs:
+Generalizes `directoryAdmin` into an admin-managed set. Verbs:
+- **court tiers** (existing `SetTier`, logged/evented);
+- **global hide = all-surface text redaction** (strips, deep links, positions:
+  banner + IDs/state/deadlines/money, no user text). **Single-key to set**
+  (legal speed); reversal is an explicit logged global act, never
+  silence/timer/meta; **reason strings are category codes only**. This is the
+  DMCA disable-access verb (put-back = manual clear; purge never the DMCA
+  verb). **Re-set rule (round 4, F5 — disjunction resolved)**: re-setting a
+  redaction that a global act cleared **within the §512(g) counter-notice
+  window (~10–14 business days) requires m-of-n**; outside that window a fresh
+  notice is a fresh single-key hide (speed preserved).
+- **clear-any**: any bit, any suspension flag.
+- **purge — row-level, m-of-n**: tombstone any single §2-inventory row (scope,
+  id), category-code reason, irreversible, unappealable, never touches a vote
+  or lifecycle (I1/I2).
+- **whole-court purge**: all text tombstones (incl. future rows), name
+  tombstoned, slug aliased `court-<n>`, routes serve money — plus carve-out #2:
+  **OpenClaim/OpenClaimSeeded refuse on a purged court** (unwind stays intact:
+  unanswered stakers `Unstake` anytime; answered claims reach a verdict via
+  permissionless settle/finalize/provClose then withdraw).
 
-- **court tiers** (existing `SetTier`, now logged/evented);
-- **global hide = all-surface text redaction**: every surface — strips, deep
-  links, positions — renders banner + IDs + state + deadlines + money, **no
-  user text**. Single-key to *set* (legal speed). Reversal is an explicit
-  logged global act — **never silence/timer/meta**. **Re-setting a redaction
-  that a global act recently cleared requires m-of-n (or a cooldown)** (round
-  3: a rogue single-key insider otherwise wins the reversal race and camps a
-  competitor's healthy claim redacted). This is the DMCA disable-access verb;
-  put-back is the manual clear after a counter-notice window; purge is never
-  the DMCA verb. **Global-hide reason strings are category codes only** (round
-  3: a free-text hide banner republishes the noticed characterization).
-- **clear-any** (recovery): any bit, any suspension flag.
-- **purge — row-level, m-of-n**: tombstone any single row of the §2 inventory,
-  addressed (scope, id); reason = statutory category code; irreversible;
-  unappealable on-chain; never touches an open vote or lifecycle (I1/I2).
-- **whole-court purge**: every text render tombstones (incl. future rows), name
-  tombstoned, slug aliased `court-<n>`, routes serve money state — plus the
-  second constitution carve-out: **`OpenClaim`/`OpenClaimSeeded` refuse on a
-  purged court** (no new content accretes; existing lifecycle completes; verified
-  unwind stays intact — unanswered stakers `Unstake` anytime, answered claims
-  reach a verdict via permissionless settle/finalize/provClose then withdraw).
-
-**Operating rules** (rendered policy copy): (1) legal-compliance takedowns use
-the global bit or purge exclusively — courtMod/meta hides are editorial;
-(2) runbook: on notice/knowledge — single-key global hide immediately +
-evidence snapshot; hosting-is-offense → m-of-n purge within 72h + NCMEC per
-counsel; DMCA stops at hide; (3) any courtMod hide citing illegality escalates
-to global review within the runbook window; (4) global bit and purge are never
-editorial.
+**Operating rules** (rendered): (1) legal takedowns use global-bit/purge only;
+(2) runbook: notice/knowledge → single-key global hide + evidence snapshot;
+hosting-is-offense → m-of-n purge within 72h + NCMEC; DMCA stops at hide;
+(3) courtMod hides citing illegality escalate to global review; (4) global-bit/
+purge never editorial.
 
 ### 3.3 The meta court (the appeals layer)
 
-- **A court** — own CC, own electorate, own governor instance (its 56-slot
-  pool is its own; appeal-dispute pressure is meta-local, never spills to other
-  courts), created at realm init under reserved slug `meta` (refused to
-  `StartCourt`), undeletable (no court-deletion path exists — verified), listed
-  by default. Init calls the extracted `startCourt(admin, slug, name)` with the
-  deployer (`unsafe.OriginCaller()`, the r/govern/token.gno pattern) as admin.
-- **Bootstrap truth**: zero supply → fully inert (no CC, no claim opens); one
-  buyer → appeals pass by **silence**. Dispositions: deployer genesis buy sized
-  to stay **vote-dominant** (the real security parameter — see the forgery
-  note), earmarked to dispute junk appeals (**+EV while dominant**: overturn
-  returns the bond and mints comp while the attacker's answer bond burns —
-  **but see §13.4: near-zero meta emission would neutralize this incentive and
-  simultaneously raise the forgery price to the full 20%·X̄**), appeals visible
-  from birth on the pending list (§5.3).
-- Reserved title schemas (strict parse; near-miss → rendered "not a valid
-  appeal" badge): `mod:unhide:<court>/<claimID>` (clear courtMod bit) ·
-  `mod:clear:<court>/<claimID>` (clear meta bit) ·
-  `mod:hide:<court>/<claimID>` (set meta bit) · `mod:suspend:<court>` /
-  `mod:unsuspend:<court>`.
-  - **Parse is stored structured state** (round 3: a render-time re-parse of a
-    tombstoned title is unrecoverable and would orphan the latch): written at
-    open, rewritten on each title edit, **surviving purge**. Redacted/purged
-    `mod:` rows render the *current stored parse* (verb + target — realm-
-    validated, category-code-class speech), never the raw title — closing the
-    pre-answer-redaction blind spot on both the pending list and the strip.
-  - **The binding parse persists at `PostAnswer`** (title frozen by then).
-    `ExecuteMetaVerdict` reads only the persisted binding parse.
-  - **Per-target appeal latch binds at `PostAnswer`, not open** (round 3: an
-    open-bound latch let a never-answered 0.1-CC junk appeal camp a target for
-    12 weeks). Pre-answer: the pending-list banner shows "appeal pending"
-    without an exclusive lock; **first-to-answer takes the latch** — forcing a
-    latch-holder onto the bonded, deployer-disputable path. Latch residency =
-    answer → Crystallize/provClose/CloseDeadClaim (a passed-but-unexecuted
-    appeal holds it through its `executedAt` window). The title-edit entrypoint
-    runs the same acquire/release/refuse block (schema→non-schema releases;
-    target-change releases+acquires, refusing if the new target's latch is
-    held) — no latch bypass via an in-window edit.
-- **Execution** (`ExecuteMetaVerdict(metaClaimID)`, permissionless):
-  1. **Order of checks**: idempotence-by-state **first** (same-direction →
-     no-op success, still stamps `executedAt`), staleness only for
-     direction-changing executions.
-  2. **Final verdict**: `Verdict() == YES` (the `provisional` field, never
-     `cs.answer`); provClose/NO/non-final/nonexistent execute nothing. **A
-     title purged *before* the PostAnswer persistence (no binding parse
-     exists) executes nothing; a post-persistence purge never blocks execution**
-     — the persisted parse is what makes it robust (round 3: guard 1's v0.3
-     wording wrongly listed "purged-title" as a blanket refusal, reopening
-     M-A24).
-  3. **Aggressive verbs need the voted route** (`route == "vote"`):
-     `mod:hide`, `mod:suspend`, `mod:unsuspend`. Restorative (`unhide`,
-     `clear`) may execute from the undisputed route — silence may restore item
-     visibility, never remove it, disarm, or re-arm. Honesty note: the route
-     gate stops only the *silent* factory — a meta-CC majority forges
-     `route == "vote"` by self-disputing (~4%·X̄ per act at default emission,
-     up to 20%·X̄ if emission is near-zero); against capture the defense is
-     deployer dominance + global clear-any + reversibility. Optional hardening
-     if capture is observed: require minimum genuinely-opposed weight.
-  4. **Staleness, actor-scoped — corrected (round 3)**: the verdict **binds
-     the authority, not the individuals; it executes against the *current*
-     set.** Only **election passages** (and any future global act touching
-     membership) write the refusing stamp `lastElectionAt`; a respondent's own
-     transitions — the courtMod set's re-hides, the creator's member shuffles,
-     the set's suspend-lane self-acts — **never refuse** (v0.3's "membership
-     changes stamp unconditionally" re-opened the M-A21 livelock in the suspend
-     lane). Execution refuses iff a *third-party* transition postdates the
-     appeal's `openedAt`: `max(bitLastAct_by_others, lastElectionAt) < openedAt`
-     required. Per-verb respondents: `unhide` → courtMod bit (respondent
-     set+creator); `hide`/`clear` → meta bit (respondent ∅; refusers = global
-     clear + later meta executions); `suspend`/`unsuspend` → flag (respondent
-     set+creator; refusers = elections/global/other verdicts).
-  5. **`executedAt` cooldown, pinned (round 3)**: the respondent may not
-     re-transition the bit **in the direction the verdict reversed** for one
-     `votingBlocks` (in practice: re-hide blocked after a `mod:unhide`;
-     clearing own bit stays allowed). Enforced at the courtMod hide entrypoint
-     reading `executedAt[bit]` (a mod-entrypoint-reads-mod-state check — no I2
-     carve-out needed). Global-DAO verbs and subsequent meta executions are
-     exempt. **No-op executions still stamp `executedAt`** (else a mod clears
-     one block early and re-hides free).
-  6. **No phantom targets**: target court and claim strictly predate the
-     appeal's `openedAt`.
-- **Asymmetric supremacy (owner flag §13.2)**: meta overrides court moderators
-  both ways; meta never clears the global bit nor reverses purge; global clears
-  meta's bits/suspensions.
-- Meta is moderated by its own §3.1 set + the global DAO. `mod:suspend:meta`
-  suspends the *set*, never the verdict machinery. No fourth layer.
+- **A court** — own CC, own electorate, its **own** 56-slot governor pool
+  (appeal-dispute pressure never spills to other courts), created at realm init
+  under reserved slug `meta` (refused to `StartCourt`), undeletable, listed.
+  Init calls `startCourt(admin,slug,name)` with the deployer
+  (`unsafe.OriginCaller()`) as admin.
+- **Bootstrap truth**: zero supply → inert; one buyer → appeals pass by
+  silence. Deployer genesis buy sized to stay **vote-dominant** (the real
+  security parameter; the route gate is forgery-able), earmarked to dispute
+  junk appeals (**+EV only while dominant** — and note §13.4: near-zero
+  emission neutralizes this +EV while raising the forgery price to ~20%·X̄).
+- Reserved schemas (strict parse; near-miss → "not a valid appeal" badge):
+  `mod:unhide:<c>/<id>` · `mod:clear:<c>/<id>` · `mod:hide:<c>/<id>` ·
+  `mod:suspend:<c>` / `mod:unsuspend:<c>`.
+  - **Parse = stored structured state** in `meta.gno` (keyed by claimID, not
+    the shared `claimState`): written at open, rewritten on each edit. **Purge
+    marks the stored parse render-only / non-bindable** (round 4 F3, resolving
+    the "surviving purge" ambiguity): a purged parse still *renders* verb+target
+    on redacted rows (category-code-class speech, so the appeal's electorate
+    isn't blinded), but cannot *bind* an execution.
+  - **The binding persists at `PostAnswer`, only from a non-poisoned stored
+    parse; if the parse is poisoned/invalid at answer, no binding persists and
+    no latch is acquired.** `ExecuteMetaVerdict` executes only from a persisted
+    binding.
+  - **Per-target latch binds at `PostAnswer`** (not open); pre-answer the
+    pending-list banner shows "appeal pending" with no lock; **first-to-answer
+    takes the latch**. The **title-edit entrypoint does NOT touch the latch**
+    (round 4 F4: edits are provably pre-answer — the edit window closes ≥2,160
+    blocks before any answer can land — so the only edit-time membership ops
+    are stored-parse rewrite + pending enter/exit; an edit that acquired a
+    latch would reopen M-A32).
+  - **Latch releases** at verdict-final when the verdict is **non-executable**
+    (NO / route-gated / no-op), and otherwise at Crystallize/provClose/
+    CloseDeadClaim (round 4 F4: the `executedAt`-window hold is only needed for
+    an executable YES — this cuts a griefer's firm hold from ~10d to ~3d and
+    removes the dispute-prolongs-hold perversity). A **restorative** appeal may
+    proceed under an **aggressive**-verb latch-holder (the griefing victim's
+    lane is never blocked by the griefer's pre-latch).
+- **Execution** (`ExecuteMetaVerdict(metaClaimID)`, permissionless). **Fixed
+  check order** (round 4 F6 — validity before state, so a non-final call can
+  never stamp anything): (1) target exists & strictly predates `openedAt`;
+  (2) a persisted binding parse exists; (3) `Verdict()==YES` (the `provisional`
+  field, non-provClose — note `route`'s third value `"closed"` is excluded
+  here); (4) aggressive verbs (`hide`/`suspend`/`unsuspend`) require
+  `route=="vote"`; (5) **not already executed** (a per-appeal `executed` flag
+  in `meta.gno` — round 4 F1, the exactly-once guard); (6) staleness; then
+  apply, set `executed`, and stamp `executedAt` **at most once per appeal**.
+  - **Exactly-once (round 4 F1, HIGH)**: without it, guard-1's "no-op success
+    still stamps `executedAt`" let anyone re-call a settled restorative appeal
+    every `votingBlocks−1` to *perpetually* extend the moderator's re-hide
+    cooldown — the M-A21 livelock mirrored onto the mod side. The `executed`
+    flag makes a second call a no-op that **stamps nothing**.
+  - **Staleness, actor-scoped + direction-scoped (round 4 F2, MED-HIGH)**: the
+    verdict binds the authority, not the individuals, and executes against the
+    *current* set. Only **election passages** stamp the refusing field
+    `lastElectionAt`; respondent self-acts never refuse. **For `unhide`,
+    staleness = `lastElectionAt < openedAt` only** — a third-party *clear* (a
+    global clear-any, another meta unhide) is same-direction as the verdict, so
+    it must not refuse (v0.4's `bitLastAct_by_others` term wrongly killed a
+    still-needed unhide when the mod re-hid after a global clear, handing a free
+    re-hide). The general `max(bitLastAct_by_others, lastElectionAt) <
+    openedAt` form is kept **only for suspend/unsuspend**, whose flag genuinely
+    takes opposite-direction third-party writes.
+  - **`executedAt` cooldown**: the respondent may not re-transition the bit **in
+    the reversed direction** for one `votingBlocks` (re-hide blocked after
+    `unhide`; clearing own bit stays open). Enforced at the courtMod hide
+    entrypoint; global-DAO verbs and later meta executions exempt (**guard 5
+    cross-ref, round 4 F7**: a mod who is also a global member can escape a lost
+    war via the single-key global bit — bounded by attribution + category codes
+    + the m-of-n re-set window + operating rules; accepted as intended
+    supremacy).
+- **Asymmetric supremacy**: meta never clears the global bit / reverses purge;
+  global clears meta's bits/suspensions. Meta is moderated by its own set +
+  global. No fourth layer.
 
-## 4. Moderation state — `REVISED (round 3)`
+## 4. Moderation state — `REVISED (round 4)`
 
 Per claim (`moderation.gno`, keyed by claimID): hide word (3 bits + per-row
-purge flags), per-bit `lastActHeight` (split by actor class so respondent acts
-don't set the refusing stamp) + `executedAt`, the append-only act log **with a
-monotone row id per entry** (so purge can address a single row), and
-`stripEnteredAt` (round 3: the index key must be idempotent — entry sites write
-only if it is zero; exits delete the stored key; no double-entry when an
-answered `mod:` row moves list→strip). Meta-side (`meta.gno`, keyed by claimID —
-**not** on the shared `claimState`, to avoid bloating every court's claims):
-the stored parse (open + persisted binding) and the per-target latch. Per court:
-mod set + set-level `lastActHeight`, `lastElectionAt`, suspension flag +
-`lastActHeight`, folders, tier, election ladder/latch/cooldown state, the
-per-court policing index and pending list. Realm-level: one global policing
-index (key = entry height | slug | claimID) + a courts-with-entries structure
-for the directory strip.
+purge flags); per-bit `lastActHeight` split by actor class (so respondent acts
+don't set the refusing stamp) + `executedAt`; append-only act log with a
+**monotone row id per entry**; `stripEnteredAt` (idempotent index key). Meta-
+side (`meta.gno`, keyed by claimID): stored parse (with a non-bindable/purged
+flag), per-target latch, per-appeal `executed`. Per court: mod set + set-level
+`lastActHeight` + `lastElectionAt`; suspension flag + `lastActHeight`; folders;
+tier; election ladder/latch/auction state; **the per-court policing index AND
+pending list, each carrying the full armature** (deadline order, per-actor
+caps, page cap). Realm-level: one global policing index + a courts-with-entries
+structure for the directory strip.
 
-Indexes write at the **membership sites only** (§5.3), never at vote sites;
-per-row status (open vote / counter window / redaction) reads live at render.
-Storage: one small row + one hash-only event per act. Render routes carved out
-before the numeric-ID parse: `<slug>/mod` (paged log); the strips; a paginated
-**read entrypoint** (query, not Render) for strip pages beyond the first.
+Indexes write at the **membership sites only**, never vote sites; per-row
+status reads live at render (reuse `ClaimStatus` + flag-slot state + bits).
+Routes carved before the numeric-ID parse: `<slug>/mod` (paged log); the
+strips; the pending list; a paginated **read entrypoint** for pages beyond the
+first on **all three** surfaces.
 
-## 5. Hiding: exact render semantics — `REVISED (rounds 1–3)`
+## 5. Hiding: exact render semantics — `REVISED (rounds 1–4)`
 
 ### 5.1 Discovery surfaces (bits apply)
 Court-page listings, folder listings, featured strips, the directory.
 
 ### 5.2 Non-discovery surfaces
-Deep links + positions always render under courtMod/meta bits (banner); under
-the **global** bit, redacted (IDs/state/deadlines/money, no user text); purged
-rows render tombstones. Money renders everywhere.
+Deep links + positions always render under courtMod/meta (banner); under global,
+redacted (money/IDs/deadlines, no text); purged → tombstones. Money everywhere.
 
-### 5.3 The policing surfaces — the load-bearing guarantee — `REVISED (round 3)`
+### 5.3 The policing surfaces — the load-bearing guarantee — `REVISED (round 4)`
 
-Two indexed strips (per-court + realm-wide directory) plus a per-court
-**pending list**. The strip shows every claim in its **policeable span**; the
-pending list shows unanswered `mod:` appeals (force-visible, so a pre-answer
-appeal can't be embargoed — M-A25) and unanswered seeded claims.
+Two indexed strips (per-court + directory) plus a per-court **pending list** —
+**all three carry the identical armature** (round 4 F2: a half-armored surface
+just relocates the flood).
 
-- **Membership**:
-  - **strip entry is uniformly `PostAnswer`** (round 3: v0.3 birth-entered
-    `mod:` rows, which are unanswerable/unflaggable/undisputable and so a
-    12-week 0.1-CC flood primitive on the one strip that must stay clean —
-    they go on the pending list instead);
-  - **pending list**: unanswered `mod:` appeals and unanswered seeded claims
-    enter at open; each **moves to the strip at `PostAnswer`** and **drops at
-    `CloseDeadClaim`** (its only two transitions — Crystallize/provClose
-    require an answer, so v0.3's "same three exits" was impossible for the
-    list);
-  - **strip exit**: `Crystallize`, `provCloseClaim`, `CloseDeadClaim`; span
-    `frozenAt != 0 && !crystallized && !provClose && !closed`.
-- **Ordering: ascending entry height (oldest first)** — anti-flood (a past
-  entry height can't be manufactured), urgency (settle deadline =
-  answerHeight + 72h, monotone in entry height on the dominant undisputed path;
-  it *approximates* urgency off that path — flags/escrow/counter windows
-  restamp crystallize-eligibility, the named exception), one monotone key.
-- **Per-actor sub-caps — the durable anti-blockade lever (round 3)**: both
-  strips cap the rows any single **answerer** and any single **author** may
-  occupy on a page (mirroring the directory's per-court sub-cap). This defeats
-  the pre-position blockade *without touching money paths*: a mill that
-  pre-answers 50 blockers before opening its target still gets only its
-  small per-actor allotment, so honest rows stay on page 1. The guarantee is
-  stated honestly as "**oldest N per actor** on page 1, with a paginated read
-  entrypoint behind it," not "un-buryable."
-  - *Optional courtv2 coordination item (touches the other session's
-    `crystallize.gno`)*: the blockade's remaining teeth are the participant-only
-    `Crystallize` grace (1 week) that stops defenders evicting blockers as fast
-    as the mill mints. Reducing that grace for **verdict-final, flag-quiet**
-    claims closes it fully but is a change to existing V2 behavior — flagged,
-    not assumed. The per-actor sub-cap alone is sufficient and render-only.
-- **Directory strip**: reads the realm index; **per-court sub-cap selects**,
-  and the per-court representative is the court's **nearest-to-mint** row, not
-  its oldest (round 3: oldest-representative let a mill's junk blocker
-  represent its court; and with ≥50 courts, pass-1 alone fills the page, so
-  selection must prefer urgency). **Selection and display are separate**: the
-  sub-cap governs *which* rows are chosen; the chosen page *renders* ascending
-  by entry height. Court creation is priced (§2), so court-count floods cost
-  like claim-count floods.
-- **Bits on strips/pending**: ignore courtMod and meta bits; the **global**
-  bit redacts the row's text but still renders the stored parse for `mod:`
-  rows. Tier-hidden courts' rows appear on the directory strip (redacted iff
-  global).
-- **Residency honesty (round 3)**: an answered-but-never-crystallized claim is
-  *correctly* strip-resident (still flaggable = still policeable); do not add
-  an exit timer. Every path terminates or is permissionlessly terminable
-  (`SettleUndisputed`/`ResolveDispute`/`Finalize`/`provCloseClaim` all
-  permissionless; Crystallize permissionless after the 1-week grace), but the
-  cranks **pay the caller nothing** — mods/deployer are the implied janitors;
-  state that.
+- **Membership**: strip entry uniformly `PostAnswer`; span `frozenAt != 0 &&
+  !crystallized && !provClose && !closed`; exits Crystallize/provClose/
+  CloseDeadClaim. Pending list: unanswered `mod:` appeals + unanswered seeded
+  claims enter at open, **move to the strip at `PostAnswer`**, drop at
+  `CloseDeadClaim` (its only two transitions). `stripEnteredAt` makes entry
+  idempotent (no list→strip double-row).
+- **Ordering: ascending actionable deadline (nearest-to-mint first)** — the
+  sybil-proof spine (round 4). Reuse `SettleDeadline` (= `answerHeight +
+  settleDelay`) as the key on the dominant path; a disputed/flagged claim's
+  deadline is its later actionable height (escrow/flag/counter window). This is
+  strictly better than entry-height ordering against the **pre-position
+  blockade**: a mill cannot keep its about-to-settle target off the nearest-to-
+  mint segment, and any junk blocker it makes near-mint to compete becomes
+  flaggable-and-slashable by that very fact. `stripEnteredAt` remains the
+  stable index *key*; the page *renders* by deadline (selection vs display
+  separated).
+- **Per-actor sub-caps** (answerer + author), **binding only under page
+  overflow** (round 4 F3b: an uncontended page renders all rows). Stated
+  honestly: caps key the *free* dimensions, so they blunt but don't alone
+  defeat a sybil blockade — **the deadline ordering is what defeats it**; the
+  caps stop one actor monopolizing a *contended* page, and the paginated read
+  entrypoint backstops enumeration. **Seeded rows are exempt from the cap**
+  (round 4 code-truth F4: a seed-farm self-burying past the cap is covered by
+  the badge — one visible seeded row exposes the farm — so capping them only
+  hides the evidence).
+- **Directory strip**: per-court sub-cap **selects**; the representative is the
+  court's **nearest-to-mint** row (not oldest); when courts exceed the page,
+  select courts by their nearest representative deadline. Selection vs display
+  separated; the chosen page renders by deadline. Honest residual (round 4 F3c):
+  no within-court rule binds a court-*dominant* actor — the representative is
+  best-effort; the honest row keeps its own court-strip slot regardless.
+- **Pending list armature (round 4 F2)**: per-actor (author) caps, page cap,
+  pagination — identical to the strips — **and the door is priced**: the meta
+  court's `minClaimDepositCC` is set high enough that a 50-row pending flood
+  parks real GNOT-sunk capital for 12 weeks (the deposit is refundable but
+  locked; the 10% fee burns on dead-close). Pre-position on the pending list is
+  thereby capital-priced, not address-priced.
+- **Bits**: strips/pending ignore courtMod+meta bits; the **global** bit redacts
+  text but still renders the stored parse for `mod:` rows (open or persisted).
+  Tier-hidden courts' rows appear on the directory strip (redacted iff global).
+- **Residency & cranks**: an answered-uncrystallized claim is correctly
+  resident (still flaggable = policeable); no exit timer. Every terminal path
+  is permissionlessly reachable (`SettleUndisputed`/`ResolveDispute`/`Finalize`/
+  `provCloseClaim`; Crystallize permissionless after the 1-week grace) but the
+  cranks **pay the caller nothing** — mods/deployer are the implied janitors.
+  *Optional courtv2 coordination item (touches the other session's
+  `crystallize.gno`)*: reducing the participant-only Crystallize grace for
+  verdict-final, flag-quiet claims lets defenders evict blockers faster — the
+  one residency-attacking lever, flagged not assumed.
 
 ## 6. Text: immutable after first stake; annotations after — `VETTING`
+Edit window `now < openedAt + delay` (the `stake==0` conjunct redundant, kept).
+First stake / window close freezes text forever; edits evented (hash-only) +
+**re-run the parser (stored-parse rewrite + pending enter/exit — no latch op)**.
+After freeze: annotations (attributed, sanitized, ≤200, append-only with row
+ids, above the original) + ≤1 relabel/authority; purge rows the sole text
+mutation (I4). Mod-copy rule (first-party speech, no §230 shield, incl. seeded
+titles + reasons + relabels + folder names): category codes / claim-about-the-
+claim phrasing, never assertions of fact about persons; token/APR language
+removal-grade.
 
-- **Edit window**: title editable while `now < openedAt + delay` (the
-  `stake == 0` conjunct is provably redundant — staking is closed in-window and
-  Stake is the only inflow — kept as defense). First stake / window close
-  freezes text forever. Edits are evented (hash-only) and **re-run the `mod:`
-  parser + latch/membership block** on the meta court (§3.3).
-- **After freeze**: annotations (attributed, sanitized, ≤ 200 chars,
-  append-only with row ids, above the original) and ≤ 1 relabel per authority.
-  Purge rows are the sole text-mutation exception (I4).
-- **Mod-copy rule** (first-party speech, no §230 shield — incl. **seeded claim
-  titles** and mod reasons/relabels/folder names): category codes and
-  claim-about-the-claim phrasing, never assertions of fact about persons;
-  token/APR language in any mod string is removal-grade.
+## 7. Folders — `VETTING`
+Membership gates nothing; flat list always remains; names/descriptions
+sanitized, length-capped, purgeable rows; moderator-writable; suspension
+refuses writes. "Zero economic weight" = zero on-chain coupling; the tripwire
+(ordered visibility sold for consideration) applies verbatim.
 
-## 7. Folders: curation metadata, zero on-chain coupling — `VETTING`
-Membership gates nothing; the flat list always remains; names/descriptions
-sanitized, length-capped, purgeable as rows; moderator-writable; suspension
-refuses writes. "Zero economic weight" = zero on-chain coupling, not zero EV —
-PLAN's tripwire (ordered visibility sold for consideration) applies verbatim.
-
-## 8. Seeding: deposit-waived, provenance-marked, discovery-guaranteed — `REVISED`
-Fee waiver = bootstrap convenience; **the discovery guarantee (§5.3) is the
-anti-farm mechanism** (an answered seeded claim is strip-resident, oldest-first,
-per-actor-capped — visible junk gets flagged); the author-slice zero is
-provenance (I5), not protection (winner 80/93 + answerer 5/93 still mint).
-- `OpenClaimSeeded`: mod-only (reads set + suspension), waives CC deposit+fee;
-  GNOT storage still paid; "seeded" badge + seeder address; polish window
-  applies; unanswered seeds sit on the **pending list**, not the strip.
-- **I5 lands twice** in crystallize.gno (author draw AND `AuthorBonus`).
-- **`settleSlash` fix**: record the claim's actual burns at `ResolveFlag`;
-  `settleSlash` reads them, not `c.params` — **re-expressed against v0.40's
-  draw-proportional slash** `min(bond, max(4.5%·X̄, 1.6·midGross))` at build
-  (the phantom-params under-pay is the same class of bug in either shape;
-  re-derive the top-up arithmetic against HEAD).
-- Zero-deposit tolerated end-to-end (four terminal sites `> 0`-guarded).
+## 8. Seeding — `REVISED`
+Fee waiver = bootstrap convenience; the **discovery guarantee (§5.3) is the
+anti-farm mechanism** (answered seeded claims are strip-resident, deadline-
+ordered, cap-exempt-but-badged); the author-slice zero is provenance (I5), not
+protection (winner 80/93 + answerer 5/93 still mint).
+- `OpenClaimSeeded`: mod-only (reads set+suspension), waives CC deposit+fee;
+  GNOT storage still paid; "seeded" badge + seeder address; unanswered seeds on
+  the pending list.
+- **I5 lands twice** (author draw AND `AuthorBonus`).
+- **`settleSlash` fix** re-expressed against v0.40's `slashSizeFor`: record the
+  claim's actual burns at `ResolveFlag`; `settleSlash` reads them, not
+  `c.params` (the phantom-params under-pay is confirmed live post-v0.40).
+- Zero-deposit tolerated end-to-end (four `>0`-guarded terminal sites).
 
 ## 9. The polish window — `REVISED (rounds 2–3)`
-`Params.stakeOpenDelayBlocks`, `mustSane` [0, 17_280]. Staking closed
-in-window; visible; author edits; mods annotate/hide/folder; auto-opens.
-- **`StartCourt` grows the delay parameter** (round 2). Meta + doc examples use
-  720 (≈1h); fixtures pass 0 except window tests. **Fixture sweep count is
-  re-derived at build** (the "28" figure was wrong — real: ~6 direct StartCourt
-  sites + a `testCourt` helper at ~41 call sites + 1 txtar; absorbing delay=0
-  into the helper is the cheap path).
-- **Priority re-anchor**: 24h answer-priority anchors at
-  `openedAt + stakeOpenDelayBlocks + answerWindow` (else it shrinks; at max
-  delay it equals `priorityWindowBlocks` and vanishes).
-- **`openBlocks` re-anchor**: crystallize's F9 cap divides by
-  `frozenAt − (openedAt + delay)`, floor 1.
+`Params.stakeOpenDelayBlocks`, `mustSane` [0, 17_280]. Staking closed in-window;
+auto-opens. `StartCourt` grows the delay param. Fixture sweep count re-derived
+at build (~6 direct StartCourt sites + a `testCourt` helper at ~42 call sites +
+1 txtar; absorb delay=0 into the helper). Priority re-anchor at `openedAt +
+stakeOpenDelayBlocks + answerWindow`. `openBlocks` = `frozenAt − (openedAt +
+delay)`, floor 1.
 
 ## 10. Invariants (deploy/test gate)
-- **I1** — hidden/redacted/purged lifecycle equivalence: identical money
-  outputs; **votes proceed on tombstones across all lanes {dispute rounds incl.
-  meta appeals, quality flag/ride/counter tallies, elections}**; purged claims'
-  authors still refund.
-- **I2** — no moderation entrypoint writes money **except the election
-  proposer-bond legs (poster's own CC only)**; the three read gates enumerated.
-- **I3** — deep links + positions render under courtMod/meta (banner); global
-  redacts (money/IDs/deadlines, no text); purged → tombstones.
-- **I4** — title writes revert after window close/first stake; annotations
-  append-only; edit entrypoint runs the parser+latch block; purge rows sole
-  text mutation.
+- **I1** — hidden/redacted/purged lifecycle equivalence; votes proceed on
+  tombstones across {dispute rounds incl. meta appeals, quality flag/ride/
+  counter tallies, elections}; purged authors still refund.
+- **I2** — no moderation entrypoint writes money **except the election auction
+  bond legs (poster's own CC)**; money→moderation write-calls never panic; the
+  four read gates enumerated; PostAnswer's latch read touches no bit/money
+  value.
+- **I3** — deep links/positions render under courtMod/meta (banner); global
+  redacts (no text); purged → tombstones.
+- **I4** — title reverts after window close/first stake; annotations append-
+  only; edit runs parser (no latch); purge rows sole text mutation.
 - **I5** — seeded: author draw = 0 AND AuthorBonus = 0, always.
-- **I6** — every act logs a row + a **no-user-text** event; `VoteWithReason`
-  never exposed.
+- **I6** — every act logs a row + a no-user-text event; `VoteWithReason` never
+  exposed.
 - **I7** — `stakeOpenDelayBlocks ∈ [0, 17_280]`.
-- **I8** — `ExecuteMetaVerdict`: idempotence-first; persisted-binding-parse
-  only (pre-persistence-purge refuses, post-persistence-purge doesn't block);
-  final-verdict field; voted-route gate on hide/suspend/unsuspend; actor-scoped
-  staleness (only elections/global stamp the refusing field); direction-scoped
-  `executedAt` cooldown with no-op stamping; strict predate.
-- **I9** — strips: the undisputed/unflagged/all-bits-set claim appears (named
-  fixture); unanswered `mod:`/seeded rows are on the **pending list, not the
-  strip**; provClosed/swept exit; ordering ascending entry height; **per-actor
-  and per-court sub-caps hold** (selection vs display separated; the directory
-  representative is nearest-to-mint); birth-entered pending rows key on
-  `openedAt`.
-- **I10** — suspension masks + refuses all set writes except clearing own
-  bits; unsuspend (voted) restores bit-for-bit; election passage clears the
-  flag + resets the bond ladder; global clear-any reaches the flag.
-- **I11** — purge m-of-n; row-level over the §2 inventory with stable row ids;
-  category codes parse (the on-chain code set is **final or shape-extensible
-  before the write-once deploy**, §13.1); unrecoverable through any realm read;
-  whole-court purge tombstones future rows + gates OpenClaim.
-- **I12** — election: per-proposer latch + cooldown; per-court bond doubling to
-  4× reset by passage; failed bond half-burned; escrow-netted quorum floor;
-  epoch pinned at open; no withdrawal path.
+- **I8** — `ExecuteMetaVerdict`: fixed check order (exists→binding→verdict→
+  route→**not-already-executed**→staleness); exactly-once (`executed` flag,
+  stamp `executedAt` ≤ once); `unhide` staleness = `lastElectionAt<openedAt`
+  only, general form for suspend/unsuspend; direction-scoped cooldown;
+  binding only from a non-poisoned parse; latch bound at PostAnswer, released
+  at non-executable verdict-final.
+- **I9** — strips + pending list all carry deadline ordering + per-actor caps
+  (bind under overflow; seeded exempt) + pagination; unanswered `mod:`/seeded
+  on the pending list not the strip; provClosed/swept exit; directory
+  representative nearest-to-mint; selection vs display separated.
+- **I10** — suspension masks + refuses set writes except clearing own bits;
+  voted unsuspend restores bit-for-bit; election passage clears the flag +
+  resets the ladder; global clear-any reaches the flag.
+- **I11** — purge m-of-n, row-level with stable row ids; category codes parse
+  (code set **final/shape-extensible before deploy**); unrecoverable; whole-
+  court purge tombstones future rows + gates OpenClaim.
+- **I12** — election: per-court latch; **bond auction (highest wins, losers
+  refunded)**; court-size-scaled base bond; per-court doubling to 4× reset by
+  passage; failed bond half-burned; escrow-netted quorum; epoch at open; no
+  withdrawal.
 
 ## 11. Attack ledger
-(rounds 1–2 rows retained; round-3 additions and status changes below)
+(rounds 1–3 rows retained; round-4 additions/status below; M-A1–A29 as v0.4
+except where noted)
 
 | # | Attack | Disposition | Status |
 |---|---|---|---|
-| M-A20 | Strip flooding (newest-first burial) | Ascending entry height + **per-actor sub-caps** + pending-list segregation + priced StartCourt + paginated reads | REVISED r3 |
-| M-A21 | Staleness livelock (free re-toggle) | Actor-scoped: only elections/global stamp the refusing field; respondent self-acts never refuse; `executedAt` cooldown | REVISED r3 |
-| M-A24 | Purge-as-appeal-veto | Stored structured parse persisted at PostAnswer; guard 1 refuses only pre-persistence purge | REVISED r3 |
-| M-A25 | Pre-answer appeal embargo | `mod:` on pending list from birth; redacted rows render the stored parse | REVISED r3 |
-| M-A30 | **Pre-position blockade** (own the target, pre-answer 50 blockers) | Per-actor sub-caps (render-only); optional crystallize-grace reduction flagged | NEW r3 |
-| M-A31 | **Unanswered-`mod:` strip flood** (birth-entry, 12wk, 0.1 CC) | Pending list, not strip; strip entry uniformly PostAnswer | NEW r3 |
-| M-A32 | **Appeal-latch camp** (never-answered junk holds a target's latch 12wk) | Latch binds at PostAnswer; first-to-answer takes it | NEW r3 |
-| M-A33 | **Election incumbent self-fail ratchet + latch camp** | Per-proposer latch/cooldown at standing bond; per-court ladder only for anti-sybil | NEW r3 |
-| M-A34 | **Single-key insider re-redaction sabotage** | m-of-n/cooldown to re-set a recently-cleared redaction | NEW r3 |
-| M-A35 | **Title-edit latch bypass** (non-schema → schema in-window) | Edit entrypoint runs the full parser+latch+membership block | NEW r3 |
-| M-A36 | **Strip index double-entry** (birth height ≠ answer height) | `stripEnteredAt` idempotency guard; pending→strip is a move, not a 2nd entry | NEW r3 |
-| M-A37 | **Directory representative gaming** (junk blocker as court's face) | Representative = nearest-to-mint; selection vs display separated | NEW r3 |
-(M-A1–A19, A22–A29 unchanged from v0.3; all REVISED/ACCEPTED.)
+| M-A30 | Pre-position blockade | **Deadline ordering (sybil-proof)** + per-actor caps (contended pages) + priced doors | REVISED r4 |
+| M-A33 | Election incumbent camp | **Bond auction (price-based, address-free)** + court-size-scaled bond; per-court latch | REVISED r4 |
+| M-A38 | **Pending-list flood** (armature only on strips) | Full armature on the pending list + priced meta deposit | NEW r4 |
+| M-A39 | **Perpetual moderator freeze** (no-op re-stamp extends cooldown forever) | Exactly-once `executed` flag; stamp `executedAt` ≤ once; validity-before-state ordering | NEW r4 |
+| M-A40 | **Global-clear poisons a pending unhide** (same-direction third-party refuses a needed verdict) | Direction-scoped staleness: `unhide` reads `lastElectionAt` only | NEW r4 |
+| M-A41 | **Edit-door latch camp** (non-schema→schema, never answer) | Edit entrypoint does no latch op; latch binds only at PostAnswer | NEW r4 |
+| M-A42 | **Non-final call stamps executedAt** | Fixed order: final-verdict + not-executed checked before idempotence/stamp | NEW r4 |
+| M-A43 | **Cross-authority global-bit war escape** | Bounded (attribution + category codes + m-of-n re-set window); intended supremacy, guard-5 cross-ref | NEW r4 (accepted) |
+(M-A31/A32/A34/A36/A37 REVISED as v0.4; unchanged rows carried forward.)
 
 ## 12. Build plan (sequencing decision first — §13.1)
 1. `moderation.gno` — bits + split `lastActHeight`/`executedAt`, log with row
-   ids (hash-only events), sets + `lastElectionAt`, suspension (mask +
-   write-refusal), global DAO migration, redaction + re-set guard, row-level +
-   whole-court purge, clear-any, `stripEnteredAt`. Tests I1–I3, I6, I10, I11.
-2. `claim.gno`+`stake.gno`+`court.gno` — polish window (I7), StartCourt delay
-   param + burned creation fee (user-call-only) + `meta` refusal, title-edit
-   entrypoint (I4), `OpenClaimSeeded`, purged-court gate (OpenClaim only),
-   claim-lane events; fixture sweep. Tests I4, I7.
-3. `answer.gno`+`crystallize.gno`+`quality.gno`+`dispute.gno` — strip/pending
-   index writes at the membership sites (idempotent); I5 both gates;
-   `settleSlash` actual-burn base (v0.40-reconciled); openBlocks + priority
-   re-anchors. Tests I5, I9-core.
-4. `folders.gno` — curation metadata (purgeable rows). Tests: goldens + purge.
-5. `modvote.gno` — election (per-proposer latch/cooldown, per-court doubling
-   bond half-burn, escrow-netted quorum, addresses-only). Tests I12.
-6. `render.gno` — filtering, banners, redaction (stored-parse for `mod:` rows),
-   tombstones, `<slug>/mod`, both strips + pending list (ascending, per-actor +
-   per-court sub-caps, nearest-to-mint representative, paginated reads), badges,
-   meta header, §7.4 hygiene. Tests I3, I9-full, goldens.
-7. `meta.gno` — `startCourt` extraction + init deploy, parser (stored parse at
-   open, binding at PostAnswer, re-parse on edit), per-target latch (PostAnswer-
-   bound), `ExecuteMetaVerdict` (I8 guards). txtar: appeal round-trip incl.
-   overturn, refused stale execution (third-party transition), latch pass by
-   first-to-answer, post-persistence-purge execution.
-8. Integration (§15) + full audit pass, by the active build session, after
-   convergence.
+   ids, sets + `lastElectionAt`, suspension, global DAO migration, redaction +
+   windowed-m-of-n re-set, row/whole-court purge, clear-any, `stripEnteredAt`.
+   Tests I1–I3, I6, I10, I11.
+2. `claim.gno`+`stake.gno`+`court.gno` — polish window (I7), StartCourt delay +
+   name-cap + burned fee (user-call-only) + `meta` refusal, title-edit
+   entrypoint (no latch), `OpenClaimSeeded`, purged-court gate (OpenClaim
+   only), events; fixture sweep. Tests I4, I7.
+3. `answer.gno`+`crystallize.gno`+`quality.gno`+`dispute.gno` — membership-site
+   index writes (non-panicking, idempotent) + PostAnswer latch read + binding
+   persist; I5 both gates; `settleSlash` actual-burn base (v0.40); openBlocks +
+   priority re-anchors. Tests I5, I9-core.
+4. `folders.gno`. 5. `modvote.gno` — election (per-court latch, bond auction,
+   court-scaled bond, escrow-netted quorum, addresses-only). Tests I12.
+6. `render.gno` — filtering, banners, redaction (stored-parse for `mod:`),
+   tombstones, `<slug>/mod`, three surfaces with the full armature (deadline
+   order via `SettleDeadline`, per-actor caps, nearest-to-mint representative,
+   paginated reads), status via `ClaimStatus`+slot+bits, badges, meta header,
+   §7.4 hygiene. Tests I3, I9-full, goldens.
+7. `meta.gno` — `startCourt` + init deploy, parser (stored at open, binding at
+   PostAnswer, non-bindable-on-purge, re-parse on edit), PostAnswer-bound latch
+   (released at non-executable verdict-final), `ExecuteMetaVerdict` (I8 fixed
+   order + exactly-once + direction-scoped staleness). txtar: appeal round-trip,
+   overturn, refused stale (election-passage), refused re-execute (exactly-
+   once), global-clear-then-unhide-still-executes, first-to-answer latch,
+   post-persistence-purge execution.
+8. Integration (§15) + full audit, after convergence.
 
 ## 13. Owner flags
 1. **Sequencing — realms are write-once.** Moderation ships inside courtv2
-   (hold launch) or as a new realm never attaching to live-V2 courts. No
-   additive patch path. Draft assumes hold-launch. **The purge category-code
-   set must be final or shape-extensible before deploy** (else a later statute
-   category has no code).
-2. **Asymmetric supremacy**: keep (meta never clears global / reverses purge).
-3. **Global DAO custody**: hide single-key (speed); **re-set + purge m-of-n**;
-   keys at launch — owner call.
-4. **Meta-court genesis + emission (coupled — round 3)**: the genesis buy must
-   stay **vote-dominant** (the route gate is forgery-able; dominance +
-   reversibility is the real defense; disputing junk appeals is +EV *only while
-   dominant*). Meta-CC **non-transferable at launch** recommended (escrow legs
-   + curve mints exempt or every bond/stake bricks; conspicuous no-exit
-   disclosure). **Near-zero meta emission** is a real fork with a two-sided
-   consequence to weigh: it *neutralizes* the deployer's +EV junk-appeal
-   policing (comp is emission) **and** *raises* the forgery price from ~4%·X̄ to
-   the full 20%·X̄. Owner call.
-5. **StartCourt creation fee** (burned GNOT, frozen constant; makes StartCourt
-   user-call-only) — amount an owner call.
+   (hold launch) or as a new realm never attaching to live-V2 state. Draft
+   assumes hold-launch. The purge category-code set must be final/shape-
+   extensible before deploy.
+2. **Asymmetric supremacy**: keep.
+3. **Global DAO custody**: hide single-key; **re-set (windowed) + purge
+   m-of-n**; keys — owner call.
+4. **Meta genesis + emission (coupled)**: genesis buy stays vote-dominant;
+   meta-CC **non-transferable at launch** (escrow + curve mints exempt);
+   **near-zero meta emission** is a two-sided fork (kills the deployer's +EV
+   junk-appeal policing AND raises the forgery price ~5×). Owner call.
+5. **StartCourt creation fee** (burned GNOT; makes StartCourt user-call-only) +
+   **court-size bond constant β** for elections — amounts owner calls.
 6. **Terminology**: "supreme" never in render/public copy; prefer "review".
 
 ## 14. Changelog
-- **v0.1–v0.3**: see prior entries (constitution; policing strips; purge;
-  meta court; suspension; election; write-once sequencing; r1 ~40 findings /
-  1 CRITICAL-legal, r2 24 / 1 CRITICAL-econ + 8 HIGH).
-- **v0.4** — round 3 ingested (0 CRITICAL, 4 HIGH, all breaking a v0.3
-  disposition):
-  - *Strip flooding closed on three doors* (HIGH ×2, econ+mech): per-actor
-    sub-caps (pre-position blockade M-A30); pending-list segregation so
-    unanswered `mod:` rows never touch the strip (M-A31); latch bound at
-    PostAnswer (camp M-A32); idempotent `stripEnteredAt` (M-A36);
-    nearest-to-mint directory representative (M-A37); optional crystallize-grace
-    reduction flagged as a courtv2 coordination item, not assumed.
-  - *Execution guards corrected* (HIGH, mech+legal): guard 3 actor-scoping
-    contradiction fixed — only elections/global stamp the refusing field,
-    respondent self-acts never refuse (M-A21 livelock reclosed in the suspend
-    lane); guard 1 purged-title contradiction fixed (M-A24); `executedAt`
-    direction/site/exemption/no-op pinned; idempotence-first ordering; parse is
-    stored structured state surviving purge (M-A25 pre-answer redaction).
-  - *Title-edit state-machine row added* (mech): the edit entrypoint runs the
-    full parser+latch+membership block (bypass M-A35).
-  - *Election fully specified* (mech): per-proposer latch/cooldown at standing
-    bond vs incumbent self-fail ratchet (M-A33); failed-bond half-burn; ladder
-    reset by passage; no withdrawal; I2 proposer-bond carve-out.
-  - *Redaction* (econ): m-of-n/cooldown to re-set a recently-cleared redaction
-    (insider sabotage M-A34); global-hide reasons category-code only.
-  - *Owner economics* (legal): §13.4 now states the near-zero-emission fork's
-    two-sided consequence (kills policing +EV, raises forgery price 5×).
-  - *Code-truth corrections*: §2 table adds the PostAnswer parse/seeded-move
-    writes, directory.gno, and the four new-module homes; StartCourt
-    burn-sink + user-call-only mechanics; escrow = realm address; epoch pinned
-    at open (governor idiom, not qualityEpoch); meta has its *own* 56-slot
-    pool; fixture count de-pinned; parse/index state homes named
-    (`meta.gno`/`moderation.gno`, not shared `claimState`); v0.40 drift note +
-    settleSlash reconciliation.
-  - *Legal nits*: §230(e)(2) IP carve-out named; category-code set finalized
-    pre-deploy; I1/I9 enumerate lanes and separate selection/display.
+- **v0.1–v0.4**: see prior entries (constitution; policing strips; purge; meta
+  court; suspension; election; write-once sequencing). r1 ~40/1 CRITICAL-legal;
+  r2 24/1 CRITICAL-econ+8 HIGH; r3 ~19/4 HIGH.
+- **v0.5** — round 4 (~16 findings, 3 HIGH + 1 MED-HIGH, all local fixes;
+  named the root principle up top):
+  - *Discovery armature completed*: deadline (nearest-to-mint) ordering as the
+    sybil-proof spine reusing `SettleDeadline` (M-A30); pending list given the
+    full armature + priced meta deposit (M-A38); per-actor caps rescoped
+    (contended-only, seeded-exempt) and stated honestly.
+  - *Election rebuilt on price*: per-court latch + **bond auction** + court-
+    size-scaled bond replace the sybil-prone per-proposer cooldown (M-A33).
+  - *Guard machinery fixed*: exactly-once `executed` flag stops the perpetual
+    moderator freeze (M-A39); fixed validity-before-state check order
+    (M-A42); direction-scoped `unhide` staleness stops the global-clear poison
+    (M-A40); latch removed from the edit path (M-A41); binding-parse source
+    pinned (non-bindable on purge); PostAnswer latch enumerated as read gate
+    #4 with the non-panicking money→moderation rule.
+  - *Latch economics*: releases at non-executable verdict-final (griefer hold
+    ~10d→~3d); restorative proceeds under an aggressive holder.
+  - *Redaction*: m-of-n scoped to the §512(g) window (disjunction resolved).
+  - *Code-truth*: court-name length-cap added to the court.gno diff; `route`
+    third value `"closed"` named; `SettleDeadline`/`ClaimStatus` reuse
+    pointers; settleSlash bug re-confirmed live post-v0.40; M-A18 reconciled
+    with the cap (seeded exempt, badge sufficient); cross-authority escape
+    (M-A43) documented as intended supremacy.
 
 ## 15. Integration items (deferred — do not race the build session)
-- REGULATIONS.md — content/platform-liability axis: CDA 230 contours **incl.
-  the §230(e)(2) IP carve-out** (ROP outside §230 in the 3d Cir., Hepp) and the
-  moderating-does-not-waive-§230 point; purge rationale; **DMCA operational
-  trio** (registered agent; §512(i) repeat-infringer policy as an address-level
-  render analog; §512(g) put-back); NCMEC §2258A; the purge **category-code
-  table**; whole-court facilitation question.
+- REGULATIONS.md — content/platform-liability axis: CDA 230 contours incl.
+  §230(e)(2) IP carve-out (ROP outside §230, 3d Cir. Hepp) + moderating-doesn't-
+  waive-§230; purge rationale; DMCA trio (registered agent; §512(i) repeat-
+  infringer policy as an address-level render analog; §512(g) put-back + the
+  m-of-n re-set window); NCMEC §2258A; purge category-code table; whole-court
+  facilitation question.
 - REGULATIONS.md exposure map — row 6 meta-CC (non-transferable, near-zero-
-  emission option, functional-only copy); row 2 curation/seeding prong-3/4
-  strengthening + counter-facts; row 3 Ooki wording; DUNA correction (**meta
-  electorate** = DUNA-cohort candidate; global DAO + mod sets = operator/agent
-  exposure, not member liability).
-- PLAN.md §7.4: seeding never marketed with curve-cheapness; featured
-  content-based; meta-CC functional-only; mod-string + seeded-title hygiene
-  removal-grade. §7.5 counsel: DMCA agent, NCMEC, category-code sign-off,
-  whole-court lifecycle. §12: owner rows for §13.1/§13.4/§13.5 + the
-  compliance-uses-global-bit-only rule.
+  emission option, functional-only copy); row 2 curation/seeding prong-3/4 +
+  counter-facts; row 3 Ooki wording; DUNA (meta electorate = cohort candidate;
+  global DAO + mod sets = operator/agent exposure).
+- PLAN.md §7.4 (seeding/featured/meta-CC/mod-string hygiene), §7.5 counsel
+  (DMCA agent, NCMEC, category codes, whole-court lifecycle), §12 owner rows.
