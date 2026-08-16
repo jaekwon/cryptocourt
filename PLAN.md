@@ -428,6 +428,34 @@ denominator exists to time or to hold hostage.
   ¼-bar drops the supply floor — `min(X̄, ⅓·votable)/4` — so required turnout
   scales with the claim exactly as the carrot does (uniform ≈2.5%
   pay-per-weight at every size). Verdict votes keep the full quorumFloor.
+- **v0.26 (micro-vet-3): PARTICIPANT EXCLUSION** — a claim's participants
+  (addresses staked at the freeze, the author, the answerer) neither vote nor
+  earn the carrot in that claim's OWN quality lane, by rule rather than by the
+  accident of escrow balances. Closes two gaps the answer-height snapshot
+  alone leaves open: same-epoch enfranchisement (stake+answer inside one
+  epoch → the sealed E−1 snapshot shows pre-stake balances → the mill's
+  working capital votes) and post-release re-enfranchisement (split
+  settlement returns principal while the flag window can still run). Sybil
+  caveat, recorded honestly: exclusion is per-address and a mill can route an
+  idle reserve through a non-participant wallet — the FULL-BAR gate on
+  slot-consuming mid (v0.25/A20) remains the load-bearing defense; exclusion
+  removes the cheap in-band paths and the carrot self-payment.
+- **v0.26 (self-found COMPOSITION risk, fix DRAFT — final micro-vet running):
+  the v0.25 trio composed into a low-capture bounty faucet against HONEST
+  claims.** The slash (2.5%·X̄, scaling) + bounty ≤ 80% of burns (so the slash
+  funds a ~2%·X̄ bounty) + the dead-zone bar (demotion turnout scales DOWN
+  with the claim) meant a capturer with reusable weight ≈ X̄/8 could push an
+  honest claim to median-low for ~0.04%·X̄ of carry, collect ~2%·X̄ minted
+  bounty funded by the honest answerer's slash, and repeat court-wide.
+  Fix (mirrors the high-gate symmetry): **two-tier low** — a MEDIAN low
+  zeroes the claim's draws and slashes only the deposit (bounty ≤ 80% of
+  deposit+fee — small); the ANSWER-BOND SLASH and the full bounty base
+  require **supermajority low (≥⅔ of turnout AND turnout ≥ the full verdict
+  bar)** — the same gate as high. Real junk reaches supermajority-low
+  honestly (Schelling convergence is what "junk" means), so mill deterrence
+  and policing pay survive on that branch; pushing an HONEST claim there
+  costs the full-bar whale threshold — the register's accepted capture class,
+  no cheaper than capturing high.
 - **v0.25 pins**: no voter carrot on INCONCLUSIVE outcomes (else ratchet-spam
   gets ~3× cheaper and a carrot upsizing could flip it — micro-vet-2's
   carrot < b₀/2 invariant stays as belt); the "honest loss capped at b₀/2"
@@ -899,7 +927,8 @@ All statuses reflect the econ vet's findings (F1–F11), ingested v0.6.
 | A14 | Scheduled self-defeat of a frozen scalar rate: d decays by the halving path → y* sinks below rate by ~the 2nd halving → farming turns on with no adversary (reservoir vet F-R1) | Rate is a deploy-frozen SCHEDULE tracking y*(n)'s deterministic component at 0.85·y*(n); decrease-only ratchet noted for r-drift; no increase lever | `CLOSED (v0.11)` |
 | A15 | Author-mill v2 — single-sided p=1 farming inside the anti-farm band, re-armed because the reservoir deleted the crowd's selfish flag motive (reservoir vet F-R2) | Low-tier slash (deposit + 2.5%·X̄ of the answer bond, burned) + bounty = min(own bond, 80%×low-burns) + PAID flag-vote voters (senior-queued) → policing positive-EV at q > ½ AND every sybil farm burn-dominated | `CLOSED (v0.20, repriced v0.25)` |
 | A19 | **Bounty mint faucet** (round-3 + micro-vet-1, independent BREAKS): bounty = own bond was unbounded by its event's burns — junk-farm sybils pumped X̄ with refundable stake and minted 2%·X̄ per ~1 CC burned, capturing the senior queue's head | Per-event burn-domination restored: bounty ≤ 80% of low-outcome burns, and the burns scale (the 2.5%·X̄ answer-bond slash) | `CLOSED (v0.25)` |
-| A20 | Idle-reserve conclusive-mid squat: ¼-bar of unstaked mill reserve self-votes the slot closed | Slot-consuming mid needs the FULL bar; ¼-bar mid reopens at ×2; failed squats net negative post-A19 | `CLOSED (v0.25)` |
+| A20 | Idle-reserve conclusive-mid squat: ¼-bar of unstaked mill reserve self-votes the slot closed | Slot-consuming mid needs the FULL bar; ¼-bar mid reopens at ×2; failed squats net negative post-A19; participants excluded from own-claim quality lanes (v0.26) | `CLOSED (v0.25/26)` |
+| A21 | **Low-capture bounty faucet (self-found composition of three v0.25 fixes)**: slash-funded bounty + claim-scaled demotion bar made capturing an honest claim's low vote profitable (~50:1) with reusable weight | Two-tier low: median-low = draws zeroed + deposit-only economics; the answer-bond slash + full bounty need ⅔ + full-bar supermajority-low — same whale price as high-capture | `DRAFT (v0.26, final micro-vet running)` |
 | A16 | **Self-flag slot squat** (mech vet R1, launch-blocking): mill's sybil flags its own claim instantly with a dust vote destined for low-turnout mid — one burned bond consumes the only flag slot and immunizes the claim; the ¼-bar floor shields the mill, not honest claims | The slot is consumed only by a CONCLUSIVE vote; inconclusive reopens it (half the bond burns); doubling is PER-SLOT, monotone across flaggers; staked CC cannot vote quality (escrow weight nets out) | `CLOSED (v0.12; pins v0.20)` |
 | A17 | **Settle/flag ordering race + step-down delay grief** (mech vet R2): permissionless settle at 72h+1 turns the flag window into a 1-block race; and a 7d flag pause could drag a rival's claim across a rate step-down, halving their draw for one 2%·X̄ bond | No-settle window is reopen-relative (24h after each flag-vote close — the post-answer version was vacuous under the 72h delay, V2-5); conviction is rate-weighted over an amortized table, so no rate snapshot or boundary block exists to race (V2-8/2A-T3) | `CLOSED (v0.20)` |
 | A18 | Credential × mill habitat overlap (mech vet R6): raw stood-counting is maximized by cherry-picking trivially-true claims — the credential would compound the mill instead of checking it | Difficulty-weighted record: undisputed stands ≈ 0, contested-and-upheld = full credit; plus cold-start guard and one-active-priority-claim limiter | `CLOSED (v0.12)` |
@@ -1318,6 +1347,18 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.26** — (iteration 30b) micro-vet-3 landed: CONFIRMS the answer-height
+  snapshot (independently derived the identical pin) and the full-bar +
+  dead-zone fixes; adds PARTICIPANT EXCLUSION (own-claim quality lane: no
+  vote, no carrot — closes same-epoch and post-release enfranchisement;
+  sybil caveat registered, full-bar stays load-bearing). Cross-checking it
+  against v0.25 surfaced a SELF-FOUND composition hole none of the vets saw
+  in isolation: slash + scaled bounty + claim-scaled demotion bar =
+  a profitable low-capture faucet against honest claims. Fix drafted:
+  TWO-TIER LOW (median-low = tier-0 with deposit-only economics;
+  supermajority-low at the full ⅔+bar gate unlocks the slash and the full
+  bounty — junk converges there honestly, honest claims cost the whale
+  price). Final composition micro-vet launched; convergence call waits on it.
 - **v0.25** — (iteration 30) **round-3 monolith + micro-vet-1 landed together,
   independently converging on a BREAKS: the v0.20 bounty was a mint faucet**
   (own-bond bounty unbounded by its event's ~1 CC of burns; junk-farm sybils
