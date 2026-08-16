@@ -194,9 +194,27 @@ denominator exists to time or to hold hostage.
   the **quality-flag lane**, fully specced below (iteration 5).
 
 **Flag-lane spec — `DRAFT, attack-vet launched`:**
-- **Window**: one flag per claim, allowed from the answer until the settle tx
-  lands. The 72h settle delay guarantees ≥72h of flag exposure on every claim;
-  a flag **pauses settlement** until its vote closes.
+- **Window (hardened v0.12, mech vet R1/R2)**: flags are allowed from the
+  answer until the settle tx lands, and **settle is disallowed outright for the
+  first 24h after the answer** (the flag-open sub-window) — without it,
+  permissionless settle turns the "≥72h of exposure" into a *1-block ordering
+  race* the mill times (spam settle from 72h+1; the flagger must win strict
+  block priority). A flag **pauses settlement** until its vote closes.
+- **The flag slot is consumed only by a CONCLUSIVE vote** (v0.12, mech vet R1 —
+  this was a launch-blocking hole): an outcome of mid with turnout **below**
+  the ¼-bar floor is *inconclusive* and REOPENS the slot. Otherwise the mill's
+  own sybil flags instantly at answer+1 with a dust vote destined for
+  low-turnout mid — burning one small bond to consume the only flag and immunize
+  the claim; the turnout floor added against dust-griefers would have protected
+  exactly the wrong party. Re-flags post an escalating bond (dispute-style
+  doubling) so genuine serial re-flagging stays spam-priced.
+- **The emission rate is sampled at answer-freeze, never at settle** (v0.12,
+  mech vet R2a): a 7-day flag pause (or an honest 8-week dispute) must not drag
+  a claim across a rate step-down — `rateAtFreeze` is stored in the claim at
+  the freeze and used for its draws. This kills the halving-boundary delay
+  grief (burn a 2%·X̄ flag bond to halve a rival's entire draw) and quietly
+  fixes an unprompted bug: honest long disputes were already crossing
+  step-downs and silently halving winners' draws.
 - **Bond**: `max(flagMin, 2%·X̄)`, escrowed. Returned iff the outcome is
   **low**; burned otherwise — including when the electorate promotes to high
   (flag risk cuts both ways; a bad flag against a genuinely good claim pays for
@@ -425,27 +443,47 @@ Assumption questioned: **capital is the only credential.** The answer slot is
 V2's most abusable scarce resource (one per claim; verdict-by-default when
 undisputed), and it is currently first-come-first-served to anyone with a bond.
 
-**ADOPTED (draft, needs attack-vet): track-record answer priority.** The court
-keeps a per-address, non-transferable answer record: `stood` / `overturned`
-counters (data it already produces). When a claim becomes answerable, the first
-`priorityWindow` (24h) accepts answers only from addresses with net record
-`stood − overturned ≥ 3`; after that, anyone. Properties: the credential is
-*earned by the exact behavior we want* and destroyed by the exact behavior we
-fear (an overturned answer burns it — lying spends the credential); it is
-non-transferable and mints nothing (zero new legal surface); newcomers are
-delayed 24h, never excluded; farming it costs real deposits, bond locks, and
-72h+ waits per unit, and the farmed credential still dies on first misuse.
+**ADOPTED (vetted v0.12, mech vet: ADOPT-WITH-FIXES): track-record answer
+priority.** The court keeps a per-address, non-transferable answer record;
+when a claim becomes answerable, the first `priorityWindow` (24h) accepts
+answers only from qualified addresses; after that, anyone. The credential is
+earned by the behavior we want and destroyed by the behavior we fear (an
+overturn burns it); non-transferable, mints nothing, newcomers delayed never
+excluded. The vet confirmed farming it is UNPROFITABLE (3× deposits + burned
+fees + bond locks + 72h waits for a credential that dies on first misuse) —
+and added three fixes, adopted:
+- **Difficulty-weighted record (R6 — the sharpest cross-interaction found)**:
+  an *undisputed* stand counts ~0 toward priority; a **contested-and-upheld**
+  answer counts full. Raw stood-counting is maximized by cherry-picking
+  trivially-true claims — the author-mill's exact habitat — so the naive
+  credential and the mill would COMPOUND. Difficulty-weighting de-aligns them:
+  mill claims (undisputed by construction) grant no priority.
+- **Cold-start guard (R5e)**: the priority gate is disabled until ≥N addresses
+  qualify — otherwise launch imposes a court-wide 24h latency tax while nobody
+  can qualify.
+- **Flywheel limiter (R5b)**: one active priority claim per address at a time —
+  a qualified answerer can't blanket every juicy claim's 24h window at once.
 Cost: one bptree + a phase check in PostAnswer. Complements — not replaces —
 the bond (§3.6): the bond prices one lie, the record prices a *career* of them.
+Register (R6 residual): the overturn-decrement still mildly chills answering
+genuine 50/50 claims; difficulty-weighting compensates by making contested
+wins the only path to the credential.
 
-**ADOPTED (draft, needs vets): claim fee, burned.** 10% of the claim deposit is
-non-refundable and burned (the other 90% stays a refundable deposit). Gives CC
-its only sink (emission otherwise inflates monotonically against a one-way
-curve), prices claim creation honestly, and — usefully — an entry fee paid
-win-or-lose is the *Humphrey* non-wager pattern (fees regardless of outcome,
-prizes not funded by entries), so it slightly strengthens the legal posture
-rather than weakening it. Author economics stay positive for good claims (the
-8% author slice at mid/high tier ≫ the fee).
+**ADOPTED (vetted v0.12, mech vet: ADOPT-WITH-FIXES): claim fee.** 10% of the
+claim deposit, escrowed at open; **burned when the claim dies unanswered or
+resolves LOW; refunded when it resolves mid/high with the turnout floor met**
+(R7b). The vet's numbers showed the original always-burn was *regressive*: it
+barely dents a mill claim that attracts real conviction, while making the
+honest low-conviction long-tail net-negative (author slice on a thin claim <
+the fee). The conditional refund keeps the CC sink exactly where it belongs
+(junk and dead claims) and stops taxing honest experimentation. It also raises
+the mill's break-even life to ~13+ weeks against the 12-week dead-claim
+ceiling — a real complement to the flag lane, not a substitute. Register
+trade-off (recorded honestly): a conditionally-refunded fee is weaker on
+*Humphrey* factor 1 ("fees paid unconditionally") than the original — accepted,
+because the fee was never the load-bearing legal element (the lead argument is
+risk-on-outcome, §7.1) and the refund condition is contribution-quality, not a
+wager's win/lose.
 
 **REJECTED: continuous-probability verdicts** (voters submit probabilities;
 payout by closeness — a scoring-rule court). The division of labor is already
@@ -532,14 +570,16 @@ product; every number on it must be reproducible from public reads.
 | winner cap | (tier/2) × time-averaged stake | flash-proof base (F9) |
 | author/answerer slice caps | ≤ (tier/2) × own stake | no capital-free rake (F1) |
 | split | 80/8/7/5; **voter slice tier-invariant, paid even at low, with-verdict only** | F2/F3 |
-| quality-flag bond | max(flagMin, 2%·X̄); returns iff median = low, else burns | the F1 flag lane |
+| quality-flag bond | max(flagMin, 2%·X̄); returns iff low, else burns; doubles per re-flag; slot reopens on inconclusive mid | spam price only — the WINDOW and SLOT rules are the security (mech vet R4) |
+| flag-open sub-window | settle disallowed first 24h post-answer | v0.12 (A17) |
+| rateAtFreeze | emission rate sampled at answer-freeze | v0.12 (A17) |
+| answer priority | difficulty-weighted record (contested-and-upheld only), ≥3 → 24h window; gate off until N addresses qualify; 1 active priority claim/address | v0.12 (A18) |
+| claim fee | 10% of deposit; burned on dead/low, refunded on mid/high with turnout floor | v0.12 (R7b) |
 | dispute bond | min(20%·X̄, 2 × answer-bond cap), doubling kept; **20% of losing bond burns on decided votes** | F5 cap; F3/F6 burn |
 | minAnswerX | re-derive in V2 units (trailing total STAKE, no sets exist; placeholder 100 CC) | §8.8 — V1's "100 sets' worth" is meaningless in V2 |
 | answer bond, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |
 | dead-claim timeout | 12 weeks | new (O6 fix) |
 | bond–tier coupling | `answerBondBps ≥ maxUndisputedTier/2` | frozen invariant, §3.6; deploy refuses otherwise |
-| claim fee (burned) | 10% of deposit | §3.8 brainstorm; CC's only sink |
-| answer priority | net record ≥ 3 → 24h priority window | §3.8 brainstorm, needs vet |
 
 ## 5. Attacks & mitigations
 
@@ -561,6 +601,9 @@ All statuses reflect the econ vet's findings (F1–F11), ingested v0.6.
 | A13 | Adversary-timed zero-draw: third party Finalizes a rival's claim while R ≈ 0 → their draw = 0 forever, at gas cost (reservoir vet F-R3) | Finalize participant-only for a 1-week grace, permissionless after; accrual-interval queue recorded as the upgrade path | `CLOSED (v0.11)` |
 | A14 | Scheduled self-defeat of a frozen scalar rate: d decays by the halving path → y* sinks below rate by ~the 2nd halving → farming turns on with no adversary (reservoir vet F-R1) | Rate is a deploy-frozen SCHEDULE tracking y*(n)'s deterministic component at 0.85·y*(n); decrease-only ratchet noted for r-drift; no increase lever | `CLOSED (v0.11)` |
 | A15 | Author-mill v2 — single-sided p=1 farming inside the anti-farm band, re-armed because the reservoir deleted the crowd's selfish flag motive (reservoir vet F-R2) | Low-tier deposit slash (burned) + flag bounty minted (≈ deposit/2) → mill kill threshold drops to q ≈ 0.2 | `CLOSED (v0.11)` |
+| A16 | **Self-flag slot squat** (mech vet R1, launch-blocking): mill's sybil flags its own claim instantly with a dust vote destined for low-turnout mid — one burned bond consumes the only flag slot and immunizes the claim; the ¼-bar floor shields the mill, not honest claims | The slot is consumed only by a CONCLUSIVE vote; inconclusive (mid under the turnout floor) REOPENS it; re-flags post doubling bonds | `CLOSED (v0.12)` |
+| A17 | **Settle/flag ordering race + step-down delay grief** (mech vet R2): permissionless settle at 72h+1 turns the flag window into a 1-block race; and a 7d flag pause could drag a rival's claim across a rate step-down, halving their draw for one 2%·X̄ bond | Settle disallowed for the first 24h post-answer (guaranteed flag-open interval); emission rate sampled at answer-freeze (`rateAtFreeze`), so no pause or honest long dispute changes a claim's rate | `CLOSED (v0.12)` |
+| A18 | Credential × mill habitat overlap (mech vet R6): raw stood-counting is maximized by cherry-picking trivially-true claims — the credential would compound the mill instead of checking it | Difficulty-weighted record: undisputed stands ≈ 0, contested-and-upheld = full credit; plus cold-start guard and one-active-priority-claim limiter | `CLOSED (v0.12)` |
 
 **The F6 insight, recorded:** in V2 a flipped verdict moves **no staker
 principal** — staker-level harm from a wrong verdict is purely epistemic. The
@@ -894,6 +937,23 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.12** — (iteration 8c) **third vet (new mechanisms) ingested — all three
+  verdicts ADOPT-WITH-FIXES, fixes applied.** Launch-blocking flag-lane hole
+  closed: the self-flag slot squat (A16 — one burned sybil bond consumed the
+  only flag and immunized a mill; the slot now only burns on a CONCLUSIVE
+  vote, inconclusive low-turnout mid reopens it, re-flags double) and the
+  settle/flag ordering race (A17 — settle now disallowed for the first 24h
+  post-answer). Emission `rateAtFreeze` (A17): a flag pause or an honest
+  8-week dispute can no longer drag a claim across a rate step-down — also
+  fixed an unprompted latent bug (long disputes silently halving winners'
+  draws). Credential de-aligned from the mill (A18): difficulty-weighted
+  record (undisputed ≈ 0, contested-and-upheld full), cold-start gate,
+  one-active-priority-claim limiter. Claim fee made conditionally refundable
+  (burn on dead/low, refund on real resolution) — the always-burn was
+  regressive against the honest thin-claim long-tail; Humphrey factor-1
+  trade-off registered honestly. Confirmed UNPROFITABLE by the vet: credential
+  farming, collusive demotion (the fixed linear rate kills the relative-share
+  motive — keep linear forever).
 - **v0.11** — (iteration 8b) **reservoir vet AND legal vet ingested together —
   the joint fix is the design rule "FORFEITURES BURN; COMPENSATION MINTS."**
   Legal vet found V1's own doc calling bonds "a bet between two people. The
