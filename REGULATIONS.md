@@ -167,3 +167,55 @@ takes (b). [SETTLED as to history]
 ## 9. Append log (new findings below, dated)
 
 - 2026-08-15: Initial compilation from the three DD memos + crypto case-law pass.
+- 2026-08-15 (legal vet, primary-sourced): **Kent v. PoolTogether** verified from
+  the order (E.D.N.Y. 21-cv-6025, Doc. 135, 6/7/2023): no-loss crypto protocol;
+  dismissed for lack of Article III standing (withdrawable principal ⇒ no
+  injury; foregone interest "a problem of his own making"); WITHOUT prejudice;
+  court analogized to prize-linked savings ("no-loss lotteries"). Standing-only
+  — blocks private suits, not AGs. [SETTLED as to holding]
+- 2026-08-15: **Prize-linked savings cuts AGAINST "returned principal ⇒ no
+  consideration"**: American Savings Promotion Act, Pub. L. 113-251 (2014,
+  govinfo-verified) defines a savings-promotion raffle's returnable deposit as
+  its "sole consideration" and had to statutorily exempt such raffles from
+  lottery law. Argue "nothing staked or risked UPON THE OUTCOME" (N.Y. Penal
+  §225.00(2), text verified) — not "no consideration". [SETTLED]
+- 2026-08-15: **Humphrey pin verified** (2007 WL 1797648 at *9): factors = fees
+  unconditional / prizes "amounts certain and guaranteed" / operator doesn't
+  compete. Variable pro-rata shares flunk factor 2; a fixed published RATE
+  scores better than a contested pool (the V2 reservoir helps here). Also Las
+  Vegas Hacienda v. Gibson, 77 Nev. 25 (1961) (fee that doesn't make up the
+  purse ≠ wager). [PARTIALLY VERIFIED — unpublished op.]
+- 2026-08-15: **White v. Cuomo (38 N.Y.3d 209, 2022) also supplies a
+  fixed-prize/entry-fee principle** (verified, NY official reporter): prizes
+  predetermined, announced, neutral operator, unchanged by entrant numbers/fees
+  ⇒ not gambling under the NY Constitution; "dominating element" standard.
+  Nuances §2's "material element — skill does NOT save you" line: Penal Law
+  text unchanged, but the state's high court is friendlier to fixed-prize
+  contest design than the AG-era posture suggested. [SETTLED]
+- 2026-08-15: **KalshiEx v. Flaherty verified from the 3d Cir. opinion**
+  (No. 25-1922, decided 4/6/2026): PI affirmed; field+conflict preemption of NJ
+  gambling law **limited to swaps on CFTC-licensed DCMs**; BOTH majority and
+  dissent read §1a(47)(A)(ii) broadly (sports outcomes fit "associated with a
+  potential financial, economic..." consequence). [SETTLED; F.4th cite verify]
+- 2026-08-15: **CFTC rulemaking chain re-verified via Federal Register API** +
+  ONE GAP the original DD missed: "Data Reporting Requirements for Certain
+  Event Contracts," proposed 7/1/2026 (doc 2026-13239). Re-pull all four at
+  final. [SETTLED as to existence]
+- 2026-08-15: **Wyoming DUNA verified from enrolled 2024 SF0050** (W.S.
+  17-32-101–129, eff. 7/1/2024): ≥100 members (auto-conversion below,
+  §114(b)(iii)); no dividends (§104(b)) BUT "reasonable compensation … for
+  services rendered, including … voting or participation" expressly permitted
+  (§104(c)(i)); member shield §107/§109; DLT governance §121–122; §118(b)
+  preserves other law (federal untested); membership-consent mechanics needed;
+  tax unresolved. [SETTLED as to statute text]
+- 2026-08-15: **Munchee burn passage verified** (33-10445): the SEC cited a
+  token-burn-for-scarcity-appreciation pitch as Howey evidence. Never market
+  the GNOT burn as scarcity/"monetary meme"; describe as verifiable on-chain
+  mechanics. [SETTLED]
+- 2026-08-15: **SEC protocol-staking statement verified via proxy** (5/29/2025):
+  rewards from "administrative or ministerial" protocol participation are not
+  securities transactions; excludes liquid staking/restaking; staff-level, no
+  legal force. Helpful analogy for V2 emission; imperfect fit (V2 rewards
+  adjudicated correctness). MSB/ICO-seller-of-own-CVC characterization of the
+  one-way curve: FinCEN 2019 guidance could not be fetched [verify] — counsel
+  checkbox added to PLAN §7.5.

@@ -74,10 +74,13 @@ unchanged from V1.
    answer standing undisputed. NEW: a **quality tier** (§3.4).
 5. **Settle.** Losers withdraw principal 1×. Winners withdraw principal 1× + the
    emission bonus (§3.5). Author, with-verdict voters, and the answerer draw their
-   emission slices. Deposit refunds to the author. **Losers may withdraw 1×
-   immediately after any DECIDED dispute round** (econ vet F7) — their outcome
-   cannot improve, and releasing them defuses the multi-round freeze-hostage
-   (up to ~8 weeks of locked capital across 3 rounds).
+   emission slices. The deposit refunds to the author **unless the quality vote
+   landed low — then it is slashed and burned** (v0.11, §3.4). Finalize is
+   participant-only for its first week of eligibility, permissionless after
+   (v0.11, §3.3). **Losers may withdraw 1× immediately after any DECIDED
+   dispute round** (econ vet F7) — their outcome cannot improve, and releasing
+   them defuses the multi-round freeze-hostage (up to ~8 weeks of locked
+   capital across 3 rounds).
 6. **Dead claim.** A claim that never reaches an answer unlocks fully after a
    timeout: all stakes 1×, deposit back (fixes V1 residual O6).
 7. **provClose** (3 failed dispute rounds): everyone 1×, no bonus, no author
@@ -127,11 +130,25 @@ denominator exists to time or to hold hostage.
 - **The sizing band (econ vet F5, closed form)**: matched-stake farming profits
   iff yield-per-conviction `y > y* = 2(r+d)·T_L/T_c` (r = external opportunity
   rate, d = dilution rate, T_L/T_c = lock-to-conviction time ratio ≈ 1.5).
-  Honest stakers with accuracy p profit iff `y > y*·(1/2p)`. So set
-  **`rate` in the band `(y*/2, y*)`** — e.g. `0.75·y*` ≈ 0.8%/week on conviction
-  at reference numbers: matched farming strictly unprofitable, any staker with
-  p ≳ 0.67 clearly profitable, coin-flippers lose to lock cost. Deploy-time
-  constant; published.
+  Honest stakers with accuracy p profit iff `y > y*·(1/2p)`.
+- **v0.11 (reservoir vet F-R1, BREAKS-AS-SPECCED — fixed): the rate is a frozen
+  SCHEDULE, not a frozen scalar.** A scalar is *scheduled to self-defeat*: `d`
+  decays deterministically (the budget halves while supply only grows), so y*
+  sinks below any fixed rate by ~the second halving and farming turns on with
+  no adversary at all. Fix: at deploy, compute `rate_n` per period from the
+  known halving path and the ceiling-supply d(n) (r frozen at the launch
+  estimate) — still a pure constant table, zero governance surface, V1
+  discipline intact. With the deterministic decay handled, a **thinner
+  anti-farm margin is safe: `rate_n = 0.85·y*(n)`** (reservoir vet F-R5),
+  which pays honest stakers down to p ≈ 0.59 instead of amputating the
+  0.5–0.67 calibration population. Residual r-drift is accepted and one
+  incentive-safe lever is noted for the wrapper entity: a **decrease-only**
+  ratchet (capture wants the rate *up*; a monotone-down lever is
+  extraction-proof). No increase lever, ever.
+- Calibration is a protocol constant; **public documents never express it as a
+  rate of return** (legal vet: our own §3.3 "APR-equivalent" language violated
+  §7.4's hygiene inside the same file — struck; yield calibration lives in a
+  private economics memo).
 - **Ceiling, not floor**: unearned budget is never minted; the reservoir cap
   banks at most 4 quiet weeks.
 - **Deploy-time invariants** (checked in code, V1-style): `curveCap + Σemission
@@ -139,9 +156,27 @@ denominator exists to time or to hold hostage.
   per-claim `Σg` is **clamped** (never aborted) at a `G_MAX` so no crafted
   position can poison a shared settlement path (econ vet F4: checked-abort on a
   shared path is a settlement DoS — clamp instead).
+- **v0.11 (reservoir vet F-R3): Finalize is participant-gated for a grace
+  week.** Permissionless-Finalize at an empty reservoir was an adversary's
+  button: finalize a rival's claim the moment it's eligible while R ≈ 0 →
+  their draw = min(Σg, 0) = 0, *forever*, at gas cost. Now only a claim's
+  participants (staker/author/answerer) may Finalize for the first week of
+  eligibility; permissionless after (liveness preserved). The accrual-interval
+  queue (entitlements reserved on the cumulative-emission number line, paid as
+  accrual covers them) is recorded as the upgrade path if scarcity becomes
+  chronic despite the rate schedule.
+- Pins (reservoir vet F-R4): `R_max` is defined against the *current* period's
+  budget, and R may transiently exceed it at a step-down boundary (pause
+  accrual; never clamp R down). Public copy advertises `min(rate,
+  availability)` — never a fixed return. Cross-claim coupling is not "gone",
+  it is **intermittent and bounded**: under scarcity your draw depends on
+  rivals' prior draws, by design, failing in the right order (farmers exit
+  first, then the least-confident stakers; the most accurate capital is the
+  last standing).
 - Residual (accepted): FCFS when the reservoir runs dry — bounded by `R_max`
   and the individual caps; draining R requires *real winning conviction*, so it
-  cannot be griefed for free.
+  cannot be griefed for free (and the grace-gate above removes the third-party
+  variant).
 
 ### 3.4 Resolution: verdict + quality — `VETTING`
 
@@ -182,9 +217,26 @@ denominator exists to time or to hold hostage.
   healthy court the dilution-payers outweigh any mill's stakers.
 - **Interactions**: a flag during an open dispute is refused (the dispute vote
   already carries quality); a flag cannot be withdrawn (no flag-then-retract
-  timing games); the flagger gets no reward beyond bond return (policing is
-  spam-priced, not yield-bearing — a paid-flagger lane would recreate F2's
-  problem in miniature).
+  timing games); **a flag must close before the draw** — the tier crystallizes
+  before D is computed, and the flag window ends at the settle tx (reservoir
+  vet pin: the earlier text never excluded a post-payment flag).
+- **v0.11 — policing must be PAID (reservoir vet F-R2, reversing v0.7's
+  no-reward stance).** Under pro-rata, junk claims diluted every other claim's
+  yield, so the crowd had a diffuse selfish motive to flag; the reservoir
+  deleted it (in under-demand a mill harms no identifiable party), and
+  bond-return-only flagging is pure altruism — the author-mill re-arms as
+  *single-sided p=1 farming*, which sits INSIDE the anti-farm band (it locks
+  1×, not 2×). Fix, harmonized with the v0.11 burn rule: on a low outcome the
+  author's **deposit is slashed and burned**, and the successful flagger is
+  compensated by a **formulaic emission slice ≈ deposit/2** (mint, not
+  transfer — no bilateral flow). Kill threshold for the mill drops from
+  q ≈ 0.65 to q ≈ 0.2, which a paid flagger community credibly supplies. The
+  v0.7 worry (paid flagging recreates F2 in miniature) is bounded: the bounty
+  pays ONLY on a real vote landing low with the ¼-bar turnout floor, and a
+  wrong flag burns the flag bond. Register note: this puts a small bounded
+  prize on low-median capture against honest claims — acceptable because
+  principal is untouched, the prize ≪ the capture cost, and the asymmetric
+  ratchet caps the blast radius.
 - **Tier ratchet is asymmetric (econ vet F3)**: the median can only move
   **mid ↔ low**; **high requires ≥ ⅔ of turnout AND turnout ≥ the claim's
   verdict bar**. A whale with ~29% of a thin turnout could capture a median;
@@ -246,6 +298,17 @@ voter slice:   TIER-INVARIANT — computed at mid-weight and paid even when the
   linear is the unique splitting-neutral rule — sqrt gifts claim-splitting
   sybils a √k multiplier; per-claim caps punish exactly the flagship big-claim
   moments. No smoother.
+- **v0.11 additions**: two further formulaic mint-slices exist under the
+  "forfeitures burn; compensation mints" rule — prevailing-party bond
+  compensation (§3.6) and the flag bounty (§3.4) — both capped, both computed
+  from tallies, both subject to reservoir availability like everything else.
+  **Public naming** (legal vet): the winner slice is called **accuracy
+  rewards**, the cap is stated as "reward ≤ 0.5× (mid) / 1.0× (high) of locked
+  stake" — never as an "up to 2×" multiplier headline; all contributor slices
+  are described as *reasonable compensation for services rendered, including
+  voting or participation* (deliberately the Wyoming DUNA act's own permitted
+  category, W.S. 17-32-104(c)(i)); the emission step-down is public-copy
+  language for what the math calls halving.
 
 ### 3.6 Bonds and deposits — `DRAFT`
 
@@ -269,17 +332,40 @@ with them or the deploy refuses. (The econ vet's F1/F10 confirmed the self-deal
 arithmetic; with the flag lane and slice caps the undisputed path nets ≤ 0
 against the bond at detection ≥ 50%.)
 
-Two bond revisions from the econ vet:
-- **Dispute bond is capped**: `min(20%·X̄, 2 × answer-bond cap)` (F5). X̄ counts
-  *refundable* stake now, so matched capital inflates it for free — an uncapped
-  20%·X̄ would let a farmer price honest policing out of its own claim. The
-  doubling schedule still deters serial disputes.
-- **20% of the losing bond burns even on DECIDED votes** (F3/F6). V1 paid the
-  loser's bond whole to the winner, which made **self-dispute free** (answer
-  from wallet A, dispute from wallet B, the upheld answerer pockets B's bond —
-  net ≈ gas) — a free trigger for vote machinery and a bribery-loot maximizer.
-  A 20% burn prices the trigger at ~4%·X̄ per pull and shaves vote-capture loot,
-  while an honest winning party still nets 80% of the loser's bond.
+Bond revisions, in two stages:
+- **Dispute bond is capped**: `min(20%·X̄, 2 × answer-bond cap)` (econ vet F5).
+  X̄ counts *refundable* stake now, so matched capital inflates it for free —
+  an uncapped 20%·X̄ would let a farmer price honest policing out of its own
+  claim. The doubling schedule still deters serial disputes.
+- **v0.11 — "FORFEITURES BURN; COMPENSATION MINTS" (legal vet + econ vet,
+  jointly).** The legal vet found the fatal sentence in our own corpus: V1's
+  tokenomics doc §4 says the bonds are *"a bet between two people. The loser's
+  bond goes to the winner, whole."* — a literal, self-described, loser-pays-
+  winner bilateral transfer on a vote outcome, i.e. the exact structure every
+  other part of V2 exists to delete, quotable by any adversary, and the #1
+  residual on BOTH the gambling and CFTC axes. The econ vet had independently
+  shown the whole-bond transfer makes self-dispute free (wallet A answers,
+  wallet B disputes, A pockets B's bond). One rule now fixes both, everywhere:
+  **a forfeited bond is burned in full, never paid to any party; the
+  prevailing party is made whole by a formulaic emission slice sized to V1's
+  compensation schedule and capped like every other slice.** The loser still
+  loses exactly as much (deterrence unchanged); the winner is still
+  compensated (incentive unchanged); no value ever moves *between* adversaries
+  on any outcome — punishment is deflation, reward is issuance. This
+  supersedes v0.6's partial 20%-burn rule, prices self-dispute at 100% (not
+  20%) of the sacrificed bond, shrinks vote-capture loot to capped emission
+  only (F6 margin improves again), and makes §7.1's "no bilateral
+  event-contingent payment" claim TRUE rather than aspirational. Cost
+  accepted: prevailing-party comp now depends on reservoir availability
+  (scaled in exhaustion like all slices) — noted in the register.
+- **Prose correction (reservoir vet F-R6)**: the §3.6 bond-sizing argument
+  above overstated itself — under the reservoir, `50%·X̄` does not *equal* the
+  maximum undisputed extraction; it **upper-bounds it with ~5× slack**
+  (rate-based extraction over a ≤12-week claim life ≈ 9%·X̄, vs the winner-cap
+  ceiling the invariant was derived from). Keep the invariant exactly as
+  written — a conservative cap-based bound survives rate/duration drift — and
+  note the lie is EV-negative at detection ≥ ~15%, not the 50% claimed before,
+  which comfortably absorbs the flag lane's imperfect detection.
 This is a **deliberately retained gray area**: a forfeitable bond is stake lost on
 a vote outcome. The distinction we rely on: it prices *your own conduct* (posting
 an answer, filing a dispute) like a court's frivolous-filing sanction or an appeal
@@ -321,8 +407,17 @@ Considered and rejected: a GNOT work-pool paying moderators/authors.
   send to a provably keyless sink (a derived unspendable address, V1
   `DerivePkgBech32Addr`-style with a dead path, or the chain's designated burn
   address if one exists; pin at implementation). CC burns (the 10% claim fee,
-  losing-bond burns) use `grc20votes.Burn`, which V1 already exercises on the
-  failed-quorum path — audited code, no new machinery.
+  bond and deposit forfeitures) use `grc20votes.Burn`, which V1 already
+  exercises — audited code, no new machinery.
+- **Legal-vet wording corrections (v0.11)**: the burn is described publicly as
+  *legible and verifiable on-chain* — never as a scarcity feature or a
+  "monetary meme" (the SEC's Munchee order cited a token-burn-for-appreciation
+  pitch as Howey evidence; the mechanism is fine, the marketing frame is the
+  hazard). And "zero compliance machinery" was an overclaim: burning defeats
+  the money-*transmission* leg, but the seller-of-own-convertible-token (ICO)
+  MSB characterization of one-way curve sales gets an explicit counsel
+  checkbox (§7.5) — likely fine for an operatorless immutable contract, not
+  free to assert.
 
 ### 3.8 Brainstorm outcomes (iteration-4 step-back pass) — `DRAFT`
 
@@ -424,7 +519,10 @@ product; every number on it must be reproducible from public reads.
 | Constant | Value (post econ vet) | Note |
 |---|---|---|
 | period | 120,960 blocks (1 wk) | halving bookkeeping only — claims have no period under the reservoir |
-| rate (CC per conviction stake-hour) | `0.75 × y*`, `y* = 2(r+d)·T_L/T_c` at launch estimates (≈0.8%/wk on conviction) | F5 band `(y*/2, y*)`: farming unprofitable, p ≳ 0.67 profitable |
+| rate schedule (CC per conviction stake-hour, per period) | `rate_n = 0.85 × y*(n)`; `y*(n) = 2(r₀+d(n))·T_L/T_c`, d(n) from the deploy-known step-down + ceiling-supply path | v0.11: frozen SCHEDULE not scalar (A14); pays p ≳ 0.59; decrease-only ratchet optional, never an increase lever |
+| Finalize authorization | participant-only first week of eligibility, then permissionless | v0.11 (A13) |
+| bond/deposit forfeitures | 100% BURNED, never paid to a party; prevailing-party comp + flag bounty are capped emission slices | v0.11 "forfeitures burn; compensation mints" |
+| flag bounty | ≈ deposit/2, minted on a low outcome | v0.11 (A15) |
 | B₀ (weekly accrual) / R_max | `b·120,960` / `4 × B_period` | reservoir cap banks ≤ 4 quiet weeks |
 | halving interval | 104 periods | total emission ≤ 2·B₀·104, finite |
 | supply invariant | curveCap + Σemission ≤ MaxInt64/Bps, ≥20% headroom | checked at deploy |
@@ -457,9 +555,12 @@ All statuses reflect the econ vet's findings (F1–F11), ingested v0.6.
 | A7 | Emission-lever capture | No lever exists (frozen constants) | `ACCEPTED (V1 discipline)` |
 | A8 | Unstake games: paint the ratio, unstake→restake cycling, freeze front-running | Exact-integral conviction (never resets; capital-conserving); freeze atomic with the answer (same-block-later unstakes revert); publish the conviction-weighted ratio alongside the instantaneous one — the only series you can move is the one you pay capital-time for | `CLOSED (F9)` |
 | A9 | Arithmetic: conviction overflow; **checked-abort on a shared settle path = settlement DoS** | Stake×hour units (fit int64 with ~5× headroom); 128-bit `mulDivFloor` for draws; per-claim Σg CLAMPED at G_MAX — never aborted — so no crafted position poisons settlement for others | `CLOSED (F4)` |
-| A10 | Cross-claim pro-rata: period-assignment timing + slowest-dispute payout coupling (self-found) | Reservoir drip adopted (§3.3) — no cross-claim denominator exists; the vet's in-model fix (assign claims to their answer-freeze period, F11) recorded but moot | `CLOSED (reservoir)` |
+| A10 | Cross-claim pro-rata: period-assignment timing + slowest-dispute payout coupling (self-found) | Reservoir drip adopted (§3.3) — no cross-claim *denominator* exists to time; coupling through R is **intermittent and bounded** under scarcity, failing farmers-first (F-R4), not "gone" | `CLOSED (reservoir, wording per F-R4)` |
 | A11 | Voter-carrot tier-coupling → electorate-wide drift to "high"; policing junk is unpaid (CRITICAL) | Voter slice tier-invariant, paid even at low, with-verdict only | `CLOSED (F2)` |
-| A12 | provClose freeze-hostage: push a rival claim through 3 failed rounds; stakers frozen ~8 weeks, conviction pays zero | Losers exit 1× after each decided round; the self-dispute variant is taxed by the 20% burn; a griefer cannot force votes to fail on any claim with motivated stakers | `MITIGATED (F7); residual: orphan claims, low damage` |
+| A12 | provClose freeze-hostage: push a rival claim through 3 failed rounds; stakers frozen ~8 weeks, conviction pays zero | Losers exit 1× after each decided round; the self-dispute variant now sacrifices 100% of the bond (v0.11 burn rule); a griefer cannot force votes to fail on any claim with motivated stakers | `MITIGATED (F7+v0.11); residual: orphan claims, low damage` |
+| A13 | Adversary-timed zero-draw: third party Finalizes a rival's claim while R ≈ 0 → their draw = 0 forever, at gas cost (reservoir vet F-R3) | Finalize participant-only for a 1-week grace, permissionless after; accrual-interval queue recorded as the upgrade path | `CLOSED (v0.11)` |
+| A14 | Scheduled self-defeat of a frozen scalar rate: d decays by the halving path → y* sinks below rate by ~the 2nd halving → farming turns on with no adversary (reservoir vet F-R1) | Rate is a deploy-frozen SCHEDULE tracking y*(n)'s deterministic component at 0.85·y*(n); decrease-only ratchet noted for r-drift; no increase lever | `CLOSED (v0.11)` |
+| A15 | Author-mill v2 — single-sided p=1 farming inside the anti-farm band, re-armed because the reservoir deleted the crowd's selfish flag motive (reservoir vet F-R2) | Low-tier deposit slash (burned) + flag bounty minted (≈ deposit/2) → mill kill threshold drops to q ≈ 0.2 | `CLOSED (v0.11)` |
 
 **The F6 insight, recorded:** in V2 a flipped verdict moves **no staker
 principal** — staker-level harm from a wrong verdict is purely epistemic. The
@@ -479,41 +580,102 @@ depth grows — transferability-off remains the emergency lever.
   calibrated crowd probability + adjudication, not a trading venue.
 - **Zero-sum sharpness.** No-loss staking attracts softer opinions than
   money-at-risk. Conviction weighting and quality tiers claw back some sharpness.
+- **The mid-confidence band (reservoir vet F-R5).** Any anti-farm margin
+  (rate < y*) prices out stakers whose true edge is below y*/(2·rate). At the
+  v0.11 schedule (0.85·y*) that's p < ~0.59: the 55–58% crowd — real signal —
+  rationally sits out, a genuine calibration cost of excluding farmers. The
+  schedule fix is what let the margin be this thin; thinner still would re-admit
+  farmers under drift. Owned, not hidden.
 - **Hard emission answers.** Dilution is a real cost borne by all holders;
   the budget makes it bounded and legible, not free.
 
 ## 7. Regulatory rationale (see REGULATIONS.md for the full DD)
 
-### 7.1 What V2 changes, per axis
-- **Gambling (state law)**: the strongest hook — loser's stake pays the winner —
-  is gone. No participant can lose principal on an outcome. Remaining theories are
-  soft: consideration-as-lockup (symmetric, non-punitive) and prize-via-dilution
-  (diffuse, untested). This is the main gain.
-- **CFTC**: no bilateral payment contingent on an event (losers ≠ payors; the
-  "payout" is protocol issuance of a non-cashable token). Materially weaker than a
-  cash-settled binary; untested, and §1a(47)(A)(ii) is broad — gray, accepted.
-- **Securities**: the pressure moved HERE, knowingly. Emission rewards look like
-  yield; paid-in-CC contributors are "efforts of others." Mitigations: CC stays
-  non-cashable in-protocol (one-way curve, GNOT burned, no protocol exit), rewards
-  go to *work and correctness*, never to passive holding; comms hygiene (§7.5).
-  Accepted residual per owner ("not afraid of SEC fines").
-- **Ooki / voter liability**: no vote ever directs real money (GNOT burned;
-  rewards formulaic). Remaining exposure: voters run the adjudication of a system
-  that mints value. Mitigation below.
+### 7.1 What V2 changes, per axis (rewritten v0.11 per the legal vet — every
+sentence now survives its overclaim scan)
+
+- **Gambling (state law)**: loser-pays-winner is gone from staking, and — after
+  the v0.11 bond rule — from the bond machine too: **no value moves between
+  adversaries on any outcome, anywhere** (forfeitures burn; compensation
+  mints). The LEAD argument is textual, not consideration: nothing is *staked
+  or risked upon the outcome* (e.g., N.Y. Penal Law §225.00(2)) — a staker's
+  principal returns unconditionally; the contingency is upside-only. Do NOT
+  lean on "no consideration": the prize-linked-savings history shows returnable
+  principal routinely IS consideration (the American Savings Promotion Act had
+  to statutorily carve out raffles whose "sole consideration" was a returnable
+  deposit). Kent v. PoolTogether (E.D.N.Y. 2023) de-fangs *private* suits (a
+  no-loss participant has no injury) but is standing-only — state AGs need no
+  injury. Residual theories: prize-via-dilution (diffuse, untested) and
+  purchase-gated eligibility in broad-consideration / any-chance states —
+  geofence lever if counsel advises.
+- **CFTC**: after v0.11, no bilateral payment contingent on an event remains —
+  the only outcome-contingent flows are one-sided protocol issuance
+  (structurally akin to protocol-staking rewards) and burns (nobody's gain).
+  "Delivery" of minted CC is still *colorably* within §1a(47)(A)(ii)'s words
+  (the 3d Cir. read the clause broadly in Flaherty), but the defense is
+  structural: no party takes the other side, no one's obligation is
+  contingent, nothing is exchanged. One wrinkle to keep visible: the
+  "excluded commodity" definition wants an occurrence *beyond the control of
+  the parties*, and V2's trigger is the participants' own vote — cuts both
+  ways. Gray, accepted; re-read the pending 2026 rulemakings at final.
+- **Securities**: the pressure concentrated HERE, knowingly — the accepted
+  risk. Precisely stated: rewards require *taking a position and being right*
+  (or doing compensated work); they scale with locked capital-time, which is
+  capped per person and never framed as yield. CC is **non-redeemable
+  in-protocol but transferable** (say it exactly this way — "non-cashable" was
+  an overclaim; OTC exit exists and is the profit-realization path a
+  hypothetical SEC case would build on). The burn strengthens Buy's
+  consumption story doubly: no pooling (nothing for anyone's efforts to
+  deploy — the SG Ltd. flip cannot happen) and no redemption. Cheapest
+  hardening, adopted: no APR/return language anywhere public, "step-down" not
+  "halving", "accuracy rewards" not multipliers, slices = compensation for
+  services. The one severable design lever left on the table: time-vesting
+  transfers of *reward-earned* CC only (purchased CC stays liquid) — §8.10.
+- **Ooki / voter liability**: no vote directs GNOT or any treasury — votes
+  only select among formulaic, pre-committed CC outcomes (verdict, tier, bond
+  disposition), and after v0.11 none of those outcomes transfers value between
+  parties. Remaining exposure: voters collectively operate a system that mints
+  transferable value. Mitigation: the DUNA wrapper (§7.3) with its
+  express compensation-for-voting authorization.
 
 ### 7.2 Explicitly accepted gray areas (owner sign-off)
 1. Inflation-funded winner rewards could be recharacterized as a common-pool prize
    (form-over-substance risk consciously taken).
-2. Forfeitable answer/dispute bonds (§3.6).
+2. Forfeitable answer/dispute/flag bonds and the low-tier deposit slash (§3.6,
+   §3.4) — all forfeitures BURN (v0.11), so no adversary is ever paid by a
+   loser, but conduct-priced loss on a vote outcome remains.
 3. CC transferability stays ON (OTC secondary value → Howey profit-expectation
    pressure) — product choice; the off switch is noted as the single biggest
-   securities lever if ever needed.
+   securities lever if ever needed; the severable middle option (vesting on
+   reward-earned CC only) is §8.10.
+4. Emission rewards are pro-rata-variable under reservoir scarcity — weaker on
+   *Humphrey*'s "amounts certain" factor than a fixed-prize design (legal vet).
+   Compensating controls: the fixed published rate (a *rate* is more
+   amount-certain than a contested pool share — the reservoir swap actively
+   helped here), the per-person caps, and scarcity-scaling being availability,
+   not competition.
+5. Prevailing-party bond compensation and the flag bounty depend on reservoir
+   availability (scaled under exhaustion) — a winner can be made *mostly*
+   whole in a busy stretch (v0.11 cost).
+6. A small bounded prize now rides low-median capture (the flag bounty) and
+   carrot-only voting mildly subsidizes P+ε coordination — both registered,
+   both bounded by caps and the ratchet.
 
 ### 7.3 Structural mitigations to build/do
-- **Entity wrapper**: form a **Wyoming DUNA** (Decentralized Unincorporated
-  Nonprofit Association, 2024 act) around governance — member-liability shield
-  aimed at exactly the Ooki theory, can hold assets/pay for services, tax
-  identity. (Verify current status with counsel — flagged in REGULATIONS.md.)
+- **Entity wrapper**: form a **Wyoming DUNA** (2024 act, verified from the
+  enrolled statute by the legal vet) around governance — separate legal entity,
+  member-liability shield aimed at exactly the Ooki theory (§107/§109), DLT
+  governance and DLT-ascertained membership expressly contemplated
+  (§121–122, §102), **and "reasonable compensation for services rendered,
+  including voting or participation" expressly permitted** (§104(c)(i)) — our
+  emission slices are drafted in that category's own words. Limits to plan
+  around: **≥100 members** (auto-conversion below — launch cohort may not
+  clear it; sequence formation accordingly); membership-consent mechanics must
+  be defined (voting = consent by conduct, or an opt-in registry — don't
+  conscript every CC holder silently); the shield is state-law and **untested
+  against federal enforcement** (§118(b) preserves other law), and it creates
+  a servable US defendant — that's the point, not immunity; tax treatment
+  unresolved (counsel).
 - Deployer/ops separation; no admin keys (already true: frozen params).
 - Optional geofence list for "any-chance"/"material-element" states if counsel
   advises at launch.
@@ -525,27 +687,27 @@ docs lead with the verdict/record product, not the token.
 
 ### 7.5 Counsel checkpoints
 Pre-launch opinion on: the no-loss+emission structure (gambling/CFTC), CC under
-Howey with emission, DUNA fit, state list. Re-check the 2026 CFTC "Prediction
-Markets" rule when final.
+Howey with emission, DUNA fit + formation sequencing (100-member floor, consent
+mechanics, tax), the **MSB / seller-of-own-convertible-token characterization
+of one-way curve sales** (v0.11), and the reward-CC transfer-vesting option
+(§8.10). Re-check at final: the 2026 CFTC "Prediction Markets" rule AND the
+**event-contract data-reporting NPRM (proposed 7/1/2026)** the original DD
+missed.
 
-### 7.6 Mechanisms added AFTER the legal vet launched (reconcile at ingestion)
-The in-flight legal vet reviewed v0.1. Added since, all in the same legal
-families it is already assessing — listed so its ingestion reconciles them
-explicitly rather than silently:
-- **Quality-flag bond** (v0.7): one more forfeitable *conduct* bond (same §7.2
-  bucket as answer/dispute bonds; burns are nobody's prize).
-- **20% burn of losing bonds on decided votes** (v0.6): reduces the
-  winner-takes-loser's-bond flavor — post-burn, less of any vote outcome is a
-  transfer between adversaries. Directionally helpful.
-- **Burned claim fee** (v0.5): entry fee paid win-or-lose — the *Humphrey*
-  non-wager factor, already argued in §3.8.
-- **Track-record answer priority** (v0.5): non-transferable, non-monetary
-  reputation — no new exposure expected.
-- **Reservoir-drip emission at a fixed published rate** (v0.6): replaces the
-  cross-claim contested pool with a per-conviction rate — *more* like protocol
-  staking rewards (the friendliest analogy in REGULATIONS.md §4), *less* like a
-  prize pool competed for across claims. Directionally helpful; needs the vet's
-  read.
+### 7.6 Post-launch mechanisms — RECONCILED at v0.11
+The legal vet read the evolving plan and its findings covered these; outcomes:
+- **Quality-flag bond** → same conduct-bond bucket; now burns like all
+  forfeitures; flag bounty mints (no bilateral flow).
+- **20% decided-vote bond burn** → SUPERSEDED by the 100% rule ("forfeitures
+  burn; compensation mints"), which the legal vet's bond finding demanded and
+  the econ vet's self-dispute finding independently supported.
+- **Burned claim fee** → confirmed helpful (*Humphrey* factor 1); note the
+  vet's precision: Humphrey factor 2 is "amounts certain and guaranteed", not
+  merely "not funded by entries" — see register item 4.
+- **Track-record answer priority** → no legal exposure noted.
+- **Reservoir rate** → confirmed the friendlier frame (a published rate reads
+  closer to protocol-staking rewards AND scores better on "amounts certain"
+  than a contested pool), with the F-R1 schedule fix adopted.
 
 ## 8. Open questions / vet queue
 
@@ -557,11 +719,18 @@ explicitly rather than silently:
 3. ~~Undisputed default-mid~~ — RESOLVED (F1): farmable and CRITICAL as it
    stood; closed by the mandatory quality-flag lane + author/answerer slice
    caps.
-3b. **Reservoir-vs-pro-rata follow-up vet** (launched v0.6): the econ vet's
-   fixes assumed the pro-rata model; I adopted the reservoir using its own F5
-   math (fixed rate below y* beats equilibrium-by-farmer-entry, and A10's
-   couplings vanish). A targeted vet is checking that swap for anything the
-   translation missed (e.g. FCFS drain races, rate staleness as r and d drift).
+3b. ~~Reservoir-vs-pro-rata follow-up vet~~ — LANDED: **KEEP RESERVOIR** with
+   mandatory tweaks, all adopted v0.11 (rate schedule A14; participant-gated
+   Finalize A13; paid flagging via deposit-slash-burn + minted bounty A15;
+   prose corrections F-R6/F-R4; the p-exclusion owned in §6). The
+   accrual-interval queue is the recorded upgrade path if scarcity turns
+   chronic anyway.
+10. **Severable securities lever (legal vet #2)**: time-vest transfers of
+   *reward-earned* CC only (in-protocol use immediate; transferable after N
+   months or one full participation cycle). Purchased CC stays liquid, so
+   Buy's consumption story is untouched. The single highest-leverage
+   securities hardening short of the full transferability off-switch. OPEN —
+   owner's product call; default OFF at launch.
 8. **minAnswerX re-derivation** (found writing Appendix B): V1's value is "100
    sets' worth" — meaningless without sets. Re-derive as a CC floor on trailing
    total stake (placeholder 100 CC); interacts with the flag bond and the
@@ -725,6 +894,36 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.11** — (iteration 8b) **reservoir vet AND legal vet ingested together —
+  the joint fix is the design rule "FORFEITURES BURN; COMPENSATION MINTS."**
+  Legal vet found V1's own doc calling bonds "a bet between two people. The
+  loser's bond goes to the winner, whole" — the last loser-pays-winner
+  bilateral transfer, falsifying §7.1's headline claims on both gambling and
+  CFTC axes; the econ vet had independently shown whole-bond transfers make
+  self-dispute free. Now every forfeiture (bonds, low-tier deposit slash)
+  burns in full and every prevailing-party compensation (answerer-comp,
+  disputer-comp, flag bounty) is a capped emission slice — deterrence and
+  incentives unchanged, zero adversary-to-adversary flows anywhere.
+  Reservoir vet: KEEP with tweaks, all adopted — rate becomes a deploy-frozen
+  SCHEDULE at 0.85·y*(n) (a frozen scalar was *scheduled to self-defeat* as d
+  decays with halvings — A14); Finalize participant-gated for a grace week
+  (zero-draw grief — A13); flagging must be paid (the reservoir deleted
+  pro-rata's diffuse flag motive; the author-mill re-armed as in-band
+  single-sided p=1 farming — A15); §3.6 prose corrected (the bond invariant is
+  a conservative ~5× upper bound; detection threshold ~15%); coupling wording
+  fixed (intermittent and bounded, F-R4); the p<0.59 mid-confidence exclusion
+  owned in §6 (F-R5). Legal vet's argument hierarchy adopted in §7.1: LEAD
+  with "nothing staked or risked UPON THE OUTCOME" (NY §225.00(2)), never
+  with "no consideration" (the prize-linked-savings history defeats it —
+  returnable deposits WERE consideration, Pub. L. 113-251); Kent v.
+  PoolTogether = standing-only; "non-cashable" corrected to "non-redeemable
+  in-protocol, transferable"; APR language struck from §3.3 (it violated our
+  own §7.4); "monetary meme" struck from §3.7 (Munchee); MSB counsel checkbox;
+  DUNA verified from the enrolled act (≥100 members, consent mechanics,
+  compensation-for-voting expressly permitted — slices drafted in the
+  statute's own words); register items 4–6 added; §8.10 severable
+  reward-CC-vesting lever recorded. REGULATIONS.md §9 gains eight dated
+  primary-sourced findings + the missed 7/1/2026 data-reporting NPRM.
 - **v0.9** — (iteration 7) §3.9 signal layer specced: three ratio series
   (instantaneous, trailing-week, conviction-weighted lifetime) — the third is
   free (the per-side conviction totals ARE ∫pool dt, already maintained for
