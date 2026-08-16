@@ -1319,6 +1319,85 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   regardless of bucket; the GNOT burn sink is a derived keyless address
   picked at deploy.
 
+## 10.2 Quality + crystallize coding spec (v0.36 — pre-implementation pins)
+
+Written before quality.gno so the intricate lane rules land as one coherent
+machine. Sources: §3.4 (flag lane), §3.5 (draw), v0.24–v0.31 changelog, pins
+P2/P4/P8/P10–P14.
+
+**Q1 — the quality electorate is pinned at PostAnswer**: `cs.qualityEpoch =
+coin.Epoch() − 1` stored on the claim when the answer lands (the last sealed
+epoch at the answer height — set before any flag can exist, v0.23). Every
+quality vote a claim ever has reads `PastVotes(voter, qualityEpoch)`. Escrowed
+(staked) capital is thereby structurally disenfranchised on its own claim.
+
+**Q2 — participant exclusion (v0.26)**: author, answerer, and any address with
+a staker record on the claim may not VoteQuality and never receive the carrot.
+Verdict (dispute) voting is unaffected (P11).
+
+**Q3 — the flag slot machine** (per claim): fields `flagOpen, flagger,
+flagBond, flagVoteEnd, flagCycles, slotConsumed, lastFlagEventAt, qVoteSeq` +
+a court-local sealed 3-bucket tally keyed (claim, qVoteSeq). b₀ =
+max(flagMinCC, X̄frozen×2%). Bond for cycle k: b₀×2^min(k,3) frozen at 4×b₀
+after 3 inconclusives with a 7-day per-flag cooldown (v0.24). OpenFlag guards:
+answered; no verdict-final crystallize yet; !disputeOpen (a flag during an
+open dispute is refused — the dispute ride carries quality); slot not
+consumed; cooldown honored; flag cannot be withdrawn.
+
+**Q4 — vote + outcome table** (window = votingBlocks, sealed until close; one
+vote per address; weight = Q1 epoch). Bars: demotionBar = min(X̄frozen,
+votable/3)/4 (NO supply floor, v0.25); fullBar = the verdict quorum floor
+(max(5%·supply, min(X̄frozen, votable/3))); votable at the Q1 epoch (P11:
+NOT net of refused weight).
+| Outcome | Condition | Tier | Flag bond | Extras |
+|---|---|---|---|---|
+| Conclusive LOW (dust) | median low ∧ turnout ≥ demotionBar ∧ (turnout < fullBar ∨ no ⅔-low) | low | **returned** | slot consumed; deposit slashed+burned, fee burned; bounty = min(bond, 80%×event burns) senior-queued; if turnout ≥ fullBar but < ⅔-low, the bond instead **half-burns** (the T2 free-roll price) |
+| Slash LOW | median low ∧ turnout ≥ fullBar ∧ ≥⅔ of turnout low ∧ answer was UNDISPUTED | low | returned | as dust-low PLUS the 4.5%·X̄ answer-bond slash, **escrowed one counter-flag window** (Q5) |
+| Conclusive MID | median mid ∧ turnout ≥ fullBar | mid | burned | slot consumed |
+| Promotion HIGH | ≥⅔ of turnout high ∧ turnout ≥ fullBar | high | burned | slot consumed (flag risk cuts both ways) |
+| Inconclusive-MID | median mid ∧ turnout < fullBar | unchanged | **half-burns** | slot REOPENS ×2 bond; no carrot |
+| Inconclusive-LOW | median low ∧ turnout < demotionBar | unchanged | **returned in full** (T1) | slot REOPENS ×2 bond; no carrot |
+
+**Q5 — counter-flag window (v0.31, P12)**: a slash outcome escrows the slash
+burn + its bounty increment for one votingBlocks window; the slashed ANSWERER
+may force exactly one re-vote at the supply-floored bar during it;
+inconclusive re-vote → the slash stands; the re-vote's outcome is final
+either way. Exactly-once: the slash amount moves answerBond→pendingSlash at
+the vote, burns (or refunds) only at window close/re-vote resolution.
+
+**Q6 — settlement gating (P4, v0.20 split settlement)**: principal
+(WithdrawStake) is NEVER gated by any flag state. A flag pauses only
+CRYSTALLIZE. Crystallize requires: verdictAt ≠ 0; !provClose; no open flag or
+pending counter-flag window; now ≥ lastFlagEventAt + 24h (the reopen-relative
+no-settle rule — every flag-vote close or slot reopen restamps it);
+participant-only for its first week of eligibility (A13 — the zero-draw
+timing attack targets the DRAW, so the gate lives here), permissionless
+after.
+
+**Q7 — the draw (one crystallize per claim, then pull-claims)**:
+- Second accumulator: stake.gno adds `rawConvHi/Lo` per position and per side
+  pool — ∫stake·dt in raw block units, u128 — the F9 flash-proof CAP base
+  (time-averaged stake = rawConv/openBlocks). A money-path change: fold into
+  the quality-milestone audit.
+- Pool-level, walk-free: Σg = tier × convToCC(winning-side pool conviction);
+  midGross = 1 × the same (tier-invariant carrot base). D = min(Σg, R, G_MAX
+  = curPeriodBudget) drawn via reserveJunior (clamp, never abort).
+- Split of D: winners 80/93, author 8/93, answerer 5/93 (court.gno split
+  invariant); carrot = 7% × midGross, P2-clamped (min(7%·midGross, per-voter
+  b₀/2−1)), senior-queued at crystallize, paid even at tier low; with-verdict
+  dispute voters weight-pro-rata (P14 governs the standalone lane: all
+  non-participant quality voters regardless of bucket).
+- Pull-claims (per claimant, at their own tx): winner_i = min( D_w ×
+  convCC_i/ΣconvCC_pool , (tier/2) × timeAvgStake_i ) — scale THEN cap
+  (P10); author ≤ (tier/2)×own timeAvgStake; answerer ≤ (tier/2)×answerBond0.
+  Cap dust stays unminted. Deposit refunds (unless slashed-low), fee refunds
+  (unless dead/conclusive-low) at crystallize — their one disposition point.
+- Tier low: D = 0 (winners/author/answerer draw nothing) but the carrot and
+  comps still pay (senior lane) and principal was never touched.
+
+**Q8 — provClose and dead claims** never crystallize: deposits/fees were
+disposed at their own terminal events; a crystallize call on them refuses.
+
 ## 11. Product surface — the V1 wireframe under V2 (v0.14)
 
 The V1 web overlay (10 screens, previously reconciled to V1 code) changes
