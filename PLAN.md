@@ -486,14 +486,26 @@ denominator exists to time or to hold hostage.
     bracketed the truth; T1 makes it moot). No faucet possible: a bond
     return is not income. (Grief-pricing micro-pass running — the one check
     the third report requested.)
-    **T2 — the large-claim free-roll priced**: at FULL-BAR turnout that fails
-    ⅔ (lands median-low), the flagger's bond burns HALF (no more free-roll
-    where the whale's own median control floors his downside), and **low-side
-    voter weight is TIME-LOCKED for T_L on any slash-triggering vote** — the
-    reuse cadence (~3%/wk yield at flagship scale) dies. This is V2's one
-    narrow weight-at-risk mechanism, and it respects the no-loss ethos:
-    weight is locked, never lost. Registered (T4): the X̄ ≳ 0.6%-supply
-    capture residual stands until T2's vet returns.
+    **T2 FINAL (v0.31, its own micro-pass, source-verified against V1's
+    checkpoints)**: at FULL-BAR turnout that fails ⅔, the flagger's bond
+    burns HALF (kills the free-roll's downside floor). The v0.29 weight
+    TIME-LOCK is **dropped as unimplementable** — an address-lock dies to
+    one transfer (PastVotes re-enfranchises the recipient wallet at the next
+    sealed epoch), and a balance-freeze would break the "grc20votes stays
+    unchanged" pin while benching the paid police for weeks. The flat-8%·X̄
+    entry alternative was REJECTED for re-creating V2-1 against honest
+    flaggers (a CORRECT flag landing median-low would burn 2× its prize).
+    The real price is the v0.28-registered **counter-flag window, now
+    armed**: the slash + full bounty ESCROW for one challenge window; the
+    slashed answerer may counter-flag at 2×b₀, forcing ONE re-vote at the
+    supply-floored bar, outcome final; an inconclusive re-vote leaves the
+    slash standing (the answerer's own mobilization is the re-vote's
+    turnout engine — if even that misses the bar, the original full-bar low
+    was sound). A capture-whale must now win ⅔ TWICE, the second against
+    maximal mobilization (p² ≈ 0); a real mill won't pay 4%·X̄ to re-lose.
+    Registered residual (A4-class): parallel reuse of one un-locked weight
+    pool across concurrent flagship claims — priced by per-claim bond risk,
+    the public alarm each 2%·X̄ posting raises, and the double-⅔ gauntlet.
     **T3 pin**: the dispute-ride quality vote inherits verdict quorum; the ⅔
     arm is checked on the QUALITY tally; no bounty exists on that path
     (no flag bond exists there — nothing to scale it from).
@@ -1404,6 +1416,20 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.31** — (iteration 52) **T2 final — and with it the ledger: CONVERGED,
+  no unvetted mechanism remains** (the micro-pass's own closing line). The
+  weight time-lock was confirmed unimplementable against V1's actual
+  checkpoint source (address-locks die to one transfer; balance-freezes break
+  the grc20votes pin and bench the paid police); my flat-8%·X̄ candidate was
+  REJECTED for re-creating V2-1 against honest flaggers; the adopted price is
+  the v0.28-registered counter-flag window, now armed: slash + bounty escrow
+  one challenge window, the slashed answerer forces one re-vote at the
+  supply-floored bar (inconclusive re-vote → slash stands), outcome final —
+  a capture-whale must win ⅔ twice, the second against maximal mobilization.
+  Parallel-reuse residual registered A4-class. The quality/policing layer's
+  full history: A4 → A15 → A16/A17 → A19 → A20 → A21 → T1/T2 — one hole
+  re-expressed seven ways, now closed at every reachable scale and priced at
+  every unreachable one.
 - **v0.30** — (iteration 46) **T1 grief-pass: SAFE-AS-IS; the quality/policing
   layer is design-CONVERGED** (the pass's own words), with both of my
   candidate guards rejected for cause and the sleepy-regime residual priced
