@@ -47,6 +47,13 @@ type claimState struct {
 	// conviction can never be repriced by later d_eff moves (audit H1).
 	frozenAt        int64 // 0 = live
 	rateAccAtFreeze int64
+	xBarFrozen      int64 // P6: the trailing-X̄ snapshot at the answer
+
+	// The answer (answer.gno).
+	answer       int8 // sideYES/sideNO once frozenAt != 0
+	answerer     address
+	answerBond   int64
+	answerHeight int64
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's
