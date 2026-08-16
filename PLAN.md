@@ -475,7 +475,29 @@ denominator exists to time or to hold hostage.
     the slashed answerer counter-flag at 2×b₀, forcing a re-vote at the
     supply-floored bar — makes small-claim slashes reachable later without
     ever freeing the faucet.
-  - **Root cause, named for V3 (both vets' convergence opinions agree)**:
+  - **v0.29 refinements (third composition report — validates the v0.28 gate,
+    fixes its two soft spots):**
+    **T1 — cheap-when-right flags**: an inconclusive-LOW (median low, turnout
+    under ¼-bar) returns the FULL bond — no bounty, no mint, slot reopens,
+    cooldown holds; the half-burn applies only to inconclusive MID/HIGH.
+    Obvious-junk flags become ~free-when-right, so flag frequency → 1 in the
+    mill band and tier-0 + deposit does the killing — robust to all three
+    vets' divergent mill-margin estimates (kill thresholds 12%/48%/74%
+    bracketed the truth; T1 makes it moot). No faucet possible: a bond
+    return is not income. (Grief-pricing micro-pass running — the one check
+    the third report requested.)
+    **T2 — the large-claim free-roll priced**: at FULL-BAR turnout that fails
+    ⅔ (lands median-low), the flagger's bond burns HALF (no more free-roll
+    where the whale's own median control floors his downside), and **low-side
+    voter weight is TIME-LOCKED for T_L on any slash-triggering vote** — the
+    reuse cadence (~3%/wk yield at flagship scale) dies. This is V2's one
+    narrow weight-at-risk mechanism, and it respects the no-loss ethos:
+    weight is locked, never lost. Registered (T4): the X̄ ≳ 0.6%-supply
+    capture residual stands until T2's vet returns.
+    **T3 pin**: the dispute-ride quality vote inherits verdict quorum; the ⅔
+    arm is checked on the QUALITY tally; no bounty exists on that path
+    (no flag bond exists there — nothing to scale it from).
+  - **Root cause, named for V3 (all three composition reports converge)**:
     A4→A20→A21 were one hole re-expressed — costless reusable voting weight
     triggering scaled value flows. It closes only by putting the triggering
     WEIGHT at risk (vote-bond escalation / appeals), which conflicts with
@@ -1382,6 +1404,18 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.29** — (iteration 42) the original composition vet's SECOND report — a
+  third independent A21 analysis — validates the v0.28 gate structure (and
+  sides with vet B against my claim-scaled bar: "slash-scale prizes must stay
+  supply-absolute") while fixing its two soft spots: **T1** inconclusive-LOW
+  returns the full bond (cheap-when-right flags → f → 1 in the mill band →
+  the mill-kill is robust to all three vets' divergent margin estimates;
+  no faucet — a bond return is not income); **T2** full-bar-low under ⅔
+  half-burns the bond and time-locks low-side voter weight for T_L on
+  slash-triggering votes (the whale free-roll and its ~3%/wk reuse cadence
+  die; V2's one weight-at-risk mechanism — locked, never lost). T3 dispute-
+  ride pin; T4 register line. One micro-pass requested and launched: T1
+  grief-pricing.
 - **v0.28** — (iteration 40b) **A21 truly final: the second composition vet
   landed minutes after v0.27 and each vet corrected the other.** Vet A's mill
   arithmetic had dropped the flagged-branch carry term — vet B restored it:
