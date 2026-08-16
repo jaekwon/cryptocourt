@@ -151,6 +151,16 @@ func renderClaim(slug string, id uint64) string {
 		b.WriteString("\n## Resolution\n\n")
 		b.WriteString("- answer: " + sideName(int(cs.answer)) + " (bond " +
 			strconv.FormatInt(cs.answerBond0, 10) + " CC units)\n")
+		// The answerer's track record — contested-and-upheld answers only, so a
+		// high number is hard-won signal, not volume (P13). If the court's
+		// priority gate is armed, a record ≥ threshold earns a 24h head start.
+		b.WriteString("- answerer's difficulty record (this court): " +
+			strconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) + "\n")
+		if PriorityGateActive(slug) {
+			b.WriteString("- answer priority is live here — a record of " +
+				strconv.FormatInt(int64(priorityNetRecord), 10) +
+				"+ earns a 24h head start on new claims\n")
+		}
 		if cs.failedRounds > 0 {
 			b.WriteString("- failed dispute rounds: " + strconv.FormatInt(cs.failedRounds, 10) +
 				" of " + strconv.FormatInt(int64(maxFailedRounds), 10) +

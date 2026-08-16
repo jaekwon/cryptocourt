@@ -171,3 +171,21 @@ func TestRenderCourtPaginatesClaims(cur realm, t *testing.T) {
 		t.Fatalf("the claim loop must be bounded: %d links", got)
 	}
 }
+
+func TestRenderShowsAnswererRecord(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rr-alice")
+	testCourt(cur, "rr1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rr1", "Record badge claim")
+	matureOI(cur, "rr1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rr1", id, sideYES)
+	out := Render("rr1/1")
+	if !strings.Contains(out, "answerer's difficulty record (this court): 0") {
+		t.Fatalf("the answerer record line must render:\n%s", out)
+	}
+	// Gate is cold (0 qualified < coldStart) → no priority line yet.
+	if strings.Contains(out, "answer priority is live") {
+		t.Fatal("the priority line must be hidden until the gate is armed")
+	}
+}
