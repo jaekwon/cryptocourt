@@ -156,11 +156,35 @@ denominator exists to time or to hold hostage.
   closed — that default alone was a pump: trivially-TRUE claims are undisputable
   (disputing a true claim loses your bond), so an author-mill could farm
   default-mid emission with zero information content. Mandatory fix adopted:
-  a **quality-flag lane** — anyone may flag any claim with a bond
-  `max(flagMin, 2%·X̄)`, triggering ONLY the 3-bucket quality vote (not the
-  verdict machine); the bond returns if the median lands low, burns otherwise.
-  "The sun rose" gets flagged → low → tier 0× → nobody, including the author,
-  draws anything. Spam-priced policing for worthless truths.
+  the **quality-flag lane**, fully specced below (iteration 5).
+
+**Flag-lane spec — `DRAFT, attack-vet launched`:**
+- **Window**: one flag per claim, allowed from the answer until the settle tx
+  lands. The 72h settle delay guarantees ≥72h of flag exposure on every claim;
+  a flag **pauses settlement** until its vote closes.
+- **Bond**: `max(flagMin, 2%·X̄)`, escrowed. Returned iff the outcome is
+  **low**; burned otherwise — including when the electorate promotes to high
+  (flag risk cuts both ways; a bad flag against a genuinely good claim pays for
+  the delay it caused).
+- **Vote**: the same court-local 3-bucket tally as the dispute-ride version;
+  snapshot = the last sealed `grc20votes` epoch at flag height (identical
+  anti-flash-loan posture to `Propose`); window = `votingBlocks` (7d); sealed
+  until close; one vote per address, weight = `PastVotes`.
+- **Outcome rules (consistent with the F3 ratchet)**: median decides low vs
+  mid; **demotion to low additionally requires turnout ≥ ¼ of the claim's
+  verdict bar** — a lone griefer with dust turnout cannot zero an honest
+  claim's emission; **promotion to high keeps its own gate** (≥⅔ of turnout
+  AND turnout ≥ the full verdict bar).
+- **Incentive geometry worth recording**: the claim's own stakers are biased
+  voters (their bonus rides on ≥mid), but the natural anti-junk constituency
+  is *every other CC holder* — dilution pays for junk emission, so the
+  electorate that funds the draw is exactly the one empowered to zero it. In a
+  healthy court the dilution-payers outweigh any mill's stakers.
+- **Interactions**: a flag during an open dispute is refused (the dispute vote
+  already carries quality); a flag cannot be withdrawn (no flag-then-retract
+  timing games); the flagger gets no reward beyond bond return (policing is
+  spam-priced, not yield-bearing — a paid-flagger lane would recreate F2's
+  problem in miniature).
 - **Tier ratchet is asymmetric (econ vet F3)**: the median can only move
   **mid ↔ low**; **high requires ≥ ⅔ of turnout AND turnout ≥ the claim's
   verdict bar**. A whale with ~29% of a thin turnout could capture a median;
@@ -284,6 +308,12 @@ Considered and rejected: a GNOT work-pool paying moderators/authors.
 - Cost accepted: contributors can't pay rent in CC. That professional-payout
   economy is precisely the regulated surface we're declining to build in-protocol.
   (A future off-protocol grants entity can pay people; see §7.3.)
+- **Burn mechanics (implementation note)**: GNOT is native coin — burn = banker
+  send to a provably keyless sink (a derived unspendable address, V1
+  `DerivePkgBech32Addr`-style with a dead path, or the chain's designated burn
+  address if one exists; pin at implementation). CC burns (the 10% claim fee,
+  losing-bond burns) use `grc20votes.Burn`, which V1 already exercises on the
+  failed-quorum path — audited code, no new machinery.
 
 ### 3.8 Brainstorm outcomes (iteration-4 step-back pass) — `DRAFT`
 
@@ -547,6 +577,16 @@ Cross-cutting invariants preserved (these were the V1 audit's spine):
 
 Newest first.
 
+- **v0.7** — (iteration 5) specced the quality-flag lane in full (window =
+  answer→settle with settlement pause; bond returns iff low; demotion needs
+  ¼-bar turnout so dust griefing can't zero honest claims; promotion keeps the
+  ⅔+bar gate; refused during disputes; flagger earns nothing — paid flagging
+  would recreate F2 in miniature). Recorded the incentive geometry: dilution-
+  payers, who fund every draw, are exactly the electorate empowered to zero
+  junk. Pinned burn mechanics (keyless-sink send for GNOT; audited
+  `grc20votes.Burn` for CC). Launched the combined attack-vet over the three
+  new DRAFT mechanisms (flag lane, track-record answer priority, burned claim
+  fee).
 - **v0.6** — (iteration 4b) **econ vet ingested — 11 findings, 2 CRITICAL, all
   addressed.** F1 author-mill on undisputed-mid → mandatory quality-flag lane +
   author/answerer slice caps (A5 closed). F2 voter-carrot tier-coupling →
