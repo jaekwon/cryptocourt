@@ -546,7 +546,16 @@ denominator exists to time or to hold hostage.
   close and never rendered before it (sealed, like the verdict tally). No new
   governor lane, no /p/ change.
 
-### 3.5 Reward split — `VETTED ×2 (econ F1/F2/F8, legal #4)`
+### 3.5 Reward split — `VETTED ×2 (econ F1/F2/F8, legal #4); code-vs-prose note v0.39`
+
+> **v0.39 correction (econ-vet P7):** the prose below sizes `D = Σg·93/80` so a
+> winner receives the full mid-weight gross with author/answerer added on top.
+> The CODE does NOT do this — `crystallize.gno` sets `D = tier·midGross` and
+> takes the 80/8/5 split OUT of that D, so a winner gets `80/93 = 0.860·midGross`.
+> This is INTENTIONAL and ~16% more conservative (lower per-claim emission,
+> ceiling-safer, worsens every mill q\*). Consequence: the honest sole-staker
+> break-even is `p ≈ 0.68`, not the `0.59` in ECONOMICS.md's headline (now
+> corrected there). Do not "fix" the code toward the prose — keep the split.
 
 Per claim, drawn from the reservoir (§3.3) at settlement:
 
@@ -1302,9 +1311,28 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   R_max pause only when seniors clear. Invariant: seniors-before-juniors.
 - **P6**: every %·X̄ quantity (bonds, slash, bounty, flag bond) reads one
   `X̄frozen` snapshotted at the answer height.
-- **P7**: deposit = 1 CC, fee = 0.1 CC, flagMin = 1 CC (code) — re-derive
-  minAnswerX/deposit scaling with the next econ pass (mill draw ≈ 19%·X̄ at
-  the hot rate, was ~10%).
+- **P7 — RESOLVED (econ-vet, v0.39).** deposit = 1 CC, fee = 0.1 CC,
+  flagMin = 1 CC, minAnswerX = 100 CC all stay. The vet reproduced the ~19%·X̄
+  hot draw exactly (it is the **12-wk max gross draw**, not net mill profit) and
+  found: (a) **minAnswerX is the wrong lever** — with S = X̄ the mill's gain,
+  carry, and slash all scale with S, so the break-even detection q\* is
+  ~invariant to minAnswerX; raising it only walls off honest thin claims. (b)
+  The mill's **edge over honest staking is negligible** — the author+answerer
+  top-up is cap-bounded to ≤ ~2.5 CC/claim (~0.01%/wk), erased at a detection
+  probability of only q\* ≈ 0.045 (typical) → 0.10 (patient), well inside what
+  the paid flag lane supplies; the rest of the "draw" is the *intended* p=1
+  staker reward. (c) The remaining absolute-EV gap is the **patient /
+  idle-capital** farmer (q\* ≈ 0.22 typical → 0.45 at the 12-wk edge), which is
+  **structural and pre-existing** (≈0.44 at the old ceiling too): the draw
+  scales with hold-time but the slash is X̄-scaled and the deposit fixed, so
+  punishment can't track the prize. deposit 1→5 CC is an owner-available lever
+  (typical q\* 0.22→0.15, patient 0.45→0.37, honest-claim-safe) but is NOT
+  applied — it taxes honest thin-claim openers to chase a case that is
+  economically the intended reward, and cannot close the patient gap without a
+  wall (~18 CC). The real fix is a **draw-proportional deterrent** (owner row
+  28, V3 frontier — fresh vet). Deploy invariants: none affected
+  (answerBondBps ≥ tierMid/2 is X̄-relative and at equality; deposit/fee outside
+  mustInvariants; A19 bounty stays flag-bond-capped).
 - **P8**: G_MAX = one period's budget (clamp, never abort).
 - **P9**: conviction units = stake × blocks × rateBpsFP (bps×1e6) in u128;
   draws divide by periodBlocks × 1e10 (implemented; supersedes the stale
@@ -1460,7 +1488,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 10 | Claim fee | **10%, conditional refund** (§3.8) | Always-burn is regressive on honest thin claims; no-fee removes CC's only sink |
 | 11 | Answer priority | **ON, difficulty-weighted, cold-start-gated** (§3.8) | OFF = pure first-come answers; naive counting re-aligns with the mill (A18) |
 | 12 | Court topology | **Per-court coins** (§3.8 pass 2) | Shared coin pools liquidity but couples every court's legal+economic fate |
-| 13 | minAnswerX | **100 CC** (§8.8) | Lower invites micro-mills; higher walls off the honest long tail |
+| 13 | minAnswerX | **100 CC** (§8.8; CONFIRMED no-change, econ-vet P7 v0.39 — q\* is ~invariant to it, the wrong lever) | Lower invites micro-mills; higher walls off the honest long tail for zero mill benefit |
 | 14 | provClose payout | **1× everyone, no price** (§3.1) | Any price-based close re-opens the V1 O5 manipulation surface |
 | 15 | Entity | **Wyoming DUNA recommended** (§7.3) | Alternatives: DAO LLC (profit OK, weaker fit), Cayman/RMI (offshore optics); none = Ooki exposure stays raw |
 | 16 | Verdict form | **Binary, sealed** (§3.8 pass 1) | Probability verdicts hand adjudicators a nudgeable knob |
@@ -1476,6 +1504,8 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 26 | d_eff pricing (v0.33, FIXED in code) | rate prices min(budget ceiling, realized-EMA dilution) | Budget-d alone = riskless farming below ~18% participation (both v0.32 audits, convergent) |
 | 27 | Headroom amendment (v0.33) | ≥10% actual (10.8%) under the 20% ceiling with curveCap = half | Alternative: curveCap = 0.44× restores ≥20%; owner may prefer it |
 | 28 | Slash size (v0.33) | 4.5%·X̄ (was 2.5%) — mill-kill q ≈ 0.22 at the hot rate | 2.5% drifts the kill bar to ~0.30 at 20%; bounty ≤ 80%×burns holds at both |
+| 28b | **Draw-proportional slash (V3 frontier, econ-vet P7 v0.39)** | NOT adopted — registered follow-up: make the anti-mill punishment scale with the crystallized draw D or claim age (e.g. `slash = max(4.5%·X̄, k%·D)`) so a patient/idle-capital mill's deterrent tracks its take | The X̄-scaled slash + fixed deposit can't track a hold-time-scaled draw; closes the patient-mill absolute-EV gap (q\* 0.45→~0.22) that no minAnswerX/deposit value fixes without a wall. Needs its own vet |
+| 37 | **deposit / fee (econ-vet P7 v0.39)** | **1 CC / 0.1 CC — no change.** Owner-available lever: 1→5 CC drops typical q\* 0.22→0.15, patient 0.45→0.37, honest-claim-safe (refunded on default-mid) | Not applied: it taxes honest thin-claim openers to chase a mill that is economically the intended p=1 reward, and can't close the patient gap without an ~18 CC wall. Pull it if tighter absolute-EV margins are wanted pre-launch |
 | 29 | Answer-bond custody (v0.35) | Bond stays escrowed through UPHELD rounds, returning only at VERDICT_FINAL — reopens stay collateralized; comp arms read the posted magnitude | V1's return-at-each-decision frees honest capital ~1–3wk sooner but leaves reopen rounds with nothing at stake (comp anchor = 0) |
 | 30 | provClose reachability (v0.35) | Kept V1's window geometry: with 1-week votes, 3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds and Finalize the defaulted verdict | Stretching small-claim escrows to fit round 3 delays every honest small claim ~2 extra weeks to serve a rare griefing path |
 | 32 | Crystallize gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
@@ -1579,6 +1609,26 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.39 — P7 economic question RESOLVED (econ-vet); V2 economically closed.**
+  The last open economic pin — does the 20% hot rate make the author-mill
+  profitable? — got a dedicated econ-vet. Verdict: the mill's **edge over
+  honest staking is negligible** (cap-bounded ≤ ~2.5 CC/claim) and erased at a
+  detection probability of q\* ≈ 0.045–0.10, well inside what the paid flag
+  lane supplies; the ~19%·X̄ P7 flagged is a gross draw (= the intended p=1
+  staker reward), not net profit, fully forfeitable on a conclusive-low flag.
+  **minAnswerX stays 100 CC** (proven the wrong lever — q\* ~invariant to it),
+  **deposit stays 1 CC** (a 1→5 bump is registered as an owner-available lever,
+  §12 row 37, but taxes honest thin-claim openers for a non-exploit). The
+  genuine residual — the patient/idle-capital mill's absolute EV (q\* ≈ 0.22
+  typical → 0.45 at the 12-wk edge) — is **structural and pre-existing** (≈0.44
+  at the old ceiling); its real fix is a draw-proportional slash (§12 row 28b,
+  V3 frontier, needs its own vet), out of P7's named lever. Two doc/code nits
+  the vet surfaced, both fixed: crystallize's 80/93 winner split is intentional
+  (~16% more conservative than §3.5's gross-up prose — a protective comment now
+  says so, §3.5 corrected) and the true honest break-even is p ≈ 0.68 not 0.59
+  (ECONOMICS.md corrected). No money-path logic changed. **All economic
+  questions in the attack ledger and pin list are now closed or registered as
+  V3-frontier; V2 is code-complete, audit-clean, and economically resolved.**
 - **v0.38 — LAUNCH GATE CLEARED.** The final full-system adversarial audit
   (whole system, fresh eyes, cross-module + court-global conservation) returned
   **0 CRITICAL, 0 HIGH, 1 MED, 2 accepted NOTEs**, and re-verified every prior

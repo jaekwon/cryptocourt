@@ -24,8 +24,16 @@
 - **Honest threshold**: a staker with accuracy p profits iff `y > y*/(2p)`.
 - **The schedule**: `rate_n = 0.85 × y*(n)` per period n. Consequences:
   farming margin −15% (never profitable); honest break-even at
-  `p_min = 1/(2×0.85) ≈ 0.59`; a p = 0.7 staker nets ≈ `(2p×0.85 − 1)·ρ·T_L
-  ≈ 0.19·ρ·T_L` per episode on conviction.
+  `p_min = 1/(2×0.85) ≈ 0.59` **for the full rate** — but see the correction
+  below: the CODE pays a winner 80/93 of the claim draw (the 8/5 author/answerer
+  points come out of the same D, not on top), so the winner's effective rate is
+  `0.85 × 80/93 = 0.731` and the true honest break-even is **`p_min ≈ 0.68`**
+  (econ-vet P7, crystallize.gno:69). The 0.59 figure assumes a gross-up the code
+  deliberately does not do (it is ~16% more conservative, ceiling-safer). A
+  p = 0.7 staker still nets slightly positive; a p = 0.6 staker is neutral-to-
+  negative on the reward (principal always returns 1× regardless). Accepted
+  calibration characteristic, not a bug — the narrower reward band is the
+  ceiling-safe choice.
 - **Why 0.85, not 0.75**: the schedule (below) removes the *deterministic*
   y*-decay that the margin previously had to absorb; the remaining drift is r
   only. 0.75 amputated the 0.59–0.67 accuracy band — real calibration signal

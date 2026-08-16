@@ -66,6 +66,15 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// D = min(tier × midGross, G_MAX, R): the per-claim clamp is one period's
 	// budget (P8), then the junior reservation clamps to the reservoir —
 	// never aborts (F4).
+	//
+	// INTENTIONAL (econ-vet P7): D is the WHOLE claim draw and the 80/8/5 split
+	// is taken OUT of it — so a winner receives 80/93 = 0.860·midGross, NOT the
+	// full midGross with author/answerer added on top. PLAN §3.5's "D = Σg·93/80"
+	// prose describes that gross-up; the code deliberately does NOT do it. The
+	// code is ~16% more conservative (lower emission per claim, ceiling-safer,
+	// and it worsens every mill break-even q*). Do NOT "fix" toward §3.5 — it
+	// would inflate every draw 16%. Consequence, accepted: the honest sole-staker
+	// break-even is p ≈ 0.68, not the 0.59 an un-split rate would give.
 	want := mustMul(cs.tier, midGross)
 	if want > c.curPeriodBudget {
 		want = c.curPeriodBudget
