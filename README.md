@@ -2,6 +2,15 @@
 
 A governor and a checkpointed voting token for gno.land.
 
+> **Status (branch `tokenomics-v2`)**: the court realm exists (`realm/r/court/`,
+> fully audited on branch `court-realm`), and its economics are being redesigned
+> — see **[PLAN.md](./PLAN.md)** (the V2 tokenomics: no-loss conviction staking,
+> bounded emission, GNOT burned — the per-court *treasury* mentioned below is a
+> V1 concept V2 abolishes), **[REGULATIONS.md](./REGULATIONS.md)** (the US
+> regulatory reference), and **[ECONOMICS.md](./ECONOMICS.md)** (internal
+> calibration). The prose below describes the governance layer both versions
+> share.
+
 The court system this is named for is not here yet. What is here is the layer
 it needs: many independent courts, each with its own coin and its own treasury,
 resolving contested claims by a vote weighted at an epoch sealed before the
