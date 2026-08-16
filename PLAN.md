@@ -1626,8 +1626,18 @@ Newest first.
   honest claims and the slashGrade trigger untouched. Owner DECLINED the
   reward-vesting transferability lever (§12 row 5, same session). Accepted
   residual: idle-capital q* floors at ~0.27 (answer-bond ceiling — V3
-  weight-at-risk frontier, not closable by a bigger k). Adversarial
-  code-review of the diff running.
+  weight-at-risk frontier, not closable by a bigger k). Adversarial code-review
+  of the diff: **CLEAN (0 HIGH/0 MED)** — it confirmed exactly-once across both
+  settle/flag orderings, two-site sizer consistency, overflow safety, the A19
+  cap, and the clamp. It also surfaced a PRE-EXISTING LOW the resize made
+  relevant and now fixed: **SettleUndisputed reset a conclusive-low tier back
+  to mid** when a flag resolved before settle (both permissionless, overlapping
+  windows) → the junk claim paid full mid emission; guarded with
+  `&& !cs.slotConsumed` so a conclusive quality outcome is never clobbered
+  (regression TestConclusiveLowSurvivesLateSettle). Two INFO items accepted as
+  pre-existing/safe (the deploy invariant's midGross bound is exact for the
+  ≤12-wk case, runtime clamp handles beyond; slashGrade after failed-only
+  dispute rounds routes through Finalize).
 - **v0.39 — P7 economic question RESOLVED (econ-vet); V2 economically closed.**
   The last open economic pin — does the 20% hot rate make the author-mill
   profitable? — got a dedicated econ-vet. Verdict: the mill's **edge over
