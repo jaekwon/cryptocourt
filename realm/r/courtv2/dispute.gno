@@ -205,6 +205,10 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// senior-queued, capped by both arms (v0.20). A reopen after a prior
 		// overturn finds answerBond already zero — comp's 80% arm is then 0
 		// and nothing mints (no burn happened this round to anchor it).
+		// A pending slash refunds INTO the bond first (a decided round
+		// supersedes it — never slashable once disputed) so the forfeiture
+		// burns the whole posted bond, slash reserve included.
+		unslash(c, cs)
 		posted := cs.disputeBond // the disputer's own risk, captured pre-zeroing
 		burned := cs.answerBond
 		if burned > 0 {
@@ -227,7 +231,9 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// the disputer's bond BURNS in full; the answerer is comped against
 		// their posted bond magnitude (answerBond0 — the live field may
 		// already be spent by an earlier overturn round). Their bond stays
-		// escrowed until VERDICT_FINAL: still at stake for reopens.
+		// escrowed until VERDICT_FINAL: still at stake for reopens. A pending
+		// slash refunds into the bond (never slashable once disputed).
+		unslash(c, cs)
 		burned := cs.disputeBond
 		if burned > 0 {
 			c.coin.Burn(c.escrow, burned)

@@ -108,6 +108,8 @@ type claimState struct {
 	pendingSlash      int64
 	pendingSlashUntil int64
 	counterUsed       bool
+	counterOpen       bool
+	counterVoteEnd    int64
 	// Crystallize marker (Q6-Q8): after it, quality is immutable.
 	crystallized bool
 	// Carrot pull-claim anchors (set at the conclusive tally)

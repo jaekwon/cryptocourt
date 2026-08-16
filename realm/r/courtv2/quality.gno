@@ -138,11 +138,14 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if bucket != qualityLow && bucket != qualityMid && bucket != qualityHigh {
 		panic("courtv2: quality is 0 (low), 1 (mid) or 2 (high)")
 	}
-	if !cs.flagOpen && !cs.disputeOpen {
+	if !cs.flagOpen && !cs.disputeOpen && !cs.counterOpen {
 		panic("courtv2: no quality vote is open on this claim")
 	}
 	if cs.flagOpen && runtime.ChainHeight() >= cs.flagVoteEnd {
 		panic("courtv2: the flag vote has closed; resolve it")
+	}
+	if cs.counterOpen && runtime.ChainHeight() >= cs.counterVoteEnd {
+		panic("courtv2: the counter re-vote has closed; resolve it")
 	}
 	if isParticipant(cs, who) {
 		panic("courtv2: the claim's participants cannot vote its quality (Q2)")
@@ -425,4 +428,139 @@ func QualityTier(courtSlug string, claimID uint64) (tier int, final bool) {
 // FlagCycles is the inconclusive-reopen count (the bond-doubling exponent).
 func FlagCycles(courtSlug string, claimID uint64) int64 {
 	return mustClaim(mustCourt(courtSlug), claimID).flagCycles
+}
+
+// ------------------------------------------------- the counter-flag window --
+
+// CounterFlag is the slashed answerer's ONE forced re-vote (v0.31, Q5): the
+// slash and its bounty wait one challenge window; during it the answerer may
+// re-pose the quality question at the supply-floored bar. No bond — the
+// reserved slash IS the stake. Exactly-once per claim.
+func CounterFlag(cur realm, courtSlug string, claimID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	if cs.pendingSlash <= 0 {
+		panic("courtv2: no slash is pending on this claim")
+	}
+	if who != cs.answerer {
+		panic("courtv2: only the slashed answerer may counter-flag")
+	}
+	if cs.counterUsed {
+		panic("courtv2: the one counter re-vote was already used")
+	}
+	if cs.disputeOpen {
+		panic("courtv2: a dispute is open; its decision supersedes the slash")
+	}
+	if runtime.ChainHeight() >= cs.pendingSlashUntil {
+		panic("courtv2: the counter-flag window has lapsed")
+	}
+	touch(c)
+	cs.counterUsed = true
+	cs.counterOpen = true
+	cs.counterVoteEnd = runtime.ChainHeight() + c.params.votingBlocks
+	openQualityTally(cs)
+}
+
+// ResolveCounter settles the re-vote. The slash STANDS unless the re-vote
+// reaches the full bar and the low bucket misses ⅔ of turnout — an
+// inconclusive re-vote does not rescue (the answerer facing 4.5%·X̄ is the
+// most mobilized party the electorate will ever have; if even they cannot
+// raise a bar of turnout, the original supermajority stands). The tier stays
+// LOW either way: the window challenges the SLASH, not the ¼-bar dust low.
+func ResolveCounter(cur realm, courtSlug string, claimID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	if !cs.counterOpen {
+		panic("courtv2: no counter re-vote to resolve")
+	}
+	now := runtime.ChainHeight()
+	if now < cs.counterVoteEnd {
+		panic("courtv2: the counter re-vote is still open")
+	}
+	touch(c)
+	cs.counterOpen = false
+	cs.lastFlagEventAt = now
+	turnout := cs.qLowW + cs.qMidW + cs.qHighW
+	_, fullBar := qualityBars(c, cs)
+	if turnout >= fullBar && cs.qLowW*3 < turnout*2 {
+		refundSlash(c, cs) // the whale failed the second ⅔
+		return
+	}
+	settleSlash(c, cs)
+}
+
+// ResolveSlashWindow closes an UNCHALLENGED window: permissionless once it
+// lapses with no counter re-vote running. A dispute open at the lapse holds
+// the close — a decided round refunds the slash itself (never slashable once
+// disputed); a failed round falls back here.
+func ResolveSlashWindow(cur realm, courtSlug string, claimID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	if cs.pendingSlash <= 0 {
+		panic("courtv2: no slash is pending")
+	}
+	if cs.counterOpen {
+		panic("courtv2: the counter re-vote is running; resolve it instead")
+	}
+	if cs.disputeOpen {
+		panic("courtv2: a dispute is open; it decides the slash")
+	}
+	if runtime.ChainHeight() < cs.pendingSlashUntil {
+		panic("courtv2: the counter-flag window is still open")
+	}
+	touch(c)
+	cs.lastFlagEventAt = runtime.ChainHeight()
+	settleSlash(c, cs)
+}
+
+// settleSlash burns the reserved slash and tops up the flagger's bounty to
+// the full per-event bound min(bond, 80% × (deposit+fee+slash)), minus the
+// dust share already paid. Exactly-once: pendingSlash zeroes here.
+func settleSlash(c *Court, cs *claimState) {
+	slash := cs.pendingSlash
+	if slash <= 0 {
+		return
+	}
+	cs.pendingSlash = 0
+	c.coin.Burn(c.escrow, slash)
+	dep := c.params.minClaimDepositCC
+	fee := dep * depositFeeBps / 10000
+	bond := flagBondFor(cs)
+	if topUp := bountyFor(bond, dep+fee+slash) - bountyFor(bond, dep+fee); topUp > 0 {
+		enqueueSenior(c, cs.flagger, topUp, "bounty")
+	}
+	cs.tierFinal = true
+}
+
+// refundSlash returns the reserved slash to the answer bond untouched — the
+// re-vote overturned the supermajority. No bounty top-up; the tier stays low
+// and is final.
+func refundSlash(c *Court, cs *claimState) {
+	cs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)
+	cs.pendingSlash = 0
+	cs.tierFinal = true
+}
+
+// unslash is the dispute machine's pre-disposition hook: a DECIDED round
+// supersedes any pending slash (a disputed answer is never slashable). The
+// reserve rejoins the bond BEFORE the round disposes it, so an overturn burns
+// slash-inclusive and an uphold escrows it back whole. Closes any running
+// counter re-vote; tier finality is then the ride's to decide.
+func unslash(c *Court, cs *claimState) {
+	if cs.pendingSlash <= 0 {
+		return
+	}
+	cs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)
+	cs.pendingSlash = 0
+	cs.counterOpen = false
 }

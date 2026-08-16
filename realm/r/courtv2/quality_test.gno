@@ -186,3 +186,166 @@ func TestDisputeVoidsOpenFlagAndRideCarriesQuality(cur realm, t *testing.T) {
 		t.Fatal("a conclusive ride consumes the slot")
 	}
 }
+
+// slashSetup drives qfSetup into a reserved slash: carol's full-bar 2/3-low.
+func slashSetup(cur realm, t *testing.T, slug string) (c *Court, id uint64, alice, bob, carol address, slash, bond int64) {
+	t.Helper()
+	var dust address
+	c, id, alice, bob, carol, dust = qfSetup(cur, t, slug)
+	_ = dust
+	bond = FlagBondNext(slug, id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), slug, id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), slug, id)
+	slash = XBarFrozen(slug, id) * slashXBps / 10000
+	return
+}
+
+func TestSlashWindowClosesUnchallenged(cur realm, t *testing.T) {
+	c, id, _, _, _, slash, bond := slashSetup(cur, t, "qf5")
+	dep := c.params.minClaimDepositCC
+	fee := dep * depositFeeBps / 10000
+	dustPaid := SeniorOwed("qf5") // min(bond, 80% x (dep+fee))
+
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("qf5-x")))
+	uassert.AbortsContains(t, cur, "window is still open", func() {
+		ResolveSlashWindow(cross(cur), "qf5", id)
+	})
+	cs := mustClaim(c, id)
+	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveSlashWindow(cross(cur), "qf5", id)
+	if got := supplyBefore - c.coin.TotalSupply(); got != slash {
+		t.Fatalf("the unchallenged slash burns whole: %d vs %d", got, slash)
+	}
+	_, final := QualityTier("qf5", id)
+	if !final || cs.pendingSlash != 0 || FlagState("qf5", id) != "consumed" {
+		t.Fatal("the window close finalizes the low")
+	}
+	// Bounty tops up to min(bond, 80% x (dep+fee+slash)) total.
+	wantTotal := (dep + fee + slash) * compOfBurnBps / 10000
+	if wantTotal > bond {
+		wantTotal = bond
+	}
+	if got := SeniorOwed("qf5"); got != wantTotal {
+		t.Fatalf("bounty total %d, want %d (dust was %d)", got, wantTotal, dustPaid)
+	}
+	uassert.AbortsContains(t, cur, "no slash is pending", func() {
+		ResolveSlashWindow(cross(cur), "qf5", id)
+	})
+}
+
+func TestCounterRevoteOverturnsSlash(cur realm, t *testing.T) {
+	c, id, alice, bob, carol, slash, _ := slashSetup(cur, t, "qf6")
+	ab := AnswerBond("qf6", id) // already slash-reduced
+	dustPaid := SeniorOwed("qf6")
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "only the slashed answerer", func() {
+		CounterFlag(cross(cur), "qf6", id)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "qf6", id)
+	uassert.AbortsContains(t, cur, "already", func() {
+		CounterFlag(cross(cur), "qf6", id)
+	})
+	// Maximal mobilization: carol re-votes MID at the full bar.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qf6", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveCounter(cross(cur), "qf6", id)
+	if c.coin.TotalSupply() != supplyBefore {
+		t.Fatal("an overturned slash burns nothing")
+	}
+	if AnswerBond("qf6", id) != ab+slash {
+		t.Fatal("the slash reserve rejoins the answer bond")
+	}
+	tier, final := QualityTier("qf6", id)
+	if tier != qualityLow || !final {
+		t.Fatal("the dust low stands final; only the slash fell")
+	}
+	if SeniorOwed("qf6") != dustPaid {
+		t.Fatal("no bounty top-up on an overturned slash")
+	}
+}
+
+func TestCounterRevoteInconclusiveSlashStands(cur realm, t *testing.T) {
+	c, id, alice, _, _, slash, _ := slashSetup(cur, t, "qf7")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "qf7", id)
+	// Nobody shows up: the absent electorate does not rescue the answerer.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveCounter(cross(cur), "qf7", id)
+	if got := supplyBefore - c.coin.TotalSupply(); got != slash {
+		t.Fatalf("an inconclusive re-vote lets the slash stand: %d vs %d", got, slash)
+	}
+	if _, final := QualityTier("qf7", id); !final {
+		t.Fatal("the close finalizes")
+	}
+}
+
+// The one reachable dispute-supersedes-slash chain: a FAILED round leaves
+// decidedRounds==0 (slashable) with a standing escrow window; the flag slash
+// lands; a REOPEN dispute then decides — the slash must refund into the bond
+// before the round disposes it (unslash), and the upheld answerer exits whole
+// on the bond while the dust low keeps the deposit.
+func TestReopenDisputeSupersedesPendingSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qf8-alice")
+	bob := testutils.TestAddress("qf8-bob")
+	carol := testutils.TestAddress("qf8-carol")
+	c := testCourt(cur, "qf8", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qf8", "Slash superseded")
+	matureOI(cur, "qf8", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qf8", id, sideYES)
+	ab := AnswerBond("qf8", id)
+	c.params.escrowMinBlocks = 700_000 // room for flag vote + reopen inside escrow
+	c.params.escrowMaxBlocks = 700_000
+
+	// Round 1 fails quorum: provisional defaults, decidedRounds stays 0.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qf8", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qf8", id)
+	if FailedRounds("qf8", id) != 1 {
+		t.Fatal("round 1 must fail quorum")
+	}
+	// Flag → slash-low reserves from the bond.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qf8", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qf8", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "qf8", id)
+	cs := mustClaim(c, id)
+	if cs.pendingSlash <= 0 {
+		t.Fatal("the slash must reserve (failed rounds keep decidedRounds 0)")
+	}
+	// Reopen decides (uphold): the slash refunds into the bond pre-disposition.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qf8", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "qf8", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qf8", id)
+	if cs.pendingSlash != 0 || cs.answerBond != ab {
+		t.Fatalf("a decided round refunds the slash into the bond: %d/%d vs %d",
+			cs.pendingSlash, cs.answerBond, ab)
+	}
+	// Finalize: the upheld answerer takes the WHOLE bond home.
+	testing.SkipHeights(EscrowUntil("qf8", id) - runtimeHeight())
+	aliceBefore := c.coin.BalanceOf(alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "qf8", id)
+	if c.coin.BalanceOf(alice) != aliceBefore+ab {
+		t.Fatal("the upheld bond returns whole, slash included")
+	}
+}
