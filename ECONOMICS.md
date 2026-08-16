@@ -31,21 +31,28 @@
   only. 0.75 amputated the 0.59–0.67 accuracy band — real calibration signal
   — for margin we no longer need (F-R5).
 
-## The deterministic d(n) path (why a scalar rate self-defeats — F-R1)
+## The d_n rule (v0.20 — LIVE supply, superseding the ceiling path)
 
-`d(n) = b_n / S_ceiling(n)` where `b_n` is the per-block accrual (halves every
-104 periods) and `S_ceiling(n) = curveCap + Σ_{k<n} b_k·blocks` (worst-case:
-every budget fully minted). Both numerator and denominator paths are
-deploy-known, so **y*(n) = 2(r₀ + d(n))·T_L/T_c is computable at deploy for
-every future period** — that table IS the rate schedule. A frozen scalar
-compared against this path crosses above y* around the second step-down
-(farming turns on by schedule); the schedule can't.
+`d_n = B_n / S_live`, with `S_live` read once at each period boundary
+(deterministic on-chain data, not a lever) and `B_n` the per-period budget on
+the **geometrically amortized** step-down (`×2^(−1/104)` per period — no
+cliffs exist, so no boundary block can be raced; 2A-T3). Then
+`y*(n) = 2(r₀ + d_n)·T_L/T_c` and `rate_n = 0.85·y*(n)`.
 
-Conservatism check (PLAN v0.15 pin): real supply ≤ ceiling supply ⇒ real d ≥
-scheduled d ⇒ real y* ≥ scheduled y* ⇒ the 15% margin holds in every court at
-every age. And the self-bound: draws are conviction-based, so
-`d_real ≤ rate × staked-fraction` — no court dilutes faster than its own
-participation earns, regardless of court size.
+Why live, not ceiling (the v0.15→v0.20 reversal, PLAN decision #19): the
+ceiling path understates d early — at 10% of ceiling supply, actual d is 10×
+the scheduled figure, actual y* ≈ 3.75%/wk vs a 0.89%/wk rate, and honest
+break-even needs p > 1: **the early court pays nobody**. With live d the 15%
+anti-farm margin tracks the true y* at every supply level. Manipulation check:
+buying CC lowers everyone's rate including yours (self-defeating for a
+yield-seeker); burning your CC raises the rate at your sole cost — every
+manipulation is self-costly. Self-bound unchanged: draws are conviction-based,
+so `d_real ≤ rate × staked-fraction` — no court dilutes faster than its own
+participation earns.
+
+Conviction itself is **rate-weighted** (∫rate(t)·stake·dt — V2-8): there is no
+rate snapshot anywhere, accrual is priced as it happens, and the F5 band holds
+within every era because 0.85·y*(t) < y*(t) pointwise.
 
 ## Reference launch numbers (used across all vet math)
 
