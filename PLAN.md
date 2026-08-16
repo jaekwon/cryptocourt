@@ -1404,6 +1404,14 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.30** — (iteration 46) **T1 grief-pass: SAFE-AS-IS; the quality/policing
+  layer is design-CONVERGED** (the pass's own words), with both of my
+  candidate guards rejected for cause and the sleepy-regime residual priced
+  and registered (income-free spite, ~4:1, killed by one counter-vote).
+  Launched the genuinely last micro-pass: T2 (the full-bar free-roll
+  half-burn + the low-side weight time-lock) is the only mechanism in the
+  design that is vet-proposed but never itself attacked — and it is the one
+  weight-at-risk rule. Its verdict completes the ledger.
 - **v0.29** — (iteration 42) the original composition vet's SECOND report — a
   third independent A21 analysis — validates the v0.28 gate structure (and
   sides with vet B against my claim-scaled bar: "slash-scale prizes must stay
