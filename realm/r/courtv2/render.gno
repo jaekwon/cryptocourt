@@ -50,16 +50,30 @@ func renderDirectory() string {
 	return b.String()
 }
 
+// renderPageSize bounds every render loop to a constant so a page's gas cost
+// cannot grow with the (attacker-openable, deposit-priced) claim or court
+// count (audit N3). Deep links (…/<slug>, …/<slug>/<id>) reach anything the
+// capped list omits.
+const renderPageSize = 50
+
 func writeTier(b *strings.Builder, heading string, tier uint8) {
 	slugs := ListByTier(int(tier))
 	if len(slugs) == 0 {
 		return
 	}
 	b.WriteString("## " + heading + "\n\n")
-	for _, s := range slugs {
+	shown := len(slugs)
+	if shown > renderPageSize {
+		shown = renderPageSize
+	}
+	for _, s := range slugs[:shown] {
 		c := mustCourt(s)
 		b.WriteString("- [" + sanitize.InlineText(c.name) + "](/r/cryptocourt/courtv2:" + s + ") — " +
 			strconv.FormatUint(c.nextID, 10) + " claims\n")
+	}
+	if len(slugs) > shown {
+		b.WriteString("- _…and " + strconv.Itoa(len(slugs)-shown) +
+			" more; open any court directly at /r/cryptocourt/courtv2:<slug>_\n")
 	}
 	b.WriteString("\n")
 }
@@ -81,10 +95,21 @@ func renderCourt(slug string) string {
 		b.WriteString("_No claims yet._\n")
 		return b.String()
 	}
-	for id := uint64(1); id <= c.nextID; id++ {
+	// Newest first, bounded to one page (audit N3): a court with thousands of
+	// deposit-priced claims must not make its page cost unbounded. Older claims
+	// stay reachable by direct id link.
+	lo := uint64(1)
+	if c.nextID > renderPageSize {
+		lo = c.nextID - renderPageSize + 1
+	}
+	for id := c.nextID; id >= lo; id-- {
 		cs := mustClaim(c, id)
 		b.WriteString("- [" + sanitize.InlineText(cs.title) + "](/r/cryptocourt/courtv2:" + slug + "/" +
 			strconv.FormatUint(id, 10) + ") — " + claimStatus(cs) + "\n")
+	}
+	if lo > 1 {
+		b.WriteString("- _…and " + strconv.FormatUint(lo-1, 10) +
+			" older; open any by id at /r/cryptocourt/courtv2:" + slug + "/<id>_\n")
 	}
 	return b.String()
 }

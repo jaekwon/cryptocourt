@@ -1,6 +1,7 @@
 package courtv2
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -142,5 +143,31 @@ func TestRenderPositionsPage(cur realm, t *testing.T) {
 	SettleUndisputed(cross(cur), "rp1", id)
 	if !strings.Contains(Render("rp1/1/"+bob.String()), "withdraw your principal") {
 		t.Fatal("post-verdict, the hint is to withdraw principal")
+	}
+}
+
+func TestRenderCourtPaginatesClaims(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("pg-alice")
+	testCourt(cur, "pg1", alice, 500_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	// Open one past a page so truncation triggers.
+	n := renderPageSize + 5
+	for i := 0; i < n; i++ {
+		OpenClaim(cross(cur), "pg1", "Claim number "+strconv.Itoa(i))
+	}
+	out := Render("pg1")
+	// The newest claim shows; the oldest (id 1) does not; the truncation note does.
+	if !strings.Contains(out, "pg1/"+strconv.Itoa(n)+")") {
+		t.Fatal("the newest claim must be on the page")
+	}
+	if strings.Contains(out, "pg1/1)") {
+		t.Fatal("the oldest claim must be paged off")
+	}
+	if !strings.Contains(out, "older; open any by id") {
+		t.Fatalf("a truncation hint must appear:\n%s", out[len(out)-300:])
+	}
+	// The page renders a bounded number of claim bullets (page + hint), not n.
+	if got := strings.Count(out, "courtv2:pg1/"); got > renderPageSize+2 {
+		t.Fatalf("the claim loop must be bounded: %d links", got)
 	}
 }
