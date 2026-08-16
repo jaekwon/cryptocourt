@@ -150,8 +150,14 @@ takes (b). [SETTLED as to history]
 3. **Voter liability (Ooki theory)** — mitigate with a Wyoming DUNA wrapper
    (2024 act: member-liability shield for DAO-like associations [verify with
    counsel]), rules-based payouts only, no real-money flows directed by votes.
-4. **Forfeitable answer/dispute bonds** — retained; argued as conduct-pricing
-   (appeal-bond/sanction analogy), not event-wagering. [UNTESTED]
+4. **Forfeitable answer/dispute/flag bonds** — retained, but as of PLAN v0.11
+   every forfeiture BURNS in full and the prevailing party is compensated by a
+   capped protocol-emission slice ("forfeitures burn; compensation mints"):
+   no loser-pays-winner transfer exists anywhere. This removed the vet-ranked
+   #1 residual on both the gambling and CFTC axes (V1's own doc had described
+   bonds as "a bet between two people"). Remaining theory: conduct-priced loss
+   on a vote outcome, defended on the appeal-bond/sanction analogy —
+   materially stronger post-burn, still [UNTESTED].
 5. **Claims subject matter** — avoid elections/sports/awards categories; prefer
    verifiable factual/economic claims. Editorial policy, cheap to keep.
 

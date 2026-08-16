@@ -774,10 +774,18 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
    Buy's consumption story is untouched. The single highest-leverage
    securities hardening short of the full transferability off-switch. OPEN —
    owner's product call; default OFF at launch.
-8. **minAnswerX re-derivation** (found writing Appendix B): V1's value is "100
-   sets' worth" — meaningless without sets. Re-derive as a CC floor on trailing
-   total stake (placeholder 100 CC); interacts with the flag bond and the
-   demotion turnout floor, so size the three together next vet round.
+8. ~~minAnswerX re-derivation~~ — RESOLVED (v0.13, provisional pending round-2
+   vet): **minAnswerX = 100 CC** of trailing total stake. The three-way sizing:
+   (a) *answerability floor* — 100 CC of sustained third-party interest is a
+   real bar for a thin honest claim but not a wall (one interested staker
+   clears it); (b) *bond base* — the minimum answer bond becomes 50 CC, large
+   enough that a wrong answer at minimum scale risks 50× the claim fee; (c)
+   *mill floor* — a minimum-scale mill must self-stake ≥100 CC for ≥ the
+   trailing window to even answer, making its maximum 12-week draw (~10 CC at
+   the schedule rate) comparable to its at-risk deposit + fee + flag exposure —
+   thin mills are noise, not profit. The minimum flag bond at this scale is
+   2 CC (2%·X̄), consistent with spam-pricing. All three constants move
+   together or the deploy invariants complain (§3.6 coupling).
 9. **v0.8 answerer-cap refinement** (bond-based, not stake-based — §3.5) rides
    the next vet round alongside 8.
 4. ~~Bond-forfeiture fallback~~ — RESOLVED (rejected; §3.6: time-lock-only bonds
@@ -822,14 +830,31 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
 
 - **No migration problem exists**: V1 never launched; V2 is the launch target.
   V1 stays fully audited in git history (branch `court-realm`, base `5d2c4ef`).
-- **Build order** (all /p/ packages untouched except deleting the court's
-  dependency on tickbook/cshares): (1) `stake.gno` (pools, conviction-128,
-  freeze) + `emission.gno` (accrual, halvings, entitlements, pull-claims);
-  (2) adapt `claim/answer/session/dispute` per Appendix A; (3) `quality.gno`
-  (3-bucket sealed median); (4) render; (5) delete `book/market/fees`.
-- **Net size**: roughly –570 LOC removed (book/market/fees) vs ~+450 new
-  (stake/emission/quality) — V2 is *smaller* than V1, because the hard machinery
-  (governor, grc20votes, twap, curve, checked math) is reused untouched.
+- **Build order (refreshed v0.13 for the v0.10–v0.12 mechanics)** — all /p/
+  packages untouched except deleting the court's dependency on
+  tickbook/cshares: (1) `stake.gno` (pools, conviction-128, freeze atomicity)
+  + `emission.gno` (reservoir accrual, the deploy-frozen rate SCHEDULE,
+  `rateAtFreeze`, entitlements, pull-claims, participant-gated Finalize);
+  (2) adapt `claim/answer/session/dispute` per Appendix A (+ the conditional
+  fee escrow, the burn sink, bond-comp-as-mint); (3) `quality.gno` (3-bucket
+  sealed median + the FLAG state machine: open-window guard, conclusive-vs-
+  inconclusive slot rule, doubling re-flag bonds, settlement pause);
+  (4) `records.gno` (difficulty-weighted answer records, priority gate with
+  cold-start + one-active limiter); (5) render (three ratio series, no
+  "backing"); (6) delete `book/market/fees`.
+- **Net size**: roughly –570 LOC removed vs ~+600 new (the flag machine and
+  records added ~150 over the v0.4 estimate) — still ≈ V1's size, with all
+  hard machinery (governor, grc20votes, twap, curve, checked math) reused
+  untouched.
+- **New deploy/test invariants accumulated through v0.12** (each gets a
+  mustSane-style check or a dedicated test): `curveCap + Σemission ≤
+  MaxInt64/Bps`; conviction fits int64 in stake-hours; per-claim Σg clamped
+  (never abort); `answerBondBps ≥ maxUndisputedTier/2`; Σminted ≤ Σaccrued;
+  rateAtFreeze immutable per claim; the flag-slot state machine (open →
+  flagged → conclusive|inconclusive-reopen) never double-pauses or
+  double-pays; forfeitures strictly burn (no transfer path exists to an
+  adversary); escrow conservation with the conditional fee (refund XOR burn,
+  exactly once).
 - **Storage model (V1 discipline)**: one packed record per (claim, staker,
   side) in a bptree — `stake int64 · convHi/convLo (uint128 in stake-hours) ·
   lastUpdate int64` ≈ four words, one object; a stake/unstake dirties exactly
@@ -937,6 +962,13 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.13** — (iteration 9, round-2 vet pending) resolved §8.8: **minAnswerX =
+  100 CC** with the three-way sizing (answerability floor / bond base 50 CC /
+  mill floor making thin mills noise). Refreshed §10 for the v0.10–v0.12
+  mechanics (flag state machine, records.gno, rateAtFreeze, burn sink,
+  conditional fee; +150 LOC over the v0.4 estimate) and consolidated the nine
+  deploy/test invariants accumulated so far. Synced REGULATIONS.md §7's bond
+  entry to the burn rule.
 - **v0.12** — (iteration 8c) **third vet (new mechanisms) ingested — all three
   verdicts ADOPT-WITH-FIXES, fixes applied.** Launch-blocking flag-lane hole
   closed: the self-flag slot squat (A16 — one burned sybil bond consumed the
