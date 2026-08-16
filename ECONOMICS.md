@@ -69,6 +69,37 @@ B_period` banks a month of quiet; anything longer is forgone by design
 (ceiling-not-floor). Under-demand mints nothing; over-demand rations by
 availability, farmers exit first (F-R4 ordering).
 
+## The 80/8/7/5 split — tuning rationale (v0.19; converts "provisional" to "reasoned-provisional")
+
+The split's job is ordering, not precision — each slice must clear its role's
+participation threshold without inverting the hierarchy *winners ≫ author >
+voters > answerer*:
+
+- **Winners 80%**: the core signal incentive must dominate everything else
+  combined, or staking becomes a side-show to service extraction. 80% keeps
+  the effective staker rate at 0.8 × rate_n — the F5/F-R5 margins in this memo
+  are computed on exactly that basis, so moving this number moves p_min.
+- **Author 8%**: with the conditional fee refund (mech vet R7b), the author's
+  worst honest case is ≈ 0 (fee back, small slice) and the good case is
+  8% × a draw their claim attracted — pure upside for surfacing questions the
+  crowd funds. Above ~10% authorship starts to compete with staking as the
+  yield path (invites claim-spam pressure the fee must then re-price); below
+  ~5% thin-claim authorship pays nothing at all.
+- **Voters 7%**: deliberately a *token* at small draws (0.7 CC/voter on a
+  1,000 CC draw) — voters' real motive is stake-protection and the court's
+  credibility; the carrot only needs to beat gas and tip marginal attention.
+  Making it large enough to be a primary income would recreate the F2/F3
+  vote-for-pay dynamics the tier-invariance fix just contained.
+- **Answerer 5%**: intentionally the smallest — the answerer's true
+  compensation is the bond return + the difficulty-weighted credential
+  (priority access to future slices); the slice is a top-up. Raising it
+  re-inflates the self-answer mill margin that A15's fixes just priced out
+  (the mill keeps winner+author+answerer = 93%; every answerer point is a
+  mill point).
+
+Tune freely at deploy **within the ordering and the caps** (§4); crossing the
+ordering or touching cap *rules* re-opens A15/F2 and needs a fresh vet.
+
 ## Cross-references
 
 PLAN.md §3.3 (mechanism + pins) · §3.5 (slices/caps) · §5 A1/A14 (the attacks

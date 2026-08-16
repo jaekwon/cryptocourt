@@ -989,7 +989,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 6 | Bonds | **Forfeitable; burn-not-transfer** (§3.6) | Time-lock-only invites answer-slot squatting DoS |
 | 7 | Undisputed quality default | **Mid + flag lane** (§3.4) | Low punishes the healthy path; high is free money |
 | 8 | Tier gates | **Median mid↔low; ⅔+bar for high** (§3.4) | Symmetric median is whale-capturable at ~29% turnout |
-| 9 | Split 80/8/7/5 | Provisional (§3.5) — untuned, caps do the safety work | Retuning is safe within caps; changing cap RULES needs re-vet |
+| 9 | Split 80/8/7/5 | Reasoned-provisional (§3.5; rationale in ECONOMICS.md v0.19: winners must dominate; author capped by claim-spam pressure; voter slice deliberately token-sized; every answerer point is a mill point) | Retune freely within the ordering + caps; crossing either re-opens A15/F2 and needs a fresh vet |
 | 10 | Claim fee | **10%, conditional refund** (§3.8) | Always-burn is regressive on honest thin claims; no-fee removes CC's only sink |
 | 11 | Answer priority | **ON, difficulty-weighted, cold-start-gated** (§3.8) | OFF = pure first-come answers; naive counting re-aligns with the mill (A18) |
 | 12 | Court topology | **Per-court coins** (§3.8 pass 2) | Shared coin pools liquidity but couples every court's legal+economic fate |
@@ -1089,6 +1089,13 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.19** — (iteration 16) the 80/8/7/5 split upgraded from "provisional" to
+  **reasoned-provisional**: tuning rationale added to ECONOMICS.md (winners
+  must dominate or staking becomes a side-show; author bounded 5–10% by
+  thin-claim viability vs claim-spam pressure; the voter slice is deliberately
+  token-sized — a primary-income carrot would recreate F2/F3; every answerer
+  point is a mill point, so it stays smallest). Decision-index row 9 updated
+  with the retune boundary (ordering + caps free; rule changes re-vet).
 - **v0.18** — (iterations 14–15, process note) the monolithic round-2 holistic
   vet ran ~4× longer than any prior vet with no output despite a nudge —
   treated as lost and SUPERSEDED by two tight splits now running: **2A**
