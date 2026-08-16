@@ -44,6 +44,7 @@ func touch(c *Court) {
 			segEnd = boundary
 		}
 		accrueSegment(c, segEnd-c.lastAccrual)
+		advanceRateAcc(c, segEnd-c.lastAccrual)
 		c.lastAccrual = segEnd
 		if segEnd == boundary {
 			rollPeriod(c)
@@ -61,9 +62,19 @@ func accrueSegment(c *Court, blocks int64) {
 	if c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail {
 		return // full and no senior waits: the budget is forgone (ceiling, not floor)
 	}
-	num := c.curPeriodBudget*blocks + c.accrualRem
+	num := mustAdd(mustMul(c.curPeriodBudget, blocks), c.accrualRem)
 	c.cumAccrual = mustAdd(c.cumAccrual, num/periodBlocks)
 	c.accrualRem = num % periodBlocks
+}
+
+// advanceRateAcc extends the era integral by one segment at the segment's own
+// rate (audit H1): rateAcc is what conviction settles against — no position is
+// ever priced at a rate that wasn't live while it accrued.
+func advanceRateAcc(c *Court, blocks int64) {
+	if blocks <= 0 {
+		return
+	}
+	c.rateAccFP = mustAdd(c.rateAccFP, mustMul(rateBpsFP(c), blocks))
 }
 
 // rollPeriod steps the budget down and reprices d_eff from realized dilution
@@ -78,14 +89,19 @@ func rollPeriod(c *Court) {
 
 	s := c.coin.TotalSupply()
 	if s > 0 {
-		dReal := int64(uint64(c.emaMinted) * 10_000 * 1_000_000 / uint64(s))
+		if c.emaMinted < 0 {
+			panic("courtv2: negative realized mint") // emittedTotal is monotone; defensive
+		}
+		// 128-bit both ways (audit C1: the naive uint64 product wraps at
+		// ~485k CC of supply — a silent 34× under-budget on any real court).
+		dReal := mulDiv128(c.emaMinted, 10_000*1_000_000, s)
 		if dReal < c.curBudgetBpsFP {
 			c.dEffBpsFP = dReal
 		} else {
 			c.dEffBpsFP = c.curBudgetBpsFP
 		}
 		// The period's budget: S_live × bps, floored (P10).
-		c.curPeriodBudget = int64(uint64(s) * uint64(c.curBudgetBpsFP) / (10_000 * 1_000_000))
+		c.curPeriodBudget = mulDiv128(s, c.curBudgetBpsFP, 10_000*1_000_000)
 	} else {
 		c.dEffBpsFP = 0
 		c.curPeriodBudget = 0

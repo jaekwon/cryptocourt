@@ -28,10 +28,10 @@ const budgetBpsFPStart = budgetWeeklyBps * 1_000_000
 
 // stakePos is one staker's position on one side of one claim.
 type stakePos struct {
-	stake      int64  // live staked amount
-	convHi     uint64 // rate-weighted conviction, u128:
-	convLo     uint64 //   Σ stake × Δblocks × rateBpsFP  (bps × 1e6)
-	lastUpdate int64  // height of the last accrual
+	stake       int64  // live staked amount
+	convHi      uint64 // rate-weighted conviction, u128: Σ stake × ΔrateAcc
+	convLo      uint64
+	lastRateAcc int64 // the court's era integral at the last settle (audit H1)
 }
 
 // rateBpsFP is the current published rate in bps × 1e6 per week:
@@ -40,38 +40,36 @@ func rateBpsFP(c *Court) int64 {
 	return 255 * (r0WeeklyBps*1_000_000 + c.dEffBpsFP) / 100
 }
 
-// accrue settles a position's conviction up to now at the current rate:
-// conv += stake × Δblocks × rateBpsFP, in u128. Also feeds the per-side pool
-// conviction so lifetime ratios and reward denominators exist for free (§3.9).
-func accrue(c *Court, cs *claimState, p *stakePos, side int) {
-	now := runtime.ChainHeight()
-	if cs.frozenAt != 0 && now > cs.frozenAt {
-		now = cs.frozenAt // accrual stops at the freeze, exactly
+// effectiveRateAcc is the era integral a claim's positions settle against:
+// the court's cumulative Σ rate×blocks, capped at the claim's freeze snapshot
+// so frozen conviction can never be repriced by later d_eff moves (audit H1).
+// Callers must touch(c) first so the integral is current.
+func effectiveRateAcc(c *Court, cs *claimState) int64 {
+	acc := c.rateAccFP
+	if cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {
+		acc = cs.rateAccAtFreeze
 	}
-	dt := now - p.lastUpdate
-	p.lastUpdate = now
-	if dt <= 0 || p.stake == 0 {
+	return acc
+}
+
+// accrue settles a position against the era integral: conv += stake × Δacc,
+// where Δacc = Σ rate(t)·dt over exactly the blocks the stake was live — the
+// rate-weighted integral by construction (V2-8; no rate snapshot, no
+// retroactive repricing). Also feeds the per-side pool conviction (§3.9).
+func accrue(c *Court, cs *claimState, p *stakePos, side int) {
+	acc := effectiveRateAcc(c, cs)
+	delta := acc - p.lastRateAcc
+	p.lastRateAcc = acc
+	if delta <= 0 || p.stake == 0 {
 		return
 	}
-	// stake × dt fits u128 via one 64×64 multiply; × rateFP via a second.
-	hi1, lo1 := bits.Mul64(uint64(p.stake), uint64(dt))
-	// (hi1:lo1) × rateFP — rateFP < 2^38, hi1 < 2^17 at our magnitudes, so the
-	// high product fits; checked anyway.
-	r := uint64(rateBpsFP(c))
-	hiA, loA := bits.Mul64(lo1, r)
-	hiB, loB := bits.Mul64(hi1, r)
-	if hiB != 0 {
-		panic("courtv2: conviction accrual overflowed 128 bits")
-	}
-	hiA += loB
-	if hiA < loB {
-		panic("courtv2: conviction accrual overflowed 128 bits")
-	}
-	p.convHi, p.convLo = add128(p.convHi, p.convLo, hiA, loA)
+	// stake < 2^50, Δacc < 2^57 over a century: one 64×64 multiply covers it.
+	hi, lo := bits.Mul64(uint64(p.stake), uint64(delta))
+	p.convHi, p.convLo = add128(p.convHi, p.convLo, hi, lo)
 	if side == sideYES {
-		cs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hiA, loA)
+		cs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hi, lo)
 	} else {
-		cs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hiA, loA)
+		cs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)
 	}
 }
 
@@ -96,7 +94,7 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	touch(c)
 
 	c.coin.Transfer(who, c.escrow, amount)
-	p := getPos(cs, who, side)
+	p := getPos(c, cs, who, side)
 	accrue(c, cs, p, side)
 	p.stake = mustAdd(p.stake, amount)
 	if side == sideYES {
@@ -126,7 +124,7 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 	}
 	touch(c)
 
-	p := getPos(cs, who, side)
+	p := getPos(c, cs, who, side)
 	if p.stake < amount {
 		panic("courtv2: unstaking more than is staked")
 	}
@@ -172,28 +170,22 @@ func ConvictionOf(courtSlug string, claimID uint64, side int, who address) int64
 		return 0
 	}
 	p := v.(*stakePos)
-	// A transient copy: settle without writing (reads must not mutate).
-	tmp := *p
-	accrueRead(c, cs, &tmp)
-	return convToCC(tmp.convHi, tmp.convLo)
-}
-
-// accrueRead mirrors accrue without touching pool totals or storage.
-func accrueRead(c *Court, cs *claimState, p *stakePos) {
-	now := runtime.ChainHeight()
-	if cs.frozenAt != 0 && now > cs.frozenAt {
-		now = cs.frozenAt
+	// A transient copy settled against a PREVIEW of the era integral: the
+	// stored integral plus the un-walked tail at the current rate (reads must
+	// not mutate; the tail approximation resolves exactly at the next touch).
+	acc := c.rateAccFP
+	if tail := runtime.ChainHeight() - c.lastAccrual; tail > 0 {
+		acc = mustAdd(acc, mustMul(rateBpsFP(c), tail))
 	}
-	dt := now - p.lastUpdate
-	if dt <= 0 || p.stake == 0 {
-		return
+	if cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {
+		acc = cs.rateAccAtFreeze
 	}
-	hi1, lo1 := bits.Mul64(uint64(p.stake), uint64(dt))
-	r := uint64(rateBpsFP(c))
-	hiA, loA := bits.Mul64(lo1, r)
-	_, loB := bits.Mul64(hi1, r)
-	hiA += loB
-	p.convHi, p.convLo = add128(p.convHi, p.convLo, hiA, loA)
+	hi, lo := p.convHi, p.convLo
+	if delta := acc - p.lastRateAcc; delta > 0 && p.stake > 0 {
+		mh, ml := bits.Mul64(uint64(p.stake), uint64(delta))
+		hi, lo = add128(hi, lo, mh, ml)
+	}
+	return convToCC(hi, lo)
 }
 
 // convToCC converts a conviction accumulator to CC base units:
@@ -209,12 +201,12 @@ func convToCC(hi, lo uint64) int64 {
 
 // ----------------------------------------------------------------- innards --
 
-func getPos(cs *claimState, who address, side int) *stakePos {
+func getPos(c *Court, cs *claimState, who address, side int) *stakePos {
 	k := posKey(who, side)
 	if v := cs.stakers.Get(k); v != nil {
 		return v.(*stakePos)
 	}
-	p := &stakePos{lastUpdate: runtime.ChainHeight()}
+	p := &stakePos{lastRateAcc: c.rateAccFP}
 	cs.stakers.Set(k, p)
 	return p
 }
@@ -230,6 +222,30 @@ func mustSide(side int) {
 	if side != sideYES && side != sideNO {
 		panic("courtv2: side is 0 (YES) or 1 (NO)")
 	}
+}
+
+// mustMul is the checked multiply (gno wraps silently — audit C1's class).
+func mustMul(a, b int64) int64 {
+	m, ok := overflow.Mul64(a, b)
+	if !ok {
+		panic("courtv2: multiply overflow")
+	}
+	return m
+}
+
+// mulDiv128 computes a×b/den with a 128-bit intermediate (audit C1: the naive
+// uint64 product wraps at real-court magnitudes). Floors; panics if the
+// quotient exceeds int64 (unreachable at our bounded inputs).
+func mulDiv128(a, b, den int64) int64 {
+	if a < 0 || b < 0 || den <= 0 {
+		panic("courtv2: mulDiv128 domain")
+	}
+	hi, lo := bits.Mul64(uint64(a), uint64(b))
+	if hi >= uint64(den) {
+		panic("courtv2: mulDiv128 quotient overflow")
+	}
+	q, _ := bits.Div64(hi, lo, uint64(den))
+	return int64(q)
 }
 
 // mustAdd is the checked add every pool total goes through (gno wraps silently).

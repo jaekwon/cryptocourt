@@ -104,9 +104,12 @@ func TestFreezeStopsEverything(cur realm, t *testing.T) {
 	Stake(cross(cur), "fz1", id, sideYES, 1_000_000_000)
 	testing.SkipHeights(1000)
 
-	// Simulate the answer (answer.gno lands later; in-package set).
+	// Simulate the answer (answer.gno lands later; in-package set): touch
+	// first so the era integral is exact at the freeze height, then pin it.
+	touch(c)
 	cs := mustClaim(c, id)
 	cs.frozenAt = testingHeight()
+	cs.rateAccAtFreeze = c.rateAccFP
 	frozenConv := ConvictionOf("fz1", id, sideYES, alice)
 
 	testing.SkipHeights(5000)

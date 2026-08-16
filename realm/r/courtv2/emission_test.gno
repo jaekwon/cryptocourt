@@ -110,3 +110,23 @@ func TestEmissionFeedsRealizedD(cur realm, t *testing.T) {
 		t.Fatal("d_eff is capped at the budget ceiling")
 	}
 }
+
+// TestBudgetAtRealCourtScale is the C1 wrap regression: the naive uint64
+// product wrapped at ~485k CC of supply (any real court), silently computing a
+// 34x under-budget at 1M CC. 128-bit mulDiv must survive curve-cap scale.
+func TestBudgetAtRealCourtScale(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("em-big")
+	c := testCourt(cur, "em5", alice, 1_000_000_000_000) // 1,000,000 CC
+	rollTo(c, 1)
+	steppedFP := budgetBpsFPStart * stepDownNum / stepDownDen
+	want := mulDiv128(1_000_000_000_000, steppedFP, 10_000*1_000_000)
+	if c.curPeriodBudget != want || c.curPeriodBudget < 3_700_000_000 {
+		t.Fatalf("1M-CC court budget = %d, want %d (~3,774 CC/wk)", c.curPeriodBudget, want)
+	}
+	// And at the curve-cap extreme the math must not wrap or panic.
+	c2 := testCourt(cur, "em6", alice, curveCap)
+	rollTo(c2, 1)
+	if c2.curPeriodBudget <= 0 {
+		t.Fatal("curve-cap-scale budget must be positive and unwrapped")
+	}
+}

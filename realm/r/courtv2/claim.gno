@@ -42,8 +42,11 @@ type claimState struct {
 	oi  twap.Ring // total stake, hourly, one week
 	yes twap.Ring // YES pool, hourly, one week
 
-	// Answer-freeze marker (answer.gno sets it; stake/unstake refuse after).
-	frozenAt int64 // 0 = live
+	// Answer-freeze markers (answer.gno sets them; stake/unstake refuse after).
+	// rateAccAtFreeze pins the era integral at the freeze height so frozen
+	// conviction can never be repriced by later d_eff moves (audit H1).
+	frozenAt        int64 // 0 = live
+	rateAccAtFreeze int64
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's

@@ -217,6 +217,7 @@ type Court struct {
 	curPeriodBudget int64 // this period's B = S_live × bps at the last roll
 	curBudgetBpsFP  int64 // budget CEILING, bps × 1e6 (stepped down at rolls)
 	dEffBpsFP       int64 // effective d: min(ceiling, realized EMA) — audit-15 P1
+	rateAccFP       int64 // cumulative Σ rate×blocks (bpsFP·block) — the era integral (audit C-H1)
 	emaMinted       int64 // 4-period EMA of minted-per-period
 	emittedAtRoll   int64 // emittedTotal at the last roll
 	lastAccrual     int64 // height the accrual walk has reached
