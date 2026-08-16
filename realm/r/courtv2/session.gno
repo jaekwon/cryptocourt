@@ -33,6 +33,7 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 
 	cs.verdictAt = runtime.ChainHeight()
 	cs.route = "undisputed"
+	cs.provisional = cs.answer
 	cs.tier = tierMidX // the undisputed default; the flag lane may re-vote it
 
 	// The bond returns exactly once — and is zeroed so nothing later (a
@@ -58,7 +59,11 @@ func WithdrawStake(cur realm, courtSlug string, claimID uint64, side int) int64 
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
 	mustSide(side)
-	if cs.verdictAt == 0 {
+	// Withdrawable at VERDICT_FINAL (both sides), or EARLY for the side a
+	// standing provisional verdict is against (econ F7: their outcome cannot
+	// improve — principal is 1× regardless and conviction is already frozen —
+	// and releasing them defuses the multi-round freeze-hostage, A12).
+	if cs.verdictAt == 0 && !(cs.provisional >= 0 && side != int(cs.provisional)) {
 		panic("courtv2: no verdict yet — unstake freely before an answer, withdraw after the verdict")
 	}
 	touch(c)
@@ -91,7 +96,10 @@ func Verdict(courtSlug string, claimID uint64) int {
 	if cs.verdictAt == 0 {
 		panic("courtv2: no verdict yet")
 	}
-	return int(cs.answer)
+	if cs.provClose {
+		panic("courtv2: closed without a decision (three failed dispute rounds)")
+	}
+	return int(cs.provisional)
 }
 
 func VerdictRoute(courtSlug string, claimID uint64) string {

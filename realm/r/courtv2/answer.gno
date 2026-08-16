@@ -75,6 +75,7 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	cs.answer = int8(verdict)
 	cs.answerer = who
 	cs.answerBond = bond
+	cs.answerBond0 = bond
 	cs.answerHeight = now
 	if inPriority {
 		holdPriority(c, who, claimID)

@@ -49,21 +49,34 @@ type claimState struct {
 	rateAccAtFreeze int64
 	xBarFrozen      int64 // P6: the trailing-X̄ snapshot at the answer
 
-	// The answer (answer.gno).
+	// The answer (answer.gno). answerBond is the LIVE escrowed remainder
+	// (zeroed as disposed, exactly once); answerBond0 is the posted magnitude —
+	// the anchor the dispute-bond and comp formulas read across rounds.
 	answer       int8 // sideYES/sideNO once frozenAt != 0
 	answerer     address
 	answerBond   int64
+	answerBond0  int64
 	answerHeight int64
 
-	// VERDICT_FINAL (P4): set by SettleUndisputed or the dispute machine.
+	// VERDICT_FINAL (P4): set by SettleUndisputed, Finalize, or provClose.
 	verdictAt int64  // 0 = no verdict yet
-	route     string // "undisputed" | "vote"
+	route     string // "undisputed" | "vote" | "closed"
 	// Quality (quality.gno finalizes; mid is the undisputed default).
 	tier      int64
 	tierFinal bool
-	// Dispute machine markers (dispute.gno).
-	disputeOpen bool
-	round       int
+	// The dispute machine (dispute.gno). provisional is the standing verdict
+	// between a decided round and Finalize (-1 = none); escrowUntil is the
+	// reopen window's end, set once at the first resolution.
+	disputeOpen   bool
+	round         int64
+	failedRounds  int64
+	decidedRounds int64
+	disputer     address
+	disputeBond  int64
+	proposalID   int64
+	provisional  int8
+	escrowUntil  int64
+	provClose    bool
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's
@@ -85,15 +98,16 @@ func OpenClaim(cur realm, courtSlug, title string) uint64 {
 	c.nextID++
 	id := c.nextID
 	cs := &claimState{
-		id:       id,
-		title:    title,
-		author:   who,
-		deposit:  dep,
-		fee:      fee,
-		openedAt: runtime.ChainHeight(),
-		stakers:  bptree.NewBPTree32(),
-		oi:       twap.New(epochBlocks, twapBuckets, 8),
-		yes:      twap.New(epochBlocks, twapBuckets, 8),
+		id:          id,
+		title:       title,
+		author:      who,
+		deposit:     dep,
+		fee:         fee,
+		openedAt:    runtime.ChainHeight(),
+		stakers:     bptree.NewBPTree32(),
+		oi:          twap.New(epochBlocks, twapBuckets, 8),
+		yes:         twap.New(epochBlocks, twapBuckets, 8),
+		provisional: -1, // int8 zero is sideYES — the sentinel must be explicit
 	}
 	c.claims.Set(beClaimKey(id), cs)
 	return id
