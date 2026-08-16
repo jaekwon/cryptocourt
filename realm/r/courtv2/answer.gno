@@ -68,6 +68,7 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// FREEZE: the era integral is walked to this exact height, then pinned —
 	// frozen conviction is immutable by construction (audit H1).
 	touch(c)
+	advancePools(c, cs)
 	cs.frozenAt = now
 	cs.rateAccAtFreeze = c.rateAccFP
 	cs.xBarFrozen = xbar // P6: the one base for every later %-of-X̄ quantity

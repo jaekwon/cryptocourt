@@ -30,6 +30,7 @@ import (
 	"chain/runtime"
 	"strconv"
 
+	bptree "gno.land/p/nt/bptree/v0"
 	governor "gno.land/p/cryptocourt/governor/v0"
 	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
 )
@@ -150,6 +151,14 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 		panic("courtv2: no open dispute on this claim")
 	}
 	c.gov.Vote(who, cs.proposalID, choice)
+	// Court-side choice record: the governor's roll is reclaimable after
+	// resolution (ReleaseRoll is permissionless), so the carrot must not
+	// depend on it. Weight is recomputed later from PastVotes at the
+	// proposal's epoch; only the choice needs remembering.
+	if cs.qVoted == nil {
+		cs.qVoted = bptree.NewBPTree32()
+	}
+	cs.qVoted.Set("d"+beClaimKey(uint64(cs.proposalID))+string(who), choice)
 }
 
 // ResolveDispute reads the FROZEN tally of a closed dispute vote and
@@ -225,6 +234,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.provisional = int8(oppositeSide(int(cs.answer)))
 		cs.failedRounds = 0
 		cs.decidedRounds++
+		cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, "yes", yes
 		resolveQualityRide(c, cs)
 	default:
 		// UPHOLD (tie, all-abstain, or a sub-threshold split, quorum met):
@@ -254,6 +264,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.provisional = cs.answer
 		cs.failedRounds = 0
 		cs.decidedRounds++
+		cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, "no", no
 		resolveQualityRide(c, cs)
 	}
 
@@ -354,7 +365,9 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 
 	cs.verdictAt = now
 	cs.route = "vote"
-	cs.tier = tierMidX // default pending the quality machinery (quality.gno)
+	if !cs.tierFinal {
+		cs.tier = tierMidX // the default; a conclusive tally (ride or flag) already set it otherwise
+	}
 	if cs.answerBond > 0 {
 		// The answer stood (an overturned bond was burned at its round).
 		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)

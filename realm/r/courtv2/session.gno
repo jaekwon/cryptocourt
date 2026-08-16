@@ -34,7 +34,9 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	cs.verdictAt = runtime.ChainHeight()
 	cs.route = "undisputed"
 	cs.provisional = cs.answer
-	cs.tier = tierMidX // the undisputed default; the flag lane may re-vote it
+	if !cs.tierFinal {
+		cs.tier = tierMidX // the undisputed default; the flag lane may re-vote it
+	}
 
 	// The bond returns exactly once — and is zeroed so nothing later (a
 	// quality flag, a slash path) can double-dispose it. The >0 guard also
@@ -67,6 +69,7 @@ func WithdrawStake(cur realm, courtSlug string, claimID uint64, side int) int64 
 		panic("courtv2: no verdict yet — unstake freely before an answer, withdraw after the verdict")
 	}
 	touch(c)
+	advancePools(c, cs)
 	p := getPos(c, cs, who, side)
 	if p.stake <= 0 {
 		panic("courtv2: nothing staked on that side")

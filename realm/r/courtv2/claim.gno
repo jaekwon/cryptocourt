@@ -39,6 +39,9 @@ type claimState struct {
 	noConvHi, noConvLo   uint64
 	yesRawHi, yesRawLo   uint64
 	noRawHi, noRawLo     uint64
+	// The side integrals' last-advance markers (advancePools).
+	yesLastAcc, noLastAcc       int64
+	yesLastRawAt, noLastRawAt   int64
 
 	// The trailing rings (§3.9): total staked (answerability X̄) and the YES
 	// pool (the ratio series). Observed on every stake/unstake.
@@ -115,6 +118,19 @@ type claimState struct {
 	// Carrot pull-claim anchors (set at the conclusive tally)
 	conclusiveSeq     uint64
 	conclusiveTurnout int64
+	// The draw (crystallize.gno): D's slices, denominators, one-shot flags.
+	drawWinners   int64
+	drawAuthor    int64
+	drawAnswerer  int64
+	winPoolConvCC int64
+	openBlocks    int64
+	carrotTotal   int64
+	carrotPool    int64 // remaining
+	carrotChoice  string
+	carrotDenom   int64
+	decidedPID    int64
+	authorPaid    bool
+	answererPaid  bool
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's

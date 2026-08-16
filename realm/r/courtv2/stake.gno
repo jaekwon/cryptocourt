@@ -38,6 +38,7 @@ type stakePos struct {
 	// rate (Q7).
 	rawHi, rawLo uint64
 	lastRawAt    int64
+	bonusPaid    bool // the winner draw is one-shot (crystallize.gno)
 }
 
 // rateBpsFP is the current published rate in bps × 1e6 per week:
@@ -71,11 +72,6 @@ func accrue(c *Court, cs *claimState, p *stakePos, side int) {
 		// stake < 2^50, Δacc < 2^57 over a century: one 64×64 multiply covers it.
 		hi, lo := bits.Mul64(uint64(p.stake), uint64(delta))
 		p.convHi, p.convLo = add128(p.convHi, p.convLo, hi, lo)
-		if side == sideYES {
-			cs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hi, lo)
-		} else {
-			cs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)
-		}
 	}
 	rh := rawHeight(cs)
 	rawDelta := rh - p.lastRawAt
@@ -83,12 +79,37 @@ func accrue(c *Court, cs *claimState, p *stakePos, side int) {
 	if rawDelta > 0 && p.stake > 0 {
 		hi, lo := bits.Mul64(uint64(p.stake), uint64(rawDelta))
 		p.rawHi, p.rawLo = add128(p.rawHi, p.rawLo, hi, lo)
-		if side == sideYES {
-			cs.yesRawHi, cs.yesRawLo = add128(cs.yesRawHi, cs.yesRawLo, hi, lo)
-		} else {
-			cs.noRawHi, cs.noRawLo = add128(cs.noRawHi, cs.noRawLo, hi, lo)
-		}
 	}
+	_ = side
+}
+
+// advancePools settles the per-side POOL integrals analytically from the side
+// totals — sideStake × Δ over exactly the interval since the last mutation,
+// during which the total was constant. This makes the pool EXACT at any
+// moment (crystallize's denominator) with no dependence on when individual
+// positions settle: Σ position integrals == the side integral by construction.
+// MUST run before any yesStake/noStake mutation.
+func advancePools(c *Court, cs *claimState) {
+	acc := effectiveRateAcc(c, cs)
+	rh := rawHeight(cs)
+	if d := acc - cs.yesLastAcc; d > 0 && cs.yesStake > 0 {
+		hi, lo := bits.Mul64(uint64(cs.yesStake), uint64(d))
+		cs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hi, lo)
+	}
+	if d := acc - cs.noLastAcc; d > 0 && cs.noStake > 0 {
+		hi, lo := bits.Mul64(uint64(cs.noStake), uint64(d))
+		cs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)
+	}
+	if d := rh - cs.yesLastRawAt; d > 0 && cs.yesStake > 0 {
+		hi, lo := bits.Mul64(uint64(cs.yesStake), uint64(d))
+		cs.yesRawHi, cs.yesRawLo = add128(cs.yesRawHi, cs.yesRawLo, hi, lo)
+	}
+	if d := rh - cs.noLastRawAt; d > 0 && cs.noStake > 0 {
+		hi, lo := bits.Mul64(uint64(cs.noStake), uint64(d))
+		cs.noRawHi, cs.noRawLo = add128(cs.noRawHi, cs.noRawLo, hi, lo)
+	}
+	cs.yesLastAcc, cs.noLastAcc = acc, acc
+	cs.yesLastRawAt, cs.noLastRawAt = rh, rh
 }
 
 // rawHeight is the height the raw integral runs to: now, capped at the freeze
@@ -122,6 +143,7 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	touch(c)
 
 	c.coin.Transfer(who, c.escrow, amount)
+	advancePools(c, cs)
 	p := getPos(c, cs, who, side)
 	accrue(c, cs, p, side)
 	p.stake = mustAdd(p.stake, amount)
@@ -152,6 +174,7 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 	}
 	touch(c)
 
+	advancePools(c, cs)
 	p := getPos(c, cs, who, side)
 	if p.stake < amount {
 		panic("courtv2: unstaking more than is staked")
