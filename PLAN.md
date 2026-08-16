@@ -360,6 +360,39 @@ A numeric verdict would hand adjudicators a knob attackers can nudge and
 dissolve the crisp "the record says YES/NO" product. Recorded so it isn't
 re-derived.
 
+**Pass 2 (iteration 8) — assumption questioned: does the one-way curve still
+earn its place, now that emission also mints and GNOT is burned?**
+
+- **KEPT — the curve, with a sharpened job description.** In V2 the curve is
+  the only GNOT→CC gate: it prices Sybil capital (every voting/staking unit
+  traces to burned GNOT or earned emission), its monotone price still rewards
+  early belief *in the court itself*, and its cap co-anchors the supply
+  invariant. What it no longer is: a value floor.
+- **CATCH (real, actionable): "backing" must be deleted from the product.**
+  V1 rendered `backing = treasury/supply` and told buyers they pay ~2×
+  backing. Under burn there is no treasury: **nothing backs CC and nothing
+  ever redeems it**. Any surviving "backing" figure in render/docs/wireframe
+  would be an implied redemption promise — legally the *opposite* of the
+  §3.7 consumption story, and factually false. V2 renders the curve price
+  (cost of the next unit) and supply only. Added to Appendix A (render row)
+  and the diff table.
+- **CHECKED — cold start under the reservoir is benign.** A new court has tiny
+  supply and tiny conviction; because draws are *rate-based*, early
+  participants earn the same per-conviction rate as anyone later — no
+  early-APR spike, no mercenary rush; the unearned budget accrues to R_max and
+  is then simply forgone (ceiling-not-floor working as intended). The curve
+  starting near zero makes early CC cheap — that, not emission, is the
+  bootstrap subsidy, and it pays only people who commit capital to a brand-new
+  court.
+- **KEPT — per-court coins** (vs one shared coin): fragmented liquidity is the
+  honest cost, but isolation is the product — each court is its own failure
+  domain, its own credibility ledger, and its own securities-analysis unit; a
+  shared coin couples every court's legal and economic fate.
+- **REJECTED — batch weekly quality votes** (one proposal covering all claims
+  settled that week): cheaper turnout arithmetic, but list-voting invites
+  rubber-stamping, and the flag lane already makes standalone quality votes
+  rare (only flagged, undisputed claims). Not worth the attention dilution.
+
 ### 3.9 Signal & render — `SPECCED (v0.9)`
 
 Three ratio series, and none of them needs new state:
@@ -620,7 +653,7 @@ that an order-book-ectomy could have silently broken:
 | `dispute.gno` | ADAPT. Bond doubling / 3 rounds / escrow windows / reopen / `quorumFloor` all KEPT. The dispute proposal's payload also opens the court-local quality tally (§3.4). `Finalize` computes entitlements and unlocks stakes; `RedeemWinning`/`RedeemClosed` become `WithdrawStake` (always 1×) + pull-claims for bonus slices. |
 | `fees.gno` | REPLACED by `emission.gno`: period budget + halving accounting, entitlement math, pull-claims for the four slices. The audited 128-bit `mulDivFloor` and the `VoteOf`-based voter-split pattern carry over directly. |
 | `directory.gno` | KEEP. |
-| `render.gno` | ADAPT. Sparkline = stake-ratio series; drop BestBid/BestAsk; show tier, route, emission drawn. Sealed-tally rule extends to the quality tally. |
+| `render.gno` | ADAPT. Sparkline = stake-ratio series; drop BestBid/BestAsk; show tier, route, emission drawn. Sealed-tally rule extends to the quality tally. **Delete "backing" everywhere** (pass-2 catch): burned GNOT backs nothing; rendering a backing figure would imply a redemption value that does not exist. Curve price + supply only. |
 | `/p/tickbook`, `/p/cshares` | REMOVED from the court's dependency set (packages remain in-repo, unused by V2). |
 | `/p/twap` | KEEP — repurposed: X̄ ring + the two pool-series rings. |
 | `/p/grc20votes`, `/p/governor`, `/p/checkpoint`, `/p/curve` | KEEP unchanged. Quality deliberately avoids touching `/p/governor` (§3.4). |
