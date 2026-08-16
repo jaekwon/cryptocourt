@@ -74,6 +74,15 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	cs.drawWinners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)
 	cs.drawAuthor = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)
 	cs.drawAnswerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)
+	// An OVERTURNED answer never stood — the answerer was adjudicated wrong
+	// (bond burned in full, record reset). They draw NO answerer slice, mirroring
+	// the author slice's winning-side gate and PLAN Appendix B's overturn example
+	// (audit-final MED). The unclaimed points stay unminted — conservative, under
+	// the ceiling. The undisputed and upheld paths set provisional == answer, so
+	// a standing answer is paid as before.
+	if int(cs.provisional) != int(cs.answer) {
+		cs.drawAnswerer = 0
+	}
 
 	// The carrot: 7 points of the MID-weight gross, tier-invariant (paid even
 	// at low — F2), senior-lane, per-voter clamped at pull (P2).

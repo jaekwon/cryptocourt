@@ -189,3 +189,62 @@ func TestReopenSupersedesCounter(cur realm, t *testing.T) {
 		ResolveCounter(cross(cur), "m3l1", id)
 	})
 }
+
+// Audit-final MED: an OVERTURNED answerer draws NO answerer emission slice —
+// the answer never stood (bond burned, record reset). The winning (NO) side
+// must carry conviction so D>0, isolating the answerer-slice gate.
+func TestOverturnedAnswererDrawsNoSlice(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mf-alice") // author + answerer (wrong)
+	ned := testutils.TestAddress("mf-ned")     // stakes NO early: the winning conviction
+	bob := testutils.TestAddress("mf-bob")     // disputer
+	carol := testutils.TestAddress("mf-carol") // overturns
+	c := testCourt(cur, "mf1", alice, 50_000_000_000)
+	c.coin.Mint(ned, 10_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "mf1", "A wrong answer that gets overturned")
+	// NO side builds real conviction over time (the eventual winners).
+	testing.SetRealm(testing.NewUserRealm(ned))
+	Stake(cross(cur), "mf1", id, sideNO, 400_000_000)
+	testing.SkipHeights(epochBlocks * 3)
+	matureOI(cur, "mf1", id, alice, 200_000_000) // answerability on total stake
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "mf1", id, sideYES) // the WRONG answer
+
+	// Dispute → overturn to NO.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "mf1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "mf1", id, "yes")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "mf1", id)
+	if Provisional("mf1", id) != sideNO {
+		t.Fatal("the answer must be overturned to NO")
+	}
+	testing.SkipHeights(EscrowUntil("mf1", id) - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "mf1", id)
+	if AnswerRecord("mf1", alice) != 0 {
+		t.Fatal("an overturn resets the record")
+	}
+
+	// Cross a period so the reservoir has a budget, then crystallize.
+	testing.SkipHeights(periodBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "mf1", id)
+	_, _, ans, _ := DrawSlices("mf1", id)
+	if ans != 0 {
+		t.Fatalf("an overturned answer draws NO answerer slice: got %d", ans)
+	}
+	// The winning (NO) side still draws — D>0, so this isolates the gate.
+	w, _, _, _ := DrawSlices("mf1", id)
+	if w <= 0 {
+		t.Fatal("the winning side must still have a live draw (D>0)")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	if got := AnswererBonus(cross(cur), "mf1", id); got != 0 {
+		t.Fatalf("the overturned answerer's bonus must be zero: got %d", got)
+	}
+}
