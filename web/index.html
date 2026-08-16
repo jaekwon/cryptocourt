@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <style>
 /* ============================================================================
-   CryptoCourt overlay — a presentation layer over the r/cryptocourt/court realm.
+   CryptoCourt overlay — a presentation layer over the r/cryptocourt/courtv2 realm.
    The chain carries all the information (every screen here can be served by the
    realm's own Render); this overlay only makes it prettier, and every button is
    a signable gnoweb transaction link, never a private API. Self-contained: no
@@ -146,7 +146,6 @@ a.card:hover{border-color:var(--line-2); box-shadow:var(--shadow); transform:tra
 .stat .v{font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:5px; letter-spacing:-.01em}
 .stat .v small,.stat .sub{font-size:12px; color:var(--ink-2); font-weight:500}
 .stat .sub{margin-top:3px}
-.stat.pair{display:flex; gap:18px; align-items:baseline}
 
 /* pills / status */
 .pill{
@@ -158,6 +157,7 @@ a.card:hover{border-color:var(--line-2); box-shadow:var(--shadow); transform:tra
 .pill.yes{background:var(--yes-wash); color:var(--yes)} .pill.no{background:var(--no-wash); color:var(--no)}
 .pill.escrow{background:var(--escrow-wash); color:var(--escrow)} .pill.void{background:var(--void-wash); color:var(--void)}
 .pill.open{background:var(--accent-wash); color:var(--accent-2)}
+.pill.good{background:var(--yes-wash); color:var(--good)}
 
 /* docket list */
 .docket{border:1px solid var(--line); border-radius:var(--r); overflow:hidden; background:var(--surface)}
@@ -189,35 +189,34 @@ a.card:hover{border-color:var(--line-2); box-shadow:var(--shadow); transform:tra
 .primer ol{margin:0; padding-left:20px; display:grid; gap:7px}
 .primer li{font-size:13.5px; color:var(--ink-2)} .primer li b{color:var(--ink); font-weight:600}
 
-/* market */
-.market{display:grid; grid-template-columns:1.3fr 1fr; gap:16px}
-@media(max-width:760px){.market{grid-template-columns:1fr}}
-.mkt-panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
-.book2{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px}
-.side{border-radius:var(--r-sm); padding:12px; text-align:center}
-.side.bid{background:var(--yes-wash)} .side.ask{background:var(--no-wash)}
-.side .lab{font-size:11px; text-transform:uppercase; letter-spacing:.06em; font-weight:600}
-.side.bid .lab{color:var(--yes)} .side.ask .lab{color:var(--no)}
-.side .px{font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:4px}
-.side .u{font-size:11px; color:var(--ink-2)}
-.spark{width:100%; height:54px; margin-top:10px}
-.spark .fill{fill:var(--accent-wash)} .spark .ln{fill:none; stroke:var(--accent); stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
-.spark .dot{fill:var(--accent)}
+/* stake panel + ratio series */
+.stakewrap{display:grid; grid-template-columns:1.3fr 1fr; gap:16px}
+@media(max-width:760px){.stakewrap{grid-template-columns:1fr}}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
+.ratio{display:grid; gap:13px; margin-top:4px}
+.ratio .row{display:grid; grid-template-columns:132px 1fr; gap:12px; align-items:center}
+.ratio .lab{font-size:12.5px; color:var(--ink-2)}
+.ratio .lab small{display:block; color:var(--muted); font-size:11px}
+.ratio .track{position:relative; height:16px; border-radius:100px; background:var(--no); overflow:hidden}
+.ratio .track .y{position:absolute; left:0; top:0; bottom:0; background:var(--yes); border-right:2px solid var(--surface)}
+.ratio .nums{display:flex; justify-content:space-between; font-size:11.5px; margin-top:3px; font-variant-numeric:tabular-nums}
+.ratio .nums .yv{color:var(--yes); font-weight:600} .ratio .nums .nv{color:var(--no); font-weight:600}
+.ratio .none{color:var(--muted); font-size:12.5px}
+.poolrow{display:flex; gap:18px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line)}
 
-/* order ticket */
+/* stake ticket */
 .ticket{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
 .ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
 .ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
 .ticket .line{display:flex; justify-content:space-between; padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
 .ticket .line:first-of-type{border-top:none}
 .ticket .line .l{color:var(--ink-2)} .ticket .line .r{font-weight:600; font-variant-numeric:tabular-nums}
-.ticket .line.win .r{color:var(--yes)} .ticket .line.lose .r{color:var(--no)}
 .ticket .never{margin-top:12px; background:var(--inset); border-radius:var(--r-sm); padding:11px 13px; font-size:12.5px; color:var(--ink-2)}
 .ticket .never b{color:var(--ink)}
 
 /* body / untrusted text frame */
 .foreign{background:var(--inset); border:1px solid var(--line); border-radius:var(--r); padding:16px 20px; position:relative}
-.foreign::before{content:"submitted by the claim's author"; position:absolute; top:-9px; left:14px; background:var(--paper); padding:0 8px; font-size:11px; color:var(--muted); letter-spacing:.02em}
+.foreign::before{content:"the claim, verbatim"; position:absolute; top:-9px; left:14px; background:var(--paper); padding:0 8px; font-size:11px; color:var(--muted); letter-spacing:.02em}
 .foreign p{margin:0 0 10px} .foreign p:last-child{margin:0}
 .foreign a{color:var(--accent-2)}
 
@@ -235,6 +234,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .notice{border-radius:var(--r); padding:13px 16px; font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice.warn{background:var(--escrow-wash); color:var(--ink)}
 .notice.refuse{background:var(--no-wash); border:1px solid var(--no); color:var(--ink)}
+.notice.good{background:var(--yes-wash); color:var(--ink)}
 .notice .g{flex:none}
 .empty{text-align:center; color:var(--muted); padding:50px 20px}
 .empty .g{font-size:34px; opacity:.5}
@@ -246,14 +246,13 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .tagrow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px}
 
 /* mobile */
-.railtoggle{display:none}
 @media(max-width:820px){
   body{grid-template-columns:1fr}
   .rail{position:static; height:auto; flex-direction:column}
   .nav{flex-direction:row; flex-wrap:wrap; gap:4px} .nav .sec{width:100%}
   .rail .foot{border-top:1px solid var(--line)}
   .main{padding:24px 18px 80px}
-  .market{grid-template-columns:1fr}
+  .stakewrap{grid-template-columns:1fr}
 }
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -266,12 +265,12 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
       <span class="scale">⚖️</span>
       <span><h1>CryptoCourt</h1></span>
     </a>
-    <div class="tag">Play-wager on claims of fact, in the court you trust.</div>
+    <div class="tag">Stake on claims of fact. Your principal always returns 1×.</div>
   </div>
   <nav class="nav" id="nav">
     <a href="#/" data-k="dir"><span class="g">▤</span> Directory</a>
     <div class="sec">You</div>
-    <a href="#/me" data-k="me"><span class="g">◈</span> Your page</a>
+    <a href="#/me" data-k="me"><span class="g">◈</span> Your positions</a>
     <a href="#/needs" data-k="needs"><span class="g">!</span> What needs you</a>
     <div class="sec">Reference</div>
     <a href="#/about" data-k="about"><span class="g">?</span> How it works</a>
@@ -300,16 +299,16 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 <script>
 "use strict";
 /* ============================ configuration ============================== */
-const PKG = "gno.land/r/cryptocourt/court";
+const PKG = "gno.land/r/cryptocourt/courtv2";
 const CFG = Object.assign(
   {mode:"demo", rpc:"http://127.0.0.1:26657", gnoweb:"https://gno.land"},
   JSON.parse(localStorage.getItem("cc.cfg")||"{}")
 );
 const saveCfg = () => localStorage.setItem("cc.cfg", JSON.stringify(CFG));
 
-const DECIMALS = 6;        // court coin metadata; the realm's economic figures are raw CC
-const PRICE_SCALE = 100;   // a full winning share pays this many CC; a tick price is 1..100 CC
-const BLOCK_SECS = 5;      // gno.land block time — how blocks become wall-clock
+const CC_DEC = 6;          // court coin decimals; economic figures are raw base units
+const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
+const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
 
 /* ============================ gno RPC client ============================= */
 /* abci_query(vm/qeval|vm/qrender) over JSON-RPC. data is amino base64; the reply
@@ -326,20 +325,22 @@ async function abci(path, data){
   if(j.error) throw new Error(j.error.message||"rpc error");
   const r = (j.result&&j.result.response) || {};
   const err = r.Error || (r.ResponseBase&&r.ResponseBase.Error);
-  if(err) throw new Error((r.Log||r.ResponseBase&&r.ResponseBase.Log||"query failed"));
+  if(err) throw new Error((r.Log||(r.ResponseBase&&r.ResponseBase.Log)||"query failed"));
   const d = r.Data!=null ? r.Data : (r.ResponseBase&&r.ResponseBase.Data);
   return d ? unb64(d) : "";
 }
 const qeval  = expr => abci("vm/qeval",  PKG+"."+expr);
 const qrender = pth => abci("vm/qrender", PKG+":"+pth);
 
-/* qeval returns typed lines like `(123 int64)` or `("orem" string)`, tuples one
-   per line. Parse tolerantly into JS values. */
+/* qeval returns typed lines like `(123 int64)` or `("orem" string)`, one per
+   returned value. Parse tolerantly into JS values. A read that panics becomes a
+   query error (caught by the caller), never a silent false — so gate panic-y
+   reads (AnswerVerdict, Verdict) behind HasAnswer/Settled first. */
 function parseTyped(out){
   const lines = out.trim().split("\n").filter(Boolean);
   return lines.map(line=>{
     const m = line.match(/^\((.*)\s+([A-Za-z0-9_./\[\]]+)\)$/s);
-    const raw = m ? m[1] : line, typ = m ? m[2] : "";
+    const raw = m ? m[1] : line;
     if(/^".*"$/s.test(raw)) return raw.slice(1,-1);
     if(raw==="true") return true; if(raw==="false") return false;
     if(/^-?\d+$/.test(raw)) return parseInt(raw,10);
@@ -351,118 +352,148 @@ const tup = async expr => parseTyped(await qeval(expr));
 const gstr = s => JSON.stringify(String(s));   // gno string literal
 
 /* ============================ demo dataset ============================== */
-/* A faithful sample so every screen renders offline. Numbers are in the realm's
-   own units: CC raw (a set = PRICE_SCALE CC), GNOT in ugnot (÷1e6 to display). */
+/* A faithful sample so every screen and state renders offline, in the realm's
+   own units (CC base units, 6 decimals) — stakes and conviction, not shares. */
 const NOW = 4_800_000; // pretend current block height
 const DEMO = {
   courts:{
     orem:{ name:"Orem Truth Court", tier:2,
-      price:118, backing:59, supply:642_000_000, treasury:200_000_000, oi:41_500,
-      claims:[1,2,3,4,5] },
+      price:118, supply:642_000_000, emitted:8_900_000, reservoir:2_100_000, seniorOwed:640_000,
+      claims:[1,2,3,4,5,6] },
     ledger:{ name:"The Ledger of Denver", tier:1,
-      price:74, backing:37, supply:210_000_000, treasury:64_000_000, oi:9_800,
+      price:74, supply:210_000_000, emitted:1_400_000, reservoir:410_000, seniorOwed:0,
       claims:[1] },
   },
   claims:{
+    // open — staking live, no answer yet
     "orem/1":{ title:"The county certified 12,412 mail ballots on Nov 6, 2025.",
       body:"The certification memo (linked below) records the figure. Two local outlets reported 12,300 the night before; the memo supersedes them.\n\nSource: county clerk PDF, page 3.",
-      depositor:"g1author4x9q2demo0000000000000000000000", x:22_000, bestBid:63, bestAsk:67,
-      priceHist:[50,52,55,58,57,60,62,64,63,65], answered:false, disputeOpen:false, provisional:-1, finalized:false },
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:41_000_000, noStake:12_000_000, convYes:9_400_000, convNo:2_600_000, trailYes:74,
+      phase:"open" },
+    // answered — bond posted, freeze, 72h settle window running
     "orem/2":{ title:"SpaceX Starship Flight 12 reached orbital velocity.",
       body:"Telemetry shows a sustained 7.8 km/s at MECO+8:20. Independent trackers concur.",
-      depositor:"g1author4x9q2demo0000000000000000000000", x:14_500, bestBid:82, bestAsk:86,
-      priceHist:[70,73,76,78,80,81,83,84,84,85], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:7_250, settleableAt:NOW+9_000, disputeOpen:false, provisional:-1, finalized:false },
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:130_000_000, noStake:9_000_000, convYes:71_000_000, convNo:4_100_000, trailYes:93,
+      phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:70_000_000, record:2, settleAt:NOW+9_000 },
+    // disputed — sealed vote in progress
     "orem/3":{ title:"The bridge inspection rated the north span 'serviceable'.",
       body:"Inspector's field notes rate it serviceable with monitoring. A dissenting engineer disputes the load model.",
-      depositor:"g1author4x9q2demo0000000000000000000000", x:31_000, bestBid:44, bestAsk:49,
-      priceHist:[60,58,55,52,50,48,47,46,45,45], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:15_500, disputeOpen:true, disputer:"g1disputer0000000000000000000000000000", proposalID:188, provisional:-1, finalized:false },
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:60_000_000, noStake:55_000_000, convYes:31_000_000, convNo:28_000_000, trailYes:52,
+      phase:"disputed", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:80_000_000, round:1, disputeBondNext:16_000_000 },
+    // settled by vote — verdict + route, quality high, crystallized
     "orem/4":{ title:"Q3 city revenue exceeded the June forecast.",
       body:"Final receipts came in 4.1% over the June forecast, per the finance dept close.",
-      depositor:"g1author4x9q2demo0000000000000000000000", x:18_000, bestBid:95, bestAsk:0,
-      priceHist:[80,84,88,90,92,95,97,98,99,100], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:9_000, disputeOpen:false, provisional:0, finalized:true, route:"by vote (71%)" },
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:180_000_000, noStake:20_000_000, convYes:96_000_000, convNo:11_000_000, trailYes:90,
+      phase:"settled", verdict:0, route:"vote", tier:2, tierFinal:true, record:3,
+      crystallized:true, draw:{w:10280, a:1028, ans:642, carrot:77} },
+    // provClose — three failed rounds, everyone 1×
     "orem/5":{ title:"The mayor privately opposed the rezoning before the vote.",
       body:"An anonymous memo alleges private opposition. Three disputes were filed; none reached quorum.",
-      depositor:"g1author4x9q2demo0000000000000000000000", x:26_000, bestBid:41, bestAsk:44,
-      priceHist:[50,48,45,43,42,41,42,43,42,42], answered:true, answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:13_000, disputeOpen:false, provisional:0, provClose:true, finalized:true, failedRounds:3, preAnswerPrice:42 },
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:26_000_000, noStake:24_000_000, convYes:12_000_000, convNo:11_000_000, trailYes:52,
+      phase:"provClose", failedRounds:3 },
+    // flagged — a quality flag vote is open (tally sealed)
+    "orem/6":{ title:"The vendor's audit found zero critical findings.",
+      body:"A one-line summary claims a clean audit. A flag questions whether this claim carries any information.",
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:110_000_000, noStake:8_000_000, convYes:60_000_000, convNo:3_000_000, trailYes:92,
+      phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      answerBond:59_000_000, record:0, settleAt:NOW-2_000, flagOpen:true, flagBondNext:2_000_000 },
     "ledger/1":{ title:"Denver's 2025 snowfall passed the 60-inch seasonal normal.",
       body:"NWS station total reached 61.2 inches by Apr 30.",
-      depositor:"g1author4x9q2demo0000000000000000000000", x:9_800, bestBid:71, bestAsk:78,
-      priceHist:[55,58,60,63,66,68,70,72,73,74], answered:false, disputeOpen:false, provisional:-1, finalized:false },
+      author:"g1author4x9q2demo0000000000000000000000",
+      yesStake:9_800_000, noStake:1_200_000, convYes:3_100_000, convNo:400_000, trailYes:73,
+      phase:"open" },
   },
-  positions:{ // by "slug/id" for the demo "you"
-    "orem/2":{yes:1200, no:0}, "orem/3":{yes:800, no:400}, "orem/4":{yes:2000, no:0},
-  },
-  balances:{ orem:38_400, ledger:0 },
+  positions:{ "orem/2":{yes:12_000_000,no:0,cy:6_400_000,cn:0}, "orem/3":{yes:8_000_000,no:4_000_000,cy:4_100_000,cn:1_900_000}, "orem/4":{yes:20_000_000,no:0,cy:10_800_000,cn:0} },
+  balances:{ orem:38_400_000, ledger:0 },
 };
 const DEMO_ME = "g1youdemoholder0000000000000000000000000";
 
 /* ======================= data access (demo | live) ====================== */
-/* Both branches return the SAME shapes, so the views never know which is live.
-   The live directory/docket come from Render() — the chain's own list — and the
-   scalars from qeval, exactly the "chain carries the information" contract. */
+/* Both branches return the SAME shapes, so views never know which is live. The
+   directory/docket come from Render() — the chain's own list — and the scalars
+   from qeval of the realm's public reads, exactly the "chain carries it" contract. */
 const isLive = () => CFG.mode==="live";
 
 async function listCourts(){
-  if(!isLive()){
+  if(!isLive())
     return Object.entries(DEMO.courts).map(([slug,c])=>({slug, name:c.name, tier:c.tier, claims:c.claims.length}));
-  }
   const md = await qrender("");
-  // parse "## Featured"/"## Courts" sections and the court links the realm emits
   const out=[]; let tier=1;
   for(const line of md.split("\n")){
     if(/^##\s+Featured/i.test(line)) tier=2;
     else if(/^##\s+Courts/i.test(line)) tier=1;
-    const m = line.match(/^\-\s*\[([^\]]+)\]\(\/r\/cryptocourt\/court:([a-z0-9-]+)\)\s*—\s*(\d+)/);
-    if(m) out.push({slug:m[2], name:m[1], tier, claims:parseInt(m[3],10)});
+    const m = line.match(/^\-\s*\[(.+?)\]\(\/r\/cryptocourt\/courtv2:([a-z0-9-]+)\)\s*—\s*(\d+)/);
+    if(m) out.push({slug:m[2], name:unesc(m[1]), tier, claims:parseInt(m[3],10)});
   }
   return out;
 }
 async function courtStats(slug){
   if(!isLive()){ const c=DEMO.courts[slug]; if(!c) return null;
-    return {name:c.name, tier:c.tier, price:c.price, backing:c.backing, supply:c.supply, treasury:c.treasury, oi:c.oi, claims:c.claims.length}; }
+    return {name:c.name, tier:c.tier, price:c.price, supply:c.supply, emitted:c.emitted, reservoir:c.reservoir, seniorOwed:c.seniorOwed, claims:c.claims.length}; }
   const s=gstr(slug);
-  const [name,price,backing,supply,treasury,oi,tier,claims] = await Promise.all([
-    one(`CourtName(${s})`), one(`CoinPrice(${s})`), one(`CoinBacking(${s})`), one(`CoinSupply(${s})`),
-    one(`Treasury(${s})`), one(`OpenInterest(${s})`), one(`CourtTier(${s})`), one(`ClaimCount(${s})`)]);
-  return {name,price,backing,supply,treasury,oi,tier,claims};
+  const [name,tier,price,supply,emitted,reservoir,seniorOwed,claims] = await Promise.all([
+    one(`CourtName(${s})`), one(`CourtTier(${s})`), one(`CoinPrice(${s})`), one(`CoinSupply(${s})`),
+    one(`EmittedTotal(${s})`), one(`Reservoir(${s})`), one(`SeniorOwed(${s})`), one(`ClaimCount(${s})`)]);
+  return {name,tier,price,supply,emitted,reservoir,seniorOwed,claims};
 }
 async function listClaims(slug){
   if(!isLive()){ const c=DEMO.courts[slug]; if(!c) return [];
-    return c.claims.map(id=>({id, ...claimHead(DEMO.claims[slug+"/"+id])})); }
+    return c.claims.map(id=>({id, title:DEMO.claims[slug+"/"+id].title, statusText:statusText(DEMO.claims[slug+"/"+id])})); }
   const md = await qrender(slug);
   const out=[];
-  for(const line of md.split("\n")){
-    const m = line.match(new RegExp("^\\-\\s*\\[([^\\]]+)\\]\\(\\/r\\/cryptocourt\\/court:"+slug+"\\/(\\d+)\\)\\s*—\\s*(.*)$"));
-    if(m) out.push({id:parseInt(m[2],10), title:m[1], statusText:m[3].trim()});
-  }
+  const re = new RegExp("^\\-\\s*\\[(.+?)\\]\\(\\/r\\/cryptocourt\\/courtv2:"+slug+"\\/(\\d+)\\)\\s*—\\s*(.*)$");
+  for(const line of md.split("\n")){ const m=line.match(re); if(m) out.push({id:parseInt(m[2],10), title:unesc(m[1]), statusText:m[3].trim()}); }
   return out;
 }
 async function claimDetail(slug,id){
   if(!isLive()){ const d=DEMO.claims[slug+"/"+id]; if(!d) return null; return {id, ...d}; }
   const s=gstr(slug), i=id;
-  const [title,body,x,answered,disputeOpen,provisional,finalized] = await Promise.all([
-    one(`ClaimTitle(${s},${i})`), one(`ClaimBody(${s},${i})`), one(`ClaimX(${s},${i})`),
-    one(`HasAnswer(${s},${i})`), one(`DisputeOpen(${s},${i})`), one(`Provisional(${s},${i})`), one(`Finalized(${s},${i})`)]);
-  const [bb,ba] = await Promise.all([tup(`BestBid(${s},${i})`), tup(`BestAsk(${s},${i})`)]);
-  const d = {id, title, body, x, answered, disputeOpen, provisional, finalized,
-    bestBid: bb[1]? bb[0]+1 : 0, bestAsk: ba[1]? ba[0]+1 : 0, priceHist:null};
+  const [title,status,pools,pconv,toi,tyes,answered,disputeOpen,settled,provClose,provisional] = await Promise.all([
+    one(`ClaimTitle(${s},${i})`), one(`ClaimStatus(${s},${i})`), tup(`StakePools(${s},${i})`),
+    tup(`PoolConviction(${s},${i})`), tup(`TrailingOI(${s},${i},${WEEK})`), tup(`TrailingYes(${s},${i},${WEEK})`),
+    one(`HasAnswer(${s},${i})`), one(`DisputeOpen(${s},${i})`), one(`Settled(${s},${i})`),
+    one(`ProvClose(${s},${i})`), one(`Provisional(${s},${i})`)]);
+  const d = {id, title, statusText:status, yesStake:pools[0], noStake:pools[1],
+    convYes:pconv[0], convNo:pconv[1], trailOImature:toi[1], trailOI:toi[0], trailYesMature:tyes[1], trailYesAvg:tyes[0],
+    answered, disputeOpen, settled, provClose, provisional};
   if(answered){
-    const [ans,answerer,bond,settleAt] = await Promise.all([
-      one(`AnswerVerdict(${s},${i})`), one(`Answerer(${s},${i})`), one(`AnswerBond(${s},${i})`), one(`SettleableAt(${s},${i})`)]);
-    Object.assign(d,{answer:ans, answerer, answerBond:bond, settleableAt:settleAt});
+    const answerer = await one(`Answerer(${s},${i})`);
+    const [ans,bond,rec,settleAt,tierT,flagState,flagBond] = await Promise.all([
+      one(`AnswerVerdict(${s},${i})`), one(`AnswerBond(${s},${i})`), one(`AnswerRecord(${s},${gstr(answerer)})`).catch(()=>0),
+      one(`SettleDeadline(${s},${i})`), tup(`QualityTier(${s},${i})`), one(`FlagState(${s},${i})`),
+      one(`FlagBondNext(${s},${i})`).catch(()=>0)]);
+    Object.assign(d,{answer:ans, answerer, answerBond:bond, record:rec, settleAt, tier:tierT[0], tierFinal:tierT[1], flagState, flagBondNext:flagBond});
+    d.flagOpen = flagState==="voting";
+    d.counterOpen = flagState==="counter-window";
   }
-  if(disputeOpen) d.proposalID = await one(`DisputeProposal(${s},${i})`);
+  if(disputeOpen || (!settled && provisional>=0)){
+    d.round = await one(`FailedRounds(${s},${i})`).catch(()=>0);
+    d.disputeBondNext = await one(`DisputeBondNext(${s},${i})`).catch(()=>0);
+    d.escrowUntil = await one(`EscrowUntil(${s},${i})`).catch(()=>0);
+  }
+  if(settled && !provClose){ d.verdict = await one(`Verdict(${s},${i})`).catch(()=>-1); d.route = await one(`VerdictRoute(${s},${i})`).catch(()=>""); }
+  if(await one(`Crystallized(${s},${i})`).catch(()=>false)){
+    const ds = await tup(`DrawSlices(${s},${i})`); d.crystallized=true; d.draw={w:ds[0],a:ds[1],ans:ds[2],carrot:ds[3]};
+  }
+  // phase for the demo-shaped views
+  d.phase = d.provClose?"provClose": d.settled?"settled": d.disputeOpen?"disputed": (d.provisional>=0?"provisional": d.answered?"answered":"open");
   return d;
 }
 async function positionOf(slug,id,addr){
-  if(!isLive()){ const p=DEMO.positions[slug+"/"+id]||{yes:0,no:0}; return {yes:p.yes,no:p.no}; }
+  if(!isLive()){ const p=DEMO.positions[slug+"/"+id]||{yes:0,no:0,cy:0,cn:0}; return p; }
   const s=gstr(slug), a=gstr(addr);
-  const [yes,no] = await Promise.all([one(`SharesOf(${s},${id},0,${a})`), one(`SharesOf(${s},${id},1,${a})`)]);
-  return {yes,no};
+  const [yes,no,cy,cn] = await Promise.all([
+    one(`StakeOf(${s},${id},0,${a})`), one(`StakeOf(${s},${id},1,${a})`),
+    one(`ConvictionOf(${s},${id},0,${a})`), one(`ConvictionOf(${s},${id},1,${a})`)]);
+  return {yes,no,cy,cn};
 }
 async function balanceOf(slug,addr){
   if(!isLive()) return DEMO.balances[slug]||0;
@@ -470,24 +501,22 @@ async function balanceOf(slug,addr){
 }
 const rawRender = pth => isLive() ? qrender(pth) : demoRender(pth);
 
-function claimHead(d){ return {title:d.title, statusText:statusText(d)}; }
+/* statusText mirrors the realm's claimStatus precedence for the demo; live mode
+   reads ClaimStatus directly (one qeval, no md-scrape). */
 function statusText(d){
-  // Mirrors the realm's claimStatus (render.gno), including its ordering: dispute-open
-  // must win over a standing provisional so a reopen's live tally stays sealed.
-  if(d.finalized && d.provClose) return "closed without a decision — redeemed at the pre-answer price";
-  if(d.finalized) return "resolved: "+outcomeName(d.provisional)+(d.route?" — "+d.route:"");
-  if(d.disputeOpen) return "a dispute is under way — the tally is sealed until the vote closes";
-  if(d.provClose) return "closing without a decision (three disputes failed to reach a verdict)";
-  if(d.provisional>=0) return "provisional "+outcomeName(d.provisional)+", in escrow (reopenable)";
-  if(d.answered) return "answered "+outcomeName(d.answer)+" (awaiting a dispute or settlement)";
-  return "open — no answer yet";
+  if(d.phase==="provClose") return "closed without a decision — everyone withdraws 1×, deposit and fee refunded";
+  if(d.phase==="settled") return "settled — every stake withdraws 1×";
+  if(d.phase==="disputed") return "disputed — a sealed vote is deciding; principal is never withheld";
+  if(d.phase==="provisional") return "provisional verdict — reopenable by a new dispute; the losing side may withdraw 1× now";
+  if(d.phase==="answered") return "answered — staking frozen; disputable, then it settles undisputed";
+  return "open — stake YES or NO; unstake freely until an answer posts";
 }
 
 /* ============================ formatting ================================ */
-const outcomeName = o => o===0?"YES":o===1?"NO":"—";
-function fmtN(n){ return (n==null?0:n).toLocaleString("en-US"); }
-function cc(n){ return fmtN(n)+" CC"; }
-function gnot(u){ const v=(u||0)/1e6; return (Math.abs(v)>=100? v.toFixed(0): v.toFixed(2))+" GNOT"; }
+const sideName = o => o===0?"YES":o===1?"NO":"—";
+function fmtN(n){ return (n==null?0:Math.round(n)).toLocaleString("en-US"); }
+function cc(n){ const v=(n||0)/1e6; return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" CC"; }
+function ugnot(n){ return fmtN(n)+" µGNOT"; }
 function shortAddr(a){ a=String(a||""); return a.length>12? a.slice(0,7)+"…"+a.slice(-4): a; }
 function wall(nowH, targetH){
   const secs=(targetH-nowH)*BLOCK_SECS, past=secs<0, s=Math.abs(secs);
@@ -495,38 +524,29 @@ function wall(nowH, targetH){
   let t = d? d+(d===1?" day":" days") : h? h+(h===1?" hour":" hours") : Math.max(1,m)+" min";
   return past? t+" ago" : "about "+t;
 }
+function pctYes(y,n){ const t=(y||0)+(n||0); return t>0? Math.round(1000*y/t)/10 : null; }
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+/* undo the realm's markdown inline-escaping (\[ \] \( …) when we lift a title
+   out of a Render link back into our own escaped DOM text. */
+function unesc(s){ return String(s).replace(/\\([\\`*_\[\]()~>\-+.!#<&])/g, "$1"); }
 
-/* Untrusted text (bodies, titles by strangers): escaped, links de-fanged. The
-   realm sanitizes for its own markdown; the overlay must not re-introduce a hole. */
+/* Untrusted text (titles, bodies by strangers): HTML-escaped, links de-fanged.
+   The realm sanitizes for its markdown; the overlay must not re-introduce a hole. */
 function safeInline(s){ return esc(s); }
-function safeBlock(s){
-  return esc(s).split(/\n{2,}/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join("");
-}
+function safeBlock(s){ return esc(s).split(/\n{2,}/).map(p=>"<p>"+p.replace(/\n/g,"<br>")+"</p>").join(""); }
 
 /* ============================ tx links ================================== */
-/* Every action is a gnoweb $help link with arguments pre-filled — the whole point
-   of the overlay being optional: the transaction is the realm's, not ours. */
+/* Every action is a gnoweb $help link with arguments pre-filled — the overlay is
+   optional: the transaction is the realm's, signed in the user's own wallet.
+   The realm's funcs are crossing (func F(cur realm, …)); gnoweb injects `cur`, so
+   the links carry only the ordinary arguments. */
 function tx(func, args){
   const q = Object.entries(args||{}).map(([k,v])=>"&"+k+"="+encodeURIComponent(v)).join("");
-  return CFG.gnoweb.replace(/\/$/,"")+"/r/cryptocourt/court$help&func="+func+q;
+  return CFG.gnoweb.replace(/\/$/,"")+"/r/cryptocourt/courtv2$help&func="+func+q;
 }
 function btn(label, func, args, cls, sub){
   return `<a class="btn ${cls||""}" target="_blank" rel="noopener" href="${tx(func,args)}">`+
     `<span class="g">↗</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}</a>`;
-}
-
-/* ============================ sparkline ================================= */
-function sparkline(vals){
-  if(!vals||vals.length<2) return "";
-  const w=260,h=54,pad=3, mn=Math.min(...vals), mx=Math.max(...vals), rng=(mx-mn)||1;
-  const X=i=>pad+i*(w-2*pad)/(vals.length-1), Y=v=>h-pad-((v-mn)/rng)*(h-2*pad);
-  const pts=vals.map((v,i)=>X(i)+","+Y(v));
-  const line="M"+pts.join(" L");
-  const area="M"+X(0)+","+(h-pad)+" L"+pts.join(" L")+" L"+X(vals.length-1)+","+(h-pad)+" Z";
-  const lx=X(vals.length-1), ly=Y(vals[vals.length-1]);
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="price history">`+
-    `<path class="fill" d="${area}"/><path class="ln" d="${line}"/><circle class="dot" cx="${lx}" cy="${ly}" r="3"/></svg>`;
 }
 
 /* ============================ router =================================== */
@@ -543,7 +563,7 @@ async function render(){
   main.innerHTML = notFound("No such page.");
 }
 function setNav(hash){
-  const k = hash==="/"||hash.startsWith("/c")?"dir": hash.startsWith("/me")?"me":
+  const k = hash==="/"||hash.startsWith("/c")||hash.startsWith("/raw")?"dir": hash.startsWith("/me")?"me":
             hash.startsWith("/needs")?"needs": hash.startsWith("/about")?"about":"";
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on", a.dataset.k===k));
 }
@@ -555,7 +575,7 @@ function errorView(e){
     <h2 class="page-h">Could not read the node</h2>
     <div class="notice refuse" style="margin-top:16px"><span class="g">⚠</span>
     <div><b>${esc(e.message||e)}</b><br><span class="small muted">The live source is set to <code>${esc(CFG.rpc)}</code>.
-    Check the node is reachable and has the court realm deployed, or switch the Source back to Demo in the left rail.</span></div></div>`;
+    Check the node is reachable and has the courtv2 realm deployed, or switch the Source back to Demo in the left rail.</span></div></div>`;
 }
 function notFound(msg){ return `<div class="empty"><div class="g">◌</div><p>${esc(msg)}</p><p><a class="btn" href="#/">Back to the directory</a></p></div>`; }
 const crumbs = parts => `<div class="crumbs">`+parts.map((p,i)=>
@@ -563,35 +583,32 @@ const crumbs = parts => `<div class="crumbs">`+parts.map((p,i)=>
 
 /* ============================ views ==================================== */
 
-/* --- directory (screen 1) --- */
+/* --- directory --- */
 on(/^\/$/, async ()=>{
   loading();
   const courts = await listCourts();
   const featured = courts.filter(c=>c.tier===2), listed = courts.filter(c=>c.tier!==2);
-  const card = c => {
-    return `<a class="card" href="#/c/${c.slug}">
+  const card = c => `<a class="card" href="#/c/${esc(c.slug)}">
       <div class="ct-name">${safeInline(c.name)}</div>
       <div class="ct-meta">${c.claims} claim${c.claims===1?"":"s"} · /${esc(c.slug)}</div>
-      <div class="ct-price" id="cp-${esc(c.slug)}"><span class="small muted">reading price…</span></div></a>`;
-  };
+      <div class="ct-price" id="cp-${esc(c.slug)}"><span class="small muted">reading…</span></div></a>`;
   main.innerHTML = crumbs([{label:"Directory"}])
     + `<div class="lead-row"><div><h1 class="page-h">Courts of record</h1>
-       <p class="page-sub">Each court runs its own coin and its own docket of claims. Pick the one whose judgment you trust — a hidden court still works for anyone who holds its link.</p></div>
+       <p class="page-sub">Each court runs its own coin and its own docket of claims of fact. Stake on YES or NO; your principal always returns 1×, and accurate conviction earns the reward. Pick the court whose judgment you trust.</p></div>
        ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary")}</div>`
     + (featured.length?`<section><div class="sec-h">Featured <span class="count">${featured.length}</span></div><div class="grid courts">${featured.map(card).join("")}</div></section>`:"")
     + `<section><div class="sec-h">Courts <span class="count">${listed.length}</span></div>`
     + (listed.length?`<div class="grid courts">${listed.map(card).join("")}</div>`:`<div class="empty"><div class="g">◌</div><p>No courts yet. Be the first to start one.</p></div>`)
     + `</section>`;
-  // enrich each card with price beside backing (the number a first-time buyer needs)
   for(const c of courts){
     courtStats(c.slug).then(s=>{ const el=document.getElementById("cp-"+c.slug); if(el&&s)
       el.innerHTML = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)} <small>µGNOT</small></div></div>
-        <div class="kv"><div class="k">backing</div><div class="v tnum">${fmtN(s.backing)} <small>µGNOT</small></div></div>`;
+        <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply)}</div></div>`;
     }).catch(()=>{});
   }
 });
 
-/* --- a court (screen 2) --- */
+/* --- a court --- */
 on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   loading();
   const s = await courtStats(slug);
@@ -604,15 +621,14 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
           <a class="small" href="#/raw/${esc(slug)}" style="color:var(--accent-2)">view as the chain serves it →</a></div>
        </div>
        <div class="actions">
-         ${btn("Buy the coin","Buy",{slug},"primary","permanent")}
+         ${btn("Buy the coin","Buy",{slug},"primary","GNOT in, one-way")}
          ${btn("Open a claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}
        </div></div>`
     + `<section><div class="grid stats">
-        <div class="stat pair"><div><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)}<small> µGNOT</small></div></div>
-          <div><div class="k">backing</div><div class="v tnum">${fmtN(s.backing)}</div><div class="sub">per coin — a buyer pays ≈2×</div></div></div>
-        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${fmtN(s.supply)}</div><div class="sub">CC minted on the curve</div></div>
-        <div class="stat"><div class="k">treasury</div><div class="v tnum">${gnot(s.treasury)}</div><div class="sub">GNOT backing, kept</div></div>
-        <div class="stat"><div class="k">open interest</div><div class="v tnum">${cc(s.oi)}</div><div class="sub">across all claims</div></div>
+        <div class="stat"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)}<small> µGNOT</small></div><div class="sub">one-way curve — the GNOT is burned</div></div>
+        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply)}</div><div class="sub">${cc(s.emitted)} of it earned as rewards</div></div>
+        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir)}</div><div class="sub">available to crystallizing claims</div></div>
+        <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed)}</div><div class="sub">comps + bounties + carrots, paid as it accrues</div></div>
        </div></section>`
     + fourThings()
     + `<section><div class="sec-h">The docket <span class="count">${claims.length} claim${claims.length===1?"":"s"}</span></div>`
@@ -622,147 +638,179 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
 });
 function tierPill(t){ return t===2?`<span class="pill open">★ Featured</span>`: t===0?`<span class="pill void">Hidden</span>`:`<span class="pill">Listed</span>`; }
 function docketRow(slug,c){
-  const st = c.statusText||"";
-  let cls="void";
-  if(/closed without/.test(st)) cls="void"; else if(/resolved/.test(st)) cls="yes";
-  else if(/dispute/.test(st)) cls="escrow"; else if(/closing|provisional/.test(st)) cls="escrow";
-  else if(/answered/.test(st)) cls="open"; else if(/^open/.test(st)) cls="void";
+  const st=(c.statusText||"").toLowerCase(); let cls="void", short="open";
+  if(/closed without|provclose/.test(st)){cls="void";short="no decision";}
+  else if(/settled/.test(st)){cls="good";short="settled";}
+  else if(/disputed|dispute/.test(st)){cls="escrow";short="in dispute";}
+  else if(/provisional/.test(st)){cls="escrow";short="settling";}
+  else if(/answered/.test(st)){cls="open";short="answered";}
+  else {cls="void";short="open";}
   return `<a href="#/c/${esc(slug)}/${c.id}">
     <div><div class="t">${safeInline(c.title)}</div><div class="m"><span>claim #${c.id}</span></div></div>
-    <div class="rt"><span class="pill ${cls}">${esc(shortStatus(st))}</span></div></a>`;
-}
-function shortStatus(st){
-  if(/closed without/.test(st)) return "closed · no decision"; if(/closing without/.test(st)) return "closing";
-  if(/resolved:\s*YES/.test(st)) return "resolved YES"; if(/resolved:\s*NO/.test(st)) return "resolved NO";
-  if(/dispute/.test(st)) return "in dispute"; if(/provisional\s*YES/.test(st)) return "settling YES";
-  if(/provisional\s*NO/.test(st)) return "settling NO"; if(/answered\s*YES/.test(st)) return "answered YES";
-  if(/answered\s*NO/.test(st)) return "answered NO"; return "open";
+    <div class="rt"><span class="pill ${cls}">${esc(short)}</span></div></a>`;
 }
 
-/* --- a claim (screen 5) + its market + order ticket --- */
+/* --- a claim: the stake panel + the three ratio series + resolution --- */
 on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   loading();
   const id = parseInt(idS,10);
   const cs = await courtStats(slug); const d = await claimDetail(slug,id);
   if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
-  const ph = d.priceHist || null;
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
     + `<div class="tagrow">${verdictBanner(d)} <a class="small" href="#/raw/${esc(slug)}/${id}" style="color:var(--accent-2)">as the chain serves it →</a></div>`
     + (d.body? `<section><div class="foreign">${safeBlock(d.body)}</div></section>`:"")
-    + `<section><div class="sec-h">Market <span class="count">open interest ${cc(d.x)}</span></div>
-        <div class="market">
-          <div class="mkt-panel">
-            <div class="book2">
-              <div class="side bid"><div class="lab">best bid · buy YES</div><div class="px tnum">${d.bestBid?fmtN(d.bestBid):"—"}</div><div class="u">${d.bestBid?"CC / share":"no bids"}</div></div>
-              <div class="side ask"><div class="lab">best ask · sell YES</div><div class="px tnum">${d.bestAsk?fmtN(d.bestAsk):"—"}</div><div class="u">${d.bestAsk?"CC / share":"no asks"}</div></div>
-            </div>
-            ${ph?`<div class="small muted" style="margin-top:14px">Traded price — last ${ph.length} samples</div>${sparkline(ph)}`:""}
-            <div class="actions" style="margin-top:14px">
-              ${btn("Mint a set","MintSet",{courtSlug:slug,claimID:id,qty:1000},"","1 YES + 1 NO")}
-              ${btn("Buy YES","TakeBuy",{courtSlug:slug,claimID:id,limitTick:(d.bestAsk||100)-1,demand:1000},"yes")}
-              ${btn("Sell YES","TakeSell",{courtSlug:slug,claimID:id,limitTick:(d.bestBid||1)-1,demand:1000},"no")}
+    + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live":"frozen at the answer"}</span></div>
+        <div class="stakewrap">
+          <div class="panel">${ratioBlock(d)}
+            <div class="poolrow">
+              <div class="kv"><div class="k">staked YES</div><div class="v tnum">${cc(d.yesStake)}</div></div>
+              <div class="kv"><div class="k">staked NO</div><div class="v tnum">${cc(d.noStake)}</div></div>
             </div>
           </div>
-          ${orderTicket(slug,id,d)}
+          ${stakeTicket(slug,id,d)}
         </div></section>`
-    + resolutionSection(slug,id,d);
+    + resolutionSection(slug,id,d)
+    + qualitySection(slug,id,d);
 });
 
-function verdictBanner(d){
-  if(d.finalized && d.provClose) return `<span class="pill void">closed · no decision</span>`;
-  if(d.finalized) return `<span class="pill yes">✓ resolved ${outcomeName(d.provisional)}${d.route?" · "+esc(d.route):""}</span>`;
-  if(d.disputeOpen) return `<span class="pill escrow">⚖ dispute under way · tally sealed</span>`;
-  if(d.provClose) return `<span class="pill void">closing · no decision</span>`;
-  if(d.provisional>=0) return `<span class="pill escrow">provisional ${outcomeName(d.provisional)} · in escrow · reopenable</span>`;
-  if(d.answered) return `<span class="pill open">answered ${outcomeName(d.answer)}</span>`;
-  return `<span class="pill void">open · no answer yet</span>`;
+/* Three ratio series (§3.9): instantaneous stake, trailing week, and the
+   lifetime conviction ratio — the one a manipulator can only move by paying
+   real capital-time. */
+function ratioBlock(d){
+  const inst = pctYes(d.yesStake,d.noStake);
+  const life = pctYes(d.convYes,d.convNo);
+  const trail = (d.trailYes!=null)? d.trailYes : (d.trailYesMature && d.trailOI>0 ? Math.round(1000*d.trailYesAvg/d.trailOI)/10 : null);
+  const bar = (label,sub,p)=> p==null
+    ? `<div class="row"><div class="lab">${label}<small>${sub}</small></div><div class="none">— not enough history —</div></div>`
+    : `<div class="row"><div class="lab">${label}<small>${sub}</small></div>
+        <div><div class="track"><div class="y" style="width:${p}%"></div></div>
+        <div class="nums"><span class="yv">${p}% YES</span><span class="nv">${Math.round((100-p)*10)/10}% NO</span></div></div></div>`;
+  return `<div class="ratio">
+    ${bar("Now","every staked coin, this instant",inst)}
+    ${bar("Trailing week","flash-resistant average",trail)}
+    ${bar("Lifetime conviction","stake × time — the reward weight",life)}
+  </div>`;
 }
 
-/* The order ticket (screen 8): what it pays if right, nothing if wrong, and —
-   the thing every prediction market forgets — what happens if it never resolves. */
-function orderTicket(slug,id,d){
-  const px = d.bestAsk || d.bestBid || 50, qty = 1000;
-  const cost = px*qty, ifYes = PRICE_SCALE*qty;
-  return `<div class="ticket">
-    <h3>Order ticket</h3>
-    <div class="hint">Buying YES at the current ask, as an example of ${fmtN(qty)} shares.</div>
-    <div class="line"><span class="l">Shares</span><span class="r tnum">${fmtN(qty)} YES</span></div>
-    <div class="line"><span class="l">Price / share</span><span class="r tnum">${fmtN(px)} CC</span></div>
-    <div class="line"><span class="l">You pay now</span><span class="r tnum">${cc(cost)}</span></div>
-    <div class="line win"><span class="l">Pays if the claim is YES</span><span class="r tnum">${cc(ifYes)}</span></div>
-    <div class="line lose"><span class="l">Pays if the claim is NO</span><span class="r tnum">0 CC</span></div>
-    <div class="never"><b>If it never resolves:</b> your shares are yours to keep or trade — there is <b>no deadline</b>. A matched set (one YES + one NO) can always be redeemed for its ${PRICE_SCALE} CC of collateral, so you are never trapped.</div>
-    <div class="actions" style="margin-top:14px">${btn("Place this order","TakeBuy",{courtSlug:slug,claimID:id,limitTick:px-1,demand:qty},"primary")}</div>
-  </div>`;
+/* The stake ticket — replaces the V1 order ticket. Principal is never at risk;
+   the reward is conviction (stake × time held until the answer). */
+function stakeTicket(slug,id,d){
+  if(d.phase!=="open"){
+    return `<div class="ticket"><h3>Staking is frozen</h3>
+      <div class="hint">An answer has been posted, so stakes are locked until the verdict is final. Principal is never withheld — both sides withdraw 1× at settlement.</div>
+      <div class="line"><span class="l">Your principal</span><span class="r">returns 1×, always</span></div>
+      <div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>
+      <div class="line"><span class="l">Losing side</span><span class="r">1×, loses nothing</span></div></div>`;
+  }
+  return `<div class="ticket"><h3>Stake the claim</h3>
+    <div class="hint">Back the side you believe. Free to unstake until an answer posts — then it locks and your <b>conviction</b> (stake × time held) becomes your reward weight.</div>
+    <div class="line"><span class="l">Your principal</span><span class="r">returns 1×, either way</span></div>
+    <div class="line"><span class="l">If your side wins</span><span class="r">1× + accuracy reward</span></div>
+    <div class="line"><span class="l">If your side loses</span><span class="r">1×, nothing lost</span></div>
+    <div class="never"><b>Reward = conviction, not stake.</b> Staking early and holding earns more than a last-second flood; the number that pays is stake × time, and it survives an honest unstake. Principal is not a wager — it always comes home.</div>
+    <div class="actions" style="margin-top:14px">
+      ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","1 CC")}
+      ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","1 CC")}
+      ${btn("Unstake","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000})}
+    </div></div>`;
+}
+
+function verdictBanner(d){
+  if(d.phase==="provClose") return `<span class="pill void">closed · no decision</span>`;
+  if(d.phase==="settled"){ const v=(d.verdict!=null?d.verdict:d.answer); return `<span class="pill good">✓ settled ${sideName(v)}${d.route?" · "+esc(d.route):""}</span>`; }
+  if(d.phase==="disputed") return `<span class="pill escrow">⚖ dispute under way · tally sealed</span>`;
+  if(d.phase==="provisional") return `<span class="pill escrow">provisional ${sideName(d.provisional)} · reopenable</span>`;
+  if(d.phase==="answered") return `<span class="pill open">answered ${sideName(d.answer)}</span>`;
+  return `<span class="pill void">open · no answer yet</span>`;
 }
 
 /* Resolution: answer / dispute / settlement, showing the verdict's ROUTE and
    wall-clock timing, and NEVER the live tally while a vote is open. */
 function resolutionSection(slug,id,d){
   let inner="";
-  if(d.finalized && d.provClose){
-    inner = `<div class="notice warn"><span class="g">◌</span><div><b>Closed without a decision.</b>
-      Three disputes failed to reach a verdict, so every share redeemed at the <b>pre-answer price</b> — the price the market set before any answer, chosen by nobody.
-      <div class="actions" style="margin-top:10px">${btn("Redeem (closed)","RedeemClosed",{courtSlug:slug,claimID:id})}</div></div></div>`;
-  } else if(d.finalized){
-    inner = `<div class="notice warn"><span class="g">✓</span><div><b>Resolved ${outcomeName(d.provisional)}</b>${d.route?" — "+esc(d.route):""}.
-      Winning shares each pay ${PRICE_SCALE} CC (less any fee). ${btn("Redeem winnings","RedeemWinning",{courtSlug:slug,claimID:id},"yes")}</div></div>`;
-  } else if(d.disputeOpen){
-    // The sealed-tally rule: dispute-open must win over a standing provisional (a reopen).
-    inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way.</b>
-      The question on the ballot is <i>“overturn the answer?”</i> — the tally stays <b>sealed until the vote closes</b>, so no one can pile onto a leader.
+  if(d.phase==="provClose"){
+    inner = `<div class="notice void"><span class="g">◌</span><div><b>Closed without a decision.</b>
+      Three dispute rounds failed to reach quorum, so nobody's answer stands. Everyone withdraws their principal 1×; the deposit and fee refund. No reward is drawn.
+      <div class="actions" style="margin-top:10px">${btn("Withdraw your stake","WithdrawStake",{courtSlug:slug,claimID:id,side:0})}</div></div></div>`;
+  } else if(d.phase==="settled"){
+    const v=(d.verdict!=null?d.verdict:d.answer);
+    inner = `<div class="notice good"><span class="g">✓</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
+      Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the claim crystallizes.
+      <div class="actions" style="margin-top:10px">
+        ${btn("Withdraw principal","WithdrawStake",{courtSlug:slug,claimID:id,side:v},"yes")}
+        ${d.crystallized?btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v}):btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id})}</div></div></div>`;
+  } else if(d.phase==="disputed"){
+    inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b> (round ${d.round||1}).
+      The ballot asks <i>“overturn the answer?”</i> — the tally stays <b>sealed until the vote closes</b>, so no one piles onto a leader. Forfeited bonds are burned, never paid to the other side.
       <div class="actions" style="margin-top:10px">
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
         ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div></div></div>`;
-  } else if(d.provClose){
-    inner = `<div class="notice warn"><span class="g">◌</span><div><b>Closing without a decision.</b>
-      Three dispute rounds failed to reach a verdict; once the escrow window passes it settles at the pre-answer price.
-      <div class="actions" style="margin-top:10px">${btn("Finalize","Finalize",{courtSlug:slug,claimID:id})}</div></div></div>`;
-  } else if(d.provisional>=0){
-    inner = `<div class="notice warn"><span class="g">⏳</span><div><b>Provisional ${outcomeName(d.provisional)}, held in escrow.</b>
-      The money waits here so a late dispute can still <b>reopen</b> it before it locks — a reopen goes straight to a vote and does not reset the clock (each failed reopen costs double). Anyone may finalize once the window passes.
+  } else if(d.phase==="provisional"){
+    const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext)+" (it doubles each failed round).":"";
+    const when = d.escrowUntil? " Reopenable until block "+fmtN(d.escrowUntil)+" ("+wall(NOW,d.escrowUntil)+").":"";
+    inner = `<div class="notice warn"><span class="g">⏳</span><div><b>Provisional ${sideName(d.provisional)}, in escrow.</b>
+      A new dispute can still reopen it before it locks.${when}${cost} The side it runs against may withdraw 1× now — their outcome can't improve.
       <div class="actions" style="margin-top:10px">
         ${btn("Reopen (dispute again)","OpenDispute",{courtSlug:slug,claimID:id},"no")}
-        ${btn("Finalize","Finalize",{courtSlug:slug,claimID:id})}</div></div></div>`;
-  } else if(d.answered){
-    const when = d.settleableAt? " It can settle undisputed "+wall(NOW,d.settleableAt)+" if nobody disputes it.":"";
-    inner = `<div class="notice warn"><span class="g">◷</span><div><b>Answered ${outcomeName(d.answer)}</b> by ${shortAddr(d.answerer)},
-      backed by a bond of ${cc(d.answerBond)} that is forfeit if the answer is overturned.${when}
+        ${btn("Finalize","Finalize",{courtSlug:slug,claimID:id})}
+        ${btn("Withdraw (losing side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1-d.provisional})}</div></div></div>`;
+  } else if(d.phase==="answered"){
+    const bondt = d.answerBond!=null? " backed by a bond of "+cc(d.answerBond)+" that burns if the answer is overturned":"";
+    const rec = d.record? " The answerer's contested-and-upheld record here is "+d.record+".":"";
+    const when = d.settleAt? " It settles undisputed "+wall(NOW,d.settleAt)+" if nobody disputes it.":"";
+    const cost = d.disputeBondNext? " Disputing now costs "+cc(d.disputeBondNext)+".":"";
+    inner = `<div class="notice warn"><span class="g">◷</span><div><b>Answered ${sideName(d.answer)}</b> by ${shortAddr(d.answerer)}${bondt}.${when}${cost}${rec}
       <div class="actions" style="margin-top:10px">
         ${btn("Dispute this answer","OpenDispute",{courtSlug:slug,claimID:id},"no")}
-        ${btn("Settle (if undisputed & aged)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
+        ${btn("Settle (if aged & undisputed)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
   } else {
-    inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Anyone may post one, with a bond large enough that lying does not pay.
-      An undisputed answer becomes settleable 72 hours after it is posted — and silence settles safely, because the money then waits in escrow where it can still be disputed.
+    inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Once the trailing total stake clears the answerability floor, anyone may post an answer with a bond sized so lying does not pay. Posting freezes staking; an undisputed answer settles 72 hours later.
       <div class="actions" style="margin-top:10px">
-        ${btn("Post: YES","PostAnswer",{courtSlug:slug,claimID:id,verdict:0},"yes")}
-        ${btn("Post: NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}</div></div></div>`;
+        ${btn("Answer YES","PostAnswer",{courtSlug:slug,claimID:id,side:0},"yes")}
+        ${btn("Answer NO","PostAnswer",{courtSlug:slug,claimID:id,side:1},"no")}</div></div></div>`;
   }
   return `<section><div class="sec-h">Resolution</div>${inner}</section>`;
 }
 
-/* The four things every participant must understand (10.1) — nothing hidden here
-   changes a decision; the warmth, floors and bond slices are deliberately omitted. */
+/* Quality lane — the tier and the flag slot, always sealed while a vote runs. */
+function qualitySection(slug,id,d){
+  if(d.phase==="open"||d.phase==="provClose") return "";
+  const tierName = t=> t===0?"low":t===2?"high":"mid";
+  let line, act="";
+  if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? The tally is <b>sealed</b> until it closes."; act = btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id}); }
+  else if(d.counterOpen){ line = "A slash is in its counter-flag window — the answerer may force one re-vote."; act = btn("Counter-flag (answerer)","CounterFlag",{courtSlug:slug,claimID:id})+btn("Resolve counter","ResolveCounter",{courtSlug:slug,claimID:id}); }
+  else {
+    const tn = d.tier!=null? tierName(d.tier):"mid";
+    line = `Quality tier: <b>${tn}</b>${d.tierFinal?" (final)":" (default — the flag lane may re-vote it)"}. A flag questions whether a claim carries information; a wrong flag burns its bond, a right one is paid.`;
+    if(!d.tierFinal && !d.crystallized) act = btn("Flag as low-information","OpenFlag",{courtSlug:slug,claimID:id}, "", d.flagBondNext?cc(d.flagBondNext)+" bond":"");
+  }
+  const draw = d.crystallized&&d.draw? `<div class="line"><span class="l">Reward pools (CC units)</span><span class="r">accuracy ${fmtN(d.draw.w)} · author ${fmtN(d.draw.a)} · answerer ${fmtN(d.draw.ans)}</span></div>`:"";
+  return `<section><div class="sec-h">Quality &amp; rewards</div>
+    <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div style="margin-top:8px">${draw}</div>`:""}
+    ${act?`<div class="actions" style="margin-top:12px">${act}</div>`:""}</div></section>`;
+}
+
+/* The four things every participant must understand — nothing hidden here changes
+   a decision; the floors, bond slices and step-down schedule stay out of the way. */
 function fourThings(){
   return `<section><div class="primer"><h3>Four things, before any button</h3><ol>
-    <li>Buying the coin is <b>permanent</b> — there is no sell button, ever.</li>
-    <li>A share pays <b>one coin if YES, nothing if NO</b>, and there is <b>no deadline</b>.</li>
-    <li>Anyone may <b>post an answer</b> with a bond large enough that lying does not pay; an undisputed answer becomes settleable <b>72 hours after it is posted</b>, and silence settles safely into escrow.</li>
-    <li>Every button spends real money and is <b>final</b>.</li>
+    <li>Buying the coin is <b>permanent</b> — GNOT flows one way and is burned; there is no sell-back.</li>
+    <li>Staking is <b>no-loss</b>: your principal always returns 1×, win or lose. Only the <b>reward</b> is at stake.</li>
+    <li>The reward is <b>conviction</b> — stake × time on the winning side — drawn from newly-minted coin, capped so it can never be farmed.</li>
+    <li>Anyone may <b>answer</b> (with a bond) and anyone may <b>dispute</b> or <b>flag</b> it; every button spends real money and is final.</li>
   </ol></div></section>`;
 }
 
-/* --- your page (screen 9) --- */
+/* --- your positions --- */
 on(/^\/me$/, async ()=>{ meView(DEMO_ME); });
-on(/^\/who\/([a-z0-9-]+)\/(g1[a-z0-9]+)$/, async (slug,addr)=>{ meView(addr, slug); });
 async function meView(addr){
   loading();
   const courts = await listCourts();
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"Your page"}])
-    + `<h1 class="page-h">Your page</h1>
-       <p class="page-sub">Render has no idea who is asking, so a court reads holdings by address. Paste yours to see positions, what is claimable, and what is waiting in escrow.</p>
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"Your positions"}])
+    + `<h1 class="page-h">Your positions</h1>
+       <p class="page-sub">Render has no idea who is asking, so a court reads holdings by address. Paste yours to see stakes, accrued conviction, and what's withdrawable.</p>
        <div class="addrbar"><input id="addr" class="mono" value="${esc(addr)}" spellcheck="false" aria-label="your address">
          <button class="btn" id="addrgo">Read positions</button></div>
        <div id="holdings"></div>`;
@@ -779,33 +827,32 @@ async function meHoldings(addr,courts){
     const claims = await listClaims(c.slug).catch(()=>[]);
     const rows=[];
     for(const cl of claims){
-      const p = await positionOf(c.slug,cl.id,addr).catch(()=>({yes:0,no:0}));
-      if(p.yes||p.no) rows.push({cl,p});
+      const p = await positionOf(c.slug,cl.id,addr).catch(()=>({yes:0,no:0,cy:0,cn:0}));
+      if(p.yes||p.no||p.cy||p.cn) rows.push({cl,p});
     }
     if(!bal && !rows.length) continue;
     blocks.push(`<section><div class="sec-h">${safeInline(c.name)} <span class="count">${cc(bal)} coin balance</span></div>`
-      + (rows.length? `<div class="scroll-x"><table class="data"><thead><tr><th>Claim</th><th>YES</th><th>NO</th><th></th></tr></thead><tbody>`
+      + (rows.length? `<div class="scroll-x"><table class="data"><thead><tr><th>Claim</th><th>YES stake</th><th>NO stake</th><th>conviction</th><th></th></tr></thead><tbody>`
           + rows.map(({cl,p})=>`<tr><td><a href="#/c/${esc(c.slug)}/${cl.id}" style="color:var(--accent-2);text-decoration:none">${safeInline(cl.title)}</a></td>
-              <td class="num">${fmtN(p.yes)}</td><td class="num">${fmtN(p.no)}</td>
-              <td class="num"><a class="small" style="color:var(--accent-2)" target="_blank" rel="noopener" href="${tx("RedeemWinning",{courtSlug:c.slug,claimID:cl.id})}">redeem ↗</a></td></tr>`).join("")
+              <td class="num">${cc(p.yes)}</td><td class="num">${cc(p.no)}</td><td class="num">${cc((p.cy||0)+(p.cn||0))}</td>
+              <td class="num"><a class="small" style="color:var(--accent-2)" target="_blank" rel="noopener" href="${tx("WithdrawStake",{courtSlug:c.slug,claimID:cl.id,side:p.yes>=p.no?0:1})}">withdraw ↗</a></td></tr>`).join("")
           + `</tbody></table></div>`
         : `<p class="small muted">Coin only — no open positions in this court.</p>`)
       + `</section>`);
   }
   box.innerHTML = blocks.length? blocks.join("")
-    : `<div class="empty"><div class="g">◌</div><p>No coin and no positions found for <span class="mono">${shortAddr(addr)}</span>.</p><p class="small">Buy a court's coin to begin.</p></div>`;
+    : `<div class="empty"><div class="g">◌</div><p>No coin and no positions found for <span class="mono">${shortAddr(addr)}</span>.</p><p class="small">Buy a court's coin and stake a claim to begin.</p></div>`;
 }
 
-/* --- what needs you (screen 7): answers on claims YOU hold, flagged if against
-   your side. The security assumption made visible — the court knows exactly whom
-   a false answer would cost, and tells them. --- */
+/* --- what needs you: live answers on claims YOU staked, flagged if against your
+   side. The people whose reward a false answer would deny are the ones told. --- */
 on(/^\/needs$/, async ()=> needsView(DEMO_ME));
 async function needsView(addr){
   loading();
   const courts = await listCourts();
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"What needs you"}])
     + `<h1 class="page-h">What needs you</h1>
-       <p class="page-sub">Answers posted on claims where you hold a position — flagged when the answer runs <b>against your side</b>. Nobody is more motivated to check a false answer than the people whose money it would make worthless. It is a notification, not a role.</p>
+       <p class="page-sub">Answers posted on claims you've staked — flagged when the answer runs <b>against your side</b>. Nobody is more motivated to contest a false answer than the stakers whose reward it would deny. It's a notification, not a role.</p>
        <div class="addrbar"><input id="naddr" class="mono" value="${esc(addr)}" spellcheck="false" aria-label="your address">
          <button class="btn" id="ngo">Check</button></div><div id="needs"></div>`;
   const go=()=>{ const a=document.getElementById("naddr").value.trim(); if(a) needsList(a,courts); };
@@ -819,34 +866,32 @@ async function needsList(addr,courts){
     const claims=await listClaims(c.slug).catch(()=>[]);
     for(const cl of claims){
       const d=await claimDetail(c.slug,cl.id).catch(()=>null);
-      if(!d||!d.answered||d.finalized) continue;
+      if(!d||!d.answered||d.settled||d.provClose) continue;
       const p=await positionOf(c.slug,cl.id,addr).catch(()=>({yes:0,no:0}));
       if(!p.yes && !p.no) continue;
-      // answer 0=YES,1=NO. "against your side" = answer says the side you DON'T hold.
       const yourSide = p.yes>=p.no?0:1;
-      const against = d.answer!==yourSide && (d.answer===0?p.no>0:p.yes>0);
-      items.push({c,cl,d,p,against});
+      const against = d.answer!==yourSide;
+      items.push({c,cl,d,against});
     }
   }
-  if(!items.length){ box.innerHTML=`<div class="empty"><div class="g">✓</div><p>Nothing needs you right now — no live answers on claims you hold.</p></div>`; return; }
+  if(!items.length){ box.innerHTML=`<div class="empty"><div class="g">✓</div><p>Nothing needs you right now — no live answers on claims you've staked.</p></div>`; return; }
   items.sort((a,b)=>(b.against?1:0)-(a.against?1:0));
   box.innerHTML = `<div class="docket">`+items.map(({c,cl,d,against})=>
     `<a href="#/c/${esc(c.slug)}/${cl.id}">
       <div><div class="t">${safeInline(cl.title)}</div>
-        <div class="m"><span>${safeInline(c.name)}</span><span>answered ${outcomeName(d.answer)}</span></div></div>
-      <div class="rt">${against?`<span class="pill no">⚑ against your side</span>`:`<span class="pill yes">matches you</span>`}</div></a>`
+        <div class="m"><span>${safeInline(c.name)}</span><span>answered ${sideName(d.answer)}</span></div></div>
+      <div class="rt">${against?`<span class="pill no">⚑ against your side</span>`:`<span class="pill good">matches you</span>`}</div></a>`
   ).join("")+`</div>`;
 }
 
-/* --- the chain render (screen 10): the same page as the realm alone serves it,
-   proving the overlay is optional, not load-bearing. --- */
+/* --- the chain render: the same page as the realm alone serves it. --- */
 on(/^\/raw\/([a-z0-9-]+)(?:\/(\d+))?$/, async (slug,id)=>{
   loading();
   const path = id!=null? slug+"/"+id : slug;
   const md = await rawRender(path);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:"Chain render"}])
     + `<h1 class="page-h">As the chain serves it</h1>
-       <p class="page-sub">This is exactly what <code>Render(${esc(gstr(path))})</code> returns — plain markdown, no overlay. Everything you need to act is here; the pretty version only rearranges it.</p>
+       <p class="page-sub">Exactly what <code>Render(${esc(gstr(path))})</code> returns — plain markdown, no overlay. Everything you need to act is here; the pretty version only rearranges it.</p>
        <div class="rawblock">${esc(md||"(empty)")}</div>`;
 });
 
@@ -856,36 +901,37 @@ on(/^\/about$/, async ()=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"How it works"}])
     + `<h1 class="page-h">How a court works</h1>
     <div class="prose" style="margin-top:16px">
-      <p>A <b>court</b> is a self-contained market for claims of fact. It mints its own coin on a one-way bonding curve — you buy in with GNOT, and the GNOT stays as the court's treasury. There is no sell-back; the coin's worth is what it can wager.</p>
-      <h2>A claim, and its market</h2>
-      <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small anti-spam deposit. Mint a <b>set</b> (one YES + one NO) for ${PRICE_SCALE} CC of collateral, then trade the halves on a tick order book. A YES share pays ${PRICE_SCALE} CC if the claim is true and nothing if it is false; a matched set is always redeemable, so you are never trapped, and there is no deadline.</p>
-      <h2>Answers, and disputes</h2>
-      <p>Anyone may <b>post an answer</b> with a bond. Left alone, it becomes settleable 72 hours after it is posted — silence settles safely, because the money waits in escrow where it can still be disputed. To contest it, open an <b>answer dispute</b>: a token vote on the single question <i>“overturn the answer?”</i> The tally is sealed until the vote closes. A verdict always shows its route — <i>undisputed</i>, or <i>by vote (71%)</i> — because that difference is the whole epistemic product.</p>
+      <p>A <b>court</b> is a self-contained venue for claims of fact. It mints its own coin on a one-way bonding curve — you buy in with GNOT, and the GNOT is <b>burned</b>. There is no treasury and no sell-back; the coin's worth is what it can stake and earn.</p>
+      <h2>Claims, and staking</h2>
+      <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small refundable deposit. Then anyone <b>stakes</b> coin on YES or NO. Staking is <b>no-loss</b>: your principal always returns 1×, whichever way the claim resolves. What you earn is a reward proportional to your <b>conviction</b> — stake × time held on the winning side — drawn from newly-minted coin under a hard per-claim cap, so it rewards early, accurate belief and can't be farmed. Unstaking is free until an answer posts; the reward weight you've already earned is kept.</p>
+      <h2>Answers, disputes, and flags</h2>
+      <p>Once a claim has enough sustained interest, anyone may <b>post an answer</b> with a bond. Posting freezes staking. Left alone, the answer settles 72 hours later. To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so no money ever moves between adversaries. Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond and a right one is paid. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
       <h2>The overlay is optional</h2>
-      <p>Everything here is read from the realm's own <code>Render</code> and its public reads, and every button is a normal gnoweb transaction. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore the shape offline.</p>
+      <p>Everything here is read from the realm's own <code>Render</code> and its public reads, and every button is a normal gnoweb transaction signed in your wallet. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore every state offline.</p>
     </div>`;
 });
 
-/* ===================== demo Render() (screen-10 sample) ================= */
+/* ===================== demo Render() (chain-render sample) ============== */
 function demoRender(path){
   const parts = path.split("/");
   if(path===""||path==="/"){
-    let o="# CryptoCourt\n\nPlay-wager on claims of fact in the court you trust.\n\n## Featured\n\n";
-    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===2) o+=`- [${c.name}](/r/cryptocourt/court:${slug}) — ${c.claims.length} claims\n`;
+    let o="# CryptoCourt V2\n\nStake on claims of fact. Your principal always returns 1×.\n\n## Featured\n\n";
+    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===2) o+=`- [${c.name}](/r/cryptocourt/courtv2:${slug}) — ${c.claims.length} claims\n`;
     o+="\n## Courts\n\n";
-    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier!==2) o+=`- [${c.name}](/r/cryptocourt/court:${slug}) — ${c.claims.length} claims\n`;
+    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier!==2) o+=`- [${c.name}](/r/cryptocourt/courtv2:${slug}) — ${c.claims.length} claims\n`;
     return o;
   }
   const c=DEMO.courts[parts[0]]; if(!c) return "## Not found\nNo court by that slug.";
   if(parts.length===1){
-    let o=`# ${c.name}\n\n- coin price: ${c.price} · backing: ${c.backing} (per coin)\n- supply: ${c.supply} · treasury: ${Math.round(c.treasury/1e6)} GNOT\n- open interest: ${c.oi} CC\n\n[buy the coin →](/r/cryptocourt/court$help&func=Buy&slug=${parts[0]})\n\n## Claims\n\n`;
-    for(const id of c.claims){ const d=DEMO.claims[parts[0]+"/"+id]; o+=`- [${d.title}](/r/cryptocourt/court:${parts[0]}/${id}) — ${statusText(d)}\n`; }
+    let o=`# ${c.name}\n\n- coin price: ${c.price} ugnot per CC unit (one-way; the GNOT is burned)\n- supply: ${c.supply} · emitted: ${c.emitted}\n- reward reservoir: ${c.reservoir} · senior queue owed: ${c.seniorOwed}\n\n## Claims\n\n`;
+    for(const id of c.claims){ const d=DEMO.claims[parts[0]+"/"+id]; o+=`- [${d.title}](/r/cryptocourt/courtv2:${parts[0]}/${id}) — ${statusText(d)}\n`; }
     return o;
   }
   const d=DEMO.claims[parts[0]+"/"+parts[1]]; if(!d) return "## Not found\nNo claim by that id.";
-  let o=`# ${d.title}\n\n${d.body}\n\n## Market\n\n- open interest X: ${d.x} CC\n`;
-  if(d.bestBid) o+=`- best bid: ${d.bestBid}\n`; if(d.bestAsk) o+=`- best ask: ${d.bestAsk}\n`;
-  o+=`\n## Verdict\n\n${statusText(d)}\n`;
+  const inst=pctYes(d.yesStake,d.noStake);
+  let o=`# ${d.title}\n\n## Signal\n\n- staked now: ${d.yesStake+d.noStake} (YES ${d.yesStake} / NO ${d.noStake})\n`;
+  if(inst!=null) o+=`- instantaneous: ${inst}% YES\n`;
+  o+=`\n## Status\n\n${statusText(d)}\n`;
   return o;
 }
 
@@ -896,7 +942,6 @@ function applyTheme(t){
   document.getElementById("themelab").textContent = dark? "Light mode":"Dark mode";
 }
 function initControls(){
-  // node source
   const modesel=document.getElementById("modesel"), rpcwrap=document.getElementById("rpcwrap"),
         dot=document.getElementById("dot"), lab=document.getElementById("nodelab"),
         rpc=document.getElementById("rpc"), gnoweb=document.getElementById("gnoweb");
@@ -907,11 +952,10 @@ function initControls(){
   rpc.onchange=()=>{ CFG.rpc=rpc.value.trim(); saveCfg(); if(CFG.mode==="live") render(); };
   gnoweb.onchange=()=>{ CFG.gnoweb=gnoweb.value.trim()||"https://gno.land"; saveCfg(); if(CFG.mode==="live") render(); };
   reflect();
-  // theme
   const themebtn=document.getElementById("themebtn");
   themebtn.onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme");
     const dark = cur? cur==="dark" : matchMedia("(prefers-color-scheme:dark)").matches;
-    const next = dark? "light":"dark"; CFG.theme=next; saveCfg(); applyTheme(next); };
+    CFG.theme = dark? "light":"dark"; saveCfg(); applyTheme(CFG.theme); };
 }
 applyTheme(CFG.theme);
 initControls();
