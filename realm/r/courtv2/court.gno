@@ -229,6 +229,8 @@ type Court struct {
 	emittedTotal    int64          // every CC ever minted via emission
 	queue           *bptree.BPTree // entitlement seq (be64) -> *entitlement
 	queueSeq        uint64
+	records         *bptree.BPTree // addr -> *answerRecord (records.gno)
+	qualifiedCount  int            // addresses at score ≥ priorityNetRecord
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.
@@ -259,6 +261,7 @@ func StartCourt(cur realm, slug, name string) string {
 		escrow:    cur.Address(),
 		claims:    bptree.NewBPTree32(),
 		queue:     bptree.NewBPTree32(),
+		records:   bptree.NewBPTree32(),
 		params:    defaultParams().mustSane(),
 		createdAt:      runtime.ChainHeight(),
 		curBudgetBpsFP: budgetBpsFPStart,
