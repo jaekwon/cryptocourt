@@ -159,6 +159,22 @@ individual cap: bonus_i ≤ stake_i × tier/2   (mid ≤ 0.5×, high ≤ 1.0× p
 
 Answer bonds and dispute bonds stay forfeitable exactly as V1 (bond doubling is
 what makes the adjudication game honest; without loss, wrong answers are free).
+
+**Bond sizing survives V2 — by a new argument (iteration 3).** V1 sized the
+answer bond at `min(50%·X̄, cap)` against V1's theft surface (a lie that stands
+steals the losing side's collateral, ~X̄-scale). That surface is gone; the new
+one is the emission draw. Work the self-deal: attacker stakes S on their own
+claim, posts a wrong answer, hopes nobody disputes. If undisputed, quality
+defaults to **mid** (high requires a vote — the undisputed path structurally
+cannot reach it), so extraction caps at `midTier/2 × S = 0.5×S` of minted CC,
+while the bond at risk is `0.5×X̄ ≈ 0.5×S`. Detection probability ≥ 50% makes
+the lie EV-negative; any dispute also flips the verdict and re-votes quality.
+So `50%·X̄` remains exactly right — but now **because** it equals the maximum
+undisputed extraction. That coupling becomes a frozen invariant, V1-mustSane
+style: `answerBondBps ≥ maxUndisputedTier/2` (in bps of X̄), checked at deploy —
+if tier multipliers or the undisputed default ever change, the bond floor moves
+with them or the deploy refuses. `VETTING` (econ vet's self-deal item #5 will
+cross-check the arithmetic).
 This is a **deliberately retained gray area**: a forfeitable bond is stake lost on
 a vote outcome. The distinction we rely on: it prices *your own conduct* (posting
 an answer, filing a dispute) like a court's frivolous-filing sanction or an appeal
@@ -217,6 +233,7 @@ quality: high"), and the emission drawn. The claim page IS the product.
 | split | 80/8/7/5 winners/author/voters/answerer | §3.5 |
 | minAnswerX, bonds, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |
 | dead-claim timeout | 12 weeks | new (O6 fix) |
+| bond–tier coupling | `answerBondBps ≥ maxUndisputedTier/2` | frozen invariant, §3.6; deploy refuses otherwise |
 
 ## 5. Attacks & mitigations
 
@@ -333,6 +350,27 @@ Markets" rule when final.
      conviction*, so a griefer cannot burn the reservoir for free. `VETTING
      (pending econ vet)`.
 
+## 10. Implementation & verification plan
+
+- **No migration problem exists**: V1 never launched; V2 is the launch target.
+  V1 stays fully audited in git history (branch `court-realm`, base `5d2c4ef`).
+- **Build order** (all /p/ packages untouched except deleting the court's
+  dependency on tickbook/cshares): (1) `stake.gno` (pools, conviction-128,
+  freeze) + `emission.gno` (accrual, halvings, entitlements, pull-claims);
+  (2) adapt `claim/answer/session/dispute` per Appendix A; (3) `quality.gno`
+  (3-bucket sealed median); (4) render; (5) delete `book/market/fees`.
+- **Net size**: roughly –570 LOC removed (book/market/fees) vs ~+450 new
+  (stake/emission/quality) — V2 is *smaller* than V1, because the hard machinery
+  (governor, grc20votes, twap, curve, checked math) is reused untouched.
+- **Verification ports the V1 discipline wholesale**: per-file unit suites;
+  conservation invariants (escrow ≥ Σ obligations, drains to bounded dust;
+  Σ minted ≤ Σ accrued budget — the new one); overflow regressions (128-bit
+  conviction at MaxSupply × years); txtar coin-invariant runs on a real node
+  (stake→answer→settle→withdraw+bonus; the dispute path; dead-claim unlock;
+  reservoir exhaustion if §8.7 adopted); then the same per-unit adversarial
+  audit loop to convergence that V1 got. Done means: full sweep, zero findings,
+  `make check` + txtar green.
+
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
 File-by-file disposition of the audited V1 realm, with the load-bearing couplings
@@ -379,6 +417,14 @@ Cross-cutting invariants preserved (these were the V1 audit's spine):
   emission never transits escrow, preserving the V1 conservation invariant);
   quality tally concretely specced as court-local 3-bucket median on the dispute
   proposal's snapshot epoch (§3.4) — no /p/governor change.
+- **v0.4** — (iteration 3, vets still out) bond sizing re-derived for V2 (§3.6):
+  the undisputed path structurally caps at mid tier, so max undisputed
+  extraction = `midTier/2 × S` — exactly V1's `50%·X̄` bond, now for a V2-native
+  reason; frozen as the deploy invariant `answerBondBps ≥ maxUndisputedTier/2`
+  (bond floor auto-moves if tiers ever change). Added §10 implementation &
+  verification plan: no migration (V1 unlaunched), build order, V2 is net
+  *smaller* than V1 (~–570 vs +450 LOC), and the V1 audit discipline ports
+  wholesale with one new invariant (Σ minted ≤ Σ accrued).
 - **v0.3** — (iteration 2, vets still out) found a flaw in my own §3.5:
   cross-claim per-period pro-rata is timeable (Finalize is permissionless →
   register into a quiet period) and couples payouts to the period's slowest
