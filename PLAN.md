@@ -571,6 +571,42 @@ earn its place, now that emission also mints and GNOT is burned?**
   rubber-stamping, and the flag lane already makes standalone quality votes
   rare (only flagged, undisputed claims). Not worth the attention dilution.
 
+**Pass 3 (iteration 12) — assumption questioned: claims are isolated.** The
+court vision's four core actions were answer / answerDispute / **support** /
+**counter** — argument EDGES between claims — and V2's tokenomics has silently
+ignored the edge layer. Should edges join the money loop?
+
+- **DECIDED — edges stay OUT of the V2 money loop, deliberately and on the
+  record.** Value-coupled edges (a supporting claim's stake/quality feeding
+  the supported claim's economics) would create exactly the surfaces five vets
+  never examined: cascade draws (one resolution triggering payouts across a
+  graph), circular-support rings, edge-spam as an emission vector, and a
+  cross-claim denominator sneaking back in through the graph. The V2 economy
+  is *per-claim by construction* — every invariant in §10 depends on it.
+  Edges ship (V3) as **curation metadata**: anyone may link claims
+  support/counter, rendered on the claim page, zero economic weight. If they
+  are ever value-coupled, that is a NEW tokenomics design with its own full
+  vet cycle — this paragraph is the tripwire.
+- **REJECTED — sortition juror panels** (random subsets instead of the whole
+  electorate per dispute): attention-cheaper at scale, but small panels make
+  bribery cheap (buy k jurors, not 50% of a bar-clearing turnout), gno's
+  determinism makes unpredictable, unbiasable juror randomness its own hard
+  project, and the full-electorate quorum machinery is the single
+  most-battle-tested part of V1. Revisit only if vote fatigue is observed
+  (V3+, with a randomness design in hand).
+- **KEPT — quality as one dimension.** Low/mid/high conflates rigor, novelty,
+  and importance; a multi-axis score would be more expressive and much worse:
+  each axis is a new capture surface (A4 per axis), the Schelling convergence
+  that makes the median honest depends on coarse, common-knowledge buckets,
+  and the tier's only job is gating emission — one dimension suffices for
+  that. Sub-dimensions belong in render (voters' free-text rationales, V3).
+- **NOTED — courts die clean.** No wind-down mechanism is needed, by
+  construction: stakes are always withdrawable (no-loss), claims die at the
+  timeout with deposits refunded, and — because GNOT is burned — **there is no
+  treasury to fight over in an abandoned court**. Death = the render going
+  quiet. The absence of an end-of-life capture surface is a direct dividend
+  of the burn decision (§3.7).
+
 ### 3.9 Signal & render — `SPECCED (v0.9)`
 
 Three ratio series, and none of them needs new state:
@@ -1053,6 +1089,15 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.16** — (iteration 12) brainstorm pass 3: **edges (support/counter) stay
+  out of the V2 money loop, on the record with a tripwire** — value-coupled
+  edges would open cascade draws, support rings, and a graph-shaped cross-claim
+  denominator no vet has examined; they ship V3 as zero-weight curation
+  metadata. Rejected sortition panels (cheap bribery + hard determinism-safe
+  randomness vs battle-tested full-electorate quorum). Kept 1-D quality (each
+  extra axis is a new A4). Noted: courts die clean — no treasury exists to
+  fight over, a direct dividend of the burn. Notably, pass 3 produced zero
+  design changes — convergence evidence.
 - **v0.15** — (iteration 11, round-2 vet pending) §12 owner decision index: all
   18 autonomous judgment calls consolidated with override costs. Corrected the
   dead-claim wording (nothing is locked pre-answer; the timeout disposes only
