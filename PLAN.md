@@ -1390,6 +1390,8 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 26 | d_eff pricing (v0.33, FIXED in code) | rate prices min(budget ceiling, realized-EMA dilution) | Budget-d alone = riskless farming below ~18% participation (both v0.32 audits, convergent) |
 | 27 | Headroom amendment (v0.33) | ≥10% actual (10.8%) under the 20% ceiling with curveCap = half | Alternative: curveCap = 0.44× restores ≥20%; owner may prefer it |
 | 28 | Slash size (v0.33) | 4.5%·X̄ (was 2.5%) — mill-kill q ≈ 0.22 at the hot rate | 2.5% drifts the kill bar to ~0.30 at 20%; bounty ≤ 80%×burns holds at both |
+| 29 | Answer-bond custody (v0.35) | Bond stays escrowed through UPHELD rounds, returning only at VERDICT_FINAL — reopens stay collateralized; comp arms read the posted magnitude | V1's return-at-each-decision frees honest capital ~1–3wk sooner but leaves reopen rounds with nothing at stake (comp anchor = 0) |
+| 30 | provClose reachability (v0.35) | Kept V1's window geometry: with 1-week votes, 3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds and Finalize the defaulted verdict | Stretching small-claim escrows to fit round 3 delays every honest small claim ~2 extra weeks to serve a rare griefing path |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
