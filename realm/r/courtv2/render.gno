@@ -135,8 +135,43 @@ func renderClaim(slug string, id uint64) string {
 		if cs.verdictAt != 0 && !cs.provClose {
 			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")
 		}
+		// Quality: the tier and the flag slot. The tally itself stays sealed.
+		q := "quality: " + tierName(cs.tier)
+		if cs.tierFinal {
+			q += " (final)"
+		} else {
+			q += " (default; the flag lane may re-vote it)"
+		}
+		b.WriteString("- " + q + "\n")
+		switch {
+		case cs.flagOpen:
+			b.WriteString("- flag vote open — the tally is sealed until it closes\n")
+		case cs.counterOpen:
+			b.WriteString("- counter re-vote open — the tally is sealed until it closes\n")
+		case cs.pendingSlash > 0:
+			b.WriteString("- a slash is escrowed in its counter-flag window\n")
+		case !cs.crystallized && !cs.slotConsumed && !cs.provClose:
+			b.WriteString("- flag slot open — bond " + strconv.FormatInt(flagBondFor(cs), 10) + " CC units\n")
+		}
+		if cs.crystallized {
+			w, a, ans, carrot := cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
+			b.WriteString("- rewards crystallized — pools (CC units): accuracy " + strconv.FormatInt(w, 10) +
+				", author " + strconv.FormatInt(a, 10) + ", answerer " + strconv.FormatInt(ans, 10) +
+				", participation remaining " + strconv.FormatInt(carrot, 10) + "\n")
+		}
 	}
 	return b.String()
+}
+
+func tierName(tier int64) string {
+	switch tier {
+	case tierLowX:
+		return "low"
+	case tierHighX:
+		return "high"
+	default:
+		return "mid"
+	}
 }
 
 func sideName(side int) string {

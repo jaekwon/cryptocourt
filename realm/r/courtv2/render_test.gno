@@ -80,9 +80,19 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	mustContain("provisional", "withdraw 1× now")
 	mustContain("provisional", "failed dispute rounds: 1 of 3")
 
-	cs.verdictAt, cs.route = 100, "vote"
+	cs.verdictAt, cs.route, cs.tier = 100, "vote", tierMidX
 	mustContain("settled", "settled — every stake withdraws 1×")
 	mustContain("settled", "verdict: NO — vote")
+	mustContain("settled", "quality: mid (default")
+	mustContain("settled", "flag slot open — bond")
+	cs.tier, cs.tierFinal = tierHighX, true
+	mustContain("quality", "quality: high (final)")
+	cs.flagOpen = true
+	mustContain("flagging", "flag vote open — the tally is sealed")
+	cs.flagOpen = false
+	cs.crystallized, cs.drawWinners, cs.carrotPool = true, 12345, 77
+	mustContain("crystallized", "accuracy 12345")
+	mustContain("crystallized", "participation remaining 77")
 
 	cs.provClose = true
 	mustContain("provclose", "closed without a decision")
