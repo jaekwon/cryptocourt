@@ -440,39 +440,40 @@ denominator exists to time or to hold hostage.
   idle reserve through a non-participant wallet — the FULL-BAR gate on
   slot-consuming mid (v0.25/A20) remains the load-bearing defense; exclusion
   removes the cheap in-band paths and the carrot self-payment.
-- **v0.27 — A21 RESOLVED (composition vet: REJECT my draft, adopt its
-  alternative).** The v0.26 draft failed both its goals: gating the slash at
-  the supply-floored full bar made the slash unreachable below whale scale
-  (mills live exactly there — and WITHOUT the slash the mill's break-even
-  flag-rate is f* ≈ 0.74, unreachable; with it, f* ≈ 0.41 — **my pre-analysis
-  P1 was WRONG: tier-0 + deposit alone does not kill the mill; the slash is
-  load-bearing**), while AT whale scale supermajority-low was *cheaper than
-  capturing high because it carries a prize high lacks* (the victim-funded
-  bounty). Final rule, using machinery already in the plan:
-  - **Bounty is two-tier**: median-low pays ≤ 80% × (deposit + fee) ≈ dust;
-    the full base applies only when the slash legitimately burned.
-  - **The slash fires at conclusive MEDIAN-low — but ONLY on UNDISPUTED
-    answers.** The dispute machine is the evidence-gate: a bond that survived
-    a real dispute was already adjudicated at verdict-scale turnout and
-    cannot be re-attacked by a quality vote; an undisputed answer's
-    median-low quality vote is its first and only trial. Junk-farms stay
-    burn-dominated (the slash hits the sybil's own bond); mill deterrence is
-    restored at reachable turnout (flagging junk pays ≈ 2%·X̄ exactly where
-    mills live — V2-1 satisfied in the mill band).
-  - **Pin: dispute-ride quality-low NEVER slashes a verdict-upheld answer**
-    (organic disputes auto-meet verdict-scale turnout, and a free-riding
-    whale could otherwise slash a prevailing honest answerer for ~nothing).
-  - **Residuals, honestly stated (register)**: the undisputed-gate is a
-    discriminator, not a wall — capturing an honest *undisputed* claim to
-    median-low still slashes its answerer and pays the capturer's flagger
-    ≈ 2%·X̄; what prices it is the contested, sealed vote against a PAID
-    defending electorate (claim-scaled carrot) where failure burns the
-    capturer's full 2%·X̄ bond — a bond-risk coin-flip, the A4 accepted
-    class, not free money. And frozen-slot (8%·X̄) flagging pays only 2%·X̄ —
-    rational only at high confidence, so Route-B (7%·X̄ of half-burns) buys a
-    raised-entry, high-q-only policing regime, not immunity. Participant
-    exclusion KEPT total (the vet floated defensive mid-only votes; rejected
-    for simplicity — A20's full-bar gate already does that work).
+- **v0.28 — A21 FINAL (two composition vets, reconciled — each corrected the
+  other).** Vet A rejected my supermajority draft but its mill arithmetic
+  dropped the carry term on the flagged branch (a flagged mill still pays
+  carry on ~1.5X̄ locked at zero yield); vet B restored it: **a median-low
+  tier-0 kills the mill at flag-frequency q ≈ 12%, X̄-invariant** — my
+  pre-analysis P1 was right via B's sharper mechanism, and the slash is
+  police-FUNDING, never mill-killing. Vet B then showed the deeper truth that
+  invalidates every reachable-bar slash design (mine AND vet A's
+  undisputed-gate): **quality-vote weight is costless, reusable, and never
+  escrowed by voting** — one weight pool services unlimited concurrent
+  captures, so ANY claim-scaled bar that triggers an X̄-scaled slash+bounty
+  is a faucet against innocent answerers (~3.4:1, parallelizable). Final
+  rule, combining both vets' surviving pieces:
+  - **Median-low (bar = min(X̄, ⅓·votable)/4)**: tier 0, deposit + fee
+    burned, bounty ≤ 80% × (deposit+fee) ≈ dust. This ALONE kills mills at
+    q ≈ 12% — reachable even from altruistic/competitor flagging.
+  - **The answer-bond slash + full bounty fire ONLY at the supply-floored
+    full verdict bar AND only on undisputed answers** (vet A's evidence-gate
+    kept as belt: dispute-survived bonds are adjudicated-once and immune;
+    A22's dispute-ride pin stands). Below whale scale this branch is simply
+    OFF — a **bounded, accepted dead zone**: small-claim mills earn a thin
+    ~0.2(r+d)·X̄ reservoir-capped spread, priced 1.1 CC + full carry per
+    cycle, dead at 12% flag frequency.
+  - **Upgrade path registered (vet B)**: escrow the slash one window and let
+    the slashed answerer counter-flag at 2×b₀, forcing a re-vote at the
+    supply-floored bar — makes small-claim slashes reachable later without
+    ever freeing the faucet.
+  - **Root cause, named for V3 (both vets' convergence opinions agree)**:
+    A4→A20→A21 were one hole re-expressed — costless reusable voting weight
+    triggering scaled value flows. It closes only by putting the triggering
+    WEIGHT at risk (vote-bond escalation / appeals), which conflicts with
+    carrot-only voting (decision #4, owner's lean) and is explicitly out of
+    V2 scope. V2's containment: scaled flows are whale-priced or
+    evidence-gated; unreachable-bar flows are dust-priced.
 - **v0.25 pins**: no voter carrot on INCONCLUSIVE outcomes (else ratchet-spam
   gets ~3× cheaper and a carrot upsizing could flip it — micro-vet-2's
   carrot < b₀/2 invariant stays as belt); the "honest loss capped at b₀/2"
@@ -898,7 +899,7 @@ product; every number on it must be reproducible from public reads.
 | Finalize authorization | participant-only first week of eligibility, then permissionless | v0.11 (A13) |
 | bond/deposit forfeitures | 100% BURNED on decided-against; **failed (quorum-less) dispute rounds burn HALF, return half**; comp = min(2×own bond, floor(80%×loser's burn)), tier-invariant, senior-queued, none on failed rounds | v0.11 + v0.20 + v0.25 |
 | flag bounty | min(flagger's bond, 80% × CC burned on the low outcome), senior-queued | v0.25 faucet fix (R3-1d + MV1-4) |
-| conclusive-low slash | 2.5%·X̄ from the ANSWER bond (burned) at conclusive MEDIAN-low, **UNDISPUTED answers only**; upheld answers never slashable | v0.27 (A21/A22) |
+| conclusive-low slash | 2.5%·X̄ from the ANSWER bond (burned) only at the SUPPLY-FLOORED full bar AND undisputed answers; upheld answers never slashable; median-low = tier-0 + deposit only | v0.28 (A21/A22 final) |
 | slot-consuming mid | requires the FULL verdict bar; ¼-bar mid = demotion denied, slot reopens ×2 | v0.25 (idle-reserve squat) |
 | bounty base | min(flagger's bond, 80% × event burns); the slash counts only when it burned | v0.27 — V2-1 in the mill band, ≤ dust for honest-claim captures that fail |
 | quality demotion bar | min(X̄, ⅓·votable)/4 — no 5%-supply floor (verdict votes keep the full floor) | v0.25 dead-zone fix |
@@ -1276,7 +1277,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 21 | Policing pay | Senior-queued entitlements, never scaled (v0.20) | Availability-scaling re-opens the scarcity-window lying meta (2A-T1 BREAKS) |
 | 22 | Flag ratchet terminal | Bond freezes at 8%·X̄ after 3 inconclusives, 7d cooldown (v0.24) | A terminate-as-mid cap = mill immunization; bare unbounded doubling = immunization by capital exhaustion |
 | 23 | Bounty base | ≤ 80% of the low outcome's burns, with the 2.5%·X̄ answer-bond slash as the scaling burn (v0.25) | Own-bond bounty was a mint faucet; deposit-only base un-pays policing (V2-1) |
-| 24 | Slash evidence-gate | UNDISPUTED-only median-low slash; dispute-survived bonds immune; bounty base = actual burns (v0.27, vet's alternative over my supermajority draft) | Supply-floored gates re-open the dead zone; supermajority-low was a cheaper-than-high capture WITH a prize |
+| 24 | Slash gate (final) | Supply-floored full bar + undisputed-only (v0.28, two vets reconciled); median-low tier-0 alone kills mills at q ≈ 12%; bounded dead zone accepted; counter-flag upgrade path registered | Any reachable-bar X̄-scaled slash re-arms the faucet (costless reusable weight); weight-at-risk is the V3 frontier |
 | 25 | Quality-lane participation | Participants excluded from own-claim quality votes and carrots (v0.26) | In-band self-defense via same-epoch/post-release enfranchisement; carrot self-payment |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
@@ -1373,6 +1374,22 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.28** — (iteration 40b) **A21 truly final: the second composition vet
+  landed minutes after v0.27 and each vet corrected the other.** Vet A's mill
+  arithmetic had dropped the flagged-branch carry term — vet B restored it:
+  median-low tier-0 + carry kills mills at q ≈ 12%, X̄-invariant (my P1 stood
+  after all; the slash is police-funding only). Vet B then invalidated BOTH
+  reachable-bar slash designs (my claim-scaled draft and vet A's
+  undisputed-gate) with the root observation: quality-vote weight is
+  costless, reusable, never escrowed — any claim-scaled bar triggering
+  X̄-scaled value is a faucet. Final: slash + full bounty only at the
+  supply-floored bar AND undisputed (belt from vet A); median-low = dust
+  economics that nonetheless suffice to kill mills; bounded dead zone
+  accepted and priced; counter-flag upgrade path registered; root cause
+  named and scoped to V3 (weight-at-risk vs carrot-only voting, decision
+  #4). Both vets' convergence opinions now agree: remaining surface =
+  accepted-register grief classes. **This closes the last structural DRAFT
+  in the attack ledger.**
 - **v0.27** — (iteration 40) **A21 resolved: the composition vet REJECTED my
   two-tier supermajority draft with decisive arithmetic** — my pre-analysis P1
   was wrong (tier-0 + deposit leaves mill break-even at an unreachable
