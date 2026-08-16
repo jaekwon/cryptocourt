@@ -303,16 +303,21 @@ denominator exists to time or to hold hostage.
   **the doubling base is the SLOT — per-claim, monotone across flaggers**
   (per-flagger bases reset via sybils → linear-cost suppression chains; per-slot
   makes cycle k cost 2^(k−1)·b₀, exponentially self-limiting at ~2–4 cycles);
-  **v0.23: the K = 3 hard cap is DELETED** — self-found one iteration after
-  adopting it: a cap that closes the slot AS MID after 3 inconclusives hands
-  the mill a guaranteed immunization recipe (3 dust self-flags ≈ 3.5%·X̄ +
-  21 days → permanent mid, no outside weight needed — cheaper than the ~9%·X̄
-  draw it protects). The cap was also unnecessary: per-slot doubling already
-  prices chains exponentially, and because the bounty equals the flagger's
-  OWN (doubled) bond, an honest late flagger at any cycle depth keeps the
-  same q > ½ EV threshold — the doubling prices griefing without ever
-  pricing out honesty. Chains are bounded economically, and a mill can never
-  reach a terminal safe state. (Pending micro-vet-2 confirmation.);
+  **v0.24 (micro-vet-2 CONFIRMED the v0.23 self-finding and refined the fix)**:
+  the K = 3 terminate-as-mid cap was a guaranteed mill immunization (3 dust
+  self-flags = **7%·X̄** burned — v0.23's 3.5% figure conflated 3.5·b₀ with
+  3.5% — + 21 days → permanent mid; EV-positive insurance for any mill with
+  q ≳ 0.75). But v0.23's bare deletion had its own tail-failure: unbounded
+  doubling re-immunizes by capital exhaustion around cycle 5 (a 32%·X̄ entry
+  price kills honest flaggability as surely as a terminal state). Final rule:
+  **after 3 inconclusive cycles the reopen chain ends but flaggability never
+  does — the bond FREEZES at 2²·b₀ = 8%·X̄** (full-burn-unless-low, bounty =
+  bond, one flag per 7-day cooldown, no further doubling). Nothing is ever
+  immune; a mill's Route-B spend buys only a raised entry price; grief-delay
+  costs a flat ~4%·X̄/week against ~0.06%·X̄/week of victim time-value
+  (~120:1, X̄-invariant). Companion deploy invariant (micro-vet-2 item 2):
+  **the flag-vote carrot per vote < b₀/2**, so idle sybils voting mid to farm
+  the carrot net strictly negative (current margin ~2.2×);
   **an inconclusive outcome burns half the bond and returns half** (full return
   would make chains free — 2A; full burn punishes honest flaggers for the
   electorate's absenteeism — round-2 V2-1; half preserves the exponential
@@ -795,8 +800,9 @@ product; every number on it must be reproducible from public reads.
 | author slice cap | ≤ (tier/2) × own stake | F1 |
 | answerer slice cap | ≤ (tier/2) × the answer bond | v0.8 (stale #6 fixed) |
 | split | 80/8/7/5; **voter slice tier-invariant, paid even at low, with-verdict only** | F2/F3 |
-| quality-flag bond | max(flagMin, 2%·X̄); conclusive low → returned + bounty; inconclusive → half-burned, slot reopens; conclusive mid/high → burned; doubling PER-SLOT | v0.20 pins (2A-T2 + V2-1/V2-6) |
+| quality-flag bond | max(flagMin, 2%·X̄); conclusive low → returned + bounty; inconclusive → half-burned, slot reopens; conclusive mid/high → burned; doubling PER-SLOT until cycle 3, then FROZEN at 8%·X̄ with a 7-day per-flag cooldown | v0.20 pins + v0.24 freeze (micro-vet-2) |
 | no-settle window | 24h after every flag-vote close / slot reopen | v0.20 (V2-5: the post-answer version was vacuous under the 72h delay) |
+| flag-vote carrot bound | carrot per flag-vote < b₀/2 | v0.24 deploy invariant (micro-vet-2: sybil mid-voters must net negative; margin ~2.2×) |
 | conviction | rate-weighted: ∫rate(t)·stake·dt; amortized table ×2^(−1/104)/period | v0.20 (V2-8 + 2A-T3; rateAtFreeze deleted) |
 | answer priority | difficulty-weighted record (contested-and-upheld only), ≥3 → 24h window; gate off until N addresses qualify; 1 active priority claim/address | v0.12 (A18) |
 | claim fee | 10% of deposit; burned only on dead-with-no-stake or CONCLUSIVE low; refunded otherwise (incl. default-mid-no-vote) | v0.20 (V2-9: the old condition was undefined at the most common outcome) |
@@ -1086,7 +1092,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   flagged → conclusive|inconclusive-reopen) never double-pauses or
   double-pays; forfeitures strictly burn (no transfer path exists to an
   adversary); escrow conservation with the conditional fee (refund XOR burn,
-  exactly once).
+  exactly once); the flag-vote carrot per vote < b₀/2 (v0.24).
 - **Storage model (V1 discipline)**: one packed record per (claim, staker,
   side) in a bptree — `stake int64 · convHi/convLo (uint128 in stake-hours) ·
   lastUpdate int64` ≈ four words, one object; a stake/unstake dirties exactly
@@ -1244,6 +1250,17 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.24** — (iteration 29) **micro-vet-2 landed: independently CONFIRMS the
+  v0.23 K-cap deletion** ("BREAKS — the cap IS the cheap immunization"),
+  corrects its arithmetic (3-cycle burn = 7%·X̄, not 3.5% — 3.5·b₀ conflated
+  with 3.5%; conclusion unchanged), and refines the fix: bare deletion left
+  unbounded doubling, which re-immunizes by capital exhaustion (~32%·X̄ entry
+  at cycle 5). Final rule: after 3 inconclusives the bond FREEZES at 8%·X̄
+  (full-burn-unless-low, bounty = bond, 7-day cooldown) — flaggability is
+  permanent at bounded capital, grief-delay costs ~120:1 against victim harm,
+  X̄-invariant. Serial-grief chain HOLDS; refund-farming HOLDS (zero); new
+  deploy invariant: flag-vote carrot < b₀/2 (sybil mid-voters net negative,
+  margin ~2.2×).
 - **v0.23b** — (iteration 28) extended the answer-height snapshot pin to
   dispute-ride quality votes: a disputer epoch-shops exactly as a flagger
   would, so BOTH quality paths use the claim's one fixed answer-height
