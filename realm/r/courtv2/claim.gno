@@ -77,6 +77,10 @@ type claimState struct {
 	provisional  int8
 	escrowUntil  int64
 	provClose    bool
+	// credEligible: some UPHELD round's overturn side carried >= 1/4 of the
+	// quorum floor — the record credits only for genuinely contested wins
+	// (audit M2-1: a weightless self-contest must not mint the credential).
+	credEligible bool
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's

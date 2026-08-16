@@ -28,6 +28,7 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 	c := testCourt(cur, "dp1", alice, 50_000_000_000)
 	c.coin.Mint(bob, 10_000_000_000)
 	c.coin.Mint(carol, 20_000_000_000)
+	c.coin.Mint(dave, 8_000_000_000)
 
 	id := stakeAnswerDispute(cur, "dp1", alice, bob)
 	xbar := XBarFrozen("dp1", id)
@@ -60,9 +61,13 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 		ResolveDispute(cross(cur), "dp1", id)
 	})
 
-	// Carol upholds (votes "no" on OVERTURN) with quorum-clearing weight.
+	// Carol upholds (votes "no" on OVERTURN) with quorum-clearing weight;
+	// dave votes "yes" with real weight (>= floor/4) and loses — the contest
+	// is GENUINE, so the uphold is credential-eligible (M2-1 bar).
 	testing.SetRealm(testing.NewUserRealm(carol))
 	VoteDispute(cross(cur), "dp1", id, "no")
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "dp1", id, "yes")
 	testing.SkipHeights(c.params.votingBlocks + 1)
 
 	supplyBefore := c.coin.TotalSupply()
@@ -263,4 +268,44 @@ func TestDisputeWindowPartition(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "verdict is final", func() {
 		OpenDispute(cross(cur), "dp4", id)
 	})
+}
+
+// The audit-M2-1 regression: a manufactured contest must not mint the
+// difficulty credential. The answerer cannot self-dispute at all; a sybil
+// dispute whose uphold carries NO adversarial weight (honest voters upholding
+// a true claim for free) finalizes with record = 0.
+func TestWeightlessContestEarnsNoCredential(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dp5-alice")
+	bob := testutils.TestAddress("dp5-bob")
+	carol := testutils.TestAddress("dp5-carol")
+	c := testCourt(cur, "dp5", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	id := stakeAnswerDispute(cur, "dp5", alice, bob)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "cannot dispute their own", func() {
+		OpenDispute(cross(cur), "dp5", id)
+	})
+
+	// The sybil route: bob (imagine alice's second wallet) disputes; the
+	// honest electorate upholds the true answer for free; zero yes-weight.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "dp5", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "dp5", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "dp5", id)
+	if Provisional("dp5", id) != sideYES {
+		t.Fatal("the uphold itself must still work")
+	}
+	testing.SkipHeights(EscrowUntil("dp5", id) - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "dp5", id)
+	if Verdict("dp5", id) != sideYES {
+		t.Fatal("verdict finalizes normally")
+	}
+	if AnswerRecord("dp5", alice) != 0 {
+		t.Fatal("a weightless contest must NOT mint the difficulty credential (M2-1)")
+	}
 }

@@ -1471,6 +1471,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 28 | Slash size (v0.33) | 4.5%·X̄ (was 2.5%) — mill-kill q ≈ 0.22 at the hot rate | 2.5% drifts the kill bar to ~0.30 at 20%; bounty ≤ 80%×burns holds at both |
 | 29 | Answer-bond custody (v0.35) | Bond stays escrowed through UPHELD rounds, returning only at VERDICT_FINAL — reopens stay collateralized; comp arms read the posted magnitude | V1's return-at-each-decision frees honest capital ~1–3wk sooner but leaves reopen rounds with nothing at stake (comp anchor = 0) |
 | 30 | provClose reachability (v0.35) | Kept V1's window geometry: with 1-week votes, 3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds and Finalize the defaulted verdict | Stretching small-claim escrows to fit round 3 delays every honest small claim ~2 extra weeks to serve a rare griefing path |
+| 31 | Credential weight bar (v0.35.1, audit M2-1) | contested-and-upheld credits only when an upheld round's overturn side carried ≥ ¼ × quorum floor — weightless (self-manufactured) contests mint nothing; near-unanimous upholds also credit nothing | Dropping the bar re-opens credential farming at ~20% of a dispute bond per point; softening to the unfloored demotion bar prices it at idle-mill scale (~25 CC) instead of whale scale |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
@@ -1566,6 +1567,26 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.35.1** — (iteration 12) **milestone-2 audit ingested: 0 CRITICAL, 0
+  HIGH, 1 MED, 4 notes.** Every money path CLEARED under probe verification:
+  escrow conservation on all routes, the A19 burn/mint doctrine, self-dispute
+  strictly negative both ways, reopen flip-flops, F7 early-exit, no stuck
+  interleaving, quorum-floor manipulation, tally overflow. The MED (M2-1):
+  **self-contest manufactured the contested-and-upheld credential** at ~20%
+  of a dispute bond per point (honest voters upholding a trivially-true claim
+  supplied the win for free). FIXED same-iteration, two layers: the answerer
+  cannot dispute their own answer (hygiene), and — the real defense —
+  **creditUpheld now requires credEligible: some upheld round's OVERTURN side
+  carried ≥ ¼ of the (supply-floored) quorum floor**. A farmer must hold and
+  vote ~1.25% of court supply against their own claim, kept under the 50.01%
+  overturn bar — the v0.28 pricing rule (supply-absolute prizes demand
+  supply-absolute weight) applied to the credential. Consequence, accepted:
+  near-unanimous upholds credit nothing (an answer nobody meaningfully backed
+  overturning wasn't hard — matches the difficulty-weighting intent).
+  Regression: TestWeightlessContestEarnsNoCredential. Notes N1-N4 recorded
+  (N1 deposit/fee deferral is the quality module's job; N2 live-price escrow
+  window only lengthens, safe; N3/N4 inherited V1 render/governor bounds).
+  Fix verification folded into the milestone-3 (quality) audit brief.
 - **v0.35** — (implementation iterations 6–7) **the verdict machine is
   complete**: `session.gno` (72h undisputed settle → VERDICT_FINAL, exactly-
   once bond return, `WithdrawStake` 1× both sides) and `dispute.gno` (V1's

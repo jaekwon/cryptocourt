@@ -76,6 +76,11 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 	if cs.frozenAt == 0 {
 		panic("courtv2: there is no answer to dispute")
 	}
+	if who == cs.answerer {
+		// Hygiene only (a sybil wallet trivially evades it): the REAL
+		// credential defense is the credEligible weight bar below (M2-1).
+		panic("courtv2: the answerer cannot dispute their own answer")
+	}
 	if cs.disputeOpen {
 		panic("courtv2: a dispute is already open on this claim")
 	}
@@ -225,6 +230,15 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		if comp := compAmount(cs.answerBond0, burned); comp > 0 {
 			enqueueSenior(c, cs.answerer, comp, "comp")
 		}
+		// The credential bar (audit M2-1): this uphold counts toward the
+		// difficulty record only if the OVERTURN side carried real weight —
+		// >= 1/4 of the (supply-floored) quorum floor. A manufactured contest
+		// has no adversarial weight unless the farmer HOLDS and votes ~1.25%
+		// of court supply against their own claim (the v0.28 pricing:
+		// supply-absolute prizes demand supply-absolute weight).
+		if yes >= floor/4 {
+			cs.credEligible = true
+		}
 		cs.provisional = cs.answer
 		cs.failedRounds = 0
 		cs.decidedRounds++
@@ -334,12 +348,13 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 		cs.answerBond = 0
 	}
 	// The record moves once, from the final verdict (P13) — and "upheld"
-	// means a DECIDED vote upheld it: a verdict that stands only by
-	// quorum-less defaults earns nothing (else half-a-dispute-bond of
-	// self-dispute burn would buy a difficulty point).
+	// means a DECIDED vote upheld it AGAINST real opposition: quorum-less
+	// defaults earn nothing, and so do weightless contests (credEligible,
+	// audit M2-1) — else ~20% of a dispute bond buys a difficulty point on
+	// any trivially-true claim.
 	if cs.provisional != cs.answer {
 		resetOverturned(c, cs.answerer)
-	} else if cs.decidedRounds > 0 {
+	} else if cs.decidedRounds > 0 && cs.credEligible {
 		creditUpheld(c, cs.answerer) // contested-and-upheld: the hard point
 	}
 	releasePriority(c, cs.answerer, claimID)
