@@ -1,8 +1,10 @@
 # PLAN — cryptocourt tokenomics V2: no-loss conviction staking
 
-> **STATUS: DESIGN CONVERGED at v0.28** — 12 adversarial vet passes; the
-> 22-attack ledger (§5) holds zero DRAFTs; both final vets' convergence
-> opinions agree the remaining surface is accepted-register grief (§7.2) and
+> **STATUS: DESIGN CONVERGED at v0.31 — no unvetted mechanism remains.**
+> 14 adversarial vet passes; the 22-attack ledger (§5) holds zero DRAFTs and
+> every rule in it was attacked, including the fixes (the T-series closed the
+> fix-of-fix chain, source-verified against V1's code). Remaining surface:
+> accepted-register grief (§7.2), the named V3 frontier (weight-at-risk), and
 > owner calls (§12). Next phase: implementation (§10), then the same
 > audit-to-convergence cycle on the code.
 >
