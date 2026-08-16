@@ -334,10 +334,10 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 	}
 
 	if slashGrade {
-		// The slash RESERVES only (Q5): 4.5%·X̄ out of what remains of the
-		// answer bond, escrowed one counter-flag window. Its burn and the
-		// full bounty settle at the window's close (quality.gno part 2).
-		slash := cs.xBarFrozen * slashXBps / 10000
+		// The slash RESERVES only (Q5): the draw-proportional size (v0.40) out
+		// of what remains of the answer bond, escrowed one counter-flag window.
+		// Its burn and the full bounty settle at the window's close.
+		slash := slashSizeFor(cs)
 		if slash > cs.answerBond {
 			slash = cs.answerBond
 		}
@@ -359,6 +359,36 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 // flagBondPosted recomputes the bond this cycle posted (the live field is
 // already disposed when the bounty is sized).
 func (cs *claimState) flagBondPosted() int64 { return flagBondFor(cs) }
+
+// winMidGross is the winning-side pool's mid-weight gross draw in CC — the
+// counterfactual take the mill would have received at the default mid tier,
+// i.e. exactly crystallize's midGross for the answer side. Keyed on cs.answer
+// (undisputed: the winning side IS the answer; slashGrade gates decidedRounds
+// == 0), and read from the pool conviction accumulators, which freeze at the
+// answer (advancePools settles them in PostAnswer; stake/unstake refuse after)
+// — so it is identical at settle, ResolveFlag, and crystallize.
+func winMidGross(cs *claimState) int64 {
+	if int(cs.answer) == sideYES {
+		return convToCC(cs.yesConvHi, cs.yesConvLo)
+	}
+	return convToCC(cs.noConvHi, cs.noConvLo)
+}
+
+// slashSizeFor is the draw-proportional slash (v0.40): max(4.5%·X̄ floor,
+// 1.6× the mill's would-be mid draw). On a conclusive-low the actual draw is
+// zero (tier→0), so the deterrent must scale with the FORGONE mid draw, not
+// the realized one — otherwise a patient mill (draw grows with hold-time)
+// outpaces a flat X̄-scaled slash. The caller clamps to the posted bond; the
+// deploy invariant (court.gno) guarantees the draw arm fits under the bond at
+// the hot-rate 12-week max, so the clamp only bites answers whose winning pool
+// was inflated past the answerer's own bond by honest co-stakers.
+func slashSizeFor(cs *claimState) int64 {
+	flat := cs.xBarFrozen * slashXBps / 10000
+	if draw := mulDiv128(winMidGross(cs), slashDrawBps, 10000); draw > flat {
+		return draw
+	}
+	return flat
+}
 
 // bountyFor is the A19-shaped bounty: min(the flagger's own bond, 80% × the
 // CC that actually burned on the outcome). Floors; never negative.

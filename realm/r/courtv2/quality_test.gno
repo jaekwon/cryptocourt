@@ -1,11 +1,20 @@
 package courtv2
 
 import (
+	"math/bits"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
 )
+
+// convForCC crafts a u128 conviction accumulator whose convToCC is exactly cc
+// (base units) — the inverse of convToCC's ÷(periodBlocks·1e10), for tests that
+// inject a known winning-pool midGross.
+func convForCC(cc int64) (hi, lo uint64) {
+	den := uint64(periodBlocks) * 10_000 * 1_000_000
+	return bits.Mul64(uint64(cc), den)
+}
 
 // qfSetup: alice authors+answers (participant), bob is a free wallet, carol
 // carries big aged weight (20k CC), dust carries tiny aged weight (0.05 CC).
@@ -358,5 +367,83 @@ func TestReopenDisputeSupersedesPendingSlash(cur realm, t *testing.T) {
 	Finalize(cross(cur), "qf8", id)
 	if c.coin.BalanceOf(alice) != aliceBefore+ab {
 		t.Fatal("the upheld bond returns whole, slash included")
+	}
+}
+
+// v0.40: the draw-proportional slash sizer — floor binds at low conviction, the
+// 1.6× draw arm binds when the winning pool's mid draw is large, and it reads
+// the answer side's pool.
+func TestSlashSizeForDrawProportional(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sd-alice")
+	c := testCourt(cur, "sd1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "sd1", "slash sizer")
+	cs := mustClaim(c, id)
+	cs.answer = sideYES
+	cs.xBarFrozen = 100_000_000 // 100 CC → flat floor 4.5 CC
+	flat := cs.xBarFrozen * slashXBps / 10000
+
+	// No conviction → floor binds.
+	if got := slashSizeFor(cs); got != flat {
+		t.Fatalf("floor must bind at zero conviction: got %d want %d", got, flat)
+	}
+	// midGross = 20 CC → draw arm 1.6×20 = 32 CC binds over the 4.5 CC floor.
+	cs.yesConvHi, cs.yesConvLo = convForCC(20_000_000)
+	if mg := convToCC(cs.yesConvHi, cs.yesConvLo); mg != 20_000_000 {
+		t.Fatalf("crafted midGross: got %d", mg)
+	}
+	want := int64(20_000_000) * slashDrawBps / 10000 // 32 CC
+	if got := slashSizeFor(cs); got != want || got <= flat {
+		t.Fatalf("draw arm must bind: got %d want %d (flat %d)", got, want, flat)
+	}
+	// The sizer does NOT clamp to the bond — the caller does. A huge pool
+	// returns a size far above a small bond (documents why the clamp exists).
+	cs.yesConvHi, cs.yesConvLo = convForCC(10_000_000_000) // 10k CC
+	if got := slashSizeFor(cs); got <= cs.xBarFrozen*answerBondBps/10000 {
+		t.Fatal("the sizer must return the unclamped draw size; the caller clamps to the bond")
+	}
+	// The NO-side answer reads the (empty) NO pool → floor.
+	cs.answer = sideNO
+	if got := slashSizeFor(cs); got != flat {
+		t.Fatal("a NO answer must read the NO pool, not the (large) YES pool")
+	}
+}
+
+// v0.40: at settle the retained reserve is the draw-proportional size (not the
+// flat floor) when the winning pool's draw is large — and it clamps to the bond.
+func TestSlashReserveDrawProportionalAtSettle(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sr-alice")
+	bob := testutils.TestAddress("sr-bob")
+	c := testCourt(cur, "sr1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "sr1", "draw-proportional settle reserve")
+	matureOI(cur, "sr1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "sr1", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "sr1", id, sideYES)
+	cs := mustClaim(c, id)
+	bond0 := cs.answerBond0
+	flat := cs.xBarFrozen * slashXBps / 10000
+
+	// Inject a winning-pool midGross of 0.2·X̄ (draw arm 0.32·X̄ — binds over the
+	// 0.045·X̄ floor, stays under the 0.5·X̄ bond, so no clamp).
+	cs.yesConvHi, cs.yesConvLo = convForCC(cs.xBarFrozen / 5)
+	want := slashSizeFor(cs)
+	if want <= flat {
+		t.Fatalf("draw arm must bind: want %d flat %d", want, flat)
+	}
+	if want >= bond0 {
+		t.Fatalf("this case must stay under the bond (no clamp): want %d bond0 %d", want, bond0)
+	}
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "sr1", id)
+	if cs.answerBond != want {
+		t.Fatalf("settle must retain the draw-proportional reserve: got %d want %d", cs.answerBond, want)
+	}
+	// The rest of the bond returned to the answerer.
+	if cs.answerBond >= bond0 {
+		t.Fatal("most of the bond should have returned; only the reserve is held")
 	}
 }

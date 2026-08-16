@@ -79,14 +79,15 @@ const (
 	compOwnX, compOfBurnBps = int64(2), int64(8000)
 
 	// Flag lane: bond = max(flagMinCC, 2%·X̄); doubling per SLOT to a frozen
-	// 4×; conclusive-low slash = 2.5%·X̄ of the answer bond, only at the
-	// supply-floored full bar on UNDISPUTED answers, escrowed one counter-flag
-	// window (v0.28–v0.31).
+	// 4×; conclusive-low slash = max(4.5%·X̄ floor, 1.6× the mill's would-be mid
+	// draw), only at the supply-floored full bar on UNDISPUTED answers, escrowed
+	// one counter-flag window (v0.28–v0.31; draw-proportional arm v0.40).
 	flagBondXBps    = int64(200)
 	flagMinCC       = int64(1_000_000) // 1 CC
 	flagFrozenMultX = int64(4)         // bond freezes at 4×b₀ = 8%·X̄ after 3 inconclusives
 	flagFreezeAfter = 3
-	slashXBps       = int64(450)  // 4.5%·X̄ answer-bond slash (whale-gated; retuned from 2.5% by the 20%-sizing vet to keep the mill-kill q at ~0.22 under the hotter rate; bounty 2% ≤ 80%×4.5% ✓)
+	slashXBps       = int64(450)   // 4.5%·X̄ answer-bond slash FLOOR (whale-gated; bounty 2% ≤ 80%×4.5% ✓)
+	slashDrawBps    = int64(16000) // v0.40: draw-proportional arm — slash ≥ 1.6× the winning-pool mid draw (midGross), so a patient mill's punishment tracks its take, not just X̄; floored by slashXBps, clamped to the bond. k=1.6 lands the 12-wk (dead-claim) mill q* on the ~0.22 target and flattens the hold-time curve (three-designer convergence, v0.40)
 	depositFeeBps   = int64(1000) // 10% of the deposit, conditionally refunded
 
 	// Answer priority (records.gno): difficulty-weighted net record ≥ 3 earns a
@@ -130,6 +131,19 @@ func mustInvariants() {
 	// mid-weight and senior — see emission.gno).
 	if splitWinners+splitAuthor+splitAnswerer != 93 {
 		panic("courtv2: the tier-scaled split must sum to 93 points")
+	}
+	// Draw-proportional slash stays bond-collateralizable (v0.40): at the
+	// hottest rate and the longest honest claim life the draw arm k·midGross
+	// must fit under the answer bond, else it silently degenerates to a flat
+	// bond-clamp (no longer tracking the take). maxMidGross/X̄ (in bps) =
+	// maxRateBpsFP × maxTcWeeks / 1e6, with maxRateBpsFP at the d_eff ceiling
+	// (= the start budget, since the schedule only steps down) and maxTcWeeks
+	// the dead-claim timeout. Derivation: midGross/X̄ = rateBpsFP·T_c/1e10.
+	maxRateBpsFP := 255 * (r0WeeklyBps*1_000_000 + budgetBpsFPStart) / 100
+	maxTcWeeks := deadClaimTimeout / periodBlocks
+	maxMidGrossBps := maxRateBpsFP * maxTcWeeks / 1_000_000
+	if slashDrawBps*maxMidGrossBps/10000 > answerBondBps {
+		panic("courtv2: the draw-proportional slash can exceed the answer bond at the hot-rate max — it would clamp to a flat bond instead of tracking the draw")
 	}
 }
 

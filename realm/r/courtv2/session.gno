@@ -40,13 +40,16 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 
 	// The bond returns — but a SLASH-SIZED reserve stays collateralized
 	// through the quality slot (audit M3-HIGH-1). A conclusive-low flag can
-	// still land after settle (flags run until crystallize), and its 4.5%·X̄
-	// slash is drawn from the answer bond; returning the whole bond here let
-	// the slash clamp to zero (votingBlocks > settleDelay, so the flag never
-	// resolved first). The reserve is disposed exactly once later: burned by a
-	// slash, or returned to the answerer at crystallize if no slash lands.
+	// still land after settle (flags run until crystallize), and its slash is
+	// drawn from the answer bond; returning the whole bond here let the slash
+	// clamp to zero (votingBlocks > settleDelay, so the flag never resolved
+	// first). The reserve is the draw-proportional slash size (v0.40) computed
+	// from the frozen conviction — identical to what ResolveFlag will draw, so
+	// the retained amount exactly covers it (no clamp-from-under-retention).
+	// Disposed exactly once later: burned by a slash, or returned to the
+	// answerer at crystallize if no slash lands.
 	if cs.answerBond > 0 {
-		reserve := cs.xBarFrozen * slashXBps / 10000
+		reserve := slashSizeFor(cs)
 		if reserve > cs.answerBond {
 			reserve = cs.answerBond
 		}
