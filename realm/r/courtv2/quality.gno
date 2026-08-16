@@ -87,8 +87,13 @@ func OpenFlag(cur realm, courtSlug string, claimID uint64) {
 	if cs.pendingSlash > 0 {
 		panic("courtv2: a slash is in its counter-flag window")
 	}
-	if cs.flagCycles >= int64(flagFreezeAfter) && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {
-		panic("courtv2: the frozen-bond flag cooldown has not passed")
+	// The re-flag cooldown applies after ANY inconclusive cycle, not only past
+	// the freeze (audit M3-MED-1): a dust-low flag chain (T1 full-return) could
+	// otherwise re-open back-to-back and block Crystallize for free forever.
+	// The 7-day cooldown exceeds the 24h Crystallize quiet window, so every
+	// inconclusive cycle leaves a ~6-day window in which the draw can settle.
+	if cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {
+		panic("courtv2: the flag cooldown after an inconclusive vote has not passed")
 	}
 	touch(c)
 
@@ -401,7 +406,7 @@ func FlagState(courtSlug string, claimID uint64) string {
 		return "counter-window"
 	case cs.slotConsumed:
 		return "consumed"
-	case cs.flagCycles >= int64(flagFreezeAfter) &&
+	case cs.flagCycles >= 1 &&
 		runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks:
 		return "cooldown"
 	default:
@@ -477,6 +482,9 @@ func ResolveCounter(cur realm, courtSlug string, claimID uint64) {
 	}
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
+	if cs.disputeOpen {
+		panic("courtv2: a dispute supersedes the slash; it decides the outcome")
+	}
 	if !cs.counterOpen {
 		panic("courtv2: no counter re-vote to resolve")
 	}

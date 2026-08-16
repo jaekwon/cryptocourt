@@ -100,10 +100,17 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 		panic("courtv2: the escrow window has passed; Finalize the verdict")
 	}
 	touch(c)
-	// A dispute outranks the quality lane: an open flag VOIDS (bond returned,
-	// slot unconsumed — the dispute's own tally carries quality), and a fresh
-	// ride tally opens with the round.
+	// A dispute outranks the quality lane (audit M3-LOW-1): an open flag VOIDS
+	// (bond returned, slot unconsumed — the dispute's own tally carries
+	// quality); a pending slash + its counter re-vote are SUPERSEDED — a
+	// disputed answer is never slashable (v0.28), so unslash refunds the
+	// reserve into the bond and closes the counter BEFORE the ride tally opens,
+	// so the reopen can never silently reset a live counter tally. A fresh ride
+	// tally then opens with the round.
 	voidFlag(c, cs)
+	if cs.pendingSlash > 0 {
+		unslash(c, cs)
+	}
 	openQualityTally(cs)
 
 	// Bond: min(20%·X̄frozen, 40% × the actual answer bond) — the v0.25 arm

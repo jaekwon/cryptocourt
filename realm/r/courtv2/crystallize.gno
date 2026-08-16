@@ -92,6 +92,15 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 		c.deposit -= cs.fee
 		cs.fee = 0
 	}
+
+	// The slash reserve retained at SettleUndisputed (M3-HIGH-1) returns to the
+	// answerer now if no conclusive-low slash consumed it. pendingSlash is 0
+	// here (the gate above refuses while a slash is in its counter window), so
+	// whatever remains in answerBond is un-slashed and owed back, exactly once.
+	if cs.answerBond > 0 {
+		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
+		cs.answerBond = 0
+	}
 }
 
 // WithdrawBonus pays a winning-side staker their accuracy reward: their share

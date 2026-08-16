@@ -131,7 +131,17 @@ func enqueueSenior(c *Court, to address, amount int64, purpose string) uint64 {
 	if amount <= 0 {
 		panic("courtv2: a senior entitlement must be positive")
 	}
-	e := &entitlement{to: to, amount: amount, start: c.reservedTail, purpose: purpose}
+	// The start cursor must clear BOTH the prior senior tail AND every junior
+	// draw already minted (audit M3-CRITICAL-1): juniors mint eagerly and
+	// occupy accrual at [reservedTail, reservedTail+juniorReserved), but
+	// reserveJunior does not advance reservedTail. A senior placed at the bare
+	// reservedTail would overlap that stretch and PullSenior would re-pay
+	// accrual the junior already minted, driving emittedTotal past cumAccrual
+	// and breaking the ceiling. Placing it past juniorReserved keeps the whole
+	// number line disjoint: seniors and juniors tile [0, reservedTail+juniorReserved)
+	// without overlap. (Pre-crystallize, juniorReserved==0 → unchanged.)
+	start := mustAdd(c.reservedTail, c.juniorReserved)
+	e := &entitlement{to: to, amount: amount, start: start, purpose: purpose}
 	c.reservedTail = mustAdd(c.reservedTail, amount)
 	c.seniorOwed = mustAdd(c.seniorOwed, amount)
 	c.queueSeq++

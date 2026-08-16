@@ -39,8 +39,12 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 	if !Settled("se1", id) || Verdict("se1", id) != sideYES || VerdictRoute("se1", id) != "undisputed" {
 		t.Fatal("the verdict must record with its route")
 	}
-	if c.coin.BalanceOf(alice) != beforeBond+bond {
-		t.Fatal("the bond returns to the answerer")
+	// Settle returns the bond MINUS a slash-sized reserve held through the
+	// quality slot (M3-HIGH-1); the reserve returns at crystallize if unslashed.
+	reserve := XBarFrozen("se1", id) * slashXBps / 10000
+	if c.coin.BalanceOf(alice) != beforeBond+bond-reserve {
+		t.Fatalf("settle returns bond minus the slash reserve: got %d want %d",
+			c.coin.BalanceOf(alice)-beforeBond, bond-reserve)
 	}
 	// Double settle refused; bond cannot double-return.
 	testing.SetRealm(testing.NewUserRealm(bob))
@@ -62,11 +66,12 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "nothing staked", func() {
 		WithdrawStake(cross(cur), "se1", id, sideNO)
 	})
-	// Escrow now holds only the claim's deposit+fee (the finalize flow owns
-	// their disposition) — every stake and the bond are out.
+	// Escrow now holds the claim's deposit+fee AND the retained slash reserve
+	// (crystallize owns their disposition) — every stake and the freed bond
+	// are out.
 	dep := c.params.minClaimDepositCC
-	if got := c.coin.BalanceOf(c.escrow); got != dep+dep*depositFeeBps/10000 {
-		t.Fatalf("escrow must drain to deposit+fee: %d", got)
+	if got := c.coin.BalanceOf(c.escrow); got != dep+dep*depositFeeBps/10000+reserve {
+		t.Fatalf("escrow must drain to deposit+fee+reserve: %d", got)
 	}
 	// Conviction survives withdrawal (the reward draws read it later).
 	if ConvictionOf("se1", id, sideYES, alice) <= 0 {

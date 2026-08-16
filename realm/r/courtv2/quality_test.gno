@@ -60,15 +60,26 @@ func TestFlagInconclusiveReopensAndDoubles(cur realm, t *testing.T) {
 
 	testing.SkipHeights(c.params.votingBlocks + 1)
 	ResolveFlag(cross(cur), "qf1", id)
-	// T1: inconclusive-LOW returns the bond IN FULL; the slot reopens ×2.
+	// T1: inconclusive-LOW returns the bond IN FULL; the slot reopens ×2 but
+	// enters a cooldown first (M3-MED-1: back-to-back dust-low re-flags would
+	// otherwise block Crystallize for free).
 	if c.coin.BalanceOf(bob) != bobBefore {
 		t.Fatal("inconclusive-low must return the whole bond (T1)")
 	}
-	if FlagCycles("qf1", id) != 1 || FlagState("qf1", id) != "open" {
-		t.Fatal("the slot must reopen with a counted cycle")
+	if FlagCycles("qf1", id) != 1 || FlagState("qf1", id) != "cooldown" {
+		t.Fatalf("the slot reopens with a counted cycle, in cooldown: %s", FlagState("qf1", id))
 	}
 	if FlagBondNext("qf1", id) != 2*b0 {
 		t.Fatalf("the reopened bond doubles: %d", FlagBondNext("qf1", id))
+	}
+	// Re-flag refused during the cooldown; allowed once it lapses.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "cooldown after an inconclusive", func() {
+		OpenFlag(cross(cur), "qf1", id)
+	})
+	testing.SkipHeights(flagCooldownBlocks + 1)
+	if FlagState("qf1", id) != "open" {
+		t.Fatal("the slot re-opens after the cooldown lapses")
 	}
 }
 

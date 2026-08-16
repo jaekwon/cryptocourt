@@ -38,12 +38,22 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 		cs.tier = tierMidX // the undisputed default; the flag lane may re-vote it
 	}
 
-	// The bond returns exactly once — and is zeroed so nothing later (a
-	// quality flag, a slash path) can double-dispose it. The >0 guard also
-	// avoids grc20votes' non-positive-transfer panic (the V1 lesson).
+	// The bond returns — but a SLASH-SIZED reserve stays collateralized
+	// through the quality slot (audit M3-HIGH-1). A conclusive-low flag can
+	// still land after settle (flags run until crystallize), and its 4.5%·X̄
+	// slash is drawn from the answer bond; returning the whole bond here let
+	// the slash clamp to zero (votingBlocks > settleDelay, so the flag never
+	// resolved first). The reserve is disposed exactly once later: burned by a
+	// slash, or returned to the answerer at crystallize if no slash lands.
 	if cs.answerBond > 0 {
-		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
-		cs.answerBond = 0
+		reserve := cs.xBarFrozen * slashXBps / 10000
+		if reserve > cs.answerBond {
+			reserve = cs.answerBond
+		}
+		if refund := cs.answerBond - reserve; refund > 0 {
+			c.coin.Transfer(c.escrow, cs.answerer, refund)
+		}
+		cs.answerBond = reserve
 	}
 	releasePriority(c, cs.answerer, claimID)
 }
