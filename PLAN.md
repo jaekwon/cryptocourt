@@ -86,7 +86,7 @@ unchanged from V1.
 
 ## 3. Mechanics
 
-### 3.1 Claim lifecycle — `VETTING`
+### 3.1 Claim lifecycle — `VETTED (econ, mech); 2A pending on Finalize gating`
 
 1. **Open.** Author posts a falsifiable factual claim + evidence, escrows the CC
    deposit (refundable; never zero).
@@ -144,7 +144,7 @@ Exact semantics (per the econ vet):
 - Bonus caps use **time-averaged stake** (`conviction / claim-open-hours`) as
   the base, never stake-at-freeze, which a 1-block flash could inflate.
 
-### 3.3 Emission — **reservoir drip, rate-based** — `REVISED (post econ vet); follow-up vet running`
+### 3.3 Emission — **reservoir drip, rate-based** — `VETTED (reservoir vet: KEEP w/ tweaks, adopted v0.11)`
 
 Adopted the §8.7 reservoir over per-period pro-rata. Deciding argument, from the
 econ vet's own F5 equilibrium math: pro-rata reaches farming-break-even *by
@@ -223,7 +223,7 @@ denominator exists to time or to hold hostage.
   cannot be griefed for free (and the grace-gate above removes the third-party
   variant).
 
-### 3.4 Resolution: verdict + quality — `VETTING`
+### 3.4 Resolution: verdict + quality — `VETTED ×3 (econ F1–F3, reservoir F-R2, mech R1–R4); 2A pending on the reopen chain`
 
 - **Verdict**: unchanged binary machine. Winners = stakers on the side matching
   the final verdict.
@@ -316,7 +316,7 @@ denominator exists to time or to hold hostage.
   close and never rendered before it (sealed, like the verdict tally). No new
   governor lane, no /p/ change.
 
-### 3.5 Reward split — `VETTING`
+### 3.5 Reward split — `VETTED ×2 (econ F1/F2/F8, legal #4)`
 
 Per claim, drawn from the reservoir (§3.3) at settlement:
 
@@ -373,7 +373,7 @@ voter slice:   TIER-INVARIANT — computed at mid-weight and paid even when the
   category, W.S. 17-32-104(c)(i)); the emission step-down is public-copy
   language for what the math calls halving.
 
-### 3.6 Bonds and deposits — `DRAFT`
+### 3.6 Bonds and deposits — `REVISED v0.11 (forfeitures burn); 2A pending on comp EV`
 
 Answer bonds and dispute bonds stay forfeitable exactly as V1 (bond doubling is
 what makes the adjudication game honest; without loss, wrong answers are free).
@@ -446,7 +446,7 @@ answer game in a way it no longer is for staking (stakers are many per side;
 answerers are one per claim). Recorded here so the next reader doesn't re-derive
 it; the legal exposure of retaining forfeiture stays in §7.2 as accepted.
 
-### 3.7 GNOT: burn — **the call** — `VETTING`
+### 3.7 GNOT: burn — **the call** — `VETTED (legal #3: confirmed, under-argued upside)`
 
 GNOT paid into the curve is **burned** (sent to an unrecoverable sink), not pooled.
 Considered and rejected: a GNOT work-pool paying moderators/authors.
@@ -849,26 +849,6 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
    prose corrections F-R6/F-R4; the p-exclusion owned in §6). The
    accrual-interval queue is the recorded upgrade path if scarcity turns
    chronic anyway.
-10. **Severable securities lever (legal vet #2)**: time-vest transfers of
-   *reward-earned* CC only (in-protocol use immediate; transferable after N
-   months or one full participation cycle). Purchased CC stays liquid, so
-   Buy's consumption story is untouched. The single highest-leverage
-   securities hardening short of the full transferability off-switch. OPEN —
-   owner's product call; default OFF at launch.
-8. ~~minAnswerX re-derivation~~ — RESOLVED (v0.13, provisional pending round-2
-   vet): **minAnswerX = 100 CC** of trailing total stake. The three-way sizing:
-   (a) *answerability floor* — 100 CC of sustained third-party interest is a
-   real bar for a thin honest claim but not a wall (one interested staker
-   clears it); (b) *bond base* — the minimum answer bond becomes 50 CC, large
-   enough that a wrong answer at minimum scale risks 50× the claim fee; (c)
-   *mill floor* — a minimum-scale mill must self-stake ≥100 CC for ≥ the
-   trailing window to even answer, making its maximum 12-week draw (~10 CC at
-   the schedule rate) comparable to its at-risk deposit + fee + flag exposure —
-   thin mills are noise, not profit. The minimum flag bond at this scale is
-   2 CC (2%·X̄), consistent with spam-pricing. All three constants move
-   together or the deploy invariants complain (§3.6 coupling).
-9. **v0.8 answerer-cap refinement** (bond-based, not stake-based — §3.5) rides
-   the next vet round alongside 8.
 4. ~~Bond-forfeiture fallback~~ — RESOLVED (rejected; §3.6: time-lock-only bonds
    invite first-answerer squatting/DoS; forfeiture is load-bearing for the
    one-per-claim answer slot). Legal color still pending from the legal vet.
@@ -907,6 +887,26 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
      conviction*, so a griefer cannot burn the reservoir for free. `VETTING
      (pending econ vet)`.
 
+8. ~~minAnswerX re-derivation~~ — RESOLVED (v0.13, provisional pending round-2
+   vet): **minAnswerX = 100 CC** of trailing total stake. The three-way sizing:
+   (a) *answerability floor* — 100 CC of sustained third-party interest is a
+   real bar for a thin honest claim but not a wall (one interested staker
+   clears it); (b) *bond base* — the minimum answer bond becomes 50 CC, large
+   enough that a wrong answer at minimum scale risks 50× the claim fee; (c)
+   *mill floor* — a minimum-scale mill must self-stake ≥100 CC for ≥ the
+   trailing window to even answer, making its maximum 12-week draw (~10 CC at
+   the schedule rate) comparable to its at-risk deposit + fee + flag exposure —
+   thin mills are noise, not profit. The minimum flag bond at this scale is
+   2 CC (2%·X̄), consistent with spam-pricing. All three constants move
+   together or the deploy invariants complain (§3.6 coupling).
+9. **v0.8 answerer-cap refinement** (bond-based, not stake-based — §3.5) rides
+   the next vet round alongside 8.
+10. **Severable securities lever (legal vet #2)**: time-vest transfers of
+   *reward-earned* CC only (in-protocol use immediate; transferable after N
+   months or one full participation cycle). Purchased CC stays liquid, so
+   Buy's consumption story is untouched. The single highest-leverage
+   securities hardening short of the full transferability off-switch. OPEN —
+   owner's product call; default OFF at launch.
 ## 10. Implementation & verification plan
 
 - **No migration problem exists**: V1 never launched; V2 is the launch target.
@@ -1085,7 +1085,7 @@ capital against 2× lock costs — negative, as designed.
   tier-invariant; quality = the dispute vote's 3-bucket outcome under the
   ⅔-for-high gate.
 
-## 9. Changelog
+## 13. Changelog
 
 Newest first.
 
