@@ -1505,7 +1505,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 26 | d_eff pricing (v0.33, FIXED in code) | rate prices min(budget ceiling, realized-EMA dilution) | Budget-d alone = riskless farming below ~18% participation (both v0.32 audits, convergent) |
 | 27 | Headroom amendment (v0.33) | ≥10% actual (10.8%) under the 20% ceiling with curveCap = half | Alternative: curveCap = 0.44× restores ≥20%; owner may prefer it |
 | 28 | Slash size (v0.33) | 4.5%·X̄ (was 2.5%) — mill-kill q ≈ 0.22 at the hot rate | 2.5% drifts the kill bar to ~0.30 at 20%; bounty ≤ 80%×burns holds at both |
-| 28b | **Draw-proportional slash (V3 frontier, econ-vet P7 v0.39)** | NOT adopted — registered follow-up: make the anti-mill punishment scale with the crystallized draw D or claim age (e.g. `slash = max(4.5%·X̄, k%·D)`) so a patient/idle-capital mill's deterrent tracks its take | The X̄-scaled slash + fixed deposit can't track a hold-time-scaled draw; closes the patient-mill absolute-EV gap (q\* 0.45→~0.22) that no minAnswerX/deposit value fixes without a wall. Needs its own vet |
+| 28b | **Draw-proportional slash — ADOPTED v0.40** (three-designer convergence + code-audit) | `slash = min(bond, max(4.5%·X̄ floor, 1.6·midGross))`, midGross = winning-pool mid draw (the mill's would-be take). Drags the patient 12-wk mill q\* 0.45→0.22 and flattens the hold-time curve; floor keeps the fast-claim deterrent; clamped to the bond (invariant guarantees the draw arm fits at the hot-rate max) | Residual: idle-capital q\* floors at ~0.27 — the answer-bond ceiling structurally caps idle-capital deterrence (V3 weight-at-risk frontier); a bigger k would just permanently clamp |
 | 37 | **deposit / fee (econ-vet P7 v0.39)** | **1 CC / 0.1 CC — no change.** Owner-available lever: 1→5 CC drops typical q\* 0.22→0.15, patient 0.45→0.37, honest-claim-safe (refunded on default-mid) | Not applied: it taxes honest thin-claim openers to chase a mill that is economically the intended p=1 reward, and can't close the patient gap without an ~18 CC wall. Pull it if tighter absolute-EV margins are wanted pre-launch |
 | 29 | Answer-bond custody (v0.35) | Bond stays escrowed through UPHELD rounds, returning only at VERDICT_FINAL — reopens stay collateralized; comp arms read the posted magnitude | V1's return-at-each-decision frees honest capital ~1–3wk sooner but leaves reopen rounds with nothing at stake (comp anchor = 0) |
 | 30 | provClose reachability (v0.35) | Kept V1's window geometry: with 1-week votes, 3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds and Finalize the defaulted verdict | Stretching small-claim escrows to fit round 3 delays every honest small claim ~2 extra weeks to serve a rare griefing path |
@@ -1610,6 +1610,24 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.40 — draw-proportional anti-mill slash (owner-directed, three-designer
+  convergence).** The P7 residual — a patient/idle-capital mill's punishment
+  didn't track its hold-time-scaled draw — is now closed on the reachable
+  (design-carry) axis. Three independent designers converged on
+  `slash = min(bond, max(4.5%·X̄, k·midGross))`, k=1.6, where midGross =
+  convToCC(winning=answer-side pool conviction) — the mill's counterfactual
+  mid-tier take (the realized draw is 0 on a conclusive-low since tier→0, so
+  the deterrent scales with the FORGONE draw). Computed from frozen conviction
+  so the settle-time reserve and the flag-resolve slash are identical by
+  construction; clamped to the posted bond; a new deploy invariant proves the
+  draw arm fits under the bond at the hot-rate 12-week max (3083 ≤ 5000 bps).
+  Effect: patient 12-wk mill q* 0.45→0.22, the whole hold-time curve flattened;
+  fast claims unchanged (floor binds); A19 bounty still own-bond-capped;
+  honest claims and the slashGrade trigger untouched. Owner DECLINED the
+  reward-vesting transferability lever (§12 row 5, same session). Accepted
+  residual: idle-capital q* floors at ~0.27 (answer-bond ceiling — V3
+  weight-at-risk frontier, not closable by a bigger k). Adversarial
+  code-review of the diff running.
 - **v0.39 — P7 economic question RESOLVED (econ-vet); V2 economically closed.**
   The last open economic pin — does the 20% hot rate make the author-mill
   profitable? — got a dedicated econ-vet. Verdict: the mill's **edge over
