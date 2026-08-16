@@ -54,6 +54,16 @@ type claimState struct {
 	answerer     address
 	answerBond   int64
 	answerHeight int64
+
+	// VERDICT_FINAL (P4): set by SettleUndisputed or the dispute machine.
+	verdictAt int64  // 0 = no verdict yet
+	route     string // "undisputed" | "vote"
+	// Quality (quality.gno finalizes; mid is the undisputed default).
+	tier      int64
+	tierFinal bool
+	// Dispute machine markers (dispute.gno).
+	disputeOpen bool
+	round       int
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's
