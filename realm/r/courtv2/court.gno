@@ -209,21 +209,26 @@ type Court struct {
 	params  Params
 	deposit int64 // sum of escrowed deposits+fees, for the conservation checks
 
-	// Emission state (emission.gno): the reservoir, the accrual clock, the
-	// step-down position, and the senior entitlement queue.
-	reservoir      int64 // accrued, undrawn budget (main R)
-	curBudgetBpsFP int64 // this period's budget CEILING, bps × 1e6 (stepped down lazily)
-	dEffBpsFP      int64 // this period's effective d: min(ceiling, realized EMA) — audit-15 P1
-	emaMinted      int64 // 4-period EMA of minted-per-period (realized dilution)
-	emittedAtRoll  int64 // emittedTotal at the last period roll
-	lastAccrual  int64  // height of the last accrual tick
-	periodIndex  int64  // completed periods since court creation (step-down n)
-	createdAt    int64  // height at StartCourt
-	seniorOwed   int64  // total senior entitlements not yet paid (queue mass)
-	seniorPaid   int64  // total senior entitlements paid out
-	emittedTotal int64  // every CC this court ever minted via emission
-	queue        *bptree.BPTree // entitlement seq (be64) -> *entitlement
-	queueSeq     uint64
+	// Emission state (emission.gno): one cumulative-accrual line carries both
+	// lanes — seniors reserve intervals on it, juniors draw what lies past the
+	// senior tail (P5).
+	cumAccrual      int64 // total budget ever accrued (monotone)
+	accrualRem      int64 // carried remainder, units of 1/periodBlocks (P10)
+	curPeriodBudget int64 // this period's B = S_live × bps at the last roll
+	curBudgetBpsFP  int64 // budget CEILING, bps × 1e6 (stepped down at rolls)
+	dEffBpsFP       int64 // effective d: min(ceiling, realized EMA) — audit-15 P1
+	emaMinted       int64 // 4-period EMA of minted-per-period
+	emittedAtRoll   int64 // emittedTotal at the last roll
+	lastAccrual     int64 // height the accrual walk has reached
+	periodIndex     int64 // completed periods (step-down n)
+	createdAt       int64 // height at StartCourt
+	reservedTail    int64 // Σ senior amounts ever enqueued (interval tail)
+	juniorReserved  int64 // Σ junior reservations (crystallized draws)
+	seniorOwed      int64 // enqueued − paid
+	seniorPaid      int64
+	emittedTotal    int64          // every CC ever minted via emission
+	queue           *bptree.BPTree // entitlement seq (be64) -> *entitlement
+	queueSeq        uint64
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.

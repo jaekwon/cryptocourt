@@ -34,37 +34,6 @@ type stakePos struct {
 	lastUpdate int64  // height of the last accrual
 }
 
-// rollPeriods lazily advances the court's emission period: steps the cached
-// budget ceiling down, and re-prices d_eff from REALIZED dilution (audit-15 P1
-// + the 20%-sizing econ vet, convergent): pricing carry off the budget-d
-// constant would overpay whenever participation is thin (rate > true y* →
-// riskless matched farming, A1/A2 reopened). d_eff = min(budget ceiling, a
-// 4-period EMA of actually-minted / live supply) — the rate starts at the
-// pure-r floor and RISES with real participation; pumping minted requires
-// winning conviction at the low rate, so every manipulation stays self-costly.
-func rollPeriods(c *Court) {
-	now := runtime.ChainHeight()
-	for c.createdAt+(c.periodIndex+1)*periodBlocks <= now {
-		c.periodIndex++
-		c.curBudgetBpsFP = c.curBudgetBpsFP * stepDownNum / stepDownDen
-		minted := c.emittedTotal - c.emittedAtRoll
-		c.emittedAtRoll = c.emittedTotal
-		c.emaMinted = (3*c.emaMinted + minted) / 4
-		s := c.coin.TotalSupply()
-		if s > 0 {
-			// realized d in bps × 1e6: minted/supply per period.
-			dReal := int64(uint64(c.emaMinted) * 10_000 * 1_000_000 / uint64(s))
-			if dReal < c.curBudgetBpsFP {
-				c.dEffBpsFP = dReal
-			} else {
-				c.dEffBpsFP = c.curBudgetBpsFP
-			}
-		} else {
-			c.dEffBpsFP = 0
-		}
-	}
-}
-
 // rateBpsFP is the current published rate in bps × 1e6 per week:
 // rate = 0.85 × y*, y* = 2(r₀ + d_eff)·T_L/T_c with T_L/T_c = 1.5 → 2.55(r₀ + d_eff).
 func rateBpsFP(c *Court) int64 {
@@ -124,7 +93,7 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	if cs.frozenAt != 0 {
 		panic("courtv2: staking is frozen — this claim has an answer")
 	}
-	rollPeriods(c)
+	touch(c)
 
 	c.coin.Transfer(who, c.escrow, amount)
 	p := getPos(cs, who, side)
@@ -155,7 +124,7 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 	if cs.frozenAt != 0 {
 		panic("courtv2: stakes are frozen — withdraw at settlement (principal is never withheld)")
 	}
-	rollPeriods(c)
+	touch(c)
 
 	p := getPos(cs, who, side)
 	if p.stake < amount {
