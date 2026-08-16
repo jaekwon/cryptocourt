@@ -86,7 +86,7 @@ const (
 	flagMinCC       = int64(1_000_000) // 1 CC
 	flagFrozenMultX = int64(4)         // bond freezes at 4×b₀ = 8%·X̄ after 3 inconclusives
 	flagFreezeAfter = 3
-	slashXBps       = int64(250)  // 2.5%·X̄ answer-bond slash (whale-gated)
+	slashXBps       = int64(450)  // 4.5%·X̄ answer-bond slash (whale-gated; retuned from 2.5% by the 20%-sizing vet to keep the mill-kill q at ~0.22 under the hotter rate; bounty 2% ≤ 80%×4.5% ✓)
 	depositFeeBps   = int64(1000) // 10% of the deposit, conditionally refunded
 
 	// Answer priority (records.gno): difficulty-weighted net record ≥ 3 earns a
@@ -211,7 +211,11 @@ type Court struct {
 
 	// Emission state (emission.gno): the reservoir, the accrual clock, the
 	// step-down position, and the senior entitlement queue.
-	reservoir    int64  // accrued, undrawn budget (main R)
+	reservoir      int64 // accrued, undrawn budget (main R)
+	curBudgetBpsFP int64 // this period's budget CEILING, bps × 1e6 (stepped down lazily)
+	dEffBpsFP      int64 // this period's effective d: min(ceiling, realized EMA) — audit-15 P1
+	emaMinted      int64 // 4-period EMA of minted-per-period (realized dilution)
+	emittedAtRoll  int64 // emittedTotal at the last period roll
 	lastAccrual  int64  // height of the last accrual tick
 	periodIndex  int64  // completed periods since court creation (step-down n)
 	createdAt    int64  // height at StartCourt
@@ -251,7 +255,8 @@ func StartCourt(cur realm, slug, name string) string {
 		claims:    bptree.NewBPTree32(),
 		queue:     bptree.NewBPTree32(),
 		params:    defaultParams().mustSane(),
-		createdAt: runtime.ChainHeight(),
+		createdAt:      runtime.ChainHeight(),
+		curBudgetBpsFP: budgetBpsFPStart,
 	}
 	c.lastAccrual = c.createdAt
 	c.gov.Adopt(disputeKind{}, disputeRules(c.params))
