@@ -19,7 +19,18 @@
 package courtv2
 
 import (
+	"chain"
 	"chain/runtime"
+	"strconv"
+)
+
+// Senior-lane events (§11 legibility): a client indexes these to build a
+// per-address "what am I owed / when do I get paid" view WITHOUT any on-chain
+// walk of the queue (which would reintroduce the audit-N3 gas problem). Emits
+// carry no authority and cannot move funds — they mirror state already written.
+const (
+	seniorEnqueuedEvent = "SeniorEnqueued"
+	seniorPaidEvent     = "SeniorPaid"
 )
 
 // entitlement is one senior claim on future accrual.
@@ -146,6 +157,13 @@ func enqueueSenior(c *Court, to address, amount int64, purpose string) uint64 {
 	c.seniorOwed = mustAdd(c.seniorOwed, amount)
 	c.queueSeq++
 	c.queue.Set(beClaimKey(c.queueSeq), e)
+	chain.Emit(seniorEnqueuedEvent,
+		"court", c.id,
+		"seq", strconv.FormatUint(c.queueSeq, 10),
+		"to", to.String(),
+		"amount", strconv.FormatInt(amount, 10),
+		"purpose", purpose,
+	)
 	return c.queueSeq
 }
 
@@ -200,6 +218,13 @@ func PullSenior(cur realm, courtSlug string, seq uint64) int64 {
 	c.seniorOwed -= pay
 	c.seniorPaid = mustAdd(c.seniorPaid, pay)
 	mintEmission(c, e.to, pay)
+	chain.Emit(seniorPaidEvent,
+		"court", c.id,
+		"seq", strconv.FormatUint(seq, 10),
+		"to", e.to.String(),
+		"paid", strconv.FormatInt(pay, 10),
+		"remaining", strconv.FormatInt(e.amount-e.paid, 10),
+	)
 	return pay
 }
 
