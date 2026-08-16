@@ -1028,8 +1028,10 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
    thin mills are noise, not profit. The minimum flag bond at this scale is
    2 CC (2%·X̄), consistent with spam-pricing. All three constants move
    together or the deploy invariants complain (§3.6 coupling).
-9. **v0.8 answerer-cap refinement** (bond-based, not stake-based — §3.5) rides
-   the next vet round alongside 8.
+9. ~~v0.8 answerer-cap refinement~~ — RESOLVED: the bond-based cap was
+   validated by 2B's role audit (a stake-based cap would zero the natural
+   non-staking answerer — 2B: "stale stake-cap would have zeroed it") and is
+   exercised in Appendix B.
 10. **Severable securities lever (legal vet #2)**: time-vest transfers of
    *reward-earned* CC only (in-protocol use immediate; transferable after N
    months or one full participation cycle). Purchased CC stays liquid, so
