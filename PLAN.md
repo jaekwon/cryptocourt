@@ -1232,8 +1232,9 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
    *reward-earned* CC only (in-protocol use immediate; transferable after N
    months or one full participation cycle). Purchased CC stays liquid, so
    Buy's consumption story is untouched. The single highest-leverage
-   securities hardening short of the full transferability off-switch. OPEN —
-   owner's product call; default OFF at launch.
+   securities hardening short of the full transferability off-switch.
+   **DECLINED by owner (2026-08-16)** — not built, not a launch toggle; all CC
+   (earned or purchased) stays immediately transferable. Recorded closed.
 ## 10. Implementation & verification plan
 
 - **STATUS (v0.37): BUILT.** All 13 modules exist on branch `courtv2`, V1
@@ -1480,7 +1481,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 2 | Emission model | **Reservoir drip** over pro-rata (§3.3, vetted KEEP) | Pro-rata + F11 fix works but pays farmers to equilibrium and re-couples payouts |
 | 3 | Rate | **Frozen schedule 0.85·y*(n)** (§3.3) | Scalar self-defeats by schedule (A14); richer rate re-admits farming; leaner excludes more honest mid-p |
 | 4 | Voting discipline | **Carrot-only, no slashing** (§3.5, your lean) | Slashing hardens against large-value bribery; costs honest-minority chill |
-| 5 | CC transferability | **ON**; reward-vesting lever OFF (§7.2, §8.10) | Vesting = the cheapest big securities cut; OFF-entirely kills OTC + product |
+| 5 | CC transferability | **ON**; reward-vesting lever **DECLINED by owner (2026-08-16)** — all CC stays immediately transferable, no vesting toggle | Vesting was the cheapest securities cut but owner rejected it; OFF-entirely kills OTC + product |
 | 6 | Bonds | **Forfeitable; burn-not-transfer** (§3.6) | Time-lock-only invites answer-slot squatting DoS |
 | 7 | Undisputed quality default | **Mid + flag lane** (§3.4) | Low punishes the healthy path; high is free money |
 | 8 | Tier gates | **Median mid↔low; ⅔+bar for high** (§3.4) | Symmetric median is whale-capturable at ~29% turnout |
