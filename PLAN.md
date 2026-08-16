@@ -1485,6 +1485,25 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.34** — (implementation iterations 2–5) **the money core is built and
+  its milestone-1 audit is ingested (FIX-FIRST → fixed)**: emission.gno (the
+  P5 senior queue verbatim, exact-remainder accrual, R_max pause,
+  permissionless pulls), buy.gno (GNOT burned to a provably keyless sink —
+  courtv2's own never-created sub-realm identity; V1's payment posture
+  unchanged), records.gno (P13 credential: contested-wins-only, overturn
+  resets, cold-start gate, one-active bracket), render.gno (three series, no
+  backing, sanitized). Audit findings: **C1 CRITICAL** — the naive uint64
+  budget product wrapped at ~485k CC of supply (34× under-budget at 1M CC;
+  the V1 wrap class; unit tests had only 10k-CC magnitudes) → mulDiv128
+  everywhere + curve-cap-scale regression tests; **H1 HIGH** — conviction was
+  not actually rate-weighted (whole idle Δt priced at rate(now), retroactive
+  repricing across rolls, frozen conviction revalued) → the audit's ERA
+  INTEGRAL adopted (court-level Σ rate×blocks per segment; positions settle
+  stake×Δacc; freeze pins the integral — immutable by construction). The
+  feared idle-position accrual panic was formally disproved (~330M years).
+  M1 (R_max segment granularity) documented as accepted. Verified clean:
+  escrow conservation, senior/junior conservation, exactly-once, auth on all
+  seven mutators, no /p/ escapes, no gas bombs.
 - **v0.33** — (implementation iteration 1) **both v0.32 audits landed,
   convergent on a CRITICAL: budget-d unmoored the rate from realized carry**
   (riskless matched farming below ~18% participation — A1/A2 reopened by the
