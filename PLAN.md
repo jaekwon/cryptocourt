@@ -29,6 +29,35 @@ share ledger, and price TWAP all become unnecessary and are removed. The product
 the **verdict, the calibrated probability signal (the stake ratio), and the public
 record** — CC is the internal participation economy that meters and rewards it.
 
+## 1a. The design at a glance (v0.13 shape — ten invariant bullets)
+
+1. **Stake, don't bet**: back YES or NO with CC; **losers always withdraw 1×**;
+   principal is never at risk on any outcome.
+2. **Conviction pays**: rewards weight by ∫stake·dt on the winning side —
+   early, sustained, correct positions earn most; last-second capital earns ~0.
+3. **Emission, not extraction**: winners are paid by new issuance from a
+   reservoir accruing on a deploy-frozen, stepped-down **rate schedule**
+   (`rate_n = 0.85·y*(n)`) sized so matched-stake farming never enters; total
+   emission is finite and invariant-checked against the supply ceiling.
+4. **Quality gates value**: low 0× / mid 1× / high 2×; high needs ⅔ + full-bar
+   turnout; anyone can flag a claim into a quality vote (slot reopens if the
+   vote is inconclusive); junk pays nobody.
+5. **The verdict machine is V1's, untouched**: answer bond → 72h → dispute →
+   sealed 7-day votes → escrow windows → 3-round close. Verdict security
+   *improved*: a flipped verdict no longer moves any staker principal.
+6. **Forfeitures burn; compensation mints**: every bond/deposit forfeiture is
+   burned; every prevailing-party compensation is a capped emission slice — no
+   value ever moves between adversaries on any outcome.
+7. **GNOT is burned at Buy**: one-way curve in, nothing ever out; no treasury,
+   no backing, no redemption — CC is participation, not a claim on assets.
+8. **Reputation is earned, not bought**: a non-transferable, difficulty-
+   weighted answer record gates a 24h priority window on the answer slot;
+   lying burns the credential.
+9. **Every number is a formula**: no discretionary payment votes, no runtime
+   knobs, frozen constants + deploy-checked invariants (nine and counting).
+10. **The product is the record**: the claim page — three ratio series, the
+    verdict, its route, its quality tier — reproducible from public reads.
+
 ## 2. Diff from V1
 
 | | V1 | V2 |
@@ -873,6 +902,26 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   audit loop to convergence that V1 got. Done means: full sweep, zero findings,
   `make check` + txtar green.
 
+## 11. Product surface — the V1 wireframe under V2 (v0.14)
+
+The V1 web overlay (10 screens, previously reconciled to V1 code) changes
+shape: the order book is gone, so the trading screens become staking screens.
+Delta map for whoever revises `web/index.html`:
+
+| V1 screen | V2 change |
+|---|---|
+| Directory / a court | Keep; **delete the backing stat** (§3.8 pass-2); curve price + supply + total staked |
+| Claim + market (order book, best bid/ask) | **Becomes the stake panel**: YES/NO pools, three ratio series (§3.9), stake/unstake, conviction preview ("your stake × time so far") |
+| Order ticket (RestBid/Take) | **Deleted** — replaced by a two-button stake ticket with the freeze warning ("staking locks at the answer") |
+| Answer flow | Keep bond math display; add the 24h priority-window badge and the answerer's difficulty-weighted record |
+| Dispute / vote | Keep sealed-tally rules; add the quality question (low/mid/high) and the ⅔-for-high note |
+| NEW: flag control | One button + bond quote on every answered-unsettled claim; shows the 24h flag-open window countdown and slot state (open / pending vote / consumed / reopened) |
+| Your page | Positions become stakes + accrued conviction + pull-claims (accuracy rewards, comps, bounty); show the record (stood-contested / overturned) |
+| Chain render | The claim page is the product (§3.9); every figure reproducible from public reads |
+
+UX copy rules carried from §7.4: no APR/return language, "accuracy rewards"
+not multipliers, "step-down" not halving, never "backing"/"redeem"/"cash out".
+
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
 File-by-file disposition of the audited V1 realm, with the load-bearing couplings
@@ -962,6 +1011,11 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.14** — (iteration 10, round-2 vet pending) added §1a "the design at a
+  glance" (ten invariant bullets — the doc's top now reflects the v0.13 shape
+  without reading the changelog) and §11 product-surface delta map (the V1
+  wireframe under V2: order-book screens become the stake panel, the new flag
+  control, record badges, pull-claims; UX copy rules consolidated).
 - **v0.13** — (iteration 9, round-2 vet pending) resolved §8.8: **minAnswerX =
   100 CC** with the three-way sizing (answerability floor / bond base 50 CC /
   mill floor making thin mills noise). Refreshed §10 for the v0.10–v0.12
