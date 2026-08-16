@@ -33,9 +33,12 @@ type claimState struct {
 	yesStake, noStake int64
 	stakers           *bptree.BPTree // addr|side -> *stakePos
 	// Per-side lifetime conviction (rate-weighted, u128) — the reward
-	// denominators and the manipulation-resistant lifetime ratio (§3.9).
+	// denominators and the manipulation-resistant lifetime ratio (§3.9) —
+	// and the raw ∫stake·dt pools (the Q7 cap bases), both freeze-capped.
 	yesConvHi, yesConvLo uint64
 	noConvHi, noConvLo   uint64
+	yesRawHi, yesRawLo   uint64
+	noRawHi, noRawLo     uint64
 
 	// The trailing rings (§3.9): total staked (answerability X̄) and the YES
 	// pool (the ratio series). Observed on every stake/unstake.
@@ -48,6 +51,9 @@ type claimState struct {
 	frozenAt        int64 // 0 = live
 	rateAccAtFreeze int64
 	xBarFrozen      int64 // P6: the trailing-X̄ snapshot at the answer
+	// Q1: the quality electorate's epoch — the last SEALED epoch at the
+	// answer, set before any flag can exist; every quality vote reads it.
+	qualityEpoch uint32
 
 	// The answer (answer.gno). answerBond is the LIVE escrowed remainder
 	// (zeroed as disposed, exactly once); answerBond0 is the posted magnitude —

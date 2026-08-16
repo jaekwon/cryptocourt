@@ -119,3 +119,28 @@ func TestPriorityWindowGates(cur realm, t *testing.T) {
 		t.Fatal("past the window the answer slot is first-come")
 	}
 }
+
+func TestQualityEpochPinnedAtAnswer(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qe-alice")
+	c := testCourt(cur, "qe1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qe1", "Epoch pin")
+	matureOI(cur, "qe1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qe1", id, sideYES)
+	cs := mustClaim(c, id)
+	if cs.qualityEpoch != c.coin.Epoch()-1 {
+		t.Fatalf("qualityEpoch must pin the last sealed epoch at the answer: %d vs %d",
+			cs.qualityEpoch, c.coin.Epoch()-1)
+	}
+	if cs.qualityEpoch < 1 {
+		t.Fatal("after three matured buckets the sealed epoch is positive")
+	}
+	// The pin is immutable: epochs advance, the stored value does not.
+	was := cs.qualityEpoch
+	testing.SkipHeights(epochBlocks * 5)
+	touch(c)
+	if cs.qualityEpoch != was {
+		t.Fatal("the quality epoch never moves after the answer")
+	}
+}

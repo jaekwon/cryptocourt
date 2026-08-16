@@ -189,3 +189,35 @@ func TestStakeGuards(cur realm, t *testing.T) {
 func testingHeight() int64 {
 	return runtimeHeight()
 }
+
+func TestRawIntegralAccruesAndFreezeCaps(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rw-alice")
+	c := testCourt(cur, "rw1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rw1", "Raw integral")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "rw1", id, sideYES, 400_000_000)
+	testing.SkipHeights(1000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unstake(cross(cur), "rw1", id, sideYES, 100_000_000) // settles the integral
+
+	cs := mustClaim(c, id)
+	p := cs.stakers.Get(posKey(alice, sideYES)).(*stakePos)
+	if p.rawHi != 0 || p.rawLo != uint64(400_000_000)*1000 {
+		t.Fatalf("raw = stake x blocks exactly: got %d/%d", p.rawHi, p.rawLo)
+	}
+	if cs.yesRawLo != p.rawLo {
+		t.Fatal("the pool raw integral mirrors the position")
+	}
+
+	// Freeze caps the raw clock: blocks after frozenAt add nothing.
+	touch(c)
+	cs.frozenAt = runtimeHeight()
+	cs.rateAccAtFreeze = c.rateAccFP
+	before := p.rawLo
+	testing.SkipHeights(2000)
+	accrue(c, cs, p, sideYES)
+	if p.rawLo != before {
+		t.Fatalf("raw must stop at the freeze: %d -> %d", before, p.rawLo)
+	}
+}

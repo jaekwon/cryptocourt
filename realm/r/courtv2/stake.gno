@@ -32,6 +32,12 @@ type stakePos struct {
 	convHi      uint64 // rate-weighted conviction, u128: Σ stake × ΔrateAcc
 	convLo      uint64
 	lastRateAcc int64 // the court's era integral at the last settle (audit H1)
+	// The RAW integral ∫stake·dt (stake × blocks, u128), freeze-capped — the
+	// F9 flash-proof cap base: time-averaged stake = raw / claim-open-blocks.
+	// Kept separate from conviction because the cap must not scale with the
+	// rate (Q7).
+	rawHi, rawLo uint64
+	lastRawAt    int64
 }
 
 // rateBpsFP is the current published rate in bps × 1e6 per week:
@@ -55,22 +61,44 @@ func effectiveRateAcc(c *Court, cs *claimState) int64 {
 // accrue settles a position against the era integral: conv += stake × Δacc,
 // where Δacc = Σ rate(t)·dt over exactly the blocks the stake was live — the
 // rate-weighted integral by construction (V2-8; no rate snapshot, no
-// retroactive repricing). Also feeds the per-side pool conviction (§3.9).
+// retroactive repricing). Also feeds the per-side pool conviction (§3.9) and
+// the raw ∫stake·dt integral (the Q7 cap base), both freeze-capped.
 func accrue(c *Court, cs *claimState, p *stakePos, side int) {
 	acc := effectiveRateAcc(c, cs)
 	delta := acc - p.lastRateAcc
 	p.lastRateAcc = acc
-	if delta <= 0 || p.stake == 0 {
-		return
+	if delta > 0 && p.stake > 0 {
+		// stake < 2^50, Δacc < 2^57 over a century: one 64×64 multiply covers it.
+		hi, lo := bits.Mul64(uint64(p.stake), uint64(delta))
+		p.convHi, p.convLo = add128(p.convHi, p.convLo, hi, lo)
+		if side == sideYES {
+			cs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hi, lo)
+		} else {
+			cs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)
+		}
 	}
-	// stake < 2^50, Δacc < 2^57 over a century: one 64×64 multiply covers it.
-	hi, lo := bits.Mul64(uint64(p.stake), uint64(delta))
-	p.convHi, p.convLo = add128(p.convHi, p.convLo, hi, lo)
-	if side == sideYES {
-		cs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hi, lo)
-	} else {
-		cs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)
+	rh := rawHeight(cs)
+	rawDelta := rh - p.lastRawAt
+	p.lastRawAt = rh
+	if rawDelta > 0 && p.stake > 0 {
+		hi, lo := bits.Mul64(uint64(p.stake), uint64(rawDelta))
+		p.rawHi, p.rawLo = add128(p.rawHi, p.rawLo, hi, lo)
+		if side == sideYES {
+			cs.yesRawHi, cs.yesRawLo = add128(cs.yesRawHi, cs.yesRawLo, hi, lo)
+		} else {
+			cs.noRawHi, cs.noRawLo = add128(cs.noRawHi, cs.noRawLo, hi, lo)
+		}
 	}
+}
+
+// rawHeight is the height the raw integral runs to: now, capped at the freeze
+// (stake stopped counting toward the cap base when the answer landed).
+func rawHeight(cs *claimState) int64 {
+	h := runtime.ChainHeight()
+	if cs.frozenAt != 0 && cs.frozenAt < h {
+		h = cs.frozenAt
+	}
+	return h
 }
 
 // Stake backs one side of a claim with CC. Free to reverse until the answer.
@@ -206,7 +234,7 @@ func getPos(c *Court, cs *claimState, who address, side int) *stakePos {
 	if v := cs.stakers.Get(k); v != nil {
 		return v.(*stakePos)
 	}
-	p := &stakePos{lastRateAcc: c.rateAccFP}
+	p := &stakePos{lastRateAcc: c.rateAccFP, lastRawAt: rawHeight(cs)}
 	cs.stakers.Set(k, p)
 	return p
 }
