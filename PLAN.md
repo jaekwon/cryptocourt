@@ -1474,6 +1474,8 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 32 | Crystallize gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
 | 33 | Cap-dust disposition (v0.36) | Scale-then-cap dust and cap-cut remainders stay juniorReserved and UNMINTED forever — economically a burn, always under the ceiling | Returning dust to R needs per-claim pull tracking (a walk) or a sweep entrypoint; the leak is bounded per claim by D and only reduces emission |
 | 34 | Carrot enqueue ordering (v0.36) | Per-voter senior entitlements enqueue at PullCarrot time (FCFS by pull), not at crystallize — avoids walking the voter set | Earlier pullers sit earlier in the senior queue; amounts are unaffected (never scaled), only payout timing |
+| 35 | Slash-reserve retention (v0.37, audit M3-HIGH) | SettleUndisputed retains 4.5%·X̄ of the bond through the quality slot, returning the rest; the reserve returns at crystallize if unslashed | Returning the whole bond at 72h (the old behavior) makes the mill-slash unreachable on undisputed claims — the exact ones it targets |
+| 36 | Inconclusive re-flag cooldown (v0.37, audit M3-MED) | 7-day cooldown after EVERY inconclusive cycle, not just past the freeze | Immediate reopens let a dust-low chain block crystallize for free; the cost is a 7-day wait for honest re-flags after an absent-electorate inconclusive (bond already returned) |
 | 31 | Credential weight bar (v0.35.1, audit M2-1) | contested-and-upheld credits only when an upheld round's overturn side carried ≥ ¼ × quorum floor — weightless (self-manufactured) contests mint nothing; near-unanimous upholds also credit nothing | Dropping the bar re-opens credential farming at ~20% of a dispute bond per point; softening to the unfloored demotion bar prices it at idle-mill scale (~25 CC) instead of whale scale |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
@@ -1570,6 +1572,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.37** — (iterations 16–18) **milestone-3 audit ingested (1C/1H/1M/1L),
+  all fixed FIX-FIRST with regressions; full system green (unit + check +
+  txtar + isolation 151 tests).**
+  - **CRITICAL — reservoir double-spend.** `reserveJunior` added to
+    `juniorReserved` but never advanced `reservedTail`, so a senior enqueued
+    AFTER a junior draw (the carrot always is; later comps/bounties too) got
+    `start = reservedTail`, overlapping accrual the junior already minted —
+    `PullSenior` re-paid it and `emittedTotal` passed `cumAccrual`, breaking
+    the 20%/yr ceiling. Fix: `enqueueSenior` start = `reservedTail +
+    juniorReserved`, so seniors and juniors tile the accrual number line
+    disjointly (pre-crystallize juniorReserved==0 → unchanged; milestone-1/2
+    tests untouched). Latent until crystallize created the junior lane.
+  - **HIGH — the 4.5%·X̄ slash was escapable via SettleUndisputed.** Settle
+    returned the whole answer bond at 72h; `votingBlocks` (1wk) > `settleDelay`
+    (72h) meant a flag could never resolve first, so the slash clamped to
+    `min(4.5%·X̄, 0) = 0`. Fix: settle now RETAINS a slash-sized reserve in the
+    bond (returning the rest), collateralized through the quality slot exactly
+    as the dispute path keeps the bond through escrow; the reserve burns on a
+    conclusive-low slash or returns to the answerer at crystallize.
+  - **MED — free indefinite Crystallize grief** via a dust-low flag chain
+    (T1 full-return, back-to-back reopens, participants excluded from
+    self-defense). Fix: the 7-day re-flag cooldown now applies after EVERY
+    inconclusive cycle (not only past the freeze); since 7d > the 24h
+    Crystallize quiet window, each inconclusive leaves a ~6-day settle window
+    the griefer cannot fill. Honest re-flag after an absent-electorate
+    inconclusive waits 7d (bond was returned) — accepted, §12.
+  - **LOW — reopen dispute vs open counter re-vote.** `OpenDispute` didn't
+    guard `counterOpen`; a reopen reset the counter's tally. Fix: a reopen now
+    `unslash`es (refunds the reserve into the bond, closes the counter) before
+    opening its ride tally — a disputed answer is never slashable (v0.28); plus
+    a `!disputeOpen` guard on `ResolveCounter`. Exactly-once held throughout.
+  - Cleared with probes by the auditor: pool-integral exactness / no
+    overdraw, carrot conservation + weight match, quality-vote integrity
+    (epoch pin, participant exclusion, no key collision), exactly-once across
+    all deposit/fee/bond sites, overflow guards, auth/borrow. **M2-1 verified
+    effective** (credential priced at ~1.25%-of-supply weight). NOTES accepted:
+    decided-route carrot disenfranchises flag voters (by design P14),
+    `ConvictionOf` read-preview tail approximation (cosmetic).
 - **v0.36** — (iterations 13–15) **the quality milestone is BUILT — every
   module of the §10 build order now exists.** Landed: rawConv ∫stake·dt cap
   accumulators + qualityEpoch pin (Q1/Q7 prereqs); quality.gno part 1 (sealed
