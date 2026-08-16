@@ -150,6 +150,10 @@ individual cap: bonus_i ≤ stake_i × tier/2   (mid ≤ 0.5×, high ≤ 1.0× p
   "pay X" votes anywhere (Ooki surface minimization, §7.3).
 - `OPEN`: whale-hogging — one giant claim can absorb the whole period pool;
   candidate smoothers (per-claim share cap, concave weight) are with the vet.
+- `CAUTION (self-found, A10)`: the per-period cross-claim pro-rata in this
+  section has a Finalize-timing game and couples payouts to the period's slowest
+  dispute. §8.7 specs a rate-based **reservoir drip** with no cross-claim
+  denominator as the likely replacement — decision lands with the econ vet.
 
 ### 3.6 Bonds and deposits — `DRAFT`
 
@@ -227,6 +231,7 @@ quality: high"), and the emission drawn. The claim page IS the product.
 | A7 | Emission-lever capture | No lever exists (frozen constants) | `ACCEPTED (V1 discipline)` |
 | A8 | Unstake-grief (yank stake to flip ratio pre-answer) | Ratio is time-bucketed; answerability reads the trailing average; freeze at answer | `DRAFT` |
 | A9 | Overflow via huge stakes (no caps anymore) | `ccMul`/checked adds everywhere + the supply invariant; **conviction specifically MUST be a 128-bit accumulator** — stake (≤ MaxSupply ≈ 9.2e14) × blocks (~6.3e6/yr) ≈ 5.8e21 ≫ MaxInt64, so per-staker and per-claim conviction accumulate in uint128 (hi,lo pairs, tickbook-style) and every pro-rata draw goes through the audited 128-bit `mulDivFloor`. No saturation, no silent wrap | `ACCEPTED (design)` |
+| A10 | **Period-assignment gaming of the §3.5 pro-rata** (self-found, iteration 2): Finalize is permissionless, so a winner times it into a quiet period for a fatter share of that period's pool; and ΣW for a period isn't final until its *slowest* dispute resolves, so honest payouts wait on the slowest claim | Candidate fix: replace cross-claim per-period pro-rata with the **reservoir drip** (§8.7) — no cross-claim denominator exists, so there is nothing to time | `OPEN (decide when econ vet lands)` |
 
 ## 6. What V2 deliberately gives up
 
@@ -292,11 +297,41 @@ Markets" rule when final.
 4. ~~Bond-forfeiture fallback~~ — RESOLVED (rejected; §3.6: time-lock-only bonds
    invite first-answerer squatting/DoS; forfeiture is load-bearing for the
    one-per-claim answer slot). Legal color still pending from the legal vet.
-5. Should conviction decay for very long stakes (anti-zombie) or is monotone fine?
+5. ~~Conviction decay~~ — RESOLVED: monotone linear, no decay. A claim's life
+   bounds its own conviction window naturally: stakes freeze at the answer,
+   disputes run on fixed vote clocks, and a claim that never gets answered
+   unlocks at the dead-claim timeout (12 weeks) — so conviction per claim is
+   bounded by claim lifetime (months, not years), you cannot fake time, and
+   linear is the 128-bit-simplest thing that rewards persistent early conviction.
+   Decay would add a knob with no attack it closes.
 6. ~~Removal-impact sweep~~ — DONE (Appendix A). Load-bearing catches: X̄ feed
    must switch to Stake/Unstake events; conviction needs 128-bit accumulators
    (A9); emission mints at pull-time and never transits escrow, preserving the
    V1 escrow-conservation invariant and its txtar checks.
+7. **Reservoir drip — candidate replacement for §3.5's cross-claim pro-rata**
+   (fixes A10; full spec, decision pending the econ vet since its farming math
+   transfers to either model):
+   - Emission accrues per block into a reservoir: `R += b` where `b = B_period /
+     120,960`, halving applies to `b`; accrual stops while `R ≥ R_max = 4 ×
+     B_period` (banked quiet weeks, capped; the un-accrued excess is never
+     minted — the ceiling-not-floor rule survives).
+   - At Finalize of claim c, each winner's gross bonus is **rate-based, not
+     share-of-pool**: `g_i = tier_c × rate × conviction_i`, with the individual
+     cap `g_i ≤ (tier_c / 2) × stake_i` unchanged. `rate` is a deploy-time
+     constant (CC per conviction-unit) sized so a mid-tier winner holding
+     through a typical claim sees the §3.3 target (~15–30% APR-equivalent).
+   - The claim draws `D_c = min(Σ g, R)`; if `R < Σ g`, everyone in the claim
+     scales pro-rata by `R / Σ g` (within-claim only); `R -= D_c`. The
+     80/8/7/5 slices apply to `D_c`.
+   - Properties: a staker's expected bonus is a *known rate with known caps*
+     (legible, and reads as participation yield rather than a contested prize
+     pool); total emission stays halving-bounded; there is **no cross-claim
+     denominator**, so no period-assignment game and no slowest-claim coupling;
+     busy stretches degrade gracefully (partial fills while the reservoir
+     refills). Residual: finalize-order FCFS when R runs low — bounded by
+     R_max and the individual caps, and draining R requires *real winning
+     conviction*, so a griefer cannot burn the reservoir for free. `VETTING
+     (pending econ vet)`.
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
@@ -344,3 +379,12 @@ Cross-cutting invariants preserved (these were the V1 audit's spine):
   emission never transits escrow, preserving the V1 conservation invariant);
   quality tally concretely specced as court-local 3-bucket median on the dispute
   proposal's snapshot epoch (§3.4) — no /p/governor change.
+- **v0.3** — (iteration 2, vets still out) found a flaw in my own §3.5:
+  cross-claim per-period pro-rata is timeable (Finalize is permissionless →
+  register into a quiet period) and couples payouts to the period's slowest
+  dispute — logged as A10. Specced the fix candidate: a rate-based **reservoir
+  drip** (§8.7) with per-block accrual, a 4-period bank cap, and within-claim-
+  only scaling — no cross-claim denominator to game; adoption decision deferred
+  until the econ vet lands (its farming math applies to both models). Resolved
+  §8.5: conviction stays monotone linear, no decay (claim lifetime bounds the
+  window; time cannot be faked; decay adds a knob that closes no attack).
