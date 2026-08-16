@@ -131,3 +131,15 @@ func VerdictRoute(courtSlug string, claimID uint64) string {
 	}
 	return cs.route
 }
+
+// SettleDeadline is the block height at which an answered, undisputed claim
+// becomes settleable (the answer height + the 72h delay); 0 if unanswered. A UI
+// renders a wall-clock countdown from it, and it is also the first-round dispute
+// window's close.
+func SettleDeadline(courtSlug string, claimID uint64) int64 {
+	cs := mustClaim(mustCourt(courtSlug), claimID)
+	if cs.frozenAt == 0 {
+		return 0
+	}
+	return cs.answerHeight + settleDelay
+}

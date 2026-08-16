@@ -301,6 +301,13 @@ func sideName(side int) string {
 	return "NO"
 }
 
+// ClaimStatus is the human one-line lifecycle status for a claim — the exact
+// text the claim page shows — exposed so a client gets it in ONE qeval instead
+// of reconstructing the phase precedence from a half-dozen reads.
+func ClaimStatus(courtSlug string, claimID uint64) string {
+	return claimStatus(mustClaim(mustCourt(courtSlug), claimID))
+}
+
 // claimStatus is the one-line lifecycle readout. It grows verdict/tier/route
 // lines as those modules land; the sealed-tally rule (never a running count)
 // binds every future addition.

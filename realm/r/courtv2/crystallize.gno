@@ -323,3 +323,17 @@ func DrawSlices(courtSlug string, claimID uint64) (winners, author, answerer, ca
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	return cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
 }
+
+// PullState reports which reward slices `who` has already pulled on a
+// crystallized claim — the winning-side accuracy bonus (their position's
+// one-shot flag), the author slice, and the answerer slice — so a UI can grey
+// out spent pulls. All false before crystallize / for non-participants.
+func PullState(courtSlug string, claimID uint64, who address) (winnerPaid, authorPaid, answererPaid bool) {
+	cs := mustClaim(mustCourt(courtSlug), claimID)
+	if cs.provisional >= 0 {
+		if v := cs.stakers.Get(posKey(who, int(cs.provisional))); v != nil {
+			winnerPaid = v.(*stakePos).bonusPaid
+		}
+	}
+	return winnerPaid, cs.authorPaid && who == cs.author, cs.answererPaid && who == cs.answerer
+}

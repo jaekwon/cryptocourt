@@ -255,6 +255,11 @@ func SeniorEntitlement(courtSlug string, seq uint64) (to address, amount, paid, 
 	return e.to, e.amount, e.paid, p
 }
 
+// QueueLen is the number of senior entitlements ever enqueued; seqs run
+// 1..QueueLen, so a client bounds SeniorEntitlement iteration with it (there is
+// no removal — paid entitlements stay in the queue with paid==amount).
+func QueueLen(courtSlug string) uint64 { return mustCourt(courtSlug).queueSeq }
+
 // Poke advances the emission clock without any other action — a public crank
 // so accrual (and thus payability) never depends on trading activity.
 func Poke(cur realm, courtSlug string) {

@@ -226,6 +226,22 @@ func TrailingOI(courtSlug string, claimID uint64, window int64) (avg int64, matu
 	return cs.oi.Average(runtime.ChainHeight(), window)
 }
 
+// PoolConviction is each side's lifetime rate-weighted conviction in CC units —
+// the numerator/denominator of the manipulation-resistant lifetime ratio (§3.9).
+// Exposed so a client can render that ratio series (render shows it, but a
+// structured UI needs it via qeval).
+func PoolConviction(courtSlug string, claimID uint64) (yes, no int64) {
+	cs := mustClaim(mustCourt(courtSlug), claimID)
+	return convToCC(cs.yesConvHi, cs.yesConvLo), convToCC(cs.noConvHi, cs.noConvLo)
+}
+
+// TrailingYes is the flash-resistant trailing average of the YES pool — the
+// numerator of the trailing-week ratio (TrailingOI is its denominator).
+func TrailingYes(courtSlug string, claimID uint64, window int64) (avg int64, mature bool) {
+	cs := mustClaim(mustCourt(courtSlug), claimID)
+	return cs.yes.Average(runtime.ChainHeight(), window)
+}
+
 func mustClaim(c *Court, id uint64) *claimState {
 	v := c.claims.Get(beClaimKey(id))
 	if v == nil {
