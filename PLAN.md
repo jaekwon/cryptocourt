@@ -1485,6 +1485,35 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.35** — (implementation iterations 6–7) **the verdict machine is
+  complete**: `session.gno` (72h undisputed settle → VERDICT_FINAL, exactly-
+  once bond return, `WithdrawStake` 1× both sides) and `dispute.gno` (V1's
+  round structure with the v0.11–v0.25 dispositions: forfeitures burn / comp
+  mints senior-queued at RoundDecided with both cap arms; failed rounds
+  half-burn half-return with NO comp; provClose = everyone 1× + deposit AND
+  fee refund, disposed inline at the third failed resolve; participant-gated
+  Finalize week; F7 loser early-exit in WithdrawStake; quorumFloor and every
+  bond read `X̄frozen` per P6). Implementation-level pins made while coding,
+  each a deliberate refinement of the prose:
+  (1) **the answer bond survives uphold rounds** — it stays escrowed until
+  VERDICT_FINAL rather than returning at each decided round (V1 returned it
+  early and accepted zero-collateral reopens); comp arms read the posted
+  magnitude `answerBond0`, so an overturned-then-vindicated answerer is
+  redressed by the reopen round's comp, not a resurrected bond;
+  (2) **records move ONCE, at Finalize, from the final verdict** (P13), and
+  `creditUpheld` additionally requires ≥1 DECIDED round — a verdict standing
+  only on quorum-less defaults earns no difficulty point (else half a dispute
+  bond of self-dispute burn would buy one);
+  (3) **the undisputed settle is immediately final**: the 72h delay IS the
+  first-round dispute window; the settle and dispute guards partition every
+  height (`now ≥` vs `now <`), so no race and no undisputed-reopen path
+  exists — contesting happens by disputing before the delay lapses;
+  (4) **escrowWindow keeps V1's formula with X̄frozen as the size proxy**
+  (the collateral is gone); consequence, recorded: with 1-week votes a
+  3-failed-round provClose only fits inside escrow windows > 2 weeks (large
+  claims) — small claims cap at 2 failed rounds and Finalize the defaulted
+  verdict, exactly V1's audited behavior. Milestone-2 adversarial code audit
+  LAUNCHED on the full verdict path.
 - **v0.34** — (implementation iterations 2–5) **the money core is built and
   its milestone-1 audit is ingested (FIX-FIRST → fixed)**: emission.gno (the
   P5 senior queue verbatim, exact-remainder accrual, R_max pause,
