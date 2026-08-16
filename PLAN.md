@@ -1232,8 +1232,9 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
 - **Build order (refreshed v0.13 for the v0.10–v0.12 mechanics)** — all /p/
   packages untouched except deleting the court's dependency on
   tickbook/cshares: (1) `stake.gno` (pools, conviction-128, freeze atomicity)
-  + `emission.gno` (reservoir accrual, the deploy-frozen rate SCHEDULE,
-  `rateAtFreeze`, entitlements, pull-claims, participant-gated Finalize);
+  + `emission.gno` (reservoir accrual, the amortized step-down INSIDE B_n —
+  one decay only, no separate halving — senior entitlement queue, pull-claims,
+  participant-gated Finalize; rateAtFreeze does NOT exist — deleted v0.20);
   (2) adapt `claim/answer/session/dispute` per Appendix A (+ the conditional
   fee escrow, the burn sink, bond-comp-as-mint); (3) `quality.gno` (3-bucket
   sealed median + the FLAG state machine: open-window guard, conclusive-vs-
@@ -1272,6 +1273,52 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   audit loop to convergence that V1 got. Done means: full sweep, zero findings,
   `make check` + txtar green.
 
+## 10.1 Implementation pins (audit-15, adopted v0.33 — the coding spec)
+
+- **P1 (BLOCKING, FIXED in code)**: the rate prices `d_eff = min(budget
+  ceiling, 4-period EMA of realized minted/S_live)` — budget-d alone overpaid
+  at thin participation (riskless farming below f ≈ 18%). Bootstrap property:
+  the rate rises from the pure-r floor with real participation.
+- **P2**: the voter carrot is clamped per claim: `min(7%·midGross, b₀/2 − 1)`
+  (at the 20% rate the 7% crosses b₀/2 at T_c ≈ 8.8wk; micro-vet-2's sybil
+  margin held only 1.2× — the clamp restores it).
+- **P3**: actual headroom under the 20% bound is 10.8%, not the stated ≥20% —
+  the invariant is AMENDED to ≥10% (owner-flagged, §12; the code's fit check
+  passes; shrinking curveCap to 0.44× is the alternative).
+- **P4 state machine**: VERDICT_FINAL (per-staker 1× withdrawals open, both
+  sides, unpausable) → QUALITY_FINAL (last flag resolved + reopen-quiet) →
+  CRYSTALLIZE (compute D, enqueue entitlements — this is what flag pauses and
+  the reopen-relative 24h windows gate, never principal).
+- **P5 senior queue**: FIFO bptree of (addr, amount, purpose) + cumulative
+  counters (reservedTail, accrual A); entitlement i payable up to
+  min(amt, A − start_i) − paid; per-tick order accrual → seniors → R;
+  R_max pause only when seniors clear. Invariant: seniors-before-juniors.
+- **P6**: every %·X̄ quantity (bonds, slash, bounty, flag bond) reads one
+  `X̄frozen` snapshotted at the answer height.
+- **P7**: deposit = 1 CC, fee = 0.1 CC, flagMin = 1 CC (code) — re-derive
+  minAnswerX/deposit scaling with the next econ pass (mill draw ≈ 19%·X̄ at
+  the hot rate, was ~10%).
+- **P8**: G_MAX = one period's budget (clamp, never abort).
+- **P9**: conviction units = stake × blocks × rateBpsFP (bps×1e6) in u128;
+  draws divide by periodBlocks × 1e10 (implemented; supersedes the stale
+  stake×hours prose).
+- **P10 rounding**: floor everywhere; per-block accrual carries remainder so
+  Σb = B; scale-then-cap per claimant; dust stays in R / unminted.
+- **P11 two-epoch ballot**: VoteQuality is its own tx in the dispute window;
+  verdict weight = propose-time snapshot, quality weight = answer-height
+  epoch; participant exclusion filters quality only; the demotion bar uses
+  votable-at-epoch NOT net of refused weight (conservative).
+- **P12**: counter-flag window = votingBlocks (7d); slash burn + bounty
+  enqueue deferred until it lapses unchallenged; exactly-once escrow.
+- **P13 priority**: contested-and-upheld = 1 point, undisputed = 0, an
+  overturn RESETS the record to 0; "one active priority claim" runs from the
+  priority answer until that claim finalizes.
+- **P14 misc**: dead-claim timeout counts only while unanswered (implemented);
+  S_live via lazy period roll (implemented); comps enqueue at RoundDecided;
+  standalone-quality carrot pays all non-participant voters weight-pro-rata
+  regardless of bucket; the GNOT burn sink is a derived keyless address
+  picked at deploy.
+
 ## 11. Product surface — the V1 wireframe under V2 (v0.14)
 
 The V1 web overlay (10 screens, previously reconciled to V1 code) changes
@@ -1290,7 +1337,23 @@ Delta map for whoever revises `web/index.html`:
 | Chain render | The claim page is the product (§3.9); every figure reproducible from public reads |
 
 UX copy rules carried from §7.4: no APR/return language, "accuracy rewards"
-not multipliers, "step-down" not halving, never "backing"/"redeem"/"cash out".
+not multipliers, "step-down" not halving, never "backing"/"redeem"/"cash out",
+and **never render the inflation ceiling or budget percentages** (audit-15).
+Audit-15 additions: a persistent "principal always returns 1×" badge; the
+stake ticket quantifies the freeze ("an answer can post once X̄ ≥ 100 CC; your
+stake then locks until resolution — up to ~9 weeks if disputed") and notes
+late stakes earn ~nothing; the flag control renders the OUTCOME TABLE with
+the slot's live bond level and state; pull-claims show senior-queue position
+("payable after ~N more accrual"); new rows: the counter-flag control for a
+slashed answerer, participant-exclusion greying with the reason, the
+"withdraw 1× now" nudge for losers after decided rounds, Finalize's
+participant-only countdown; and the three quality buckets get frozen
+canonical one-liners (low = no informational value; mid = a real falsifiable
+question; high = unusually decision-relevant and rigorous) — Schelling
+convergence needs common knowledge. Reward previews show absolute CC
+("potential accuracy reward if correct: N CC, subject to availability"),
+never percentages, never annualized. web/index.html still carries V1
+"backing" copy 11× — swept when the V2 overlay is built.
 
 ## 12. Owner decision index (v0.15)
 
@@ -1324,6 +1387,9 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 23 | Bounty base | ≤ 80% of the low outcome's burns, with the 2.5%·X̄ answer-bond slash as the scaling burn (v0.25) | Own-bond bounty was a mint faucet; deposit-only base un-pays policing (V2-1) |
 | 24 | Slash gate (final) | Supply-floored full bar + undisputed-only (v0.28, two vets reconciled); median-low tier-0 alone kills mills at q ≈ 12%; bounded dead zone accepted; counter-flag upgrade path registered | Any reachable-bar X̄-scaled slash re-arms the faucet (costless reusable weight); weight-at-risk is the V3 frontier |
 | 25 | Quality-lane participation | Participants excluded from own-claim quality votes and carrots (v0.26) | In-band self-defense via same-epoch/post-release enfranchisement; carrot self-payment |
+| 26 | d_eff pricing (v0.33, FIXED in code) | rate prices min(budget ceiling, realized-EMA dilution) | Budget-d alone = riskless farming below ~18% participation (both v0.32 audits, convergent) |
+| 27 | Headroom amendment (v0.33) | ≥10% actual (10.8%) under the 20% ceiling with curveCap = half | Alternative: curveCap = 0.44× restores ≥20%; owner may prefer it |
+| 28 | Slash size (v0.33) | 4.5%·X̄ (was 2.5%) — mill-kill q ≈ 0.22 at the hot rate | 2.5% drifts the kill bar to ~0.30 at 20%; bounty ≤ 80%×burns holds at both |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
@@ -1419,6 +1485,19 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.33** — (implementation iteration 1) **both v0.32 audits landed,
+  convergent on a CRITICAL: budget-d unmoored the rate from realized carry**
+  (riskless matched farming below ~18% participation — A1/A2 reopened by the
+  4× ceiling raise). FIXED in code the same turn: d_eff = min(ceiling,
+  realized-EMA) — the rate starts at the pure-r floor and rises with real
+  participation. Slash retuned 2.5→4.5%·X̄ (mill-kill q back to ~0.22 at the
+  hot rate; bounty bound holds). §10.1 pins P1–P14 adopted as the coding
+  spec; §10 purged of rateAtFreeze and the double-decay trap; §11 gains the
+  audit's UX rows + the never-render-the-ceiling rule; P3 headroom amended
+  to ≥10% (owner-flagged, §12). CODE: claim.gno + stake.gno landed green
+  (no-loss staking, u128 rate-weighted conviction, freeze semantics,
+  dead-claim close, escrow-conservation tests). ECONOMICS/App-B reference
+  numbers are stale at the hot rate — marked, recompute next.
 - **v0.32** — (OWNER DIRECTIVE) inflation ceiling set at **20%/yr worst-case**:
   per-period budget `B_n = (20%/52) × S_live × 2^(−n/104)` — the ceiling now
   scales with live supply (a court of any size worst-cases at 20%/yr, decaying

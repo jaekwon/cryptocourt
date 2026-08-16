@@ -144,7 +144,7 @@ takes (b). [SETTLED as to history]
 1. **Emission-funded winner rewards** — recharacterization risk as a common-pool
    prize via dilution (accepted gray, owner sign-off; see PLAN.md §7.2).
 2. **CC coin under Howey** — yield-ish emission + paid contributors strengthen
-   prongs 3/4; mitigants: non-cashable in protocol, work/correctness-gated
+   prongs 3/4; mitigants: non-redeemable in-protocol (transferable), work/correctness-gated
    rewards, comms hygiene, no treasury expectations (GNOT burned). Main
    accepted risk.
 3. **Voter liability (Ooki theory)** — mitigate with a Wyoming DUNA wrapper
