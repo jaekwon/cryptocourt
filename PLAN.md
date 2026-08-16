@@ -1567,6 +1567,31 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.36** — (iterations 13–15) **the quality milestone is BUILT — every
+  module of the §10 build order now exists.** Landed: rawConv ∫stake·dt cap
+  accumulators + qualityEpoch pin (Q1/Q7 prereqs); quality.gno part 1 (sealed
+  3-bucket court-local tally at the pinned epoch, participant exclusion, flag
+  slot machine with doubling→4×b₀ freeze + close-anchored 7d cooldown, the
+  full Q4 outcome table incl. T1 full-return and T2 half-burn, dust-low
+  dispositions with burn-dominated bounty, slash RESERVE) and part 2 (the
+  counter-flag window: CounterFlag = the answerer's one forced re-vote —
+  slash falls only at fullBar-reached + ⅔-low missed; ResolveSlashWindow;
+  settleSlash bounty top-up; the `unslash` hook — a DECIDED dispute round
+  refunds the reserve into the bond BEFORE disposition); crystallize.gno
+  (Q6-Q8: quiet-24h + participant-week gates, walk-free draw D = min(tier ×
+  midGross, G_MAX, R), 80/8/5 slices, scale-then-cap pull-claims under
+  (tier/2) caps, tier-invariant senior carrot with the per-voter b₀/2−1
+  clamp, N1 deposit/fee disposition). Three build-time finds, fixed in place:
+  (1) **an open flag could blockade the 72h dispute window** — a dispute now
+  VOIDS an open flag (bond whole, slot unconsumed; the ride carries quality);
+  (2) **position-fed pool integrals undercounted at crystallize** (early
+  pullers would overdraw D) — pools now advance analytically from side
+  totals (advancePools), exact at every mutation boundary; (3) **settle/
+  finalize stamped default-mid over final conclusive-low tiers** — guarded.
+  Carrot is ReleaseRoll-immune via court-side choice records; weights
+  recompute from PastVotes at the proposal's epoch. The reservoir's first
+  budget lands at the first weekly roll (tests must cross it — recorded).
+  Milestone-3 adversarial audit LAUNCHED over the whole layer.
 - **v0.35.1** — (iteration 12) **milestone-2 audit ingested: 0 CRITICAL, 0
   HIGH, 1 MED, 4 notes.** Every money path CLEARED under probe verification:
   escrow conservation on all routes, the A19 burn/mint doctrine, self-dispute
