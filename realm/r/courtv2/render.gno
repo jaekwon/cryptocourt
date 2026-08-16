@@ -131,6 +131,12 @@ func renderClaim(slug string, id uint64) string {
 			// The sealed-tally rule: an open vote renders NO running count.
 			b.WriteString("- dispute round " + strconv.FormatInt(cs.round, 10) +
 				" vote open — the tally is sealed until the vote closes\n")
+		} else if cs.verdictAt == 0 {
+			// Disputable: show what contesting the answer costs right now, so a
+			// user can weigh it without simulating the bond formula themselves.
+			// The bond doubles each failed round (reflected as rounds accrue).
+			b.WriteString("- disputing this answer now costs " +
+				strconv.FormatInt(cs.disputeBond0(), 10) + " CC units (doubles per failed round)\n")
 		}
 		if cs.verdictAt != 0 && !cs.provClose {
 			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")

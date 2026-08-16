@@ -65,8 +65,10 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	// Answered: crafted state (the dispute tests exercise the real paths;
 	// render only reads).
 	cs.frozenAt, cs.answer, cs.answerBond0, cs.answerHeight = 10, sideNO, 777, 10
+	cs.xBarFrozen = 1_000_000 // so the dispute-bond quote is positive
 	mustContain("answered", "settles undisputed")
 	mustContain("answered", "answer: NO (bond 777 CC units)")
+	mustContain("answered", "disputing this answer now costs")
 
 	cs.disputeOpen, cs.round = true, 1
 	mustContain("disputed", "sealed vote")
