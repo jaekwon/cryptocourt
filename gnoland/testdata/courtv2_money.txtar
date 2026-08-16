@@ -1,0 +1,119 @@
+# V2 money core against a real node. The one claim a unit harness cannot make:
+# Buy's GNOT really LEAVES — the realm account keeps nothing, the keyless burn
+# sink (a never-created sub-realm address) really receives it, and the realm's
+# own BurnedGNOT() read agrees with the bank. In-harness, testing.SetOriginSend
+# declares an envelope without crediting anyone; here the coins move or fail.
+#
+# Also on-chain-checked: CC escrow conservation through OpenClaim/Stake/Unstake,
+# zero emission before any verdict (the 20% ceiling starts at literal zero), and
+# the §7.4 comms hygiene — the public pages never say backing/APR/redeem.
+#
+# NOT covered here: answer/dispute/settle timing paths (thousands of blocks);
+# those live in realm/r/courtv2/*_test.gno with SkipHeights.
+
+loadpkg gno.land/p/cryptocourt/checkpoint/v0
+loadpkg gno.land/p/cryptocourt/grc20votes/v0
+loadpkg gno.land/p/cryptocourt/governor/v0
+loadpkg gno.land/p/cryptocourt/twap/v0
+loadpkg gno.land/p/cryptocourt/curve/v0
+loadpkg gno.land/r/cryptocourt/courtv2
+
+gnoland start
+
+# Deterministic addresses, cross-checked against the realm's own reads below so
+# a typo queries the wrong account and fails loudly.
+env COURTV2=g1n5fu7kux7gur367pmnqc6rnqap9944e4j2e3q8
+env SINK=g1v7pg68k2pyzh843gmancrglcymnm8q393r6s26
+
+# --- Fresh realm: directory empty state, hygiene from block one ---------------
+gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:"
+stdout 'No courts yet'
+stdout 'principal always returns'
+! stdout '[Bb]acking'
+
+# --- Start a court -------------------------------------------------------------
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CourtEscrow(\"orem\")"
+stdout ${COURTV2}
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.BurnSink()"
+stdout ${SINK}
+
+# Nothing anywhere yet: both accounts empty (a no-coin account returns "").
+gnokey query bank/balances/${COURTV2}
+stdout 'data: ""'
+gnokey query bank/balances/${SINK}
+stdout 'data: ""'
+
+# --- Buy: real GNOT in, and it does NOT stay -----------------------------------
+# 50 GNOT sent. The curve mints CC to the buyer; the spent GNOT is sent to the
+# burn sink in the same call. The realm account must end EMPTY — a realm that
+# keeps the GNOT is quietly holding a treasury V2 promised not to have.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout '\([1-9][0-9]* int64\)'
+stdout 'OK!'
+
+gnokey query bank/balances/${COURTV2}
+stdout 'data: ""'
+gnokey query bank/balances/${SINK}
+stdout 'data: "50000000ugnot"'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.BurnedGNOT()"
+stdout '\(50000000 int64\)'
+# The curve's mint is deterministic: 50 GNOT mints exactly 316227766 CC base
+# units, ALL held by the buyer — curve-minted == buyer balance == total supply
+# (no other mint path has run; EmittedTotal stays literal zero pre-verdict).
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CurvePosition(\"orem\")"
+stdout '\(316227766 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CoinBalanceOf(\"orem\",\"$test1_user_addr\")"
+stdout '\(316227766 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CoinSupply(\"orem\")"
+stdout '\(316227766 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.EmittedTotal(\"orem\")"
+stdout '\(0 int64\)'
+
+# A second buy accumulates in the sink — one-way, monotone.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func Buy -args orem -send 5000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query bank/balances/${SINK}
+stdout 'data: "55000000ugnot"'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.BurnedGNOT()"
+stdout '\(55000000 int64\)'
+
+# --- Claim + stake: real CC escrow conservation ---------------------------------
+# OpenClaim escrows deposit (1 CC) + fee (0.1 CC) = 1_100_000 base units.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func OpenClaim -args orem -args 'Is the sky blue?' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout '\(1 uint64\)'
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CoinBalanceOf(\"orem\",\"${COURTV2}\")"
+stdout '\(1100000 int64\)'
+
+# Stake 0.5 CC on YES: escrow grows by exactly the stake.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func Stake -args orem -args 1 -args 0 -args 500000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CoinBalanceOf(\"orem\",\"${COURTV2}\")"
+stdout '\(1600000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.StakePools(\"orem\",1)"
+stdout '500000 int64'
+
+# Unstake it all: the escrow returns to exactly deposit+fee. Conservation, on a
+# real ledger, not a mock.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func Unstake -args orem -args 1 -args 0 -args 500000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.CoinBalanceOf(\"orem\",\"${COURTV2}\")"
+stdout '\(1100000 int64\)'
+
+# --- Public pages: the §7.4 hygiene walls ----------------------------------------
+# Court and claim pages exist, show absolute CC figures, and never render the
+# forbidden framings (backing/redeem/APR/inflation ceiling).
+gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:orem"
+stdout 'Orem Truth Court'
+! stdout '[Bb]acking'
+! stdout 'APR'
+! stdout 'redeem'
+! stdout '20%'
+
+gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:orem/1"
+stdout 'Is the sky blue\?'
+! stdout '[Bb]acking'
+! stdout 'APR'

@@ -41,7 +41,7 @@ func TestCourtTxtar(t *testing.T) {
 var staged = []struct{ kind, name string }{
 	{"p", "checkpoint"}, {"p", "grc20votes"}, {"p", "governor"}, {"p", "twap"},
 	{"p", "cshares"}, {"p", "tickbook"}, {"p", "curve"},
-	{"r", "court"},
+	{"r", "court"}, {"r", "courtv2"},
 }
 
 func TestMain(m *testing.M) {
