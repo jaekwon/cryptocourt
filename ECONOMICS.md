@@ -65,7 +65,7 @@ y*₀ = 2(0.35%)(1.5) = 1.05%/wk → **rate₀ = 0.89%/wk per unit conviction**.
 | Coin-flipper (p = .5) | one side | negative (0.85/2·y*·T_c < ρ·T_L) |
 | Break-even staker | p ≈ 0.59 | ≈ 0 |
 | Good staker (p = 0.7) | one side | ≈ +0.19·ρ·T_L ≈ +0.10%·stake/wk-equivalent |
-| Mill (post-v0.12 fixes) | self-claim | negative at flag-prob q ≥ 0.2; fee+deposit at risk vs mid-tier crumbs |
+| Mill (post-v0.20 repricing) | self-claim | negative at modest flag probability — now economically supplied (bounty = flagger's own bond, paid flag-voters); deposit slash + tier-0 at risk vs mid-tier crumbs. (The old "q ≥ 0.2" figure was retracted as unreproducible, V2-1.) |
 
 ## Sizing B and R_max
 
