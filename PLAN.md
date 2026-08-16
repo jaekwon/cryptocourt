@@ -211,7 +211,8 @@ claim's draw   D    = min(Σg, R)        (within-claim scaling if R < Σg)
 split of D:    winners 80% (pro-rata by conviction)
                author 8% · with-verdict voters 7% · answerer 5%
 caps:          winner_i  ≤ (tier/2) × time-averaged stake_i
-               author+answerer slices ≤ (tier/2) × their own stake  (F1)
+               author slice   ≤ (tier/2) × author's own stake        (F1)
+               answerer slice ≤ (tier/2) × the answer BOND           (F1 refined, v0.8)
 voter slice:   TIER-INVARIANT — computed at mid-weight and paid even when the
                tier lands low  (F2)
 ```
@@ -219,6 +220,14 @@ voter slice:   TIER-INVARIANT — computed at mid-weight and paid even when the
 - **Slice caps close the capital-free rake (econ vet F1, CRITICAL)**: without
   them, author + answerer skimmed 13% of the draw with no stake of their own —
   the crowd's risk-free capital did the earning. Capped remainder is not minted.
+- **v0.8 refinement (found by working Appendix B; `DRAFT`, rides the next vet)**:
+  the answerer's cap references the **answer bond**, not their stake — F1's
+  rationale is "no capital-free rake", and the answerer is *never* capital-free:
+  the bond (50%·X̄) is the largest single skin in the claim. A stake-based cap
+  would zero the slice for the natural non-staking answerer and kill the answer
+  incentive; a bond-based cap (`≤ (tier/2) × bond`) preserves the rationale and
+  effectively never binds. The *author* keeps the stake-based cap (their deposit
+  is small and refundable — stake is their only real skin).
 - **The voter slice must not scale with the tier (econ vet F2, CRITICAL)**: if
   it does, every voter's pay doubles at high and zeroes at low → "everything is
   high" becomes the electorate's Nash equilibrium and junk-policing is unpaid
@@ -375,7 +384,8 @@ quality: high"), and the emission drawn. The claim page IS the product.
 | split | 80/8/7/5; **voter slice tier-invariant, paid even at low, with-verdict only** | F2/F3 |
 | quality-flag bond | max(flagMin, 2%·X̄); returns iff median = low, else burns | the F1 flag lane |
 | dispute bond | min(20%·X̄, 2 × answer-bond cap), doubling kept; **20% of losing bond burns on decided votes** | F5 cap; F3/F6 burn |
-| minAnswerX, answer bond, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |
+| minAnswerX | re-derive in V2 units (trailing total STAKE, no sets exist; placeholder 100 CC) | §8.8 — V1's "100 sets' worth" is meaningless in V2 |
+| answer bond, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |
 | dead-claim timeout | 12 weeks | new (O6 fix) |
 | bond–tier coupling | `answerBondBps ≥ maxUndisputedTier/2` | frozen invariant, §3.6; deploy refuses otherwise |
 | claim fee (burned) | 10% of deposit | §3.8 brainstorm; CC's only sink |
@@ -481,6 +491,12 @@ Markets" rule when final.
    math (fixed rate below y* beats equilibrium-by-farmer-entry, and A10's
    couplings vanish). A targeted vet is checking that swap for anything the
    translation missed (e.g. FCFS drain races, rate staleness as r and d drift).
+8. **minAnswerX re-derivation** (found writing Appendix B): V1's value is "100
+   sets' worth" — meaningless without sets. Re-derive as a CC floor on trailing
+   total stake (placeholder 100 CC); interacts with the flag bond and the
+   demotion turnout floor, so size the three together next vet round.
+9. **v0.8 answerer-cap refinement** (bond-based, not stake-based — §3.5) rides
+   the next vet round alongside 8.
 4. ~~Bond-forfeiture fallback~~ — RESOLVED (rejected; §3.6: time-lock-only bonds
    invite first-answerer squatting/DoS; forfeiture is load-bearing for the
    one-per-claim answer slot). Legal color still pending from the legal vet.
@@ -573,10 +589,71 @@ Cross-cutting invariants preserved (these were the V1 audit's spine):
 - **Exactly-once disposal** (bonds, deposits, entitlements) and **sealed tallies**
   carry over as design rules to every new V2 flow.
 
+## Appendix B — worked end-to-end example (v0.8)
+
+Numbers chosen realistic; doing this arithmetic is what surfaced the v0.8
+answerer-cap refinement. Court supply S = 10,000,000 CC; emission constants:
+r = 0.25%/wk, d = 0.1%/wk, T_L/T_c = 1.5 → y* = 1.05%/wk; **rate = 0.75·y* ≈
+0.79%/wk ≈ 0.113%/day per CC of conviction**; B_period = 10,000 CC/wk;
+R_max = 40,000 CC.
+
+**Claim**: "Flight 171's fuel switches were cut off before impact." Author
+Alice opens it: 1 CC deposit escrowed, 0.1 CC fee burned.
+
+| Day | Event | Stake pools (YES/NO) | Ratio |
+|---|---|---|---|
+| 0 | Alice stakes 30,000 YES (author, has skin) | 30,000 / 0 | 100% |
+| 7 | Bob stakes 20,000 NO | 30,000 / 20,000 | 60% |
+| 14 | Carol stakes 10,000 YES | 40,000 / 20,000 | 66.7% |
+| 21 | Dan (record net-4, priority window) answers YES; bond = 50%·X̄ ≈ 30,000 escrowed; **staking freezes** | frozen | 66.7% |
+| 24 | 72h pass, no dispute, no flag → SettleUndisputed: verdict YES, quality mid (default), Dan's bond returns | — | — |
+
+**Conviction at freeze** (CC-days): Alice 30,000×21 = 630,000; Carol
+10,000×7 = 70,000; Bob 280,000 (losing side — irrelevant to draws).
+
+**Draws at settle** (tier mid = 1×, rate 0.113%/day):
+- Alice: 630,000 × 0.113% ≈ **712 CC** (cap 0.5 × 30,000 time-avg = 15,000 — slack).
+- Carol: 70,000 × 0.113% ≈ **79 CC** (cap 1,667 — slack).
+- Σ winners 791 = 80% of the draw → D̂ ≈ 989 CC; reservoir has ~34,000 accrued — pays in full.
+- Author slice 8% ≈ **79 CC** to Alice (cap 15,000 via her stake — slack).
+- Voter slice 7% ≈ 69 CC — **not minted** (no vote occurred).
+- Answerer slice 5% ≈ **49 CC** to Dan — under the v0.8 bond-based cap
+  (0.5 × 30,000). *A stake-based cap would have zeroed this and killed the
+  answerer incentive — the inconsistency this example caught.*
+- **Total minted ≈ 919 CC ≈ 0.009% of supply.** Bob withdraws his 20,000
+  whole. Escrow held 60,000 stakes + 1 deposit + 30,000 bond and returned
+  every unit 1×; emission never touched it. Conservation ✓.
+
+**Returns check**: Alice earned ~2.6% on 30,000 over ~24 days *by being right*
+(~0.79%/wk on conviction — a p<1 staker's expected rate is p-scaled); a
+coin-flipper nets negative against lock cost, per the F5 band. A matched
+farmer staking both sides earns the winner leg's 0.79%/wk on half their
+capital against 2× lock costs — negative, as designed.
+
+**Alternative endings**:
+- *Flagged and demoted*: flag bond posted day 22, quality vote (7d) lands
+  **low** with ≥¼-bar turnout → tier 0×: **zero minted for anyone**, all
+  principals 1×, flag bond returns, Dan's bond still returns (verdict stood;
+  quality ≠ verdict).
+- *Disputed and overturned*: verdict flips NO → Bob's 280,000 CC-days draw
+  instead; Dan's bond: **80% (24,000) to the disputer, 20% (6,000) burned**
+  (v0.6 rule); the 7% voter slice mints to with-verdict voters,
+  tier-invariant; quality = the dispute vote's 3-bucket outcome under the
+  ⅔-for-high gate.
+
 ## 9. Changelog
 
 Newest first.
 
+- **v0.8** — (iteration 6) **Appendix B: worked end-to-end example** with real
+  numbers (30k/20k/10k stakes, 21-day life, bond 30k, draws 712/79/79/49,
+  minted 919 ≈ 0.009% of supply, escrow conservation checked, both alternative
+  endings). Working the arithmetic caught an F1-cap inconsistency: a
+  stake-based answerer cap zeroes the slice for the natural non-staking
+  answerer — refined to a **bond-based answerer cap** (the bond IS the skin;
+  F1's rationale preserved). Also: minAnswerX must be re-derived in V2 units
+  (V1's "100 sets" is meaningless without sets) — §8.8; both items ride the
+  next vet round.
 - **v0.7** — (iteration 5) specced the quality-flag lane in full (window =
   answer→settle with settlement pause; bond returns iff low; demotion needs
   ¼-bar turnout so dust griefing can't zero honest claims; promotion keeps the
