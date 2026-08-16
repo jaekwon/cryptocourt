@@ -1,16 +1,15 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.6 — round-5 vet ingested (2 lenses; 1 HIGH + 1 MED-HIGH, both
-> breaking a v0.5 delta; verification lens returned CONVERGED with 2 LOW nits).
-> VETTING; round 6 re-checks only the two v0.6 deltas — the multi-candidate
-> ballot election and the pending-list honesty correction.** Trajectory:
-> severity ceiling CRITICAL(r1/r2)→HIGH(r3/r4/r5), attacker HIGH-counts
-> 2→2→(1 HIGH+1 MED-HIGH), findings converging on one root principle (below).
-> The election has been the fix-of-fix locus (r3→r4→r5); v0.6's multi-candidate
-> ballot is structurally different — it removes the *scarce excludable slot*
-> every prior break exploited, so it should terminate the chain. Additive to
-> launch-cleared V2 (PLAN v0.40; see the drift note and §13.1). PLAN/REGULATIONS
-> edits deferred to integration (§15).
+> **STATUS: v0.7 — round-6 vet ingested. The ELECTION broke a 4th time and is
+> now re-specified as textbook approval voting (round-6 fix A–F); EVERYTHING
+> ELSE converged by round 5 (r6's second lens confirmed the non-election
+> machinery + pending-list correction).** Round 7 re-checks ONLY the election.
+> Trajectory: severity ceiling CRITICAL(r1/r2)→HIGH(r3–r6), but the HIGHs are
+> now confined to the one module (the election), and r6's were mis-specification
+> of a *standard* mechanism, not a missing one. **Owner flag §13.7: the election
+> is the highest-risk module and warrants human review before build.** Additive
+> to launch-cleared V2 (PLAN v0.40; drift note + §13.1). PLAN/REGULATIONS edits
+> deferred to integration (§15).
 
 > **The root principle (four rounds earned it):** *address-keyed defenses fall
 > to sybils; only capital-keyed, deadline-keyed, or residency-keyed defenses
@@ -126,43 +125,69 @@ clears the global bit but global; nobody reverses a purge.
 - Per-court set; render-layer powers: hide/unhide (own bit), annotate/relabel
   (§6), folders (§7), seeding (§8), polish acts (§9).
 - **Appointment**: the creator (`Court.admin`) bootstraps the set until a
-  **replacement election** passes; passage installs the elected set, unseats
-  the creator's appointment power, clears the suspension flag, and resets the
-  bond ladder. Dark set → another election (quorum nets escrow, so viable).
-- **The election** (court-local sealed tally, `modvote.gno`; no governor
-  slots; the quality-vote idiom). Rebuilt three times (r3 latch-camp → r4
-  per-proposer-sybil → r5 auction ballot-veto); v0.6 removes the property every
-  break exploited — **a scarce slot capital could win to *exclude* a proposal
-  from the vote**:
+  **replacement election** installs a new one; installation unseats the
+  creator's appointment power and clears the suspension flag. Dark/captured set
+  → another election (quorum nets escrow, and the ballot is uncapped +
+  price-not-veto, so a turnout majority is always able to install — that is the
+  recovery this whole subsection must deliver).
+- **The election** (court-local sealed multi-select tally, `modvote.gno`; no
+  governor slots — but **NOT** the quality-vote 3-bucket idiom; a purpose-built
+  accumulator, see below). Rebuilt four times (r3 latch-camp → r4 per-proposer-
+  sybil → r5 auction ballot-veto → r6 majority-gate + cap); v0.6/v0.7 stops
+  inventing and specifies **standard approval voting done correctly** — every
+  prior break was a scarce excludable slot, and the r6 break was two of them
+  (an absolute majority gate that made abstention a vote for the incumbent, and
+  an undefined candidate *cap*). The correct mechanism has neither.
   - **latch = per-court (one open election window)** — pinned; a per-proposer
     latch splits quorum across concurrent elections.
-  - **multi-candidate ballot; bonds ADD candidates, never EXCLUDE one**
-    (round 5 F1 — the auction let a capital-dominant but vote-*minority*
-    incumbent, or a pure griefer, win the latch and run a doomed status-quo
-    proposal, so the community's real proposal was never voted → capital
-    overriding a vote majority, defeating the recovery §3.1 exists to protect).
-    When the latch opens, a fixed **nomination window** (≈1 day) collects
-    **all** bonded candidate-sets onto **one ballot** (each candidate costs the
-    bond, capped per election); **"retain the current set" is the implicit
-    floor**. The electorate votes by **approval** (approve any number of
-    candidate-sets — approval, not plurality, so adding a candidate cannot
-    split a majority). A set installs iff it clears **5001 bps of approving
-    weight AND the quorum floor**, highest-approval among those that do;
-    otherwise the current set is retained (fail-safe on indecision). Capital
-    can *place* a candidate, never keep one *off* — a vote-majority always
-    reaches its decision.
-  - weights: `PastVotes` at the epoch **pinned at nomination-window open**
-    (governor idiom, not the answer-time qualityEpoch); quorum floor
-    **max(1, 5%·(PastTotal(at) − PastVotes(escrow, at)))** (escrow = the realm
-    address; netting it is the election's own rule, analogous to the dispute
-    floor's votable arm); length `votingBlocks`.
+  - **The ballot is every bonded candidate-set PLUS an explicit approvable
+    "retain the current set" line — no candidate cap** (round 6 F2: a cap is a
+    scarce excludable slot; a griefer front-fills it to keep a challenger off,
+    reintroducing exactly the veto v0.5 removed). The ballot is **priced and
+    paginated, not capped**; **at most one nomination per address** (sybil-
+    priced by the bond, so no actor exhausts a global pool). Nomination window
+    ≈1 day.
+  - **Install by most-approvals-over-retain — no absolute threshold** (round 6
+    F1: "5001 bps of approving weight" was copied from the two-sided dispute
+    vote, which only means something because it has a yes+no denominator;
+    approval has none, so an absolute gate + retain-as-silent-default makes a
+    31% captured minority beat a 69% honest majority, or a motivated 5%
+    capture). Each voter **approves any number of lines including retain**. The
+    winner is `argmax` approving-weight over {all candidate-sets, retain}. A
+    challenger installs **iff** it is the winner **AND** its approval exceeds
+    retain's by ≥ the **margin floor** (= the quorum floor) **AND** turnout ≥
+    the quorum floor; otherwise the current set is retained. Retain being a
+    real ballot line judged by approvals (not a zero-approval fail-through) is
+    what makes approval's anti-split property actually hold — adding an honest
+    candidate cannot hand the seat to the incumbent.
+  - **Tie / near-tie is deterministic and capital-stable**: within the margin
+    floor, earliest nomination height wins, else retain (round 6 F5 — stops a
+    whale installing a one-address-swapped **decoy** of an honest set by adding
+    free approving weight). Render must **diff** every candidate-set against the
+    incumbent and flag near-duplicates, since proposals are addresses-only.
+  - weights: `PastVotes` at the epoch **pinned at nomination-window open**;
+    quorum/margin floor **max(1, 5%·(PastTotal(at) − PastVotes(escrow, at)))**
+    (escrow = the realm address); length `votingBlocks`.
   - **per-candidate bond scales with court size**: `max(flagMinCC,
-    β·PastTotal(at))` (a flat 1-CC bond can't deter spamming a large court's
-    ballot); β a frozen constant. A candidate's bond **returns if it installs
-    or is approved above the quorum floor, half-burns otherwise** (deters
-    throwaway-candidate spam without taxing serious nominations); a fully-failed
-    election (no candidate cleared) starts a per-court `flagCooldownBlocks`
-    cooldown. No withdrawal path.
+    β·PastTotal(at))`. **β is FROZEN with a two-sided deploy invariant** (round
+    6 F4 — not an owner knob): a floor keeping the bond ≥ `flagMinCC`, and a
+    ceiling keeping `β·PastTotal` below a fraction a legitimate challenger
+    coalition can bear, so no court is ever challenge-proof by price. **Bond
+    refunds ONLY on install; every non-installed candidate half-burns** (round
+    6 F3: "refund if above the quorum floor" was self-approvable — a ≥5% holder
+    approves its own junk to reach the floor and spams the ballot for free,
+    then loops the `flagCooldownBlocks` cooldown to lock a captured court
+    indefinitely). No withdrawal path; a fully-failed election (retain wins)
+    starts a per-court cooldown of `flagCooldownBlocks`' **duration** — but in
+    its **own** per-court election-cooldown slot (round 6 code-truth: the
+    existing `flagCooldownBlocks` field is per-*claim* flag-lane state; reuse
+    the constant, not the field).
+  - **Tally structure**: a `candidateID→approvingWeight` accumulator + a
+    per-(candidate, voter) dedup set (a voter may approve many lines, unlike
+    the quality tally's single bucket), in the bptree idiom; the `argmax`
+    winner scan is O(candidates) and **bounded/paginated** (the priced,
+    uncapped ballot means candidate count is bounded by bond spend, but the
+    scan must not assume a small set).
   - **I2 carve-out**: candidate-bond legs move the poster's *own* CC to escrow
     and burn on failure — the one money write a moderation-adjacent entrypoint
     makes (the flag lane's bond legs are identical).
@@ -373,6 +398,17 @@ just relocates the flood).
   `minClaimDepositCC` high enough to make a 50-row flood park real capital 12
   weeks without pricing out a single appeal — accepting this is a nuisance-cost
   ceiling, not a flood *gate*.
+  **The load-bearing escape, stated (round 6 F1):** a buried pre-answer
+  appellant is not stuck — they **self-answer their own appeal** (`PostAnswer`
+  has no author≠answerer ban), which moves the row **pending → strip**, where
+  the sybil-proof deadline spine makes it discoverable-for-policing for its
+  whole settle window and the deployer's junk-appeal-policing sees it. Cost
+  ≈ `minAnswerX` (100 CC) + a 50%·X̄ answer bond (~50 CC) ≈ 150 meta-CC, all
+  recoverable. *That* — not pagination — is what bounds pending-list burial to
+  friction rather than denial; pagination merely preserves enumeration until the
+  appellant escapes. (A floor-deposit appellant sorts to the bottom under
+  deposit-descending order, so the escape, not the render key, is the real
+  guarantee.)
 - **Bits**: strips/pending ignore courtMod+meta bits; the **global** bit redacts
   text but still renders the stored parse for `mod:` rows (open or persisted).
   Tier-hidden courts' rows appear on the directory strip (redacted iff global).
@@ -430,9 +466,9 @@ delay)`, floor 1.
   tombstones across {dispute rounds incl. meta appeals, quality flag/ride/
   counter tallies, elections}; purged authors still refund.
 - **I2** — no moderation entrypoint writes money **except the election
-  candidate-bond legs (poster's own CC)**; money→moderation write-calls never
-  panic; the four read gates enumerated; PostAnswer's latch read touches no
-  bit/money value.
+  candidate-bond legs (poster's own CC → escrow; refunded on install, else
+  half-burned)**; money→moderation write-calls never panic; the four read gates
+  enumerated; PostAnswer's latch read touches no bit/money value.
 - **I3** — deep links/positions render under courtMod/meta (banner); global
   redacts (no text); purged → tombstones.
 - **I4** — title reverts after window close/first stake; annotations append-
@@ -462,12 +498,16 @@ delay)`, floor 1.
 - **I11** — purge m-of-n, row-level with stable row ids; category codes parse
   (code set **final/shape-extensible before deploy**); unrecoverable; whole-
   court purge tombstones future rows + gates OpenClaim.
-- **I12** — election: per-court latch; **multi-candidate approval ballot (bonds
-  add candidates, never exclude one; "retain current set" is the floor;
-  installs iff ≥5001 bps approving weight AND quorum, else current set
-  retained)**; court-size-scaled per-candidate bond, returned if installed/above-
-  quorum else half-burned; escrow-netted quorum; epoch at nomination-window
-  open; fully-failed election starts a cooldown; no withdrawal.
+- **I12** — election: per-court latch; **approval ballot with retain as an
+  explicit approvable line, no candidate cap, one nomination/address; install =
+  argmax-approval over {candidates, retain} iff a challenger wins by ≥ the
+  margin floor AND turnout ≥ quorum, else retain**; deterministic earliest-
+  nomination tie-break within the margin; court-size-scaled per-candidate bond
+  **refunded only on install, else half-burned**; **β frozen by two-sided
+  deploy invariant** (bond ≥ flagMinCC floor, bearable-coalition ceiling);
+  escrow-netted quorum/margin floor; epoch at nomination-window open;
+  fully-failed election starts a cooldown; no withdrawal; O(candidates) winner
+  scan bounded.
 
 ## 11. Attack ledger
 (rounds 1–3 rows retained; round-4 additions/status below; M-A1–A29 as v0.4
@@ -476,7 +516,10 @@ except where noted)
 | # | Attack | Disposition | Status |
 |---|---|---|---|
 | M-A30 | Pre-position blockade | **Deadline ordering (sybil-proof, strips)** + per-actor caps (contended pages) + priced doors; spine delivers discovery not self-financing slash (r5 prose) | REVISED r4/r5 |
-| M-A33 | Election incumbent camp / ballot-veto | **Multi-candidate approval ballot — bonds ADD candidates, never exclude one** (r5: the auction let capital veto ballot access, overriding a vote majority); per-court latch; court-scaled per-candidate bond | REVISED r4/**r5** |
+| M-A33 | Election incumbent camp / ballot-veto | **Standard approval voting, correctly specified**: uncapped priced ballot + retain-as-explicit-line + most-approvals-over-retain (no absolute gate) + refund-on-install-only + frozen β | REVISED r4/r5/**r6** |
+| M-A46 | **Approval majority-gate incumbency-lock** (absolute 5001-bps gate + retain-as-default → abstention favors incumbent; 31% minority beats 69% majority) | Retain is an approvable ballot line; install by argmax-over-retain + margin, no absolute threshold | NEW r6 |
+| M-A47 | **Candidate-cap exclusion + free self-approved spam** (fill the cap to keep a challenger off; ≥5% holder self-approves to refund junk bonds, loops cooldowns) | No cap (price + paginate, one nomination/address); refund only on install | NEW r6 |
+| M-A48 | **Decoy near-duplicate set** (whale installs a one-address-swapped clone of an honest set) | Deterministic earliest-nomination tie-break within margin; render diffs candidates vs incumbent | NEW r6 |
 | M-A38 | **Pending-list flood** | Pending list = pagination + priced door (enumeration preserved); **NOT** the deadline spine (r5: pre-answer rows have no SettleDeadline; harm bounded to discovery-friction) | REVISED r4/**r5** |
 | M-A44 | **Auction ballot-veto** (capital wins the latch, runs a doomed proposal, community's proposal never voted) | Folded into M-A33's multi-candidate ballot | NEW r5 |
 | M-A45 | **Pre-emptive no-op-unhide hide-block** (chain of unhide appeals on a visible item stamps cooldown) | No-op unhide stamps nothing | NEW r5 |
@@ -528,9 +571,21 @@ except where noted)
    meta-CC **non-transferable at launch** (escrow + curve mints exempt);
    **near-zero meta emission** is a two-sided fork (kills the deployer's +EV
    junk-appeal policing AND raises the forgery price ~5×). Owner call.
-5. **StartCourt creation fee** (burned GNOT; makes StartCourt user-call-only) +
-   **court-size bond constant β** for elections — amounts owner calls.
+5. **StartCourt creation fee** (burned GNOT; makes StartCourt user-call-only) —
+   amount an owner call. (β is **no longer an owner knob** — round 6 froze it
+   with a two-sided deploy invariant; the owner sets only the invariant's
+   floor/ceiling shape, not a live value.)
 6. **Terminology**: "supreme" never in render/public copy; prefer "review".
+7. **The election is the highest-iteration, highest-risk module — recommend
+   human review before it goes live.** The moderator-replacement election broke
+   in four consecutive audit rounds (latch-camp → per-proposer-sybil → auction
+   ballot-veto → majority-gate + cap); v0.7 settles on textbook approval voting
+   (retain as an explicit line, most-approvals-over-retain, no absolute gate, no
+   cap, refund-on-install, frozen β), which is a solved problem when specified
+   correctly — but four breaks on one mechanism is a signal that a human should
+   sanity-check the final election spec before build, and that the build should
+   carry the heaviest test coverage here (the r6 fix set A–F maps to concrete
+   test cases). Everything *else* in the doc converged cleanly by round 5.
 
 ## 14. Changelog
 - **v0.1–v0.4**: see prior entries (constitution; policing strips; purge; meta
