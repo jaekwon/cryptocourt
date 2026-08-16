@@ -1089,6 +1089,15 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.18** — (iterations 14–15, process note) the monolithic round-2 holistic
+  vet ran ~4× longer than any prior vet with no output despite a nudge —
+  treated as lost and SUPERSEDED by two tight splits now running: **2A**
+  (mechanism fixes under attack: burn-comp dispute EV incl. scarcity-window
+  lying, flag-reopen chains incl. the per-claim-vs-per-flagger doubling-base
+  pin, rateAtFreeze boundary games) and **2B** (full stale-text/consistency
+  checklist — Appendix B is known-stale — plus the ten-role incentive audit).
+  If the original ever reports, it becomes confirmation. Also v0.17.5: README
+  status pointer to the design set.
 - **v0.17** — (iteration 13) created **ECONOMICS.md**, the private calibration
   memo §3.3 referenced but which didn't exist: symbols, the y*/p_min results,
   the deploy-computable d(n) ceiling path that makes the rate schedule
