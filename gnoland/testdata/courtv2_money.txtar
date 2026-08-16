@@ -117,3 +117,46 @@ gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:orem/1"
 stdout 'Is the sky blue\?'
 ! stdout '[Bb]acking'
 ! stdout 'APR'
+
+# --- Render security on a REAL node: a hostile claim title -----------------------
+# The title carries a markdown link and an HTML/script injection. On-chain
+# sanitize.InlineText must neutralize both so qrender's markdown can never emit
+# a live link to the attacker's host or a raw <script>/<img> tag — proving the
+# escaping holds through the actual qrender path, not just the in-process test.
+gnokey maketx call -pkgpath gno.land/r/cryptocourt/courtv2 -func OpenClaim -args orem -args 'INJ[x](http://evil.example)<script>alert(1)</script><img src=q onerror=y>END' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout '\(2 uint64\)'
+stdout 'OK!'
+
+gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:orem/2"
+# The title's safe text still renders (it is shown, not dropped)...
+stdout 'INJ'
+stdout 'END'
+# ...but the dangerous forms are neutralized: InlineText backslash-escapes the
+# markdown/HTML-active chars, so no COMPLETE dangerous token can form — no live
+# link `](http`, no `<script>` open tag, no img tag that closes with its
+# handler (`onerror=y>`). (The bare bytes `<img` still appear as the inert
+# `\<img`; the escaped `<` means the HTML renderer never opens a tag.)
+! stdout '\]\(http'
+! stdout '<script>'
+! stdout 'onerror=y>'
+# And the claim page still renders its own chrome (the title did not break out
+# of its slot and swallow the page).
+stdout 'Signal'
+stdout 'staked now'
+
+# The hostile title also appears in the court's claim list — same neutralization.
+gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:orem"
+! stdout '\]\(http'
+! stdout '<script>'
+
+# --- Queryability reads a UI depends on (qeval, no md-scraping) -------------------
+# One-call human status; settle deadline (0 pre-answer); senior-queue bound;
+# per-side pool conviction (0/0 on a fresh claim). All return cleanly.
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.ClaimStatus(\"orem\",2)"
+stdout 'open'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.SettleDeadline(\"orem\",2)"
+stdout '\(0 int64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.QueueLen(\"orem\")"
+stdout '\(0 uint64\)'
+gnokey query vm/qeval --data "gno.land/r/cryptocourt/courtv2.PoolConviction(\"orem\",2)"
+stdout '\(0 int64\)'
