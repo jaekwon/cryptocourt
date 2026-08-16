@@ -447,3 +447,50 @@ func TestSlashReserveDrawProportionalAtSettle(cur realm, t *testing.T) {
 		t.Fatal("most of the bond should have returned; only the reserve is held")
 	}
 }
+
+// audit_slash_v040 LOW: a conclusive-low flag resolving BEFORE settle must not
+// have its low tier reset to mid by SettleUndisputed — the junk claim draws 0,
+// not a full mid draw.
+func TestConclusiveLowSurvivesLateSettle(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cl-alice")
+	bob := testutils.TestAddress("cl-bob")
+	carol := testutils.TestAddress("cl-carol")
+	c := testCourt(cur, "cl1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cl1", "junk that gets flagged before settle")
+	matureOI(cur, "cl1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cl1", id, sideYES)
+
+	// The flag resolves conclusive-low FIRST (nobody settled yet).
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "cl1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "cl1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "cl1", id)
+	if tier, _ := QualityTier("cl1", id); tier != qualityLow {
+		t.Fatal("the flag must land conclusive-low")
+	}
+
+	// NOW settle (permissionless, still callable — verdictAt was never set).
+	SettleUndisputed(cross(cur), "cl1", id)
+	if tier, _ := QualityTier("cl1", id); tier != qualityLow {
+		t.Fatal("settle must NOT reset a conclusive-low tier back to mid")
+	}
+
+	// Close the counter window, then crystallize: the low tier means D = 0.
+	cs := mustClaim(c, id)
+	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	ResolveSlashWindow(cross(cur), "cl1", id)
+	testing.SkipHeights(priorityWindowBlocks + 1) // 24h quiet
+	testing.SkipHeights(periodBlocks)             // a budget to draw from, if any
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cl1", id)
+	if w, a, ans, _ := DrawSlices("cl1", id); w != 0 || a != 0 || ans != 0 {
+		t.Fatalf("a conclusive-low claim must draw nothing: %d/%d/%d", w, a, ans)
+	}
+}

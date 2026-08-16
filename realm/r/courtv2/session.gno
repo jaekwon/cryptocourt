@@ -34,8 +34,14 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	cs.verdictAt = runtime.ChainHeight()
 	cs.route = "undisputed"
 	cs.provisional = cs.answer
-	if !cs.tierFinal {
-		cs.tier = tierMidX // the undisputed default; the flag lane may re-vote it
+	// The undisputed default is mid — UNLESS a conclusive flag already decided
+	// quality (slotConsumed). A slash-grade LOW leaves tierFinal false while its
+	// counter-flag window is open (tier==low, slotConsumed==true); without the
+	// slotConsumed guard, a settle landing in that window (both are permissionless
+	// with overlapping timing) would reset the low back to mid and pay full mid
+	// emission on a claim the crowd conclusively voted junk (audit_slash_v040 LOW).
+	if !cs.tierFinal && !cs.slotConsumed {
+		cs.tier = tierMidX
 	}
 
 	// The bond returns — but a SLASH-SIZED reserve stays collateralized
