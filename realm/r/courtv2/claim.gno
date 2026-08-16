@@ -87,6 +87,32 @@ type claimState struct {
 	// quorum floor — the record credits only for genuinely contested wins
 	// (audit M2-1: a weightless self-contest must not mint the credential).
 	credEligible bool
+
+	// The quality lane (quality.gno, §10.2 Q2-Q5). One flag slot per claim;
+	// a court-local sealed 3-bucket tally rides flags AND dispute rounds.
+	flagOpen        bool
+	flagger         address
+	flagBond        int64
+	flagVoteEnd     int64
+	flagCycles      int64 // inconclusive reopens; bond frozen at 4xb0 after 3
+	slotConsumed    bool
+	lastFlagEventAt int64 // restamped at vote close/reopen/void — the 24h rule
+	lastFlagAt      int64 // cooldown anchor once the bond is frozen
+	qVoteSeq        uint64
+	qLowW           int64 // the SEALED tally: no read ever exposes these live
+	qMidW           int64
+	qHighW          int64
+	qVoted          *bptree.BPTree // seq|addr -> true (one vote per tally)
+	// The slash escrow (Q5): reserved from the answer bond at a slash-low,
+	// disposed exactly once at the counter-flag window's close.
+	pendingSlash      int64
+	pendingSlashUntil int64
+	counterUsed       bool
+	// Crystallize marker (Q6-Q8): after it, quality is immutable.
+	crystallized bool
+	// Carrot pull-claim anchors (set at the conclusive tally)
+	conclusiveSeq     uint64
+	conclusiveTurnout int64
 }
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's

@@ -99,6 +99,11 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 		panic("courtv2: the escrow window has passed; Finalize the verdict")
 	}
 	touch(c)
+	// A dispute outranks the quality lane: an open flag VOIDS (bond returned,
+	// slot unconsumed — the dispute's own tally carries quality), and a fresh
+	// ride tally opens with the round.
+	voidFlag(c, cs)
+	openQualityTally(cs)
 
 	// Bond: min(20%·X̄frozen, 40% × the actual answer bond) — the v0.25 arm
 	// keeps round 1 at q > 1/3 on every claim including bond-capped courts —
@@ -216,6 +221,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.provisional = int8(oppositeSide(int(cs.answer)))
 		cs.failedRounds = 0
 		cs.decidedRounds++
+		resolveQualityRide(c, cs)
 	default:
 		// UPHOLD (tie, all-abstain, or a sub-threshold split, quorum met):
 		// the disputer's bond BURNS in full; the answerer is comped against
@@ -242,6 +248,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.provisional = cs.answer
 		cs.failedRounds = 0
 		cs.decidedRounds++
+		resolveQualityRide(c, cs)
 	}
 
 	// The escrow clock is set ONCE, at the first resolution, and never
