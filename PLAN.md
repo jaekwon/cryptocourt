@@ -1256,6 +1256,10 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 19 | d_n denominator | **Live realized supply** (v0.20) — REVERSES the v0.15 ceiling pin; ceiling made early courts unpayable (p_min > 1); all manipulations self-costly | Ceiling path = safe margins but a dead early court; modeled path risks farming re-entry |
 | 20 | Comp sizing | min(2×own bond, 80%×loser's burn), tier-invariant, senior-queued (v0.20) | Any comp reachable above the pair's burn re-opens self-X recapture (V2-2) |
 | 21 | Policing pay | Senior-queued entitlements, never scaled (v0.20) | Availability-scaling re-opens the scarcity-window lying meta (2A-T1 BREAKS) |
+| 22 | Flag ratchet terminal | Bond freezes at 8%·X̄ after 3 inconclusives, 7d cooldown (v0.24) | A terminate-as-mid cap = mill immunization; bare unbounded doubling = immunization by capital exhaustion |
+| 23 | Bounty base | ≤ 80% of the low outcome's burns, with the 2.5%·X̄ answer-bond slash as the scaling burn (v0.25) | Own-bond bounty was a mint faucet; deposit-only base un-pays policing (V2-1) |
+| 24 | Two-tier low | Median-low = tier-0 + deposit-only economics; slash + full bounty need ⅔ + full bar (v0.26, DRAFT pending final vet) | Single-tier low made honest-claim capture a ~50:1 faucet |
+| 25 | Quality-lane participation | Participants excluded from own-claim quality votes and carrots (v0.26) | In-band self-defense via same-epoch/post-release enfranchisement; carrot self-payment |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
 
@@ -1331,11 +1335,15 @@ break-even p ≈ 0.59). A matched farmer earns the winner leg on half their
 capital against 2× lock: negative, as designed.
 
 **Alternative endings (v0.20 rules)**:
-- *Flagged, conclusive LOW* (turnout ≥ ¼-bar): every tier-scaled slice = 0;
-  Alice's deposit slashed and **burned**, fee **burned**; the flagger's bond
-  returns plus a minted, senior-queued **bounty = the bond** (≈1,200 CC);
-  flag-vote voters split the senior-queued carrot; all principals exit 1× —
-  **principal is never pausable** (split settlement).
+- *Flagged, SUPERMAJORITY low* (≥⅔ of turnout at the full verdict bar — where
+  real junk converges): every tier-scaled slice = 0; Alice's deposit + fee
+  burned AND **2.5%·X̄ = 1,500 CC slashed from Dan's answer bond** (v0.25 —
+  answering junk is conduct); the flagger's bond returns plus a senior-queued
+  bounty = min(1,200, 80% × 1,501) = **1,200 CC**; non-participant flag-vote
+  voters split the carrot; all principals exit 1× — **principal is never
+  pausable** (split settlement). *(A median-only low — the two-tier rule,
+  v0.26 — zeroes the draws and slashes only the deposit; the bounty is then
+  ≤ 80% × 1.1 ≈ 0.9 CC and no answer-bond slash occurs.)*
 - *Disputed and overturned* (verdict flips NO): Dan's 30,000 bond **burns in
   full**; the disputer risked B_d = 20%·X̄ = 12,000 (zero-case rule: the
   answer-bond cap is 0 = uncapped, so B_d is plain 20%·X̄), gets it back plus
@@ -1347,6 +1355,11 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.26b** — (iteration 31) ripple sweep: Appendix B's flagged ending
+  recomputed under two-tier low (supermajority branch shown — slash 1,500 CC,
+  bounty 1,200 CC; median-only branch noted at ≈0.9 CC); decision index rows
+  22–25 added (ratchet freeze, bounty base, two-tier low, participant
+  exclusion).
 - **v0.26** — (iteration 30b) micro-vet-3 landed: CONFIRMS the answer-height
   snapshot (independently derived the identical pin) and the full-bar +
   dead-zone fixes; adds PARTICIPANT EXCLUSION (own-claim quality lane: no
