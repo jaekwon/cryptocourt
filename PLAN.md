@@ -456,6 +456,17 @@ denominator exists to time or to hold hostage.
   and policing pay survive on that branch; pushing an HONEST claim there
   costs the full-bar whale threshold — the register's accepted capture class,
   no cheaper than capturing high.
+  **Pre-analysis while the vet runs (iteration 33, for comparison at
+  ingestion)**: (a) tier-0 + deposit alone kills any FLAGGED mill — the draw
+  was the mill's whole income, so the slash is police-funding, not
+  mill-killing; (b) BUT gating the slash at the supply-floored full bar
+  likely re-opens the dead zone on small claims (supermajority-low
+  unreachable → only dust-bounty median-low fires → flagging irrational
+  again at small X̄). Candidate refinement: supermajority-low = ⅔ of turnout
+  at the CLAIM-SCALED bar `min(X̄, ⅓·votable)` — the capture price then
+  lives in the ⅔-against-honest-consensus requirement (2:1 dominance over
+  the paid electorate, sealed), not in an absolute floor; junk earns its ⅔
+  free because honest voters genuinely vote low on junk.
 - **v0.25 pins**: no voter carrot on INCONCLUSIVE outcomes (else ratchet-spam
   gets ~3× cheaper and a carrot upsizing could flip it — micro-vet-2's
   carrot < b₀/2 invariant stays as belt); the "honest loss capped at b₀/2"
