@@ -45,3 +45,45 @@ func TestRenderPagesAndSanitization(cur realm, t *testing.T) {
 	}
 	_ = c
 }
+
+func TestRenderLifecycleLines(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rl-alice")
+	c := testCourt(cur, "rl1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rl1", "Lifecycle lines")
+	cs := mustClaim(c, id)
+
+	mustContain := func(stage, want string) {
+		t.Helper()
+		out := Render("rl1/1")
+		if !strings.Contains(out, want) {
+			t.Fatalf("%s: missing %q in:\n%s", stage, want, out)
+		}
+	}
+	mustContain("open", "open — stake YES or NO")
+
+	// Answered: crafted state (the dispute tests exercise the real paths;
+	// render only reads).
+	cs.frozenAt, cs.answer, cs.answerBond0, cs.answerHeight = 10, sideNO, 777, 10
+	mustContain("answered", "settles undisputed")
+	mustContain("answered", "answer: NO (bond 777 CC units)")
+
+	cs.disputeOpen, cs.round = true, 1
+	mustContain("disputed", "sealed vote")
+	mustContain("disputed", "sealed until the vote closes")
+	if strings.Contains(Render("rl1/1"), "yes:") {
+		t.Fatal("an open vote must never render a running tally")
+	}
+
+	cs.disputeOpen, cs.provisional, cs.escrowUntil, cs.failedRounds = false, int8(sideNO), 99999, 1
+	mustContain("provisional", "provisional verdict NO")
+	mustContain("provisional", "withdraw 1× now")
+	mustContain("provisional", "failed dispute rounds: 1 of 3")
+
+	cs.verdictAt, cs.route = 100, "vote"
+	mustContain("settled", "settled — every stake withdraws 1×")
+	mustContain("settled", "verdict: NO — vote")
+
+	cs.provClose = true
+	mustContain("provclose", "closed without a decision")
+}

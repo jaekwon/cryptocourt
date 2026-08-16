@@ -118,7 +118,32 @@ func renderClaim(slug string, id uint64) string {
 		b.WriteString("- lifetime conviction: " + pct(yc, yc+nc) + " YES\n")
 	}
 	b.WriteString("\n## Status\n\n" + claimStatus(cs) + "\n")
+	if cs.frozenAt != 0 {
+		b.WriteString("\n## Resolution\n\n")
+		b.WriteString("- answer: " + sideName(int(cs.answer)) + " (bond " +
+			strconv.FormatInt(cs.answerBond0, 10) + " CC units)\n")
+		if cs.failedRounds > 0 {
+			b.WriteString("- failed dispute rounds: " + strconv.FormatInt(cs.failedRounds, 10) +
+				" of " + strconv.FormatInt(int64(maxFailedRounds), 10) +
+				" — the next dispute bond doubles\n")
+		}
+		if cs.disputeOpen {
+			// The sealed-tally rule: an open vote renders NO running count.
+			b.WriteString("- dispute round " + strconv.FormatInt(cs.round, 10) +
+				" vote open — the tally is sealed until the vote closes\n")
+		}
+		if cs.verdictAt != 0 && !cs.provClose {
+			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")
+		}
+	}
 	return b.String()
+}
+
+func sideName(side int) string {
+	if side == sideYES {
+		return "YES"
+	}
+	return "NO"
 }
 
 // claimStatus is the one-line lifecycle readout. It grows verdict/tier/route
@@ -128,8 +153,19 @@ func claimStatus(cs *claimState) string {
 	switch {
 	case cs.closed:
 		return "closed — never answered; every stake exited 1×, the deposit refunded"
+	case cs.provClose:
+		return "closed without a decision — three dispute rounds failed quorum; everyone withdraws 1×, deposit and fee refunded"
+	case cs.verdictAt != 0:
+		return "settled — every stake withdraws 1×"
+	case cs.disputeOpen:
+		return "disputed — a sealed vote is deciding; principal is never withheld"
+	case cs.provisional >= 0:
+		return "provisional verdict " + sideName(int(cs.provisional)) +
+			" — reopenable by a new dispute until block " + strconv.FormatInt(cs.escrowUntil, 10) +
+			"; the side it is against may withdraw 1× now"
 	case cs.frozenAt != 0:
-		return "answered — staking frozen; resolution in progress (principal is never withheld)"
+		return "answered — staking frozen; disputable until block " +
+			strconv.FormatInt(cs.answerHeight+settleDelay, 10) + ", then it settles undisputed"
 	default:
 		return "open — stake YES or NO; unstake freely until an answer posts"
 	}
