@@ -15,21 +15,25 @@ import (
 
 // Render routes:
 //
-//	""              the directory
-//	"<slug>"        one court
-//	"<slug>/<id>"   one claim
+//	""                    the directory
+//	"<slug>"              one court
+//	"<slug>/<id>"         one claim
+//	"<slug>/<id>/<addr>"  one address's positions on a claim ("your page")
 func Render(path string) string {
 	path = strings.Trim(path, "/")
 	if path == "" {
 		return renderDirectory()
 	}
-	parts := strings.SplitN(path, "/", 2)
+	parts := strings.SplitN(path, "/", 3)
 	if len(parts) == 1 {
 		return renderCourt(parts[0])
 	}
 	id, err := strconv.ParseUint(parts[1], 10, 64)
 	if err != nil {
 		return "## Not found\nA claim id must be a number."
+	}
+	if len(parts) == 3 {
+		return renderPositions(parts[0], id, parts[2])
 	}
 	return renderClaim(parts[0], id)
 }
@@ -164,6 +168,81 @@ func renderClaim(slug string, id uint64) string {
 			b.WriteString("- rewards crystallized — pools (CC units): accuracy " + strconv.FormatInt(w, 10) +
 				", author " + strconv.FormatInt(a, 10) + ", answerer " + strconv.FormatInt(ans, 10) +
 				", participation remaining " + strconv.FormatInt(carrot, 10) + "\n")
+		}
+	}
+	b.WriteString("\n_Your positions: append your address to this path (…/" +
+		strconv.FormatUint(id, 10) + "/<your-address>)._\n")
+	return b.String()
+}
+
+// renderPositions is the per-address "your page" for one claim (§11): live
+// principal per side, durable conviction (the reward weight), the caller's
+// roles, and lifecycle hints on what is withdrawable. Read-only — it composes
+// existing reads and never re-derives the money math the pull entrypoints own.
+func renderPositions(slug string, id uint64, addrStr string) string {
+	if !Exists(slug) {
+		return "## Not found\nNo court by that slug."
+	}
+	c := mustCourt(slug)
+	if id == 0 || id > c.nextID {
+		return "## Not found\nNo claim by that id."
+	}
+	who := address(addrStr)
+	if !who.IsValid() {
+		return "## Not found\nThat is not a valid address."
+	}
+	cs := mustClaim(c, id)
+
+	b := strings.Builder{}
+	b.WriteString("# Your positions\n\n")
+	b.WriteString("Claim: " + sanitize.InlineText(cs.title) + "\n\n")
+	b.WriteString("Address: " + sanitize.InlineText(addrStr) + "\n\n")
+
+	yStake := StakeOf(slug, id, sideYES, who)
+	nStake := StakeOf(slug, id, sideNO, who)
+	yConv := ConvictionOf(slug, id, sideYES, who)
+	nConv := ConvictionOf(slug, id, sideNO, who)
+	b.WriteString("## Stake (live principal, always returns 1×)\n\n")
+	b.WriteString("- YES: " + strconv.FormatInt(yStake, 10) +
+		"   NO: " + strconv.FormatInt(nStake, 10) + " (CC base units)\n")
+	b.WriteString("- conviction so far — YES: " + strconv.FormatInt(yConv, 10) +
+		"   NO: " + strconv.FormatInt(nConv, 10) + " (the reward weight)\n")
+
+	// Roles on this claim.
+	roles := ""
+	if who == cs.author {
+		roles += "author "
+	}
+	if cs.frozenAt != 0 && who == cs.answerer {
+		roles += "answerer "
+	}
+	if roles != "" {
+		b.WriteString("- roles: " + roles + "\n")
+	}
+	if rec := AnswerRecord(slug, who); rec > 0 {
+		b.WriteString("- difficulty record (this court): " + strconv.FormatInt(int64(rec), 10) + "\n")
+	}
+
+	// Lifecycle hints — what to do next. No amounts (the pulls compute those).
+	b.WriteString("\n## What you can do\n\n")
+	switch {
+	case cs.verdictAt == 0 && cs.frozenAt == 0:
+		b.WriteString("- staking is open — stake or unstake freely until an answer posts\n")
+	case cs.verdictAt == 0:
+		b.WriteString("- answered, awaiting the verdict — principal is never withheld; withdraw once it is final\n")
+	default:
+		b.WriteString("- the verdict is final — withdraw your principal on either side (1×)\n")
+		if cs.crystallized {
+			win := int(cs.provisional)
+			if !cs.provClose && ((win == sideYES && yStake+yConv > 0) || (win == sideNO && nStake+nConv > 0)) {
+				b.WriteString("- you backed the winning side — pull your accuracy reward\n")
+			}
+			if who == cs.author && cs.drawAuthor > 0 {
+				b.WriteString("- author reward available — pull it\n")
+			}
+			if who == cs.answerer && cs.drawAnswerer > 0 {
+				b.WriteString("- answerer reward available — pull it\n")
+			}
 		}
 	}
 	return b.String()

@@ -99,3 +99,48 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	cs.provClose = true
 	mustContain("provclose", "closed without a decision")
 }
+
+func TestRenderPositionsPage(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rp-alice")
+	bob := testutils.TestAddress("rp-bob")
+	c := testCourt(cur, "rp1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rp1", "Positions page claim")
+	matureOI(cur, "rp1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "rp1", id, sideNO, 300_000_000)
+
+	// Bad inputs degrade gracefully.
+	if !strings.Contains(Render("rp1/1/not-an-address"), "not a valid address") {
+		t.Fatal("an invalid address must render the not-found notice")
+	}
+	if !strings.Contains(Render("nope/1/"+bob.String()), "No court") {
+		t.Fatal("unknown court must render not-found")
+	}
+
+	// Bob's page: his NO stake and conviction show; staking-open hint.
+	out := Render("rp1/1/" + bob.String())
+	if !strings.Contains(out, "Your positions") || !strings.Contains(out, bob.String()) {
+		t.Fatal("the page must name the address")
+	}
+	if !strings.Contains(out, "NO: 300000000") {
+		t.Fatalf("bob's live NO stake must show:\n%s", out)
+	}
+	if !strings.Contains(out, "staking is open") {
+		t.Fatal("pre-answer, the hint is that staking is open")
+	}
+	// The claim page links to the positions route.
+	if !strings.Contains(Render("rp1/1"), "append your address") {
+		t.Fatal("the claim page must hint the positions route")
+	}
+
+	// After answer + settle, the hint flips to withdraw.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rp1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "rp1", id)
+	if !strings.Contains(Render("rp1/1/"+bob.String()), "withdraw your principal") {
+		t.Fatal("post-verdict, the hint is to withdraw principal")
+	}
+}
