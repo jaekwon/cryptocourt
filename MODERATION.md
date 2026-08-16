@@ -1,12 +1,16 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.5 — round-4 vet ingested (3 lenses; 3 HIGH + 1 MED-HIGH + spec-
-> consistency MEDs, all breaking a v0.4 disposition or its prose, all with
-> local fixes). VETTING; round 5 is the convergence check on the deltas
-> only.** Trajectory: severity ceiling CRITICAL(r1/r2)→HIGH(r3/r4), counts
-> 40→24→19→16, findings now converging on one root principle (below) + guard-
-> prose tightening. Additive to launch-cleared V2 (PLAN v0.40; see the drift
-> note and §13.1). PLAN/REGULATIONS edits deferred to integration (§15).
+> **STATUS: v0.6 — round-5 vet ingested (2 lenses; 1 HIGH + 1 MED-HIGH, both
+> breaking a v0.5 delta; verification lens returned CONVERGED with 2 LOW nits).
+> VETTING; round 6 re-checks only the two v0.6 deltas — the multi-candidate
+> ballot election and the pending-list honesty correction.** Trajectory:
+> severity ceiling CRITICAL(r1/r2)→HIGH(r3/r4/r5), attacker HIGH-counts
+> 2→2→(1 HIGH+1 MED-HIGH), findings converging on one root principle (below).
+> The election has been the fix-of-fix locus (r3→r4→r5); v0.6's multi-candidate
+> ballot is structurally different — it removes the *scarce excludable slot*
+> every prior break exploited, so it should terminate the chain. Additive to
+> launch-cleared V2 (PLAN v0.40; see the drift note and §13.1). PLAN/REGULATIONS
+> edits deferred to integration (§15).
 
 > **The root principle (four rounds earned it):** *address-keyed defenses fall
 > to sybils; only capital-keyed, deadline-keyed, or residency-keyed defenses
@@ -14,7 +18,7 @@
 > camp, and the round-4 pending-list flood are one bug. Every discovery-surface
 > defense here is therefore priced (capital), ordered by actionable deadline
 > (which a mill cannot manufacture without exposing the row to slashing), or
-> auctioned by bond — never gated by address identity.
+> balloted among bonded candidates — never gated by address identity.
 
 > **Drift note (PLAN v0.40):** the live branch adopted a **draw-proportional
 > anti-mill slash** — `slash = min(bond, max(4.5%·X̄, 1.6·midGross))`
@@ -126,33 +130,42 @@ clears the global bit but global; nobody reverses a purge.
   the creator's appointment power, clears the suspension flag, and resets the
   bond ladder. Dark set → another election (quorum nets escrow, so viable).
 - **The election** (court-local sealed tally, `modvote.gno`; no governor
-  slots; the quality-vote idiom), rebuilt round 4 (F1) because per-proposer
-  cooldowns fall to address-sybils:
-  - **latch = per-court (exactly one open election)** — pinned; a per-proposer
-    latch would split quorum across concurrent elections.
-  - proposal: **addresses-only**; proposer = any address posting the bond.
-  - weights: `PastVotes` at the epoch **pinned at vote open** (governor idiom,
-    not the answer-time qualityEpoch); threshold 5001 bps; length
-    `votingBlocks`; quorum floor **max(1, 5%·(PastTotal(at) −
-    PastVotes(escrow, at)))** (escrow = the realm address; netting it is the
-    election's own rule, analogous to the dispute floor's votable arm).
-  - **base bond scales with court size**: `max(flagMinCC, β·PastTotal(at))`
-    (round 4: a flat 1-CC bond can't deter camping a large court's governance
-    latch); β a frozen constant.
-  - **slot allocation is a bond auction, not first-come** (round 4, the sybil-
-    proof replacement for per-proposer cooldowns): when the latch is open, a
-    fixed **auction window** (≈1 day) collects competing proposals; the
-    **highest bond wins** the latch and runs the vote, all losers refunded in
-    full. A failed vote re-opens the auction (bond doubles per *failed
-    election*, per-court, frozen at 4×, reset by a passed election); the
-    winner's failed bond is **half-burned/half-returned** (dispute failed-
-    quorum disposition). No withdrawal path; quorum-miss and sub-threshold both
-    count as failed. Camping now costs *out-bidding real challenger demand
-    every window*, which scales with the challenger's stake, not with free
-    addresses.
-  - **I2 carve-out**: the auction's bond legs move the poster's *own* CC to
-    escrow and burn on failure — the one money write a moderation-adjacent
-    entrypoint makes (the flag lane's bond legs are identical).
+  slots; the quality-vote idiom). Rebuilt three times (r3 latch-camp → r4
+  per-proposer-sybil → r5 auction ballot-veto); v0.6 removes the property every
+  break exploited — **a scarce slot capital could win to *exclude* a proposal
+  from the vote**:
+  - **latch = per-court (one open election window)** — pinned; a per-proposer
+    latch splits quorum across concurrent elections.
+  - **multi-candidate ballot; bonds ADD candidates, never EXCLUDE one**
+    (round 5 F1 — the auction let a capital-dominant but vote-*minority*
+    incumbent, or a pure griefer, win the latch and run a doomed status-quo
+    proposal, so the community's real proposal was never voted → capital
+    overriding a vote majority, defeating the recovery §3.1 exists to protect).
+    When the latch opens, a fixed **nomination window** (≈1 day) collects
+    **all** bonded candidate-sets onto **one ballot** (each candidate costs the
+    bond, capped per election); **"retain the current set" is the implicit
+    floor**. The electorate votes by **approval** (approve any number of
+    candidate-sets — approval, not plurality, so adding a candidate cannot
+    split a majority). A set installs iff it clears **5001 bps of approving
+    weight AND the quorum floor**, highest-approval among those that do;
+    otherwise the current set is retained (fail-safe on indecision). Capital
+    can *place* a candidate, never keep one *off* — a vote-majority always
+    reaches its decision.
+  - weights: `PastVotes` at the epoch **pinned at nomination-window open**
+    (governor idiom, not the answer-time qualityEpoch); quorum floor
+    **max(1, 5%·(PastTotal(at) − PastVotes(escrow, at)))** (escrow = the realm
+    address; netting it is the election's own rule, analogous to the dispute
+    floor's votable arm); length `votingBlocks`.
+  - **per-candidate bond scales with court size**: `max(flagMinCC,
+    β·PastTotal(at))` (a flat 1-CC bond can't deter spamming a large court's
+    ballot); β a frozen constant. A candidate's bond **returns if it installs
+    or is approved above the quorum floor, half-burns otherwise** (deters
+    throwaway-candidate spam without taxing serious nominations); a fully-failed
+    election (no candidate cleared) starts a per-court `flagCooldownBlocks`
+    cooldown. No withdrawal path.
+  - **I2 carve-out**: candidate-bond legs move the poster's *own* CC to escrow
+    and burn on failure — the one money write a moderation-adjacent entrypoint
+    makes (the flag lane's bond legs are identical).
 - Meta may **suspend** a set: bits masked at render (kept); **all set writes
   refuse except clearing own bits**; elections stay proposable; `unsuspend`
   requires the voted route.
@@ -250,9 +263,16 @@ purge never editorial.
     re-hide). The general `max(bitLastAct_by_others, lastElectionAt) <
     openedAt` form is kept **only for suspend/unsuspend**, whose flag genuinely
     takes opposite-direction third-party writes.
+  - **No-op executions stamp nothing (round 5 hardening)**: an `unhide` whose
+    target bit is already clear is a true no-op — it sets `executed` (exactly-
+    once) but does **not** stamp `executedAt`, so it starts no re-hide cooldown
+    on an item that was never hidden. Closes a pre-emptive-hide-block residual
+    (a chain of fresh passed `unhide` appeals on an always-visible item can no
+    longer hold a courtMod's hide-ability off), and tightens M-A39's spirit:
+    `executedAt` reflects only real transitions.
   - **`executedAt` cooldown**: the respondent may not re-transition the bit **in
-    the reversed direction** for one `votingBlocks` (re-hide blocked after
-    `unhide`; clearing own bit stays open). Enforced at the courtMod hide
+    the reversed direction** for one `votingBlocks` (re-hide blocked after a
+    *real* `unhide`; clearing own bit stays open). Enforced at the courtMod hide
     entrypoint; global-DAO verbs and later meta executions exempt (**guard 5
     cross-ref, round 4 F7**: a mod who is also a global member can escape a lost
     war via the single-key global bit — bounded by attribution + category codes
@@ -271,7 +291,7 @@ don't set the refusing stamp) + `executedAt`; append-only act log with a
 side (`meta.gno`, keyed by claimID): stored parse (with a non-bindable/purged
 flag), per-target latch, per-appeal `executed`. Per court: mod set + set-level
 `lastActHeight` + `lastElectionAt`; suspension flag + `lastActHeight`; folders;
-tier; election ladder/latch/auction state; **the per-court policing index AND
+tier; election latch/ballot/candidate-bond state; **the per-court policing index AND
 pending list, each carrying the full armature** (deadline order, per-actor
 caps, page cap). Realm-level: one global policing index + a courts-with-entries
 structure for the directory strip.
@@ -304,36 +324,55 @@ just relocates the flood).
   `CloseDeadClaim` (its only two transitions). `stripEnteredAt` makes entry
   idempotent (no list→strip double-row).
 - **Ordering: ascending actionable deadline (nearest-to-mint first)** — the
-  sybil-proof spine (round 4). Reuse `SettleDeadline` (= `answerHeight +
-  settleDelay`) as the key on the dominant path; a disputed/flagged claim's
-  deadline is its later actionable height (escrow/flag/counter window). This is
-  strictly better than entry-height ordering against the **pre-position
-  blockade**: a mill cannot keep its about-to-settle target off the nearest-to-
-  mint segment, and any junk blocker it makes near-mint to compete becomes
-  flaggable-and-slashable by that very fact. `stripEnteredAt` remains the
-  stable index *key*; the page *renders* by deadline (selection vs display
-  separated).
+  sybil-proof spine **on the two strips** (round 4). Reuse `SettleDeadline`
+  (= `answerHeight + settleDelay`) as the render ordering/selection key on the
+  dominant path; a disputed/flagged claim's deadline is its later actionable
+  height (escrow/flag/counter window). This is strictly better than entry-height
+  ordering against the **pre-position blockade**: a mill cannot keep its
+  about-to-settle target off the nearest-to-mint segment, so the target is
+  **discoverable-for-policing** there for its whole settle window. (Prose
+  precision, round 5: the spine delivers *discovery*, not a self-financing
+  slash — actually slashing a near-mint junk blocker is turnout-gated, and
+  without turnout the flag resolves inconclusive-mid and half-burns the
+  *defender's* bond while the mill crystallizes in the flag cooldown; that
+  economics is pre-v0.5 dispositioned and unchanged. The spine's job is to
+  *surface* the target so a funded court can police it.) `stripEnteredAt` is the
+  membership/storage key; `SettleDeadline` is the render key (selection vs
+  display separated).
 - **Per-actor sub-caps** (answerer + author), **binding only under page
   overflow** (round 4 F3b: an uncontended page renders all rows). Stated
   honestly: caps key the *free* dimensions, so they blunt but don't alone
-  defeat a sybil blockade — **the deadline ordering is what defeats it**; the
-  caps stop one actor monopolizing a *contended* page, and the paginated read
-  entrypoint backstops enumeration. **Seeded rows are exempt from the cap**
-  (round 4 code-truth F4: a seed-farm self-burying past the cap is covered by
-  the badge — one visible seeded row exposes the farm — so capping them only
-  hides the evidence).
+  defeat a sybil blockade — **the deadline ordering is what defeats it on the
+  strips**; the caps stop one actor monopolizing a *contended* page, and the
+  paginated read entrypoint backstops enumeration. **Seeded rows are exempt
+  from the cap** (round 4 code-truth F4: a seed-farm self-burying past the cap
+  is covered by the badge — one visible seeded row exposes the farm — so
+  capping them only hides the evidence).
 - **Directory strip**: per-court sub-cap **selects**; the representative is the
   court's **nearest-to-mint** row (not oldest); when courts exceed the page,
   select courts by their nearest representative deadline. Selection vs display
   separated; the chosen page renders by deadline. Honest residual (round 4 F3c):
   no within-court rule binds a court-*dominant* actor — the representative is
   best-effort; the honest row keeps its own court-strip slot regardless.
-- **Pending list armature (round 4 F2)**: per-actor (author) caps, page cap,
-  pagination — identical to the strips — **and the door is priced**: the meta
-  court's `minClaimDepositCC` is set high enough that a 50-row pending flood
-  parks real GNOT-sunk capital for 12 weeks (the deposit is refundable but
-  locked; the 10% fee burns on dead-close). Pre-position on the pending list is
-  thereby capital-priced, not address-priced.
+- **Pending list armature (round 4 F2; corrected round 5 F2)**: page cap,
+  pagination, per-actor (author) caps, **and a priced door** — but **NOT the
+  deadline spine**. Honest statement (round 5): a pending row is pre-answer, so
+  it has no `SettleDeadline`; its only monotone key is `openedAt`, whose
+  dead-close deadline (`openedAt + 12wk`) sorts a *flood earliest*, i.e.
+  flooder-first. So on the pending list the guarantee is **pagination + the
+  paginated read entrypoint (enumeration is preserved), plus the priced deposit
+  as a nuisance-cost lever** — the deadline ordering that defeats the blockade
+  on the strips has no sybil-proof analog here, and neither the address-keyed
+  per-actor cap nor a linear deposit is a true flood gate (a funded adversary
+  mimics N appellants; the deposit taxes poor legitimate appellants equally).
+  The harm is therefore bounded to discovery-*friction*, not discovery-denial.
+  Render order: key on **live deposit-at-risk descending** (a flooder can't
+  cluster-control it as cheaply as `openedAt`) or accept flooder-first and rely
+  on pagination — a build choice, documented as such, not a claimed spine.
+  Because meta-CC is one-way GNOT-sunk and non-transferable, set
+  `minClaimDepositCC` high enough to make a 50-row flood park real capital 12
+  weeks without pricing out a single appeal — accepting this is a nuisance-cost
+  ceiling, not a flood *gate*.
 - **Bits**: strips/pending ignore courtMod+meta bits; the **global** bit redacts
   text but still renders the stored parse for `mod:` rows (open or persisted).
   Tier-hidden courts' rows appear on the directory strip (redacted iff global).
@@ -390,10 +429,10 @@ delay)`, floor 1.
 - **I1** — hidden/redacted/purged lifecycle equivalence; votes proceed on
   tombstones across {dispute rounds incl. meta appeals, quality flag/ride/
   counter tallies, elections}; purged authors still refund.
-- **I2** — no moderation entrypoint writes money **except the election auction
-  bond legs (poster's own CC)**; money→moderation write-calls never panic; the
-  four read gates enumerated; PostAnswer's latch read touches no bit/money
-  value.
+- **I2** — no moderation entrypoint writes money **except the election
+  candidate-bond legs (poster's own CC)**; money→moderation write-calls never
+  panic; the four read gates enumerated; PostAnswer's latch read touches no
+  bit/money value.
 - **I3** — deep links/positions render under courtMod/meta (banner); global
   redacts (no text); purged → tombstones.
 - **I4** — title reverts after window close/first stake; annotations append-
@@ -404,13 +443,18 @@ delay)`, floor 1.
 - **I7** — `stakeOpenDelayBlocks ∈ [0, 17_280]`.
 - **I8** — `ExecuteMetaVerdict`: fixed check order (exists→binding→verdict→
   route→**not-already-executed**→staleness); exactly-once (`executed` flag,
-  stamp `executedAt` ≤ once); `unhide` staleness = `lastElectionAt<openedAt`
-  only, general form for suspend/unsuspend; direction-scoped cooldown;
-  binding only from a non-poisoned parse; latch bound at PostAnswer, released
-  at non-executable verdict-final.
-- **I9** — strips + pending list all carry deadline ordering + per-actor caps
-  (bind under overflow; seeded exempt) + pagination; unanswered `mod:`/seeded
-  on the pending list not the strip; provClosed/swept exit; directory
+  stamp `executedAt` ≤ once, **and never on a no-op unhide of an already-clear
+  bit**); `unhide` staleness = `lastElectionAt<openedAt` only, general form for
+  suspend/unsuspend; direction-scoped cooldown; binding only from a non-poisoned
+  parse; latch bound at PostAnswer, released at non-executable verdict-final.
+- **I9** — **the two strips** carry deadline ordering (the sybil-proof spine) +
+  per-actor caps (bind under overflow; seeded exempt) + pagination; **the
+  pending list carries per-actor caps + pagination + priced door, but NOT the
+  deadline spine** — its guarantee is enumeration via pagination, harm bounded
+  to discovery-friction (round 5 F2). The undisputed/unflagged/all-bits-set
+  answered claim appears on its strip (the named M-A13 fixture). Unanswered
+  `mod:`/seeded on the pending list not the strip; provClosed/swept exit;
+  directory
   representative nearest-to-mint; selection vs display separated.
 - **I10** — suspension masks + refuses set writes except clearing own bits;
   voted unsuspend restores bit-for-bit; election passage clears the flag +
@@ -418,10 +462,12 @@ delay)`, floor 1.
 - **I11** — purge m-of-n, row-level with stable row ids; category codes parse
   (code set **final/shape-extensible before deploy**); unrecoverable; whole-
   court purge tombstones future rows + gates OpenClaim.
-- **I12** — election: per-court latch; **bond auction (highest wins, losers
-  refunded)**; court-size-scaled base bond; per-court doubling to 4× reset by
-  passage; failed bond half-burned; escrow-netted quorum; epoch at open; no
-  withdrawal.
+- **I12** — election: per-court latch; **multi-candidate approval ballot (bonds
+  add candidates, never exclude one; "retain current set" is the floor;
+  installs iff ≥5001 bps approving weight AND quorum, else current set
+  retained)**; court-size-scaled per-candidate bond, returned if installed/above-
+  quorum else half-burned; escrow-netted quorum; epoch at nomination-window
+  open; fully-failed election starts a cooldown; no withdrawal.
 
 ## 11. Attack ledger
 (rounds 1–3 rows retained; round-4 additions/status below; M-A1–A29 as v0.4
@@ -429,9 +475,11 @@ except where noted)
 
 | # | Attack | Disposition | Status |
 |---|---|---|---|
-| M-A30 | Pre-position blockade | **Deadline ordering (sybil-proof)** + per-actor caps (contended pages) + priced doors | REVISED r4 |
-| M-A33 | Election incumbent camp | **Bond auction (price-based, address-free)** + court-size-scaled bond; per-court latch | REVISED r4 |
-| M-A38 | **Pending-list flood** (armature only on strips) | Full armature on the pending list + priced meta deposit | NEW r4 |
+| M-A30 | Pre-position blockade | **Deadline ordering (sybil-proof, strips)** + per-actor caps (contended pages) + priced doors; spine delivers discovery not self-financing slash (r5 prose) | REVISED r4/r5 |
+| M-A33 | Election incumbent camp / ballot-veto | **Multi-candidate approval ballot — bonds ADD candidates, never exclude one** (r5: the auction let capital veto ballot access, overriding a vote majority); per-court latch; court-scaled per-candidate bond | REVISED r4/**r5** |
+| M-A38 | **Pending-list flood** | Pending list = pagination + priced door (enumeration preserved); **NOT** the deadline spine (r5: pre-answer rows have no SettleDeadline; harm bounded to discovery-friction) | REVISED r4/**r5** |
+| M-A44 | **Auction ballot-veto** (capital wins the latch, runs a doomed proposal, community's proposal never voted) | Folded into M-A33's multi-candidate ballot | NEW r5 |
+| M-A45 | **Pre-emptive no-op-unhide hide-block** (chain of unhide appeals on a visible item stamps cooldown) | No-op unhide stamps nothing | NEW r5 |
 | M-A39 | **Perpetual moderator freeze** (no-op re-stamp extends cooldown forever) | Exactly-once `executed` flag; stamp `executedAt` ≤ once; validity-before-state ordering | NEW r4 |
 | M-A40 | **Global-clear poisons a pending unhide** (same-direction third-party refuses a needed verdict) | Direction-scoped staleness: `unhide` reads `lastElectionAt` only | NEW r4 |
 | M-A41 | **Edit-door latch camp** (non-schema→schema, never answer) | Edit entrypoint does no latch op; latch binds only at PostAnswer | NEW r4 |
@@ -452,7 +500,7 @@ except where noted)
    index writes (non-panicking, idempotent) + PostAnswer latch read + binding
    persist; I5 both gates; `settleSlash` actual-burn base (v0.40); openBlocks +
    priority re-anchors. Tests I5, I9-core.
-4. `folders.gno`. 5. `modvote.gno` — election (per-court latch, bond auction,
+4. `folders.gno`. 5. `modvote.gno` — election (per-court latch, multi-candidate approval ballot,
    court-scaled bond, escrow-netted quorum, addresses-only). Tests I12.
 6. `render.gno` — filtering, banners, redaction (stored-parse for `mod:`),
    tombstones, `<slug>/mod`, three surfaces with the full armature (deadline
@@ -488,6 +536,30 @@ except where noted)
 - **v0.1–v0.4**: see prior entries (constitution; policing strips; purge; meta
   court; suspension; election; write-once sequencing). r1 ~40/1 CRITICAL-legal;
   r2 24/1 CRITICAL-econ+8 HIGH; r3 ~19/4 HIGH.
+- **v0.6** — round 5 (1 HIGH + 1 MED-HIGH; verification lens CONVERGED):
+  - *Election, structurally different fix* (M-A33/M-A44, HIGH): the v0.5 bond
+    auction put the capital key on *ballot access* — a capital-dominant but
+    vote-minority incumbent (or a griefer) could win the latch and run a doomed
+    proposal, so the community's real proposal was never voted (capital over
+    vote majority). Replaced with a **multi-candidate approval ballot**: bonds
+    *add* candidates to one ballot and can never keep one off it; "retain
+    current set" is the floor; a set installs iff ≥5001 bps approving weight +
+    quorum, else the current set is retained. Removes the scarce excludable slot
+    the last three election breaks all exploited.
+  - *Pending-list honesty* (M-A38, MED-HIGH): a pending row is pre-answer and
+    has no `SettleDeadline`, so it cannot carry the nearest-to-mint spine — its
+    only key (`openedAt`→dead-close) sorts a flood first. Corrected: the pending
+    list's guarantee is **pagination + priced door** (enumeration preserved,
+    harm bounded to discovery-friction), not a deadline spine; I9 scopes the
+    spine to the two strips; render order keys on deposit-at-risk or documents
+    flooder-first + pagination.
+  - *Two holds hardened*: the deadline spine delivers *discovery* not a self-
+    financing slash (M-A30 prose softened — slashing is turnout-gated, pre-v0.5
+    dispositioned); a no-op `unhide` of an already-clear bit stamps nothing,
+    closing a pre-emptive hide-block (M-A45).
+  - *LOW nits from the verification lens*: `SettleDeadline` (render key) vs
+    `stripEnteredAt` (membership key) glossed; the M-A13 named fixture restored
+    to I9.
 - **v0.5** — round 4 (~16 findings, 3 HIGH + 1 MED-HIGH, all local fixes;
   named the root principle up top):
   - *Discovery armature completed*: deadline (nearest-to-mint) ordering as the
