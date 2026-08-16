@@ -21,7 +21,7 @@ them on an order book, and at resolution the losing side's collateral pays the
 winning side. That loser-pays-winner core is what makes it legally a wager and a
 CFTC-style binary event contract, no matter what we call it. V2 deletes that core.
 Stakers back YES or NO directly; **losers get their entire stake back**; winners
-share a **bounded, halving emission of new CC**, weighted by how much and how long
+share a **bounded, stepped-down emission of new CC**, weighted by how much and how long
 they staked ("conviction") and by an adjudicated **quality tier**. Real money (GNOT)
 enters exactly once, through the one-way bonding curve, and is **burned** — no real
 money ever exits the system, contingent on anything. The order book, matched sets,
@@ -41,7 +41,8 @@ record** — CC is the internal participation economy that meters and rewards it
    emission is finite and invariant-checked against the supply ceiling.
 4. **Quality gates value**: low 0× / mid 1× / high 2×; high needs ⅔ + full-bar
    turnout; anyone can flag a claim into a quality vote (slot reopens if the
-   vote is inconclusive); junk pays nobody.
+   vote is inconclusive); junk pays no author, answerer, or winner (the policing layer is
+   deliberately still paid).
 5. **The verdict machine is V1's, untouched**: answer bond → 72h → dispute →
    sealed 7-day votes → escrow windows → 3-round close. Verdict security
    *improved*: a flipped verdict no longer moves any staker principal.
@@ -72,11 +73,12 @@ record** — CC is the internal participation economy that meters and rewards it
 | Share ledger (cshares) | Core | **Removed** (two stake tallies per claim) |
 | Price TWAP + preAnswerPrice | Core, manipulation-hardened | **Removed** (provClose pays 1× to everyone — no price needed) |
 | OI ceiling (20% supply), per-claim caps | Core safety | **Removed** — replaced by the emission cap + checked arithmetic |
-| Fees (adjFee/settleFee skimmed from winners) | Core | **Removed** — voter/answerer/author rewards are emission slices |
-| Answer/dispute machine (bonds, doubling, 3 rounds, escrow windows) | Core | **Kept** unchanged (see §3.6 for the bond gray area) |
+| Fees (adjFee/settleFee skimmed from winners) | Core | **Removed** — replaced by emission slices; NEW: 10% claim fee, conditionally refunded (v0.20) |
+| "Backing" (treasury/supply stat) | Rendered, marketed | **Deleted** — burned GNOT backs nothing; showing it would imply redemption (§3.8 pass 2) |
+| Answer/dispute machine (bonds, doubling, 3 rounds, escrow windows) | Core | **Kept**, with V2 dispositions: dispute-bond cap (F5), forfeitures burn + comp mints (v0.11/v0.20), loser early-exit (F7) |
 | Governor + grc20votes (weighted vote, epochs, anti-flash-loan) | Core | **Kept**; + a new 3-bucket quality tally (§3.4) |
 | One-way bonding curve (GNOT→CC) | Core | **Kept** (destination now burn) |
-| Claim deposit (anti-spam, refundable) | Refund only at Finalize (stranding residual O6) | Refundable after timeout on dead claims (O6 fixed) |
+| Claim deposit (anti-spam, refundable) | Refund only at Finalize (stranding residual O6) | Refund after dead-claim timeout (O6 fixed); slashed+burned on conclusive LOW (v0.11); +10% conditionally-refundable fee (v0.20) |
 
 Audit residuals that simply evaporate in V2: **O5** (pre-answer-price pin — no price
 exists), **O6** (deposit stranding — dead claims unlock), the whole overflow-bomb
@@ -120,7 +122,8 @@ unchanged from V1.
    ever held. (Fixes V1 residual O6; the earlier "unlocks fully" wording
    implied a lock that doesn't exist.)
 7. **provClose** (3 failed dispute rounds): everyone 1×, no bonus, no author
-   reward, deposit back. No price needed — the V1 O5 manipulation surface is gone.
+   reward, deposit back; the fee REFUNDS (provClose is not a conclusive low)
+   and no voter carrot exists (failed rounds produce no verdict to match). No price needed — the V1 O5 manipulation surface is gone.
 
 ### 3.2 Conviction (time-weighted stake) — `ACCEPTED (econ vet F9/F4)`
 
@@ -300,6 +303,9 @@ denominator exists to time or to hold hostage.
   **the doubling base is the SLOT — per-claim, monotone across flaggers**
   (per-flagger bases reset via sybils → linear-cost suppression chains; per-slot
   makes cycle k cost 2^(k−1)·b₀, exponentially self-limiting at ~2–4 cycles);
+  **hard cap: after K = 3 inconclusive cycles the slot closes permanently as
+  mid** (monolith F-H5b — the reopen-relative window guarantees each cycle a
+  fair flag shot, so an absolute bound must come from the cap, not a race);
   **an inconclusive outcome burns half the bond and returns half** (full return
   would make chains free — 2A; full burn punishes honest flaggers for the
   electorate's absenteeism — round-2 V2-1; half preserves the exponential
@@ -332,11 +338,11 @@ denominator exists to time or to hold hostage.
   verdict bar** — a lone griefer with dust turnout cannot zero an honest
   claim's emission; **promotion to high keeps its own gate** (≥⅔ of turnout
   AND turnout ≥ the full verdict bar).
-- **Incentive geometry worth recording**: the claim's own stakers are biased
-  voters (their bonus rides on ≥mid), but the natural anti-junk constituency
-  is *every other CC holder* — dilution pays for junk emission, so the
-  electorate that funds the draw is exactly the one empowered to zero it. In a
-  healthy court the dilution-payers outweigh any mill's stakers.
+- **Incentive geometry (v0.7 text, SUPERSEDED)**: the "dilution-payers will
+  police for free" argument below was pro-rata-era reasoning — F-R2 rejected
+  it for flaggers and F-H4 for flag-voters (diffuse dilution motivates
+  nobody). Kept struck-through in spirit as the record of why the policing
+  layer is now PAID (bounty + carrot, senior-queued), not volunteered.
 - **Interactions**: a flag during an open dispute is refused (the dispute vote
   already carries quality); a flag cannot be withdrawn (no flag-then-retract
   timing games); **a flag must close before the draw** — the tier crystallizes
@@ -398,7 +404,7 @@ the old block could not pay its own tier-invariant voter slice at low):
                        answerer 5 (of the original 93 points; low ⇒ Σg = 0 ⇒
                        these three slices are zero)
   caps:           winner_i ≤ (tier/2) × time-averaged stake_i
-                  author   ≤ (tier/2) × author's own stake     (F1)
+                  author   ≤ (tier/2) × author's own time-averaged stake, either side (F1)
                   answerer ≤ (tier/2) × the answer BOND        (v0.8)
 
 SENIOR-QUEUED, TIER-INVARIANT, independent of D — reserved on the accrual
@@ -463,10 +469,11 @@ one is the emission draw. Work the self-deal: attacker stakes S on their own
 claim, posts a wrong answer, hopes nobody disputes. If undisputed, quality
 defaults to **mid** (high requires a vote — the undisputed path structurally
 cannot reach it), so extraction caps at `midTier/2 × S = 0.5×S` of minted CC,
-while the bond at risk is `0.5×X̄ ≈ 0.5×S`. Detection probability ≥ 50% makes
-the lie EV-negative; any dispute also flips the verdict and re-votes quality.
-So `50%·X̄` remains exactly right — but now **because** it equals the maximum
-undisputed extraction. That coupling becomes a frozen invariant, V1-mustSane
+while the bond at risk is `0.5×X̄ ≈ 0.5×S`. Under the reservoir the lie is
+EV-negative at detection ≥ ~15% (F-R6); any dispute also flips the verdict
+and re-votes quality.
+So `50%·X̄` remains right — as a **conservative upper bound** on undisputed
+extraction (with ~5× slack under the reservoir; see the F-R6 correction below). That coupling becomes a frozen invariant, V1-mustSane
 style: `answerBondBps ≥ maxUndisputedTier/2` (in bps of X̄), checked at deploy —
 if tier multipliers or the undisputed default ever change, the bond floor moves
 with them or the deploy refuses. (The econ vet's F1/F10 confirmed the self-deal
@@ -555,7 +562,7 @@ Considered and rejected: a GNOT work-pool paying moderators/authors.
 - **Burn mechanics (implementation note)**: GNOT is native coin — burn = banker
   send to a provably keyless sink (a derived unspendable address, V1
   `DerivePkgBech32Addr`-style with a dead path, or the chain's designated burn
-  address if one exists; pin at implementation). CC burns (the 10% claim fee,
+  address if one exists; pin at implementation). CC burns (the conditionally-burned claim fee,
   bond and deposit forfeitures) use `grc20votes.Burn`, which V1 already
   exercises — audited code, no new machinery.
 - **Legal-vet wording corrections (v0.11)**: the burn is described publicly as
@@ -589,8 +596,8 @@ and added three fixes, adopted:
   trivially-true claims — the author-mill's exact habitat — so the naive
   credential and the mill would COMPOUND. Difficulty-weighting de-aligns them:
   mill claims (undisputed by construction) grant no priority.
-- **Cold-start guard (R5e)**: the priority gate is disabled until ≥N addresses
-  qualify — otherwise launch imposes a court-wide 24h latency tax while nobody
+- **Cold-start guard (R5e)**: the priority gate is disabled until ≥3 addresses
+  qualify (N pinned = 3, matching the §4 row) — otherwise launch imposes a court-wide 24h latency tax while nobody
   can qualify.
 - **Flywheel limiter (R5b)**: one active priority claim per address at a time —
   a qualified answerer can't blanket every juicy claim's 24h window at once.
@@ -607,9 +614,9 @@ resolves LOW; refunded when it resolves mid/high with the turnout floor met**
 barely dents a mill claim that attracts real conviction, while making the
 honest low-conviction long-tail net-negative (author slice on a thin claim <
 the fee). The conditional refund keeps the CC sink exactly where it belongs
-(junk and dead claims) and stops taxing honest experimentation. It also raises
-the mill's break-even life to ~13+ weeks against the 12-week dead-claim
-ceiling — a real complement to the flag lane, not a substitute. Register
+(junk and dead claims) and stops taxing honest experimentation. Under the v0.20 refund rule the fee no longer taxes a mill at all
+(mill claims resolve default-mid → refund) — anti-mill work belongs wholly to
+the flag lane; the fee's jobs are spam-pricing dead claims and the CC sink. Register
 trade-off (recorded honestly): a conditionally-refunded fee is weaker on
 *Humphrey* factor 1 ("fees paid unconditionally") than the original — accepted,
 because the fee was never the load-bearing legal element (the lead argument is
@@ -743,8 +750,8 @@ product; every number on it must be reproducible from public reads.
 | conviction | rate-weighted: ∫rate(t)·stake·dt; amortized table ×2^(−1/104)/period | v0.20 (V2-8 + 2A-T3; rateAtFreeze deleted) |
 | answer priority | difficulty-weighted record (contested-and-upheld only), ≥3 → 24h window; gate off until N addresses qualify; 1 active priority claim/address | v0.12 (A18) |
 | claim fee | 10% of deposit; burned only on dead-with-no-stake or CONCLUSIVE low; refunded otherwise (incl. default-mid-no-vote) | v0.20 (V2-9: the old condition was undefined at the most common outcome) |
-| dispute bond | min(20%·X̄, 2 × answer-bond cap), doubling kept; forfeitures burn 100% (v0.11) | F5 cap; superseded 20%-rule removed (stale #5) |
-| minAnswerX | re-derive in V2 units (trailing total STAKE, no sets exist; placeholder 100 CC) | §8.8 — V1's "100 sets' worth" is meaningless in V2 |
+| dispute bond | min(20%·X̄, 2 × answer-bond cap) **when the answer-bond cap > 0; plain 20%·X̄ when the cap is 0 (= uncapped, V1 convention)** — v0.20 zero-case fix: the naive formula made every dispute bond 0 in uncapped courts; doubling kept; forfeitures burn 100% | F5 cap + v0.20 |
+| minAnswerX | 100 CC of trailing total stake | resolved v0.13 (§8.8), provisional pending round-3 |
 | answer bond, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |
 | dead-claim timeout | 12 weeks | new (O6 fix) |
 | bond–tier coupling | `answerBondBps ≥ maxUndisputedTier/2` | frozen invariant, §3.6; deploy refuses otherwise |
@@ -755,10 +762,10 @@ All statuses reflect the econ vet's findings (F1–F11), ingested v0.6.
 
 | # | Attack | Resolution | Status |
 |---|---|---|---|
-| A1/A2 | **Matched-stake farming** (one wallet or a sybil pair): stake both sides, harvest the winner bonus risklessly | Closed form (F5): profitable iff rate `y > y* = 2(r+d)·T_L/T_c`. The reservoir rate is FIXED inside `(y*/2, y*)` → farming strictly unprofitable; honest p ≳ 0.67 stakers profit. Per-address netting DELETED — the vet showed my "sybil doubles lock cost" claim was arithmetically false (a lone matched farmer already locks 2X) and netting breaks custodial wallets while stopping nobody | `CLOSED (F5)` |
+| A1/A2 | **Matched-stake farming** (one wallet or a sybil pair): stake both sides, harvest the winner bonus risklessly | Closed form (F5): profitable iff rate `y > y* = 2(r+d)·T_L/T_c`. The reservoir rate is a frozen SCHEDULE inside `(y*/2, y*)` (A14) → farming strictly unprofitable; honest p ≳ 0.67 stakers profit. Per-address netting DELETED — the vet showed my "sybil doubles lock cost" claim was arithmetically false (a lone matched farmer already locks 2X) and netting breaks custodial wallets while stopping nobody | `CLOSED (F5)` |
 | A3 | Last-second stake flood | Conviction ≈ 0 for late stake; cap base is time-averaged stake (flash-proof) | `ACCEPTED` |
-| A4 | Quality capture: whale median-push (needs only ~29% of a thin turnout), off-band pre-announcement herding, free self-dispute trigger | High needs ⅔ of turnout + turnout ≥ the verdict bar; the median only moves mid↔low; with-median carrot dropped; the 20% decided-vote bond burn prices the trigger | `CLOSED (F3)` |
-| A5 | **Author-mill on undisputed default-mid** (CRITICAL): trivially-true claims are undisputable → default mid → uncapped 13% author+answerer skim of a crowd-earned draw, ~6× on lock cost, self-reinforcing | Quality-flag lane (bond returns iff median = low, else burns) + author/answerer slices capped at (tier/2) × own stake | `CLOSED (F1)` |
+| A4 | Quality capture: whale median-push (needs only ~29% of a thin turnout), off-band pre-announcement herding, free self-dispute trigger | High needs ⅔ of turnout + turnout ≥ the verdict bar; the median only moves mid↔low; with-median carrot dropped; the v0.20 comp rule prices the trigger (every self-X pair burns ≥ 20% net) | `CLOSED (F3)` |
+| A5 | **Author-mill on undisputed default-mid** (CRITICAL): trivially-true claims are undisputable → default mid → uncapped 13% author+answerer skim of a crowd-earned draw, ~6× on lock cost, self-reinforcing | Quality-flag lane + author slice capped at (tier/2)×own stake, answerer at (tier/2)×bond (v0.8) | `CLOSED (F1, repriced v0.20)` |
 | A6 | Whale claim hogs the pool | Non-attack under a linear rate (equal yield per conviction by construction); sqrt and per-claim caps are WORSE (√k to claim-splitters / punishes flagship claims). No smoother | `CLOSED (F8)` |
 | A7 | Emission-lever capture | No lever exists (frozen constants) | `ACCEPTED (V1 discipline)` |
 | A8 | Unstake games: paint the ratio, unstake→restake cycling, freeze front-running | Exact-integral conviction (never resets; capital-conserving); freeze atomic with the answer (same-block-later unstakes revert); publish the conviction-weighted ratio alongside the instantaneous one — the only series you can move is the one you pay capital-time for | `CLOSED (F9)` |
@@ -778,10 +785,10 @@ principal** — staker-level harm from a wrong verdict is purely epistemic. The
 only financial prizes riding on any vote are the conduct bonds (present only
 when contested) and a capped, dilution-funded emission draw. V1's quorum bar was
 sized against a prize of X (the losing collateral); V2 keeps the same bar
-against a prize of ≲1.4·X̄-in-bonds + (tier/2)·stake — **verdict security is
+against a prize of capped emission comps only — bonds burn and are no longer capturable — plus (tier/2)·stake — **verdict security is
 strictly improved**, and the soft underbelly moved to the quality tier, which
-A4/A5/A11 close. Vote-buying at launch scale is unprofitable (the loot is
-non-cashable CC whose value the attack itself debases); it degrades only as OTC
+A4/A5/A11 close. Vote-buying at launch scale is unprofitable (the loot is CC —
+non-redeemable in-protocol, transferable — whose value the attack debases); it degrades only as OTC
 depth grows — transferability-off remains the emergency lever.
 
 ## 6. What V2 deliberately gives up
@@ -871,6 +878,10 @@ sentence now survives its overclaim scan)
 6. A small bounded prize now rides low-median capture (the flag bounty) and
    carrot-only voting mildly subsidizes P+ε coordination — both registered,
    both bounded by caps and the ratchet.
+7. Queue-jamming via self-dispute chains: senior comp entitlements from a
+   staged multi-round fight delay everyone else's policing pay. Bounded and
+   costly by the min-rule — the pair burns ≥ 1.25× what it jams (comp ≤ 80%
+   of the burn) with doubling bonds; net supply falls. Registered, accepted.
 
 ### 7.3 Structural mitigations to build/do
 - **Entity wrapper**: form a **Wyoming DUNA** (2024 act, verified from the
@@ -912,9 +923,10 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
 - **20% decided-vote bond burn** → SUPERSEDED by the 100% rule ("forfeitures
   burn; compensation mints"), which the legal vet's bond finding demanded and
   the econ vet's self-dispute finding independently supported.
-- **Burned claim fee** → confirmed helpful (*Humphrey* factor 1); note the
-  vet's precision: Humphrey factor 2 is "amounts certain and guaranteed", not
-  merely "not funded by entries" — see register item 4.
+- **Claim fee** → confirmed helpful at v0.5 (*Humphrey* factor 1); since
+  superseded by the v0.12/v0.20 conditional refund (factor-1 trade-off
+  registered in §3.8); Humphrey factor 2 is "amounts certain and guaranteed" —
+  see register item 4.
 - **Track-record answer priority** → no legal exposure noted.
 - **Reservoir rate** → confirmed the friendlier frame (a published rate reads
   closer to protocol-staking rewards AND scores better on "amounts certain"
@@ -923,7 +935,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
 ## 8. Open questions / vet queue
 
 1. ~~A1/A2 economics~~ — RESOLVED (F5): profitability condition `y > y* =
-   2(r+d)·T_L/T_c`; the fixed reservoir rate sits below y*, so farming never
+   2(r+d)·T_L/T_c`; the frozen rate SCHEDULE sits below y*(n), so farming never
    enters; netting deleted as theater.
 2. ~~A6 smoother~~ — RESOLVED (F8): nothing; linear is the unique
    splitting-neutral rule.
@@ -960,7 +972,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
      share-of-pool**: `g_i = tier_c × rate × conviction_i`, with the individual
      cap `g_i ≤ (tier_c / 2) × stake_i` unchanged. `rate` is a deploy-time
      constant (CC per conviction-unit) sized so a mid-tier winner holding
-     through a typical claim sees the §3.3 target (~15–30% APR-equivalent).
+     through a typical claim sees the §3.3 target (the ECONOMICS.md calibration target).
    - The claim draws `D_c = min(Σ g, R)`; if `R < Σ g`, everyone in the claim
      scales pro-rata by `R / Σ g` (within-claim only); `R -= D_c`. The
      80/8/7/5 slices apply to `D_c`.
@@ -1036,7 +1048,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   conservation invariants (escrow ≥ Σ obligations, drains to bounded dust;
   Σ minted ≤ Σ accrued budget — the new one); overflow regressions (128-bit
   conviction at MaxSupply × years); txtar coin-invariant runs on a real node
-  (stake→answer→settle→withdraw+bonus; the dispute path; dead-claim unlock;
+  (stake→answer→settle→withdraw+bonus; the dispute path; dead-claim disposal;
   reservoir exhaustion if §8.7 adopted); then the same per-unit adversarial
   audit loop to convergence that V1 got. Done means: full sweep, zero findings,
   `make check` + txtar green.
@@ -1123,62 +1135,81 @@ Cross-cutting invariants preserved (these were the V1 audit's spine):
 - **Exactly-once disposal** (bonds, deposits, entitlements) and **sealed tallies**
   carry over as design rules to every new V2 flow.
 
-## Appendix B — worked end-to-end example (v0.8)
+## Appendix B — worked end-to-end example (recomputed v0.20)
 
-Numbers chosen realistic; doing this arithmetic is what surfaced the v0.8
-answerer-cap refinement. Court supply S = 10,000,000 CC; emission constants:
-r = 0.25%/wk, d = 0.1%/wk, T_L/T_c = 1.5 → y* = 1.05%/wk; **rate = 0.75·y* ≈
-0.79%/wk ≈ 0.113%/day per CC of conviction**; B_period = 10,000 CC/wk;
-R_max = 40,000 CC.
+Same scenario as the original v0.8 example, all figures updated to the v0.20
+rules (live-supply d, 0.85·y* amortized rate, comp min-rule, senior queue,
+conditional fee). Court supply S = 10,000,000 CC; B_period = 10,000 CC/wk →
+live d = 0.1%/wk; r₀ = 0.25%/wk; T_L/T_c = 1.5 → y* = 1.05%/wk;
+**rate ≈ 0.89%/wk ≈ 0.127%/day per CC of conviction**; R has ~34,000 accrued.
 
 **Claim**: "Flight 171's fuel switches were cut off before impact." Author
-Alice opens it: 1 CC deposit escrowed, 0.1 CC fee burned.
+Alice opens it: 1 CC deposit + 0.1 CC fee, both escrowed (fee refundable —
+v0.20: burns only on dead-no-stake or conclusive low).
 
-| Day | Event | Stake pools (YES/NO) | Ratio |
+| Day | Event | Pools (YES/NO) | Ratio |
 |---|---|---|---|
-| 0 | Alice stakes 30,000 YES (author, has skin) | 30,000 / 0 | 100% |
+| 0 | Alice stakes 30,000 YES | 30,000 / 0 | 100% |
 | 7 | Bob stakes 20,000 NO | 30,000 / 20,000 | 60% |
 | 14 | Carol stakes 10,000 YES | 40,000 / 20,000 | 66.7% |
-| 21 | Dan (record net-4, priority window) answers YES; bond = 50%·X̄ ≈ 30,000 escrowed; **staking freezes** | frozen | 66.7% |
-| 24 | 72h pass, no dispute, no flag → SettleUndisputed: verdict YES, quality mid (default), Dan's bond returns | — | — |
+| 21 | Dan (qualified record) answers YES; bond 50%·X̄ ≈ 30,000; staking freezes | frozen | 66.7% |
+| 24 | 72h pass, no dispute, no flag → settle: verdict YES, quality mid (default), Dan's bond returns | — | — |
 
-**Conviction at freeze** (CC-days): Alice 30,000×21 = 630,000; Carol
-10,000×7 = 70,000; Bob 280,000 (losing side — irrelevant to draws).
+**Rate-weighted conviction at freeze** (rate ~flat over 24 days, so ≈
+CC-days × rate): Alice 630,000 CC-days; Carol 70,000; Bob 280,000 (losing —
+principal only).
 
-**Draws at settle** (tier mid = 1×, rate 0.113%/day):
-- Alice: 630,000 × 0.113% ≈ **712 CC** (cap 0.5 × 30,000 time-avg = 15,000 — slack).
-- Carol: 70,000 × 0.113% ≈ **79 CC** (cap 1,667 — slack).
-- Σ winners 791 = 80% of the draw → D̂ ≈ 989 CC; reservoir has ~34,000 accrued — pays in full.
-- Author slice 8% ≈ **79 CC** to Alice (cap 15,000 via her stake — slack).
-- Voter slice 7% ≈ 69 CC — **not minted** (no vote occurred).
-- Answerer slice 5% ≈ **49 CC** to Dan — under the v0.8 bond-based cap
-  (0.5 × 30,000). *A stake-based cap would have zeroed this and killed the
-  answerer incentive — the inconsistency this example caught.*
-- **Total minted ≈ 919 CC ≈ 0.009% of supply.** Bob withdraws his 20,000
-  whole. Escrow held 60,000 stakes + 1 deposit + 30,000 bond and returned
-  every unit 1×; emission never touched it. Conservation ✓.
+**Draws at settle** (tier mid = 1×):
+- g_Alice ≈ 630,000 × 0.127% ≈ **803 CC** (cap 0.5 × 30,000 — slack).
+- g_Carol ≈ 89 CC (cap 1,667 — slack).
+- D = min(Σg × 93/80, R) ≈ 1,037: winners 892, **author 89** (Alice, stake-capped
+  fine), **answerer 56** (Dan — bond-based cap, v0.8; a stake cap would zero it).
+- Voter carrot: none minted (no vote occurred).
+- Fee: **refunded** (default-mid is not a conclusive low). Deposit back.
+- **Total minted ≈ 1,037 ≈ 0.010% of supply.** Bob withdraws 20,000 whole.
+  Escrow held 60,000 stakes + 1 deposit + 0.1 fee + 30,000 bond and returned
+  every unit; emission never touched it. Conservation ✓.
 
-**Returns check**: Alice earned ~2.6% on 30,000 over ~24 days *by being right*
-(~0.79%/wk on conviction — a p<1 staker's expected rate is p-scaled); a
-coin-flipper nets negative against lock cost, per the F5 band. A matched
-farmer staking both sides earns the winner leg's 0.79%/wk on half their
-capital against 2× lock costs — negative, as designed.
+**Returns check**: Alice ≈ +2.7% on 30,000 over ~24 days *for being right*
+(≈0.89%/wk on conviction; a p-accurate staker's expected rate is p-scaled —
+break-even p ≈ 0.59). A matched farmer earns the winner leg on half their
+capital against 2× lock: negative, as designed.
 
-**Alternative endings**:
-- *Flagged and demoted*: flag bond posted day 22, quality vote (7d) lands
-  **low** with ≥¼-bar turnout → tier 0×: **zero minted for anyone**, all
-  principals 1×, flag bond returns, Dan's bond still returns (verdict stood;
-  quality ≠ verdict).
-- *Disputed and overturned*: verdict flips NO → Bob's 280,000 CC-days draw
-  instead; Dan's bond: **80% (24,000) to the disputer, 20% (6,000) burned**
-  (v0.6 rule); the 7% voter slice mints to with-verdict voters,
-  tier-invariant; quality = the dispute vote's 3-bucket outcome under the
-  ⅔-for-high gate.
+**Alternative endings (v0.20 rules)**:
+- *Flagged, conclusive LOW* (turnout ≥ ¼-bar): every tier-scaled slice = 0;
+  Alice's deposit slashed and **burned**, fee **burned**; the flagger's bond
+  returns plus a minted, senior-queued **bounty = the bond** (≈1,200 CC);
+  flag-vote voters split the senior-queued carrot; all principals exit 1× —
+  **principal is never pausable** (split settlement).
+- *Disputed and overturned* (verdict flips NO): Dan's 30,000 bond **burns in
+  full**; the disputer risked B_d = 20%·X̄ = 12,000 (zero-case rule: the
+  answer-bond cap is 0 = uncapped, so B_d is plain 20%·X̄), gets it back plus
+  minted senior comp = min(2×12,000, 80%×30,000) = **24,000 CC**; Bob's
+  280,000 CC-days now draw instead; the 7% mid-gross voter carrot ≈ 62 CC
+  splits among with-verdict voters, senior-queued, tier-invariant.
 
 ## 13. Changelog
 
 Newest first.
 
+- **v0.21** — (iteration 20) **vet 2B landed and independently CONFIRMED the
+  v0.20 targets**: analyzing the pre-v0.20 file, its three "decisions wording
+  cannot close" were exactly the three v0.20 fixes (unpaid flag voters → paid;
+  the fee's undefined default-mid branch → refunds; bounty∝deposit vs
+  bond∝X̄ → bounty = own bond). Applied its full residual checklist + the
+  monolith's second report: K = 3 hard cap on flag reopens; the
+  mill-break-even fee sentence deleted (false under the v0.20 refund rule —
+  anti-mill work belongs wholly to the flag lane); queue-jam register item 7
+  (self-dispute chains can delay policing pay but burn ≥ 1.25× what they
+  jam); §3.6 upstream prose corrected at the source; the v0.7
+  "dilution-payers police for free" paragraph marked SUPERSEDED; §2 gains the
+  missing backing-deletion row and the fee row; provClose fee/carrot
+  dispositions pinned (fee refunds; no carrot without a verdict); author cap
+  base pinned (time-averaged, either side); dispute-bond zero-case fixed
+  (cap = 0 means uncapped, not zero); Appendix B fully recomputed at the
+  v0.20 rules (rate ≈ 0.89%/wk, D ≈ 1,037, comp min-rule ending, split
+  settlement). Round-3 vet running on the three v0.20 reconciliations
+  (comp min-rule edge cases, half-burn chains, staked-can't-vote).
 - **v0.20** — (iteration 19) **BOTH round-2 vets ingested (the stalled monolith
   finally landed, then 2A twenty minutes later — they agree, and 2A goes
   deeper). Verdict was NOT-CONVERGED; every structural item is now addressed:**
