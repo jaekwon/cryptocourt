@@ -396,6 +396,45 @@ denominator exists to time or to hold hostage.
   the radius; and the honest mill-deterrence statement is now: mill EV goes
   negative at a modest flag probability the repriced lane economically
   supplies, with the deposit as the sizing lever if margins need more.
+- **v0.25 — THE BOUNTY FAUCET (round-3 R3-1d + micro-vet-1 #4, independently:
+  BREAKS).** Bounty = own bond was the one mint unbounded by its event's burn:
+  a low outcome burned only deposit+fee (~1.1 CC, fixed) while minting 2%·X̄ —
+  and X̄ is pumpable with REFUNDABLE stake. A sybil author+staker+flagger farm
+  on deliberately-junk claims minted 2%·X̄ per cycle against ~1 CC of burn,
+  with the honest electorate voting low *truthfully* as the trigger; at scale
+  the senior-queued mints capture the head of the emission queue — recreating
+  engineered scarcity from inside the 2A-T1 fix. Convergent fix, both vets:
+  **the per-event invariant the comp rule already obeys, applied to the
+  bounty — `bounty = min(flagger's bond, 80% × CC burned on the low outcome)`
+  — plus a low-outcome burn that SCALES: conclusive low slashes 2.5%·X̄ from
+  the ANSWER BOND** (answering junk is conduct — the §3.6 doctrine; 5% of the
+  bond, mild for a real mistake, and it makes answerers the quality
+  gatekeepers of the slot they occupy). Now bounty = 2%·X̄ ≤ 0.8 × 2.5%·X̄:
+  V2-1's scaling preserved, q > ½ preserved at every ratchet level (burn base
+  doubles alongside via cumulative slot half-burns), and every sybil
+  arrangement is strictly negative — the junk-farm pair nets −0.5%·X̄ − 1.1 CC.
+- **v0.25 — the idle-reserve squat (round-3 R3-2: "the squat is NOT dead").**
+  A mill holding ¼-bar of UNSTAKED reserve could self-flag and self-vote a
+  conclusive mid — consuming the slot permanently for +7%·X̄ if the one sealed
+  vote wins, nearly free to try. Fixes: **a slot-consuming mid requires the
+  FULL verdict bar** (symmetric with high's gate); a ¼-bar mid denies the
+  demotion but the slot REOPENS at ×2 — immunity now costs bar-scale idle
+  capital contested by paid outsiders. And the bounty fix above makes a failed
+  squat genuinely negative.
+- **v0.25 — the small-claim dead zone (round-3 R3-3b).** Below the 5%-supply
+  quorum floor the demotion bar was fixed while the carrot scaled with X̄ —
+  pay-per-weight collapsed to dust and nobody would police small claims,
+  exactly where mills are viable from X̄ ≈ 12× deposit. Fix: the QUALITY
+  ¼-bar drops the supply floor — `min(X̄, ⅓·votable)/4` — so required turnout
+  scales with the claim exactly as the carrot does (uniform ≈2.5%
+  pay-per-weight at every size). Verdict votes keep the full quorumFloor.
+- **v0.25 pins**: no voter carrot on INCONCLUSIVE outcomes (else ratchet-spam
+  gets ~3× cheaper and a carrot upsizing could flip it — micro-vet-2's
+  carrot < b₀/2 invariant stays as belt); the "honest loss capped at b₀/2"
+  claim holds only for the first slot cycle — at ratcheted levels the
+  load-bearing property is that risk and reward double TOGETHER, keeping the
+  q > ½ bar at every depth; the ANSWERER picks the quality epoch (they time
+  the answer) — bounded, public before any vote, registered.
 - **Tier ratchet is asymmetric (econ vet F3)**: the median can only move
   **mid ↔ low**; **high requires ≥ ⅔ of turnout AND turnout ≥ the claim's
   verdict bar**. A whale with ~29% of a thin turnout could capture a median;
@@ -539,6 +578,30 @@ Bond revisions, in two stages:
   1×, acceptable for rarer, higher-conviction fights). This is v0.6's 80%
   economics, minted instead of transferred, capped at 2× own risk — the k
   that v0.11 left unpinned, now pinned.
+- **v0.25 refinements (round-3 R3-1 + micro-vet-1, convergent):**
+  - **Rounding pin**: the 80% arm TRUNCATES (floor) — ceil at small numbers
+    pushes comp above 80% of the burn and re-cracks the anti-recapture bound
+    (both vets, same example).
+  - **Capped-court fix**: with an answer-bond cap, B_d = 20%·X̄ grows past the
+    capped B_a and the round-1 honest bar silently degrades toward ~0.71 on
+    exactly the biggest claims. Fix: `B_d1 = min(20%·X̄, 0.4 × the ACTUAL
+    answer bond)` — restores 2·B_d1 ≤ 0.8·B_a identically on every claim, so
+    round 1 is q > 1/3 everywhere; the doubling then produces the designed
+    degradation only at rounds 2–3.
+  - **Failed (quorum-less) rounds burn HALF the disputer's bond, return half**
+    — decided-against still burns 100%. The dispute lane had kept the exact
+    disease V2-1 cured in the flag lane: full burn punished honest disputers
+    for turnout they don't control, and conditioned on reaching round k,
+    no-quorum is the likely branch. Serial-chain costs stay exponential
+    (identical argument to the flag ratchet); sybil pairs stay pure-burn (no
+    comp mints on failed rounds — pinned: the answerer is NOT comped on a
+    failed round; their bond simply survives).
+  - Register notes: escalation ordering is CORRECT (griefer's certain loss
+    accelerates +0.2/+0.4/+0.8·X̄ while the honest bar decelerates
+    1/3→1/2→2/3, micro-vet-1 #2); the machine progressively favors the
+    incumbent answer as rounds climb (defender comp doubles, risk fixed) —
+    fine for deterrence, recorded; answerer-prevails adequacy HOLDS (whole at
+    verdict-error < 24%, micro-vet-1 #3 and round-3 agree).
 - **Prose correction (reservoir vet F-R6)**: the §3.6 bond-sizing argument
   above overstated itself — under the reservoir, `50%·X̄` does not *equal* the
   maximum undisputed extraction; it **upper-bounds it with ~5× slack**
@@ -788,8 +851,11 @@ product; every number on it must be reproducible from public reads.
 | period | 120,960 blocks (1 wk) | halving bookkeeping only — claims have no period under the reservoir |
 | rate schedule | `rate_n = 0.85 × y*(n)`; `y*(n) = 2(r₀+d_n)·T_L/T_c`; **d_n = B_n / S_live** read once at each period boundary; table amortized ×2^(−1/104)/period | v0.20 (V2-7 live-supply — ceiling path made early courts unpayable; V2-8/2A-T3 amortization) |
 | Finalize authorization | participant-only first week of eligibility, then permissionless | v0.11 (A13) |
-| bond/deposit forfeitures | 100% BURNED; prevailing-party comp = min(2×own bond, 80%×loser's burn), tier-invariant, senior-queued | v0.11 rule + v0.20 sizing (V2-2) |
-| flag bounty | = the flagger's own bond, minted on conclusive low, senior-queued | v0.20 (V2-1) |
+| bond/deposit forfeitures | 100% BURNED on decided-against; **failed (quorum-less) dispute rounds burn HALF, return half**; comp = min(2×own bond, floor(80%×loser's burn)), tier-invariant, senior-queued, none on failed rounds | v0.11 + v0.20 + v0.25 |
+| flag bounty | min(flagger's bond, 80% × CC burned on the low outcome), senior-queued | v0.25 faucet fix (R3-1d + MV1-4) |
+| conclusive-low slash | 2.5%·X̄ from the ANSWER bond (burned), + deposit + fee | v0.25 — the scaling burn that keeps the bounty meaningful |
+| slot-consuming mid | requires the FULL verdict bar; ¼-bar mid = demotion denied, slot reopens ×2 | v0.25 (idle-reserve squat) |
+| quality demotion bar | min(X̄, ⅓·votable)/4 — no 5%-supply floor (verdict votes keep the full floor) | v0.25 dead-zone fix |
 | B₀ (weekly accrual) / R_max | `b·120,960` / `4 × B_period` | reservoir cap banks ≤ 4 quiet weeks |
 | halving interval | 104 periods | total emission ≤ 2·B₀·104, finite |
 | supply invariant | curveCap + Σemission ≤ MaxInt64/Bps, ≥20% headroom | checked at deploy |
@@ -806,7 +872,7 @@ product; every number on it must be reproducible from public reads.
 | conviction | rate-weighted: ∫rate(t)·stake·dt; amortized table ×2^(−1/104)/period | v0.20 (V2-8 + 2A-T3; rateAtFreeze deleted) |
 | answer priority | difficulty-weighted record (contested-and-upheld only), ≥3 → 24h window; gate off until N addresses qualify; 1 active priority claim/address | v0.12 (A18) |
 | claim fee | 10% of deposit; burned only on dead-with-no-stake or CONCLUSIVE low; refunded otherwise (incl. default-mid-no-vote) | v0.20 (V2-9: the old condition was undefined at the most common outcome) |
-| dispute bond | min(20%·X̄, 2 × answer-bond cap) **when the answer-bond cap > 0; plain 20%·X̄ when the cap is 0 (= uncapped, V1 convention)** — v0.20 zero-case fix: the naive formula made every dispute bond 0 in uncapped courts; doubling kept; forfeitures burn 100% | F5 cap + v0.20 |
+| dispute bond | `B_d1 = min(20%·X̄, 0.4 × the actual answer bond)`, doubling per round | v0.25 (R3-1a): keeps round-1 at q > 1/3 on every claim incl. capped courts; subsumes the v0.20 zero-case |
 | minAnswerX | 100 CC of trailing total stake | resolved v0.13 (§8.8), provisional pending round-3 |
 | answer bond, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |
 | dead-claim timeout | 12 weeks | new (O6 fix) |
@@ -831,7 +897,9 @@ All statuses reflect the econ vet's findings (F1–F11), ingested v0.6.
 | A12 | provClose freeze-hostage: push a rival claim through 3 failed rounds; stakers frozen ~8 weeks, conviction pays zero | Losers exit 1× after each decided round AND principal is never pausable (v0.20 split settlement); every self-X sybil pair is strictly negative under the v0.20 comp rule (≥20% of the paired bond burns — the v0.11 "100%" claim was false, V2-2); a griefer cannot force votes to fail on claims with motivated stakers | `MITIGATED (F7+v0.20)` |
 | A13 | Adversary-timed zero-draw: third party Finalizes a rival's claim while R ≈ 0 → their draw = 0 forever, at gas cost (reservoir vet F-R3) | Finalize participant-only for a 1-week grace, permissionless after; accrual-interval queue recorded as the upgrade path | `CLOSED (v0.11)` |
 | A14 | Scheduled self-defeat of a frozen scalar rate: d decays by the halving path → y* sinks below rate by ~the 2nd halving → farming turns on with no adversary (reservoir vet F-R1) | Rate is a deploy-frozen SCHEDULE tracking y*(n)'s deterministic component at 0.85·y*(n); decrease-only ratchet noted for r-drift; no increase lever | `CLOSED (v0.11)` |
-| A15 | Author-mill v2 — single-sided p=1 farming inside the anti-farm band, re-armed because the reservoir deleted the crowd's selfish flag motive (reservoir vet F-R2) | Low-tier deposit slash (burned) + flag bounty = the flagger's own bond + PAID flag-vote voters (all senior-queued) → policing is positive-EV at q > ½; the old q ≈ 0.2 number retracted as unreproducible (V2-1) | `CLOSED (v0.20 repricing)` |
+| A15 | Author-mill v2 — single-sided p=1 farming inside the anti-farm band, re-armed because the reservoir deleted the crowd's selfish flag motive (reservoir vet F-R2) | Low-tier slash (deposit + 2.5%·X̄ of the answer bond, burned) + bounty = min(own bond, 80%×low-burns) + PAID flag-vote voters (senior-queued) → policing positive-EV at q > ½ AND every sybil farm burn-dominated | `CLOSED (v0.20, repriced v0.25)` |
+| A19 | **Bounty mint faucet** (round-3 + micro-vet-1, independent BREAKS): bounty = own bond was unbounded by its event's burns — junk-farm sybils pumped X̄ with refundable stake and minted 2%·X̄ per ~1 CC burned, capturing the senior queue's head | Per-event burn-domination restored: bounty ≤ 80% of low-outcome burns, and the burns scale (the 2.5%·X̄ answer-bond slash) | `CLOSED (v0.25)` |
+| A20 | Idle-reserve conclusive-mid squat: ¼-bar of unstaked mill reserve self-votes the slot closed | Slot-consuming mid needs the FULL bar; ¼-bar mid reopens at ×2; failed squats net negative post-A19 | `CLOSED (v0.25)` |
 | A16 | **Self-flag slot squat** (mech vet R1, launch-blocking): mill's sybil flags its own claim instantly with a dust vote destined for low-turnout mid — one burned bond consumes the only flag slot and immunizes the claim; the ¼-bar floor shields the mill, not honest claims | The slot is consumed only by a CONCLUSIVE vote; inconclusive reopens it (half the bond burns); doubling is PER-SLOT, monotone across flaggers; staked CC cannot vote quality (escrow weight nets out) | `CLOSED (v0.12; pins v0.20)` |
 | A17 | **Settle/flag ordering race + step-down delay grief** (mech vet R2): permissionless settle at 72h+1 turns the flag window into a 1-block race; and a 7d flag pause could drag a rival's claim across a rate step-down, halving their draw for one 2%·X̄ bond | No-settle window is reopen-relative (24h after each flag-vote close — the post-answer version was vacuous under the 72h delay, V2-5); conviction is rate-weighted over an amortized table, so no rate snapshot or boundary block exists to race (V2-8/2A-T3) | `CLOSED (v0.20)` |
 | A18 | Credential × mill habitat overlap (mech vet R6): raw stood-counting is maximized by cherry-picking trivially-true claims — the credential would compound the mill instead of checking it | Difficulty-weighted record: undisputed stands ≈ 0, contested-and-upheld = full credit; plus cold-start guard and one-active-priority-claim limiter | `CLOSED (v0.12)` |
@@ -1250,6 +1318,28 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.25** — (iteration 30) **round-3 monolith + micro-vet-1 landed together,
+  independently converging on a BREAKS: the v0.20 bounty was a mint faucet**
+  (own-bond bounty unbounded by its event's ~1 CC of burns; junk-farm sybils
+  pump X̄ with refundable stake, honest low votes trigger the mint, senior
+  queue's head captured). Fixed with the per-event invariant the comp rule
+  already obeys — bounty ≤ 80% of low-outcome burns — made meaningful by a
+  scaling burn: conclusive low slashes 2.5%·X̄ from the answer bond
+  (answerers become the quality gatekeepers of the slot they occupy). All
+  sybil arrangements strictly negative again (junk farm nets −0.5%·X̄−1.1CC).
+  Also from round-3: capped-court dispute-bond fix (B_d1 = min(20%·X̄,
+  0.4×actual answer bond) — round-1 bar was silently ~0.71 on big capped
+  claims); failed rounds burn HALF (the dispute lane had kept the disease
+  V2-1 cured in flags); floor-rounding pinned on the 80% arm (ceil re-cracks
+  the bound); the idle-reserve conclusive-mid squat closed (full bar to
+  consume the slot; ¼-bar mid reopens ×2 — A20); the small-claim dead zone
+  closed (quality bar = min(X̄,⅓votable)/4, no supply floor — pay-per-weight
+  uniform at every claim size); no carrot on inconclusives; v0.23b's
+  answer-height snapshot CONFIRMED as having killed a real adverse-selection
+  attack (the v0.20 flag-height rule was exploitable). HOLDS verified:
+  escalation ordering, answerer-prevails (whole at verdict-error < 24%),
+  refund-farming zero, comp chains burn-dominated (3-round all-sybil: burns
+  1.1X̄, mints 0.88X̄).
 - **v0.24** — (iteration 29) **micro-vet-2 landed: independently CONFIRMS the
   v0.23 K-cap deletion** ("BREAKS — the cap IS the cheap immunization"),
   corrects its arithmetic (3-cycle burn = 7%·X̄, not 3.5% — 3.5·b₀ conflated
