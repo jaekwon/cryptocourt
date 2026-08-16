@@ -1,5 +1,11 @@
 # PLAN — cryptocourt tokenomics V2: no-loss conviction staking
 
+> **STATUS: DESIGN CONVERGED at v0.28** — 12 adversarial vet passes; the
+> 22-attack ledger (§5) holds zero DRAFTs; both final vets' convergence
+> opinions agree the remaining surface is accepted-register grief (§7.2) and
+> owner calls (§12). Next phase: implementation (§10), then the same
+> audit-to-convergence cycle on the code.
+>
 > Living design document. Branch `tokenomics-v2`, base `5d2c4ef` (the fully-audited V1).
 > Standalone: this file is readable without the V1 docs; §2 is the explicit diff.
 > Every mechanism carries a VET status: `DRAFT` → `VETTING` → `ACCEPTED` / `REVISED`.
@@ -36,9 +42,11 @@ record** — CC is the internal participation economy that meters and rewards it
 2. **Conviction pays**: rewards weight by ∫stake·dt on the winning side —
    early, sustained, correct positions earn most; last-second capital earns ~0.
 3. **Emission, not extraction**: winners are paid by new issuance from a
-   reservoir accruing on a deploy-frozen, stepped-down **rate schedule**
-   (`rate_n = 0.85·y*(n)`) sized so matched-stake farming never enters; total
-   emission is finite and invariant-checked against the supply ceiling.
+   reservoir on a stepped-down **rate rule** — the formula is frozen
+   (`rate_n = 0.85·y*(n)`), its dilution input is read live from supply each
+   period (every manipulation of it is self-costly) — sized so matched-stake
+   farming never enters; total emission is finite and invariant-checked
+   against the supply ceiling.
 4. **Quality gates value**: low 0× / mid 1× / high 2×; high needs ⅔ + full-bar
    turnout; anyone can flag a claim into a quality vote (slot reopens if the
    vote is inconclusive); junk pays no author, answerer, or winner (the policing layer is
