@@ -939,7 +939,8 @@ product; every number on it must be reproducible from public reads.
 | Constant | Value (post econ vet) | Note |
 |---|---|---|
 | period | 120,960 blocks (1 wk) | halving bookkeeping only — claims have no period under the reservoir |
-| rate schedule | `rate_n = 0.85 × y*(n)`; `y*(n) = 2(r₀+d_n)·T_L/T_c`; **d_n = B_n / S_live** read once at each period boundary; table amortized ×2^(−1/104)/period | v0.20 (V2-7 live-supply — ceiling path made early courts unpayable; V2-8/2A-T3 amortization) |
+| rate schedule | `rate_n = 0.85 × y*(n)`; `y*(n) = 2(r₀+d_n)·T_L/T_c`; **d_n = B_n / S_live** read once at each period boundary; table amortized ×2^(−1/104)/period | v0.20 (V2-7 live-supply; V2-8/2A-T3 amortization) |
+| **inflation ceiling (OWNER, v0.32)** | `B_n = (20%/52) × S_live × 2^(−n/104)` — worst-case dilution ≤ 20%/yr year one at any court size, halving-amortized; total supply provably < 1.78× curve-sold (Σ of the geometric exponent ≈ e^0.577); **curveCapV2 = (MaxInt64/Bps)/2** for overflow headroom | owner set the ceiling at 20% (overriding my conservative ~5%); the %-of-live-supply budget is self-costly to manipulate for the same reasons as live-d (buying is paid, burning is self-costly, minting is earned-only and ceiling-bounded); ECON VET RUNNING on this sizing |
 | Finalize authorization | participant-only first week of eligibility, then permissionless | v0.11 (A13) |
 | bond/deposit forfeitures | 100% BURNED on decided-against; **failed (quorum-less) dispute rounds burn HALF, return half**; comp = min(2×own bond, floor(80%×loser's burn)), tier-invariant, senior-queued, none on failed rounds | v0.11 + v0.20 + v0.25 |
 | flag bounty | min(flagger's bond, 80% × CC burned on the low outcome), senior-queued | v0.25 faucet fix (R3-1d + MV1-4) |
@@ -1418,6 +1419,18 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.32** — (OWNER DIRECTIVE) inflation ceiling set at **20%/yr worst-case**:
+  per-period budget `B_n = (20%/52) × S_live × 2^(−n/104)` — the ceiling now
+  scales with live supply (a court of any size worst-cases at 20%/yr, decaying
+  by the amortized halving), total supply provably bounded < 1.78× curve-sold
+  supply, and `curveCapV2 = (MaxInt64/Bps)/2` restores the overflow headroom
+  the tighter bound consumes. The %-of-live-supply objection from v0.3
+  (compounding/gameable) is answered the same way live-d was: minting is
+  earned-only and ceiling-bounded, buying raises the budget only by paying
+  the curve, burning lowers it at the burner's sole cost. Economics vet
+  launched on this sizing + a fresh full-design audit at the 20% numbers
+  (owner asked for another audit). **IMPLEMENTATION BEGINS**: V1 code stays
+  untouched; V2 lands as new modules in `realm/r/courtv2/` per §10.
 - **v0.31** — (iteration 52) **T2 final — and with it the ledger: CONVERGED,
   no unvetted mechanism remains** (the micro-pass's own closing line). The
   weight time-lock was confirmed unimplementable against V1's actual

@@ -67,7 +67,16 @@ y*₀ = 2(0.35%)(1.5) = 1.05%/wk → **rate₀ = 0.89%/wk per unit conviction**.
 | Good staker (p = 0.7) | one side | ≈ +0.19·ρ·T_L ≈ +0.10%·stake/wk-equivalent |
 | Mill (post-v0.20 repricing) | self-claim | negative at modest flag probability — now economically supplied (bounty = flagger's own bond, paid flag-voters); deposit slash + tier-0 at risk vs mid-tier crumbs. (The old "q ≥ 0.2" figure was retracted as unreproducible, V2-1.) |
 
-## Sizing B and R_max
+## Sizing B and R_max (v0.32 — OWNER: 20% ceiling)
+
+`B_n = (20%/52) × S_live × 2^(−n/104)` per period: worst-case dilution ≤
+20%/yr year one at any court size, halving-amortized. Total growth factor
+bounded: Σ exponents = (0.2/52)·Σ2^(−n/104) ≈ (0.2/52)·150 ≈ 0.577 → supply
+< e^0.577 ≈ 1.78× curve-sold, hence curveCapV2 = (MaxInt64/Bps)/2 keeps the
+tally-overflow headroom. Realized dilution is participation-scaled as before
+(d_real ≤ rate × staked-fraction); 20% binds only at full saturation.
+
+## Sizing B and R_max (superseded v0.17 text)
 
 `B_period` is a throughput ceiling, not a target: size it ≥ the forecast
 `rate × Σconviction` of a healthy busy week so honest demand never scales down
