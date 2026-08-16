@@ -360,12 +360,31 @@ A numeric verdict would hand adjudicators a knob attackers can nudge and
 dissolve the crisp "the record says YES/NO" product. Recorded so it isn't
 re-derived.
 
-### 3.9 Signal & render — `DRAFT`
+### 3.9 Signal & render — `SPECCED (v0.9)`
 
-The sparkline is the stake ratio `YES/(YES+NO)` bucketed hourly (same epoch-bucket
-code as V1's TWAP, storing the two pool sizes). Render shows: ratio series, total
-staked, conviction leaders, verdict + tier + route ("undisputed" / "by vote 71%,
-quality: high"), and the emission drawn. The claim page IS the product.
+Three ratio series, and none of them needs new state:
+
+1. **Instantaneous ratio** `yes/(yes+no)` from the two live pool totals — what
+   the sparkline draws at the current bucket.
+2. **Trailing-week ratio** = trailing average of the YES-pool ring ÷ trailing
+   average of the total-pool ring, both hourly rings on the V1 twap machinery
+   (two rings per claim, storing pool sizes on every stake/unstake — the same
+   objects that feed X̄). Flash-resistant; what an integrating consumer should
+   read.
+3. **Conviction-weighted lifetime ratio** = `convYES / (convYES + convNO)` —
+   and this is free: the per-side conviction totals ARE the time-integrals
+   ∫pool dt, already maintained for the reward math. This is the F9
+   manipulation-resistant series: the only way to move it is to pay
+   capital-time on a side.
+
+Render per claim: sparkline (1), the week and lifetime ratios (2, 3) side by
+side — divergence between them is itself signal (a recent swing vs a long-held
+consensus) — total staked, X̄, verdict + tier + route ("undisputed" / "by vote
+71%, quality: high (⅔)"), emission drawn vs caps, and the flag/dispute status.
+Sealed-tally rules apply to BOTH open tallies (verdict and quality): while
+either vote is open, render shows only that it is open and its close height —
+never a running count (V1 §3.4 discipline, unchanged). The claim page is the
+product; every number on it must be reproducible from public reads.
 
 ## 4. Parameters (deploy-time constants)
 
@@ -476,6 +495,25 @@ Pre-launch opinion on: the no-loss+emission structure (gambling/CFTC), CC under
 Howey with emission, DUNA fit, state list. Re-check the 2026 CFTC "Prediction
 Markets" rule when final.
 
+### 7.6 Mechanisms added AFTER the legal vet launched (reconcile at ingestion)
+The in-flight legal vet reviewed v0.1. Added since, all in the same legal
+families it is already assessing — listed so its ingestion reconciles them
+explicitly rather than silently:
+- **Quality-flag bond** (v0.7): one more forfeitable *conduct* bond (same §7.2
+  bucket as answer/dispute bonds; burns are nobody's prize).
+- **20% burn of losing bonds on decided votes** (v0.6): reduces the
+  winner-takes-loser's-bond flavor — post-burn, less of any vote outcome is a
+  transfer between adversaries. Directionally helpful.
+- **Burned claim fee** (v0.5): entry fee paid win-or-lose — the *Humphrey*
+  non-wager factor, already argued in §3.8.
+- **Track-record answer priority** (v0.5): non-transferable, non-monetary
+  reputation — no new exposure expected.
+- **Reservoir-drip emission at a fixed published rate** (v0.6): replaces the
+  cross-claim contested pool with a per-conviction rate — *more* like protocol
+  staking rewards (the friendliest analogy in REGULATIONS.md §4), *less* like a
+  prize pool competed for across claims. Directionally helpful; needs the vet's
+  read.
+
 ## 8. Open questions / vet queue
 
 1. ~~A1/A2 economics~~ — RESOLVED (F5): profitability condition `y > y* =
@@ -547,6 +585,15 @@ Markets" rule when final.
 - **Net size**: roughly –570 LOC removed (book/market/fees) vs ~+450 new
   (stake/emission/quality) — V2 is *smaller* than V1, because the hard machinery
   (governor, grc20votes, twap, curve, checked math) is reused untouched.
+- **Storage model (V1 discipline)**: one packed record per (claim, staker,
+  side) in a bptree — `stake int64 · convHi/convLo (uint128 in stake-hours) ·
+  lastUpdate int64` ≈ four words, one object; a stake/unstake dirties exactly
+  two objects (the record + the claim's per-side totals, which ride the claim
+  object being written anyway) plus the hourly ring on bucket boundaries —
+  matching V1's transfer cost shape. No per-period ledgers exist (reservoir has
+  a single accumulator + last-accrual height). Emission entitlements are
+  computed at settle and stored per claimant as pull-claims (exactly V1's fee
+  pull-claim pattern, audited there).
 - **Verification ports the V1 discipline wholesale**: per-file unit suites;
   conservation invariants (escrow ≥ Σ obligations, drains to bounded dust;
   Σ minted ≤ Σ accrued budget — the new one); overflow regressions (128-bit
@@ -645,6 +692,15 @@ capital against 2× lock costs — negative, as designed.
 
 Newest first.
 
+- **v0.9** — (iteration 7) §3.9 signal layer specced: three ratio series
+  (instantaneous, trailing-week, conviction-weighted lifetime) — the third is
+  free (the per-side conviction totals ARE ∫pool dt, already maintained for
+  rewards); divergence between series is itself signal; sealed-tally discipline
+  extended to the quality vote. §7.6 added: explicit reconcile-list of the five
+  mechanisms added since the legal vet launched (so its ingestion addresses
+  them rather than silently missing them). §10 storage model sketched: one
+  packed record per (claim, staker, side), two dirtied objects per stake op,
+  pull-claims reuse V1's audited fee pattern.
 - **v0.8** — (iteration 6) **Appendix B: worked end-to-end example** with real
   numbers (30k/20k/10k stakes, 21-day life, bond 30k, draws 712/79/79/49,
   minted 919 ≈ 0.009% of supply, escrow conservation checked, both alternative
