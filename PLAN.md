@@ -213,7 +213,43 @@ Considered and rejected: a GNOT work-pool paying moderators/authors.
   economy is precisely the regulated surface we're declining to build in-protocol.
   (A future off-protocol grants entity can pay people; see §7.3.)
 
-### 3.8 Signal & render — `DRAFT`
+### 3.8 Brainstorm outcomes (iteration-4 step-back pass) — `DRAFT`
+
+Assumption questioned: **capital is the only credential.** The answer slot is
+V2's most abusable scarce resource (one per claim; verdict-by-default when
+undisputed), and it is currently first-come-first-served to anyone with a bond.
+
+**ADOPTED (draft, needs attack-vet): track-record answer priority.** The court
+keeps a per-address, non-transferable answer record: `stood` / `overturned`
+counters (data it already produces). When a claim becomes answerable, the first
+`priorityWindow` (24h) accepts answers only from addresses with net record
+`stood − overturned ≥ 3`; after that, anyone. Properties: the credential is
+*earned by the exact behavior we want* and destroyed by the exact behavior we
+fear (an overturned answer burns it — lying spends the credential); it is
+non-transferable and mints nothing (zero new legal surface); newcomers are
+delayed 24h, never excluded; farming it costs real deposits, bond locks, and
+72h+ waits per unit, and the farmed credential still dies on first misuse.
+Cost: one bptree + a phase check in PostAnswer. Complements — not replaces —
+the bond (§3.6): the bond prices one lie, the record prices a *career* of them.
+
+**ADOPTED (draft, needs vets): claim fee, burned.** 10% of the claim deposit is
+non-refundable and burned (the other 90% stays a refundable deposit). Gives CC
+its only sink (emission otherwise inflates monotonically against a one-way
+curve), prices claim creation honestly, and — usefully — an entry fee paid
+win-or-lose is the *Humphrey* non-wager pattern (fees regardless of outcome,
+prizes not funded by entries), so it slightly strengthens the legal posture
+rather than weakening it. Author economics stay positive for good claims (the
+8% author slice at mid/high tier ≫ the fee).
+
+**REJECTED: continuous-probability verdicts** (voters submit probabilities;
+payout by closeness — a scoring-rule court). The division of labor is already
+right: the *market* (stake ratio) prices belief continuously; the *vote*
+decides truth discretely, where 5001 bps and sealed tallies are battle-tested.
+A numeric verdict would hand adjudicators a knob attackers can nudge and
+dissolve the crisp "the record says YES/NO" product. Recorded so it isn't
+re-derived.
+
+### 3.9 Signal & render — `DRAFT`
 
 The sparkline is the stake ratio `YES/(YES+NO)` bucketed hourly (same epoch-bucket
 code as V1's TWAP, storing the two pool sizes). Render shows: ratio series, total
