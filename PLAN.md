@@ -1610,6 +1610,156 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.52 — v0.51's latch was one latch too wide (HIGH, caught in the post-commit
+  vet); the answerer's Q5 challenge is an INDEPENDENT poll again.** Two independent
+  reviewers converged on the same defect in v0.51 as committed: `qualityReasked` was a
+  single per-claim latch shared by `OpenDispute` and `CounterFlag`, so whichever fired
+  first spent it — and a third party always fires first, **race-free**. `ResolveFlag`
+  is permissionless, so the flagger submits `ResolveFlag` and `OpenDispute` at the same
+  height; `CounterFlag` panics on `pendingSlash <= 0` before the first and on
+  `disputeOpen` after the second, so there is no block in between in which the answerer
+  could have acted. The severity comes from a property I had treated purely as a
+  virtue: `qVoted` keys on `qVoteSeq|addr`, so a frozen seq **locks out every address
+  that already voted**. An honest elector who changes their mind cannot, and their
+  earlier low keeps counting against the answerer. §3.4's "a capture-whale must win ⅔
+  TWICE, the second against maximal mobilization (p² ≈ 0)" presupposes the counter
+  re-vote is an independent second poll; inheriting the ride's tally collapses p² to p.
+  A reviewer's worked case (low bloc 0.80·fullBar + 0.38·fullBar) burns the reserve
+  where the pre-v0.51 code refunded it — **same electorate, same weight, same beliefs**,
+  the only difference being that one honest voter's earlier ballot is frozen. Fix:
+  `CounterFlag` re-opens the tally UNCONDITIONALLY **and latches**. **The reviewers'
+  literal one-line fix — wipe without latching — reintroduces the purchase, and my own
+  v0.51 fixture is what caught it.** Both reviewers asserted the resulting budget was
+  "one for the ride plus one for the answerer, strictly the doctrine"; neither priced
+  ORDERING. Unlatched, the answerer takes TWO rolls by choosing the order: counter-flag
+  first (roll one), watch the crowd re-confirm low, then sock-dispute to spend the
+  ride's still-unspent wipe (roll two), erasing that low and voting mid alone over the
+  bar — refunding the reserve for ~4%·X̄, the identical purchase v0.47, v0.50 and v0.51
+  each closed at a different door. Latching bounds the budget to **at most one fresh
+  tally per lane**: a sock that disputes first spends the ride's wipe and the answerer
+  still gets their own poll; an answerer that counters first spends both, and every
+  later round votes their accumulating tally.
+  **CORRECTION to this commit's own message, which overclaimed.** I wrote "never two
+  for one party". That is FALSE, and enumerating the three wipe sites against their
+  gates shows why: post-adjudication the total is 1 if `CounterFlag` fires first (it
+  latches, so the ride never wipes) but 2 if `OpenDispute` fires first (it latches, yet
+  `CounterFlag` still wipes unconditionally — which is the whole point of the fix). The
+  answerer's coalition can FORCE the second ordering with a sybil disputer, since the
+  self-dispute guard is by its own comment "hygiene only (a sybil wallet trivially
+  evades it)". So the answerer can buy BOTH polls — a ride poll plus their counter poll
+  — for one dispute bond: net ~10%·X̄ on a quorum-less round (half the bond returns), or
+  net ~4%·X̄ on an upheld round where the bond burns whole and comp pays back
+  min(2·answerBond0, 80%·burned). Against a draw-proportional slash reaching 30.8%·X̄
+  that is profitable optionality. Two things keep this a RESIDUAL rather than a
+  regression: it is bounded at TWO polls, where pre-v0.51 every reopen wiped without
+  limit; and it is not introduced here — post-v0.47 the answerer could always sock-
+  dispute for a ride poll, so v0.51/v0.52 strictly narrowed it. Closing it properly
+  means pricing the ride poll to the answerer rather than bounding the wipe, which is a
+  dispute-bond question and belongs with the same econ vet as PLAN §12 row 30.
+  Latching costs the answerer nothing they are owed, since their wipe is unconditional
+  either way and `counterUsed` already bounds them to one challenge. Mutation-verified
+  in BOTH directions, the two fixtures now pinning each other in opposition: drop the
+  latch and `TestSockDisputeCannotEraseTheCounterTally` fails (the sock erases the
+  counter tally); gate the wipe and `TestCounterFlagAlwaysGetsAnIndependentPoll` fails
+  (the answerer inherits the ride). Neither error mode can slip through alone — which
+  is the lesson: this defect and its fix are a matched pair, and a test for either half
+  by itself would have passed the broken version. **Also closes**, per the same reviewer,
+  a second path: the governor leaves `stateActive` BEFORE `p.closes` on three
+  verdict-tally predicates (`governor.gno:1032/1050/1057`), so a whale could have spent
+  the shared wipe on a ride with zero votable blocks; with the answerer's ballot no
+  longer spendable, that buys nothing. **Vet results worth recording as PROVEN, not
+  assumed:** STRAND none and CONSERVATION proven, by closure over every write to
+  `pendingSlash`/`counterOpen`/`slashLevied`/`slotConsumed` — `counterOpen ⟹
+  pendingSlash > 0` holds, the two closers partition all heights, and
+  `counterVoteEnd = pendingSlashUntil` is load-bearing (shorter would leave a stretch
+  where `ResolveCounter` is early and `ResolveSlashWindow` is blocked). FREEZE none: the
+  new ride guard is the exact complement of `ResolveDispute`'s. And the first-mover
+  poison I was most worried about **does not price out** — pre-seeding hurts the
+  answerer only when the griefer's low weight exceeds `2·fullBar` (≥10% of court supply
+  held non-staking), at which point they win the ⅔ contest outright and need no grief;
+  below it, banked adverse weight counts toward the turnout bar the answerer must clear,
+  so accumulation HELPS them. **Corrections to my own v0.51 comments:** the
+  failed-quorum branch's claim that the reverse ordering "would strand in escrow with
+  no later payout path" is FALSE — `refundSlash` has a `provClose` arm that pays the
+  answerer directly, so both orders are safe and the ordering is a preference for the
+  common path; and that branch scores the RESERVE only, deliberately not the TIER, so
+  an identical full-bar non-⅔-low ride refunds while leaving `tier` LOW where a decided
+  round promotes to MID. That asymmetry errs conservative in both directions it can err,
+  and widening it moves draw money, so it stays pending its own econ vet. Documented the
+  voter-facing rule neither v0.51 nor its reviewers had written down: across an
+  accumulating tally an address's FIRST quality vote is its ONLY one, which changes the
+  elector's optimal play on a ride to "commit once, late". **Residual:**
+  `lastFlagEventAt` is not restamped on the two `ResolveDispute` dispose paths, unlike
+  every other closer — harmless while `slotConsumed` bars a re-flag, but the 24h
+  Crystallize quiet window is inconsistently maintained.
+
+- **v0.51 — the TALLY WIPE was the re-roll (HIGH); the quality question is now
+  re-asked exactly once and then accumulates.** v0.48 fixed a stranger's dispute
+  spending the answerer's one-shot Q5 challenge by having `parkCounter` CANCEL the
+  re-vote — clearing `counterUsed` — rather than spend it. That created the mirror
+  defect: `counterUsed` became re-mintable on demand, so an answerer facing a settle
+  could counter-flag, self-dispute through a sybil wallet to cancel it, and
+  counter-flag again, indefinitely inside the escrow window. Chasing that exposed the
+  larger one underneath it. **Every** dispute round and counter window called
+  `openQualityTally`, which bumps `qVoteSeq` and zeroes the three buckets — a WIPE. The
+  wipe, not any guard, was the re-roll: honest low weight that had already answered the
+  quality question was ERASED rather than out-voted, so each reopen bought a fresh coin
+  flip at the price of a dispute bond (~4 %·X̄, the same price v0.47 and v0.50 closed at
+  two other doors), ~3× inside a 3-week escrow. After the reserve disposed, the prize
+  grew: `resolveQualityRide` has no `!slotConsumed` guard, so a full-bar MID ride on a
+  wiped tally promoted a settled LOW back to mid and restored the **whole draw**
+  (`midGross`, ~86 % of it to the pool a mill controls) — strictly larger than the slash
+  it was hunting. Fix: `qualityReasked`, a one-way latch making the wipe available AT
+  MOST ONCE once anything has been adjudicated (`slotConsumed`); every later round and
+  window votes the same ACCUMULATING tally. Accumulation is what converts the attack
+  from erasure into out-weighing: `qVoted` keys on `qVoteSeq|addr`, so a frozen seq also
+  freezes each address to one vote. `parkCounter` is deleted — its stated justification
+  ("openQualityTally would silently discard the re-vote's votes") is discharged by the
+  latch, since `counterOpen ⟹ qualityReasked` makes the wipe unreachable while a re-vote
+  is live. What the answerer is owed on a round that decided nothing is the TIME, and
+  `rearmSlashWindow` now returns exactly that by reopening the LANE
+  (`counterOpen`, `counterVoteEnd = pendingSlashUntil`) while `counterUsed` stays true.
+  Three further changes ship WITH it, not after, because accumulation makes each one
+  load-bearing rather than cosmetic: (a) the dispute ride gains a vote deadline
+  (`c.gov.State(proposalID) != "active"`) — under a per-round wipe a mempool-raced late
+  vote died with its round, but a persistent tally would let transaction ordering rather
+  than the electorate decide a reserve worth up to 30.8 %·X̄; (b) `ResolveDispute`'s
+  failed-quorum branch now SCORES the ride (`disposeSlashOnRide`) instead of re-arming
+  blindly — the VERDICT question failed quorum but the QUALITY question has its own,
+  higher bar and can be answered on a round the governor's floor rejected, and a
+  discarded full-bar rescue tally was then burned by the unconditional
+  `ResolveSlashWindow`; a below-bar ride still re-arms, which is the v0.47 behavior
+  verbatim; (c) `settleSlash`/`refundSlash` clear `counterOpen` above their early
+  returns. **Method:** three identical-prompt subagents, iterated to convergence over
+  three rounds (round 1 split A/B/A, round 2 A-OPEN/A-OPEN/OTHER, round 3 unanimous).
+  Two facts were settled from code rather than by majority: `VoteQuality`'s three
+  deadline guards are independent `if`s, so a lane left open past `counterVoteEnd`
+  freezes quality voting for EVERYONE on the claim; and the doctrine is exactly one
+  re-ask (§3.4 says so three times). Two of three reviewers independently derived the
+  same sharpening — key the latch on `slotConsumed`, not `pendingSlash > 0`, since
+  origination implies `slotConsumed` but not conversely, so the wider key also covers
+  before-origination and after-disposal at zero extra state. **Rejected:** the third
+  reviewer's authority ratchet in `resolveQualityRide`
+  (`if slotConsumed && turnout <= conclusiveTurnout { return }`) would BREAK the
+  legitimate rescue — the one permitted re-ask starts the tally at zero, so a genuine
+  full-bar rescue whose turnout lands between `fullBar` and `conclusiveTurnout` would be
+  silently refused. The structural fix has no such edge. **Verification:** six guards
+  mutation-verified (revert → the named test fails → restore); four new fixtures
+  (`TestSockDisputeCannotEraseTheCounterTally`,
+  `TestLapsedCounterLaneDoesNotFreezeTheRide`,
+  `TestFailedQuorumRideAtFullBarLiftsTheSlash`, `TestRideVoteClosesWithTheRoll`), and
+  `TestReopenSupersedesCounter` INVERTED — its `if cs.counterUsed { t.Fatal }` was the
+  v0.48 defect encoded as a green test. **Honest gap:** the `counterOpen = false` inside
+  `settleSlash`/`refundSlash` is UNREACHABLE today (every caller either clears the lane
+  first or panics on it), so no mutation of it fails a test and it is defensive only. It
+  stays because the failure it guards is unbounded rather than merely wrong:
+  `Crystallize` panics on `counterOpen`, so a lane outliving its reserve would strand
+  the claim's entire draw forever. **Residuals registered, not fixed:** the failed-quorum
+  branch now settles a reserve on a full-bar ⅔-low ride WITHOUT recording the LOW tier
+  (it never calls `resolveQualityRide`), an asymmetry the per-round wipe used to hide;
+  and a full-bar ⅔-low tally riding a failed round still originates nothing while
+  `slotConsumed` is false, leaving the pre-origination wipe lever untouched.
+
 - **v0.50 — the ride lane could not levy a slash (HIGH, reproduced); origination and
   disposal now share one site.** A fresh sweep found, and I reproduced, that v0.47 shut
   `slashGrade`'s door to purchased immunity and left `resolveQualityRide`'s wide open.

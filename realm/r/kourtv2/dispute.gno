@@ -111,13 +111,15 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 	// reserve now: an overturn burns it with the bond (A19), an upheld round is
 	// scored on its own ride, and a round that decided nothing re-arms it.
 	//
-	// What must still happen here is closing a LIVE counter re-vote, because
-	// openQualityTally resets the shared tally and would silently discard its
-	// votes. parkCounter cancels it rather than spending it, so a stranger's
-	// dispute cannot consume the answerer's one Q5 challenge.
+	// A LIVE counter re-vote still closes here — the round's own ride replaces it —
+	// but it is no longer un-SPENT (v0.51). Clearing counterUsed re-minted the
+	// one-shot Q5 challenge on demand: an answerer facing a settle could counter,
+	// self-dispute to cancel it, and counter again, indefinitely inside the escrow
+	// window. What the answerer is owed is the TIME, which rearmSlashWindow returns
+	// by reopening the lane itself on any round that adjudicated nothing.
 	voidFlag(c, cs)
-	parkCounter(cs)
-	openQualityTally(cs)
+	cs.counterOpen = false
+	reaskQualityTally(cs)
 
 	// Bond: min(20%·X̄frozen, 40% × the actual answer bond) — the v0.25 arm
 	// keeps round 1 at q > 1/3 on every claim including bond-capped courts —
@@ -212,12 +214,27 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 			c.coin.Burn(c.escrow, rest)
 		}
 		cs.disputeBond = 0
-		// A quorum-less round adjudicated NOTHING — least of all quality — so any
-		// carved slash survives it untouched (v0.47). The answerer only gets a
-		// fresh challenge window, since this round discarded theirs. Re-armed
-		// BEFORE provCloseClaim below, which returns the bond but leaves the
-		// reserve carved for ResolveSlashWindow (or a counter re-vote) to settle.
-		rearmSlashWindow(c, cs)
+		// The VERDICT question failed quorum, but the RESERVE's question has its own,
+		// higher bar and can be answered on a round the governor's floor rejected
+		// (v0.51). Scoring the ride here rather than re-arming blindly is what stops
+		// a full-bar rescue tally from being discarded and then burned by the
+		// unconditional ResolveSlashWindow — a below-bar ride still re-arms, which is
+		// the v0.47 behavior verbatim.
+		//
+		// Scores the RESERVE only, deliberately not the TIER: this branch does not
+		// call resolveQualityRide, so an identical full-bar non-⅔-low ride refunds
+		// here while leaving cs.tier LOW, where a DECIDED round would promote it to
+		// MID. That asymmetry errs conservative in both directions it can err (it
+		// cannot promote a tier on a round nobody carried, and it cannot burn a
+		// reserve the electorate just rescued), and widening it moves draw money, so
+		// it stays until it has its own econ vet.
+		//
+		// Runs BEFORE provCloseClaim so a refund rejoins answerBond and leaves on the
+		// ordinary bond exit. Note the reverse order would ALSO be safe — refundSlash
+		// has a provClose arm that pays the answerer directly — so this ordering is a
+		// preference for the common path, not a strand guard. (An earlier version of
+		// this comment claimed it was a strand guard; it is not.)
+		disposeSlashOnRide(c, cs)
 		// Only the FIRST failed round defaults the verdict to the answer; a
 		// failed reopen leaves a standing decided verdict untouched.
 		if firstResolution {

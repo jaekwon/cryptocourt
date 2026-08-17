@@ -27,11 +27,13 @@ regression.
     python3 scripts/check-storage.py
 """
 
+import contextlib
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Every realm that has filetests, with what each is allowed to write.
@@ -83,6 +85,33 @@ def realms_with_filetests():
     return out
 
 
+@contextlib.contextmanager
+def stage_lock(root):
+    """The same lock check-isolation.py and the Makefile take, by the same name.
+
+    This script stages into $GNOROOT/examples/gno.land/{p,r}/kourt and rm -rf's
+    it, exactly like the others, so it has to queue with them. It had no lock,
+    which meant `make check` running check-storage could delete the tree a
+    concurrent isolation sweep was using and produce a phantom failure in code
+    that was fine.
+    """
+    lock = os.path.join(root, "examples/gno.land/.kourt-stage.lock")
+    for _ in range(600):
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            time.sleep(1)
+    else:
+        print(f"check-storage: the stage lock at {lock} has been held for 10 "
+              f"minutes; remove it if it is stale", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+
+
 def stage(root, target):
     pairs = [(os.path.join(REPO, "realm/p", d), f"{P}/{d}/v0") for d in target["deps"]]
     pairs.append((target["src"], target["dest"]))
@@ -119,13 +148,17 @@ def main():
 
     for target in TARGETS:
         realm = os.path.basename(target["dest"])
-        stage(root, target)
-        base = os.path.join(root, target["dest"])
-        r = subprocess.run(["gno", "test", "-v", "."], cwd=base,
-                           capture_output=True, text=True)
-        out = r.stdout + r.stderr
-        shutil.rmtree(base, ignore_errors=True)
-        shutil.rmtree(os.path.join(root, P), ignore_errors=True)
+        # Held across stage -> run -> teardown, not just the copy: the tree has
+        # to survive the `gno test` that reads it, and it is the teardown that
+        # hurts a concurrent runner.
+        with stage_lock(root):
+            stage(root, target)
+            base = os.path.join(root, target["dest"])
+            r = subprocess.run(["gno", "test", "-v", "."], cwd=base,
+                               capture_output=True, text=True)
+            out = r.stdout + r.stderr
+            shutil.rmtree(base, ignore_errors=True)
+            shutil.rmtree(os.path.join(root, P), ignore_errors=True)
 
         if r.returncode != 0:
             print(f"check-storage: {realm}'s suite does not pass, so its costs "

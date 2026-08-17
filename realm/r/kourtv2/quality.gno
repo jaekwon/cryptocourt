@@ -122,6 +122,28 @@ func openQualityTally(cs *claimState) {
 	cs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0
 }
 
+// reaskQualityTally re-poses the quality question for the DISPUTE RIDE — the one
+// lane a third party can open at will. Before anything has been adjudicated every
+// round asks fresh; afterwards the ride re-asks EXACTLY ONCE and every later round
+// votes the SAME accumulating tally. Accumulation is what makes a reopen chain cost
+// weight instead of buying a fresh coin flip: qVoted keys on qVoteSeq|addr, so a
+// frozen seq also freezes each address to one vote.
+//
+// The counter re-vote does NOT come through here — see CounterFlag. That freezing
+// property is exactly why: it is correct against a sock buying round after round,
+// and wrong against the answerer's single answerer-gated challenge, which the
+// doctrine grants as an INDEPENDENT poll.
+func reaskQualityTally(cs *claimState) {
+	if !cs.slotConsumed {
+		openQualityTally(cs) // nothing adjudicated yet: each round asks fresh
+		return
+	}
+	if !cs.qualityReasked {
+		cs.qualityReasked = true
+		openQualityTally(cs)
+	}
+}
+
 // voidFlag cancels an open flag because a dispute arrived: the bond returns
 // whole, the slot is NOT consumed, no cycle is counted. The 24h stamp moves so
 // crystallize cannot race the void.
@@ -161,6 +183,15 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if cs.counterOpen && runtime.ChainHeight() >= cs.counterVoteEnd {
 		panic("kourtv2: the counter re-vote has closed; resolve it")
 	}
+	// The ride's deadline is the governor's own, since disputeOpen stays true until
+	// the permissionless ResolveDispute and nothing else bounds the window. Under a
+	// per-round wipe a mempool-raced late vote died with its round; the tally now
+	// ACCUMULATES, so an unbounded ride would let a vote landing after the roll
+	// closed persist into every later round and window — transaction ordering, not
+	// the electorate, deciding a reserve worth up to 30.8%·X̄.
+	if cs.disputeOpen && c.gov.State(cs.proposalID) != "active" {
+		panic("courtv2: the dispute vote has closed; resolve the round")
+	}
 	if isParticipant(cs, who) {
 		panic("kourtv2: the claim's participants cannot vote its quality (Q2)")
 	}
@@ -171,6 +202,15 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}
+	// One vote per address PER TALLY. Since v0.51 a ride does not reset the tally
+	// after the first re-ask, so the voter-facing rule is stronger than it reads:
+	// across an accumulating tally an address's FIRST quality vote is its ONLY one,
+	// and it cannot be revised as later rounds bring information. That is deliberate
+	// against a sock buying round after round — banked weight is what makes a reopen
+	// cost weight instead of buying a coin flip — and it is why CounterFlag keeps an
+	// unconditional fresh tally: the answerer's one challenge must be a poll every
+	// holder can actually vote in, including one who already voted low on a ride.
+	// Elector's consequence: on a ride, commit once and late.
 	k := beClaimKey(cs.qVoteSeq) + string(who)
 	if cs.qVoted.Has(k) {
 		panic("kourtv2: already voted this quality tally")
@@ -603,6 +643,28 @@ func CounterFlag(cur realm, courtSlug string, claimID uint64) {
 	cs.counterUsed = true
 	cs.counterOpen = true
 	cs.counterVoteEnd = runtime.ChainHeight() + c.params.votingBlocks
+	// UNCONDITIONAL, unlike the ride (v0.51 follow-up). The v0.31/Q5 grant is an
+	// INDEPENDENT second poll — "a capture-whale must win ⅔ TWICE, the second
+	// against maximal mobilization (p² ≈ 0)" — and inheriting the ride's tally
+	// collapses p² to p: qVoted keys on qVoteSeq|addr, so a frozen seq LOCKS OUT
+	// every address that already voted. An honest voter who changes their mind
+	// cannot, and their earlier low still counts against the answerer.
+	//
+	// It also LATCHES, which is what keeps the budget order-independent. Wiping here
+	// without latching would let the answerer take TWO rolls by choosing the order:
+	// counter-flag first (roll one), watch the crowd re-confirm low, then sock-dispute
+	// to spend the ride's still-unspent wipe (roll two), erasing that low and voting
+	// mid alone over the bar — refunding the reserve for ~4%·X̄, the same purchase
+	// v0.47, v0.50 and v0.51 each closed at a different door. Latching costs the
+	// answerer nothing they are owed: their wipe is unconditional either way, and
+	// counterUsed already bounds them to one challenge.
+	//
+	// Net budget, whichever lane moves first: unlimited before anything is
+	// adjudicated, then AT MOST ONE fresh tally per lane and never two for one party.
+	// A sock that disputes first spends the ride's wipe and the answerer still gets
+	// their own poll; an answerer that counters first spends both and every later
+	// round votes their accumulating tally.
+	cs.qualityReasked = true
 	openQualityTally(cs)
 }
 
@@ -671,6 +733,13 @@ func ResolveSlashWindow(cur realm, courtSlug string, claimID uint64) {
 // the full per-event bound min(bond, 80% × (deposit+fee+slash)), minus the
 // dust share already paid. Exactly-once: pendingSlash zeroes here.
 func settleSlash(c *Court, cs *claimState) {
+	// UNREACHABLE TODAY, and deliberately kept: no caller can arrive here with the
+	// lane open (ResolveCounter clears it first, ResolveSlashWindow panics on it,
+	// and disposeSlashOnRide runs inside a round whose OpenDispute already closed
+	// it), so no mutation of this line fails a test. It stays because the cost of
+	// the invariant breaking is unbounded: Crystallize panics on counterOpen, so a
+	// lane outliving its reserve would strand the claim's whole draw forever.
+	cs.counterOpen = false
 	slash := cs.pendingSlash
 	if slash <= 0 {
 		return
@@ -709,6 +778,7 @@ func settleSlash(c *Court, cs *claimState) {
 // escrow forever. Newly reachable in v0.47, where a slash survives the failed
 // rounds that provClose counts.
 func refundSlash(c *Court, cs *claimState) {
+	cs.counterOpen = false // as settleSlash: unreachable today, same strand if it broke
 	slash := cs.pendingSlash
 	cs.pendingSlash = 0
 	cs.tierFinal = true
@@ -738,25 +808,35 @@ func unslash(c *Court, cs *claimState) {
 	cs.counterOpen = false
 }
 
-// parkCounter closes a RUNNING counter re-vote because a dispute is about to
-// reset the shared quality tally — openQualityTally moves qVoteSeq, so a live
-// re-vote's votes would otherwise be silently discarded mid-tally. The re-vote is
-// CANCELLED, not SPENT: counterUsed clears, so a stranger's dispute cannot
-// consume the answerer's one v0.31/Q5 challenge. Idempotent; touches no coin.
-func parkCounter(cs *claimState) {
-	if !cs.counterOpen {
-		return
-	}
-	cs.counterOpen = false
-	cs.counterUsed = false
-}
-
-// rearmSlashWindow gives a SURVIVING reserve a fresh counter-flag window after a
-// round that adjudicated nothing. The round consumed the window it interrupted
-// (its own vote runs a full votingBlocks) and parkCounter discarded any live
-// re-vote, so the answerer's challenge period restarts with time to use it.
-// ResolveSlashWindow stays the permissionless closer, so a re-armed reserve can
-// never strand Crystallize.
+// rearmSlashWindow gives a SURVIVING reserve a fresh window after a round that
+// adjudicated nothing about quality (or one that reached the slash's bar before the
+// answerer had been offered their challenge). The round consumed the window it
+// interrupted, since its own vote runs a full votingBlocks.
+//
+// A re-armed reserve always has exactly one permissionless closer, but WHICH one
+// depends on the branch below, and it is not always ResolveSlashWindow:
+//   - counterUsed false: the lane stays shut, so ResolveSlashWindow closes it once
+//     pendingSlashUntil lapses — and CounterFlag is still open to the answerer until
+//     then, which is the whole point of re-arming rather than settling.
+//   - counterUsed true: the lane REOPENS, and ResolveSlashWindow then PANICS on
+//     counterOpen. ResolveCounter is the closer on that path.
+// Either way Crystallize cannot strand: it panics on pendingSlash > 0, and one of
+// the two closers is always callable.
+//
+// A challenge already SPENT gets its lane back, not the right to open a second one:
+// counterUsed stays true (still exactly one per claim) while counterOpen reopens,
+// because CounterFlag would refuse to re-enter and the answerer would otherwise
+// forfeit their one v0.31/Q5 challenge to a stranger's failed round. What comes back
+// there is the WINDOW, not a fresh ballot: counterUsed implies qualityReasked, so the
+// tally is frozen and VoteQuality refuses every address already recorded at that seq
+// — including the answerer's own bloc. Only weight that has not yet voted can move it.
+//
+// counterVoteEnd is set EQUAL to pendingSlashUntil. A shorter lane would also be
+// safe — with counterOpen true, ResolveCounter is the only closer and an earlier
+// counterVoteEnd merely closes sooner. (An earlier version of this comment claimed a
+// shorter lane opened an unclosable gap; that is backwards. The gap it describes
+// needs counterVoteEnd > pendingSlashUntil, which is what CounterFlag itself does —
+// now + votingBlocks while now < pendingSlashUntil — and is safe for the same reason.)
 func rearmSlashWindow(c *Court, cs *claimState) {
 	if cs.pendingSlash <= 0 {
 		return
@@ -764,6 +844,10 @@ func rearmSlashWindow(c *Court, cs *claimState) {
 	now := runtime.ChainHeight()
 	cs.pendingSlashUntil = now + c.params.votingBlocks
 	cs.lastFlagEventAt = now
+	if cs.counterUsed {
+		cs.counterOpen = true
+		cs.counterVoteEnd = cs.pendingSlashUntil
+	}
 }
 
 // disposeSlashOnRide settles a slash that survived an UPHELD round against that
@@ -788,6 +872,22 @@ func disposeSlashOnRide(c *Court, cs *claimState) {
 		rearmSlashWindow(c, cs) // adjudicated nothing about quality
 	case cs.qLowW*3 < turnout*2:
 		refundSlash(c, cs) // the electorate failed the second ⅔ (ResolveCounter's rescue)
+	case !cs.counterUsed:
+		// A ride may CONFIRM a slash only once the answerer has actually been offered
+		// their v0.31/Q5 challenge. Settling here while counterUsed is false
+		// ANNIHILATES that grant with no block in which they could have used it, and
+		// it is race-free for the attacker: ResolveFlag is permissionless, so a sock
+		// OpenDispute lands in the same block the reserve is carved in, CounterFlag
+		// panics on disputeOpen throughout the round, and after settleSlash it panics
+		// on pendingSlash <= 0 forever. Half a dispute bond (~10%·X̄ burned, no comp on
+		// a quorum-less round) would destroy up to 30.8%·X̄ plus the poll.
+		//
+		// Re-arming instead costs the mechanism nothing: the reserve is not forgiven,
+		// ResolveSlashWindow still settles it unconditionally once the window lapses
+		// with no lane open, and the RESCUE arm above is untouched — the electorate can
+		// still lift a slash on a ride, we just do not let a ride burn one behind the
+		// answerer's back. Bounded by escrowUntil and maxFailedRounds → provClose.
+		rearmSlashWindow(c, cs)
 	default:
 		settleSlash(c, cs) // a full-bar ⅔-low ride re-confirms the flag
 	}
