@@ -583,9 +583,9 @@ func (c *countingDispatch) run(k Kind, sub, pay string) error {
 // so worth writing down — a test here has to keep its closures one level deep,
 // which a method's deferred recover is.
 type reenterer struct {
-	g      *Governor
-	id     int64
-	other  int64
+	g       *Governor
+	id      int64
+	other   int64
 	inner   *countingDispatch
 	reVote  any
 	reExec  any
@@ -1159,5 +1159,145 @@ func TestEveryRulesFieldLandsOnItsOwnTerm(t *testing.T) {
 			"voting=%d grace=%d propose=%d; want 1/2/3/5/6",
 			after.QuorumBps, after.ThresholdBps, after.VotingBlocks,
 			after.GraceBlocks, after.ProposeBps)
+	}
+}
+
+// deepToken reports more decimals than 10^d can hold in an int64. Pathological —
+// grc20votes clamps its own to 0..18 — but New validates nothing about a token, so
+// the engine has to survive one.
+type deepToken struct{ d int }
+
+func (deepToken) Name() string       { return "Deep" }
+func (deepToken) Symbol() string     { return "DEEP" }
+func (t deepToken) Decimals() int    { return t.d }
+func (deepToken) TotalSupply() int64 { return 1_000_000 }
+
+// scale() clamps a token's decimals before exponentiating, found surviving.
+//
+// 10^19 already overflows int64, and 10^k for k >= 64 wraps to exactly ZERO
+// because every power of ten carries that many factors of two — so an unclamped
+// scale divides by zero in units(), and units() is on the front page. Render is a
+// READ, so a page that panics is a page nobody can look at, on a token nobody can
+// fix from outside.
+func TestScaleClampsAPathologicalTokensDecimals(t *testing.T) {
+	g := New(&council{members: []address{gAlice}, epoch: 2}, deepToken{d: 64})
+	if got := g.scale(); got <= 0 {
+		t.Fatalf("scale() is %d — 10^64 wraps to zero and units() would divide by it", got)
+	}
+	// And the page renders at all, which is the property the clamp is for.
+	mustNotPanic(t, func() { _ = g.Render("", "") })
+}
+
+// The units rendering, three of whose four rules were unheld.
+//
+// Called directly rather than through a page: these are exact string claims and a
+// page assertion would smother them in the rest of the markdown.
+func TestTheUnitsRenderingIsExact(t *testing.T) {
+	g, _, _ := armed(t, gAlice)
+	if g.token.Decimals() != 6 {
+		t.Fatalf("this test states its expectations at 6 decimals; the token has %d",
+			g.token.Decimals())
+	}
+	// A whole number reads as one, with no trailing ".0".
+	if got := g.units(1_000_000); got != "1" {
+		t.Errorf("a whole token renders as %q, want \"1\"", got)
+	}
+	// A fraction keeps its significant digits and drops the rest.
+	if got := g.units(1_500_000); got != "1.5" {
+		t.Errorf("one and a half renders as %q, want \"1.5\"", got)
+	}
+	// The smallest unit is zero-padded to the token's decimals, not printed as
+	// though it were a tenth.
+	if got := g.units(1); got != "0.000001" {
+		t.Errorf("one base unit renders as %q, want \"0.000001\"", got)
+	}
+	// And the SIGN comes from the amount, not from its whole part. Integer division
+	// truncates towards zero, so everything between -1 and 0 has a whole part of
+	// exactly 0 and a minus taken from there is dropped — which renders -0.5 as
+	// 0.5, the opposite number rather than a near miss. Not reachable through this
+	// realm's own pages (a negative supply is refused at Propose), but units() is a
+	// helper with a stated contract and this is it.
+	if got := g.units(-500_000); got != "-0.5" {
+		t.Errorf("minus a half renders as %q, want \"-0.5\"", got)
+	}
+}
+
+// A span says HOURS up to two days, and days beyond, found surviving because the
+// only durations any test rendered were the bootstrap terms — and 2 days is exactly
+// on the boundary, so it reads the same whichever side the comparison falls.
+//
+// The choice is deliberate: "36 hours" is a figure somebody can hold against a
+// deadline, where "1 day" for the same period is both vaguer and wrong by a third.
+func TestASpanSaysHoursUpToTwoDays(t *testing.T) {
+	// 36 hours at five seconds a block.
+	if got := span(25_920); !contains(got, "36 hours") {
+		t.Errorf("a thirty-six hour period renders as %q", got)
+	}
+	// The last block below two days is still hours; two days exactly is days.
+	if got := span(34_559); !contains(got, "47 hours") {
+		t.Errorf("one block short of two days renders as %q", got)
+	}
+	if got := span(34_560); !contains(got, "2 days") {
+		t.Errorf("two days exactly renders as %q", got)
+	}
+	// And the singular, on both sides of the unit change.
+	if got := span(720); !contains(got, "1 hour)") {
+		t.Errorf("one hour renders as %q", got)
+	}
+}
+
+// A proposal row is its own markdown list item, found surviving: drop the trailing
+// newline and every row on the page runs into the one before it, collapsing the
+// whole list into a single item. Nothing noticed because the page assertions all
+// look for substrings, which survive being glued together.
+func TestAProposalRowIsItsOwnListItem(t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	a := g.Propose(gAlice, "fee", "1", "the first question")
+	b := g.Propose(gAlice, "fee", "2", "the second question")
+	if a == b {
+		t.Fatal("setup: two proposals share an id")
+	}
+	page := g.Render("", "")
+	// Each row begins a line of its own, so each is preceded by a newline.
+	if got := strings.Count(page, "\n- [#"); got != 2 {
+		t.Errorf("the page has %d rows beginning a line, want 2 — rows that do not "+
+			"end their list item collapse into one\n%s", got, page)
+	}
+}
+
+// An active proposal's countdown counts DOWN, found surviving. The existing test
+// asserts the line is present; nothing asserted the number on it, so reversing the
+// subtraction — printing how long ago voting would have closed — read as fine.
+func TestTheCountdownToCloseCountsDown(t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	id := g.Propose(gAlice, "fee", "1", "asked just now")
+	// The fixture's kind votes for 100 blocks and nothing has advanced the clock,
+	// so the whole window is still ahead.
+	page := g.Render(strconv.FormatInt(id, 10), "")
+	if !contains(page, "closes in 100 blocks") {
+		t.Errorf("the page does not count down from the full voting window:\n%s", page)
+	}
+}
+
+// A consumer-set ABSOLUTE quorum is rendered as the count it is, found surviving.
+//
+// ProposeWithQuorum replaces the rules' bps fraction with a number the consumer
+// computed — a court sizing quorum to a claim's open interest — and the tally then
+// compares turnout against that number outright. Render the percentage instead and
+// the page states a bar the proposal is not being measured against: a reader works
+// out from it that the vote has or has not cleared, and is wrong.
+//
+// The tally side of this was tested (TestProposeWithQuorumRaisesTheBar). The PAGE
+// side was not, which is the half a holder actually reads.
+func TestAnAbsoluteQuorumIsRenderedAsTheCountItIs(t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	id := g.ProposeWithQuorum(gAlice, "fee", "1", "an absolute bar", 2)
+	page := g.Render(strconv.FormatInt(id, 10), "")
+	if !contains(page, "needs 2 ·") {
+		t.Errorf("the page does not state the absolute floor the tally applies:\n%s", page)
+	}
+	// And not the bps bar the floor replaced, which is still sitting in the rules.
+	if contains(page, "needs "+pct(5000)+" ·") {
+		t.Errorf("the page states the bps quorum that the floor replaced:\n%s", page)
 	}
 }

@@ -4164,5 +4164,208 @@
   "label": "applyRules: the grace change lands on the VOTING period",
   "find": "\t\tcase \"grace\":\n\t\t\tr.GraceBlocks = f.n",
   "replace": "\t\tcase \"grace\":\n\t\t\tr.VotingBlocks = f.n"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: the front page and a proposal page are swapped",
+  "find": "\tif path != \"\" {\n\t\treturn g.renderOne(path)\n\t}",
+  "replace": "\tif path == \"\" {\n\t\treturn g.renderOne(path)\n\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: a FINISHED proposal is listed above the fold as well as in history",
+  "find": "\t\tif st != stateActive && st != stateSucceeded {",
+  "replace": "\t\tif st != stateActive && st != stateSucceeded && now < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: a decided proposal is listed under 'to vote on'",
+  "find": "\t\tif st == stateSucceeded {\n\t\t\tready += proposalLine(p, st)\n\t\t} else {\n\t\t\topen += proposalLine(p, st)\n\t\t}",
+  "replace": "\t\tif st == stateSucceeded {\n\t\t\topen += proposalLine(p, st)\n\t\t} else {\n\t\t\tready += proposalLine(p, st)\n\t\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: the slot count never counts anything",
+  "find": "\t\tnOpen++\n\t\treturn false",
+  "replace": "\t\treturn false"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: the history tail is unbounded, so the page's WORK grows forever",
+  "find": "\t\tif len(done) >= 2000 {\n\t\t\treturn true\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: an OPEN proposal is listed again under finished",
+  "find": "\t\tif st == stateActive || st == stateSucceeded {\n\t\t\treturn false // already above, from g.openIdx\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: the reserved-lane notice is off by one",
+  "find": "\tif nOpen >= maxOpen {",
+  "replace": "\tif nOpen > maxOpen {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: the slot count is reported out of the WRONG total",
+  "find": "\tout += ufmt.Sprintf(\"%d of %d slots in use\", nOpen, maxLive)",
+  "replace": "\tout += ufmt.Sprintf(\"%d of %d slots in use\", nOpen, maxOpen)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "render: an empty board does not say so",
+  "find": "\tif open == \"\" {\n\t\tout += \"_Nothing to vote on._\\n\"\n\t} else {",
+  "replace": "\tif false {\n\t\tout += \"_Nothing to vote on._\\n\"\n\t} else {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: a path that is not a number is not refused",
+  "find": "\tid, err := strconv.ParseInt(path, 10, 64)\n\tif err != nil {\n\t\treturn \"# not a proposal id\\n\"\n\t}",
+  "replace": "\tid, _ := strconv.ParseInt(path, 10, 64)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: a proposal that does not exist is not guarded",
+  "find": "\tif v == nil {\n\t\treturn \"# no such proposal\\n\"\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: an absolute quorum floor is rendered as a FRACTION of engaged",
+  "find": "\tif p.quorumFloor > 0 {\n\t\tout += ufmt.Sprintf(\"\\nturnout %d of %d, needs %d \u00b7 \"",
+  "replace": "\tif p.quorumFloor < 0 {\n\t\tout += ufmt.Sprintf(\"\\nturnout %d of %d, needs %d \u00b7 \""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: an all-abstained tally prints a support bar out of nothing",
+  "find": "\tcase forAndAgainst(p) > 0:",
+  "replace": "\tcase forAndAgainst(p) >= 0:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: an all-abstained page says NO VOTES CAST beside a full turnout",
+  "find": "\tcase p.abstain > 0:\n\t\tout += \"every vote was an abstention, so the threshold has nothing to weigh\\n\"",
+  "replace": "\tcase p.abstain > 0 && p.id < 0:\n\t\tout += \"every vote was an abstention, so the threshold has nothing to weigh\\n\""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: an active proposal never says when voting closes",
+  "find": "\tif st == stateActive {\n\t\tout += ufmt.Sprintf(\"\\n_Voting closes in %d blocks, at height %d._\\n\",\n\t\t\tp.closes-runtime.ChainHeight(), p.closes)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: the countdown to close runs backwards",
+  "find": "\t\t\tp.closes-runtime.ChainHeight(), p.closes)",
+  "replace": "\t\t\truntime.ChainHeight()-p.closes, p.closes)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: a decided-but-unrecorded proposal reads SUCCEEDED and EXPIRED together",
+  "find": "\t\tcase p.state != stateSucceeded:",
+  "replace": "\t\tcase p.state != stateSucceeded && p.id < 0:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "renderOne: a proposal in its timelock does not say it is waiting",
+  "find": "\t\tcase inDelay(p, now):",
+  "replace": "\t\tcase inDelay(p, now) && p.id < 0:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "span: a zero period renders as a duration",
+  "find": "\tif blocks <= 0 {",
+  "replace": "\tif blocks < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "span: minutes are computed as hours",
+  "find": "plural(secs/60, \"minute\")",
+  "replace": "plural(secs/3600, \"minute\")"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "span: the minute/hour boundary is off",
+  "find": "\tcase secs < 60*60:",
+  "replace": "\tcase secs < 60*61:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "span: the hour/day boundary is a day early",
+  "find": "\tcase secs < 48*60*60:",
+  "replace": "\tcase secs < 24*60*60:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "plural: a count of one takes the plural",
+  "find": "\tif n == 1 {\n\t\treturn \"1 \" + unit\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "units: the sign is taken from the WHOLE part, so -0.5 renders as 0.5",
+  "find": "\tif n < 0 {\n\t\tsign = \"-\"",
+  "replace": "\tif whole < 0 {\n\t\tsign = \"-\""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "units: the fraction is not zero-padded to the token's decimals",
+  "find": "\tfor len(out) < g.token.Decimals() {\n\t\tout = \"0\" + out\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "units: trailing zeroes are not trimmed",
+  "find": "\tfor len(out) > 1 && out[len(out)-1] == '0' {\n\t\tout = out[:len(out)-1]\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "units: a whole number renders with a fraction",
+  "find": "\tif out == \"0\" {\n\t\treturn sign + strconv.FormatInt(whole, 10)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "scale: decimals are not clamped, so a pathological token divides by zero",
+  "find": "\tif d > 18 {\n\t\td = 18\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "proposalLine: a row does not end its markdown list item",
+  "find": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** \u2014 `%s` \u00b7 %s\\n\",",
+  "replace": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** \u2014 `%s` \u00b7 %s\","
  }
 ]

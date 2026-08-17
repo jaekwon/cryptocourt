@@ -1624,6 +1624,48 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.07 — the render path, and the governor is now swept end to end: 21 of 31 caught, and
+  every survivor was a claim the page MAKES rather than a guard it keeps.**
+  The last unswept governor surface — `render`, `renderOne`, `span`, `plural`, `units`, `scale`,
+  `proposalLine`. Already held: the two pages not being swapped, a finished proposal listed
+  twice, decided proposals under the wrong heading, the slot count, the unbounded history tail,
+  the reserved-lane notice, a nonexistent proposal id, the all-abstained contradiction in both
+  directions, and the trailing-zero trim.
+  **The pattern in the eight real survivors is worth naming: every one of them is a statement
+  the page makes to a reader, and the tests that existed asserted a line was PRESENT rather than
+  what it said.** `TestAnActiveProposalSaysWhenVotingCloses` caught the whole countdown block
+  being deleted and did not notice the subtraction reversed, so a page could tell a holder how
+  long ago voting would have closed. The absolute-quorum line has a test on the TALLY side
+  (`TestProposeWithQuorumRaisesTheBar`) and none on the page, so a proposal measured against a
+  count could print a percentage bar it is not being measured against — a reader works out from
+  it whether the vote cleared, and is wrong. `proposalLine`'s trailing newline collapses every
+  row on the page into one list item, and the existing page assertions all look for substrings,
+  which survive being glued together. `span`'s hour/day boundary was unheld because the only
+  durations any test rendered were the bootstrap terms, and two days sits exactly ON the
+  boundary, so it reads the same whichever side the comparison falls.
+  Three `units` rules were unheld, including the one its own comment calls out: the sign has to
+  come from the AMOUNT, not the whole part, because integer division truncates towards zero and
+  everything between -1 and 0 has a whole part of exactly 0 — a minus taken from there is
+  dropped, and -0.5 renders as 0.5, the opposite number rather than a near miss. Not reachable
+  through this realm's pages (a negative supply is refused at Propose), and pinned anyway
+  because `units` is a helper with a stated contract.
+  And `scale()`'s clamp: 10^19 already overflows int64, and 10^k for k >= 64 wraps to exactly
+  ZERO, because every power of ten carries that many factors of two — so an unclamped scale
+  divides by zero inside `units`, which is on the front page. Render is a READ, so the failure
+  is a page nobody can look at, on a token nobody can fix from outside.
+  Two unreachable arms excluded, both verified. `renderOne`'s `expires && now > expiry` cannot
+  fire: `wouldBe` has already converted an expired Succeeded proposal to `stateExpired`, so
+  inside `if st == stateSucceeded` that case is dead — the same shape as v1.02's `expires` bool,
+  now found in the render mirror of it. And the front page's nil-proposal guard is unreachable
+  for the reason established in v1.03: proposals are never removed.
+  **A residual, registered rather than fixed.** `units` pads the fraction using the token's RAW
+  `Decimals()` while dividing by the CLAMPED scale, so a token reporting 64 decimals renders
+  legible-but-meaningless figures instead of panicking. The clamp's job is to keep Render
+  readable, and it does; making the two agree would be a behaviour change on a token this realm
+  cannot produce (grc20votes clamps at 18), so it is noted here rather than guessed at.
+  Batch now 624 rows: 623 caught, 0 not caught, one surviving by design. **Every file in
+  `p/governor` has now been mutation-swept, and so has every `p/` package.**
+
 - **v1.06 — rules.gno: 16 of 24 caught, and the gap was FIELD ROUTING — two of six terms
   landing on the wrong one, invisible to everything downstream.**
   `govern:rules` is the last authority-bearing builtin: it retunes what it takes to pass an
