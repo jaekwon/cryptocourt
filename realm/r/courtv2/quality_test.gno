@@ -2097,3 +2097,58 @@ func TestSlashDisposalRefusesEveryOutOfLaneResolve(cur realm, t *testing.T) {
 			cs.answerBond, bondBefore)
 	}
 }
+
+// A19: an overturn burns the answer bond IN FULL, reserve included. `unslash`'s
+// fold-back is what makes that true, and it survived the harness — delete it and
+// pendingSlash is zeroed while its coin stays in escrow accounted to nothing: not
+// burned with the bond, not refunded to anyone, not reserved any more. A conservation
+// break rather than a wrong number, which is the class that does not announce itself.
+//
+// The fold-back is also the ONLY reason `burned := cs.answerBond` is the whole
+// forfeiture. Read the overturn branch in order: unslash first, then burned is read,
+// then the burn. Take away the first step and the second reads a smaller number while
+// the escrow balance is unchanged.
+//
+// So the assertion is on SUPPLY, not on the fields: the fields would agree with the
+// mutant (pendingSlash zero either way, answerBond zero either way after the burn).
+// Only the amount of coin that left existence tells them apart.
+func TestOverturnBurnsTheSlashWithTheBond(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("a19-alice") // author + answerer
+	bob := testutils.TestAddress("a19-bob")     // disputer
+	carol := testutils.TestAddress("a19-carol") // the electorate
+	c := testCourt(cur, "a19", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	cs, slash := levySlash(cur, c, "a19", alice, bob, carol)
+	bond := cs.answerBond
+	if slash <= 0 || bond <= 0 {
+		t.Fatalf("setup: need a live reserve carved from a live bond: slash=%d bond=%d",
+			slash, bond)
+	}
+
+	// A fresh round, carried decisively the other way.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "a19", cs.id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "a19", cs.id, "yes") // OVERTURN
+	testing.SkipHeights(c.params.votingBlocks + 1)
+
+	// The reserve must still be standing going in — opening a round does not forgive
+	// it (v0.47), so what follows tests the OUTCOME disposing it.
+	if cs.pendingSlash != slash {
+		t.Fatalf("opening a round must not dispose the reserve: %d vs %d",
+			cs.pendingSlash, slash)
+	}
+	supplyBefore := c.coin.TotalSupply()
+	ResolveDispute(cross(cur), "a19", cs.id)
+
+	if got := supplyBefore - c.coin.TotalSupply(); got != bond+slash {
+		t.Fatalf("an overturn burns the bond AND the reserve it was carved from: "+
+			"burned %d, want %d+%d = %d", got, bond, slash, bond+slash)
+	}
+	if cs.pendingSlash != 0 || cs.answerBond != 0 {
+		t.Fatalf("and leaves neither behind: pending=%d bond=%d",
+			cs.pendingSlash, cs.answerBond)
+	}
+}

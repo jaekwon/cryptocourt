@@ -1244,5 +1244,68 @@
   "label": "settleSlash: the reserve is never burned",
   "find": "\tcs.pendingSlash = 0\n\tc.coin.Burn(c.escrow, slash)",
   "replace": "\tcs.pendingSlash = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "originateSlash: the reserve is not carved from the bond",
+  "find": "\tcs.answerBond -= slash\n\tcs.pendingSlash = slash",
+  "replace": "\tcs.pendingSlash = slash"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "originateSlash: the bounty beneficiary is not recorded",
+  "find": "\tcs.slashFlagger = flagger\n\tcs.slashLevied = true",
+  "replace": "\tcs.slashLevied = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "originateSlash: the once-per-claim latch is never set",
+  "find": "\tcs.slashFlagger = flagger\n\tcs.slashLevied = true",
+  "replace": "\tcs.slashFlagger = flagger"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "originateSlash: the counter-flag window is zero-length",
+  "find": "\tcs.pendingSlashUntil = now + c.params.votingBlocks\n\tcs.slashFlagger = flagger",
+  "replace": "\tcs.pendingSlashUntil = now\n\tcs.slashFlagger = flagger"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "refundSlash: the reserve never returns to the answer bond",
+  "find": "\tcs.answerBond = mustAdd(cs.answerBond, slash)\n}",
+  "replace": "}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "refundSlash: the tier is not finalized",
+  "find": "\tcs.pendingSlash = 0\n\tcs.tierFinal = true",
+  "replace": "\tcs.pendingSlash = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "unslash: the reserve is not folded back, so the burn is not slash-inclusive (A19)",
+  "find": "\tcs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)\n\tcs.pendingSlash = 0",
+  "replace": "\tcs.pendingSlash = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "rearmSlashWindow: a spent challenge's lane never reopens",
+  "find": "\tif cs.counterUsed {\n\t\tcs.counterOpen = true",
+  "replace": "\tif false {\n\t\tcs.counterOpen = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "rearmSlashWindow: the reserve gets no fresh window",
+  "find": "\tcs.pendingSlashUntil = now + c.params.votingBlocks\n\tcs.lastFlagEventAt = now",
+  "replace": "\tcs.lastFlagEventAt = now"
  }
 ]

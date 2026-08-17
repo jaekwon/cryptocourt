@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.82 — the refund/rearm half of the slash lane: A19's fold-back was unpinned, and it
+  is invisible in every field it touches.** Thirteen mutations over `originateSlash`,
+  `refundSlash`, `unslash` and `rearmSlashWindow` — the complement of v0.81's `settleSlash`
+  sweep. Nine already held: the carve out of the bond, the beneficiary recorded at
+  origination, the once-per-claim latch, the window length, the refund's return to the bond,
+  the tier finalization, and both halves of the re-arm (the fresh window and the spent
+  challenge's lane reopening).
+  **`unslash`'s fold-back — the real gap, and the reason it hid.** An overturn burns the
+  answer bond in full, reserve included (A19). The overturn branch reads in order: `unslash`,
+  then `burned := cs.answerBond`, then the burn. Delete the fold-back and the second step
+  reads a smaller number while the escrow balance is unchanged: `pendingSlash` is zeroed and
+  its coin sits in escrow accounted to NOTHING — not burned with the bond, not refunded to
+  anyone, not reserved any longer. A conservation break rather than a wrong number.
+  It hid because **every field agrees with the mutant**: `pendingSlash` is zero either way,
+  `answerBond` is zero either way once the burn has run. Only the amount of coin that left
+  existence tells them apart, so the fixture asserts on SUPPLY. It also pins, on the way
+  past, that opening the round does not forgive the reserve (v0.47) — so what disposes it is
+  the OUTCOME.
+  **Three survived and all three are EQUIVALENT, each established differently.**
+  `originateSlash`'s `pendingSlash > 0` clause is redundant BY CONSTRUCTION, which beats any
+  probe: `slashLevied` is written in exactly one place, `= true` at origination, and never
+  cleared, so a live reserve implies the latch and the first clause already refuses.
+  `originateSlash`'s `answerBond <= 0` clause is backstopped by the clamp below it —
+  measured, an origination against a drained bond is an exact no-op, because the clamp
+  assigns `slash = answerBond ≤ 0` and the `slash <= 0` return fires. That is worth
+  recording for a second reason: the clamp carries a comment calling itself UNREACHABLE
+  behind the collateralization floor and warning against cleaning it up on the strength of
+  its survivor report. It is unreachable, and it is also exactly this clause's backstop —
+  the two are mutually protective, the same structure found in `curve`. The warning was
+  right.
+  `refundSlash`'s `provClose` arm is unreachable on today's ordering: `disposeSlashOnRide`
+  runs BEFORE `provCloseClaim`, so a refund rejoins the bond and leaves by the ordinary
+  exit. The source comment already says precisely this — that the ordering is "a preference
+  for the common path, not a strand guard" — and the surviving mutation CORROBORATES the
+  comment rather than contradicting it. Item 1's strand fix is present in the code and
+  waiting for a reordering that has not happened.
+  Batch now 187 rows, 0 not caught.
+
 - **v0.81 — FOUR ways to spend the answerer's Q5 challenge without holding a vote, and a
   flaw in the harness's own summary that hid a row for several batches.**
   The slash disposal lane: eleven mutations over `ResolveCounter`, `ResolveSlashWindow` and
