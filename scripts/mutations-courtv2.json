@@ -817,5 +817,47 @@
   "label": "WithdrawBonus: the losing side draws too",
   "find": "\tif side != int(cs.provisional) {",
   "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: a participant draws the carrot as well as its slice",
+  "find": "\tif isParticipant(cs, who) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: the carrot can be claimed twice",
+  "find": "\tif cs.qVoted.Has(claimedKey) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: an against-verdict voter draws the carrot",
+  "find": "\t\tif v == nil || v.(string) != cs.carrotChoice {",
+  "replace": "\t\tif v == nil {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: a non-voter draws the standalone carrot",
+  "find": "\t\tif !cs.qVoted.Has(beClaimKey(cs.conclusiveSeq) + string(who)) {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: a share may exceed what is left in the pool",
+  "find": "\tif share > cs.carrotPool {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: the claim latch is never written",
+  "find": "\tcs.qVoted.Set(claimedKey, true)",
+  "replace": ""
  }
 ]

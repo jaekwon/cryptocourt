@@ -385,6 +385,37 @@ func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
 	if carrot <= 0 {
 		t.Fatal("above the full bar the carrot is tier-invariant and must be paid")
 	}
+
+	// Two guards on the STANDALONE branch, both found surviving. This is the fixture
+	// that has a live pot to take, so it is where they belong.
+	//
+	// First: the electorate is the tally's own voters. A complete non-voter is refused.
+	gus := testutils.TestAddress("cz5-gus") // never voted on anything
+	testing.SetRealm(testing.NewUserRealm(gus))
+	uassert.AbortsContains(t, cur, "conclusive quality tally", func() {
+		PullCarrot(cross(cur), "cz5", id)
+	})
+
+	// Second: the carrot is a POT, not a per-voter entitlement. That is not a detail —
+	// it is the invariant the item-4 econ vet's NO-CHANGE verdict rested on ("the WHOLE
+	// electorate together is paid less than one flagger's own bond"), and it had no test.
+	// Eve takes her pro-rata share, then the pot is left holding a single unit and
+	// Frank — whose own share is of the same order as Eve's — must take only that unit.
+	testing.SetRealm(testing.NewUserRealm(eve))
+	evesShare := PullCarrot(cross(cur), "cz5", id)
+	if evesShare <= 1 {
+		t.Fatalf("setup: shares here must exceed a single unit for the clamp arm below "+
+			"to mean anything: %d", evesShare)
+	}
+	cs.carrotPool = 1
+	testing.SetRealm(testing.NewUserRealm(frank))
+	if share := PullCarrot(cross(cur), "cz5", id); share != 1 {
+		t.Fatalf("a share must be clamped to what is left in the pot, not paid in "+
+			"full: got %d want 1", share)
+	}
+	if cs.carrotPool != 0 {
+		t.Fatalf("and the pot must be empty afterwards, not negative: %d", cs.carrotPool)
+	}
 }
 
 // The `decidedPID == 0` clause of v0.55's withholding, pinned. On a DECIDED claim the
@@ -751,5 +782,78 @@ func TestAuthorBonusGuardsItsSliceAndItsF9Cap(cur realm, t *testing.T) {
 	// no-op draw must still consume the slice, or the cap becomes a retry loop.
 	uassert.AbortsContains(t, cur, "already drawn", func() {
 		AuthorBonus(cross(cur), "au1", id)
+	})
+}
+
+// The DECIDED round's carrot electorate, found SURVIVING: drop the carrotChoice half
+// of PullCarrot's first branch and a voter who voted AGAINST the verdict draws the
+// policing pay of the round that went the other way. That is the whole point of the
+// carrot — it pays for being right, and paying both sides pays for turning up.
+//
+// Nothing caught it because no fixture had ever built a CONTESTED decided round. cz6
+// has a single voter, so every recorded vote equals carrotChoice by construction and
+// the comparison is true whatever it compares. Here the round is contested and the
+// losing voter is refused by name.
+func TestDecidedCarrotRefusesTheAgainstVerdictVoter(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cvd1-alice") // author + answerer
+	bob := testutils.TestAddress("cvd1-bob")     // disputer
+	carol := testutils.TestAddress("cvd1-carol") // votes NO, wins, big weight
+	dan := testutils.TestAddress("cvd1-dan")     // votes YES, loses
+	c := testCourt(cur, "cvd1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 1_000_000_000)
+	c.coin.Mint(carol, 5_000_000_000)
+	c.coin.Mint(dan, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cvd1", "a decided round pays only its own side")
+	matureOI(cur, "cvd1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cvd1", id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+
+	// Round 1 fails quorum, which opens the escrow window the decided round needs.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cvd1", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cvd1", id)
+
+	// A CONTESTED round: NO carries on weight, so the YES voter is on the losing side
+	// of the verdict while still having voted.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cvd1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "cvd1", id, "no")
+	testing.SetRealm(testing.NewUserRealm(dan))
+	VoteDispute(cross(cur), "cvd1", id, "yes")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cvd1", id)
+
+	cs := mustClaim(c, id)
+	if cs.decidedPID == 0 || cs.carrotChoice != "no" {
+		t.Fatalf("setup: need a decided round carried by NO: pid=%d choice=%q",
+			cs.decidedPID, cs.carrotChoice)
+	}
+
+	testing.SkipHeights(EscrowUntil("cvd1", id) - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "cvd1", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cvd1", id)
+	if _, _, _, carrot := DrawSlices("cvd1", id); carrot <= 0 {
+		t.Fatalf("setup: a decided round must leave a carrot to fight over: %d", carrot)
+	}
+
+	// The voter who voted WITH the verdict is paid.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	if share := PullCarrot(cross(cur), "cvd1", id); share <= 0 {
+		t.Fatalf("the with-verdict voter must be paid: %d", share)
+	}
+	// The one who voted against it is not — and note it is refused for the RIGHT
+	// reason: dan did vote, so this cannot pass by way of the non-voter branch.
+	testing.SetRealm(testing.NewUserRealm(dan))
+	uassert.AbortsContains(t, cur, "with-verdict voters", func() {
+		PullCarrot(cross(cur), "cvd1", id)
 	})
 }

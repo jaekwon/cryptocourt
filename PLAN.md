@@ -1624,6 +1624,34 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.75 — `PullCarrot`'s electorate was half-unpinned, and one of the survivors is the
+  invariant item 4's NO-CHANGE verdict was argued FROM.** Policing pay lives in the carrot,
+  so it was the next target after the draw family. Six guards mutated, three already
+  pinned by `cz2` (participants never take it, one claim only, the latch is written), three
+  surviving — all three on the question of WHO gets paid and HOW MUCH.
+  **The against-verdict voter.** Drop the `carrotChoice` half of the decided branch's test
+  and someone who voted AGAINST the verdict draws the policing pay of the round that went
+  the other way. Nothing caught it because no fixture had ever built a CONTESTED decided
+  round: `cz6` has a single voter, so every recorded vote equals `carrotChoice` by
+  construction and the comparison is true whatever it compares. The new fixture makes the
+  round contested and refuses the loser by name — and the loser DID vote, so the arm cannot
+  pass by way of the non-voter branch instead.
+  **The non-voter.** On the standalone branch a complete non-voter was refused by a guard
+  no test exercised. Pinned in the above-full-bar fixture, which is the one with a live pot.
+  **The pot clamp — `share > carrotPool ⇒ share = carrotPool`.** This is the one worth
+  recording carefully. v0.71's item-4 econ vet concluded NO-CHANGE on policing pay, and its
+  second reason was, verbatim, that "the carrot is a **pot**, not a per-voter entitlement
+  (`share > carrotPool ⇒ share = carrotPool`) — so the WHOLE electorate together is paid
+  less than one flagger's own bond, and '~999 CC each' is arithmetically impossible."
+  That clamp had no test. The design argument was sound and the code was correct, but the
+  line the argument rests on was one edit away from being false with nothing to notice. A
+  conclusion is only as durable as the guard it cites, and citing a guard is now a reason
+  to go and check that something pins it.
+  The clamp arm leaves a single unit in the pot and requires a voter whose own share is of
+  the same order to take only that unit; the arm's discriminating power is established by
+  the mutation being caught, not asserted in the fixture.
+  Batch now 123 rows, all caught, none invalid.
+
 - **v0.74 — item 5 is DONE, including the half recorded as needing an owner decision:
   every runner now gets its own GNOROOT, so two worktrees can test at the same time.**
   The decision that was parked was between two bad options — keep sharing one tree, or
