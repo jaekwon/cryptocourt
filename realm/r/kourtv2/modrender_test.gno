@@ -240,3 +240,64 @@ func TestModLogReportsItsOwnTruncation(cur realm, t *testing.T) {
 		t.Fatal("a log that fits on one page must not claim to be truncated")
 	}
 }
+
+// An m-of-n set that cannot see what it has half-approved coordinates by
+// rumour, and v0.25 gave every unfired approval a 7-day expiry — a deadline
+// nobody can see is a trap for a set six days into gathering signatures.
+//
+// The second assertion is the load-bearing one. A pending proposal's `reason` is
+// free text ONE moderator wrote, which no m-of-n has approved. Rendering it
+// would hand any single member a publication channel on the court's own page
+// without the set's consent — the same authority-without-agreement the m-of-n
+// exists to prevent. It appears only once the act carries.
+func TestPendingProposalsRenderWithoutTheirReason(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mdrp-alice")
+	m2 := testutils.TestAddress("mdrp-m2")
+	testCourt(cur, "mdrp", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mdrp", []address{alice, m2}, 2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "mdrp", "a claim")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "mdrp", id, "SECRETSMEAR")
+	if HiddenFromListing("mdrp", id) {
+		t.Fatal("fixture: one of two must not fire")
+	}
+
+	page := Render("mdrp/mod")
+	if !strings.Contains(page, "Awaiting approval") {
+		t.Fatal("an in-flight proposal must be visible to its own set")
+	}
+	if !strings.Contains(page, "1 of 2 approved") {
+		t.Fatal("the tally so far must render")
+	}
+	if !strings.Contains(page, "expires at height") {
+		t.Fatal("the deadline must render — an unseen 7-day clock is a trap")
+	}
+	if strings.Contains(page, "SECRETSMEAR") {
+		t.Fatal("an UNAPPROVED reason must not render: that is a publication channel for one member")
+	}
+
+	// Once the act carries it leaves the pending list and the reason appears.
+	testing.SetRealm(testing.NewUserRealm(m2))
+	HideItem(cross(cur), "mdrp", id, "SECRETSMEAR")
+	page = Render("mdrp/mod")
+	if strings.Contains(page, "Awaiting approval") {
+		t.Fatal("a carried act must leave the pending list")
+	}
+	if !strings.Contains(page, "SECRETSMEAR") {
+		t.Fatal("the reason belongs in the log once the set actually agreed")
+	}
+
+	// An expired proposal is not pending either — the read agrees with
+	// approveAction, which treats it as absent.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id2 := OpenClaim(cross(cur), "mdrp", "another claim")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "mdrp", id2, "stale")
+	testing.SkipHeights(pendingTTLBlocks + 1)
+	if strings.Contains(Render("mdrp/mod"), "Awaiting approval") {
+		t.Fatal("an expired proposal must not read as in-flight")
+	}
+}

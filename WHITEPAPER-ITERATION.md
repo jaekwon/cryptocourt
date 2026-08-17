@@ -265,11 +265,62 @@ search, sources cited in its report):
   HHS-OIG-audited, terminated 2022), D (DEFUSE furin text public via
   leak+FOIA), F (node #5's FALSE rests on "cannot," which is the point).
 
-MEGA-PASS PLAN (one rewrite, NEXT FIRE, skeptic or no skeptic — it is the
-last straggler and everything else is banked):
-A1-A15 + E1-E5 + F1-F5 + full Satoshi-register rewrite. Skeptic findings
-fold into the round after if late. After the mega-pass: style lens seated
-every round.
+From **hostile-skeptic** (landed minutes after the mega-pass; it reviewed the
+PRE-mega-pass draft — its hits on "runs today"/"with reasoning"/"never
+banked"/"multiple keys"/present-tense-tree were ALREADY FIXED by A-findings.
+New items, each verified before deciding):
+- K1 ACCEPT (§7 Disclosure block): designers hold GNOT, the token every curve
+  burns; may hold early positions in courts they found; on-chain visible.
+  Verified nuance: court.gno:126's "~500-1,000 GNOT genesis buy" is a floor-
+  calibration ASSUMPTION, not a stated deployer plan — disclosure written dry,
+  no scarcity argument made (S-rules hold: disclosing an interest ≠ marketing
+  the burn).
+- K2 ACCEPT (§6): global backstop is genesis 1-of-1 (ensureGlobalDAO migrates
+  directoryAdmin = first creator; "DAO-ification is V3", moderation.gno:60,86).
+  Now stated: single operator key at genesis, m-of-n supported, broadening is
+  deployment work.
+- K3 ACCEPT (§2): both-sides staking is code-true (Stake() has no opposite-
+  side check; StakeOf keyed by (side,who)). Added: "lean measures net stake,
+  not headcount."
+- K4 ACCEPT (§2): sealed-epoch honesty — the seal binds reactors, not
+  planners (buy, wait an hour, open the dispute yourself). Added plainly.
+- K5 ACCEPT (§8): faucet-token burns are rehearsal; the record that matters
+  starts where money is real.
+- K6 REJECT (name the deployer): the doc discloses the interest (K1); naming
+  legal identity is an owner call, not a critic's. → Owner notes.
+- K7 REJECT ("candor is manufactured; the confession is the conversion
+  funnel"): no wording change can answer this — the counter is process, not
+  prose: claims are verified against code and false ones removed, and this
+  log is public. Noted, not actionable.
+- K8 REJECT (carrot = beauty contest on values claims): already stated
+  honestly in §2 ("a pull toward expected consensus rather than an oracle").
+- K9 → OWNER (realm-level, out of whitepaper scope): hedged both-sides
+  staking looks +EV (winner-side accuracy rewards, no loser-side principal
+  loss) and inflates stake-lean legibility. Mechanism question for the
+  courtv2-moderation session, logged in HANDOFF.
+- Skeptic's could-not-break list (kept for the record): contract-level
+  burn/no-treasury clean; render/money separation held everywhere it counts;
+  no-loss principal code-true; sealed epochs real; no premine narrowly true;
+  emission bounds enforced by deploy-gates; "a genuinely careful machine."
+
+## Round log (continued)
+
+| round | date | lenses | changes | verdict |
+|---|---|---|---|---|
+| 6 | 2026-08-17 | style (seated) + structure | Applied the full round-3 panel. STRUCTURE (verdict "sound", 3 recs): §6 gains the moderator-origination sentence (VERIFIED moderation.gno:305-316 "only the court creator appoints moderators (until an election)" + creatorUnseated latch); mockup gains a glyph legend and the widest annotation shortened for phone width; §5's closing paragraph cut (restated §6's rule 30 words early — style critic independently flagged the same sentence as a paradox flourish). STYLE (register drift concentrated in section-capper aphorisms): all cappers flattened — subtitle → plain category, "Not evidence. Permission." → declarative, "record is the point/product" ×2 flattened, charity quip, rug-tricolon, furious-moderators, §7 self-regard, §8 poetic imperatives + period-pieces close; fight/fights (8×) → dispute/vote family; honestly/genuinely/actually → 0; permanently 6→4; the one second-person pronoun removed; §6 splice artifact from K2 repaired; "Bring a claim." CUT per the Nakamoto-only ruling (owner-reversible, see Register rulings above). 22+4 edits, ~3,500 words. Critic counts POST-edit: em-dashes in running prose 0, initial-And/So ≤3. | NOT-CLEAN (26 applied) |
+| 5 | 2026-08-17 | cold-re-read (style + structure still out) | Cold reader #2: register HOLDS ("What changed was permission" earns the read; Abstract works); all four disclosures read as trust-building, not red flags; example reads as tool ("Courts judge claims, not teams" quote cited as the load-bearing line). THE decision question, third critic running to flag it: is hedged both-sides staking +EV? ANSWERED IN THE DOC now, code-verified first: stake.gno:168 escrows staked coins out of the ledger balance → absent from epoch snapshots → disenfranchised (PLAN.md:339,1368 confirms as design). New §2 paragraph: hedger earns a guesser's return at a believer's lockup, buys zero verdict power (verdicts = coin votes, not stakes), and equal both-sides stake moves the lean TOWARD even. Also simplified the §5 franchise sentence the reader had to read three times. K9 in HANDOFF stays (render-side netting still worth owner thought) but demoted: the mechanism already defuses the exploit. Two drift points (§4 parameter chain, Abstract middle) deferred to the seated style critic's counts. | NOT-CLEAN (2 applied) |
+| 4 | 2026-08-17 | accuracy + prose + fact-check + skeptic + REGISTER | THE MEGA-PASS: full Satoshi-register rewrite (added Abstract; dry numbered titles; em-dashes 64→~10; second person ~0; self-certified candor removed; rhetorical Q→statement). Applied A1-A15 (incl. MAJOR: V2/V3 layering stated honestly in §3; "not yet deployed" in header/§7/§8; claimed-burn capture base + unclaimed-franchise reserve; polish-window fixed; m-of-n; creator-before-election; meta-emission exception; hide-verb quorum nuance), E1-E5 (all rhythm/dead-word/structure/close fixes; colophon flattened), F1-F5 (dated §1 arc; durable #7; #8→infected-animal-found FALSE for camp symmetry; #9 settled-TRUE + #10 pardon-privilege OPEN — intake decomposes; universities not states). Then K1-K5 surgical post-skeptic edits. 3,458 words (~7pp). Under the 3,800 floor — accepted per the logged note; padding would invert the register. | NOT-CLEAN (40+ applied) |
+
+## Register rulings the owner can reverse in one word
+
+- **"Bring a claim." was CUT** (round 6). Round-2 prose editor said it earned
+  its drama; round-3 style critic, judging by the Nakamoto standard the owner
+  set, said cut. The later, stricter directive governed. §8 now ends
+  declaratively ("Individual verdicts will age...").
+- The subtitle tagline became a plain category ("An on-chain court system for
+  contested claims"), and the Abstract now closes on purpose-of-system rather
+  than "The record is the product."
+- To restore any of these, write it here; the loop will obey.
 
 ## Owner notes
 

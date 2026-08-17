@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.27 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.28 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,26 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.28 — a set can see what it has half-approved, minus the part it has not
+  agreed to**. v0.25 gave every unfired approval a 7-day expiry and
+  `PendingApproval(court, key)` to read one; that still required knowing the key.
+  The moderation log now lists in-flight proposals with their tallies and
+  deadlines. An m-of-n set that cannot see what it has half-approved coordinates
+  by rumour, and an unseen clock is a trap for a set six days into gathering
+  signatures.
+  **The stored `reason` is deliberately withheld until the act carries.** It is
+  free text ONE moderator wrote, which no m-of-n has approved — rendering it
+  would hand any single member of the set a publication channel on the court's
+  own page without the set's consent, which is the same
+  authority-without-agreement the threshold exists to prevent. The key, the
+  count and the deadline are enough to coordinate on; the prose waits for the
+  agreement.
+  Bounded on entries VISITED as well as rows emitted, because this is the only
+  place in the realm that walks `pending` and an unbounded walk here would undo
+  v0.21's lesson one function from where it was learned. Expired proposals do not
+  render, so the page agrees with what `approveAction` will actually do.
+  Regression asserts all four: the tally shows, the deadline shows, the
+  unapproved reason does NOT, and it appears once the set really agreed.
 - **v0.27 — ordinary courts get the supply-relative floor, at a TENTH of
   meta's fraction (3 identical economists; unanimous on shape, 2/3 on the
   number)**. v0.26 established the bug; the panel established that my intended

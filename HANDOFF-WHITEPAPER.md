@@ -38,6 +38,20 @@ Three files are involved, all new, all untracked, none of yours touched:
 
 ## Open items it surfaced for owners (also in the iteration file)
 
+4. **Hedged staking looks +EV (realm-level, from the hostile-skeptic round):**
+   one address may stake both sides of a claim (stake.gno permits it); losers
+   keep principal, winner-side stakers draw accuracy rewards — so hedging both
+   sides appears strictly positive-EV and inflates the stake-lean that renders
+   as "58/42". If intended (a liquidity/legibility trade), document it; if
+   not, the fix is realm-side (e.g. net-of-hedge lean in render, or excluding
+   self-offsetting stake from reward draws).
+5. **Genesis global backstop is 1-of-1** (ensureGlobalDAO migrates the first
+   creator; DAO-ification is V3): whitepaper now says so plainly; decide the
+   mainnet m-of-n plan before launch.
+6. **Deployer identity naming**: the whitepaper discloses designer GNOT
+   holdings and possible early positions (dry, no scarcity argument); whether
+   to NAME the deployer is an owner call it deliberately does not make.
+
 1. **META transferability** (§13.8 OWNER RE-CHECK) — the whitepaper ducks it;
    a decision would let §5 say something stronger.
 2. **govern's `tokenSymbol = "COURT"`** (token.gno:18) — already sent to

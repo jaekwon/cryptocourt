@@ -20,6 +20,7 @@
 package kourtv2
 
 import (
+	"chain/runtime"
 	"math/overflow"
 	"strconv"
 	"strings"
@@ -313,6 +314,52 @@ func renderModLog(slug string) string {
 		}
 		b.WriteString("\n")
 	}
+	// In-flight proposals, with their deadlines. An m-of-n set that cannot see
+	// what it has half-approved coordinates by rumour, and v0.25 gave every
+	// unfired approval a 7-day expiry — a deadline nobody can see is a trap for
+	// a set six days into gathering signatures.
+	//
+	// The action KEY, the count and the deadline render. The stored `reason` does
+	// NOT, deliberately: it is free text one moderator wrote, and no m-of-n has
+	// approved it yet. Rendering it would hand any single member of the set a
+	// publication channel on the court's own page without the set's consent —
+	// which is the same authority-without-agreement the m-of-n exists to prevent.
+	// It appears in the log only once the act FIRES.
+	//
+	// Bounded on entries VISITED, like the act loop below: this is the only place
+	// in the realm that walks `pending`, and an unbounded walk here would undo
+	// the v0.21 lesson one function away from where it was learned.
+	pendingRows := []string{}
+	pendingSeen := 0
+	pendingMore := false
+	now := runtime.ChainHeight()
+	cm.pending.Iterate("", "", func(key string, v any) bool {
+		pendingSeen++
+		if a, ok := v.(*approval); ok {
+			if deadline := a.openedAt + pendingTTLBlocks; now < deadline {
+				pendingRows = append(pendingRows,
+					"- `"+sanitize.InlineText(key)+"` — "+strconv.Itoa(a.approvers.Size())+
+						" of "+strconv.Itoa(cm.m)+" approved, expires at height "+
+						strconv.FormatInt(deadline, 10))
+			}
+		}
+		if len(pendingRows) >= renderPageSize || pendingSeen >= renderPageSize {
+			pendingMore = true
+			return true
+		}
+		return false
+	})
+	if len(pendingRows) > 0 {
+		b.WriteString("## Awaiting approval\n\nProposals this set has started and not yet carried. An approval expires if the set does not reach its threshold in time; the reason is withheld until the act carries.\n\n")
+		for _, r := range pendingRows {
+			b.WriteString(r + "\n")
+		}
+		if pendingMore {
+			b.WriteString("- _…more not shown_\n")
+		}
+		b.WriteString("\n")
+	}
+
 	// Newest acts first, one page (the N3 bound). ReverseIterate matters: claim
 	// keys are big-endian ids, so a forward walk starts at the OLDEST moderated
 	// claim — once those filled a page, no recent act was ever visible, which is

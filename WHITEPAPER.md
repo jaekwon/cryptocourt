@@ -5,132 +5,135 @@
 
 # Kourt
 
-**Courts for the internet's arguments — and the map they leave behind.**
+**An on-chain court system for contested claims.**
 
-*Draft. Kourt runs today on gno.land's sapphire testnet. Nothing in this
+**Abstract.** Kourt is a network of on-chain courts, one per topic. A claim is
+filed in fixed wording and cannot be reworded afterward. Holders of the
+court's coin stake on it, an answerer bonds a resolution, and anyone who
+disagrees can force a vote. Voting weight is read from an hourly snapshot
+sealed before the vote opened, so weight cannot be bought for a vote already
+underway. Verdicts, stakes, and dissents are recorded permanently. The coin is
+minted on a one-way curve and the payment is burned; no treasury exists, and
+rewards are minted by a bounded, decaying emission that pays the people who do
+the judging. Moderation, including the appeals court that oversees it, can
+control what is listed but cannot touch a stake, a verdict, or a withdrawal.
+What accumulates is a public record of each dispute: what was claimed, what it
+cost to claim it, and how each part fared. This record is the purpose of the
+system.
+
+*Draft. Kourt is not yet deployed to a public network. Nothing in this
 document is an offer to sell anything or a promise that anything will be worth
-anything. Section 7 says plainly what these coins are and are not; read it
-before buying anything.*
+anything. Section 7 states what the coins are and are not; read it before
+acquiring any.*
 
----
+## 1. Introduction
 
-## 1. Every big argument on the internet is undefeated
+In February 2021, Facebook banned posts claiming the COVID-19 virus was
+man-made. It reversed the ban that May. In February 2023, the director of the
+FBI said the bureau assessed the pandemic most likely began with a lab
+incident in Wuhan. The claim had not changed. The evidence had barely changed.
+What changed was permission.
 
-In early 2021, the largest social platforms removed posts arguing that
-SARS-CoV-2 might have come out of a laboratory. Two years later, the director
-of the FBI said a lab origin was the bureau's assessment. The claim had not
-changed. The evidence had barely changed. What changed was *permission*.
-
-That sequence should bother you no matter where you think the virus came from,
-because it reveals what public argument actually runs on. Not evidence —
-permission. And permission has no memory: nobody who shouted "conspiracy
-theory" in 2021 paid anything in 2023, and nobody who was right early was owed
-anything either. There is no scoreboard. There is no ledger of who claimed
-what, against what resistance, at what price.
+That sequence is a problem whatever the virus's true origin, because it shows
+that public argument runs on permission rather than evidence. Permission has
+no memory: no one who dismissed the claim in 2021 paid anything in 2023, and no
+one who was right early was owed anything. There is no scoreboard. There is no
+ledger of who claimed what, against what resistance, at what price.
 
 The deeper problem is structural. Assertion is free, so it never stops.
 Rebuttal is unpaid, so it never sticks. A thread about a contested question in
-2020 and a thread about the same question in 2026 contain the same fight, the
-same links, the same accusations — because nothing anyone said in between was
-recorded anywhere it could *bind*. The internet has annotation (fact-checks,
-community notes), and it has summary (the encyclopedia written by whoever
-outlasted the edit war). It has never had the argument itself: as a structure,
-with positions, with costs, with a record of who was where before it was safe
-to be there.
+2020 and a thread about the same question in 2026 contain the same dispute and
+the same links, because nothing said in between was recorded anywhere it could
+bind. The internet has annotation, and it has summary. It has never had the
+argument itself: as a structure, with positions, costs, and a record of who
+was where before it was safe to be there.
 
-Kourt is that record.
+Kourt is that record. Claims are filed in exact, unchangeable words, argued by
+people who put money behind their positions, and decided by a vote whose
+weights were fixed before the vote opened. Win or lose, everything stays:
+every claim, every stake, every verdict, every dissent.
 
-Kourt is a network of small courts, one per topic or community, where claims
-are filed in exact, unchangeable words; argued by people who put money behind
-their positions; and decided by a vote whose weights were fixed *before the
-fight was visible*. Win or lose, everything stays: every claim, every stake,
-every verdict, every dissent, linked into a public graph of the whole dispute.
+The verdicts are useful; the record is what the system exists to produce.
 
-The verdicts are useful. The graph is the point.
+## 2. Claims
 
-## 2. How a claim lives
+A claim moves through six states.
 
-Walk one claim through the machine.
+**Filed.** A claim is one sentence, at most 200 characters. The sentence is
+permanent: a claim's identity is its wording, and a different question is a
+different claim. A court may allow a short polish window at filing, up to a
+day; staking cannot begin until the window ends, and the wording is fixed from
+then on. A claim cannot become a different claim after it starts winning.
 
-**Filed.** Someone posts a claim in a court: one sentence, plus a body of
-evidence. The sentence is immutable — a claim's identity *is* its wording, and
-a different question is a different claim. The body is append-only: the author
-may add timestamped notes below, and may never revise or remove what is
-already there. Once anyone stakes on the claim, even the polish window closes.
-There is no version of this where a claim quietly becomes a different claim
-after it starts winning. Moving the goalposts is not against the rules; it is
-against the data structure.
+**Staked.** Holders of the court's coin stake it on the claim, for or against.
+Stake accrues conviction over time: coins staked for months count for more
+than coins parked yesterday. A losing position forfeits rewards, never
+principal. Stakes move freely until an answer is posted; an answer freezes the
+claim's stakes until settlement, and at settlement principal returns in full,
+whichever way the verdict went. People stake their true position when a wrong one
+cannot ruin them.
 
-**Staked.** Holders of the court's coin stake it on the claim — for or
-against. Staking is how a question becomes a question the court must answer,
-and a position accrues *conviction* over time: coins staked for months count
-for more than the same coins parked yesterday. Under the deployed rules, a
-losing position forfeits rewards, never principal. You may unstake freely
-until an answer is posted; an answer freezes the claim's stakes until
-settlement, and at settlement principal returns in full, whichever way the
-verdict went. The court is trying to find out what you actually believe, and
-people stake honestly when a wrong position can't ruin them.
+Nothing prevents one holder staking both sides of a claim. It does not pay.
+Staked coins sit in escrow and are absent from the hourly snapshots, so a
+hedger gives up voting weight on both halves while only the winning half draws
+rewards: a guesser's return at a believer's lockup. Verdicts themselves are
+decided by coin votes, not by stakes, so hedged capital buys no verdict power
+at all. And equal stake on both sides moves a claim's lean toward even; it
+cannot manufacture one. The lean measures net stake, not headcount.
 
-**Answered.** An answerer posts a resolution — TRUE, FALSE, with reasoning —
-and bonds it. The bond is sized so that posting junk answers costs more than
-it can ever pay.
+**Answered.** An answerer posts a side, TRUE or FALSE, and bonds it. The bond
+is sized so that posting junk answers costs more than it can pay.
 
-**Disputed.** Anyone who thinks the answer is wrong can dispute it, which
+**Disputed.** Anyone except the answerer can dispute the answer. A dispute
 sends the claim to a vote.
 
-**Voted.** Voting weight is the court's coin as of an *epoch* — an hourly
-snapshot of holdings — sealed **before the dispute opened**. This is the
-mechanism the whole design leans on: by the time a fight is visible, the
-electorate that will decide it is already fixed. You cannot buy your way into
-a verdict you can already see coming — coins acquired today vote only in
-tomorrow's fights.
+**Voted.** Voting weight is the court's coin as of an epoch: an hourly
+snapshot of holdings, sealed at the moment the vote opened. By the time a vote
+exists, the electorate that will decide it is already fixed. Coins bought after the seal
+carry weight in later votes, not this one. The seal binds those who react to
+a dispute, not those who plan one: a buyer can wait out the hour and open the
+dispute himself. What it removes is the crowd that arrives once a dispute is
+visible.
 
-**Crystallized.** The verdict is recorded permanently and the claim takes its
-place in the graph: TRUE, FALSE, or, often and honestly, still OPEN, with the
-live stakes on each side visible to anyone. Accuracy rewards are paid from the
-court's own bounded emission — to the answerer, to the stakers who were right,
-and to the voters of the deciding round. Forfeited bonds and deposits are
-burned. Nobody in Kourt is ever paid from anyone else's loss.
+**Crystallized.** The verdict is recorded and never revised:
+TRUE, FALSE, or still OPEN with the live stakes visible. Accuracy rewards are
+minted from the court's emission and paid to the answerer, the stakers on the
+verdict's side, and the voters of the deciding round. Forfeited bonds are
+burned. No one in Kourt is paid from anyone else's loss.
 
-One thing a verdict is not: the truth. A verdict is the recorded conclusion of
-a particular electorate, with a particular amount of money behind it, at a
-particular time. That is exactly as much authority as any human institution's
-conclusion carries — a journal's, an agency's, an encyclopedia's. The
+A verdict is not the truth. It is the recorded conclusion of a particular
+electorate with a particular amount of money at stake at a particular time.
+That is the same authority any human institution's conclusion carries. The
 difference is that this one shows its work, prices its convictions, and keeps
 its dissents on the record.
 
-Won't people just vote their side? Sometimes they will. The design's honest
-answer has four parts. Accuracy rewards pay the voters who sided with the
-eventual verdict — a pull toward expected consensus, not an oracle. The sealed
-epoch keeps a mob from flooding into a fight it can already see. The dissent
-is permanent, so a court that votes tribally signs its own record in public,
-claim after claim. And founding a rival court is permissionless: a court's
-product is its credibility, and credibility is the one thing a captured court
-cannot mint. If a court rots, the topic is not trapped — the record of which
-court called what, and when, is how the next reader knows which one earned
-the authority.
+People will sometimes vote their side rather than the evidence. The design
+accepts this and answers it four ways. Accuracy rewards pay the voters who
+sided with the eventual verdict, a pull toward expected consensus rather than
+an oracle. The sealed epoch keeps a crowd from buying into a dispute it can see.
+Dissent is permanent, so a court that votes tribally signs its own record,
+claim after claim. And founding a rival court is open to anyone, so a court
+that rots does not trap its topic: the record of which court called what, and
+when, tells the next reader which one earned authority.
 
-## 3. The by-product that outlives the verdicts
+## 3. The record
 
-Claims in a court do not float free. They form two structures at once.
+The version of Kourt described in this paper ships in layers, and it is worth
+being exact about which layer does what. The court layer, specified above, is
+built: wordlocked claims, stakes, bonds, votes, verdicts, dissents, all
+permanent. The structure layer arranges those claims and is specified for the
+release after: each claim gets one home in a tree of sections, so paths mean
+something and the same sentence cannot be filed twice in the same place, and
+anyone may add argument edges marking that one claim supports or counters
+another. Edges will be inert by design. A supporting claim settling TRUE will
+not mechanically move its parent; people vote the parent too, seeing the
+children. Views may aggregate; the chain does not infer, and no attacker can
+tip a tree of verdicts from one cheap corner of it.
 
-The first is a **tree**: every claim has exactly one home — a section, a
-parent question — so paths mean something and the same sentence cannot be
-filed twice in the same place. The second is a **graph** laid over it:
-argument edges, added by anyone, at any time, marking that one claim
-*supports* or *counters* another. A piece of evidence genuinely bears on many
-questions; the edges are how the record says so.
+The mockup below shows a mature origins court under both layers.
 
-The edges are deliberately inert. A supporting claim settling TRUE does not
-mechanically drag its parent toward TRUE — no cascade, no inference engine, no
-chain of dominoes an attacker could tip from one cheap corner of the graph.
-People vote the parent too, seeing the children. Views may aggregate; the
-chain does not infer.
-
-Here is what that produces. The mockup below is illustrative — every number in
-it is invented — but the *shape* is the product:
-
-**KOURT:ORIGINS — "Origins of SARS-CoV-2"** (a court; month 14 of its life)
+**KOURT:ORIGINS — "Origins of SARS-CoV-2"** (month 14 of the court's life;
+⊘ open · ✓ settled true · ✗ settled false; every number is invented)
 
 ```
 ⊘ #1  "SARS-CoV-2 originated in a laboratory."                OPEN   412k staked · leaning 58/42
@@ -144,243 +147,238 @@ it is invented — but the *shape* is the product:
   │        naturally."
   ├─ ⊘ #6  "The earliest cases cluster at the Huanan market   OPEN   97k staked · 47/53
   │        independent of where officials looked first."
-  ├─ ✓ #7  "US intelligence is split: FBI and DOE assess a    TRUE   settled month 2, undisputed
-  │        lab origin as more likely; others lean zoonotic."
-  ├─ ✗ #8  "mRNA vaccines contain tracking hardware."         FALSE  settled month 1; answerer
-  │                                                                  compensated, disputer's bond burned
-  └─ ⊘ #9  "Anthony Fauci declined to answer a Senate         OPEN   filed this week;
-           committee's questions, invoking the Fifth (2026)."        answer window open
+  ├─ ✓ #7  "US intelligence agencies are split on the         TRUE   settled month 2, undisputed
+  │        origin, with no consensus assessment."
+  ├─ ✗ #8  "A SARS-CoV-2-infected animal was found at the     FALSE  settled month 8;
+  │        Huanan market."                                            disputer's bond burned
+  ├─ ✓ #9  "Anthony Fauci invoked the Fifth Amendment more    TRUE   filed and settled inside
+  │        than 100 times before a Senate committee (2026)."          five days
+  └─ ⊘ #10 "The January 2025 pardon defeats the Fifth         OPEN   freshly staked
+           Amendment privilege for the pardoned conduct."
 ```
 
-Read what the tree is doing, because no other artifact on the internet does
-it.
+The tree separates the strong version of each case from the weak version, on
+both sides at once. Claims #2, #3, #7 and #9 were, at various points,
+expensive to say in public. On the record, with money invited against them,
+they settled fast, because each reduces to documents, and staking against a
+published document predictably loses. Claim #5 settled FALSE: a favorite argument of
+the lab-leak side, retired in a court whose root leans lab-leak. Claim #8
+settled FALSE the same way for the other side: the 2023 market samples were
+environmental, and no infected animal was ever found, however widely the
+opposite was reported. Each camp lost its weakest claim in public, which is
+what makes the root's open 58/42 worth reading. Claims #9 and #10 show intake:
+a breaking event decomposes on arrival into the part that reduces to public
+record, which settles in days, and the contested residue, which
+stays open with stakes accumulating.
 
-Claims #2, #3 and #7 were, at various points, socially expensive to say out
-loud. On the record, with money invited against them, they settled fast and
-cheap — because each one reduces to documents, and staking against a published
-document is expensive charity. Claim #5 settled FALSE: a favorite argument of
-the lab-leak side, killed *in a lab-leak-curious court*, which is precisely
-what makes the root claim's open 58/42 worth staring at. The graph separates
-the strong version of a case from the weak version — on both sides, at once.
-Claim #8 is the junk filter working as economics rather than moderation:
-nobody had to delete it; it cost its supporters money and stands as a public
-loss. And claim #9 is intake: a breaking, contested assertion enters the
-record wordlocked, dated, and priced before the news cycle has settled on what
-happened. However it resolves, the graph will remember who said what first,
-and what it cost them to say it.
-
-Policy claims work too, and differently. In a neighboring court:
+Policy claims resolve to a court's judgment and say so on their face. In a
+neighboring court:
 
 **KOURT:MANDATES — "Pediatric COVID-19 vaccine mandates were justified."**
-VERDICT: NO — month 14, 71/29, heavy stakes on both sides, dissent preserved.
+VERDICT: NO. Month 14, 71/29, heavy stakes on both sides, dissent preserved.
 
-A policy claim resolves to the court's *judgment*, and says so on its face.
-This court's NO happens to land where several European health authorities
-landed and against where several US states did. Unlike either, it shows you
-exactly who backed which side, how hard, and what the minority said on the way
-down — the dissent is as permanent as the verdict. And in the same court, the
-claim *"COVID-19 vaccines substantially reduced severe disease and death in
-adults"* settled TRUE early and was never seriously challenged. The same
-electorate that rejected pediatric mandates settled adult efficacy TRUE.
-Courts judge claims, not teams — and the graph is what proves it, either way,
-to both audiences.
+That NO lands where several European health authorities landed, and against
+where hundreds of US universities stood. Unlike either, it shows who backed
+which side, at what weight, and what the minority said on the way down. In the
+same court, the claim "COVID-19 vaccines substantially reduced severe disease
+and death in adults" settled TRUE early and was never seriously challenged.
+The same electorate rejected pediatric mandates and settled adult efficacy
+TRUE. Courts judge claims, not teams, and the record proves it to both
+audiences.
 
-Now zoom out from COVID. The same machine runs for any dispute that generates
-more heat than structure: a scientific controversy, a disputed election claim,
-a corporate scandal, a historical argument, the safety record of a product.
-What accumulates in each court is something that has never existed: **a map of
-the argument** — what is claimed, what each claim rests on, what died and what
-killed it, what is still live, and how much sustained conviction sits on each
-side, denominated in the only unit the internet cannot counterfeit: money
-someone chose to burn for a voice.
+The same machine runs for any dispute that generates more heat than structure:
+a scientific controversy, an election claim, a corporate scandal, a historical
+argument, a product's safety record. What accumulates in each court has not
+existed before: a map of the argument. What is claimed, what each claim rests
+on, what died and what killed it, what is still live. The weight on each side
+is denominated in the one unit the internet cannot counterfeit: money someone
+chose to burn for a voice.
 
-Wikipedia gives you the winner's summary. Threads give you the fight, with no
-memory. Fact-checks give you one editor's verdict on one atom, with no
-structure. Kourt gives you the argument itself — and gives it to everyone,
-because the chain is public. Researchers, journalists, historians, and anyone
-building AI systems that need to know *what the dispute actually is* — not
-which side won the platform-moderation coin toss that week — can read the
-whole graph, free, forever. That artifact is the reason this system deserves
-to exist. The coins below are how it gets built.
+Wikipedia records the winner's summary. Threads record the fight, without
+memory. Fact-checks record one editor's verdict on one atom, without
+structure. Kourt records the argument itself, and the chain is public, so it
+records it for everyone: researchers, journalists, historians, and anyone
+building systems that need to know what a dispute is rather than which side
+was winning moderation that week. That artifact is the reason the
+system exists. The coins are how it gets built.
 
 ## 4. Courts and coins
 
-Every court has its own coin. This is deliberate fragmentation: one topic's
-fate — legal, economic, social — must not couple to another's. A court about
-drug policy and a court about a war zone should not share a token, a treasury,
-or a failure mode. Capture of one court captures one court.
+Every court has its own coin. This is deliberate fragmentation. One topic's
+fate must not couple to another's, so courts share no token, no treasury, and
+no failure mode. Capture of one court captures one court.
 
-A court's coin is minted one way only: on its **bonding curve**, paid in GNOT,
-gno.land's native token. The price starts near zero and rises linearly with
-every coin minted. Voice in a small court is cheap because almost nobody has
-claimed one; voice in a large, established court costs what established voices
-cost. There is no premine, no allocation, no founder's stash — the founder
-mints on the same curve as everyone else, starting at position zero because
-nobody has minted yet, not because anyone reserved anything.
+A court's coin is minted one way: on its bonding curve, paid in GNOT, the
+native token of the gno.land chain. The price starts near zero and rises
+linearly with each coin minted, so the cost of the n-th coin is proportional
+to n. Voice in a small court is cheap because almost no one has claimed one.
+Voice in a large court costs what established voices cost. There is no premine
+and no allocation. The founder mints on the same curve as everyone else,
+starting at position zero because no one has minted yet, not because anything
+was reserved.
 
-And the GNOT you pay is **burned** — destroyed, sent to a designated burn
-address, auditable by anyone on-chain. Not held, not pooled, not managed by
-anybody. This one fact clarifies the whole design, so it is worth being blunt
-about what it buys and what it costs:
+The GNOT paid is burned: sent to a designated burn address, auditable by
+anyone on-chain. It is not held, pooled, or managed. This one fact clarifies
+the design:
 
-- **There is no treasury.** Nobody — not the founder, not a moderator, not a
-  53%-of-supply attacker — holds a pool of contributed funds, because no such
-  pool exists. There is nothing to rug, nothing to embezzle, nothing to freeze,
-  and nothing whose custody you are trusting anyone with.
-- **There is no redemption.** The curve only mints; nothing ever buys back.
-  Your GNOT is spent the moment you spend it, in exchange for exactly one
-  thing: a durable voice in one court's decisions, plus eligibility to earn
-  its emission by working.
+- **No treasury.** No one holds a pool of contributed funds, because no such
+  pool exists. There is no fund to steal, freeze, or embezzle, and no
+  custodian to trust.
+- **No redemption.** The curve only mints; nothing buys back. GNOT spent is
+  spent. What it bought is a durable voice in one court's decisions, and
+  eligibility to earn that court's emission by working.
 
-Coins are voice: staking weight, voting weight (at sealed epochs), the right
-to answer and dispute. Coins also *flow to work*: each court runs a bounded
-emission — 0.38% of live supply per week at genesis, stepping down a little
-every week, shrinking to half its rate over each two-year span, with a hard
-lifetime ceiling under +80% of everything ever minted on the curve. It decays
-because a court needs its work funded hardest at the start; it is ceilinged so
-that the worst case is arithmetic, not trust. Emission pays for answering
-claims, disputing bad answers, voting in decided fights, and moderating well;
-weeks with nothing worth paying for are skipped and forgone forever, never
-banked and paid later. The coin concentrates, over time, in the hands of the
-people doing the judging.
+Coins are voice: staking weight, voting weight at sealed epochs, the right to
+answer and dispute.
 
-## 5. The Review Court, and what it costs to capture
+Coins also flow to work. Each court runs a bounded emission: 0.38% of live
+supply per week at genesis, stepping down weekly, halving over each two-year
+span, ceilinged for all time under +80% of everything minted on the curve.
+(The Review Court, described next, runs a small fixed weekly budget instead.)
+The rate decays because a court needs its work funded hardest at the start. It
+is ceilinged so the worst case is arithmetic rather than trust. Emission pays
+for staking on the verdict's side, answering, disputing bad answers, voting in
+deciding rounds, and policing junk. Beyond a four-week reservoir, unspent
+budget is forgone, not banked. Over time the coin concentrates in the hands of
+the people doing the judging.
 
-Courts moderate themselves — and moderators, everywhere, eventually make
-someone furious. So above all courts sits one more court, built out of the
-same machinery: **KOURT:META, the Review Court**, the appeals layer.
+## 5. The Review Court
 
-An appeal is just a claim in the Review Court, in a reserved format naming a
-verb and a target. Six verbs exist. Two are *restorative* — un-hide an item a
-court's moderators hid, clear the Review Court's own mark — and these can pass
-even from silence, because silence should be able to restore visibility. Four
-are *aggressive* — hide, suspend a moderator set, re-arm one, install a new
-moderator set on a court — and these execute only after a genuinely contested,
-quorate vote in which a real adversary showed up. Silence can never seize a
-court.
+Courts moderate themselves, and moderation eventually faces challenge. One
+further court therefore sits above the courts, built from the same machinery:
+KOURT:META, the Review Court, the appeals layer.
 
-Who votes in the Review Court? The people who built the platform under it.
-Every unit of GNOT burned in any court accrues, to the burner, a claimable
-**franchise**: the right to mint KOURT:META through the Review Court's own
-curve, at the same price a direct buyer would pay at that moment. Every
-court's burn feeds that one curve, so the price of appellate voice reflects
-the whole platform's history, not any one court's. Participation anywhere
-earns appellate voice everywhere — automatically, at no discount and no
-penalty. (You can also simply buy META. It accrues nothing further and costs
-the same. Almost nobody should.)
+An appeal is a claim in the Review Court, in a reserved format naming a verb
+and a target. Six verbs exist. Two are restorative: un-hide an item a court's
+moderators hid, and clear the Review Court's own mark. These can pass even
+from silence, because silence should be able to restore visibility. Four are
+aggressive: hide an item, suspend a moderator set, re-arm one, and install a
+new set. These execute only after a decided, quorate vote, and the three verbs
+that touch moderator sets further require that real opposing weight voted.
+Silence can never seize a court.
 
-The arithmetic of capturing the Review Court is public and brutal. To end
-holding a given share of it, an attacker must irrecoverably burn a multiple of
-**everything the entire platform has ever burned**:
+The Review Court's electorate is the people who built the platform under it.
+Burning GNOT in any court, other than the Review Court itself, earns
+franchise: a claimable right to mint KOURT:META later. A claim mints through
+the Review Court's own curve at the price a direct buyer would pay at that
+moment, and every court's claimed burn feeds that one curve, so the cost of
+appellate voice reflects the platform's whole history rather than any one
+court's. Direct purchase is also possible, accrues nothing further, and costs
+the same.
 
-| share of the Review Court | cost, as a multiple of all GNOT ever burned platform-wide |
+Capturing the Review Court is a purchase whose price is public. To end up
+holding a share of it, an attacker must irrecoverably burn a multiple of
+everything ever claimed into its curve:
+
+| share of the Review Court | cost, as a multiple of all burn ever claimed into it |
 |---:|---:|
 | 5% | 0.11× |
 | 20% | 0.56× |
 | 50% | 3× |
 | 90% | 99× |
 
-And even that only counts if it was in place *before the epoch sealed* — the
-weights for any given appeal were fixed before the appeal was visible.
+Weight counts only if it was in place before the appeal's vote opened.
+Franchise not yet claimed is a standing reserve: every unclaimed unit, once
+claimed, dilutes a captor.
 
-Then the last line of defense, which is really the first: **the Review Court
-cannot touch money.** Neither can anything else in the moderation system.
 
-## 6. Moderation with a constitution
+## 6. Moderation
 
 One rule governs every moderation power in Kourt, from a single court
-moderator to the Review Court to the operator's own legal backstop:
+moderator to the Review Court to the operator's legal backstop:
 
-> **Moderation is render-layer authority. No moderation state is ever read by
-> a money path, and no moderation action ever writes one.**
+> Moderation controls what is found, never what is owed. No moderation power
+> can touch a stake, a bond, a verdict, or a withdrawal.
 
-Concretely: a hidden claim leaves the browse listings — and its full lifecycle
-keeps running, byte-identically. Stakes, votes, settlement, withdrawals: all
-of it. Deep links always render, with a banner naming exactly which authority
-hid the item and under which category. Hiding is *discovery* control, never
-custody, never confiscation. A fully captured moderator — a fully captured
-*Review Court* — is harmless to funds, because the pipes it would need do not
-connect.
+A hidden claim leaves the browse listings, and its lifecycle keeps running,
+byte for byte: stakes, votes, settlement, withdrawal. A direct link to a
+hidden item always renders, with a banner naming the authority that hid it and
+the category invoked. Two narrow intake gates exist, both disclosed: a purged
+court accepts no new claims, and an item under live review pauses new answers.
+Funds in flight are never gated. A fully captured moderator, or a fully
+captured Review Court, is harmless to funds, because the pipes it would need
+do not connect.
 
-Above the courts and the Review Court sits a small global moderator set: the
-operator's legal backstop, for the things a token vote cannot lawfully decide
-— court orders, DMCA notices, content that must actually come down. Its powers
-are deliberately shaped as *cures, not commands*: it can clear any hide bit
-(including the Review Court's — the recovery path if meta itself is ever
-captured), disarm a rogue moderator set, and, by multiple keys, purge text for
-legal compliance — a tombstone that removes words while every position stays
-withdrawable. What it cannot do: appoint anyone's moderators (it can only
-empty a set; the court's own electorate installs the next one), reverse a
-verdict, or move a coin. Even the takedown machinery observes due-process
-shapes — re-imposing a redaction that was cleared requires multiple keys
-within a counter-notice window modeled on the DMCA's.
+Above the courts sits the operator's legal backstop, for the things a token
+vote cannot lawfully decide: court orders, DMCA notices, content that must
+come down. At genesis this is a single operator key; the code supports m-of-n
+membership, and broadening it is deployment work, not a rule change. Its
+powers are cures, not commands. It can clear any hide bit, including the Review Court's, which is
+the recovery path if the Review Court itself is captured. It can disarm a
+rogue moderator set, though it cannot appoint one: after a disarm, the court's
+own electorate installs the next set, or its creator does if no election has
+yet been held. A court's first moderator set is likewise its creator's
+appointment; once an election installs a set, the creator's power to appoint
+is spent. By m-of-n keys it can purge text for legal compliance, a
+tombstone that removes words while every position stays withdrawable.
+Re-imposing a redaction that was cleared requires m-of-n approval inside a
+counter-notice window modeled on the DMCA's.
 
-Every moderation act is an on-chain event carrying codes, never content — so
-the history of who hid what is itself permanent and auditable, without
-becoming a channel that defeats a legal purge.
+Every moderation act emits an on-chain event carrying codes, never content.
+The history of who hid what is itself durable, without becoming a channel
+that defeats a legal purge.
 
 ## 7. What this is not
 
-Read this section as written, because it is not boilerplate; it is the design.
+The limits below are design constraints, not disclaimers.
 
-**Kourt coins are not investments, and this document is not an offer of one.**
-There is no treasury, no dividend, no buyback, no redemption, no revenue
-share, and no pool of anyone's money anywhere in the system. The GNOT you
-spend on a curve is burned: *treat it as spent.* What you receive is a
-participation instrument — voice in one court's decisions and eligibility to
-earn its emission by doing its work. If you do not intend to stake, vote,
-answer, dispute, or moderate in that court, its coin is not for you.
+**The coins are not investments, and this document is not an offer of one.**
+There is no treasury, no dividend, no buyback, no redemption, and no pool of
+anyone's money anywhere in the system. GNOT spent on a curve is burned and
+should be treated as spent. The coin is a participation instrument: voice in
+one court's decisions, and eligibility to earn its emission by doing its
+work. A coin in a court whose question holds no interest is a coin with no
+use.
 
-**Nobody's future efforts stand behind these coins.** Once deployed, a gno
-realm — gno.land's unit of deployed contract code — cannot be redeployed or
-upgraded at its path, by the deployer or anyone else; a testnet reset starts a
-fresh instance rather than changing a live one. The rules described here are
-the rules, permanently, checkable in public source. The operator's remaining
-roles are legal compliance and front-page curation, both constitutionally
-fenced away from money. A thing whose value depended on our ongoing management
-would be a different thing than this one. This is a machine that runs.
+**No one's future efforts stand behind the coins.** A gno realm, the chain's
+unit of deployed contract code, cannot be redeployed or changed at its path
+once published, by its deployer or anyone else. The rules described here are
+the rules, checkable in public source. The operator's remaining roles are
+legal compliance and front-page curation, both fenced away from money by the
+rule in section 6. A thing whose value depended on continuing management
+would be a different thing than this one.
 
 **Verdicts are conclusions, not facts.** A court can be wrong. A court can
 stay wrong. The remedy is the record and the fork, not an oracle.
 
-**Emission dilutes.** Holding without participating means a slow, bounded,
-publicly scheduled dilution in favor of the people doing the work — that is
-its purpose. Ceiling: under +80% of curve-minted supply, ever; half of all
-emission lands in roughly the first two years of a court's life.
+**Emission dilutes.** Holding without participating means a slow, scheduled
+dilution in favor of the people doing the work. That is its purpose. The
+lifetime ceiling is under +80% of curve-minted supply, and half of all
+emission lands in roughly a court's first two years.
 
-**This is early, on a young chain, with internal audit rounds only — no
-external audit yet.** Testnet deployments will reset. Assume bugs exist.
-Assume the coin you acquire may end up worth nothing, socially or otherwise,
-and size your participation like the burn it literally is.
+**This is early software on a young chain.** It has had internal audit rounds
+only; there has been no external audit. Nothing is deployed to a public
+network as of this draft, and test deployments reset. Assume bugs exist.
+Assume a coin can end up worthless, and size participation like the burn it
+is.
 
-**Nothing here is legal, financial, or medical advice** — including the
-contents of any court's graph, which are the recorded opinions of the people
-who staked on them.
+**Disclosure.** Kourt's designers hold GNOT, the token every curve burns,
+and may hold early positions in courts they found. Early curve positions are
+cheap by construction and visible on-chain like any others. Readers should
+weigh this document accordingly.
 
-## 8. Starting
+**Nothing here is legal, financial, or medical advice.** That includes the
+contents of every court's record, which are the staked opinions of the people
+who put money on them.
 
-Kourt runs on gno.land, whose native token (GNOT) pays for transactions and
-feeds the curves. Today that means the sapphire testnet, where GNOT is free
-from a faucet — the entire system above is live to try at zero cost.
+## 8. Participation
 
-To participate: pick a court whose question you care about — or found one,
-which is permissionless and costs only storage deposits. Mint voice on its
-curve. File the claim you think the record is missing, in words you are
-willing to be held to forever. Answer something. Dispute something that
-deserves it. Vote when a fight lands in your court. Claim your franchise in
-the Review Court when you've earned it.
+Kourt is built for gno.land. At launch it will run on a public testnet, where
+GNOT is free from a faucet, so trying the system will cost nothing. A burn of
+faucet tokens is rehearsal; the record that matters starts where the money is
+real.
 
-The verdicts compensate the participants. The graph pays everyone else. Ten
-years from now, most individual verdicts will read as period pieces — and the
-map of how we argued, who stood where, what it cost and what died along the
-way, will still be worth reading.
+Participation is three acts: founding or joining a court, filing the claims
+its record lacks, and staking, answering, disputing, and voting as the
+court's life brings disputes to each epoch. The Review Court franchise
+accrues on its own.
 
-Bring a claim.
+Individual verdicts will age. The record of how each question was argued,
+who stood where, and what it cost, will not.
 
 ---
 
-*Kourt — kourt.xyz · realm `gno.land/r/kourt/kourtv2` (sapphire testnet) ·
-coins are denominated KOURT:SLUG; the Review Court's is KOURT:META. Design
-sources: PLAN.md, MODERATION.md, and the realm source, which is public and
-controlling — where this document and the code disagree, the code is the
-whitepaper.*
+*Kourt · kourt.xyz · target platform gno.land · coins denominated KOURT:SLUG;
+the Review Court's coin is KOURT:META. Design sources: PLAN.md, MODERATION.md,
+and the realm source. Where this document and the code disagree, the code
+governs.*
