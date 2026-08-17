@@ -94,11 +94,11 @@ isolation-test:
 # for the whole of the v0.51-v0.62 work and went unused because nothing pointed at it,
 # so every guard was mutated by hand instead. ~2.5 minutes.
 #
-# If a run is interrupted, check `git diff` on the realm before trusting a green suite:
-# a killed run can leave a mutation applied. mutate.py writes .mutate-backup files beside
-# the sources and recovers them on its next run. A killed run also leaves its shadow
-# GNOROOT behind, which needs nobody: it is a directory in the system temp named after a
-# pid that no longer exists, and the next run builds its own.
+# An interrupted run needs nothing from you. Mutations are applied to the STAGED COPY in
+# the run's own shadow GNOROOT, never to the repo, so a killed run cannot leave one in the
+# source — which also means several runs may go at once. What it leaves behind is a
+# directory in the system temp named after a pid that no longer exists, and the next run
+# builds its own.
 mutate:
 	python3 scripts/mutate.py < scripts/mutations-courtv2.json
 

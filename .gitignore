@@ -1,10 +1,4 @@
-# scripts/mutate.py writes one of these beside a file while it is mutated, and
-# removes it on a clean exit. One that survives is a run that was killed, and
-# the next run recovers from it — but it must never be committed, because a
-# committed backup is a half-mutated tree that looks like source.
-*.mutate-backup
-
-# scripts/ became importable in v0.70 (stagelock.py is shared by three runners),
+# scripts/ became importable in v0.70 (gnoroot.py is shared by every runner),
 # so running any of them now leaves bytecode beside the sources. Never source.
 __pycache__/
 *.selftest-backup

@@ -1624,6 +1624,38 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.77 — the STAKING lane is fully covered (8 of 8), and advertising parallelism
+  exposed a real bug in the harness itself: two mutate runs in one worktree silently
+  corrupted each other.** The staking lane first, since it is where principal-is-no-loss
+  lives: `Stake` and `Unstake`, eight guards — both per-side pool routings, the
+  over-unstake bar, both freeze gates, the closed-claim gate and both positive-amount
+  checks — and **all eight already caught**. Notable because `Stake`'s per-side routing is
+  the exact counterpart of the one that survived in `WithdrawStake` last version; here the
+  pin comes from the X̄-frozen fixtures, which read the pools afterwards.
+  **Then the harness bug, which is the substantial part.** `mutate.py` wrote mutations
+  into the REPO's sources and reverted them afterwards. Running a second batch while the
+  136-row batch was going produced `mutate: recovered claim.gno from a run that did not
+  finish` — the second run had found the first's backup files and "recovered" them, which
+  means it REVERTED a mutation that was at that moment under test. That row then reports
+  SURVIVED because nothing was broken: the harness's own signature failure, a non-result
+  reported as a result, in a fourth form beside the three its header already warns about.
+  Those results were discarded and the batch re-run alone.
+  Note the provenance: this was reachable before, but nothing reached it until v0.74 made
+  parallel runs a thing anyone would try. Removing a serialization is also a claim that
+  nothing needed it, and that claim was wrong about one resource — the sources — even
+  though it was right about the staged tree.
+  **Fixed structurally rather than with a lock.** Mutations now go to the STAGED COPY,
+  inside the run's own shadow GNOROOT, between staging and testing. The repo is never
+  written to. That removes the whole class rather than guarding it: no `.mutate-backup`
+  files, no recovery pass, no `*.mutate-backup` in .gitignore, no standing rule to check
+  `git diff` before trusting a green suite — and a killed run can no longer leave a
+  mutation in the source at all, which is what cost an hour earlier in this work.
+  Verified three ways: the same five rows return the same verdicts as before (three
+  caught, one equivalent survivor, one BAD ANCHOR); the realm sources are untouched after
+  a run; and **two batches run concurrently in ONE worktree now both report correctly,
+  with no "recovered" line between them.** Full batch re-run alone: 136 rows, all caught,
+  none invalid, realm clean throughout.
+
 - **v0.76 — the ADJUDICATION core swept: both vote deadlines were unguarded by any test,
   and a late vote is a first-mover veto rather than merely a late vote.** `VoteQuality` is
   where the system decides things, so it was the next target after the payouts. Nine

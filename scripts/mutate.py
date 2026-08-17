@@ -43,6 +43,25 @@ A saved batch for the courtv2 money path lives at scripts/mutations-courtv2.json
     python3 scripts/mutate.py < scripts/mutations-courtv2.json
 
 Needs a gno toolchain. PKGS below lists every tree this can stage or mutate.
+
+THE REPO'S SOURCES ARE NEVER WRITTEN TO. A mutation is applied to the STAGED COPY,
+inside this run's own GNOROOT, between staging and testing.
+
+It did not always work that way, and the reasons it changed are worth keeping. When
+mutations went into the repo, a run that was KILLED left one there — invisible in an
+untracked tree, where `git status` reports only that the directory is new. That cost
+an hour once, to a mutant that recursed forever and made every later run "hang" for
+no visible reason, and it needed a whole apparatus to paper over: backup files
+written beside the sources, recovered on the next run, plus a standing rule to check
+`git diff` before trusting any green suite.
+
+Worse, it made two runs in ONE worktree corrupt each other silently. The second run
+would find the first's backups, "recover" them — reverting a mutation that was at
+that moment under test — and the row would report SURVIVED because nothing had been
+broken. That is the harness's own failure mode, a non-result reported as a result,
+which this file's header warns about in three other forms. Mutating the staged copy
+removes the whole class: no backups, no recovery, no rule to remember, and any number
+of runs in parallel.
 """
 
 import atexit
@@ -133,9 +152,13 @@ def stage(root):
                 shutil.copy(os.path.join(src, g), dst)
 
 
-def run_suite(root, pkg=None):
+def run_suite(root, pkg=None, mut=None):
     """Run the OBSERVER suites for `pkg`; all of them when pkg is None (the baseline).
     Returns (passed, output).
+
+    `mut` is applied to the STAGED COPY after staging and before testing, so the repo's
+    own sources are never written to. See the note in this file's header on why that
+    matters more than it looks.
 
     More than the mutated package's own suite, because a mutation there can be caught
     by its own tests, by a realm that imports it, or by neither — and only the last is
@@ -145,11 +168,15 @@ def run_suite(root, pkg=None):
     anyway is what made a full batch time out.
     """
     names = OBSERVERS.get(pkg, list(PKGS)) if pkg else list(PKGS)
-    # One complete stage/test/unstage cycle, in the run's OWN GNOROOT (see
+    # One complete stage/mutate/test/unstage cycle, in the run's OWN GNOROOT (see
     # scripts/gnoroot.py) — so a long batch no longer holds a shared tree, and a
     # concurrent runner in another worktree cannot delete the mutant mid-test and
     # have it scored INVALID.
     stage(root)
+    if mut is not None:
+        f = os.path.join(root, PKGS[mut.get("pkg", "govern")][1], mut["file"])
+        src = open(f).read()
+        open(f, "w").write(src.replace(mut["find"], mut["replace"]))
     out, passed = "", True
     for nm in names:
         rel = PKGS[nm][1]
@@ -161,32 +188,6 @@ def run_suite(root, pkg=None):
     for _, rel in PKGS.values():
         shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
     return passed, out
-
-
-BAK = ".mutate-backup"
-
-
-def recover_backups():
-    """Put back anything a killed run left mutated."""
-    for src, _ in PKGS.values():
-        for f in os.listdir(src):
-            if not f.endswith(BAK):
-                continue
-            bak = os.path.join(src, f)
-            orig = bak[: -len(BAK)]
-            if not os.path.exists(orig):
-                # The original is gone, so this backup is from a tree that no
-                # longer exists — a file deleted deliberately since the run
-                # that left it. Restoring would RESURRECT it, which is worse
-                # than the mutation this was meant to undo: it happened, and
-                # the resurrected file broke a build for an hour.
-                os.remove(bak)
-                print(f"mutate: discarded a stale backup for {orig}, which no "
-                      f"longer exists", file=sys.stderr)
-                continue
-            shutil.move(bak, orig)
-            print(f"mutate: recovered {orig} from a run that did not finish",
-                  file=sys.stderr)
 
 
 def main():
@@ -205,24 +206,8 @@ def main():
             raise SystemExit(f"mutate: no such pkg {pkg!r}; have {sorted(PKGS)}")
         return os.path.join(PKGS[pkg][0], m["file"])
 
-    # Backups on DISK, not just in memory.
-    #
-    # The restore is in a finally, and a finally does not run when the process
-    # is killed — a mutation that hangs the suite gets the whole run timed out,
-    # and the source is left broken. That is bad enough in a tracked tree and
-    # invisible in an untracked one, where `git status` says only that the
-    # directory is new. It cost an hour once: a mutant that recursed forever
-    # was still in the source, and every later run "hung" for no visible reason.
-    #
-    # So the originals are written beside the files, recovered on the next run,
-    # and removed on a clean exit.
-    recover_backups()
-    originals = {}
-    for m in muts:
-        f = where(m)
-        if f not in originals:
-            originals[f] = open(f).read()
-            open(f + BAK, "w").write(originals[f])
+    # Nothing below writes to the repo. Anchors are counted against the sources
+    # READ-ONLY and the mutation is applied to the staged copy inside run_suite.
 
     # The baseline, before anything is mutated.
     #
@@ -238,16 +223,13 @@ def main():
 
     survivors = []
     for m in muts:
-        f, label = where(m), m["label"]
-        src = originals[f]
-        n = src.count(m["find"])
+        label = m["label"]
+        n = open(where(m)).read().count(m["find"])
         if n != 1:
             print(f"{label:<46} BAD ANCHOR (matched {n}x)")
             continue
-        open(f, "w").write(src.replace(m["find"], m["replace"]))
 
-        ok, out = run_suite(root, m.get("pkg", "govern"))
-        open(f, "w").write(src)
+        ok, out = run_suite(root, m.get("pkg", "govern"), mut=m)
 
         # Filetests are named by FILE, not by a TestXxx function, so a catch
         # from one has no Test name anywhere in the output.
@@ -272,10 +254,6 @@ def main():
             survivors.append(label + " [invalid]")
         else:
             print(f"{label:<46} caught: {hits[0] if hits else 'failed'}")
-
-    for f in originals:
-        if os.path.exists(f + BAK):
-            os.remove(f + BAK)
 
     print(f"\n{len(survivors)} survived or invalid, of {len(muts)}")
     for s in survivors:
