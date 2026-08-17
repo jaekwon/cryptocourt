@@ -5,6 +5,26 @@ Machine-maintained by the whitepaper loop running in the *influence* session
 Humans: leave notes in **§ Owner notes** below; the loop reads this file first
 every round.
 
+## PHASE 2 — after convergence (owner directive, 2026-08-17)
+
+Do NOT stop when the whitepaper converges. Instead: (1) finalize the
+whitepaper (update HANDOFF, final status); (2) CronDelete THIS job
+(5cdddab6); (3) CronCreate a NEW 1-minute loop for the WEBSITE phase with a
+self-contained prompt covering: polish + test web/ in this worktree (check
+git status first — the courtv2-moderation session may have touched it; the
+owner has now authorized web/ edits from this loop); user-friendly from a
+first-time visitor's POV — spell out what a court is, what a claim costs,
+what buying voice means, before any jargon; integrate the Adena wallet
+(memory file adena-api.md in the influence project's memory dir holds the
+researched window.adena API — verify against current Adena docs before
+relying on it); add CLI helpers for every user action — either inline
+command-builders or links to gno.land's helper pages (gnoweb serves a $help
+view per realm that renders ready-to-run gnokey commands; search the web to
+confirm the current shape); same critic-loop discipline (cold-visitor,
+UX-walkthrough, accuracy-vs-realm, style) with convergence = 10 rounds + 4
+clean. The whitepaper's register rules do NOT bind the website copy, but
+§7.4 comms hygiene DOES (no profit language anywhere user-facing).
+
 ## Convergence rule
 
 Stop only when BOTH hold: **≥ 10 total rounds** AND **≥ 4 consecutive CLEAN
@@ -307,6 +327,13 @@ New items, each verified before deciding):
 
 | round | date | lenses | changes | verdict |
 |---|---|---|---|---|
+| 14w | 2026-08-17 | (hold) | Panel A stayed silent through ping + one fire — (superseded — see round 15) | WAIT |
+| 15w | 2026-08-17 | (hold) | Relaunched duplicate sweep out. Fires: 3 — if silent next fire, discard it (round-15 edits came from its own lens anyway) and run the streak with fresh panels. | WAIT |
+| 15 | 2026-08-17 | convergence panel A (original, woke after relaunch; duplicate sweep still out — cross-check on landing) | Securities CLEAN, register CLEAN, capture/emission arithmetic re-verified. FOUR internal-consistency findings, all ACCEPTED (5 edits): (1) §4 "designers hold such positions" contradicted §7 "may hold" AND the not-deployed status — false in the doc's own frame → "may hold"; (2) Abstract said sealed BEFORE vote-open, §2 said AT vote-open — code truth is before (round-9: proposal snapshots Epoch()-1) → §2 "already sealed when the vote opened"; (3) MANDATES "VERDICT: NO" used a verdict vocabulary the system does not record (TRUE/FALSE/OPEN only) → FALSE, meaning preserved (claim is "...were justified"); (4) §6 used "purged court" but only defined text-purge → "purge text, up to a whole court". Streak resets. | NOT-CLEAN (5 applied) |
+| 14 | 2026-08-17 | convergence panel B (cold acceptance; panel A still out) | Verdict SHIP. All four acceptance answers correct from stated text (pay: burned GNOT; get: voice + emission eligibility + franchise; risk: whole burn, bonds forfeitable, principal never, dilution, unaudited; non-buyers: the free public record). Two observations judged non-actionable: mockup screenshot-bait (deliberate + hedged — legend carries the caveat), §7 no-future-efforts vs §3 next-layer (pre-answered by the built/specified split; the coins sold are the built layer's). Zero findings survive. | CLEAN (streak 1/4) |
+| 13 | 2026-08-17 | micro-panel (style+securities, newest sentences) | 4 CLEAN (both-sides staking incl. "guesser's reward" ruled earned; seal candor; intake-gate scope exact; Disclosure register right), 2 FLAGGED and APPLIED: (1) legend now includes "verdicts" in the invented list — without it, #5/#8 read as pre-announced outcomes, the one thing the legend must prevent; (2) "same burn counted twice" replaced — it quoted as dual-accrual (Munchee-kind); new framing leads with price-sameness and describes WHICH burn pays, not how much is gained. Critic's close: "apply these two, then stop editing." Streak: 0/4 (these count). Next: full convergence panels — the round-12 lipstick fixes and these two have not been seen by any broad lens. | NOT-CLEAN (2 applied) |
+| 12 | 2026-08-17 | skeptic-re-run (micro-panel still out) | Skeptic's own verdict: the thread "no longer writes itself — it has become read-what-they-concede... half an endorsement." Every constant re-verified in code. TWO lipstick findings ACCEPTED (streak resets — honesty is the brand): (1) §4 "no premine and no allocation" was true-but-hollow → now states the tradeoff plainly ("what a founder gets is the chance to mint first... at its lowest positions; section 7 discloses"); (2) §6 "m-of-n keys" dressed a genesis-1 threshold the admin sets both directions (SetPurgeThreshold 1..n, moderation.gno:124-131 verified) → "by its configured threshold of keys, one at genesis and set by its own admin". THREE attacks REJECTED with reasons: §5-decoy (capture table measures the Review Court accurately; the operator key is cures-only and now honestly thresholded); no-secondary-market-mention (deliberate — §7.4 forbids trading-venue talk; naming exits would worsen exposure, logged as design); product-on-display (already dated explicitly in §3; mockup labeled; purge-key concentration now honest via fix 2). Streak: 0/4. | NOT-CLEAN (2 applied) |
+| 11 | 2026-08-17 | duplicate-accuracy cross-check (skeptic-re-run still out) | The relaunched accuracy agent landed: 8/8 CORRECT, independently reproducing the resumed agent's verdicts (same file:line cites; its two "phrasing looseness" notes are the exact glosses already fixed in round 9 — current text already reads "sit in escrow, where they carry no vote"). Two independent auditors, no contradictions. Zero findings survive → first CLEAN round. Launched narrow round-6 panel on the ~8 sentences added since round 8: style-recheck + securities-recheck (specific question: does "the same burn counted twice" read as a two-for-one value pitch?). | CLEAN (streak 1/4) |
 | 10w | 2026-08-17 | (hold) | Skeptic-re-run + duplicate accuracy out. Draft frozen. Fires while waiting: 1. | WAIT |
 | 10 | 2026-08-17 | cold-read #3 (skeptic-re-run + duplicate accuracy still out) | Verdict "try"; three trust-earners quoted (verdict-not-truth, no-custodian, assume-worthless). Two findings, both APPLIED: (1) claim #9 read as "inventing a future humiliation of a named real person" — root cause is MY legend ("every number is invented") implying the claims are fictional; the event is real (round-2 web verification). Legend now says stakes/leans/dates are invented, the claims reference real documents and events. (2) Franchise value opaque ("if claiming costs what buying costs, what does the franchise earn you?") — added the punchline sentence: the franchise is the same burn counted twice — court coin AND meta-curve credit; a direct buyer spends new GNOT. Verified against accrueFranchise (1:1 µGNOT credit) + ClaimMetaFranchise (credit spends through the curve, no new GNOT). TEN SUBSTANTIVE ROUNDS COMPLETE — convergence gate #1 met; need 4 consecutive CLEAN. | NOT-CLEAN (2 applied) |
 | 9w | 2026-08-17 | (hold) | Round-5 panel (skeptic-re-run, cold-read) + duplicate accuracy agent out. Draft frozen. Fires while waiting: 2. | WAIT |

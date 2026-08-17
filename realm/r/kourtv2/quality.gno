@@ -247,6 +247,28 @@ func qualityBars(c *Court, cs *claimState) (demotionBar, fullBar int64) {
 	if fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {
 		fullBar = fivePct
 	}
+	// The same clamp quorumFloor takes, for the same reason (v0.29): `arm` above
+	// is already bounded by votable/3 and the 5% max() escapes that ceiling once
+	// escrow passes 85%. Inert below it.
+	//
+	// The consequence here is sharper than on the verdict lane, because this bar
+	// gates the SLASH and cs.qualityEpoch is pinned at PostAnswer — nobody can
+	// buy fresh weight in afterwards. So a mill's own answered claims fill the
+	// escrow that makes the mill permanently unslashable, per claim, for that
+	// claim's whole life. Meanwhile demotionBar has no supply arm and gets EASIER
+	// as escrow grows, so at high escrow the lane kept its one free destructive
+	// action (a refunded demotion that burns the author's deposit) and lost the
+	// priced one. That is not a conservative failure; it is positive feedback on
+	// the single deterrent the draw-proportional slash exists to provide.
+	if third := votable / 3; fullBar > third {
+		fullBar = third
+	}
+	// The pair must keep its designed ordering: demotionBar is arm/4 and the tier
+	// ladder in applyQualityTally reads them together, so a clamp that pushed the
+	// full bar below the demotion bar would invert the ladder.
+	if fullBar < demotionBar {
+		fullBar = demotionBar
+	}
 	if fullBar < 1 {
 		fullBar = 1
 	}

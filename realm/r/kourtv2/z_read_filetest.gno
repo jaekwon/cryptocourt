@@ -72,6 +72,12 @@ func main(cur realm) {
 	m, n := kourtv2.ModThreshold("meta")
 	println("meta threshold:    ", m, n)
 
+	// The escrow-share reads (v0.29). These are the only window onto whether a
+	// court's dispute lane is reachable, so they must answer on an empty court
+	// and must not allocate reaching for it.
+	rawS, escS, votS := kourtv2.VotableSupply("meta")
+	println("supply raw/esc/vot:", rawS, escS, votS)
+
 	// The strips, and the franchise ledger.
 	println("strip size:        ", kourtv2.DirectoryStripSize())
 	println("stranger franchise:", kourtv2.FranchiseOf(stranger))
@@ -106,6 +112,7 @@ func main(cur realm) {
 // pending approvals:  0 0
 // global pending:     0 0
 // meta threshold:     1 1
+// supply raw/esc/vot: 0 0 0
 // strip size:         0
 // stranger franchise: 0
 // front page renders: true

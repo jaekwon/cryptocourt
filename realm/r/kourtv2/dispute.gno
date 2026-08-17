@@ -480,6 +480,49 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	releasePriority(c, cs.answerer, claimID)
 }
 
+// VotableSupply reports a court's raw supply, its escrowed weight, and the
+// difference — the weight that can actually vote — at the last sealed epoch.
+//
+// This exists because the ratio it exposes is the one number that says whether
+// a court's dispute lane is alive, and it was previously unobservable: escrow's
+// ADDRESS is readable but its share never was. The failure it makes visible
+// reads from outside as apathy rather than as a bug — every claim settling
+// undisputed, no slash ever firing, no claim ever reaching HIGH — so a court
+// that cannot watch this ratio cannot tell consensus from paralysis.
+//
+// Non-allocating, and it answers 0,0,0 before the first epoch seals rather than
+// panicking, matching what the bars themselves do at that point.
+func VotableSupply(courtSlug string) (raw, escrowed, votable int64) {
+	c := mustCourt(courtSlug)
+	at := c.coin.Epoch()
+	if at <= 1 {
+		return 0, 0, 0
+	}
+	at--
+	raw = c.coin.PastTotal(at)
+	escrowed = c.coin.PastVotes(c.escrow, at)
+	votable = raw - escrowed
+	if votable < 0 {
+		votable = 0
+	}
+	return raw, escrowed, votable
+}
+
+// QuorumFloorOf quotes the turnout a dispute on this claim must reach.
+// ElectionFloorOf has existed since the election lane shipped; the verdict and
+// quality lanes had no equivalent, so their bars could go underwater unseen.
+func QuorumFloorOf(courtSlug string, claimID uint64) int64 {
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	return quorumFloor(c, cs.xBarFrozen)
+}
+
+// QualityBarsOf quotes the demotion and full bars this claim is judged against.
+func QualityBarsOf(courtSlug string, claimID uint64) (demotionBar, fullBar int64) {
+	c := mustCourt(courtSlug)
+	return qualityBars(c, mustClaim(c, claimID))
+}
+
 // isParticipant: the claim's author, answerer, or any address with a staker
 // record (records persist across withdrawal — conviction holders count).
 func isParticipant(cs *claimState, who address) bool {
@@ -507,6 +550,35 @@ func quorumFloor(c *Court, xbar int64) int64 {
 	if fivePct := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps); fivePct > floor {
 		floor = fivePct
 	}
+	// THE CLAMP THIS FUNCTION ALREADY IMPLIED AND THEN THREW AWAY (v0.29, three
+	// reviewers, 2/3 preferring this over netting and the third naming it as its
+	// own fallback).
+	//
+	// The X̄ arm above is clamped to votable/3 — this function's own statement of
+	// how high a turnout bar may go and still be decidable. The 5% arm then
+	// max()es past that ceiling. And 5%·supply exceeds votable/3 exactly when
+	// escrow passes 85% of supply, so the supply arm breaks the reachability rule
+	// in precisely, and only, the regime where the lane is already dying. Above
+	// 95% the bar exceeds ALL votable weight and no set of votes can clear it.
+	//
+	// Totalling the clamp is BIT-IDENTICAL for every court under 85% escrow, so
+	// it weakens nothing in the normal range; above it, "a third of the float"
+	// replaces "impossible". Netting the 5% arm instead would have divided the bar
+	// by (1−E) at EVERY level — 20× at 95% escrow — buying nothing at 50% where
+	// the bar was already fine.
+	//
+	// Why this matters more than it looks: an unreachable quorum does NOT mean
+	// "no verdict". The failed-quorum branch leaves cs.provisional = cs.answer,
+	// burns half the disputer's bond, and returns the answer bond whole. So the
+	// bar hands the decision to the party it exists to police, and challenging
+	// costs ~70%·X̄ across three doubling rounds to deny a draw worth ≤31%. A bar
+	// whose non-satisfaction means the policed party wins cannot be made safer by
+	// raising it.
+	if third := votable / 3; floor > third {
+		floor = third
+	}
+	// LAST, deliberately: governor.ProposeWithQuorum refuses a non-positive
+	// floor, and a fully-escrowed court has votable == 0.
 	if floor < 1 {
 		floor = 1
 	}

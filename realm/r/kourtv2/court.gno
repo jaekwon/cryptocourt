@@ -330,9 +330,26 @@ type Court struct {
 	gov  *governor.Governor // the dispute arbiter; electorate = coin
 	crv  curve.Curve        // one-way GNOT -> CC; proceeds are burned
 
-	// escrow holds staked CC, deposits, and bonds. It never votes (the quorum
-	// floor nets it out), and — new in V2 — participants of a claim are
-	// excluded from that claim's quality lane by rule, not just by escrow.
+	// escrow holds staked CC, deposits, and bonds, and it never votes — the coins
+	// are physically here, not with their owners.
+	//
+	// It is NOT "netted out of the quorum floor", which this comment used to
+	// claim (v0.29). quorumFloor and qualityBars net the escrow only on their X̄
+	// arm; the 5%-of-supply arm that usually dominates reads RAW supply, and the
+	// max() between them escapes the votable/3 ceiling the first arm imposed.
+	// That sentence is how the arrangement came to be read as a simple oversight
+	// one lane over from electionFloor, which genuinely does net. Both bars now
+	// carry a total reachability clamp instead; the netting still does not happen
+	// and should not be assumed.
+	//
+	// Note also what escrow does and does not buy. Stake principal is never
+	// slashed and never burned — WithdrawStake returns it 1× on both sides — so
+	// custody buys exactly one thing: disenfranchisement. And it disenfranchises
+	// COURT-WIDE, while the design only wants it CLAIM-SCOPED, which is what the
+	// next clause does properly: participants of a claim are excluded from that
+	// claim's quality lane BY RULE (isParticipant), not by where the coins sit.
+	// Locking stake in place rather than transferring it would make votable equal
+	// supply and retire this whole question; that is a V3-scale change.
 	escrow address
 
 	minted int64 // cumulative curve position (never decremented; prices mints)

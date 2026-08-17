@@ -87,7 +87,7 @@ is sized so that posting junk answers costs more than it can pay.
 sends the claim to a vote.
 
 **Voted.** Voting weight is the court's coin as of an epoch: an hourly
-snapshot of holdings, sealed at the moment the vote opened. By the time a vote
+snapshot of holdings, already sealed when the vote opened. By the time a vote
 exists, the electorate that will decide it is already fixed. Coins bought after the seal
 carry weight in later votes, not this one. The seal binds those who react to
 a dispute, not those who plan one: a buyer can wait out the hour and open the
@@ -132,9 +132,9 @@ tip a tree of verdicts from one cheap corner of it.
 The mockup below shows a mature origins court under both layers.
 
 **KOURT:ORIGINS — "Origins of SARS-CoV-2"** (month 14 of the court's life;
-⊘ open · ✓ settled true · ✗ settled false. The stakes, leans, and settlement
-dates are invented; the claims themselves reference real documents and
-events.)
+⊘ open · ✓ settled true · ✗ settled false. The stakes, leans, verdicts, and
+settlement dates are invented; the claims themselves reference real documents
+and events.)
 
 ```
 ⊘ #1  "SARS-CoV-2 originated in a laboratory."                OPEN   412k staked · leaning 58/42
@@ -176,10 +176,11 @@ Policy claims resolve to a court's judgment and say so on their face. In a
 neighboring court:
 
 **KOURT:MANDATES — "Pediatric COVID-19 vaccine mandates were justified."**
-VERDICT: NO. Month 14, 71/29, heavy stakes on both sides, dissent preserved.
+VERDICT: FALSE. Month 14, 71/29, heavy stakes on both sides, dissent
+preserved.
 
-That NO lands where several European health authorities landed, and against
-where hundreds of US universities stood. Unlike either, it shows who backed
+That FALSE lands where several European health authorities landed, and
+against where hundreds of US universities stood. Unlike either, it shows who backed
 which side, at what weight, and what the minority said on the way down. In the
 same court, the claim "COVID-19 vaccines substantially reduced severe disease
 and death in adults" settled TRUE early and was never seriously challenged.
@@ -214,9 +215,9 @@ native token of the gno.land chain. The price starts near zero and rises
 linearly with each coin minted, so the cost of the n-th coin is proportional
 to n. Voice in a small court is cheap because almost no one has claimed one.
 Voice in a large court costs what established voices cost. There is no premine
-and no allocation. The founder mints on the same curve as everyone else,
-starting at position zero because no one has minted yet, not because anything
-was reserved.
+and no allocation. What a founder gets is the chance to mint first, on the
+same curve, at its lowest positions; section 7 discloses that the designers
+may hold such positions.
 
 The GNOT paid is burned: sent to a designated burn address, auditable by
 anyone on-chain. It is not held, pooled, or managed. This one fact clarifies
@@ -261,9 +262,10 @@ Silence can never seize a court.
 The Review Court's electorate is the people who built the platform under it.
 Burning GNOT in any court, other than the Review Court itself, earns
 franchise: a claimable right to mint KOURT:META later. The franchise is not a
-discount; it is the same burn counted twice. GNOT burned for a court's coin
-also stands as credit toward the Review Court's curve, while a direct buyer
-spends new GNOT for the same position. Claiming mints through
+discount; the price is the same for everyone. What differs is which burn pays
+it: GNOT already burned for a court's coin stands on record, and the Review
+Court's curve accepts that record as payment, while a direct buyer burns new
+GNOT. Claiming mints through
 the Review Court's own curve at the price a direct buyer would pay at that
 moment, and every court's claimed burn feeds that one curve, so the cost of
 appellate voice reflects the platform's whole history rather than any one
@@ -313,10 +315,11 @@ rogue moderator set, though it cannot appoint one: after a disarm, the court's
 own electorate installs the next set, or its creator does if no election has
 yet been held. A court's first moderator set is likewise its creator's
 appointment; once an election installs a set, the creator's power to appoint
-is spent. By m-of-n keys it can purge text for legal compliance, a
-tombstone that removes words while every position stays withdrawable.
-Re-imposing a redaction that was cleared requires m-of-n approval inside a
-counter-notice window modeled on the DMCA's.
+is spent. By its configured threshold of keys, one at genesis and set by its own admin,
+it can purge text, up to a whole court, for legal compliance: a tombstone
+that removes words while every position stays withdrawable. Re-imposing a redaction that was cleared
+requires that same threshold inside a counter-notice window modeled on the
+DMCA's.
 
 Every moderation act emits an on-chain event carrying codes, never content.
 The history of who hid what is itself durable, without becoming a channel

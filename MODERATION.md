@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.28 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.29 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,77 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.29 — the reachability clamp both bars already implied and then threw
+  away (3 identical mechanism reviewers)**. Asked whether `quorumFloor` and
+  `qualityBars` should net the escrow on their 5% arm, as `electionFloor` was
+  changed to in v0.14. **Answer: no — and the fix was already in the code.**
+  - **All three found the same thing independently.** Each bar computes
+    `min(X̄, votable/3)` — its own statement of how high a turnout bar may go and
+    still be decidable — and then `max()`es past that ceiling with 5% of RAW
+    supply. `5%·S` exceeds `votable/3` **exactly when escrow passes 85%**, so the
+    supply arm breaks the reachability rule in precisely, and only, the regime
+    where the lane is already dying. Above 95% the bar exceeds all votable weight
+    and no set of votes can clear it.
+  - **Totalling the clamp is bit-identical below 85% escrow** — it weakens
+    nothing in the normal range, and no fixture changed. Above it, "a third of the
+    float" replaces "impossible". Netting would instead have divided the bar by
+    (1−E) at *every* level — 20× at 95% escrow — buying nothing at 50%, where the
+    bar was already fine. **2/3 preferred the clamp; the third named it as its own
+    fallback**, so all three found it acceptable.
+  - **My panel prompt contained a false premise, and all three corrected it.** I
+    offered "the jam may be the intended conservative failure". It is not. The
+    failed-quorum branch sets `provisional = answer`, burns *half* the disputer's
+    bond, and returns the answer bond whole. So an unreachable bar **hands the
+    decision to the party it exists to police**, and challenging costs ~70%·X̄
+    across three doubling rounds to deny a draw worth ≤31%. A bar whose
+    non-satisfaction means the policed party wins cannot be made safer by raising
+    it.
+  - **And v0.27's own reasoning reverses in sign here.** "Votable is deflatable
+    for free" is true of a PRICE the attacker pays and false of a BAR he must
+    clear: parking coins to shrink the denominator is ~19:1 counterproductive,
+    because the deflating resource and the measured resource are the same coins.
+    Recorded so nobody unifies the lanes on it. **General rule: check the
+    direction of an argument before reusing it one lane over.**
+  - The quality lane's case is sharper than the verdict lane's, which is why the
+    clamp matters there most: `fullBar` gates the **slash**, and `qualityEpoch` is
+    pinned at `PostAnswer`, so nobody can buy fresh weight in afterwards. A mill's
+    own answered claims fill the escrow that makes the mill **permanently
+    unslashable, per claim, for that claim's whole life** — while `demotionBar`
+    has no supply arm and gets *easier* as escrow grows. So the lane kept its one
+    free destructive action and lost the priced one: positive feedback on the
+    single deterrent the draw-proportional slash exists to provide. The clamp also
+    now enforces `fullBar ≥ demotionBar`, since the tier ladder reads them
+    together.
+  - **`court.gno`'s escrow comment was the source of the misreading.** It claimed
+    the escrow "never votes (the quorum floor nets it out)". The quorum floor does
+    **not** net it out on the arm that decides the value. Corrected, along with
+    what custody does and does not buy: stake principal is never slashed and never
+    burned, so custody buys only disenfranchisement — and it disenfranchises
+    COURT-WIDE where the design wants CLAIM-SCOPED, which the `isParticipant` rule
+    beside it already does properly.
+  - **New reads: `VotableSupply`, `QuorumFloorOf`, `QualityBarsOf`.**
+    `ElectionFloorOf` had existed since the election lane shipped; the verdict and
+    quality lanes had none, so the one ratio that distinguishes a paralysed court
+    from a quiet one was unobservable — escrow's *address* was readable, its
+    *share* never was. All non-allocating and covered by the read filetest.
+
+  **Recorded dissent, not acted on.** One reviewer argued for netting both bars
+  outright, on the ground that `fullBar` guards no extractable prize
+  (`isParticipant` makes promotion unprofitable; the slash is a burn with the
+  bounty capped at the flagger's own bond). Another argued for replacing
+  `electionFloor`'s v0.14 netting with the same clamp — `min(5%·raw, votable/3)`,
+  uniformly stricter than today and equal only at zero escrow. That is 1/3 and
+  would change shipped behaviour, so it needs its own panel.
+
+  **Two items split out rather than bundled.** (1) `VoteDispute` has **no
+  `isParticipant` guard** while `VoteQuality` does, so an answerer can vote their
+  own liquid weight to uphold their own answer and the only thing preventing it is
+  the *accident* of custodial escrow. Two reviewers flagged it; I verified it and
+  measured the guard — it has real fixture blast radius, unlike the clamp, so it
+  ships on its own rather than under an inert-clamp headline. (2) **3/3 name the
+  root fix: make `Stake` a lock in place rather than a transfer.** `votable` would
+  equal `supply` identically and this entire question would retire. V3-scale —
+  needs a lock primitive in grc20votes and the `VoteDispute` guard first.
 - **v0.28 — a set can see what it has half-approved, minus the part it has not
   agreed to**. v0.25 gave every unfired approval a 7-day expiry and
   `PendingApproval(court, key)` to read one; that still required knowing the key.
