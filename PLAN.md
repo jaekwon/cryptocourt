@@ -1624,6 +1624,49 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.01 — checkpoint, the last unswept `p/` package: 18 of 23 caught, and the one real gap
+  was a separator that is load-bearing only above page 2^24.**
+  307 lines carrying two rows, both constants. Twenty-three mutations over `SetAt`'s roll,
+  `ValueAt`'s floor query, the key guards and the big-endian packing. Eighteen were already
+  held — the 1-based epoch sentinel, the clock-backwards refusal, both archived-point fields,
+  both inline-slot boundaries and their order, the floor comparison, the descent's direction
+  and both of its stopping rules, all three key guards, `be32`'s byte order, and `rd64`'s sign
+  bit (which an earlier audit had flagged as a gap; the round-trip test exists and works).
+  **The interesting result is a cluster of three separator mutations, of which exactly one is
+  real.** Lowering `ValueAt`'s scan start from `key+Sep` to `key` is equivalent: it admits only
+  the point `key` itself and no page is ever stored there. Widening its end bound from page
+  `at/PageEpochs` to page `at` is equivalent too: a page newer than `at/PageEpochs` holds no
+  epoch at or below `at`, so the inner floor test skips everything it finds and the descent
+  continues — the mutation costs pages read, not correctness.
+  The third is real, and it is invisible for a reason worth writing down: **below 2^24 a page
+  key does not need its separator, because a big-endian page number BEGINS with 0x00 and that
+  leading zero does the separator's job by accident.** Every existing test runs down there, so
+  dropping `Sep` from `pageKey` changed nothing any of them could see. Past 2^24 the leading
+  byte is no longer zero, two adjacent keys' page ranges interleave, and a query answers with
+  the next key's value. That is reachable with legal inputs rather than a theoretical bound:
+  epochs are a caller-supplied `uint32` and this package deliberately never asks what one
+  means — "the clock is policy" — so nothing in it confines them to the small numbers a
+  720-block epoch produces. Cryptocourt's own ledger never gets there; a caller checkpointing
+  per block or per second does. `TestAPageKeyIsSeparatedFromTheNextKeysPages` builds it with
+  two legal keys, `"a"` and `"a\x01"`.
+  Two further notes against myself. The lower-bound row was too WEAK rather than uncovered:
+  `TestAKeyReadsZeroBeforeItsOwnHistoryNotItsNeighbours` exists precisely to pin that bound
+  and catches its outright removal, which is now the row in the batch — a survivor can mean
+  the mutation was feeble, not that the property is unheld, and the two are distinguished only
+  by reading the test that should have caught it. And the same-epoch coalescing mutation is
+  caught by a COST test, `TestCheckpointingDoesNotPayPerTransfer`, not by any value test:
+  traced through, the mutant answers every query identically and differs only in that the
+  archive grows a page it should not. For this package that is not a lesser finding — bounding
+  the archive is the whole thesis — but it does mean the cost tests are load-bearing
+  correctness tests, and deleting one would silently un-cover a real defect.
+  Three of the 23 needed re-anchoring: two BAD ANCHORs from indentation and an interposed
+  comment, and one INVALID from leaving `strings` unused. Guards that are unreachable rather
+  than deleted (`&& key == "\x01unreachable"`) keep an import live and are the cleaner
+  mutation where a whole block cannot go.
+  Batch now 438 rows: 437 caught, 0 not caught, one surviving by design.
+  Every `p/` package has now been swept at least once. `governor` — 2,042 lines, nine rows —
+  is the only large surface left.
+
 - **v1.00 — the governance token's write surface, unswept until now: 23 of 26 caught, and the
   two real gaps were both a NEGATIVE amount turning a destructor into a mint.**
   v0.99 swept `grc20votes.move` and found it clean, which said nothing about the rest of the

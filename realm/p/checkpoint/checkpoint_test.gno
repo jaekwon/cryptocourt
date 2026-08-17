@@ -144,6 +144,62 @@ func TestAKeyReadsZeroBeforeItsOwnHistoryNotItsNeighbours(t *testing.T) {
 	}
 }
 
+// The separator in a PAGE key, which is a different claim from the one the key
+// check makes — and the only one of the three separator mutations that is not an
+// equivalent mutant.
+//
+// Below 2^24 a page key needs no separator at all, because a big-endian page
+// number BEGINS with 0x00 and that leading zero does the separator's job by
+// accident. Every test above runs there, so removing Sep from pageKey changes
+// nothing any of them can see. Past 2^24 the first byte is no longer zero, the
+// two keys' page ranges interleave, and a query answers with a stranger's value.
+//
+// It is reachable with legal inputs rather than a theoretical limit: epochs are
+// a caller-supplied uint32 and this package deliberately never asks what one
+// means ("the clock is policy"), so nothing here bounds them to the small
+// numbers a 720-block epoch produces. A caller checkpointing per block, or per
+// second, gets here. Cryptocourt's own ledger never would.
+//
+// The two mutations that ARE equivalent, recorded so they are not mistaken for
+// gaps: lowering the scan's start bound from key+Sep to key admits only the
+// point `key` itself, and no page is ever stored there; and widening its end
+// bound from page at/PageEpochs to page `at` only makes the descent read more
+// pages, since a page newer than at/PageEpochs holds no epoch <= at and the
+// inner floor test skips what it finds.
+func TestAPageKeyIsSeparatedFromTheNextKeysPages(t *testing.T) {
+	// The bucket where a page number's leading byte stops being 0x00, plus one:
+	// the range has to reach strictly past the neighbour's page-0 key.
+	const leakPage = uint32(1)<<24 + 1
+	const leakEpoch = leakPage * PageEpochs
+
+	arch := NewArchive()
+	var above, victim Series
+
+	// "a\x01" sorts directly above "a" — a legal key, since only Sep is refused —
+	// and its page keys begin with the same 0x01 a large page number does.
+	for e := uint32(1); e <= 3; e++ {
+		above.SetAt(arch, "a\x01", e, 77)
+	}
+	// The victim's own history is newer than the epoch it will ask about, so the
+	// query has no choice but to reach the archive. Three points, so both inline
+	// slots are full and the oldest has rolled.
+	victim.SetAt(arch, "a", leakEpoch+56, 5)
+	victim.SetAt(arch, "a", leakEpoch+1056, 6)
+	victim.SetAt(arch, "a", leakEpoch+2056, 7)
+
+	if got := victim.ValueAt(arch, "a", leakEpoch); got != 0 {
+		t.Errorf("a key read %d for an epoch before it held anything, want 0 — that "+
+			"is the NEXT key's value, reached because the page key stopped "+
+			"separating the two ranges once the page number's leading byte was "+
+			"no longer zero", got)
+	}
+	// And the bound is not simply refusing everything: its own archived point
+	// still answers.
+	if got := victim.ValueAt(arch, "a", leakEpoch+100); got != 5 {
+		t.Errorf("the key's own archived history reads %d, want 5", got)
+	}
+}
+
 // The second inline slot has to earn its keep.
 //
 // A holder who has changed twice must answer entirely from their own record,

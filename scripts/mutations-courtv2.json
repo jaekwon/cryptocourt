@@ -2911,5 +2911,159 @@
   "label": "TransferFrom: the allowance is not spent",
   "find": "\tif rest := allowed - amount; rest == 0 {\n\t\tl.allowances.Remove(key)\n\t} else {\n\t\tl.allowances.Set(key, rest)\n\t}",
   "replace": "\t_ = key"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: epoch zero is accepted (the sentinel collision)",
+  "find": "\tif e == 0 {",
+  "replace": "\tif e == 0 && key == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: the clock may go backwards to the PREVIOUS slot",
+  "find": "\tif e < s.e0 {",
+  "replace": "\tif e < s.e1 {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: a same-epoch change does not coalesce",
+  "find": "\tif e == s.e0 {",
+  "replace": "\tif e == s.e0 && key == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: an unused second slot is archived anyway",
+  "find": "\tif s.e1 != 0 {\n\t\ta.append(key, s.e1, s.prev)\n\t}",
+  "replace": "\ta.append(key, s.e1, s.prev)"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: the NEW value lands in both slots",
+  "find": "\ts.prev, s.e1 = s.cur, s.e0\n\ts.cur, s.e0 = v, e",
+  "replace": "\ts.prev, s.e1 = v, e\n\ts.cur, s.e0 = v, e"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: the roll happens after the overwrite, so prev == cur",
+  "find": "\ts.prev, s.e1 = s.cur, s.e0\n\ts.cur, s.e0 = v, e",
+  "replace": "\ts.cur, s.e0 = v, e\n\ts.prev, s.e1 = s.cur, s.e0"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: the archived point carries the WRONG epoch",
+  "find": "\t\ta.append(key, s.e1, s.prev)",
+  "replace": "\t\ta.append(key, s.e0, s.prev)"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "SetAt: the archived point carries the WRONG value",
+  "find": "\t\ta.append(key, s.e1, s.prev)",
+  "replace": "\t\ta.append(key, s.e1, s.cur)"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the epoch a value was written in reads as the OLD value",
+  "find": "\tif at >= s.e0 {\n\t\treturn s.cur\n\t}",
+  "replace": "\tif at > s.e0 {\n\t\treturn s.cur\n\t}"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the previous slot's own epoch reads past it",
+  "find": "\tif at >= s.e1 {\n\t\treturn s.prev\n\t}",
+  "replace": "\tif at > s.e1 {\n\t\treturn s.prev\n\t}"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the two inline slots are consulted in the wrong order",
+  "find": "\tif at >= s.e0 {\n\t\treturn s.cur\n\t}",
+  "replace": "\tif at >= s.e1 {\n\t\treturn s.prev\n\t}"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the floor query excludes the epoch asked for",
+  "find": "\t\t\tif rd32(s, off) <= at {",
+  "replace": "\t\t\tif rd32(s, off) < at {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the page is scanned ASCENDING, returning the oldest match",
+  "find": "\t\tfor i := len(s)/12 - 1; i >= 0; i-- {",
+  "replace": "\t\tfor i := 0; i < len(s)/12; i++ {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: a found entry does not stop the descent",
+  "find": "\t\t\t\tout = rd64(s, off+4)\n\t\t\t\treturn true",
+  "replace": "\t\t\t\tout = rd64(s, off+4)\n\t\t\t\treturn false"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the descent stops at the first page even when the answer is older",
+  "find": "\t\t// may hold only points later than the epoch being asked about. Keep\n\t\t// walking down; the answer is in an older page.\n\t\treturn false",
+  "replace": "\t\t// may hold only points later than the epoch being asked about. Keep\n\t\t// walking down; the answer is in an older page.\n\t\treturn true"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "mustBeUsable: a key may contain the separator (cross-key page collision)",
+  "find": "\tif strings.Contains(key, Sep) {",
+  "replace": "\tif strings.Contains(key, Sep) && key == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "mustBeUsable: the key length bound is off by one",
+  "find": "\tif len(key) > MaxKey {",
+  "replace": "\tif len(key) > MaxKey+1 {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "mustBeUsable: an empty key is accepted",
+  "find": "\tif key == \"\" {",
+  "replace": "\tif key == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "be32: pages are packed little-endian, so they sort wrong past 256",
+  "find": "\tb := [4]byte{byte(u >> 24), byte(u >> 16), byte(u >> 8), byte(u)}",
+  "replace": "\tb := [4]byte{byte(u), byte(u >> 8), byte(u >> 16), byte(u >> 24)}"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "rd64: the sign bit is dropped, so a negative archived value reads back huge",
+  "find": "\treturn int64(u)",
+  "replace": "\treturn int64(u & 0x7fffffffffffffff)"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "pageKey: the separator is dropped from the page key",
+  "find": "func pageKey(key string, page uint32) string { return key + Sep + be32(page) }",
+  "replace": "func pageKey(key string, page uint32) string { return key + be32(page) }"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "ValueAt: the descent has no lower bound at all",
+  "find": "\ta.t.ReverseIterate(key+Sep, ",
+  "replace": "\ta.t.ReverseIterate(\"\", "
  }
 ]
