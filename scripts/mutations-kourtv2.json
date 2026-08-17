@@ -1,0 +1,394 @@
+[
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.52: CounterFlag does not latch (two rolls, one party)",
+    "find": "\tcs.qualityReasked = true\n\topenQualityTally(cs)",
+    "replace": "\topenQualityTally(cs)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.52: CounterFlag inherits the ride's tally",
+    "find": "\tcs.qualityReasked = true\n\topenQualityTally(cs)",
+    "replace": "\treaskQualityTally(cs)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.54: tier ratchet removed",
+    "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a ⅔ mandate (§3.4 F3)\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.54: ratchet gates demotions too",
+    "find": "if cs.slotConsumed && tier > int(cs.tier) && bucketW",
+    "replace": "if cs.slotConsumed && bucketW"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.54: mandate tightened to 3/4",
+    "find": "bucketW(cs, tier)*3 < turnout*2 {",
+    "replace": "bucketW(cs, tier)*4 < turnout*3 {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.53: a ride may burn before the Q5 poll",
+    "find": "\tcase !cs.counterUsed:",
+    "replace": "\tcase false:"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "v0.55: sub-bar carrot not withheld",
+    "find": "\tif cs.decidedPID == 0 && cs.conclusiveSeq != 0 {\n\t\tif _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {\n\t\t\tcs.carrotTotal = 0\n\t\t}\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "v0.55: withheld unconditionally (breaks F2 above the bar)",
+    "find": "if _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {",
+    "replace": "if true {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "v0.55: decidedPID guard dropped",
+    "find": "if cs.decidedPID == 0 && cs.conclusiveSeq != 0 {",
+    "replace": "if cs.conclusiveSeq != 0 {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "slug charset allows a path separator",
+    "find": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'",
+    "replace": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '/'"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "directory.gno",
+    "label": "SetTier admin guard removed",
+    "find": "\tif !isGlobalMod(who) {\n\t\tpanic(\"kourtv2: only a global DAO member may set a court's tier\")\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "P6 base drops the lifetime arm",
+    "find": "\tif life := lifeAvgStake(cs, now); life > xbar {\n\t\txbar = life\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "P6 base REPLACES instead of max (the ramp-up direction)",
+    "find": "\tif life := lifeAvgStake(cs, now); life > xbar {\n\t\txbar = life\n\t}",
+    "replace": "\txbar = lifeAvgStake(cs, now)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "v0.50: bounty pays cs.flagger when slashFlagger is empty",
+    "find": "\tif cs.slashFlagger != \"\" {",
+    "replace": "\tif true {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Q2: stakers may vote quality",
+    "find": "\treturn cs.stakers.Get(posKey(who, sideYES)) != nil ||\n\t\tcs.stakers.Get(posKey(who, sideNO)) != nil",
+    "replace": "\treturn false"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Q2: only the YES side counts as participation",
+    "find": "\treturn cs.stakers.Get(posKey(who, sideYES)) != nil ||\n\t\tcs.stakers.Get(posKey(who, sideNO)) != nil",
+    "replace": "\treturn cs.stakers.Get(posKey(who, sideYES)) != nil"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "F3 ratchet: high promotion needs no 2/3",
+    "find": "if turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
+    "replace": "if turnout >= fullBar {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality fullBar loses its 5%-supply floor",
+    "find": "\tfullBar = arm\n\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {\n\t\tfullBar = fivePct\n\t}",
+    "replace": "\tfullBar = arm"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "comp loses its 80%-of-burn arm",
+    "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {\n\t\tcomp = arm\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "provClose never fires at maxFailedRounds",
+    "find": "\t\tif cs.failedRounds >= maxFailedRounds {",
+    "replace": "\t\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "emission.gno",
+    "label": "senior start ignores juniorReserved (M3-CRITICAL-1)",
+    "find": "\tstart := mustAdd(c.reservedTail, c.juniorReserved)",
+    "replace": "\tstart := c.reservedTail"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "settle clobbers a conclusive tier",
+    "find": "\tif !cs.tierFinal && !cs.slotConsumed {",
+    "replace": "\tif !cs.tierFinal {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Finalize clobbers a conclusive tier",
+    "find": "\tif !cs.tierFinal && !cs.slotConsumed {",
+    "replace": "\tif !cs.tierFinal {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "voidFlag does not return the bond",
+    "find": "\tif cs.flagBond > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.flagger, cs.flagBond)\n\t\tcs.flagBond = 0\n\t}\n\tcs.flagOpen = false",
+    "replace": "\tcs.flagOpen = false"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "emission.gno",
+    "label": "CEILING: dEff not capped by the weekly budget",
+    "find": "\t\tif dReal < c.curBudgetBpsFP {",
+    "replace": "\t\tif true {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "emission.gno",
+    "label": "CEILING: dEff always the budget (min collapsed the other way)",
+    "find": "\t\tif dReal < c.curBudgetBpsFP {",
+    "replace": "\t\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "Crystallize ignores the 24h quiet window",
+    "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "quiet window one block short",
+    "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
+    "replace": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks-1 {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "T1/T2 boundary: T2 predicate drops the full-bar requirement",
+    "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {",
+    "replace": "\tif cs.answerBond > 0 && !slashGrade {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "2A: inconclusive-MID half-burn becomes a full return",
+    "find": "\t\t} else {\n\t\t\thalf := cs.flagBond / 2",
+    "replace": "\t\t} else {\n\t\t\thalf := cs.flagBond"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "T2 failed-attempt half-burn becomes a full return",
+    "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2",
+    "replace": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "Crystallize runs with a quality question open",
+    "find": "\tif cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "carrot pull is not once-per-address",
+    "find": "\tif cs.qVoted.Has(claimedKey) {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "P2 per-voter carrot clamp removed",
+    "find": "\tif clamp := b0/2 - 1; share > clamp {\n\t\tshare = clamp // P2: the sybil-margin invariant, per voter\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "emission.gno",
+    "label": "junior reservation not clamped to the reservoir",
+    "find": "\tr := c.reservoirR()\n\tif want > r {\n\t\twant = r\n\t}",
+    "replace": "\tr := c.reservoirR()\n\t_ = r"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "emission.gno",
+    "label": "budget never steps down",
+    "find": "\tc.curBudgetBpsFP = c.curBudgetBpsFP * stepDownNum / stepDownDen",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "re-flag cooldown after an inconclusive cycle removed",
+    "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "claim.gno",
+    "label": "CloseDeadClaim ignores the timeout",
+    "find": "\tif runtime.ChainHeight() < cs.openedAt+deadClaimTimeout {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "PRINCIPAL: withdraw returns less than the stake",
+    "find": "\tamount := p.stake\n\tp.stake = 0",
+    "replace": "\tamount := p.stake - p.stake/100\n\tp.stake = 0"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "PRINCIPAL: withdraw leaves the position open",
+    "find": "\tamount := p.stake\n\tp.stake = 0",
+    "replace": "\tamount := p.stake"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "PRINCIPAL: withdraw before any verdict",
+    "find": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0 && side != int(cs.provisional)) {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "M2-1: credEligible needs no adversarial weight",
+    "find": "\t\tif yes >= floor/4 {",
+    "replace": "\t\tif true {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "dispute bond never doubles per failed round",
+    "find": "\tbond := mustMul(base, int64(1)<<uint(shift))",
+    "replace": "\tbond := base"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "mulDiv128 quotient overflow guard removed",
+    "find": "\tif hi >= uint64(den) {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "mulDiv128 domain guard removed",
+    "find": "\tif a < 0 || b < 0 || den <= 0 {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "mulDiv128 NOTE-6 int64 guard removed",
+    "find": "\tif q > 9223372036854775807 {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "capBonus F9 bound loosened 1000x",
+    "find": "\tbound := mustMul(cs.tier, rawAvg) / 2",
+    "replace": "\tbound := mustMul(cs.tier, rawAvg) * 1000"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "crystallize.gno",
+    "label": "capBonus drops its negative floor",
+    "find": "\tif gross < 0 {\n\t\tgross = 0\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "7.4: the COURT page renders a backing figure",
+    "find": "\tb.WriteString(\"# \" + courtNameFor(c) + \"\\n\\n\")",
+    "replace": "\tb.WriteString(\"# \" + courtNameFor(c) + \"\\n\\nbacking: 1.00\\n\\n\")"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "7.4: the CLAIM page renders an APR",
+    "find": "\tb.WriteString(\"# \" + claimTitleFor(c, cs) + \"\\n\\n\")",
+    "replace": "\tb.WriteString(\"# \" + claimTitleFor(c, cs) + \"\\n\\nAPR 20%\\n\\n\")"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "7.4: the DIRECTORY renders the inflation ceiling",
+    "find": "\tb.WriteString(\"# \" + platformName + \"\\n\\nStake on claims of fact. Your principal always returns 1×.\\n\\n\")",
+    "replace": "\tb.WriteString(\"# \" + platformName + \"\\n\\nStake on claims of fact. Your principal always returns 1×. Inflation ceiling 20%.\\n\\n\")"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "7.4: the POSITIONS page renders redeem",
+    "find": "\tb.WriteString(\"Claim: \" + claimTitleFor(c, cs) + \"\\n\\n\")",
+    "replace": "\tb.WriteString(\"Claim: \" + claimTitleFor(c, cs) + \"\\n\\nredeem at par\\n\\n\")"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "buy.gno",
+    "label": "BUY: IsUserCall weakened entirely",
+    "find": "\tif !prev.IsUserCall() {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "buy.gno",
+    "label": "BUY: minted goes to the court, not the buyer",
+    "find": "\tc.coin.Mint(buyer, delta)",
+    "replace": "\tc.coin.Mint(cur.Address(), delta)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "buy.gno",
+    "label": "BUY: a zero/negative send is accepted",
+    "find": "\tif sent <= 0 {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "buy.gno",
+    "label": "BUY: the spent GNOT is not burned",
+    "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
+    "replace": ""
+  }
+]

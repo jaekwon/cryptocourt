@@ -209,3 +209,95 @@ func TestPctNoOverflowAtWhaleConviction(cur realm, t *testing.T) {
 		t.Fatal("pct guards den<=0 and num<0")
 	}
 }
+
+// §7.4 across EVERY render path, not one word on one page. The existing coverage
+// checks only the literal "backing" and only the DIRECTORY, while §7.4 forbids four
+// things — backing, redeem, APR, and the inflation ceiling — and the court and claim
+// pages are the ones carrying money numbers. An owner-locked constraint enforced on a
+// quarter of its surface is close to unenforced.
+//
+// Driven through a FULL lifecycle so the pages have real figures to leak: stake, an
+// answer, a flag with a conclusive tier, settle, and crystallize. A page that renders
+// nothing cannot violate §7.4, so an empty-state check would prove little.
+func TestNoRenderPathLeaksTheForbiddenTerms(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("s74-alice")
+	flagger := testutils.TestAddress("s74-flag")
+	voter := testutils.TestAddress("s74-voter")
+	c := testCourt(cur, "s74", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(voter, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "s74", "A claim with real numbers on it")
+	matureOI(cur, "s74", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "s74", id, sideYES)
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "s74", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "s74", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "s74", id)
+	SettleUndisputed(cross(cur), "s74", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "s74", id)
+
+	idStr := strconv.FormatUint(id, 10)
+	pages := map[string]string{
+		"directory": Render(""),
+		"court":     Render("s74"),
+		"claim":     Render("s74/" + idStr),
+		"positions": Render("s74/" + idStr + "/" + alice.String()),
+	}
+	// Lowercased, because §7.4 is about what a reader sees, not about casing. "apr"
+	// is checked as a whole word: it is a substring of ordinary English ("appraisal"),
+	// and a guard that fires on those would be deleted by the next person.
+	for name, body := range pages {
+		if body == "" {
+			t.Fatalf("%s rendered nothing, so it proves nothing about §7.4", name)
+		}
+		low := lowerASCII(body)
+		for _, banned := range []string{"backing", "redeem", "inflation", "ceiling"} {
+			if containsSub(low, banned) {
+				t.Fatalf("§7.4: the %s page renders %q", name, banned)
+			}
+		}
+		if hasWordAPR(low) {
+			t.Fatalf("§7.4: the %s page renders APR", name)
+		}
+	}
+}
+
+// lowerASCII folds A-Z; the realm imports no strings package and §7.4 is
+// case-insensitive from a reader's point of view.
+func lowerASCII(s string) string {
+	b := []byte(s)
+	for i := 0; i < len(b); i++ {
+		if b[i] >= 'A' && b[i] <= 'Z' {
+			b[i] += 32
+		}
+	}
+	return string(b)
+}
+
+// hasWordAPR finds "apr" only as a whole word, so "appraisal" does not trip it.
+func hasWordAPR(s string) bool {
+	for i := 0; i+3 <= len(s); i++ {
+		if s[i:i+3] != "apr" {
+			continue
+		}
+		if i > 0 && isAlnumByte(s[i-1]) {
+			continue
+		}
+		if i+3 < len(s) && isAlnumByte(s[i+3]) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func isAlnumByte(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
+}

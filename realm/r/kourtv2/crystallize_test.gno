@@ -475,3 +475,92 @@ func TestDecidedRoundCarrotSurvivesAStaleSubBarTally(cur realm, t *testing.T) {
 		t.Fatalf("the with-verdict voter must be paid: %d", share)
 	}
 }
+
+// The 24h quiet window (Q6), found SURVIVING by the mutation harness: replacing
+// `now < cs.lastFlagEventAt+priorityWindowBlocks` with `if false` failed no test.
+// The window exists so Crystallize cannot RACE a flag event — every flag close,
+// reopen and void restamps lastFlagEventAt precisely so the draw cannot be frozen
+// in the same breath as a quality outcome that a party has not had time to react to.
+// Nothing pinned it, so nothing objected to removing the reaction period entirely.
+func TestCrystallizeWaitsOutTheQuietWindow(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qw-alice")
+	flagger := testutils.TestAddress("qw-flag")
+	voter := testutils.TestAddress("qw-voter")
+	c := testCourt(cur, "qwin", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(voter, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qwin", "the draw waits for the reaction period")
+	matureOI(cur, "qwin", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qwin", id, sideYES)
+
+	// A conclusive MID flag: consumes the slot, restamps lastFlagEventAt at its close.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "qwin", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "qwin", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "qwin", id)
+	SettleUndisputed(cross(cur), "qwin", id)
+
+	cs := mustClaim(c, id)
+	if cs.lastFlagEventAt == 0 {
+		t.Fatal("setup: the flag close must restamp the quiet-window anchor")
+	}
+	// Inside the window: refused, even for a participant with everything else ready.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "24h quiet window", func() {
+		Crystallize(cross(cur), "qwin", id)
+	})
+	if cs.crystallized {
+		t.Fatal("a refused Crystallize must not have crystallized")
+	}
+	// One block short is still short — the boundary, not just the middle.
+	testing.SkipHeights(priorityWindowBlocks - 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "24h quiet window", func() {
+		Crystallize(cross(cur), "qwin", id)
+	})
+	// And once it passes, the same call succeeds — so the guard is a delay, not a bar.
+	testing.SkipHeights(2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "qwin", id)
+	if !cs.crystallized {
+		t.Fatal("past the quiet window the draw must crystallize")
+	}
+}
+
+// capBonus's F9 bound, found SURVIVING: multiplying it by 1000 failed no test, because
+// TestF9CapHeadroomAtTheExtreme establishes the cap is UNREACHABLE by natural flow
+// (~9x headroom at the extreme). That makes it defence rather than a live clamp — but
+// capBonus is a pure function taking its inputs as arguments, so the clamp itself is
+// testable directly without crafting protocol state the design forbids.
+func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
+	cs := &claimState{tier: tierMidX, openBlocks: 1}
+	// rawAvg = 100, tier 1 -> bound = 50.
+	if got := capBonus(cs, 1_000, 0, 100); got != 50 {
+		t.Fatalf("gross above the bound must clamp to (tier x rawAvg)/2: got %d want 50", got)
+	}
+	// Below the bound, gross passes through untouched.
+	if got := capBonus(cs, 10, 0, 100); got != 10 {
+		t.Fatalf("gross below the bound is unchanged: got %d want 10", got)
+	}
+	// The bound scales with the tier: HIGH doubles it.
+	cs.tier = tierHighX
+	if got := capBonus(cs, 1_000, 0, 100); got != 100 {
+		t.Fatalf("the bound is tier-scaled: got %d want 100", got)
+	}
+	// At tier LOW the bound is zero, so nothing is payable — the same reason a low
+	// tier zeroes the draw.
+	cs.tier = tierLowX
+	if got := capBonus(cs, 1_000, 0, 100); got != 0 {
+		t.Fatalf("tier LOW bounds the bonus to zero: got %d", got)
+	}
+	// And the floor: a negative gross never becomes a payout.
+	cs.tier = tierMidX
+	if got := capBonus(cs, -5, 0, 100); got != 0 {
+		t.Fatalf("a negative gross floors at zero: got %d", got)
+	}
+}

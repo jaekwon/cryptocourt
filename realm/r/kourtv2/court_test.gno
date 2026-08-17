@@ -70,7 +70,8 @@ func shouldPanicV2(t *testing.T, name string, fn func()) {
 
 // mustSlug's CHARSET check is load-bearing for a security property in a DIFFERENT
 // file, and only its length check was tested. render.gno writes the slug RAW into
-// markdown link targets — `](/r/cryptocourt/courtv2:` + slug + `)` at :71 and :107 —
+// markdown link targets — `](/r/kourt/kourtv2:` + slug + `)` in writeListedByBurn,
+// writeTier and renderCourt —
 // while every other user string there goes through sanitize.InlineText. That raw
 // interpolation is safe ONLY because [a-z0-9-] cannot close a link target, open a
 // markdown construct, or traverse a path. AGENTS.md names exactly this class: never

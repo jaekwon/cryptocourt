@@ -1624,6 +1624,218 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.62 — the money-IN path: one guard pinned, three unreachable, and ONE THAT NO TEST
+  IN THIS HARNESS CAN COVER.** Eight mutations against `buy.gno`, never touched before.
+  **Pinned:** `IsUserCall` against deletion, the mint going to the buyer, the zero-send
+  refusal, and the burn of spent GNOT.
+  **CORRECTION, and it is the second time this session I called something a money leak
+  before checking reachability.** I reported "a buyer's unspent GNOT can be swept to the
+  burn sink — real user money lost silently" on the strength of a surviving mutation. It is
+  NOT reachable: `Minted` picks the largest span whose round-up `Cost` fits the payment,
+  and at this curve's granularity (delta in base units, 1e6 per CC) one more base unit
+  costs far under 1 ugnot, so `spent == sent` EXACTLY for every amount probed — 5, 1 000,
+  7 777, 100 001, 12 345 678, 333 333 333, 999 999 999, all remainder zero. No remainder
+  exists to misdirect. Same for "a payment too small to mint": 1 ugnot already mints 20 000
+  base units, so `delta > 0` for any accepted payment and that guard is reachable only once
+  the curve is at cap. Same for the self-buy check: the buyer is `prev.Address()` behind the
+  IsUserCall gate, so it is never the realm. All three are documented in place as
+  unreachable defence, NOT claimed as verified. The earlier instance of the same error was
+  PostAnswer's collateralization floor, which "survived" a mutation I had written as a
+  no-op. **A surviving mutation is a lead, not a hole — reachability is a separate
+  question, and I have now got that wrong twice by announcing before checking.**
+  **THE ONE THAT MATTERS, and it needs owner awareness rather than a fixture.** Swapping
+  `prev.IsUserCall()` for `prev.IsUser()` SURVIVES, and that is precisely the downgrade
+  AGENTS.md warns about: `IsUser()` accepts a `maketx run` EPHEMERAL realm, which can
+  consume the origin-send envelope and call in with the payment already spent. The
+  distinguishing caller is an `/e/<addr>/run` realm, and `testing.NewCodeRealm` REFUSES
+  such a path ("should only be called for Realms"), so this harness cannot construct one.
+  The fixture therefore catches DELETING the guard but not WEAKENING it. Enforcement of
+  that specific rule rests on code review — which is exactly why AGENTS.md states it as a
+  reading rule rather than a test — and the survivor must not be read as a gap a fixture
+  can close. courtv2 currently uses the CORRECT form; the risk is a future edit
+  downgrading it invisibly. Batch now 56 rows.
+  **OPERATIONAL NOTE, learned the hard way: the batch is now too slow to run whole and
+  MUST be run in slices.** `run_suite` runs all eleven staged suites per mutation, so 56
+  rows is ~616 suite runs and exceeds a 10-minute budget. My attempt was killed
+  mid-mutation and left `mulDiv128`'s domain guard replaced with `if false` IN THE SOURCE
+  — a live money-path guard disabled in the working tree, invisible in `git status` except
+  as a one-line diff. `mutate.py`'s own header warns about precisely this ("a mutation
+  that hangs the suite gets the whole run timed out, and the source is left broken … It
+  cost an hour once"), and its on-disk `.mutate-backup` files are what made recovery a
+  one-liner. Two rules: run slices of ~10 rows, and after ANY interrupted run check
+  `git diff` on the realm before trusting a green suite. The kill ALSO left a stale
+  stage lock — `stage_lock`'s `finally` does not run when the process is killed — and the
+  10-minute ceiling I gave it in v0.57 reported that clearly instead of hanging, which is
+  what it was for. Clearing it is `rmdir`, and the message says so.
+
+- **v0.61 — §7.4 was enforced on a quarter of its surface.** The third owner-locked
+  constraint — never render backing, redeem, APR or the inflation ceiling in public copy —
+  had exactly one assertion behind it: `render_test.gno` checked the literal string
+  "backing" on the DIRECTORY page only. §7.4 names four things, and `Render` has four
+  paths (directory, court, claim, positions), of which the court and claim pages are the
+  ones carrying money figures. Three of four terms and three of four pages were
+  unchecked. An owner constraint enforced on a quarter of its surface is close to
+  unenforced, and unlike the ceiling and principal-is-no-loss this one has no mechanism
+  behind it at all — only prose discipline, so a test is the ONLY thing that can hold it.
+  `TestNoRenderPathLeaksTheForbiddenTerms` drives a full lifecycle first (stake, answer,
+  flag to a conclusive tier, settle, crystallize) so every page has real figures to leak —
+  a page rendering nothing cannot violate §7.4, so an empty-state check would prove
+  little — then folds case and scans all four pages for all four terms. "apr" is matched
+  as a WHOLE WORD, because it is a substring of ordinary English and a guard that fires on
+  "appraisal" is a guard someone deletes. Mutation-verified by injecting a distinct
+  violation into each of the four render paths: all four caught. Batch now 52 rows.
+
+- **v0.60 — fourth hunt: PRINCIPAL-IS-NO-LOSS is pinned, three pure-function guards
+  were not.** Ten more mutations. The good news first: all three attacks on the owner's
+  second locked promise are CAUGHT — a 1% haircut on withdrawal, paying from escrow while
+  leaving the position open, and withdrawing before any verdict. So is M2-1's credEligible
+  weight bar and the dispute bond's per-round doubling. Batch now 48 rows, all caught.
+  **Three survivors, all pure functions, all now tested by DIRECT CALL** rather than by
+  crafting protocol state the design forbids: `mulDiv128`'s domain guard, its
+  `hi >= den` quotient guard, and `capBonus`'s F9 bound. The last is instructive —
+  `TestF9CapHeadroomAtTheExtreme` already establishes that cap is UNREACHABLE by natural
+  flow (~9x headroom), which is exactly why loosening it 1000x survived; but `capBonus`
+  takes its inputs as arguments, so the clamp is testable on its own terms. Same for
+  `mulDiv128`, whose guards are fail-loud defence at magnitudes the protocol never reaches.
+  When a guard is unreachable through the protocol but its function is pure, test the
+  FUNCTION — that is the middle path between faking reachable state and leaving it
+  unverified.
+  **Writing the fixture taught me the code has a THIRD mulDiv128 guard I had not seen.**
+  `hi >= den` only bounds the quotient to uint64; a quotient in (MaxInt64, 2^64) would
+  wrap silently through `int64(q)`, so math-audit NOTE-6 added a separate `q > MaxInt64`
+  panic with its own message. My first fixture asserted the wrong one and the mismatch is
+  what surfaced it. All three are now pinned separately.
+  **And a gno-specific trap worth recording:** `uassert.AbortsContains` recovers panics
+  from CROSSING calls only. An internal call's panic escapes it, so the assertion fails
+  with the panic propagating rather than reporting a mismatch. The grc20votes suite already
+  had a local `defer`/`recover` helper for the same reason (a /p/ test cannot supply
+  `cur realm`); courtv2 now has one too. Use `uassert` for entrypoints, a local recover for
+  internals.
+
+- **v0.59 — second and third hunts: four more surviving guards, one of them the LOCKED
+  CEILING's own enforcement point.** Twenty-one further mutations against pre-existing
+  guards. The batch now stands at 38 rows, all caught, none invalid.
+  **THE CEILING (fixed, the most serious survivor of the session).** `rollPeriod`
+  computes `d_eff = min(budget ceiling, 4-period EMA of minted/supply)`, and replacing
+  that comparison with `if true` — so d_eff tracks realized dilution UNCAPPED — failed no
+  test. d_eff feeds `rateBpsFP`, which drives conviction accrual, hence `cumAccrual`, hence
+  `reservoirR`: an uncapped d_eff raises the emission ceiling itself, the one constraint
+  the owner has locked. Reachable rather than theoretical, and the mechanism is the point:
+  `curBudgetBpsFP` steps DOWN on every roll while `emaMinted` decays only 3/4, so realized
+  dilution above the now-lower ceiling is exactly the state the min() exists for. Closed by
+  `TestDEffIsCappedByTheWeeklyBudget`, which pins BOTH directions — the cap binding when
+  dReal is above it, and d_eff tracking dReal when it is below — so neither collapse of the
+  min() survives.
+  **THE T1/T2 BOUNDARY (fixed, and it is one this loop reasoned from).** Dropping
+  `turnout >= fullBar` from the T2 half-burn predicate failed no test: nothing
+  distinguished "a sub-bar low returns the flag bond WHOLE" from "a full-bar non-⅔-low
+  half-burns it". That boundary IS v0.29/T1's cheap-when-right property, and v0.55, v0.56
+  and this session's sub-bar-low pricing all rest on it — the free-roll arithmetic, the
+  disarm's zero cost, the refutation of the half-burn lever. An invariant argued from that
+  often should not have rested on no fixture. Closed by
+  `TestSubBarLowReturnsTheFlagBondWhole`, measured on the FLAGGER'S BALANCE, since
+  asserting escrow drains cannot tell a return from a burn.
+  **Also fixed:** the 24h quiet window before Crystallize (Q6's reaction period —
+  `if false` failed no test, and the fixture pins the boundary one block short as well as
+  the middle), and 2A's inconclusive-MID half-burn, the rule that stops suppression chains
+  being free.
+  **Three of my own mutations were malformed, which the harness caught rather than
+  flattered.** One matched twice (BAD ANCHOR), one matched zero times, and one I wrote as
+  `_ = 0` appended — a no-op that "SURVIVED" while testing nothing, and I nearly recorded
+  it as a finding about PostAnswer's collateralization floor. A fourth reported INVALID
+  (did not build) rather than surviving: "Crystallize is not participant-only" was never a
+  real survivor and a pre-existing test catches it once the mutation compiles. The harness
+  distinguishing all four states — caught, survived, bad anchor, did not build — is why it
+  should have been used from firing one instead of hand-rolled `sed`.
+  **And it caught me shipping a red suite.** After adding the ceiling fixture the baseline
+  went RED: my new slug `cap1` collided with the pre-existing
+  `TestBondCollateralizesSlashUnderCourtCap`. Filtered runs passed; the full suite did not.
+  Second slug collision of the session (after `rr1`), same cause both times — I checked
+  slug uniqueness the first time and did not the second. Fixed, and the whole-suite check
+  now runs before any batch.
+
+- **v0.58 — first real hunt with the harness pointed at courtv2: three PRE-EXISTING
+  guards were surviving, two of them load-bearing.** Twelve mutations against guards
+  nobody wrote this session — the ones that had never been broken on purpose because
+  the harness could not reach the realm. Nine were caught, and the three survivors were
+  exactly the shape the harness header predicts: "a rule the source states in a comment
+  and nothing checks."
+  **SURVIVOR 1 (fixed): the v0.50 `slashFlagger != ""` guard.** Replacing it with
+  `if true` failed no test. That guard is the one whose own comment spells out the cost
+  — an entitlement for the zero address is unpayable (`grc20votes.Mint` rejects it, now
+  itself pinned as of the previous entry) while `reservedTail` is monotone and has
+  already advanced past it, permanently shrinking the reservoir for every later junior
+  draw; and the fallback it forbids, `cs.flagger`, would pay a STALE flagger from an
+  earlier inconclusive cycle whose bond already came back whole under T1. No fixture had
+  ever SETTLED a ride-levied reserve, so nothing objected. Closed by
+  `TestRideLeviedSlashEnqueuesNoBounty`, which reaches the state through the v0.50 path
+  (a sock disputes in the block after the answer, the honest crowd upholds the answer
+  while voting the claim junk, so the RIDE originates with `slashFlagger` unset) and
+  asserts the reserve BURNS in full while `seniorOwed` does not move.
+  **SURVIVOR 2 (fixed): Q2's STAKER branch.** `isParticipant` returning `false` for both
+  staker checks failed no test — author and answerer are covered by the early return, but
+  no fixture had a STAKER try to vote their own claim's quality, which is the branch that
+  matters most since the tier multiplies the staker's own payout. Closed by
+  `TestQ2BarsAStakerFromVotingQuality`, with one staker per side (staking freezes at the
+  answer, so both positions must be taken before it) so `posKey(who, sideYES)` and
+  `posKey(who, sideNO)` are each exercised — a second mutation confirms checking only
+  the YES side now fails too. It also carries the control the guard needs: a
+  NON-participant holding the same weight is admitted, so the check rejects
+  participation rather than everyone.
+  **SURVIVOR 3 (documented, deliberately not fixed): `originateSlash`'s clamp to the
+  remaining bond.** Genuinely unreachable behind PostAnswer's collateralization floor,
+  which sizes the bond to cover `slashSizeFor`, and `slashLevied` bounds origination to
+  the single carve where that guarantee holds. A fixture would have to break the floor
+  first, i.e. pin a state the design forbids. Left in place with the survivor report
+  named in the comment, because the cost of the floor ever drifting is `answerBond`
+  going NEGATIVE — a conservation break, not a wrong number. Same treatment as
+  `settleSlash`'s unreachable `counterOpen = false`: kept, labelled, and NOT claimed as
+  verified.
+  The nine caught are now rows in `scripts/mutations-courtv2.json` (24 total, re-runnable
+  in one command) rather than facts about guards that happened to hold on the day. Among
+  them, several invariants this loop has been reasoning from all session are confirmed
+  fail-detectable for the first time: the F3 ⅔ ratchet on HIGH promotion, the quality
+  bar's 5%-supply floor, comp's 80%-of-burn arm, provClose at `maxFailedRounds`, the
+  M3-CRITICAL-1 senior/junior interval tiling, and both terminal tier-clobber guards.
+
+- **v0.57 — the mutation harness could not reach courtv2, and it disproved one of my
+  own coverage claims within a minute of being able to.** `scripts/mutate.py` — this
+  repo's own tool for the exact discipline the loop mandates — had a `PKGS` registry
+  covering govern, checkpoint, grc20votes, governor and offerer, and **no entry for
+  courtv2**. So every guard in the realm that holds the whole money path had to be
+  mutated by hand, which is what I did for two dozen mutations across this session.
+  Same shape as v0.49's finding about the isolation guard staging 3 p/ + 2 r/ and not
+  courtv2: a check that measures everything except the thing most worth measuring.
+  Registered courtv2 plus the four packages the realm-test set stages (twap, cshares,
+  tickbook, curve) — staged, not mutated, because a missing dependency makes the
+  baseline red for a staging reason and every mutation then reads as caught, which is
+  the lie the file's own header warns about. Also took the stage lock inside
+  `run_suite`, at one complete stage/test/unstage cycle, so a long batch does not hold
+  the shared tree for its whole duration. Saved the session's money-path batch as
+  `scripts/mutations-courtv2.json` (13 mutations, all caught, none invalid) so it is
+  re-runnable rather than reconstructed from commit messages.
+  **CORRECTION — v0.56's companion commit claimed "lifeAvgStake had no test at all".
+  That is FALSE.** It was already covered by `TestDrainedClaimPricesBarsOffLifetimeStake`,
+  which arrived with 4f72b58, the v0.46 X̄-base fix itself — a fixture that exercises the
+  lifetime arm through `PostAnswer` and never names the function, so my per-function
+  reference count missed it. My hand mutation could not reveal this because I ran it
+  AFTER adding my own fixture, so both caught it and I attributed the catch to mine.
+  The harness distinguished them in one run by naming the catching test. What WAS
+  genuinely new in that commit is the other direction: `max()` versus REPLACE. That
+  mutation survived the entire suite before `TestXBarFrozenTakesTheTrailingArmOnAGrowing`
+  `Claim` existed, and the saved batch now pins both directions separately so the two can
+  never again be confused for one another.
+  **Standing correction to the sweep method, third revision and final.** Counting
+  test-file references per function is a LEAD GENERATOR with a high false-positive rate
+  in three distinct ways: exported names tested through a re-export wrapper in another
+  package (governor.NewRules via r/govern); unexported validators tested through their
+  callers, which is the NORMAL case (checkpoint.mustBeUsable via SetAt, and lifeAvgStake
+  via PostAnswer); and anything covered by a filetest, which carries no Test name at all.
+  Only mutation establishes coverage. Of five claimed finds this session, four stand
+  (directory.gno's access control, mustSlug's charset, grc20votes' validators,
+  twap.mustSane — each mutation-confirmed against a suite that passed without the guard)
+  and one was half wrong.
+
 - **v0.56 — the sub-bar-low SLASH DISARM: vetted 3x, NO CONVERGENCE, OWNER DECISION.
   Shipped only a pure read.** The mechanism is confirmed by all three reviewers: a
   conclusive LOW below the supply-floorless `fullBar` latches `slotConsumed`, `OpenFlag`

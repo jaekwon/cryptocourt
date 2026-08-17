@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.32 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.33 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,64 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.33 — the merge brought back a bug I had already fixed once, and item 18
+  turns out to be a fifth the size it was filed as, for a reason that also
+  sharpens what it is actually buying.**
+  - **The second staging lock came back.** `scripts/mutate.py` arrived from the
+    other branch taking `.cryptocourt-stage.lock` while every other stager takes
+    `.kourt-stage.lock` — the *exact* failure already found and fixed this
+    session: two differently-named locks exclude nothing while looking protected,
+    so a mutation run and a gate can stage into the same tree and delete each
+    other's files mid-run, which this harness would score as a mutation it could
+    not judge. All four stagers now agree on one name, verified by grep rather
+    than by assumption. **A merge can reintroduce a fixed bug under a name the
+    conflict resolver never shows you** — the file merged *cleanly*; nothing
+    conflicted, because their line and my line were never the same line.
+  - Their saved mutation batch needed retargeting, and five of its 56 anchors no
+    longer matched. Four were the §7.4 comms-hygiene mutations — the ones that
+    prove the render layer never prints a backing figure, an APR, the inflation
+    ceiling or the word *redeem* — and one was the `SetTier` guard, stale because
+    v0.24 moved that power from the lone `directoryAdmin` key to the global DAO.
+    An anchor that matches nothing is reported as BAD ANCHOR rather than as a
+    survivor, so this failed loudly instead of silently claiming coverage; but the
+    coverage claim in the commit that added them was false against this tree until
+    retargeted. Anchors now verified to match exactly once, **and then verified to
+    be CAUGHT**, because an anchor that applies is not a guard that fires.
+  - One incoming comment had gone from stale to wrong: it described `render.gno`
+    writing `](/r/cryptocourt/courtv2:` at two line numbers, where the code writes
+    `](/r/kourt/kourtv2:` at four sites. Rewritten against function anchors, which
+    is what this repo requires anyway and is why the line numbers rotted.
+  - **ITEM 18 IS SMALLER THAN FILED, AND CUSTODY IS BUYING ONE THING AFTER ALL.**
+    Scoping found the separation that matters: conviction accrual reads
+    `stakePos.stake`, the per-claim record, and **never** the escrow balance. The
+    only escrow reads in the realm are four `PastVotes(c.escrow, at)` calls
+    computing `votable` for the turnout bars. So a lock in place does not touch
+    accrual, and — the assumption I had backwards — it needs **no formula change
+    to `votableAt`, `electionFloor`, `quorumFloor` or `qualityBars` either.** They
+    keep netting the escrow; the escrow simply stops containing stake. The
+    expressions are already correct for the world after the change.
+    - The stake transfer is redundant bookkeeping: `p.stake` and the escrow
+      balance move in lockstep, and bonuses are **minted**, never paid out of
+      escrow, so no payout depends on the staked CC being held there. That is
+      item 18's claim — custody buys nothing — confirmed in code.
+    - **But custody is buying sufficiency enforcement, for free.** Today the
+      *ledger* makes double-committing impossible, because staked coins physically
+      left the balance. Under a lock they do not, so a staker with 100 CC could
+      stake 100 and then post a 100 bond against the same coins: the transfer to
+      escrow succeeds, and at unstake the realm owes 100 it does not hold and
+      would have to mint to honour — breaking supply conservation, the one
+      invariant a token cannot lose. So the lock does not merely delete a
+      transfer; it **moves a sufficiency check out of the ledger, where it was
+      automatic and total, into this realm, where it must be written once per
+      spend path and cannot miss one.** That is the whole risk of the item, and
+      the reason it is worth a plan rather than an edit.
+    - Plan: a per-court per-address locked total, one `spendable(c, who) =
+      BalanceOf(who) − locked(c, who)` helper, and every one of the six sites that
+      spends from a user balance routed through it — `Stake`, the answer bond, the
+      claim deposit, the dispute bond, the flag bond, the election bond. The
+      test that must exist before it ships: stake the full balance, then try to
+      bond the same coins, and require the refusal — plus the conservation
+      assertion that total supply is unchanged across a stake/unstake cycle.
 - **v0.32 — THE SPEC AND THE CODE DISAGREE ABOUT WHETHER CC IS TRANSFERABLE, AND
   THE CODE HAS NEVER IMPLEMENTED IT. Owner decision needed; deliberately not
   built.** Scoping item 18 required knowing whether a lock in place is

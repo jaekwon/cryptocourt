@@ -130,3 +130,53 @@ func TestBudgetAtRealCourtScale(cur realm, t *testing.T) {
 		t.Fatal("curve-cap-scale budget must be positive and unwrapped")
 	}
 }
+
+// THE LOCKED CEILING's enforcement point, found SURVIVING by the mutation harness.
+// rollPeriod computes d_eff = min(budget ceiling, 4-period EMA of minted/supply), and
+// replacing that comparison with `if true` — so d_eff tracks realized dilution with no
+// cap — failed no test. d_eff feeds rateBpsFP, which drives conviction accrual, which
+// drives cumAccrual and therefore reservoirR: an uncapped d_eff raises the emission
+// ceiling itself, which is the one constraint the owner has locked.
+//
+// Reachable, not theoretical: curBudgetBpsFP steps DOWN on every roll while emaMinted
+// is a 4-period EMA that decays only 3/4 per roll, so realized dilution above the
+// (now lower) ceiling is exactly the state the min() exists for. Crafted here the way
+// TestP2CarrotClampBindsForASoleVoter crafts carrotTotal, because driving it by
+// natural emission would take more periods than a harness can run.
+func TestDEffIsCappedByTheWeeklyBudget(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cap-alice")
+	c := testCourt(cur, "dcap", alice, 50_000_000_000)
+
+	// Realized dilution far above the ceiling: emaMinted at ~100% of supply.
+	c.curBudgetBpsFP = 1_000_000 // a deliberately low ceiling
+	c.emaMinted = c.coin.TotalSupply()
+	if c.emaMinted <= 0 {
+		t.Fatal("setup: the court must have supply to dilute")
+	}
+
+	rollPeriod(c)
+
+	// rollPeriod steps the ceiling down first, then caps d_eff to it. Either way
+	// d_eff must EQUAL the ceiling here, never the realized rate.
+	if c.dEffBpsFP != c.curBudgetBpsFP {
+		t.Fatalf("d_eff must be capped by the budget ceiling: dEff=%d budget=%d",
+			c.dEffBpsFP, c.curBudgetBpsFP)
+	}
+	// And the cap is doing real work: realized dilution is orders above it.
+	dReal := mulDiv128(c.emaMinted, 10_000*1_000_000, c.coin.TotalSupply())
+	if dReal <= c.curBudgetBpsFP {
+		t.Fatalf("fixture must place realized dilution ABOVE the ceiling: "+
+			"dReal=%d budget=%d", dReal, c.curBudgetBpsFP)
+	}
+
+	// The complement: when realized dilution is BELOW the ceiling, d_eff tracks it
+	// rather than sitting at the ceiling — so the min() is a min, not a clamp to one
+	// side. Without this the mutation "d_eff is always the budget" would survive.
+	c.curBudgetBpsFP = 38_000_000
+	c.emaMinted = c.coin.TotalSupply() / 1_000_000
+	rollPeriod(c)
+	if c.dEffBpsFP >= c.curBudgetBpsFP {
+		t.Fatalf("below the ceiling d_eff must track realized dilution: dEff=%d budget=%d",
+			c.dEffBpsFP, c.curBudgetBpsFP)
+	}
+}

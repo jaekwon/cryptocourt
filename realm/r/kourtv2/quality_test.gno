@@ -1645,3 +1645,223 @@ func TestQualityBarsQuotesTheBarsResolveFlagUses(cur realm, t *testing.T) {
 			afterDemotion, afterFull, wantDemotion, wantFull)
 	}
 }
+
+// A RIDE-levied slash has no flagger, and settling it must enqueue NOTHING. v0.50
+// added the `slashFlagger != ""` guard for this and its comment spells out the cost:
+// the zero address is unpayable (grc20votes.Mint rejects it), so an entitlement
+// created for it can never be pulled — while reservedTail, which is monotone and
+// never decremented, has already advanced past it, permanently shrinking the
+// reservoir for every later junior draw. The alternative it warns against is worse:
+// falling back to cs.flagger would pay a STALE flagger from an earlier inconclusive
+// cycle whose bond already came back whole under T1.
+//
+// The mutation harness found this guard SURVIVING — no fixture settled a ride-levied
+// reserve, so nothing objected when the guard was replaced with `if true`. Reached
+// here through the v0.50 path: a sock disputes in the block after the answer, before
+// any flag can exist, and the honest crowd upholds the answer while voting the claim
+// junk, so the RIDE originates with slashFlagger unset.
+func TestRideLeviedSlashEnqueuesNoBounty(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rnb-alice") // author + answerer
+	sock := testutils.TestAddress("rnb-sock")
+	crowd := testutils.TestAddress("rnb-crowd")
+	c := testCourt(cur, "rnb", alice, 50_000_000_000)
+	c.coin.Mint(sock, 10_000_000_000)
+	c.coin.Mint(crowd, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rnb", "the ride levies, so nobody is owed a bounty")
+	matureOI(cur, "rnb", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rnb", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(sock))
+	OpenDispute(cross(cur), "rnb", id)
+	testing.SetRealm(testing.NewUserRealm(crowd))
+	VoteDispute(cross(cur), "rnb", id, "no")
+	testing.SetRealm(testing.NewUserRealm(crowd))
+	VoteQuality(cross(cur), "rnb", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "rnb", id)
+
+	cs := mustClaim(c, id)
+	slash := cs.pendingSlash
+	if slash <= 0 {
+		t.Fatal("setup: the ride must levy the slash (v0.50)")
+	}
+	if cs.slashFlagger != "" {
+		t.Fatalf("setup: a ride posts no bond, so it records no beneficiary: %q",
+			cs.slashFlagger)
+	}
+
+	// Settle the unchallenged window. The reserve must BURN and nothing may be owed.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	owedBefore := SeniorOwed("rnb")
+	supplyBefore := c.coin.TotalSupply()
+	ResolveSlashWindow(cross(cur), "rnb", id)
+	if cs.pendingSlash != 0 {
+		t.Fatalf("the reserve must settle: %d", cs.pendingSlash)
+	}
+	if burned := supplyBefore - c.coin.TotalSupply(); burned != slash {
+		t.Fatalf("the reserve must burn in full: burned %d want %d", burned, slash)
+	}
+	if got := SeniorOwed("rnb"); got != owedBefore {
+		t.Fatalf("a ride-levied slash owes no bounty — an entitlement for the zero "+
+			"address is unpayable while reservedTail has already advanced: %d vs %d",
+			got, owedBefore)
+	}
+}
+
+// Q2's STAKER branch, which the mutation harness found surviving: no fixture had a
+// staker try to vote their own claim's quality. Author and answerer are covered by
+// isParticipant's early return, but a staker is exactly who has the strongest motive
+// — the quality tier multiplies their own payout — so this is the branch that matters
+// most and it was the one nothing broke on purpose.
+func TestQ2BarsAStakerFromVotingQuality(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("q2s-alice")  // author + answerer
+	flagger := testutils.TestAddress("q2s-flag")
+	noSide := testutils.TestAddress("q2s-no")   // stakes NO
+	yesSide := testutils.TestAddress("q2s-yes")  // stakes YES
+	c := testCourt(cur, "q2s", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(noSide, 20_000_000_000)
+	c.coin.Mint(yesSide, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "q2s", "a staker may not price their own payout")
+	matureOI(cur, "q2s", id, alice, 200_000_000)
+	// Both stakers back a side BEFORE the answer — staking freezes at the answer, and
+	// isParticipant checks posKey on BOTH sides, so one of each covers both branches.
+	testing.SetRealm(testing.NewUserRealm(noSide))
+	Stake(cross(cur), "q2s", id, sideNO, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(yesSide))
+	Stake(cross(cur), "q2s", id, sideYES, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "q2s", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "q2s", id)
+
+	// Q2: a staker is a participant and is refused, despite holding weight at the
+	// claim's quality epoch. Both sides, since isParticipant checks each.
+	for _, who := range []address{noSide, yesSide} {
+		testing.SetRealm(testing.NewUserRealm(who))
+		uassert.AbortsContains(t, cur, "participants cannot vote its quality (Q2)",
+			func() {
+				VoteQuality(cross(cur), "q2s", id, qualityMid)
+			})
+	}
+	cs := mustClaim(c, id)
+	if cs.qMidW != 0 || cs.qLowW != 0 || cs.qHighW != 0 {
+		t.Fatalf("a refused vote must not reach the tally: %d/%d/%d",
+			cs.qLowW, cs.qMidW, cs.qHighW)
+	}
+	// The control: a NON-participant holding weight is admitted, so the guard
+	// rejects participation rather than everyone. The flagger qualifies —
+	// isParticipant covers author, answerer and stakers, and posting a flag bond
+	// makes you none of those.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	VoteQuality(cross(cur), "q2s", id, qualityMid)
+	if cs.qMidW <= 0 {
+		t.Fatalf("a non-participant's vote must reach the tally: %d", cs.qMidW)
+	}
+}
+
+// T1 vs T2, the two halves of the flag bond's disposition on a LOW — and the harness
+// found the boundary between them unpinned: dropping `turnout >= fullBar` from the T2
+// predicate failed no test, so nothing distinguished "sub-bar low returns the bond
+// WHOLE" from "full-bar non-⅔-low half-burns it".
+//
+// That boundary is v0.29/T1's cheap-when-right property, and this session priced the
+// sub-bar-low free roll and the slash disarm on it repeatedly ("the bond returns whole
+// below the full bar"). An invariant reasoned from that often should not have rested on
+// no fixture. Measured on the FLAGGER'S BALANCE, which is what distinguishes a return
+// from a burn — asserting escrow drains cannot, since a burn also empties escrow.
+func TestSubBarLowReturnsTheFlagBondWhole(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("t1b-alice")
+	flagger := testutils.TestAddress("t1b-flag")
+	dust := testutils.TestAddress("t1b-dust") // >= demotionBar, < fullBar
+	c := testCourt(cur, "t1b", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(dust, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "t1b", "a correct dust flag is free")
+	matureOI(cur, "t1b", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "t1b", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "t1b", id)
+	cs := mustClaim(c, id)
+	bond := cs.flagBond
+	if bond <= 0 {
+		t.Fatal("setup: the flag must post a bond")
+	}
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "t1b", id, qualityLow)
+	_, fullBar := qualityBars(c, cs)
+	demotionBar, _ := qualityBars(c, cs)
+	if cs.qLowW >= fullBar || cs.qLowW < demotionBar {
+		t.Fatalf("fixture must sit in [demotionBar, fullBar): low=%d bars=%d/%d",
+			cs.qLowW, demotionBar, fullBar)
+	}
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	before := c.coin.BalanceOf(flagger)
+	ResolveFlag(cross(cur), "t1b", id)
+	if cs.tier != tierLowX || !cs.slotConsumed {
+		t.Fatalf("setup: a sub-bar low is still CONCLUSIVE: tier=%d consumed=%t",
+			cs.tier, cs.slotConsumed)
+	}
+	// THE GUARD: whole, not half. A half-burn here would price a CORRECT dust flag at
+	// half the bond and destroy T1.
+	if got := c.coin.BalanceOf(flagger) - before; got != bond {
+		t.Fatalf("a sub-bar low returns the flag bond WHOLE: got %d want %d", got, bond)
+	}
+}
+
+// The 2A rule, also found surviving: an inconclusive-MID flag HALF-burns. A full
+// return would make suppression chains free — open a flag, let it go inconclusive,
+// collect the bond back, repeat — which is why v0.28 split the two inconclusive
+// outcomes: inconclusive-LOW returns whole (the flagger was directionally right and
+// the electorate was absent), inconclusive-MID does not.
+func TestInconclusiveMidHalfBurnsTheFlagBond(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("2ab-alice")
+	flagger := testutils.TestAddress("2ab-flag")
+	dust := testutils.TestAddress("2ab-dust")
+	c := testCourt(cur, "2ab", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(dust, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "2ab", "an inconclusive mid is not free")
+	matureOI(cur, "2ab", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "2ab", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "2ab", id)
+	cs := mustClaim(c, id)
+	bond := cs.flagBond
+	// A sub-bar MID: not medianLow, and under the full bar, so INCONCLUSIVE-mid.
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "2ab", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	before := c.coin.BalanceOf(flagger)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveFlag(cross(cur), "2ab", id)
+
+	if cs.slotConsumed {
+		t.Fatal("setup: an inconclusive outcome must NOT consume the slot")
+	}
+	if cs.flagCycles != 1 {
+		t.Fatalf("setup: an inconclusive cycle must be counted: %d", cs.flagCycles)
+	}
+	half := bond / 2
+	if got := c.coin.BalanceOf(flagger) - before; got != half {
+		t.Fatalf("inconclusive-mid returns HALF the bond: got %d want %d", got, half)
+	}
+	if burned := supplyBefore - c.coin.TotalSupply(); burned != bond-half {
+		t.Fatalf("the other half must BURN: burned %d want %d", burned, bond-half)
+	}
+}
