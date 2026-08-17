@@ -357,3 +357,64 @@ func countSub(s, sub string) int {
 	}
 	return n
 }
+
+// §7.4 swept across claim STATES, which the existing sweep cannot reach.
+//
+// TestNoRenderPathLeaksTheForbiddenTerms above already walks all four render paths, so
+// the pages themselves are covered. What it cannot cover is the STATE it renders them in:
+// it drives one claim through its whole life and reads the pages at the END, after
+// Crystallize. renderClaim branches on state, and several of those branches exist ONLY
+// before that point — the flag-slot line, the counter-re-vote line, the escrowed-slash
+// line. Copy on any of them is invisible to a sweep taken at the end.
+//
+// Measured, not assumed: injecting "backing" into the flag-slot branch — reachable only
+// while `!crystallized && !slotConsumed && !provClose` — is caught HERE and not by the
+// sweep above.
+//
+// "ceiling" is included though §7.4 names only the inflation ceiling: a bare "ceiling" in
+// public copy is the same disclosure by a shorter name, and the four pages were checked
+// to confirm no legitimate copy uses the word.
+func TestNoRenderSurfaceLeaksTheForbiddenVocabulary(cur realm, t *testing.T) {
+	forbidden := []string{"backing", "redeem", "apr", "inflation", "ceiling"}
+	alice := testutils.TestAddress("r74-alice")
+	bob := testutils.TestAddress("r74-bob")
+	c := testCourt(cur, "r74", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "r74", "a claim to render")
+	matureOI(cur, "r74", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "r74", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "r74", id, sideYES)
+
+	sweep := func(state string) {
+		t.Helper()
+		paths := []string{"", "r74", "r74/" + strconv.FormatUint(id, 10),
+			"r74/" + strconv.FormatUint(id, 10) + "/" + bob.String()}
+		for _, p := range paths {
+			out := strings.ToLower(Render(p))
+			if len(out) == 0 {
+				t.Fatalf("%s: path %q rendered nothing, so this sweep proves nothing "+
+					"about it", state, p)
+			}
+			for _, w := range forbidden {
+				if strings.Contains(out, w) {
+					t.Fatalf("%s: path %q renders the forbidden term %q (§7.4)",
+						state, p, w)
+				}
+			}
+		}
+	}
+
+	// Every state a reader can arrive at a page in: live, settled, and drawn.
+	sweep("answered")
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "r74", id)
+	sweep("settled")
+	testing.SkipHeights(100_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "r74", id)
+	sweep("crystallized")
+}

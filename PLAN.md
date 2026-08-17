@@ -1624,6 +1624,33 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.92 — PostAnswer is CLEAN (12 of 12), and a premise of mine about §7.4 was wrong —
+  the gap was not the pages, it was the STATE they were read in.**
+  `PostAnswer` — the freeze, the bond sizing and every answerability gate — came out with
+  all twelve mutations caught: the already-answered bar, the dead-claim timeout, the
+  maturity check, the minAnswerX floor, all three clauses of the priority window, BOTH
+  directions of the P6 max() base (the drain exploit and dropping the lifetime arm), the
+  pool settlement ordering, H1's conviction pin, and the X̄ freeze itself. Nothing to add;
+  recorded as clean because a money path that sizes every later %-of-X̄ quantity is worth
+  knowing is covered.
+  **Then §7.4, where I had the premise backwards.** I set out believing the owner
+  constraint was enforced by four hand-picked mutation rows, one per page, and that a fifth
+  page or a new line would be uncovered. Wrong: `TestNoRenderPathLeaksTheForbiddenTerms`
+  already sweeps all four render paths — the four rows are the MUTATIONS and that test is
+  what catches them. Render dispatches on segment count, so those four paths are the whole
+  public surface.
+  The real gap is narrower and was worth finding anyway. That sweep drives one claim through
+  its entire life and reads the pages at the END, after Crystallize — and `renderClaim`
+  branches on state, with several branches existing ONLY before that point: the flag-slot
+  line, the counter-re-vote line, the escrowed-slash line. Copy on any of them is invisible
+  to a sweep taken at the end. Measured rather than argued: injecting "backing" into the
+  flag-slot branch, reachable only while `!crystallized && !slotConsumed && !provClose`, is
+  caught by the new state-walking fixture and NOT by the existing one.
+  So the addition is a sweep at three states (answered, settled, crystallized) rather than
+  one — and the honest framing is that §7.4's page coverage was already complete and its
+  state coverage was not.
+  Batch now 314 rows, 0 not caught (8m48s).
+
 - **v0.91 — the slash lane's LAST switch, and its cheapest-looking guard turns out to zero
   the draw on ordinary claims.** Swept `disposeSlashOnRide` — item 1's converged four-way
   disposal — and `compAmount`. Twelve mutations, nine already held: every money DIRECTION

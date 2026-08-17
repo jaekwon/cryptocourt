@@ -2105,5 +2105,96 @@
   "label": "compAmount: the two arms take the LARGER",
   "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {",
   "replace": "\tif arm := burned * compOfBurnBps / 10000; arm > comp {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: a claim can be answered twice",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"courtv2: this claim already has an answer\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: a claim past the dead-claim timeout is still answerable",
+  "find": "\tif now >= cs.openedAt+deadClaimTimeout {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: an immature stake history is answerable",
+  "find": "\tif !mature {\n\t\tpanic(\"courtv2: not enough stake history to answer yet\")\n\t}",
+  "replace": "\t_ = mature"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: trailing stake below the answer floor is answerable",
+  "find": "\tif xbar < c.params.minAnswerX {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the priority window never expires",
+  "find": "\tif priorityGateActive(c) && now < cs.openedAt+answerWindow+priorityWindowBlocks {",
+  "replace": "\tif priorityGateActive(c) {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the priority window binds before the cold-start gate arms",
+  "find": "\tif priorityGateActive(c) && now < cs.openedAt+answerWindow+priorityWindowBlocks {",
+  "replace": "\tif now < cs.openedAt+answerWindow+priorityWindowBlocks {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: anyone may answer inside the priority window",
+  "find": "\t\tif !mayAnswerInPriority(c, who) {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the P6 base takes the SMALLER of the two arms (the drain exploit)",
+  "find": "\tif life := lifeAvgStake(cs, now); life > xbar {",
+  "replace": "\tif life := lifeAvgStake(cs, now); life < xbar {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the lifetime arm is dropped from the P6 base",
+  "find": "\tif life := lifeAvgStake(cs, now); life > xbar {\n\t\txbar = life\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the pools are not settled before the bond is sized",
+  "find": "\tadvancePools(c, cs)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: H1's conviction pin is never taken",
+  "find": "\tcs.rateAccAtFreeze = c.rateAccFP",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: X-bar is never frozen, so every %-of-X quantity reads zero",
+  "find": "\tcs.xBarFrozen = xbar // P6: the one base for every later %-of-X\u0304 quantity",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "7.4: a PRE-crystallize-only branch renders backing",
+  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
  }
 ]
