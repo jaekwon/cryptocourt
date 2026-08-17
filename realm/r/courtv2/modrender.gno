@@ -20,6 +20,7 @@
 package courtv2
 
 import (
+	"math/overflow"
 	"strconv"
 	"strings"
 
@@ -47,10 +48,18 @@ func beInv(v int64) string {
 // reindexBurn adds `spent` to a court's burn total and re-keys its index row.
 // Called from Buy; never panics, never reads money state back.
 func reindexBurn(c *Court, spent int64) {
+	// Checked add with a SILENT skip — deliberately not mustAdd. This runs
+	// inside Buy, the platform's only GNOT on-ramp, so a panic here would brick
+	// buying on every court; an unreachable overflow must degrade the index,
+	// never the money path. (Same discipline as accrueFranchise.)
+	sum, ok := overflow.Add64(c.burnedGNOT, spent)
+	if !ok {
+		return
+	}
 	if c.burnedGNOT > 0 || c.burnKey != "" {
 		burnIdx.Remove(c.burnKey)
 	}
-	c.burnedGNOT += spent
+	c.burnedGNOT = sum
 	c.burnKey = beInv(c.burnedGNOT) + c.id
 	burnIdx.Set(c.burnKey, c.id)
 }
@@ -122,6 +131,17 @@ func claimTitleFor(c *Court, cs *claimState) string {
 		}
 	}
 	return sanitize.InlineText(cs.title)
+}
+
+// courtNameFor gates a COURT's name the way claimTitleFor gates a claim title.
+// A whole-court purge is a legal-hold act, and §2 lists court names in the
+// user-text inventory purge must reach — rendering the raw name anywhere would
+// leave the offending text on the directory and on every page of that court.
+func courtNameFor(c *Court) string {
+	if c.mod != nil && c.mod.courtPurged {
+		return "[removed · " + sanitize.InlineText(c.mod.courtTombstone) + "]"
+	}
+	return sanitize.InlineText(c.name)
 }
 
 // hideBanner names the authority hiding a claim, for deep links (which always
@@ -201,7 +221,7 @@ func renderModLog(slug string) string {
 	}
 	c := mustCourt(slug)
 	b := strings.Builder{}
-	b.WriteString("# Moderation log — " + sanitize.InlineText(c.name) + "\n\n")
+	b.WriteString("# Moderation log — " + courtNameFor(c) + "\n\n")
 	b.WriteString("Every moderation act on this court is recorded here: who acted, what they did, and when. Moderation controls what is listed; it never moves a coin or changes a verdict.\n\n")
 	if c.mod == nil {
 		b.WriteString("_No moderation acts yet._\n")

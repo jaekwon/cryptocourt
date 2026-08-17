@@ -160,6 +160,22 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 		ExecuteMetaVerdict(cross(cur), ap5)
 	})
 
+	// ---- 6b. the LATCH RELEASES at a terminal transition --------------------
+	// ap2 was correctly refused (aggressive verb on silence). Its latch must NOT
+	// outlive the appeal claim: it used to be freed only on a SUCCESSFUL
+	// execution, so every refused/expired/voted-down appeal held its target's
+	// review slot forever — permanently bricking that target's appeals lane and
+	// permanently reverting PostAnswer for it.
+	if AppealLatchHolder(verbHide, "mtx2", 1) != ap2 {
+		t.Fatal("the refused appeal should hold its slot until a terminal transition")
+	}
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), metaSlug, ap2)
+	if AppealLatchHolder(verbHide, "mtx2", 1) != 0 {
+		t.Fatal("a terminal transition must free the target's review slot")
+	}
+
 	// ---- 6. FIRST-TO-ANSWER takes the target's review slot ------------------
 	testCourt(cur, "mtx6", alice, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))

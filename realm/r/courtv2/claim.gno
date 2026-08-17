@@ -288,6 +288,7 @@ func CloseDeadClaim(cur realm, courtSlug string, claimID uint64) {
 	// Terminal: nothing on a dead claim is policeable any more (§5.3 exits).
 	pendingExit(c, cs)
 	stripExit(c, cs)
+	releaseMetaLatchIfMeta(c, cs)
 	// Exactly-once dispositions: refund the deposit, burn the fee.
 	if cs.deposit > 0 {
 		c.coin.Transfer(c.escrow, cs.author, cs.deposit)
@@ -304,8 +305,13 @@ func CloseDeadClaim(cur realm, courtSlug string, claimID uint64) {
 // ------------------------------------------------------------------ reads --
 
 func ClaimCount(courtSlug string) uint64 { return mustCourt(courtSlug).nextID }
+
+// ClaimTitle goes through the SAME text gate as render: a purged claim returns
+// its tombstone and a globally-redacted one returns nothing. A raw accessor here
+// would defeat purge — the legal-compliance power — with a single qeval.
 func ClaimTitle(courtSlug string, claimID uint64) string {
-	return mustClaim(mustCourt(courtSlug), claimID).title
+	c := mustCourt(courtSlug)
+	return claimTitleFor(c, mustClaim(c, claimID))
 }
 func ClaimAuthor(courtSlug string, claimID uint64) address {
 	return mustClaim(mustCourt(courtSlug), claimID).author

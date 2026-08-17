@@ -37,7 +37,7 @@ func TestSlugAndParamGuards(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "slug is lowercase", func() {
 		StartCourt(cross(cur), "Bad Slug!", "x")
 	})
-	uassert.AbortsContains(t, cur, "slug is 1..64", func() {
+	uassert.AbortsContains(t, cur, "slug is 1..11", func() {
 		StartCourt(cross(cur), "", "x")
 	})
 	// mustSane rejections (exercised directly — params are frozen defaults).

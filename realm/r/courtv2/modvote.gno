@@ -39,6 +39,17 @@ const (
 	// win a race. One day.
 	nominationWindow = int64(17_280)
 
+	// maxBallotLines bounds the work ResolveElection must do in ONE transaction.
+	// Without it the failure mode is permanent, not merely slow: the bond is
+	// pinned at OpenElection while the curve keeps selling for the whole
+	// nomination window, so an attacker can fund far more lines than the bond
+	// implied, and a resolve that cannot fit in a tx leaves `resolved == false`
+	// — which refuses every future election on that court forever AND strands
+	// every poster's bond. The cap is deliberately far above honest use, and it
+	// is NOT the r6 "excludable slot": a shut-out nominator opens the next
+	// election themselves rather than being kept off a vote that proceeds.
+	maxBallotLines = 64
+
 	// electionBondBps is β: the per-candidate bond as a fraction of supply,
 	// floored at flagMinCC. Frozen — never an owner knob. Its ceiling is
 	// checked against the quorum floor at deploy (mustElectionInvariants).
@@ -255,6 +266,9 @@ func NominateCandidate(cur realm, courtSlug string, candidateID uint64) {
 }
 
 func addNomination(c *Court, cm *courtMod, e *election, cand *modCandidate, who address) {
+	if e.lines.Size() >= maxBallotLines {
+		panic("courtv2: this ballot is full; open the next election instead")
+	}
 	if e.nominators.Has(who.String()) {
 		panic("courtv2: one nomination per address per election")
 	}
@@ -371,7 +385,14 @@ func ResolveElection(cur realm, courtSlug string) {
 	if install {
 		e.lines.Iterate("", "", func(_ string, v any) bool {
 			l, ok := v.(*ballotLine)
-			if !ok || l.weight < maxW-e.floor {
+			// Both tests matter. The first keeps the tie-break inside the margin
+			// band; the SECOND re-applies the install condition to the line that
+			// actually wins. Without it the band is `weight >= maxW - floor`, so
+			// when maxW is near the floor the band reaches down to ZERO and the
+			// earliest-nominated line installs on no approvals at all — and the
+			// election opener is always the earliest line, so a griefer's puppet
+			// set would beat a genuinely-approved challenger for free.
+			if !ok || l.weight < maxW-e.floor || l.weight-e.retainW < e.floor {
 				return false
 			}
 			if winner == nil || l.nomAt < winner.nomAt ||

@@ -16,6 +16,7 @@ package courtv2
 
 import (
 	"chain/runtime"
+	"strings"
 
 	curve "gno.land/p/cryptocourt/curve/v0"
 	governor "gno.land/p/cryptocourt/governor/v0"
@@ -118,8 +119,10 @@ const (
 	// that supply grows with platform burn and Params have no retune path after
 	// deploy: fixed constants would decay to nothing as the platform grew, and
 	// §5.3's flood-deposit argument would decay with them.
-	metaFloorBps      = int64(1) // 0.01% of meta supply
-	maxCourtNameLen   = 100
+	metaFloorBps    = int64(1) // 0.01% of meta supply
+	maxCourtNameLen = 100
+	// maxSlugLen keeps uppercase(slug) inside GRC20's symbol-length bound.
+	maxSlugLen        = 11
 	maxStakeOpenDelay = int64(17_280) // 24h
 )
 
@@ -361,7 +364,15 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 	}
 	p := defaultParams()
 	p.stakeOpenDelayBlocks = delay
-	coin := grc20votes.NewLedger(name, "COURT", coinDecimals, epochBlocks)
+	// The symbol is DERIVED from the slug, never a shared literal. Every court
+	// used to mint its ledger as "COURT", which grc20votes also adopts as the
+	// ledger id — so every court's coin was identically labelled AND identically
+	// identified. Wallets, explorers and indexers key their display on the
+	// symbol rather than the package path, so a malicious court's coin rendered
+	// pixel-identical to the flagship's, while the two are non-fungible and
+	// backed by entirely separate one-way curves. Deriving from the slug makes
+	// the symbol a bijection with an already-unique, deposit-priced name.
+	coin := grc20votes.NewLedger(name, courtSymbol(slug), coinDecimals, epochBlocks)
 	c := &Court{
 		id:             slug,
 		name:           name,
@@ -408,7 +419,11 @@ func CourtCount() int { return courts.Size() }
 func Exists(slug string) bool { return courts.Has(slug) }
 
 func CourtName(slug string) string { return mustCourt(slug).name }
-func CoinSupply(slug string) int64 { return mustCourt(slug).coin.TotalSupply() }
+
+// CourtSymbol is a court coin's ticker — unique per court, derived from its
+// slug. Display it namespaced (PLEA:<SYMBOL>) anywhere outside its own court.
+func CourtSymbol(slug string) string { return mustCourt(slug).coin.Symbol() }
+func CoinSupply(slug string) int64   { return mustCourt(slug).coin.TotalSupply() }
 
 // CoinPrice is the curve's marginal price for the next coin. There is no
 // "backing" read in V2: burned GNOT backs nothing, and rendering one would
@@ -458,10 +473,33 @@ func mustCourt(slug string) *Court {
 	return v.(*Court)
 }
 
-// mustSlug: 1..64 of [a-z0-9-] — URL- and markdown-safe by construction.
+// courtSymbol is the per-court coin symbol: the slug upper-cased, hyphens kept.
+// Keeping hyphens matters — stripping them would break injectivity ("ab-c" and
+// "abc" would collide) and silently reintroduce the shared-symbol problem.
+// Render namespaces it as PLEA:<SYMBOL>; a bare symbol appears only inside its
+// own court, so a court coin can never read as the platform token.
+func courtSymbol(slug string) string { return strings.ToUpper(slug) }
+
+// reservedSlugs may never be registered: each would let a court impersonate the
+// platform token or a well-known asset in any wallet that shows only symbols.
+// (metaSlug is deliberately NOT listed: init must be able to create it, and the
+// PUBLIC path refuses it separately in startCourtUser.)
+var reservedSlugs = []string{
+	"plea", "pleadger", "gno", "gnot", "ugnot",
+	"btc", "eth", "usdc", "usdt",
+}
+
+// mustSlug: 1..maxSlugLen of [a-z0-9-] — URL- and markdown-safe by
+// construction, and short enough that courtSymbol always satisfies GRC20's
+// symbol-length bound.
 func mustSlug(slug string) {
-	if len(slug) == 0 || len(slug) > 64 {
-		panic("courtv2: a slug is 1..64 characters")
+	if len(slug) == 0 || len(slug) > maxSlugLen {
+		panic("courtv2: a slug is 1..11 characters")
+	}
+	for _, r := range reservedSlugs {
+		if slug == r {
+			panic("courtv2: that slug is reserved")
+		}
 	}
 	for i := 0; i < len(slug); i++ {
 		ch := slug[i]

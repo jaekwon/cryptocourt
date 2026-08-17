@@ -48,7 +48,8 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 
 	cs.tierFinal = true // whatever stands now (default mid if never voted) is it
 	cs.crystallized = true
-	stripExit(c, cs) // no longer policeable (§5.3 membership exit)
+	stripExit(c, cs)              // no longer policeable (§5.3 membership exit)
+	releaseMetaLatchIfMeta(c, cs) // an appeal's review slot is freed at its end
 	// The F9 time-averaged-stake cap divides by the claim's stakeable life. The
 	// polish window is dead time (staking is closed), so counting it would
 	// over-tighten every cap by (delay/life) — re-anchored (MODERATION.md §9).

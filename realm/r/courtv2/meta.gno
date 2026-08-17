@@ -186,8 +186,16 @@ func onTitleEdited(c *Court, cs *claimState) {
 		return
 	}
 	p := parseModTitle(cs.title)
+	// Carry the purge poison forward: re-parsing must not re-arm an appeal whose
+	// title was purged during the polish window.
+	if prev := meta.parses.Get(beClaimKey(cs.id)); prev != nil && prev.(*modParse).poisoned {
+		p.poisoned = true
+	}
 	meta.parses.Set(beClaimKey(cs.id), &p)
-	if p.valid {
+	// A SEEDED claim stays on the pending list whatever its title says — the set
+	// that seeds content must never be able to embargo it by editing the title
+	// into a non-appeal string (M-A18).
+	if p.valid || cs.seeded {
 		pendingEnter(c, cs)
 	} else {
 		pendingExit(c, cs)
@@ -219,6 +227,21 @@ func onClaimAnswered(c *Court, cs *claimState) {
 	meta.latches.Set(k, cs.id)
 	bind := *p
 	meta.bindings.Set(beClaimKey(cs.id), &bind)
+}
+
+// releaseMetaLatchIfMeta frees a meta appeal's target slot at any TERMINAL
+// transition of the appeal claim. It exists because the latch used to be freed
+// only on a SUCCESSFUL execution — so every appeal that was refused, expired, or
+// simply voted down held its target's review slot FOREVER, permanently bricking
+// that target's appeals lane and permanently reverting PostAnswer for it. That
+// fires on the ordinary path, not just under attack: a hide appeal correctly
+// refused on silence would have poisoned the item for good. Non-panicking, so
+// it is safe on a money path.
+func releaseMetaLatchIfMeta(c *Court, cs *claimState) {
+	if c.id != metaSlug {
+		return
+	}
+	releaseMetaLatch(cs)
 }
 
 // releaseMetaLatch frees a target's slot once its appeal can no longer execute.
@@ -281,6 +304,16 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 		target = mustClaim(tc, p.target)
 		if target.openedAt >= cs.openedAt {
 			panic("courtv2: the target claim does not predate this appeal")
+		}
+	}
+	if p.verb == verbSetmods {
+		// The candidate is the target here, and it must ALSO predate the appeal.
+		// Registration is permissionless with a predictable per-court counter, so
+		// without this an attacker opens setmods against an unallocated id, wins
+		// the vote on a candidate nobody could inspect, and only then registers
+		// their own puppet set at that id.
+		if cand := ensureMod(tc).mustCandidate(p.target); cand.at >= cs.openedAt {
+			panic("courtv2: the candidate set does not predate this appeal")
 		}
 	}
 

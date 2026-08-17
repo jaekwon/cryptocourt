@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
+	uassert "gno.land/p/nt/uassert/v0"
 )
 
 // Hiding removes a claim from the court's LIST but never from its own page:
@@ -131,4 +132,45 @@ func TestDirectoryRanksByBurn(cur realm, t *testing.T) {
 	if got := ListedCourtsBy("new", 0, 1); len(got) != 1 {
 		t.Fatalf("creation ordering should paginate, got %v", got)
 	}
+}
+
+// Court coins must be DISTINGUISHABLE. Every court used to mint its ledger with
+// the literal symbol "COURT" — which grc20votes also adopts as the ledger id —
+// so two courts' coins were identically labelled and identically identified,
+// while being non-fungible and backed by separate one-way curves. Wallets and
+// explorers key display on the symbol, not the package path, so that was a live
+// phishing vector.
+func TestCourtSymbolsAreUniquePerCourt(cur realm, t *testing.T) {
+	a := testutils.TestAddress("sym-a")
+	testCourt(cur, "symone", a, 1_000_000)
+	testCourt(cur, "sym-two", a, 1_000_000)
+
+	if CourtSymbol("symone") == CourtSymbol("sym-two") {
+		t.Fatal("two courts must not share a coin symbol")
+	}
+	if CourtSymbol("symone") != "SYMONE" {
+		t.Fatalf("symbol is the upper-cased slug, got %q", CourtSymbol("symone"))
+	}
+	// Hyphens are PRESERVED: stripping them would break injectivity, so "ab-c"
+	// and "abc" would collide and reintroduce the shared-symbol problem.
+	if CourtSymbol("sym-two") != "SYM-TWO" {
+		t.Fatalf("hyphens must survive, got %q", CourtSymbol("sym-two"))
+	}
+}
+
+// Reserved slugs cannot be registered — otherwise a court could mint a coin
+// that impersonates the platform token in any symbol-only wallet view.
+func TestReservedSlugsRefused(cur realm, t *testing.T) {
+	a := testutils.TestAddress("sym-res")
+	for _, bad := range []string{"plea", "pleadger", "gnot", "usdc"} {
+		testing.SetRealm(testing.NewUserRealm(a))
+		uassert.AbortsContains(t, cur, "reserved", func() {
+			StartCourt(cross(cur), bad, "impostor")
+		})
+	}
+	// The meta slug is refused on the PUBLIC path too (init owns it).
+	testing.SetRealm(testing.NewUserRealm(a))
+	uassert.AbortsContains(t, cur, "reserved", func() {
+		StartCourt(cross(cur), metaSlug, "impostor")
+	})
 }

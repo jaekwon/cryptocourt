@@ -926,6 +926,57 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.13 — the final CODE audit (3 identical adversarial auditors; one ran
+  executed exploit probes against a staged realm). Verdicts: 2× "MUST FIX
+  BEFORE MERGE (5 critical/high)", 1× "(1 critical / 4 high)". ALL fixed, all
+  three gates re-run green.** The consensus findings, and what each cost:
+  - **CRITICAL, 3/3, probe-verified — the meta latch leaked forever.**
+    `releaseMetaLatch` had exactly ONE call site: the tail of a *successful*
+    execution. So every appeal that was refused, expired, or voted down held its
+    target's review slot permanently — bricking that target's appeals lane and
+    permanently reverting `PostAnswer` for it, for the price of a refundable
+    bond. Worse, it fired on the ORDINARY path: this doc's own "aggressive verb
+    refused on silence" test was silently leaking a latch. Fixed by releasing at
+    every terminal transition (Crystallize / provClose / CloseDeadClaim), with a
+    regression test asserting the slot frees.
+  - **CRITICAL, 1/3 — a zero-approval candidate could win the election.** The
+    two-pass tie-break filtered on `weight >= maxW - floor`, so whenever the
+    winning approval sat near the floor the band reached down to ZERO — and the
+    election opener is always the earliest line, so a griefer's puppet beat a
+    genuinely-approved challenger for free (permanently unseating the creator
+    and gaining the seeding privilege). The selected line now re-tests the
+    install condition itself. Regression test added.
+  - **HIGH, 3/3, probe-verified — the re-hide cooldown was never read.**
+    `executedAt` was written twice and read nowhere, so a moderator who LOST an
+    unhide appeal re-hid in the next block, free, forever: the restorative half
+    of the appeals layer was a no-op. Now enforced in `HideItem`.
+  - **HIGH, 3/3, probe-verified — m-of-n was bypassable with banked approvals.**
+    Pending approvals were never re-validated and never cleared on a membership
+    change, so a deposed moderator's signature still counted — including toward
+    an irreversible purge. Pending now clears on every membership/threshold
+    change.
+  - **HIGH, 2/3 — `setmods` never checked its candidate.** Registration is
+    permissionless with a predictable per-court counter, so an attacker could
+    win a vote on an unallocated candidate id and only *then* register their own
+    puppet set at it. The candidate must now exist and predate the appeal.
+  - **HIGH, 3/3, probe-verified — purge did not reach every surface.** Both
+    `ClaimTitle` (a one-call qeval) and the `…/<id>/<addr>` positions page
+    rendered raw titles, defeating the legal-compliance power outright. Both now
+    go through the same text gate; a whole-court purge also tombstones the court
+    NAME (it was still rendering on the directory and every court page).
+  - **Also fixed:** `AppointMods` validated `m` against the pre-dedup list (so
+    `{A,A,B}, m=3` produced an unsatisfiable 3-of-2 in which even `UnhideItem`
+    could never fire); a title edit could drop a SEEDED claim off the pending
+    list (M-A18) or clear the purge poison; and `ResolveElection` was an
+    unpaginated O(N) transaction whose N an attacker controlled — exceeding the
+    gas cap would have left `resolved == false`, permanently killing that
+    court's elections and stranding every bond, so the ballot is now bounded.
+  - **Confirmed clean by all three:** I1 (no hide/purge/suspension state gates
+    any money write), I2 (money→moderation writes are total; the only refusal is
+    the sanctioned latch read), I5 (both seeded gates), the §13.8 franchise
+    economics (court-independent per-µGNOT, no double accrual, no over-claim,
+    cannot panic inside `Buy`), determinism (no range-over-map), borrow rule #2,
+    and access control on every exported crossing function.
 - **v0.12 — naming (3/3 unanimous)**: ticker **PLEA**, not PLGR (PLGR is a dead
   token named "Pledge", reads "plugger", spells PLeDGeR, and is one char from
   PLTR; PLEA is unclaimed across 18,438 CoinGecko coins + Dexscreener + CMC +

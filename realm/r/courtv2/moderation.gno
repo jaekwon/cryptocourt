@@ -93,6 +93,7 @@ func AddGlobalMod(cur realm, who address) {
 	if !d.members.Has(who.String()) {
 		d.members.Set(who.String(), true)
 		d.n++
+		d.pending = bptree.NewBPTree32() // stale approvals must not carry over
 	}
 }
 
@@ -113,6 +114,7 @@ func RemoveGlobalMod(cur realm, who address) {
 		if d.purgeM > d.n {
 			d.purgeM = d.n
 		}
+		d.pending = bptree.NewBPTree32() // a removed member's approval must not still count
 	}
 }
 
@@ -278,29 +280,30 @@ func AppointMods(cur realm, courtSlug string, mods []address, m int) {
 	if c.mod != nil && c.mod.suspended {
 		panic("courtv2: this moderator set is suspended; only an election or a meta verdict may reinstate it")
 	}
-	if len(mods) == 0 {
+	// Canonicalize FIRST, then validate: checking m against the raw list let
+	// {A,A,B} with m=3 install n=2/m=3 — a set in which no action can ever reach
+	// its own threshold, including UnhideItem, so any standing hide became
+	// locally permanent.
+	canon := canonicalMembers(mods)
+	if len(canon) == 0 {
 		panic("courtv2: a moderator set may not be empty")
 	}
-	if m < 1 || m > len(mods) {
-		panic("courtv2: the m-of-n threshold must be in 1..len(mods)")
+	if m < 1 || m > len(canon) {
+		panic("courtv2: the m-of-n threshold must be in 1..n")
 	}
 	cm := ensureMod(c)
 	fresh := bptree.NewBPTree32()
 	n := 0
-	for _, a := range mods {
-		if a == "" {
-			panic("courtv2: a moderator address may not be zero")
-		}
-		if !fresh.Has(a.String()) {
-			fresh.Set(a.String(), true)
-			n++
-		}
+	for _, a := range canon {
+		fresh.Set(a.String(), true)
+		n++
 	}
 	cm.members = fresh
 	cm.n = n
 	cm.m = m
 	cm.setActHeight = runtime.ChainHeight()
-	cm.installedByMeta = false // a creator appointment is a local act
+	cm.installedByMeta = false        // a creator appointment is a local act
+	cm.pending = bptree.NewBPTree32() // see clearPendingOnMembershipChange
 }
 
 func requireMod(cm *courtMod, who address) {
@@ -309,6 +312,11 @@ func requireMod(cm *courtMod, who address) {
 	}
 }
 
+// Pending m-of-n approvals are DISCARDED whenever the set changes. They record
+// approver addresses and are never re-validated at fire time, so a surviving
+// entry lets a deposed moderator's signature still count toward the threshold —
+// including toward an irreversible purge. Same reasoning for the global DAO.
+//
 // requireActiveMod additionally forbids the act while the set is suspended —
 // a suspended set may only CLEAR its own bits (de-escalatory), never hide,
 // annotate, seed, or fold (MODERATION.md §3.1).
@@ -393,6 +401,13 @@ func HideItem(cur realm, courtSlug string, claimID uint64, reason string) {
 	requireActiveMod(cm, who)
 	checkReason(reason)
 	clm := ensureClaimMod(c, cm, claimID)
+	// The re-hide cooldown (I8). Without reading executedAt, a moderator who
+	// LOST an unhide appeal — after the appellant spent weeks and real bonds —
+	// re-hid in the very next block for free, nullifying the restorative half of
+	// the appeals layer. Global-DAO verbs and meta executions do not route here.
+	if clm.executedAt != 0 && runtime.ChainHeight() < clm.executedAt+c.params.votingBlocks {
+		panic("courtv2: a review verdict just cleared this; the set may not re-hide yet")
+	}
 	fire, r := approveAction(cm.pending, "hide:"+strconv.FormatUint(claimID, 10), who, reason, cm.m)
 	if !fire {
 		return
@@ -619,7 +634,8 @@ func ResetModSet(cur realm, courtSlug string) {
 	}
 	cm.members = bptree.NewBPTree32()
 	cm.n = 0
-	cm.m = 1 // n==0 means nobody is a member, so nothing can act
+	cm.m = 1                          // n==0 means nobody is a member, so nothing can act
+	cm.pending = bptree.NewBPTree32() // stale approvals die with the set
 	cm.suspended = false
 	cm.setActHeight = runtime.ChainHeight()
 	emitGlobalAct(c.id, 0, "reset-mod-set", who)

@@ -341,6 +341,7 @@ func provCloseClaim(c *Court, cs *claimState) {
 	// no longer policeable and must leave the strips, or its row would linger
 	// forever (§5.3 membership exit).
 	stripExit(c, cs)
+	releaseMetaLatchIfMeta(c, cs)
 }
 
 // Finalize makes a disputed claim's standing provisional verdict FINAL once

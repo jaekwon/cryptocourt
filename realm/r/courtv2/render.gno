@@ -69,7 +69,7 @@ func writeListedByBurn(b *strings.Builder) {
 		if c.tier != tierListed {
 			continue
 		}
-		b.WriteString("- [" + sanitize.InlineText(c.name) + "](/r/cryptocourt/courtv2:" + s + ") — " +
+		b.WriteString("- [" + courtNameFor(c) + "](/r/cryptocourt/courtv2:" + s + ") — " +
 			strconv.FormatUint(c.nextID, 10) + " claims\n")
 	}
 	b.WriteString("\n")
@@ -93,7 +93,7 @@ func writeTier(b *strings.Builder, heading string, tier uint8) {
 	}
 	for _, s := range slugs[:shown] {
 		c := mustCourt(s)
-		b.WriteString("- [" + sanitize.InlineText(c.name) + "](/r/cryptocourt/courtv2:" + s + ") — " +
+		b.WriteString("- [" + courtNameFor(c) + "](/r/cryptocourt/courtv2:" + s + ") — " +
 			strconv.FormatUint(c.nextID, 10) + " claims\n")
 	}
 	if len(slugs) > shown {
@@ -109,7 +109,7 @@ func renderCourt(slug string) string {
 	}
 	c := mustCourt(slug)
 	b := strings.Builder{}
-	b.WriteString("# " + sanitize.InlineText(c.name) + "\n\n")
+	b.WriteString("# " + courtNameFor(c) + "\n\n")
 	b.WriteString("- coin price: " + strconv.FormatInt(c.crv.Price(c.minted), 10) + " ugnot per CC unit (one-way; the GNOT is burned)\n")
 	b.WriteString("- supply: " + strconv.FormatInt(c.coin.TotalSupply(), 10) +
 		" · emitted: " + strconv.FormatInt(c.emittedTotal, 10) + "\n")
@@ -273,7 +273,13 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 
 	b := strings.Builder{}
 	b.WriteString("# Your positions\n\n")
-	b.WriteString("Claim: " + sanitize.InlineText(cs.title) + "\n\n")
+	// Through the SAME text gate as every other surface, with the banner: this
+	// route (…/<slug>/<id>/<addr>, reachable with any address string) was the one
+	// render path that bypassed it, so a purged claim's text stayed publicly
+	// readable and purge — the legal-compliance power — did not actually reach
+	// "every surface".
+	b.WriteString(hideBanner(c, cs))
+	b.WriteString("Claim: " + claimTitleFor(c, cs) + "\n\n")
 	b.WriteString("Address: " + sanitize.InlineText(addrStr) + "\n\n")
 
 	yStake := StakeOf(slug, id, sideYES, who)

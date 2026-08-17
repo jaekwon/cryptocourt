@@ -281,3 +281,50 @@ func TestElectionTurnoutIsDistinctVoters(cur realm, t *testing.T) {
 		t.Fatalf("turnout counts the voter ONCE, got %d", turnout)
 	}
 }
+
+// A candidate the electorate did NOT approve must never install, even when it is
+// the earliest-nominated line inside the margin band. The band is
+// `weight >= maxW - floor`, so whenever the winning approval sits near the floor
+// the band reaches down to zero — and the election opener is always the earliest
+// line, so a griefer's puppet would beat a genuinely-approved challenger for
+// free, permanently unseating the creator and gaining the seeding privilege.
+func TestElectionZeroApprovalCandidateCannotInstall(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("ev7-creator")
+	whale := testutils.TestAddress("ev7-whale")   // never votes
+	small := testutils.TestAddress("ev7-small")   // the only approver
+	griefer := testutils.TestAddress("ev7-grief") // opens with a puppet set
+	honestMod := testutils.TestAddress("ev7-honest")
+	puppet := testutils.TestAddress("ev7-puppet")
+	c := electionCourt(cur, "ev7", creator,
+		[]address{whale, small, griefer},
+		[]int64{900_000_000, 50_000_000, 50_000_000})
+	_ = c
+
+	testing.SetRealm(testing.NewUserRealm(griefer))
+	puppetSet := RegisterModCandidate(cross(cur), "ev7", []address{puppet}, 1)
+	testing.SetRealm(testing.NewUserRealm(small))
+	honestSet := RegisterModCandidate(cross(cur), "ev7", []address{honestMod}, 1)
+
+	// The griefer opens, so their puppet is the EARLIEST line on the ballot.
+	testing.SetRealm(testing.NewUserRealm(griefer))
+	OpenElection(cross(cur), "ev7", puppetSet)
+	testing.SkipHeights(10)
+	testing.SetRealm(testing.NewUserRealm(small))
+	NominateCandidate(cross(cur), "ev7", honestSet)
+	testing.SkipHeights(nominationWindow)
+
+	// Only the honest set is approved; the puppet gets nothing.
+	testing.SetRealm(testing.NewUserRealm(small))
+	ApproveCandidate(cross(cur), "ev7", honestSet)
+
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(small))
+	ResolveElection(cross(cur), "ev7")
+
+	if IsCourtMod("ev7", puppet) {
+		t.Fatal("a candidate with ZERO approvals must never install")
+	}
+	if !IsCourtMod("ev7", honestMod) {
+		t.Fatal("the approved candidate should install")
+	}
+}
