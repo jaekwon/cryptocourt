@@ -11,7 +11,7 @@
 //
 // A realm allocates one Ledger and keeps it in an unexported package variable:
 //
-//	var ledger = grc20votes.NewLedger("Cryptocourt Governance", "COURT", 6, 720)
+//	var ledger = grc20votes.NewLedger("Kourt Governance", "COURT", 6, 720)
 //
 //	func Transfer(cur realm, to address, amount int64) {
 //		if !cur.IsCurrent() {

@@ -1,4 +1,4 @@
-# CryptoCourt web overlay (V2)
+# Kourt web overlay (V2)
 
 A single, self-contained page that reads a deployed `r/kourt/courtv2` realm and
 renders it. **The chain carries all the information; this overlay only makes it

@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.19 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.20 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,34 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.20 — the rename's survivors, and one ticker question for the owner**.
+  The 2026-08-16 cryptocourt→Kourt rename moved directories and import paths but
+  left five *strings* behind, three of them user-visible. Found by grepping the
+  whole tree rather than the realm being worked on:
+  - `realm/r/govern/token.gno` — the governance token's live **name** was
+    `"Cryptocourt Governance"`. Now `"Kourt Governance"`. govern is not part of
+    the V1 freeze, and the comment above those constants explicitly invites
+    changing them pre-deploy. `z_use_filetest.gno`'s expected output updated
+    with it, since the filetest asserts the name.
+  - `realm/r/kourtv1/render.gno` — V1's front page still headed
+    **`# CryptoCourt`**. Now `# Kourt`, matching kourtv2's `platformName`.
+    **Flagged as revertible**: the owner froze V1 *behaviourally, including its
+    internal `COURT` coin symbol*, and this is render copy rather than
+    behaviour — but it is exactly the branding "no more cryptocourt" targets,
+    and no test asserts it.
+  - `realm/p/grc20votes/grc20votes.gno` package-doc example, `web/README.md`
+    heading, and two `REGULATIONS.md` headings.
+
+  **SURFACED, DELIBERATELY NOT CHANGED — for the owner.** govern's
+  `tokenSymbol` is still **`"COURT"`**, and `tokenID` is
+  `"gno.land/r/kourt/govern." + tokenSymbol`, so the symbol is part of the
+  token's wire identity. Three things collide here: the platform ticker is
+  **KOURT**; per-court coins already render `KOURT:SLUG`; and kourtv1's internal
+  `COURT` symbol is explicitly exempted from the rename. A *governance* token
+  called `COURT` is confusable with all three. Changing it is free today (the
+  realm is undeployed and a realm cannot be redeployed at its path) and
+  impossible later. Not decided here because retickering is an owner call and
+  the owner has been specific about tickers.
 - **v0.19 — moderation on a real node, and the read that contradicted its own
   write path**. `kourtv2_moderation.txtar` asserts the §2 constitution through
   the surface a reader actually meets — a node's `qrender` over RPC, not

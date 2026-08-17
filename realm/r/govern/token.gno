@@ -14,7 +14,7 @@ import (
 // the ledger takes them as arguments precisely so it does not have to be
 // forked to do it.
 const (
-	tokenName     = "Cryptocourt Governance"
+	tokenName     = "Kourt Governance"
 	tokenSymbol   = "COURT"
 	tokenDecimals = 6
 	tokenID       = "gno.land/r/kourt/govern." + tokenSymbol

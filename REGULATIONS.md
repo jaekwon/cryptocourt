@@ -18,7 +18,7 @@
 **Master finding:** no U.S. prediction market has EVER been held "not gambling" or
 "not a derivative" on the merits by relabeling. The two proven escapes are (a)
 become a regulated derivative (CEA preemption), or (b) remove the wager substance.
-Cryptocourt V2 takes (b). [SETTLED as to the history; (b)'s specific shape UNTESTED]
+Kourt V2 takes (b). [SETTLED as to the history; (b)'s specific shape UNTESTED]
 
 ## 2. State gambling law (details)
 
@@ -139,7 +139,7 @@ takes (b). [SETTLED as to history]
 | Decentralization / non-custody | Helps securities (efforts-of-others), **does not help** CFTC/gambling (Ooki, Polymarket) |
 | Non-profit / "verdict-as-product" framing | Rhetoric, not doctrine |
 
-## 7. Cryptocourt-specific exposure map (V2)
+## 7. Kourt-specific exposure map (V2)
 
 1. **Emission-funded winner rewards** — recharacterization risk as a common-pool
    prize via dilution (accepted gray, owner sign-off; see PLAN.md §7.2).
