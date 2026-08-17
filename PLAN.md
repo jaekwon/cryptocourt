@@ -1624,6 +1624,35 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.86 — a field documented "for the conservation checks" had no reader, so all NINE of
+  its write sites were deletable in silence.** Swept the terminal-path family
+  (`CloseDeadClaim`, `provCloseClaim`) following v0.85's heuristic, and it led somewhere
+  better than another guard.
+  `Court.deposit` is described in court.gno as "sum of escrowed deposits+fees, **for the
+  conservation checks**". It is written in nine places — one increment at `OpenClaim`, and
+  a decrement for the deposit and for the fee at each of the four disposal paths
+  (`CloseDeadClaim`, `provCloseClaim`, crystallize, conclusive-low burn) — and it was READ
+  NOWHERE. No conservation check consulted it, no accessor exposed it, no test looked at
+  it. Every decrement could be deleted with nothing to notice: the claim's own fields
+  stayed right, the coin moved correctly, and only a number nobody read went wrong.
+  That is v0.84's class taken one step further. Those were guards whose failure showed up
+  on another tree; this is a ledger with no reader at all — the limit case, where the
+  "somewhere else" that disagrees is nowhere.
+  **The fix is not another guard, it is to make the field mean what its comment says.**
+  Two fixtures now assert the invariant the comment describes —
+  `c.deposit == Σ over live claims of (cs.deposit + cs.fee)` — after each disposal path:
+  provClose and the dead-claim close in one court, the draw and the conclusive-low burn in
+  another (separate courts so neither claim's windows are pushed around by the other's
+  clock). ONE assertion pins all nine sites, increment included.
+  Also closed on the same sweep: `provCloseClaim`'s `releasePriority` — **the THIRD terminal
+  path with that gap**, predicted from v0.84 and v0.85 and found where they said it would
+  be — and its tier disposition (final, and LOW; a closed claim left unfinalized or at mid
+  invites a later path to treat it as an ordinary mid one). `CloseDeadClaim` came out
+  otherwise clean: the double-close bar, the answered-claim bar, the timeout, the closed
+  latch, and BOTH directions of its asymmetric disposition (deposit refunded, fee burned)
+  were already pinned.
+  Batch now 241 rows, 0 not caught (14m42s).
+
 - **v0.85 — Finalize is the least-covered function found in this whole sweep: FOUR real
   gaps, including two preconditions that let it write a final verdict onto a claim that
   never earned one.** Fourteen mutations. Nine already held: the double finalize, the

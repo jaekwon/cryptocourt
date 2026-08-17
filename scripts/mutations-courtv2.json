@@ -1552,5 +1552,138 @@
   "label": "Finalize: the route provenance says undisputed",
   "find": "\tcs.route = \"vote\"",
   "replace": "\tcs.route = \"undisputed\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: closes twice, refunding the deposit again",
+  "find": "\tif cs.closed {\n\t\tpanic(\"courtv2: already closed\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: an ANSWERED claim can be killed",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"courtv2: this claim has an answer; it settles, it does not die\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the dead-claim timeout is not waited out",
+  "find": "\tif runtime.ChainHeight() < cs.openedAt+deadClaimTimeout {\n\t\tpanic(\"courtv2: the dead-claim timeout has not passed\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the claim is never marked closed",
+  "find": "\tcs.closed = true\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the fee is refunded instead of burned",
+  "find": "\t\tc.coin.Burn(c.escrow, cs.fee)",
+  "replace": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.fee)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the deposit is burned instead of refunded",
+  "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
+  "replace": "\t\tc.coin.Burn(c.escrow, cs.deposit)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: the court's deposit ledger is not incremented",
+  "find": "\tc.deposit += dep + fee",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the court's deposit ledger is not decremented",
+  "find": "\t\tc.deposit -= cs.deposit",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the court's ledger is not decremented for the fee",
+  "find": "\t\tc.deposit -= cs.fee",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "provCloseClaim: the court's deposit ledger is not decremented",
+  "find": "\t\tc.deposit -= cs.deposit",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "provCloseClaim: the court's ledger is not decremented for the fee",
+  "find": "\t\tc.deposit -= cs.fee",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the court's deposit ledger is not decremented",
+  "find": "\t\tc.deposit -= cs.deposit",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the court's ledger is not decremented for the fee",
+  "find": "\t\tc.deposit -= cs.fee",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "conclusive low: the court's deposit ledger is not decremented",
+  "find": "\t\tc.deposit -= cs.deposit",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "conclusive low: the court's ledger is not decremented for the fee",
+  "find": "\t\tc.deposit -= cs.fee",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "provCloseClaim: the answer bond is never returned",
+  "find": "\tif cs.answerBond > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\t\tcs.answerBond = 0\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "provCloseClaim: the answerer's priority slot is never released",
+  "find": "\treleasePriority(c, cs.answerer, cs.id)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "provCloseClaim: the tier is not finalized",
+  "find": "\tcs.tierFinal = true\n\tif cs.answerBond > 0 {",
+  "replace": "\tif cs.answerBond > 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "provCloseClaim: a closed claim is left at the MID tier",
+  "find": "\tcs.tier = tierLowX",
+  "replace": "\tcs.tier = tierMidX"
  }
 ]
