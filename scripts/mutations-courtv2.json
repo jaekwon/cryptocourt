@@ -3898,5 +3898,131 @@
   "label": "retire: retirement makes the kind LIVE",
   "find": "\te.live = false\n\treturn nil",
   "replace": "\te.live = true\n\treturn nil"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch check: a member naming nothing passes",
+  "find": "\t\te := g.entryOf(m.kind)\n\t\tif e == nil {\n\t\t\treturn govErr(\"no kind called \" + m.kind)\n\t\t}",
+  "replace": "\t\te := g.entryOf(m.kind)"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch check: a member the holders never adopted passes",
+  "find": "\t\tif !e.live {\n\t\t\t// A batch cannot reach a power the holders have not granted.\n\t\t\treturn govErr(m.kind + \" is not adopted\")\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch check: a batch may contain a batch",
+  "find": "\t\tif m.kind == (batchKind{}).Name() {",
+  "replace": "\t\tif m.kind == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch check: a member's own payload is never validated",
+  "find": "\t\tif err := g.checkKind(e.kind, m.payload); err != nil {\n\t\t\treturn govErr(m.kind + \": \" + err.Error())\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch run: a member RETIRED since the vote still runs",
+  "find": "\t\tif e == nil || !e.live {",
+  "replace": "\t\tif e == nil {"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch run: every member is handed the BATCH's sub-realm, not its own",
+  "find": "\t\t\terr = dispatch(e.kind, subPathOf(m.kind), m.payload)",
+  "replace": "\t\t\terr = dispatch(e.kind, subPathOf((batchKind{}).Name()), m.payload)"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch run: a failed member records a failure instead of unwinding the batch",
+  "find": "\t\t\tpanic(ufmt.Sprintf(\"govern: batch member %d (%s) failed: %s\",\n\t\t\t\ti+1, m.kind, err.Error()))",
+  "replace": "\t\t\t_ = i\n\t\t\treturn err"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch run: a built-in member is dispatched as a sub-realm",
+  "find": "\t\tif b, ok := asBuiltin(e.kind); ok {",
+  "replace": "\t\tif b, ok := asBuiltin(e.kind); ok && m.kind == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: a line is not trimmed",
+  "find": "\t\tline = strings.TrimSpace(line)",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: a blank line becomes a member",
+  "find": "\t\tif line == \"\" {\n\t\t\tcontinue\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: the kind is everything up to the LAST space",
+  "find": "\t\tsp := strings.Index(line, \" \")",
+  "replace": "\t\tsp := strings.LastIndex(line, \" \")"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: the kind name swallows its separating space",
+  "find": "\t\tout = append(out, member{kind: line[:sp], payload: strings.TrimSpace(line[sp+1:])})",
+  "replace": "\t\tout = append(out, member{kind: line[:sp+1], payload: strings.TrimSpace(line[sp+1:])})"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: the payload keeps its leading whitespace",
+  "find": "\t\tout = append(out, member{kind: line[:sp], payload: strings.TrimSpace(line[sp+1:])})",
+  "replace": "\t\tout = append(out, member{kind: line[:sp], payload: line[sp+1:]})"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: a ONE-member batch is accepted",
+  "find": "\tif len(out) < 2 {",
+  "replace": "\tif len(out) < 1 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "parseBatch: the member bound is off by one",
+  "find": "\tif len(out) > maxBatch {",
+  "replace": "\tif len(out) > maxBatch+1 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "batch describe: a malformed batch renders as nothing",
+  "find": "\t\treturn \"malformed batch: \" + err.Error()",
+  "replace": "\t\treturn \"\""
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "describeMember: a member naming no kind is not guarded on the page",
+  "find": "\tk := g.anyKind(m.kind)\n\tif k == nil {\n\t\treturn \"_no kind by that name_\"\n\t}",
+  "replace": "\tk := g.anyKind(m.kind)"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "describeMember: the page demands a LIVE kind, panicking on an unadopted member",
+  "find": "\tk := g.anyKind(m.kind)",
+  "replace": "\tk := g.kindOf(m.kind)"
  }
 ]

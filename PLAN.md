@@ -1624,6 +1624,35 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.05 — batch.gno: 10 of 19 caught, and the survivor that matters is the one guard a batch
+  exists to make true.** 144 lines with no `p/`-side tests at all; everything reaching it came
+  from the realm suite. Already held: a member the holders never adopted, a batch containing a
+  batch, a member's payload going unvalidated, a member retired between the vote and execution,
+  and four of `parseBatch`'s five structural rules (the first-space split, the trim, the blank
+  line, the two-member minimum, the bound).
+  **`err = dispatch(e.kind, subPathOf(m.kind), m.payload)` — each member under ITS OWN
+  sub-realm.** Mutate it to the batch's own path and nothing objected. That is the escalation the
+  per-member sub-path exists to prevent: a governed realm gates on the sub-path of the power it
+  granted, so a member dispatched as `govern-batch` is seen as the batch rather than as the power
+  it is, and one adoption would give every member the reach of all of them. Nothing could see it
+  because the sub-path is visible only to the DISPATCHER, which the consuming realm supplies — a
+  test that supplies a recording one is the only observer there can be, and none did.
+  Three more survivors are all in the DESCRIBE path, and all reachable through `Preview`, which
+  is a read taking caller-supplied strings — a UI showing somebody their proposal before they pay
+  for it. So `describe` sees member names that `check` would refuse: dropping the `k == nil` guard
+  panics the page, and swapping `anyKind` for `kindOf` panics on a member that is offered but not
+  adopted. The second is worth stating twice, because it is not only about previews: a batch
+  proposal that has already been voted on enters exactly that state the moment one member is
+  retired, so a page rendered with `kindOf` would panic on a proposal that already exists.
+  One equivalence, and it is a pleasing one: `parseBatch`'s `sp <= 0` is equivalent to `sp < 0`
+  BECAUSE of the `strings.TrimSpace` two lines above it — with the line already trimmed, a first
+  space at index zero cannot occur. The guard that makes the other guard redundant is itself
+  tested, so the redundancy is safe rather than accidental; recorded in the new test.
+  And again, both rows that first came back INVALID proved to be caught by existing tests once
+  valid. Three firings running, every INVALID row has been a false alarm rather than a gap —
+  worth remembering as the harness's most misleading output.
+  Batch now 575 rows: 574 caught, 0 not caught, one surviving by design.
+
 - **v1.04 — the adoption path and the terms: 26 of 39 caught, and all thirteen survivors were
   VALIDATOR LEGS nothing had ever exercised.** The third governor unit: `isReserved`, `Offer`,
   `mustBeUsableName`, `mustBeUsableTitle`, `TextOnly`, `saneRules`, `BootstrapRules`,

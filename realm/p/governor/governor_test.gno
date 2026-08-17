@@ -963,3 +963,131 @@ func TestAdoptAndRetireCheckTheirPreconditions(t *testing.T) {
 		t.Error(`the bare prefix "govern:" is not treated as reserved`)
 	}
 }
+
+// recordingDispatch keeps the sub-path each member was dispatched under, which
+// is the only way to observe the one thing a batch promises about authority.
+type recordingDispatch struct {
+	paths []string
+}
+
+func (d *recordingDispatch) run(k Kind, sub, pay string) error {
+	d.paths = append(d.paths, sub)
+	return dispatch(k, sub, pay)
+}
+
+// Each batch member is handed ITS OWN sub-realm, not the batch's, found
+// surviving — and it is the sharpest thing in batch.gno.
+//
+// A batch is a way to decide several things at once. It is not a way to launder
+// one kind's authority into another's, and the sub-path is the whole of that
+// distinction: a governed realm gates on the sub-path of the power it granted,
+// so a member dispatched under `govern-batch` is seen as the batch rather than as
+// the power it is. Adopt a batch once and every member reaches everything any
+// member could — which is precisely the escalation the per-member sub-path
+// prevents.
+//
+// Nothing could see it because the sub-path is only visible to the DISPATCHER,
+// which the consuming realm supplies. A test that supplies a recording one is the
+// only observer there can be.
+func TestABatchGivesEachMemberItsOwnSubRealm(t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	// Retune the built-in for the test the way armed does: BootstrapRules carries
+	// a two-day timelock, and this test is about the dispatch rather than the wait.
+	g.kinds.Set(reserved+"batch", &entry{kind: batchKind{}, live: true, rules: Rules{
+		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1000,
+	}})
+	one, two := int64(-1), int64(-1)
+	g.Adopt(setFee{name: "treasury/spend", ran: &one}, BootstrapRules())
+	g.Adopt(setFee{name: "toll", ran: &two}, BootstrapRules())
+
+	id := g.Propose(gAlice, reserved+"batch", "treasury/spend 100\ntoll 250", "two at once")
+	g.Vote(gAlice, id, "yes")
+	g.Vote(gBob, id, "yes")
+	if got := g.State(id); got != "succeeded" {
+		t.Fatalf("setup: the batch is %q, want succeeded", got)
+	}
+
+	rec := &recordingDispatch{}
+	g.Execute(gCarl, id, rec.run)
+	if got := g.State(id); got != "executed" {
+		t.Fatalf("the batch is %q after running, want executed", got)
+	}
+	if len(rec.paths) != 2 {
+		t.Fatalf("the batch dispatched %d members, want 2", len(rec.paths))
+	}
+	// Neither member may arrive under the batch's own path — that is the mutation
+	// this test exists for, stated before the positive form so the failure names it.
+	batchPath := subPathOf(reserved + "batch")
+	for i, got := range rec.paths {
+		if got == batchPath {
+			t.Errorf("member %d was dispatched under the BATCH's sub-realm %q — one "+
+				"adoption would grant every member the reach of all of them", i+1, got)
+		}
+	}
+	if got, want := rec.paths[0], subPathOf("treasury/spend"); got != want {
+		t.Errorf("the first member ran under %q, want %q", got, want)
+	}
+	if got, want := rec.paths[1], subPathOf("toll"); got != want {
+		t.Errorf("the second member ran under %q, want %q", got, want)
+	}
+	// And both actually ran, so the paths above are not from a batch that did
+	// nothing.
+	if one != 100 || two != 250 {
+		t.Errorf("the members recorded %d and %d, want 100 and 250", one, two)
+	}
+}
+
+// A batch's PAGE has to survive members that are missing or not adopted, found
+// surviving in three places at once.
+//
+// Reachable through Preview, which is a read taking caller-supplied strings — a
+// UI showing somebody their proposal before they pay for it — so the describe
+// path sees names that Check would refuse and must not panic on them. The
+// `anyKind` there is load-bearing for a second reason: `kindOf` demands a LIVE
+// kind, and a batch proposal that has already been voted on hits exactly that
+// state the moment one of its members is retired, so a page rendered with kindOf
+// would panic on a proposal that already exists.
+func TestABatchsPageSurvivesAMemberThatIsGoneOrNotAdopted(t *testing.T) {
+	g, _ := fresh()
+
+	// A member nothing was ever offered under: the page says so.
+	out := g.Preview(reserved+"batch", "nosuch/kind 1\nother/kind 2")
+	if !contains(out, "no kind by that name") {
+		t.Errorf("a batch naming an unknown member rendered as:\n%s", out)
+	}
+
+	// A member OFFERED but not adopted: described from its own kind, because
+	// judging an adoption vote is exactly when a reader needs to see it.
+	g.Offer(gAlice, setFee{name: "shelved/k", ran: new(int64)}, BootstrapRules())
+	g.Adopt(setFee{name: "live/k", ran: new(int64)}, BootstrapRules())
+	out = g.Preview(reserved+"batch", "shelved/k 1\nlive/k 2")
+	if !contains(out, "set the fee to 1") {
+		t.Errorf("a shelved member was not described on the page:\n%s", out)
+	}
+
+	// And a malformed batch explains itself rather than rendering blank.
+	out = g.Preview(reserved+"batch", "onlyonemember 1")
+	if !contains(out, "malformed batch") {
+		t.Errorf("a malformed batch rendered as:\n%s", out)
+	}
+}
+
+// A member line splits at its FIRST space and the payload is trimmed, so a batch
+// somebody lined up by eye still parses. The trim was unheld, and it is also what
+// makes the `sp <= 0` guard above it equivalent to `sp < 0`: with the line already
+// trimmed, a first space at index zero cannot happen.
+func TestABatchLineSplitsAtItsFirstSpace(t *testing.T) {
+	ms, err := parseBatch("fee   250\n  toll 1  ")
+	if err != nil {
+		t.Fatalf("a batch with ordinary spacing was refused: %v", err)
+	}
+	if len(ms) != 2 {
+		t.Fatalf("parsed %d members, want 2", len(ms))
+	}
+	if ms[0].kind != "fee" || ms[0].payload != "250" {
+		t.Errorf("first member is %q/%q, want fee/250", ms[0].kind, ms[0].payload)
+	}
+	if ms[1].kind != "toll" || ms[1].payload != "1" {
+		t.Errorf("second member is %q/%q, want toll/1", ms[1].kind, ms[1].payload)
+	}
+}
