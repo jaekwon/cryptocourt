@@ -59,6 +59,38 @@ def real_root():
     return r if r and os.path.isdir(r) else ""
 
 
+def reap(quiet=True):
+    """Remove shadow roots whose owning process is gone.
+
+    A killed run leaves its root behind — harmless, since nothing reads it, but 14MB
+    a time and nobody's job to clear. The owner's pid is in the name, so the next
+    build can tell a live root from an abandoned one and take only the latter. Live
+    roots are never touched: two runs in parallel is the point of this module.
+    """
+    if not os.path.isdir(BASE):
+        return 0
+    n = 0
+    for name in os.listdir(BASE):
+        if not name.startswith(PREFIX):
+            continue
+        tail = name.rsplit("-", 1)[-1]
+        if not tail.isdigit():
+            continue
+        try:
+            os.kill(int(tail), 0)
+            continue  # alive, or ours
+        except ProcessLookupError:
+            pass
+        except OSError:
+            continue  # somebody else's live process
+        shutil.rmtree(os.path.join(BASE, name), ignore_errors=True)
+        n += 1
+    if n and not quiet:
+        print(f"gnoroot: reaped {n} shadow root(s) left by runs that did not finish",
+              file=sys.stderr)
+    return n
+
+
 def build(real, label, pid=None):
     """Shadow `real` and return the new root's path.
 
@@ -68,6 +100,7 @@ def build(real, label, pid=None):
     tree, which costs more than the half second it saves.
     """
     pid = os.getpid() if pid is None else pid
+    reap()  # clear anything a killed run left, before adding one more
     # The worktree name, so a listing of BASE says whose each root is.
     who = os.path.basename(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     root = os.path.join(BASE, f"{PREFIX}{who}-{label}-{pid}")

@@ -1919,3 +1919,62 @@ func TestVoteQualityNeedsWeightAndAnOpenWindow(cur realm, t *testing.T) {
 		VoteQuality(cross(cur), "qfw", id, qualityMid)
 	})
 }
+
+// OpenFlag's FIRST precondition — an answered claim — found surviving, and it is the
+// only one of OpenFlag's eight that nothing else re-refuses. Measured with the guard
+// removed: the flag OPENS on a claim that was never answered. flagOpen latches, a bond
+// moves into escrow, and the flagger is recorded, all against a claim with nothing to
+// judge — quality is a verdict on an ANSWER, and there is none.
+//
+// Two details make it worse than a stray state write. The bond is at its FLOOR: the
+// b0 formula is a share of xBarFrozen, which PostAnswer sets, so on an unanswered claim
+// it is zero and b0 falls back to flagMinCC — the cheapest the flag lane ever gets.
+// And staking is still OPEN (frozenAt == 0 is exactly what that means), so the flag
+// runs against a pool that is still moving.
+//
+// The neighbouring guards do not cover for it. slotConsumed is false, pendingSlash is
+// zero, no dispute is open, nothing is crystallized or closed, and flagCycles is zero
+// so the cooldown short-circuits. This one stands alone.
+func TestOpenFlagRefusesAnUnansweredClaim(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qfu-alice")
+	bob := testutils.TestAddress("qfu-bob")
+	c := testCourt(cur, "qfu", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qfu", "opened, staked, never answered")
+	matureOI(cur, "qfu", id, alice, 200_000_000)
+
+	cs := mustClaim(c, id)
+	if cs.frozenAt != 0 {
+		t.Fatalf("setup: this claim must be unanswered, got frozenAt=%d", cs.frozenAt)
+	}
+	// Nothing else here would refuse the flag, which is why this guard is load-bearing
+	// rather than one more layer: assert that, so the arm below cannot pass by accident.
+	if cs.slotConsumed || cs.pendingSlash != 0 || cs.disputeOpen || cs.crystallized ||
+		cs.provClose || cs.closed || cs.flagCycles != 0 {
+		t.Fatalf("setup: every OTHER precondition must be satisfied, so that the "+
+			"answered-claim check is the only thing standing: consumed=%v pending=%d "+
+			"dispute=%v crystallized=%v provClose=%v closed=%v cycles=%d",
+			cs.slotConsumed, cs.pendingSlash, cs.disputeOpen, cs.crystallized,
+			cs.provClose, cs.closed, cs.flagCycles)
+	}
+
+	escrowBefore := c.coin.BalanceOf(c.escrow)
+	bobBefore := c.coin.BalanceOf(bob)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "only an answered claim", func() {
+		OpenFlag(cross(cur), "qfu", id)
+	})
+	// And no bond moved: the refusal happens before the transfer.
+	if got := c.coin.BalanceOf(c.escrow); got != escrowBefore {
+		t.Fatalf("a refused flag must move no coin into escrow: %d vs %d",
+			got, escrowBefore)
+	}
+	if got := c.coin.BalanceOf(bob); got != bobBefore {
+		t.Fatalf("and none out of the flagger: %d vs %d", got, bobBefore)
+	}
+	if cs.flagOpen {
+		t.Fatal("and must leave no open flag behind")
+	}
+}

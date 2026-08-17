@@ -1624,6 +1624,43 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.80 — OpenFlag swept: eight preconditions, and the one that survives is the only
+  one no neighbour re-refuses — an UNANSWERED claim was flaggable.** Eleven mutations over
+  `OpenFlag` and `openQualityTally`. Eight already held, including both halves of the
+  M3-MED-1 re-flag cooldown (removing it and starting it a cycle late are both caught), the
+  bond actually being posted, the flagger being the bounty beneficiary rather than the
+  answerer, the consumed-slot latch, the dispute-open bar, and both halves of the fresh
+  tally — the seq bump and the accumulator reset.
+  **The real one: `cs.frozenAt == 0`.** Measured with the guard removed, the flag OPENS on
+  a claim that was never answered — `flagOpen` latches, a bond moves into escrow, the
+  flagger is recorded — against a claim with nothing to judge, since quality is a verdict
+  on an ANSWER. Two details make it worse than a stray write. The bond is at its FLOOR: b0
+  is a share of `xBarFrozen`, which `PostAnswer` sets, so on an unanswered claim it is zero
+  and b0 falls back to `flagMinCC` — the cheapest the flag lane ever gets. And staking is
+  still open (`frozenAt == 0` is what that means), so the flag runs against a pool that is
+  still moving. The fixture asserts every OTHER precondition is satisfied first, so the arm
+  cannot pass by way of a neighbour, and that a refused flag moves no coin either way.
+  **Two survived and are EQUIVALENT, both measured.** `OpenFlag`'s `cs.lastFlagAt` restamp
+  is a DEAD WRITE: the cooldown is gated on `flagCycles >= 1`, and the only place that
+  becomes true is `ResolveFlag`'s inconclusive branch, which sets `lastFlagAt` itself. So
+  the anchor that gates the cooldown is always the resolve's, and the open's value is
+  overwritten before anything can read it — confirmed by removing it and watching the
+  cooldown still refuse a back-to-back reflag. (Removable as a simplification; left alone,
+  since it is harmless and this is a money path.) And `cs.pendingSlash > 0` is re-refused by
+  `slotConsumed`, which the probe confirms is true whenever `pendingSlash` is positive —
+  the slash-grade path latches both.
+  **The v0.79 refactor was confirmed by an accident.** The batch outgrew a ten-minute
+  ceiling and was KILLED mid-run. Under the old design that left a mutation in the source;
+  now the realm came out clean with no backup files and nothing to recover — the property
+  claimed last version, tested by a real interruption rather than a constructed one.
+  What it did leave was its shadow GNOROOT, and two had accumulated. `gnoroot.build` now
+  REAPS roots whose owning pid is gone before making its own: the pid is already in the
+  name, so an abandoned root is distinguishable from a live one, and live ones are never
+  touched — deleting the tree a running suite is testing against would be the very
+  collision this module exists to remove. Two more self-test controls, one per direction.
+  Batch now 166 rows, all caught, none invalid — and at ~9¼ minutes it no longer fits in
+  one foreground run.
+
 - **v0.79 — the ACCRUAL CLOCK swept: P10's carry was unpinned, and the test that looks
   like it covers P10 cannot, because it walks a period in one segment.** `emission.gno`'s
   clock is the other half of the minting path and it governs the LOCKED ceiling. Nine

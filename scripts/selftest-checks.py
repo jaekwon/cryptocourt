@@ -271,6 +271,17 @@ else:
     rootcase("removing a non-shadow under the base is refused",
              gnoroot.remove(os.path.join(gnoroot.BASE, "not-a-shadow")) == 1)
 
+    # The reaper must take an ABANDONED root and leave a live one alone. Getting
+    # this backwards deletes the tree a running suite is testing against, which
+    # is the same collision the whole module exists to remove.
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    ghost = os.path.join(gnoroot.BASE, f"{gnoroot.PREFIX}selftest-ghost-{dead.pid}")
+    os.makedirs(ghost, exist_ok=True)
+    gnoroot.reap()
+    rootcase("an abandoned root is reaped", not os.path.exists(ghost))
+    rootcase("a live root survives the reaper", os.path.isdir(a) and os.path.isdir(b))
+
     # And removal must unlink the symlinks rather than follow them.
     before = sorted(os.listdir(real))
     gnoroot.remove(a)

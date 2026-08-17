@@ -1097,5 +1097,68 @@
   "label": "touch: a segment is not clamped to the period boundary",
   "find": "\t\tif boundary < segEnd {\n\t\t\tsegEnd = boundary\n\t\t}",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: an unanswered claim can be flagged",
+  "find": "\tif cs.frozenAt == 0 {\n\t\tpanic(\"courtv2: only an answered claim can be quality-flagged\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: the re-flag cooldown never applies (M3-MED-1)",
+  "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: the cooldown starts one cycle late",
+  "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
+  "replace": "\tif cs.flagCycles >= 2 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: the flag bond is never posted",
+  "find": "\tc.coin.Transfer(who, c.escrow, bond)\n\tcs.flagOpen = true",
+  "replace": "\tcs.flagOpen = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: the bounty beneficiary is the answerer, not the flagger",
+  "find": "\tcs.flagger = who",
+  "replace": "\tcs.flagger = cs.answerer"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: a consumed flag slot is reusable",
+  "find": "\tif cs.slotConsumed {\n\t\tpanic(\"courtv2: the flag slot was consumed by a conclusive vote\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "OpenFlag: a flag opens while a dispute is open",
+  "find": "\tif cs.disputeOpen {\n\t\tpanic(\"courtv2: a dispute is open; its vote already carries quality\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "openQualityTally: the tally seq is not advanced",
+  "find": "\tcs.qVoteSeq++\n\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0",
+  "replace": "\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "openQualityTally: the accumulators are not reset",
+  "find": "\tcs.qVoteSeq++\n\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0",
+  "replace": "\tcs.qVoteSeq++"
  }
 ]
