@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.15 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.17 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,77 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.17 — the isolation gate had never run on this code**. Noticed from a
+  number that did not move: `make isolation-test` printed "151 tests" both
+  before and after kourtv2 gained two test functions. `scripts/check-isolation.py`
+  keeps its scope in a hand-maintained `REALMS` list, and that list had drifted
+  from the Makefile's: it swept **151 of the 388 tests `realm-test` compiles**,
+  and every one of the 237 it skipped was the newer half of the tree —
+  **kourtv1, kourtv2, and p/twap, p/cshares, p/tickbook, p/curve**. So the whole
+  moderation layer, all 110 kourtv2 tests, had never been isolation-checked,
+  while three green gates were being cited on every commit.
+  The script's own docstring already forbade this — *"Everything `make
+  realm-test` compiles, not just the realm most likely to have the problem.
+  Covering where somebody has already looked is opt-in coverage, and opt-in
+  coverage is how a citation goes unregistered."* The list had simply not kept
+  up with the tree. `REALMS` now mirrors the Makefile's two lists exactly: 11
+  packages, 388 tests.
+  **What widening it found:** exactly one real failure, and not in the new code
+  — **`TestDirectoryTiers` (kourtv1)**. Its own line 1 admitted the dependency:
+  `admin := DirectoryAdmin() // the first court's creator, set across the suite`.
+  The directory admin is whoever created the first court in the process, so run
+  ALONE the test's own `dir-court` was that first court and its supposed
+  non-admin *was* the admin — the "a non-admin cannot curate" assertion passed
+  in company and asserted nothing by itself. Fixed by seeding a court from a
+  separate address so an admin exists either way, then reading it back. All 110
+  kourtv2 tests passed alone unchanged.
+  **Lesson, and it generalises past this repo:** a gate whose scope is a
+  hand-maintained list drifts silently, because a passing run looks identical
+  either way. The only symptom is a count that stops moving — so print the
+  count, and watch it. Backlog: derive `REALMS` from the Makefile, or assert the
+  two agree, so the drift cannot recur.
+- **v0.16 — the moderation layer's dead state, and what it was hiding**. A
+  sweep for written-but-never-read fields, on the principle that state which
+  *looks* load-bearing is worse than no state at all — a future reader trusts it.
+  - **`courtActByOthers` / `metaActByOthers` / `globalActHeight` DELETED.** Their
+    comment said the meta staleness guard read them "(§3.3 g4)". Nothing did.
+    They are residue of a per-claim third-party refusal that was **deliberately
+    removed** — see the `verbUnhide` comment in `meta.gno`: refusing on a
+    same-direction third-party clear let a moderator re-hide for free. Kept as
+    written-only stamps, they advertised a guard that did not exist. The mod log
+    already carries the same who/when for render.
+  - **`stripEnteredAt` DELETED** — the strip key already encodes the deadline it
+    would have duplicated.
+  - **`approval.actor0` / `.height` DELETED**, with the reason recorded at the
+    struct: re-add them *together with a sweep* when pending entries get an
+    expiry. **Noted as a real gap:** today a member can leave unfired proposals
+    outstanding forever and nothing prunes `pending`.
+  - **`suspendedAt` WIRED** (it is the only record of when a suspension began),
+    and a new **`suspendActByGlobal`** stamped by the two global-DAO suspension
+    verbs — `ClearCourtSuspension` and `GlobalSuspendSet` **stamped nothing at
+    all**, so a meta verdict filed *before* a global decision could execute
+    after it and silently undo the legal backstop. The meta staleness guard now
+    reads it, refusing only **opposite-direction** acts, which is the rule
+    `verbUnhide` already settled on: refusing on a same-direction act buys
+    nothing (the verdict's goal is already achieved) and costs a re-appeal.
+  - **`maxModSetSize = 32`**, enforced at `canonicalMembers` — the one chokepoint
+    `AppointMods` and `RegisterModCandidate` share. `currentSetID` concatenates
+    every member into one string, so it is O(n²), **and it sits on the suspend
+    path**: uncapped, a set could be grown until the global DAO's and the meta
+    court's emergency hammer no longer fit in a transaction — a set making
+    itself too big to suspend.
+  - **`ensureClaimMod` moved AFTER `approveAction`** in `HideItem`, `GlobalHide`
+    and `PurgeClaim`. Allocating on the *first* approval let one member of an
+    m>1 set mint an empty `claimMod` per claim — rows carrying no act, costing
+    storage, that `renderModLog` and every claims-tree walk must step over. Pure
+    griefing of a set the griefer cannot otherwise act for. The pre-vote reads
+    (the I8 re-hide cooldown, the §512(g) re-set window) now go through
+    `lookupClaimMod`, and `mustClaim` still runs first so a nonexistent claim
+    is refused whether or not the act fires.
+
+  Tests: `TestModSetSizeIsCapped`, `TestUnfiredApprovalAllocatesNothing`, and
+  `TestMetaLifecycleGuards` §10 (the global DAO suspends then clears while an
+  appeal is in flight; the stale `suspend` verdict must refuse).
 - **v0.15 — meta's supply floors, re-derived (3 identical adversarial
   economists; the SAME bug class as v0.14, one lane over)**. The panel was asked
   only to re-size `metaFloorBps`, and found instead that the fixed constants

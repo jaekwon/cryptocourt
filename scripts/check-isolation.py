@@ -23,8 +23,8 @@ wrong thing.
     python3 scripts/check-isolation.py
     python3 scripts/check-isolation.py --only TestSomething   # one test
 
-The whole sweep runs each suite once per test — 143 of them, a few minutes — so
-it is its own target rather than part of realm-test. --only exists so a control
+The whole sweep runs each suite once per test — 388 of them, about ten minutes
+— so it is its own target rather than part of realm-test. --only exists so a control
 can prove this guard fires without paying for the sweep.
 
 Everything `make realm-test` compiles, not just the realm most likely to have
@@ -49,16 +49,38 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Everything `make realm-test` compiles, staged the same way it stages them.
-DEP = (os.path.join(REPO, "realm/p/checkpoint"),
-       "examples/gno.land/p/kourt/checkpoint/v0")
-REALMS = [
-    (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/kourt/checkpoint/v0"),
-    (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/kourt/grc20votes/v0"),
-    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/kourt/governor/v0"),
-    (os.path.join(REPO, "realm/r/govern"), "examples/gno.land/r/kourt/govern"),
-    (os.path.join(REPO, "realm/r/offerer"), "examples/gno.land/r/kourt/offerer"),
-]
+# DERIVED from the Makefile, deliberately, because the hand-maintained version
+# of this list drifted and nothing noticed: it swept 151 tests while realm-test
+# compiled 388, and every package it skipped was the newer half of the tree
+# (kourtv1, kourtv2, p/twap, p/cshares, p/tickbook, p/curve). A gate whose scope
+# is maintained by hand fails open — a passing run looks identical whether it
+# covered everything or a third of it, and the only symptom is a count that
+# stops moving.
+#
+# Parsing a Makefile is not elegant, but it fails LOUDLY: if either loop stops
+# matching, realms() raises and the sweep refuses to run, where the previous
+# arrangement just quietly swept less. One source of truth, and it is the same
+# one the build uses.
+def realms():
+    mk = open(os.path.join(REPO, "Makefile")).read()
+    pkgs = re.search(r"for p in ([\w \t-]+); do", mk)
+    rlms = re.search(r"for r in ([\w \t-]+); do", mk)
+    if not pkgs or not rlms:
+        raise SystemExit(
+            "check-isolation: cannot read realm-test's package lists out of the "
+            "Makefile. Fix the parse rather than hardcoding a list here — a "
+            "hardcoded one is what silently stopped covering kourtv2.")
+    out = [(os.path.join(REPO, "realm/p", n), f"examples/gno.land/p/kourt/{n}/v0")
+           for n in pkgs.group(1).split()]
+    out += [(os.path.join(REPO, "realm/r", n), f"examples/gno.land/r/kourt/{n}")
+            for n in rlms.group(1).split()]
+    for src, _ in out:
+        if not os.path.isdir(src):
+            raise SystemExit(f"check-isolation: {src} is in the Makefile but not on disk")
+    return out
 
+
+REALMS = realms()
 
 def stage(root):
     for src, rel in REALMS:

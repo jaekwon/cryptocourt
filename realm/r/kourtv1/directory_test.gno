@@ -8,8 +8,21 @@ import (
 )
 
 func TestDirectoryTiers(cur realm, t *testing.T) {
-	admin := DirectoryAdmin() // the first court's creator, set across the suite
+	// The directory admin is whoever created the FIRST court in the process.
+	// This used to just read DirectoryAdmin() and trust a neighbour to have
+	// created one; run alone, "dir-court" below WAS the first court, so `other`
+	// became the admin and the non-admin case asserted nothing. Seed a court
+	// from a separate address so an admin exists either way, then read it back
+	// — if a neighbour did get there first, theirs is still a real admin, and
+	// it is never `other`.
+	seed := testutils.TestAddress("dir-seed")
+	testing.SetRealm(testing.NewUserRealm(seed))
+	StartCourt(cross(cur), "dirseed", "Directory Seed")
+	admin := DirectoryAdmin()
 	other := testutils.TestAddress("dir-other")
+	if admin == other {
+		t.Fatal("fixture: the curator and the non-curator must be different addresses")
+	}
 
 	testing.SetRealm(testing.NewUserRealm(other))
 	StartCourt(cross(cur), "dir-court", "Directory Court")
