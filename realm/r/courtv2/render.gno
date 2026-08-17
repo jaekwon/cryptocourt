@@ -333,12 +333,15 @@ func claimStatus(cs *claimState) string {
 	}
 }
 
-// pct renders a basis-point-precision percentage from two int64s.
+// pct renders a basis-point-precision percentage from two int64s. num can be a
+// conviction-CC value, which is stake×TIME and so NOT bounded by supply — a bare
+// num*10000 wraps for a whale on a long-open claim (math-audit MED-1). The
+// 128-bit intermediate is overflow-proof (num ≤ den here, so bps ≤ 10000).
 func pct(num, den int64) string {
-	if den <= 0 {
+	if den <= 0 || num < 0 {
 		return "—"
 	}
-	bps := num * 10000 / den
+	bps := mulDiv128(num, 10000, den)
 	return strconv.FormatInt(bps/100, 10) + "." + pad2(bps%100) + "%"
 }
 

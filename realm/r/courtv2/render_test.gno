@@ -189,3 +189,23 @@ func TestRenderShowsAnswererRecord(cur realm, t *testing.T) {
 		t.Fatal("the priority line must be hidden until the gate is armed")
 	}
 }
+
+// math-audit MED-1: pct must not wrap when num is a conviction-CC value (stake×
+// time, NOT bounded by supply). A whale on a long-open claim can drive
+// convToCC past MaxInt64/10000; the 128-bit pct must still yield a sane ratio.
+func TestPctNoOverflowAtWhaleConviction(cur realm, t *testing.T) {
+	// yc near the convToCC ceiling (~7e18); a bare yc*10000 would wrap negative.
+	yc := int64(7_000_000_000_000_000_000)
+	if got := pct(yc, yc); got != "100.00%" {
+		t.Fatalf("pct(yc,yc) must be 100%%, got %q (bare *10000 would have wrapped)", got)
+	}
+	// ~two-thirds split at huge magnitude stays sane, never negative.
+	out := pct(2*(yc/3), yc)
+	if len(out) == 0 || out[0] == '-' {
+		t.Fatalf("pct must never render a negative/garbage ratio: %q", out)
+	}
+	// Degenerate guards.
+	if pct(0, 0) != "—" || pct(-1, 10) != "—" {
+		t.Fatal("pct guards den<=0 and num<0")
+	}
+}

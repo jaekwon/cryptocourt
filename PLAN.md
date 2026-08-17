@@ -1610,6 +1610,35 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.41 — adversarial overflow/underflow math audit (owner-directed).** A
+  dedicated fresh-eyes pass over every arithmetic site — `×Bps`, `×10000`,
+  `×2`/`×3`, all subtractions, the u128 conviction integrals — from an attacker's
+  angle. Verdict: **0 CRITICAL, 0 HIGH, 1 MED, 6 NOTE.** The load-bearing safety
+  story held up: `mustInvariants` caps `curveCap` so total supply can never exceed
+  ≈ MaxInt64/Bps, which is what makes every supply-derived `×Bps`/`×10000` product
+  fit int64 — and every silent-wrap subtraction (reservoir lanes, emission
+  queue) was already guarded. The audit's one real correction to my own model:
+  **conviction (the `convToCC` result) is stake × TIME, so it is NOT bounded by
+  supply** — a whale on a long-open claim can push it past MaxInt64/10000, and it
+  is the single quantity that can. That made two bare conviction×constant sites
+  reachable-in-principle wraps, both now on the 128-bit path the winner-share and
+  slash-draw arms already used, no money-path logic changed:
+  - **MED-1 — `pct` (render).** `num*10000/den` wrapped negative at conviction
+    scale (a display ratio, so cosmetic, but it renders garbage). Now
+    `mulDiv128(num, 10000, den)` with a `num < 0` guard; `num ≤ den` here so the
+    result stays ≤ 10000. Regression `TestPctNoOverflowAtWhaleConviction` crafts a
+    ~7e18 numerator and asserts a sane percentage.
+  - **NOTE-2 — `carrotTotal` (crystallize).** `midGross*splitCarrot/100` where
+    `midGross` is conviction → `mulDiv128`; a wrap here would otherwise surface as
+    a `PullCarrot` panic only at ~millennia scale.
+  - **NOTE-6 — `mulDiv128` (stake) honors its contract.** The `hi < den` guard
+    bounds the quotient to uint64, but a value in (MaxInt64, 2^64) would still
+    wrap silently through `int64(q)`. Now it panics — unreachable at bounded
+    inputs, but the discipline is fail-loud, never silent-wrong.
+  NOTE-3/4/5/7 are millennia-scale defensive panics or already-documented-handled
+  (no change). Gate green: `make check` (all 11 suites + citation/docnumber/storage
+  guards) and the staged `courtv2` suite. No economic behavior changed — this is
+  overflow-hardening of a display path plus two extreme-scale defensive panics.
 - **v0.40 — draw-proportional anti-mill slash (owner-directed, three-designer
   convergence).** The P7 residual — a patient/idle-capital mill's punishment
   didn't track its hold-time-scaled draw — is now closed on the reachable

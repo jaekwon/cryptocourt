@@ -296,6 +296,13 @@ func mulDiv128(a, b, den int64) int64 {
 		panic("courtv2: mulDiv128 quotient overflow")
 	}
 	q, _ := bits.Div64(hi, lo, uint64(den))
+	// Honor the contract (math-audit NOTE-6): the hi<den guard only bounds q to
+	// uint64; a quotient in (MaxInt64, 2^64) would silently wrap through
+	// int64(q). Fail loud instead — unreachable at bounded inputs, but the
+	// discipline is fail-loud, never silent-wrong.
+	if q > 9223372036854775807 {
+		panic("courtv2: mulDiv128 quotient exceeds int64")
+	}
 	return int64(q)
 }
 
