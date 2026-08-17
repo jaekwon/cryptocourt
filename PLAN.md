@@ -1624,6 +1624,30 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.67 — batch-coverage sweep: `answer.gno` had two mutations for the file that sizes
+  the bond, and the cap's binding half was open.** Checked the batch against the source
+  tree — every courtv2 file had at least one row, but `claim.gno`, `court.gno`,
+  `directory.gno` and `answer.gno` had one or two each, and `answer.gno` is where the bond
+  is sized and the freeze is pinned. Seven mutations there; six caught (the flat-arm half
+  of the floor, H1's write side, the P6 base pin, the escrow transfer, and both floor
+  removals once well-formed), one surviving: the court's `answerBondCapCC` clamp.
+  `TestBondCollateralizesSlashUnderCourtCap` sets the cap to 1 and asserts
+  `bond >= slashSizeFor`, so it pins the case where the FLOOR overrides a tiny cap — and an
+  uncapped bond of 50%·X̄ satisfies that too. The half nothing covered is the cap actually
+  BINDING, which is the knob's only purpose. `TestAnswerBondCapBindsWhenTheFloorIsBelowIt`
+  places the cap strictly between the flat floor (4.5%·X̄) and the uncapped bond (50%·X̄) and
+  requires the bond to equal the cap; together the two fixtures pin the ordering
+  answer.gno spells out — floor applied AFTER the cap, because an uncollateralized slash is
+  worse than an over-large bond and "the cap must not re-open the hole".
+  **THIRD correction on the collateralization floor, and this one retires the topic.** I
+  reported it as a survivor twice: in v0.62 on a mutation I had written as `_ = 0`
+  appended (a no-op that tested nothing), and again this firing on one that failed to
+  BUILD. Well-formed, it is CAUGHT by the existing fixture, and so is the
+  floor-before-cap reordering. The floor was never unpinned; my mutations were malformed.
+  Three strikes on the same guard is worth stating plainly: I was pattern-matching "audit
+  round 2 comment, therefore probably untested" instead of reading the harness's verdict
+  column, which said INVALID both times and not SURVIVED. Batch now 84 rows.
+
 - **v0.66 — swept the audit-named invariants systematically; N3 was open, and the
   "documented means unpinned" pattern I claimed in v0.65 is WRONG.** Instead of guessing
   areas, grepped the source for emphatic invariant markers (`audit X`, `M3-*`, `NOTE-*`,

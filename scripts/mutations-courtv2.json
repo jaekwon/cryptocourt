@@ -537,5 +537,54 @@
   "label": "MED-1: pct loses its den/num domain guard",
   "find": "\tif den <= 0 || num < 0 {",
   "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "the court's answer-bond cap is not applied",
+  "find": "\tif c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {\n\t\tbond = c.params.answerBondCapCC\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "COLLATERALIZATION FLOOR removed (drained mill posts 224x less)",
+  "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {\n\t\tbond = floor\n\t}",
+  "replace": "\tconvHi, convLo := cs.sideConv(verdict)\n\t_, _ = convHi, convLo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "FLOOR applied BEFORE the cap (cap re-opens the hole)",
+  "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {\n\t\tbond = floor\n\t}\n\tif bond < 1 {",
+  "replace": "\tconvHi, convLo := cs.sideConv(verdict)\n\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {\n\t\tbond = floor\n\t}\n\tif c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {\n\t\tbond = c.params.answerBondCapCC\n\t}\n\tif bond < 1 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "FLOOR covers only the draw arm, not the flat arm",
+  "find": "\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {",
+  "replace": "\tif floor := mulDiv128(convToCC(convHi, convLo), slashDrawBps, 10000); floor > bond {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "the freeze does not pin rateAcc (H1's write side)",
+  "find": "\tcs.rateAccAtFreeze = c.rateAccFP",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "xBarFrozen is not pinned (P6 base unset)",
+  "find": "\tcs.xBarFrozen = xbar // P6: the one base for every later %-of-X\u0304 quantity",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "answer.gno",
+  "label": "the answer bond is never escrowed",
+  "find": "\tc.coin.Transfer(who, c.escrow, bond)",
+  "replace": ""
  }
 ]
