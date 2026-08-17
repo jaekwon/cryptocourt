@@ -1391,5 +1391,75 @@
   "label": "OpenDispute: a reopen ignores the escrow window",
   "find": "\t} else if now >= cs.escrowUntil {\n\t\tpanic(\"courtv2: the escrow window has passed; Finalize the verdict\")\n\t}",
   "replace": "\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: a claim with past rounds settles undisputed",
+  "find": "\tif cs.disputeOpen || cs.round > 0 {",
+  "replace": "\tif cs.disputeOpen {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: settles twice",
+  "find": "\tif cs.verdictAt != 0 {\n\t\tpanic(\"courtv2: already settled\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the 72h settlement minimum is not waited out",
+  "find": "\tif runtime.ChainHeight() < cs.answerHeight+settleDelay {\n\t\tpanic(\"courtv2: the answer has not aged the 72h settlement minimum\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the verdict is the OPPOSITE of the answer",
+  "find": "\tcs.provisional = cs.answer",
+  "replace": "\tcs.provisional = int8(oppositeSide(int(cs.answer)))"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: a consumed slot's low is reset to mid (audit_slash_v040 LOW)",
+  "find": "\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
+  "replace": "\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: nothing is retained for a later slash (M3-HIGH-1)",
+  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the retained reserve is forgotten",
+  "find": "\t\tcs.answerBond = reserve",
+  "replace": "\t\tcs.answerBond = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the whole bond refunds AND the reserve is kept",
+  "find": "\t\tif refund := cs.answerBond - reserve; refund > 0 {",
+  "replace": "\t\tif refund := cs.answerBond; refund > 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the route provenance says vote",
+  "find": "\tcs.route = \"undisputed\"",
+  "replace": "\tcs.route = \"vote\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the answerer's priority slot is never released",
+  "find": "\treleasePriority(c, cs.answerer, claimID)",
+  "replace": ""
  }
 ]

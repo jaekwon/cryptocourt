@@ -1624,6 +1624,40 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.84 — SettleUndisputed swept: the one real gap is not about money at all, and it is
+  invisible from inside the claim it damages.** Thirteen mutations. Nine already held: the
+  past-rounds bar, the double settle, the 72h minimum, the verdict side, the
+  audit_slash_v040 LOW guard, M3-HIGH-1's retention, the retained figure, the
+  refund-minus-reserve arithmetic, and the route provenance.
+  **The survivor that mattered: `releasePriority` at the end.** Delete it and the
+  answerer's `activePriority` stays pointed at a claim that has already settled. Since the
+  design permits "ONE active priority claim per address at a time", that answerer never
+  gets another priority window — an earned credential is spent permanently on its first
+  use. It survives every other check because nothing about the settled claim is wrong: the
+  verdict, tier, refund and retention are all correct. What is wrong lives in the
+  ANSWERER's record, on a different tree, and only a SECOND claim would ever reveal it.
+  `TestPriorityWindowGates` builds this exact state and stops at the gate, asserting the
+  slot is HELD; nothing asserted it comes back.
+  Worth naming as a class, since this is the third such find in three versions: the guards
+  that survive are the ones whose failure leaves the object under test internally
+  consistent. v0.82's A19 fold-back agreed with every field and disagreed only with supply.
+  v0.83's bond arms agreed on every uncapped court. This one agrees about the claim and
+  disagrees only about the answerer.
+  **Three survived and are EQUIVALENT, two of them provable from the write-set.**
+  `cs.round` is written in exactly ONE place — `cs.round++` in OpenDispute — and never
+  reset, so `disputeOpen` implies `round > 0` and the first clause of the disputed-claim
+  bar is redundant. Every `tierFinal = true` writer reachable at `round == 0` sits inside
+  ResolveFlag's CONCLUSIVE block, which sets `slotConsumed` first, so `!tierFinal` is
+  defence-in-depth here exactly as the source already says of its neighbour
+  `pendingSlash == 0`.
+  And the retention clamp `reserve > answerBond` cannot fire, because the reserve is
+  `slashSizeFor` and PostAnswer's collateralization floor sizes the bond to cover it —
+  which the source comment states as "no clamp-from-under-retention". **That is the THIRD
+  guard in three versions whose unreachability traces to that floor** (originateSlash's
+  clamp in v0.82, the dispute bond's floor-of-one in v0.83). The floor is load-bearing for
+  at least three guards outside its own function, and its docstring does not say so.
+  Batch now 209 rows, 0 not caught.
+
 - **v0.83 — the DISPUTE BOND's two arms were unpinned because on an uncapped court they
   are ARITHMETICALLY IDENTICAL, and the reopen lane's only finite bound was unpinned too.**
   Nineteen mutations over `OpenDispute`. Nine already held: the bond posted, the refund
