@@ -103,7 +103,22 @@ const (
 	// Moderation build constants (MODERATION.md §9, §2). metaSlug is reserved so
 	// only realm init can create the meta court; the public StartCourt path
 	// refuses it. maxStakeOpenDelay caps the polish window at 24h.
-	metaSlug          = "meta"
+	metaSlug = "meta"
+	// Meta's emission is a FIXED ABSOLUTE weekly budget, never S_live × bps
+	// (§13.8, unanimous). Meta's supply tracks platform-wide burn, so a
+	// supply-proportional budget would size the appeals court's emission off
+	// unrelated courts' volume — inflating the prize for junk appeals and
+	// attaching a platform-growth yield story to the one token that must not
+	// have one. Absolute keeps the SENIOR lane (comp/bounty/carrot) funded, so
+	// the deployer's +EV junk-appeal policing survives, while the lifetime bound
+	// stays provably tiny: 100 CC × Σ2^(−n/104) ≈ 15,000 CC, four orders under
+	// the tally ceiling.
+	metaWeeklyBudget = int64(100_000_000) // 100 CC/week, stepped down
+	// Meta's answerability and deposit floors scale with ITS OWN supply, because
+	// that supply grows with platform burn and Params have no retune path after
+	// deploy: fixed constants would decay to nothing as the platform grew, and
+	// §5.3's flood-deposit argument would decay with them.
+	metaFloorBps      = int64(1) // 0.01% of meta supply
 	maxCourtNameLen   = 100
 	maxStakeOpenDelay = int64(17_280) // 24h
 )
@@ -118,6 +133,18 @@ func mustInvariants() {
 	maxSupply := int64(9223372036854775807) / grc20votes.Bps
 	if curveCap > (maxSupply/1785)*1000 {
 		panic("courtv2: curveCap × emission growth bound exceeds the tally-safe supply ceiling")
+	}
+	// §13.8 — the meta franchise does NOT need a new supply bound, and this
+	// assertion is what makes that claim checkable rather than asserted. The
+	// franchise mint routes through meta's OWN curve, so every unit of meta
+	// primary issuance is still bounded by curveCap exactly as a purchased unit
+	// is; the only NEW term is meta's absolute lifetime emission, the geometric
+	// sum of a stepped-down weekly budget (Σ2^(−n/104) < 151). If a future
+	// change ever mints the franchise outside the curve, this check is the one
+	// that must be revisited — and `mustInvariants` would otherwise keep
+	// certifying a property that had quietly stopped holding.
+	if metaLifetimeEmission := metaWeeklyBudget * 151; curveCap > maxSupply-metaLifetimeEmission {
+		panic("courtv2: curveCap + meta's lifetime emission exceeds the tally-safe supply ceiling")
 	}
 	// Bond–tier coupling (§3.6): the answer bond must cover the maximum
 	// undisputed extraction, tierMid/2 of the stake, in bps.
@@ -278,6 +305,11 @@ type Court struct {
 	burnedGNOT int64
 	burnKey    string
 	createdSeq uint64
+
+	// absBudget: when > 0 this court's weekly emission is a FIXED ABSOLUTE
+	// amount (stepped down like every other budget) instead of S_live × bps.
+	// Only the meta court uses it — see metaWeeklyBudget (§13.8).
+	absBudget int64
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.
@@ -347,6 +379,9 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 		curBudgetBpsFP: budgetBpsFPStart,
 	}
 	c.lastAccrual = c.createdAt
+	if slug == metaSlug {
+		c.absBudget = metaWeeklyBudget // §13.8: never S_live × bps
+	}
 	c.gov.Adopt(disputeKind{}, disputeRules(c.params))
 	courts.Set(slug, c)
 	indexNewCourt(c) // directory ordering (burn-desc / creation-newest)
@@ -387,6 +422,32 @@ func CourtEscrow(slug string) address { return mustCourt(slug).escrow }
 // EmittedTotal is every CC this court has minted through emission — the figure
 // a holder audits dilution against.
 func EmittedTotal(slug string) int64 { return mustCourt(slug).emittedTotal }
+
+// effMinAnswerX / effMinDeposit are the LIVE floors. For an ordinary court they
+// are the frozen params; for META they additionally scale with its own supply,
+// which grows with platform-wide burn (§13.8). Params have no retune path after
+// deploy, so a fixed constant there would silently decay to nothing — taking
+// §5.3's flood-deposit argument with it.
+func effMinAnswerX(c *Court) int64 {
+	v := c.params.minAnswerX
+	if c.id == metaSlug {
+		if rel := mulDiv128(c.coin.TotalSupply(), metaFloorBps, grc20votes.Bps); rel > v {
+			v = rel
+		}
+	}
+	return v
+}
+
+func effMinDeposit(c *Court) int64 {
+	v := c.params.minClaimDepositCC
+	if c.id == metaSlug {
+		// Keep the params' own 100:1 answerability-to-deposit ratio as supply grows.
+		if rel := effMinAnswerX(c) / 100; rel > v {
+			v = rel
+		}
+	}
+	return v
+}
 
 // mustCourt fetches a court or panics. Never exported.
 func mustCourt(slug string) *Court {

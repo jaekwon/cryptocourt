@@ -194,7 +194,7 @@ func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 	}
 	var dep, fee int64
 	if !seeded {
-		dep = c.params.minClaimDepositCC
+		dep = effMinDeposit(c)
 		fee = dep * depositFeeBps / 10000
 		c.coin.Transfer(who, c.escrow, dep+fee)
 		c.deposit += dep + fee

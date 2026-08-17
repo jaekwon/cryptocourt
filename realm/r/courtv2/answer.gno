@@ -37,7 +37,7 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	if !mature {
 		panic("courtv2: not enough stake history to answer yet")
 	}
-	if xbar < c.params.minAnswerX {
+	if xbar < effMinAnswerX(c) {
 		panic("courtv2: trailing stake is below the minimum to answer")
 	}
 

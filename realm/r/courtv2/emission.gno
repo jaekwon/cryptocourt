@@ -112,8 +112,15 @@ func rollPeriod(c *Court) {
 		} else {
 			c.dEffBpsFP = c.curBudgetBpsFP
 		}
-		// The period's budget: S_live × bps, floored (P10).
-		c.curPeriodBudget = mulDiv128(s, c.curBudgetBpsFP, 10_000*1_000_000)
+		// The period's budget: S_live × bps, floored (P10) — except a court on
+		// an ABSOLUTE budget (meta), whose emission must not track a supply that
+		// grows with other courts' burn (§13.8).
+		if c.absBudget > 0 {
+			c.absBudget = c.absBudget * stepDownNum / stepDownDen
+			c.curPeriodBudget = c.absBudget
+		} else {
+			c.curPeriodBudget = mulDiv128(s, c.curBudgetBpsFP, 10_000*1_000_000)
+		}
 	} else {
 		c.dEffBpsFP = 0
 		c.curPeriodBudget = 0
