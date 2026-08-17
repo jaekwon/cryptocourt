@@ -25,9 +25,11 @@ gnoland start
 env COURTV2=g1n5fu7kux7gur367pmnqc6rnqap9944e4j2e3q8
 env SINK=g1v7pg68k2pyzh843gmancrglcymnm8q393r6s26
 
-# --- Fresh realm: directory empty state, hygiene from block one ---------------
+# --- Fresh realm: only the review court, hygiene from block one ---------------
+# A fresh realm is NOT empty: the meta (appeals) court is deployed at init under
+# the reserved slug, so the appeals layer exists before anyone starts a court.
 gnokey query vm/qrender --data "gno.land/r/cryptocourt/courtv2:"
-stdout 'No courts yet'
+stdout 'Review Court'
 stdout 'principal always returns'
 ! stdout '[Bb]acking'
 
