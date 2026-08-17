@@ -61,6 +61,14 @@ func Buy(cur realm, slug string) int64 {
 	b.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),
 		chain.Coins{chain.NewCoin(gnotDenom, spent)})
 
+	// UNREACHABLE at this curve's granularity, and kept as defence. The mutation
+	// harness reports both this branch and its destination as survivors: delta is in
+	// base units (1e6 per CC), so one more base unit costs far under 1 ugnot, and
+	// Minted's step-up loop plus round-up Cost make `spent` land EXACTLY on `sent` for
+	// every payment probed. A fixture would have to coarsen the curve to reach it,
+	// i.e. pin a configuration this court does not have. It stays because a coarser
+	// curve is a parameter change away and the failure mode would be silently keeping
+	// a buyer's change. NOT claimed as verified — see PLAN §13 v0.62.
 	if r := sent - spent; r > 0 {
 		b.SendCoins(cur.Address(), buyer, chain.Coins{chain.NewCoin(gnotDenom, r)})
 	}

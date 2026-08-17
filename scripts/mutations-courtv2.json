@@ -362,5 +362,33 @@
   "label": "7.4: the POSITIONS page renders redeem",
   "find": "\tb.WriteString(\"Claim: \" + sanitize.InlineText(cs.title) + \"\\n\\n\")",
   "replace": "\tb.WriteString(\"Claim: \" + sanitize.InlineText(cs.title) + \"\\n\\nredeem at par\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "BUY: IsUserCall weakened entirely",
+  "find": "\tif !prev.IsUserCall() {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "BUY: minted goes to the court, not the buyer",
+  "find": "\tc.coin.Mint(buyer, delta)",
+  "replace": "\tc.coin.Mint(cur.Address(), delta)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "BUY: a zero/negative send is accepted",
+  "find": "\tif sent <= 0 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "BUY: the spent GNOT is not burned",
+  "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
+  "replace": ""
  }
 ]

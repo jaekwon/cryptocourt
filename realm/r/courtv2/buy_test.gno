@@ -56,3 +56,54 @@ func TestBuyGuards(cur realm, t *testing.T) {
 		Buy(cross(cur), "buy2")
 	})
 }
+
+// Two guards the mutation harness found surviving on the money-IN path. IsUserCall is
+// the one AGENTS.md names explicitly: with OriginSend payments the caller check must be
+// IsUserCall, not IsUser, because a `maketx run` ephemeral realm can consume the
+// origin-send envelope before calling in and so bypass the payment. Weakening it to
+// `if false` failed no test — the whole payment-bypass protection was unpinned.
+//
+// THREE other survivors on this path are UNREACHABLE at this curve's granularity and
+// are documented in buy.gno rather than faked here: the remainder refund (Minted spends
+// the payment EXACTLY for every amount probed, so no remainder exists to misdirect), the
+// "too small to mint" guard (1 ugnot already mints 20,000 base units, so delta > 0 for
+// any accepted payment — reachable only once the curve is at cap), and the self-buy
+// check (the buyer is prev.Address() behind this IsUserCall gate, so it is never the
+// realm). Naming them here so the next reader does not mistake the survivor report for
+// a list of holes.
+//
+// AND ONE THAT IS NOT TESTABLE HERE AT ALL, which matters more than the rest: swapping
+// IsUserCall for IsUser survives this fixture, and that is exactly the downgrade
+// AGENTS.md warns about — IsUser ACCEPTS a `maketx run` ephemeral realm, which can
+// consume the origin-send envelope and call in with the payment already spent. The
+// distinguishing caller is an /e/<addr>/run realm, and testing.NewCodeRealm REFUSES
+// such a path ("should only be called for Realms"), so the harness cannot construct
+// one. This assertion therefore catches DELETING the guard but not WEAKENING it.
+// Enforcement of that one rests on code review, which is why AGENTS.md states it as a
+// reading rule rather than a test. Recorded in PLAN §13 v0.62; do not read the survivor
+// as a gap a fixture can close.
+func TestBuyRefusesNonUserCallsSelfBuysAndDustPayments(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("byg2-alice")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	StartCourt(cross(cur), "byg2", "More guards")
+
+	// A call arriving from a REALM rather than a user is refused, even with GNOT
+	// attached — otherwise the envelope could be spent by an intermediary.
+	testing.IssueCoins(chain.PackageAddress(realmPath),
+		chain.Coins{{Denom: "ugnot", Amount: 300_000_000}})
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 300_000_000}})
+	testing.SetRealm(testing.NewCodeRealm("gno.land/r/cryptocourt/notacourt"))
+	uassert.AbortsContains(t, cur, "must be a direct user call", func() {
+		Buy(cross(cur), "byg2")
+	})
+	testing.SetOriginSend(nil)
+
+	// The control: the SAME payment from a user call succeeds, so the guard rejects
+	// the caller kind and not the payment.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: 300_000_000}})
+	if got := Buy(cross(cur), "byg2"); got <= 0 {
+		t.Fatalf("a direct user call with the same payment must mint: %d", got)
+	}
+	testing.SetOriginSend(nil)
+}

@@ -1624,6 +1624,50 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.62 — the money-IN path: one guard pinned, three unreachable, and ONE THAT NO TEST
+  IN THIS HARNESS CAN COVER.** Eight mutations against `buy.gno`, never touched before.
+  **Pinned:** `IsUserCall` against deletion, the mint going to the buyer, the zero-send
+  refusal, and the burn of spent GNOT.
+  **CORRECTION, and it is the second time this session I called something a money leak
+  before checking reachability.** I reported "a buyer's unspent GNOT can be swept to the
+  burn sink — real user money lost silently" on the strength of a surviving mutation. It is
+  NOT reachable: `Minted` picks the largest span whose round-up `Cost` fits the payment,
+  and at this curve's granularity (delta in base units, 1e6 per CC) one more base unit
+  costs far under 1 ugnot, so `spent == sent` EXACTLY for every amount probed — 5, 1 000,
+  7 777, 100 001, 12 345 678, 333 333 333, 999 999 999, all remainder zero. No remainder
+  exists to misdirect. Same for "a payment too small to mint": 1 ugnot already mints 20 000
+  base units, so `delta > 0` for any accepted payment and that guard is reachable only once
+  the curve is at cap. Same for the self-buy check: the buyer is `prev.Address()` behind the
+  IsUserCall gate, so it is never the realm. All three are documented in place as
+  unreachable defence, NOT claimed as verified. The earlier instance of the same error was
+  PostAnswer's collateralization floor, which "survived" a mutation I had written as a
+  no-op. **A surviving mutation is a lead, not a hole — reachability is a separate
+  question, and I have now got that wrong twice by announcing before checking.**
+  **THE ONE THAT MATTERS, and it needs owner awareness rather than a fixture.** Swapping
+  `prev.IsUserCall()` for `prev.IsUser()` SURVIVES, and that is precisely the downgrade
+  AGENTS.md warns about: `IsUser()` accepts a `maketx run` EPHEMERAL realm, which can
+  consume the origin-send envelope and call in with the payment already spent. The
+  distinguishing caller is an `/e/<addr>/run` realm, and `testing.NewCodeRealm` REFUSES
+  such a path ("should only be called for Realms"), so this harness cannot construct one.
+  The fixture therefore catches DELETING the guard but not WEAKENING it. Enforcement of
+  that specific rule rests on code review — which is exactly why AGENTS.md states it as a
+  reading rule rather than a test — and the survivor must not be read as a gap a fixture
+  can close. courtv2 currently uses the CORRECT form; the risk is a future edit
+  downgrading it invisibly. Batch now 56 rows.
+  **OPERATIONAL NOTE, learned the hard way: the batch is now too slow to run whole and
+  MUST be run in slices.** `run_suite` runs all eleven staged suites per mutation, so 56
+  rows is ~616 suite runs and exceeds a 10-minute budget. My attempt was killed
+  mid-mutation and left `mulDiv128`'s domain guard replaced with `if false` IN THE SOURCE
+  — a live money-path guard disabled in the working tree, invisible in `git status` except
+  as a one-line diff. `mutate.py`'s own header warns about precisely this ("a mutation
+  that hangs the suite gets the whole run timed out, and the source is left broken … It
+  cost an hour once"), and its on-disk `.mutate-backup` files are what made recovery a
+  one-liner. Two rules: run slices of ~10 rows, and after ANY interrupted run check
+  `git diff` on the realm before trusting a green suite. The kill ALSO left a stale
+  stage lock — `stage_lock`'s `finally` does not run when the process is killed — and the
+  10-minute ceiling I gave it in v0.57 reported that clearly instead of hanging, which is
+  what it was for. Clearing it is `rmdir`, and the message says so.
+
 - **v0.61 — §7.4 was enforced on a quarter of its surface.** The third owner-locked
   constraint — never render backing, redeem, APR or the inflation ceiling in public copy —
   had exactly one assertion behind it: `render_test.gno` checked the literal string
