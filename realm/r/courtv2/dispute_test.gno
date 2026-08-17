@@ -586,3 +586,184 @@ func TestReopenRefusedOnceTheEscrowWindowHasPassed(cur realm, t *testing.T) {
 		t.Fatal("and no round may have opened")
 	}
 }
+
+// Finalize's two unpinned PRECONDITIONS. Both are reachable, and both let Finalize
+// write a final verdict onto a claim that has not earned one.
+//
+//	`provisional < 0` — a claim nobody ever disputed has escrowUntil == 0, so the
+//	  escrow guard below it passes trivially (now >= 0). Without this clause a freshly
+//	  answered claim is finalizable AT ONCE: the 72h settle delay and the whole dispute
+//	  window are skipped, and the verdict is recorded with route "vote" on a claim that
+//	  never had one.
+//	`disputeOpen`    — a reopen's vote outlives the escrow window by construction
+//	  (OpenDispute requires now < escrowUntil, and the vote then runs a full
+//	  votingBlocks), so there is always a band where the window has passed and a round
+//	  is still live. Without this clause the claim finalizes mid-vote.
+func TestFinalizeRefusesUnearnedVerdicts(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fzg-alice")
+	bob := testutils.TestAddress("fzg-bob")
+	c := testCourt(cur, "fzg", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fzg", "answered, never disputed")
+	matureOI(cur, "fzg", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "fzg", id, sideYES)
+
+	// No round has run: no provisional verdict, and no escrow clock either — which is
+	// exactly why the escrow guard cannot stand in for this one.
+	cs := mustClaim(c, id)
+	if cs.provisional >= 0 || cs.escrowUntil != 0 {
+		t.Fatalf("setup: need an undisputed claim with no escrow clock: provisional=%d "+
+			"escrowUntil=%d", cs.provisional, cs.escrowUntil)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "no provisional verdict to finalize", func() {
+		Finalize(cross(cur), "fzg", id)
+	})
+
+	// Now a failed round, which sets the clock, then a reopen whose vote outlives it.
+	c.params.escrowMinBlocks = 200_000
+	c.params.escrowMaxBlocks = 200_000
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "fzg", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "fzg", id)
+	if cs.escrowUntil == 0 || cs.provisional < 0 {
+		t.Fatalf("setup: the first resolution must set the clock and a provisional "+
+			"verdict: until=%d provisional=%d", cs.escrowUntil, cs.provisional)
+	}
+
+	// Reopen just inside the window; its vote necessarily runs past the window's end.
+	testing.SkipHeights(cs.escrowUntil - runtimeHeight() - 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "fzg", id)
+	testing.SkipHeights(2) // now past escrowUntil, still inside the vote
+	if !cs.disputeOpen || runtimeHeight() < cs.escrowUntil {
+		t.Fatalf("setup: must sit past the window with a live round: open=%v now=%d "+
+			"until=%d", cs.disputeOpen, runtimeHeight(), cs.escrowUntil)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a dispute is active", func() {
+		Finalize(cross(cur), "fzg", id)
+	})
+	if cs.verdictAt != 0 {
+		t.Fatal("and nothing may have been finalized")
+	}
+}
+
+// Finalize moves the answerer's RECORD, and both directions were unpinned. This is the
+// same shape as the priority-slot find: nothing about the finalized claim is wrong, so
+// only the answerer's own record — a different tree — disagrees.
+//
+// An OVERTURNED answerer must lose their record. Without the reset, being proved wrong
+// costs nothing at all in credential terms, and the difficulty score that gates the
+// priority window keeps whatever it had.
+func TestFinalizeResetsAnOverturnedRecord(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fzr-alice") // author
+	pro := testutils.TestAddress("fzr-pro")     // answerer, carries a record
+	bob := testutils.TestAddress("fzr-bob")     // disputer
+	carol := testutils.TestAddress("fzr-carol") // the electorate
+	c := testCourt(cur, "fzr", alice, 50_000_000_000)
+	c.coin.Mint(pro, 10_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	for i := 0; i < priorityNetRecord; i++ {
+		creditUpheld(c, pro)
+	}
+	if AnswerRecord("fzr", pro) <= 0 {
+		t.Fatal("setup: the answerer must carry a record for the reset to be visible")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fzr", "an answer that gets overturned")
+	matureOI(cur, "fzr", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(pro))
+	PostAnswer(cross(cur), "fzr", id, sideYES)
+	c.params.escrowMinBlocks = 200_000
+	c.params.escrowMaxBlocks = 200_000
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "fzr", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "fzr", id, "yes") // OVERTURN
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "fzr", id)
+
+	cs := mustClaim(c, id)
+	if cs.provisional == cs.answer {
+		t.Fatalf("setup: the answer must have been overturned: provisional=%d answer=%d",
+			cs.provisional, cs.answer)
+	}
+	testing.SkipHeights(cs.escrowUntil - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(pro)) // the answerer is a participant
+	Finalize(cross(cur), "fzr", id)
+
+	if got := AnswerRecord("fzr", pro); got != 0 {
+		t.Fatalf("an overturned answerer's record must reset to zero, got %d", got)
+	}
+}
+
+// The other direction, and the one the source names an attack on: a QUORUM-LESS default
+// earns nothing. `decidedRounds > 0` is what separates "a vote upheld this against real
+// opposition" from "nobody turned up, so the answer stood by default" — and without it,
+// as the comment says, ~20% of a dispute bond buys a difficulty point on any trivially
+// true claim, self-disputed.
+//
+// The priority slot's release is asserted here too. Finalize is the other terminal path,
+// and it had the same gap SettleUndisputed did.
+func TestFinalizeCreditsNothingForAQuorumlessDefault(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fzu-alice")
+	steady := testutils.TestAddress("fzu-steady") // qualified answerer
+	bob := testutils.TestAddress("fzu-bob")       // disputer who brings no votes
+	c := testCourt(cur, "fzu", alice, 50_000_000_000)
+	c.coin.Mint(steady, 10_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	// Arm the priority gate so answering actually takes the slot.
+	for _, a := range []address{steady, testutils.TestAddress("fzu-q2"),
+		testutils.TestAddress("fzu-q3")} {
+		for i := 0; i < priorityNetRecord; i++ {
+			creditUpheld(c, a)
+		}
+	}
+	before := AnswerRecord("fzu", steady)
+	if before <= 0 {
+		t.Fatal("setup: the answerer must start with a record")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fzu", "an answer nobody musters against")
+	matureOI(cur, "fzu", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(steady))
+	PostAnswer(cross(cur), "fzu", id, sideYES)
+	if mayAnswerInPriority(c, steady) {
+		t.Fatal("setup: answering in priority must take the one slot")
+	}
+	c.params.escrowMinBlocks = 200_000
+	c.params.escrowMaxBlocks = 200_000
+
+	// A round that draws no votes: the answer stands by DEFAULT, not by verdict.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "fzu", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "fzu", id)
+
+	cs := mustClaim(c, id)
+	if cs.provisional != cs.answer || cs.decidedRounds != 0 {
+		t.Fatalf("setup: need a quorum-less default, not a decided verdict: "+
+			"provisional=%d answer=%d decided=%d", cs.provisional, cs.answer,
+			cs.decidedRounds)
+	}
+	testing.SkipHeights(cs.escrowUntil - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(steady))
+	Finalize(cross(cur), "fzu", id)
+
+	if got := AnswerRecord("fzu", steady); got != before {
+		t.Fatalf("a quorum-less default must earn no difficulty point: record %d became %d",
+			before, got)
+	}
+	if !mayAnswerInPriority(c, steady) {
+		t.Fatal("and finalizing must give the priority slot back")
+	}
+}

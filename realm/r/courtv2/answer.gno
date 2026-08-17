@@ -122,6 +122,25 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// Floors on the WHOLE sizer, not just the draw arm: the flat arm (4.5%·X̄)
 	// is covered today only because answerBondCapCC is 0 everywhere, so a
 	// draw-arm-only floor is a trap armed the day that knob is wired.
+	//
+	// WHAT ELSE DEPENDS ON THIS FLOOR. Three guards in other functions are
+	// unreachable BECAUSE of it, each verified by mutation (they survive, and the
+	// measurement in each case shows this floor is why):
+	//
+	//   originateSlash's `slash > answerBond` clamp (quality.gno) — the floor sizes
+	//     the bond to cover slashSizeFor, so the clamp never fires. Its own comment
+	//     says so and warns against deleting it on the strength of the survivor
+	//     report.
+	//   SettleUndisputed's and Finalize's `reserve > answerBond` clamps — same
+	//     reason, stated there as "no clamp-from-under-retention".
+	//   OpenDispute's `base < 1` bond floor (dispute.gno) — because this floor
+	//     overrides the court cap, an answered claim's bond cannot be small enough
+	//     for 40% of it to round to zero. Setting answerBondCapCC = 1 does NOT
+	//     produce a bond of 1; measured, it produced 18_000_000.
+	//
+	// So weakening this floor does not merely restore one exploit: it makes three
+	// guards elsewhere live at once, in three files, none of which has a fixture
+	// that can reach them today. If this is ever relaxed, mutate those three first.
 	convHi, convLo := cs.sideConv(verdict)
 	if floor := slashSizeAt(xbar, convHi, convLo); floor > bond {
 		bond = floor

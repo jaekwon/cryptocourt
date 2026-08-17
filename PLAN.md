@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.85 — Finalize is the least-covered function found in this whole sweep: FOUR real
+  gaps, including two preconditions that let it write a final verdict onto a claim that
+  never earned one.** Fourteen mutations. Nine already held: the double finalize, the
+  escrow window, the participant-only grace week, the tier guard, M3-HIGH-1's retention
+  twin, the route provenance, the record's DIRECTION, the M2-1 weight bar, and the
+  credit itself.
+  **The two preconditions, both reachable.** `provisional < 0`: a claim nobody ever
+  disputed has `escrowUntil == 0`, so the escrow guard directly beneath it passes
+  trivially — without this clause a freshly answered claim is finalizable AT ONCE, skipping
+  the 72h settle delay and the whole dispute window, and recording route "vote" on a claim
+  that never had a vote. `disputeOpen`: a reopen's vote outlives the escrow window BY
+  CONSTRUCTION (OpenDispute requires `now < escrowUntil`, then the vote runs a full
+  votingBlocks), so there is always a band where the window has passed and a round is live
+  — without this clause the claim finalizes mid-vote.
+  **The two record gaps, same shape as v0.84's.** An OVERTURNED answerer's record must
+  reset; without it, being proved wrong costs nothing in credential terms and the score
+  gating the priority window keeps whatever it had. And Finalize had the SAME unreleased
+  priority slot as SettleUndisputed — the other terminal path, the same gap, found because
+  v0.84 named the class: the guards that survive are the ones whose failure leaves the
+  claim internally consistent and disagrees only somewhere else. Looking there first found
+  three of this version's four.
+  **One survived and is equivalent, proved from the write-set.** `decidedRounds > 0 &&
+  credEligible`: `credEligible = true` has exactly ONE writer, dispute.gno:299, inside the
+  UPHELD branch — and `decidedRounds++` sits three lines below it in the same branch. So
+  `credEligible` implies `decidedRounds > 0` and the first clause is defence-in-depth. The
+  source comment names two attacks ("quorum-less defaults earn nothing, and so do
+  weightless contests") and the second clause already refuses both. Fourth guard this sweep
+  proved redundant this way, after `slashLevied`, `cs.round`, and the tierFinal clause.
+  **Also acted on the standing note about PostAnswer's collateralization floor.** Three
+  guards in three other functions are unreachable BECAUSE of that floor, each established
+  by measurement over v0.82-v0.84, and its docstring said nothing about them. It now lists
+  them — originateSlash's clamp, the two retention clamps, and OpenDispute's bond
+  floor-of-one — with the measurement that pins the last one (`answerBondCapCC = 1` does
+  not yield a bond of 1; it yielded 18,000,000). Weakening that floor does not restore one
+  exploit, it makes three guards live at once across three files, none of which has a
+  fixture that can reach them today. Comment only; no logic touched.
+  Batch now 222 rows, 0 not caught.
+
 - **v0.84 — SettleUndisputed swept: the one real gap is not about money at all, and it is
   invisible from inside the claim it damages.** Thirteen mutations. Nine already held: the
   past-rounds bar, the double settle, the 72h minimum, the verdict side, the

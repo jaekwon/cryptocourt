@@ -1461,5 +1461,96 @@
   "label": "SettleUndisputed: the answerer's priority slot is never released",
   "find": "\treleasePriority(c, cs.answerer, claimID)",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: the record moves the WRONG way on an overturn",
+  "find": "\tif cs.provisional != cs.answer {",
+  "replace": "\tif cs.provisional == cs.answer {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: an overturned answerer keeps their record",
+  "find": "\t\tresetOverturned(c, cs.answerer)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: a weightless contest earns a difficulty point (M2-1)",
+  "find": "\t} else if cs.decidedRounds > 0 && cs.credEligible {",
+  "replace": "\t} else if cs.decidedRounds > 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: a contested-and-upheld answer earns nothing",
+  "find": "\t\tcreditUpheld(c, cs.answerer) // contested-and-upheld: the hard point",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: the answerer's priority slot is never released",
+  "find": "\treleasePriority(c, cs.answerer, claimID)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: finalizes twice",
+  "find": "\tif cs.verdictAt != 0 {\n\t\tpanic(\"courtv2: already final\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: finalizes with a live dispute",
+  "find": "\tif cs.disputeOpen {\n\t\tpanic(\"courtv2: a dispute is active; cannot finalize\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: finalizes with no provisional verdict",
+  "find": "\tif cs.provisional < 0 {\n\t\tpanic(\"courtv2: no provisional verdict to finalize\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: finalizes before the escrow window passes",
+  "find": "\tif now < cs.escrowUntil {\n\t\tpanic(\"courtv2: the escrow window has not passed\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: the participant-only grace week is not enforced",
+  "find": "\tif now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {",
+  "replace": "\tif false && !isParticipant(cs, who) {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: a consumed slot's low is reset to mid",
+  "find": "\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
+  "replace": "\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: nothing is retained for a later slash (M3-HIGH-1 twin)",
+  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: the route provenance says undisputed",
+  "find": "\tcs.route = \"vote\"",
+  "replace": "\tcs.route = \"undisputed\""
  }
 ]
