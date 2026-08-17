@@ -48,8 +48,18 @@ import sys
 # ReadMemPackage publishes whatever is in the directory — a design record left
 # there is deployed on chain, and this one is a quarter of the govern realm's
 # deploy. It still quotes the gno tree, so it still has to be checked.
+#
+# The court realms and their packages are listed on this file's OWN stated
+# principle — "listed so that the first one somebody adds is watched rather
+# than discovered". They were not listed before, and the omission is the same
+# shape as the one check 4 below names: a guard whose coverage is opt-in. It is
+# how check-isolation came to sweep 151 of 388 tests without anybody noticing.
+# They make no line-number citations today; that is the point of adding them
+# now rather than after the first one rots.
 SRC = ["realm/r/govern", "realm/p/checkpoint", "realm/p/grc20votes",
-       "realm/p/governor", "realm/r/offerer", "docs/DESIGN.md"]
+       "realm/p/governor", "realm/r/offerer", "docs/DESIGN.md",
+       "realm/r/kourtv1", "realm/r/kourtv2", "realm/p/twap",
+       "realm/p/cshares", "realm/p/tickbook", "realm/p/curve"]
 
 # (path under GNOROOT, anchor regex, the literal the prose quotes, the claim)
 #

@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.17 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.18 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,46 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.18 — kourtv2 had no filetest, so nothing guarded "a read that writes"**.
+  Following v0.17's drift into the sibling guards. Two turned out fine and one
+  did not:
+  - `check-docnumbers.py` is **correctly** govern-scoped — it pins govern's
+    `doc.gno` table against `governor.gno`'s init, and kourtv2 has no such
+    table. No change.
+  - `check-citations.py` had the **same drift**: `SRC` listed govern, its
+    packages and offerer, but not kourtv1, kourtv2, or p/twap, p/cshares,
+    p/tickbook, p/curve. Extended on that file's own stated principle —
+    *"listed so that the first one somebody adds is watched rather than
+    discovered"* — and it is pure prevention: those six packages contain **zero**
+    line-number citations today, and the widened run reports "34 citations still
+    hold".
+  - `check-storage.py` could not have covered kourtv2 even if listed, because
+    **kourtv2 had no filetests at all**. govern has had a read-must-write-nothing
+    filetest since the beginning; kourtv2's read surface was unguarded, and that
+    is exactly the defect found by hand TWICE this session — five election reads
+    calling `ensureMod` (v0.13 pass) and `ensureClaimMod` running ahead of the
+    m-of-n gating it (v0.16). Both are the shape govern's guard was written for:
+    the work is thrown away with the query, so the only symptom is storage that
+    grows on reads, months later, under load.
+
+  So kourtv2 gets its first filetest, `z_read_filetest.gno`: the read surface
+  walked from OUTSIDE the package — directory, coin, curve, moderation,
+  election, strips, franchise, and both render routes — using the meta court
+  (created at realm init) as a fixture needing no setup. **It writes zero
+  bytes**, so it earns the strictest budget, `None`. `GlobalModCount` was
+  suspected of allocating through `ensureGlobalDAO` and does not: it already
+  returns 0 on a nil DAO. One honest observable recorded rather than hidden —
+  `DirectoryAdmin()` is empty in a filetest, because the meta court is created
+  at init from `unsafe.OriginCaller()` and a filetest has no deployer to be;
+  on chain `MsgAddPackage` supplies one, and govern's filetest records the same
+  condition about its minter.
+
+  `check-storage.py` was single-realm by construction (`REALM`/`DEST`/`BUDGETS`),
+  which is *how* the gap existed, so it is now a `TARGETS` list — and it
+  cross-checks itself: **`realms_with_filetests()` walks `realm/r/*` and fails on
+  any realm that has filetests without a budget entry.** Verified it fires. That
+  is the v0.17 lesson applied one level up: the fix for a hand-maintained scope
+  list is not a longer list, it is a list that is checked against the tree.
 - **v0.17 — the isolation gate had never run on this code**. Noticed from a
   number that did not move: `make isolation-test` printed "151 tests" both
   before and after kourtv2 gained two test functions. `scripts/check-isolation.py`
