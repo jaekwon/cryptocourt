@@ -66,6 +66,18 @@ const (
 // absolute flagMinCC minimum, and (before this fix) a bond quoted on raw
 // supply against a floor quoted on votable weight. electionBond now closes
 // both at runtime; see its comment. This gate is the ratio arm alone.
+//
+// ITS THREE PANICS ARE IN NO MUTATION BATCH, AND THAT IS DELIBERATE. Each
+// compares package CONSTANTS, and init() calls this function on every package
+// load — including every test load — so the relationship is already enforced on
+// every run by the guard itself: violate it and the package does not load.
+// Deleting a panic here is unobservable precisely BECAUSE the constants satisfy
+// it, so the mutation survives correctly rather than revealing a gap, and a test
+// restating the same comparison would duplicate init() instead of adding a
+// check. It is not in known-gaps either: that file asserts a gap a test could
+// someday close, and this one never can — v0.40's rule, the same one that keeps
+// ResetModSet's clear out of both batches. If you change electionBondBps,
+// quorumSupplyBps or nominationWindow, THIS is what stops you.
 func mustElectionInvariants() {
 	if electionBondBps <= 0 {
 		panic("kourtv2: the election bond must be positive")

@@ -1860,5 +1860,201 @@
     "label": "modvote: an election resolves before its voting window closes",
     "find": "\t\tpanic(\"kourtv2: the voting window has not closed\")\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/AddGlobalMod: kourtv2: only the global DAO admin manages membership",
+    "find": "func AddGlobalMod(cur realm, who address) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\td := ensureGlobalDAO()\n\tif cur.Previous().Address() != d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin manages membership\")\n",
+    "replace": "func AddGlobalMod(cur realm, who address) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\td := ensureGlobalDAO()\n\tif cur.Previous().Address() != d.admin {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/RemoveGlobalMod: kourtv2: only the global DAO admin manages membership",
+    "find": "func RemoveGlobalMod(cur realm, who address) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\td := ensureGlobalDAO()\n\tif cur.Previous().Address() != d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin manages membership\")\n",
+    "replace": "func RemoveGlobalMod(cur realm, who address) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\td := ensureGlobalDAO()\n\tif cur.Previous().Address() != d.admin {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/TransferGlobalAdmin: kourtv2: only the global DAO admin transfers the seat",
+    "find": "\t\tpanic(\"kourtv2: only the global DAO admin transfers the seat\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/GlobalHide: kourtv2: only a global DAO member may global-hide",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may global-hide\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/GlobalClear: kourtv2: only a global DAO member may clear a global hide",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may clear a global hide\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/ClearAnyBit: kourtv2: only a global DAO member may clear bits (recovery)",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may clear bits (recovery)\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/ClearCourtSuspension: kourtv2: only a global DAO member may clear a suspension (recovery)",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may clear a suspension (recovery)\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/PurgeClaim: kourtv2: only a global DAO member may purge",
+    "find": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n",
+    "replace": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/GlobalSuspendSet: kourtv2: only a global DAO member may suspend a moderator set",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may suspend a moderator set\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/ResetModSet: kourtv2: only a global DAO member may reset a moderator set",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may reset a moderator set\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/PurgeCourt: kourtv2: only a global DAO member may purge",
+    "find": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n",
+    "replace": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/mustCandidate:242: kourtv2: no such candidate",
+    "find": "\tif cm.candidates == nil {\n\t\tpanic(\"kourtv2: no such candidate\")\n",
+    "replace": "\tif cm.candidates == nil {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/mustCandidate:246: kourtv2: no such candidate",
+    "find": "\tif v == nil {\n\t\tpanic(\"kourtv2: no such candidate\")\n",
+    "replace": "\tif v == nil {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/mustOpenElection:329: kourtv2: no election is open",
+    "find": "\t\tpanic(\"kourtv2: no election is open\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/mustModRead:545: kourtv2: this court has no moderation state yet",
+    "find": "\t\tpanic(\"kourtv2: this court has no moderation state yet\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/RemoveGlobalMod: kourtv2: the admin cannot be removed; transfer admin first",
+    "find": "\t\tpanic(\"kourtv2: the admin cannot be removed; transfer admin first\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/AppointMods: kourtv2: only the court creator appoints moderators (until an election)",
+    "find": "\t\tpanic(\"kourtv2: only the court creator appoints moderators (until an election)\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/AppointMods: kourtv2: a moderator set may not be empty",
+    "find": "\t\tpanic(\"kourtv2: a moderator set may not be empty\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/checkReason: kourtv2: a moderation reason is at most 200 characters",
+    "find": "\t\tpanic(\"kourtv2: a moderation reason is at most 200 characters\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/UnhideItem: kourtv2: this court is not hiding that claim",
+    "find": "\t\tpanic(\"kourtv2: this court is not hiding that claim\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/GlobalClear: kourtv2: no global hide on that claim",
+    "find": "\t\tpanic(\"kourtv2: no global hide on that claim\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/ClearAnyBit: kourtv2: nothing to clear on that claim",
+    "find": "\t\tpanic(\"kourtv2: nothing to clear on that claim\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/ClearCourtSuspension: kourtv2: that court's set is not suspended",
+    "find": "\t\tpanic(\"kourtv2: that court's set is not suspended\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/PurgeClaim: kourtv2: purge needs a statutory category code",
+    "find": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
+    "replace": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/GlobalSuspendSet: kourtv2: that set is already suspended",
+    "find": "\t\tpanic(\"kourtv2: that set is already suspended\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/PurgeCourt: kourtv2: purge needs a statutory category code",
+    "find": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
+    "replace": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/PurgeModLogRow: kourtv2: purge needs a statutory category code",
+    "find": "func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
+    "replace": "func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/PurgeModLogRow: kourtv2: that claim has no moderation log",
+    "find": "\t\tpanic(\"kourtv2: that claim has no moderation log\")\n",
+    "replace": ""
   }
 ]

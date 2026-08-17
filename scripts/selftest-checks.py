@@ -122,6 +122,7 @@ CITE = "scripts/check-citations.py"
 STORE = "scripts/check-storage.py"
 NONTRANS = "scripts/check-nontransferable.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
+READPURE = "scripts/check-read-purity.py"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
@@ -186,6 +187,32 @@ control("a membership pattern that drifted off the code", MEMCLEAR,
         r'r"^\s*cmNOPE\.(members)"',
         "cannot be right",
         argv=["python3", MEMCLEAR])
+
+print("\ncheck-read-purity")
+# The guard's failure mode is a read that allocates SUCCEEDING where it should
+# have panicked, so nothing in the suite goes red — the drift is invisible to
+# tests by construction. The control has to inject a whole read rather than edit
+# one, because every existing read is already correct.
+control("a read that allocates state", f"{KOURTV2}/modvote.gno",
+        "func ElectionOpen(",
+        "func SelfTestAllocatingRead(courtSlug string) bool {\n"
+        "\tcm := ensureMod(mustCourt(courtSlug))\n\t_ = cm\n\treturn true\n}\n\n"
+        "func ElectionOpen(",
+        "allocates and persists state",
+        argv=["python3", READPURE])
+# Fail CLOSED, both ways. An allocator that gets renamed leaves the scan looking
+# for a call that can no longer appear, and a read pattern that drifts leaves it
+# scanning nothing — either would report clean forever.
+control("an allocator renamed out from under the scan", READPURE,
+        'ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod")',
+        'ALLOCATORS = ("ensureModGone", "ensureGlobalDAO", "ensureClaimMod")',
+        "cannot appear",
+        argv=["python3", READPURE])
+control("a read pattern that drifted off the code", READPURE,
+        r'EXPORTED = re.compile(r"^func ([A-Z]\w*)\(([^)]*)\)")',
+        r'EXPORTED = re.compile(r"^funcNOPE ([A-Z]\w*)\(([^)]*)\)")',
+        "cannot be right",
+        argv=["python3", READPURE])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")

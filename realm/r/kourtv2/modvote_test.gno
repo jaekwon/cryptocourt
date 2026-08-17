@@ -716,3 +716,92 @@ func TestVotingWindowAndWeightGates(cur realm, t *testing.T) {
 		ApproveRetain(cross(cur), "votegate")
 	})
 }
+
+// The lookup helpers behind every election read. Each refuses in TWO distinct
+// states that share ONE message, so a fixture reaching only the first leaves the
+// second deletable in silence: mustCandidate refuses a court whose candidate
+// registry was never created AND a registry that does not hold the id, and
+// mustOpenElection refuses a court that never opened a ballot AND one whose
+// ballot has resolved. A message assertion cannot tell those apart — only the
+// STATE the fixture builds can — which is why each branch gets its own court.
+// These are plain reads, so they panic rather than abort.
+func TestElectionReadsRefuseEveryMissingState(cur realm, t *testing.T) {
+	// mustModRead. StartCourt does not allocate moderation state, so a court
+	// nobody has moderated has none, and a query must say so rather than create
+	// one on the way past — the read-purity rule check-read-purity.py enforces.
+	fresh := testutils.TestAddress("lk-fresh")
+	testCourt(cur, "lkfresh", fresh, 10_000_000_000)
+	uassert.PanicsContains(t, cur, "no moderation state yet", func() {
+		ElectionBondOf("lkfresh")
+	})
+
+	// mustCandidate, BRANCH 1 — moderation state exists, the candidate registry
+	// does not. AppointMods allocates the courtMod without touching
+	// cm.candidates, which is exactly this state and is not reachable by
+	// registering and then removing, because nothing removes a candidate.
+	creator := testutils.TestAddress("lk-creator")
+	m1 := testutils.TestAddress("lk-m1")
+	testCourt(cur, "lknoreg", creator, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "lknoreg", []address{m1}, 1)
+	uassert.PanicsContains(t, cur, "no such candidate", func() {
+		CandidateMembers("lknoreg", 1)
+	})
+
+	// mustCandidate, BRANCH 2 — the registry exists and does not hold the id.
+	// The registered candidate is read back FIRST, so the refusal below is about
+	// the id and not about a registry that failed to appear.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	id := RegisterModCandidate(cross(cur), "lknoreg", []address{m1}, 1)
+	if got := CandidateMembers("lknoreg", id); len(got) != 1 || got[0] != m1 {
+		t.Fatal("a registered candidate must read back before its absence means anything")
+	}
+	uassert.PanicsContains(t, cur, "no such candidate", func() {
+		CandidateMembers("lknoreg", id+999)
+	})
+
+	// mustOpenElection, BRANCH 1 — moderation state and a candidate, no ballot.
+	// Registering is deliberately NOT opening: the registry is permissionless
+	// and unbonded, the ballot is bonded and capped.
+	uassert.PanicsContains(t, cur, "no election is open", func() {
+		ElectionBondOf("lknoreg")
+	})
+}
+
+// mustOpenElection's SECOND refusal, which needs a ballot that has run its
+// course rather than one that never existed. A resolved ballot is not an open
+// one: without the guard every election read would keep serving a finished
+// ballot's pinned figures as though voting were live, and approve() would bank
+// votes into a tally nothing will ever count again.
+func TestAResolvedElectionIsNoLongerOpen(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("lkd-creator")
+	voter := testutils.TestAddress("lkd-voter")
+	mod := testutils.TestAddress("lkd-mod")
+	c := electionCourt(cur, "lkdone", creator, []address{voter}, []int64{900_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	id := RegisterModCandidate(cross(cur), "lkdone", []address{mod}, 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "lkdone", id)
+	if !ElectionOpen("lkdone") {
+		t.Fatal("the ballot must be open before resolving it proves anything")
+	}
+	// Nobody votes, so this resolves to retain — the point here is the resolved
+	// FLAG, not the outcome, and a no-approval ballot reaches it with the fewest
+	// moving parts.
+	testing.SkipHeights(nominationWindow + c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveElection(cross(cur), "lkdone")
+
+	if ElectionOpen("lkdone") {
+		t.Fatal("a resolved ballot must not report as open")
+	}
+	uassert.PanicsContains(t, cur, "no election is open", func() {
+		ElectionBondOf("lkdone")
+	})
+	// And the write path agrees with the read path: a vote cannot land in it.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "no election is open", func() {
+		ApproveCandidate(cross(cur), "lkdone", id)
+	})
+}

@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.47 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.48 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,157 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.48 — THE GLOBAL DAO'S ENTIRE AUTHORITY PERIMETER WAS UNPINNED. Eleven
+  guards, one structural cause, and it took a batch to see it.** `moderation.gno`
+  was the worst surface on v0.47's site table — 153 of 156 decision sites untouched
+  — and mutating its 35 substantive guards returned **26 survivors**.
+  - **What survived is not a scatter, it is a shape.** Eleven of the twenty-six are
+    the *"only a global DAO member/admin may…"* checks, and they guard the most
+    dangerous powers in the design: irreversible `PurgeClaim` and `PurgeCourt`,
+    `GlobalHide`, `ClearAnyBit`, `ClearCourtSuspension`, `GlobalSuspendSet`,
+    `ResetModSet`, DAO membership via `AddGlobalMod`/`RemoveGlobalMod`, and admin
+    succession via `TransferGlobalAdmin`. Every one could be deleted with the whole
+    suite green.
+  - **The cause is the fixture, not the code.** The DAO bootstraps with
+    `directoryAdmin` as its *sole* member, so every test that exercises a global
+    power acts **as** the authority. An authority check that nothing ever calls as a
+    NON-member is never exercised at all. This is the same trap already written into
+    the doctrine as *any test needing a non-authority must not use the court
+    creator* — one level up, at the DAO instead of the court, and it had eleven
+    instances. **A PERIMETER TESTED ONLY FROM INSIDE IS NOT TESTED.**
+  - `TestGlobalDAOPowersRefuseAStranger` closes all eleven from one fixture. Three
+    details make it mean something. The stranger carries a prefix no other test
+    uses, because a stranger who is a DAO member somewhere else in this
+    package-global state would make every assertion vacuous. The authority check is
+    the FIRST substantive guard in each of these — before `mustCourt`, before
+    `mustClaim`, before any category-code or state test — so each refusal is
+    unambiguously about who called, and the court and claim are real anyway so a
+    deleted guard lets the call proceed instead of tripping over a bogus argument.
+    And `PurgeClaim` and `PurgeCourt` share one message, so each is called on its
+    own entrypoint.
+  - **Two powers are asserted only as refusals, deliberately.** A successful
+    `TransferGlobalAdmin` or `AddGlobalMod` moves package-global DAO state that
+    every other test reads — `TestModerationRangeAndAuthorityGates` already refuses
+    to compute a bound off `n` for exactly that reason. The positive control is a
+    `GlobalHide` by the bootstrap member, reversed by `GlobalClear`, which proves
+    the fixture is capable of a global act that lands and leaves the claim as it was
+    found.
+  - **The other thirteen survivors are the state guards, and they failed for the
+    mirror reason**: the suite exercises these powers only on state where they
+    succeed, so the no-op arms were never reached. **AN IDEMPOTENCE GUARD THAT
+    NOTHING EVER CALLS TWICE IS NOT A GUARD, IT IS A COMMENT.**
+    `TestGlobalDAOStateGuardsRefuseNoOps` pins the three nothing-to-clear arms, the
+    already-suspended arm (with the first suspend as its success control, then
+    lifted so the court is left as found), `UnhideItem`'s not-hiding, `checkReason`'s
+    200-character cap, the purge trio's byte-identical category-code message called
+    once per entrypoint, `PurgeModLogRow`'s no-log arm, the admin-cannot-be-removed
+    rule, and `AppointMods`' creator/empty-set pair — paired so the first refusal is
+    about the caller and the second about the argument, and neither can stand in for
+    the other.
+  - **`checkReason` is a shared chokepoint**, reached by `HideItem`, `UnhideItem`
+    and `GlobalHide` alike, so one call pins it for all three — the same structure
+    that let `canonicalMembers`' size cap cover both ways a moderator set enters,
+    and the reason v0.47's `RegisterModCandidate` gaps were *not* covered that way.
+  - **The election lookup helpers hid two refusals under one message each.**
+    `mustCandidate` refuses both a court whose candidate registry was never created
+    and a registry that does not hold the id; `mustOpenElection` refuses both a
+    court that never opened a ballot and one whose ballot has resolved.
+    **A MESSAGE ASSERTION CANNOT DISTINGUISH TWO BRANCHES THAT SHARE ONE MESSAGE** —
+    only the state the fixture builds can, so each branch got its own court.
+    `mustModRead` is reachable at all only because `StartCourt` does not allocate
+    moderation state, which is the same fact the next item is built on.
+  - **A new structural guard: `scripts/check-read-purity.py`.** `mustModRead` exists
+    to state a rule — a query must never allocate and persist state as a side effect
+    of being asked a question — and nothing enforced it. 100 exported reads, none
+    allocates, and the guard keeps it that way. The rule is not invented: the fix at
+    `FolderPurged` already records this exact class, where a nonexistent folder
+    answered two different ways depending on whether the court happened to hold any
+    moderation state. Add that a query carries no storage deposit, so a read that
+    persists lets anyone grow the realm for free while every other flood surface here
+    is priced. A test can only assert this about the reads it names; the failure mode
+    is a *new* read reaching for `ensureMod` because that is the helper the writes
+    use, and allocating makes it SUCCEED where it should have panicked — nothing goes
+    red. Verified to fire on an injected allocating read and on both fail-closed
+    paths, with three control arms in the self-test.
+  - **Two scoping errors of mine in that guard, both caught before it shipped, and
+    the second is the instructive one.** First, I scanned for `ensureMod` alone and
+    reported the invariant clean — there are THREE allocators (`ensureGlobalDAO` and
+    `ensureClaimMod` too), so **AN ENUMERATION OF HELPERS MUST BE COMPLETE BEFORE A
+    SCAN OVER IT MEANS ANYTHING**. Second, my discriminator was "exported and no
+    `cur realm` parameter", which counted `dispute.gno`'s `Check`, `Describe`, `Do`
+    and `Name` as reads. `Do` **executes** a governance action; it takes no `cur
+    realm` because the governor calls it, not a user. A query reaches exported
+    top-level functions only, never a method on an internal type, so methods are now
+    excluded deliberately rather than incidentally. **A DISCRIMINATOR MUST MATCH THE
+    THING IT NAMES** — mine would have made the guard fire on correct code.
+  - **Two guards are now recorded as belonging in NEITHER batch**, on v0.40's rule
+    that known-gaps asserts a gap a test could someday close:
+    - the three `mustElectionInvariants` panics compare package CONSTANTS, and
+      `init()` runs the guard on every package load including every test load, so the
+      relationship is already enforced by the guard itself and deleting a panic is
+      unobservable *because* the constants satisfy it. A test restating the
+      comparison would duplicate `init()`. **A GUARD THAT RUNS IN init() IS ENFORCED
+      BY EVERY TEST LOAD.**
+    - `ensureGlobalDAO`'s *"no court exists yet"* fires only when `globalDAO == nil`
+      AND `directoryAdmin == ""`. Both are package-globals that never reset —
+      `directoryAdmin` is set by the first `StartCourt`, and `globalDAO` once built
+      stays built. A test asserting it would pass ALONE and fail TOGETHER, and
+      `check-isolation` demands both. Genuinely unpinnable, and said so at the guard.
+  - **Still unpinned and deferred with its reason**: `HideItem`'s *"a review verdict
+    just cleared this; the set may not re-hide yet"* needs a `claimMod` whose
+    `executedAt` was stamped by a review verdict and read inside `votingBlocks`.
+    That state is constructible and the next pass should construct it rather than
+    drive a whole meta appeal to reach it.
+  - **Tokenomics audited this round with no defect found, recorded so it is not
+    re-done.** The affordability invariant — affording the ballot is never harder
+    than winning the vote — is defended three times over: the constant ratio gate,
+    base equality (both `electionBond` and `electionFloor` read `votableAt`, supply
+    net of the escrow's votes), and the runtime clamp. The clamp alone makes
+    `bond <= floor` unconditional, which is the classic shape where two sufficient
+    mechanisms mean a test proves neither — but
+    `TestElectionBondNeverExceedsTheFloor` does not fall into it: ARM 1 sizes a court
+    at 10 CC votable so only the clamp can save it, and ARM 2 puts 99% of supply in
+    escrow with both figures deliberately well above `flagMinCC` "so this arm tests
+    the base and not the clamp". **WHEN TWO MECHANISMS WOULD EACH SUFFICE, SIZE EACH
+    ARM SO EXACTLY ONE IS LOAD-BEARING** — already done here, and worth naming as
+    the pattern.
+  - Also checked, also fine: the bond half-burn falls on honest nominators in a
+    failed election, and §169 is explicit that this is the intended price ("the
+    griefer pays ½-bond per cycle, so it is bounded friction"), with above-quorum
+    refunds rejected at round-6 F3 because a ≥5% holder could then self-approve junk
+    to reach the floor and spam the ballot for free. And v0.34's lock-in-place
+    changed what `votableAt` nets: staked CC now counts in **both** the votable base
+    and its holder's weight, where before it counted in neither. The ratio is
+    untouched because both terms read the same base.
+  - **Sanitization audited, clean, and the scan was mostly wrong.** All six markdown
+    composition sites wrap user strings in `sanitize.InlineText`. Four hits dissolved
+    on inspection: three `court.gno` panics carrying a hardcoded TIER name rather
+    than a court name, and `folders.gno`'s `"[purged:" + f.code + "]"`, which sits
+    inside `FolderName` — an exported ACCESSOR that no render path calls, where
+    sanitizing would corrupt the value for every non-rendering caller. Folders have
+    no render surface at all, so nothing leaks; whoever adds one must sanitize at the
+    composition point. That is twice in two rounds that a pattern scan produced only
+    false positives, after the §7.4 episode. **A PATTERN SCAN FLAGS SHAPES, NOT
+    CLAIMS** — inspect every hit before reporting one.
+  - **And the state-guard test failed ALONE while passing in company, which is the
+    isolation guard earning its keep on my own fixture.** The cause: I read
+    `DirectoryAdmin()` *before* creating the court. `directoryAdmin` is empty until
+    the FIRST court in the package exists, so alone that read yields the **zero
+    address** — and `RemoveGlobalMod(zero)` is not a refusal, it is a silent no-op,
+    because zero is simply not a member. The admin-cannot-be-removed arm was
+    therefore vacuous alone and correct in company only because a neighbouring test
+    had made a court first. **A TEST THAT DEPENDS ON PACKAGE-GLOBAL STATE MUST
+    ESTABLISH IT, NOT INHERIT IT** — already in the doctrine, and this is the
+    subtlest instance yet, because inheriting it *worked* in every run that mattered
+    to the suite. The read moved after the court, with an explicit non-empty
+    assertion so it cannot recur silently.
+  - **The diagnosis technique is worth keeping.** `println` markers between arms
+    proved nothing: `uassert` RECORDS a failure and RETURNS, so every marker printed
+    and the test still failed. Replacing them with `if t.Failed() { panic("ARM n") }`
+    turned "some assertion failed" into "arm 11 failed" in a single run.
+    **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
+    t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
+    continued proves nothing about the arm it follows.
 - **v0.47 — `modvote.gno` measured at the site level, and 10 of its 16 guards
   were deletable in silence. Eleven election tests pin six.** The frontier v0.46
   named turned out to be the worst surface in the realm, and it is the one that

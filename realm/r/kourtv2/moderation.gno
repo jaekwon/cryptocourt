@@ -62,6 +62,17 @@ func ensureGlobalDAO() *daoState {
 	if globalDAO != nil {
 		return globalDAO
 	}
+	// THIS PANIC IS IN NO MUTATION BATCH, AND THAT IS DELIBERATE. It fires only
+	// when globalDAO is still nil AND directoryAdmin is still empty, and both are
+	// package-globals that never reset: directoryAdmin is set by the first
+	// StartCourt (court.gno) and globalDAO, once built, stays built. So a test
+	// asserting this refusal would pass ALONE and fail TOGETHER with its package,
+	// and check-isolation.py requires both — the guard is unpinnable by
+	// construction. Note the near miss it protects against anyway: reading
+	// DirectoryAdmin() before any court exists yields the ZERO address, which is
+	// not a DAO member and not the admin, so calls made with it are silently
+	// no-ops rather than refusals. A fixture that reads it must create its court
+	// first.
 	if directoryAdmin == "" {
 		panic("kourtv2: no court exists yet; the global DAO has no admin")
 	}
@@ -174,15 +185,15 @@ type courtMod struct {
 	n       int
 	m       int // m-of-n decision threshold
 
-	suspended      bool
-	suspendedAt    int64 // when the CURRENT suspension began (render)
+	suspended   bool
+	suspendedAt int64 // when the CURRENT suspension began (render)
 	// suspendActByGlobal stamps the two GLOBAL DAO suspension verbs. The meta
 	// staleness guard reads it so a verdict cannot silently overturn a global
 	// decision taken after the appeal was filed — see meta.gno's guard 7.
 	suspendActByGlobal int64
-	suspendedSetID string // WHICH set was judged — an install of the SAME set must not clear the flag
-	setActHeight   int64  // last membership change (for the meta staleness stamp)
-	lastElectionAt int64
+	suspendedSetID     string // WHICH set was judged — an install of the SAME set must not clear the flag
+	setActHeight       int64  // last membership change (for the meta staleness stamp)
+	lastElectionAt     int64
 	// installedByMeta: this set was seated by a meta verdict rather than by the
 	// court's own creator or electorate. Such a set may not SEED claims — the
 	// seeding waiver skips the CC deposit and fee while winner/answerer slices
@@ -343,7 +354,7 @@ func AppointMods(cur realm, courtSlug string, mods []address, m int) {
 	cm.n = n
 	cm.m = m
 	cm.setActHeight = runtime.ChainHeight()
-	cm.installedByMeta = false        // a creator appointment is a local act
+	cm.installedByMeta = false // a creator appointment is a local act
 	clearPendingOnMembershipChange(&cm.pending)
 }
 
@@ -728,7 +739,7 @@ func ResetModSet(cur realm, courtSlug string) {
 	}
 	cm.members = bptree.NewBPTree32()
 	cm.n = 0
-	cm.m = 1                          // n==0 means nobody is a member, so nothing can act
+	cm.m = 1                                    // n==0 means nobody is a member, so nothing can act
 	clearPendingOnMembershipChange(&cm.pending) // stale approvals die with the set
 	cm.suspended = false
 	cm.setActHeight = runtime.ChainHeight()

@@ -850,3 +850,219 @@ func TestGlobalDAODiscardsApprovalsOnMembershipChange(cur realm, t *testing.T) {
 		RemoveGlobalMod(cross(cur), m)
 	}
 }
+
+// THE GLOBAL DAO'S AUTHORITY PERIMETER. Eleven entrypoints carry the most
+// dangerous powers in the design — irreversible purge, global hide, clearing any
+// bit, suspending a court's moderator set — and every one of their authority
+// guards could be deleted with the whole suite still green. The reason is
+// structural and worth stating: the DAO bootstraps with the directory admin as
+// its sole member, so every test that exercises a global power acts AS the
+// authority, and an authority check nothing ever calls as a NON-member is never
+// exercised at all. Eleven mutations, eleven survivors, one cause.
+//
+// The authority check is the FIRST substantive guard in each of these — before
+// mustCourt, before mustClaim, before any category-code or state test — so each
+// refusal below is unambiguously about who called and not about what they asked
+// for. The court and claim are real anyway, so that with a guard deleted the call
+// would proceed rather than trip over a bogus argument.
+//
+// Two powers are asserted ONLY as refusals, deliberately: a successful
+// TransferGlobalAdmin or AddGlobalMod would move package-global DAO state that
+// every other test reads — TestModerationRangeAndAuthorityGates already avoids
+// computing a bound off `n` for exactly that reason.
+func TestGlobalDAOPowersRefuseAStranger(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("perim-alice")
+	// A prefix no other test uses, because a stranger who is a DAO member
+	// somewhere else in the package would make every assertion below vacuous.
+	stranger := testutils.TestAddress("perim-stranger")
+	c := testCourt(cur, "perim", alice, 10_000_000_000)
+	_ = c
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "perim", "a claim the stranger will fail to touch")
+
+	// --- the admin-only seat: membership and succession -------------------
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only the global DAO admin manages membership", func() {
+		AddGlobalMod(cross(cur), stranger)
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only the global DAO admin manages membership", func() {
+		RemoveGlobalMod(cross(cur), DirectoryAdmin())
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only the global DAO admin transfers the seat", func() {
+		TransferGlobalAdmin(cross(cur), stranger)
+	})
+
+	// --- the member-only recovery and redaction powers --------------------
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may global-hide", func() {
+		GlobalHide(cross(cur), "perim", id, "dmca")
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may clear a global hide", func() {
+		GlobalClear(cross(cur), "perim", id)
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may clear bits (recovery)", func() {
+		ClearAnyBit(cross(cur), "perim", id)
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may clear a suspension (recovery)", func() {
+		ClearCourtSuspension(cross(cur), "perim")
+	})
+
+	// --- the member-only irreversible powers ------------------------------
+	// PurgeClaim and PurgeCourt share one message, so each is called on its own
+	// entrypoint: the message cannot tell them apart and only the call can.
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may purge", func() {
+		PurgeClaim(cross(cur), "perim", id, "csam")
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may purge", func() {
+		PurgeCourt(cross(cur), "perim", "csam")
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may suspend a moderator set", func() {
+		GlobalSuspendSet(cross(cur), "perim")
+	})
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may reset a moderator set", func() {
+		ResetModSet(cross(cur), "perim")
+	})
+
+	// THE CONTROL. Without it every refusal above would read the same if the
+	// fixture were simply incapable of a successful global act — a wrong slug, a
+	// claim that does not exist, a DAO with no members. The directory admin IS
+	// the bootstrap member, so the same call it just refused from a stranger goes
+	// through, and its reverse puts the claim back so no later test inherits a
+	// globally hidden claim.
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHide(cross(cur), "perim", id, "dmca")
+	if !TextRedacted("perim", id) {
+		t.Fatal("the bootstrap DAO member's own global-hide must land, or the eleven refusals above prove nothing")
+	}
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalClear(cross(cur), "perim", id)
+	if TextRedacted("perim", id) {
+		t.Fatal("a global clear must lift the redaction it just set")
+	}
+}
+
+// The STATE guards behind the same powers — the refusals that are not about who
+// called but about whether there is anything to do. Every one survived its
+// mutation for the same structural reason the authority perimeter did: the suite
+// exercises these powers only on state where they succeed, so the no-op arms were
+// never reached. An idempotence guard that nothing ever calls twice is not a
+// guard, it is a comment.
+func TestGlobalDAOStateGuardsRefuseNoOps(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("noop-alice")
+	stranger := testutils.TestAddress("noop-stranger")
+	testCourt(cur, "noopc", alice, 10_000_000_000)
+	// AFTER the court, never before. directoryAdmin is empty until the FIRST
+	// court in the package is created, so reading it earlier yields the ZERO
+	// address — and RemoveGlobalMod(zero) is a silent no-op rather than a
+	// refusal, which made the admin-cannot-be-removed arm below vacuous when
+	// this test ran alone and correct only because a neighbour had made a court
+	// first. A test that depends on package-global state must ESTABLISH it.
+	dadmin := DirectoryAdmin()
+	if dadmin == "" {
+		t.Fatal("the directory admin must exist before any global-DAO arm runs")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "noopc", "a claim with nothing done to it")
+
+	// Nothing to clear: no global hide, no bits, no suspension.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "no global hide on that claim", func() {
+		GlobalClear(cross(cur), "noopc", id)
+	})
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "nothing to clear on that claim", func() {
+		ClearAnyBit(cross(cur), "noopc", id)
+	})
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "that court's set is not suspended", func() {
+		ClearCourtSuspension(cross(cur), "noopc")
+	})
+
+	// The mirror image: suspending a set that is already suspended. The FIRST
+	// call has to succeed, which also controls the three refusals above — without
+	// it they would all read the same if the fixture were simply incapable of a
+	// global act that lands.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalSuspendSet(cross(cur), "noopc")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "that set is already suspended", func() {
+		GlobalSuspendSet(cross(cur), "noopc")
+	})
+	// Lifted again, both to pin the clear's success arm and to leave the court as
+	// it was found — a suspended set refuses every court-level act below.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	ClearCourtSuspension(cross(cur), "noopc")
+
+	// A court cannot unhide what it is not hiding. alice is the creator and hence
+	// the sole 1-of-1 moderator, so this is a court-level refusal, not a global
+	// one, and it is reached only because the suspension above was lifted.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "this court is not hiding that claim", func() {
+		UnhideItem(cross(cur), "noopc", id, "never hidden")
+	})
+
+	// The reason cap. checkReason is a SHARED chokepoint — HideItem, UnhideItem
+	// and GlobalHide all pass through it — so one call pins it for all three, the
+	// same way canonicalMembers' size cap covers both ways a moderator set enters.
+	long := ""
+	for i := 0; i < maxReasonLen+1; i++ {
+		long += "x"
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "at most 200 characters", func() {
+		HideItem(cross(cur), "noopc", id, long)
+	})
+
+	// The purge trio each validate the category code in their own body, and the
+	// message is byte-identical at all three sites, so each entrypoint is called
+	// on its own — the message cannot tell them apart and only the call can.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "purge needs a statutory category code", func() {
+		PurgeClaim(cross(cur), "noopc", id, "")
+	})
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "purge needs a statutory category code", func() {
+		PurgeCourt(cross(cur), "noopc", "")
+	})
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "purge needs a statutory category code", func() {
+		PurgeModLogRow(cross(cur), "noopc", id, 1, "")
+	})
+	// And a log row cannot be purged from a claim that has no log — the code is
+	// valid here, so this refusal is about the claim and not about the code.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "that claim has no moderation log", func() {
+		PurgeModLogRow(cross(cur), "noopc", id, 1, "dmca")
+	})
+
+	// The admin seat is vacated by TRANSFER only. Removal would leave a DAO with
+	// no admin and therefore no way to appoint one — unrecoverable, which is why
+	// the guard names the remedy.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "the admin cannot be removed; transfer admin first", func() {
+		RemoveGlobalMod(cross(cur), dadmin)
+	})
+
+	// AppointMods is the creator's power until an election spends it. Paired
+	// deliberately: the first refusal is about the caller, the second about the
+	// argument, so neither can stand in for the other.
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only the court creator appoints moderators", func() {
+		AppointMods(cross(cur), "noopc", []address{alice}, 1)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a moderator set may not be empty", func() {
+		AppointMods(cross(cur), "noopc", []address{}, 1)
+	})
+}
