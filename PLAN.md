@@ -1624,6 +1624,33 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.97 — the OTHER half of the calibration: six of eight per-court params were unpinned
+  too, including the overturn threshold.** `defaultParams()` holds the knobs a court
+  carries, as distinct from the file-level consts pinned in v0.96, and it had the same
+  defect for one extra reason: fixtures OVERRIDE these fields (`c.params.escrowMaxBlocks =
+  450_000` appears in several), so the tests that touch them are testing something else and
+  set their own values first — the defaults were never anyone's subject.
+  Six survived: `disputeThresholdBps` (5001 — a bare MAJORITY overturns, and moving it to
+  6000 changed nothing any test could see), `graceBlocks`, `minAnswerX`, `minClaimDepositCC`,
+  and BOTH escrow bounds. The escrow pair is worth naming because §12 row 30's whole
+  geometry argument is about those two numbers, and the row is an open owner decision:
+  the premise was being reasoned about while the values it rests on were unpinned.
+  Two were caught: `votingBlocks`, and `answerBondCapCC` — which is the good news, because
+  its ZERO is load-bearing well outside its own function. It gets its own assertion rather
+  than a table row, saying so: wiring a cap arms three guards in other files that no fixture
+  can reach while it is 0 (the draw-arm/flat-arm asymmetry PostAnswer's floor comment warns
+  about, and the two clamps that comment lists). The pin tells the next editor to mutate
+  those three first.
+  Also asserted on the DEFAULTS: the two relationships `mustSane` enforces at runtime
+  (escrow floor ≤ cap, threshold in [5001, 10000]). A change that would abort every
+  StartCourt now fails in a unit test with a clearer reason than an init-time panic.
+  **Next target, sized but not started:** the `p/` packages have on the order of 150 numeric
+  definitions between them and only `curve` has ANY batch rows. Their earlier sweeps —
+  governor, twap, grc20votes, checkpoint, curve — were sweeps of LOGIC, exactly as courtv2's
+  were before v0.96, so the constants layer there is presumably in the same state this one
+  was.
+  Batch now 358 rows: 357 caught, 0 not caught, one surviving by design (13m24s).
+
 - **v0.96 — the whole ECONOMIC CALIBRATION was unpinned: 330 rows and not ONE of them
   mutated a constant. Sixteen tried, TEN survived.** Following v0.95's lesson to its sharpest
   form rather than waiting to trip over it a third time.

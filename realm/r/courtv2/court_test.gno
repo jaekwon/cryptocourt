@@ -285,3 +285,58 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 			flagFrozenMultX, flagBondXBps)
 	}
 }
+
+// The other half of the calibration: defaultParams(), the PER-COURT knobs. Distinct from
+// the const block above because these are fields a court carries and fixtures freely
+// override (`c.params.escrowMaxBlocks = 450_000` appears in several), which is a second
+// reason nothing pinned their defaults — the tests that touch them are testing something
+// else and set their own values first.
+//
+// Eight were mutated and SIX survived: the overturn threshold, the grace window, the
+// answerability floor, the claim deposit, and both escrow bounds. Literals again, for the
+// same reason: every fixture reads `c.params.votingBlocks` rather than a number, so the
+// symbol cannot pin itself.
+func TestDefaultParamsAreTheCalibratedValues(t *testing.T) {
+	p := defaultParams()
+	for _, k := range []struct {
+		name string
+		got  int64
+		want int64
+		what string
+	}{
+		{"disputeThresholdBps", p.disputeThresholdBps, 5001,
+			"a bare majority overturns — 5001 is a MAJORITY, not a supermajority"},
+		{"votingBlocks", p.votingBlocks, 120_960, "one week of voting on every lane"},
+		{"graceBlocks", p.graceBlocks, 17_280, "24h of grace"},
+		{"minAnswerX", p.minAnswerX, 100_000_000, "100 CC of trailing stake before a claim is answerable"},
+		{"minClaimDepositCC", p.minClaimDepositCC, 1_000_000, "1 CC to open a claim — the spam price"},
+		{"escrowMinBlocks", p.escrowMinBlocks, 120_960, "the escrow window's floor: one week"},
+		{"escrowMaxBlocks", p.escrowMaxBlocks, 362_880, "and its cap: three weeks (§12 row 30's geometry)"},
+	} {
+		if k.got != k.want {
+			t.Errorf("defaultParams().%s is %d, the design says %d (%s) — if this change "+
+				"is deliberate, edit this pin in the same commit", k.name, k.got, k.want, k.what)
+		}
+	}
+
+	// answerBondCapCC gets its own assertion because ZERO is load-bearing far outside
+	// this function. Wiring a cap makes three guards elsewhere live at once — the
+	// draw-arm/flat-arm asymmetry PostAnswer's floor comment warns about, and the two
+	// clamps that comment lists — none of which has a fixture that can reach them while
+	// the cap is 0. See the note beside the collateralization floor in answer.gno.
+	if p.answerBondCapCC != 0 {
+		t.Errorf("answerBondCapCC must default to 0 (uncapped): got %d. Wiring it arms "+
+			"guards in three other files; mutate those first", p.answerBondCapCC)
+	}
+
+	// The relationships mustSane enforces at runtime, asserted on the DEFAULTS so a
+	// change that would abort every StartCourt fails here first, with a clearer reason.
+	if p.escrowMinBlocks > p.escrowMaxBlocks {
+		t.Errorf("the escrow window's floor must not exceed its cap: %d > %d",
+			p.escrowMinBlocks, p.escrowMaxBlocks)
+	}
+	if p.disputeThresholdBps < 5001 || p.disputeThresholdBps > 10000 {
+		t.Errorf("the overturn threshold must stay in [5001, 10000]: %d",
+			p.disputeThresholdBps)
+	}
+}

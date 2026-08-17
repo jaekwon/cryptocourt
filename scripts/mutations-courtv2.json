@@ -2449,5 +2449,61 @@
   "label": "CONST curveDenom doubled (a gentler curve)",
   "find": "\tcurveDenom = int64(1_000_000_000)",
   "replace": "\tcurveDenom = int64(2_000_000_000)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM disputeThresholdBps 5001 -> 6000 (a higher overturn bar)",
+  "find": "\t\tdisputeThresholdBps: 5001,",
+  "replace": "\t\tdisputeThresholdBps: 6000,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM votingBlocks halved (1 week -> half)",
+  "find": "\t\tvotingBlocks:        120_960,",
+  "replace": "\t\tvotingBlocks:        60_480,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM graceBlocks halved (24h -> 12h)",
+  "find": "\t\tgraceBlocks:         17_280,",
+  "replace": "\t\tgraceBlocks:         8_640,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM minAnswerX halved (100 CC -> 50 CC)",
+  "find": "\t\tminAnswerX:          100_000_000, // 100 CC of trailing total stake",
+  "replace": "\t\tminAnswerX:          50_000_000,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM answerBondCapCC wired from 0 to 1 CC (the knob three guards depend on being 0)",
+  "find": "\t\tanswerBondCapCC:     0,",
+  "replace": "\t\tanswerBondCapCC:     1_000_000,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM minClaimDepositCC doubled (1 CC -> 2 CC)",
+  "find": "\t\tminClaimDepositCC:   1_000_000, // 1 CC",
+  "replace": "\t\tminClaimDepositCC:   2_000_000,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM escrowMinBlocks halved (1 week -> half)",
+  "find": "\t\tescrowMinBlocks:     120_960,",
+  "replace": "\t\tescrowMinBlocks:     60_480,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "PARAM escrowMaxBlocks halved (3 weeks -> 1.5)",
+  "find": "\t\tescrowMaxBlocks:     362_880,",
+  "replace": "\t\tescrowMaxBlocks:     181_440,"
  }
 ]
