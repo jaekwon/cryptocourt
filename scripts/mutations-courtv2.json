@@ -4024,5 +4024,145 @@
   "label": "describeMember: the page demands a LIVE kind, panicking on an unadopted member",
   "find": "\tk := g.anyKind(m.kind)",
   "replace": "\tk := g.kindOf(m.kind)"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "rules check: a name nothing was offered under passes",
+  "find": "\te := g.entryOf(name)\n\tif e == nil {\n\t\treturn errNoSuchKind\n\t}\n\tif !e.live {",
+  "replace": "\te := g.entryOf(name)\n\tif !e.live {"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "rules check: a kind that is NOT ADOPTED may be retuned (the terms swap)",
+  "find": "\tif !e.live {",
+  "replace": "\tif !e.live && name == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "rules check: the retuned terms are never checked for sanity",
+  "find": "\treturn saneRules(next)",
+  "replace": "\treturn nil"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "rules check: the check MUTATES the live entry it is only meant to inspect",
+  "find": "\tnext := e.rules\n\tapplyRules(&next, set)\n\t// The same sanity",
+  "replace": "\tnext := e.rules\n\tapplyRules(&e.rules, set)\n\t// The same sanity"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "rules run: the change never lands",
+  "find": "\te.rules = next\n\treturn nil",
+  "replace": "\treturn nil"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "parseRules: a bare kind name with NO changes is accepted",
+  "find": "\tif len(parts) < 2 {",
+  "replace": "\tif len(parts) < 1 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "parseRules: a field with no value is accepted",
+  "find": "\t\tif eq <= 0 || eq == len(p)-1 {",
+  "replace": "\t\tif eq <= 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "parseRules: an UNKNOWN field is silently ignored",
+  "find": "\t\tdefault:\n\t\t\treturn \"\", nil, govErr(\"unknown field \" + key)\n\t\t}",
+  "replace": "\t\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "parseRules: an unparseable value silently becomes zero",
+  "find": "\t\tn, err := strconv.ParseInt(raw, 10, 64)\n\t\tif err != nil || n < 0 {",
+  "replace": "\t\tn, _ := strconv.ParseInt(raw, 10, 64)\n\t\tif n < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "parseRules: a negative value reaches the rules",
+  "find": "\t\tif err != nil || n < 0 {",
+  "replace": "\t\tif err != nil {"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "field.human: a basis-point term renders as a DURATION",
+  "find": "\t\treturn ufmt.Sprintf(\"%d bps (%s)\", f.n, pct(f.n))",
+  "replace": "\t\treturn span(f.n)"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "field.human: a block count renders as BASIS POINTS",
+  "find": "\t\t// two different ways depending on which page you arrived at.\n\t\treturn span(f.n)",
+  "replace": "\t\t// two different ways depending on which page you arrived at.\n\t\treturn ufmt.Sprintf(\"%d bps (%s)\", f.n, pct(f.n))"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "pct: the fraction is not zero-padded (1 bps reads as 0.1%)",
+  "find": "\tfor int64(len(frac)) < 2 {\n\t\tfrac = \"0\" + frac\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "pct: the whole part is divided by the wrong scale",
+  "find": "\treturn ufmt.Sprintf(\"%d.%s%%\", n/per, frac)",
+  "replace": "\treturn ufmt.Sprintf(\"%d.%s%%\", n/bps, frac)"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "applyRules: a quorum change lands on the THRESHOLD",
+  "find": "\t\tcase \"quorum\":\n\t\t\tr.QuorumBps = f.n",
+  "replace": "\t\tcase \"quorum\":\n\t\t\tr.ThresholdBps = f.n"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "applyRules: a threshold change lands on the QUORUM",
+  "find": "\t\tcase \"threshold\":\n\t\t\tr.ThresholdBps = f.n",
+  "replace": "\t\tcase \"threshold\":\n\t\t\tr.QuorumBps = f.n"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "applyRules: a delay change lands on the GRACE period",
+  "find": "\t\tcase \"delay\":\n\t\t\tr.DelayBlocks = f.n",
+  "replace": "\t\tcase \"delay\":\n\t\t\tr.GraceBlocks = f.n"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "applyRules: a voting change lands on the DELAY",
+  "find": "\t\tcase \"voting\":\n\t\t\tr.VotingBlocks = f.n",
+  "replace": "\t\tcase \"voting\":\n\t\t\tr.DelayBlocks = f.n"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "applyRules: the proposer bar is dropped again (the field that was once missing)",
+  "find": "\t\tcase \"propose\":\n\t\t\tr.ProposeBps = f.n",
+  "replace": "\t\tcase \"propose\":"
+ },
+ {
+  "pkg": "governor",
+  "file": "rules.gno",
+  "label": "applyRules: the grace change lands on the VOTING period",
+  "find": "\t\tcase \"grace\":\n\t\t\tr.GraceBlocks = f.n",
+  "replace": "\t\tcase \"grace\":\n\t\t\tr.VotingBlocks = f.n"
  }
 ]

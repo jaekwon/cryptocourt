@@ -1091,3 +1091,73 @@ func TestABatchLineSplitsAtItsFirstSpace(t *testing.T) {
 		t.Errorf("second member is %q/%q, want toll/1", ms[1].kind, ms[1].payload)
 	}
 }
+
+// Every one of the six rules fields lands on the term it names. Four were held
+// only incidentally and two — threshold and delay — not at all.
+//
+// The routing is the whole of what applyRules does, and a swap is invisible to
+// nearly everything downstream: the change set parses, applyRules cannot fail,
+// saneRules passes because the values are all in range, the proposal executes, and
+// the kind is left passing on a bar nobody agreed to. The two that were unheld are
+// the two that do the most damage that way — `delay=X` landing on GraceBlocks
+// moves the EXPIRY instead of the timelock, so a decision runs immediately and
+// stops being executable early; `threshold=X` landing on QuorumBps swaps a bar on
+// votes CAST for a bar on the whole electorate, which are different questions with
+// the same units.
+//
+// Six DISTINCT values, so no swap can hide behind two fields sharing a number, and
+// the payload is parsed rather than hand-built so the key names are pinned too.
+func TestEveryRulesFieldLandsOnItsOwnTerm(t *testing.T) {
+	name, set, err := parseRules("fee quorum=11 threshold=22 voting=33 delay=44 grace=55 propose=66")
+	if err != nil {
+		t.Fatalf("a well-formed six-field change was refused: %v", err)
+	}
+	if name != "fee" {
+		t.Errorf("the kind parsed as %q, want fee", name)
+	}
+	if len(set) != 6 {
+		t.Fatalf("parsed %d fields, want 6", len(set))
+	}
+
+	got := Rules{}
+	applyRules(&got, set)
+	if got.QuorumBps != 11 {
+		t.Errorf("quorum landed as %d, want 11", got.QuorumBps)
+	}
+	if got.ThresholdBps != 22 {
+		t.Errorf("threshold landed as %d, want 22", got.ThresholdBps)
+	}
+	if got.VotingBlocks != 33 {
+		t.Errorf("voting landed as %d, want 33", got.VotingBlocks)
+	}
+	if got.DelayBlocks != 44 {
+		t.Errorf("delay landed as %d, want 44", got.DelayBlocks)
+	}
+	if got.GraceBlocks != 55 {
+		t.Errorf("grace landed as %d, want 55", got.GraceBlocks)
+	}
+	if got.ProposeBps != 66 {
+		t.Errorf("propose landed as %d, want 66", got.ProposeBps)
+	}
+
+	// And a field left OUT keeps what it had — which is what makes lengthening one
+	// delay a short line, and is also the second way a misrouted field shows up:
+	// it moves a term the proposal never mentioned.
+	after := Rules{QuorumBps: 1, ThresholdBps: 2, VotingBlocks: 3,
+		DelayBlocks: 4, GraceBlocks: 5, ProposeBps: 6}
+	_, one, err := parseRules("fee delay=99")
+	if err != nil {
+		t.Fatalf("a one-field change was refused: %v", err)
+	}
+	applyRules(&after, one)
+	if after.DelayBlocks != 99 {
+		t.Errorf("the delay landed as %d, want 99", after.DelayBlocks)
+	}
+	if after.QuorumBps != 1 || after.ThresholdBps != 2 || after.VotingBlocks != 3 ||
+		after.GraceBlocks != 5 || after.ProposeBps != 6 {
+		t.Errorf("a one-field change moved something else: quorum=%d threshold=%d "+
+			"voting=%d grace=%d propose=%d; want 1/2/3/5/6",
+			after.QuorumBps, after.ThresholdBps, after.VotingBlocks,
+			after.GraceBlocks, after.ProposeBps)
+	}
+}

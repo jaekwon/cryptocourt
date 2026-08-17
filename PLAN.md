@@ -1624,6 +1624,42 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.06 — rules.gno: 16 of 24 caught, and the gap was FIELD ROUTING — two of six terms
+  landing on the wrong one, invisible to everything downstream.**
+  `govern:rules` is the last authority-bearing builtin: it retunes what it takes to pass an
+  adopted power. Already held, and worth naming because I expected otherwise: **the retuned
+  terms ARE checked for sanity** — `saneRules`' third caller is covered, so the "two entry
+  points to one validator" lesson from v1.04 did not repeat here. Also held: retuning a kind
+  that is not adopted (the terms-swap under an open adoption vote), a bare kind name with no
+  changes, an unknown field silently ignored, a negative value reaching the rules, an
+  unparseable value becoming zero, a check that MUTATES the entry it only inspects, both
+  rendering swaps between basis points and durations, `pct`'s zero-padding, and the change
+  failing to land.
+  **What nothing held was `applyRules`' routing for `threshold` and `delay`.** Four of the six
+  fields were caught incidentally; these two were not, and they are the two that do the most
+  damage that way. A swap is invisible to everything downstream — the change set parses,
+  `applyRules` cannot fail, `saneRules` passes because every value is in range, the proposal
+  executes, and the kind is left passing on a bar nobody agreed to. `delay=X` landing on
+  `GraceBlocks` moves the EXPIRY instead of the timelock, so a decision becomes runnable at once
+  and stops being runnable early; `threshold=X` landing on `QuorumBps` swaps a bar on votes CAST
+  for a bar on the whole electorate — different questions carrying the same units, which is
+  exactly why the mistake survives inspection. The new test parses a six-field payload with six
+  DISTINCT values so no swap can hide behind two terms sharing a number, and separately asserts
+  that a one-field change moves nothing else.
+  Four equivalent mutants, all verified rather than assumed. `run`'s `e == nil` is UNREACHABLE:
+  `g.kinds` is only ever `Set` and never `Remove`d anywhere in the package, and `check` has
+  already established the entry in the same transaction. Two `parseRules` legs (`eq <= 0` and
+  splitting at the LAST `=`) both refuse either way and differ only in the error text, because a
+  key containing `=` can never match the field switch.
+  **And one equivalence worth keeping for what it says about the difference between code and
+  tests.** `pct` computes `per := bps / 100` where a literal `100` would do, and its comment says
+  the derivation exists so a change to the scale cannot leave the rendering stale — so the
+  mutation is equivalent today and load-bearing only if `bps` moves. That is the exact INVERSE of
+  the derived-expectation defect this loop keeps hitting: deriving from the constant is right in
+  production code, where it keeps two things agreeing, and wrong in a test, where it destroys the
+  pin. Same expression, opposite verdict, depending on which side of the assertion it sits.
+  Batch now 595 rows: 594 caught, 0 not caught, one surviving by design.
+
 - **v1.05 — batch.gno: 10 of 19 caught, and the survivor that matters is the one guard a batch
   exists to make true.** 144 lines with no `p/`-side tests at all; everything reaching it came
   from the realm suite. Already held: a member the holders never adopted, a batch containing a
