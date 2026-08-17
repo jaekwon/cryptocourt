@@ -1624,6 +1624,31 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.69 — `Params.mustSane` had six unexercised guards, and a note on why
+  `mustInvariants` is NOT mutation-testable.** `court.gno` was the last thin file by
+  ratio: 348 lines, two batch rows. Thirteen guards live in it — seven in
+  `mustInvariants` and six in `mustSane` — and none of the latter had a test.
+  They are unreachable today (StartCourt hardcodes `defaultParams()` and there is no
+  params setter anywhere), so the fixture calls the method DIRECTLY, the approach settled
+  in v0.60 for `mulDiv128` and `capBonus`. Worth pinning now rather than later because
+  `mustSane` becomes load-bearing the moment a setter exists, and §12 row 37 already
+  contemplates one (the deposit lever, 1 CC → 5 CC): a validator nobody has ever
+  exercised is a poor thing to discover a governance path with. All seven mutations
+  caught, including BOTH edges of the threshold band — weakening the lower bound to 5000
+  would let a TIE overturn an answer, and the fixture asserts 5001 and 10000 are accepted
+  so the guard cannot pass by rejecting everything. Also pinned: equal escrow bounds stay
+  legal (a fixed-length window, which several fixtures set) and a zero bond cap stays the
+  documented "uncapped" sentinel.
+  **`mustInvariants` is deliberately NOT in the batch, and the reason is worth recording.**
+  It runs at `init()`, so mutating any constant it checks panics the PACKAGE LOAD rather
+  than failing a test. The harness would print "caught" — but nothing was judged by a
+  test; the realm simply refused to load. That is the same false signal as counting a
+  build failure as a catch, which this file's header warns about, arriving through a third
+  door. The deploy check IS its own enforcement and needs no fixture; what it does not
+  need is a batch row implying a test stands behind it.
+  Batch now 100 rows, all caught, none invalid — including two `directory.gno` rows that
+  were mutation-verified back in v0.58 and never recorded.
+
 - **v0.68 — the CLAIM LIFECYCLE was almost entirely unpinned: six survivors in one
   batch, the worst run of the session.** The remaining thin files (`claim.gno`,
   `court.gno`, one row each) turned out to be thin because nothing tested them.

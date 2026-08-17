@@ -119,3 +119,89 @@ func TestSlugCharsetIsWhatMakesTheRawRenderSafe(cur realm, t *testing.T) {
 		}
 	}
 }
+
+// Params.mustSane's six guards, none of which had a test. They are unreachable today —
+// StartCourt hardcodes defaultParams() and there is no params setter anywhere — so this
+// calls the method directly rather than trying to construct an unreachable court, the
+// same approach used for mulDiv128 and capBonus.
+//
+// Worth pinning now rather than later because mustSane becomes load-bearing the moment a
+// setter exists, and PLAN §12 row 37 already contemplates one (the deposit lever, 1 CC →
+// 5 CC). A validator that has never been exercised is a poor thing to discover a
+// governance path with. Each case also asserts the DEFAULTS pass, so the guards cannot
+// hold by rejecting everything.
+func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
+	mustPanicWith := func(want string, fn func()) {
+		t.Helper()
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatalf("expected a panic saying %q; nothing panicked", want)
+			}
+			got, ok := r.(string)
+			if !ok || !containsSub(got, want) {
+				t.Fatalf("panic %v, want one saying %q", r, want)
+			}
+		}()
+		fn()
+	}
+
+	// The defaults are sane — the control.
+	_ = defaultParams().mustSane()
+
+	// The overturn threshold is a STRICT majority band: 5000 would let a tie overturn.
+	for _, bad := range []int64{5000, 0, -1, 10001} {
+		p := defaultParams()
+		p.disputeThresholdBps = bad
+		mustPanicWith("overturn threshold must be in [5001, 10000]", func() { p.mustSane() })
+	}
+	// Both boundaries accepted.
+	for _, ok := range []int64{5001, 10000} {
+		p := defaultParams()
+		p.disputeThresholdBps = ok
+		_ = p.mustSane()
+	}
+
+	// A zero voting or grace window would close a vote in the block it opened.
+	for _, f := range []func(p *Params){
+		func(p *Params) { p.votingBlocks = 0 },
+		func(p *Params) { p.graceBlocks = 0 },
+		func(p *Params) { p.votingBlocks = -1 },
+	} {
+		p := defaultParams()
+		f(&p)
+		mustPanicWith("vote and grace windows must be positive", func() { p.mustSane() })
+	}
+
+	// minAnswerX is the answerability floor; zero would let a claim with no stake be
+	// answered, and every %-of-X̄ bar would then price off nothing.
+	p := defaultParams()
+	p.minAnswerX = 0
+	mustPanicWith("minAnswerX must be positive", func() { p.mustSane() })
+
+	// A zero deposit makes claim-opening free, which is the anti-spam price.
+	p = defaultParams()
+	p.minClaimDepositCC = 0
+	mustPanicWith("claim deposit must never be zero", func() { p.mustSane() })
+
+	// The escrow window must be a window: positive, and max not below min.
+	p = defaultParams()
+	p.escrowMinBlocks = 0
+	mustPanicWith("escrow window is malformed", func() { p.mustSane() })
+	p = defaultParams()
+	p.escrowMaxBlocks = p.escrowMinBlocks - 1
+	mustPanicWith("escrow window is malformed", func() { p.mustSane() })
+	// Equal is allowed: a fixed-length window is legitimate (several fixtures set it).
+	p = defaultParams()
+	p.escrowMaxBlocks = p.escrowMinBlocks
+	_ = p.mustSane()
+
+	// A negative cap would read as "uncapped" through the `> 0` test at PostAnswer.
+	p = defaultParams()
+	p.answerBondCapCC = -1
+	mustPanicWith("answerBondCapCC must be non-negative", func() { p.mustSane() })
+	// Zero is the documented "uncapped" sentinel and must stay legal.
+	p = defaultParams()
+	p.answerBondCapCC = 0
+	_ = p.mustSane()
+}

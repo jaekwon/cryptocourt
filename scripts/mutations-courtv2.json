@@ -635,5 +635,68 @@
   "label": "StartCourt overwrites an existing slug",
   "find": "\tif courts.Has(slug) {\n\t\tpanic(\"courtv2: that slug is taken\")\n\t}",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: threshold band lower bound weakened to a tie",
+  "find": "\tif p.disputeThresholdBps < 5001 || p.disputeThresholdBps > 10000 {",
+  "replace": "\tif p.disputeThresholdBps < 5000 || p.disputeThresholdBps > 10000 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: threshold band upper bound removed",
+  "find": "\tif p.disputeThresholdBps < 5001 || p.disputeThresholdBps > 10000 {",
+  "replace": "\tif p.disputeThresholdBps < 5001 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: grace window may be zero",
+  "find": "\tif p.votingBlocks < 1 || p.graceBlocks < 1 {",
+  "replace": "\tif p.votingBlocks < 1 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: minAnswerX may be zero",
+  "find": "\tif p.minAnswerX < 1 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: the claim deposit may be zero",
+  "find": "\tif p.minClaimDepositCC < 1 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: escrow max may be below min",
+  "find": "\tif p.escrowMinBlocks < 1 || p.escrowMaxBlocks < p.escrowMinBlocks {",
+  "replace": "\tif p.escrowMinBlocks < 1 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSane: a negative bond cap is accepted",
+  "find": "\tif p.answerBondCapCC < 0 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "directory.gno",
+  "label": "SetTier: the range check is removed",
+  "find": "\tif tier < int(tierHidden) || tier > int(tierFeatured) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "directory.gno",
+  "label": "ListByTier ignores the tier filter",
+  "find": "\t\tif int(v.(*Court).tier) == tier {",
+  "replace": "\t\tif true {"
  }
 ]
