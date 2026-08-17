@@ -96,7 +96,7 @@ func AddGlobalMod(cur realm, who address) {
 	if !d.members.Has(who.String()) {
 		d.members.Set(who.String(), true)
 		d.n++
-		d.pending = bptree.NewBPTree32() // stale approvals must not carry over
+		clearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over
 	}
 }
 
@@ -117,7 +117,7 @@ func RemoveGlobalMod(cur realm, who address) {
 		if d.purgeM > d.n {
 			d.purgeM = d.n
 		}
-		d.pending = bptree.NewBPTree32() // a removed member's approval must not still count
+		clearPendingOnMembershipChange(&d.pending) // a removed member's approval must not still count
 	}
 }
 
@@ -132,6 +132,14 @@ func SetPurgeThreshold(cur realm, m int) {
 	}
 	if m < 1 || m > d.n {
 		panic("kourtv2: the purge threshold must be in 1..n")
+	}
+	if m != d.purgeM {
+		// Lowering the bar re-scores every banked signature against it: five
+		// approvals gathered under 7-of-7 become executable the moment the
+		// admin sets 5, at their sole discretion. The threshold is half of
+		// "who must agree", so changing it invalidates consent just as
+		// membership does.
+		clearPendingOnMembershipChange(&d.pending)
 	}
 	d.purgeM = m
 }
@@ -148,6 +156,10 @@ func TransferGlobalAdmin(cur realm, to address) {
 	if !d.members.Has(to.String()) {
 		d.members.Set(to.String(), true)
 		d.n++
+		// AddGlobalMod wipes on this exact operation; this path did not, which
+		// made it the STRICTLY BETTER route for an admin wanting to complete a
+		// stuck purge: seat a fresh key without resetting the banked signatures.
+		clearPendingOnMembershipChange(&d.pending)
 	}
 	d.admin = to
 }
@@ -239,13 +251,33 @@ type modAct struct {
 	purged bool
 }
 
-// approval accumulates distinct-member approvals for an m-of-n action. It
-// deliberately carries no proposer or timestamp: both were stored and never
-// read. Re-add them together with a sweep when pending entries get an expiry —
-// today a member can leave unfired proposals outstanding forever.
+// pendingTTLBlocks is how long an unfired m-of-n approval stays valid: 7 days,
+// the same duration as flagCooldownBlocks and the default votingBlocks. This
+// realm's unit for "a body gets this long to decide" — and a set of at most 32
+// self-selected moderators should not get longer than a whole court electorate
+// gets for a dispute. §3.2's own runbook targets an m-of-n purge "within 72h",
+// so a week is already 2.3× the operating target.
+//
+// Deliberately NOT reSetWindowBlocks (14d): that measures the DMCA §512(g)
+// counter-notice period, an external statutory clock that counsel must be able
+// to retune alone. Coupling an internal quorum rule to it means one of the two
+// eventually gets changed for the other's reasons.
+const pendingTTLBlocks = flagCooldownBlocks
+
+// approval accumulates distinct-member approvals for an m-of-n action.
+//
+// openedAt is read (unlike the actor0 that was deleted alongside it in v0.16
+// and stays deleted, still having no reader). It exists because THE REAL DEFECT
+// here was never storage — approvals are self-paid via the storage deposit,
+// bounded by a derived key space, and walked by nothing. It is that an approval
+// could never go stale: m-of-n meant "m members agreed at some point in
+// history", not "m members agree now". A signature given in January sat at m-1
+// and could be completed in November by one careless colleague, on an
+// irreversible purge its author would have withdrawn if withdrawing existed.
 type approval struct {
 	approvers *bptree.BPTree // addr -> true
 	reason    string
+	openedAt  int64
 }
 
 // ensureMod lazily creates a court's moderation object with a 1-of-1 creator
@@ -312,13 +344,29 @@ func AppointMods(cur realm, courtSlug string, mods []address, m int) {
 	cm.m = m
 	cm.setActHeight = runtime.ChainHeight()
 	cm.installedByMeta = false        // a creator appointment is a local act
-	cm.pending = bptree.NewBPTree32() // see clearPendingOnMembershipChange
+	clearPendingOnMembershipChange(&cm.pending)
 }
 
 func requireMod(cm *courtMod, who address) {
 	if !cm.members.Has(who.String()) {
 		panic("kourtv2: not a moderator of this court")
 	}
+}
+
+// clearPendingOnMembershipChange discards a body's pending m-of-n approvals.
+//
+// Approvals record approver ADDRESSES and are never re-validated at fire time,
+// so a surviving entry lets a deposed moderator's signature still count toward
+// the threshold — including toward an irreversible purge. Any change to WHO is
+// in a set, or to HOW MANY of them must agree, therefore invalidates every
+// approval collected under the old rule.
+//
+// This existed only as a comment and four hand-written copies of one line, and
+// the three membership paths added later each forgot it (three identical
+// adversarial reviewers found the same hole independently). Naming an invariant
+// is not enforcing it; a helper every mutating path calls is.
+func clearPendingOnMembershipChange(pending **bptree.BPTree) {
+	*pending = bptree.NewBPTree32()
 }
 
 // Pending m-of-n approvals are DISCARDED whenever the set changes. They record
@@ -376,12 +424,41 @@ func (clm *claimMod) appendLog(actor address, code, reason string) uint64 {
 // approveAction records who's approval for key and returns (fire, reason). When
 // the m-th distinct member approves, the pending entry is cleared and fire=true;
 // with m==1 the first call fires. Re-approving is a no-op (returns false).
+//
+// EXPIRY IS LAZY, AND ONLY LAZY — there is no sweep entrypoint, by design.
+//
+// The deadline is FIXED at the first approval, not slid forward by each new
+// signer. Sliding would give an entry up to n×TTL of life (32 × 7 days ≈ 224
+// days), reintroducing the problem; and a fixed death height is a public,
+// deterministic function of chain state, identical for attacker and defender,
+// which is what makes this unweaponisable. A permissionless sweep with a hard
+// cutoff WOULD be a veto: watch for the m-th signature, front-run it, and the
+// entry vanishes — profitably, since the storage refund pays the caller. Lazy
+// eviction has no such surface. The predicate is only ever evaluated by a
+// member already authorised for that exact key, and eviction is a REPLACEMENT,
+// not a deletion: the evictor's own signature seeds the fresh entry, so they
+// cannot leave the key empty. Racing to touch an already-expired key is not a
+// veto, it is authorship of a new proposal, and the others can re-sign and fire
+// in the same block.
+//
+// It is also the reclaim. The overwriting Set drops the old approval and its
+// approvers tree in the same transaction, and gno refunds the released bytes to
+// that caller — so every entry anyone revisits is collected automatically, and
+// the entries nobody revisits are exactly the ones whose existence costs
+// nothing. Expiry is silent: no cooldown, no cap, no event. Punishing a lapse
+// would tax the honest first mover, and an m-of-n set whose members are afraid
+// to sign first never acts at all.
 func approveAction(pending *bptree.BPTree, key string, who address, reason string, m int) (bool, string) {
+	now := runtime.ChainHeight()
 	var a *approval
 	if v := pending.Get(key); v != nil {
 		a = v.(*approval)
-	} else {
-		a = &approval{approvers: bptree.NewBPTree32(), reason: reason}
+		if now >= a.openedAt+pendingTTLBlocks {
+			a = nil // stale by rule; this caller opens a fresh proposal
+		}
+	}
+	if a == nil {
+		a = &approval{approvers: bptree.NewBPTree32(), reason: reason, openedAt: now}
 	}
 	if a.approvers.Has(who.String()) {
 		return false, ""
@@ -652,7 +729,7 @@ func ResetModSet(cur realm, courtSlug string) {
 	cm.members = bptree.NewBPTree32()
 	cm.n = 0
 	cm.m = 1                          // n==0 means nobody is a member, so nothing can act
-	cm.pending = bptree.NewBPTree32() // stale approvals die with the set
+	clearPendingOnMembershipChange(&cm.pending) // stale approvals die with the set
 	cm.suspended = false
 	cm.setActHeight = runtime.ChainHeight()
 	emitGlobalAct(c.id, 0, "reset-mod-set", who)
@@ -863,6 +940,38 @@ func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, category
 	clm.log[idx].reason = "" // gone from state, not merely hidden at render
 	clm.appendLog(who, "purgerow:"+code, "")
 	emitPurge(c.id, claimID, code, who)
+}
+
+// PendingApproval reports how many approvals an action key has collected and
+// the height its window closes. A deadline nobody can see is a trap: a set that
+// gathered signatures over six days needs to know it has one left.
+//
+// Non-allocating, and reports an already-expired entry as absent — the same
+// answer approveAction will act on, so the read cannot disagree with the write
+// path (the v0.19 rule). courtSlug "" reads the global DAO's tree.
+func PendingApproval(courtSlug, actionKey string) (approvals int, expiresAt int64) {
+	var pending *bptree.BPTree
+	if courtSlug == "" {
+		if globalDAO == nil {
+			return 0, 0
+		}
+		pending = globalDAO.pending
+	} else {
+		c := mustCourt(courtSlug)
+		if c.mod == nil {
+			return 0, 0
+		}
+		pending = c.mod.pending
+	}
+	v := pending.Get(actionKey)
+	if v == nil {
+		return 0, 0
+	}
+	a := v.(*approval)
+	if runtime.ChainHeight() >= a.openedAt+pendingTTLBlocks {
+		return 0, 0
+	}
+	return a.approvers.Size(), a.openedAt + pendingTTLBlocks
 }
 
 // CourtSuspended reports whether a court's moderator set is suspended (masked).

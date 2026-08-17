@@ -519,3 +519,77 @@ func TestSetTierIsAGlobalDAOPower(cur realm, t *testing.T) {
 		t.Fatal("any global DAO member may set a tier")
 	}
 }
+
+// An approval must go stale. The defect was never storage — approvals are
+// self-paid, bounded by a derived key space, and walked by nothing. It is that
+// m-of-n meant "m members agreed at some point in history" rather than "m
+// members agree now": a signature given in January sat at m-1 and could be
+// completed in November by one colleague, on an irreversible act its author
+// would have withdrawn if withdrawing existed.
+func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ttl-alice")
+	m1 := testutils.TestAddress("ttl-m1")
+	m2 := testutils.TestAddress("ttl-m2")
+	testCourt(cur, "ttlc", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "ttlc", []address{m1, m2}, 2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ttlc", "a claim")
+	key := "hide:" + strconv.FormatUint(id, 10)
+
+	testing.SetRealm(testing.NewUserRealm(m1))
+	HideItem(cross(cur), "ttlc", id, "one")
+	n, expires := PendingApproval("ttlc", key)
+	if n != 1 || expires == 0 {
+		t.Fatalf("the deadline must be visible: %d approvals, expires %d", n, expires)
+	}
+
+	// One block past the window: m2's approval starts a NEW proposal rather
+	// than completing the old one.
+	testing.SkipHeights(pendingTTLBlocks + 1)
+	if n, _ := PendingApproval("ttlc", key); n != 0 {
+		t.Fatal("an expired entry must read as absent, matching what the write path will do")
+	}
+	testing.SetRealm(testing.NewUserRealm(m2))
+	HideItem(cross(cur), "ttlc", id, "two")
+	if HiddenFromListing("ttlc", id) {
+		t.Fatal("a stale signature completed the quorum")
+	}
+	if n, _ := PendingApproval("ttlc", key); n != 1 {
+		t.Fatal("the evictor's own signature should seed the fresh proposal")
+	}
+
+	// EXPIRY IS A RESTART, NOT A BLOCK: the set can re-sign and fire at once.
+	testing.SetRealm(testing.NewUserRealm(m1))
+	HideItem(cross(cur), "ttlc", id, "two")
+	if !HiddenFromListing("ttlc", id) {
+		t.Fatal("two contemporaneous approvals must still fire immediately")
+	}
+}
+
+// The deadline is FIXED at the first approval, not slid forward by each signer.
+// Sliding would give an entry up to n x TTL of life, and a death height that
+// depends on other members' behaviour is one a coordinated pair can steer.
+func TestApprovalDeadlineIsFixedNotSliding(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("slide-alice")
+	m1 := testutils.TestAddress("slide-m1")
+	m2 := testutils.TestAddress("slide-m2")
+	m3 := testutils.TestAddress("slide-m3")
+	testCourt(cur, "slidec", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "slidec", []address{m1, m2, m3}, 3)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "slidec", "a claim")
+
+	testing.SetRealm(testing.NewUserRealm(m1))
+	HideItem(cross(cur), "slidec", id, "one")
+	testing.SkipHeights(pendingTTLBlocks - 10)
+	testing.SetRealm(testing.NewUserRealm(m2))
+	HideItem(cross(cur), "slidec", id, "two") // progress, but the clock is fixed
+	testing.SkipHeights(20)                   // now past the ORIGINAL deadline
+	testing.SetRealm(testing.NewUserRealm(m3))
+	HideItem(cross(cur), "slidec", id, "three")
+	if HiddenFromListing("slidec", id) {
+		t.Fatal("a mid-window approval must not extend the original deadline")
+	}
+}

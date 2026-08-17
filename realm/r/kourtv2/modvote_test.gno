@@ -383,3 +383,67 @@ func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
 	// The beta-of-votable arm, not the clamp: the ratio holds on its own here.
 	uassert.Equal(t, int64(5_000_000), bond2, "beta of votable weight, well clear of both bounds")
 }
+
+// THE deposed-signature bypass. Approvals record ADDRESSES and are never
+// re-validated at fire time, so any surviving entry lets a moderator the
+// electorate just removed still count toward the threshold. installModSet is
+// the shared install primitive for both peers that replace a set — the court's
+// own election and the meta court's `mod:setmods` verdict — and it was the one
+// membership change that left `pending` standing.
+//
+// The exploit this pins: the outgoing set banks m-1 approvals on a hide, the
+// electorate throws them out, and a single member of the incoming set fires it
+// on the deposed signatures. That breaks §3.1's "a lone puppet installed into a
+// set can act on nothing" in precisely the scenario the election exists to
+// remedy, and ResolveElection is permissionless, so the attacker does not even
+// need to be the one who calls it.
+func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("dep-creator")
+	holder := testutils.TestAddress("dep-holder")
+	oldA := testutils.TestAddress("dep-oldA")
+	oldB := testutils.TestAddress("dep-oldB")
+	newX := testutils.TestAddress("dep-newX")
+	newY := testutils.TestAddress("dep-newY")
+
+	c := electionCourt(cur, "deposed", creator, []address{holder}, []int64{1_000_000_000})
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "deposed", []address{oldA, oldB}, 2)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	id := OpenClaim(cross(cur), "deposed", "a claim the old set wanted buried")
+
+	// The outgoing set banks one of the two approvals it needs.
+	testing.SetRealm(testing.NewUserRealm(oldA))
+	HideItem(cross(cur), "deposed", id, "pretextual")
+	if HiddenFromListing("deposed", id) {
+		t.Fatal("fixture: one of two must not fire")
+	}
+
+	// The electorate replaces them with a DISJOINT set.
+	testing.SetRealm(testing.NewUserRealm(holder))
+	cand := RegisterModCandidate(cross(cur), "deposed", []address{newX, newY}, 2)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	OpenElection(cross(cur), "deposed", cand)
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	ApproveCandidate(cross(cur), "deposed", cand)
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	ResolveElection(cross(cur), "deposed")
+	if !IsCourtMod("deposed", newX) || IsCourtMod("deposed", oldA) {
+		t.Fatal("fixture: the election must have installed the new set")
+	}
+
+	// ONE member of the incoming set acts. Under the bug, oldA's banked
+	// signature completed the 2-of-2 and this hid the claim.
+	testing.SetRealm(testing.NewUserRealm(newX))
+	HideItem(cross(cur), "deposed", id, "reviewing")
+	if HiddenFromListing("deposed", id) {
+		t.Fatal("a deposed moderator's approval completed the new set's quorum")
+	}
+	// And the new set can still act properly, on its own two signatures.
+	testing.SetRealm(testing.NewUserRealm(newY))
+	HideItem(cross(cur), "deposed", id, "reviewing")
+	if !HiddenFromListing("deposed", id) {
+		t.Fatal("the incoming set's own two approvals should fire")
+	}
+}

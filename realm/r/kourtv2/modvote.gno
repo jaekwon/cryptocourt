@@ -510,6 +510,15 @@ func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64, byElect
 	cm.members = fresh
 	cm.n = len(cand.members)
 	cm.m = cand.m
+	// THE hole (found independently by three reviewers). This is the shared
+	// install primitive for BOTH peers that replace a set — the court's own
+	// election and the meta court's `mod:setmods` verdict — and it was the only
+	// membership change that left the old set's approvals standing. Old set at
+	// m-1 on a hide, electorate throws them out, one new member fires it on the
+	// deposed signatures: exactly the "a lone puppet installed into a set can
+	// act on nothing" bound (§3.1), broken in the scenario the election IS the
+	// remedy for, and reachable through permissionless ResolveElection.
+	clearPendingOnMembershipChange(&cm.pending)
 	cm.setActHeight = at
 	cm.installedByMeta = !byElection
 	// Clear the suspension UNLESS this install re-seats the very set that was

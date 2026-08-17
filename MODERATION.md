@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.24 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.25 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,70 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.25 — pending approvals: a live m-of-n bypass, and consent that never
+  went stale (3 identical reviewers)**. The question put to the panel was
+  storage: nothing prunes `pending`, so a moderator can leave unfired proposals
+  outstanding forever. **All three came back saying the storage framing is the
+  weak half — and all three independently found the same live authorization
+  bug instead.**
+  - **THE BUG (3/3, verified here, exploit test written and confirmed by
+    reverting the fix). `installModSet` did not clear `cm.pending`.** Approvals
+    record ADDRESSES and are never re-validated at fire time, so any surviving
+    entry lets a deposed moderator's signature still count. `installModSet` is
+    the shared install primitive for *both* peers that replace a set — the
+    court's own election and the meta court's `mod:setmods` verdict — and it was
+    the only membership change that left approvals standing. Old set banks m-1
+    on a hide, the electorate throws them out, one member of the incoming set
+    fires it on the deposed signatures. That breaks §3.1's "a lone puppet
+    installed into a set can act on nothing" **in the exact scenario the
+    election is the remedy for**, and `ResolveElection` is permissionless.
+  - Two more of the same family: **`TransferGlobalAdmin`** adds a member without
+    wiping (making it the strictly better route than `AddGlobalMod` for an admin
+    wanting to complete a stuck purge — seat a key without resetting the banked
+    signatures), and **`SetPurgeThreshold`** lowers `purgeM` without wiping, so
+    signatures gathered under 7-of-7 become executable at 5 on the admin's word.
+    The threshold is half of "who must agree".
+  - **Root cause, and the fix that matters more than the three lines.**
+    `moderation.gno` referenced a helper `clearPendingOnMembershipChange` that
+    **did not exist** — the invariant was named in a comment and implemented as
+    four hand-written copies of one line, and every membership path added later
+    forgot it. The helper is now real and all six sites call it. *Naming an
+    invariant is not enforcing it.*
+  - **The expiry itself (3/3 on shape, 2/3 on the two splits).** Framed as
+    **consent freshness**, not garbage collection: the panel showed the storage
+    case is thin — entries are self-paid by the proposer's own storage deposit,
+    the key space is *derived* (every key needs a pre-existing claim, folder or
+    row, each a larger separately-paid object), and nothing in the realm ever
+    walks `pending`. What is real is that m-of-n meant "m members agreed at some
+    point in history" rather than "m members agree now".
+    `pendingTTLBlocks = flagCooldownBlocks` (7 days) — the realm's existing unit
+    for "a body gets this long to decide", and 2.3× §3.2's own 72h purge
+    runbook. **Not** `reSetWindowBlocks`: that is the statutory §512(g) clock and
+    must stay independently tunable.
+    **Lazy eviction only, no sweep entrypoint (2/3)** — and the dissenting
+    design is why. A permissionless sweep *is* a front-runnable veto: watch for
+    the m-th signature, snipe the entry, and moderation fails — profitably,
+    since the storage refund pays the caller. Lazy eviction has no such surface:
+    the predicate is only ever evaluated by a member already authorised for that
+    key, and eviction is a **replacement, not a deletion**, so the evictor's own
+    signature seeds the fresh entry and they cannot leave the key empty. It is
+    also the reclaim — the overwriting `Set` frees the old object in the same
+    transaction.
+    **Fixed deadline from the first approval, not sliding (2/3)**: sliding gives
+    an entry up to n×TTL (32 × 7 days ≈ 224 days) and makes the death height
+    depend on other members' behaviour, which a coordinated pair can steer. A
+    fixed height is public and identical for attacker and defender.
+    **Silent (3/3)** — no cooldown, no cap, no event. Punishing a lapse taxes the
+    honest first mover, and an m-of-n set whose members fear signing first never
+    acts. Only `openedAt` came back from v0.16; **`actor0` stays deleted**, still
+    having no reader.
+    Per-member caps rejected 3/3: address-keyed, which this project's root
+    principle rejects by name, and a liveness footgun that locks honest
+    moderators out during the spam wave that needs them.
+  - `PendingApproval(court, key)` ships with it: a deadline nobody can see is a
+    trap for a set six days into gathering signatures. Non-allocating, and it
+    reports an expired entry as absent — the same answer the write path acts on,
+    per the v0.19 rule.
 - **v0.24 — the unimplemented spec, two built and one handed back**.
   - **I11, row-level mod-log purge — BUILT.** `modAct.rowID` and `modAct.purged`
     both existed and `renderModLog` had honoured `purged` since it was written,
