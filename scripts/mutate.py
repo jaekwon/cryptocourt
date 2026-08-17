@@ -45,14 +45,14 @@ A saved batch for the courtv2 money path lives at scripts/mutations-courtv2.json
 Needs a gno toolchain. PKGS below lists every tree this can stage or mutate.
 """
 
-import contextlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import time
+
+import stagelock
 
 SRC = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -121,34 +121,6 @@ OBSERVERS = {
 }
 
 
-@contextlib.contextmanager
-def stage_lock(root):
-    """Serialize the shared staging area, as realm-test and check-isolation do.
-
-    Every runner stages into the SAME $GNOROOT/examples/gno.land/{p,r}/cryptocourt
-    and removes it afterwards; the import paths fix that location, so it cannot be
-    parameterized. Two concurrent runners delete each other's tree mid-run and the
-    loser reports a phantom build failure — which this harness would count as
-    INVALID, i.e. as a mutation it could not judge. mkdir is atomic, so it is the
-    lock.
-    """
-    lock = os.path.join(root, "examples/gno.land/.cryptocourt-stage.lock")
-    for _ in range(600):
-        try:
-            os.mkdir(lock)
-            break
-        except FileExistsError:
-            time.sleep(1)
-    else:
-        print(f"mutate: the stage lock at {lock} has been held for 10 minutes; "
-              f"remove it if it is stale", file=sys.stderr)
-        raise SystemExit(1)
-    try:
-        yield
-    finally:
-        shutil.rmtree(lock, ignore_errors=True)
-
-
 def stage(root):
     """Copy both trees into GNOROOT/examples at the paths they hold on chain."""
     for src, rel in PKGS.values():
@@ -175,7 +147,7 @@ def run_suite(root, pkg=None):
     # Under the lock: one complete stage/test/unstage cycle. Taking it here rather
     # than around the whole run keeps a long batch from holding the shared tree for
     # its entire duration, and every cycle is self-contained.
-    with stage_lock(root):
+    with stagelock.held(root, "mutate"):
         stage(root)
         out, passed = "", True
         for nm in names:

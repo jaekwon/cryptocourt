@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.70 — the isolation sweep is clean at full scope; the staging lock could call a
+  LIVE holder stale, and the fix removes the last hand-copy.** Three results, none of
+  them a realm change.
+  **The isolation sweep now covers what it claims and passes: all 390 tests across 11
+  packages pass alone as well as together.** v0.62 fixed the staging (the realm lists are
+  read from the Makefile, not copied), but the sweep at full scope had never actually been
+  RUN — so "courtv2 is now covered" was a statement about the script, not a result. It is
+  now a result: no test in the V2 realm depends on a neighbour having run first, so the
+  order-dependence this item expected to expose does not exist. Worth having asked, since
+  the two instances that motivated the guard (an unregistered kind, a clock nobody rewound)
+  were both invisible until swept.
+  **The staging lock's patience ceiling had become shorter than its longest legitimate
+  hold.** All three runners waited 600s and then told the operator to "remove it if it is
+  stale" — but the sweep above legitimately holds the lock for a quarter of an hour, so the
+  ceiling that was meant to catch a DEAD holder had started firing on a live one, and the
+  advice it gave was to delete the one piece of state whose deletion while live re-creates
+  the exact race the lock exists to prevent. A holder now records its pid, so a waiter can
+  KNOW rather than guess: a dead holder's lock is reclaimed automatically (by rename, so
+  two waiters cannot delete each other's fresh lock), a live one is waited on by name, and
+  an unidentified one — a lock from the old inline loops — is never touched. The two stale
+  locks this session recovered by hand no longer need a human.
+  **And it is now ONE implementation, in `scripts/stagelock.py`.** It was three hand-copied
+  loops, which is precisely the arrangement that let check-isolation's realm lists drift out
+  of step with the Makefile's for an entire development cycle; repeating it after fixing
+  that would have been the same mistake with the serial numbers filed off. The Makefile
+  shells out to it and holds it with the SHELL's pid, since the shell's liveness is what
+  the hold means.
+  Three self-test controls added, and the coverage rule extended: it compared `exercised`
+  against `scripts/check-*.py` only, so a runner not named `check-` sailed through with no
+  control — `mutate.py` had been in that blind spot all along. Also fixed two drifted facts
+  in check-isolation's docstring: a test count that read 143 through the very change that
+  quadrupled it (now stated as a recomputable range, since a figure nobody can derive will
+  drift again), and a paragraph about `grc20`/`qcards`, packages this repo does not contain.
+  Also recorded: **items 1–4 of the standing priority list are closed**, verified by
+  reading rather than assumed — the unslash leg (`disposeSlashOnRide`/`rearmSlashWindow`,
+  both named tests inverted not deleted), and all four v0.45 test gaps, one of whose
+  fixtures names itself "v0.45 gap 2".
+
 - **v0.69 — `Params.mustSane` had six unexercised guards, and a note on why
   `mustInvariants` is NOT mutation-testable.** `court.gno` was the last thin file by
   ratio: 348 lines, two batch rows. Thirteen guards live in it — seven in

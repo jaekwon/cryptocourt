@@ -18,6 +18,10 @@ vet:
 # They have to run from inside GNOROOT/examples: the realms resolve their
 # imports from the examples tree, and gno test will not find a sibling package
 # any other way. The staged copies are removed afterwards.
+#
+# That tree is shared with every other runner, so this holds scripts/stagelock.py
+# across the whole recipe — with the SHELL's pid ($$), not the short-lived
+# acquiring process's, since the shell's liveness is what the hold really means.
 realm-test:
 	@if ! command -v gno >/dev/null 2>&1; then \
 		if [ -n "$$REQUIRE_GNO" ]; then echo "gno not installed"; exit 1; fi; \
@@ -29,17 +33,8 @@ realm-test:
 	root=$$(gno env GNOROOT); \
 	rbase="$$root/examples/gno.land/r/cryptocourt"; \
 	pbase="$$root/examples/gno.land/p/cryptocourt"; \
-	lock="$$root/examples/gno.land/.cryptocourt-stage.lock"; \
-	i=0; \
-	while ! mkdir "$$lock" 2>/dev/null; do \
-		i=$$((i+1)); \
-		if [ $$i -gt 600 ]; then \
-			echo "realm-test: the stage lock at $$lock has been held for 10 minutes; remove it if it is stale"; \
-			exit 1; \
-		fi; \
-		sleep 1; \
-	done; \
-	trap 'rm -rf "$$rbase" "$$pbase" "$$lock"' EXIT; \
+	python3 scripts/stagelock.py acquire --root "$$root" --label realm-test --pid $$$$ || exit 1; \
+	trap 'rm -rf "$$rbase" "$$pbase"; python3 scripts/stagelock.py release --root "$$root"' EXIT; \
 	for p in checkpoint grc20votes governor twap cshares tickbook curve; do \
 		mkdir -p "$$pbase/$$p/v0" && \
 		cp realm/p/$$p/*.gno realm/p/$$p/gnomod.toml "$$pbase/$$p/v0/" || exit 1; \
@@ -92,8 +87,9 @@ isolation-test:
 #
 # If a run is interrupted, check `git diff` on the realm before trusting a green suite:
 # a killed run can leave a mutation applied. mutate.py writes .mutate-backup files beside
-# the sources and recovers them on its next run, and it may also leave a stale
-# .cryptocourt-stage.lock, which the next runner reports rather than hanging on.
+# the sources and recovers them on its next run. A killed run also leaves the staging
+# lock behind, but that no longer needs a human: the lock records its holder, so the next
+# runner sees the pid is gone and reclaims it.
 mutate:
 	python3 scripts/mutate.py < scripts/mutations-courtv2.json
 
