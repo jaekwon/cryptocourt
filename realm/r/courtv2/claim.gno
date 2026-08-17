@@ -173,7 +173,17 @@ func OpenClaimSeeded(cur realm, courtSlug, title string) uint64 {
 	if courtIsPurged(c) {
 		panic("courtv2: this court is purged; no new claims may be opened")
 	}
-	requireActiveMod(ensureMod(c), who) // mod-only; suspension refuses (a read gate, no money)
+	cm := ensureMod(c)
+	requireActiveMod(cm, who) // mod-only; suspension refuses (a read gate, no money)
+	// A META-INSTALLED set may not seed (setmods vet, 2/3): the waiver skips the
+	// CC deposit AND fee while the winner/answerer emission slices still mint,
+	// so seeding is an economic privilege, not a render-layer act. A captured
+	// meta court seating puppets must not thereby hand them a free claim
+	// faucet. Creator-appointed and election-installed sets seed normally —
+	// bootstrapping a young court is the whole point of the verb.
+	if cm.installedByMeta {
+		panic("courtv2: a meta-installed moderator set may not seed claims; seed after a local election")
+	}
 	return openClaim(c, who, title, true)
 }
 

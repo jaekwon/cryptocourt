@@ -259,3 +259,90 @@ func TestSuspendedCreatorCannotReappoint(cur realm, t *testing.T) {
 		AppointMods(cross(cur), "scr", []address{other}, 1)
 	})
 }
+
+// A meta-installed set may not seed claims (setmods vet 2/3): seeding waives
+// the deposit AND fee while winner/answerer slices still mint, so a captured
+// meta must not be able to hand puppets a free claim faucet. Locally-installed
+// sets seed normally.
+func TestMetaInstalledSetCannotSeed(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("mis-creator")
+	puppet := testutils.TestAddress("mis-puppet")
+	c := testCourt(cur, "mis", creator, 10_000_000_000)
+	cm := ensureMod(c)
+
+	// Seeding works for the creator-appointed set.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	OpenClaimSeeded(cross(cur), "mis", "creator seed is fine")
+
+	// Now simulate a meta verdict seating a puppet set.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	cand := RegisterModCandidate(cross(cur), "mis", []address{puppet}, 1)
+	installModSet(c, cm, cm.mustCandidate(cand), 100, false) // byElection=false => meta
+	testing.SetRealm(testing.NewUserRealm(puppet))
+	uassert.AbortsContains(t, cur, "may not seed", func() {
+		OpenClaimSeeded(cross(cur), "mis", "puppet faucet")
+	})
+	// The puppet can still do ordinary render-layer moderation.
+	c.coin.Mint(puppet, 10_000_000)
+	testing.SetRealm(testing.NewUserRealm(puppet))
+	id := OpenClaim(cross(cur), "mis", "ordinary claim")
+	testing.SetRealm(testing.NewUserRealm(puppet))
+	HideItem(cross(cur), "mis", id, "puppet hides")
+	if !HiddenFromListing("mis", id) {
+		t.Fatal("a meta-installed set still moderates; only seeding is denied")
+	}
+}
+
+// Re-installing the SAME set does not escape a suspension; installing a
+// different one does (otherwise suspension is escapable at zero cost).
+func TestInstallClearsSuspensionOnlyIfSetChanges(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("ics-creator")
+	a1 := testutils.TestAddress("ics-a1")
+	a2 := testutils.TestAddress("ics-a2")
+	c := testCourt(cur, "ics", creator, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "ics", []address{a1}, 1)
+	cm := ensureMod(c)
+
+	suspendSet(c, creator)
+	if !CourtSuspended("ics") {
+		t.Fatal("set should be suspended")
+	}
+	// Re-installing the identical set must NOT clear the suspension.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	same := RegisterModCandidate(cross(cur), "ics", []address{a1}, 1)
+	installModSet(c, cm, cm.mustCandidate(same), 200, true)
+	if !CourtSuspended("ics") {
+		t.Fatal("re-seating the judged set must not escape the suspension")
+	}
+	// Installing a genuinely different set clears it.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	diff := RegisterModCandidate(cross(cur), "ics", []address{a2}, 1)
+	installModSet(c, cm, cm.mustCandidate(diff), 300, true)
+	if CourtSuspended("ics") {
+		t.Fatal("installing a different set delivers it ARMED")
+	}
+}
+
+// The global DAO can SET a suspension, not only clear one (m-of-n).
+func TestGlobalSuspendSet(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("gss-creator")
+	g2 := testutils.TestAddress("gss-g2")
+	testCourt(cur, "gss", creator, 10_000_000_000)
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), g2)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalSuspendSet(cross(cur), "gss")
+	if CourtSuspended("gss") {
+		t.Fatal("one of two approvals must not suspend")
+	}
+	testing.SetRealm(testing.NewUserRealm(g2))
+	GlobalSuspendSet(cross(cur), "gss")
+	if !CourtSuspended("gss") {
+		t.Fatal("two approvals should suspend the set")
+	}
+}

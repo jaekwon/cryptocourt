@@ -159,8 +159,15 @@ type courtMod struct {
 
 	suspended      bool
 	suspendedAt    int64
-	setActHeight   int64 // last membership change (for the meta staleness stamp)
+	suspendedSetID string // WHICH set was judged — an install of the SAME set must not clear the flag
+	setActHeight   int64  // last membership change (for the meta staleness stamp)
 	lastElectionAt int64
+	// installedByMeta: this set was seated by a meta verdict rather than by the
+	// court's own creator or electorate. Such a set may not SEED claims — the
+	// seeding waiver skips the CC deposit and fee while winner/answerer slices
+	// still mint, so it is an economic privilege, and a captured meta must not
+	// be able to hand an attacker-chosen principal a free claim faucet.
+	installedByMeta bool
 
 	courtPurged    bool   // whole-court text tombstone (global DAO, m-of-n)
 	courtTombstone string // the category code
@@ -293,6 +300,7 @@ func AppointMods(cur realm, courtSlug string, mods []address, m int) {
 	cm.n = n
 	cm.m = m
 	cm.setActHeight = runtime.ChainHeight()
+	cm.installedByMeta = false // a creator appointment is a local act
 }
 
 func requireMod(cm *courtMod, who address) {
@@ -549,6 +557,33 @@ func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string
 	emitPurge(c.id, claimID, code, who)
 }
 
+// GlobalSuspendSet lets the global DAO SET a court's suspension, not only clear
+// it (setmods vet): the global verb set could previously only lower that flag,
+// so a hostile-but-not-yet-replaceable set had no fast global disarm. m-of-n —
+// disarming a court's moderation is consequential and is never time-critical
+// the way a legal-hold hide is.
+func GlobalSuspendSet(cur realm, courtSlug string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	d := ensureGlobalDAO()
+	if !d.members.Has(who.String()) {
+		panic("courtv2: only a global DAO member may suspend a moderator set")
+	}
+	c := mustCourt(courtSlug)
+	cm := ensureMod(c)
+	if cm.suspended {
+		panic("courtv2: that set is already suspended")
+	}
+	fire, _ := approveAction(d.pending, "gsuspend:"+c.id, who, "", d.purgeM)
+	if !fire {
+		return
+	}
+	suspendSet(c, who)
+	emitGlobalAct(c.id, 0, "global-suspend-set", who)
+}
+
 // ResetModSet is the SET-LEVEL global recovery verb (setmods vet, unanimous):
 // `ClearAnyBit` is per-claim, so before this existed a hostile moderator set —
 // e.g. puppets seated by a captured meta court — was globally irreversible, and
@@ -677,7 +712,19 @@ func suspendSet(c *Court, by address) {
 	cm := ensureMod(c)
 	cm.suspended = true
 	cm.suspendedAt = runtime.ChainHeight()
+	cm.suspendedSetID = currentSetID(cm) // remember WHICH set was judged
 	emitModAct(c.id, 0, "suspend", by)
+}
+
+// currentSetID is a canonical identity for a moderator set: its sorted members
+// and threshold. Sets are stored canonically, so equal sets produce equal IDs.
+func currentSetID(cm *courtMod) string {
+	s := strconv.Itoa(cm.m) + ":"
+	cm.members.Iterate("", "", func(k string, _ any) bool {
+		s += k + ","
+		return false
+	})
+	return s
 }
 
 func unsuspendSet(c *Court, by address) {

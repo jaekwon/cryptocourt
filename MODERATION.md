@@ -309,9 +309,59 @@ purge never editorial.
     seats bad mods) can be corrected by meta, and a court meta wrongly targets
     is defended by its own electorate. Suspend remains the *fast* lever (freeze
     now, before a replacement set is known); `setmods` is the *corrective* one.
-  - **Vet status: PENDING** — one adversarial pass on the flap/harassment
-    economics (can a griefer ping-pong a court's set cheaply?) before build,
-    per §13.7's discipline; a bounded render-layer addition, not a re-converge.
+  - **Vet status: DONE (v0.10) — three identical adversarial passes, all three
+    returned HOLD WITH FIXES.** The consensus, and what it forces:
+    - **The safety claim was false as written and is now true in code**: no
+      global verb reached set MEMBERSHIP (`ClearAnyBit` is per-claim), so a
+      hostile install was globally irreversible while a suspension was a
+      one-call cure. Added **`ResetModSet`** (m-of-n, disarms without
+      appointing — global gets a cure, never the power to pick moderators) and
+      **`GlobalSuspendSet`** (global could previously only *clear* the flag).
+    - **The local electorate beats meta in any flap war** — ~8 days and 0 CC
+      (the winner's bond refunds) against meta's ~14–28 days and 4–10 CC. So
+      **the claim that setmods "corrects a whale-captured local coin" is
+      withdrawn**: an attentive local majority is supreme over its own set,
+      before and after this verb. `setmods` genuinely bites only on *quiet*
+      courts — which is the negligent/absent case that motivated it.
+    - **`route == "vote"` is forgeable for ~10%·X̄ with ZERO voters**: it is
+      stamped for any once-disputed claim, including one whose only round
+      FAILED QUORUM. Seating a principal on someone else's court must not
+      execute on silence, so `setmods` additionally requires
+      **`cs.decidedRounds > 0`** (a quorate round actually classified it) and
+      a genuine contest (`credEligible`, the same test the credential already
+      uses), not merely a self-dispute.
+    - **Staleness must NOT anchor on `openedAt`** (2/3 explicit): the local side
+      is always faster, so an `openedAt` anchor hands it a free mid-flight veto
+      and meta's duty cycle goes to zero. Anchor after the vote concludes —
+      **refuse if `cm.setActHeight > cs.verdictAt`** — plus an **execution
+      expiry of one `votingBlocks` after verdict-final**, so bindings cannot be
+      banked and discharged one block after each local election (the
+      "K banked shots" inversion, which would have let meta win the war).
+    - **The setmods latch is keyed per COURT**, not per (court, candidate), or
+      unlimited parallel appeals run on one court.
+    - **A meta install must not stamp `lastElectionAt`** (it would poison every
+      other in-flight appeal on that court, reintroducing M-A40 through the
+      shared primitive) **nor burn `creatorUnseated`** (one cheap appeal would
+      permanently destroy a never-elected court's free repair path). Both are
+      election-only effects now.
+    - **Install clears the suspension only if the installed set DIFFERS from
+      the judged one** — always-clearing made suspension escapable at zero cost
+      by re-seating the same addresses; never-clearing delivered a pre-disarmed
+      remedy. A one-address swap still escapes: the accepted M-A48 decoy
+      residual, now costing a real membership change.
+    - **`AppointMods` is refused outright while suspended** (it is creator-only
+      and free, so it must not undo a bonded, voted disarm), and installs are
+      never gated by `requireActiveMod` (or meta's own setmods would deadlock
+      against meta's own suspend).
+    - **"Render-layer only" is qualified**: install grants `OpenClaimSeeded`,
+      which waives the deposit AND fee while winner/answerer slices still mint
+      — an economic privilege. So **a meta-installed set may not seed**;
+      creator-appointed and election-installed sets seed normally.
+    - *Accepted, owner-decided:* meta-CC stays transferable, so ~5% of meta
+      supply is purchasable and is the security parameter for every court at
+      once (all three vets flagged it; §13.4 records the owner's call). The
+      meta court's `minAnswerX` is the explicit forgery-price dial — the forge
+      costs ~10% of it — and is worth revisiting if abuse appears.
   - **Parse = stored structured state** in `meta.gno` (keyed by claimID, not
     the shared `claimState`): written at open, rewritten on each edit. **Purge
     marks the stored parse render-only / non-bindable** (round 4 F3, resolving
@@ -711,6 +761,19 @@ except where noted)
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.10 — the setmods flap vet, resolved by three identical adversarial
+  passes (all HOLD WITH FIXES; §3.3 carries the full list)**. Landed in code:
+  `ResetModSet` + `GlobalSuspendSet` (global had NO reach over set membership —
+  the "backstopped by the global DAO" claim was false for installs);
+  `AppointMods` refused while suspended; meta installs no longer stamp
+  `lastElectionAt` or burn `creatorUnseated`; install clears a suspension only
+  if the set actually changed; a meta-installed set may not seed. Specified for
+  the module-7 build: `decidedRounds > 0` + genuine-contest gating on setmods,
+  staleness anchored at `verdictAt` (never `openedAt`) plus a one-`votingBlocks`
+  execution expiry, and a per-COURT setmods latch. Doc corrections: the
+  "corrects a locally-captured court" claim is withdrawn (local wins any war,
+  8d/0 CC vs 14–28d/4–10 CC), and "render-layer only" is qualified for the
+  seeding waiver.
 - **v0.9 — owner decision (meta can INSTALL a mod set, not just suspend)**: the
   meta court and the local coin-holder electorate are **peers** over a court's
   moderator set (`mod:setmods`), because suspend-only deepens the gap in the

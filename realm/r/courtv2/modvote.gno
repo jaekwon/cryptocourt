@@ -448,8 +448,17 @@ func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64, byElect
 	cm.members = fresh
 	cm.n = len(cand.members)
 	cm.m = cand.m
-	cm.suspended = false
 	cm.setActHeight = at
+	cm.installedByMeta = !byElection
+	// Clear the suspension UNLESS this install re-seats the very set that was
+	// judged: always-clearing would make suspension escapable at zero cost by
+	// re-installing the same addresses, while never-clearing would deliver a
+	// pre-disarmed remedy. A one-address swap still escapes — that is the
+	// accepted decoy residual, and it now costs a real membership change.
+	if currentSetID(cm) != cm.suspendedSetID {
+		cm.suspended = false
+		cm.suspendedSetID = ""
+	}
 	if byElection {
 		cm.lastElectionAt = at
 		cm.creatorUnseated = true
