@@ -31,6 +31,15 @@ type claimState struct {
 	seeded   bool  // moderator-seeded (deposit/fee waived; author draw = 0, I5)
 	openedAt int64
 	closed   bool // dead-claim close (unanswered past the timeout)
+	// dustBurns is what the deposit+fee ACTUALLY burned at a conclusive low —
+	// recorded because settleSlash must size its bounty top-up against real
+	// burns, not against params (a seeded claim burns nothing, and the params
+	// base would silently under-pay the flagger). See strips.gno / quality.gno.
+	dustBurns int64
+	// Policing-surface membership (strips.gno, MODERATION.md §5.3). Render-layer
+	// only: no money path reads them; they make index entry/exit idempotent.
+	inStrip   bool
+	inPending bool
 
 	// The two stake pools and their staker records (stake.gno).
 	yesStake, noStake int64
@@ -196,6 +205,11 @@ func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 		provisional: -1, // int8 zero is sideYES — the sentinel must be explicit
 	}
 	c.claims.Set(beClaimKey(id), cs)
+	// A seeded claim is force-visible on the pending list from birth: the set
+	// that seeds content must not also be able to embargo it (§5.3, M-A18).
+	if seeded {
+		pendingEnter(c, cs)
+	}
 	// Claim-lane event: clients enumerate claims off events (no on-chain
 	// address→claims index exists; MODERATION.md §2/I3). No user text beyond the
 	// title, which is the claim's whole public content.
@@ -259,6 +273,9 @@ func CloseDeadClaim(cur realm, courtSlug string, claimID uint64) {
 		panic("courtv2: the dead-claim timeout has not passed")
 	}
 	cs.closed = true
+	// Terminal: nothing on a dead claim is policeable any more (§5.3 exits).
+	pendingExit(c, cs)
+	stripExit(c, cs)
 	// Exactly-once dispositions: refund the deposit, burn the fee.
 	if cs.deposit > 0 {
 		c.coin.Transfer(c.escrow, cs.author, cs.deposit)

@@ -47,8 +47,13 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// detection; priority is a perk, not a guarantee (a claim that matures
 	// late may have no priority phase left). Binds only once the court's
 	// cold-start gate is armed.
+	// Re-anchored for the polish window (MODERATION.md §9): the earliest
+	// answerable moment moves by stakeOpenDelayBlocks, because the ring cannot
+	// mature until staking opens. Without this the priority phase silently
+	// shrinks — and at the 24h maximum delay it would vanish entirely, since
+	// the delay cap equals priorityWindowBlocks. Default delay 0 → unchanged.
 	inPriority := false
-	if priorityGateActive(c) && now < cs.openedAt+answerWindow+priorityWindowBlocks {
+	if priorityGateActive(c) && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {
 		if !mayAnswerInPriority(c, who) {
 			panic("courtv2: the priority window is open — a qualified answerer may act first (wait ~24h)")
 		}
@@ -82,6 +87,11 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	if inPriority {
 		holdPriority(c, who, claimID)
 	}
+	// Policing surfaces (§5.3): an answered claim becomes policeable, so it
+	// enters both strips regardless of any hide bit; a seeded/appeal row that
+	// was waiting on the pending list moves over. Non-panicking by contract.
+	pendingExit(c, cs)
+	stripEnter(c, cs)
 }
 
 // ------------------------------------------------------------------ reads --

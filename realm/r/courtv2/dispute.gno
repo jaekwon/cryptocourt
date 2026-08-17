@@ -2,20 +2,20 @@
 // 7-day tallies, tally-based classification, escrow windows, reopens, 3-round
 // close) with the V2 dispositions (PLAN §3.6, v0.11–v0.25):
 //
-//   FORFEITURES BURN; COMPENSATION MINTS. No value ever moves between
-//   adversaries on any outcome — punishment is deflation, reward is issuance,
-//   senior-queued: comp = min(2 × the prevailing party's own bond,
-//   floor(80% × the loser's burned bond)), reserved at the round's decision.
+//	FORFEITURES BURN; COMPENSATION MINTS. No value ever moves between
+//	adversaries on any outcome — punishment is deflation, reward is issuance,
+//	senior-queued: comp = min(2 × the prevailing party's own bond,
+//	floor(80% × the loser's burned bond)), reserved at the round's decision.
 //
-//   Failed (quorum-less) rounds burn HALF the disputer's bond and return half
-//   (turnout is not the disputer's conduct); the answerer is NOT comped on a
-//   failed round — their bond simply survives, escrowed until the verdict is
-//   final. Three failed rounds close the claim without a decision: everyone
-//   1×, deposit AND fee refund, no draw.
+//	Failed (quorum-less) rounds burn HALF the disputer's bond and return half
+//	(turnout is not the disputer's conduct); the answerer is NOT comped on a
+//	failed round — their bond simply survives, escrowed until the verdict is
+//	final. Three failed rounds close the claim without a decision: everyone
+//	1×, deposit AND fee refund, no draw.
 //
-//   Every %·X̄ quantity reads the ONE X̄frozen snapshot taken at the answer
-//   (P6): bond base = min(20%·X̄frozen, 40% × the actual answer bond),
-//   doubling per failed round, claim-scoped (sybil-proof).
+//	Every %·X̄ quantity reads the ONE X̄frozen snapshot taken at the answer
+//	(P6): bond base = min(20%·X̄frozen, 40% × the actual answer bond),
+//	doubling per failed round, claim-scoped (sybil-proof).
 //
 // Rounds are framed against the ORIGINAL answer (V1): overturn sets the
 // provisional verdict to its opposite, uphold to the answer itself; a reopen
@@ -30,9 +30,9 @@ import (
 	"chain/runtime"
 	"strconv"
 
-	bptree "gno.land/p/nt/bptree/v0"
 	governor "gno.land/p/cryptocourt/governor/v0"
 	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
+	bptree "gno.land/p/nt/bptree/v0"
 )
 
 const disputeKindName = "dispute"
@@ -337,6 +337,10 @@ func provCloseClaim(c *Court, cs *claimState) {
 		cs.fee = 0
 	}
 	releasePriority(c, cs.answerer, cs.id)
+	// A provClosed claim is terminal — unflaggable and undisputable — so it is
+	// no longer policeable and must leave the strips, or its row would linger
+	// forever (§5.3 membership exit).
+	stripExit(c, cs)
 }
 
 // Finalize makes a disputed claim's standing provisional verdict FINAL once

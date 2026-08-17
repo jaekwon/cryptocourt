@@ -264,6 +264,13 @@ type Court struct {
 	// court that is never moderated carries a single nil pointer. See
 	// MODERATION.md §2 (the constitution) and §4 (state homes).
 	mod *courtMod
+
+	// Policing surfaces (strips.gno, MODERATION.md §5.3). Deliberately NOT on
+	// courtMod: the money path writes them at lifecycle transitions, and going
+	// through ensureMod would give PostAnswer a moderator-set side effect.
+	// Lazily created; keyed so ascending iteration IS nearest-deadline-first.
+	stripIdx   *bptree.BPTree // be(deadline)|be(claimID) -> claimID
+	pendingIdx *bptree.BPTree // be(openedAt)|be(claimID) -> claimID
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.

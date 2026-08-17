@@ -6,13 +6,14 @@
 // period boundary — the OWNER's 20%/yr worst-case ceiling.
 //
 // Two lanes, one accrual line (P5):
-//   SENIOR — conduct comps, flag bounties, voter carrots: entitlements reserve
-//   intervals [start, start+amount) on the cumulative-accrual number line at
-//   enqueue time and are payable as accrual covers them — full amount, possibly
-//   time-delayed, never scaled (2A-T1).
-//   JUNIOR — the tier-scaled claim draws: D = min(Σg, R) where R is accrual
-//   past the senior tail minus prior junior reservations; scaled once at
-//   crystallize, then pulled.
+//
+//	SENIOR — conduct comps, flag bounties, voter carrots: entitlements reserve
+//	intervals [start, start+amount) on the cumulative-accrual number line at
+//	enqueue time and are payable as accrual covers them — full amount, possibly
+//	time-delayed, never scaled (2A-T1).
+//	JUNIOR — the tier-scaled claim draws: D = min(Σg, R) where R is accrual
+//	past the senior tail minus prior junior reservations; scaled once at
+//	crystallize, then pulled.
 //
 // The R_max pause (ceiling-not-floor): accrual stops while the junior pool is
 // full AND every senior is covered; the skipped budget is forgone forever.

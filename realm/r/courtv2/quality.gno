@@ -351,6 +351,11 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 	} else {
 		cs.tierFinal = true
 	}
+	// Record what ACTUALLY burned, so settleSlash can size its top-up against
+	// reality instead of re-deriving a params figure that a waived-deposit
+	// (seeded) claim never paid. Accumulates, though the deposit/fee can only
+	// burn once (they zero on disposition).
+	cs.dustBurns += burns
 	if bounty := bountyFor(cs.flagBondPosted(), burns); bounty > 0 {
 		enqueueSenior(c, cs.flagger, bounty, "bounty")
 	}
@@ -571,10 +576,14 @@ func settleSlash(c *Court, cs *claimState) {
 	}
 	cs.pendingSlash = 0
 	c.coin.Burn(c.escrow, slash)
-	dep := c.params.minClaimDepositCC
-	fee := dep * depositFeeBps / 10000
+	// The top-up is the bounty on the slash ON TOP OF the dust bounty already
+	// paid at ResolveFlag — so it must subtract what that bounty was actually
+	// sized against. Reading the PARAMS deposit+fee here (the pre-moderation
+	// code) assumes every claim paid one, which a moderator-seeded claim never
+	// does: the phantom base silently under-paid the flagger whenever the bond
+	// clamped. cs.dustBurns is what really burned.
 	bond := flagBondFor(cs)
-	if topUp := bountyFor(bond, dep+fee+slash) - bountyFor(bond, dep+fee); topUp > 0 {
+	if topUp := bountyFor(bond, cs.dustBurns+slash) - bountyFor(bond, cs.dustBurns); topUp > 0 {
 		enqueueSenior(c, cs.flagger, topUp, "bounty")
 	}
 	cs.tierFinal = true

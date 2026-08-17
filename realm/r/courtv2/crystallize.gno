@@ -48,7 +48,12 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 
 	cs.tierFinal = true // whatever stands now (default mid if never voted) is it
 	cs.crystallized = true
-	cs.openBlocks = cs.frozenAt - cs.openedAt
+	stripExit(c, cs) // no longer policeable (§5.3 membership exit)
+	// The F9 time-averaged-stake cap divides by the claim's stakeable life. The
+	// polish window is dead time (staking is closed), so counting it would
+	// over-tighten every cap by (delay/life) — re-anchored (MODERATION.md §9).
+	// Default delay 0 → identical to before.
+	cs.openBlocks = cs.frozenAt - (cs.openedAt + c.params.stakeOpenDelayBlocks)
 	if cs.openBlocks < 1 {
 		cs.openBlocks = 1
 	}
@@ -91,6 +96,14 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// a standing answer is paid as before.
 	if int(cs.provisional) != int(cs.answer) {
 		cs.drawAnswerer = 0
+	}
+	// I5 (MODERATION.md §8): a moderator-SEEDED claim never pays an author
+	// slice. Seeding waives the CC deposit/fee to bootstrap a young court, and
+	// the author slice staying unminted is what proves seeding is uncompensated
+	// work — the securities-relevant fact, and it keeps the waiver un-farmable.
+	// The points stay unminted (conservative, under the ceiling).
+	if cs.seeded {
+		cs.drawAuthor = 0
 	}
 
 	// The carrot: 7 points of the MID-weight gross, tier-invariant (paid even
@@ -184,6 +197,14 @@ func AuthorBonus(cur realm, courtSlug string, claimID uint64) int64 {
 	touch(c)
 	cs.authorPaid = true
 	var pay int64
+	// I5, second gate: a seeded claim pays its author nothing here either. The
+	// draw is already zeroed at crystallize, so this is belt-and-braces — but
+	// the invariant is asserted at the payout site because that is where a
+	// future change would most plausibly break it.
+	if cs.seeded {
+		mintEmission(c, who, 0)
+		return 0
+	}
 	if v := cs.stakers.Get(posKey(who, int(cs.provisional))); v != nil {
 		p := v.(*stakePos)
 		accrue(c, cs, p, int(cs.provisional))
