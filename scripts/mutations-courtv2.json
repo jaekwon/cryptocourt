@@ -2309,5 +2309,145 @@
   "label": "StartCourt: a new court lists itself as FEATURED",
   "find": "\t\ttier:      tierListed,",
   "replace": "\t\ttier:      tierFeatured,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST budgetWeeklyBps doubled (the LOCKED ceiling's own source)",
+  "find": "\tbudgetWeeklyBps = int64(38)",
+  "replace": "\tbudgetWeeklyBps = int64(76)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST stepDownPeriods halved (104 -> 52)",
+  "find": "\tstepDownPeriods = int64(104)",
+  "replace": "\tstepDownPeriods = int64(52)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST rMaxPeriods 4 -> 8 (the reservoir banks twice as long)",
+  "find": "\trMaxPeriods     = int64(4)",
+  "replace": "\trMaxPeriods     = int64(8)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST tierHighX 2 -> 3 (bucket value and draw multiplier at once)",
+  "find": "\ttierLowX, tierMidX, tierHighX = int64(0), int64(1), int64(2)",
+  "replace": "\ttierLowX, tierMidX, tierHighX = int64(0), int64(1), int64(3)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST the P7 split moves carrot 7 -> 14",
+  "find": "\tsplitWinners, splitAuthor, splitAnswerer, splitCarrot = int64(80), int64(8), int64(5), int64(7)",
+  "replace": "\tsplitWinners, splitAuthor, splitAnswerer, splitCarrot = int64(80), int64(8), int64(5), int64(14)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST answerBondBps halved (50%\u00b7X-bar -> 25%)",
+  "find": "\tanswerBondBps = int64(5000)",
+  "replace": "\tanswerBondBps = int64(2500)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST disputeBond arms halved and doubled",
+  "find": "\tdisputeBondXBps, disputeBondOfAnswerBps = int64(2000), int64(4000)",
+  "replace": "\tdisputeBondXBps, disputeBondOfAnswerBps = int64(1000), int64(8000)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST comp arms widened (2x -> 4x, 80% -> 90%)",
+  "find": "\tcompOwnX, compOfBurnBps = int64(2), int64(8000)",
+  "replace": "\tcompOwnX, compOfBurnBps = int64(4), int64(9000)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST flagBondXBps halved (2%\u00b7X-bar -> 1%)",
+  "find": "\tflagBondXBps    = int64(200)",
+  "replace": "\tflagBondXBps    = int64(100)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST flagMinCC gutted (1 CC -> 1 unit)",
+  "find": "\tflagMinCC       = int64(1_000_000) // 1 CC",
+  "replace": "\tflagMinCC       = int64(1)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST flagFrozenMultX 4x -> 2x",
+  "find": "\tflagFrozenMultX = int64(4)",
+  "replace": "\tflagFrozenMultX = int64(2)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST slashXBps halved (4.5%\u00b7X-bar floor -> 2.25%)",
+  "find": "\tslashXBps       = int64(450)",
+  "replace": "\tslashXBps       = int64(225)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST slashDrawBps halved (1.6x midGross -> 0.8x)",
+  "find": "\tslashDrawBps    = int64(16000)",
+  "replace": "\tslashDrawBps    = int64(8000)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST depositFeeBps doubled (10% -> 20%)",
+  "find": "\tdepositFeeBps   = int64(1000)",
+  "replace": "\tdepositFeeBps   = int64(2000)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST settleDelay halved (72h -> 36h)",
+  "find": "\tsettleDelay      = int64(51_840)",
+  "replace": "\tsettleDelay      = int64(25_920)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST deadClaimTimeout halved (12 weeks -> 6)",
+  "find": "\tdeadClaimTimeout = int64(1_451_520)",
+  "replace": "\tdeadClaimTimeout = int64(725_760)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST priorityWindowBlocks halved (24h -> 12h)",
+  "find": "\tpriorityWindowBlocks = int64(17_280)",
+  "replace": "\tpriorityWindowBlocks = int64(8_640)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST periodBlocks halved (1 week -> half)",
+  "find": "\tperiodBlocks = int64(120_960) // 1 week \u2014 the emission accounting period",
+  "replace": "\tperiodBlocks = int64(60_480)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST epochBlocks halved (720 -> 360)",
+  "find": "\tepochBlocks  = int64(720)",
+  "replace": "\tepochBlocks  = int64(360)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "CONST curveDenom doubled (a gentler curve)",
+  "find": "\tcurveDenom = int64(1_000_000_000)",
+  "replace": "\tcurveDenom = int64(2_000_000_000)"
  }
 ]

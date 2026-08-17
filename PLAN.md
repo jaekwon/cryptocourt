@@ -1624,6 +1624,34 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.96 — the whole ECONOMIC CALIBRATION was unpinned: 330 rows and not ONE of them
+  mutated a constant. Sixteen tried, TEN survived.** Following v0.95's lesson to its sharpest
+  form rather than waiting to trip over it a third time.
+  The lesson was: a fixture that derives its expectation from the code under test can only
+  check consistency. Its worst case is a CONSTANT. Every fixture in the suite computes its
+  expectation from the same symbol the value lives in — `wantBond := xbar *
+  disputeBondXBps / 10000`, `testing.SkipHeights(settleDelay)` — so changing the constant
+  moves both sides together and the assertion still holds while the price has changed. A
+  count confirmed the gap was total: the batch had rows in fourteen files and not one
+  mutated a value definition.
+  Ten of sixteen survived: **the P7 carrot split, both comp arms, the flag bond's 1-CC
+  floor, its frozen multiple, BOTH slash arms, the deposit fee, the settle delay, the
+  priority window, and the reservoir's cap.** These are not incidental numbers.
+  `slashDrawBps` carries "k=1.6 lands the 12-wk mill q* on the ~0.22 target (three-designer
+  convergence, v0.40)" in its own comment; gutting `flagMinCC` from 1 CC to 1 unit makes
+  flagging nearly free, which is the price the whole suppression analysis rests on. Any of
+  them could have drifted in a refactor and nothing would have objected.
+  Pinned by a calibration table that writes the numbers out as LITERALS — which is the
+  entire design of it. A pin that referenced the symbols would reproduce the defect it
+  exists to fix. Twenty-eight constants, each with a line saying what it prices, plus the
+  three RELATIONSHIPS the source comments assert and a value table cannot cover: the P7
+  split summing to 100, court.gno's own "bounty 2% ≤ 80% × 4.5%", and the frozen flag bond
+  being 8%·X̄. The failure message says to edit the pin in the same commit — the point is
+  not that these values are RIGHT, it is that changing one must be deliberate.
+  All twenty constant mutations are caught now, including `periodBlocks` and `epochBlocks`,
+  which were already caught by ordinary fixtures.
+  Batch now 350 rows: 349 caught, 0 not caught, one surviving by design (10m03s).
+
 - **v0.95 — the CREATION paths, and a test that could not see what it was asserting.**
   Swept `OpenClaim` and `StartCourt`. Nine of twelve held: the provisional sentinel (int8
   zero is sideYES, so `-1` must be explicit — and it is checked), both title bounds, the
