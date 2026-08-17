@@ -586,9 +586,10 @@ type reenterer struct {
 	g      *Governor
 	id     int64
 	other  int64
-	inner  *countingDispatch
-	reVote any
-	reExec any
+	inner   *countingDispatch
+	reVote  any
+	reExec  any
+	rePropo any
 }
 
 func (r *reenterer) tryVote() {
@@ -601,9 +602,15 @@ func (r *reenterer) tryExecute() {
 	r.g.Execute(gCarl, r.id, r.inner.run)
 }
 
+func (r *reenterer) tryPropose() {
+	defer func() { r.rePropo = recover() }()
+	r.g.Propose(gCarl, "fee", "13", "asked from inside an execution")
+}
+
 func (r *reenterer) run(k Kind, sub, pay string) error {
 	r.tryVote()
 	r.tryExecute()
+	r.tryPropose()
 	return dispatch(k, sub, pay)
 }
 
@@ -623,6 +630,10 @@ func (r *reenterer) run(k Kind, sub, pay string) error {
 //
 //	Vote, because a tally that moves while a decision derived from it is being
 //	carried out is a tally that can contradict the thing it authorised.
+//
+//	Propose, because a kind that can open questions while running is a kind that
+//	can fill the book — bounded at maxLive — from inside a transaction nobody
+//	else can interleave with.
 //
 // Both are refused by one latch, so the sharpest mutation is not either guard
 // but `g.executing = true` itself: delete that line and both go quiet at once.
@@ -655,6 +666,11 @@ func TestExecutionCannotReEnterTheGovernor(t *testing.T) {
 	} else if got, _ := r.reExec.(string); !contains(got, "re-entrant execution") {
 		t.Errorf("the re-entrant execution was refused with %q", got)
 	}
+	if r.rePropo == nil {
+		t.Error("a kind opened a proposal from inside an execution; that must be refused")
+	} else if got, _ := r.rePropo.(string); !contains(got, "cannot propose from inside an execution") {
+		t.Errorf("the re-entrant proposal was refused with %q", got)
+	}
 	if inner.n != 0 {
 		t.Errorf("the kind ran %d extra time(s) from inside its own execution — a "+
 			"proposal that pays or mints would have done it twice", inner.n)
@@ -672,5 +688,98 @@ func TestExecutionCannotReEnterTheGovernor(t *testing.T) {
 	if yes, _, _, _ := g.Tally(other); yes != 0 {
 		t.Errorf("the still-open proposal recorded %d yes weight from inside an "+
 			"execution", yes)
+	}
+}
+
+// councilWithBar is a four-member council whose kind carries a proposer bar, so
+// one member holds exactly a quarter of the electorate and the bar can be stated
+// at, above and below that quarter.
+func councilWithBar(bar int64) *Governor {
+	c := &council{members: []address{gAlice, gBob, gCarl, gDave}, epoch: 2}
+	g := New(c, coin{supply: 4})
+	ran := int64(-1)
+	g.kinds.Set("fee", &entry{kind: setFee{ran: &ran}, live: true, rules: Rules{
+		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100,
+		GraceBlocks: 1000, ProposeBps: bar,
+	}})
+	return g
+}
+
+// The proposer bar refuses only what falls SHORT of it, found surviving: the
+// comparison is `held*bps < total*ProposeBps`, so a holder standing exactly at
+// the bar may ask. Nothing tested that, and the two quorum bars either side of
+// it in the same function both have boundary tests — this one was simply missed.
+//
+// It matters in the direction the mutation goes. Making it exclusive turns a
+// stated bar of "a quarter of the supply" into "more than a quarter", which is
+// unmeetable by exactly the holder the number was chosen to admit; and a court
+// computing a bar as a fraction of its own supply lands on the boundary as a
+// matter of course rather than by coincidence.
+func TestTheProposerBarIsMetAtItsExactValue(t *testing.T) {
+	// One of four members is 2500 bps of the electorate.
+	at := councilWithBar(2500)
+	id := at.Propose(gAlice, "fee", "1", "exactly a quarter")
+	if got := at.State(id); got != "active" {
+		t.Errorf("a holder standing exactly at the bar was refused: state %q", got)
+	}
+	// One basis point above what they hold, and they are short.
+	over := councilWithBar(2501)
+	mustPanicContains(t, "not enough voting power to open this", func() {
+		over.Propose(gAlice, "fee", "1", "a hair short")
+	})
+	// And the roll's first node is bought here, by the proposer, before any vote
+	// has been cast — the sentinel is present and is the only thing present.
+	// Left to the first voter it would cost them about eleven times an ordinary
+	// insert, which is a tax on being early.
+	p := at.mustProposal(id)
+	if p.voted == nil {
+		t.Fatal("a fresh proposal has no voter roll at all")
+	}
+	if got := p.voted.Size(); got != 1 {
+		t.Errorf("the fresh roll holds %d keys, want just the proposer-bought "+
+			"sentinel", got)
+	}
+}
+
+// A withdrawn proposal is recorded as WITHDRAWN, found surviving: swapping
+// stateCanceled for stateDefeated changed nothing any test could see. Both are
+// terminal and both free the slot, so the tally, the book and the refunds are all
+// correct either way — the only thing that differs is what the record says
+// happened, and a proposer taking their own question back is not the electorate
+// rejecting it. Anything reading the outcome to decide whether the question was
+// answered would be told that it was.
+func TestACancellationIsRecordedAsOne(t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	id := g.Propose(gAlice, "fee", "1", "asked and withdrawn")
+	g.Cancel(gAlice, id)
+	if got := g.State(id); got != "canceled" {
+		t.Errorf("a withdrawn proposal reads %q, want canceled", got)
+	}
+}
+
+// maxReason's boundary, found surviving: the clip test in the realm suite drives
+// a 1,200-byte failure message, which is cut whichever side of the bound the
+// comparison falls on, so an off-by-one there was invisible.
+//
+// The lengths are LITERALS on purpose. Written as maxReason and maxReason+1 the
+// inputs would move with the constant, both sides of the comparison would shift
+// together, and the test would pass with the bound doubled — the derived-
+// expectation defect this repo has now committed once and documented twice.
+func TestTheReasonBoundIsWhereItSays(t *testing.T) {
+	if maxReason != 256 {
+		t.Fatalf("maxReason is %d; this test states 256/257 outright so that it "+
+			"fails when the bound moves rather than moving with it", maxReason)
+	}
+	at := strings.Repeat("a", 256)
+	if got := clip(at); got != at {
+		t.Errorf("a reason exactly at the bound was cut to %d bytes", len(got))
+	}
+	over := strings.Repeat("a", 257)
+	got := clip(over)
+	if got == over {
+		t.Errorf("a reason of %d bytes was kept whole; the bound is 256", len(over))
+	}
+	if n := len(got); n > 256+len("…") {
+		t.Errorf("a clipped reason is %d bytes, past the bound plus its ellipsis", n)
 	}
 }

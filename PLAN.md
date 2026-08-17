@@ -1624,6 +1624,47 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.03 — the governor's proposal book: 27 of 38 caught, and a guard whose stated reason was
+  BACKWARDS.** The second governor unit — `propose`, `ReleaseRoll`, `Cancel`, `setState`, the
+  sweep, `clip` and `digest`. Already held: the roll that cannot be reclaimed out from under a
+  kind, cancellation's ownership and its lateness (including the settle-first that makes a
+  lapsed proposal uncancellable), the unclipped reason, the rune-boundary cut, the dedup index,
+  the book bound, the sweep's slot recovery, and the digest's payload and separator.
+  **The finding worth the firing is `engaged <= 0`.** Its comment said an electorate that
+  engages nobody "makes every quorum unreachable". That is the opposite of what happens. The
+  bar is `cast*bps >= engaged*QuorumBps`, so at `engaged == 0` the right-hand side is zero, the
+  comparison holds for ANY turnout including none, and quorum stops existing — at the deadline
+  one yes vote carries the question however few showed up. The guard is therefore load-bearing
+  rather than tidy, and it is reachable with an HONEST electorate: `EngagedTotal` exists so a
+  realm can drop idle weight out of the denominator, and one where all weight is idle returns
+  zero truthfully. Comment corrected, `TestAnElectorateThatEngagesNobodyIsRefused` added.
+  Five more gaps, each small and each real. The **proposer bar** is met at its exact value —
+  `held*bps < total*ProposeBps` refuses only what falls SHORT — and nothing tested it, though
+  both quorum bars in the same function have boundary tests; making it exclusive turns "a
+  quarter of the supply" into "more than a quarter", unmeetable by exactly the holder the
+  number was chosen to admit. **Propose** was the third leg of v1.02's re-entrancy cluster and
+  the fixture now covers it: a kind that can open questions while running can fill a book
+  bounded at `maxLive` from inside a transaction nobody can interleave with. A **cancellation
+  recorded as a defeat** changed nothing any test could see — both states are terminal and both
+  free the slot, so only the record of what happened differs, and a proposer withdrawing is not
+  the electorate rejecting. **maxReason's boundary** was invisible because the realm's clip test
+  drives a 1,200-byte message, cut whichever side of the bound the comparison falls on; the new
+  test states 256 and 257 as LITERALS and pins the constant, because written as `maxReason+1`
+  the input moves with the bound and both sides shift together — the derived-expectation defect
+  this repo has now committed once and documented three times. And the **voter roll's first
+  node**, bought by the proposer, is now asserted present before any vote.
+  Two equivalent mutants excluded, both verified rather than assumed. Dropping the NUL from the
+  sweep cursor (`last + "\x00"` -> `last`) re-reads one already-seen key per window, so progress
+  is seven keys a window instead of eight — it never stalls and never misses a slot, so it costs
+  gas and nothing else. And the stale-entry removal loop is UNREACHABLE: an entry is stale only
+  when its proposal is absent from `g.proposals`, and `g.proposals` is only ever `Set`, never
+  `Remove`, in the whole package. Dead defence, like `expiresAt`'s `expires` arm in v1.02.
+  Three rows first came back INVALID (dropping a check left `k`, `before` and `last` unused) and
+  ALL THREE turned out to be caught by existing tests once valid — so of 38 mutations the
+  genuine gaps were exactly the six with new fixtures. An INVALID row is not a survivor and must
+  not be read as one.
+  Batch now 518 rows: 517 caught, 0 not caught, one surviving by design.
+
 - **v1.02 — the governor's decision core: 38 of 45 caught, and the gap was RE-ENTRANCY —
   three guards, every one of them dead in every fixture.**
   2,042 lines carrying nine rows, all of them constants, so the tally, the vote path, the

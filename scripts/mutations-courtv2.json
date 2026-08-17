@@ -3373,5 +3373,257 @@
   "label": "inDelay: the delay window is off by one",
   "find": "func inDelay(p *proposal, now int64) bool { return now < p.ready }",
   "replace": "func inDelay(p *proposal, now int64) bool { return now < p.ready-1 }"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: a proposal may be opened from inside an execution",
+  "find": "\tif g.executing {\n\t\tpanic(\"govern: cannot propose from inside an execution\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the title is not validated",
+  "find": "\tmustBeUsableTitle(title)\n\tif len(payload) > maxPayload {",
+  "replace": "\tif len(payload) > maxPayload {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the payload is never checked against its kind",
+  "find": "\tif err := g.checkKind(k, payload); err != nil {\n\t\tpanic(\"govern: \" + err.Error())\n\t}",
+  "replace": "\t_ = k"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the snapshot is the CURRENT unsealed epoch",
+  "find": "\tat := g.voters.Epoch() - 1",
+  "replace": "\tat := g.voters.Epoch()"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: a chain with no sealed epoch may still vote",
+  "find": "\tif at == 0 {\n\t\tpanic(\"govern: no sealed epoch yet \u2014 the chain is too young to vote\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: a zero snapshot supply is accepted",
+  "find": "\tif total <= 0 {",
+  "replace": "\tif total < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the engaged weight ignores the electorate's own seam",
+  "find": "\tengaged := g.voters.EngagedTotal(at)",
+  "replace": "\tengaged := g.voters.PastTotal(at)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: a zero engaged weight is accepted",
+  "find": "\tif engaged <= 0 {",
+  "replace": "\tif engaged < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the proposer bar is exclusive at its own value",
+  "find": "\t\tif held := g.voters.PastVotes(who, at); held*bps < total*rules.ProposeBps {",
+  "replace": "\t\tif held := g.voters.PastVotes(who, at); held*bps <= total*rules.ProposeBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: there is no proposer bar at all",
+  "find": "\tif rules.ProposeBps > 0 {",
+  "replace": "\tif rules.ProposeBps < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the governor's own lanes are not reserved",
+  "find": "\tif !isReserved(kind) {\n\t\tlimit = maxOpen\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the book is not swept before refusing a full one",
+  "find": "\tif g.openIdx.Size() >= limit {\n\t\t// Try to reclaim before refusing: a full list is usually full of\n\t\t// finished business nobody has written down.\n\t\tg.sweep()\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the book bound is off by one",
+  "find": "\tif g.openIdx.Size() >= limit {\n\t\tif limit < maxLive {",
+  "replace": "\tif g.openIdx.Size() > limit {\n\t\tif limit < maxLive {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: a closed-but-unrecorded proposal still blocks its own re-asking",
+  "find": "\t\tif pv := g.proposals.Get(v.(string)); pv != nil {\n\t\t\tg.settle(pv.(*proposal))\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: an identical proposal may be opened twice",
+  "find": "\tif g.openIdx.Has(d) {",
+  "replace": "\tif g.openIdx.Has(d) && quorumFloor < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: voting closes the moment it opens",
+  "find": "\t\topened:      now, closes: now + rules.VotingBlocks,",
+  "replace": "\t\topened:      now, closes: now,"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the proposer does not buy the voter roll's first node",
+  "find": "\tp.voted.Set(rollSentinel, ballot(0))",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the dedup index is never written",
+  "find": "\tg.openIdx.Set(d, enc(uint64(g.propSeq)))",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "ReleaseRoll: the roll may be dropped while the proposal is still OPEN",
+  "find": "\tcase stateActive:\n\t\tpanic(\"govern: that proposal is still open; its roll is what refuses a second vote\")",
+  "replace": "\tcase stateActive:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "ReleaseRoll: the roll may be dropped in the window before execution",
+  "find": "\tcase stateSucceeded:\n\t\tpanic(\"govern: that proposal has not run yet; the roll is what it runs against\")",
+  "replace": "\tcase stateSucceeded:"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "ReleaseRoll: the roll is never actually dropped",
+  "find": "\tp.voted = nil",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Cancel: anybody may cancel somebody else's proposal",
+  "find": "\tif who != p.proposer {",
+  "replace": "\tif who != p.proposer && id < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Cancel: a DECIDED proposal may still be cancelled",
+  "find": "\tif p.state != stateActive {\n\t\tpanic(\"govern: too late to cancel\")\n\t}",
+  "replace": "\tif p.state != stateActive && id < 0 {\n\t\tpanic(\"govern: too late to cancel\")\n\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Cancel: the clock is not advanced first, so a lapsed proposal can be cancelled",
+  "find": "\t\tpanic(\"govern: only the proposer may cancel\")\n\t}\n\tg.settle(p)",
+  "replace": "\t\tpanic(\"govern: only the proposer may cancel\")\n\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Cancel: a cancellation is recorded as a defeat",
+  "find": "\tg.setState(p, stateCanceled, \"\")",
+  "replace": "\tg.setState(p, stateDefeated, \"\")"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "setState: a SUCCEEDED proposal loses its slot before it has run",
+  "find": "\tif st != stateSucceeded {\n\t\tg.release(p)\n\t}",
+  "replace": "\tg.release(p)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "setState: a finished proposal never frees its slot",
+  "find": "\tif st != stateSucceeded {\n\t\tg.release(p)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "setState: the reason is stored unclipped",
+  "find": "\tp.state, p.reason = st, clip(reason)",
+  "replace": "\tp.state, p.reason = st, reason"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "sweep: only one window is ever tried",
+  "find": "\tfor w := 0; w <= maxLive/sweepScan; w++ {",
+  "replace": "\tfor w := 0; w < 1; w++ {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "sweep: it keeps sweeping after a slot has been freed",
+  "find": "\t\tif g.openIdx.Size() < before {\n\t\t\treturn\n\t\t}",
+  "replace": "\t\t_ = before"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "sweepWindow: the per-window scan is unbounded",
+  "find": "\t\treturn seen >= scan",
+  "replace": "\t\treturn false"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "sweepWindow: the cursor never advances, so later slots are never reclaimed",
+  "find": "\tif seen < scan {\n\t\tg.sweepFrom = \"\"\n\t} else {\n\t\tg.sweepFrom = last + \"\\x00\"\n\t}",
+  "replace": "\tg.sweepFrom = \"\"\n\t_ = last"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "clip: the reason bound is off by one",
+  "find": "\tif len(s) <= maxReason {",
+  "replace": "\tif len(s) <= maxReason+1 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "clip: the cut lands inside the character BEFORE the boundary",
+  "find": "\tfor n > 0 && s[n]&0xC0 == 0x80 {\n\t\tn--\n\t}\n\treturn s[:n] + \"\u2026\"",
+  "replace": "\tfor n > 0 && s[n]&0xC0 == 0x80 {\n\t\tn--\n\t}\n\tn--\n\treturn s[:n] + \"\u2026\""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "digest: the payload is not part of a proposal's identity",
+  "find": "\th := sha256.Sum256([]byte(kind + \"\\x00\" + payload))",
+  "replace": "\th := sha256.Sum256([]byte(kind))"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "digest: the separator between kind and payload is dropped",
+  "find": "\th := sha256.Sum256([]byte(kind + \"\\x00\" + payload))",
+  "replace": "\th := sha256.Sum256([]byte(kind + payload))"
  }
 ]

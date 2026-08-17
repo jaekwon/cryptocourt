@@ -126,3 +126,29 @@ func TestAllAbstainDefeats(t *testing.T) {
 		t.Fatalf("all-abstain should defeat with 'nobody voted in favour', got %q", got)
 	}
 }
+
+// An electorate that engages NOBODY is refused at the door, found surviving.
+//
+// The guard reads `engaged <= 0`, and the comment above it used to say such an
+// electorate "makes every quorum unreachable" — which is backwards, and the
+// reason the hole is worth a test rather than a shrug. Quorum is
+// `cast*bps >= engaged*QuorumBps`; with engaged at zero the right-hand side is
+// zero, so the comparison is true for ANY turnout including none. Quorum stops
+// existing rather than becoming unreachable, and at the deadline a single yes
+// vote carries the proposal however few showed up.
+//
+// Reachable with a legitimate electorate, not a broken one: EngagedTotal exists
+// precisely so a realm can drop idle weight out of the denominator, and a realm
+// where all weight is idle returns zero from it honestly.
+func TestAnElectorateThatEngagesNobodyIsRefused(t *testing.T) {
+	g := govFor(&stated{total: 100, engaged: 0, epoch: 2})
+	mustPanicContains(t, "engaged weight has to be positive", func() {
+		g.Propose(gAlice, "fee", "1", "engages nobody")
+	})
+	// One unit of engagement is enough to have a bar at all.
+	ok := govFor(&stated{total: 100, engaged: 1, epoch: 2})
+	id := ok.Propose(gAlice, "fee", "1", "engages one")
+	if got := ok.State(id); got != "active" {
+		t.Errorf("an electorate engaging one unit was refused: %q", got)
+	}
+}
