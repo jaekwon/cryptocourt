@@ -1624,6 +1624,38 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.79 — the ACCRUAL CLOCK swept: P10's carry was unpinned, and the test that looks
+  like it covers P10 cannot, because it walks a period in one segment.** `emission.gno`'s
+  clock is the other half of the minting path and it governs the LOCKED ceiling. Nine
+  guards; six already held, including the R_max pause, the step-down, the EMA smoothing,
+  **the ceiling itself** (`d_eff = min(realized, budget)` — inverting the comparison is
+  caught), the period budget being sized off the ceiling rather than off `d_eff`, and
+  `touch` clamping a segment to the period boundary.
+  **Both halves of the P10 carry survived** — not adding the carried remainder back in,
+  and discarding it instead of keeping it — and the reason is the interesting part.
+  `TestAccrualIsExactOverAPeriod` reads like the test for this and is not: `rollTo` jumps
+  a WHOLE period in ONE segment, so the numerator is `budget × periodBlocks`, divides
+  exactly, and the remainder machinery never runs at all. P10 is a claim about PARTIAL
+  segments — the case every real court is in, since any state-changing call touches the
+  clock mid-period. So the invariant had a test named after it that structurally could not
+  exercise it, which is a worse position than having none: it reads as covered.
+  The new fixture walks one period in three UNEVEN segments. The carry is exactly what
+  makes that exact: the numerators sum to `budget × periodBlocks`, so the floors plus the
+  carry chain come to precisely `budget` with nothing left over, and the fixture asserts
+  the total, the closing remainder of zero, AND that some intermediate remainder was
+  non-zero — without that last check it would pass on spans that all divided exactly,
+  which is the same nothing the whole-period jump proves. Discard the remainder and each
+  segment floors alone, so the period pays SHORT: a slow leak against everyone the accrual
+  owes, invisible per segment and permanent in aggregate.
+  One more survived and is EQUIVALENT, measured this time rather than argued:
+  `accrueSegment`'s `blocks <= 0 || curPeriodBudget <= 0` fast path. With it removed both
+  cases are exact no-ops, and the reason generalizes beyond the probe — `accrualRem` is a
+  modulus, hence always `< periodBlocks`, so `num = rem` floors to 0 and leaves `rem`
+  unchanged whatever the state. Same standing as `advanceRateAcc`'s `blocks <= 0`, which
+  the source already documents as unreachable-and-kept (v0.66) — except that one is
+  recorded as *not* claimed verified, and this one now is. No batch row, per v0.76.
+  Batch now 157 rows, all caught, none invalid.
+
 - **v0.78 — the MINTING path swept: 9 of 14 guards already held, three real holes closed,
   and the worst of them loses a payee without leaving a gap to notice.** `emission.gno` is
   where coin is created, so it was the last large unswept money surface. What already held

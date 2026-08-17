@@ -249,3 +249,60 @@ func TestSeniorQueueRefusesJunkAndNeverOverwrites(cur realm, t *testing.T) {
 		t.Fatalf("and must not move juniorReserved: %d vs %d", c.juniorReserved, jr)
 	}
 }
+
+// P10 — "flooring never loses a unit across a period" — which the source states in
+// accrueSegment's own comment and nothing checked. Both halves of the carry survived
+// the harness: not adding the carried remainder back in, and discarding it instead of
+// keeping it.
+//
+// TestAccrualIsExactOverAPeriod looks like it covers this and does not, for a reason
+// worth writing down: rollTo jumps a WHOLE period in ONE segment, so the numerator is
+// budget x periodBlocks, divides exactly, and the remainder machinery never runs. The
+// invariant is about PARTIAL segments — the case every real court is in, since any
+// state-changing call touches the clock mid-period.
+//
+// Walked in uneven segments, the carry is what makes the total exact: the numerators
+// sum to budget x periodBlocks, so the floors plus the carry chain come to exactly
+// budget with nothing left over. Discard the remainder and each segment floors on its
+// own, so the period pays SHORT — a slow leak against everyone the accrual owes,
+// invisible per segment and permanent in aggregate.
+func TestAccrualCarriesItsRemainderAcrossSegments(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("p10-alice")
+	c := testCourt(cur, "p10", alice, 10_000_000_000)
+	rollTo(c, 1)
+	budget := c.curPeriodBudget
+	if budget <= 0 {
+		t.Fatalf("setup: period 1 must carry a live budget, got %d", budget)
+	}
+	if c.accrualRem != 0 {
+		t.Fatalf("setup: period 0 pays nothing, so the carry starts empty: %d",
+			c.accrualRem)
+	}
+	acc0 := c.cumAccrual
+
+	// One period, in three UNEVEN segments instead of one jump.
+	spans := []int64{40_321, 40_321, periodBlocks - 2*40_321}
+	sawRemainder := false
+	for _, span := range spans {
+		testing.SkipHeights(span)
+		touch(c)
+		if c.accrualRem != 0 {
+			sawRemainder = true
+		}
+	}
+	// Without this the arms below would pass on spans that all divided exactly,
+	// which is the same nothing the whole-period jump proves.
+	if !sawRemainder {
+		t.Fatal("setup: every span divided exactly, so the carry was never exercised " +
+			"— choose spans where budget*blocks is not a multiple of periodBlocks")
+	}
+	if got := c.cumAccrual - acc0; got != budget {
+		t.Fatalf("a period walked in segments must accrue exactly its budget, not %d "+
+			"of %d (short by %d)", got, budget, budget-got)
+	}
+	// And the chain closes: an exact period leaves nothing carried.
+	if c.accrualRem != 0 {
+		t.Fatalf("a period that came out exact must carry nothing forward: %d",
+			c.accrualRem)
+	}
+}

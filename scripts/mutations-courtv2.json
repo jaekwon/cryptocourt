@@ -1041,5 +1041,61 @@
   "label": "reserveJunior: a negative reservation is accepted",
   "find": "\tif want < 0 {\n\t\twant = 0\n\t}",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "accrueSegment: the R_max pause never holds, so accrual runs past the cap",
+  "find": "\tif c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "accrueSegment: the carried remainder is never added back (P10)",
+  "find": "\tnum := mustAdd(mustMul(c.curPeriodBudget, blocks), c.accrualRem)",
+  "replace": "\tnum := mustMul(c.curPeriodBudget, blocks)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "accrueSegment: the remainder is discarded instead of carried (P10)",
+  "find": "\tc.accrualRem = num % periodBlocks",
+  "replace": "\tc.accrualRem = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: the budget never steps down",
+  "find": "\tc.curBudgetBpsFP = c.curBudgetBpsFP * stepDownNum / stepDownDen\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: the dilution EMA is not smoothed",
+  "find": "\tc.emaMinted = (3*c.emaMinted + minted) / 4",
+  "replace": "\tc.emaMinted = minted"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: d_eff takes the LARGER of realized and ceiling",
+  "find": "\t\tif dReal < c.curBudgetBpsFP {",
+  "replace": "\t\tif dReal > c.curBudgetBpsFP {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: the period budget is sized off d_eff, not the ceiling",
+  "find": "\t\tc.curPeriodBudget = mulDiv128(s, c.curBudgetBpsFP, 10_000*1_000_000)",
+  "replace": "\t\tc.curPeriodBudget = mulDiv128(s, c.dEffBpsFP, 10_000*1_000_000)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "touch: a segment is not clamped to the period boundary",
+  "find": "\t\tif boundary < segEnd {\n\t\t\tsegEnd = boundary\n\t\t}",
+  "replace": ""
  }
 ]
