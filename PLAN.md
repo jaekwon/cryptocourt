@@ -1624,6 +1624,33 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.87 — the batch is sharded: 14m42s to 8m07s on the same 241 rows, same verdict —
+  and where the time goes was MEASURED before anything was changed.** The batch had grown
+  past a quarter of an hour and grows with every guard pinned, so it was worth fixing
+  before it stopped being run.
+  The obvious optimisation was wrong. Staging looks expensive — nine trees copied per
+  mutation, 241 times — so it was timed: **staging a shard is 0.03s, one courtv2 suite run
+  is 3.67s.** Staging is 1% of a row. Caching it, which was the first idea, would have
+  bought nothing measurable and this file would have carried a claim about it. The cost is
+  irreducibly ONE SUITE RUN PER MUTATION, which is what mutation testing is.
+  So the lever is parallelism, and it is available only because of the last few versions:
+  each runner builds its own GNOROOT (v0.74) and mutations land on the staged copy rather
+  than the repo (v0.79). Two concurrent mutate runs corrupted each other as recently as
+  v0.79; now nothing is shared — not the tree, not the sources, not a lock.
+  Rows are split ROUND-ROBIN rather than in blocks, so no shard inherits every row for one
+  slow package. The single all-caught number is the whole point of the batch, so the driver
+  prints every row and then ONE verdict; shard boundaries are not shown.
+  **The new failure mode is a shard that dies while its siblings pass** — its rows never
+  ran, and merging what came back would print a clean verdict over a hole. Guarded three
+  ways: a nonzero shard exit, a missing summary line, and a row count that does not match
+  what was sent, each of which fails the whole run. Two self-test controls cover it (the
+  driver refuses, and its exit code says so), and it is registered in the coverage rule —
+  seven guards in scripts/ now, all with controls.
+  Measured 1.8x, not 4x, on four shards: CPU peaked at 428% of 800% and each shard runs its
+  OWN baseline. That duplication is deliberate — a shard's tree is independently verified
+  green before its rows run, and mutate.py's header is emphatic that a red baseline makes
+  every row below it meaningless. Trading that for ~20% wall clock is the wrong way round.
+
 - **v0.86 — a field documented "for the conservation checks" had no reader, so all NINE of
   its write sites were deletable in silence.** Swept the terminal-path family
   (`CloseDeadClaim`, `provCloseClaim`) following v0.85's heuristic, and it led somewhere
