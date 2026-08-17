@@ -29,7 +29,17 @@ realm-test:
 	root=$$(gno env GNOROOT); \
 	rbase="$$root/examples/gno.land/r/cryptocourt"; \
 	pbase="$$root/examples/gno.land/p/cryptocourt"; \
-	trap 'rm -rf "$$rbase" "$$pbase"' EXIT; \
+	lock="$$root/examples/gno.land/.cryptocourt-stage.lock"; \
+	i=0; \
+	while ! mkdir "$$lock" 2>/dev/null; do \
+		i=$$((i+1)); \
+		if [ $$i -gt 600 ]; then \
+			echo "realm-test: the stage lock at $$lock has been held for 10 minutes; remove it if it is stale"; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done; \
+	trap 'rm -rf "$$rbase" "$$pbase" "$$lock"' EXIT; \
 	for p in checkpoint grc20votes governor twap cshares tickbook curve; do \
 		mkdir -p "$$pbase/$$p/v0" && \
 		cp realm/p/$$p/*.gno realm/p/$$p/gnomod.toml "$$pbase/$$p/v0/" || exit 1; \

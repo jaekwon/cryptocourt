@@ -40,11 +40,13 @@ Needs a gno toolchain; skips without one unless REQUIRE_GNO is set, and says so
 rather than passing quietly.
 """
 
+import contextlib
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -74,6 +76,35 @@ REALMS = (
     + [(os.path.join(REPO, "realm/r", r), f"examples/gno.land/r/cryptocourt/{r}")
        for r in RLMS]
 )
+
+
+@contextlib.contextmanager
+def stage_lock(root):
+    """Serialize the shared staging area.
+
+    Every runner stages into the SAME $GNOROOT/examples/gno.land/{p,r}/cryptocourt
+    and rm -rf's it on exit. The location cannot be parameterized: the import paths
+    baked into the sources are what make gno resolve siblings there at all. So two
+    concurrent runners delete each other's tree mid-run, and the loser reports a
+    phantom compile error in code that is fine — which is exactly how a
+    "c.mod undefined" failure and an outright `make isolation-test` failure were
+    manufactured. mkdir is atomic, so it is the lock.
+    """
+    lock = os.path.join(root, "examples/gno.land/.cryptocourt-stage.lock")
+    for _ in range(600):
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            time.sleep(1)
+    else:
+        print(f"check-isolation: the stage lock at {lock} has been held for 10 "
+              f"minutes; remove it if it is stale", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
 
 
 def stage(root):
@@ -127,17 +158,18 @@ def main():
               file=sys.stderr)
         return 1
 
-    stage(root)
     bad, total = [], 0
-    for rel, names in work:
-        base = os.path.join(root, rel)
-        for t in names:
-            total += 1
-            r = subprocess.run(["gno", "test", "-run", f"^{t}$", "."], cwd=base,
-                               capture_output=True, text=True)
-            if r.returncode != 0:
-                bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
-    cleanup(root)
+    with stage_lock(root):
+        stage(root)
+        for rel, names in work:
+            base = os.path.join(root, rel)
+            for t in names:
+                total += 1
+                r = subprocess.run(["gno", "test", "-run", f"^{t}$", "."], cwd=base,
+                                   capture_output=True, text=True)
+                if r.returncode != 0:
+                    bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
+        cleanup(root)
 
     for rel, t, out in bad:
         print(f"ALONE   {t} ({os.path.basename(rel)}) fails when it is the only "
