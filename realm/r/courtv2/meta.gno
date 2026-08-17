@@ -26,6 +26,8 @@ import (
 
 	unsafe "chain/runtime/unsafe"
 
+	"math/overflow"
+
 	bptree "gno.land/p/nt/bptree/v0"
 )
 
@@ -405,6 +407,113 @@ func AppealLatchHolder(verb, court string, target uint64) uint64 {
 	p := modParse{verb: verb, court: court, target: target}
 	if v := meta.latches.Get(latchKey(p)); v != nil {
 		return v.(uint64)
+	}
+	return 0
+}
+
+// ---- the meta franchise (MODERATION.md §13.8) -----------------------------
+//
+// The appeals layer's electorate should be the platform's paying participants,
+// not whoever chose to buy the appeals coin. Selling meta-CC on its own curve
+// makes the security parameter a CONSTANT — one actor's one-time purchase — so
+// a 5% pivot costs ~0.108x the deployer's genesis spend forever, at any
+// platform size. Deriving it from burned GNOT instead makes it ENDOGENOUS: it
+// grows with adoption, and burned GNOT is the one signal nobody can fake.
+//
+// Three independent vets converged on the same shape, and every clause below
+// exists because a specific attack needs it:
+//
+//   - accrue on `spent` µGNOT, NEVER on CC minted. A fresh curve sells CC
+//     ~44,721x cheaper per GNOT and StartCourt is free, so a per-CC rule is an
+//     unbounded sqrt(N) free-mint of the platform's governance token. Per-GNOT
+//     makes the court you burn into irrelevant — and that is sound ONLY because
+//     the GNOT is truly burned to a keyless sink with no redemption path
+//     anywhere. TRIPWIRE: this breaks the instant a treasury or redemption is
+//     reintroduced.
+//   - CLAIM-ON-DEMAND, not an airdrop. Burning accrues an entitlement; meta-CC
+//     exists only when its owner asks for it. This one choice does four jobs:
+//     supply stays equal to the ENGAGED electorate (so the 5%-of-supply quorum
+//     floor stays reachable — an auto-mint would inflate the bar ~158x while
+//     turnout stayed flat, killing honest appeals while the zero-voter forge
+//     kept working); the cheap-float capture route disappears (an attacker must
+//     pay people to claim AND sell, which is visible vote-buying); the
+//     unsolicited distribution becomes an opt-in membership act; and the
+//     unclaimed overhang is a standing DEFENSIVE RESERVE — dormant burners can
+//     claim and dilute a capture next cycle.
+//   - route the mint through META'S OWN CURVE, advancing the same monotone
+//     position its Buy uses. That keeps the quadratic escalator (capture gets
+//     harder as the platform grows), closes the side door where a parked curve
+//     would sell a capture bloc at genesis prices, and leaves court.gno's
+//     supply-ceiling invariant true UNCHANGED — the curve's own cap still
+//     bounds every unit of meta primary issuance.
+//   - CLAMP, never panic. This mint is reached from Buy, the platform's only
+//     GNOT on-ramp; a MaxSupply panic here would brick buying on every court.
+
+// franchise: address -> unclaimed µGNOT burned across all courts.
+var franchise = bptree.NewBPTree32()
+
+// accrueFranchise records a burn toward the claimant's future meta weight.
+// Called from Buy; never panics, never mints, never reads money state back.
+// Buying META itself does not accrue — that GNOT already bought meta-CC
+// directly through the same curve, and counting it twice would pay the same
+// burn two ways.
+func accrueFranchise(c *Court, who address, spent int64) {
+	if c.id == metaSlug || spent <= 0 {
+		return
+	}
+	k := who.String()
+	prev := int64(0)
+	if v := franchise.Get(k); v != nil {
+		prev = v.(int64)
+	}
+	sum, ok := overflow.Add64(prev, spent)
+	if !ok {
+		return // unreachable at real volumes; never panic on the Buy path
+	}
+	franchise.Set(k, sum)
+}
+
+// ClaimMetaFranchise mints the caller's accrued appeals weight. Permissionless
+// and idempotent — claiming twice with nothing accrued is a no-op returning 0.
+func ClaimMetaFranchise(cur realm) int64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	k := who.String()
+	v := franchise.Get(k)
+	if v == nil {
+		return 0
+	}
+	owed := v.(int64)
+	if owed <= 0 {
+		return 0
+	}
+	mc := mustCourt(metaSlug)
+	touch(mc) // the mint changes meta's live supply; its accrual clock must be current
+	delta, used := mc.crv.Minted(mc.minted, owed)
+	if delta <= 0 {
+		return 0 // the curve is at its cap: clamp silently, keep the entitlement
+	}
+	mc.minted += delta // ONE monotone position, shared with meta's own Buy
+	mc.coin.Mint(who, delta)
+	if used >= owed {
+		franchise.Remove(k)
+	} else {
+		franchise.Set(k, owed-used) // a partial fill leaves the rest claimable
+	}
+	chain.Emit("FranchiseClaimed",
+		"who", who.String(),
+		"burned", strconv.FormatInt(used, 10),
+		"minted", strconv.FormatInt(delta, 10),
+	)
+	return delta
+}
+
+// FranchiseOf is the caller-visible unclaimed entitlement, in µGNOT burned.
+func FranchiseOf(who address) int64 {
+	if v := franchise.Get(who.String()); v != nil {
+		return v.(int64)
 	}
 	return 0
 }

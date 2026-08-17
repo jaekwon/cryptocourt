@@ -60,6 +60,10 @@ func Buy(cur realm, slug string) int64 {
 	// the front page ranks on it (MODERATION.md §3.2). Render-layer only: no
 	// money path reads the index.
 	reindexBurn(c, spent)
+	// Accrue this burn toward the buyer's appeals-layer weight (meta.gno). It
+	// only ACCRUES — nothing is minted until the buyer claims — so meta's supply
+	// tracks the engaged electorate rather than every passerby.
+	accrueFranchise(c, buyer, spent)
 
 	// BURN the spent GNOT: send it to the keyless sink. Verifiable on-chain;
 	// never described as a scarcity feature (§7.4 / Munchee).
