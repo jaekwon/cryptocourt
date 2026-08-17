@@ -171,6 +171,15 @@ type courtMod struct {
 	folders   *bptree.BPTree // folderID (be64) -> *folder (folders.gno)
 	folderSeq uint64
 
+	// The replacement election (modvote.gno) and the candidate registry it and
+	// the meta court's `mod:setmods` peer path share.
+	candidates            *bptree.BPTree // candidateID (be64) -> *modCandidate
+	candSeq               uint64
+	election              *election
+	electionSeq           uint64
+	electionCooldownUntil int64 // this court's OWN cooldown slot (not the per-claim flag field)
+	creatorUnseated       bool  // an election has installed a set; the creator no longer appoints
+
 	// election / strip-index state land in modvote.gno / the strip module; they
 	// hang off this struct so a court's whole moderation footprint is one
 	// lazily-created object.
@@ -250,6 +259,9 @@ func AppointMods(cur realm, courtSlug string, mods []address, m int) {
 	c := mustCourt(courtSlug)
 	if cur.Previous().Address() != c.admin {
 		panic("courtv2: only the court creator appoints moderators (until an election)")
+	}
+	if c.mod != nil && c.mod.creatorUnseated {
+		panic("courtv2: an election has installed a set; the creator's appointment power is spent")
 	}
 	if len(mods) == 0 {
 		panic("courtv2: a moderator set may not be empty")
