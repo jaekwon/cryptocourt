@@ -38,16 +38,21 @@ Usage — a JSON list of mutations on stdin, each applied and reverted in turn:
     ]
     EOF
 
-Needs a gno toolchain. Paths are the govern realm and the checkpoint package it
-imports; edit REALM and DEP for another target.
+A saved batch for the courtv2 money path lives at scripts/mutations-courtv2.json:
+
+    python3 scripts/mutate.py < scripts/mutations-courtv2.json
+
+Needs a gno toolchain. PKGS below lists every tree this can stage or mutate.
 """
 
+import contextlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 
 SRC = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -76,7 +81,56 @@ PKGS = {
     # as a catch, told by omission.
     "offerer": (os.path.join(REPO, "realm/r/offerer"),
                 "examples/gno.land/r/cryptocourt/offerer"),
+    # courtv2 and the packages it needs staged. Added after this harness spent a
+    # whole session unusable against the realm that holds almost every guard worth
+    # breaking: the money-path work (the slash reserve, the quality ratchet, the
+    # carrot withholding) all lives here, and every one of those guards had to be
+    # mutated BY HAND because there was no entry for it. That is the same shape as
+    # the isolation guard staging 3 p/ + 2 r/ and not courtv2 — a check that
+    # measures everything except the thing most worth measuring.
+    "courtv2": (os.path.join(REPO, "realm/r/courtv2"),
+                "examples/gno.land/r/cryptocourt/courtv2"),
+    # Staged, not mutated: courtv2 imports twap directly and the realm-test set
+    # stages all seven, so leaving any out makes the baseline red for a staging
+    # reason and every mutation then reads as caught — the lie this file's header
+    # warns about, told by omission.
+    "twap": (os.path.join(REPO, "realm/p/twap"),
+             "examples/gno.land/p/cryptocourt/twap/v0"),
+    "cshares": (os.path.join(REPO, "realm/p/cshares"),
+                "examples/gno.land/p/cryptocourt/cshares/v0"),
+    "tickbook": (os.path.join(REPO, "realm/p/tickbook"),
+                 "examples/gno.land/p/cryptocourt/tickbook/v0"),
+    "curve": (os.path.join(REPO, "realm/p/curve"),
+              "examples/gno.land/p/cryptocourt/curve/v0"),
 }
+
+
+@contextlib.contextmanager
+def stage_lock(root):
+    """Serialize the shared staging area, as realm-test and check-isolation do.
+
+    Every runner stages into the SAME $GNOROOT/examples/gno.land/{p,r}/cryptocourt
+    and removes it afterwards; the import paths fix that location, so it cannot be
+    parameterized. Two concurrent runners delete each other's tree mid-run and the
+    loser reports a phantom build failure — which this harness would count as
+    INVALID, i.e. as a mutation it could not judge. mkdir is atomic, so it is the
+    lock.
+    """
+    lock = os.path.join(root, "examples/gno.land/.cryptocourt-stage.lock")
+    for _ in range(600):
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            time.sleep(1)
+    else:
+        print(f"mutate: the stage lock at {lock} has been held for 10 minutes; "
+              f"remove it if it is stale", file=sys.stderr)
+        raise SystemExit(1)
+    try:
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
 
 
 def stage(root):
@@ -98,15 +152,19 @@ def run_suite(root):
     finding. Running one suite and calling it the answer would report the realm
     as covering the package it merely depends on, or the reverse.
     """
-    stage(root)
-    out, passed = "", True
-    for _, rel in PKGS.values():
-        r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
-                           capture_output=True, text=True)
-        out += r.stdout + r.stderr
-        passed = passed and r.returncode == 0
-    for _, rel in PKGS.values():
-        shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
+    # Under the lock: one complete stage/test/unstage cycle. Taking it here rather
+    # than around the whole run keeps a long batch from holding the shared tree for
+    # its entire duration, and every cycle is self-contained.
+    with stage_lock(root):
+        stage(root)
+        out, passed = "", True
+        for _, rel in PKGS.values():
+            r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
+                               capture_output=True, text=True)
+            out += r.stdout + r.stderr
+            passed = passed and r.returncode == 0
+        for _, rel in PKGS.values():
+            shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
     return passed, out
 
 

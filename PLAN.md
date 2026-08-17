@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.57 — the mutation harness could not reach courtv2, and it disproved one of my
+  own coverage claims within a minute of being able to.** `scripts/mutate.py` — this
+  repo's own tool for the exact discipline the loop mandates — had a `PKGS` registry
+  covering govern, checkpoint, grc20votes, governor and offerer, and **no entry for
+  courtv2**. So every guard in the realm that holds the whole money path had to be
+  mutated by hand, which is what I did for two dozen mutations across this session.
+  Same shape as v0.49's finding about the isolation guard staging 3 p/ + 2 r/ and not
+  courtv2: a check that measures everything except the thing most worth measuring.
+  Registered courtv2 plus the four packages the realm-test set stages (twap, cshares,
+  tickbook, curve) — staged, not mutated, because a missing dependency makes the
+  baseline red for a staging reason and every mutation then reads as caught, which is
+  the lie the file's own header warns about. Also took the stage lock inside
+  `run_suite`, at one complete stage/test/unstage cycle, so a long batch does not hold
+  the shared tree for its whole duration. Saved the session's money-path batch as
+  `scripts/mutations-courtv2.json` (13 mutations, all caught, none invalid) so it is
+  re-runnable rather than reconstructed from commit messages.
+  **CORRECTION — v0.56's companion commit claimed "lifeAvgStake had no test at all".
+  That is FALSE.** It was already covered by `TestDrainedClaimPricesBarsOffLifetimeStake`,
+  which arrived with 4f72b58, the v0.46 X̄-base fix itself — a fixture that exercises the
+  lifetime arm through `PostAnswer` and never names the function, so my per-function
+  reference count missed it. My hand mutation could not reveal this because I ran it
+  AFTER adding my own fixture, so both caught it and I attributed the catch to mine.
+  The harness distinguished them in one run by naming the catching test. What WAS
+  genuinely new in that commit is the other direction: `max()` versus REPLACE. That
+  mutation survived the entire suite before `TestXBarFrozenTakesTheTrailingArmOnAGrowing`
+  `Claim` existed, and the saved batch now pins both directions separately so the two can
+  never again be confused for one another.
+  **Standing correction to the sweep method, third revision and final.** Counting
+  test-file references per function is a LEAD GENERATOR with a high false-positive rate
+  in three distinct ways: exported names tested through a re-export wrapper in another
+  package (governor.NewRules via r/govern); unexported validators tested through their
+  callers, which is the NORMAL case (checkpoint.mustBeUsable via SetAt, and lifeAvgStake
+  via PostAnswer); and anything covered by a filetest, which carries no Test name at all.
+  Only mutation establishes coverage. Of five claimed finds this session, four stand
+  (directory.gno's access control, mustSlug's charset, grc20votes' validators,
+  twap.mustSane — each mutation-confirmed against a suite that passed without the guard)
+  and one was half wrong.
+
 - **v0.56 — the sub-bar-low SLASH DISARM: vetted 3x, NO CONVERGENCE, OWNER DECISION.
   Shipped only a pure read.** The mechanism is confirmed by all three reviewers: a
   conclusive LOW below the supply-floorless `fullBar` latches `slotConsumed`, `OpenFlag`
