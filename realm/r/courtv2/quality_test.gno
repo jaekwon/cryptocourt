@@ -869,14 +869,17 @@ func TestDustRideCannotLiftTheSlash(cur realm, t *testing.T) {
 	if cs.pendingSlash != slash {
 		t.Fatalf("a sub-full-bar ride must not lift the slash: %d want %d", cs.pendingSlash, slash)
 	}
-	// And the dust ride cannot PROMOTE the tier either — resolveQualityRide has
-	// no !slotConsumed guard, so the only thing standing between a dust-mid ride
-	// and a restored mid draw is the bar asymmetry inside applyQualityTally: the
-	// demotionBar enables a LOW demotion only, while any mid/high outcome needs
-	// the full supply-floored bar. So the ride is simply inconclusive and the
-	// full-bar LOW stands. This pins that asymmetry, which is load-bearing here:
-	// were promotions to become demotionBar-reachable, a dust voter could undo a
-	// full-bar junk verdict and restore the draw.
+	// And the dust ride cannot PROMOTE the tier either. resolveQualityRide has no
+	// !slotConsumed guard, so two braces hold instead. First, the bar asymmetry
+	// inside applyQualityTally: the demotionBar enables a LOW demotion only, while
+	// any mid/high outcome needs the full supply-floored bar — so this ride is
+	// simply inconclusive and the full-bar LOW stands. Second, since v0.51, the
+	// qualityReasked latch: a later round votes the SAME accumulating tally, so a
+	// promotion has to out-weigh the standing low rather than start from an empty
+	// one. Before that latch the tier was the larger of the two re-rollable prizes
+	// — a full-bar MID ride on a wiped tally restored the whole draw — and only the
+	// first brace stood in its way. This pins the asymmetry; the latch's own pin is
+	// TestSockDisputeCannotEraseTheCounterTally.
 	if tier, final := QualityTier("qfd", id); tier != qualityLow || final {
 		t.Fatalf("a dust ride must not promote the tier: got tier=%d final=%v", tier, final)
 	}
@@ -1071,4 +1074,186 @@ func TestSlashIsLeviedAtMostOncePerClaim(cur realm, t *testing.T) {
 		t.Fatalf("a claim is slashed at most once: pending=%d bond=%d want 0/%d",
 			cs.pendingSlash, cs.answerBond, remainder)
 	}
+}
+
+// levySlash drives a claim to a standing, adjudicated slash reserve: a failed
+// round 1 (so decidedRounds stays 0 and the claim is still slashable), then a
+// flag whose conclusive ⅔-low reserves from the answer bond. Returns the claim
+// and the reserve; the posted bond is cs.answerBond + the reserve.
+func levySlash(cur realm, c *Court, slug string, alice, bob, carol address) (*claimState, int64) {
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), slug, "a standing slash reserve")
+	matureOI(cur, slug, id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), slug, id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), slug, id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), slug, id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), slug, id)
+	cs := mustClaim(c, id)
+	return cs, cs.pendingSlash
+}
+
+// v0.51 — THE WIPE WAS THE RE-ROLL. Every reopen used to reset the shared
+// quality tally, so a sock bought a fresh coin flip for the price of a dispute
+// bond and the honest weight that had already answered the question was erased
+// rather than out-voted. The question is now re-asked EXACTLY ONCE after
+// anything has been adjudicated (the v0.31/Q5 doctrine, "forces one re-vote");
+// every later round and window votes the SAME accumulating tally.
+//
+// Here the answerer spends that one re-ask themselves and the electorate answers
+// low again, decisively. The sock — a fresh wallet, since OpenDispute's
+// same-address guard is hygiene only — must now OUT-WEIGH 30 CC of standing low
+// with its 8 CC of mid instead of deleting it. Before the fix dave's mid stood
+// alone, cleared the full bar unopposed, and refunded the slash.
+func TestSockDisputeCannotEraseTheCounterTally(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp1-alice") // author + answerer
+	bob := testutils.TestAddress("wp1-bob")     // round-1 disputer, then flagger
+	carol := testutils.TestAddress("wp1-carol") // the honest electorate
+	dave := testutils.TestAddress("wp1-dave")   // the answerer's sybil wallet
+	c := testCourt(cur, "wp1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	c.coin.Mint(dave, 8_000_000_000)
+	cs, slash := levySlash(cur, c, "wp1", alice, bob, carol)
+	if slash <= 0 {
+		t.Fatal("setup: the slash must reserve")
+	}
+	remainder := cs.answerBond
+
+	// The answerer spends their ONE Q5 challenge; the crowd answers low again.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "wp1", cs.id)
+	seq := cs.qVoteSeq
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp1", cs.id, qualityLow)
+	low := cs.qLowW
+
+	// The sock buys a round. It inherits the tally; it does not reset it.
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp1", cs.id)
+	if cs.qVoteSeq != seq {
+		t.Fatalf("a later round votes the SAME tally: seq %d want %d", cs.qVoteSeq, seq)
+	}
+	if cs.qLowW != low {
+		t.Fatalf("the honest low weight survives the reopen: %d want %d", cs.qLowW, low)
+	}
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteQuality(cross(cur), "wp1", cs.id, qualityMid)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "wp1", cs.id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp1", cs.id)
+	// pendingSlash 0 with the bond still short IS settle; a refund would restore
+	// the bond, a re-arm would leave the reserve standing.
+	if cs.pendingSlash != 0 || cs.answerBond != remainder {
+		t.Fatalf("the accumulated ⅔-low settles the slash: pending=%d bond=%d want 0/%d",
+			cs.pendingSlash, cs.answerBond, remainder)
+	}
+}
+
+// A round must CLOSE a lapsed counter lane, never inherit it. VoteQuality's
+// "the counter re-vote has closed" guard is unconditional, so a lane left open
+// past counterVoteEnd froze the whole quality lane for the claim: the ride could
+// not be voted by anyone, and the reserve's only remaining exit was whatever the
+// clock defaulted to. This is the regression pin for that freeze.
+func TestLapsedCounterLaneDoesNotFreezeTheRide(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp2-alice")
+	bob := testutils.TestAddress("wp2-bob")
+	carol := testutils.TestAddress("wp2-carol")
+	dave := testutils.TestAddress("wp2-dave")
+	c := testCourt(cur, "wp2", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	c.coin.Mint(dave, 8_000_000_000)
+	cs, slash := levySlash(cur, c, "wp2", alice, bob, carol)
+	if slash <= 0 {
+		t.Fatal("setup: the slash must reserve")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "wp2", cs.id)
+	testing.SkipHeights(c.params.votingBlocks + 1) // the lane lapses unresolved
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp2", cs.id)
+	if cs.counterOpen {
+		t.Fatal("a round must close a lapsed counter lane, not inherit it")
+	}
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp2", cs.id, qualityLow) // must not abort
+	if cs.qLowW <= 0 {
+		t.Fatal("the ride must be votable after a lapsed lane closes")
+	}
+}
+
+// The QUALITY question has its own, higher bar and can be answered on a round the
+// governor's quorum floor rejected. Scoring the ride on the failed-quorum branch
+// (v0.51) rather than re-arming blindly is what stops a full-bar rescue tally
+// from being discarded and then burned by the unconditional ResolveSlashWindow.
+// A below-bar ride still re-arms — TestReopenSupersedesCounter pins that arm.
+func TestFailedQuorumRideAtFullBarLiftsTheSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp3-alice")
+	bob := testutils.TestAddress("wp3-bob")
+	carol := testutils.TestAddress("wp3-carol")
+	dave := testutils.TestAddress("wp3-dave")
+	c := testCourt(cur, "wp3", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	c.coin.Mint(dave, 8_000_000_000)
+	cs, slash := levySlash(cur, c, "wp3", alice, bob, carol)
+	if slash <= 0 {
+		t.Fatal("setup: the slash must reserve")
+	}
+	ab := cs.answerBond + slash
+
+	// Round 2: nobody votes the VERDICT (it fails quorum) but the crowd rides
+	// quality at the full bar with no ⅔-low — ResolveCounter's own rescue test.
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp3", cs.id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp3", cs.id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp3", cs.id)
+	if FailedRounds("wp3", cs.id) != 2 {
+		t.Fatalf("setup: round 2 must fail quorum, got %d failed", FailedRounds("wp3", cs.id))
+	}
+	if cs.pendingSlash != 0 || cs.answerBond != ab {
+		t.Fatalf("a full-bar non-⅔-low ride lifts the slash even on a quorum-less round: "+
+			"pending=%d bond=%d want 0/%d", cs.pendingSlash, cs.answerBond, ab)
+	}
+}
+
+// The ride's deadline is the governor's own roll. disputeOpen stays true until
+// the permissionless ResolveDispute, and nothing else bounded the window — so
+// under an accumulating tally a vote landing after the roll closed would persist
+// into every later round, letting transaction ordering rather than the
+// electorate decide the reserve.
+func TestRideVoteClosesWithTheRoll(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp4-alice")
+	bob := testutils.TestAddress("wp4-bob")
+	carol := testutils.TestAddress("wp4-carol")
+	c := testCourt(cur, "wp4", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "wp4", "the ride closes with the roll")
+	matureOI(cur, "wp4", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "wp4", id, sideYES)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "wp4", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp4", id, qualityLow) // in time: fine
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "the dispute vote has closed", func() {
+		VoteQuality(cross(cur), "wp4", id, qualityMid)
+	})
 }

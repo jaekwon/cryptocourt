@@ -385,12 +385,13 @@ func TestReopenSupersedesCounter(cur realm, t *testing.T) {
 		t.Fatal("the slash must reserve")
 	}
 
-	// Answerer opens the counter re-vote, then a reopen dispute PARKS it.
-	// v0.47: the round CLOSES the running re-vote (its tally is about to be
-	// reset) but neither forgives the slash nor SPENDS the answerer's one
-	// challenge — a stranger's dispute must not consume it. Previously this
-	// refunded the reserve into the bond at OPEN, before a single vote, which is
-	// how a zero-weight failed-quorum reopen erased an adjudicated slash for good.
+	// Answerer opens the counter re-vote, then a reopen dispute closes its lane.
+	// v0.47: the round neither forgives the slash nor lets the reserve go
+	// unadjudicated. v0.51: it also does not UN-SPEND the challenge. Clearing
+	// counterUsed here re-minted the one-shot Q5 vote on demand — an answerer
+	// facing a settle could counter, self-dispute to cancel it, and counter again,
+	// indefinitely. What they are owed is the TIME, and rearmSlashWindow returns
+	// that by reopening the lane itself.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	CounterFlag(cross(cur), "m3l1", id)
 	testing.SetRealm(testing.NewUserRealm(bob))
@@ -400,18 +401,18 @@ func TestReopenSupersedesCounter(cur realm, t *testing.T) {
 			cs.pendingSlash, cs.answerBond, slash, ab-slash)
 	}
 	if cs.counterOpen {
-		t.Fatal("the running re-vote must close before the ride tally resets")
+		t.Fatal("the running re-vote's lane must close while the ride carries quality")
 	}
-	if cs.counterUsed {
-		t.Fatal("a stranger's dispute must not spend the answerer's one re-vote")
+	if !cs.counterUsed {
+		t.Fatal("a dispute must not re-mint the answerer's one-shot Q5 challenge")
 	}
-	// The parked counter cannot be resolved against the dispute's tally.
+	// The closed counter cannot be resolved against the dispute's tally.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "quality ride decides the slash first", func() {
 		ResolveCounter(cross(cur), "m3l1", id)
 	})
-	// And the answerer's challenge is genuinely restored: once the round
-	// resolves without adjudicating quality, they may counter-flag again.
+	// Once the round resolves without adjudicating quality, the LANE comes back —
+	// the answerer gets their window, not a second challenge.
 	testing.SetRealm(testing.NewUserRealm(carol))
 	VoteDispute(cross(cur), "m3l1", id, "no")
 	testing.SkipHeights(c.params.votingBlocks + 1)
@@ -419,11 +420,14 @@ func TestReopenSupersedesCounter(cur realm, t *testing.T) {
 	if cs.pendingSlash != slash {
 		t.Fatalf("a ride that adjudicated nothing leaves the slash standing: %d", cs.pendingSlash)
 	}
-	testing.SetRealm(testing.NewUserRealm(alice))
-	CounterFlag(cross(cur), "m3l1", id) // must not panic: the re-vote was restored
-	if !cs.counterOpen || !cs.counterUsed {
-		t.Fatal("the restored counter re-vote must be usable exactly once")
+	if !cs.counterOpen || cs.counterVoteEnd != cs.pendingSlashUntil {
+		t.Fatalf("rearm must restore the lane to the full window: open=%t end=%d until=%d",
+			cs.counterOpen, cs.counterVoteEnd, cs.pendingSlashUntil)
 	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "the one counter re-vote was already used", func() {
+		CounterFlag(cross(cur), "m3l1", id)
+	})
 }
 
 // Audit-final MED: an OVERTURNED answerer draws NO answerer emission slice —

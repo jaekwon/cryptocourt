@@ -129,6 +129,17 @@ type claimState struct {
 	// a STALE flagger from an earlier inconclusive cycle whose bond already came back
 	// whole under T1, who would then mint a bounty for a slash the RIDE levied.
 	slashFlagger address
+	// qualityReasked is the one-way EXACTLY-ONCE latch on the TALLY WIPE — the dual
+	// of slashLevied, which bounds ORIGINATION. Once a conclusive tally has
+	// adjudicated quality, the tally resets AT MOST ONCE more; every later round and
+	// window votes the same ACCUMULATING tally. Without it the wipe was the re-roll:
+	// each reopen handed a sock a fresh coin flip at the price of a dispute bond,
+	// erasing the honest low weight that had already answered the question, so the
+	// slash (and, after it disposed, the whole tier and its draw) could be re-rolled
+	// ~3x inside a 3-week escrow. Keyed on slotConsumed rather than pendingSlash > 0
+	// because origination implies slotConsumed (both sites latch it first) but not
+	// conversely — the tier prize outlives the reserve. Never cleared.
+	qualityReasked bool
 	// Crystallize marker (Q6-Q8): after it, quality is immutable.
 	crystallized bool
 	// Carrot pull-claim anchors (set at the conclusive tally)

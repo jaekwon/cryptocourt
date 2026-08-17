@@ -111,13 +111,15 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 	// reserve now: an overturn burns it with the bond (A19), an upheld round is
 	// scored on its own ride, and a round that decided nothing re-arms it.
 	//
-	// What must still happen here is closing a LIVE counter re-vote, because
-	// openQualityTally resets the shared tally and would silently discard its
-	// votes. parkCounter cancels it rather than spending it, so a stranger's
-	// dispute cannot consume the answerer's one Q5 challenge.
+	// A LIVE counter re-vote still closes here — the round's own ride replaces it —
+	// but it is no longer un-SPENT (v0.51). Clearing counterUsed re-minted the
+	// one-shot Q5 challenge on demand: an answerer facing a settle could counter,
+	// self-dispute to cancel it, and counter again, indefinitely inside the escrow
+	// window. What the answerer is owed is the TIME, which rearmSlashWindow returns
+	// by reopening the lane itself on any round that adjudicated nothing.
 	voidFlag(c, cs)
-	parkCounter(cs)
-	openQualityTally(cs)
+	cs.counterOpen = false
+	reaskQualityTally(cs)
 
 	// Bond: min(20%·X̄frozen, 40% × the actual answer bond) — the v0.25 arm
 	// keeps round 1 at q > 1/3 on every claim including bond-capped courts —
@@ -212,12 +214,15 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 			c.coin.Burn(c.escrow, rest)
 		}
 		cs.disputeBond = 0
-		// A quorum-less round adjudicated NOTHING — least of all quality — so any
-		// carved slash survives it untouched (v0.47). The answerer only gets a
-		// fresh challenge window, since this round discarded theirs. Re-armed
-		// BEFORE provCloseClaim below, which returns the bond but leaves the
-		// reserve carved for ResolveSlashWindow (or a counter re-vote) to settle.
-		rearmSlashWindow(c, cs)
+		// The VERDICT question failed quorum; the QUALITY question has its own,
+		// higher bar and can be answered on a round the governor's floor rejected
+		// (v0.51). Scoring the ride here rather than re-arming blindly is what stops
+		// a full-bar rescue tally from being discarded and then burned by the
+		// unconditional ResolveSlashWindow — a below-bar ride still re-arms, which is
+		// the v0.47 behavior verbatim. Runs BEFORE provCloseClaim below, so a refund
+		// rejoins answerBond and is paid out there; reversed, it would strand in
+		// escrow with no later payout path.
+		disposeSlashOnRide(c, cs)
 		// Only the FIRST failed round defaults the verdict to the answer; a
 		// failed reopen leaves a standing decided verdict untouched.
 		if firstResolution {
