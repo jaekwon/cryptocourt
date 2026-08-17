@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.31 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.32 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,55 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.32 — THE SPEC AND THE CODE DISAGREE ABOUT WHETHER CC IS TRANSFERABLE, AND
+  THE CODE HAS NEVER IMPLEMENTED IT. Owner decision needed; deliberately not
+  built.** Scoping item 18 required knowing whether a lock in place is
+  *enforceable*, which meant asking who can move a balance. The answer is nobody
+  outside this realm: **CC cannot be transferred between two user addresses, in
+  V1 or V2, and never could.** Every one of the 27 `coin.Transfer` call sites has
+  the escrow account as its source or its destination; the exported write surface
+  contains no `Transfer`, `Approve`, `TransferFrom`, `Delegate` or `Sell`; the
+  curve is one-way so there is no burn-for-GNOT exit; and `r/offerer` is a
+  governor fixture that never touches CC. A court coin is therefore mint-only,
+  escrow-only, burn-only — **effectively soulbound**.
+  - **This contradicts a recorded owner decision and several load-bearing
+    passages of this document.** §"meta-CC stays transferable" is written as an
+    owner call from v0.9, and the capture analysis reasons explicitly that
+    *"transferable coins let an attacker resell the franchise"* and that
+    *"transferability is precisely what enables the cheap-float capture route."*
+    That entire route is currently foreclosed by the implementation. One stale row
+    in the REGULATIONS.md exposure map still says non-transferable, which is the
+    only place the code's actual behaviour is described.
+  - **Two readings, and it is not my call which is right.** Either the decision
+    was never implemented, or non-transferability is the real design and the
+    decision was reversed without the document catching up. A soulbound court coin
+    is a defensible and even strong design — it is the most complete
+    anti-vote-buying property available, and unlike an address-keyed guard it
+    cannot be sybilled around, because the capital itself cannot move. So this is
+    flagged, not fixed. Adding user-to-user transfer is a large,
+    security-critical behaviour change that needs its own design round, and
+    implementing an owner decision this consequential from a changelog line would
+    be the wrong kind of initiative.
+  - **The divergence errs in the SAFE direction, which is why it has survived.**
+    Every parameter was chosen assuming a resale/cheap-float threat the code does
+    not actually expose, so the shipped constants are conservative against the
+    real surface. The danger is the reverse: **if transfer is ever added, a large
+    amount of already-settled reasoning silently becomes load-bearing again.**
+  - **Concretely, it adds a fourth precondition to the v0.31 `electionFloor`
+    ruling.** Panel C's refutation of the park-to-cheapen vector assumed the
+    attacker must "buy existing float from existing holders on a secondary
+    market." There is no secondary market, so they cannot acquire float at all —
+    only park their own, which is monotonically self-defeating (`A ≥ q·V +
+    (1−q)·S`). The 3/3 KEEP NETTING verdict is therefore safer than the panel
+    knew, and **non-transferability is now one of the things it rests on.** If CC
+    becomes transferable, re-open item 17 along with the three preconditions
+    already listed.
+  - Item 18's premise (b) is answered and **satisfied**: a lock in place needs no
+    coin hook, because `grc20votes.Ledger` has none and needs none — this realm
+    controls 100% of balance movement. A lock reduces to tracking a per-address
+    locked amount and checking it at the six sites that spend from a user balance
+    (stake, the answer/dispute/quality/election bonds, the claim deposit). That is
+    tractable, and it is the next item.
 - **v0.31 — the two moderation powers that had never run on a node, and a
   vacuous refusal caught by insisting on the message**. `SetTier` and
   `PurgeModLogRow` were the last two moderation entrypoints with no on-chain

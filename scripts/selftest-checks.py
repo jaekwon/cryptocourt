@@ -108,6 +108,7 @@ def have_gno():
 
 CITE = "scripts/check-citations.py"
 STORE = "scripts/check-storage.py"
+NONTRANS = "scripts/check-nontransferable.py"
 GOVERN = "realm/r/govern"
 VOTES = "realm/p/grc20votes"
 
@@ -129,6 +130,27 @@ control("a gno-tree file nobody cited", f"{GOVERN}/errors.gno",
 control("a newly written file:line citation", f"{GOVERN}/errors.gno",
         "package govern\n",
         "package govern\n\n// see governor.gno:275\n", "line-number citation")
+
+print("\ncheck-nontransferable")
+# The guard is a tripwire on an ABSENCE — no exported entrypoint moves a court
+# coin between two user addresses — and an absence check is the easiest kind to
+# write so that it can never fire. Both arms exist because both failure modes
+# are live: the thing it watches for actually appearing, and the guard losing
+# sight of the tree it is supposed to be watching.
+control("a coin that became transferable", "realm/r/kourtv2/buy.gno",
+        "func BurnSink() address",
+        "func Transfer(cur realm, slug string, to address, amount int64) {}\n\n"
+        "func BurnSink() address",
+        "appears to have become transferable",
+        argv=["python3", NONTRANS])
+# Fail CLOSED, not open. This is the shape that let check-isolation sweep 39% of
+# the suite while reporting success: a scope list that no longer resolves must be
+# an error, never an empty scan reported as a clean one.
+control("a guard that lost the tree it watches", NONTRANS,
+        'REALMS = ["kourtv1", "kourtv2"]',
+        'REALMS = ["kourtv9_moved"]',
+        "measuring nothing",
+        argv=["python3", NONTRANS])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")
