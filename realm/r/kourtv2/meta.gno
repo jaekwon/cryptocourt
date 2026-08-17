@@ -335,8 +335,20 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 		if cs.route != "vote" || cs.decidedRounds == 0 {
 			panic("kourtv2: this verb needs a decided contested vote, not silence")
 		}
-		if p.verb == verbSetmods && !cs.credEligible {
-			panic("kourtv2: a manufactured contest cannot reseat a court's moderators")
+		// credEligible (dispute.gno) means ≥ floor/4 of weight voted AGAINST the
+		// claim — a real adversary showed up. Without it the surviving forge is
+		// "hold 5% of meta supply and abstain-vote your own appeal": abstentions
+		// clear the quorum, yes=0 falls to the uphold default, and decidedRounds
+		// stamps. That buys a contested-looking verdict with ZERO opposing
+		// weight, so the verbs that seize authority demand real opposition.
+		//
+		// hide is deliberately EXEMPT (3-agent panel, 2/3 with the carve-out
+		// reasoned only by B): requiring an adversary would mean a correct but
+		// UNCONTESTED hide could never execute, and hide is the one aggressive
+		// verb that is low-harm and globally reversible — the global DAO clears
+		// it, and it moves no money.
+		if p.verb != verbHide && !cs.credEligible {
+			panic("kourtv2: a manufactured contest cannot seize authority — this verb needs weight voted against it")
 		}
 	}
 

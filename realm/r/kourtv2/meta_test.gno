@@ -66,13 +66,22 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	mc := mustCourt(metaSlug)
 	mc.coin.Mint(alice, 500_000_000_000)
 	mc.coin.Mint(bob, 500_000_000_000)
+	// Seal the epoch holding these mints before anything reads a floor. Meta's
+	// answerability floor is a fraction of SEALED supply (v0.15), so until this
+	// lands it reads the pre-history case and answers with the dust arm.
+	testing.SkipHeights(epochBlocks * 2)
 
 	// appeal drives a meta claim to VERDICT_FINAL on the undisputed route.
+	// The stake is DERIVED from the live floor rather than a literal: meta's
+	// answerability floor is a fraction of meta supply (v0.15), so a constant
+	// here would silently stop clearing it the next time the fraction moves.
+	// matureOI stakes its amount three times, so one floor's worth per round is
+	// 3× headroom — ample against emission drift during the epoch skips.
 	appeal := func(title string) uint64 {
 		testing.SkipHeights(1) // the target must strictly predate the appeal
 		testing.SetRealm(testing.NewUserRealm(alice))
 		id := OpenClaim(cross(cur), metaSlug, title)
-		matureOI(cur, metaSlug, id, alice, 200_000_000)
+		matureOI(cur, metaSlug, id, alice, 2*effMinAnswerX(mc))
 		testing.SetRealm(testing.NewUserRealm(alice))
 		PostAnswer(cross(cur), metaSlug, id, sideYES)
 		testing.SkipHeights(settleDelay + 1)
@@ -151,7 +160,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	testing.SkipHeights(2)
 	testing.SetRealm(testing.NewUserRealm(alice)) // the target claim is born AFTER the appeal
 	OpenClaim(cross(cur), "mtx5", "created after the appeal")
-	matureOI(cur, metaSlug, ap5, alice, 200_000_000)
+	matureOI(cur, metaSlug, ap5, alice, 2*effMinAnswerX(mc))
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), metaSlug, ap5, sideYES)
 	testing.SkipHeights(settleDelay + 1)
@@ -216,15 +225,94 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	first := OpenClaim(cross(cur), metaSlug, "mod:unhide:mtx6/1")
 	testing.SetRealm(testing.NewUserRealm(bob))
 	second := OpenClaim(cross(cur), metaSlug, "mod:unhide:mtx6/1")
-	matureOI(cur, metaSlug, first, alice, 200_000_000)
+	matureOI(cur, metaSlug, first, alice, 2*effMinAnswerX(mc))
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), metaSlug, first, sideYES)
 	if AppealLatchHolder(verbUnhide, "mtx6", 1) != first {
 		t.Fatal("the first answerer should hold the review slot")
 	}
-	matureOI(cur, metaSlug, second, bob, 200_000_000)
+	matureOI(cur, metaSlug, second, bob, 2*effMinAnswerX(mc))
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "review slot", func() {
 		PostAnswer(cross(cur), metaSlug, second, sideYES)
 	})
+
+	// ---- 8. the SUPPLY-RELATIVE floors, and the front-run they used to allow --
+	// v0.15. Meta's answerability and deposit floors are fractions of ITS OWN
+	// supply, because that supply tracks platform-wide burn and params have no
+	// retune path. The fixed 100 CC they replaced was wrong at both ends: near
+	// launch it was ~10% of meta supply, which made FILING an appeal cost more
+	// than DECIDING one — the incumbency-lock-by-price that mustElectionInvariants
+	// forbids in the election lane and that the appeals lane never guarded.
+	supply := mc.coin.PastTotal(mc.coin.Epoch() - 1)
+	wantX := supply * metaAnswerXBps / 10000
+	uassert.Equal(t, wantX, effMinAnswerX(mc), "answerability is a fraction of meta supply")
+	uassert.Equal(t, supply*metaDepositBps/10000, effMinDeposit(mc),
+		"the deposit has its own fraction, unpegged from answerability/100")
+	// The property the deploy invariant certifies, checked on real state.
+	filing := wantX * (10000 + answerBondBps) / 10000
+	if deciding := supply * quorumSupplyBps / 10000; filing >= deciding {
+		t.Fatalf("filing an appeal (%d) must cost less than winning the vote (%d)", filing, deciding)
+	}
+
+	// THE FRONT-RUN. effMinAnswerX used to read live TotalSupply(), and
+	// ClaimMetaFranchise mints into supply — so a whale sitting on an unclaimed
+	// entitlement could mint in the same block as an honest PostAnswer, push the
+	// floor above that appellant's X̄, and revert the answer. Repeatably, for
+	// free, keeping coins they were owed anyway. Reading the last SEALED epoch
+	// closes it: a same-epoch mint moves TotalSupply and moves nothing else.
+	beforeX, beforeD := effMinAnswerX(mc), effMinDeposit(mc)
+	liveBefore := mc.coin.TotalSupply()
+	mc.coin.Mint(bob, 400_000_000_000) // a whale claims a huge franchise, now
+	if mc.coin.TotalSupply() <= liveBefore {
+		t.Fatal("the fixture must actually move live supply for this to prove anything")
+	}
+	uassert.Equal(t, beforeX, effMinAnswerX(mc), "a same-epoch mint must not move the answerability floor")
+	uassert.Equal(t, beforeD, effMinDeposit(mc), "a same-epoch mint must not move the deposit floor")
+
+	// ---- 9. a MANUFACTURED CONTEST cannot seize authority (v0.15) -----------
+	// The forge that survived the decidedRounds guard: hold 5% of meta supply,
+	// self-answer, have a confederate dispute, then vote your own weight to
+	// UPHOLD with nobody opposing. The round is quorate, so it decides and
+	// stamps route="vote" — a contested-LOOKING verdict bought with zero
+	// adversarial weight. credEligible is the test that sees through it (it
+	// asks whether the OVERTURN side carried >= floor/4), and until v0.15 only
+	// `setmods` consulted it, leaving suspend/unsuspend purchasable this way.
+	testCourt(cur, "mtx9", alice, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // seal, and let the target predate
+	sup9 := CourtSuspended("mtx9")
+	if sup9 {
+		t.Fatal("fixture: mtx9 must start unsuspended")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap9 := OpenClaim(cross(cur), metaSlug, "mod:suspend:mtx9")
+	matureOI(cur, metaSlug, ap9, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap9, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), metaSlug, ap9)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	VoteDispute(cross(cur), metaSlug, ap9, "no") // uphold, unopposed
+	testing.SkipHeights(mc.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), metaSlug, ap9)
+
+	cs9 := mustClaim(mc, ap9)
+	if cs9.decidedRounds != 1 || Provisional(metaSlug, ap9) != sideYES {
+		t.Fatal("fixture: the round must DECIDE and uphold, or this proves nothing")
+	}
+	if cs9.credEligible {
+		t.Fatal("fixture: nobody opposed, so the round must NOT be credEligible")
+	}
+	testing.SkipHeights(cs9.escrowUntil - runtimeHeight() + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), metaSlug, ap9)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "weight voted against it", func() {
+		ExecuteMetaVerdict(cross(cur), ap9)
+	})
+	if CourtSuspended("mtx9") {
+		t.Fatal("a manufactured contest must not suspend a court's moderators")
+	}
 }

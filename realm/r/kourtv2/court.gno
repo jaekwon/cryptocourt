@@ -119,8 +119,23 @@ const (
 	// that supply grows with platform burn and Params have no retune path after
 	// deploy: fixed constants would decay to nothing as the platform grew, and
 	// §5.3's flood-deposit argument would decay with them.
-	metaFloorBps    = int64(1) // 0.01% of meta supply
-	maxCourtNameLen = 100
+	//
+	// v0.15 (3-agent panel, MODERATION.md §14): the previous 0.01% arm needed
+	// ~5e8 GNOT of CLAIMED burn to overtake the 100 CC constant, so it never
+	// bound and both floors were fixed in practice. Worse, the panel found the
+	// constant is wrong at BOTH ends. A ~500–1,000 GNOT genesis buy puts launch
+	// meta supply near 1,000 CC, where a 100 CC answerability floor is ~10% of
+	// supply and the full filing cost (stake + the 50%·X̄ bond) is ~15% — so
+	// FILING AN APPEAL COST 2–3× MORE THAN DECIDING ONE, the same
+	// incumbency-lock-by-price that mustElectionInvariants already forbids in
+	// the election lane, unguarded here. The fixed arms are therefore demoted
+	// to anti-dust floors and the relative arms carry the policy.
+	metaAnswerXBps = int64(50) // 0.50% of meta supply — the audited β from modvote
+	metaDepositBps = int64(2)  // 0.02% — sized by the §5.3 flood rule below
+	// Dust arms only: they keep 50%·X̄ / 20%·X̄ / 4.5%·X̄ from rounding to zero
+	// at near-zero supply. metaAnswerDustCC stops binding at 200 CC of supply.
+	metaAnswerDustCC = int64(1_000_000) // 1 CC
+	maxCourtNameLen  = 100
 	// maxSlugLen keeps uppercase(slug) inside GRC20's symbol-length bound.
 	maxSlugLen        = 11
 	maxStakeOpenDelay = int64(17_280) // 24h
@@ -191,6 +206,24 @@ func mustInvariants() {
 	// 4.5%·X̄ arm too, so the floor is inert on BOTH arms while the cap is unset.
 	if slashXBps > answerBondBps {
 		panic("kourtv2: the flat slash arm exceeds the base answer bond")
+	}
+	// META APPEALS LANE (v0.15). mustElectionInvariants has long carried this
+	// ratio gate for the election lane; the appeals lane never had one, which is
+	// how a 100 CC constant came to price filing above deciding at launch scale.
+	// Filing costs (Bps+answerBondBps)/Bps × X̄, and X̄ floors at metaAnswerXBps
+	// of supply, so the whole filing cost must stay strictly under the 5% bar.
+	if metaAnswerXBps*(grc20votes.Bps+answerBondBps)/grc20votes.Bps >= quorumSupplyBps {
+		panic("kourtv2: the meta answerability floor prices filing an appeal above winning the vote — incumbency lock by price in the appeals lane")
+	}
+	// §5.3 frozen as code: the pending list's guarantee is that flooding it
+	// costs more than the self-answer escape it tries to force. 50 rows must
+	// park at least one filing cost.
+	if 50*metaDepositBps < metaAnswerXBps*(grc20votes.Bps+answerBondBps)/grc20votes.Bps {
+		panic("kourtv2: a 50-row pending-list flood is cheaper than the self-answer escape from it (§5.3)")
+	}
+	// The door may never cost more than the answer it opens.
+	if metaDepositBps >= metaAnswerXBps {
+		panic("kourtv2: the meta deposit floor exceeds its answerability floor")
 	}
 }
 
@@ -449,27 +482,68 @@ func CourtEscrow(slug string) address { return mustCourt(slug).escrow }
 func EmittedTotal(slug string) int64 { return mustCourt(slug).emittedTotal }
 
 // effMinAnswerX / effMinDeposit are the LIVE floors. For an ordinary court they
-// are the frozen params; for META they additionally scale with its own supply,
-// which grows with platform-wide burn (§13.8). Params have no retune path after
-// deploy, so a fixed constant there would silently decay to nothing — taking
-// §5.3's flood-deposit argument with it.
+// are the frozen params; for META they are supply-relative instead, because its
+// supply grows with platform-wide burn (§13.8) and params have no retune path
+// after deploy.
+//
+// On the meta path the params are NOT consulted at all. Taking max(100 CC, bps)
+// would just move the dead zone one order down — the relative arm would not
+// overtake 100 CC until ~40,000 CC of supply — and 100 CC is itself the wrong
+// number at launch (see the constant block). Meta gets dust arms and a fraction.
 func effMinAnswerX(c *Court) int64 {
-	v := c.params.minAnswerX
-	if c.id == metaSlug {
-		if rel := mulDiv128(c.coin.TotalSupply(), metaFloorBps, grc20votes.Bps); rel > v {
-			v = rel
-		}
+	if c.id != metaSlug {
+		return c.params.minAnswerX
 	}
-	return v
+	return metaSupplyFloor(c, metaAnswerXBps, metaAnswerDustCC)
 }
 
 func effMinDeposit(c *Court) int64 {
-	v := c.params.minClaimDepositCC
-	if c.id == metaSlug {
-		// Keep the params' own 100:1 answerability-to-deposit ratio as supply grows.
-		if rel := effMinAnswerX(c) / 100; rel > v {
-			v = rel
-		}
+	if c.id != metaSlug {
+		return c.params.minClaimDepositCC
+	}
+	// Unpegged from effMinAnswerX/100 (which failed §5.3 arithmetically: a
+	// 50-row flood parked half of ONE self-answer escape). Its own fraction now,
+	// sized by the deploy invariant `50·metaDepositBps ≥ 1.5·metaAnswerXBps`.
+	return metaSupplyFloor(c, metaDepositBps, c.params.minClaimDepositCC)
+}
+
+// metaSupplyFloor is max(dust, bps·supply), clamped so the resulting filing cost
+// can never exceed the turnout bar. Three deliberate choices:
+//
+//   - RAW supply, not votable. Votable is deflatable for free — anyone parking
+//     no-loss stake in the escrow shrinks it — so a votable base would let an
+//     attacker lower the appeals bar at zero cost, and would make each new
+//     appeal cheapen the next.
+//   - The LAST SEALED epoch, not TotalSupply(). Live supply is atomically
+//     griefable: PostAnswer reads this floor (answer.gno), ClaimMetaFranchise
+//     mints into supply, so a whale sitting on unclaimed franchise could
+//     front-run an honest answer in the same block, push the floor above the
+//     appellant's X̄, and revert it — repeatably, for free, keeping coins they
+//     were owed anyway. A sealed read closes that for nothing.
+//   - CLAMPED, the v0.14 lesson applied to this lane. The deploy invariant
+//     covers the ratio arm, but no constant can see the dust arm: below ~30 CC
+//     of supply the 1 CC dust floor prices filing above the 5% turnout bar and
+//     inverts the guarantee, exactly as flagMinCC did to the election bond.
+func metaSupplyFloor(c *Court, bps, dust int64) int64 {
+	// Epoch() is 1-based and epoch 0 means "before this token existed", which
+	// PastTotal refuses rather than reporting as zero. Unlike quorumFloor, this
+	// runs at OpenClaim — reachable in meta's very first epoch — so the
+	// pre-history case is real and resolves to the dust arm.
+	var supply int64
+	if at := c.coin.Epoch(); at > 1 {
+		supply = c.coin.PastTotal(at - 1)
+	}
+	v := mulDiv128(supply, bps, grc20votes.Bps)
+	if v < dust {
+		v = dust
+	}
+	// Filing costs (Bps+answerBondBps)/Bps × X̄; hold that under the 5% bar.
+	if lid := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps) * grc20votes.Bps /
+		(grc20votes.Bps + answerBondBps); lid > 0 && v > lid {
+		v = lid
+	}
+	if v < 1 {
+		v = 1
 	}
 	return v
 }

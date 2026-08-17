@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.10 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.15 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -377,9 +377,20 @@ purge never editorial.
       creator-appointed and election-installed sets seed normally.
     - *Accepted, owner-decided:* meta-CC stays transferable, so ~5% of meta
       supply is purchasable and is the security parameter for every court at
-      once (all three vets flagged it; §13.4 records the owner's call). The
-      meta court's `minAnswerX` is the explicit forgery-price dial — the forge
-      costs ~10% of it — and is worth revisiting if abuse appears.
+      once (all three vets flagged it; §13.4 records the owner's call).
+      ~~The meta court's `minAnswerX` is the explicit forgery-price dial — the
+      forge costs ~10% of it.~~ **CORRECTED v0.15 (3/3 unanimous):** that was
+      true of the code this section was written against and is false now. The
+      `decidedRounds > 0` guard below means no aggressive verb executes without
+      a QUORATE round, so the ~10%·X̄ zero-voter forge cannot run at all. The
+      live price of a hostile aggressive execution is **5% of meta supply held
+      as votable weight** (12.5% where `credEligible` applies) — already
+      supply-relative, and 100× the term `minAnswerX` contributes. `minAnswerX`
+      is not the forgery dial and no value of it makes it one; the dials are
+      `quorumSupplyBps`, `compOfBurnBps`, and `credEligible`'s scope. What
+      `minAnswerX` *does* price is OCCUPANCY — the review latch, the pending
+      list, and the restorative silence route — which is why v0.15 makes it
+      supply-relative anyway.
   - **Parse = stored structured state** in `meta.gno` (keyed by claimID, not
     the shared `claimState`): written at open, rewritten on each edit. **Purge
     marks the stored parse render-only / non-bindable** (round 4 F3, resolving
@@ -535,10 +546,16 @@ just relocates the flood).
   Render order: key on **live deposit-at-risk descending** (a flooder can't
   cluster-control it as cheaply as `openedAt`) or accept flooder-first and rely
   on pagination — a build choice, documented as such, not a claimed spine.
-  Because meta-CC is one-way GNOT-sunk and non-transferable, set
-  `minClaimDepositCC` high enough to make a 50-row flood park real capital 12
-  weeks without pricing out a single appeal — accepting this is a nuisance-cost
-  ceiling, not a flood *gate*.
+  ~~Because meta-CC is one-way GNOT-sunk and non-transferable,~~ **meta-CC is
+  TRANSFERABLE (§3.3, §13.4 owner call) — this paragraph was written against the
+  wrong premise (caught v0.15).** Set the deposit high enough to make a 50-row
+  flood park real capital for 12 weeks without pricing out a single appeal —
+  a nuisance-cost ceiling, not a flood *gate*. **v0.15 makes the sizing rule
+  explicit and deploy-checked** rather than left to judgement: a 50-row flood
+  must cost at least one self-answer escape, `50·metaDepositBps ≥
+  1.5·metaAnswerXBps`. The old `effMinAnswerX/100` peg failed this
+  arithmetically — 50 rows parked half of ONE escape — so the deposit now
+  carries its own fraction of supply.
   **The load-bearing escape, stated (round 6 F1):** a buried pre-answer
   appellant is not stuck — they **self-answer their own appeal** (`PostAnswer`
   has no author≠answerer ban), which moves the row **pending → strip**, where
@@ -814,11 +831,14 @@ cheap-float capture route. Keeping it transferable is the owner's standing
 decision; the vets' unanimous recommendation is to re-take that one call on the
 changed input.
 
-**Also flagged:** meta's `minAnswerX` / `minClaimDepositCC` are absolute CC
-constants frozen at StartCourt with no retune path — if meta supply grows 1000×
-they decay to nothing, and §5.3's flood-deposit argument decays with them. Make
-them supply-relative **before deploy**. And the forge price (~10%·X̄) does not
-scale with supply, so `minAnswerX` stops being the forgery dial it is called.
+**Also flagged — RESOLVED in v0.15:** meta's `minAnswerX` /
+`minClaimDepositCC` were absolute CC constants frozen at StartCourt with no
+retune path, so they decayed to nothing as meta supply grew and took §5.3's
+flood-deposit argument with them. Now supply-relative (§14 v0.15). The panel
+also found the constants were wrong in the OTHER direction at launch scale, and
+that "the forge price does not scale, so `minAnswerX` stops being the forgery
+dial" mis-states the position: it was never the dial once `decidedRounds > 0`
+landed. See the correction in §3.3.
 5. **StartCourt creation fee — RESOLVED (v0.8.2): no GNOT fee.** A fixed GNOT
    fee can't be sized without a USD oracle; court-count floods are priced by the
    per-byte storage deposit court creation already incurs (protocol-set, no
@@ -947,6 +967,70 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.15 — meta's supply floors, re-derived (3 identical adversarial
+  economists; the SAME bug class as v0.14, one lane over)**. The panel was asked
+  only to re-size `metaFloorBps`, and found instead that the fixed constants
+  behind it were wrong at *both* ends. **Unanimous 3/3:**
+  - `metaFloorBps = 1` (0.01%) needed ~**5e8 GNOT of CLAIMED burn** to overtake
+    the 100 CC constant — 10⁶× the deployer's genesis spend. Unreachable, not
+    slack; both floors were fixed in practice. Deleted.
+  - **The launch-side inversion, which nobody had looked for.** A ~500–1,000
+    GNOT genesis buy puts launch meta supply near 1,000 CC, where a 100 CC
+    answerability floor is ~10% of supply and the full filing cost (stake +
+    50%·X̄ bond) is ~15% — against a 5% turnout bar. **Filing an appeal cost 2–3×
+    more than deciding one**, for the platform's entire early life. This is
+    exactly the incumbency-lock-by-price `mustElectionInvariants` has long
+    forbidden in the election lane; the appeals lane simply never had the gate.
+    Worse, it fed back: `quorumFloor = max(5%·S, min(X̄, votable/3))`, so an X̄
+    pinned at 10% of supply DOUBLED the turnout bar it was sized against.
+  - §3.3's "`minAnswerX` is the explicit forgery-price dial — the forge costs
+    ~10% of it" is **stale**: `meta.gno`'s `decidedRounds > 0` guard already
+    closed the zero-voter forge. Corrected in place.
+  - Do **not** price the answer bond off supply. Doctrine, now stated: **X̄
+    prices claim-scoped risk; supply prices franchise-scoped authority; the
+    floor on X̄ is the only bridge between them** — so make the floor
+    supply-relative and change nothing else. Pricing the bond off supply would
+    falsify `mustInvariants`' collateralization identity (an X̄-relative
+    statement) and add friction only to honest answerers: the forger's bond
+    returns in full on the uphold path.
+  - Base is RAW supply, not votable — votable is deflatable for free by parking
+    no-loss stake, so a votable base lets an attacker lower the appeals bar at
+    zero cost and makes each appeal cheapen the next.
+  - Unpeg the deposit from `effMinAnswerX/100`; add deploy invariants.
+
+  **Majority 2/3:** fraction **50 bps** (A,C; B argued 25) · **sealed
+  `PastTotal(Epoch()-1)`** rather than live `TotalSupply()` (B,C) · **1 CC dust
+  arm replacing the 100 CC policy arm** entirely (B,C; A wanted to keep a
+  lowered 10 CC arm — but `max(100 CC, bps)` merely moves the dead zone one
+  order down, to ~40,000 CC) · extend `credEligible` beyond `setmods` to
+  suspend/unsuspend **but not `hide`** (B's carve-out, the only reasoned one:
+  requiring an adversary would mean a correct but UNCONTESTED hide could never
+  execute, and hide is the one aggressive verb that is low-harm, moves no money,
+  and is globally reversible).
+
+  **The sealed-epoch read closes a live griefing vector B found and C
+  independently confirmed:** `effMinAnswerX` read live `TotalSupply()`,
+  `PostAnswer` reads that floor, and `ClaimMetaFranchise` mints into supply — so
+  a whale sitting on an unclaimed entitlement could front-run an honest answer
+  **in the same block**, push the floor above that appellant's X̄, and revert it.
+  Repeatably, for free, keeping coins they were owed anyway. Regressed in
+  `TestMetaLifecycleGuards` §8.
+
+  **Where the panel split 1/1/1: the deposit fraction** (A 10 bps, B 1, C 2).
+  Resolved on the *rule* rather than the number — B and C derived from the same
+  constraint (`50·d ≥ 1.5·f`: a 50-row flood must cost at least one self-answer
+  escape), which is 2/3, and at the majority `f = 50` that yields **d = 2 bps**.
+  A's stricter rule (a flood must park the whole quorum floor, `55·d ≥ 500`)
+  would give 10 bps and is **not** satisfied at 2 — recorded here as the one
+  place a reasoned minority was overruled, so it can be revisited if
+  pending-list abuse ever appears. Noted for that day: the **fee**, not the
+  deposit, is the flood-specific dial — it is burned only on the dead-claim
+  path, so a flooder always pays it and an answered honest appeal never does.
+
+  **Out of scope, worth recording:** every ORDINARY court has the same
+  decayed-constant problem (`defaultParams` hands them all a fixed 100 CC with
+  no retune path). Meta only needed it first because its supply tracks
+  platform-wide burn rather than its own.
 - **v0.14 — polish pass: the election bond's two unpoliced arms (§3.1)**. The
   round-7 R1 deploy invariant certifies that affording the ballot is never
   harder than winning the vote, but it is a **constant ratio check**, and two
