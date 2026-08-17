@@ -466,11 +466,27 @@ titles + reasons + relabels + folder names): category codes / claim-about-the-
 claim phrasing, never assertions of fact about persons; token/APR language
 removal-grade.
 
-## 7. Folders — `VETTING`
-Membership gates nothing; flat list always remains; names/descriptions
-sanitized, length-capped, purgeable rows; moderator-writable; suspension
-refuses writes. "Zero economic weight" = zero on-chain coupling; the tripwire
-(ordered visibility sold for consideration) applies verbatim.
+## 7. Folders and argument edges — `VETTING`
+**Folders**: membership gates nothing; flat list always remains;
+names/descriptions sanitized, length-capped, purgeable rows; moderator-writable;
+suspension refuses writes. "Zero economic weight" = zero on-chain coupling; the
+tripwire (ordered visibility sold for consideration) applies verbatim.
+
+**Argument edges (support/counter links between claims)**: permissionless to
+*create* (anyone links, priced only by the chain-level storage deposit, zero
+economic weight — no vote, no emission, no verdict effect), but **moderators may
+hide an individual edge** (owner add, v0.8): a per-edge courtMod hide bit,
+m-of-n like any mod act, suspension-disabled, so a spammy or abusive edge can be
+pulled from a claim page without hiding either endpoint claim. This sits
+trivially inside the constitution and needs **no re-vet**: an edge carries zero
+economic weight and (as a typed link) no free text, so hiding one is strictly
+weaker than the already-audited claim hide — it can affect nothing a money path
+reads, and the audit's whole threat model is about hiding *claims*. If an edge
+ever carries a label, that label is a sanitized, purgeable user string like any
+other (the §7 tripwire on value-coupling still applies to edges verbatim).
+Edges themselves are a curation feature that may ship after this moderation
+pass; the hide primitive attaches to them when they land (same courtMod bit,
+keyed by edgeID).
 
 ## 8. Seeding — `REVISED`
 Fee waiver = bootstrap convenience; the **discovery guarantee (§5.3) is the
@@ -642,6 +658,10 @@ except where noted)
   (R4); two-pass paginated resolution + own cooldown slot as build notes (R5).
   Owner flags standing: §13.1 sequencing, §13.7 election review (m-of-n +
   UI-dependent decoy residual).
+- **v0.8.1 — owner addition (edges hideable)**: moderators may hide an
+  individual argument edge (§7), not just a node/claim. Constitution-consistent
+  and no re-vet needed (an edge is zero-weight, text-free, so an edge hide is
+  strictly weaker than the audited claim hide). Build hooks it when edges land.
 - **v0.6** — round 5 (1 HIGH + 1 MED-HIGH; verification lens CONVERGED):
   - *Election, structurally different fix* (M-A33/M-A44, HIGH): the v0.5 bond
     auction put the capital key on *ballot access* — a capital-dominant but
