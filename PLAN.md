@@ -1624,6 +1624,35 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.68 — the CLAIM LIFECYCLE was almost entirely unpinned: six survivors in one
+  batch, the worst run of the session.** The remaining thin files (`claim.gno`,
+  `court.gno`, one row each) turned out to be thin because nothing tested them.
+  **`CloseDeadClaim` would kill an ANSWERED claim.** Removing the "it settles, it does
+  not die" guard failed no test. An answered claim has a bond in escrow and a settle
+  path; dying instead refunds the deposit, sets `closed`, and leaves `Crystallize`
+  panicking on `closed` forever — the bond stranded. Reachable because `deadClaimTimeout`
+  and the answerability window are both 12 weeks, so an answer landing late leaves a claim
+  that is both answered and past the timeout.
+  **`StartCourt` would overwrite a taken slug**, replacing the `Court` value the tree
+  holds and orphaning every claim, position and escrowed balance under it while the coin
+  ledger keeps the funds. Three of my own test-slug collisions this session surfaced that
+  panic — as a SETUP failure, which is not the same as asserting it, and is exactly why it
+  read as covered.
+  Also unpinned and now closed: a repeat `CloseDeadClaim` (exactly-once holds by field
+  zeroing, so the guard pins the CONTRACT rather than the payout), the dead-claim refund
+  going to the author rather than the burn, and `OpenClaim`'s 1..200 title bounds — the
+  title is attacker-chosen and reaches every render path.
+  **`escrowWindow` is now measurable, which turns §12 row 30 from prose into a fixture.**
+  Both arms were unpinned; making it ignore `extraDays` entirely failed no test.
+  `TestEscrowWindowGrowsThenPinsAtTheCap` pins zero-X̄ at the minimum, a middle case
+  growing in WHOLE days strictly between the arms, and the cap arm binding past the room —
+  which is row 30's corrected premise. Writing it surfaced the cold-start half too:
+  `Price(s) = s/d` with integer division and d ≈ 1e9, so on a court nobody has bought into
+  the price FLOORS TO ZERO and every claim sits at `escrowMin` regardless of X̄. That is
+  not an artefact of the fixture — it is why row 30 says the window grows "once the curve
+  has any real price", and it took a 5 GNOT buy to move it off zero.
+  Batch now 91 rows, all caught, none invalid.
+
 - **v0.67 — batch-coverage sweep: `answer.gno` had two mutations for the file that sizes
   the bond, and the cap's binding half was open.** Checked the batch against the source
   tree — every courtv2 file had at least one row, but `claim.gno`, `court.gno`,

@@ -414,3 +414,67 @@ func TestWeightlessContestEarnsNoCredential(cur realm, t *testing.T) {
 		t.Fatal("a weightless contest must NOT mint the difficulty credential (M2-1)")
 	}
 }
+
+// escrowWindow's two arms, both unpinned: making it ignore extraDays entirely (always
+// the minimum) failed no test. The window is min + one day per 500 GNOT of X̄·Price,
+// clamped at max — so it is the reopen budget, and how fast it grows decides how many
+// rounds fit inside one claim.
+//
+// This also makes PLAN §12 row 30 MEASURABLE instead of prose. That row's original
+// premise was "3 failed rounds fit only inside >2-week escrows (large claims); small
+// claims cap at 2 failed rounds", corrected in v0.49 to: the window pins at the 3-week
+// max as soon as X̄·Price clears the room, which a modest claim reaches once the curve
+// has any real price. The second case below pins exactly that — the cap arm binding on a
+// claim that is not large — so a future change to the geometry fails here rather than
+// silently changing how much griefing fits in a window.
+func TestEscrowWindowGrowsThenPinsAtTheCap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ewn-alice")
+	// The curve must have been BOUGHT INTO for the window to grow at all: Price(0) is
+	// zero, so extraDays is zero and every claim sits at escrowMin. That is not an
+	// artefact — it is the cold-start half of §12 row 30's corrected premise, that the
+	// window only starts growing "once the curve has any real price".
+	// Price(s) = s/d with integer division and d ~= 1e9, so a small buy still floors
+	// the price to zero. Buy enough to move it off zero.
+	fundAndBuy(cur, "ewn", alice, 5_000_000_000)
+	c := mustCourt("ewn")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ewn", "the reopen budget")
+	cs := mustClaim(c, id)
+
+	room := (c.params.escrowMaxBlocks - c.params.escrowMinBlocks) / oneDayBlocks
+	if room <= 1 {
+		t.Fatalf("setup: the default params must leave room to grow: %d days", room)
+	}
+
+	// A claim whose X̄·Price buys ZERO extra days sits exactly at the minimum.
+	cs.xBarFrozen = 0
+	if got := escrowWindow(c, cs); got != c.params.escrowMinBlocks {
+		t.Fatalf("no X̄ buys no extra days: got %d want %d", got, c.params.escrowMinBlocks)
+	}
+
+	// One that buys SOME grows by whole days — the arm that "always the minimum" breaks.
+	price := c.crv.Price(c.minted)
+	if price <= 0 {
+		t.Fatal("setup: the curve must quote a price")
+	}
+	cs.xBarFrozen = 500_000_000 / price * 2 // ~2 days' worth
+	grown := escrowWindow(c, cs)
+	if grown <= c.params.escrowMinBlocks {
+		t.Fatalf("X̄·Price must buy extra days: got %d min %d (xBar=%d price=%d)",
+			grown, c.params.escrowMinBlocks, cs.xBarFrozen, price)
+	}
+	if grown >= c.params.escrowMaxBlocks {
+		t.Fatalf("fixture must sit strictly between the arms: got %d max %d",
+			grown, c.params.escrowMaxBlocks)
+	}
+	if (grown-c.params.escrowMinBlocks)%oneDayBlocks != 0 {
+		t.Fatalf("the window grows in WHOLE days: %d", grown-c.params.escrowMinBlocks)
+	}
+
+	// And one that buys more than the room pins at the cap, never past it (§12 row 30).
+	cs.xBarFrozen = 500_000_000 / price * (room + 5)
+	if got := escrowWindow(c, cs); got != c.params.escrowMaxBlocks {
+		t.Fatalf("past the room the window pins at the cap: got %d want %d",
+			got, c.params.escrowMaxBlocks)
+	}
+}

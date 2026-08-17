@@ -586,5 +586,54 @@
   "label": "the answer bond is never escrowed",
   "find": "\tc.coin.Transfer(who, c.escrow, bond)",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "escrowWindow: extraDays ignored (always the minimum)",
+  "find": "\treturn c.params.escrowMinBlocks + extraDays*oneDayBlocks",
+  "replace": "\treturn c.params.escrowMinBlocks"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "escrowWindow: the cap arm is skipped (window exceeds escrowMax)",
+  "find": "\tif extraDays >= room {\n\t\treturn c.params.escrowMaxBlocks\n\t}",
+  "replace": "\tif extraDays >= room {\n\t\treturn c.params.escrowMaxBlocks + oneDayBlocks\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim kills an ANSWERED claim",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"courtv2: this claim has an answer; it settles, it does not die\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim runs twice",
+  "find": "\tif cs.closed {\n\t\tpanic(\"courtv2: already closed\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim accepts any title length",
+  "find": "\tif len(title) == 0 || len(title) > 200 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "dead-claim close burns the deposit instead of refunding",
+  "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
+  "replace": "\t\tc.coin.Burn(c.escrow, cs.deposit)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "StartCourt overwrites an existing slug",
+  "find": "\tif courts.Has(slug) {\n\t\tpanic(\"courtv2: that slug is taken\")\n\t}",
+  "replace": ""
  }
 ]
