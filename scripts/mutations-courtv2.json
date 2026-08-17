@@ -782,5 +782,40 @@
   "label": "Cost: an unaffordable span panics instead of being refused",
   "find": "\tif hi2 >= m {",
   "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "WithdrawStake: the pool bookkeeping debits the wrong side",
+  "find": "\tif side == sideYES {\n\t\tcs.yesStake -= amount\n\t} else {\n\t\tcs.noStake -= amount\n\t}",
+  "replace": "\tif side == sideYES {\n\t\tcs.noStake -= amount\n\t} else {\n\t\tcs.yesStake -= amount\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "WithdrawStake: the position is not zeroed, so the stake is withdrawable twice",
+  "find": "\tamount := p.stake\n\tp.stake = 0\n",
+  "replace": "\tamount := p.stake\n"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "WithdrawStake: an empty position is withdrawable",
+  "find": "\tif p.stake <= 0 {\n\t\tpanic(\"courtv2: nothing staked on that side\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "WithdrawStake: the winning side may leave before the verdict",
+  "find": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0 && side != int(cs.provisional)) {",
+  "replace": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0) {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "WithdrawBonus: the losing side draws too",
+  "find": "\tif side != int(cs.provisional) {",
+  "replace": "\tif false {"
  }
 ]

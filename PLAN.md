@@ -1624,6 +1624,31 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.73 — the withdraw family swept: five of six guards already pinned, and the one
+  survivor is the one that changes nothing the caller can see.** `WithdrawStake` is the
+  function that moves real GNOT out of escrow, so it was the natural next target after the
+  two bonus twins. It came out well: the zeroing, the empty position, and BOTH clauses of
+  the early-withdrawal gate are all pinned, as is `WithdrawBonus`'s winning-side check.
+  The one that survived is **the per-side pool bookkeeping** — swap the branches so a
+  withdrawal debits the OTHER side's pool and nothing objected. That is exactly the profile
+  of a gap this sweep is now looking for: every other guard aborts or changes what the
+  caller receives, whereas this one pays the withdrawer correctly and leaves the damage
+  behind in the claim.
+  Not cosmetic. `advancePools` builds the per-side ∫stake·dt from these totals — its own
+  comment requires it to run BEFORE any mutation of them — and that integral is the F9 cap
+  base every bonus is clamped against; the totals also feed the OI and YES observations.
+  So a misdirected debit corrupts the conviction accounting of a side that did nothing, and
+  because the losing side may leave EARLY while the claim is still live (F7/A12), it can do
+  so while those numbers are still being used.
+  The discriminating assertion is the one after the FIRST withdrawal: once both sides have
+  gone, a swapped debit has subtracted both amounts either way and only the two totals
+  separately still carry the trace. **The fixture's first draft was wrong** and the harness
+  caught it as BASELINE IS RED rather than as a green pass — it asserted pools of 200M/300M,
+  but `matureOI` stakes repeatedly to mature the observation window, so YES was 600M. Fixed
+  by asserting the RELATION the test actually needs (both live, and unequal — equal pools
+  would hide a swapped debit by symmetry) instead of figures copied from the setup call.
+  Batch now 117 rows, all caught, none invalid.
+
 - **v0.72 — `AuthorBonus` had the same three gaps as its twin, and two of the four
   vectors in v0.71's `Cost` table were decorative.** The pattern behind both v0.71 and
   this entry is now explicit and worth naming: **a guard exercised only on the side where
