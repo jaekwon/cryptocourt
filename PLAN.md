@@ -1624,6 +1624,25 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.63 — the harness now judges a mutation by its OBSERVERS, and the whole batch runs
+  in 2.5 minutes instead of timing out.** `run_suite` ran all staged suites for every
+  mutation, which is what made 56 rows exceed a ten-minute budget and get killed
+  mid-mutation (v0.62). But the principle in its own docstring is narrower than "all": a
+  mutation should be judged by its package's own tests PLUS every staged tree that imports
+  it, because "caught by neither" is the finding. An `OBSERVERS` map encodes exactly that —
+  courtv2 mutations run courtv2's suite alone; a grc20votes mutation runs grc20votes,
+  courtv2 and govern; checkpoint runs its four transitive importers. Staging is unchanged
+  (every tree is still staged, since imports must resolve), and the BASELINE still runs
+  every suite, so a red tree anywhere is still caught before any mutation is judged.
+  **Also corrected a v0.57 claim of mine:** I registered `cshares` and `tickbook` as trees
+  courtv2 needs staged. It does not — the import graph shows only the V1 `court` realm uses
+  them, and V1 is deliberately absent from this harness, so they were adding two suite runs
+  to every mutation for nothing. courtv2's actual imports are curve, governor, grc20votes
+  and twap, plus checkpoint transitively. Pruned.
+  **Result: 56 rows, 0 survived, 0 invalid, 2m27s** — the batch is now something a
+  contributor can actually run before a money-path change rather than a file that times
+  out. `make selftest` still reports every control firing.
+
 - **v0.62 — the money-IN path: one guard pinned, three unreachable, and ONE THAT NO TEST
   IN THIS HARNESS CAN COVER.** Eight mutations against `buy.gno`, never touched before.
   **Pinned:** `IsUserCall` against deletion, the mint going to the buyer, the zero-send
@@ -1663,7 +1682,8 @@ Newest first.
   that hangs the suite gets the whole run timed out, and the source is left broken … It
   cost an hour once"), and its on-disk `.mutate-backup` files are what made recovery a
   one-liner. Two rules: run slices of ~10 rows, and after ANY interrupted run check
-  `git diff` on the realm before trusting a green suite. The kill ALSO left a stale
+  `git diff` on the realm before trusting a green suite — and FIXED in v0.63, so the
+  slicing rule is no longer needed. The kill ALSO left a stale
   stage lock — `stage_lock`'s `finally` does not run when the process is killed — and the
   10-minute ceiling I gave it in v0.57 reported that clearly instead of hanging, which is
   what it was for. Clearing it is `rmdir`, and the message says so.

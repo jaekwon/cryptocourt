@@ -90,18 +90,34 @@ PKGS = {
     # measures everything except the thing most worth measuring.
     "courtv2": (os.path.join(REPO, "realm/r/courtv2"),
                 "examples/gno.land/r/cryptocourt/courtv2"),
-    # Staged, not mutated: courtv2 imports twap directly and the realm-test set
-    # stages all seven, so leaving any out makes the baseline red for a staging
-    # reason and every mutation then reads as caught — the lie this file's header
-    # warns about, told by omission.
+    # The packages courtv2 actually imports. NOT cshares or tickbook: the import graph
+    # says only the V1 court realm uses those, and V1 is deliberately absent here, so
+    # staging them added two suites to every mutation for nothing. (v0.57 claimed the
+    # realm-test set's seven were all needed; that was wrong — courtv2's imports are
+    # curve, governor, grc20votes and twap, plus checkpoint transitively.)
     "twap": (os.path.join(REPO, "realm/p/twap"),
              "examples/gno.land/p/cryptocourt/twap/v0"),
-    "cshares": (os.path.join(REPO, "realm/p/cshares"),
-                "examples/gno.land/p/cryptocourt/cshares/v0"),
-    "tickbook": (os.path.join(REPO, "realm/p/tickbook"),
-                 "examples/gno.land/p/cryptocourt/tickbook/v0"),
     "curve": (os.path.join(REPO, "realm/p/curve"),
               "examples/gno.land/p/cryptocourt/curve/v0"),
+}
+
+# Which suites can plausibly OBJECT to a mutation in a given tree: that tree's own
+# tests, plus every staged tree that imports it, directly or transitively. This keeps
+# the principle in run_suite's docstring exactly — a mutation caught by neither the
+# package's own tests nor its importers is the finding — while cutting the common case
+# from nine suites to one. Running all of them per mutation is what made the 56-row
+# batch exceed a ten-minute budget and get killed mid-mutation, leaving a disabled
+# guard in the source. Staging is unchanged: every tree is still staged, because the
+# imports must resolve whatever is being mutated.
+OBSERVERS = {
+    "courtv2":    ["courtv2"],
+    "govern":     ["govern"],
+    "offerer":    ["offerer", "govern"],
+    "twap":       ["twap", "courtv2"],
+    "curve":      ["curve", "courtv2"],
+    "grc20votes": ["grc20votes", "courtv2", "govern"],
+    "governor":   ["governor", "courtv2", "govern"],
+    "checkpoint": ["checkpoint", "grc20votes", "governor", "govern", "courtv2"],
 }
 
 
@@ -144,21 +160,26 @@ def stage(root):
                 shutil.copy(os.path.join(src, g), dst)
 
 
-def run_suite(root):
-    """Run BOTH suites against the trees as they stand. Returns (passed, output).
+def run_suite(root, pkg=None):
+    """Run the OBSERVER suites for `pkg`; all of them when pkg is None (the baseline).
+    Returns (passed, output).
 
-    Both, because a mutation in the package can be caught by the package's own
-    tests, by the realm that imports it, or by neither — and only the last is a
-    finding. Running one suite and calling it the answer would report the realm
-    as covering the package it merely depends on, or the reverse.
+    More than the mutated package's own suite, because a mutation there can be caught
+    by its own tests, by a realm that imports it, or by neither — and only the last is
+    a finding. Running one suite and calling it the answer would report the realm as
+    covering the package it merely depends on, or the reverse. But not ALL suites
+    either: a courtv2 mutation cannot be caught by twap's tests, and running them
+    anyway is what made a full batch time out.
     """
+    names = OBSERVERS.get(pkg, list(PKGS)) if pkg else list(PKGS)
     # Under the lock: one complete stage/test/unstage cycle. Taking it here rather
     # than around the whole run keeps a long batch from holding the shared tree for
     # its entire duration, and every cycle is self-contained.
     with stage_lock(root):
         stage(root)
         out, passed = "", True
-        for _, rel in PKGS.values():
+        for nm in names:
+            rel = PKGS[nm][1]
             r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
                                capture_output=True, text=True)
             out += r.stdout + r.stderr
@@ -247,7 +268,7 @@ def main():
             continue
         open(f, "w").write(src.replace(m["find"], m["replace"]))
 
-        ok, out = run_suite(root)
+        ok, out = run_suite(root, m.get("pkg", "govern"))
         open(f, "w").write(src)
 
         # Filetests are named by FILE, not by a TestXxx function, so a catch
