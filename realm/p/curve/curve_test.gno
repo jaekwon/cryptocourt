@@ -351,3 +351,33 @@ func TestCostAndMintedRefuseTheirDomain(t *testing.T) {
 		t.Fatalf("a filled curve mints nothing: got %d,%d", d, sp)
 	}
 }
+
+// maxCap is a CALIBRATION, not a safety edge, and it is worth saying which.
+//
+// Mutating it survived at 2^54 and still survived at 2^62 — cap² is 2^124 there, inside
+// the range where isqrt128 is exact, so the arithmetic does not break and no fixture could
+// tell. What 2^50 actually buys is headroom over the token's own ceiling: grc20votes caps
+// supply at MaxInt64/10000 ≈ 9.22e14, and 2^50 ≈ 1.13e15 clears it with room to spare.
+//
+// So this is a value pin, like the court's economic constants: the number is a choice, and
+// a change to it should be deliberate rather than silent. The property assertions beneath
+// it are the part that would notice if the arithmetic ever did stop being exact at the cap.
+func TestMaxCapIsTheCalibratedBound(t *testing.T) {
+	if maxCap != int64(1)<<50 {
+		t.Errorf("maxCap is %d, the design says 1<<50 (headroom over the token's "+
+			"MaxInt64/10000 supply ceiling) — if this change is deliberate, edit this pin",
+			maxCap)
+	}
+	// Whatever the bound is, a curve built AT it must still price and mint exactly.
+	c := New(1, maxCap)
+	if got, ok := c.Cost(maxCap-1, 1); !ok || got <= 0 {
+		t.Fatalf("a unit span at the cap must be priceable: got %d, ok=%v", got, ok)
+	}
+	delta, spent := c.Minted(maxCap-1, 1<<62)
+	if delta != 1 {
+		t.Errorf("at the cap only the last unit remains: minted %d", delta)
+	}
+	if want, _ := c.Cost(maxCap-1, 1); spent != want {
+		t.Errorf("and it is charged its exact cost: spent %d want %d", spent, want)
+	}
+}

@@ -2,6 +2,7 @@ package governor
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -499,5 +500,67 @@ func TestAdoptChecksItsTermsLikeOfferDoes(t *testing.T) {
 	g.Adopt(setFee{name: "c/k", ran: &ran}, sane)
 	if _, live := g.KindStatus("c/k"); !live {
 		t.Error("a sane kind was not adopted")
+	}
+}
+
+// The two INPUT BOUNDS nothing pinned. Mutating maxPayload (4096 -> 40960) and maxBatch
+// (16 -> 160) both survived the whole suite, while maxTitle, maxKindName, maxLive and
+// maxOpen were all caught — so these two were the gaps rather than a general one. The
+// batch GUARD is covered (TestABatchIsBounded catches its removal); it was only the VALUE
+// that nothing held.
+//
+// The inputs below are LITERALS, and the first version of this test got that wrong: it
+// built them as maxPayload+1 and maxBatch+1, so doubling the constant doubled the test's
+// input and both mutations still survived a test written to catch them. That is the same
+// derived-expectation defect recorded against the court's constants — a fixture that reads
+// the number it is checking can only prove the code agrees with itself. Value pins and
+// literal boundaries together: the pin fails if the number moves, the boundary fails if
+// either the number or the `len(...) >` guard moves.
+func TestPayloadAndBatchBoundsHoldAtTheirLimit(t *testing.T) {
+	if maxPayload != 4096 {
+		t.Errorf("maxPayload is %d, the design says 4096 — edit this pin if deliberate",
+			maxPayload)
+	}
+	if maxBatch != 16 {
+		t.Errorf("maxBatch is %d, the design says 16 — edit this pin if deliberate",
+			maxBatch)
+	}
+
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+
+	// One byte over the documented limit is refused FOR BEING TOO LONG.
+	mustPanic(t, "govern: that payload is too long", func() {
+		g.Propose(gAlice, "fee", strings.Repeat("9", 4097), "over")
+	})
+
+	// Exactly at it, the length guard must be silent. The fee kind refuses a
+	// 4096-digit payload for its own reasons, so the assertion is that the complaint is
+	// NOT about length — which is what an off-by-one in the bound would change.
+	func() {
+		defer func() {
+			r := recover()
+			if r == nil {
+				return // accepted outright is fine too
+			}
+			if got, ok := r.(string); ok && got == "govern: that payload is too long" {
+				t.Errorf("a payload of exactly 4096 bytes must not be refused for length")
+			}
+		}()
+		g.Propose(gAlice, "fee", strings.Repeat("9", 4096), "at the limit")
+	}()
+
+	// maxBatch is enforced in parseBatch, which reports rather than panics.
+	batch := func(n int) string {
+		lines := make([]string, n)
+		for i := range lines {
+			lines[i] = "fee " + strconv.Itoa(i+1)
+		}
+		return strings.Join(lines, "\n")
+	}
+	if _, err := parseBatch(batch(16)); err != nil {
+		t.Errorf("a batch of exactly 16 members must parse: %v", err)
+	}
+	if _, err := parseBatch(batch(17)); err == nil {
+		t.Errorf("a batch of 17 members must be refused")
 	}
 }

@@ -2505,5 +2505,103 @@
   "label": "PARAM escrowMaxBlocks halved (3 weeks -> 1.5)",
   "find": "\t\tescrowMaxBlocks:     362_880,",
   "replace": "\t\tescrowMaxBlocks:     181_440,"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "P-CONST curve maxCap 2^50 -> 2^54",
+  "find": "const maxCap = int64(1) << 50",
+  "replace": "const maxCap = int64(1) << 54"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST governor maxLive 64 -> 128 (the proposal book's bound)",
+  "find": "const maxLive = 64",
+  "replace": "const maxLive = 128"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST governor govLanes 8 -> 4 (reserved gov lanes halved)",
+  "find": "const govLanes = 8",
+  "replace": "const govLanes = 4"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST governor maxOpen no longer subtracts the gov lanes",
+  "find": "const maxOpen = maxLive - govLanes",
+  "replace": "const maxOpen = maxLive"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST governor maxTitle 120 -> 1200",
+  "find": "const maxTitle = 120",
+  "replace": "const maxTitle = 1200"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST governor maxPayload 4096 -> 40960",
+  "find": "const maxPayload = 4096",
+  "replace": "const maxPayload = 40960"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST governor maxKindName 64 -> 640",
+  "find": "const maxKindName = 64",
+  "replace": "const maxKindName = 640"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "P-CONST governor maxBatch 16 -> 160",
+  "find": "const maxBatch = 16",
+  "replace": "const maxBatch = 160"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-GUARD governor: the payload bound is not enforced",
+  "find": "\tif len(payload) > maxPayload {\n\t\tpanic(\"govern: that payload is too long\")\n\t}\n\tk := g.kindOf(kind)",
+  "replace": "\tk := g.kindOf(kind)"
+ },
+ {
+  "pkg": "governor",
+  "file": "batch.gno",
+  "label": "P-GUARD governor: the batch bound is not enforced",
+  "find": "\tif len(out) > maxBatch {\n\t\treturn nil, govErr(\"too many members in one batch\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "P-CONST grc20votes Bps 10000 -> 1000 (every bps quantity x10)",
+  "find": "const Bps = int64(10000)",
+  "replace": "const Bps = int64(1000)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "P-CONST grc20votes MaxSupply loses its Bps headroom",
+  "find": "const MaxSupply = int64(9223372036854775807) / Bps",
+  "replace": "const MaxSupply = int64(9223372036854775807)"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "P-CONST checkpoint MaxKey 128 -> 1280",
+  "find": "const MaxKey = 128",
+  "replace": "const MaxKey = 1280"
+ },
+ {
+  "pkg": "checkpoint",
+  "file": "checkpoint.gno",
+  "label": "P-CONST checkpoint PageEpochs 32 -> 8 (the page size)",
+  "find": "const PageEpochs = uint32(32)",
+  "replace": "const PageEpochs = uint32(8)"
  }
 ]

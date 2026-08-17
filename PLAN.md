@@ -1624,6 +1624,34 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.98 — the p/ layer's constants: my prediction was WRONG (9 of 12 already caught), and
+  I then committed the exact defect I had spent two versions documenting.**
+  v0.97 sized this target and guessed the `p/` packages would be "presumably in the same
+  state" courtv2 was. They were not: of twelve constant mutations, nine were already caught —
+  `maxLive`, `govLanes`, `maxOpen`, `maxTitle`, `maxKindName`, grc20votes' `Bps` and
+  `MaxSupply`, checkpoint's `MaxKey` and `PageEpochs`. Two corrections to that entry while I
+  am here: the "~150 numeric definitions" was an overcount from a grep that caught local
+  variables — the real constant surface is about a dozen — and `twap` has NO package
+  constants at all, being parameterised at construction.
+  Three survived. `curve`'s `maxCap` turns out to be a CALIBRATION rather than a safety
+  edge: it survives at 2^54 and still survives at 2^62, where cap² is 2^124 and still inside
+  isqrt128's exact range. What 2^50 buys is headroom over the token's own ceiling
+  (MaxInt64/10000 ≈ 9.22e14 against 2^50 ≈ 1.13e15), so it gets a value pin plus property
+  assertions that would notice if the arithmetic ever did stop being exact at the cap.
+  governor's `maxPayload` and `maxBatch` were the other two — and both GUARDS were already
+  covered (`TestAProposalsStringsAreBounded`, `TestABatchIsBounded` catch their removal). It
+  was only the VALUES nothing held.
+  **Then the part worth recording against myself.** The boundary test I wrote for those two
+  built its inputs as `maxPayload+1` and `maxBatch+1` — so doubling the constant doubled the
+  test's input, both sides moved together, and both mutations survived a test written
+  specifically to catch them. That is the derived-expectation defect recorded in v0.95 and
+  v0.96, committed in the fixture meant to close it. Two versions of documenting a trap is
+  not the same as not falling into it; what caught me was mutation-verifying the fixture
+  rather than trusting it. The inputs are literals now, and the test carries both a value
+  pin and a literal boundary: the pin fails if the number moves, the boundary fails if
+  either the number or the `len(...) >` guard does.
+  Batch now 372 rows: 371 caught, 0 not caught, one surviving by design (11m04s).
+
 - **v0.97 — the OTHER half of the calibration: six of eight per-court params were unpinned
   too, including the overturn threshold.** `defaultParams()` holds the knobs a court
   carries, as distinct from the file-level consts pinned in v0.96, and it had the same
