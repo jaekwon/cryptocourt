@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.25 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.26 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,34 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.26 — ORDINARY courts have meta's decayed-constant bug too, and worse.
+  Premise corrected, quantified, NOT YET FIXED.** The backlog carried this as
+  low-priority on the grounds that "unlike meta, an ordinary court's params ARE
+  settable at StartCourt". **That is false.** `StartCourt` lets a creator set
+  `stakeOpenDelayBlocks` and *nothing else*; every other param, `minAnswerX`
+  included, comes from `defaultParams()` frozen with no retune path — exactly
+  meta's situation before v0.15.
+  And the launch-side inversion is **worse** here. Filing an appeal costs
+  1.5×X̄ while deciding one costs 5% of supply, so a fixed 100 CC floor makes
+  **filing cost more than deciding for every court under ~3,000 CC of supply**
+  — and every court starts at zero and grows through that band (~4,500 GNOT of
+  burn to leave it). At 200 CC of supply the floor is **50% of the court's
+  entire supply**. Meta was one court in the inverted regime; this is all of
+  them, always, at birth.
+  **Status: reverted, not shipped.** The fix is the v0.15 shape applied to every
+  court (demote `defaultParams().minAnswerX` to a 1 CC dust arm, let the
+  fraction carry policy). Blast radius is ONE test —
+  `TestF9CapHeadroomAtTheExtreme`, which deliberately stakes big and unstakes to
+  a sliver to probe the F9 cap's worst case. That shape is **no longer legal**
+  under a supply-relative floor, which is itself the finding: *the floor bounds
+  how far a position can diverge and still answer, so the F9 cap has MORE
+  headroom than the test currently asserts.* Rewriting that fixture needs a
+  careful run rather than the three guesses it got; backed out so the branch
+  stays green, with the analysis kept.
+  Method note: the first blast-radius measurement reported "zero failures" and
+  was **vacuous** — the edit had silently no-op'd. Verified-applied, it is one.
+  Same lesson as everything else this session: a check that measures nothing
+  reports success.
 - **v0.25 — pending approvals: a live m-of-n bypass, and consent that never
   went stale (3 identical reviewers)**. The question put to the panel was
   storage: nothing prunes `pending`, so a moderator can leave unfired proposals

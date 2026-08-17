@@ -61,6 +61,17 @@ func main(cur realm) {
 	println("election open:     ", kourtv2.ElectionOpen("meta"))
 	println("election cooldown: ", kourtv2.ElectionCooldownUntil("meta"))
 
+	// The m-of-n pending queue, both trees. PendingApproval is the newest read
+	// in the realm and the one most likely to allocate by accident: it reaches
+	// through c.mod and through globalDAO, each created lazily, and each with an
+	// ensure* function sitting right beside the accessor it must NOT call.
+	pa, pexp := kourtv2.PendingApproval("meta", "hide:1")
+	println("pending approvals: ", pa, pexp)
+	ga, gexp := kourtv2.PendingApproval("", "purge:meta:1")
+	println("global pending:    ", ga, gexp)
+	m, n := kourtv2.ModThreshold("meta")
+	println("meta threshold:    ", m, n)
+
 	// The strips, and the franchise ledger.
 	println("strip size:        ", kourtv2.DirectoryStripSize())
 	println("stranger franchise:", kourtv2.FranchiseOf(stranger))
@@ -92,6 +103,9 @@ func main(cur realm) {
 // folders:            0
 // election open:      false
 // election cooldown:  0
+// pending approvals:  0 0
+// global pending:     0 0
+// meta threshold:     1 1
 // strip size:         0
 // stranger franchise: 0
 // front page renders: true
