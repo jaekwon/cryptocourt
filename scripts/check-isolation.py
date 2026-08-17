@@ -50,13 +50,13 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Everything `make realm-test` compiles, staged the same way it stages them.
 DEP = (os.path.join(REPO, "realm/p/checkpoint"),
-       "examples/gno.land/p/cryptocourt/checkpoint/v0")
+       "examples/gno.land/p/kourt/checkpoint/v0")
 REALMS = [
-    (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/cryptocourt/checkpoint/v0"),
-    (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/cryptocourt/grc20votes/v0"),
-    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/cryptocourt/governor/v0"),
-    (os.path.join(REPO, "realm/r/govern"), "examples/gno.land/r/cryptocourt/govern"),
-    (os.path.join(REPO, "realm/r/offerer"), "examples/gno.land/r/cryptocourt/offerer"),
+    (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/kourt/checkpoint/v0"),
+    (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/kourt/grc20votes/v0"),
+    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/kourt/governor/v0"),
+    (os.path.join(REPO, "realm/r/govern"), "examples/gno.land/r/kourt/govern"),
+    (os.path.join(REPO, "realm/r/offerer"), "examples/gno.land/r/kourt/offerer"),
 ]
 
 
@@ -73,8 +73,8 @@ def stage(root):
 def cleanup(root):
     for _, rel in REALMS:
         shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/p/cryptocourt"), ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/r/cryptocourt"), ignore_errors=True)
+    shutil.rmtree(os.path.join(root, "examples/gno.land/p/kourt"), ignore_errors=True)
+    shutil.rmtree(os.path.join(root, "examples/gno.land/r/kourt"), ignore_errors=True)
 
 
 def main():

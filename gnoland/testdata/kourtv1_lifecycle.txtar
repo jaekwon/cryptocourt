@@ -1,0 +1,102 @@
+# End-to-end court lifecycle against a real node: this proves what a unit harness
+# cannot fake — real GNOT arriving on the one-way curve and staying as treasury, and
+# real CC collateral moving into the realm's escrow on a claim deposit and a set mint
+# and back out on a redeem. testing.SetOriginSend declares an envelope without
+# crediting the realm, so in-harness Buy "receives" coins that never moved; here they
+# really do.
+#
+# NOT covered here: the answer/dispute/settle/finalize/reopen timing paths. Each needs
+# thousands of blocks advanced (72h settle, 1-3wk escrow, 7d votes) which a txtar
+# cannot practically produce; those are covered by the unit suite with SkipHeights
+# (see realm/r/kourtv1/{session,dispute,reopen}_test.gno).
+
+loadpkg gno.land/p/kourt/checkpoint/v0
+loadpkg gno.land/p/kourt/grc20votes/v0
+loadpkg gno.land/p/kourt/governor/v0
+loadpkg gno.land/p/kourt/twap/v0
+loadpkg gno.land/p/kourt/cshares/v0
+loadpkg gno.land/p/kourt/tickbook/v0
+loadpkg gno.land/p/kourt/curve/v0
+loadpkg gno.land/r/kourt/kourtv1
+
+gnoland start
+
+# The realm's own address holds every court's escrow (CC) and treasury (GNOT). It is
+# deterministic; bound once and then only referenced, and cross-checked against what
+# the realm reports, so a typo would query the wrong account and fail loudly here.
+env COURT=g1xn93zj74qs0twq8fgj25xnhh3uqnqpw8sa9u38
+
+# --- A fresh realm has no courts: the directory renders its empty state -------
+# Regression guard: renderDirectory wrote its header before the emptiness check,
+# so "No courts yet" was dead code and never appeared. On a fresh node, before any
+# StartCourt, the directory must say so.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv1:"
+stdout 'No courts yet'
+
+# --- Start a court ----------------------------------------------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv1 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.CourtEscrow(\"orem\")"
+stdout ${COURT}
+
+# Nothing has moved yet: the realm account is empty (a no-coin account returns "").
+gnokey query bank/balances/${COURT}
+stdout 'data: ""'
+
+# --- Buy the coin: real GNOT in, one-way ------------------------------------
+# 50 GNOT sent. The curve keeps ~all of it as treasury and mints CC to the buyer;
+# any unspent remainder is refunded. What it keeps must be real coins in the realm
+# account — a supply counter not backed by coins is the failure the payout rests on.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv1 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# The treasury counter and the realm's actual ugnot balance are the same number:
+# the GNOT the curve kept really arrived and really stays (no sell-back).
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.Treasury(\"orem\")"
+stdout '\(50000000 int64\)'
+gnokey query bank/balances/${COURT}
+stdout 'data: "50000000ugnot"'
+
+# The buyer holds the minted CC (curve-derived amount; asserted positive).
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.CoinBalanceOf(\"orem\",\"$test1_user_addr\")"
+stdout '\([1-9][0-9]* int64\)'
+
+# --- Open a claim: the deposit is real CC escrow ----------------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv1 -func OpenClaim -args orem -args 'Is the sky blue?' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout '\(1 uint64\)'
+stdout 'OK!'
+
+# The 1_000_000 CC anti-spam deposit moved into the realm's escrow (its CC balance).
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.CoinBalanceOf(\"orem\",\"${COURT}\")"
+stdout '\(1000000 int64\)'
+
+# --- Mint a complete set: collateral escrow ---------------------------------
+# 1000 sets = 1000 YES + 1000 NO, collateralised at priceScale (100) CC each = 100000.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv1 -func MintSet -args orem -args 1 -args 1000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.SharesOf(\"orem\",1,0,\"$test1_user_addr\")"
+stdout '\(1000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.SharesOf(\"orem\",1,1,\"$test1_user_addr\")"
+stdout '\(1000 int64\)'
+
+# Open interest X = sets x priceScale, and escrow now holds deposit + collateral.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.ClaimX(\"orem\",1)"
+stdout '\(100000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.CoinBalanceOf(\"orem\",\"${COURT}\")"
+stdout '\(1100000 int64\)'
+
+# --- Redeem the set: collateral returns -------------------------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv1 -func RedeemSet -args orem -args 1 -args 1000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# Shares burned, collateral released: escrow back to just the deposit, X back to 0.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.ClaimX(\"orem\",1)"
+stdout '\(0 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv1.CoinBalanceOf(\"orem\",\"${COURT}\")"
+stdout '\(1000000 int64\)'
+
+# The GNOT treasury is untouched by any of the CC-side flow — still one-way.
+gnokey query bank/balances/${COURT}
+stdout 'data: "50000000ugnot"'

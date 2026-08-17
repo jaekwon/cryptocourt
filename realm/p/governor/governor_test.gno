@@ -319,7 +319,7 @@ func TestInstallBuiltinIsForReservedNamesOnly(t *testing.T) {
 // engine with an incomplete API — and a realm's tests are the first consumer to
 // find out. Each of these is a read the front page or a proposal page already
 // publishes in words.
-// TestVoteOfMatchesTallyLeg pins the load-bearing invariant the cryptocourt court's
+// TestVoteOfMatchesTallyLeg pins the load-bearing invariant the kourt court's
 // fee split depends on: each voter's VoteOf weight equals their contribution to Tally,
 // and Σ(ballot weights) == yes+no+abstain exactly. If these diverged, the court's
 // ClaimAdjFee bound Σ floor(pool·w/W) ≤ pool would break and over-pay. A big

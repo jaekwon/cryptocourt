@@ -1,4 +1,4 @@
-# cryptocourt — the ultimate plan
+# kourt — the ultimate plan
 
 The court system this repository is named for, built on the governance layer that
 already lives here. This is the buildable plan: the economics are settled (see
@@ -8,11 +8,11 @@ this document is how it becomes gno code.
 ## The rule for every package
 
 **A `/p/` package earns its place by being reusable by other projects.** If the
-only conceivable importer is cryptocourt's own realm, it is not a library, it is
+only conceivable importer is kourt's own realm, it is not a library, it is
 realm code in the wrong directory. Every `/p/` below is something a completely
 different gno project would want: a conditional-share ledger, a tick order book,
 a fixed-window average. The court-specific glue — bonds, sessions, escrow, the
-fee split, the governance wiring — lives in `/r/cryptocourt/*`, which is the one
+fee split, the governance wiring — lives in `/r/kourt/*`, which is the one
 worked consumer.
 
 Each package is also held to two more bars: **gas-efficient** (measured against
@@ -23,11 +23,11 @@ no realm state, takes an acting address rather than reading one — the same spl
 
 ## What already exists (the governance half)
 
-    p/cryptocourt/checkpoint/v0    a number's history, as of a sealed epoch
-    p/cryptocourt/grc20votes/v0    the voting-token ledger (balances, delegation, PastVotes)
-    p/cryptocourt/governor/v0      the proposal/kind/vote engine
-    r/cryptocourt/govern           a worked governance consumer
-    r/cryptocourt/offerer          an example kind
+    p/kourt/checkpoint/v0    a number's history, as of a sealed epoch
+    p/kourt/grc20votes/v0    the voting-token ledger (balances, delegation, PastVotes)
+    p/kourt/governor/v0      the proposal/kind/vote engine
+    r/kourt/govern           a worked governance consumer
+    r/kourt/offerer          an example kind
 
 The court consumes `grc20votes` (its coin) and `governor` (its answerDisputes go
 through a governor Kind). Three small additive changes to `governor` are needed,
@@ -45,7 +45,7 @@ governor"):
 Built in dependency order; nothing above is started until the thing below it is
 tested to convergence.
 
-### 1. `p/cryptocourt/twap/v0` — a fixed-window trailing average
+### 1. `p/kourt/twap/v0` — a fixed-window trailing average
 
 A ring of one-byte (or small-int) samples over a rolling window, giving a
 manipulation-resistant average of a series (price, open interest). Distinct from
@@ -58,7 +58,7 @@ answers "what has it averaged over the last W" from a fixed, cheap ring.
   threshold read (kills flash-inflation), and the pre-answer price for
   close-without-decision.
 
-### 2. `p/cryptocourt/cshares/v0` — a conditional-share ledger
+### 2. `p/kourt/cshares/v0` — a conditional-share ledger
 
 Binary (extensible to N-outcome) conditional shares over a collateral token: mint
 a complete set for one unit of collateral, redeem a matched set back, transfer
@@ -69,7 +69,7 @@ shares, and pay out on resolution. Collateral conservation is the invariant.
 - **Court uses it for:** every claim's YES/NO positions; "open interest X" is this
   package's outstanding-set count.
 
-### 3. `p/cryptocourt/tickbook/v0` — a tick-quantised order book
+### 3. `p/kourt/tickbook/v0` — a tick-quantised order book
 
 100 price ticks on a 0.01 grid, one aggregated quantity per (side, tick), a pair
 of 64-bit occupancy bitmaps per side, taker walks crossed levels by bitmap scan.
@@ -79,7 +79,7 @@ Integer-only, no LP, O(levels crossed). Pull-settled makers.
   price grid, the thing every gno market currently lacks.
 - **Court uses it for:** the market on each claim (`COURTS_TOKENOMICS.md` §3.1).
 
-### 4. `r/cryptocourt/court` — the court realm (the consumer)
+### 4. `r/kourt/court` — the court realm (the consumer)
 
 Not a library. Ties the above to `grc20votes` and `governor`, and holds the
 court-specific rules: the one-way curve, claims (title + append-only body),
@@ -112,10 +112,10 @@ Started alongside the packages, not after.
 ## Status
 
 - [x] Governance layer (`checkpoint`, `grc20votes`, `governor`) — exists.
-- [x] `p/cryptocourt/twap/v0` — built, 14 tests, adversarially reviewed (caught a mature-fabricated-zero bug)
-- [x] `p/cryptocourt/cshares/v0` — built, 13 tests, reviewed (conservation airtight; 3 hygiene fixes: freeze-on-resolve, approval-key delimiter, range-check)
-- [x] `p/cryptocourt/tickbook/v0` — built, 23 tests, design converged with a subagent. No-custody CLOB: realm escrows on Place, book records; Take dirties ONE packed object regardless of levels crossed; makers pull-settled by a per-tick multiplicative survival-fraction accumulator with an epoch counter for tick reuse (an additive per-original-unit accumulator over-credits the partially-filled — the bug the tests caught). Non-crossing guard forces Take-before-rest. Self-contained: the 128-bit MulDiv is inlined, so it depends only on bptree.
-- [x] `p/cryptocourt/curve/v0` — built, 10 tests (incl. a 4000-case no-over-issue fuzz + the 128-bit large-value path). Linear one-way bonding curve with a **reciprocal slope** `p(s)=s/D` (a numerator slope overflows 128-bit at the supply cap — the 3-subagent plan review caught this). `Cost` rounds UP (128-bit via `bits.Mul64`); `Minted` floors via a binary-search 128-bit isqrt candidate then **re-verifies ±1 against `Cost`**, so an isqrt off-by-one can never mint below backing. The realm holds a monotonic `curveMinted` position; burns/redeems never move it.
+- [x] `p/kourt/twap/v0` — built, 14 tests, adversarially reviewed (caught a mature-fabricated-zero bug)
+- [x] `p/kourt/cshares/v0` — built, 13 tests, reviewed (conservation airtight; 3 hygiene fixes: freeze-on-resolve, approval-key delimiter, range-check)
+- [x] `p/kourt/tickbook/v0` — built, 23 tests, design converged with a subagent. No-custody CLOB: realm escrows on Place, book records; Take dirties ONE packed object regardless of levels crossed; makers pull-settled by a per-tick multiplicative survival-fraction accumulator with an epoch counter for tick reuse (an additive per-original-unit accumulator over-credits the partially-filled — the bug the tests caught). Non-crossing guard forces Take-before-rest. Self-contained: the 128-bit MulDiv is inlined, so it depends only on bptree.
+- [x] `p/kourt/curve/v0` — built, 10 tests (incl. a 4000-case no-over-issue fuzz + the 128-bit large-value path). Linear one-way bonding curve with a **reciprocal slope** `p(s)=s/D` (a numerator slope overflows 128-bit at the supply cap — the 3-subagent plan review caught this). `Cost` rounds UP (128-bit via `bits.Mul64`); `Minted` floors via a binary-search 128-bit isqrt candidate then **re-verifies ±1 against `Cost`**, so an isqrt off-by-one can never mint below backing. The realm holds a monotonic `curveMinted` position; burns/redeems never move it.
 - [x] governor's three additive changes — done, +6 tests. **#1** clamp
   `engaged>total` (was a panic) so a court can host claims too big to decide;
   **#2** `ProposeWithQuorum(…, quorumFloor)` for a consumer-computed absolute bar
@@ -125,7 +125,7 @@ Started alongside the packages, not after.
   door (F1), and document the inclusive-threshold tie-at-5000 (F2). All strictly
   additive — govern/offerer behaviour unchanged (one govern test updated to assert
   the new clamp instead of the old refusal).
-- [x] `r/cryptocourt/court` — V1 BUILT, 10 files, 22 tests, make realm-test green.
+- [x] `r/kourt/court` — V1 BUILT, 10 files, 22 tests, make realm-test green.
   court/params + directory + StartCourt; buy (one-way curve); claim (append-only
   body + deposit-escrow); market (MintSet/RedeemSet, priceScale=100, 20% OI ceiling,
   OI-twap); book (RestSell/RestBid/TakeBuy/TakeSell/Collect/CancelOrder + ask/bid
@@ -208,7 +208,7 @@ concrete failing input). Outcome:
 `make check` is green: 34 citations hold, doc-numbers match, storage ceilings
 pass, all packages + the two consuming realms test clean, gofmt + vet clean.
 
-Cross-cutting obligations the audit surfaced for `r/cryptocourt/court` are listed
+Cross-cutting obligations the audit surfaced for `r/kourt/court` are listed
 at the end of `AUDIT.md` (observe-twap-on-every-change + `StaleBy` gating; a
 tickbook minimum order size; drive the governor with `grc20votes` and
 `ThresholdBps>5000`; sweep escrow-pool dust).

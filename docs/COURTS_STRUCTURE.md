@@ -379,7 +379,7 @@ weight is readable at a sealed past epoch, per-kind rules, and a way to run code
 when a vote passes. That layer exists — checked against it rather than assumed.
 
 **Use the instantiable one.** There are two: a package-level singleton whose
-state is realm-global, and `p/cryptocourt/governor/v0`, which is a `Governor`
+state is realm-global, and `p/kourt/governor/v0`, which is a `Governor`
 struct constructed with `New(voters, token)` and a per-instance ledger. Only the
 second can host many courts in one realm, and its ledger's own documentation
 already anticipates this — *"so one realm can run several, and a court can name

@@ -1,4 +1,4 @@
-# PLAN — cryptocourt tokenomics V2: no-loss conviction staking
+# PLAN — kourt tokenomics V2: no-loss conviction staking
 
 > **STATUS: DESIGN CONVERGED at v0.31 — no unvetted mechanism remains.**
 > 14 adversarial vet passes; the 22-attack ledger (§5) holds zero DRAFTs and
@@ -1769,8 +1769,8 @@ Newest first.
   written. Registered as the next tooling fix (extend `REALMS` to the full realm-test
   set, then work through whatever order-dependence it exposes). Note also that
   `make isolation-test` currently fails outright for an unrelated environmental reason:
-  a second worktree (`cryptocourt-mod`, branch courtv2-moderation) stages into the SAME
-  `$GNOROOT/examples/.../cryptocourt` path and `rm -rf`s it on exit, deleting this run's
+  a second worktree (`kourt-mod`, branch courtv2-moderation) stages into the SAME
+  `$GNOROOT/examples/.../kourt` path and `rm -rf`s it on exit, deleting this run's
   staged tree mid-copy. Per-worktree GNOROOT (or staging dir) is the durable fix.
   Remaining registered gaps from the same sweep (lower value, none a known defect): the
   F9/Q7 bonus caps never bind in any fixture; the conclusive-low half-burn branch

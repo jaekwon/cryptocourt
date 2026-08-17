@@ -1,4 +1,4 @@
-# REGULATIONS.md — US regulatory reference for cryptocourt
+# REGULATIONS.md — US regulatory reference for kourt
 
 > Research reference, **not legal advice**. Compiled from three primary-source
 > research passes (gambling/state law; CFTC/CEA; securities + "information system"
@@ -110,7 +110,7 @@ Cryptocourt V2 takes (b). [SETTLED as to the history; (b)'s specific shape UNTES
   evade". [SETTLED as to the statement's own terms]
 - Protocol-staking statement (5/2025): staking rewards for protocol participation
   generally not securities transactions — the friendliest analogy for V2's
-  emission ("participation rewards"), though cryptocourt's emission rewards
+  emission ("participation rewards"), though kourt's emission rewards
   *correctness in a contest adjudicated by vote*, which is further from
   ministerial validation than PoS. [helpful analogy, UNTESTED fit]
 

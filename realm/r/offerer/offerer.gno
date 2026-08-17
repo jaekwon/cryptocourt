@@ -21,7 +21,7 @@ import (
 	"chain"
 	"strconv"
 
-	"gno.land/r/cryptocourt/govern"
+	"gno.land/r/kourt/govern"
 )
 
 // greeting is a Kind whose name is chosen when it is offered.

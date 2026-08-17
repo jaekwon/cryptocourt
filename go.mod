@@ -1,4 +1,4 @@
-module github.com/jaekwon/cryptocourt
+module github.com/jaekwon/kourt
 
 go 1.25.9
 

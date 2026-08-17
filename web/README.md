@@ -1,6 +1,6 @@
 # CryptoCourt web overlay (V2)
 
-A single, self-contained page that reads a deployed `r/cryptocourt/courtv2` realm and
+A single, self-contained page that reads a deployed `r/kourt/courtv2` realm and
 renders it. **The chain carries all the information; this overlay only makes it
 prettier.** Every screen here can also be served by the realm's own `Render` (see the
 "as the chain serves it →" link on every court and claim), and every button is a normal
@@ -28,8 +28,8 @@ Two ABCI queries, exactly what gnoweb and `gnokey query` use:
 
 | what | call | example |
 |---|---|---|
-| a rendered page (lists) | `vm/qrender` | `gno.land/r/cryptocourt/courtv2:orem/3` |
-| a typed read (scalars)  | `vm/qeval`   | `gno.land/r/cryptocourt/courtv2.CoinPrice("orem")` |
+| a rendered page (lists) | `vm/qrender` | `gno.land/r/kourt/kourtv2:orem/3` |
+| a typed read (scalars)  | `vm/qeval`   | `gno.land/r/kourt/kourtv2.CoinPrice("orem")` |
 
 The **court and claim lists come from `Render`** — the realm's own markdown, parsed for
 its links — so the directory and docket are always whatever the chain says. The
@@ -65,7 +65,7 @@ alone serves it**.
    RPC to your node and the gnoweb host to your testnet's web host (both persist).
 2. Host `index.html` on any static host (it is fully self-contained), or just share the
    file — it runs from `file://`.
-3. The transaction links resolve to `<gnoweb-host>/r/cryptocourt/courtv2$help&func=…`; the
+3. The transaction links resolve to `<gnoweb-host>/r/kourt/kourtv2$help&func=…`; the
    realm's functions are crossing (`func F(cur realm, …)`), so gnoweb injects `cur` and the
    links carry only the ordinary arguments. `Buy` needs a GNOT `-send`, which the user
    attaches in the gnoweb help form.

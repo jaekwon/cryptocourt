@@ -132,7 +132,7 @@ func TestEpochZeroIsNotAnEpoch(cur realm, t *testing.T) {
 
 // The mint is a realm policy, not a ledger one.
 //
-// p/cryptocourt/grc20votes has no minter and cannot have one: who may create
+// p/kourt/grc20votes has no minter and cannot have one: who may create
 // supply depends on who is calling, and a pure package has no caller. So the
 // rule lives here, and these are the assertions that say the wiring holds.
 func TestTheMintIsThisRealmsPolicyAndNotTheLedgers(cur realm, t *testing.T) {

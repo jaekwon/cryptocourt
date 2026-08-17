@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <style>
 /* ============================================================================
-   CryptoCourt overlay — a presentation layer over the r/cryptocourt/courtv2 realm.
+   CryptoCourt overlay — a presentation layer over the r/kourt/courtv2 realm.
    The chain carries all the information (every screen here can be served by the
    realm's own Render); this overlay only makes it prettier, and every button is
    a signable gnoweb transaction link, never a private API. Self-contained: no
@@ -299,7 +299,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 <script>
 "use strict";
 /* ============================ configuration ============================== */
-const PKG = "gno.land/r/cryptocourt/courtv2";
+const PKG = "gno.land/r/kourt/kourtv2";
 const CFG = Object.assign(
   {mode:"demo", rpc:"http://127.0.0.1:26657", gnoweb:"https://gno.land"},
   JSON.parse(localStorage.getItem("cc.cfg")||"{}")
@@ -430,7 +430,7 @@ async function listCourts(){
   for(const line of md.split("\n")){
     if(/^##\s+Featured/i.test(line)) tier=2;
     else if(/^##\s+Courts/i.test(line)) tier=1;
-    const m = line.match(/^\-\s*\[(.+?)\]\(\/r\/cryptocourt\/courtv2:([a-z0-9-]+)\)\s*—\s*(\d+)/);
+    const m = line.match(/^\-\s*\[(.+?)\]\(\/r\/kourt\/kourtv2:([a-z0-9-]+)\)\s*—\s*(\d+)/);
     if(m) out.push({slug:m[2], name:unesc(m[1]), tier, claims:parseInt(m[3],10)});
   }
   return out;
@@ -449,7 +449,7 @@ async function listClaims(slug){
     return c.claims.map(id=>({id, title:DEMO.claims[slug+"/"+id].title, statusText:statusText(DEMO.claims[slug+"/"+id])})); }
   const md = await qrender(slug);
   const out=[];
-  const re = new RegExp("^\\-\\s*\\[(.+?)\\]\\(\\/r\\/cryptocourt\\/courtv2:"+slug+"\\/(\\d+)\\)\\s*—\\s*(.*)$");
+  const re = new RegExp("^\\-\\s*\\[(.+?)\\]\\(\\/r\\/kourt\\/kourtv2:"+slug+"\\/(\\d+)\\)\\s*—\\s*(.*)$");
   for(const line of md.split("\n")){ const m=line.match(re); if(m) out.push({id:parseInt(m[2],10), title:unesc(m[1]), statusText:m[3].trim()}); }
   return out;
 }
@@ -542,7 +542,7 @@ function safeBlock(s){ return esc(s).split(/\n{2,}/).map(p=>"<p>"+p.replace(/\n/
    the links carry only the ordinary arguments. */
 function tx(func, args){
   const q = Object.entries(args||{}).map(([k,v])=>"&"+k+"="+encodeURIComponent(v)).join("");
-  return CFG.gnoweb.replace(/\/$/,"")+"/r/cryptocourt/courtv2$help&func="+func+q;
+  return CFG.gnoweb.replace(/\/$/,"")+"/r/kourt/kourtv2$help&func="+func+q;
 }
 function btn(label, func, args, cls, sub){
   return `<a class="btn ${cls||""}" target="_blank" rel="noopener" href="${tx(func,args)}">`+
@@ -916,15 +916,15 @@ function demoRender(path){
   const parts = path.split("/");
   if(path===""||path==="/"){
     let o="# CryptoCourt V2\n\nStake on claims of fact. Your principal always returns 1×.\n\n## Featured\n\n";
-    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===2) o+=`- [${c.name}](/r/cryptocourt/courtv2:${slug}) — ${c.claims.length} claims\n`;
+    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===2) o+=`- [${c.name}](/r/kourt/kourtv2:${slug}) — ${c.claims.length} claims\n`;
     o+="\n## Courts\n\n";
-    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier!==2) o+=`- [${c.name}](/r/cryptocourt/courtv2:${slug}) — ${c.claims.length} claims\n`;
+    for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier!==2) o+=`- [${c.name}](/r/kourt/kourtv2:${slug}) — ${c.claims.length} claims\n`;
     return o;
   }
   const c=DEMO.courts[parts[0]]; if(!c) return "## Not found\nNo court by that slug.";
   if(parts.length===1){
     let o=`# ${c.name}\n\n- coin price: ${c.price} ugnot per CC unit (one-way; the GNOT is burned)\n- supply: ${c.supply} · emitted: ${c.emitted}\n- reward reservoir: ${c.reservoir} · senior queue owed: ${c.seniorOwed}\n\n## Claims\n\n`;
-    for(const id of c.claims){ const d=DEMO.claims[parts[0]+"/"+id]; o+=`- [${d.title}](/r/cryptocourt/courtv2:${parts[0]}/${id}) — ${statusText(d)}\n`; }
+    for(const id of c.claims){ const d=DEMO.claims[parts[0]+"/"+id]; o+=`- [${d.title}](/r/kourt/kourtv2:${parts[0]}/${id}) — ${statusText(d)}\n`; }
     return o;
   }
   const d=DEMO.claims[parts[0]+"/"+parts[1]]; if(!d) return "## Not found\nNo claim by that id.";

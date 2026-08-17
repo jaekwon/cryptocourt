@@ -1,4 +1,4 @@
-# cryptocourt
+# kourt
 
 A governor and a checkpointed voting token for gno.land.
 
@@ -25,11 +25,11 @@ were inherited, which were refused, and what was measured to decide.
 
 ## What is here
 
-    realm/p/checkpoint/     gno.land/p/cryptocourt/checkpoint/v0
-    realm/p/grc20votes/     gno.land/p/cryptocourt/grc20votes/v0
-    realm/p/governor/       gno.land/p/cryptocourt/governor/v0
-    realm/r/govern/         gno.land/r/cryptocourt/govern
-    realm/r/offerer/        gno.land/r/cryptocourt/offerer
+    realm/p/checkpoint/     gno.land/p/kourt/checkpoint/v0
+    realm/p/grc20votes/     gno.land/p/kourt/grc20votes/v0
+    realm/p/governor/       gno.land/p/kourt/governor/v0
+    realm/r/govern/         gno.land/r/kourt/govern
+    realm/r/offerer/        gno.land/r/kourt/offerer
 
 The `/p/` packages are the reusable half: any realm can import them and get a
 checkpointed voting token and a governor over it without forking anything. The

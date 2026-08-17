@@ -47,7 +47,7 @@ import (
 	"math/overflow"
 	"strconv"
 
-	checkpoint "gno.land/p/cryptocourt/checkpoint/v0"
+	checkpoint "gno.land/p/kourt/checkpoint/v0"
 	bptree "gno.land/p/nt/bptree/v0"
 )
 

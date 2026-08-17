@@ -190,7 +190,7 @@
 //	}
 //
 // The governor cannot apply that itself — govern:batch is defined in terms of
-// newlines, and only a kind knows its own grammar. r/cryptocourt/offerer shows the
+// newlines, and only a kind knows its own grammar. r/kourt/offerer shows the
 // call in place.
 //
 // Two paths carry untrusted text with no kind to vet it, and both are closed: a
@@ -281,7 +281,7 @@
 // NewRules rather than a Rules literal: a realm cannot allocate another realm's
 // struct, so `govern.Rules{...}` written in YOUR realm is refused by the VM.
 //
-// r/cryptocourt/offerer is that sketch as a whole file, tested and deployed. Worth
+// r/kourt/offerer is that sketch as a whole file, tested and deployed. Worth
 // reading first, because four things it does are not obvious above:
 //
 //   - its kind carries its NAME as a field, not a constant, so one realm can
@@ -339,8 +339,8 @@
 // The order matters and most of it cannot be undone, so it is written out
 // once here rather than assembled from three files.
 //
-//  1. Publish the packages this realm imports FIRST — p/cryptocourt/checkpoint/v0
-//     and p/cryptocourt/grc20votes/v0, in that order. AddPackage
+//  1. Publish the packages this realm imports FIRST — p/kourt/checkpoint/v0
+//     and p/kourt/grc20votes/v0, in that order. AddPackage
 //     compiles on chain, and an import that does not resolve is a deploy that
 //     fails — which costs the path, because a realm cannot be redeployed at
 //     one.

@@ -4,7 +4,7 @@ import (
 	"chain/runtime"
 	"testing"
 
-	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
+	grc20votes "gno.land/p/kourt/grc20votes/v0"
 	"gno.land/p/nt/testutils/v0"
 )
 

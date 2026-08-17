@@ -63,19 +63,19 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # own — was the half nothing broke on purpose.
 PKGS = {
     "govern": (os.path.join(REPO, "realm/r/govern"),
-               "examples/gno.land/r/cryptocourt/govern"),
+               "examples/gno.land/r/kourt/govern"),
     "checkpoint": (os.path.join(REPO, "realm/p/checkpoint"),
-                   "examples/gno.land/p/cryptocourt/checkpoint/v0"),
+                   "examples/gno.land/p/kourt/checkpoint/v0"),
     "grc20votes": (os.path.join(REPO, "realm/p/grc20votes"),
-                   "examples/gno.land/p/cryptocourt/grc20votes/v0"),
+                   "examples/gno.land/p/kourt/grc20votes/v0"),
     "governor": (os.path.join(REPO, "realm/p/governor"),
-                 "examples/gno.land/p/cryptocourt/governor/v0"),
+                 "examples/gno.land/p/kourt/governor/v0"),
     # Staged but never mutated: the govern realm's offer filetest imports it,
     # so leaving it out makes the baseline red for a staging reason and every
     # mutation reads as caught. That is the same lie as a build failure counted
     # as a catch, told by omission.
     "offerer": (os.path.join(REPO, "realm/r/offerer"),
-                "examples/gno.land/r/cryptocourt/offerer"),
+                "examples/gno.land/r/kourt/offerer"),
 }
 
 

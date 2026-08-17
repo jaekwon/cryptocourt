@@ -78,7 +78,7 @@ func TestAnAllowanceMovesVotingPowerToTheOwnersDelegate(cur realm, t *testing.T)
 	}
 	// Whether the emptied key is actually GIVEN BACK, and whether everyone's
 	// power still sums to the supply, are the ledger's own properties. They are
-	// asserted inside p/cryptocourt/grc20votes, which can see its own trees;
+	// asserted inside p/kourt/grc20votes, which can see its own trees;
 	// what belongs here is that this realm's entrypoints reach them correctly.
 	//
 	// The balances are the visible half of the same thing, so they are checked

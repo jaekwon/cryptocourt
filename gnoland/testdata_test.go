@@ -1,6 +1,6 @@
 //go:build txtar
 
-// Package gnoland holds the .txtar integration tests: the cryptocourt realms run
+// Package gnoland holds the .txtar integration tests: the kourt realms run
 // against a real (in-memory) gnoland node, exactly as gno.land's own
 // pkg/integration/testdata does. These are the only tests that exercise real
 // cross-realm calls, real banker coin movement, real escrow, and the on-chain
@@ -11,7 +11,7 @@
 // Run with: make txtar-test   (or: go test -tags txtar ./gnoland/)
 //
 // TestMain stages the realm sources into $GNOROOT/examples so the scripts'
-// `loadpkg gno.land/{p,r}/cryptocourt/...` resolve, then removes them after.
+// `loadpkg gno.land/{p,r}/kourt/...` resolve, then removes them after.
 package gnoland
 
 import (
@@ -35,13 +35,13 @@ func TestCourtTxtar(t *testing.T) {
 	testscript.Run(t, p)
 }
 
-// staged is every cryptocourt package the scripts load, in dependency order. The
-// /p/ packages map to gno.land/p/cryptocourt/<name>/v0; the realm to
-// gno.land/r/cryptocourt/court.
+// staged is every kourt package the scripts load, in dependency order. The
+// /p/ packages map to gno.land/p/kourt/<name>/v0; the realm to
+// gno.land/r/kourt/kourtv1.
 var staged = []struct{ kind, name string }{
 	{"p", "checkpoint"}, {"p", "grc20votes"}, {"p", "governor"}, {"p", "twap"},
 	{"p", "cshares"}, {"p", "tickbook"}, {"p", "curve"},
-	{"r", "court"}, {"r", "courtv2"},
+	{"r", "kourtv1"}, {"r", "kourtv2"},
 }
 
 func TestMain(m *testing.M) {
@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 
 	var dsts []string
 	for _, pk := range staged {
-		dst := filepath.Join(root, "examples", "gno.land", pk.kind, "cryptocourt", pk.name)
+		dst := filepath.Join(root, "examples", "gno.land", pk.kind, "kourt", pk.name)
 		if pk.kind == "p" {
 			dst = filepath.Join(dst, "v0")
 		}
@@ -66,8 +66,8 @@ func TestMain(m *testing.M) {
 	for _, d := range dsts {
 		os.RemoveAll(d)
 	}
-	os.RemoveAll(filepath.Join(root, "examples", "gno.land", "p", "cryptocourt"))
-	os.RemoveAll(filepath.Join(root, "examples", "gno.land", "r", "cryptocourt"))
+	os.RemoveAll(filepath.Join(root, "examples", "gno.land", "p", "kourt"))
+	os.RemoveAll(filepath.Join(root, "examples", "gno.land", "r", "kourt"))
 	os.Exit(code)
 }
 

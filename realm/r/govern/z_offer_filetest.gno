@@ -1,4 +1,4 @@
-// PKGPATH: gno.land/r/cryptocourt/offerer
+// PKGPATH: gno.land/r/kourt/offerer
 package offerer
 
 // Can a DIFFERENT realm publish a Kind and offer it?
@@ -14,7 +14,7 @@ package offerer
 // are different questions. This file asks the second one.
 
 import (
-	"gno.land/r/cryptocourt/govern"
+	"gno.land/r/kourt/govern"
 )
 
 // mine is a Kind declared entirely outside govern.

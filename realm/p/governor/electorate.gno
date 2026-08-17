@@ -65,7 +65,7 @@ type Electorate interface {
 // times — Electorate about a sealed epoch, Token about now — and a realm may
 // well have one without the other.
 //
-// p/cryptocourt/grc20votes.Ledger satisfies both, which is the ordinary case.
+// p/kourt/grc20votes.Ledger satisfies both, which is the ordinary case.
 type Token interface {
 	Name() string
 	Symbol() string

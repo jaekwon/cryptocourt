@@ -266,7 +266,7 @@ address. If the address holds nothing, the capability is worth nothing.
   The checkpoint store is a different case: pure data structure, no crossing
   functions, no realm state. The engine has none of those properties.
 
-- **The checkpoint STORE, which IS a `p/` package**: `p/cryptocourt/checkpoint/v0`.
+- **The checkpoint STORE, which IS a `p/` package**: `p/kourt/checkpoint/v0`.
   That half needs no crossing functions at all, which is what makes it the half
   that can move. It is the honest gno reading of ERC20Votes-as-a-reusable-extension: in
   Solidity the extension is inherited and brings the token with it, here the
@@ -276,7 +276,7 @@ Two things that could only be settled on a chain, and were. Execution after the
 full two-day timelock works — 34,560 blocks, an hour of sending, kept behind
 `SLOW_EXECUTE`; the checkpoint layer's own curve is behind `SLOW_ARCHIVE`, six
 sealed epochs, for the same reason. And a realm that is not `govern` can publish
-a power: `r/cryptocourt/offerer` does, on a chain. `Offer` takes a Kind
+a power: `r/kourt/offerer` does, on a chain. `Offer` takes a Kind
 INTERFACE and `MsgCall` cannot carry one, so that needed a realm to exist rather
 than a test. See "Proven on a chain" below.
 
@@ -633,9 +633,9 @@ ten integration tests against a live chain:
 
 | | |
 | --- | --- |
-| `r/cryptocourt/govern` | 123 tests, 3 filetests |
-| `p/cryptocourt/checkpoint/v0` | 15 tests |
-| `r/cryptocourt/offerer` | 5 tests — the worked example, and the fixture that proves the extension point |
+| `r/kourt/govern` | 123 tests, 3 filetests |
+| `p/kourt/checkpoint/v0` | 15 tests |
+| `r/kourt/offerer` | 5 tests — the worked example, and the fixture that proves the extension point |
 | `internal/chain` | 10 `TestIntegrationGovern*`, needing a node (two behind flags) |
 
 The token checkpoints voting power on every balance change; the governor votes
@@ -709,7 +709,7 @@ specific line rather than by care.
 
 **A kind holding the governor's realm capability.** If `Execute` passes its live
 `cur` into `Kind.Do`, then inside a foreign kind's `Do` `IsCurrent()` is true and
-`PkgPath()` is `gno.land/r/cryptocourt/govern`. That is not "the realm as data",
+`PkgPath()` is `gno.land/r/kourt/govern`. That is not "the realm as data",
 it is govern's authority: the kind can `cross()` into any realm that trusts
 govern and be seen as govern, issue this realm's tokens, and call `Mint` as the
 realm itself. One adoption vote, cast to grant one power, hands over the
@@ -817,11 +817,11 @@ checkpoints, no delegation — by swapping the one line that names the electorat
 
 ## Shape
 
-    realm/p/checkpoint/     gno.land/p/cryptocourt/checkpoint/v0
-    realm/p/grc20votes/     gno.land/p/cryptocourt/grc20votes/v0
-    realm/p/governor/       gno.land/p/cryptocourt/governor/v0
-    realm/r/govern/         gno.land/r/cryptocourt/govern
-    realm/r/offerer/        gno.land/r/cryptocourt/offerer
+    realm/p/checkpoint/     gno.land/p/kourt/checkpoint/v0
+    realm/p/grc20votes/     gno.land/p/kourt/grc20votes/v0
+    realm/p/governor/       gno.land/p/kourt/governor/v0
+    realm/r/govern/         gno.land/r/kourt/govern
+    realm/r/offerer/        gno.land/r/kourt/offerer
     internal/chain/         the tests that need a running node
     scripts/                the guards, and the mutation runner
     docs/                   this file, and VERIFYING.md

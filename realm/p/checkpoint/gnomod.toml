@@ -1,2 +1,2 @@
-module = "gno.land/p/cryptocourt/checkpoint/v0"
+module = "gno.land/p/kourt/checkpoint/v0"
 gno = "0.9"

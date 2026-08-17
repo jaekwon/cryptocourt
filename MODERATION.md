@@ -897,7 +897,7 @@ The scheme (2/3 preferred, and it needs no new registry):
 **Sequencing:** the rename is cross-cutting (docs, realm paths, README, PLAN,
 this file) and touches the other session's files, so it lands LAST, after the
 code audit, with a coordinated merge. **Realm import paths are write-once** —
-`gno.land/r/cryptocourt/courtv2` cannot be renamed after deploy, so the path
+`gno.land/r/kourt/kourtv2` cannot be renamed after deploy, so the path
 decision must be made before launch, not after.
 
 ## 14. Changelog

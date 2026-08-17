@@ -9,7 +9,7 @@
 //
 // # Not checkpoint
 //
-// The sibling p/cryptocourt/checkpoint answers a different question — "what was
+// The sibling p/kourt/checkpoint answers a different question — "what was
 // this value at sealed epoch N?" — from unbounded, paged history. This is a
 // bounded rolling window with no archive: the last N buckets and nothing older.
 // Different query, different structure, no overlap.

@@ -1,2 +1,2 @@
-module = "gno.land/p/cryptocourt/grc20votes/v0"
+module = "gno.land/p/kourt/grc20votes/v0"
 gno = "0.9"

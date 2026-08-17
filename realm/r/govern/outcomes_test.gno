@@ -1,7 +1,7 @@
 package govern
 
 import (
-	governor "gno.land/p/cryptocourt/governor/v0"
+	governor "gno.land/p/kourt/governor/v0"
 	"chain/runtime"
 	"strings"
 	"testing"

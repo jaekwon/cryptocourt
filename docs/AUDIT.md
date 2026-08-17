@@ -1,4 +1,4 @@
-# cryptocourt `/p/` — systematic audit
+# kourt `/p/` — systematic audit
 
 One adversarial pass per package, hunting the failure modes money and authority
 primitives actually have: conservation/solvency, integer rounding direction,
@@ -108,7 +108,7 @@ answer is a money/authority bug.
   is now stated hard in the package and `Average` docs, and a new `StaleBy(height)`
   reports how far a read has drifted from the newest observation so a caller can
   gate on recency. Regression: `TestStaleTailIsFlaggedByStaleBy`.
-  **Court obligation (enforce when building `r/cryptocourt/court`):** Observe OI
+  **Court obligation (enforce when building `r/kourt/court`):** Observe OI
   and price on every change, or immediately before any gating read.
 - Coverage added: aliasing (value-semantics), `width>1` bucketing, boundary
   maturity. Docs: the oversold flash-resistance claim now carries its precondition.
@@ -245,7 +245,7 @@ all six packages + both realms, gofmt + vet. COURTS_STRUCTURE.md storage numbers
 updated (tick 16→20 B, checkpoint entry 16→12 B). A convergence pass adversarially
 re-verifies the two repacks (the only new logic).
 
-## Cross-cutting obligations for `r/cryptocourt/court`
+## Cross-cutting obligations for `r/kourt/court`
 
 Carried forward from the audit so they are not lost:
 1. **Observe twap on every OI/price change** (or immediately before a gating
@@ -257,7 +257,7 @@ Carried forward from the audit so they are not lost:
 4. **Escrow pools:** the court owns the ask/bid pools; a periodic sweep of the
    accrued (safe-direction) dust to the treasury keeps them tidy.
 
-## Money-conservation audit of `r/cryptocourt/court`
+## Money-conservation audit of `r/kourt/court`
 
 An adversarial two-ledger audit of the court's money flows (GNOT treasury + CC
 escrow), run with probe tests against every branch. **Verdict: conservation is

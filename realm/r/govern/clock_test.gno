@@ -1,8 +1,8 @@
 package govern
 
 import (
-	governor "gno.land/p/cryptocourt/governor/v0"
-	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
+	governor "gno.land/p/kourt/governor/v0"
+	grc20votes "gno.land/p/kourt/grc20votes/v0"
 	"chain/runtime"
 	"testing"
 

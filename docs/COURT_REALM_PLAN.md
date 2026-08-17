@@ -1,4 +1,4 @@
-# r/cryptocourt/court — implementation plan (v2, after 3-subagent review)
+# r/kourt/court — implementation plan (v2, after 3-subagent review)
 
 The consuming realm composing the six audited `/p/` primitives into the court of
 `COURTS_TOKENOMICS.md` (V4) and `COURTS_STRUCTURE.md`. **v2 folds in three
@@ -12,7 +12,7 @@ inline as **[R]**. The primitives stay court-agnostic; the court holds every rul
 Two of them get a small, separately-audited extension for the court (below):
 `cshares.CloseAt` (fractional close) and nothing else.
 
-## 1. `p/cryptocourt/curve/v0` — the bonding curve (build FIRST)
+## 1. `p/kourt/curve/v0` — the bonding curve (build FIRST)
 
 Linear, one-way, `p(s) = s/D`. **[R] `k` is a reciprocal denominator `D`, never a
 numerator scale** — with a numerator `k·(s1²−s0²)`, a realistic `k≈1e9` gives
@@ -69,7 +69,7 @@ Conservation holds for ANY p: while open `ΣY=ΣN=supply`, so total payout
 resolve pays. Floor rounds toward the pool (dust safe). This gets its own
 adversarial test (fractional conservation, p=0 and p=1 degenerate to Resolve).
 
-## 2. Realm layout (`r/cryptocourt/court/`)
+## 2. Realm layout (`r/kourt/court/`)
 
     court.gno      Court type; per-court grc20votes + governor + curve position; params
     buy.gno        one-way curve Buy (GNOT in → CC), treasury, curveMinted
@@ -259,10 +259,10 @@ vote→resolve→redeem lifecycle. `make realm-test` green after each package.
 
 ## 8. Build order
 
-1. `p/cryptocourt/curve/v0` [BUILT — 12 tests, reciprocal-D + fill-to-cap guard +
+1. `p/kourt/curve/v0` [BUILT — 12 tests, reciprocal-D + fill-to-cap guard +
    Minted-verifies-Cost] + `cshares.CloseAt`/`RedeemClosed` [BUILT — 3 tests,
    128-bit `mulDivFloor`, conservation verified]. Both `make realm-test` green.
-2. `r/cryptocourt/court` bottom-up (11 tests so far, make realm-test green):
+2. `r/kourt/court` bottom-up (11 tests so far, make realm-test green):
    **court/params ✓** (Court+Params+directory+StartCourt) → **buy ✓** (one-way curve
    Buy: IsUserCall+OriginSend guard, monotonic curveMinted, treasury, refund) →
    **claim ✓** (title + append-only chunked body, deposit-escrow, author guard) →

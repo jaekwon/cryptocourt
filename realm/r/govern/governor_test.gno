@@ -1,7 +1,7 @@
 package govern
 
 import (
-	governor "gno.land/p/cryptocourt/governor/v0"
+	governor "gno.land/p/kourt/governor/v0"
 	"strconv"
 	"strings"
 	"testing"
@@ -2788,7 +2788,7 @@ func TestABatchNumbersItsMembersTheSameWayTwice(cur realm, t *testing.T) {
 //
 // The interface calls rlm "the realm as data". It was not: Execute passed its
 // live cur straight through, so inside a foreign kind's Do, IsCurrent() was
-// true and PkgPath() was "gno.land/r/cryptocourt/govern". That is govern's authority,
+// true and PkgPath() was "gno.land/r/kourt/govern". That is govern's authority,
 // handed to code adopted for one purpose — enough to cross() into any realm
 // that trusts govern and be seen as it, to issue this realm's tokens, and to
 // call Mint as the realm itself.

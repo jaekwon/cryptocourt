@@ -3,7 +3,7 @@ package govern
 import (
 	"chain/runtime/unsafe"
 
-	grc20votes "gno.land/p/cryptocourt/grc20votes/v0"
+	grc20votes "gno.land/p/kourt/grc20votes/v0"
 )
 
 // The token's identity, and the clock it quantises history on.
@@ -17,7 +17,7 @@ const (
 	tokenName     = "Cryptocourt Governance"
 	tokenSymbol   = "COURT"
 	tokenDecimals = 6
-	tokenID       = "gno.land/r/cryptocourt/govern." + tokenSymbol
+	tokenID       = "gno.land/r/kourt/govern." + tokenSymbol
 )
 
 // epochBlocks is an hour at gno's five-second cadence, and the figure every

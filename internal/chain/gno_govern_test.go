@@ -24,14 +24,14 @@ import (
 // govern realm had never been deployed anywhere.
 //
 // It also pins the deploy ORDER, which is the part that cannot be undone.
-// p/cryptocourt/checkpoint/v0 has to exist on chain before r/cryptocourt/govern will
+// p/kourt/checkpoint/v0 has to exist on chain before r/kourt/govern will
 // compile, and a realm cannot be redeployed at its path — so getting the order
 // wrong costs the path rather than the transaction.
 const (
-	governPkgPath    = "gno.land/p/cryptocourt/checkpoint/v0"
-	governVotesPath  = "gno.land/p/cryptocourt/grc20votes/v0"
-	governEnginePath = "gno.land/p/cryptocourt/governor/v0"
-	governRealmPath  = "gno.land/r/cryptocourt/govern"
+	governPkgPath    = "gno.land/p/kourt/checkpoint/v0"
+	governVotesPath  = "gno.land/p/kourt/grc20votes/v0"
+	governEnginePath = "gno.land/p/kourt/governor/v0"
+	governRealmPath  = "gno.land/r/kourt/govern"
 )
 
 // governDeps is every /p/ the realm imports, in the order a chain needs them.

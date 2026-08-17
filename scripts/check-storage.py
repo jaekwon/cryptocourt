@@ -3,7 +3,7 @@
 
 `gno test -v` reports the storage each filetest wrote, per realm:
 
-    --- PASS: ./z_write_filetest.gno (... storage: gno.land/r/cryptocourt/govern:+6328b)
+    --- PASS: ./z_write_filetest.gno (... storage: gno.land/r/kourt/govern:+6328b)
 
 That is the same number a chain charges a deposit for, available without a node
 and on every `make realm-test`. Everything else measuring gas in this repo needs
@@ -36,11 +36,11 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REALM = os.path.join(REPO, "realm/r/govern")
 DEPS = [
-    (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/cryptocourt/checkpoint/v0"),
-    (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/cryptocourt/grc20votes/v0"),
-    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/cryptocourt/governor/v0"),
+    (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/kourt/checkpoint/v0"),
+    (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/kourt/grc20votes/v0"),
+    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/kourt/governor/v0"),
 ]
-DEST = "examples/gno.land/r/cryptocourt/govern"
+DEST = "examples/gno.land/r/kourt/govern"
 
 # filetest -> ceiling in bytes written to the govern realm, or None for "must
 # write nothing at all".
@@ -80,7 +80,7 @@ def main():
                        capture_output=True, text=True)
     out = r.stdout + r.stderr
     shutil.rmtree(base, ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/p/cryptocourt"), ignore_errors=True)
+    shutil.rmtree(os.path.join(root, "examples/gno.land/p/kourt"), ignore_errors=True)
 
     if r.returncode != 0:
         print("check-storage: the suite does not pass, so its costs mean "
@@ -93,7 +93,7 @@ def main():
         if not m or "PASS" not in line:
             continue
         name = m.group(1)
-        w = re.search(r"gno\.land/r/cryptocourt/govern:\+(\d+)b", line)
+        w = re.search(r"gno\.land/r/kourt/govern:\+(\d+)b", line)
         seen[name] = int(w.group(1)) if w else 0
 
     for name, budget in BUDGETS.items():

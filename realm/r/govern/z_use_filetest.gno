@@ -1,4 +1,4 @@
-// PKGPATH: gno.land/r/cryptocourt/usegovern
+// PKGPATH: gno.land/r/kourt/usegovern
 package usegovern
 
 // Using the realm from outside it, which every other test in this package
@@ -18,7 +18,7 @@ import (
 	"chain/runtime"
 	"testing"
 
-	"gno.land/r/cryptocourt/govern"
+	"gno.land/r/kourt/govern"
 	testutils "gno.land/p/nt/testutils/v0"
 )
 

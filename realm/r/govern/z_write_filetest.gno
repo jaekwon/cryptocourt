@@ -1,4 +1,4 @@
-// PKGPATH: gno.land/r/cryptocourt/holder
+// PKGPATH: gno.land/r/kourt/holder
 package holder
 
 // A realm holding a position, writing to the token from outside it.
@@ -25,7 +25,7 @@ package holder
 
 import (
 	testutils "gno.land/p/nt/testutils/v0"
-	"gno.land/r/cryptocourt/govern"
+	"gno.land/r/kourt/govern"
 )
 
 func main(cur realm) {

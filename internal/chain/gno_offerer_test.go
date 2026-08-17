@@ -124,4 +124,4 @@ func TestIntegrationGovernOfferFromAnotherRealm(t *testing.T) {
 	}
 }
 
-const governOffererPath = "gno.land/r/cryptocourt/offerer"
+const governOffererPath = "gno.land/r/kourt/offerer"

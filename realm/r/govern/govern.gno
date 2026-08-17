@@ -1,13 +1,13 @@
 package govern
 
 import (
-	governor "gno.land/p/cryptocourt/governor/v0"
+	governor "gno.land/p/kourt/governor/v0"
 )
 
 // The engine, and the entrypoints that authenticate for it.
 //
 // Everything about proposals — the kind registry, the tally, the rules, the
-// slot sweep, the pages — is p/cryptocourt/governor/v0. What is left here is
+// slot sweep, the pages — is p/kourt/governor/v0. What is left here is
 // what only a realm can do: hold a `cur realm`, check that it is live, read who
 // is calling, and mint the sub-realm token a kind is handed.
 //
