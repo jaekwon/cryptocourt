@@ -717,3 +717,124 @@ func TestAppointModsDiscardsTheOutgoingSetsApprovals(cur realm, t *testing.T) {
 		t.Fatal("the incoming set's own 2-of-2 must fire")
 	}
 }
+
+// The global DAO discards its banked approvals whenever WHO MAY ACT changes, or
+// how many must agree. Four call sites share this body — AddGlobalMod,
+// RemoveGlobalMod, TransferGlobalAdmin and SetPurgeThreshold — and each was
+// deletable without a test noticing.
+//
+// The assertion is direct rather than behavioural: bank one approval, make the
+// change, and require the pending count to be ZERO. Driving it through
+// fire/no-fire would need a third approver per case and would fire irreversible
+// actions to prove a negative; reading the count says the same thing in one line.
+//
+// The control is the middle case. WITHOUT a membership change the banked approval
+// SURVIVES, which is what proves a zero came from the clear rather than from
+// banking never having worked at all.
+func TestGlobalDAODiscardsApprovalsOnMembershipChange(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gdao-alice")
+	memB := testutils.TestAddress("gdao-memB")
+	memC := testutils.TestAddress("gdao-memC")
+	memD := testutils.TestAddress("gdao-memD")
+	for _, slug := range []string{"gdao1", "gdao2", "gdao3", "gdao4"} {
+		testCourt(cur, slug, alice, 1_000_000_000)
+	}
+	dadmin := DirectoryAdmin()
+
+	// A body of at least three, and a threshold of two, so a single approval BANKS
+	// instead of firing. The DAO bootstraps n=1/purgeM=1, where one approval is
+	// already a quorum and there is no banked state to discard.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), memB)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), memC)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+
+	bank := func(slug string) int64 {
+		testing.SetRealm(testing.NewUserRealm(memB))
+		GlobalSuspendSet(cross(cur), slug)
+		if CourtSuspended(slug) {
+			t.Fatalf("fixture: one of two must not fire on %s", slug)
+		}
+		if n, _ := PendingApproval("", "gsuspend:"+slug); n != 1 {
+			t.Fatalf("fixture: %s must have ONE banked approval, got %d", slug, n)
+		}
+		return runtime.ChainHeight()
+	}
+	gone := func(slug, what string) {
+		if n, _ := PendingApproval("", "gsuspend:"+slug); n != 0 {
+			t.Fatalf("%s left %d banked approval(s) standing; a member who no "+
+				"longer counts can still complete the threshold", what, n)
+		}
+	}
+
+	// THE CONTROL, first: with no membership change the approval survives. Every
+	// zero below means something only because this one is not zero.
+	at := bank("gdao1")
+	if n, _ := PendingApproval("", "gsuspend:gdao1"); n != 1 {
+		t.Fatal("control: an untouched approval must still be banked")
+	}
+	if runtime.ChainHeight() >= at+pendingTTLBlocks {
+		t.Fatal("fixture went vacuous: the pending TTL elapsed, so every clear " +
+			"below would read as effective whether or not it ran")
+	}
+
+	// ADDING a member: the threshold is now met by a different set of people.
+	bank("gdao2")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), memD)
+	gone("gdao2", "AddGlobalMod")
+
+	// REMOVING one: their signature must not still count. Note this also clamps
+	// purgeM down to n if it would exceed it, so the threshold is restored after.
+	bank("gdao3")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	RemoveGlobalMod(cross(cur), memD)
+	gone("gdao3", "RemoveGlobalMod")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+
+	// MOVING THE ADMIN SEAT TO A FRESH KEY. This was the strictly better route for
+	// an admin wanting to complete a stuck purge: seat a new key without resetting
+	// the banked signatures. It must be a NON-member — the clear sits inside the
+	// branch that ADDS the new admin, and that conditionality is deliberate, not an
+	// oversight (see the next assertion).
+	memE := testutils.TestAddress("gdao-memE")
+	bank("gdao4")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	TransferGlobalAdmin(cross(cur), memE)
+	gone("gdao4", "TransferGlobalAdmin")
+
+	// ...and the seat moving between EXISTING members deliberately does NOT clear,
+	// which is why the fixture above had to use a fresh address. Membership is
+	// unchanged, so every banked signature still belongs to a current member and no
+	// consent has gone stale; the admin's own extra powers are unilateral and were
+	// never approved by m-of-n in the first place. Pinned so that nobody "fixes"
+	// the conditional into an unconditional wipe and quietly makes a stuck purge
+	// un-completable by rotating a key.
+	at3 := bank("gdao2")
+	_ = at3
+	testing.SetRealm(testing.NewUserRealm(memE))
+	TransferGlobalAdmin(cross(cur), dadmin)
+	if n, _ := PendingApproval("", "gsuspend:gdao2"); n != 1 {
+		t.Fatalf("a seat moving between existing members must NOT clear: got %d", n)
+	}
+
+	// CHANGING THE THRESHOLD. Consent is half "who must agree", so lowering the bar
+	// re-scores every banked signature against it. memB holds the admin seat now.
+	at2 := bank("gdao3")
+	_ = at2
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 3)
+	gone("gdao3", "SetPurgeThreshold")
+
+	// Restore the body: the global DAO is package-global and never reset, so a test
+	// that grows it owes the next one a tidy state.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	for _, m := range []address{memB, memC, memE} {
+		testing.SetRealm(testing.NewUserRealm(dadmin))
+		RemoveGlobalMod(cross(cur), m)
+	}
+}

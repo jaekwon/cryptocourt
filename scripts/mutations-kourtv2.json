@@ -530,5 +530,33 @@
     "label": "mod: AppointMods keeps the outgoing set's approvals",
     "find": "\tclearPendingOnMembershipChange(&cm.pending)\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: AddGlobalMod keeps stale approvals",
+    "find": "\t\tclearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: RemoveGlobalMod keeps the removed member's approval",
+    "find": "\t\tclearPendingOnMembershipChange(&d.pending) // a removed member's approval must not still count\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: SetPurgeThreshold keeps approvals gathered under the old m",
+    "find": "\t\t// membership does.\n\t\tclearPendingOnMembershipChange(&d.pending)\n",
+    "replace": "\t\t// membership does.\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: TransferGlobalAdmin keeps the banked signatures",
+    "find": "\t\t// stuck purge: seat a fresh key without resetting the banked signatures.\n\t\tclearPendingOnMembershipChange(&d.pending)\n",
+    "replace": "\t\t// stuck purge: seat a fresh key without resetting the banked signatures.\n"
   }
 ]

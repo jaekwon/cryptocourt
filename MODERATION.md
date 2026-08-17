@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.39 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.40 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,41 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.40 — the last four moderation gaps are closed; the known-gaps list is
+  empty and the batch stands at 80, all caught.** The global DAO discards its
+  banked approvals whenever *who may act* changes, or *how many must agree*:
+  `AddGlobalMod`, `RemoveGlobalMod`, `TransferGlobalAdmin` and
+  `SetPurgeThreshold`. All four share one body, all four were deletable without a
+  test noticing, and all four are now pinned — **verified separately**, because one
+  fixture claimed to catch four and catching one is the trap.
+  - **The assertion is the pending count, not the behaviour.** Bank one approval,
+    make the change, require the count to be **zero**. Driving it through
+    fire/no-fire would need a third approver per case and would have to fire
+    irreversible actions to prove a negative. The control is what makes a zero mean
+    anything: **with no membership change the approval survives**, asserted first,
+    so every subsequent zero is the clear working rather than banking never having
+    worked at all.
+  - **A wrong premise of mine, caught by the fixture rather than by reading.** My
+    first attempt transferred the admin seat to an **existing** member and the
+    approval survived — which looked like a fifth bug and is not one. The clear sits
+    inside the branch that *adds* the new admin, and that conditionality is correct:
+    if the seat moves between existing members, membership is unchanged, so every
+    banked signature still belongs to a current member and no consent has gone
+    stale. The admin's own extra powers are unilateral and were never approved by
+    m-of-n. The exploit the code comment describes — *seat a fresh key without
+    resetting the banked signatures* — needs a **non-member**, which does clear.
+    - Both branches are now pinned, including the deliberate non-clear, so nobody
+      "fixes" the conditional into an unconditional wipe and thereby makes a stuck
+      purge un-completable by rotating a key.
+  - The fixture **restores the DAO** it grew — threshold back to 1, added members
+    removed — because the global DAO is package-global and never reset between
+    tests, so a test that grows it owes the next one a tidy body.
+  - **What an empty gaps list does and does not mean.** It means every guard this
+    audit found unpinned is now pinned or structurally enforced. It does **not**
+    mean there are no unpinned guards: `meta.gno`, `folders.gno`, `strips.gno`,
+    `modrender.gno` and `records.gno` still have **no mutation coverage at all**, and
+    the only reason no gaps are listed there is that nobody has looked yet. The
+    80-entry main batch is the signal; the empty file is a bookmark.
 - **v0.39 — `AppointMods` pinned, and one guard proved UNPINNABLE BY ANY TEST, so
   it got a structural check instead.** Two more of the six closed, by opposite
   means, and the second is the interesting one.
