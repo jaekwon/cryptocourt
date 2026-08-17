@@ -3,10 +3,12 @@
 package courtv2
 
 import (
+	"chain"
 	"chain/runtime"
+	"strconv"
 
-	bptree "gno.land/p/nt/bptree/v0"
 	twap "gno.land/p/cryptocourt/twap/v0"
+	bptree "gno.land/p/nt/bptree/v0"
 )
 
 // Sides of a claim. A side is an int in the API for gnokey ergonomics.
@@ -24,8 +26,9 @@ type claimState struct {
 	title  string
 	author address
 
-	deposit int64 // refundable anti-spam deposit (escrowed)
-	fee     int64 // 10% of deposit: burned on dead/conclusive-low, else refunded
+	deposit  int64 // refundable anti-spam deposit (escrowed)
+	fee      int64 // 10% of deposit: burned on dead/conclusive-low, else refunded
+	seeded   bool  // moderator-seeded (deposit/fee waived; author draw = 0, I5)
 	openedAt int64
 	closed   bool // dead-claim close (unanswered past the timeout)
 
@@ -40,8 +43,8 @@ type claimState struct {
 	yesRawHi, yesRawLo   uint64
 	noRawHi, noRawLo     uint64
 	// The side integrals' last-advance markers (advancePools).
-	yesLastAcc, noLastAcc       int64
-	yesLastRawAt, noLastRawAt   int64
+	yesLastAcc, noLastAcc     int64
+	yesLastRawAt, noLastRawAt int64
 
 	// The trailing rings (§3.9): total staked (answerability X̄) and the YES
 	// pool (the ratio series). Observed on every stake/unstake.
@@ -80,12 +83,12 @@ type claimState struct {
 	round         int64
 	failedRounds  int64
 	decidedRounds int64
-	disputer     address
-	disputeBond  int64
-	proposalID   int64
-	provisional  int8
-	escrowUntil  int64
-	provClose    bool
+	disputer      address
+	disputeBond   int64
+	proposalID    int64
+	provisional   int8
+	escrowUntil   int64
+	provClose     bool
 	// credEligible: some UPHELD round's overturn side carried >= 1/4 of the
 	// quorum floor — the record credits only for genuinely contested wins
 	// (audit M2-1: a weightless self-contest must not mint the credential).
@@ -135,20 +138,48 @@ type claimState struct {
 
 // OpenClaim posts a claim. The opener escrows deposit + fee; the fee's
 // disposition is decided at resolution (refund unless dead or conclusive low).
+// Refused on a whole-court-purged court (§3.2 carve-out #2).
 func OpenClaim(cur realm, courtSlug, title string) uint64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	if courtIsPurged(c) {
+		panic("courtv2: this court is purged; no new claims may be opened")
+	}
+	return openClaim(c, cur.Previous().Address(), title, false)
+}
+
+// OpenClaimSeeded posts a claim with the CC deposit and fee WAIVED, for a
+// moderator bootstrapping a young court (MODERATION.md §8). Mod-only; a
+// suspended set is refused. The GNOT storage deposit is still the mod's to pay,
+// and the author emission slice never mints on a seeded claim (I5, crystallize)
+// so the waiver cannot be farmed. Refused on a purged court.
+func OpenClaimSeeded(cur realm, courtSlug, title string) uint64 {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
+	if courtIsPurged(c) {
+		panic("courtv2: this court is purged; no new claims may be opened")
+	}
+	requireActiveMod(ensureMod(c), who) // mod-only; suspension refuses (a read gate, no money)
+	return openClaim(c, who, title, true)
+}
+
+// openClaim is the shared creation core. A seeded claim waives deposit+fee.
+func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 	if len(title) == 0 || len(title) > 200 {
 		panic("courtv2: a claim title is 1..200 characters")
 	}
-	dep := c.params.minClaimDepositCC
-	fee := dep * depositFeeBps / 10000
-	c.coin.Transfer(who, c.escrow, dep+fee)
-	c.deposit += dep + fee
-
+	var dep, fee int64
+	if !seeded {
+		dep = c.params.minClaimDepositCC
+		fee = dep * depositFeeBps / 10000
+		c.coin.Transfer(who, c.escrow, dep+fee)
+		c.deposit += dep + fee
+	}
 	c.nextID++
 	id := c.nextID
 	cs := &claimState{
@@ -157,6 +188,7 @@ func OpenClaim(cur realm, courtSlug, title string) uint64 {
 		author:      who,
 		deposit:     dep,
 		fee:         fee,
+		seeded:      seeded,
 		openedAt:    runtime.ChainHeight(),
 		stakers:     bptree.NewBPTree32(),
 		oi:          twap.New(epochBlocks, twapBuckets, 8),
@@ -164,7 +196,47 @@ func OpenClaim(cur realm, courtSlug, title string) uint64 {
 		provisional: -1, // int8 zero is sideYES — the sentinel must be explicit
 	}
 	c.claims.Set(beClaimKey(id), cs)
+	// Claim-lane event: clients enumerate claims off events (no on-chain
+	// address→claims index exists; MODERATION.md §2/I3). No user text beyond the
+	// title, which is the claim's whole public content.
+	chain.Emit("ClaimOpened",
+		"court", c.id,
+		"claim", strconv.FormatUint(id, 10),
+		"author", who.String(),
+		"seeded", strconv.FormatBool(seeded),
+	)
 	return id
+}
+
+// EditClaimTitle lets the author fix wording during the polish window, before
+// any stake (MODERATION.md §6). The first stake or the window's close freezes
+// the title forever. (With a 0 window the title is frozen from birth.) On the
+// meta court this re-runs the mod: parser — wired in the meta module.
+func EditClaimTitle(cur realm, courtSlug string, claimID uint64, newTitle string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	if who != cs.author {
+		panic("courtv2: only the author may edit the title")
+	}
+	if len(newTitle) == 0 || len(newTitle) > 200 {
+		panic("courtv2: a claim title is 1..200 characters")
+	}
+	if cs.closed || cs.frozenAt != 0 {
+		panic("courtv2: the claim is no longer editable")
+	}
+	if runtime.ChainHeight() >= cs.openedAt+c.params.stakeOpenDelayBlocks {
+		panic("courtv2: the polish window has closed; the title is frozen")
+	}
+	if cs.yesStake != 0 || cs.noStake != 0 {
+		panic("courtv2: staking has begun; the title is frozen")
+	}
+	cs.title = newTitle
+	onTitleEdited(c, cs) // meta-parser re-run hook (no-op until the meta module)
+	chain.Emit("ClaimTitleEdited", "court", c.id, "claim", strconv.FormatUint(claimID, 10))
 }
 
 // CloseDeadClaim closes a claim that never got an answer within the timeout:
@@ -211,6 +283,9 @@ func ClaimAuthor(courtSlug string, claimID uint64) address {
 }
 func ClaimClosed(courtSlug string, claimID uint64) bool {
 	return mustClaim(mustCourt(courtSlug), claimID).closed
+}
+func ClaimSeeded(courtSlug string, claimID uint64) bool {
+	return mustClaim(mustCourt(courtSlug), claimID).seeded
 }
 
 // StakePools returns the two live pool totals — the instantaneous ratio's

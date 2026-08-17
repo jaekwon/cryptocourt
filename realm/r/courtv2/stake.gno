@@ -140,6 +140,12 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	if cs.frozenAt != 0 {
 		panic("courtv2: staking is frozen — this claim has an answer")
 	}
+	// Polish window (§9): staking is closed for stakeOpenDelayBlocks after
+	// OpenClaim so the author/moderators can fix wording before anyone bets.
+	// Default 0 → no window, behaviour unchanged for courts that don't opt in.
+	if runtime.ChainHeight() < cs.openedAt+c.params.stakeOpenDelayBlocks {
+		panic("courtv2: the polish window is open; staking has not started yet")
+	}
 	touch(c)
 
 	c.coin.Transfer(who, c.escrow, amount)

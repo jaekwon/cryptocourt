@@ -88,7 +88,7 @@ const (
 	flagFreezeAfter = 3
 	slashXBps       = int64(450)   // 4.5%·X̄ answer-bond slash FLOOR (whale-gated; bounty 2% ≤ 80%×4.5% ✓)
 	slashDrawBps    = int64(16000) // v0.40: draw-proportional arm — slash ≥ 1.6× the winning-pool mid draw (midGross), so a patient mill's punishment tracks its take, not just X̄; floored by slashXBps, clamped to the bond. k=1.6 lands the 12-wk (dead-claim) mill q* on the ~0.22 target and flattens the hold-time curve (three-designer convergence, v0.40)
-	depositFeeBps   = int64(1000) // 10% of the deposit, conditionally refunded
+	depositFeeBps   = int64(1000)  // 10% of the deposit, conditionally refunded
 
 	// Answer priority (records.gno): difficulty-weighted net record ≥ 3 earns a
 	// 24h priority window; gate off until 3 addresses qualify; one active
@@ -99,6 +99,13 @@ const (
 
 	settleDelay      = int64(51_840)    // 72h before an undisputed answer settles
 	deadClaimTimeout = int64(1_451_520) // 12 weeks: unanswered claims close
+
+	// Moderation build constants (MODERATION.md §9, §2). metaSlug is reserved so
+	// only realm init can create the meta court; the public StartCourt path
+	// refuses it. maxStakeOpenDelay caps the polish window at 24h.
+	metaSlug          = "meta"
+	maxCourtNameLen   = 100
+	maxStakeOpenDelay = int64(17_280) // 24h
 )
 
 // mustInvariants is the deploy gate for the cross-constant couplings the audit
@@ -152,26 +159,28 @@ func init() { mustInvariants() }
 // Params are the per-court knobs, frozen at StartCourt through mustSane exactly
 // as V1: no retune entrypoint exists.
 type Params struct {
-	disputeThresholdBps int64 // overturn bar; > 5000 so a tie never overturns
-	votingBlocks        int64 // dispute vote length
-	graceBlocks         int64 // governor slot-free grace
-	minAnswerX          int64 // min trailing total stake (CC base) to answer
-	answerBondCapCC     int64 // 0 = uncapped (V1 convention)
-	minClaimDepositCC   int64 // never zero
-	escrowMinBlocks     int64 // 1 week
-	escrowMaxBlocks     int64 // 3 weeks
+	disputeThresholdBps  int64 // overturn bar; > 5000 so a tie never overturns
+	votingBlocks         int64 // dispute vote length
+	graceBlocks          int64 // governor slot-free grace
+	minAnswerX           int64 // min trailing total stake (CC base) to answer
+	answerBondCapCC      int64 // 0 = uncapped (V1 convention)
+	minClaimDepositCC    int64 // never zero
+	escrowMinBlocks      int64 // 1 week
+	escrowMaxBlocks      int64 // 3 weeks
+	stakeOpenDelayBlocks int64 // polish window: staking closed for this long after OpenClaim (0 = none)
 }
 
 func defaultParams() Params {
 	return Params{
-		disputeThresholdBps: 5001,
-		votingBlocks:        120_960,
-		graceBlocks:         17_280,
-		minAnswerX:          100_000_000, // 100 CC of trailing total stake
-		answerBondCapCC:     0,
-		minClaimDepositCC:   1_000_000, // 1 CC
-		escrowMinBlocks:     120_960,
-		escrowMaxBlocks:     362_880,
+		disputeThresholdBps:  5001,
+		votingBlocks:         120_960,
+		graceBlocks:          17_280,
+		minAnswerX:           100_000_000, // 100 CC of trailing total stake
+		answerBondCapCC:      0,
+		minClaimDepositCC:    1_000_000, // 1 CC
+		escrowMinBlocks:      120_960,
+		escrowMaxBlocks:      362_880,
+		stakeOpenDelayBlocks: 0, // default: no polish window (opt in via StartCourtP)
 	}
 }
 
@@ -194,6 +203,9 @@ func (p Params) mustSane() Params {
 	}
 	if p.answerBondCapCC < 0 {
 		panic("courtv2: answerBondCapCC must be non-negative")
+	}
+	if p.stakeOpenDelayBlocks < 0 || p.stakeOpenDelayBlocks > maxStakeOpenDelay {
+		panic("courtv2: the polish window must be in [0, 24h]")
 	}
 	return p
 }
@@ -264,26 +276,59 @@ func StartCourt(cur realm, slug, name string) string {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
+	return startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 0)
+}
+
+// StartCourtP is StartCourt with an opt-in polish window (§9): staking is
+// closed for stakeOpenDelayBlocks after each OpenClaim, giving the author and
+// moderators a pre-stake window to fix wording before anyone bets. The default
+// StartCourt uses 0 (no window), which preserves every existing caller — so no
+// fixture sweep is forced by adding the field (the audit's concern is moot when
+// the default is 0 and the window is opt-in).
+func StartCourtP(cur realm, slug, name string, stakeOpenDelay int64) string {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	return startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, stakeOpenDelay)
+}
+
+// startCourtUser is the public creation path: it refuses the reserved `meta`
+// slug (only realm init may create the meta court, via startCourt directly),
+// then delegates to startCourt.
+func startCourtUser(admin, escrowAddr address, slug, name string, delay int64) string {
+	if slug == metaSlug {
+		panic("courtv2: the 'meta' slug is reserved")
+	}
+	return startCourt(admin, escrowAddr, slug, name, delay)
+}
+
+// startCourt creates a court: its coin, governor, curve, and claim book. It is
+// the reusable core — realm init calls it directly (with the realm address as
+// escrow) to deploy the meta court, which is why it takes admin/escrow as
+// arguments rather than reading a crossing realm. No payment is collected
+// (court-count floods are storage-deposit-priced, MODERATION.md §2/§13.5).
+func startCourt(admin, escrowAddr address, slug, name string, delay int64) string {
 	mustSlug(slug)
+	mustCourtName(name)
 	if courts.Has(slug) {
 		panic("courtv2: that slug is taken")
 	}
-	admin := cur.Previous().Address()
-
+	p := defaultParams()
+	p.stakeOpenDelayBlocks = delay
 	coin := grc20votes.NewLedger(name, "COURT", coinDecimals, epochBlocks)
 	c := &Court{
-		id:        slug,
-		name:      name,
-		tier:      tierListed,
-		admin:     admin,
-		coin:      coin,
-		gov:       governor.New(coin, coin),
-		crv:       curve.New(curveDenom, curveCap),
-		escrow:    cur.Address(),
-		claims:    bptree.NewBPTree32(),
-		queue:     bptree.NewBPTree32(),
-		records:   bptree.NewBPTree32(),
-		params:    defaultParams().mustSane(),
+		id:             slug,
+		name:           name,
+		tier:           tierListed,
+		admin:          admin,
+		coin:           coin,
+		gov:            governor.New(coin, coin),
+		crv:            curve.New(curveDenom, curveCap),
+		escrow:         escrowAddr,
+		claims:         bptree.NewBPTree32(),
+		queue:          bptree.NewBPTree32(),
+		records:        bptree.NewBPTree32(),
+		params:         p.mustSane(),
 		createdAt:      runtime.ChainHeight(),
 		curBudgetBpsFP: budgetBpsFPStart,
 	}
@@ -294,6 +339,14 @@ func StartCourt(cur realm, slug, name string) string {
 		directoryAdmin = admin
 	}
 	return slug
+}
+
+// mustCourtName: 1..maxCourtNameLen. Capped so a purge-worthy name is bounded
+// and render stays predictable (MODERATION.md §2 user-text inventory).
+func mustCourtName(name string) {
+	if len(name) == 0 || len(name) > maxCourtNameLen {
+		panic("courtv2: a court name is 1..100 characters")
+	}
 }
 
 // ------------------------------------------------------------------ reads --

@@ -162,6 +162,9 @@ type courtMod struct {
 	setActHeight   int64 // last membership change (for the meta staleness stamp)
 	lastElectionAt int64
 
+	courtPurged    bool   // whole-court text tombstone (global DAO, m-of-n)
+	courtTombstone string // the category code
+
 	claims  *bptree.BPTree // claimID (be64) -> *claimMod
 	pending *bptree.BPTree // actionKey -> *approval
 
@@ -524,6 +527,54 @@ func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string
 	clm.tombstone = code
 	clm.appendLog(who, "purge:"+code, "")
 	emitPurge(c.id, claimID, code, who)
+}
+
+// PurgeCourt tombstones a whole court's text and gates new claims: on a purged
+// court `OpenClaim`/`OpenClaimSeeded` refuse (constitution carve-out #2), so an
+// illegal-theme court accretes no new content. Existing lifecycle still runs to
+// completion (I1) — stakers unwind, verdicts settle, deposits refund; only new
+// content and text are stopped. m-of-n.
+func PurgeCourt(cur realm, courtSlug string, categoryCode string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	d := ensureGlobalDAO()
+	if !d.members.Has(who.String()) {
+		panic("courtv2: only a global DAO member may purge")
+	}
+	if len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {
+		panic("courtv2: purge needs a statutory category code")
+	}
+	c := mustCourt(courtSlug)
+	cm := ensureMod(c)
+	fire, code := approveAction(d.pending, "purgecourt:"+c.id, who, categoryCode, d.purgeM)
+	if !fire {
+		return
+	}
+	cm.courtPurged = true
+	cm.courtTombstone = code
+	emitPurge(c.id, 0, code, who)
+}
+
+// courtIsPurged is the OpenClaim gate (MODERATION.md §2 build guardrail: this
+// is read ONLY by OpenClaim/OpenClaimSeeded, never by PostAnswer/Stake/withdraw,
+// so no answered claim's stakers can ever strand).
+func courtIsPurged(c *Court) bool {
+	return c.mod != nil && c.mod.courtPurged
+}
+
+// CourtPurged is the render/test read.
+func CourtPurged(courtSlug string) bool {
+	return courtIsPurged(mustCourt(courtSlug))
+}
+
+// onTitleEdited is called by EditClaimTitle so the meta court can re-parse a
+// `mod:` appeal's title while it is still editable (MODERATION.md §3.3). No-op
+// for ordinary courts; the meta module (module 7) fills in the parse for the
+// meta court's own claims.
+func onTitleEdited(c *Court, cs *claimState) {
+	// meta-parser re-run lands here in the meta module.
 }
 
 // ---- meta / suspension internal hooks (called by ExecuteMetaVerdict) ------
