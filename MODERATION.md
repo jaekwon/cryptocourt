@@ -204,14 +204,27 @@ clears the global bit but global; nobody reverses a purge.
   - weights: `PastVotes` at the epoch **pinned at nomination-window open**;
     quorum/margin floor **max(1, 5%·(PastTotal(at) − PastVotes(escrow, at)))**
     (escrow = the realm address); length `votingBlocks`.
-  - **per-candidate bond scales with court size**: `max(flagMinCC,
-    β·PastTotal(at))`. **β is FROZEN with a two-sided deploy invariant** (round
-    6 F4 — not an owner knob): a floor keeping the bond ≥ `flagMinCC`, and a
-    **ceiling pinning β·PastTotal below the 5% quorum floor** (round 7 R1 —
-    concretely β ≤ ~1% of PastTotal), so "can you afford the bond" is never
-    tighter than "can you win the vote": any coalition that can clear quorum can
-    trivially field one nominator, and refund-on-install means a winner pays
-    zero — so the ceiling can sit well under the floor without enabling spam.
+  - **per-candidate bond scales with court size**: `min(quorumFloor,
+    max(flagMinCC, β·votable(at)))` — measured on **votable weight, the same
+    base as the floor**, then clamped to the floor. **β is FROZEN with a
+    two-sided deploy invariant** (round 6 F4 — not an owner knob): a floor
+    keeping the bond ≥ `flagMinCC`, and a **ceiling pinning β below the 5%
+    quorum floor** (round 7 R1 — concretely β ≤ ~1% ), so "can you afford the
+    bond" is never tighter than "can you win the vote": any coalition that can
+    clear quorum can trivially field one nominator, and refund-on-install means
+    a winner pays zero — so the ceiling can sit well under the floor without
+    enabling spam.
+    **The two runtime clamps are load-bearing, not belt-and-braces** (v0.14): a
+    constant deploy gate can only police the RATIO, and two terms escape it.
+    (i) The bond was quoted on **raw supply** while the floor nets the escrow,
+    making the true ratio `(β/q)·(supply/votable)` — so the invariant *inverted*
+    on any court holding >90% of its CC as stake and bonds, i.e. precisely the
+    mature courts whose electorate most needs the remedy, and only those.
+    (ii) `flagMinCC` is absolute, so below ~20 CC votable it is the binding term
+    and exceeds 5% of votable outright. The floor wins: a ballot priced above
+    winning the vote *is* incumbency-lock-by-price, and the spam bar is not
+    needed there anyway — filling all 64 lines at 5% of votable each costs 3.2×
+    the court's entire votable weight.
     **Bond refunds ONLY on install; every non-installed candidate half-burns**
     (round 6 F3: "refund if above the quorum floor" was self-approvable — a ≥5%
     holder approves its own junk to reach the floor and spams the ballot for
@@ -827,7 +840,15 @@ scale with supply, so `minAnswerX` stops being the forgery dial it is called.
 
 ### 13.9 Naming — "Pleadger", ticker PLEA, and a live symbol bug (3/3 unanimous)
 
-**Project name (owner):** Pleadger — *plead* + *ledger*.
+> **SUPERSEDED (2026-08-16).** The owner rejected *Pleadger* on the trademark
+> flag raised in this very section, and the project is now **Kourt** —
+> **kourt.xyz**, ticker **KOURT**, canonical display **`KOURT:SLUG`**. Read
+> everything below as the method and the evidence, not the answer: the
+> per-court `uppercase(slug)` symbol rule, the reserved deny-list, and the live
+> `"COURT"`-symbol phishing bug it uncovered all still stand and are all
+> implemented. Substitute KOURT for PLEA throughout.
+
+**Project name (owner):** ~~Pleadger — *plead* + *ledger*.~~ **Kourt.**
 
 **Ticker: `PLEA`, not PLGR.** Three independent researchers reached this
 unanimously, and the reasoning is not aesthetic:
@@ -926,6 +947,23 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.14 — polish pass: the election bond's two unpoliced arms (§3.1)**. The
+  round-7 R1 deploy invariant certifies that affording the ballot is never
+  harder than winning the vote, but it is a **constant ratio check**, and two
+  runtime terms sat outside it — one of which inverted the guarantee on exactly
+  the courts it was written for. (i) **Base mismatch**: the bond was quoted on
+  `PastTotal` while the floor nets the escrow, so the real ratio was
+  `(β/q)·(supply/votable)`; at β/q = 1/10 the bond overtakes the floor once
+  escrow passes 90% of supply — the normal state of a busy court, where most CC
+  is stake and bonds. Fixed by measuring the bond on **votable weight, the same
+  base as the floor**. (ii) **Absolute-floor arm**: `flagMinCC` = 1 CC binds
+  below ~20 CC votable and exceeds 5% of votable outright; fixed by **clamping
+  the bond to the floor**, which is safe because 64 lines at 5% of votable each
+  already costs 3.2× the court's whole votable weight. Regression:
+  `TestElectionBondNeverExceedsTheFloor` covers both arms separately (ARM 2 is
+  sized well above `flagMinCC` so it tests the base, not the clamp). Lesson for
+  future invariants: **a constant-only gate is valid only if every term it
+  compares shares a denominator, and only above the absolute floors.**
 - **v0.13 — the final CODE audit (3 identical adversarial auditors; one ran
   executed exploit probes against a staged realm). Verdicts: 2× "MUST FIX
   BEFORE MERGE (5 critical/high)", 1× "(1 critical / 4 high)". ALL fixed, all
@@ -977,7 +1015,10 @@ decision must be made before launch, not after.
     economics (court-independent per-µGNOT, no double accrual, no over-claim,
     cannot panic inside `Buy`), determinism (no range-over-map), borrow rule #2,
     and access control on every exported crossing function.
-- **v0.12 — naming (3/3 unanimous)**: ticker **PLEA**, not PLGR (PLGR is a dead
+- **v0.12 — naming (3/3 unanimous)** — *SUPERSEDED: the owner rejected Pleadger
+  on the trademark flag this very entry raised, and the project is now **Kourt**
+  (kourt.xyz, ticker **KOURT**, per-court display `KOURT:SLUG`). Kept for the
+  method and for the live bug it caught.* Ticker **PLEA**, not PLGR (PLGR is a dead
   token named "Pledge", reads "plugger", spells PLeDGeR, and is one char from
   PLTR; PLEA is unclaimed across 18,438 CoinGecko coins + Dexscreener + CMC +
   US equities). Per-court symbol = `uppercase(slug)` displayed `PLEA:SLUG`,

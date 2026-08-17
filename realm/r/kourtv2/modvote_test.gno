@@ -328,3 +328,58 @@ func TestElectionZeroApprovalCandidateCannotInstall(cur realm, t *testing.T) {
 		t.Fatal("the approved candidate should install")
 	}
 }
+
+// The deploy gate on β is a RATIO check, and a ratio check is blind to two
+// runtime terms that can each invert the very thing it certifies: "affording
+// the ballot is never harder than winning the vote". Both are checked here.
+func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
+	// ARM 1 — the absolute floor. A court with 10 CC votable has a 0.5 CC
+	// election floor, but flagMinCC pins the bond at 1 CC: without the clamp
+	// the ballot costs twice what winning the vote does, and the electorate's
+	// own remedy is priced out of reach on precisely the youngest courts.
+	creator := testutils.TestAddress("eb1-creator")
+	holder := testutils.TestAddress("eb1-holder")
+	_ = electionCourt(cur, "ebond1", creator, []address{holder}, []int64{10_000_000})
+
+	cand1 := testutils.TestAddress("eb1-cand")
+	testing.SetRealm(testing.NewUserRealm(holder))
+	id1 := RegisterModCandidate(cross(cur), "ebond1", []address{cand1}, 1)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	OpenElection(cross(cur), "ebond1", id1)
+
+	floor1, bond1 := ElectionFloorOf("ebond1"), ElectionBondOf("ebond1")
+	uassert.Equal(t, int64(500_000), floor1, "a twentieth of 10 CC votable")
+	if bond1 > floor1 {
+		t.Fatalf("the absolute flagMinCC arm escaped the clamp: bond %d > floor %d", bond1, floor1)
+	}
+	uassert.Equal(t, floor1, bond1, "on a small court the floor is the binding term")
+
+	// ARM 2 — the base mismatch. 99% of supply sits in escrow as stake and
+	// bonds, which is ordinary for a mature court. Quoted on RAW supply the
+	// bond here would be 500 CC against a 50 CC floor: a tenfold inversion
+	// produced by nothing but the two terms disagreeing about a denominator.
+	// The sizes are deliberately well above flagMinCC so this arm tests the
+	// base and not the clamp.
+	creator2 := testutils.TestAddress("eb2-creator")
+	holder2 := testutils.TestAddress("eb2-holder")
+	testing.SetRealm(testing.NewUserRealm(creator2))
+	StartCourt(cross(cur), "ebond2", "Escrow Heavy")
+	c2 := mustCourt("ebond2")
+	c2.coin.Mint(holder2, 1_000_000_000)    // 1,000 CC votable
+	c2.coin.Mint(c2.escrow, 99_000_000_000) // 99,000 CC locked as stake and bonds
+	testing.SkipHeights(epochBlocks * 2)
+
+	cand2 := testutils.TestAddress("eb2-cand")
+	testing.SetRealm(testing.NewUserRealm(holder2))
+	id2 := RegisterModCandidate(cross(cur), "ebond2", []address{cand2}, 1)
+	testing.SetRealm(testing.NewUserRealm(holder2))
+	OpenElection(cross(cur), "ebond2", id2)
+
+	floor2, bond2 := ElectionFloorOf("ebond2"), ElectionBondOf("ebond2")
+	uassert.Equal(t, int64(50_000_000), floor2, "a twentieth of the 1,000 CC that can actually vote")
+	if bond2 > floor2 {
+		t.Fatalf("the bond is still quoted on raw supply: bond %d > floor %d", bond2, floor2)
+	}
+	// The beta-of-votable arm, not the clamp: the ratio holds on its own here.
+	uassert.Equal(t, int64(5_000_000), bond2, "beta of votable weight, well clear of both bounds")
+}

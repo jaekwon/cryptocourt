@@ -431,7 +431,7 @@ func Exists(slug string) bool { return courts.Has(slug) }
 func CourtName(slug string) string { return mustCourt(slug).name }
 
 // CourtSymbol is a court coin's ticker — unique per court, derived from its
-// slug. Display it namespaced (PLEA:<SYMBOL>) anywhere outside its own court.
+// slug. Display it namespaced (KOURT:<SYMBOL>) anywhere outside its own court.
 func CourtSymbol(slug string) string { return mustCourt(slug).coin.Symbol() }
 func CoinSupply(slug string) int64   { return mustCourt(slug).coin.TotalSupply() }
 
@@ -486,7 +486,7 @@ func mustCourt(slug string) *Court {
 // courtSymbol is the per-court coin symbol: the slug upper-cased, hyphens kept.
 // Keeping hyphens matters — stripping them would break injectivity ("ab-c" and
 // "abc" would collide) and silently reintroduce the shared-symbol problem.
-// Render namespaces it as PLEA:<SYMBOL>; a bare symbol appears only inside its
+// Render namespaces it as KOURT:<SYMBOL>; a bare symbol appears only inside its
 // own court, so a court coin can never read as the platform token.
 func courtSymbol(slug string) string { return strings.ToUpper(slug) }
 

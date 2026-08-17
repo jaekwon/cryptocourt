@@ -14,8 +14,8 @@
 //     a vote for the incumbent: a 31% captured minority beat a 69% majority);
 //   - install is argmax-approval OVER RETAIN plus a margin and a quorum;
 //   - the bond refunds ONLY on install, so self-approving junk always costs;
-//   - β is frozen below the quorum floor, so affording the bond is never
-//     tighter than winning the vote.
+//   - β is frozen below the quorum floor AND the bond is clamped to that floor
+//     at runtime, so affording the bond is never tighter than winning the vote.
 //
 // Resolution is deliberately TWO-PASS: pass 1 finds the max and retain, pass 2
 // picks the earliest-nominated candidate within the margin of the max. A
@@ -60,6 +60,12 @@ const (
 // floor keeping the bond meaningful, and a ceiling keeping it strictly below
 // the quorum floor — so any coalition that can clear quorum can trivially
 // afford to field one nominator, and no court is ever challenge-proof by price.
+//
+// A constant gate can only police the RATIO arm, and only if both sides are
+// measured on the same base. Two runtime terms escape it entirely — the
+// absolute flagMinCC minimum, and (before this fix) a bond quoted on raw
+// supply against a floor quoted on votable weight. electionBond now closes
+// both at runtime; see its comment. This gate is the ratio arm alone.
 func mustElectionInvariants() {
 	if electionBondBps <= 0 {
 		panic("kourtv2: the election bond must be positive")
@@ -118,22 +124,47 @@ type election struct {
 // as stake/bonds, and a floor of 5% of RAW supply can exceed all votable weight,
 // making the electorate's own remedy unreachable exactly where it is needed.
 func electionFloor(c *Court, at uint32) int64 {
-	supply := c.coin.PastTotal(at)
-	votable := supply - c.coin.PastVotes(c.escrow, at)
-	if votable < 0 {
-		votable = 0
-	}
-	f := mulDiv128(votable, quorumSupplyBps, grc20votes.Bps)
+	f := mulDiv128(votableAt(c, at), quorumSupplyBps, grc20votes.Bps)
 	if f < 1 {
 		f = 1
 	}
 	return f
 }
 
+// votableAt is supply net of the escrow — the base BOTH the floor and the bond
+// must be measured on. Quoting one on raw supply and the other on votable is
+// not a rounding difference: it multiplies the bond/floor ratio by
+// supply/votable, which on a busy court is unbounded.
+func votableAt(c *Court, at uint32) int64 {
+	v := c.coin.PastTotal(at) - c.coin.PastVotes(c.escrow, at)
+	if v < 0 {
+		v = 0
+	}
+	return v
+}
+
+// electionBond is β of VOTABLE weight, then clamped to never exceed the
+// election floor. Both clamps repair a break in the deploy invariant that
+// mustElectionInvariants structurally cannot see:
+//
+//   - BASE MISMATCH. The bond used to be quoted on raw supply while the floor
+//     nets the escrow, making the true ratio (β/q)·(supply/votable). β/q is
+//     1/10, so the invariant inverted on any court holding more than 90% of its
+//     CC as stake and bonds — i.e. exactly the mature, active courts whose
+//     electorate most needs the remedy, and only those. Same base now.
+//   - ABSOLUTE FLOOR. flagMinCC (1 CC) is a constant, so on a court with less
+//     than 20 CC votable it is the binding term and exceeds 5% of votable
+//     outright. The clamp lets the floor win: a spam bar priced above winning
+//     the vote is the incumbency-lock-by-price the invariant forbids, and the
+//     bar is not needed there anyway — filling all 64 ballot lines at 5% of
+//     votable each costs 3.2× the court's entire votable weight.
 func electionBond(c *Court, at uint32) int64 {
-	b := mulDiv128(c.coin.PastTotal(at), electionBondBps, grc20votes.Bps)
+	b := mulDiv128(votableAt(c, at), electionBondBps, grc20votes.Bps)
 	if b < flagMinCC {
 		b = flagMinCC
+	}
+	if f := electionFloor(c, at); b > f {
+		b = f
 	}
 	return b
 }
