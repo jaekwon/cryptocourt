@@ -2224,5 +2224,13 @@
   "label": "Buy: the spent GNOT is never burned",
   "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "Buy: IsUserCall downgraded to IsUser (the maketx-run envelope bypass)",
+  "find": "\tif !prev.IsUserCall() {",
+  "replace": "\tif !prev.IsUser() {",
+  "elsewhere": "gnoland/testdata/courtv2_paymentauth.txtar"
  }
 ]

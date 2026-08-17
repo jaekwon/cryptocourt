@@ -221,9 +221,14 @@ def main():
               file=sys.stderr)
         return 2
 
-    survivors = []
+    survivors, elsewhere = [], []
     for m in muts:
         label = m["label"]
+        # Captured HERE because the loop used to rebind `m` to a regex match halfway
+        # down; anything read after that line was reading the wrong object. The match
+        # is `bm` now, but the capture stays: it is the row's own data and belongs at
+        # the top.
+        covered = m.get("elsewhere", "")
         n = open(where(m)).read().count(m["find"])
         if n != 1:
             # Counted, not just printed. A row whose anchor never matched was never
@@ -247,10 +252,19 @@ def main():
         # build failure, so every catch without a Test name in it was being
         # reported as INVALID. That is the same lie as counting a build failure
         # as a catch, told the other way round, and it hid four real catches.
-        m = re.search(r"(\d+) build errors", out)
-        broke = (m and int(m.group(1)) > 0) or "gnoTypeCheckError" in out
+        bm = re.search(r"(\d+) build errors", out)
+        broke = (bm and int(bm.group(1)) > 0) or "gnoTypeCheckError" in out
 
-        if ok:
+        if ok and covered:
+            # A guard whose coverage lives in a suite this harness does not run —
+            # today only the txtar tests, which need a real node. Such a row survives
+            # for ever here, so omitting it was the alternative, and omission is
+            # worse: it leaves no trace that the guard was ever considered. Recorded,
+            # never counted as a finding, and ALWAYS printed in the summary below, so
+            # this cannot become a way to silence a real survivor.
+            print(f"{label:<46} covered elsewhere: {covered}")
+            elsewhere.append(f"{label} — {covered}")
+        elif ok:
             print(f"{label:<46} SURVIVED <<<")
             survivors.append(label)
         elif broke:
@@ -258,6 +272,12 @@ def main():
             # as much as one that was never applied.
             print(f"{label:<46} INVALID (did not build) <<<")
             survivors.append(label + " [invalid]")
+        elif covered:
+            # It is caught HERE after all, so the annotation is stale — the row does
+            # not need it, and leaving it would hide a future regression behind an
+            # excuse that no longer applies.
+            print(f"{label:<46} caught: {hits[0] if hits else 'failed'} "
+                  f"— drop its `elsewhere`, it is covered here")
         else:
             print(f"{label:<46} caught: {hits[0] if hits else 'failed'}")
 
@@ -265,6 +285,11 @@ def main():
           f"of {len(muts)}")
     for s in survivors:
         print(f"  {s}")
+    if elsewhere:
+        print(f"\n{len(elsewhere)} row(s) survive here BY DESIGN, covered by a suite "
+              f"this harness does not run:")
+        for s in elsewhere:
+            print(f"  {s}")
 
 
 if __name__ == "__main__":

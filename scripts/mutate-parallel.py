@@ -35,7 +35,7 @@ import sys
 import threading
 
 SRC = os.path.dirname(os.path.abspath(__file__))
-ROW = re.compile(r"caught:|SURVIVED|BAD ANCHOR|INVALID")
+ROW = re.compile(r"caught:|SURVIVED|BAD ANCHOR|INVALID|covered elsewhere:")
 SUMMARY = re.compile(r"(\d+) not caught \(survived, invalid, or never applied\), of (\d+)")
 
 
@@ -72,9 +72,28 @@ def main():
     for t in threads:
         t.join()
 
+    def section(text, header):
+        """The indented block under `header`, up to the first blank line.
+
+        Parsed by header rather than by indentation alone: mutate.py prints TWO
+        indented lists — the not-caught rows and the rows covered elsewhere — and an
+        indentation-only parser folded the second into the first, which would have
+        reported a by-design survivor as a finding.
+        """
+        i = text.find(header)
+        if i < 0:
+            return []
+        out = []
+        for line in text[i:].split("\n")[1:]:
+            if not line.startswith("  "):
+                break
+            if line.strip():
+                out.append(line.strip())
+        return out
+
     # Every row, then one verdict. Shard boundaries are an implementation detail
     # and deliberately absent from the output.
-    notcaught, total, broken = [], 0, []
+    notcaught, elsewhere, total, broken = [], [], 0, []
     for i, res in enumerate(out):
         if res is None:
             broken.append(f"shard {i} produced nothing")
@@ -92,9 +111,8 @@ def main():
             broken.append(f"shard {i}: no summary line, so its rows are unaccounted for")
             continue
         total += int(m.group(2))
-        notcaught += [l.strip() for l in stdout.split("\n")
-                      if l.startswith("  ") and l.strip()
-                      and not ROW.search(l) and "not caught" not in l]
+        notcaught += section(stdout, m.group(0))
+        elsewhere += section(stdout, "survive here BY DESIGN")
 
     if broken:
         print("\nmutate: the run is NOT a result:", file=sys.stderr)
@@ -110,6 +128,11 @@ def main():
           f"of {total}")
     for s in notcaught:
         print(f"  {s}")
+    if elsewhere:
+        print(f"\n{len(elsewhere)} row(s) survive here BY DESIGN, covered by a suite "
+              f"this harness does not run:")
+        for s in elsewhere:
+            print(f"  {s}")
     return 0
 
 

@@ -1624,6 +1624,32 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.94 — the batch can now SAY that a guard is covered somewhere it cannot look, which
+  is the bookkeeping v0.93 left open.** Closing Buy's IsUserCall in txtar created a row that
+  survives here for ever, and the only options were to count it as a finding (false) or omit
+  it (invisible). Omission is the worse of the two: it leaves no trace that the guard was
+  ever considered, and the next person to sweep buy.gno would rediscover it as new.
+  A row may now carry `"elsewhere": "<where>"`. Such a row is applied and run exactly as
+  before; if it SURVIVES it is reported as `covered elsewhere: <where>`, kept out of the
+  not-caught count, and **printed in its own block in the summary of every run** — so the
+  annotation cannot become a way to silence a real survivor, which was the whole risk of
+  adding it. If it turns out to be CAUGHT here, the run says `drop its elsewhere, it is
+  covered here`: a stale excuse would mask a future regression, so it is called out rather
+  than quietly tolerated. A BAD ANCHOR still counts as not-caught regardless — the
+  annotation claims the GUARD is covered, not that the row may fail to apply.
+  Three self-test controls, one per direction (named on its own line, listed in the summary,
+  and the stale case). Both of my first attempts at those controls were WRONG and the
+  self-test caught me: one expected BAD ANCHOR from an anchor that matches once, the other
+  expected a survivor from `maxLive = 65`, which a governor test catches. A no-op
+  replacement — find equal to replace — is the deterministic way to force a survivor, since
+  it applies cleanly and changes nothing.
+  The sharded driver needed the same care and had a latent bug waiting: it parsed the
+  not-caught list by INDENTATION, and mutate.py now prints two indented lists. That parser
+  would have folded the by-design block into the findings and reported it as a survivor —
+  precisely the false positive the feature exists to avoid. It parses by section HEADER now.
+  Batch now 319 rows: 318 caught, 0 not caught, and one surviving by design with its
+  coverage named (8m56s).
+
 - **v0.93 — the LAST residual is closed: Buy's IsUserCall is now TESTED, on a real node,
   and the downgrade is demonstrated to open the bypass.** Swept `Buy` — the money-IN path,
   where real GNOT becomes CC. Four guards already held (the zero-send bar, the monotonic

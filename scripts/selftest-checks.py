@@ -222,6 +222,27 @@ else:
     feed("a pkg that does not exist", [{
         "pkg": "checkpont", "file": "checkpoint.gno", "label": "x",
         "find": "x", "replace": "y"}], "no such pkg")
+    # A row annotated `elsewhere` says "this guard is covered by a suite mutate.py
+    # does not run" — today only the txtar tests. It must never be able to hide a
+    # finding, so both directions are controlled: an annotated row that SURVIVES is
+    # reported in its own block rather than vanishing, and one that turns out to be
+    # caught here says so, since a stale excuse would mask a future regression.
+    # A no-op replacement is the deterministic way to force a survivor: it applies
+    # cleanly (so it is not a BAD ANCHOR) and changes nothing (so no test can object).
+    noop = {"pkg": "governor", "file": "governor.gno",
+            "label": "a row that cannot fail here",
+            "find": "const maxLive = 64", "replace": "const maxLive = 64",
+            "elsewhere": "somewhere this harness cannot run"}
+    feed("an `elsewhere` row is named on its own line", [noop], "covered elsewhere")
+    feed("and listed in the summary, never omitted", [noop], "survive here BY DESIGN")
+    # The other direction: an annotation that is no longer true must say so, or a
+    # stale excuse would mask a future regression.
+    feed("a STALE `elsewhere` annotation is called out", [{
+        "pkg": "governor", "file": "governor.gno",
+        "label": "a row that IS caught here",
+        "find": "const maxLive = 64", "replace": "const maxLive = 65",
+        "elsewhere": "somewhere this harness cannot run"}], "drop its `elsewhere`")
+
     control("a suite that is already failing", f"{GOVERN}/clock_test.gno",
             "func resumeClock() { advanceBlocks(0) }",
             "func resumeClock() { advanceBlocks(0) }\n\nfunc TestSelfTestDeliberateFailure(t *testing.T) {\n\tt.Error(\"deliberate\")\n}",
