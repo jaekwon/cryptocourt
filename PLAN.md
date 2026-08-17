@@ -1610,6 +1610,47 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.48 — the unslash leg: opening a dispute no longer forgives an adjudicated
+  slash.** The second half of v0.47's hole, flagged by all three reviewers. `OpenDispute`
+  called `unslash` UNCONDITIONALLY — before a single vote — so a **zero-vote,
+  zero-weight failed-quorum dispute permanently destroyed a full-bar ⅔-low slash**, and
+  `slotConsumed` was already latched so no replacement flag could ever re-arm it. Cost to
+  the mill: half a dispute bond. Opening a round is not adjudicating one.
+  **Shipped:** opening a round now only PARKS a running counter re-vote (`parkCounter`) so
+  the ride tally can reset without silently discarding its votes — and parks it
+  *cancelled, not spent*: `counterUsed` clears, so a stranger's dispute cannot consume the
+  answerer's one v0.31/Q5 challenge. The round's OUTCOME then disposes the reserve:
+  - **overturn** keeps its unconditional `unslash`, so the bond burns slash-inclusive (A19);
+  - **uphold** is scored by `disposeSlashOnRide` on `ResolveCounter`'s EXACT test — the
+    ride asks the slash's question at the same bars before a strictly larger electorate,
+    so it *is* the counter re-vote: full bar with low short of ⅔ → refund; full-bar ⅔-low
+    → settle; **below the bar → the reserve stands on a fresh window**. Never merely
+    "conclusive", since `applyQualityTally` goes conclusive at the supply-floorless
+    `demotionBar` — a dust ride must not be able to lift a full-bar slash;
+  - **failed quorum** adjudicated nothing, so the reserve survives and only re-arms.
+  Also fixed, newly reachable because a slash can now outlive the failed rounds provClose
+  counts: `refundSlash` on a **provClosed** claim had no payout path at all
+  (`provCloseClaim` already returned the bond and `Crystallize` refuses closed claims), so
+  the reserve would have stranded in escrow forever — it now pays the answerer directly.
+  Three stale-doctrine panic messages corrected ("a dispute supersedes the slash" is no
+  longer true — its quality ride decides it), and the file header's "on an UNDISPUTED
+  answer (v0.28)" claim retired.
+  **Tests:** the two fixtures that encoded the old behavior are INVERTED, not deleted —
+  `TestReopenDisputeSupersedesPendingSlash` asserted "the upheld bond returns whole, slash
+  included", which was the attacker's payoff written as a green test. Added
+  `TestReopenRideAtFullBarLiftsTheSlash` (the rescue arm still works — v0.48 did not make
+  slashes unliftable) and `TestDustRideCannotLiftTheSlash`. All mutation-verified:
+  restoring the unconditional `unslash` fails both inverted tests; weakening the full-bar
+  guard fails the dust test.
+  **A hypothesis I tested and DISPROVED, recorded so nobody re-derives it:** I suspected
+  `resolveQualityRide` (which has no `!slotConsumed` guard) would let a dust-MID ride
+  overwrite a full-bar conclusive LOW and restore the mid draw. It cannot — and the reason
+  is a real invariant worth knowing: inside `applyQualityTally` the `demotionBar` enables a
+  **low demotion only**, while any mid/high outcome requires the full supply-floored bar,
+  so a dust ride is simply inconclusive. `TestDustRideCannotLiftTheSlash` now pins that
+  asymmetry, because it is load-bearing: were promotions ever to become
+  demotionBar-reachable, a dust voter could undo a full-bar junk verdict.
+  `make check` + txtar green.
 - **v0.47 — slash immunity was purchasable for ~4%·X̄ (HIGH); the `decidedRounds` gate
   deleted, by three-reviewer convergence.** `slashGrade` required `decidedRounds == 0`,
   so ONE decided dispute round retired the slash **permanently**. A mill bought that with

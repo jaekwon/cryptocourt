@@ -349,24 +349,101 @@ func TestReopenDisputeSupersedesPendingSlash(cur realm, t *testing.T) {
 	if cs.pendingSlash <= 0 {
 		t.Fatal("the slash must reserve (failed rounds keep decidedRounds 0)")
 	}
-	// Reopen decides (uphold): the slash refunds into the bond pre-disposition.
+	slash := cs.pendingSlash
+
+	// Reopen and win it — but NOBODY rides the quality question, so the round
+	// adjudicated the verdict and nothing else. v0.47: the slash SURVIVES. (This
+	// test previously asserted the opposite — "the upheld bond returns whole,
+	// slash included" — which was the attacker's payoff encoded as a green test:
+	// opening a round used to unslash unconditionally, so a reopen erased an
+	// adjudicated slash and slotConsumed barred any replacement flag.)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	OpenDispute(cross(cur), "qf8", id)
 	testing.SetRealm(testing.NewUserRealm(carol))
 	VoteDispute(cross(cur), "qf8", id, "no")
 	testing.SkipHeights(c.params.votingBlocks + 1)
 	ResolveDispute(cross(cur), "qf8", id)
-	if cs.pendingSlash != 0 || cs.answerBond != ab {
-		t.Fatalf("a decided round refunds the slash into the bond: %d/%d vs %d",
-			cs.pendingSlash, cs.answerBond, ab)
+	if cs.pendingSlash != slash || cs.answerBond != ab-slash {
+		t.Fatalf("a ride that adjudicated nothing must not erase the slash: %d/%d want %d/%d",
+			cs.pendingSlash, cs.answerBond, slash, ab-slash)
 	}
-	// Finalize: the upheld answerer takes the WHOLE bond home.
+	if cs.counterUsed {
+		t.Fatal("a stranger's dispute must not spend the answerer's counter re-vote")
+	}
+	if cs.pendingSlashUntil <= runtimeHeight() {
+		t.Fatal("the surviving reserve must get a fresh counter-flag window")
+	}
+
+	// Finalize returns the bond LESS the standing reserve; the reserve then burns.
 	testing.SkipHeights(EscrowUntil("qf8", id) - runtimeHeight())
 	aliceBefore := c.coin.BalanceOf(alice)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "qf8", id)
-	if c.coin.BalanceOf(alice) != aliceBefore+ab {
-		t.Fatal("the upheld bond returns whole, slash included")
+	if c.coin.BalanceOf(alice) != aliceBefore+ab-slash {
+		t.Fatalf("the upheld bond returns less the standing slash: got %d want %d",
+			c.coin.BalanceOf(alice), aliceBefore+ab-slash)
+	}
+	// The long escrow skip above already outran the re-armed window; only wait
+	// when it has not lapsed yet (SkipHeights refuses to go backwards).
+	if now := runtimeHeight(); now < cs.pendingSlashUntil {
+		testing.SkipHeights(cs.pendingSlashUntil - now + 1)
+	}
+	supplyBefore := c.coin.TotalSupply()
+	ResolveSlashWindow(cross(cur), "qf8", id)
+	if got := supplyBefore - c.coin.TotalSupply(); got != slash {
+		t.Fatalf("the surviving slash must burn: %d want %d", got, slash)
+	}
+}
+
+// The rescue arm of disposeSlashOnRide: a reopen whose ride DOES clear the
+// slash's own bar (full bar, low short of ⅔) lifts the slash — the ride is the
+// counter re-vote, before a strictly larger electorate, so it is scored on
+// ResolveCounter's exact test. Pins that v0.47 did not simply make slashes
+// unliftable.
+func TestReopenRideAtFullBarLiftsTheSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qfa-alice")
+	bob := testutils.TestAddress("qfa-bob")
+	carol := testutils.TestAddress("qfa-carol")
+	c := testCourt(cur, "qfa", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qfa", "Slash lifted by the ride")
+	matureOI(cur, "qfa", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qfa", id, sideYES)
+	ab := AnswerBond("qfa", id)
+	c.params.escrowMinBlocks = 700_000
+	c.params.escrowMaxBlocks = 700_000
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qfa", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qfa", id) // failed quorum: decidedRounds stays 0
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qfa", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qfa", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "qfa", id)
+	cs := mustClaim(c, id)
+	if cs.pendingSlash <= 0 {
+		t.Fatal("setup: the slash must reserve")
+	}
+
+	// Reopen, and this time the electorate rides quality at the FULL bar with no
+	// ⅔-low: the same test ResolveCounter applies, so the slash lifts.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qfa", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "qfa", id, "no")
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qfa", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qfa", id)
+	if cs.pendingSlash != 0 || cs.answerBond != ab {
+		t.Fatalf("a full-bar non-⅔-low ride lifts the slash: %d/%d want 0/%d",
+			cs.pendingSlash, cs.answerBond, ab)
 	}
 }
 
@@ -732,5 +809,75 @@ func TestDecidedRoundBuysNoSlashImmunity(cur realm, t *testing.T) {
 	ResolveSlashWindow(cross(cur), "sim1", id)
 	if got := supplyBefore - c.coin.TotalSupply(); got != wantReserve {
 		t.Fatalf("the slash must burn the retained reserve: burned %d want %d", got, wantReserve)
+	}
+}
+
+// disposeSlashOnRide must score the ride on ResolveCounter's bar, never on mere
+// "conclusiveness": applyQualityTally goes conclusive at the demotionBar, which
+// has NO supply floor, so a dust ride would otherwise be able to lift a slash
+// imposed at the full supply-floored bar. Here a dust voter rides MID — enough
+// to be conclusive, far short of fullBar — and the slash must still stand.
+func TestDustRideCannotLiftTheSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qfd-alice")
+	bob := testutils.TestAddress("qfd-bob")
+	carol := testutils.TestAddress("qfd-carol")
+	dust := testutils.TestAddress("qfd-dust")
+	c := testCourt(cur, "qfd", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	c.coin.Mint(dust, 1_000_000_000) // >= demotionBar, << fullBar (5% of supply)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qfd", "Dust ride cannot rescue")
+	matureOI(cur, "qfd", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qfd", id, sideYES)
+	c.params.escrowMinBlocks = 700_000
+	c.params.escrowMaxBlocks = 700_000
+
+	// A failed round keeps the claim slashable; the flag then reserves a slash.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qfd", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qfd", id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qfd", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qfd", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "qfd", id)
+	cs := mustClaim(c, id)
+	slash := cs.pendingSlash
+	if slash <= 0 {
+		t.Fatal("setup: the slash must reserve at the full bar")
+	}
+	demotionBar, fullBar := qualityBars(c, cs)
+	if 1_000_000_000 < demotionBar || 1_000_000_000 >= fullBar {
+		t.Fatalf("setup: dust must be conclusive but sub-full-bar (bars %d/%d)", demotionBar, fullBar)
+	}
+
+	// Reopen; only dust rides quality, at MID. Conclusive — but nowhere near the
+	// bar that imposed the slash, so it adjudicates nothing about the slash.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qfd", id)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "qfd", id, qualityMid)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "qfd", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qfd", id)
+	if cs.pendingSlash != slash {
+		t.Fatalf("a sub-full-bar ride must not lift the slash: %d want %d", cs.pendingSlash, slash)
+	}
+	// And the dust ride cannot PROMOTE the tier either — resolveQualityRide has
+	// no !slotConsumed guard, so the only thing standing between a dust-mid ride
+	// and a restored mid draw is the bar asymmetry inside applyQualityTally: the
+	// demotionBar enables a LOW demotion only, while any mid/high outcome needs
+	// the full supply-floored bar. So the ride is simply inconclusive and the
+	// full-bar LOW stands. This pins that asymmetry, which is load-bearing here:
+	// were promotions to become demotionBar-reachable, a dust voter could undo a
+	// full-bar junk verdict and restore the draw.
+	if tier, final := QualityTier("qfd", id); tier != qualityLow || final {
+		t.Fatalf("a dust ride must not promote the tier: got tier=%d final=%v", tier, final)
 	}
 }
