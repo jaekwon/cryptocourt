@@ -1650,5 +1650,47 @@
     "label": "OpenDispute: a reopen ignores the escrow window",
     "find": "\t} else if now >= cs.escrowUntil {\n\t\tpanic(\"kourtv2: the escrow window has passed; Finalize the verdict\")\n\t}",
     "replace": "\t}"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "folders.gno",
+    "label": "folders: CreateFolder accepts any name/description length",
+    "find": "\tif len(name) == 0 || len(name) > maxFolderTextLen || len(desc) > maxFolderTextLen {\n\t\tpanic(\"kourtv2: a folder name is 1..200 and a description at most 200 characters\")\n\t}\n\tcm.folderSeq++\n",
+    "replace": "\tcm.folderSeq++\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "folders.gno",
+    "label": "folders: RenameFolder accepts any name/description length",
+    "find": "\tif len(name) == 0 || len(name) > maxFolderTextLen || len(desc) > maxFolderTextLen {\n\t\tpanic(\"kourtv2: a folder name is 1..200 and a description at most 200 characters\")\n\t}\n\tf := cm.mustFolder(folderID)\n",
+    "replace": "\tf := cm.mustFolder(folderID)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "folders.gno",
+    "label": "folders: RemoveFromFolder accepts a claim that is not in it",
+    "find": "\t\tpanic(\"kourtv2: that claim is not in the folder\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "folders.gno",
+    "label": "folders: a purged folder's text can be re-set",
+    "find": "\t\tpanic(\"kourtv2: this folder's text was purged and cannot be re-set\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "folders.gno",
+    "label": "folders: anyone may purge a folder",
+    "find": "\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "folders.gno",
+    "label": "folders: a purge needs no statutory category code",
+    "find": "\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
+    "replace": ""
   }
 ]

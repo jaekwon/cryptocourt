@@ -44,7 +44,11 @@ list above and then delete this file, which is the point.
 
 import re
 import sys
+
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import repolock
 
 ROOT = Path(__file__).resolve().parent.parent
 REALMS = ["kourtv1", "kourtv2"]
@@ -69,6 +73,7 @@ ALLOWED = {"TransferGlobalAdmin", "ApproveCandidate", "ApproveRetain"}
 
 
 def main() -> int:
+    repolock.refuse_if_held("check-nontransferable")
     scanned, hits = 0, []
     for realm in REALMS:
         d = ROOT / "realm" / "r" / realm

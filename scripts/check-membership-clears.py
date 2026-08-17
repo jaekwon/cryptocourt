@@ -32,7 +32,11 @@ leave a stale approval — say why, here, in this file.
 
 import re
 import sys
+
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import repolock
 
 ROOT = Path(__file__).resolve().parent.parent
 REALM = ROOT / "realm" / "r" / "kourtv2"
@@ -61,6 +65,7 @@ def functions(src):
 
 
 def main() -> int:
+    repolock.refuse_if_held("check-membership-clears")
     files = [p for p in sorted(REALM.glob("*.gno")) if not p.name.endswith("_test.gno")]
     if not files:
         # A silent zero here would make this check report success forever.

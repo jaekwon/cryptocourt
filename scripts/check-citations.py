@@ -38,6 +38,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import repolock
+
 # Every tree that belongs to this design: the realm, the package the checkpoint
 # machinery moved into, and the example realm that extends it. The last makes no
 # citations today and is listed so that the first one somebody adds is watched
@@ -213,6 +216,7 @@ def sources():
 
 
 def main():
+    repolock.refuse_if_held("check-citations")
     files = sources()
     if not files:
         print(f"check-citations: no sources under {SRC}", file=sys.stderr)

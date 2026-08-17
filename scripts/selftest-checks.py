@@ -35,6 +35,7 @@ Needs a gno toolchain for the storage arms; skips them without one, and says so
 rather than passing quietly.
 """
 
+import atexit
 import glob
 import json
 import os
@@ -44,6 +45,16 @@ import sys
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO, "scripts"))
+import repolock  # noqa: E402
+
+# This run rewrites the working tree, one guard at a time. Announce it so a
+# concurrent `make check` refuses instead of reporting our breakage as its own.
+_treelock = repolock.hold().__enter__()
+# Release on ANY exit, including a failing run. Without this the lockfile
+# outlives the process and the next reader has to notice the pid is dead before
+# it will proceed — correct, but it makes a stale lock the normal case.
+atexit.register(_treelock.__exit__, None, None, None)
 os.chdir(REPO)
 
 failures = []
@@ -319,6 +330,54 @@ else:
 # deletes a tree recursively whose entries are symlinks INTO a real gno checkout:
 # if it ever followed one, or accepted a path that is not a shadow, it would
 # delete the monorepo. No test in this repo would survive to report it.
+print("\nrepolock.py")
+# The mutating runner announces itself so the readers refuse instead of reporting
+# its deliberate breakage as their own finding. This existed because `make check`
+# beside a selftest printed two citation errors naming files nobody had touched --
+# a false failure in a DIFFERENT gate, which is the worst kind to debug.
+#
+# selftest holds the lock for its own run, so a refusal arm has to stand up a
+# DIFFERENT live holder and call the reader without the inherited owner pid.
+def _lockcase(label, ok):
+    exercised.add("repolock.py")
+    print(f"  {label:<44} " + ("fires" if ok else "WRONG"))
+    if not ok:
+        failures.append(label)
+
+
+_saved_owner = os.environ.get(repolock.ENV)
+_ghost = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
+try:
+    with open(repolock.LOCK, "w") as f:
+        f.write(str(_ghost.pid))
+    _noenv = {k: v for k, v in os.environ.items() if k != repolock.ENV}
+    r = subprocess.run([sys.executable, os.path.join(REPO, CITE)],
+                       capture_output=True, text=True, env=_noenv)
+    _lockcase("a reader refuses while the tree is rewritten",
+              r.returncode == 1 and "rewriting the working tree" in r.stderr)
+    # Re-entrancy: selftest runs the readers AS its controls, so an inherited owner
+    # pid must pass straight through or this file could not test anything at all.
+    r = subprocess.run([sys.executable, os.path.join(REPO, CITE)],
+                       capture_output=True, text=True,
+                       env={**os.environ, repolock.ENV: str(_ghost.pid)})
+    _lockcase("the owner's own children are not locked out", r.returncode == 0)
+finally:
+    _ghost.kill()
+    _ghost.wait()
+# A dead holder must CLEAR, not refuse forever: leaving it behind would wedge every
+# reader, which is worse than the race it prevents.
+with open(repolock.LOCK, "w") as f:
+    f.write(str(_ghost.pid))
+r = subprocess.run([sys.executable, os.path.join(REPO, CITE)],
+                   capture_output=True, text=True,
+                   env={k: v for k, v in os.environ.items() if k != repolock.ENV})
+_lockcase("a dead holder clears instead of wedging", r.returncode == 0)
+# Put selftest's own claim back for the rest of the run.
+with open(repolock.LOCK, "w") as f:
+    f.write(str(os.getpid()))
+if _saved_owner is not None:
+    os.environ[repolock.ENV] = _saved_owner
+
 print("\ngnoroot.py")
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import gnoroot  # noqa: E402

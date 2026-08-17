@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -152,5 +153,106 @@ func TestFolderReadsAgreeOnAMissingFolder(cur realm, t *testing.T) {
 	}
 	uassert.PanicsContains(t, cur, "no such folder", func() {
 		FolderPurged("fldag2", 999)
+	})
+}
+
+// folders.gno's six distinct rules, every one of which survived the mutation batch:
+// the two text-length bounds, the not-in-the-folder guard, the purged-text latch, and
+// the purge's authority and category-code requirements. The file had folder tests
+// already — they simply pinned none of these.
+//
+// Each refusal is PAIRED WITH A SUCCESS. Curation is m-of-n and needs an active
+// moderator, so without the paired call every refusal below would pass just as well
+// if the caller simply lacked authority, which is a different guard entirely.
+func TestFolderRulesAreEnforced(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fru-alice")
+	stranger := testutils.TestAddress("fru-stranger")
+	testCourt(cur, "fru", alice, 10_000_000_000)
+	long := strings.Repeat("x", maxFolderTextLen+1)
+
+	// CreateFolder's text bounds. alice is the creator, hence the sole 1-of-1 mod.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a folder name is 1..200", func() {
+		CreateFolder(cross(cur), "fru", "", "empty name")
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a folder name is 1..200", func() {
+		CreateFolder(cross(cur), "fru", long, "over-long name")
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a folder name is 1..200", func() {
+		CreateFolder(cross(cur), "fru", "fine", long)
+	})
+	// THE CONTROL: a valid folder is created, so the three refusals are the bound
+	// and not a missing authority.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fid := CreateFolder(cross(cur), "fru", "Evidence", "the good stuff")
+	if FolderCount("fru") != 1 || FolderName("fru", fid) != "Evidence" {
+		t.Fatal("a valid folder must be created")
+	}
+
+	// RenameFolder's bounds, same shape.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a folder name is 1..200", func() {
+		RenameFolder(cross(cur), "fru", fid, "", "empty")
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a folder name is 1..200", func() {
+		RenameFolder(cross(cur), "fru", fid, "fine", long)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RenameFolder(cross(cur), "fru", fid, "Exhibits", "renamed")
+	if FolderName("fru", fid) != "Exhibits" {
+		t.Fatal("a valid rename must land")
+	}
+
+	// RemoveFromFolder refuses a claim the folder does not hold. Removing something
+	// absent is not a harmless no-op: it is how a curator learns their view of the
+	// folder is stale.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fru", "a claim to file")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "not in the folder", func() {
+		RemoveFromFolder(cross(cur), "fru", fid, id)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "fru", fid, id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RemoveFromFolder(cross(cur), "fru", fid, id) // the control: present, so removable
+	if len(FolderItems("fru", fid)) != 0 {
+		t.Fatal("a present claim must be removable")
+	}
+
+	// The purge's authority and its category code. Curation is a moderator power;
+	// PURGING is the global DAO's, because it is the one that cannot be undone.
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member may purge", func() {
+		PurgeFolder(cross(cur), "fru", fid, "DOXX-1")
+	})
+	dadmin := DirectoryAdmin()
+	// ESTABLISH the threshold rather than assume it. PurgeFolder is m-of-n on the
+	// global DAO's purgeM, which is package-global and outlives every test that
+	// moves it — so a lone approval BANKS instead of firing if a neighbour left it
+	// above one, and this fixture passed alone and failed in company until it said
+	// so out loud.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "purge needs a statutory category code", func() {
+		PurgeFolder(cross(cur), "fru", fid, "")
+	})
+	// THE CONTROL: the DAO member purges with a code, so both refusals above are
+	// their own rule rather than a folder that could not be purged at all.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeFolder(cross(cur), "fru", fid, "DOXX-1")
+	if !FolderPurged("fru", fid) {
+		t.Fatal("a coded purge by a DAO member must land")
+	}
+
+	// And the purged text is a LATCH: a rename cannot walk it back, or purge would
+	// be a suggestion rather than the legal-compliance power it is.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "was purged and cannot be re-set", func() {
+		RenameFolder(cross(cur), "fru", fid, "Back Again", "undo the purge")
 	})
 }

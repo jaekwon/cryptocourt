@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.43 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.44 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,67 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.44 — `folders.gno` had folder tests and pinned none of its rules. All six
+  now caught; batch 242.** Curation is the shallow end of the moderation
+  constitution, which is presumably why it was never measured: four folder tests
+  exist, and **every one of the file's six distinct guards could be deleted without
+  any of them noticing** — both text-length bounds, the not-in-the-folder guard, the
+  purged-text latch, and the purge's authority and category-code requirements.
+  - **Every refusal is paired with a success**, and here that pairing is doing real
+    work rather than ceremony: curation is m-of-n and needs an active moderator, so
+    without the paired call each refusal would pass just as well if the caller
+    simply lacked authority — a different guard entirely.
+  - Two of the six needed **disambiguated anchors**: `CreateFolder` and
+    `RenameFolder` share one length message verbatim, so a line-level anchor matched
+    twice and `mutate.py` reported *bad anchor* rather than a survivor. Widened by
+    the line that follows each — the sequence bump versus the folder lookup.
+  - **The fixture passed alone and failed in company, and the cause was worth
+    fixing properly.** `PurgeFolder` is m-of-n on the global DAO's `purgeM`, which
+    is package-global and outlives any test that moves it, so a lone approval
+    **banks instead of firing** if a neighbour left it above one. The fix is for the
+    fixture to *establish* the threshold rather than assume it. **A TEST THAT
+    DEPENDS ON PACKAGE-GLOBAL STATE MUST ESTABLISH IT, NOT INHERIT IT** — the
+    companion to the rule that a test which grows such state owes the next one a
+    tidy body.
+  - I skipped my own duplicate-slug check before adding the court and got away with
+    it; the scan afterwards was clean. Noted because the rule exists precisely
+    because that collision is invisible test-by-test.
+  - **And the new parallelism produced its own false failure, which is now guarded.**
+    Per-runner GNOROOT made the gates safe to run together, so I ran five at once —
+    and `make check` came back with two citation errors naming files nobody had
+    touched: `NoProseSaysThis` and `nobody_cited_this.gno`. Both are **selftest's own
+    controls**, read mid-mutation. Shadows made *staging* parallel-safe and did
+    nothing for the one runner that rewrites the **working tree**: selftest's whole
+    job is to break a guard and watch it complain, and the guards read the repo's own
+    sources, so it edits them in place.
+    - **A FALSE FAILURE IN A DIFFERENT GATE IS THE WORST KIND** — it names a file you
+      did not touch, for a reason that is not true, and the natural response is to go
+      fix a citation that was never wrong. So `repolock.py` has the mutating runner
+      announce itself and the four source-reading guards refuse rather than report.
+      A refusal costs one re-run; a phantom citation error costs a diagnosis.
+    - Three controls, all firing, all institutionalised rather than run once by
+      hand: a reader refuses while the tree is being rewritten; **the owner's own
+      children are not locked out** (selftest invokes those readers *as* its
+      controls, so without re-entrancy it could not test anything at all); and a
+      **dead holder clears instead of wedging**, because a lock left behind by a
+      crashed run would refuse every reader forever — worse than the race it
+      prevents.
+    - Corrected rule: check, isolation, txtar and the mutation batch are parallel-
+      safe; **`make selftest` must run alone.** `mutate.py` is safe because their
+      merge made it mutate the staged copy and it says so in the code.
+    - **Adding the lock broke two guards, and their controls are what caught it.**
+      The scripted edit inserted the sibling import after `import sys`, which in two
+      of the four files sits *above* `from pathlib import Path` — so the guards
+      crashed on a name that did not exist yet instead of running. Both showed up as
+      **SILENT** controls in the selftest: the arms were watching for a complaint and
+      got a traceback. **A SCRIPTED IMPORT MUST LAND AFTER THE NAMES IT USES ARE
+      DEFINED** — placing it after the *last* top-level import is the rule that has
+      no exceptions. Worth noting which way the evidence ran: the guards I had just
+      written were broken, and the guards I had written earlier are what said so.
+    - The lock is released on **any** exit, including a failing run. Registering that
+      was not cosmetic: without it the lockfile outlives the process, and every later
+      reader has to notice the pid is dead before proceeding — correct, but it makes
+      a stale lock the normal case rather than the exception.
 - **v0.43 — merged the other branch's 23 commits: it had been building the same
   mutation harness in parallel, and its infrastructure is better than mine, so I
   took it wholesale.** Their 199-row batch plus my 93 gives **236 rows**, every

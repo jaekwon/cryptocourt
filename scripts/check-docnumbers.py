@@ -27,6 +27,9 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import repolock
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # doc.gno is the realm's; the numbers it quotes are the engine's. Two trees
 # now, which is the whole reason this guard exists: the table and the code it
@@ -125,6 +128,7 @@ def doc_values():
 
 
 def main():
+    repolock.refuse_if_held("check-docnumbers")
     code, doc = code_values(), doc_values()
     bad = 0
     for name, want in const_values().items():
