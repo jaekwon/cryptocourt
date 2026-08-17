@@ -1624,6 +1624,39 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.78 — the MINTING path swept: 9 of 14 guards already held, three real holes closed,
+  and the worst of them loses a payee without leaving a gap to notice.** `emission.gno` is
+  where coin is created, so it was the last large unswept money surface. What already held
+  is worth stating, because it is the expensive half: **the cranker cannot redirect a
+  payment** (`PullSenior` pays `e.to`, and pointing it at the caller is caught), payment is
+  clamped to the entitlement's amount, the paid ledger advances, `seniorOwed` falls,
+  `reservedTail` advances, the F4 reservoir clamp on junior draws holds, `mintEmission`
+  refuses a non-positive amount, and **BOTH halves of M3-CRITICAL-1** — the start cursor
+  clearing `juniorReserved` at enqueue, and `PullSenior` honouring that offset — are pinned.
+  Three survived.
+  **`c.queueSeq++`, the serious one.** Without it the second `queue.Set` lands on the
+  FIRST entitlement's key. The first payee's claim is gone while `reservedTail` and
+  `seniorOwed` still count both amounts: a debt the court believes it owes and nobody can
+  pull. What makes it invisible is the queue's own design — there is no removal, paid
+  entitlements stay with `paid == amount`, so there is no missing entry to spot, only a
+  wrong one. The fixture asserts both seqs answer with their OWN payee and amount, which
+  is what an overwrite fails: the survivor would answer for both.
+  **A non-positive entitlement** would sit in a queue that never forgets, emitting an event
+  for nothing. **A negative junior reservation** would REDUCE `juniorReserved`, dragging a
+  later senior's start cursor back under the junior stretch — which is exactly the overlap
+  M3-CRITICAL-1 exists to prevent, arriving from the other direction. All three are pinned
+  by one fixture calling the internals directly, as settled in v0.60 and v0.69.
+  **Two more survived and are EQUIVALENT, both verified in the VM rather than argued.**
+  `PullSenior`'s `pay <= 0` fast path: `cumAccrual` is only ever `mustAdd`-ed, so it never
+  decreases and a negative `pay` is unreachable; at `pay == 0` every following statement is
+  a no-op and the function returns 0 either way. The one real difference is that the
+  removal EMITS a zero-value `seniorPaid` event, and since anyone may crank permissionlessly
+  that is indexer noise rather than money — recorded, not tested. And the unknown-seq nil
+  check: removed, the type assertion aborts the call anyway, so it buys a clear message.
+  Neither gets a batch row, for the reason set out in v0.76 — a row that always survives
+  would break the all-caught invariant that makes the batch legible.
+  Batch now 149 rows, all caught, none invalid.
+
 - **v0.77 — the STAKING lane is fully covered (8 of 8), and advertising parallelism
   exposed a real bug in the harness itself: two mutate runs in one worktree silently
   corrupted each other.** The staking lane first, since it is where principal-is-no-loss

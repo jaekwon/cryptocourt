@@ -950,5 +950,96 @@
   "label": "ResolveDispute: a round resolves while its vote is still open",
   "find": "\tif c.gov.State(cs.proposalID) == \"active\" {",
   "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: the cranker is paid instead of the entitlement",
+  "find": "\tmintEmission(c, e.to, pay)",
+  "replace": "\tmintEmission(c, cur.Previous().Address(), pay)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: payment is not clamped to the entitlement's amount",
+  "find": "\tif covered > e.amount {\n\t\tcovered = e.amount\n\t}\n\tpay := covered - e.paid",
+  "replace": "\tpay := covered - e.paid"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: the paid ledger is never advanced",
+  "find": "\te.paid += pay\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: coverage ignores the entitlement's start offset",
+  "find": "\tcovered := c.cumAccrual - e.start\n\tif covered > e.amount {\n\t\tcovered = e.amount\n\t}\n\tpay := covered - e.paid",
+  "replace": "\tcovered := c.cumAccrual\n\tif covered > e.amount {\n\t\tcovered = e.amount\n\t}\n\tpay := covered - e.paid"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: seniorOwed is never reduced",
+  "find": "\tc.seniorOwed -= pay\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "mintEmission: a non-positive amount is minted",
+  "find": "\tif amount <= 0 {\n\t\treturn\n\t}\n\tc.coin.Mint(to, amount)",
+  "replace": "\tc.coin.Mint(to, amount)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "enqueueSenior: the start cursor ignores junior draws (M3-CRITICAL-1)",
+  "find": "\tstart := mustAdd(c.reservedTail, c.juniorReserved)",
+  "replace": "\tstart := c.reservedTail"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "enqueueSenior: a non-positive entitlement is enqueued",
+  "find": "\tif amount <= 0 {\n\t\tpanic(\"courtv2: a senior entitlement must be positive\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "enqueueSenior: the senior tail never advances",
+  "find": "\tc.reservedTail = mustAdd(c.reservedTail, amount)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "enqueueSenior: seniorOwed never grows",
+  "find": "\tc.seniorOwed = mustAdd(c.seniorOwed, amount)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "enqueueSenior: the queue seq is not advanced, so entitlements overwrite",
+  "find": "\tc.queueSeq++\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "reserveJunior: a junior draw is not clamped to the reservoir",
+  "find": "\tr := c.reservoirR()\n\tif want > r {\n\t\twant = r\n\t}",
+  "replace": "\tr := c.reservoirR()\n\t_ = r"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "reserveJunior: a negative reservation is accepted",
+  "find": "\tif want < 0 {\n\t\twant = 0\n\t}",
+  "replace": ""
  }
 ]
