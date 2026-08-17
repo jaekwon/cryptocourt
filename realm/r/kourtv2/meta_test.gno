@@ -290,9 +290,14 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), metaSlug, ap9, sideYES)
 
+	// The confederate disputes AND upholds. Bob never staked, so he is not a
+	// participant and may vote — which is the point: v0.30's participant guard
+	// stops the answerer voting their own verdict, and an attacker answers that
+	// by using a second address, exactly as this fixture now does. The guard is
+	// hygiene; credEligible is the defence.
 	testing.SetRealm(testing.NewUserRealm(bob))
 	OpenDispute(cross(cur), metaSlug, ap9)
-	testing.SetRealm(testing.NewUserRealm(alice))
+	testing.SetRealm(testing.NewUserRealm(bob))
 	VoteDispute(cross(cur), metaSlug, ap9, "no") // uphold, unopposed
 	testing.SkipHeights(mc.params.votingBlocks + 1)
 	ResolveDispute(cross(cur), metaSlug, ap9)
@@ -336,12 +341,15 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	PostAnswer(cross(cur), metaSlug, ap10, sideYES)
 
 	// A genuinely contested round: carol carries real overturn weight (>= floor/4,
-	// so credEligible is set) and alice's larger uphold carries it.
+	// so credEligible is set) and bob's larger uphold carries it.
 	testing.SetRealm(testing.NewUserRealm(bob))
 	OpenDispute(cross(cur), metaSlug, ap10)
 	testing.SetRealm(testing.NewUserRealm(carol))
 	VoteDispute(cross(cur), metaSlug, ap10, "yes")
-	testing.SetRealm(testing.NewUserRealm(alice))
+	// Bob upholds, not alice: alice answered and staked, so the participant guard
+	// refuses her. Bob holds more than carol, so the uphold still carries while
+	// carol's weight still clears floor/4 and sets credEligible.
+	testing.SetRealm(testing.NewUserRealm(bob))
 	VoteDispute(cross(cur), metaSlug, ap10, "no")
 	testing.SkipHeights(mc.params.votingBlocks + 1)
 	ResolveDispute(cross(cur), metaSlug, ap10)

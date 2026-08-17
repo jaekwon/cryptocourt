@@ -165,6 +165,27 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	if !cs.disputeOpen {
 		panic("kourtv2: no open dispute on this claim")
 	}
+	// Nobody votes on their own claim's verdict — the same rule VoteQuality has
+	// applied since V2, for the same reason: a participant's stake, bond or
+	// authorship is a direct interest in the outcome, and quality already refuses
+	// to let anyone vote their own payout multiplier.
+	//
+	// THIS IS HYGIENE, NOT A SECURITY GUARD, and the distinction matters because
+	// it would be easy to bank on. isParticipant is ADDRESS-KEYED, and this
+	// design's root principle — earned over four audit rounds and stated at the
+	// top of MODERATION.md — is that address-keyed defenses fall to sybils; only
+	// capital-keyed, deadline-keyed or residency-keyed ones hold. An attacker
+	// wanting to uphold their own answer simply votes from an address that never
+	// staked, which costs nothing. So this closes the naive case and the
+	// conflict of interest; it does NOT close the manufactured contest.
+	//
+	// What closes that is capital-keyed and already shipped: credEligible
+	// requires weight >= floor/4 voted AGAINST the claim before an aggressive
+	// meta verb will execute, so a contest with no real adversary buys nothing
+	// however many addresses staged it.
+	if isParticipant(cs, who) {
+		panic("kourtv2: a participant may not vote on their own claim's verdict")
+	}
 	c.gov.Vote(who, cs.proposalID, choice)
 	// Court-side choice record: the governor's roll is reclaimable after
 	// resolution (ReleaseRoll is permissionless), so the carrot must not

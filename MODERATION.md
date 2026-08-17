@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.29 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.30 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,38 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.30 — nobody votes on their own verdict, and a note on exactly what that
+  is worth**. `VoteQuality` has refused participants since V2 — quality moves
+  their own payout multiplier, and nobody votes their own multiplier.
+  `VoteDispute` had **no such check**, so a claim's author, answerer or any
+  staker could vote their own liquid weight on their own claim's verdict, and the
+  only thing preventing it was the *accident* of custodial escrow. Two of the
+  three v0.29 reviewers flagged it independently; verified in code, and now
+  fixed.
+  - **Deliberately NOT sold as a security fix.** `isParticipant` is
+    **address-keyed**, and this document's own root principle — earned over four
+    audit rounds and stated at the top — is that *address-keyed defenses fall to
+    sybils; only capital-keyed, deadline-keyed or residency-keyed defenses hold.*
+    A participant who wants to vote simply votes from a second address that never
+    staked, at the cost of one transaction. So the guard closes the naive case and
+    the conflict of interest; it does **not** close the manufactured contest. What
+    closes that is capital-keyed and already shipped in v0.15: `credEligible`
+    demands weight voted AGAINST the claim before an aggressive meta verb will
+    execute, so a contest with no real adversary buys nothing however many
+    addresses staged it. The limitation is written beside the guard in code, and
+    **asserted in the test** — the last leg of
+    `TestParticipantsCannotVoteTheirOwnVerdict` votes successfully from a sock
+    address, so nobody can later mistake the guard for more than it is.
+  - **The fixture fix improved the fixtures.** Exactly one test broke — the two
+    places in `TestMetaLifecycleGuards` where alice self-answers and then votes
+    her own weight to uphold. Substituting the confederate who opened the dispute
+    (bob, who never staked) is not a workaround: it is how the attack is actually
+    performed, so §9's manufactured-contest fixture now models the real shape
+    **and still succeeds in reaching a decided round with zero adversarial
+    weight** — which is the live demonstration that the guard does not stop it and
+    `credEligible` must.
+  - Noted in passing: `stakeAnswerDispute` stakes and answers but does *not* open
+    the dispute its name promises; callers do. Left alone, recorded here.
 - **v0.29 — the reachability clamp both bars already implied and then threw
   away (3 identical mechanism reviewers)**. Asked whether `quorumFloor` and
   `qualityBars` should net the escrow on their 5% arm, as `electionFloor` was

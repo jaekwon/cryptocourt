@@ -414,3 +414,51 @@ func TestWeightlessContestEarnsNoCredential(cur realm, t *testing.T) {
 		t.Fatal("a weightless contest must NOT mint the difficulty credential (M2-1)")
 	}
 }
+
+// Nobody votes on their own claim's verdict — the rule VoteQuality has applied
+// since V2, now applied to the verdict lane too. All three of author, answerer
+// and staker are refused, because all three are a direct interest in the
+// outcome.
+//
+// AND THE LIMIT, asserted rather than assumed: the guard is ADDRESS-KEYED, and
+// this design's root principle is that address-keyed defences fall to sybils.
+// A participant who wants to vote simply votes from a second address that never
+// staked, at no cost — the last leg below proves it, so nobody mistakes this for
+// the defence that stops a manufactured contest. That defence is credEligible,
+// which is capital-keyed: it demands weight voted AGAINST the claim.
+func TestParticipantsCannotVoteTheirOwnVerdict(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("pvg-alice")   // author + answerer
+	bob := testutils.TestAddress("pvg-bob")       // staker on the other side
+	carol := testutils.TestAddress("pvg-carol")   // disputer, never staked
+	sock := testutils.TestAddress("pvg-sock")     // alice's second address
+	c := testCourt(cur, "pvg", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 10_000_000_000)
+	c.coin.Mint(sock, 10_000_000_000)
+
+	// stakeAnswerDispute stakes and answers despite its name; the caller opens
+	// the dispute. Carol opens it — she never staked, so she is not a participant.
+	id := stakeAnswerDispute(cur, "pvg", alice, bob)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	OpenDispute(cross(cur), "pvg", id)
+
+	// The answerer (who is also the author and a staker) is refused.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "may not vote on their own claim's verdict", func() {
+		VoteDispute(cross(cur), "pvg", id, "no")
+	})
+	// So is a staker who never answered.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "may not vote on their own claim's verdict", func() {
+		VoteDispute(cross(cur), "pvg", id, "yes")
+	})
+	// A disputer who never staked is NOT a participant and may vote.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "pvg", id, "yes")
+
+	// THE SYBIL BYPASS, asserted so the guard is never mistaken for more than it
+	// is: a second address that never staked votes freely, so a participant loses
+	// nothing but one transaction by routing around it.
+	testing.SetRealm(testing.NewUserRealm(sock))
+	VoteDispute(cross(cur), "pvg", id, "no")
+}
