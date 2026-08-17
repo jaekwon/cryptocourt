@@ -334,5 +334,33 @@
   "label": "capBonus drops its negative floor",
   "find": "\tif gross < 0 {\n\t\tgross = 0\n\t}",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "7.4: the COURT page renders a backing figure",
+  "find": "\tb.WriteString(\"# \" + sanitize.InlineText(c.name) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"# \" + sanitize.InlineText(c.name) + \"\\n\\nbacking: 1.00\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "7.4: the CLAIM page renders an APR",
+  "find": "\tb.WriteString(\"# \" + sanitize.InlineText(cs.title) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"# \" + sanitize.InlineText(cs.title) + \"\\n\\nAPR 20%\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "7.4: the DIRECTORY renders the inflation ceiling",
+  "find": "\tb.WriteString(\"# CryptoCourt V2\\n\\nStake on claims of fact. Your principal always returns 1\u00d7.\\n\\n\")",
+  "replace": "\tb.WriteString(\"# CryptoCourt V2\\n\\nStake on claims of fact. Your principal always returns 1\u00d7. Inflation ceiling 20%.\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "7.4: the POSITIONS page renders redeem",
+  "find": "\tb.WriteString(\"Claim: \" + sanitize.InlineText(cs.title) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"Claim: \" + sanitize.InlineText(cs.title) + \"\\n\\nredeem at par\\n\\n\")"
  }
 ]

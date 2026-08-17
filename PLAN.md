@@ -1624,6 +1624,23 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.61 — §7.4 was enforced on a quarter of its surface.** The third owner-locked
+  constraint — never render backing, redeem, APR or the inflation ceiling in public copy —
+  had exactly one assertion behind it: `render_test.gno` checked the literal string
+  "backing" on the DIRECTORY page only. §7.4 names four things, and `Render` has four
+  paths (directory, court, claim, positions), of which the court and claim pages are the
+  ones carrying money figures. Three of four terms and three of four pages were
+  unchecked. An owner constraint enforced on a quarter of its surface is close to
+  unenforced, and unlike the ceiling and principal-is-no-loss this one has no mechanism
+  behind it at all — only prose discipline, so a test is the ONLY thing that can hold it.
+  `TestNoRenderPathLeaksTheForbiddenTerms` drives a full lifecycle first (stake, answer,
+  flag to a conclusive tier, settle, crystallize) so every page has real figures to leak —
+  a page rendering nothing cannot violate §7.4, so an empty-state check would prove
+  little — then folds case and scans all four pages for all four terms. "apr" is matched
+  as a WHOLE WORD, because it is a substring of ordinary English and a guard that fires on
+  "appraisal" is a guard someone deletes. Mutation-verified by injecting a distinct
+  violation into each of the four render paths: all four caught. Batch now 52 rows.
+
 - **v0.60 — fourth hunt: PRINCIPAL-IS-NO-LOSS is pinned, three pure-function guards
   were not.** Ten more mutations. The good news first: all three attacks on the owner's
   second locked promise are CAUGHT — a 1% haircut on withdrawal, paying from escrow while
