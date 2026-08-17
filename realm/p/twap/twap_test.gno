@@ -276,3 +276,60 @@ func TestSeedThenFillIsMatureWithRealData(t *testing.T) {
 		t.Fatalf("a full week from a real start should be 40 mature; got %d %v", avg, mature)
 	}
 }
+
+// mustSane guards BOTH constructors (New and Load) and no test asserted any of its
+// three panics — a gap a previous audit named as "the New/Load guards" and that was
+// never closed. It matters because the ring's geometry is trusted everywhere after
+// construction: `put`/`get` index into buf by bpp with no bounds re-check, and the
+// courts size their answerability window off `n`. A zero width would divide by zero
+// on the bucket index; a bpp outside 1..8 would slice past a sample.
+//
+// Each case is checked on New AND Load, since Load takes the same geometry from
+// persisted state and a caller that reconstructs a ring from bad bytes must be
+// refused just as loudly as one that builds a fresh one.
+func TestConstructorsRejectInsaneGeometry(t *testing.T) {
+	mustPanicWith := func(want string, fn func()) {
+		t.Helper()
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatalf("expected a panic saying %q; nothing panicked", want)
+			}
+			if got, ok := r.(string); !ok || !contains(got, want) {
+				t.Fatalf("panic %v, want one saying %q", r, want)
+			}
+		}()
+		fn()
+	}
+
+	// width must be positive: it is the divisor for the bucket index.
+	mustPanicWith("width must be positive", func() { New(0, buckets, 1) })
+	mustPanicWith("width must be positive", func() { New(-1, buckets, 1) })
+	mustPanicWith("width must be positive", func() { Load(0, buckets, 1, 0, 0, 0, 0, "") })
+
+	// n must be positive: a zero-bucket ring has no slot to write.
+	mustPanicWith("n must be positive", func() { New(hour, 0, 1) })
+	mustPanicWith("n must be positive", func() { New(hour, -1, 1) })
+	mustPanicWith("n must be positive", func() { Load(hour, 0, 1, 0, 0, 0, 0, "") })
+
+	// bpp must be 1..8: outside that, put/get would slice past a sample.
+	mustPanicWith("bpp must be 1..8", func() { New(hour, buckets, 0) })
+	mustPanicWith("bpp must be 1..8", func() { New(hour, buckets, 9) })
+	mustPanicWith("bpp must be 1..8", func() { New(hour, buckets, -1) })
+	mustPanicWith("bpp must be 1..8", func() { Load(hour, buckets, 9, 0, 0, 0, 0, "") })
+
+	// And the boundaries are ACCEPTED, so the guard is not off by one at either end.
+	_ = New(1, 1, 1)
+	_ = New(hour, buckets, 8)
+}
+
+// contains is strings.Contains; twap imports no stdlib and a test should not be the
+// first thing to.
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
