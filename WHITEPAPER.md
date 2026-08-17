@@ -16,7 +16,8 @@ underway. Verdicts, stakes, and dissents are recorded permanently. The coin is
 minted on a one-way curve and the payment is burned; no treasury exists, and
 rewards are minted by a bounded, decaying emission that pays the people who do
 the judging. Moderation, including the appeals court that oversees it, can
-control what is listed but cannot touch a stake, a verdict, or a withdrawal.
+control what is listed but cannot touch a stake, a bond, a verdict, or a
+withdrawal.
 What accumulates is a public record of each dispute: what was claimed, what it
 cost to claim it, and how each part fared. This record is the purpose of the
 system.
@@ -53,8 +54,6 @@ people who put money behind their positions, and decided by a vote whose
 weights were fixed before the vote opened. Win or lose, everything stays:
 every claim, every stake, every verdict, every dissent.
 
-The verdicts are useful; the record is what the system exists to produce.
-
 ## 2. Claims
 
 A claim moves through six states.
@@ -73,10 +72,10 @@ claim's stakes until settlement, and at settlement principal returns in full,
 whichever way the verdict went. People stake their true position when a wrong one
 cannot ruin them.
 
-Nothing prevents one holder staking both sides of a claim. It does not pay.
-Staked coins sit in escrow and are absent from the hourly snapshots, so a
-hedger gives up voting weight on both halves while only the winning half draws
-rewards: a guesser's return at a believer's lockup. Verdicts themselves are
+Nothing prevents one holder staking both sides of a claim. It buys nothing.
+Staked coins sit in escrow, where they carry no vote, so a hedger gives up
+voting weight on both halves while only the winning half draws accuracy
+rewards: a guesser's reward at a believer's lockup. Verdicts themselves are
 decided by coin votes, not by stakes, so hedged capital buys no verdict power
 at all. And equal stake on both sides moves a claim's lean toward even; it
 cannot manufacture one. The lean measures net stake, not headcount.
@@ -133,7 +132,9 @@ tip a tree of verdicts from one cheap corner of it.
 The mockup below shows a mature origins court under both layers.
 
 **KOURT:ORIGINS — "Origins of SARS-CoV-2"** (month 14 of the court's life;
-⊘ open · ✓ settled true · ✗ settled false; every number is invented)
+⊘ open · ✓ settled true · ✗ settled false. The stakes, leans, and settlement
+dates are invented; the claims themselves reference real documents and
+events.)
 
 ```
 ⊘ #1  "SARS-CoV-2 originated in a laboratory."                OPEN   412k staked · leaning 58/42
@@ -205,7 +206,7 @@ system exists. The coins are how it gets built.
 ## 4. Courts and coins
 
 Every court has its own coin. This is deliberate fragmentation. One topic's
-fate must not couple to another's, so courts share no token, no treasury, and
+fate must not couple to another's, so courts share no coin, no treasury, and
 no failure mode. Capture of one court captures one court.
 
 A court's coin is minted one way: on its bonding curve, paid in GNOT, the
@@ -232,8 +233,8 @@ Coins are voice: staking weight, voting weight at sealed epochs, the right to
 answer and dispute.
 
 Coins also flow to work. Each court runs a bounded emission: 0.38% of live
-supply per week at genesis, stepping down weekly, halving over each two-year
-span, ceilinged for all time under +80% of everything minted on the curve.
+supply per week at genesis, stepping down weekly, falling by half over each
+two-year span, ceilinged for all time under +80% of everything minted on the curve.
 (The Review Court, described next, runs a small fixed weekly budget instead.)
 The rate decays because a court needs its work funded hardest at the start. It
 is ceilinged so the worst case is arithmetic rather than trust. Emission pays
@@ -259,7 +260,10 @@ Silence can never seize a court.
 
 The Review Court's electorate is the people who built the platform under it.
 Burning GNOT in any court, other than the Review Court itself, earns
-franchise: a claimable right to mint KOURT:META later. A claim mints through
+franchise: a claimable right to mint KOURT:META later. The franchise is not a
+discount; it is the same burn counted twice. GNOT burned for a court's coin
+also stands as credit toward the Review Court's curve, while a direct buyer
+spends new GNOT for the same position. Claiming mints through
 the Review Court's own curve at the price a direct buyer would pay at that
 moment, and every court's claimed burn feeds that one curve, so the cost of
 appellate voice reflects the platform's whole history rather than any one
@@ -281,7 +285,6 @@ Weight counts only if it was in place before the appeal's vote opened.
 Franchise not yet claimed is a standing reserve: every unclaimed unit, once
 claimed, dilutes a captor.
 
-
 ## 6. Moderation
 
 One rule governs every moderation power in Kourt, from a single court
@@ -292,14 +295,15 @@ moderator to the Review Court to the operator's legal backstop:
 
 A hidden claim leaves the browse listings, and its lifecycle keeps running,
 byte for byte: stakes, votes, settlement, withdrawal. A direct link to a
-hidden item always renders, with a banner naming the authority that hid it and
+hidden claim always renders, with a banner naming the authority that hid it and
 the category invoked. Two narrow intake gates exist, both disclosed: a purged
-court accepts no new claims, and an item under live review pauses new answers.
-Funds in flight are never gated. A fully captured moderator, or a fully
+court accepts no new claims, and while a review of a target is live, competing
+appeals against that target cannot be answered. Funds in flight are never
+gated. A fully captured moderator, or a fully
 captured Review Court, is harmless to funds, because the pipes it would need
 do not connect.
 
-Above the courts sits the operator's legal backstop, for the things a token
+Above the courts sits the operator's legal backstop, for the things a coin
 vote cannot lawfully decide: court orders, DMCA notices, content that must
 come down. At genesis this is a single operator key; the code supports m-of-n
 membership, and broadening it is deployment work, not a rule change. Its
@@ -353,9 +357,9 @@ Assume a coin can end up worthless, and size participation like the burn it
 is.
 
 **Disclosure.** Kourt's designers hold GNOT, the token every curve burns,
-and may hold early positions in courts they found. Early curve positions are
-cheap by construction and visible on-chain like any others. Readers should
-weigh this document accordingly.
+and may hold positions in courts they found, minted on the same public curve
+as anyone else's and visible on-chain like any others. Readers should weigh
+this document accordingly.
 
 **Nothing here is legal, financial, or medical advice.** That includes the
 contents of every court's record, which are the staked opinions of the people
@@ -369,9 +373,8 @@ faucet tokens is rehearsal; the record that matters starts where the money is
 real.
 
 Participation is three acts: founding or joining a court, filing the claims
-its record lacks, and staking, answering, disputing, and voting as the
-court's life brings disputes to each epoch. The Review Court franchise
-accrues on its own.
+its record lacks, and staking, answering, disputing, and voting as
+disputes arise. The Review Court franchise accrues on its own.
 
 Individual verdicts will age. The record of how each question was argued,
 who stood where, and what it cost, will not.

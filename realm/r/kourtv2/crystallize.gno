@@ -112,6 +112,35 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// is conviction (stake×time), not supply-bounded, so a bare ×7 could wrap and
 	// then panic PullCarrot at extreme scale (math-audit NOTE-2).
 	cs.carrotTotal = mulDiv128(midGross, splitCarrot, 100)
+	// TIER-invariant, but not TURNOUT-invariant (v0.55). A conclusive tally BELOW the
+	// supply-floored fullBar can only be a LOW — mid and high both gate on the bar —
+	// and there ResolveFlag returns the flag bond WHOLE. So the pot minted ~1.35%·X̄
+	// against 1.1 CC of burn, on never-escrowed weight that voting does not consume and
+	// that services every claim with X̄ <= 4W in parallel: v0.25's A21 faucet at 0.675×
+	// the bounty flow that closed it, same reachable bar, arriving through the carrot —
+	// the one leg the per-event burn invariant never reached. It also made the whole
+	// band [demotionBar, fullBar) pay EVERY ballot only if low wins, since mid and high
+	// cannot go conclusive there and an inconclusive tally sets no conclusiveSeq: a
+	// structural demotion cartel for the entire electorate, which is F2/A11's forbidden
+	// tier-contingency arriving through the turnout door.
+	//
+	// P2's clamp does not bound this: it is per-VOTER against a shared pot, so two
+	// addresses each take carrotTotal/2, stay under b0/2-1, and collect the whole
+	// 7%·midGross. Withholding the pot is the only lever that survives — excluding the
+	// flagger's own address is defeated by one extra wallet (OpenFlag and VoteQuality
+	// take separate callers), and half-burning the sub-bar bond leaves a bloc at
+	// +0.175·b0 while pricing a CORRECT dust flag at 2%·X̄, which is v0.29/T1's
+	// cheap-when-right property and the F3 asymmetry the v0.54 ratchet leans on.
+	//
+	// F2 survives because this keys on TURNOUT, not tier: above the bar a conclusive
+	// low still draws the full tier-invariant 7%·midGross, and below it a voter's only
+	// alternative is an inconclusive tally, which v0.25 already pays nothing. Withheld,
+	// never redirected — strictly ceiling-safer.
+	if cs.decidedPID == 0 && cs.conclusiveSeq != 0 {
+		if _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {
+			cs.carrotTotal = 0
+		}
+	}
 	cs.carrotPool = cs.carrotTotal
 
 	// N1 lands here: the deposit refunds unless a conclusive low already

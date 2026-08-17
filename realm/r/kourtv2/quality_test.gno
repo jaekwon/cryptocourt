@@ -1437,3 +1437,211 @@ func TestQuorumlessRideCannotAnnihilateTheQ5Window(cur realm, t *testing.T) {
 		t.Fatalf("the reserve must burn, not vanish: burned %d want >= %d", burned, slash)
 	}
 }
+
+// v0.54 (HIGH): a PROMOTION out of an adjudicated tier must carry a ⅔ MANDATE in its
+// own bucket. MID is reachable as a bare RESIDUAL — applyQualityTally returns
+// conclusive MID whenever the full bar is met and low misses the weighted median, so a
+// mid bloc that is merely the largest, not a supermajority, used to overturn a
+// conclusive ⅔-low and restore cs.tier, and with it the WHOLE draw (tierLowX = 0
+// zeroes D outright). ~4%·X̄ net against a draw bounded at 19.27%·X̄.
+//
+// Here the low bloc is IN the ride tally at 4 CC against the mill's 6 CC of mid: enough
+// for MID to classify (low misses the median), not enough for a mandate (3x6 < 2x10).
+// A turnout comparison was tried instead and is bypassable — a throwaway dust-LOW round
+// rewrites cs.conclusiveTurnout DOWNWARD, so the promotion lands next round for one
+// extra bond. The fixture also pins that the ratchet leaves the RESERVE alone: the same
+// ride still refunds it with the tier left LOW.
+func TestResidualMidRideCannotBuyTheTier(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp7-alice") // author + answerer
+	bob := testutils.TestAddress("wp7-bob")     // round-1 disputer, then flagger
+	carol := testutils.TestAddress("wp7-carol") // the honest low bloc, 4 CC
+	dave := testutils.TestAddress("wp7-dave")   // the mill's mid bloc, 6 CC
+	c := testCourt(cur, "wp7", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 4_000_000_000)
+	c.coin.Mint(dave, 6_000_000_000)
+	cs, slash := levySlash(cur, c, "wp7", alice, bob, carol)
+	if slash <= 0 || cs.tier != tierLowX {
+		t.Fatalf("setup: a conclusive ⅔-low with a reserve, got tier=%d slash=%d",
+			cs.tier, slash)
+	}
+	remainder := cs.answerBond
+
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp7", cs.id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp7", cs.id, qualityLow)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteQuality(cross(cur), "wp7", cs.id, qualityMid)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "wp7", cs.id, "no") // meets quorum, yes == 0 -> UPHELD
+	low, mid := cs.qLowW, cs.qMidW
+	if low*2 >= low+mid || mid*3 >= (low+mid)*2 {
+		t.Fatalf("fixture must be residual-MID without a mandate: low=%d mid=%d", low, mid)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp7", cs.id)
+
+	if tier, _ := QualityTier("wp7", cs.id); tier != int(tierLowX) {
+		t.Fatalf("a residual mid must not buy the tier: got tier=%d want %d (low=%d mid=%d)",
+			tier, tierLowX, low, mid)
+	}
+	if cs.pendingSlash != 0 || cs.answerBond != remainder+slash {
+		t.Fatalf("the ratchet must not refuse a rescue: pending=%d bond=%d want 0/%d",
+			cs.pendingSlash, cs.answerBond, remainder+slash)
+	}
+}
+
+// The ratchet's PROMOTION-only qualifier, pinned. §3.4's F3 asymmetry makes demotion
+// deliberately cheap, so a demotion must land even carrying NO ⅔ mandate:
+// applyQualityTally goes conclusive LOW on the weighted median (qLowW*2 >= turnout),
+// which admits a low share anywhere in [1/2, 2/3). Dropping `tier > int(cs.tier)` would
+// gate exactly that band and freeze a standing MID in place, inverting F3 in the mill's
+// favour. A sole-low-voter fixture cannot see this — it satisfies the mandate trivially
+// — so the qualifier only becomes verifiable at a low share under ⅔.
+func TestUnmandatedDemotionRideStillLands(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp8-alice")
+	bob := testutils.TestAddress("wp8-bob")
+	carol := testutils.TestAddress("wp8-carol") // 30 CC MID: the standing tier
+	dave := testutils.TestAddress("wp8-dave")   // 5 CC low
+	erin := testutils.TestAddress("wp8-erin")   // 4 CC mid -> low share 5/9, under ⅔
+	c := testCourt(cur, "wp8", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	c.coin.Mint(dave, 5_000_000_000)
+	c.coin.Mint(erin, 4_000_000_000)
+	id := standingMid(cur, c, "wp8", alice, bob, carol)
+	cs := mustClaim(c, id)
+
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp8", id)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteQuality(cross(cur), "wp8", id, qualityLow)
+	testing.SetRealm(testing.NewUserRealm(erin))
+	VoteQuality(cross(cur), "wp8", id, qualityMid)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "wp8", id, "no")
+	low, mid := cs.qLowW, cs.qMidW
+	if low*2 < low+mid || low*3 >= (low+mid)*2 {
+		t.Fatalf("fixture must be a median demotion WITHOUT a ⅔ mandate: low=%d mid=%d",
+			low, mid)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp8", id)
+	if tier, _ := QualityTier("wp8", id); tier != int(tierLowX) {
+		t.Fatalf("an unmandated demotion must still land: got tier=%d want %d (low=%d mid=%d)",
+			tier, tierLowX, low, mid)
+	}
+}
+
+// The mandate bar must be exactly HIGH's own bar, no tighter. applyQualityTally returns
+// conclusive HIGH only on qHighW*3 >= turnout*2, so an honest ⅔ HIGH carries a mandate
+// by construction and must never be refused. Both ratchet reviewers found the earlier
+// turnout-comparison form refusing precisely this — a promotion with a STRONGER mandate
+// than the residual MID it overturns, losing the whole draw. The high share here is
+// 7/10: over ⅔, under 3/4, so tightening the bar one notch fails this test. Turnout is
+// also deliberately BELOW the standing tally's, which is what the old form tripped on.
+func TestMandatedHighRidePromotesOverAStandingMid(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp9-alice")
+	bob := testutils.TestAddress("wp9-bob")
+	carol := testutils.TestAddress("wp9-carol") // 30 CC MID: the standing tier
+	dave := testutils.TestAddress("wp9-dave")   // 7 CC high
+	erin := testutils.TestAddress("wp9-erin")   // 3 CC mid -> high share 7/10
+	c := testCourt(cur, "wp9", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	c.coin.Mint(dave, 7_000_000_000)
+	c.coin.Mint(erin, 3_000_000_000)
+	id := standingMid(cur, c, "wp9", alice, bob, carol)
+	cs := mustClaim(c, id)
+	wonAt := cs.conclusiveTurnout
+
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp9", id)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteQuality(cross(cur), "wp9", id, qualityHigh)
+	testing.SetRealm(testing.NewUserRealm(erin))
+	VoteQuality(cross(cur), "wp9", id, qualityMid)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "wp9", id, "no")
+	high, turnout := cs.qHighW, cs.qLowW+cs.qMidW+cs.qHighW
+	if high*3 < turnout*2 || high*4 >= turnout*3 {
+		t.Fatalf("fixture must sit in [2/3, 3/4): high=%d turnout=%d", high, turnout)
+	}
+	if turnout > wonAt {
+		t.Fatalf("fixture must also be BELOW the standing turnout (%d), which is what "+
+			"the old turnout form tripped on: %d", wonAt, turnout)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp9", id)
+	if tier, _ := QualityTier("wp9", id); tier != int(tierHighX) {
+		t.Fatalf("a ⅔-mandated high must promote: got tier=%d want %d (high=%d of %d)",
+			tier, tierHighX, high, turnout)
+	}
+}
+
+// standingMid drives a claim to a STANDING conclusive MID at high turnout: a failed
+// round 1 to open the escrow window, then a flag the mid bloc carries alone. The tier
+// the ratchet's promotion tests are measured against.
+func standingMid(cur realm, c *Court, slug string, alice, bob, mid address) uint64 {
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), slug, "a standing conclusive mid")
+	matureOI(cur, slug, id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), slug, id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), slug, id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(mid))
+	VoteQuality(cross(cur), slug, id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), slug, id)
+	return id
+}
+
+// QualityBars is a pure read, and it must agree exactly with the bars ResolveFlag
+// scores against — otherwise it would tell an elector to clear a bar the mechanism
+// does not use. Pinned against the internal predicate on the same claim, and pinned
+// as SEALED-SAFE: the bars are not the tally, so this read must expose no bucket.
+func TestQualityBarsQuotesTheBarsResolveFlagUses(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qb-alice")
+	bob := testutils.TestAddress("qb-bob")
+	carol := testutils.TestAddress("qb-carol")
+	c := testCourt(cur, "qb1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 4_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qb1", "the bars are quotable")
+	matureOI(cur, "qb1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qb1", id, sideYES)
+
+	cs := mustClaim(c, id)
+	wantDemotion, wantFull := qualityBars(c, cs)
+	gotDemotion, gotFull := QualityBars("qb1", id)
+	if gotDemotion != wantDemotion || gotFull != wantFull {
+		t.Fatalf("the quoted bars must be the scored bars: got %d/%d want %d/%d",
+			gotDemotion, gotFull, wantDemotion, wantFull)
+	}
+	if gotDemotion <= 0 || gotFull < gotDemotion {
+		t.Fatalf("bars must be positive and ordered: %d/%d", gotDemotion, gotFull)
+	}
+
+	// Both bars read a SEALED past epoch, so they are claim-constant for life: a
+	// voter can act on the quote and it cannot be moved under them mid-vote. This is
+	// what the fix in resolveQualityRide's authority test also relies on.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qb1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qb1", id, qualityLow)
+	afterDemotion, afterFull := QualityBars("qb1", id)
+	if afterDemotion != wantDemotion || afterFull != wantFull {
+		t.Fatalf("the bars must not move once the epoch is sealed: %d/%d want %d/%d",
+			afterDemotion, afterFull, wantDemotion, wantFull)
+	}
+}

@@ -143,20 +143,32 @@ func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
 	if w != 0 || a != 0 || ans != 0 {
 		t.Fatalf("tier low draws nothing: %d/%d/%d", w, a, ans)
 	}
-	if carrot <= 0 {
-		t.Fatal("the carrot is tier-invariant: paid even at low")
+	// v0.55: the carrot is TIER-invariant, not TURNOUT-invariant. This tally is a
+	// DUST low — conclusive at the supply-floorless demotionBar, below the full bar —
+	// where the flag bond returns WHOLE, so paying an X̄-scaled pot here was v0.25's
+	// A21 faucet arriving through the carrot. Tier-invariance is pinned above the bar
+	// by TestFullBarLowStillPaysTheTierInvariantCarrot.
+	if carrot != 0 {
+		t.Fatalf("a sub-full-bar tally pays no carrot: %d", carrot)
 	}
 	// The winner pull is a zero, not a revert (cap = 0 at tier 0).
 	testing.SetRealm(testing.NewUserRealm(alice))
 	if got := WithdrawBonus(cross(cur), "cz2", id, sideYES); got != 0 {
 		t.Fatal("low tier pays zero accuracy reward")
 	}
-	// Eve (non-participant conclusive voter) pulls the carrot, senior-queued.
+	// Eve (non-participant conclusive voter) pulls, and gets NOTHING (v0.55): the
+	// tally was sub-full-bar, so there is no pot. The pull is a zero rather than a
+	// revert, and it reserves no accrual — SeniorOwed must not move, since a senior
+	// entitlement here would advance the monotone reservedTail against a mint that
+	// never happens.
 	owedBefore := SeniorOwed("cz2")
 	testing.SetRealm(testing.NewUserRealm(eve))
-	share := PullCarrot(cross(cur), "cz2", id)
-	if share <= 0 || SeniorOwed("cz2") != owedBefore+share {
-		t.Fatalf("the carrot senior-queues: %d", share)
+	if share := PullCarrot(cross(cur), "cz2", id); share != 0 {
+		t.Fatalf("a sub-full-bar tally pulls nothing: %d", share)
+	}
+	if SeniorOwed("cz2") != owedBefore {
+		t.Fatalf("a zero pull must reserve no accrual: %d vs %d",
+			SeniorOwed("cz2"), owedBefore)
 	}
 	uassert.AbortsContains(t, cur, "already claimed", func() {
 		PullCarrot(cross(cur), "cz2", id)
@@ -332,5 +344,134 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 	if cs.carrotPool != cs.carrotTotal-clamp {
 		t.Fatalf("only the clamped amount leaves the pool: pool=%d want %d",
 			cs.carrotPool, cs.carrotTotal-clamp)
+	}
+}
+
+
+// The other side of v0.55: tier-invariance is real ABOVE the bar. F2/A11 argues a
+// conclusive LOW must still pay its electorate the same 7%·midGross a mid or high
+// would — what v0.55 withholds is only the SUB-BAR pot, where the flag bond returns
+// whole and the pot was an X̄-scaled mint against 1.1 CC of burn. This drives a
+// full-bar low in the T2 band (low share in [1/2, 2/3), so no slash reserves and
+// Crystallize is reachable) and requires the carrot to be paid in full.
+func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cz5-alice")
+	flagger := testutils.TestAddress("cz5-flagger")
+	eve := testutils.TestAddress("cz5-eve")   // 3 CC low
+	frank := testutils.TestAddress("cz5-frank") // 2.5 CC mid -> low share 6/11
+	c := testCourt(cur, "cz5", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 1_000_000_000)
+	c.coin.Mint(eve, 3_000_000_000)
+	c.coin.Mint(frank, 2_500_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cz5", "A full-bar low still pays its voters")
+	matureOI(cur, "cz5", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cz5", id, sideYES)
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "cz5", id)
+	testing.SetRealm(testing.NewUserRealm(eve))
+	VoteQuality(cross(cur), "cz5", id, qualityLow)
+	testing.SetRealm(testing.NewUserRealm(frank))
+	VoteQuality(cross(cur), "cz5", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "cz5", id)
+	cs := mustClaim(c, id)
+	_, fullBar := qualityBars(c, cs)
+	if cs.conclusiveTurnout < fullBar || cs.tier != tierLowX || cs.pendingSlash != 0 {
+		t.Fatalf("setup: need a full-bar T2 low with no reserve: turnout=%d bar=%d "+
+			"tier=%d pending=%d", cs.conclusiveTurnout, fullBar, cs.tier, cs.pendingSlash)
+	}
+	SettleUndisputed(cross(cur), "cz5", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cz5", id)
+	w, a, ans, carrot := DrawSlices("cz5", id)
+	if w != 0 || a != 0 || ans != 0 {
+		t.Fatalf("tier low still draws nothing: %d/%d/%d", w, a, ans)
+	}
+	if carrot <= 0 {
+		t.Fatal("above the full bar the carrot is tier-invariant and must be paid")
+	}
+}
+
+// The `decidedPID == 0` clause of v0.55's withholding, pinned. On a DECIDED claim the
+// carrot's electorate is the verdict round's with-verdict voters (PullCarrot's first
+// branch), who never cast the quality tally at all — so a stale sub-bar
+// conclusiveTurnout left over from an earlier dust-low flag must not withhold THEIR
+// pot. Reachable exactly as built here: a dust-low flag sets conclusiveTurnout below
+// the bar, then a decided round whose ride nobody votes leaves it there while setting
+// decidedPID. Without the clause the verdict lane is silently unpaid, and no other
+// fixture notices.
+func TestDecidedRoundCarrotSurvivesAStaleSubBarTally(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cz6-alice") // author + answerer + staker
+	flagger := testutils.TestAddress("cz6-flag")
+	eve := testutils.TestAddress("cz6-eve")   // dust low: >= demotionBar, < fullBar
+	bob := testutils.TestAddress("cz6-bob")   // disputer
+	carol := testutils.TestAddress("cz6-carol") // with-verdict voter, clears quorum
+	c := testCourt(cur, "cz6", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 1_000_000_000)
+	c.coin.Mint(eve, 1_000_000_000)
+	c.coin.Mint(bob, 1_000_000_000)
+	c.coin.Mint(carol, 5_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cz6", "a decided round pays its own voters")
+	matureOI(cur, "cz6", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cz6", id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+
+	// Round 1 fails quorum: opens the escrow window for the decided round below.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cz6", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cz6", id)
+
+	// A DUST low leaves conclusiveTurnout below the bar (and levies no slash).
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "cz6", id)
+	testing.SetRealm(testing.NewUserRealm(eve))
+	VoteQuality(cross(cur), "cz6", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "cz6", id)
+	cs := mustClaim(c, id)
+	_, fullBar := qualityBars(c, cs)
+	if cs.conclusiveSeq == 0 || cs.conclusiveTurnout >= fullBar || cs.pendingSlash != 0 {
+		t.Fatalf("setup: need a stale SUB-BAR conclusive tally and no reserve: seq=%d "+
+			"turnout=%d bar=%d pending=%d", cs.conclusiveSeq, cs.conclusiveTurnout,
+			fullBar, cs.pendingSlash)
+	}
+
+	// A decided round whose quality ride nobody votes: decidedPID lands, the stale
+	// sub-bar conclusiveTurnout stays.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cz6", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "cz6", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cz6", id)
+	if cs.decidedPID == 0 || cs.conclusiveTurnout >= fullBar {
+		t.Fatalf("setup: need a decided round over a stale sub-bar tally: pid=%d turnout=%d",
+			cs.decidedPID, cs.conclusiveTurnout)
+	}
+
+	testing.SkipHeights(EscrowUntil("cz6", id) - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "cz6", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cz6", id)
+
+	if _, _, _, carrot := DrawSlices("cz6", id); carrot <= 0 {
+		t.Fatalf("a decided round's carrot must survive a stale sub-bar quality tally: %d",
+			carrot)
+	}
+	// And the verdict voter can actually take it.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	if share := PullCarrot(cross(cur), "cz6", id); share <= 0 {
+		t.Fatalf("the with-verdict voter must be paid: %d", share)
 	}
 }

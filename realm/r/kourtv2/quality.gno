@@ -516,6 +516,19 @@ func bountyFor(bond, burned int64) int64 {
 	return b
 }
 
+// bucketW is the sealed tally's weight for one bucket. Only the authority ratchet
+// reads it; no exported read exposes the buckets (§10.2 Q3).
+func bucketW(cs *claimState, bucket int) int64 {
+	switch bucket {
+	case qualityLow:
+		return cs.qLowW
+	case qualityMid:
+		return cs.qMidW
+	default:
+		return cs.qHighW
+	}
+}
+
 // resolveQualityRide applies a dispute round's quality tally at a DECIDED
 // resolve: the same bars, no bond mechanics (the ride is free), the slot
 // untouched. Below-bar rides leave the tier standing (default mid).
@@ -523,6 +536,52 @@ func resolveQualityRide(c *Court, cs *claimState) {
 	tier, conclusive, turnout := applyQualityTally(c, cs)
 	if !conclusive {
 		return // below-bar rides leave the tier standing (default mid)
+	}
+	// AUTHORITY RATCHET, promotion-only (v0.54). A PROMOTION out of an already
+	// adjudicated tier must carry a ⅔ MANDATE in its own bucket — the same F3 shape
+	// applyQualityTally already imposes on HIGH, and ResolveCounter on the rescue.
+	// Without it, MID is reachable as a bare RESIDUAL: applyQualityTally returns
+	// conclusive MID whenever the full bar is met and low misses the weighted median,
+	// so `qLowW=49, qMidW=0, qHighW=51` classifies MID on ZERO mid weight. A
+	// bare-plurality mid then overturned a conclusive ⅔-low and restored cs.tier, and
+	// with it the WHOLE draw, since tierLowX = 0 makes a low zero D outright. Priced at
+	// ~4%·X̄ net (a 20%·X̄ bond burns on UPHOLD while comp mints 16%·X̄ back to the
+	// answerer) against a draw bounded by maxMidGrossBps = 1927, i.e. 19.27%·X̄. Note
+	// the reserve, at max(4.5%·X̄, 1.6·midGross), is the LARGER prize of the two — the
+	// draw is not, and an earlier version of this comment had that backwards.
+	//
+	// PROMOTION-only, deliberately: gating demotions would break two honest paths — an
+	// ordinary demotion at the supply-floorless demotionBar, which §3.4's F3 asymmetry
+	// makes cheap on purpose, and `tier = LOW` on an OVERTURN ride, where skipping it
+	// would restore the winning pool's draw on a claim the crowd called junk.
+	//
+	// A MANDATE test, not a turnout comparison. `turnout <= cs.conclusiveTurnout` was
+	// tried and is wrong three ways: cs.conclusiveTurnout is REWRITTEN unconditionally
+	// below on any non-gated conclusive ride, so a throwaway dust-LOW round resets the
+	// mark downward and the promotion lands on the next round for one extra bond; the
+	// mark is sealed and unreadable, so an honest promoter must burn a 20%·X̄ bond to
+	// discover the bar; and it makes the bar depend on the OPPOSITION's participation,
+	// so opposition that stays home RAISES it. The mandate form is unresettable,
+	// turnout-independent, and needs no new state.
+	//
+	// What it does NOT do — stated so the next reader does not overrate it: it cannot
+	// see weight the ride's one wipe already erased. Where the honest low bloc was
+	// wiped rather than out-voted, the surviving tally genuinely does show a ⅔ mid
+	// mandate and the promotion is allowed. Closing that needs a change upstream of any
+	// authority test (no post-adjudication ride wipe, or a monotone authority mark) and
+	// is an OWNER DECISION — see PLAN §13 v0.54.
+	//
+	// Rescues: the SLASH rescue is unaffected on every branch — no reserve path reads
+	// cs.tier (ResolveCounter never calls this function, and disposeSlashOnRide is a
+	// separate call scoring the buckets with hadSlash captured before the ride —
+	// see disposeSlashOnRide and ResolveCounter in dispute.gno). The TIER rescue is
+	// a different question, and the
+	// mandate form is what keeps it open: a mid-only counter poll has qMidW == turnout,
+	// so it clears ⅔ trivially. The turnout form refused exactly that, which is why
+	// v0.52's objection was MIS-SCOPED rather than false, and why calling it simply
+	// "false" over-corrected.
+	if cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {
+		return // a promotion out of an adjudicated tier needs a ⅔ mandate (§3.4 F3)
 	}
 	now := runtime.ChainHeight()
 	_, fullBar := qualityBars(c, cs)
@@ -609,6 +668,23 @@ func QualityTier(courtSlug string, claimID uint64) (tier int, final bool) {
 // FlagCycles is the inconclusive-reopen count (the bond-doubling exponent).
 func FlagCycles(courtSlug string, claimID uint64) int64 {
 	return mustClaim(mustCourt(courtSlug), claimID).flagCycles
+}
+
+// QualityBars quotes the two turnout bars a voter is judged against: the demotion
+// bar (a LOW below it is inconclusive) and the full bar (nothing but LOW can go
+// conclusive below it, and since v0.55 nothing below it is PAID).
+//
+// Exported because the asymmetry was one-sided and it was mine to create. Both bars
+// read a SEALED past epoch (cs.qualityEpoch), so a sophisticated party has always
+// been able to reconstruct them from the checkpoint archive, while an ordinary
+// elector could not — and v0.55 then made clearing the full bar the condition for
+// being paid at all. Quoting them is what lets an elector decide to over-shoot the
+// bar rather than land in the unpaid band. Neither bar is the TALLY: the three
+// buckets stay sealed (see FlagState), so this still says nothing about how much
+// weight has already arrived or which way it voted.
+func QualityBars(courtSlug string, claimID uint64) (demotionBar, fullBar int64) {
+	c := mustCourt(courtSlug)
+	return qualityBars(c, mustClaim(c, claimID))
 }
 
 // ------------------------------------------------- the counter-flag window --

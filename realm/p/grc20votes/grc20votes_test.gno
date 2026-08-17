@@ -523,3 +523,72 @@ func TestBurningMovesTheDenominator(t *testing.T) {
 		t.Errorf("the live supply reads %d after the burn", got)
 	}
 }
+
+// mustBeValid and mustBePositive guard seven call sites between them and NO test
+// exercised either with a rejected input. That matters beyond this package:
+// courtv2's claim.gno builds a security guard on the STATED behaviour of this one —
+// its slashFlagger field carries a comment reasoning that "grc20votes.Mint calls
+// mustBeValid and PANICS, so the entitlement is unpayable forever while reservedTail
+// has already advanced", which is why v0.50 added a `slashFlagger != ""` check
+// instead of falling back to cs.flagger. A consumer's money-path design resting on
+// an untested validator in its dependency is exactly the coupling worth pinning.
+//
+// The zero address is the case that reaches courtv2: an unset `address` field is "",
+// which IsValid rejects.
+//
+// Mutation testing showed courtv2's conclusion is ROBUST but its stated reason is
+// over-specific: with mustBeValid deleted from Mint the call still panics, one layer
+// down, as "checkpoint: a key may not be empty". So the unpayable-entitlement
+// reasoning survives even if this guard moves — two layers reject it, not one. The
+// same probe found the opposite for amounts: with mustBePositive deleted, a NEGATIVE
+// mint is still caught deeper ("voting power would go negative") but a ZERO mint
+// silently succeeds. mustBePositive is therefore the only thing rejecting zero, which
+// is the case worth pinning here.
+func TestInvalidAddressIsRejectedAtEveryEntryPoint(t *testing.T) {
+	alice := testutils.TestAddress("gv-alice")
+	l := fresh()
+	l.Mint(alice, 1_000_000)
+
+	var zero address // the unset field courtv2 reasons about
+	if zero.IsValid() {
+		t.Fatal("premise: the zero address must be invalid")
+	}
+
+	// Mint — the site courtv2's comment names.
+	mustPanic(t, "grc20votes: not an address", func() { l.Mint(zero, 1) })
+	// Transfer/move — the same guard on the recipient.
+	mustPanic(t, "grc20votes: not an address", func() { l.Transfer(alice, zero, 1) })
+	// Approve — the spender.
+	mustPanic(t, "grc20votes: not an address", func() { l.Approve(alice, zero, 1) })
+	// Delegate — the delegatee.
+	mustPanic(t, "grc20votes: not an address", func() { l.Delegate(alice, zero) })
+
+	// A rejected call must not have moved anything.
+	if got := l.BalanceOf(alice); got != 1_000_000 {
+		t.Fatalf("a rejected call must not move balances: %d", got)
+	}
+	if got := l.TotalSupply(); got != 1_000_000 {
+		t.Fatalf("a rejected mint must not move supply: %d", got)
+	}
+}
+
+// mustBePositive's three sites, same reasoning: zero and negative amounts must be
+// refused, not silently applied. A negative mint would inflate a balance by
+// subtracting, and a negative transfer would move value the wrong way.
+func TestNonPositiveAmountsAreRejected(t *testing.T) {
+	alice := testutils.TestAddress("gv2-alice")
+	bob := testutils.TestAddress("gv2-bob")
+	l := fresh()
+	l.Mint(alice, 1_000_000)
+
+	for _, amt := range []int64{0, -1, -1_000_000} {
+		mustPanic(t, "grc20votes: amount must be positive", func() { l.Mint(bob, amt) })
+		mustPanic(t, "grc20votes: amount must be positive", func() { l.Transfer(alice, bob, amt) })
+	}
+	if got := l.BalanceOf(bob); got != 0 {
+		t.Fatalf("no rejected amount may reach a balance: %d", got)
+	}
+	if got := l.BalanceOf(alice); got != 1_000_000 {
+		t.Fatalf("a rejected transfer must not debit the sender: %d", got)
+	}
+}
