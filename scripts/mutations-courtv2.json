@@ -488,5 +488,54 @@
   "label": "RESERVOIR: juniorReserved not subtracted",
   "find": "\tr := past - c.juniorReserved",
   "replace": "\tr := past"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "M3-HIGH-1: SettleUndisputed returns the WHOLE bond",
+  "find": "\t\t\treserve = slashSizeFor(cs)\n\t\t\tif reserve > cs.answerBond {",
+  "replace": "\t\t\treserve = 0\n\t\t\tif reserve > cs.answerBond {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "M3-HIGH-1: Finalize returns the WHOLE bond",
+  "find": "\t\t\treserve = slashSizeFor(cs)\n\t\t\tif reserve > cs.answerBond {",
+  "replace": "\t\t\treserve = 0\n\t\t\tif reserve > cs.answerBond {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "M3-HIGH-1: settle retains only HALF the slash size",
+  "find": "\t\t\treserve = slashSizeFor(cs)\n\t\t\tif reserve > cs.answerBond {",
+  "replace": "\t\t\treserve = slashSizeFor(cs) / 2\n\t\t\tif reserve > cs.answerBond {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "settle does not shrink answerBond to the reserve",
+  "find": "\t\tcs.answerBond = reserve",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "N3: the page bound is loosened past one page",
+  "find": "const renderPageSize = 50",
+  "replace": "const renderPageSize = 60"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "N3: the page bound is tightened",
+  "find": "const renderPageSize = 50",
+  "replace": "const renderPageSize = 40"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "MED-1: pct loses its den/num domain guard",
+  "find": "\tif den <= 0 || num < 0 {",
+  "replace": "\tif false {"
  }
 ]

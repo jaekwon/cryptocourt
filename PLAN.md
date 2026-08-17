@@ -1624,6 +1624,40 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.66 — swept the audit-named invariants systematically; N3 was open, and the
+  "documented means unpinned" pattern I claimed in v0.65 is WRONG.** Instead of guessing
+  areas, grepped the source for emphatic invariant markers (`audit X`, `M3-*`, `NOTE-*`,
+  `Do NOT`, `CRITICAL`) and mutated the guard beside each. That list is a good map: H1,
+  C1, M3-CRITICAL-1, M2-1, M3-MED-1 and M3-LOW-1 were already covered by earlier firings.
+  **M3-HIGH-1 is WELL pinned** — three mutations of the retention amount in both terminal
+  paths (whole bond returned in `SettleUndisputed`, the same in `Finalize`, and a subtle
+  half-size retention) were all caught. That matters because it **refutes the pattern I
+  asserted in v0.65**, that "documentation and verification are inversely correlated here".
+  M3-HIGH-1 is the most heavily commented invariant in the realm and it is also the best
+  tested. The real distinction is narrower: a guard is pinned when the FIX that introduced
+  it shipped with a fixture, and unpinned when it was added as REASONING — H1's freeze cap,
+  the P7 winners' slice and §7.4's other three terms were all argued in prose and never
+  driven. I overstated a two-point correlation into a law; the corrected version is about
+  provenance, not about how much prose a guard carries.
+  **N3 (the render page bound) was open, and its mutation HANGS the suite** rather than
+  surviving — which is itself the finding: removing the bound makes an attacker-openable,
+  deposit-priced claim count turn a page render into unbounded work, enough to blow a
+  ten-minute budget. Pinned by asserting the cap BINDS on a court with more claims than a
+  page (a fixture cannot use a mutation that hangs), and **the first version of that
+  fixture was self-referential** — it sized the setup from `renderPageSize`, so mutating
+  the constant moved setup and expectation together and the mutation survived. The bound is
+  now written independently, with a mismatch check so a deliberate page-size change fails
+  loudly instead of silently widening the assertion.
+  **Two survivors documented rather than faked:** `advanceRateAcc`'s `blocks <= 0` early
+  return (blocks is always now-minus-lastTouch and touch never runs backwards, so it cannot
+  be negative; kept because the failure it prevents is rateAcc moving DOWN, repricing every
+  live position — H1's class from the other side) and the negative-realized-mint panic,
+  which the source already labels "defensive" since `emittedTotal` is monotone.
+  **Second timeout of the session, and my v0.62 rule paid for itself:** the killed run left
+  `renderPageSize = 1000000` in the source and a stale stage lock. Checked `git diff` on
+  the realm first, restored from `.mutate-backup`, cleared the lock with `rmdir`. Batch now
+  77 rows, all caught, none invalid.
+
 - **v0.65 — the P7 draw split was open on the side the code warns about.** Eight
   mutations over `PullSenior`'s payable math, `reservoirR`'s two subtractions, and the
   80/8/5 split. Seven caught — the senior lane's paid-deduction, its `paid` bookkeeping,
