@@ -465,6 +465,140 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if IsCourtMod("mtx12", puppet) {
 		t.Fatal("a candidate registered after the appeal must not be installable")
 	}
+
+	// ---- 13. a claim with NO BINDING APPEAL executes nothing ----------------
+	// The binding is written at PostAnswer and only for a title that parses as a
+	// `mod:` instruction, so an ordinary claim filed on the review court reaches
+	// execution with nothing bound to it. Deleting this guard does not merely let a
+	// no-op through: the very next line dereferences the binding, so the refusal
+	// becomes a nil dereference. A clean error and a VM panic are different
+	// behaviours, and only one of them is a refusal.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap13 := OpenClaim(cross(cur), metaSlug, "an ordinary claim, not a mod instruction")
+	matureOI(cur, metaSlug, ap13, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap13, sideYES)
+	testing.SkipHeights(settleDelay + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SettleUndisputed(cross(cur), metaSlug, ap13)
+	if Provisional(metaSlug, ap13) != sideYES {
+		t.Fatal("fixture: the appeal must carry a final YES, so only the binding is missing")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "carries no binding appeal", func() {
+		ExecuteMetaVerdict(cross(cur), ap13)
+	})
+
+	// ---- 14. a NO verdict executes nothing ---------------------------------
+	// Nothing else stops this one. The verdict is read from `provisional`, the
+	// field a dispute OVERTURNS, so a valid instruction that the electorate voted
+	// DOWN must not act — otherwise losing an appeal and winning it do the same
+	// thing.
+	testCourt(cur, "mtx14", alice, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // the target must predate the appeal
+	testing.SetRealm(testing.NewUserRealm(alice))
+	OpenClaim(cross(cur), "mtx14", "a claim to leave alone")
+	testing.SkipHeights(2) // predate is STRICT, and check 2 runs before check 3
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap14 := OpenClaim(cross(cur), metaSlug, "mod:unhide:mtx14/1")
+	matureOI(cur, metaSlug, ap14, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap14, sideNO) // the electorate says NO
+	testing.SkipHeights(settleDelay + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SettleUndisputed(cross(cur), metaSlug, ap14)
+	if Provisional(metaSlug, ap14) != sideNO {
+		t.Fatalf("fixture: the verdict must be NO, got %d", Provisional(metaSlug, ap14))
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "the verdict was not YES", func() {
+		ExecuteMetaVerdict(cross(cur), ap14)
+	})
+
+	// ---- 15. a LOCAL INSTALL between verdict and execution refuses ----------
+	// setmods anchors its staleness on verdictAt rather than openedAt, deliberately:
+	// the local electorate is always faster than a meta appeal, so an openedAt
+	// anchor would hand the local set a permanent free veto and meta's duty cycle
+	// would be zero. But an install landing AFTER the verdict must still refuse —
+	// otherwise meta overwrites a set the court chose while the appeal was in the
+	// post-verdict queue, which is the one window the anchor leaves open.
+	testCourt(cur, "mtx15", alice, 10_000_000_000)
+	// Top up. Fifteen sections of stakes are still LOCKED — nothing here ever
+	// withdraws — so alice's spendable balance has been drawn down to roughly 29.6k
+	// CC while matureOI needs three stakes of 2x the answer floor, about 44.5k.
+	// Minting converges rather than chasing its own tail: the floor is basis points
+	// of supply, so adding S raises the requirement by a small fraction of S. carol
+	// is topped up in the same proportion because credEligible needs her overturn
+	// weight to stay above a quarter of a floor that also moves with supply.
+	mc.coin.Mint(alice, 200_000_000_000)
+	mc.coin.Mint(carol, 100_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // seal the mint before the floors read it
+	newMod15 := testutils.TestAddress("mtx15-new")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	cand15 := RegisterModCandidate(cross(cur), "mtx15", []address{newMod15}, 1)
+	testing.SkipHeights(epochBlocks * 2) // court AND candidate must predate the appeal
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap15 := OpenClaim(cross(cur), metaSlug,
+		"mod:setmods:mtx15/"+strconv.FormatUint(cand15, 10))
+	matureOI(cur, metaSlug, ap15, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap15, sideYES)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), metaSlug, ap15)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), metaSlug, ap15, "yes")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	VoteDispute(cross(cur), metaSlug, ap15, "no")
+	testing.SkipHeights(mc.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), metaSlug, ap15)
+	cs15 := mustClaim(mc, ap15)
+	if cs15.decidedRounds != 1 || !cs15.credEligible {
+		t.Fatal("fixture: setmods needs a decided, credEligible round to reach the guard")
+	}
+	testing.SkipHeights(cs15.escrowUntil - runtimeHeight() + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), metaSlug, ap15)
+
+	// The court installs its OWN set after the verdict. alice is the creator and no
+	// election has spent her appointment power, so this is the ordinary local route.
+	localMod := testutils.TestAddress("mtx15-local")
+	// STRICTLY after: the guard compares setActHeight > verdictAt, and the escrow
+	// skip above is a no-op once escrowUntil has already passed, so without a block
+	// here the install shares the verdict's height and the comparison reads equal.
+	testing.SkipHeights(1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mtx15", []address{localMod}, 1)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "moderator set changed after this verdict", func() {
+		ExecuteMetaVerdict(cross(cur), ap15)
+	})
+	// The local choice stands, and meta's candidate never lands.
+	if !IsCourtMod("mtx15", localMod) || IsCourtMod("mtx15", newMod15) {
+		t.Fatal("a stale setmods verdict must not overwrite the court's own install")
+	}
+
+	// ---- 16. a PROVISIONALLY CLOSED claim is not a verdict ------------------
+	// `verdictAt == 0 || provClose` looks like one guard and is two. The first arm
+	// is masked: an undecided claim still carries provisional == -1, so the YES
+	// check one line down refuses it anyway. The provClose arm is the one that has
+	// to exist on its own — three failed rounds close a claim WITHOUT deciding it,
+	// leaving everyone whole and `provisional` still sitting on the posted answer.
+	// If that answer was YES, the YES check passes and only this arm refuses.
+	//
+	// The state is set directly rather than driven through three failed rounds,
+	// because the PATH there is already covered by
+	// TestDisputeFailedRoundsToProvClose; what is under test here is the guard's
+	// reaction to that state. Reusing ap15 also pins the CHECK ORDER: the verdict
+	// test is step 3 and the setmods staleness test is step 7, so the message must
+	// change from the staleness one asserted above to this one.
+	cs15.provClose = true
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "no final verdict", func() {
+		ExecuteMetaVerdict(cross(cur), ap15)
+	})
+	cs15.provClose = false // leave the fixture as section 15 left it
 }
 
 // metaRealmPath is a STRING CONSTANT, and meta's escrow is derived from it,

@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.41 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.42 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,44 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.42 — all 13 of `meta.gno`'s measured guards are pinned. Batch 93, gaps
+  empty.** The last four closed as §13–§16 of `TestMetaLifecycleGuards`, and three
+  of them taught something about the fixture rather than the code.
+  - **§13, a claim with no binding appeal.** The binding is written at
+    `PostAnswer` and only for a title that parses as a `mod:` instruction, so an
+    ordinary claim filed on the review court reaches execution with nothing bound.
+    Deleting the guard does not let a no-op through — the next line dereferences the
+    binding, so the refusal becomes a **nil dereference**. A clean error and a VM
+    panic are different behaviours and only one is a refusal.
+  - **§14, a NO verdict.** Nothing else blocks it: the verdict is read from
+    `provisional`, the field a dispute overturns, so without this guard losing an
+    appeal and winning it do the same thing. The fixture needed a block inserted
+    between the target claim and the appeal — **predate is strict, and check 2 runs
+    before check 3**, so the claim guard fired first and the test was measuring the
+    wrong refusal until the gap was widened.
+  - **§15, a local install between verdict and execution.** `setmods` anchors
+    staleness on `verdictAt` rather than `openedAt` deliberately — the local
+    electorate is always faster than a meta appeal, so an `openedAt` anchor would
+    hand it a permanent free veto and meta's duty cycle would be zero. But an
+    install landing *after* the verdict must still refuse, which is the one window
+    that anchor leaves open. Two fixture faults, both measured rather than guessed:
+    alice had run out of **spendable** CC (15 sections of stakes are still locked
+    and nothing withdraws), and the install shared the verdict's block, so a strict
+    `>` read equal. Topping up converges because the floor is basis points of
+    supply — adding S raises the requirement by a small fraction of S — and carol
+    was topped up in the same proportion because `credEligible` needs her overturn
+    weight above a quarter of a floor that also moves with supply.
+  - **§16, a provisionally closed claim is not a verdict.** `verdictAt == 0 ||
+    provClose` looks like one guard and is two. The first arm is **masked** — an
+    undecided claim still carries `provisional == -1`, so the YES check refuses it
+    anyway. The `provClose` arm stands alone: three failed rounds close a claim
+    *without* deciding it, leaving `provisional` on the posted answer, and if that
+    answer was YES then only this arm refuses. The state is set directly rather
+    than driven through three failed rounds, because the **path** there is already
+    covered by `TestDisputeFailedRoundsToProvClose` and what is under test here is
+    the guard's reaction to it. Reusing §15's decided appeal also pins the **check
+    order**: the verdict test is step 3 and the staleness test is step 7, so the
+    message must change from the one §15 asserts to this one.
 - **v0.41 — `meta.gno` measured for the first time: `TestMetaLifecycleGuards`
   earns its name on 7 of 13 guards, and the two predate arms it was missing guard a
   named attack.** The biggest zero-coverage surface, and the home of I8. Thirteen
