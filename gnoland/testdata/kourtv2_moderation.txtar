@@ -27,12 +27,29 @@ loadpkg gno.land/r/kourt/kourtv2
 gnoland start
 
 env TEST1=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
+env KOURTV2=g1ulvf0h879a8jg7kdhv23z9zwvnm6r04rm3ks9k
+
+# --- The review court's escrow really is this realm -----------------------------
+# meta is created at init, which has no `cur` to ask for the realm's own address,
+# so its escrow is derived from a string CONSTANT (metaRealmPath). Every other
+# court gets cur.Address(), straight from the crossing frame. On a real node
+# both must resolve to the realm, and comparing them is the check: if that
+# constant ever drifts from the deploy path, meta's escrow becomes an address
+# nobody holds the key to, every appeal bond is paid into it, and a realm is
+# write-once so nothing repairs it afterwards.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtEscrow(\"meta\")"
+stdout ${KOURTV2}
 
 # --- A court, and two claims in it ---------------------------------------------
 # The creator bootstraps as the court's 1-of-1 moderator set, so test1 can
 # moderate its own court without any appointment.
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
+
+# The other half of the comparison: an ordinary court's escrow comes from
+# cur.Address(), so meta's constant-derived one above must equal it.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtEscrow(\"orem\")"
+stdout ${KOURTV2}
 
 # Claims cost a refundable CC deposit, so buy into the court's curve first.
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1

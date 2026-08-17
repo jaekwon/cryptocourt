@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.22 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.23 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,31 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.23 — the review court's escrow is a string constant, now checked**.
+  `init()` has no `cur` to ask for the realm's own address, so meta's escrow is
+  derived from the **`metaRealmPath` constant**. Every other court gets
+  `cur.Address()`, straight from the crossing frame. The two derivations must
+  agree, and *comparing them is the whole check* — no address literal to pin,
+  no oracle needed.
+  If that constant ever drifts from the deploy path — a rename, a fork, a v3
+  deployed beside this one — meta's escrow silently becomes an address nobody
+  holds the key to. Every appeal bond and deposit routed through the review
+  court is paid into it, and **a realm is write-once**, so there is no version
+  of this that gets repaired afterwards. The cheapest possible assertion against
+  the most expensive possible typo.
+  Checked in two places: `TestMetaEscrowIsThisRealm` (unit, so it runs in the
+  isolation sweep too) and the moderation txtar, which asserts both derivations
+  resolve to the realm address on a real node.
+  **The guard was verified by breaking it**: pointing `metaRealmPath` at
+  `.../kourtv3` makes the test fail with both addresses in the message. A guard
+  nobody has watched fail is not yet a guard — the same standard `make selftest`
+  already holds the script checks to.
+  **Deliberately a test, not a runtime assert.** The only way to make this false
+  is to edit the constant or move the realm, and both happen in the repository,
+  where a test catches them. A per-call runtime check would charge every user
+  gas forever to guard against a mistake no user can make. Also worth recording:
+  the existing money txtar pins `CourtEscrow("orem")`, which looked like it
+  already covered this and does not — ordinary courts never touch the constant.
 - **v0.22 — the rest of the lazily-created reads**. A sweep for the v0.19 bug
   class: every read with a *not-yet-materialised* branch must answer what the
   WRITE path would do, not what is currently stored. Nine reads audited, one

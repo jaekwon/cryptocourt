@@ -377,3 +377,36 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 		t.Fatal("a stale verdict must not re-suspend a court the global DAO released")
 	}
 }
+
+// metaRealmPath is a STRING CONSTANT, and meta's escrow is derived from it,
+// because init() has no `cur` to ask for the realm's own address. Every other
+// court gets cur.Address() — the genuine one, straight from the crossing frame.
+// So the two derivations must agree, and comparing them is the whole check.
+//
+// If that constant ever drifts from the deploy path — a rename, a fork, a v3
+// deployed beside this one — meta's escrow silently becomes an address nobody
+// holds the key to. Every appeal bond and deposit routed through the review
+// court would be paid into it, and a realm is write-once, so there is no
+// version of this that gets repaired afterwards. It is the cheapest possible
+// assertion against the most expensive possible typo.
+//
+// A unit test, not a runtime guard: the only way to make this false is to edit
+// the constant or move the realm, and both happen here, in the repository,
+// where a test catches them. A per-call runtime check would charge every user
+// gas forever to guard against a mistake no user can make.
+func TestMetaEscrowIsThisRealm(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mesc-alice")
+	testCourt(cur, "mescrow", alice, 1_000_000)
+
+	fromConstant := CourtEscrow(metaSlug)  // chain.PackageAddress(metaRealmPath)
+	fromFrame := CourtEscrow("mescrow")    // cur.Address()
+	if fromConstant != fromFrame {
+		t.Fatalf("metaRealmPath does not name this realm: the review court's "+
+			"escrow is %s but the realm's own address is %s — every appeal bond "+
+			"would be paid to an account nobody controls",
+			fromConstant, fromFrame)
+	}
+	if fromConstant == "" {
+		t.Fatal("the review court's escrow must not be the zero address")
+	}
+}
