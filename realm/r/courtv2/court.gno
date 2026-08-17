@@ -132,18 +132,28 @@ func mustInvariants() {
 	if splitWinners+splitAuthor+splitAnswerer != 93 {
 		panic("courtv2: the tier-scaled split must sum to 93 points")
 	}
-	// Draw-proportional slash stays bond-collateralizable (v0.40): at the
-	// hottest rate and the longest honest claim life the draw arm k·midGross
-	// must fit under the answer bond, else it silently degenerates to a flat
-	// bond-clamp (no longer tracking the take). maxMidGross/X̄ (in bps) =
-	// maxRateBpsFP × maxTcWeeks / 1e6, with maxRateBpsFP at the d_eff ceiling
-	// (= the start budget, since the schedule only steps down) and maxTcWeeks
-	// the dead-claim timeout. Derivation: midGross/X̄ = rateBpsFP·T_c/1e10.
+	// CALIBRATION, NOT A SAFETY PROOF — read before trusting this (audit round 2).
+	// A check over CONSTANTS can only make a constant-space claim: on a pool
+	// roughly CONSTANT over a ≤12-week life, the draw arm k·midGross lands under
+	// the 50%·X̄ bond, i.e. PostAnswer's collateralization floor stays a NO-OP on
+	// the honest path and the quoted bond stays legible. It does NOT prove the
+	// slash is collateralized. Its premise (midGross/X̄ = rateBpsFP·T_c/1e10, with
+	// X̄ standing in for the pool) is falsified AT RUNTIME two ways: by a DRAIN —
+	// Unstake is free and keeps conviction by design (F9), measured at a 224×
+	// shortfall — and by an over-aged claim, since nothing forced CloseDeadClaim.
+	// The real guarantee is the runtime floor in PostAnswer, which prices the slash
+	// with the SAME sizer ResolveFlag later draws with; the ≤12-week premise is now
+	// enforced there by the dead-claim answerability gate.
 	maxRateBpsFP := 255 * (r0WeeklyBps*1_000_000 + budgetBpsFPStart) / 100
 	maxTcWeeks := deadClaimTimeout / periodBlocks
 	maxMidGrossBps := maxRateBpsFP * maxTcWeeks / 1_000_000
 	if slashDrawBps*maxMidGrossBps/10000 > answerBondBps {
-		panic("courtv2: the draw-proportional slash can exceed the answer bond at the hot-rate max — it would clamp to a flat bond instead of tracking the draw")
+		panic("courtv2: the draw arm exceeds the base bond at the hot-rate 12-week max — PostAnswer's collateralization floor would bind on HONEST claims, repricing every answer")
+	}
+	// The flat arm's twin coupling, previously unstated: the base bond covers the
+	// 4.5%·X̄ arm too, so the floor is inert on BOTH arms while the cap is unset.
+	if slashXBps > answerBondBps {
+		panic("courtv2: the flat slash arm exceeds the base answer bond")
 	}
 }
 

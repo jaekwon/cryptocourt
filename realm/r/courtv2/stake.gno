@@ -122,6 +122,23 @@ func rawHeight(cs *claimState) int64 {
 	return h
 }
 
+// lifeAvgStake is the claim's LIFETIME time-averaged TOTAL stake:
+// (∫yesStake·dt + ∫noStake·dt) / (now − openedAt), read from the raw integrals
+// advancePools already keeps — the same integral, over the same denominator,
+// that crystallize's capBonus uses for the F9 flash-proof base. Callers must
+// have settled the pools to `now` first. The denominator runs from the claim's
+// OPEN, not its first stake, so an idle head only ever lowers it: conservative
+// by construction. Unlike the trailing ring, no withdrawal can lower this —
+// moving it costs capital × TIME, and past capital-time is immutable.
+func lifeAvgStake(cs *claimState, now int64) int64 {
+	hi, lo := add128(cs.yesRawHi, cs.yesRawLo, cs.noRawHi, cs.noRawLo)
+	den := now - cs.openedAt
+	if den < 1 {
+		den = 1
+	}
+	return div128(hi, lo, den)
+}
+
 // Stake backs one side of a claim with CC. Free to reverse until the answer.
 func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) {
 	if !cur.IsCurrent() {
