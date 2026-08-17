@@ -698,5 +698,54 @@
   "label": "ListByTier ignores the tier filter",
   "find": "\t\tif int(v.(*Court).tier) == tier {",
   "replace": "\t\tif true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AnswererBonus: the tier bound never binds",
+  "find": "\tif bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {",
+  "replace": "\tif bound := mustMul(cs.tier, cs.answerBond0) * 1000; pay > bound {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AnswererBonus: the bound is a whole bond, not half",
+  "find": "\tif bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {",
+  "replace": "\tif bound := mustMul(cs.tier, cs.answerBond0); pay > bound {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AnswererBonus: the bound reads one tier too high",
+  "find": "\tif bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {",
+  "replace": "\tif bound := mustMul(cs.tier+1, cs.answerBond0) / 2; pay > bound {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AnswererBonus: the slice can be drawn twice",
+  "find": "\tif cs.answererPaid {\n\t\tpanic(\"courtv2: the answerer slice was already drawn\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AnswererBonus: anyone may draw the answerer's slice",
+  "find": "\tif who != cs.answerer {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: the domain guard is removed",
+  "find": "\tif from < 0 || delta < 0 || from > c.cap {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: a negative span is accepted",
+  "find": "\tif from < 0 || delta < 0 || from > c.cap {",
+  "replace": "\tif from < 0 || from > c.cap {"
  }
 ]

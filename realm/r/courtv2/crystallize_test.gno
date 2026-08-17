@@ -614,3 +614,81 @@ func TestP7SplitTakesEightyOfNinetyThreeForWinners(cur realm, t *testing.T) {
 			splitAuthor, splitWinners, a, w)
 	}
 }
+
+// AnswererBonus had FIVE surviving mutations — every guard in the function, which
+// is the worst-covered money path found since v0.68. Two of them stand between a
+// caller and mintEmission: delete `who != cs.answerer` and ANYONE draws the
+// answerer's slice into their own balance; delete `answererPaid` and the answerer
+// draws it again, and again. Neither is an equivalence — both mint.
+//
+// The function was not untested, which is why this went unnoticed. Two fixtures
+// call it: TestCrystallizeMidHappyPathDrainsEscrow asserts the answerer draws
+// exactly its slice (so the tier bound is never reached), and the M3 overturn
+// fixture asserts zero — but by way of drawAnswerer == 0, not the bound. Both call
+// it AS the answerer, once. Every guard was therefore exercised on the side where
+// it does nothing, which is indistinguishable from coverage until something breaks
+// it on purpose.
+func TestAnswererBonusGuardsItsSliceAndItsCap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ab1-alice")
+	bob := testutils.TestAddress("ab1-bob")
+	c := testCourt(cur, "ab1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ab1", "The answerer's slice and its cap")
+	matureOI(cur, "ab1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "ab1", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "ab1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "ab1", id)
+	testing.SkipHeights(100_000) // the reservoir starts empty; cross a period
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "ab1", id)
+
+	// Only the answerer, and the check must be the ANSWERER's identity rather than
+	// mere participation: bob staked, settled and is a live participant here.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "only the answerer draws this slice", func() {
+		AnswererBonus(cross(cur), "ab1", id)
+	})
+
+	_, _, ans, _ := DrawSlices("ab1", id)
+	if ans <= 0 {
+		t.Fatalf("setup: this claim must have a live answerer slice, got %d", ans)
+	}
+	cs := mustClaim(c, id)
+	if cs.tier <= 0 {
+		t.Fatalf("setup: an undisputed mid claim must carry a positive tier, got %d",
+			cs.tier)
+	}
+	// The bound is tier x b0 / 2 and the natural fixture sits UNDER it, exactly as
+	// the happy path asserts. So drive the bound down to half the slice instead of
+	// driving the slice up past the bound: clamping DOWN keeps the mint smaller
+	// than one the reservoir has already funded, whereas an inflated draw would
+	// test the cap against the emission budget as much as against the cap.
+	if natural := cs.tier * cs.answerBond0 / 2; ans > natural {
+		t.Fatalf("this fixture assumes the cap is slack (slice %d, bound %d); it now "+
+			"binds on its own, so assert the natural value instead of squeezing it",
+			ans, natural)
+	}
+	cs.answerBond0 = ans / cs.tier
+	want := cs.tier * cs.answerBond0 / 2
+	if want <= 0 || want >= ans {
+		t.Fatalf("the squeeze must land strictly between 0 and the slice: "+
+			"bound %d, slice %d", want, ans)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	got := AnswererBonus(cross(cur), "ab1", id)
+	if got != want {
+		t.Fatalf("the tier bound must clamp the answerer's slice to %d, not pay %d "+
+			"(uncapped slice %d)", want, got, ans)
+	}
+
+	// One draw only. Without this latch the clamped slice is mintable on every call.
+	uassert.AbortsContains(t, cur, "already drawn", func() {
+		AnswererBonus(cross(cur), "ab1", id)
+	})
+}

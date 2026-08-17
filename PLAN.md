@@ -1624,6 +1624,46 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.71 — `AnswererBonus` had FIVE of five guards unpinned, and the `curve` "all four
+  are equivalent mutations" reading of v0.70 was WRONG on the one that mattered.**
+  **`AnswererBonus` is the first function found with no guard covered at all.** Five
+  mutations, five survivors: the tier bound never binding, the bound taken as a whole bond
+  instead of half, the bound read one tier high, the slice drawable twice, and *anyone*
+  drawing the answerer's slice. The last two both reach `mintEmission` — one mints to a
+  stranger, the other mints again on every call — so neither is an equivalence.
+  The instructive part is that the function was NOT untested. Two fixtures call it:
+  the mid happy path asserts the answerer draws exactly its slice (so the bound is never
+  reached), and the M3 overturn fixture asserts zero — but by way of `drawAnswerer == 0`,
+  not the bound. Both call it AS the answerer, once. Every guard was exercised on the side
+  where it does nothing, which is indistinguishable from coverage until something breaks it
+  on purpose. The new fixture drives the bound DOWN below the natural slice rather than the
+  slice up past the bound, so the clamp is tested against the cap and not against the
+  emission budget; it fails loudly if the cap ever starts binding on its own.
+  **RETRACTION.** v0.70's reading of the four `curve` survivors — "defensive depth, every
+  input they reject is rejected again downstream, all four equivalent" — was right about
+  three and wrong about `Cost`'s domain check, in this repo's signature failure mode. The
+  argument was that a negative span borrows, so `hi` is all ones, so `hi2 >= m` re-rejects
+  it. It does not: `bits.Add64(lo, m-1, 0)` CARRIES, `hi + carry` WRAPS BACK TO ZERO, and
+  the overflow guard sees nothing. `Cost(1, -1)` answers `(0, TRUE)` — a valid quote for a
+  span that runs backwards, which is exactly the "walking it backward would let the same
+  region be bought twice" failure the package doc names. So I reasoned about a wrap guard
+  and got caught by a wrap. It survived only because the pairs first written into the table
+  ({10,-1}) sit too far from the origin to diverge — the divergence needs
+  from² − s1² ≤ 2d−1. Now caught, in the real VM, including the isolated `delta < 0` clause.
+  The other three ARE value-equivalent, but not independently redundant — they are MUTUALLY
+  PROTECTIVE, and the clamp is the one that must not be removed as dead. Measured, not
+  argued: with the domain check and the clamp both gone, on a curve `New` will happily
+  build, `Minted(1, -1)` returns **9223372036854775807 units for a spend of 0**. `uint64(-1)`
+  pushes the operand past `isqrt128`'s exact range, `r` comes back as its search bound 2^63,
+  `int64(r)` is MinInt64, and `s1 - from` wraps to MaxInt64, which the `delta <= 0` exit then
+  waves through as a positive mint. Recorded beside the clamp, since that is where somebody
+  would go to delete it. Also corrected: v0.70 called the domain check's cost "bounded work,
+  up to cap steps" — for a negative `from` it is up to ~9.2e18 divisions, an unconditional
+  hang, not a gas nit.
+  None of this changes `curve` logic — the guards are all present and correct; the finding
+  is that one of them was unpinned and the other three are load-bearing in combination.
+  Batch now 107 rows, all caught, none invalid.
+
 - **v0.70 — the isolation sweep is clean at full scope; the staging lock could call a
   LIVE holder stale, and the fix removes the last hand-copy.** Three results, none of
   them a realm change.
