@@ -1657,6 +1657,18 @@ Newest first.
   is not a shadow and unlinks symlinks rather than following them into a real gno
   checkout. Without that last one a bug here deletes the monorepo, and no test in this
   repo would survive to report it.
+  **Hardened after watching the other worktree run.** `cryptocourt-mod` was mid-suite
+  during this work, which showed two things the first draft got wrong. The copy of
+  examples/ now SKIPS the staging directories (`cryptocourt` and the renamed `kourt`):
+  they are the only volatile part of that tree, and another runner part way through its
+  own rm -rf would otherwise fail this copy with an error about a path nobody asked for.
+  Skipping them is both the correct result — a staged realm must not reach the real tree's
+  copy of itself — and the robust one. `.git` is now left out rather than symlinked as
+  well: nothing here needs it, and a link would mean any tool that ran git inside a shadow
+  was working on the real checkout's index. Cost is about a second, once per run.
+  **Then re-verified under real concurrency:** the 117-row batch and the 393-test isolation
+  sweep run at the SAME TIME from this worktree, while the renamed worktree ran its own
+  check, isolation, txtar and mutate — five test workloads across two checkouts, all green.
   Note for anyone reading the old entries: **`gno env GNOROOT` is cwd-dependent.** Run
   from a gno monorepo checkout it reports that checkout; run from this repo it falls back
   to `~/gopath/src/github.com/gnolang/gno`. The tooling runs from here, so that is what it

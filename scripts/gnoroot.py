@@ -22,8 +22,8 @@ GNOROOT is honoured from the environment, so the runner gets a shadow of it:
 every top-level entry SYMLINKED, except `examples`, which is a real copy. Only
 the examples tree needs to be real — gno's package discovery walks it and does
 not follow symlinks, which is the whole reason a symlink farm alone does not work
-— and it is 14MB, about half a second. Everything expensive (gnovm, tm2, the
-stdlibs) stays a symlink and is never copied.
+— and it is a few tens of MB, on the order of a second, once per run. Everything
+expensive (gnovm, tm2, the stdlibs) stays a symlink and is never copied.
 
 What this does NOT do is rewrite import paths, which was the other way to get
 per-worktree staging and a bad trade: the code under test would then differ
@@ -74,20 +74,38 @@ def build(real, label, pid=None):
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(root)
     for name in os.listdir(real):
-        if name == "examples":
+        # `examples` is copied below. `.git` is deliberately absent rather than
+        # symlinked: nothing here needs it, and a symlink would mean any tool that
+        # ran git inside a shadow was operating on the real checkout's index.
+        # Removal is already safe either way — rmtree unlinks symlinks instead of
+        # descending them, which the self-test pins — but a link that cannot be
+        # followed by accident is better than one that merely is not.
+        if name in ("examples", ".git"):
             continue
         os.symlink(os.path.join(real, name), os.path.join(root, name))
     src = os.path.join(real, "examples")
     dst = os.path.join(root, "examples")
-    # cp -Rc clones on APFS, so this is near-free where it is supported; -R alone
-    # is the fallback and still only takes about half a second for 14MB.
-    if subprocess.run(["cp", "-Rc", src, dst], capture_output=True).returncode != 0:
-        shutil.copytree(src, dst, symlinks=True)
-    # A staged realm must never be able to reach the REAL tree's copy of itself.
-    for kind in ("p", "r"):
-        shutil.rmtree(os.path.join(dst, "gno.land", kind, "cryptocourt"),
-                      ignore_errors=True)
+    shutil.copytree(src, dst, symlinks=True, ignore=_skip_staging)
     return root
+
+
+# Directory names another runner stages into, skipped while copying examples/.
+#
+# Two reasons, and the second is the one that bites. A staged realm must not be
+# able to reach the real tree's copy of itself. And these are the only VOLATILE
+# directories in examples/: a runner in another worktree — or an older version of
+# this tooling, or the renamed checkout, which stages `kourt` — may be part way
+# through its own rm -rf while this copy walks the tree, and a file that vanishes
+# mid-copy would fail the build with an error about a path nobody asked for. Not
+# copying them at all is both the correct result and the robust one.
+STAGED = ("cryptocourt", "kourt")
+
+
+def _skip_staging(directory, names):
+    parts = directory.replace(os.sep, "/").split("/")
+    if len(parts) >= 2 and parts[-2] == "gno.land" and parts[-1] in ("p", "r"):
+        return {n for n in names if n in STAGED}
+    return set()
 
 
 def remove(path):
