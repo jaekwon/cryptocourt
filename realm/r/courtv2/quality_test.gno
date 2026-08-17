@@ -564,3 +564,103 @@ func TestConclusiveLowSurvivesLateFinalize(cur realm, t *testing.T) {
 		t.Fatalf("a conclusive-low claim must draw nothing after Finalize: %d/%d/%d", w, a, ans)
 	}
 }
+
+// DIAGNOSTIC (audit round 2): can a mill bank huge conviction, drain the stake to
+// the floor just before answering, and thereby collateralize the slash with a
+// tiny bond? The slash is sized off LIFETIME conviction; the bond is sized off the
+// 3-HOUR trailing average — and Unstake keeps conviction by design (F9).
+func TestDrainedStakeCannotUndercollateralizeTheSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("drn-alice")
+	c := testCourt(cur, "drn1", alice, 1_000_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "drn1", "Drained before the answer")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "drn1", id, sideYES, 100_000_000_000) // 100k CC
+	testing.SkipHeights(11 * periodBlocks)                  // 11 weeks of accrual (< 12wk dead-claim)
+
+	// Drain to the answer floor, then let the 3h window forget the big position.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unstake(cross(cur), "drn1", id, sideYES, 99_900_000_000) // leaves 100 CC = minAnswerX
+	testing.SkipHeights(answerWindow + epochBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "drn1", id, sideYES)
+
+	cs := mustClaim(c, id)
+	if got, want := cs.answerBond, slashSizeFor(cs); got < want {
+		t.Fatalf("bond must collateralize the slash: bond=%d slash=%d (ratio %dx)", got, want, want/got)
+	}
+}
+
+// The flat arm must be collateralized too, at ANY court cap. A draw-arm-only
+// floor passes every fixture today only because answerBondCapCC is 0 everywhere;
+// this pins the invariant against the day that knob is wired.
+func TestBondCollateralizesSlashUnderCourtCap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cap-alice")
+	c := testCourt(cur, "cap1", alice, 50_000_000_000)
+	// A cap far below the 50%·X̄ arm, so the flat arm would escape a draw-only floor.
+	c.params.answerBondCapCC = 1
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cap1", "Capped-bond claim")
+	matureOI(cur, "cap1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cap1", id, sideYES)
+
+	cs := mustClaim(c, id)
+	if got, want := cs.answerBond, slashSizeFor(cs); got < want {
+		t.Fatalf("the cap must not un-collateralize the slash: bond=%d slash=%d", got, want)
+	}
+}
+
+// PostAnswer must refuse a claim past the dead-claim timeout: CloseDeadClaim is
+// permissionless but optional, and every X̄-derived bound is derived for a
+// <=12-week life (conviction keeps accruing on an un-closed claim).
+func TestPostAnswerRefusesPastDeadClaimTimeout(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dct-alice")
+	testCourt(cur, "dct1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "dct1", "Answered far too late")
+	matureOI(cur, "dct1", id, alice, 200_000_000)
+	testing.SkipHeights(deadClaimTimeout)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "past the dead-claim timeout", func() {
+		PostAnswer(cross(cur), "dct1", id, sideYES)
+	})
+}
+
+// B (round-2 convergence): X̄frozen is the P6 base for every prize/punishment in
+// the claim, so it must be drain-resistant. The bond floor alone cannot pin this —
+// it repairs the bond and leaves the OTHER consumers reading the drained value.
+// Here the same drain is priced off the lifetime average, so the demotion bar can
+// no longer be cleared by dust: 25 CC of weight must not be able to zero the draw.
+func TestDrainedClaimPricesBarsOffLifetimeStake(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bar-alice")
+	c := testCourt(cur, "bar1", alice, 1_000_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "bar1", "Drained, but priced honestly")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "bar1", id, sideYES, 100_000_000_000) // 100k CC
+	testing.SkipHeights(11 * periodBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unstake(cross(cur), "bar1", id, sideYES, 99_900_000_000) // drain to 100 CC
+	testing.SkipHeights(answerWindow + epochBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "bar1", id, sideYES)
+
+	// The frozen base is the lifetime average, not the 100 CC the ring reports.
+	xbar := XBarFrozen("bar1", id)
+	if xbar < 50_000_000_000 {
+		t.Fatalf("X̄frozen must be the drain-resistant lifetime base, got %d", xbar)
+	}
+	// Therefore the dust-demotion faucet is priced out: the flag bond and the
+	// demotion bar both scale with the honest size of the claim.
+	if b0 := FlagBondNext("bar1", id); b0 < 1_000_000_000 {
+		t.Fatalf("the flag bond must scale with the honest size, got %d", b0)
+	}
+	cs := mustClaim(c, id)
+	if cs.answerBond < slashSizeFor(cs) {
+		t.Fatalf("bond must still collateralize the slash: %d < %d", cs.answerBond, slashSizeFor(cs))
+	}
+}

@@ -373,10 +373,16 @@ func (cs *claimState) flagBondPosted() int64 { return flagBondFor(cs) }
 // answer (advancePools settles them in PostAnswer; stake/unstake refuse after)
 // — so it is identical at settle, ResolveFlag, and crystallize.
 func winMidGross(cs *claimState) int64 {
-	if int(cs.answer) == sideYES {
-		return convToCC(cs.yesConvHi, cs.yesConvLo)
+	hi, lo := cs.sideConv(int(cs.answer))
+	return convToCC(hi, lo)
+}
+
+// sideConv is one side's pool conviction accumulator (u128).
+func (cs *claimState) sideConv(side int) (hi, lo uint64) {
+	if side == sideYES {
+		return cs.yesConvHi, cs.yesConvLo
 	}
-	return convToCC(cs.noConvHi, cs.noConvLo)
+	return cs.noConvHi, cs.noConvLo
 }
 
 // slashSizeFor is the draw-proportional slash (v0.40): max(4.5%·X̄ floor,
@@ -387,12 +393,22 @@ func winMidGross(cs *claimState) int64 {
 // deploy invariant (court.gno) guarantees the draw arm fits under the bond at
 // the hot-rate 12-week max, so the clamp only bites answers whose winning pool
 // was inflated past the answerer's own bond by honest co-stakers.
-func slashSizeFor(cs *claimState) int64 {
-	flat := cs.xBarFrozen * slashXBps / 10000
-	if draw := mulDiv128(winMidGross(cs), slashDrawBps, 10000); draw > flat {
+// slashSizeAt is the sizer parameterized on the base and the answered side's
+// conviction, so PostAnswer can price the EXACT slash a later ResolveFlag will
+// draw — BEFORE the freeze pins land. One function, two callers: "the bond
+// collateralizes the slash" is then enforced by SHARED CODE rather than by two
+// parallel arithmetic paths that a drained pool can pull apart (audit round 2).
+func slashSizeAt(xbar int64, convHi, convLo uint64) int64 {
+	flat := xbar * slashXBps / 10000
+	if draw := mulDiv128(convToCC(convHi, convLo), slashDrawBps, 10000); draw > flat {
 		return draw
 	}
 	return flat
+}
+
+func slashSizeFor(cs *claimState) int64 {
+	hi, lo := cs.sideConv(int(cs.answer))
+	return slashSizeAt(cs.xBarFrozen, hi, lo)
 }
 
 // bountyFor is the A19-shaped bounty: min(the flagger's own bond, 80% × the

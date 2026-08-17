@@ -1610,6 +1610,61 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.46 — the drain: X̄ divorced from conviction (HIGH, confirmed + reproduced), fixed
+  by three-reviewer convergence.** A fresh adversarial sweep found, and I reproduced with
+  exact numbers, that the v0.40 anti-mill slash could be **nullified by one extra
+  transaction**. `slashSizeFor` = max(4.5%·X̄, 1.6×midGross) is CLAMPED to the posted
+  answer bond; midGross is the answered side's LIFETIME conviction, but the bond was
+  sized off a 3-HOUR trailing average of stake — and `Unstake` is permissionless, free,
+  and KEEPS conviction by design (F9). Stake 100k CC → hold 11 weeks (under the 12-week
+  dead-claim timeout) → unstake to minAnswerX → wait 2h for the ring to forget → answer:
+  **bond 50 CC against 11_220 CC of earned slash exposure, a 224× shortfall.** Break-even
+  detection probability moves from ~0.385 to ~0.99 — profitable even at 90% detection.
+  This is NOT the accepted idle-capital residual (which assumes the slash reaches
+  1.6×midGross; here it never does). It also falsified the `mustInvariants` deploy bound
+  at RUNTIME, where a check over constants cannot see it.
+  **Decision process:** three independent reviewers on identical prompts split 2–1
+  (A-only vs A+B) in round 1; a second identical round on the single open question
+  converged **3–0 on A+B**. What flipped it: (1) the base was a **units mismatch** — the
+  invariant's identity midGross/X̄ = rate·T_c is valid only when X̄ *is* the lifetime
+  average, since midGross is a lifetime integral, so B makes the deploy check TRUE by
+  construction rather than merely re-labelled; (2) A **removes the mill's reason to
+  drain**, so the post-fix drained population is honest rotations while a mill simply
+  doesn't drain — A-only's "cheap policing" is evadable by the adversary and unavoidable
+  by the honest; (3) the drain **un-escrows** the attacker's weight (escrowed stake is
+  netted out of `votable` and barred from the quality lane by `isParticipant`), so the
+  same act that lowers every bar hands the attacker the weight to clear them; (4) the
+  injured stakers are **disenfranchised** — `isParticipant` persists across withdrawal,
+  so those whose draw is being zeroed may not vote, and the 7-day flag vote outlives the
+  72-hour dispute window, so there is no rescue.
+  **Shipped (A):** a collateralization floor in `PostAnswer` on the FULL sizer via a
+  SHARED function (`slashSizeAt`) that `ResolveFlag` also uses, so "the bond
+  collateralizes the slash" is enforced by shared code, not two parallel arithmetic paths
+  a drain can pull apart; `touch`/`advancePools` hoisted above it (load-bearing — else
+  the floor reads stale conviction); the floor applied AFTER the court cap deliberately
+  (an uncollateralized slash is worse than an over-large bond). Flooring the WHOLE sizer,
+  not just the draw arm, closes a trap that is inert only while `answerBondCapCC` is 0.
+  **Shipped (B):** `xBarFrozen = max(3h trailing, lifetime time-averaged total stake)`,
+  wholesale — P6's "one base" preserved, no split (the P2 carrot clamp is derived against
+  `flagBondFor`'s b₀ and `disputeBond0`'s arms couple through `answerBond0`;
+  desynchronizing them re-opens the base-shopping class this bug came from). Provably a
+  no-op wherever total stake never decreased, so it binds only on a drain — confirmed
+  empirically: the entire pre-existing suite passes unchanged.
+  **Also shipped:** a dead-claim answerability gate — `CloseDeadClaim` is permissionless
+  but OPTIONAL, so conviction kept accruing on an unclosed claim and past ~19.5 weeks the
+  draw arm crossed the bond **on a perfectly constant pool**, no drain required; and
+  `mustInvariants` demoted to a CALIBRATION with its missing flat-arm check added.
+  Every guard is mutation-verified: removing B fails its test while the original drain
+  repro still passes without B (proving A and B cover different ground and no single
+  fixture could pin both). `make check` + txtar green.
+  **Registered residuals** (named, not hidden): B raises `quorumFloor`/`fullBar` ~2× and
+  pins `escrowWindow` at its cap on drained claims; the flag **bounty** does NOT rise
+  under B (that arm is pinned by 80%×(deposit+fee)) — the **carrot** does, ~1 → ~999 CC,
+  and that is where policing pay actually lives; a self-dispute-upheld path buys a mill
+  permanent slash immunity for ~4 CC net (`decidedRounds=1` gates `slashGrade` off)
+  — its own finding, not addressed here; and §12 row 30's "small claims cap at 2 failed
+  rounds" premise is false on any court with real `minted`, since `escrowWindow` is
+  already pinned at its 3-week cap.
 - **v0.45 — test-gap sweep: pinning guards that would have survived deletion.** A
   dedicated completeness critic asked not "is the code right" but "which guarantees are
   UNPROVEN — which guards would survive being deleted?" It found several money-path
