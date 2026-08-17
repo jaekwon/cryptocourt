@@ -1610,6 +1610,63 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.55 — the sub-bar carrot was A21's faucet through the one leg the burn invariant
+  never reached (converged 3/3).** A conclusive tally BELOW the supply-floored `fullBar`
+  can only be a LOW — mid and high both gate on the bar — and there `ResolveFlag` returns
+  the flag bond **WHOLE**. So `carrotTotal = 7%·midGross ≈ 1.35%·X̄` minted against 1.1 CC
+  of burn, on weight that is never escrowed, is not consumed by voting, and services every
+  claim with `X̄ ≤ 4W` in parallel: v0.25's A21 faucet at 0.675× the bounty flow that
+  closed it, same reachable bar, arriving through the carrot. Worse than the free roll
+  itself: across the whole band `[demotionBar, fullBar)` the carrot is payable **iff the
+  median lands LOW**, since mid and high cannot go conclusive there and an inconclusive
+  tally sets no `conclusiveSeq` — a structural demotion cartel for the entire electorate,
+  which is F2/A11's forbidden tier-contingency arriving through the TURNOUT door instead
+  of the tier door. Fix, at the single site where `carrotTotal` is computed: withhold the
+  pot when `decidedPID == 0 && conclusiveSeq != 0 && conclusiveTurnout < fullBar`. Keys on
+  turnout, not tier, so F2 survives — above the bar a conclusive low still draws the full
+  tier-invariant 7%·midGross, and below it a voter's only alternative was an inconclusive
+  tally, which v0.25 already pays nothing. Withheld, never redirected: strictly
+  ceiling-safer.
+  **Both of my candidate levers were refuted identically by all three reviewers.**
+  Excluding the FLAGGER's own address is dead on arrival — `OpenFlag` and `VoteQuality`
+  take separate callers, so wallet A posts the bond and wallet B votes and pulls the
+  same pot; this is exactly the address-keyed defence the recorded sybil rule already
+  rules out. Half-burning the sub-bar bond is both insufficient (`0.5·b₀` cost against a
+  `0.675·b₀` pot leaves a two-address bloc at **+0.175·b₀**) and prices a CORRECT dust
+  flag at 2%·X̄, which is v0.29/T1's cheap-when-right property and the already-rejected
+  flat-entry doctrine. Neither would have moved the F3 asymmetry v0.54 leans on, but
+  neither works.
+  **Two errors of mine, both corrected by 3/3 independently.** (1) I recorded the DRAINED
+  regime as live, citing `answer.gno`'s "X̄ reads 100 CC while the prize is 7 012 CC". That
+  passage is the MOTIVATION for the fix implemented six lines below it:
+  `xBarFrozen = max(3h trailing, lifeAvgStake)`, and `lifeAvgStake` reads the monotone raw
+  integrals, so no withdrawal can lower it. `midGross ≤ 19.27%·X̄` is therefore a runtime
+  guarantee, provable and tight, not a calibration — there is ONE attack and the
+  aged-undrained case is its extremal instance. One reviewer reproduced this section's own
+  measured `4.909e8` cold-court pot exactly as confirmation. (2) I priced the ceiling at
+  `b₀/2` from the P2 clamp. The clamp is per-VOTER against a shared POT, so two addresses
+  each take `carrotTotal/2`, stay under `b₀/2 − 1`, and collect the whole `0.675·b₀` — my
+  figure was 35% low, and "~8.9 weeks until the clamp binds" holds only for a SOLE voter
+  at the hot rate (cold needs 22.4 weeks, unreachable under the 12-week gate).
+  **Four clauses, four fixtures — and three of them only became fail-detectable after the
+  first mutation round passed.** Removing the withholding fails the dust-low fixture;
+  withholding unconditionally fails `TestFullBarLowStillPaysTheTierInvariantCarrot` (added
+  because tier-invariance above the bar is a real property that the blanket form breaks);
+  dropping `decidedPID == 0` fails `TestDecidedRoundCarrotSurvivesAStaleSubBarTally` (added
+  because a decided claim's carrot pays the VERDICT round's voters, who never cast the
+  stale sub-bar quality tally); dropping `conclusiveSeq != 0` fails an existing fixture,
+  confirming that conjunct keeps a fresh `qualityBars` call off claims that never made one.
+  `TestCrystallizeLowTierZeroDrawCarrotStillPays` was INVERTED rather than deleted — it
+  asserted `carrot > 0` on a dust low under the comment "the carrot is tier-invariant: paid
+  even at low", conflating tier-invariance with turnout-invariance, which no doctrine ever
+  claimed.
+  **Not closed by this:** the `slotConsumed` latch on a supply-floorless low still disarms
+  the full-bar ⅔-low slash permanently (registered residual), and P2 remains literally
+  broken for a LOW-voting self-flagger — the 0.88 CC dust bounty is X̄-invariant and
+  A21-sanctioned, but it is still a positive net on a bond that returns whole. Strict
+  negativity there needs the triggering WEIGHT at risk, which PLAN already places out of
+  V2 scope.
+
 - **v0.54 — a tier PROMOTION now needs a ⅔ mandate (HIGH); three reviewers rejected my
   first predicate.** `resolveQualityRide` wrote `cs.tier` with no authority test, and MID
   is reachable as a bare RESIDUAL, not a plurality: `applyQualityTally` returns conclusive
