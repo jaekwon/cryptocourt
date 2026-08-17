@@ -284,16 +284,29 @@ func TestCostAndMintedRefuseTheirDomain(t *testing.T) {
 	// Cost reports NOT-OK rather than a number for anything outside its domain, so a
 	// caller that ignores `ok` cannot silently price a nonsense span.
 	for _, k := range []struct{ from, delta int64 }{
-		// {1,-1} and {2,-1} are the load-bearing pairs, and they are load-bearing
-		// for a reason worth stating: a negative span is NOT re-caught downstream.
-		// The 128-bit subtract borrows, so hi is all ones — but then
-		// bits.Add64(lo, m-1, 0) carries, hi+carry WRAPS BACK TO ZERO, and the
-		// `hi2 >= m` overflow guard does not fire. Cost would answer (0, TRUE):
-		// a free rewind of the curve position, reported as a valid quote. The
-		// divergence needs from² − s1² ≤ 2d−1, so on this d=2 curve only a span
-		// ending within a unit or two of the origin exposes it — {10,-1} does not,
-		// which is why a table of merely "obviously invalid" pairs proves nothing.
-		{1, -1}, {2, -1}, {-1, 10}, {10, -1}, {-1, -1}, {c.Cap() + 1, 1},
+		// Only the first three of these DISCRIMINATE — measured, with the guard
+		// deleted, on this exact curve. The rest are contract documentation, and
+		// saying which is which is the point: a table of pairs that are merely
+		// obviously invalid proves nothing, because the invalid ones are refused
+		// downstream anyway.
+		//
+		// {1,-1}, {2,-1} — a negative span, answered (0, TRUE). The 128-bit
+		//   subtract borrows so hi is all ones, but bits.Add64(lo, m-1, 0) CARRIES
+		//   and hi+carry WRAPS BACK TO ZERO, so the `hi2 >= m` overflow guard never
+		//   fires. That is a free rewind of the curve position reported as a valid
+		//   quote — the "walking it backward would let the same region be bought
+		//   twice" failure this package's doc names. Needs from² − s1² ≤ 2d−1, so on
+		//   this d=2 curve only a span ending near the origin exposes it.
+		// {-631917,1} — the worse family: a FABRICATED PRICE. uint64() of a
+		//   negative from injects a 2^65·|from| term, and both magnitude checks
+		//   (`hi2 >= m`, and the quotient against MaxInt64) bound SIZE, not domain,
+		//   so for |from| < d they pass and a price comes back. Deleting the guard
+		//   quotes this span at 9223372036854459850 with ok=true.
+		// {-1,10}, {-1,-1}, {cap+1,1} — refused either way. {-1,10} in particular
+		//   only just misses: it exits on the quotient check by a margin of 21, so
+		//   it is not protection, it is a coincidence of d=2. Do not let it stand in
+		//   for the negative-from case; that is what {-631917,1} is for.
+		{1, -1}, {2, -1}, {-631917, 1}, {-1, 10}, {10, -1}, {-1, -1}, {c.Cap() + 1, 1},
 	} {
 		if got, ok := c.Cost(k.from, k.delta); ok || got != 0 {
 			t.Fatalf("Cost(%d,%d) must be refused: got %d,%v", k.from, k.delta, got, ok)

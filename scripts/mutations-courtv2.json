@@ -747,5 +747,40 @@
   "label": "Cost: a negative span is accepted",
   "find": "\tif from < 0 || delta < 0 || from > c.cap {",
   "replace": "\tif from < 0 || from > c.cap {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AuthorBonus: anyone may draw the author's slice",
+  "find": "\tif who != cs.author {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AuthorBonus: the slice can be drawn twice",
+  "find": "\tif cs.authorPaid {\n\t\tpanic(\"courtv2: the author slice was already drawn\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "AuthorBonus: the author's slice skips the F9 cap",
+  "find": "\t\tpay = capBonus(cs, cs.drawAuthor, p.rawHi, p.rawLo)",
+  "replace": "\t\tpay = cs.drawAuthor"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: a negative position fabricates a price",
+  "find": "\tif from < 0 || delta < 0 || from > c.cap {",
+  "replace": "\tif delta < 0 || from > c.cap {"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: an unaffordable span panics instead of being refused",
+  "find": "\tif hi2 >= m {",
+  "replace": "\tif false {"
  }
 ]

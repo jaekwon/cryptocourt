@@ -692,3 +692,64 @@ func TestAnswererBonusGuardsItsSliceAndItsCap(cur realm, t *testing.T) {
 		AnswererBonus(cross(cur), "ab1", id)
 	})
 }
+
+// AuthorBonus is AnswererBonus's twin and had the same three gaps: the identity
+// check, the one-draw latch, and the F9 cap. Same cause, too — the happy-path
+// fixture's author IS its answerer and draws once, so "only the author" was only
+// ever asked of the author.
+//
+// The cap arm drives the F9 time-average to ZERO rather than crafting a bound,
+// because that is what F9 says: the bonus is capped by capital-time, so a position
+// with no measurable capital-time draws nothing however large the slice it would
+// otherwise take. Inflating openBlocks is the cheapest way to say that — it is the
+// divisor of the raw integral — and it keeps the assertion (pay is 0 while the
+// slice is live) independent of the formula under test, instead of recomputing
+// capBonus's own arithmetic and comparing it with itself.
+func TestAuthorBonusGuardsItsSliceAndItsF9Cap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("au1-alice")
+	bob := testutils.TestAddress("au1-bob")
+	c := testCourt(cur, "au1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "au1", "The author's slice and its F9 cap")
+	matureOI(cur, "au1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "au1", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "au1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "au1", id)
+	testing.SkipHeights(100_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "au1", id)
+
+	// Not the author — and bob is a staker who settled this very claim, so what is
+	// refused here is the AUTHOR's identity and not mere standing.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "only the author draws this slice", func() {
+		AuthorBonus(cross(cur), "au1", id)
+	})
+
+	_, a, _, _ := DrawSlices("au1", id)
+	if a <= 0 {
+		t.Fatalf("setup: this claim must have a live author slice, got %d", a)
+	}
+	// Stretch the claim's open life so far that the author's time-averaged stake
+	// floors to zero. The slice stays live; only the F9 bound moves.
+	cs := mustClaim(c, id)
+	cs.openBlocks = int64(1) << 60 // far above any raw integral this fixture can bank
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	got := AuthorBonus(cross(cur), "au1", id)
+	if got != 0 {
+		t.Fatalf("with no measurable capital-time the F9 cap must pay nothing, not "+
+			"%d of a %d slice", got, a)
+	}
+
+	// One draw only, and the latch holds even though that draw paid zero — a
+	// no-op draw must still consume the slice, or the cap becomes a retry loop.
+	uassert.AbortsContains(t, cur, "already drawn", func() {
+		AuthorBonus(cross(cur), "au1", id)
+	})
+}

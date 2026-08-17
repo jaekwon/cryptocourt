@@ -1624,6 +1624,47 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.72 — `AuthorBonus` had the same three gaps as its twin, and two of the four
+  vectors in v0.71's `Cost` table were decorative.** The pattern behind both v0.71 and
+  this entry is now explicit and worth naming: **a guard exercised only on the side where
+  it does nothing is indistinguishable from a covered guard.** Every draw function is
+  called by the party entitled to draw, once, in a fixture whose point was the arithmetic —
+  so the identity checks and the one-draw latches were all asked only of the party that
+  passes them. `AuthorBonus` repeated `AnswererBonus` exactly: identity, latch, and the F9
+  cap, three of three surviving. In the happy path the author IS the answerer, which is
+  why one fixture hid two functions' worth of gaps.
+  The cap arm drives the F9 time-average to ZERO instead of crafting a bound, because that
+  is what F9 asserts — a position with no measurable capital-time draws nothing however
+  large the slice it would otherwise take — and because an expectation recomputed from
+  `capBonus`'s own arithmetic would be compared with itself (the v0.61 self-reference
+  lesson). Also pinned: the latch holds even when the draw paid zero, or the cap becomes a
+  retry loop.
+  **And a correction to v0.71's own fix.** Adding `{1,-1}` caught the guard, so the table
+  looked done. Measured with the guard deleted on the fixture's own curve, only three of
+  its seven pairs discriminate at all: `{1,-1}` and `{2,-1}` (the wrap family), and
+  `{-631917,1}`, which was missing. That last one is the WORSE failure — not `ok` flipping
+  on a zero cost but a FABRICATED PRICE of 9223372036854459850 with `ok=true`, because
+  `uint64()` of a negative `from` injects a 2^65·|from| term and both magnitude checks
+  bound SIZE, not domain. `{-1,10}`, which had been standing in for the negative-`from`
+  case, is refused either way: it misses the quotient check by a margin of **21**, so it
+  was never protection, only a coincidence of d=2. With it alone, deleting just the
+  `from < 0` clause survives. Each pair is now labelled with whether it discriminates.
+  **Three independent reviewers converged 3/3** on the shape of the `curve` verdict: the
+  domain check is load-bearing, the other three are value-equivalent but chained. One of
+  them additionally proposed fixing the in-code comment at the `hi2 >= m` guard, which
+  says that deleting it would violate `bits.Div64`'s `hi < m` precondition — reporting 0
+  such violations across six million inputs. **That correction was checked and REFUSED.**
+  Its sweeps deleted the DOMAIN check, where a negative span wraps `hi2` to zero and no
+  violation can occur; the guard's own removal is a different path. Removed for real, on
+  the court's own shape, `Cost(0, 2e14)` panics with `math/bits: integer overflow`, exactly
+  as the comment says — and `Cost(0, 1.9e14)` still returns `(0, false)`, placing the
+  threshold where the comment places it. A measurement that swept the wrong mutation is
+  still a measurement, and it read like a finding. The comment stands unchanged.
+  That guard IS pinned, but by `TestBuyMintsAndBurnsGNOT` in the realm rather than by
+  anything in `curve` — coverage by importer, which the harness counts and which is worth
+  knowing is what is holding it up.
+  Batch now 112 rows, all caught, none invalid.
+
 - **v0.71 — `AnswererBonus` had FIVE of five guards unpinned, and the `curve` "all four
   are equivalent mutations" reading of v0.70 was WRONG on the one that mattered.**
   **`AnswererBonus` is the first function found with no guard covered at all.** Five
