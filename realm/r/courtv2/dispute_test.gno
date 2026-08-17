@@ -184,6 +184,97 @@ func TestDisputeOverturnPath(cur realm, t *testing.T) {
 	WithdrawStake(cross(cur), "dp2", id, sideYES)
 }
 
+// TestOverturnedVerdictCannotBeFlippedBack pins the two guards that stand between
+// a DECIDED verdict and a silent flip back to the answer. Both were previously
+// unpinned: their only fixtures satisfied every clause at once, so either guard
+// could be deleted with the suite still green (audit convergence v0.45).
+//
+//   - session.gno: `disputeOpen || round > 0`. The existing fixture settles while
+//     the dispute is OPEN, so both clauses hold. Since disputeOpen ⟹ round > 0,
+//     `round > 0` is the load-bearing clause, and only a RESOLVED round isolates it.
+//   - dispute.gno: `if firstResolution { provisional = answer }` in the failed-quorum
+//     branch. Every existing fixture has provisional == answer already, so the
+//     assignment is a no-op there and the guard is invisible.
+//
+// If either fails, provisional flips from the overturn winner back to the answer:
+// the entire winners' slice pays the losing side and the true winners are refused.
+func TestOverturnedVerdictCannotBeFlippedBack(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ovf-alice")
+	bob := testutils.TestAddress("ovf-bob")
+	carol := testutils.TestAddress("ovf-carol")
+	c := testCourt(cur, "ovf1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	// alice answers YES; bob holds the NO side. Bob stakes BEFORE the maturation
+	// window so the NO pool carries real conviction — otherwise the winners' draw
+	// is zero and step (3) proves nothing about who got paid.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ovf1", "Overturned, and it must stay overturned")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "ovf1", id, sideNO, 300_000_000)
+	matureOI(cur, "ovf1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "ovf1", id, sideYES)
+
+	// A decided round OVERTURNS to NO.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "ovf1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "ovf1", id, "yes")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "ovf1", id)
+	if Provisional("ovf1", id) != sideNO || DisputeOpen("ovf1", id) {
+		t.Fatal("setup: the overturn must stand with the dispute closed")
+	}
+
+	// (1) Settle must REFUSE. disputeOpen is already false here, so `round > 0` is
+	// the only thing preventing settle from reassigning provisional = answer (YES).
+	uassert.AbortsContains(t, cur, "settles by vote", func() {
+		SettleUndisputed(cross(cur), "ovf1", id)
+	})
+	if Provisional("ovf1", id) != sideNO || Settled("ovf1", id) {
+		t.Fatal("a refused settle must not touch the verdict")
+	}
+
+	// (2) A FAILED reopen must leave the decided verdict standing. Only the
+	// firstResolution guard prevents the failed-quorum branch from re-defaulting
+	// provisional back to the answer.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "ovf1", id)
+	testing.SkipHeights(c.params.votingBlocks + 1) // nobody votes → failed quorum
+	ResolveDispute(cross(cur), "ovf1", id)
+	if Provisional("ovf1", id) != sideNO {
+		t.Fatal("a failed reopen must not re-default a decided verdict to the answer")
+	}
+
+	// (3) The money follows the verdict: the NO side draws, the overturned YES
+	// side is refused — the consequence both guards exist to protect.
+	if now := runtimeHeight(); now < EscrowUntil("ovf1", id) {
+		testing.SkipHeights(EscrowUntil("ovf1", id) - now)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "ovf1", id)
+	if Verdict("ovf1", id) != sideNO {
+		t.Fatal("the overturned verdict must finalize as NO")
+	}
+	testing.SkipHeights(priorityWindowBlocks + 1) // 24h quiet
+	testing.SkipHeights(periodBlocks)             // a budget to draw from
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "ovf1", id)
+	if w, _, ans, _ := DrawSlices("ovf1", id); w <= 0 || ans != 0 {
+		t.Fatalf("winners must draw and the overturned answerer must not: w=%d ans=%d", w, ans)
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	if got := WithdrawBonus(cross(cur), "ovf1", id, sideNO); got <= 0 {
+		t.Fatalf("the overturn winner must draw a bonus, got %d", got)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "only the winning side draws", func() {
+		WithdrawBonus(cross(cur), "ovf1", id, sideYES)
+	})
+}
+
 func TestDisputeFailedRoundsToProvClose(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("dp3-alice")
 	bob := testutils.TestAddress("dp3-bob")
