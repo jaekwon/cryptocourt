@@ -1610,6 +1610,64 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.47 — slash immunity was purchasable for ~4%·X̄ (HIGH); the `decidedRounds` gate
+  deleted, by three-reviewer convergence.** `slashGrade` required `decidedRounds == 0`,
+  so ONE decided dispute round retired the slash **permanently**. A mill bought that with
+  a sock-wallet dispute it deliberately lost: the uphold burns the dispute bond, but
+  `compAmount = min(2×answerBond0, 80%×burned)` refunds most of it, leaving a net cost of
+  **~3–4%·X̄ against a slash worth up to 30.8%·X̄** — a 7.7–10.3× trade, break-even
+  detection ~10–13% against the design's own q*≈0.22 target. Decisively, that price is
+  **below even the 4.5%·X̄ flat slash floor** — cheaper than the smallest slash the system
+  can levy — so buying dominated at every hold time, capping the entire v0.40
+  draw-proportional deterrent at a flat ~4%. `VoteDispute` has no participant bar, and
+  honest uphold turnout counts toward quorum, so the mill could need **zero weight of its
+  own**. The repo already contained the fixture: `TestWeightlessContestEarnsNoCredential`
+  builds this exact purchase ("imagine alice's second wallet") and asserts only that the
+  CREDENTIAL is denied — the same round silently granted the SHIELD.
+  **Decision:** three reviewers on identical prompts unanimously found the attack real and
+  chose "sharpen the gate", then split 2–1 on the replacement; a second identical round
+  converged **3–0 on deleting the clause outright**. The reasoning:
+  - **It was redundant for every case v0.28 wrote it for.** A CONCLUSIVE ride latches
+    `slotConsumed`, and `OpenFlag` panics on that (and on `disputeOpen`, with
+    `OpenDispute` voiding any live flag), so `ResolveFlag` is *unreachable* once a round
+    has judged quality. An OVERTURN zeroes `answerBond`, which the existing clamp turns
+    into `slash == 0`. Its only live domain was an UPHELD round whose ride adjudicated
+    **nothing** — exactly where immunity is unearned. All three verified this by
+    enumerating `slotConsumed`'s write sites (two, both `= true`, none false) and every
+    `answerBond` write.
+  - **PLAN v0.28 itself calls the clause a "belt"** on top of the load-bearing
+    supply-floored-bar + ⅔ "braces". A belt that costs ~4%·X̄ to unbuckle is a liability.
+  - **The rejected alternative (gate on `!credEligible`) is worse than repriced — it is
+    free.** A mill's junk-but-TRUE claim attracts an *honest* challenger who disputes and
+    loses; that challenger's real weight (≥ floor/4) sets `credEligible` and hands the
+    mill permanent immunity at no cost. It is also purchasable two-sidedly at zero escrow
+    cost (sock-yes at exactly floor/4, sock-no larger, since 5001 bps keeps the uphold),
+    and it welds a *reputation* predicate to a *security* gate. Verified by mutation: the
+    new regression fails under `!credEligible` too, so it pins this choice, not merely the
+    direction.
+  Also rejected, unanimously: pricing the immunity (arithmetically impossible — the
+  dispute bond is capped at 20%·X̄ by construction while the slash reaches 30.8%·X̄, so
+  even comp = 0 cannot cover it) and a participant bar on `VoteDispute` (staked CC sits at
+  escrow and never votes, so it touches none of the weight actually cast while
+  disenfranchising the informed verdict electorate).
+  **Shipped:** `slashGrade` (and the T2 free-roll arm) now ask "was a slash ever in
+  reach?" directly as `answerBond > 0` — which also preserves the documented T2 intent the
+  bare deletion would have lost, without the purchasable clause. Finalize's retention gate
+  drops the same clause in **lockstep** (else the whole bond returns and the later slash
+  clamps to zero — M3-HIGH-1's shape on the path a mill now targets), which as a bonus
+  makes it *character-identical* to `SettleUndisputed`'s, closing the sibling asymmetry
+  that produced v0.42 and v0.43. `TestDisputeUpholdPath` updated: an upheld bond now
+  returns less the reserve, the remainder at crystallize. Mutation-verified three ways
+  (old gate → slash leg fails; `!credEligible` → slash leg fails; lockstep reverted →
+  Finalize leg fails). `make check` + txtar green.
+  **NOT yet fixed — the second leg, next commit:** `OpenDispute` calls `unslash`
+  UNCONDITIONALLY, before any round is decided, so a zero-vote failed-quorum dispute still
+  permanently destroys an already-adjudicated slash while `slotConsumed` stays latched so
+  no replacement flag can re-arm it. All three reviewers flagged it; the converged shape is
+  to stop forgiving at OPEN and let the round's OUTCOME dispose the reserve, with an
+  upheld round's ride scored on `ResolveCounter`'s exact test (full bar, low short of ⅔) —
+  never merely "conclusive", since `applyQualityTally` returns conclusive-LOW at the
+  supply-floorless `demotionBar`.
 - **v0.46 — the drain: X̄ divorced from conviction (HIGH, confirmed + reproduced), fixed
   by three-reviewer convergence.** A fresh adversarial sweep found, and I reproduced with
   exact numbers, that the v0.40 anti-mill slash could be **nullified by one extra

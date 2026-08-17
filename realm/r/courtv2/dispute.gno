@@ -398,8 +398,17 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 		// slotConsumed is a one-way latch and OpenFlag panics on it, so a consumed
 		// slot means no future flag and therefore no future slash — retaining then
 		// would withhold the answerer's coin until crystallize for nothing.
+		// v0.47 LOCKSTEP with slashGrade: a decided round no longer confers
+		// immunity, so it must no longer suppress the reserve either — otherwise
+		// the whole bond returns here and the later slash clamps to zero, which is
+		// exactly the M3-HIGH-1 shape, re-created on the path a mill now targets.
+		// Dropping the clause also makes this gate character-identical to
+		// SettleUndisputed's (session.gno): the two terminal paths finally share
+		// ONE predicate, which is the v0.44 symmetry goal. v0.43's proof that an
+		// overturn cannot retain now rests on one lock instead of two — the
+		// enclosing `answerBond > 0` (decidedRounds++ was the second).
 		reserve := int64(0)
-		if cs.pendingSlash == 0 && cs.decidedRounds == 0 && !cs.slotConsumed {
+		if cs.pendingSlash == 0 && !cs.slotConsumed {
 			reserve = slashSizeFor(cs)
 			if reserve > cs.answerBond {
 				reserve = cs.answerBond
