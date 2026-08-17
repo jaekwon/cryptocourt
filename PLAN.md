@@ -1610,6 +1610,63 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.50 — the ride lane could not levy a slash (HIGH, reproduced); origination and
+  disposal now share one site.** A fresh sweep found, and I reproduced, that v0.47 shut
+  `slashGrade`'s door to purchased immunity and left `resolveQualityRide`'s wide open.
+  `pendingSlash` had exactly ONE origination site (ResolveFlag's slashGrade branch), while
+  a conclusive ride latches `slotConsumed` — a one-way latch `OpenFlag` refuses forever. So
+  **a full-bar ⅔-low verdict delivered on the RIDE permanently foreclosed the only path
+  that could levy the slash it had just voted for.** The mill sock-disputes in the block
+  after the answer (votingBlocks 7 d > settleDelay 72 h, so no flag can have resolved, and
+  OpenFlag refuses while `disputeOpen`); the honest crowd then does exactly what the
+  mechanism asks — upholds the true answer, votes the junk claim low — and thereby DESTROYS
+  the slash. Measured: `pendingSlash=0` where 18 000 000 was owed. Price ~4 %·X̄ (the sock's
+  burned dispute bond less minted comp) to avoid up to 30.8 %·X̄ — **v0.47's exact purchase
+  through a different door**, again below the 4.5 %·X̄ flat floor. My blind spot precisely:
+  v0.47 used "slotConsumed ⇒ ResolveFlag unreachable" as PROOF the `decidedRounds` clause
+  was redundant and never asked whether the conclusive-ride branch was itself safe, and
+  `TestDecidedRoundBuysNoSlashImmunity` asserts the ride is INCONCLUSIVE — scoped away from
+  this exact state.
+  **Three reviewers on identical prompts converged 3–0 on "let the ride originate"**, and
+  each contributed a guard the others missed:
+  - **`slashLevied`** — a one-way, exactly-once-per-claim latch across BOTH lanes. The flag
+    lane was bounded by `slotConsumed`; the ride is not, so a reopen chain levied a fresh
+    `slashSizeFor` out of the REMAINING bond every round (reachable inside a 3-week escrow:
+    round 1 fails @7 d, flag resolves @14 d, window closes @21 d, reopen @21 d < 28 d).
+    Mutation-demonstrated: without it a second 18 000 000 is carved from the 182 000 000
+    remainder.
+  - **`slashFlagger`** — the bounty beneficiary recorded AT origination. `settleSlash` must
+    not fall back to `cs.flagger`, which on a ride path is either the zero address —
+    `grc20votes.Mint` calls `mustBeValid` and PANICS, so the entitlement is unpayable
+    forever while `reservedTail` (monotone, written only as `mustAdd`) has already advanced,
+    permanently shrinking `reservoirR` for **every later junior draw in the court** — or a
+    STALE flagger from an earlier inconclusive cycle whose bond already came back whole
+    under T1, who would then mint a bounty for a slash the RIDE levied. I verified both legs
+    (`mustBeValid` rejects the empty address; `reservedTail` has exactly one write site).
+  - **the originate/dispose split** — `disposeSlashOnRide` scores a reserve the round
+    INHERITED; one the round's own ride just levied gets its counter-flag window instead.
+    Running both on the same tally settles the slash in the very call that levied it, with
+    no window and no Q5 challenge. Mutation-demonstrated.
+  Also shipped: a conclusive-LOW **ride now burns deposit+fee** like the flag lane
+  (`burnConclusiveLowDust`, shared) — skipping them refunded the junk author at crystallize
+  on exactly the claims the crowd demoted; and origination is a single shared
+  `originateSlash` used by both lanes, so the two can no longer drift, the same "one sizer,
+  two callers" discipline `slashSizeAt` established in v0.46. `tierFinal` stays false while
+  a ride-levied reserve stands, preserving the answerer's one v0.31/Q5 counter re-vote.
+  All four guards mutation-verified; `make check` + txtar green; **no existing test needed
+  changing**, which is itself evidence no fixture had ever covered the ride's low path.
+  **Registered, NOT fixed — three residuals from the same family, each needing its own
+  vet:** (1) `parkCounter` clears `counterUsed`, the sole gate on `CounterFlag`, so an
+  answerer's own sock can re-mint the one-shot Q5 challenge at ~4 %·X̄ a shot (bounded at
+  3–4 by `escrowUntil`) — the v0.48 implementation vet found this, and `audit_m3_test.gno`
+  currently ASSERTS the extra challenge as correct; (2) `slotConsumed` latches on a DUST low
+  at the supply-floorless `demotionBar` in both lanes, so ~X̄/4 of sock weight self-flags,
+  gets the bond back whole plus ~0.88 CC of minted bounty, and permanently disarms the
+  full-bar slash at a NET PROFIT; (3) the quality RIDE has no vote deadline — `VoteQuality`
+  guards `flagVoteEnd` and `counterVoteEnd` but not the dispute case, which since v0.48
+  makes a ~30 %·X̄ decision a mempool race. Counting v0.47, that is **four doors to the same
+  purchase**, which says the defect was never any single gate but that origination and
+  disposal did not share a predicate — now they do.
 - **v0.49 — the isolation guard was measuring less than half the system.**
   `scripts/check-isolation.py` kept its package list as a hand-maintained COPY of the
   Makefile's, and the two drifted: it staged 3 `p/` + 2 `r/` packages while

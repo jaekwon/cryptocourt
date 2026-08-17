@@ -285,12 +285,20 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.failedRounds = 0
 		cs.decidedRounds++
 		cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, "no", no
+		// Captured BEFORE the ride, which may now ORIGINATE a reserve (v0.50).
+		// disposeSlashOnRide scores a reserve this round INHERITED; one this round's
+		// own ride just levied gets its counter-flag window instead. Running both on
+		// the SAME tally would settle the slash in the very call that levied it —
+		// burned with no window and no Q5 challenge for the answerer.
+		hadSlash := cs.pendingSlash > 0
 		resolveQualityRide(c, cs)
 		// The VERDICT question is not the QUALITY question: winning the dispute
 		// does not lift an adjudicated slash. Only this round's ride can, and only
-		// on ResolveCounter's own terms — it is the counter re-vote, before a
-		// strictly larger electorate, so it is scored as one (v0.47).
-		disposeSlashOnRide(c, cs)
+		// on ResolveCounter's own terms — it asks the slash's question at the same
+		// bars before the same electorate, so it is scored as one (v0.47).
+		if hadSlash {
+			disposeSlashOnRide(c, cs)
+		}
 	}
 
 	// The escrow clock is set ONCE, at the first resolution, and never

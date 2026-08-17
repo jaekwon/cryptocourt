@@ -113,6 +113,22 @@ type claimState struct {
 	counterUsed       bool
 	counterOpen       bool
 	counterVoteEnd    int64
+	// slashLevied is the one-way EXACTLY-ONCE latch on ORIGINATION (v0.50). The
+	// flag lane is bounded by slotConsumed (one flag per claim); the dispute ride
+	// is not, so without this a reopen chain levies a fresh slashSizeFor out of the
+	// REMAINING bond every round — reachable inside a 3-week escrow (round 1 fails
+	// at 7d, the flag resolves at 14d, its window closes at 21d, a reopen lands at
+	// 21d < escrowUntil 28d). Never cleared.
+	slashLevied bool
+	// slashFlagger is the bounty beneficiary of the CURRENTLY reserved slash: the
+	// flagger whose flag levied it, or "" when a dispute RIDE levied it. settleSlash
+	// must NOT fall back to cs.flagger, which on a ride path is either the zero
+	// address — grc20votes.Mint calls mustBeValid and PANICS, so the entitlement is
+	// unpayable forever while reservedTail (monotone, never decremented) has already
+	// advanced, permanently shrinking the reservoir for every later junior draw — or
+	// a STALE flagger from an earlier inconclusive cycle whose bond already came back
+	// whole under T1, who would then mint a bounty for a slash the RIDE levied.
+	slashFlagger address
 	// Crystallize marker (Q6-Q8): after it, quality is immutable.
 	crystallized bool
 	// Carrot pull-claim anchors (set at the conclusive tally)
