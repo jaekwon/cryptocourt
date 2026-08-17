@@ -14,15 +14,24 @@
 // inconclusive-low returns in full (T1 — the electorate's absenteeism is not
 // the flagger's fault, and a bond return is not income).
 //
-// The slash (4.5%·X̄, from the answer bond) fires only at the supply-floored
-// FULL bar with a ⅔-low supermajority on an UNDISPUTED answer (v0.28), and
-// even then it only RESERVES: the burn and its bounty escrow one counter-flag
-// window in which the slashed answerer may force one re-vote (v0.31, Q5).
+// The slash (max(4.5%·X̄, 1.6× the forgone mid draw), from the answer bond)
+// fires only at the supply-floored FULL bar with a ⅔-low supermajority, and even
+// then it only RESERVES: the burn and its bounty escrow one counter-flag window
+// in which the slashed answerer may force one re-vote (v0.31, Q5).
+//
+// It is NOT gated on the answer being undisputed (v0.28's extra clause, deleted
+// in v0.47): that made immunity purchasable for ~4%·X̄ — below even the flat
+// slash floor — with a sock dispute deliberately lost. Winning an argument about
+// whether the ANSWER is right settles nothing about whether the CLAIM was worth
+// answering. A round supersedes an adjudicated slash only by RE-ADJUDICATING
+// quality: an overturn burns the bond slash-inclusive (A19), and an upheld
+// round's ride is scored on ResolveCounter's own bar.
 //
 // A dispute arriving mid-flag VOIDS the flag (bond returned whole, slot
 // unconsumed, no cycle counted): the dispute vote carries quality itself, and
 // anything less would let a dust flag's 7-day vote blockade the 72h dispute
-// window — the verdict lane always outranks the quality lane.
+// window — the verdict lane always outranks the quality lane. A dispute does NOT
+// void a RESERVED slash: opening a round is not adjudicating one.
 package courtv2
 
 import (
@@ -513,7 +522,7 @@ func CounterFlag(cur realm, courtSlug string, claimID uint64) {
 		panic("courtv2: the one counter re-vote was already used")
 	}
 	if cs.disputeOpen {
-		panic("courtv2: a dispute is open; its decision supersedes the slash")
+		panic("courtv2: a dispute is open; its quality ride decides the slash first")
 	}
 	if runtime.ChainHeight() >= cs.pendingSlashUntil {
 		panic("courtv2: the counter-flag window has lapsed")
@@ -538,7 +547,7 @@ func ResolveCounter(cur realm, courtSlug string, claimID uint64) {
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
 	if cs.disputeOpen {
-		panic("courtv2: a dispute supersedes the slash; it decides the outcome")
+		panic("courtv2: a dispute is open; its quality ride decides the slash first")
 	}
 	if !cs.counterOpen {
 		panic("courtv2: no counter re-vote to resolve")
@@ -576,7 +585,7 @@ func ResolveSlashWindow(cur realm, courtSlug string, claimID uint64) {
 		panic("courtv2: the counter re-vote is running; resolve it instead")
 	}
 	if cs.disputeOpen {
-		panic("courtv2: a dispute is open; it decides the slash")
+		panic("courtv2: a dispute is open; its quality ride decides the slash first")
 	}
 	if runtime.ChainHeight() < cs.pendingSlashUntil {
 		panic("courtv2: the counter-flag window is still open")
@@ -605,20 +614,34 @@ func settleSlash(c *Court, cs *claimState) {
 	cs.tierFinal = true
 }
 
-// refundSlash returns the reserved slash to the answer bond untouched — the
-// re-vote overturned the supermajority. No bounty top-up; the tier stays low
-// and is final.
+// refundSlash returns the reserved slash untouched — the re-vote overturned the
+// supermajority. No bounty top-up; the tier stays low and is final.
+//
+// Normally the reserve rejoins the bond and rides its existing exit (settle or
+// Finalize retains it, crystallize pays out whatever stands). A provClosed claim
+// has NEITHER: provCloseClaim already returned the bond, and Crystallize panics
+// on provClose — so there the reserve must be paid straight back or it strands in
+// escrow forever. Newly reachable in v0.47, where a slash survives the failed
+// rounds that provClose counts.
 func refundSlash(c *Court, cs *claimState) {
-	cs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)
+	slash := cs.pendingSlash
 	cs.pendingSlash = 0
 	cs.tierFinal = true
+	if slash <= 0 {
+		return
+	}
+	if cs.provClose {
+		c.coin.Transfer(c.escrow, cs.answerer, slash)
+		return
+	}
+	cs.answerBond = mustAdd(cs.answerBond, slash)
 }
 
-// unslash is the dispute machine's pre-disposition hook: a DECIDED round
-// supersedes any pending slash (a disputed answer is never slashable). The
-// reserve rejoins the bond BEFORE the round disposes it, so an overturn burns
-// slash-inclusive and an uphold escrows it back whole. Closes any running
-// counter re-vote; tier finality is then the ride's to decide.
+// unslash folds a pending reserve back into the answer bond so a round can
+// dispose the bond WHOLE. Since v0.47 its ONLY caller is ResolveDispute's
+// OVERTURN branch, where the whole bond burns and the burn must stay
+// slash-inclusive (A19). Opening a round no longer calls it: opening a dispute is
+// not adjudicating one.
 func unslash(c *Court, cs *claimState) {
 	if cs.pendingSlash <= 0 {
 		return
@@ -626,4 +649,59 @@ func unslash(c *Court, cs *claimState) {
 	cs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)
 	cs.pendingSlash = 0
 	cs.counterOpen = false
+}
+
+// parkCounter closes a RUNNING counter re-vote because a dispute is about to
+// reset the shared quality tally — openQualityTally moves qVoteSeq, so a live
+// re-vote's votes would otherwise be silently discarded mid-tally. The re-vote is
+// CANCELLED, not SPENT: counterUsed clears, so a stranger's dispute cannot
+// consume the answerer's one v0.31/Q5 challenge. Idempotent; touches no coin.
+func parkCounter(cs *claimState) {
+	if !cs.counterOpen {
+		return
+	}
+	cs.counterOpen = false
+	cs.counterUsed = false
+}
+
+// rearmSlashWindow gives a SURVIVING reserve a fresh counter-flag window after a
+// round that adjudicated nothing. The round consumed the window it interrupted
+// (its own vote runs a full votingBlocks) and parkCounter discarded any live
+// re-vote, so the answerer's challenge period restarts with time to use it.
+// ResolveSlashWindow stays the permissionless closer, so a re-armed reserve can
+// never strand Crystallize.
+func rearmSlashWindow(c *Court, cs *claimState) {
+	if cs.pendingSlash <= 0 {
+		return
+	}
+	now := runtime.ChainHeight()
+	cs.pendingSlashUntil = now + c.params.votingBlocks
+	cs.lastFlagEventAt = now
+}
+
+// disposeSlashOnRide settles a slash that survived an UPHELD round against that
+// round's own quality ride, scored on ResolveCounter's EXACT test: the ride asks
+// the slash's question at the same bars before a strictly larger electorate, so
+// it IS the counter re-vote and must be scored as one. It can therefore dispose
+// the slash only on terms at least as good for the answerer as the window it
+// replaced. A ride that never reached the slash's bar adjudicated nothing — the
+// reserve stands on a fresh window.
+//
+// Never merely "conclusive": applyQualityTally returns conclusive-LOW at the
+// demotionBar, which has NO supply floor, so a dust ride would otherwise be able
+// to settle (or lift) a slash imposed at the full supply-floored bar.
+func disposeSlashOnRide(c *Court, cs *claimState) {
+	if cs.pendingSlash <= 0 {
+		return
+	}
+	turnout := cs.qLowW + cs.qMidW + cs.qHighW
+	_, fullBar := qualityBars(c, cs)
+	switch {
+	case turnout < fullBar:
+		rearmSlashWindow(c, cs) // adjudicated nothing about quality
+	case cs.qLowW*3 < turnout*2:
+		refundSlash(c, cs) // the electorate failed the second ⅔ (ResolveCounter's rescue)
+	default:
+		settleSlash(c, cs) // a full-bar ⅔-low ride re-confirms the flag
+	}
 }

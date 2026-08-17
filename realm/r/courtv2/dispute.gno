@@ -101,16 +101,22 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 	}
 	touch(c)
 	// A dispute outranks the quality lane (audit M3-LOW-1): an open flag VOIDS
-	// (bond returned, slot unconsumed — the dispute's own tally carries
-	// quality); a pending slash + its counter re-vote are SUPERSEDED — a
-	// disputed answer is never slashable (v0.28), so unslash refunds the
-	// reserve into the bond and closes the counter BEFORE the ride tally opens,
-	// so the reopen can never silently reset a live counter tally. A fresh ride
-	// tally then opens with the round.
+	// (bond returned, slot unconsumed — the dispute's own tally carries quality).
+	//
+	// A pending slash does NOT (v0.47). Opening a round is not adjudicating one:
+	// this used to unslash unconditionally, right here, before a single vote — so
+	// a zero-weight FAILED-QUORUM dispute permanently destroyed an already
+	// adjudicated full-bar ⅔-low slash, and slotConsumed was already latched so no
+	// replacement flag could ever re-arm it. Only a round's OUTCOME disposes the
+	// reserve now: an overturn burns it with the bond (A19), an upheld round is
+	// scored on its own ride, and a round that decided nothing re-arms it.
+	//
+	// What must still happen here is closing a LIVE counter re-vote, because
+	// openQualityTally resets the shared tally and would silently discard its
+	// votes. parkCounter cancels it rather than spending it, so a stranger's
+	// dispute cannot consume the answerer's one Q5 challenge.
 	voidFlag(c, cs)
-	if cs.pendingSlash > 0 {
-		unslash(c, cs)
-	}
+	parkCounter(cs)
 	openQualityTally(cs)
 
 	// Bond: min(20%·X̄frozen, 40% × the actual answer bond) — the v0.25 arm
@@ -206,6 +212,12 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 			c.coin.Burn(c.escrow, rest)
 		}
 		cs.disputeBond = 0
+		// A quorum-less round adjudicated NOTHING — least of all quality — so any
+		// carved slash survives it untouched (v0.47). The answerer only gets a
+		// fresh challenge window, since this round discarded theirs. Re-armed
+		// BEFORE provCloseClaim below, which returns the bond but leaves the
+		// reserve carved for ResolveSlashWindow (or a counter re-vote) to settle.
+		rearmSlashWindow(c, cs)
 		// Only the FIRST failed round defaults the verdict to the answer; a
 		// failed reopen leaves a standing decided verdict untouched.
 		if firstResolution {
@@ -249,8 +261,9 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// their posted bond magnitude (answerBond0 — the live field may
 		// already be spent by an earlier overturn round). Their bond stays
 		// escrowed until VERDICT_FINAL: still at stake for reopens. A pending
-		// slash refunds into the bond (never slashable once disputed).
-		unslash(c, cs)
+		// slash is left carved here — comp reads answerBond0, so the reserve
+		// changes no arithmetic in this branch — and is disposed below by this
+		// round's own ride (v0.47).
 		burned := cs.disputeBond
 		if burned > 0 {
 			c.coin.Burn(c.escrow, burned)
@@ -273,6 +286,11 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.decidedRounds++
 		cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, "no", no
 		resolveQualityRide(c, cs)
+		// The VERDICT question is not the QUALITY question: winning the dispute
+		// does not lift an adjudicated slash. Only this round's ride can, and only
+		// on ResolveCounter's own terms — it is the counter re-vote, before a
+		// strictly larger electorate, so it is scored as one (v0.47).
+		disposeSlashOnRide(c, cs)
 	}
 
 	// The escrow clock is set ONCE, at the first resolution, and never
