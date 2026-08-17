@@ -718,9 +718,94 @@ except where noted)
 3. **Global DAO custody**: hide single-key; **re-set (windowed) + purge
    m-of-n**; keys — owner call.
 4. **Meta genesis + emission (coupled)**: genesis buy stays vote-dominant;
-   meta-CC **non-transferable at launch** (escrow + curve mints exempt);
-   **near-zero meta emission** is a two-sided fork (kills the deployer's +EV
-   junk-appeal policing AND raises the forgery price ~5×). Owner call.
+   meta-CC transferable per the owner's v0.9 call; **near-zero meta emission**
+   is a two-sided fork (kills the deployer's +EV junk-appeal policing AND
+   raises the forgery price). Owner call. **Superseded in part by §13.8.**
+
+### 13.8 The meta franchise — owner proposal, three-way vet, UNANIMOUS ADOPT WITH FIXES
+
+**The proposal (owner):** stop selling meta-CC on its own curve as the primary
+channel. Instead, whenever anyone burns GNOT into ANY court, they receive
+meta-CC pro-rata to the GNOT burned — so the appeals franchise belongs to the
+platform's paying participants, weighted by unfakeable sunk capital.
+
+**Why it is right (all three vets):** today meta's security budget is *one
+actor's one-time purchase and never grows*. The binding threshold is not 50%
+but **5%** (`quorumFloor`'s supply arm), so a 5% pivot costs ~0.108× the
+deployer's genesis spend — on the order of **~54–108 GNOT, forever, at any
+platform size**. Pro-rata makes the parameter **endogenous**: ~0.053×
+cumulative platform burn, i.e. ~49× better at 100k GNOT burned and rising with
+adoption. It also fixes the selection problem — a franchise sold at the door
+selects for *appetite for the lever*, the worst possible filter for a review
+body; burned capital selects for diversified exposure to the platform's
+credibility.
+
+**Six fixes, unanimous, without which it is a REGRESSION:**
+
+1. **Mint on `spent` µGNOT — never on `delta`/CC minted.** A fresh curve sells
+   CC ~44,721× cheaper per GNOT, and `StartCourt` is free, so per-CC minting is
+   an unbounded **√N free-mint** of the platform's master governance token
+   (10,000 shell courts ⇒ 100× the meta-CC for the same GNOT). Per-GNOT makes
+   the court you burn into irrelevant — and this is safe *only because the GNOT
+   is genuinely burned to a keyless sink with no redemption anywhere*. **Record
+   that as a tripwire: it breaks instantly if a treasury or redemption is ever
+   reintroduced.** Corollary: per-court caps and age/tier weighting are BOTH
+   sybil-defeated by free court creation, so uniform-linear-per-µGNOT is the
+   only defensible form.
+2. **Meta's own curve must not stay a cheap side door.** `c.minted` advances
+   only on curve buys, so a franchise channel that leaves it parked lets meta's
+   curve sell a capture bloc at genesis prices forever (~45× cheaper). Either
+   close meta's `Buy`, or advance meta's `minted` with every franchise mint —
+   routing the franchise *through meta's own curve* additionally preserves the
+   quadratic escalator (5% costs 0.108·B instead of 0.053·B) and keeps
+   `mustInvariants` true **unchanged**, with ~4 orders of magnitude of headroom.
+3. **Clamp at the cap, silently — NEVER panic.** `grc20votes.Mint` panics past
+   `MaxSupply`, and the franchise mint lives inside `Buy`, the platform's only
+   GNOT on-ramp: an unclamped mint means the day meta fills, **every `Buy` on
+   every court reverts forever.** Same discipline as `reindexBurn` (never
+   panics, never reads money state back).
+4. **Fix the quorum denominator FIRST — this is the one that decides win vs
+   regression.** Meta supply would inflate with platform burn while turnout does
+   not, and `quorumFloor`/`electionFloor` take 5% of **raw** supply, so the bar
+   rises ~158× and legitimate appeals go **quorum-dead** — while the zero-voter
+   `route=="vote"` forge keeps working. Unfixed, the change *starves the honest
+   path and leaves the forgery path operational*.
+5. **Claim-on-demand is the fix, and it was derived independently by all
+   three.** Accrue an address-keyed entitlement at `Buy`; mint only when the
+   holder affirmatively claims. One mechanism solves four problems: supply then
+   equals the *engaged* electorate so quorum stays reachable; the cheap-float
+   capture route evaporates (an attacker must pay people to claim and sell —
+   visible vote-buying); the unsolicited distribution becomes an opt-in
+   membership act (the securities fix); and the unclaimed overhang becomes a
+   **standing defensive reserve** — dormant burners can claim and dilute an
+   attacker next cycle. Honest debit: the security base is *claimed* burn, not
+   total burn.
+6. **New deploy invariant + meta emission.** `mustInvariants` becomes a false
+   certificate (it proves a bound only the curve enforces): restate as
+   `metaGenesis + metaFranchiseCap + metaEmissionLifetimeBound ≤ MaxInt64/Bps`
+   with an explicit frozen cap and counter. Meta emission must not be
+   `S_live × bps` (it would size meta's budget off platform-scale supply):
+   zero, or senior-lane-only on a fixed absolute stepped-down budget.
+
+**Honest accounting (all three):** the headline capture-cost win is **~3–10×
+smaller than gross**, because transferable coins let an attacker resell the
+court-CC collateral and keep the meta weight, and because an airdropped
+transferable franchise creates a large weak-handed float that is cheaper to buy
+out than to out-burn. Fix 5 recovers most of it.
+
+**OWNER RE-CHECK (surfaced, not overridden):** all three vets note the §13.4
+transferability call was made about a *bought* coin. This proposal changes the
+premise — **nobody pays for franchise-minted meta-CC, so locking it takes
+nothing from anyone**, and transferability is precisely what enables the
+cheap-float capture route. Keeping it transferable is the owner's standing
+decision; the vets' unanimous recommendation is to re-take that one call on the
+changed input.
+
+**Also flagged:** meta's `minAnswerX` / `minClaimDepositCC` are absolute CC
+constants frozen at StartCourt with no retune path — if meta supply grows 1000×
+they decay to nothing, and §5.3's flood-deposit argument decays with them. Make
+them supply-relative **before deploy**. And the forge price (~10%·X̄) does not
+scale with supply, so `minAnswerX` stops being the forgery dial it is called.
 5. **StartCourt creation fee — RESOLVED (v0.8.2): no GNOT fee.** A fixed GNOT
    fee can't be sized without a USD oracle; court-count floods are priced by the
    per-byte storage deposit court creation already incurs (protocol-set, no
@@ -766,6 +851,20 @@ except where noted)
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.11 — the meta-franchise vet (owner proposal; 3 identical passes, all
+  ADOPT WITH FIXES; §13.8 carries the full consensus)**. Distributing meta-CC
+  pro-rata to GNOT burned on every court makes meta's security budget
+  endogenous to platform adoption (~49× at 100k GNOT burned) instead of a fixed
+  ~54–108 GNOT forever, and replaces an electorate self-selected for appetite
+  for the lever with one selected by sunk capital. Six unanimous conditions:
+  mint on `spent` µGNOT never on CC (an unbounded √N free-mint otherwise);
+  don't leave meta's own curve a parked side door; clamp never panic (a mint
+  panic inside `Buy` bricks the platform's only on-ramp); fix the raw-supply
+  quorum arm FIRST or the change is a net regression; **claim-on-demand**
+  (independently derived by all three — it fixes quorum, cheap-float capture,
+  the securities posture, and creates a defensive reserve); and a restated
+  supply invariant with meta emission off `S_live × bps`. Owner re-check
+  surfaced on transferability, not overridden.
 - **v0.10 — the setmods flap vet, resolved by three identical adversarial
   passes (all HOLD WITH FIXES; §3.3 carries the full list)**. Landed in code:
   `ResetModSet` + `GlobalSuspendSet` (global had NO reach over set membership —
