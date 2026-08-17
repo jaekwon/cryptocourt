@@ -1624,6 +1624,32 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.90 — the RIDE's own decisions: five real gaps, including a bounty minted for a slash
+  nobody bonded.** Swept `resolveQualityRide` — the dispute lane's quality arm, and the last
+  large logic block in quality.gno. Eleven mutations, six not caught, five of them real.
+  **The one to read twice is the beneficiary.** A ride posts no bond, so `originateSlash`
+  is called with `""` and the source says why: settleSlash pays whoever ORIGINATION
+  recorded, never `cs.flagger`, because that field is either the zero address or a STALE
+  flagger from an earlier inconclusive cycle whose own bond already came back whole under
+  T1. Pass `cs.flagger` instead and that stale flagger is minted a bounty for a slash the
+  RIDE levied — a guard the comment describes in full and nothing in the suite tested.
+  **Two more on the slash predicate**, which must be ResolveFlag's slashGrade and not merely
+  "conclusive": a DUST ride could levy (no full bar), and a bare-majority low could levy
+  (no two-thirds). Both matter for the reason the source gives — a ride that cannot LIFT a
+  slash must not be able to impose one, which is the asymmetry disposeSlashOnRide is scored
+  on.
+  **And both halves of the F3 ratchet's scope.** Its first clause restricts the ⅔ mandate to
+  a re-adjudication, so dropping it refuses an honest FIRST verdict; and the mandate must be
+  read in the promoted tier's OWN bucket, not the high bucket. The two differ only in
+  whether the slot was already consumed — invisible from outside the function, which is why
+  one table driving it directly separates cases that would each need their own dispute round.
+  One survived and is EQUIVALENT: `tier == qualityLow` in the slash predicate is implied by
+  the clause beside it. `qLowW*3 >= turnout*2` gives `qLowW >= ⅔·turnout`, which forces the
+  weighted median low; HIGH cannot also hold ⅔ (both would need 4/3 of turnout); and at
+  `turnout == 0` the function has already returned as inconclusive. Redundant by
+  construction — the fifth guard proved that way in this sweep.
+  Batch now 290 rows, 0 not caught (8m23s).
+
 - **v0.89 — THE BARS: 8 of 11 mutations survived on the two numbers every adjudication
   decision in the realm reads, and the reason needed two fixtures, not one.** Swept
   `applyQualityTally` and `qualityBars` — the decision and the thresholds it decides

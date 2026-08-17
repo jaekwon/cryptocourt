@@ -1958,5 +1958,75 @@
   "label": "qualityBars: the supply floor is sized off VOTABLE, not supply",
   "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {",
   "replace": "\tif fivePct := mulDiv128(votable, quorumSupplyBps, 10000); fivePct > fullBar {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride F3: the mandate applies even on a FIRST adjudication",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "\tif tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride F3: the mandate applies to DEMOTIONS too",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "\tif cs.slotConsumed && bucketW(cs, tier)*3 < turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride F3: a promotion needs no two-thirds mandate",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "\tif false && cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride F3: the mandate reads the HIGH bucket, not the promoted tier's",
+  "find": "bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "cs.qHighW*3 < turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: a conclusive LOW skips the dust burns (v0.50 refund bug)",
+  "find": "\tif tier == qualityLow {\n\t\tburnConclusiveLowDust(c, cs)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: a DUST ride levies the slash (no full bar)",
+  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
+  "replace": "\tif tier == qualityLow && fullBar >= 0 && cs.qLowW*3 >= turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: a bare-majority low levies the slash (no two-thirds)",
+  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
+  "replace": "\tif tier == qualityLow && turnout >= fullBar {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the slash records a STALE flagger as its bounty beneficiary",
+  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty",
+  "replace": "\t\toriginateSlash(c, cs, now, cs.flagger)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the tier finalizes even with a live reserve, spending the Q5 counter",
+  "find": "\tcs.tierFinal = cs.pendingSlash == 0",
+  "replace": "\tcs.tierFinal = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the slot is not consumed",
+  "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
+  "replace": "\tcs.conclusiveTurnout = turnout"
  }
 ]

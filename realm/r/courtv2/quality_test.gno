@@ -2392,3 +2392,107 @@ func TestQualityBarsWhenTheSupplyFloorBinds(cur realm, t *testing.T) {
 			"%d)", fivePct, f, fivePctOfVotable)
 	}
 }
+
+// THE RIDE'S OWN DECISIONS. Eleven mutations over resolveQualityRide, six not caught, and
+// five of those are real: the F3 ratchet's scope and bucket, and three clauses of the
+// predicate that decides whether a ride LEVIES A SLASH.
+//
+// Driven directly. The function is applyQualityTally plus dispositions, so a table over
+// (buckets, prior tier, slot state) separates cases that would each need their own dispute
+// round to reach through the lane — and the two F3 cases differ only in whether the slot
+// was already consumed, which is invisible from outside.
+//
+// The one worth reading twice is the beneficiary. A ride posts no bond, so it must record
+// NO bounty beneficiary; the source says so and settleSlash pays whoever origination
+// recorded. Pass cs.flagger instead and a stale flagger from an earlier inconclusive cycle
+// — whose own bond already came back whole under T1 — is minted a bounty for a slash the
+// RIDE levied. Nothing else in the suite noticed.
+func TestRideRatchetAndSlashPredicate(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rqr-alice")
+	stale := testutils.TestAddress("rqr-stale")
+	c := testCourt(cur, "rqr", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rqr", "what a ride may decide")
+	matureOI(cur, "rqr", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rqr", id, sideYES)
+
+	cs := mustClaim(c, id)
+	d, f := qualityBars(c, cs)
+	bond := cs.answerBond
+	if d < 1 || f < 5 || bond <= 0 {
+		t.Fatalf("setup: need live bars and a live bond: d=%d f=%d bond=%d", d, f, bond)
+	}
+	// A stale flagger on record, as an earlier inconclusive cycle would leave.
+	cs.flagger = stale
+
+	reset := func(tier int64, consumed bool) {
+		cs.tier, cs.slotConsumed = tier, consumed
+		cs.pendingSlash, cs.slashLevied, cs.slashFlagger = 0, false, ""
+		cs.answerBond, cs.tierFinal = bond, false
+		cs.qVoteSeq++
+	}
+
+	// (1) A DUST conclusive low must not levy: a ride that cannot lift a slash must not
+	//     be able to impose one (the asymmetry disposeSlashOnRide is scored on).
+	reset(tierMidX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = d, 0, 0
+	resolveQualityRide(c, cs)
+	if cs.tier != tierLowX {
+		t.Fatalf("a dust ride still demotes: tier=%d", cs.tier)
+	}
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a dust ride must levy NO slash, got %d", cs.pendingSlash)
+	}
+
+	// (2) A full-bar low that misses the two-thirds must not levy either.
+	reset(tierMidX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = 16*f/10, 14*f/10, 0
+	if cs.qLowW*2 < cs.qLowW+cs.qMidW || cs.qLowW*3 >= (cs.qLowW+cs.qMidW)*2 {
+		t.Fatalf("setup: this case needs low in [1/2, 2/3): low=%d turnout=%d",
+			cs.qLowW, cs.qLowW+cs.qMidW)
+	}
+	resolveQualityRide(c, cs)
+	if cs.tier != tierLowX {
+		t.Fatalf("a full-bar majority low demotes: tier=%d", cs.tier)
+	}
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a low short of two-thirds must levy NO slash, got %d", cs.pendingSlash)
+	}
+
+	// (3) A full-bar two-thirds low DOES levy — with NO bounty beneficiary.
+	reset(tierMidX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = 2*f, f, 0
+	resolveQualityRide(c, cs)
+	if cs.pendingSlash <= 0 {
+		t.Fatalf("a full-bar two-thirds low must levy the slash, got %d", cs.pendingSlash)
+	}
+	if cs.slashFlagger != "" {
+		t.Fatalf("a ride posts no bond, so it must record NO beneficiary; got %s "+
+			"(the stale flagger is %s)", cs.slashFlagger, stale)
+	}
+
+	// (4) F3 is PROMOTION-out-of-an-ADJUDICATED-tier only. On a FIRST adjudication the
+	//     residual mid stands with no mandate at all — gating it here would refuse an
+	//     honest first verdict.
+	reset(tierLowX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = 49*f/100*3, 0, 51*f/100*3
+	resolveQualityRide(c, cs)
+	if cs.tier != tierMidX {
+		t.Fatalf("a first adjudication needs no mandate to land the residual mid: "+
+			"tier=%d (low=%d mid=%d high=%d)", cs.tier, cs.qLowW, cs.qMidW, cs.qHighW)
+	}
+
+	// (5) And when the slot IS consumed, the mandate is read in the PROMOTED tier's own
+	//     bucket. Mid carries two thirds here, so the promotion stands; read the high
+	//     bucket instead and it would be refused.
+	reset(tierLowX, true)
+	cs.qLowW, cs.qMidW, cs.qHighW = 0, 2*f, f
+	resolveQualityRide(c, cs)
+	if cs.tier != tierMidX {
+		t.Fatalf("a promotion carrying two thirds of its OWN bucket must stand: "+
+			"tier=%d (mid=%d high=%d turnout=%d)", cs.tier, cs.qMidW, cs.qHighW,
+			cs.qMidW+cs.qHighW)
+	}
+}
