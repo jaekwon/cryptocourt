@@ -48,7 +48,7 @@ import shutil
 import subprocess
 import sys
 
-import stagelock
+import gnoroot
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -90,20 +90,8 @@ def stage(root):
                 shutil.copy(os.path.join(src, f), dst)
 
 
-def cleanup(root):
-    for _, rel in REALMS:
-        shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/p/cryptocourt"), ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/r/cryptocourt"), ignore_errors=True)
-
-
 def main():
-    try:
-        root = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
-                              text=True, timeout=30).stdout.strip()
-    except (FileNotFoundError, subprocess.SubprocessError):
-        root = ""
-    if not root or not os.path.isdir(root):
+    if not gnoroot.real_root():
         if os.environ.get("REQUIRE_GNO"):
             print("check-isolation: gno not installed", file=sys.stderr)
             return 1
@@ -132,17 +120,17 @@ def main():
         return 1
 
     bad, total = [], 0
-    with stagelock.held(root, "check-isolation"):
+    with gnoroot.shadow("check-isolation") as root:
         stage(root)
         for rel, names in work:
             base = os.path.join(root, rel)
             for t in names:
                 total += 1
                 r = subprocess.run(["gno", "test", "-run", f"^{t}$", "."], cwd=base,
-                                   capture_output=True, text=True)
+                                   capture_output=True, text=True,
+                                   env={**os.environ, "GNOROOT": root})
                 if r.returncode != 0:
                     bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
-        cleanup(root)
 
     for rel, t, out in bad:
         print(f"ALONE   {t} ({os.path.basename(rel)}) fails when it is the only "

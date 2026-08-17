@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.74 — item 5 is DONE, including the half recorded as needing an owner decision:
+  every runner now gets its own GNOROOT, so two worktrees can test at the same time.**
+  The decision that was parked was between two bad options — keep sharing one tree, or
+  rewrite import paths at staging time so each worktree could have its own directory,
+  which would mean the code under test differs textually from the code that is committed.
+  There is a third way, and it needs no decision: **GNOROOT itself is honoured from the
+  environment**, so a runner can have its own. `scripts/gnoroot.py` builds a shadow —
+  every top-level entry SYMLINKED, except `examples`, which is a real copy — and the
+  runner points GNOROOT at that. Import paths are untouched; the staged sources are
+  byte-identical to the committed ones.
+  Only `examples` has to be real, and that is the load-bearing detail: gno's package
+  discovery WALKS the examples tree and does not follow symlinks, so a symlink farm alone
+  fails with `gno: downloading gno.land/p/nt/bptree/v0` and a network error. A symlink
+  farm plus one real copy of examples works, and examples is 14MB — about half a second.
+  Everything expensive (gnovm, tm2, the stdlibs) stays a symlink and resolves fine
+  through it.
+  **There were FIVE staging sites, not the three the item named** — realm-test,
+  check-isolation, mutate, txtar's TestMain, and `check-storage.py`, which staged into
+  the shared tree while taking no lock at all and ends by removing the whole of
+  `p/cryptocourt`. So a guard whose only job was to measure a filetest's storage could
+  delete another runner's staged packages out from under it. All five now build their own
+  root, which is why this is a better fix than adding a fourth lock call site.
+  `scripts/stagelock.py` is deleted. Nothing takes it any more, and a lock nobody takes
+  is worse than no lock: it tells a reader that staging is serialized when it is not.
+  **Demonstrated rather than assumed:** two `make realm-test` runs launched concurrently
+  from one checkout both exit 0, no shadow roots are left behind, and the real tree has no
+  cryptocourt staging in it afterwards. That is the property item 5 actually wanted and it
+  is now a measured result. Six self-test controls replace the three lock ones, covering
+  both directions that fail silently: that two shadows are isolated and neither leaks into
+  the real root, and — the catastrophic direction — that `remove()` refuses anything that
+  is not a shadow and unlinks symlinks rather than following them into a real gno
+  checkout. Without that last one a bug here deletes the monorepo, and no test in this
+  repo would survive to report it.
+  Note for anyone reading the old entries: **`gno env GNOROOT` is cwd-dependent.** Run
+  from a gno monorepo checkout it reports that checkout; run from this repo it falls back
+  to `~/gopath/src/github.com/gnolang/gno`. The tooling runs from here, so that is what it
+  shadows — but a figure quoted from a shell sitting somewhere else will disagree.
+
 - **v0.73 — the withdraw family swept: five of six guards already pinned, and the one
   survivor is the one that changes nothing the caller can see.** `WithdrawStake` is the
   function that moves real GNOT out of escrow, so it was the natural next target after the

@@ -19,9 +19,12 @@ vet:
 # imports from the examples tree, and gno test will not find a sibling package
 # any other way. The staged copies are removed afterwards.
 #
-# That tree is shared with every other runner, so this holds scripts/stagelock.py
-# across the whole recipe — with the SHELL's pid ($$), not the short-lived
-# acquiring process's, since the shell's liveness is what the hold really means.
+# That tree used to be SHARED — one $GNOROOT for every runner and every worktree,
+# each ending in an rm -rf of a directory the others might be reading. This now
+# builds its own GNOROOT instead (scripts/gnoroot.py): symlinks to everything
+# except a private copy of examples/, named after this SHELL's pid ($$) so two
+# runs in one checkout do not share it either. Import paths are untouched, so the
+# code under test is byte-identical to the code that is committed.
 realm-test:
 	@if ! command -v gno >/dev/null 2>&1; then \
 		if [ -n "$$REQUIRE_GNO" ]; then echo "gno not installed"; exit 1; fi; \
@@ -30,11 +33,11 @@ realm-test:
 	python3 scripts/check-citations.py || exit 1; \
 	python3 scripts/check-docnumbers.py || exit 1; \
 	python3 scripts/check-storage.py || exit 1; \
-	root=$$(gno env GNOROOT); \
+	root=$$(python3 scripts/gnoroot.py build --label realm-test --pid $$$$) || exit 1; \
+	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
+	export GNOROOT="$$root"; \
 	rbase="$$root/examples/gno.land/r/cryptocourt"; \
 	pbase="$$root/examples/gno.land/p/cryptocourt"; \
-	python3 scripts/stagelock.py acquire --root "$$root" --label realm-test --pid $$$$ || exit 1; \
-	trap 'rm -rf "$$rbase" "$$pbase"; python3 scripts/stagelock.py release --root "$$root"' EXIT; \
 	for p in checkpoint grc20votes governor twap cshares tickbook curve; do \
 		mkdir -p "$$pbase/$$p/v0" && \
 		cp realm/p/$$p/*.gno realm/p/$$p/gnomod.toml "$$pbase/$$p/v0/" || exit 1; \
@@ -67,8 +70,14 @@ chain-test:
 # GNOROOT/examples (where `loadpkg` looks) and removes them after. This is the only
 # place the on-chain coin invariant — real GNOT to treasury, real CC through escrow —
 # is checkable; the unit harness can only assert internal consistency.
+# Its own GNOROOT too. TestMain stages through gnoenv.RootDir(), which reads
+# GNOROOT from the environment, so the same shadow works here — and it matters
+# as much as anywhere: this staged the widest set of packages of any runner and
+# removed all of p/cryptocourt and r/cryptocourt when it finished.
 txtar-test:
-	go test -tags txtar -count=1 -timeout 20m ./gnoland/
+	@root=$$(python3 scripts/gnoroot.py build --label txtar --pid $$$$) || exit 1; \
+	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
+	GNOROOT="$$root" go test -tags txtar -count=1 -timeout 20m ./gnoland/
 
 # Every realm suite run on its own. A gno test file shares package state and
 # these suites do not rewind the clock, so a test can pass only because of what
@@ -87,9 +96,9 @@ isolation-test:
 #
 # If a run is interrupted, check `git diff` on the realm before trusting a green suite:
 # a killed run can leave a mutation applied. mutate.py writes .mutate-backup files beside
-# the sources and recovers them on its next run. A killed run also leaves the staging
-# lock behind, but that no longer needs a human: the lock records its holder, so the next
-# runner sees the pid is gone and reclaims it.
+# the sources and recovers them on its next run. A killed run also leaves its shadow
+# GNOROOT behind, which needs nobody: it is a directory in the system temp named after a
+# pid that no longer exists, and the next run builds its own.
 mutate:
 	python3 scripts/mutate.py < scripts/mutations-courtv2.json
 

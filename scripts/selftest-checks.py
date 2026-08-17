@@ -230,70 +230,64 @@ else:
             stdin='[{"pkg":"governor","file":"governor.gno","label":"x","find":"const maxLive = 64","replace":"const maxLive = 63"}]',
             cwd=os.path.join(REPO, GOVERN))
 
-# ---------------------------------------------------------------- stagelock --
-# The staging lock decides whether two runners may delete each other's staged
-# tree, and it can fail silently in BOTH directions. Stop reclaiming dead
-# holders and every later run blocks for three quarters of an hour against a pid
-# that no longer exists. Start reclaiming LIVE ones and it hands out a tree two
-# runners are already using — the race the lock exists to prevent, now caused by
-# the lock. A green suite shows neither, so both get a control.
+# ----------------------------------------------------------------- gnoroot --
+# Each runner now gets its OWN GNOROOT — symlinks to everything but a private copy
+# of examples/ — which is what lets two worktrees test at the same time. Two ways
+# that can go wrong silently, so both get a control.
 #
-# All of it runs against a scratch root. The real one may be held by a real
-# runner at this moment, and a self-test that reclaims a live lock to prove it
-# can reclaim locks would be the funniest possible way to cause the bug.
-print("\nstagelock.py")
-LOCK = os.path.join(REPO, ".selftest-stagelock")
-LOCKDIR = os.path.join(LOCK, "examples/gno.land/.cryptocourt-stage.lock")
+# If the isolation stops working, the runners are sharing a tree again and the
+# collisions this replaced come back, with nothing to announce it. And remove()
+# deletes a tree recursively whose entries are symlinks INTO a real gno checkout:
+# if it ever followed one, or accepted a path that is not a shadow, it would
+# delete the monorepo. No test in this repo would survive to report it.
+print("\ngnoroot.py")
+sys.path.insert(0, os.path.join(REPO, "scripts"))
+import gnoroot  # noqa: E402
 
 
-def lockheld(pid=None, label="ghost", anonymous=False):
-    """Leave the scratch lock held by `pid`, or by nobody it will name."""
-    shutil.rmtree(LOCK, ignore_errors=True)
-    os.makedirs(LOCKDIR)
-    if not anonymous:
-        with open(os.path.join(LOCKDIR, "owner"), "w") as f:
-            f.write(f"{pid}\t{time.time()}\t{label}")
-
-
-def lockcase(label, want, granted):
-    """Ask for the scratch lock; require `want` said, and granted-or-not."""
-    exercised.add("stagelock.py")
-    r = subprocess.run(["python3", "scripts/stagelock.py", "acquire",
-                        "--root", LOCK, "--label", "selftest", "--wait", "2"],
-                       capture_output=True, text=True)
-    out = r.stdout + r.stderr
-    if want in out and (r.returncode == 0) == granted:
-        print(f"  {label:<44} fires")
-    else:
-        got = out.strip().replace("\n", " ")[:60] or "nothing"
-        print(f"  {label:<44} WRONG — exit {r.returncode}, said: {got}")
+def rootcase(label, ok):
+    exercised.add("gnoroot.py")
+    print(f"  {label:<44} " + ("fires" if ok else "WRONG"))
+    if not ok:
         failures.append(label)
 
 
-dead = subprocess.Popen([sys.executable, "-c", "pass"])
-dead.wait()  # a pid that is certainly gone, so the reclaim arm is not a guess
+if not have_gno():
+    print("  gnoroot arms need a gno toolchain - NOT CHECKED")
+    failures.append("gnoroot arms were not run")
+else:
+    real = gnoroot.real_root()
+    a = gnoroot.build(real, "selftest-a")
+    b = gnoroot.build(real, "selftest-b")
+    # Two roots, one file: staging into one must not be visible in the other.
+    mark = "examples/gno.land/p/cryptocourt/selftest-marker"
+    os.makedirs(os.path.join(a, mark))
+    rootcase("two shadows are isolated", not os.path.exists(os.path.join(b, mark)))
+    rootcase("and neither leaks into the real root",
+             not os.path.exists(os.path.join(real, mark)))
 
-lockheld(pid=dead.pid, label="a killed run")
-lockcase("a dead holder's lock is reclaimed", "reclaimed", granted=True)
+    # The dangerous direction: anything that is not a shadow must be refused.
+    rootcase("removing the real root is refused", gnoroot.remove(real) == 1)
+    rootcase("removing a non-shadow under the base is refused",
+             gnoroot.remove(os.path.join(gnoroot.BASE, "not-a-shadow")) == 1)
 
-lockheld(pid=os.getpid(), label="this self-test")
-lockcase("a LIVE holder's lock is never taken", "not stale", granted=False)
-
-lockheld(anonymous=True)
-lockcase("an unidentified holder is left alone", "predates this script",
-         granted=False)
-
-shutil.rmtree(LOCK, ignore_errors=True)
+    # And removal must unlink the symlinks rather than follow them.
+    before = sorted(os.listdir(real))
+    gnoroot.remove(a)
+    gnoroot.remove(b)
+    rootcase("removal leaves the real root intact", sorted(os.listdir(real)) == before)
+    rootcase("removal leaves the real stdlibs intact",
+             os.path.isdir(os.path.join(real, "gnovm", "stdlibs")))
 
 # Every guard in scripts/ must have been pointed at by at least one control.
 #
 # check-*.py by name, plus the runners that are guards in everything but
-# spelling: mutate.py decides whether a mutation counted, stagelock.py decides
+# spelling: mutate.py decides whether a mutation counted, gnoroot.py decides
 # whether a suite ran against its own staged tree. Naming them explicitly is
 # the same opt-in coverage this file complains about elsewhere, but the
 # alternative — every scripts/*.py — demands a control for this file itself,
 # and a self-test that must break itself to prove it works is a worse trade.
-RUNNERS = {"mutate.py", "stagelock.py"}
+RUNNERS = {"mutate.py", "gnoroot.py"}
 print("\ncoverage")
 guards = {os.path.basename(p) for p in glob.glob(os.path.join(REPO, "scripts/check-*.py"))}
 guards |= RUNNERS

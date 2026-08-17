@@ -45,6 +45,7 @@ A saved batch for the courtv2 money path lives at scripts/mutations-courtv2.json
 Needs a gno toolchain. PKGS below lists every tree this can stage or mutate.
 """
 
+import atexit
 import json
 import os
 import re
@@ -52,7 +53,7 @@ import shutil
 import subprocess
 import sys
 
-import stagelock
+import gnoroot
 
 SRC = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -144,20 +145,21 @@ def run_suite(root, pkg=None):
     anyway is what made a full batch time out.
     """
     names = OBSERVERS.get(pkg, list(PKGS)) if pkg else list(PKGS)
-    # Under the lock: one complete stage/test/unstage cycle. Taking it here rather
-    # than around the whole run keeps a long batch from holding the shared tree for
-    # its entire duration, and every cycle is self-contained.
-    with stagelock.held(root, "mutate"):
-        stage(root)
-        out, passed = "", True
-        for nm in names:
-            rel = PKGS[nm][1]
-            r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
-                               capture_output=True, text=True)
-            out += r.stdout + r.stderr
-            passed = passed and r.returncode == 0
-        for _, rel in PKGS.values():
-            shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
+    # One complete stage/test/unstage cycle, in the run's OWN GNOROOT (see
+    # scripts/gnoroot.py) — so a long batch no longer holds a shared tree, and a
+    # concurrent runner in another worktree cannot delete the mutant mid-test and
+    # have it scored INVALID.
+    stage(root)
+    out, passed = "", True
+    for nm in names:
+        rel = PKGS[nm][1]
+        r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
+                           capture_output=True, text=True,
+                           env={**os.environ, "GNOROOT": root})
+        out += r.stdout + r.stderr
+        passed = passed and r.returncode == 0
+    for _, rel in PKGS.values():
+        shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
     return passed, out
 
 
@@ -189,8 +191,12 @@ def recover_backups():
 
 def main():
     muts = json.load(sys.stdin)
-    root = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
-                          text=True).stdout.strip()
+    # One shadow GNOROOT for the whole batch, removed at exit. atexit does not run
+    # on a kill, same as the backups below — but a leaked root is a directory in
+    # the system temp that nothing reads, whereas the shared-tree lock this
+    # replaces would block every later run until a human removed it.
+    root = gnoroot.build(gnoroot.real_root(), "mutate")
+    atexit.register(gnoroot.remove, root)
     # Absolute paths throughout, since a mutation may name a file in either
     # tree and there is no single directory to sit in.
     def where(m):

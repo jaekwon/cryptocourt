@@ -33,6 +33,8 @@ import shutil
 import subprocess
 import sys
 
+import gnoroot
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REALM = os.path.join(REPO, "realm/r/govern")
 DEPS = [
@@ -62,25 +64,24 @@ def stage(root):
 
 
 def main():
-    try:
-        root = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
-                              text=True, timeout=30).stdout.strip()
-    except (FileNotFoundError, subprocess.SubprocessError):
-        root = ""
-    if not root or not os.path.isdir(root):
+    if not gnoroot.real_root():
         if os.environ.get("REQUIRE_GNO"):
             print("check-storage: gno not installed", file=sys.stderr)
             return 1
         print("check-storage: gno not installed - skipping")
         return 0
 
-    stage(root)
-    base = os.path.join(root, DEST)
-    r = subprocess.run(["gno", "test", "-v", "."], cwd=base,
-                       capture_output=True, text=True)
-    out = r.stdout + r.stderr
-    shutil.rmtree(base, ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/p/cryptocourt"), ignore_errors=True)
+    # Its own GNOROOT. This runner used to stage into the shared one WITHOUT
+    # taking the lock the others took, and it ends by removing all of
+    # p/cryptocourt — so a concurrent runner's staged packages were deletable by
+    # a guard that only wanted to measure a filetest's storage.
+    with gnoroot.shadow("check-storage") as root:
+        stage(root)
+        base = os.path.join(root, DEST)
+        r = subprocess.run(["gno", "test", "-v", "."], cwd=base,
+                           capture_output=True, text=True,
+                           env={**os.environ, "GNOROOT": root})
+        out = r.stdout + r.stderr
 
     if r.returncode != 0:
         print("check-storage: the suite does not pass, so its costs mean "
