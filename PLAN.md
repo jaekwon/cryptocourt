@@ -1512,7 +1512,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 32 | Crystallize gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
 | 33 | Cap-dust disposition (v0.36) | Scale-then-cap dust and cap-cut remainders stay juniorReserved and UNMINTED forever — economically a burn, always under the ceiling | Returning dust to R needs per-claim pull tracking (a walk) or a sweep entrypoint; the leak is bounded per claim by D and only reduces emission |
 | 34 | Carrot enqueue ordering (v0.36) | Per-voter senior entitlements enqueue at PullCarrot time (FCFS by pull), not at crystallize — avoids walking the voter set | Earlier pullers sit earlier in the senior queue; amounts are unaffected (never scaled), only payout timing |
-| 35 | Slash-reserve retention (v0.37, audit M3-HIGH) | SettleUndisputed retains 4.5%·X̄ of the bond through the quality slot, returning the rest; the reserve returns at crystallize if unslashed | Returning the whole bond at 72h (the old behavior) makes the mill-slash unreachable on undisputed claims — the exact ones it targets |
+| 35 | Slash-reserve retention (v0.37, audit M3-HIGH; extended to Finalize v0.43) | BOTH terminal paths retain the draw-proportional slash size through the quality slot, returning the rest: SettleUndisputed (undisputed claims) and Finalize (claims that reached finality through FAILED rounds, which keep decidedRounds==0 and so stay slash-eligible). Retention is gated on "a slash can still land": `!slotConsumed` (the load-bearing clause — a consumed slot admits no future flag) plus `pendingSlash==0` as defence-in-depth (implied: the carve follows the latch), and on Finalize also `decidedRounds==0`; SettleUndisputed correctly omits that last clause, being unreachable with a decided round (it panics on `round > 0`). The reserve returns at crystallize if unslashed | Returning the whole bond (the old behavior on both paths) makes the mill-slash unreachable on exactly the claims it targets; on the Finalize path this was the common case, since votingBlocks (7d) exceeds the escrow window so the flag resolves after finality |
 | 36 | Inconclusive re-flag cooldown (v0.37, audit M3-MED) | 7-day cooldown after EVERY inconclusive cycle, not just past the freeze | Immediate reopens let a dust-low chain block crystallize for free; the cost is a 7-day wait for honest re-flags after an absent-electorate inconclusive (bond already returned) |
 | 31 | Credential weight bar (v0.35.1, audit M2-1) | contested-and-upheld credits only when an upheld round's overturn side carried ≥ ¼ × quorum floor — weightless (self-manufactured) contests mint nothing; near-unanimous upholds also credit nothing | Dropping the bar re-opens credential farming at ~20% of a dispute bond per point; softening to the unfloored demotion bar prices it at idle-mill scale (~25 CC) instead of whale scale |
 
@@ -1610,6 +1610,142 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.45 — test-gap sweep: pinning guards that would have survived deletion.** A
+  dedicated completeness critic asked not "is the code right" but "which guarantees are
+  UNPROVEN — which guards would survive being deleted?" It found several money-path
+  guards standing behind fixtures that satisfy every clause at once and therefore pin
+  none of them — the same non-discriminating shape the v0.44 vet caught in this
+  session's own regression. **No source logic changed; these are proofs, not fixes.**
+  Every item below was verified by explicitly mutating the guard and confirming the new
+  test fails (and, where noted, that the old one did not):
+  - **A decided verdict cannot be silently flipped back** (highest value). TWO separate
+    permissionless entrypoints could reassign `provisional` from the overturn winner
+    back to the answer, redirecting the entire winners' slice and locking the true
+    winners out of `WithdrawBonus` — and both guards were unpinned. `SettleUndisputed`'s
+    `disputeOpen || round > 0`: the only fixture settled while the dispute was OPEN, so
+    both clauses held; since `disputeOpen ⟹ round > 0`, only a RESOLVED round isolates
+    the load-bearing clause. `ResolveDispute`'s `if firstResolution` in the
+    failed-quorum branch: every fixture already had `provisional == answer`, making the
+    assignment a no-op and the guard invisible. `TestOverturnedVerdictCannotBeFlippedBack`
+    drives overturn → refused settle → failed reopen → finalize → crystallize and
+    asserts the verdict holds at each step AND that the money follows it. Both mutants
+    die.
+  - **`Crystallize` refuses while a slash is in flight.** The gate
+    `flagOpen || counterOpen || pendingSlash > 0` had NO test at all. Without it,
+    crystallize would zero `answerBond` mid-slash and a later winning counter-flag
+    (`refundSlash` credits the reserve back) would restore coin to a field nothing pays
+    out again — stranding it in escrow permanently. `TestCrystallizeRefusesWhileSlashPending`
+    reaches the state where the pending slash is the ONLY remaining blocker (the 24 h
+    quiet window closes ~6 days before the counter window), asserts the refusal, then
+    closes the window and proves escrow drains to zero.
+  - **The burned deposit cannot resurrect.** `TestCrystallizeLowTierZeroDrawCarrotStillPays`
+    asserted `cs.deposit == 0` after crystallize — trivially true in both worlds, since
+    Crystallize zeroes the field *after* paying. So dropping the burn-site zeroing would
+    have refunded an already-burned deposit to the author **out of staked principal**,
+    invisibly. Now asserts the author's balance and total supply are unchanged across
+    Crystallize, plus escrow drains to zero. The old assertion did not catch the mutant;
+    the new one does.
+  **CORRECTION — the isolation guard measures less than it claims.**
+  `scripts/check-isolation.py`'s `REALMS` list stages only 3 `p/` packages
+  (checkpoint, grc20votes, governor) and 2 `r/` realms (govern, offerer), while its own
+  comment says "everything `make realm-test` compiles" — which is 7 `p/` + 4 `r/`,
+  **including courtv2**. So its cheerful "all 151 tests across 5 packages pass alone as
+  well as together" has never included the V2 realm, and earlier changelog entries
+  citing isolation as cover for courtv2 work (v0.42–v0.44) overstated it; the line in
+  v0.44 is corrected in place. Nothing regressed — the claim was simply weaker than
+  written. Registered as the next tooling fix (extend `REALMS` to the full realm-test
+  set, then work through whatever order-dependence it exposes). Note also that
+  `make isolation-test` currently fails outright for an unrelated environmental reason:
+  a second worktree (`cryptocourt-mod`, branch courtv2-moderation) stages into the SAME
+  `$GNOROOT/examples/.../cryptocourt` path and `rm -rf`s it on exit, deleting this run's
+  staged tree mid-copy. Per-worktree GNOROOT (or staging dir) is the durable fix.
+  Remaining registered gaps from the same sweep (lower value, none a known defect): the
+  F9/Q7 bonus caps never bind in any fixture; the conclusive-low half-burn branch
+  (full bar, low in [½, ⅔)) is untested; `Finalize`'s `!slotConsumed` reserve clause has
+  the same non-discriminating shape as the settle one did (timing-only money); the P2
+  per-voter carrot clamp never binds.
+- **v0.44 — retention symmetry closed, and a mutation-tested guard.** With v0.43 shipped,
+  `SettleUndisputed` was left the *less* precise sibling: it retained a reserve
+  unconditionally, including when the flag slot was already consumed or a slash was
+  already carved out — states where no further slash can ever land, so the retention was
+  pure lockup of the answerer's coin until crystallize. Now gated `pendingSlash == 0 &&
+  !slotConsumed` (no `decidedRounds` clause: that path panics on `round > 0`). **Not a
+  security change** — totals are identical in every branch and the coin always returned
+  at crystallize; this moves timing only, and it removes the sibling asymmetry that
+  produced both v0.42 and v0.43. Adversarial vet: the CODE was proven correct on all six
+  questions — the latch is real (`slotConsumed` has two writes, both `= true`, none
+  false), a post-settle slash is impossible (both forfeiture routes shut: `slotConsumed`
+  closes the carve, `verdictAt != 0` closes the overturn burn), conservation is
+  exactly-once in every branch, and **the deterrent is provably not weakened** (retention
+  is skipped only where the coin was already unslashable; the counter re-vote can't be
+  bought with the early-returned coin either, since its weights read the sealed
+  `qualityEpoch` pinned at PostAnswer). But the vet returned **INCOMPLETE on the proof
+  surface**, and it was right: `pendingSlash > 0` *implies* `slotConsumed` (the carve
+  follows the latch on one straight-line path), so the first regression satisfied both
+  clauses and could not tell them apart — the load-bearing `!slotConsumed` was untested,
+  and deleting it still passed. Fixed with a fixture that isolates it: a **dust low**
+  (quarter-bar, below the full bar) consumes the slot with **no** slash reserved.
+  Verified by explicit mutation — with `!slotConsumed` deleted, the old test PASSES and
+  `TestSettleRetainsNothingAfterDustLowNoSlash` FAILS. §12 row 35 restated around the
+  real invariant ("a slash can still land"), naming which clause carries it and which is
+  defence-in-depth. `make check` + txtar green, and `make isolation-test` green —
+  **but see the correction in v0.45: that guard does NOT stage courtv2**, so it never
+  covered any of this work. The mutation checks, not isolation, are what carry these
+  claims.
+- **v0.43 — the SECOND Finalize twin: the missing slash reserve (HIGH), fixed +
+  vetted.** The v0.42 vet surfaced an orthogonal twin in the same function, found by
+  chasing the same meta-pattern ("a guard added to one sibling but not the other").
+  `SettleUndisputed` retains a slash-sized reserve out of the answer bond through the
+  quality slot (M3-HIGH-1, whose own comment warns "returning the whole bond here let
+  the slash clamp to zero") — but `Finalize` refunded the bond **whole**. A claim that
+  reaches finality through FAILED dispute rounds keeps `decidedRounds == 0` and so is
+  still slash-eligible (`slashGrade` gates on exactly that), and since votingBlocks
+  (7 d) exceeds the escrow window the conclusive-low flag typically resolves AFTER
+  Finalize — so the slash clamped to a zero bond and the mill paid **nothing**. This
+  was the common case on that path, not an edge. D = 0 still held throughout and no
+  funds were ever misdirected: the loss was the deterrent itself. FIX: mirror the
+  sibling's retention, gated `pendingSlash == 0 && decidedRounds == 0 &&
+  !slotConsumed`. Proven load-bearing — `TestSlashSurvivesFinalize` (twin of
+  `TestSlashSurvivesSettle`) fails `answerBond=0 want 22500000` without it. Adversarial
+  vet: **FIX-CORRECT-AND-COMPLETE**, with a proof worth recording — `slashSizeFor` is
+  *provably immutable* after the answer (PostAnswer advances the pools BEFORE pinning
+  `frozenAt`/`rateAccAtFreeze`, so every later `advancePools` delta is exactly 0, and
+  Stake/Unstake panic post-freeze). Hence the reserve computed at Finalize and the slash
+  computed at ResolveFlag are identical **including under the clamp**, so a retained
+  reserve can never come up short. The vet also proved no strand (every crystallize
+  blocker has a permissionless closer, and the 7-day re-flag cooldown exceeds the 24 h
+  quiet window), no double-pay, and that overturn is double-locked out of retention
+  (`answerBond = 0` AND `decidedRounds++`). Its one correction is folded in: the
+  original gate lacked `!slotConsumed` and so withheld a second reserve after an
+  already-settled slash — money that still returned at crystallize, but needlessly late.
+  §12 row 35 updated (retention is now a property of BOTH terminal paths).
+  `make check` + txtar-test green. (The residual it left — `SettleUndisputed` being the
+  *less* precise sibling — is closed in v0.44 below.)
+- **v0.42 — convergence re-sweep: the Finalize tier-reset twin (HIGH), fixed +
+  vetted.** Per "any applied change resets the sweep," a fresh holistic pass after
+  v0.41 re-vetted the math commit SAFE and found a genuine HIGH: `Finalize`
+  (dispute.gno) reset the quality tier guarded only by `!cs.tierFinal` — the
+  UNTREATED TWIN of the v0.40 `SettleUndisputed` fix (session.gno, which got
+  `&& !cs.slotConsumed`). Reachable exploit: a mill's junk claim survives a FAILED
+  dispute round (which keeps verdictAt=0/decidedRounds=0), is flagged slash-grade
+  conclusive-LOW (which leaves slotConsumed=true but tierFinal=false for the
+  counter-flag window), then `Finalize` runs in that window and clobbers the tier
+  LOW→MID → the junk claim draws full mid-tier emission at Crystallize, breaking the
+  D=0 invariant the tier-low mechanism exists to guarantee. FIX: mirror the sibling
+  guard exactly (`if !cs.tierFinal && !cs.slotConsumed`). Proven load-bearing —
+  regression `TestConclusiveLowSurvivesLateFinalize` fails on the exact tier-clobber
+  assertion with the guard reverted, passes with it. Adversarial vet:
+  **FIX-CORRECT-AND-COMPLETE** — tierFinal/slotConsumed are one-way latches, so the
+  new clause is dead for every conclusive mid/high/non-slash outcome (all already set
+  tierFinal=true) and live ONLY for slash-grade-low (where tier must stay low); no
+  third unguarded quality-tier site (directory.gno's `Court.tier` is unrelated
+  curation state); the slash-window closers touch only tierFinal, and the
+  bond/coin accounting is untouched. `make check` (11 suites + doc guards) +
+  txtar-test green. The vet surfaced a SECOND, orthogonal twin — `Finalize` refunds
+  the FULL answer bond with no slash reserve (unlike SettleUndisputed's M3-HIGH-1
+  retention), so a claim flagged slash-grade-low AFTER a failed-round Finalize
+  slashes nothing (a deterrent gap; D=0 still holds and no funds are mis-sent) —
+  registered as the next convergence round.
 - **v0.41 — adversarial overflow/underflow math audit (owner-directed).** A
   dedicated fresh-eyes pass over every arithmetic site — `×Bps`, `×10000`,
   `×2`/`×3`, all subtractions, the u128 conviction integrals — from an attacker's

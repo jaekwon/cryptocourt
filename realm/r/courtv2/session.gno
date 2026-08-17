@@ -54,10 +54,24 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	// the retained amount exactly covers it (no clamp-from-under-retention).
 	// Disposed exactly once later: burned by a slash, or returned to the
 	// answerer at crystallize if no slash lands.
+	// Retain only while a slash can still land (v0.44, symmetric with Finalize):
+	// slotConsumed is a one-way latch and OpenFlag panics on it, so a consumed
+	// slot admits no future flag and therefore no future slash; and a slash
+	// already pending was carved out of the bond at ResolveFlag, so what remains
+	// here is owed back. Retaining in either case only withholds the answerer's
+	// coin until crystallize for nothing. (No decidedRounds clause: this path
+	// panics on round > 0, so it is always 0 here.) NOTE pendingSlash > 0 implies
+	// slotConsumed — the carve follows the latch on one straight-line path — so
+	// !slotConsumed is the load-bearing clause and pendingSlash == 0 is
+	// defence-in-depth. TestSettleRetainsNothingAfterDustLowNoSlash is the fixture
+	// that isolates the former (a consumed slot with no slash reserved).
 	if cs.answerBond > 0 {
-		reserve := slashSizeFor(cs)
-		if reserve > cs.answerBond {
-			reserve = cs.answerBond
+		reserve := int64(0)
+		if cs.pendingSlash == 0 && !cs.slotConsumed {
+			reserve = slashSizeFor(cs)
+			if reserve > cs.answerBond {
+				reserve = cs.answerBond
+			}
 		}
 		if refund := cs.answerBond - reserve; refund > 0 {
 			c.coin.Transfer(c.escrow, cs.answerer, refund)

@@ -345,10 +345,12 @@ func provCloseClaim(c *Court, cs *claimState) {
 
 // Finalize makes a disputed claim's standing provisional verdict FINAL once
 // the escrow window has passed with no active dispute: withdrawals open for
-// both sides, the answer bond is disposed (returned if the answer stands —
-// it burned already if not), and the answer record moves once, from the final
-// verdict (P13). Participant-only for the first week of eligibility (A13),
-// permissionless after. Deposit and fee wait for QUALITY_FINAL (crystallize).
+// both sides, the answer bond is disposed (returned if the answer stands — it
+// burned already if not, LESS a slash-sized reserve while the claim is still
+// slash-eligible, mirroring SettleUndisputed's M3-HIGH-1 retention), and the
+// answer record moves once, from the final verdict (P13). Participant-only for
+// the first week of eligibility (A13), permissionless after. Deposit, fee, and
+// any retained reserve wait for QUALITY_FINAL (crystallize).
 func Finalize(cur realm, courtSlug string, claimID uint64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -376,13 +378,41 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 
 	cs.verdictAt = now
 	cs.route = "vote"
-	if !cs.tierFinal {
-		cs.tier = tierMidX // the default; a conclusive tally (ride or flag) already set it otherwise
+	// The default mid tier — UNLESS a conclusive tally already set it. A
+	// slash-grade conclusive-low flag leaves slotConsumed=true but tierFinal=false
+	// for its counter-flag window (quality.gno slashGrade branch), and a failed
+	// dispute round keeps verdictAt=0/decidedRounds=0 so Finalize is reachable
+	// in that window. Without the slotConsumed guard this clobbers LOW→MID and a
+	// junk claim draws full mid emission — the exact twin of the v0.40
+	// SettleUndisputed fix (session.gno), which this mirrors.
+	if !cs.tierFinal && !cs.slotConsumed {
+		cs.tier = tierMidX
 	}
 	if cs.answerBond > 0 {
-		// The answer stood (an overturned bond was burned at its round).
-		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
-		cs.answerBond = 0
+		// The answer stood (an overturned bond was burned at its round). But if
+		// the claim is still slash-eligible — no DECIDED round ran, so a
+		// conclusive-low flag can still slashGrade (quality.gno gates it on
+		// decidedRounds==0), and no slash is yet reserved — retain a slash-sized
+		// reserve exactly as SettleUndisputed does (M3-HIGH-1). votingBlocks
+		// exceeds the dispute/escrow windows, so the flag typically resolves AFTER
+		// this Finalize; returning the whole bond here would let that later slash
+		// clamp to zero (zero deterrent). The reserve disposes exactly once later —
+		// burned by the slash, or returned at crystallize if none lands. A slash
+		// already pending (a flag that resolved first) is separate: return the rest.
+		// slotConsumed is a one-way latch and OpenFlag panics on it, so a consumed
+		// slot means no future flag and therefore no future slash — retaining then
+		// would withhold the answerer's coin until crystallize for nothing.
+		reserve := int64(0)
+		if cs.pendingSlash == 0 && cs.decidedRounds == 0 && !cs.slotConsumed {
+			reserve = slashSizeFor(cs)
+			if reserve > cs.answerBond {
+				reserve = cs.answerBond
+			}
+		}
+		if refund := cs.answerBond - reserve; refund > 0 {
+			c.coin.Transfer(c.escrow, cs.answerer, refund)
+		}
+		cs.answerBond = reserve
 	}
 	// The record moves once, from the final verdict (P13) — and "upheld"
 	// means a DECIDED vote upheld it AGAINST real opposition: quorum-less

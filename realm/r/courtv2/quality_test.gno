@@ -494,3 +494,73 @@ func TestConclusiveLowSurvivesLateSettle(cur realm, t *testing.T) {
 		t.Fatalf("a conclusive-low claim must draw nothing: %d/%d/%d", w, a, ans)
 	}
 }
+
+// TestConclusiveLowSurvivesLateFinalize is the Finalize twin of the test above
+// (audit convergence v0.42). A slash-grade conclusive-LOW flag leaves
+// slotConsumed=true but tierFinal=false for its counter-flag window; a FAILED
+// dispute round leaves verdictAt=0 and decidedRounds=0, so Finalize is callable
+// in that window. Finalize's tier reset must honor the conclusive low — without
+// the &&!slotConsumed guard it clobbers LOW→MID and the junk claim draws full mid.
+func TestConclusiveLowSurvivesLateFinalize(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cf-alice")
+	bob := testutils.TestAddress("cf-bob")
+	carol := testutils.TestAddress("cf-carol")
+	c := testCourt(cur, "cf1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	// Pin a tiny escrow window so it lapses well before the flag's counter-flag
+	// window closes — making Finalize reachable INSIDE that window deterministically,
+	// independent of price/xBar (escrowUntil is set once, at ResolveDispute).
+	c.params.escrowMinBlocks = 10
+	c.params.escrowMaxBlocks = 10
+
+	// Staked + answered, then a dispute that FAILS quorum: the round defaults the
+	// verdict to the answer with verdictAt=0 and decidedRounds=0 (Finalize-able,
+	// still slash-eligible), and closes the dispute.
+	id := stakeAnswerDispute(cur, "cf1", alice, bob)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cf1", id)
+	testing.SkipHeights(c.params.votingBlocks + 1) // nobody votes → failed quorum
+	ResolveDispute(cross(cur), "cf1", id)
+	if FailedRounds("cf1", id) != 1 || ProvClose("cf1", id) || DisputeOpen("cf1", id) {
+		t.Fatal("one failed round: provisional stands, not provClosed, dispute closed")
+	}
+
+	// The crowd flags it conclusive-LOW at the full bar → slash-grade: slotConsumed,
+	// tier=low, tierFinal=false, a slash pending in its counter-flag window.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "cf1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "cf1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "cf1", id)
+	if tier, final := QualityTier("cf1", id); tier != qualityLow || final {
+		t.Fatalf("flag must land slash-grade low (not yet final): tier=%d final=%v", tier, final)
+	}
+	cs := mustClaim(c, id)
+	if cs.pendingSlash <= 0 {
+		t.Fatal("a slash must be pending — the counter-flag window is open")
+	}
+
+	// Finalize NOW, inside the counter window (escrow lapsed a week ago). A
+	// participant (the author staked+answered) may finalize even in the grace week.
+	if runtimeHeight() < cs.escrowUntil {
+		testing.SkipHeights(cs.escrowUntil - runtimeHeight() + 1)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "cf1", id)
+	if tier, _ := QualityTier("cf1", id); tier != qualityLow {
+		t.Fatal("Finalize must NOT reset a conclusive-low tier back to mid (the SettleUndisputed twin)")
+	}
+
+	// Close the counter window and crystallize: the low tier means D = 0.
+	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	ResolveSlashWindow(cross(cur), "cf1", id)
+	testing.SkipHeights(priorityWindowBlocks + 1) // 24h quiet
+	testing.SkipHeights(periodBlocks)             // a budget to draw from, if any
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cf1", id)
+	if w, a, ans, _ := DrawSlices("cf1", id); w != 0 || a != 0 || ans != 0 {
+		t.Fatalf("a conclusive-low claim must draw nothing after Finalize: %d/%d/%d", w, a, ans)
+	}
+}

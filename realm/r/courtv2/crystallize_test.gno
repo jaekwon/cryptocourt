@@ -124,8 +124,21 @@ func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
 	}
 	// The reopen-relative rule: 24h quiet after the flag-vote close.
 	testing.SkipHeights(priorityWindowBlocks + 1)
+	authorBefore := c.coin.BalanceOf(alice)
+	supplyBefore := c.coin.TotalSupply()
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "cz2", id)
+	// The burned deposit and fee stay burned. Asserting the FIELDS is not enough —
+	// Crystallize zeroes them after paying, so a resurrected refund would be
+	// invisible there (v0.45). The author's balance is what discriminates: a refund
+	// would come out of escrow, i.e. out of staked principal. Nothing mints either,
+	// since tier low means D = 0 (the carrot mints later, at pull).
+	if got := c.coin.BalanceOf(alice); got != authorBefore {
+		t.Fatalf("no coin may reach the author on a burned-deposit claim: %d vs %d", got, authorBefore)
+	}
+	if got := c.coin.TotalSupply(); got != supplyBefore {
+		t.Fatalf("tier low mints nothing at crystallize: %d vs %d", got, supplyBefore)
+	}
 	w, a, ans, carrot := DrawSlices("cz2", id)
 	if w != 0 || a != 0 || ans != 0 {
 		t.Fatalf("tier low draws nothing: %d/%d/%d", w, a, ans)
@@ -157,5 +170,12 @@ func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
 	cs := mustClaim(c, id)
 	if cs.deposit != 0 || cs.fee != 0 {
 		t.Fatal("low-slashed deposit/fee must not resurrect")
+	}
+	// Conservation: once the only stake is withdrawn, escrow is empty — the burned
+	// deposit/fee left no phantom balance and the flag bond went back to its poster.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	WithdrawStake(cross(cur), "cz2", id, sideYES)
+	if got := c.coin.BalanceOf(c.escrow); got != 0 {
+		t.Fatalf("escrow must drain to zero: %d", got)
 	}
 }
