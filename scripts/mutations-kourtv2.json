@@ -1790,5 +1790,75 @@
     "replace": "\tclm := lookupClaimMod(c.mod, cs.id)\n\tif clm == nil {\n\t\treturn \"\"\n\t}\n\treturn \"\"\n",
     "pkg": "kourtv2",
     "file": "modrender.gno"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: an empty candidate set may be registered",
+    "find": "\t\tpanic(\"kourtv2: a candidate set may not be empty\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: RegisterModCandidate accepts any m-of-n threshold",
+    "find": "\t\tpanic(\"kourtv2: the m-of-n threshold must be in 1..n\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: the zero address may be a moderator",
+    "find": "\t\t\tpanic(\"kourtv2: a moderator address may not be zero\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: a second election may open while one is already open",
+    "find": "\t\tpanic(\"kourtv2: an election is already open for this court\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: the ballot has no size limit",
+    "find": "\t\tpanic(\"kourtv2: this ballot is full; open the next election instead\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: the same candidate may be added to the ballot twice",
+    "find": "\t\tpanic(\"kourtv2: that candidate is already on the ballot\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: a vote lands after voting has closed",
+    "find": "\t\tpanic(\"kourtv2: voting has closed\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: an address with no weight at the pinned epoch may vote",
+    "find": "\t\tpanic(\"kourtv2: no voting weight at the pinned epoch\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: a vote may name a candidate not on the ballot",
+    "find": "\t\t\tpanic(\"kourtv2: that candidate is not on the ballot\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote: an election resolves before its voting window closes",
+    "find": "\t\tpanic(\"kourtv2: the voting window has not closed\")\n",
+    "replace": ""
   }
 ]

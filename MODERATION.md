@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.46 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.47 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,88 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.47 — `modvote.gno` measured at the site level, and 10 of its 16 guards
+  were deletable in silence. Eleven election tests pin six.** The frontier v0.46
+  named turned out to be the worst surface in the realm, and it is the one that
+  matters most: the election machinery is how a captured moderator set is
+  removed.
+  - **The control comes first, because without it the number means nothing.** The
+    32-member cap mutation *was* caught, by `TestModSetSizeIsCapped` — the v0.14
+    test that deliberately checks the cap on **both** ways in. So the harness
+    reaches this file, runs its tests, and fails when a real guard goes. "10 of 16
+    survived" is a property of the suite, not an artefact of the run. **A SURVIVOR
+    COUNT WITHOUT A CATCH IN THE SAME BATCH IS UNINTERPRETABLE.**
+  - **`RegisterModCandidate` validates its own argument, and only the other
+    entrypoint's copy was tested.** The empty-set rule, the m-of-n range and the
+    zero-address rule all survived. `TestModMofN` covers *`AppointMods`'* m-of-n —
+    a separate `panic` with identical text — so a reader grepping the message finds
+    a test and concludes the rule is pinned. The cap, by contrast, lives in the
+    shared `canonicalMembers` chokepoint, which is exactly why its single test
+    covered both paths and caught. **A GUARD DUPLICATED ACROSS TWO ENTRYPOINTS IS
+    TWO GUARDS; A GUARD IN A SHARED CHOKEPOINT IS ONE** — and the message alone
+    does not tell you which kind you are looking at.
+  - **I12's per-court latch was unpinned.** A second election could be opened while
+    one was live, leaving two ballots pinned to different epochs where whichever
+    resolves second overwrites the set the first installed — the same shape as the
+    v0.25 deposed-signature bug, in the same file.
+  - **Both ballot-admission rules were unpinned**: one line per candidate, and the
+    `maxBallotLines` board limit that keeps `ResolveElection`'s single-transaction
+    walk affordable.
+  - **All four voting window-and-weight gates were unpinned, including the epoch
+    weight pin.** `PastVotes(who, e.epoch)` is what stops an election being decided
+    by CC acquired *after* the ballot became visible — the anti-flash-loan property,
+    and the one guard here whose deletion is directly profitable. Also unpinned:
+    voting after `voteEnd`, approving a candidate that was registered but never
+    nominated (which is what keeps the permissionless unbonded *registry* from
+    doubling as the bonded capped *ballot*), and resolving before the window closes.
+  - **Two fixture notes, both about measuring the arm you name.** The board-limit
+    test *constructs* a full board rather than funding 64 nominators, and nominates
+    an unlisted candidate from an address that has not nominated — so with the limit
+    deleted the call **succeeds** and no neighbouring guard can stand in for it. The
+    weight-pin test deliberately seals **no** epoch after minting to the latecomer:
+    sealing costs `epochBlocks*2` heights, which would carry the fixture past
+    `voteEnd` and make it measure the *closed* refusal instead.
+  - **And a reporting error of mine worth recording, because it nearly became a
+    finding about the tooling.** The first batch's per-line output looked lossy —
+    six of sixteen rows missing, two with panic-dump text bleeding in — and I began
+    writing it up as parallel-print corruption in `mutate.py`. The cause was
+    `tail -22` on a 28-line report. **NEVER PIPE A COMPLETENESS CHECK THROUGH `head`
+    *OR* `tail`** — the existing doctrine named only `head`, and the other end of
+    the same pipe is just as good at hiding the rows you have not read.
+  - **All ten are now caught, each by the test named after it.** Batch 256 -> 266.
+  - **A §7.4 finding of mine that was wrong, and the correction is the more useful
+    result.** I inspected all six `scripts/check-*.py` — citations, docnumbers,
+    isolation, membership-clears, nontransferable, storage — found that none scans
+    render output for the forbidden vocabulary, and concluded that §7.4 was enforced
+    nowhere on the realm's public copy. It is enforced. `render_test.gno` carries
+    `TestNoRenderPathLeaksTheForbiddenTerms`, merged from the other branch in v0.43:
+    it drives a full lifecycle so every page has real figures to leak, folds case,
+    and scans **all four** render paths for **all four** terms, mutation-verified by
+    injecting a distinct violation into each path. Those four rows are in the batch
+    already. **MEASURING THE WRONG SURFACE IS STILL RECALL** — I enumerated the
+    *guards* and drew a conclusion about *enforcement*, and enforcement lives in
+    tests too. The gap I found was a gap in my own scan's scope.
+  - **Their approach also settles the design question I had reached independently
+    and better than my answer did.** Scanning source string literals across all 50
+    non-test files, V2's only mentions of "backing" are the two comments that forbid
+    it — *"no 'backing' anywhere (burned GNOT backs nothing)"* and *"rendering one
+    would imply a redemption value that does not exist"* — and its one matching
+    render string, *"you backed the winning side"*, is the position-taking sense. So
+    a source-vocabulary scanner would produce three false positives and zero real
+    findings, where testing the RENDERED OUTPUT produces neither. Their commit
+    reached the same rule from the other side, matching `apr` as a whole word because
+    *"a guard that fires on 'appraisal' is a guard someone deletes"*. **A HYGIENE
+    GUARD MUST MATCH THE CLAIM, NOT THE WORD** — and the claim is what a reader sees,
+    which means the assertion belongs on the output, not on the source.
+  - **What the scan did turn up is an asymmetry, and it is V1's.**
+    `kourtv1/render.gno` renders a per-coin `· backing:` figure — precisely the read
+    V2 deleted on the grounds that it implies a redemption value that does not exist
+    — and V1 has no §7.4 test of any kind. V1 is behaviourally frozen and a render
+    string is behaviour, so this is left alone and **flagged for the owner**. Its
+    *"redeemed at the pre-answer price"* is the same family, milder.
+    `court.gno`'s params panic naming the *"20%/yr inflation ceiling"* stays as
+    written: §7.4 governs public copy, and a sanity check that will not say which
+    bound it enforces is not diagnosable.
 - **v0.46 — `records.gno` and `modrender.gno` measured; every source file in the
   realm now has mutation coverage. Batch 256, and the zero-coverage list is
   empty.** Both files also have **no panics**, so both were mutated on their

@@ -531,3 +531,188 @@ func TestElectionFloorIsPinnedAtOpenAndNeverFalls(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(9_750_000), live,
 		"a twentieth of the 195 CC still votable — what an attacker would have bought")
 }
+
+// RegisterModCandidate is the SECOND way a moderator set enters a court, and
+// it validates its argument independently of AppointMods. TestModSetSizeIsCapped
+// already covers the 32-member cap on BOTH paths — and caught its mutation —
+// but the empty-set rule, the m-of-n range and the zero-address rule on this
+// path were unpinned: each panic could be deleted and all eleven election
+// tests still passed.
+func TestRegisterModCandidateValidatesItsSet(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("rc-creator")
+	m1 := testutils.TestAddress("rc-m1")
+	testCourt(cur, "regcand", creator, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "candidate set may not be empty", func() {
+		RegisterModCandidate(cross(cur), "regcand", []address{}, 1)
+	})
+	// Both ends of the m-of-n range, so the bound cannot be half-deleted.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
+		RegisterModCandidate(cross(cur), "regcand", []address{m1}, 0)
+	})
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
+		RegisterModCandidate(cross(cur), "regcand", []address{m1}, 2)
+	})
+	// canonicalMembers refuses the zero address on both paths, and nothing
+	// else in the suite ever passes one.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "moderator address may not be zero", func() {
+		RegisterModCandidate(cross(cur), "regcand", []address{m1, ""}, 1)
+	})
+	// A well-formed set registers, so the four refusals above are about their
+	// own reasons and not about a call that was broken to begin with.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	if id := RegisterModCandidate(cross(cur), "regcand", []address{m1}, 1); id == 0 {
+		t.Fatal("a well-formed candidate set must register and return an id")
+	}
+}
+
+// I12's per-court latch: one open election at a time. Without it a court can
+// carry two live ballots pinned to different epochs, and whichever resolves
+// second silently overwrites the set the first one installed — the same shape
+// as the v0.25 deposed-signature bug. The cooldown guard sits AFTER this one,
+// so a court with no history can only be refused for the latch.
+func TestOnlyOneElectionOpenPerCourt(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("oe-creator")
+	voter := testutils.TestAddress("oe-voter")
+	m1 := testutils.TestAddress("oe-m1")
+	m2 := testutils.TestAddress("oe-m2")
+	electionCourt(cur, "onelect", creator, []address{voter}, []int64{900_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	a := RegisterModCandidate(cross(cur), "onelect", []address{m1}, 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	b := RegisterModCandidate(cross(cur), "onelect", []address{m2}, 1)
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "onelect", a)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "election is already open", func() {
+		OpenElection(cross(cur), "onelect", b)
+	})
+}
+
+// The two ballot-ADMISSION rules, neither of which any election test reached.
+// A candidate may hold at most one line, and the board is bounded at
+// maxBallotLines so ResolveElection's single-transaction walk stays affordable.
+func TestBallotRefusesAFullBoardAndADuplicateLine(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("bf-creator")
+	opener := testutils.TestAddress("bf-opener")
+	second := testutils.TestAddress("bf-second")
+	third := testutils.TestAddress("bf-third")
+	m1 := testutils.TestAddress("bf-m1")
+	m2 := testutils.TestAddress("bf-m2")
+	m3 := testutils.TestAddress("bf-m3")
+	c := electionCourt(cur, "ballotfl", creator,
+		[]address{opener, second, third},
+		[]int64{900_000_000, 900_000_000, 900_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(opener))
+	a := RegisterModCandidate(cross(cur), "ballotfl", []address{m1}, 1)
+	testing.SetRealm(testing.NewUserRealm(opener))
+	b := RegisterModCandidate(cross(cur), "ballotfl", []address{m2}, 1)
+	testing.SetRealm(testing.NewUserRealm(opener))
+	d := RegisterModCandidate(cross(cur), "ballotfl", []address{m3}, 1)
+	// OpenElection nominates its own candidate, so `a` is on the board and the
+	// opener has spent its one nomination.
+	testing.SetRealm(testing.NewUserRealm(opener))
+	OpenElection(cross(cur), "ballotfl", a)
+
+	// A DIFFERENT address may not re-list a candidate already on the board.
+	// The opener itself would be refused one guard earlier by the
+	// one-nomination-per-address rule, so only a second nominator can reach
+	// this arm at all.
+	testing.SetRealm(testing.NewUserRealm(second))
+	uassert.AbortsContains(t, cur, "already on the ballot", func() {
+		NominateCandidate(cross(cur), "ballotfl", a)
+	})
+	// The same address CAN list a different candidate, so the refusal above is
+	// about the candidate and not about the nominator.
+	testing.SetRealm(testing.NewUserRealm(second))
+	NominateCandidate(cross(cur), "ballotfl", b)
+
+	// The board limit. Filling it honestly needs maxBallotLines funded
+	// addresses; the line-ADDING path is covered by the nomination just above
+	// and by TestElectionDecoyLosesToEarliestNomination, so the full state is
+	// constructed and only the refusal is exercised. `third` has not nominated
+	// and `d` is not on the board, so with the limit deleted this nomination
+	// SUCCEEDS — no neighbouring guard can stand in for it.
+	cm := ensureMod(c)
+	e := cm.election
+	for i := e.lines.Size(); i < maxBallotLines; i++ {
+		id := uint64(10_000 + i)
+		e.lines.Set(beClaimKey(id), &ballotLine{
+			candID: id, nomAt: runtime.ChainHeight(), bond: e.bond, poster: creator,
+		})
+	}
+	if e.lines.Size() != maxBallotLines {
+		t.Fatalf("the constructed board must sit exactly at the cap, got %d", e.lines.Size())
+	}
+	testing.SetRealm(testing.NewUserRealm(third))
+	uassert.AbortsContains(t, cur, "ballot is full", func() {
+		NominateCandidate(cross(cur), "ballotfl", d)
+	})
+}
+
+// The four window-and-weight gates on the voting path. The weight pin is the
+// load-bearing one: it is what stops an election being decided by CC bought
+// after the ballot became visible, and it was entirely unpinned.
+func TestVotingWindowAndWeightGates(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("vg-creator")
+	voter := testutils.TestAddress("vg-voter")
+	m1 := testutils.TestAddress("vg-m1")
+	m2 := testutils.TestAddress("vg-m2")
+	c := electionCourt(cur, "votegate", creator, []address{voter}, []int64{900_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	onBallot := RegisterModCandidate(cross(cur), "votegate", []address{m1}, 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	offBallot := RegisterModCandidate(cross(cur), "votegate", []address{m2}, 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "votegate", onBallot)
+
+	// Step to the close of the nomination window, where voting opens.
+	testing.SkipHeights(nominationWindow)
+
+	// Resolving while the ballot is still live would install on a partial
+	// count — whoever leads at that instant, not whoever leads at the close.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting window has not closed", func() {
+		ResolveElection(cross(cur), "votegate")
+	})
+
+	// A registered candidate nobody nominated is not an approvable line. This
+	// guard is what keeps the candidate REGISTRY — permissionless and
+	// unbonded — from doubling as the ballot, which is bonded and capped.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "not on the ballot", func() {
+		ApproveCandidate(cross(cur), "votegate", offBallot)
+	})
+
+	// Weight is pinned at the epoch the election opened. The latecomer is
+	// minted more CC than the honest voter holds and still cannot vote,
+	// because it held none at the pin. No epoch is sealed here on purpose:
+	// sealing one would need epochBlocks*2 heights, and the fixture must stay
+	// inside the voting window or it would measure the CLOSED refusal instead.
+	latecomer := testutils.TestAddress("vg-late")
+	c.coin.Mint(latecomer, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(latecomer))
+	uassert.AbortsContains(t, cur, "no voting weight at the pinned epoch", func() {
+		ApproveCandidate(cross(cur), "votegate", onBallot)
+	})
+	// The pinned holder still votes, so the refusal above is about the pin and
+	// not about a ballot that was shut for everyone.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "votegate", onBallot)
+
+	// voteEnd is inclusive-closed: exactly at it the board is shut, including
+	// to the holder who was voting a moment earlier.
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting has closed", func() {
+		ApproveRetain(cross(cur), "votegate")
+	})
+}
