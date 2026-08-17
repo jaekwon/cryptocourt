@@ -218,6 +218,20 @@ else:
     # registry no longer survives a reset and the leak it reproduced cannot
     # happen. Verified by running it — the test fails alone AND with its package
     # now, so the old control was pointing the new classifier at the wrong label.
+    # The third label, and the one that exposed the guard's own false success. Two
+    # tests claiming the same court slug kills the package the instant both run,
+    # and it is INVISIBLE test-by-test: each passes alone. The guard used to run
+    # the suite together only for packages that had already failed alone, so with
+    # everything green it printed "pass alone as well as together" having never
+    # checked the second half. The together-run is unconditional now, and this is
+    # what proves it.
+    control("a suite that dies with no test to blame", f"{KOURTV2}/stake_test.gno",
+            'c := testCourt(cur, "rlk1", alice, 500_000_000_000)',
+            'c := testCourt(cur, "st1", alice, 500_000_000_000)',
+            "fails as a whole",
+            argv=["python3", "scripts/check-isolation.py",
+                  "--only", "TestReleasingMoreThanIsLockedIsRefused"])
+
     control("a test that passes only in company", f"{KOURTV2}/stake_test.gno",
             "// THE invariant the lock has to buy back.",
             "func TestSelfTestNeedsANeighboursCourt(cur realm, t *testing.T) {\n"

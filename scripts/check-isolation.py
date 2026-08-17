@@ -175,9 +175,26 @@ def main():
         return 1
 
     bad, total = [], 0
-    red = set()  # (pkg, test) pairs that fail WITH their package too
+    red = set()   # (pkg, test) pairs that fail WITH their package too
+    rered = []    # packages whose suite is red as a whole
     with stage_lock(root):
         stage(root)
+        # The together-run comes FIRST, and unconditionally. It used to run only
+        # for packages that had already produced a per-test failure, which meant
+        # the success line — "pass alone as well as together" — asserted a thing
+        # the guard had never once checked when everything passed alone. A slug
+        # collision between two tests is invisible test-by-test and fails the
+        # suite instantly; that is exactly what slipped through. One run per
+        # package, against N runs per package for the sweep itself: free.
+        for rel, names in work:
+            r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
+                               capture_output=True, text=True)
+            if r.returncode != 0:
+                out = r.stdout + r.stderr
+                rered.append((rel, out.strip().split("\n")))
+                for t in names:
+                    if f'failed: "{t}"' in out or f"--- FAIL: {t}" in out:
+                        red.add((rel, t))
         for rel, names in work:
             base = os.path.join(root, rel)
             for t in names:
@@ -186,24 +203,6 @@ def main():
                                    capture_output=True, text=True)
                 if r.returncode != 0:
                     bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
-        # Only now, and only for packages that actually produced a failure, run the
-        # suite TOGETHER. Without this baseline every failure reads as an isolation
-        # problem, because running a test alone is the only thing this guard did:
-        # an ordinary broken test looks identical to one that needs its neighbours,
-        # and the report sent you hunting for cross-test state that was never
-        # there. One extra run per affected package, and none at all when green.
-        #
-        # PER-TEST, not per-package. The package exit code is too coarse: one
-        # unrelated red test would relabel every genuine isolation failure beside
-        # it as ordinary. So the together-run's output is scanned for THIS test's
-        # own failure marker.
-        for rel in sorted({rel for rel, _, _ in bad}):
-            r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
-                               capture_output=True, text=True)
-            out = r.stdout + r.stderr
-            for t in {t for rl, t, _ in bad if rl == rel}:
-                if f'failed: "{t}"' in out or f"--- FAIL: {t}" in out:
-                    red.add((rel, t))
         cleanup(root)
 
     alone = [(rel, t, out) for rel, t, out in bad if (rel, t) not in red]
@@ -218,7 +217,15 @@ def main():
               f"test that runs, but passes with its package")
         for line in out[:4]:
             print(f"        {line}")
-    if bad:
+    unattributed = [(rel, out) for rel, out in rered
+                    if not any(rl == rel for rl, _ in red)]
+    for rel, out in unattributed:
+        print(f"SUITE   {os.path.basename(rel)} fails as a whole with no single "
+              f"test to blame — the package dies before any test's own marker "
+              f"prints. A slug collision or a package-level panic looks like this.")
+        for line in out[:4]:
+            print(f"        {line}")
+    if bad or unattributed:
         if alone:
             print(f"\n{len(alone)} of {total} tests pass only in company. A test "
                   f"that needs its neighbours is reporting on their state, not on "
@@ -226,6 +233,9 @@ def main():
         if broken:
             print(f"{len(broken)} of {total} tests fail either way. Fix those "
                   f"first: a red suite tells you nothing about isolation.")
+        if unattributed:
+            print(f"{len(unattributed)} package suite(s) are red as a whole. Fix "
+                  f"those first: a red suite tells you nothing about isolation.")
         return 1
     print(f"all {total} tests across {len(work)} packages pass alone as well as "
           f"together.")

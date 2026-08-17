@@ -390,5 +390,82 @@
     "label": "BUY: the spent GNOT is not burned",
     "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "lock: answer bond skips the spendable check",
+    "find": "\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
+    "replace": "\tc.coin.Transfer(who, c.escrow, bond)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "claim.gno",
+    "label": "lock: claim deposit skips the spendable check",
+    "find": "\t\tmustSpendable(c, who, dep+fee)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "lock: dispute bond skips the spendable check",
+    "find": "\tmustSpendable(c, who, bond)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "lock: election bond skips the spendable check",
+    "find": "\tmustSpendable(c, who, e.bond)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "lock: flag bond skips the spendable check",
+    "find": "\tmustSpendable(c, who, bond)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "lock: Stake itself skips the spendable check",
+    "find": "\tmustSpendable(c, who, amount)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "lock.gno",
+    "label": "lock: spendable ignores what is locked",
+    "find": "\ts := c.coin.BalanceOf(who) - lockedOf(c, who)",
+    "replace": "\ts := c.coin.BalanceOf(who)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "lock: staking records no lock",
+    "find": "\tlockStake(c, who, amount)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "lock: unstake never releases the lock",
+    "find": "\tp.stake -= amount\n\treleaseStake(c, who, amount)",
+    "replace": "\tp.stake -= amount"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "lock: settlement withdrawal never releases the lock",
+    "find": "\treleaseStake(c, who, amount)\n\treturn amount",
+    "replace": "\treturn amount"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "lock.gno",
+    "label": "lock: releasing more than is locked is tolerated",
+    "find": "\tif amount > l {\n\t\tpanic(\"kourtv2: releasing more stake than is locked\")\n\t}\n",
+    "replace": ""
   }
 ]

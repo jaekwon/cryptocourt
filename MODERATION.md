@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.34 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.35 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,47 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.35 — the mutation batch found that v0.34's own test walked five of six
+  paths, and the isolation guard was reporting a success it had never checked.**
+  `lock.gno` shipped as a new money-path file with **zero mutation coverage**,
+  which is exactly the gap that batch exists to close. Eleven mutations were added
+  — deleting each of the six spendable guards, making `spendable` ignore the lock,
+  dropping the lock on stake, dropping the release on both unstake paths, and
+  removing the over-release panic. Two survived on the first run, and both were
+  real.
+  - **The test said FIVE and there were SIX.** `TestLockedStakeCannotBeSpentTwice`
+    enumerated another stake, the claim deposit, the answer bond, the flag bond
+    and the dispute bond — and never the **election bond**, which `addNomination`
+    posts out of the nominator's own CC. Deleting that guard survived. The comment
+    claiming completeness is the thing that made it invisible: enumerating is only
+    worth something if the enumeration is complete, and nothing short of a mutation
+    run was ever going to say otherwise. **AN ENUMERATION THAT CLAIMS TO BE
+    COMPLETE IS A CLAIM, NOT A FACT.**
+  - `releaseStake`'s over-release panic also survived, because nothing exercised
+    it. It is unreachable through any public path — it fires only if `p.stake` and
+    the lock tree have already diverged — but an unreachable assertion nobody has
+    watched fire is indistinguishable from a comment, and a refactor can drop it
+    silently. Now pinned directly, along with the lock being unchanged by the
+    refusal. All eleven caught, none surviving.
+  - **And the isolation guard was claiming something it had not tested.** Its
+    success line says tests "pass alone as well as together", but the together-run
+    only happened for packages that had *already* failed alone — so when
+    everything passed alone it printed that claim having never once run a suite
+    together. A slug collision proved it: my new test reused `rl1`, which
+    `render_test.gno` already owns, and slugs are package-global and never reset.
+    Each test passed alone; the package died instantly with *"that slug is taken"*;
+    the guard reported **success**. The together-run is unconditional now — one run
+    per package against N per package for the sweep itself, so free — and a suite
+    that dies with no attributable test gets its own `SUITE` label, because that
+    shape prints no per-test marker to blame. Verified by reintroducing the
+    collision: the guard now fails, with exit code 1 so `make check` gates on it,
+    and all three labels have controls.
+  - Worth naming as its own lesson, because it recurred twice in one change:
+    **a test that passes alone and fails in company is the mirror of an isolation
+    bug, and the sweep as written could not see it.** The other instance was
+    `effMinDeposit` returning the dust arm until the first epoch seals and the
+    supply arm afterwards, so a court funded just enough to run alone cannot
+    afford its own claim once neighbours have advanced the clock.
 - **v0.34 — STAKE IS A LOCK IN PLACE, NOT A TRANSFER. Staking no longer costs the
   staker their vote.** The last backlog item, endorsed 3/3 by two independent
   panels. `Stake` used to `Transfer(who, escrow, amount)`; it now records a claim

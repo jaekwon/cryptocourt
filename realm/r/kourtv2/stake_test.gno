@@ -101,6 +101,12 @@ func TestStakeUnstakeConservesEscrow(cur realm, t *testing.T) {
 // Every one of those paths appears here. If a new one is added, it belongs here
 // too — that is the whole reason this test enumerates them instead of spot-
 // checking one.
+//
+// It said FIVE and walked five, and there were SIX: the election bond was
+// missing, and the mutation that deletes its guard survived until the batch in
+// scripts/mutations-kourtv2.json was pointed at this file. Enumerating is only
+// worth anything if the enumeration is complete, and nothing but a mutation run
+// was ever going to say otherwise.
 func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("lk-alice")
 	bob := testutils.TestAddress("lk-bob")
@@ -163,6 +169,17 @@ func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
 		OpenDispute(cross(cur), "lk1", id)
+	})
+
+	// PATH 6 — the election bond, which addNomination posts out of the nominator's
+	// own CC. Alice registers the candidate (that costs nothing); bob cannot open
+	// the ballot, because opening it is a commitment like any other.
+	cand := testutils.TestAddress("lk-cand")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	candID := RegisterModCandidate(cross(cur), "lk1", []address{cand}, 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		OpenElection(cross(cur), "lk1", candID)
 	})
 
 	// Nothing above moved a coin, and SUPPLY IS UNCHANGED — the assertion the
@@ -443,4 +460,33 @@ func containsSub(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// releaseStake's conservation panic, which no public path can reach: it fires only
+// if stakePos.stake and the lock tree have already diverged, and returning CC the
+// holder never committed is exactly the mint the lock exists to prevent. Left
+// untested it was a mutation that survived — a defensive assertion nobody has
+// watched fire is indistinguishable from a comment.
+func TestReleasingMoreThanIsLockedIsRefused(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rl-alice")
+	// Minted well above the deposit floor on purpose. effMinDeposit returns the
+	// DUST arm only until the first epoch seals and the supply arm afterwards, so
+	// a court funded just enough to run alone stops being able to afford its own
+	// claim once neighbours have advanced the clock — which is how the first draft
+	// of this test passed alone and failed in company.
+	c := testCourt(cur, "rlk1", alice, 500_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rlk1", "Can the lock go negative?")
+
+	const S = int64(1_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "rlk1", id, sideYES, S)
+
+	uassert.PanicsContains(t, cur, "releasing more stake than is locked", func() {
+		releaseStake(c, alice, S+1)
+	})
+	// And the lock is untouched by the refusal.
+	if got := LockedOf("rlk1", alice); got != S {
+		t.Fatalf("a refused release changed the lock: %d", got)
+	}
 }
