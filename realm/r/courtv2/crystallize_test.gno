@@ -179,3 +179,66 @@ func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
 		t.Fatalf("escrow must drain to zero: %d", got)
 	}
 }
+
+// F9 headroom probe (v0.45 gap 1). The flash-proof cap is
+// bound = tier·(positionRaw/openBlocks)/2, i.e. HALF the position's
+// time-averaged stake at mid tier (tierMidX == 1). The gross it caps is the
+// staker's share of the conviction-scaled draw, which the deploy calibration
+// bounds at ≤19.27%·X̄ over a 12-week life. 0.1927 < 0.5, so on a constant pool
+// the cap has ~2.6× of headroom and cannot bind — the same relationship that
+// keeps the answer bond above the slash. This drives the most extreme LEGAL
+// shape instead: stake big, bank conviction, unstake (F9 keeps conviction), then
+// let the claim age so openBlocks dilutes rawAvg while conviction stands. If the
+// cap is reachable at all, it is here.
+func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("f9-alice")
+	c := testCourt(cur, "f9c", alice, 1_000_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "f9c", "Banked conviction, diluted raw")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "f9c", id, sideYES, 100_000_000_000) // 100k CC
+	testing.SkipHeights(4 * periodBlocks)                  // bank conviction AND raw
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unstake(cross(cur), "f9c", id, sideYES, 99_900_000_000) // raw stops; conviction kept
+	testing.SkipHeights(6 * periodBlocks)                   // openBlocks grows, raw does not
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "f9c", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "f9c", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SkipHeights(periodBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "f9c", id)
+
+	cs := mustClaim(c, id)
+	p := cs.stakers.Get(posKey(alice, sideYES)).(*stakePos)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	pay := WithdrawBonus(cross(cur), "f9c", id, sideYES)
+
+	// Read the position AFTER the pull: WithdrawBonus calls accrue() to settle it
+	// to the freeze pin, so a conviction read taken before would be stale (it is,
+	// by ~0.15% — enough to make an equality assertion lie).
+	convCC := convToCC(p.convHi, p.convLo)
+	gross := mulDiv128(cs.drawWinners, convCC, cs.winPoolConvCC)
+	rawAvg := div128(p.rawHi, p.rawLo, cs.openBlocks)
+	bound := mustMul(cs.tier, rawAvg) / 2
+
+	if pay != gross {
+		t.Fatalf("THE F9 CAP BINDS HERE — it is reachable after all, so build the "+
+			"binding fixture from this state: pay=%d gross=%d bound=%d rawAvg=%d openBlocks=%d",
+			pay, gross, bound, rawAvg, cs.openBlocks)
+	}
+	// Measured headroom at this extreme: bound 2.0e10 vs gross 2.2e9, ~9×. The
+	// ratio gross/bound is 2·rate·openBlocks, so binding needs openBlocks >
+	// 1/(2·rate) ≈ 1.1e7 blocks ≈ 91 weeks — far past the 12-week dead-claim
+	// timeout PostAnswer now enforces. The cap is therefore UNREACHABLE at mid
+	// tier, and higher tiers only double the bound. This pins the relationship
+	// rather than a number: if rates, windows, or the timeout ever change enough
+	// to invert it, F9 starts binding honest positions and this fails.
+	if bound <= gross {
+		t.Fatalf("F9 headroom is gone — the cap now binds honest positions: bound=%d gross=%d",
+			bound, gross)
+	}
+}

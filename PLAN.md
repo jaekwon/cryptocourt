@@ -1652,8 +1652,26 @@ Newest first.
     version asserted the wrong burn total; the supply also drops by the deposit+fee every
     conclusive low carries, independent of the slash question. Corrected against the
     measured 5.1 M rather than argued.)
-  Still open from v0.45: the F9/Q7 bonus caps never bind in any fixture, and the P2
-  per-voter carrot clamp never binds.
+  **Third v0.45 gap resolved — and it was not a missing test.** "The F9/Q7 bonus caps
+  never bind in any fixture" turns out to be because they are **unreachable**, not
+  because the fixtures are weak. `capBonus`'s bound is `tier·(positionRaw/openBlocks)/2`
+  = HALF the position's time-averaged stake at mid tier (`tierMidX == 1`), while the
+  gross it caps is conviction-scaled and bounded at ≤19.27%·X̄ over a 12-week life — the
+  *same* 0.1927-vs-0.5 relationship that keeps the answer bond above the slash. The ratio
+  `gross/bound` is `2·rate·openBlocks`, so binding needs `openBlocks > 1/(2·rate)` ≈ 1.1e7
+  blocks ≈ **91 weeks**, far past the 12-week dead-claim timeout `PostAnswer` now
+  enforces (v0.48). Measured at the most extreme legal shape — stake 100k CC, bank
+  conviction, unstake (F9 keeps it), then age the claim 10 of its 12 permitted weeks so
+  `openBlocks` dilutes `rawAvg` — the headroom is still **~9×** (bound 2.0e10 vs gross
+  2.2e9). Higher tiers only double the bound. `TestF9CapHeadroomAtTheExtreme` pins the
+  RELATIONSHIP rather than a number, so if rates, windows, or the timeout ever change
+  enough to invert it, F9 starts binding honest positions and the test says so.
+  (Methodology note worth keeping: the first version of this probe read the position's
+  conviction BEFORE `WithdrawBonus`, which calls `accrue()` to settle it — the stale read
+  was 0.15% low and made an equality assertion lie. Read settled state after the call.)
+  Still open from v0.45: the P2 per-voter carrot clamp never binds — same question to
+  answer (`carrotTotal > b0/2` needs `midGross > 14.3%·X̄`, i.e. ~9 weeks at the hot rate,
+  which IS inside the 12-week life, so this one is probably genuinely reachable).
   Also corrected in this pass, both by verification rather than assumption: §12 row 30's
   provClose-reachability premise (false on any court past bootstrap — see the row) and
   v0.46's "the flag bounty does not rise under B" residual (stale — B fixed it; see the
