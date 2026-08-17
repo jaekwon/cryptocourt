@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.40 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.41 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,43 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.41 — `meta.gno` measured for the first time: `TestMetaLifecycleGuards`
+  earns its name on 7 of 13 guards, and the two predate arms it was missing guard a
+  named attack.** The biggest zero-coverage surface, and the home of I8. Thirteen
+  mutations written against `ExecuteMetaVerdict`'s check order and exactly-once
+  machinery.
+  - **The ten-section scenario is a real test, not a vacuous one.** It caught
+    `credEligible` (the manufactured contest, v0.15), exactly-once execution, the
+    execution expiry, the silence refusal, the target-claim predate and the global
+    DAO's suspension interlock. That was worth establishing rather than assuming —
+    exactly this shape, a test named after a guard, is what failed to pin the v0.25
+    fix.
+  - **Six survived, and the two now closed were the security-relevant pair.**
+    §5 covered the target *claim* predate; the **court** and **candidate** arms were
+    both deletable with nothing noticing, and they are not the same guard — each
+    names a different thing that had to exist when voters judged the appeal.
+    - The court arm: the parse is stored at open and existence is only checked at
+      execution, so an appeal can name a court that does not exist yet. Without the
+      guard an attacker files against a name, wins a vote on a court nobody could
+      inspect because it was not there, then creates it.
+    - The candidate arm guards an attack the code comment already described:
+      registration is permissionless with a **predictable per-court counter**, so an
+      attacker opens `setmods` against an unallocated id, wins the vote on a
+      candidate set nobody could inspect, and only then registers their own puppet
+      set at exactly that id. The new §12 performs it — puppet registered after the
+      appeal, at id 1, the first and therefore predictable allocation — and requires
+      the refusal.
+    - **Asserted on the specific message, not the shared substring.** All three arms
+      contain *"does not predate"*, so asserting that loosely would let the claim
+      guard stand in for the other two. §11 and §12 name `target court` and
+      `candidate set`.
+  - **Four still unpinned, recorded rather than implied**: a claim with no binding
+    appeal (deleting the guard turns a clean refusal into a nil dereference), an
+    undecided verdict, a **NO** verdict, and a mod set changed between verdict and
+    execution. The undecided one is *partly* masked — an undecided claim has
+    `provisional == -1`, so the YES check fires anyway — but `provClose` with
+    `provisional == YES` distinguishes them, so it is a genuine gap rather than an
+    unpinnable one. Batch at **89**; gaps at **four**.
 - **v0.40 — the last four moderation gaps are closed; the known-gaps list is
   empty and the batch stands at 80, all caught.** The global DAO discards its
   banked approvals whenever *who may act* changes, or *how many must agree*:

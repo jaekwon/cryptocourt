@@ -386,6 +386,85 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if CourtSuspended("mtx10") {
 		t.Fatal("a stale verdict must not re-suspend a court the global DAO released")
 	}
+
+	// ---- 11. the predate guard's OTHER TWO ARMS -----------------------------
+	// Section 5 covers the target CLAIM. The court arm and the candidate arm were
+	// both deletable without any test noticing, and they are not the same guard:
+	// each names a different thing that must already have existed when voters
+	// judged the appeal.
+	//
+	// THE COURT ARM. The parse is stored when the appeal opens and existence is
+	// only checked at execution, so an appeal can name a court that does not exist
+	// yet. Without this guard an attacker files against a name, wins a vote on a
+	// court nobody could inspect because it was not there, and creates it
+	// afterwards.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap11 := OpenClaim(cross(cur), metaSlug, "mod:unhide:mtx11/1")
+	testing.SkipHeights(2)
+	testCourt(cur, "mtx11", alice, 10_000_000_000) // the COURT is born after the appeal
+	testing.SetRealm(testing.NewUserRealm(alice))
+	OpenClaim(cross(cur), "mtx11", "a claim in a court that postdates the appeal")
+	matureOI(cur, metaSlug, ap11, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap11, sideYES)
+	testing.SkipHeights(settleDelay + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SettleUndisputed(cross(cur), metaSlug, ap11)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	// The COURT message, not the shared "does not predate" substring: all three
+	// arms share that phrase, so asserting it loosely would let the claim guard
+	// stand in for this one.
+	uassert.AbortsContains(t, cur, "target court does not predate", func() {
+		ExecuteMetaVerdict(cross(cur), ap11)
+	})
+
+	// ---- 12. the CANDIDATE arm, which guards a named attack ----------------
+	// Registration is permissionless with a predictable per-court counter, so
+	// without this guard an attacker opens setmods against an id that is not
+	// allocated yet, wins the vote on a candidate set nobody could inspect, and
+	// only then registers their own puppet set at exactly that id.
+	testCourt(cur, "mtx12", alice, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // the court must predate, so only the CANDIDATE is late
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap12 := OpenClaim(cross(cur), metaSlug, "mod:setmods:mtx12/1")
+	testing.SkipHeights(2)
+
+	// The puppet set is registered AFTER the appeal that installs it — id 1, the
+	// first and therefore predictable allocation on a fresh court.
+	puppet := testutils.TestAddress("mtx12-puppet")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	if got := RegisterModCandidate(cross(cur), "mtx12", []address{puppet}, 1); got != 1 {
+		t.Fatalf("fixture: the attack needs the predictable first id, got %d", got)
+	}
+
+	matureOI(cur, metaSlug, ap12, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap12, sideYES)
+	// setmods is AGGRESSIVE, so it needs a decided, credEligible contest — the
+	// same shape section 10 builds. carol carries the overturn weight, bob upholds.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), metaSlug, ap12)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), metaSlug, ap12, "yes")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	VoteDispute(cross(cur), metaSlug, ap12, "no")
+	testing.SkipHeights(mc.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), metaSlug, ap12)
+	cs12 := mustClaim(mc, ap12)
+	if cs12.decidedRounds != 1 || !cs12.credEligible {
+		t.Fatal("fixture: setmods needs a decided, credEligible round to reach the guard")
+	}
+	testing.SkipHeights(cs12.escrowUntil - runtimeHeight() + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), metaSlug, ap12)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "candidate set does not predate", func() {
+		ExecuteMetaVerdict(cross(cur), ap12)
+	})
+	if IsCourtMod("mtx12", puppet) {
+		t.Fatal("a candidate registered after the appeal must not be installable")
+	}
 }
 
 // metaRealmPath is a STRING CONSTANT, and meta's escrow is derived from it,

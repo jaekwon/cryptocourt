@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a claim with no binding appeal may still execute",
+    "find": "\t\tpanic(\"kourtv2: this claim carries no binding appeal\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: an undecided verdict may execute",
+    "find": "\t\tpanic(\"kourtv2: no final verdict\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a NO verdict may execute",
+    "find": "\t\tpanic(\"kourtv2: the verdict was not YES\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a mod set changed after the verdict may still be overwritten",
+    "find": "\t\t\tpanic(\"kourtv2: the moderator set changed after this verdict; re-appeal\")\n",
+    "replace": ""
+  }
+]

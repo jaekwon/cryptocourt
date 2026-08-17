@@ -558,5 +558,68 @@
     "label": "mod: TransferGlobalAdmin keeps the banked signatures",
     "find": "\t\t// stuck purge: seat a fresh key without resetting the banked signatures.\n\t\tclearPendingOnMembershipChange(&d.pending)\n",
     "replace": "\t\t// stuck purge: seat a fresh key without resetting the banked signatures.\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a second appeal may seize an occupied review slot",
+    "find": "\t\t\tpanic(\"kourtv2: another appeal already holds this target's review slot\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a target claim created AFTER the appeal may be seized",
+    "find": "\t\t\tpanic(\"kourtv2: the target claim does not predate this appeal\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: silence counts as a decided contested vote",
+    "find": "\t\t\tpanic(\"kourtv2: this verb needs a decided contested vote, not silence\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a manufactured contest may seize authority (credEligible removed)",
+    "find": "\t\t\tpanic(\"kourtv2: a manufactured contest cannot seize authority — this verb needs weight voted against it\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a verdict may execute twice",
+    "find": "\t\tpanic(\"kourtv2: already executed\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: an expired verdict may still execute",
+    "find": "\t\tpanic(\"kourtv2: this verdict has expired; re-appeal\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a suspension changed under the appeal is ignored",
+    "find": "\t\t\tpanic(\"kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a target court created AFTER the appeal may be seized",
+    "find": "\t\tpanic(\"kourtv2: the target court does not predate this appeal\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta: a candidate set created AFTER the appeal may be installed",
+    "find": "\t\t\tpanic(\"kourtv2: the candidate set does not predate this appeal\")\n",
+    "replace": ""
   }
 ]
