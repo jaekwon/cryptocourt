@@ -106,13 +106,14 @@ zero power over money.
 | audited file | edit |
 |---|---|
 | `stake.gno` | polish-window gate on Stake (Unstake redundant, kept as defense) |
-| `court.gno` | `Params.stakeOpenDelayBlocks` + `mustSane` (I7); `StartCourt` grows the delay param + **name length-cap** + a burned-GNOT creation fee (`IsUserCall`+`OriginSend`+refund → keyless sink `…courtv2:burned`; makes StartCourt **user-call-only** — a composability change) + reserved-slug `meta` refusal; `startCourt(admin,slug,name)` extraction takes **no payment** |
+| `court.gno` | `Params.stakeOpenDelayBlocks` + `mustSane` (I7); `StartCourt` grows the delay param + **name length-cap** + reserved-slug `meta` refusal; `startCourt(admin,slug,name)` extraction for init. **No GNOT creation fee** (owner decision v0.8.2): a fixed GNOT fee can't be sized without a USD oracle, so court-count floods are priced by the **per-byte storage deposit** the Court/coin/governor/curve state already incurs (protocol-set, self-repricing, no oracle) — which also keeps `StartCourt` **realm-callable** (no `OriginSend`, no user-call-only restriction) |
 | `answer.gno` | priority re-anchor (§9); **`PostAnswer` writes (non-panicking): strip entry, seeded/pending move, persisted binding parse; and reads the per-target latch (refuse-if-held)** |
 | `crystallize.gno` | seeded gate on author draw AND `AuthorBonus` (I5); `openBlocks` re-anchor; strip exit |
 | `quality.gno` | `settleSlash` bounty base = actual recorded burns, re-expressed vs v0.40 `slashSizeFor` (§8) |
 | `dispute.gno` | strip exit in `provCloseClaim` |
 | `claim.gno` | `OpenClaimSeeded` + pending entry; **title-edit entrypoint** (rewrites stored parse + pending enter/exit — **no latch op**, round 4 F4); pending drop in `CloseDeadClaim`; purged-court gate on OpenClaim; claim-lane events |
-| `directory.gno` | `directoryAdmin`→global-DAO migration; `SetTier` logged/evented |
+| `directory.gno` | `directoryAdmin`→global-DAO migration; `SetTier` logged/evented; burn-descending + creation-newest secondary indexes for the front-page sort (§3.2) |
+| `buy.gno` | maintain the per-court GNOT-burn total + its burn-ordered directory index entry on each `Buy` (write-only, additive) |
 | `moderation.gno`/`modvote.gno`/`folders.gno`/`meta.gno` | new modules (state homes §4) |
 | `session.gno` | none (re-verified vs the v0.40 `slotConsumed` tier-reset guard) |
 
@@ -231,7 +232,17 @@ clears the global bit but global; nobody reverses a purge.
 ### 3.2 The global moderator DAO (realm-wide)
 
 Generalizes `directoryAdmin` into an admin-managed set. Verbs:
-- **court tiers** (existing `SetTier`, logged/evented);
+- **court tiers** (existing `SetTier`, logged/evented). **Front-page sort
+  within the listed tier (owner decision, v0.8.2)**: two paginated orderings,
+  both served from monotone secondary indexes so render stays O(page) — (a)
+  **GNOT-burn descending** (the default): cumulative GNOT burned into a court's
+  curve is a real, un-sybil-able capital signal (you cannot fake burning real
+  money), so it ranks courts by genuine commitment without any gameable
+  activity/vote score — index keyed by `burned|slug`, updated on `Buy`; and
+  (b) **creation order, newest first** — index by a monotone creation seq,
+  reverse-iterated. Featured tier renders above both. This deliberately avoids
+  an auto-ranking on any address-keyed or vote-keyed signal (a capture surface);
+  the only rank is curation (tier) + burned capital + age.
 - **global hide = all-surface text redaction** (strips, deep links, positions:
   banner + IDs/state/deadlines/money, no user text). **Single-key to set**
   (legal speed); reversal is an explicit logged global act, never
@@ -585,9 +596,9 @@ except where noted)
    windowed-m-of-n re-set, row/whole-court purge, clear-any, `stripEnteredAt`.
    Tests I1–I3, I6, I10, I11.
 2. `claim.gno`+`stake.gno`+`court.gno` — polish window (I7), StartCourt delay +
-   name-cap + burned fee (user-call-only) + `meta` refusal, title-edit
-   entrypoint (no latch), `OpenClaimSeeded`, purged-court gate (OpenClaim
-   only), events; fixture sweep. Tests I4, I7.
+   name-cap + `meta` refusal (no GNOT fee — storage-deposit-priced, realm-
+   callable), title-edit entrypoint (no latch), `OpenClaimSeeded`, purged-court
+   gate (OpenClaim only), events; fixture sweep. Tests I4, I7.
 3. `answer.gno`+`crystallize.gno`+`quality.gno`+`dispute.gno` — membership-site
    index writes (non-panicking, idempotent) + PostAnswer latch read + binding
    persist; I5 both gates; `settleSlash` actual-burn base (v0.40); openBlocks +
@@ -626,8 +637,11 @@ except where noted)
    meta-CC **non-transferable at launch** (escrow + curve mints exempt);
    **near-zero meta emission** is a two-sided fork (kills the deployer's +EV
    junk-appeal policing AND raises the forgery price ~5×). Owner call.
-5. **StartCourt creation fee** (burned GNOT; makes StartCourt user-call-only) —
-   amount an owner call. (β is **no longer an owner knob** — round 6 froze it
+5. **StartCourt creation fee — RESOLVED (v0.8.2): no GNOT fee.** A fixed GNOT
+   fee can't be sized without a USD oracle; court-count floods are priced by the
+   per-byte storage deposit court creation already incurs (protocol-set, no
+   oracle), and `StartCourt` stays realm-callable. (β is **no longer an owner
+   knob** — round 6 froze it
    with a two-sided deploy invariant; the owner sets only the invariant's
    floor/ceiling shape, not a live value.)
 6. **Terminology**: "supreme" never in render/public copy; prefer "review".
@@ -662,6 +676,12 @@ except where noted)
   individual argument edge (§7), not just a node/claim. Constitution-consistent
   and no re-vet needed (an edge is zero-weight, text-free, so an edge hide is
   strictly weaker than the audited claim hide). Build hooks it when edges land.
+- **v0.8.2 — owner decisions (front-page sort + StartCourt fee)**: the listed
+  tier sorts by **GNOT-burn descending** (default; an un-sybil-able capital
+  signal) or **creation newest-first**, both paginated from monotone secondary
+  indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
+  without a USD oracle, so court-count floods are storage-deposit-priced (no
+  oracle) and `StartCourt` stays realm-callable (§2, §13.5).
 - **v0.6** — round 5 (1 HIGH + 1 MED-HIGH; verification lens CONVERGED):
   - *Election, structurally different fix* (M-A33/M-A44, HIGH): the v0.5 bond
     auction put the capital key on *ballot access* — a capital-dominant but
