@@ -1610,6 +1610,112 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.54 — a tier PROMOTION now needs a ⅔ mandate (HIGH); three reviewers rejected my
+  first predicate.** `resolveQualityRide` wrote `cs.tier` with no authority test, and MID
+  is reachable as a bare RESIDUAL, not a plurality: `applyQualityTally` returns conclusive
+  MID whenever the full bar is met and low misses the weighted median, so
+  `qLowW=49, qMidW=0, qHighW=51` classifies MID on **zero mid weight**. A mid bloc that is
+  merely the largest therefore overturned a conclusive ⅔-low and restored `cs.tier` — and
+  with it the WHOLE draw, since `tierLowX = 0` zeroes D outright. Priced at ~4%·X̄ net (a
+  20%·X̄ bond burns on UPHOLD while `compAmount` mints 16%·X̄ back to the answerer) against
+  a draw bounded by `maxMidGrossBps = 1927`, i.e. 19.27%·X̄. All three reviewers
+  independently traced it as reachable on DEFAULT params, and one supplied the argument
+  that settles whether to gate anything at all: **a mill already buying the round to
+  rescue its reserve gets the tier re-roll at ZERO marginal cost.** Shipped predicate:
+  `if cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 { return }`
+  — a promotion out of an adjudicated tier must carry ⅔ of turnout in its OWN bucket, the
+  same F3 shape `applyQualityTally` already imposes on HIGH and `ResolveCounter` on the
+  rescue.
+  **My first predicate was `turnout <= cs.conclusiveTurnout`, and 3/3 rejected it for
+  three independent reasons.** (1) It is BYPASSABLE: `resolveQualityRide` rewrites
+  `cs.conclusiveTurnout` unconditionally on any non-gated conclusive ride, including a
+  same-tier re-confirmation, so a throwaway wallet voting LOW at exactly `demotionBar`
+  resets the mark DOWNWARD (30 000 CC → 50 CC in the worked case) and the promotion lands
+  the next round for one extra bond — total cost one bond and one week, with the SAME
+  ~1.25·fullBar of weight the attack always needed. My comment's claim that "a promotion
+  must out-turnout the tally it overturns" was therefore not what the code enforced.
+  (2) It refused HONEST paths: a conclusive HIGH already requires `qHighW*3 >= turnout*2`
+  — a STRICTLY STRONGER mandate than the residual MID it overturns — yet was refused on
+  raw turnout alone, and on a minimum-escrow claim only one reopen fits, making the
+  refusal permanent (≤19.27%·X̄ lost). Worse, a full-bar Q5 counter-poll the answerer WINS
+  still lost the tier, because `CounterFlag` spends the ride's one wipe while
+  `ResolveCounter` never writes `conclusiveTurnout`, so the later ride was measured
+  against the FLAG's stale total with every counter-poll voter locked out by `qVoted`.
+  (3) It was UNOBSERVABLE and opposition-dependent: `conclusiveTurnout` has no exported
+  read, so an honest promoter had to burn a 20%·X̄ bond to discover the bar — and because
+  the bar counts all buckets, opposition that stays home RAISES it.
+  **Three claims of mine to correct.** The reserve, at `max(4.5%·X̄, 1.6·midGross)`, is
+  the LARGER prize — greater than `midGross` for every input, and the 50%·X̄ bond clamp
+  does not change it (30.83% vs 19.27% at the ceiling). I had said the tier was the larger
+  of the two; that is backwards. "A draw up to 31.25%·X̄" was also wrong: 3125 bps is
+  `mustInvariants`' headroom (`answerBondBps/slashDrawBps`), reached through the SLASH arm,
+  not an achievable `midGross` — and that stray 1.6× is almost certainly where the
+  inversion came from. And my "no rescue is affected on any branch" OVER-CORRECTED v0.52:
+  the SLASH rescue is unaffected (verified independently by all three), but the TIER rescue
+  was refused in exactly the `[fullBar, conclusiveTurnout]` band, so v0.52's objection was
+  **mis-scoped, not false** — I was wrong in both directions on the same question, and the
+  mandate form is what actually keeps the tier rescue open (a mid-only counter poll has
+  `qMidW == turnout` and clears ⅔ trivially).
+  **Method lesson, and it is the sharper one.** Three clauses need three fixtures. My
+  first round of mutation testing verified the guard's EXISTENCE and silently missed both
+  qualifiers: gating demotions passed the whole suite, and tightening the mandate to 3/4
+  passed the whole suite. Only `TestUnmandatedDemotionRideStillLands` (a demotion at a
+  low share in [1/2, 2/3), which a sole-low-voter fixture cannot express because it
+  satisfies the mandate trivially) and `TestMandatedHighRidePromotesOverAStandingMid` (a
+  high share in [2/3, 3/4), below the standing turnout so the old form would have refused
+  it) make those clauses fail-detectable. All three now mutation-verified independently.
+  **OWNER DECISION — the mandate test TAXES the attack, it does not close it.** It can
+  only see the surviving tally, and the ride's one permitted wipe ERASES adjudicated
+  weight; where the honest low bloc was wiped rather than out-voted, the survivors
+  genuinely do show a ⅔ mid mandate and the promotion is allowed. The root cause is
+  upstream of any authority test, and the three reviewers split three ways on it: the
+  mandate form (two of three), an absolute public bar such as `turnout < 2·fullBar` (one),
+  and a monotone `tierAuthorityW` field that a dust round cannot reset (one, as an
+  alternative to its own mandate proposal). The two real options are (a) stop wiping the
+  tally after adjudication at all, which changes §3.4's "exactly one re-ask" doctrine, or
+  (b) the monotone mark, against which the absolute-bar reviewer's objection stands: a
+  whale can set the mark arbitrarily high FOR FREE (vote LOW alone at the full bar with ⅔,
+  where `ResolveFlag` returns the bond whole and pays a bounty) and then go silent,
+  blocking an uncontested honest promotion forever — while Q2 bars the parties who benefit
+  from a promotion from voting quality at all. Not picked unilaterally.
+
+- **Item 4 (policing pay on drained claims) — CONVERGED 2/3 on NO-CHANGE, and my framing
+  of the question was wrong in three specific ways.** Three identical-prompt econ vets.
+  All three refuted the premise: (1) `midGross` **is** X̄-bounded — conviction is
+  rate-weighted and `PostAnswer` refuses past the 12-week dead-claim timeout, so
+  `midGross ≤ 19.28%·X̄`, the court's own `maxMidGrossBps`; (2) therefore
+  `carrotTotal = 7%·midGross ≤ 1.35%·X̄ = 0.675·b₀`, and the carrot is a **pot**, not a
+  per-voter entitlement (`share > carrotPool ⇒ share = carrotPool`) — so the WHOLE
+  electorate together is paid less than one flagger's own bond, and "~999 CC each" is
+  arithmetically impossible; at most one dominant voter approaches `b₀/2`, and only on a
+  ≥8.9-week claim; (3) the two states are **disjoint** — an overturn always sets
+  `decidedPID`, and `PullCarrot`'s first branch routes the whole carrot to the *verdict*
+  round's with-verdict voters, so wherever quality voters are paid (`decidedPID == 0`)
+  `answerBond > 0` and the flagger receives the full `b₀`. My "voter out-earns flagger"
+  comparison cannot occur. Two further corrections: the flagger is NOT excluded from the
+  carrot (`isParticipant` covers author/answerer/stakers only), and the T2 half-burn is
+  gated on `answerBond > 0`, so on a drained claim every low outcome returns the bond
+  WHOLE. "Drained AND flaggable" is reachable only post-OVERTURN, by exhaustion:
+  `SettleUndisputed` and `Finalize` both retain `min(slashSizeFor, answerBond)` while
+  `!slotConsumed`, and PostAnswer's collateralization floor guarantees the bond covers
+  it. Both candidate fixes are worse than the status quo — re-basing the bounty re-opens
+  the v0.25 faucet (~1000 CC minted per claim against 1.1 CC burned, bond returned whole,
+  weight reusable, and the base doubles free through T1 inconclusive-lows), and re-basing
+  the carrot clamp inverts F2 into a demotion cartel while barely biting, since the clamp
+  is a corner case. **Dissent recorded:** one reviewer argued REBASE-BOUNTY on `midGross`
+  specifically (not `slashSizeFor`, which is 3h-pumpable), on the ground that the flag's
+  real product is cancelling the DRAW, which survives the bond burn. **The residual that
+  actually matters, reprioritized above this one:** the v0.48 dust-low residual has its
+  CARROT LEG UNPRICED. `answer.gno` already records that ~25 CC of weight can force a
+  conclusive LOW and zero a ~7,012 CC draw *at a profit* because the flag bond returns
+  whole below the full bar — and that residual counted only the 0.88 CC bounty, while the
+  same sock also pulls up to `b₀/2 − 1` of carrot, ~1000× larger. P2's "voting to farm is
+  strictly negative" holds for MID/HIGH-voting sybils and **not** for a LOW-voting
+  self-flagger. Also registered: on a decided-round claim the marginal quality-ride tx is
+  entirely unpaid (`originateSlash` passes `""` on a ride, and `PullCarrot`'s `decidedPID`
+  branch pays verdict voters whether or not they voted quality), so the "free ride is the
+  substitute for the flag lane" argument has zero marginal incentive behind it.
+
 - **v0.52 — v0.51's latch was one latch too wide (HIGH, caught in the post-commit
   vet); the answerer's Q5 challenge is an INDEPENDENT poll again.** Two independent
   reviewers converged on the same defect in v0.51 as committed: `qualityReasked` was a
@@ -1738,12 +1844,21 @@ Newest first.
   re-ask (§3.4 says so three times). Two of three reviewers independently derived the
   same sharpening — key the latch on `slotConsumed`, not `pendingSlash > 0`, since
   origination implies `slotConsumed` but not conversely, so the wider key also covers
-  before-origination and after-disposal at zero extra state. **Rejected:** the third
-  reviewer's authority ratchet in `resolveQualityRide`
-  (`if slotConsumed && turnout <= conclusiveTurnout { return }`) would BREAK the
-  legitimate rescue — the one permitted re-ask starts the tally at zero, so a genuine
-  full-bar rescue whose turnout lands between `fullBar` and `conclusiveTurnout` would be
-  silently refused. The structural fix has no such edge. **Verification:** six guards
+  before-origination and after-disposal at zero extra state. **Rejected — WRONGLY; see
+  v0.54, which adds it.** I rejected the third reviewer's authority ratchet in
+  `resolveQualityRide` on the ground that it "would BREAK the legitimate rescue, since
+  the one permitted re-ask starts the tally at zero, so a genuine full-bar rescue whose
+  turnout lands between `fullBar` and `conclusiveTurnout` would be silently refused."
+  **That reasoning is false, and it kept a HIGH out of the tree for two versions.** No
+  rescue path reads `cs.tier` or passes through `resolveQualityRide` at all:
+  `ResolveCounter` never calls it, and `disposeSlashOnRide` is a SEPARATE call scoring
+  the buckets directly, invoked at `dispute.gno:237` (alone, on failed quorum) and
+  `:310-317` (with `hadSlash` captured BEFORE the ride runs). An early return inside
+  `resolveQualityRide` therefore cannot change any rescue outcome on any branch — which
+  `TestBarePluralityRideCannotBuyTheTier` now demonstrates directly by asserting the
+  refund happens on the very ride whose promotion is refused. The lesson for me: I
+  reasoned about what the function was *named for* rather than tracing who actually
+  reads its output. **Verification:** six guards
   mutation-verified (revert → the named test fails → restore); four new fixtures
   (`TestSockDisputeCannotEraseTheCounterTally`,
   `TestLapsedCounterLaneDoesNotFreezeTheRide`,
