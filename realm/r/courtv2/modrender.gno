@@ -133,6 +133,21 @@ func claimTitleFor(c *Court, cs *claimState) string {
 	return sanitize.InlineText(cs.title)
 }
 
+// platformName / platformTicker are the product's identity.
+const (
+	platformName   = "Kourt"
+	platformTicker = "KOURT"
+)
+
+// qualifiedSymbol renders a court coin as KOURT:SYMBOL. A BARE court symbol is
+// only ever shown inside that court's own page: court coins are non-fungible and
+// backed by separate one-way curves, so an unqualified ticker in a directory or
+// a wallet-style list invites reading one court's coin as another's — or as the
+// platform token.
+func qualifiedSymbol(c *Court) string {
+	return platformTicker + ":" + sanitize.InlineText(c.coin.Symbol())
+}
+
 // courtNameFor gates a COURT's name the way claimTitleFor gates a claim title.
 // A whole-court purge is a legal-hold act, and §2 lists court names in the
 // user-text inventory purge must reach — rendering the raw name anywhere would

@@ -494,8 +494,11 @@ func courtSymbol(slug string) string { return strings.ToUpper(slug) }
 // platform token or a well-known asset in any wallet that shows only symbols.
 // (metaSlug is deliberately NOT listed: init must be able to create it, and the
 // PUBLIC path refuses it separately in startCourtUser.)
+// "court" is reserved alongside "kourt": it is a homophone of the platform
+// ticker, and a court coin symbol is the upper-cased slug, so leaving it open
+// would let someone mint COURT and have wallets show it beside KOURT.
 var reservedSlugs = []string{
-	"plea", "pleadger", "gno", "gnot", "ugnot",
+	"kourt", "court", "gno", "gnot", "ugnot",
 	"btc", "eth", "usdc", "usdt",
 }
 

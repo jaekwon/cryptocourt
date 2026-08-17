@@ -45,7 +45,7 @@ func Render(path string) string {
 
 func renderDirectory() string {
 	b := strings.Builder{}
-	b.WriteString("# CryptoCourt V2\n\nStake on claims of fact. Your principal always returns 1×.\n\n")
+	b.WriteString("# " + platformName + "\n\nStake on claims of fact. Your principal always returns 1×.\n\n")
 	afterHeader := b.Len()
 	writeTier(&b, "Featured", tierFeatured)
 	// The listed tier ranks by cumulative GNOT burned into each court — the one
@@ -69,8 +69,8 @@ func writeListedByBurn(b *strings.Builder) {
 		if c.tier != tierListed {
 			continue
 		}
-		b.WriteString("- [" + courtNameFor(c) + "](/r/cryptocourt/courtv2:" + s + ") — " +
-			strconv.FormatUint(c.nextID, 10) + " claims\n")
+		b.WriteString("- [" + courtNameFor(c) + "](/r/cryptocourt/courtv2:" + s + ") · " +
+			qualifiedSymbol(c) + " — " + strconv.FormatUint(c.nextID, 10) + " claims\n")
 	}
 	b.WriteString("\n")
 }
@@ -93,8 +93,8 @@ func writeTier(b *strings.Builder, heading string, tier uint8) {
 	}
 	for _, s := range slugs[:shown] {
 		c := mustCourt(s)
-		b.WriteString("- [" + courtNameFor(c) + "](/r/cryptocourt/courtv2:" + s + ") — " +
-			strconv.FormatUint(c.nextID, 10) + " claims\n")
+		b.WriteString("- [" + courtNameFor(c) + "](/r/cryptocourt/courtv2:" + s + ") · " +
+			qualifiedSymbol(c) + " — " + strconv.FormatUint(c.nextID, 10) + " claims\n")
 	}
 	if len(slugs) > shown {
 		b.WriteString("- _…and " + strconv.Itoa(len(slugs)-shown) +
@@ -110,6 +110,7 @@ func renderCourt(slug string) string {
 	c := mustCourt(slug)
 	b := strings.Builder{}
 	b.WriteString("# " + courtNameFor(c) + "\n\n")
+	b.WriteString("- coin: " + qualifiedSymbol(c) + " — this court's own coin, not interchangeable with any other court's\n")
 	b.WriteString("- coin price: " + strconv.FormatInt(c.crv.Price(c.minted), 10) + " ugnot per CC unit (one-way; the GNOT is burned)\n")
 	b.WriteString("- supply: " + strconv.FormatInt(c.coin.TotalSupply(), 10) +
 		" · emitted: " + strconv.FormatInt(c.emittedTotal, 10) + "\n")

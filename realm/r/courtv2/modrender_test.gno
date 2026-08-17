@@ -162,7 +162,7 @@ func TestCourtSymbolsAreUniquePerCourt(cur realm, t *testing.T) {
 // that impersonates the platform token in any symbol-only wallet view.
 func TestReservedSlugsRefused(cur realm, t *testing.T) {
 	a := testutils.TestAddress("sym-res")
-	for _, bad := range []string{"plea", "pleadger", "gnot", "usdc"} {
+	for _, bad := range []string{"kourt", "court", "gnot", "usdc"} {
 		testing.SetRealm(testing.NewUserRealm(a))
 		uassert.AbortsContains(t, cur, "reserved", func() {
 			StartCourt(cross(cur), bad, "impostor")
@@ -172,5 +172,28 @@ func TestReservedSlugsRefused(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(a))
 	uassert.AbortsContains(t, cur, "reserved", func() {
 		StartCourt(cross(cur), metaSlug, "impostor")
+	})
+}
+
+// Court coins render NAMESPACED outside their own court, so a court ticker can
+// never be read as the platform token or as another court's coin.
+func TestQualifiedSymbolRendering(cur realm, t *testing.T) {
+	a := testutils.TestAddress("qs-a")
+	testCourt(cur, "qsone", a, 1_000_000)
+
+	if page := Render("qsone"); !strings.Contains(page, "KOURT:QSONE") {
+		t.Fatalf("the court page should show the namespaced ticker:\n%s", page)
+	}
+	if !strings.Contains(Render(""), "Kourt") {
+		t.Fatal("the front page should carry the product name")
+	}
+	// The platform ticker and its homophone are not squattable as slugs.
+	testing.SetRealm(testing.NewUserRealm(a))
+	uassert.AbortsContains(t, cur, "reserved", func() {
+		StartCourt(cross(cur), "kourt", "impostor")
+	})
+	testing.SetRealm(testing.NewUserRealm(a))
+	uassert.AbortsContains(t, cur, "reserved", func() {
+		StartCourt(cross(cur), "court", "impostor")
 	})
 }
