@@ -94,6 +94,98 @@ func TestSlashSurvivesSettle(cur realm, t *testing.T) {
 	}
 }
 
+// TestSettleRetainsNothingAfterConsumedSlot pins the v0.44 symmetry: retention
+// exists only to keep a FUTURE slash reachable, so once the flag slot is consumed
+// (a one-way latch OpenFlag refuses) or a slash is already carved out, settle must
+// withhold nothing — the remainder is owed back now, not at crystallize.
+func TestSettleRetainsNothingAfterConsumedSlot(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("scs-alice")
+	bob := testutils.TestAddress("scs-bob")
+	carol := testutils.TestAddress("scs-carol")
+	c := testCourt(cur, "scs1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "scs1", "Flagged before it settles")
+	matureOI(cur, "scs1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "scs1", id, sideYES)
+
+	// A conclusive-low slashGrade flag lands BEFORE settle (its 7-day vote already
+	// outlasts the 72h settle delay): the slash is carved out of the bond and the
+	// slot is consumed, so no further slash can ever land on this claim.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "scs1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "scs1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "scs1", id)
+	cs := mustClaim(c, id)
+	if cs.pendingSlash <= 0 || !cs.slotConsumed {
+		t.Fatal("setup: the flag must consume the slot and reserve a slash")
+	}
+	remainder := cs.answerBond
+
+	// Settle withholds NOTHING extra: the whole remainder returns to the answerer.
+	before := c.coin.BalanceOf(alice)
+	SettleUndisputed(cross(cur), "scs1", id)
+	if cs.answerBond != 0 {
+		t.Fatalf("a consumed slot admits no future slash: nothing may be retained, got %d", cs.answerBond)
+	}
+	if got := c.coin.BalanceOf(alice) - before; got != remainder {
+		t.Fatalf("the whole remainder must return at settle: got %d want %d", got, remainder)
+	}
+}
+
+// TestSettleRetainsNothingAfterDustLowNoSlash pins the LOAD-BEARING half of that
+// gate. Because the slash carve happens after the slot latch on one straight-line
+// path, pendingSlash > 0 always implies slotConsumed — so the test above satisfies
+// both clauses and cannot tell them apart. Only a conclusive flag that consumes the
+// slot WITHOUT reserving a slash (a dust low: quarter-bar, below the full bar)
+// isolates !slotConsumed, and only this fixture kills a mutation that drops it.
+func TestSettleRetainsNothingAfterDustLowNoSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sdl-alice")
+	eve := testutils.TestAddress("sdl-eve")
+	flagger := testutils.TestAddress("sdl-flagger")
+	c := testCourt(cur, "sdl1", alice, 50_000_000_000)
+	c.coin.Mint(eve, 1_000_000_000) // dust-low weight: >= X̄/4, < the 5% full bar
+	c.coin.Mint(flagger, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "sdl1", "Dust-flagged, never slashed")
+	matureOI(cur, "sdl1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "sdl1", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "sdl1", id)
+	testing.SetRealm(testing.NewUserRealm(eve))
+	VoteQuality(cross(cur), "sdl1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "sdl1", id)
+	cs := mustClaim(c, id)
+	if !cs.slotConsumed || cs.pendingSlash != 0 {
+		t.Fatalf("setup: slot consumed with NO slash reserved; got consumed=%v pending=%d",
+			cs.slotConsumed, cs.pendingSlash)
+	}
+	bond := cs.answerBond
+	if bond <= 0 {
+		t.Fatal("setup: the answer bond must still be posted")
+	}
+
+	// The slot is spent, so OpenFlag refuses forever and no slash can follow:
+	// retention here would be pure lockup. The whole bond returns now.
+	before := c.coin.BalanceOf(alice)
+	SettleUndisputed(cross(cur), "sdl1", id)
+	if cs.answerBond != 0 {
+		t.Fatalf("nothing may be retained once the slot is consumed: %d", cs.answerBond)
+	}
+	if got := c.coin.BalanceOf(alice) - before; got != bond {
+		t.Fatalf("the whole bond must return at settle: got %d want %d", got, bond)
+	}
+}
+
 // TestSlashSurvivesFinalize is the Finalize twin of TestSlashSurvivesSettle
 // (audit convergence v0.43). SettleUndisputed retains a slash reserve
 // (M3-HIGH-1) but Finalize refunded the WHOLE answer bond — so a claim that
