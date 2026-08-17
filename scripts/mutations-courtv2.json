@@ -2603,5 +2603,313 @@
   "label": "P-CONST checkpoint PageEpochs 32 -> 8 (the page size)",
   "find": "const PageEpochs = uint32(32)",
   "replace": "const PageEpochs = uint32(8)"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: maturity is measured against the CAPPED k",
+  "find": "\treturn sum / int64(count), count == want && r.filled >= want",
+  "replace": "\treturn sum / int64(count), count == k && r.filled >= k"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: maturity drops the filled clause",
+  "find": "\treturn sum / int64(count), count == want && r.filled >= want",
+  "replace": "\treturn sum / int64(count), count == want"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: maturity drops the count clause",
+  "find": "\treturn sum / int64(count), count == want && r.filled >= want",
+  "replace": "\treturn sum / int64(count), r.filled >= want"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: the mean divides by the REQUESTED buckets, not the counted ones",
+  "find": "\treturn sum / int64(count), count == want && r.filled >= want",
+  "replace": "\treturn sum / int64(want), count == want && r.filled >= want"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: the oldest-held bucket boundary is off by one",
+  "find": "\t\tif bkt < 0 || bkt <= r.base-int64(r.filled) {",
+  "replace": "\t\tif bkt < 0 || bkt < r.base-int64(r.filled) {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: a value does not persist past the last observation",
+  "find": "\t\t\tv = r.last // beyond the last observation: value has persisted",
+  "replace": "\t\t\tv = 0"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: a sub-width window is not widened to one bucket",
+  "find": "\tif window < r.width {\n\t\twindow = r.width\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: a wrapped window sum is not refused",
+  "find": "\t\tnext, ok := overflow.Add64(sum, v)\n\t\tif !ok {\n\t\t\tpanic(\"twap: window sum overflowed int64\")\n\t\t}\n\t\tsum = next",
+  "replace": "\t\tnext, _ := overflow.Add64(sum, v)\n\t\tsum = next"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: an overdraft is allowed (the conservation guard)",
+  "find": "\tif src == nil || src.balance < amount {\n\t\tpanic(\"grc20votes: insufficient balance\")\n\t}",
+  "replace": "\tif src == nil {\n\t\tpanic(\"grc20votes: insufficient balance\")\n\t}"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the sender is not debited (a transfer mints)",
+  "find": "\tsrc.balance -= amount\n\tdst.balance += amount",
+  "replace": "\tdst.balance += amount"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the recipient is not credited (a transfer burns)",
+  "find": "\tsrc.balance -= amount\n\tdst.balance += amount",
+  "replace": "\tsrc.balance -= amount"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the sender keeps their VOTING WEIGHT after sending",
+  "find": "\tl.addVotes(delegateeOf(from, src), -amount)",
+  "replace": ""
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the recipient gains no voting weight",
+  "find": "\tl.addVotes(delegateeOf(to, dst), amount)",
+  "replace": ""
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the weight debit is signed the wrong way",
+  "find": "\tl.addVotes(delegateeOf(from, src), -amount)",
+  "replace": "\tl.addVotes(delegateeOf(from, src), amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the sender's weight leaves the HOLDER, not their delegatee",
+  "find": "\tl.addVotes(delegateeOf(from, src), -amount)",
+  "replace": "\tl.addVotes(from, -amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the recipient's weight lands on the HOLDER, not their delegatee",
+  "find": "\tl.addVotes(delegateeOf(to, dst), amount)",
+  "replace": "\tl.addVotes(to, amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: a non-positive amount is accepted",
+  "find": "\tmustBeValid(to)\n\tmustBePositive(amount)\n\tsrc := l.getAccount(from)",
+  "replace": "\tmustBeValid(to)\n\tsrc := l.getAccount(from)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the recipient address is not validated",
+  "find": "\tmustBeValid(to)\n\tmustBePositive(amount)\n\tsrc := l.getAccount(from)",
+  "replace": "\tmustBePositive(amount)\n\tsrc := l.getAccount(from)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "mustBeSealed: the CURRENT epoch is readable (the anti-flash-loan invariant)",
+  "find": "\tif at == 0 || at >= l.Epoch() {",
+  "replace": "\tif at == 0 || at > l.Epoch() {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "mustBeSealed: epoch zero is readable",
+  "find": "\tif at == 0 || at >= l.Epoch() {",
+  "replace": "\tif at >= l.Epoch() {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Epoch: the epoch is 0-based, so 'never' and the first epoch collide",
+  "find": "\treturn uint32(runtime.ChainHeight()/l.epochBlocks) + 1",
+  "replace": "\treturn uint32(runtime.ChainHeight() / l.epochBlocks)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "addVotes: the checkpoint lands in an UNSEALED future epoch",
+  "find": "\ta.votes.SetAt(l.archive, string(who), l.Epoch(), next)",
+  "replace": "\ta.votes.SetAt(l.archive, string(who), l.Epoch()+1, next)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: the supply cap is dropped",
+  "find": "\tif !ok || next > MaxSupply {",
+  "replace": "\tif !ok {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: supply is not checkpointed",
+  "find": "\tl.supply.SetAt(l.archive, supplyKey, l.Epoch(), next)",
+  "replace": ""
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: no balance is credited",
+  "find": "\ta.balance += amount\n\tl.addVotes(delegateeOf(to, a), amount)",
+  "replace": "\tl.addVotes(delegateeOf(to, a), amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: no voting power is created",
+  "find": "\ta.balance += amount\n\tl.addVotes(delegateeOf(to, a), amount)",
+  "replace": "\ta.balance += amount"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: the weight lands on the HOLDER, not their delegatee",
+  "find": "\tl.addVotes(delegateeOf(to, a), amount)",
+  "replace": "\tl.addVotes(to, amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: a non-positive amount is accepted",
+  "find": "\tmustBeValid(to)\n\tmustBePositive(amount)\n\n\tnext, ok := overflow.Add64(l.total, amount)",
+  "replace": "\tmustBeValid(to)\n\n\tnext, ok := overflow.Add64(l.total, amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: a NEGATIVE burn mints, bypassing the supply cap",
+  "find": "\tmustBePositive(amount)\n\ta := l.getAccount(from)",
+  "replace": "\ta := l.getAccount(from)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: more than the balance can be burned",
+  "find": "\tif a == nil || a.balance < amount {\n\t\tpanic(\"grc20votes: insufficient balance\")\n\t}\n\ta.balance -= amount",
+  "replace": "\tif a == nil {\n\t\tpanic(\"grc20votes: insufficient balance\")\n\t}\n\ta.balance -= amount"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: the balance is not debited",
+  "find": "\ta.balance -= amount\n\tl.addVotes(delegateeOf(from, a), -amount)",
+  "replace": "\tl.addVotes(delegateeOf(from, a), -amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: burned tokens KEEP their voting power",
+  "find": "\ta.balance -= amount\n\tl.addVotes(delegateeOf(from, a), -amount)",
+  "replace": "\ta.balance -= amount"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: supply does not fall",
+  "find": "\tl.total -= amount\n\tl.supply.SetAt(l.archive, supplyKey, l.Epoch(), l.total)",
+  "replace": "\tl.supply.SetAt(l.archive, supplyKey, l.Epoch(), l.total)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: supply is not re-checkpointed",
+  "find": "\tl.total -= amount\n\tl.supply.SetAt(l.archive, supplyKey, l.Epoch(), l.total)",
+  "replace": "\tl.total -= amount"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Delegate: the OLD delegate keeps the weight (total weight doubles)",
+  "find": "\tl.addVotes(was, -a.balance)\n\tl.addVotes(now, a.balance)",
+  "replace": "\tl.addVotes(now, a.balance)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Delegate: the NEW delegate gains nothing",
+  "find": "\tl.addVotes(was, -a.balance)\n\tl.addVotes(now, a.balance)",
+  "replace": "\tl.addVotes(was, -a.balance)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Delegate: a zero-balance account cannot name anyone but itself",
+  "find": "\tif l.getAccount(from) == nil && to == from {",
+  "replace": "\tif l.getAccount(from) == nil {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Delegate: the delegatee is not validated",
+  "find": "func (l *Ledger) Delegate(from, to address) {\n\tmustBeValid(to)",
+  "replace": "func (l *Ledger) Delegate(from, to address) {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "TransferFrom: the allowance key is reversed (the debit lands on the wrong pair)",
+  "find": "\tkey := string(from) + sep + string(spender)\n\tallowed := l.Allowance(from, spender)",
+  "replace": "\tkey := string(spender) + sep + string(from)\n\tallowed := l.Allowance(from, spender)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "TransferFrom: the allowance ceiling is dropped",
+  "find": "\tif allowed < amount {",
+  "replace": "\tif allowed < 0 {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Approve: a negative allowance is accepted",
+  "find": "\tif amount < 0 {\n\t\tpanic(\"grc20votes: negative allowance\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Approve: the spender is not validated",
+  "find": "\tmustBeValid(spender)\n\tif amount < 0 {",
+  "replace": "\tif amount < 0 {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: the supply overflow check is dropped",
+  "find": "\tnext, ok := overflow.Add64(l.total, amount)\n\tif !ok || next > MaxSupply {",
+  "replace": "\tnext, _ := overflow.Add64(l.total, amount)\n\tif next > MaxSupply {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "TransferFrom: the allowance is not spent",
+  "find": "\tif rest := allowed - amount; rest == 0 {\n\t\tl.allowances.Remove(key)\n\t} else {\n\t\tl.allowances.Set(key, rest)\n\t}",
+  "replace": "\t_ = key"
  }
 ]

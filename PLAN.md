@@ -1624,6 +1624,82 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.00 — the governance token's write surface, unswept until now: 23 of 26 caught, and the
+  two real gaps were both a NEGATIVE amount turning a destructor into a mint.**
+  v0.99 swept `grc20votes.move` and found it clean, which said nothing about the rest of the
+  package: of twelve existing rows, ten were `move` and two were constants. Mint, Burn,
+  Delegate, Approve, TransferFrom, `addVotes` and `mustBeSealed` — the whole write surface of
+  the token every governor vote is weighed in — had never been mutated.
+  Twenty-three of twenty-six were already caught, which is a much better result than the realm
+  side gave at the same stage, and worth saying plainly: the anti-flash-loan invariant
+  (`mustBeSealed` refusing the current epoch), the 1-based epoch, a checkpoint written to an
+  unsealed future epoch, both `delegateeOf` routings on mint, the delegation hand-off in both
+  directions, the reversed allowance key, and the zero-balance account's right to name someone
+  else are all held by tests that already existed.
+  **Both real gaps were the same shape.** `Ledger.Burn`'s `mustBePositive` had nothing on it,
+  and its removal is not a failure to destroy — it is a MINT. `a.balance < amount` is false for
+  every negative amount, so both subtractions below it add: the balance rises, the voting weight
+  rises, and `l.total` rises without ever passing the `MaxSupply` ceiling, whose stated purpose
+  is that `yes*Bps` cannot wrap and report a won vote as lost. And it is publicly reachable —
+  `r/govern`'s `Burn` hands the ledger `amount` straight from the caller with no validation of
+  its own, so that one line in /p/ is the entire path. `TestNonPositiveAmountsAreRejected`
+  already loops `{0, -1, -1_000_000}` over Mint and Transfer; Burn was simply missing from the
+  loop, so the fix is one line in the loop plus supply and weight assertions, since the balance
+  checks already there do not imply either.
+  The second is the other arm of Mint's own ceiling: `overflow.Add64`'s `!ok`. An amount large
+  enough to wrap the SUM cannot be caught by comparing against MaxSupply, because a wrapped sum
+  is negative and `next > MaxSupply` is false — the mint is accepted and the ledger ends with a
+  negative total supply beside an astronomical balance. The existing ceiling test is the right
+  home and its state is already right: the wrap needs a supply standing, since on a fresh ledger
+  `0 + MaxInt64` does not wrap and the ceiling arm answers instead. The test now says so, because
+  moving that line above the mint would silently cost it all its discriminating power.
+  Two of the 26 first came back INVALID rather than caught — dropping a check left `ok` and
+  `key` unused — a reminder that in this harness an unused variable and a live guard produce the
+  same headline number unless INVALID is counted separately, which since v0.94 it is.
+  Batch now 416 rows: 415 caught, 0 not caught, one surviving by design.
+  **Where the remaining coverage debt is, measured rather than guessed.** By package the batch
+  now stands at courtv2 354, grc20votes 38, governor 9, twap 8, curve 5, checkpoint 2. Against
+  source size that makes `governor` the outstanding gap by a wide margin — 2,042 lines carrying
+  nine rows, which is thinner per line than anything else here has been — and `checkpoint` the
+  next after it at 307 lines and two rows. Those two are the whole remaining `p/` surface;
+  everything else in `p/` has now been swept at least once.
+
+- **v0.99 — the batch had ZERO rows on the function that produces X̄, and the first fixture
+  I wrote for its two gaps proved nothing.** Every %-of-X̄ quantity in the system — the answer
+  bond, the slash flat arm, the flag bond, the P2 carrot clamp, both quality bars, the dispute
+  bond, the quorum floor, the escrow window — reads `xBarFrozen`, and `xBarFrozen` is whatever
+  `twap.Average` returned at the freeze. In 372 rows the batch mutated that function not once.
+  Ten mutations. Six caught as they stood, including the one twap.gno's own comment warns
+  about (maturity measured against the CAPPED `k`, which would call a stale ring mature),
+  value persistence past the last observation, the oldest-held-bucket boundary, dividing by the
+  REQUESTED buckets instead of the counted ones, and — once re-run validly as
+  `next, _ := overflow.Add64(...)` so the mutant compiles — the overflow refusal.
+  Of the four not caught, **two are equivalent mutants and are deliberately NOT in the batch**,
+  each for a structural reason worth recording so a later reader does not "fix" them:
+  capping `k` to the ring cannot change maturity, because `filled ≤ n < want` makes
+  `r.filled >= want` false whatever `k` is — the cap bounds loop iterations on a stale ring, so
+  it is a gas guard, not a correctness guard; and the index wrap can take only one step,
+  because `base-bkt < filled ≤ n` means a single `+= n` always suffices.
+  The other two were real: maturity dropping its `count == want` clause, and a sub-width window
+  not being widened to one bucket.
+  **The fixture for those two is the part worth recording.** Its first version had two arms
+  and NEITHER discriminated. One aimed at the `k` cap — the equivalence above, which I had not
+  yet proved. The other asked for `window = 1` to test the sub-width widening, in a file that
+  defines `hour = int64(1)`: the "sub-width" window was exactly one width, so the clause under
+  test never ran. Both arms passed, both mutants survived, and the test read as coverage.
+  What the rewrite needed was a ring whose width EXCEEDS 1 (a width-10 ring asked for a
+  window of 1) and a query placed BEFORE the last observation, so the scan runs off the oldest
+  bucket held and `count` falls short while `filled` alone is satisfied — which is precisely
+  the state the two clauses of the maturity test exist to distinguish. This is the third
+  version in a row where the fixture, not the code, was the thing that turned out to be wrong,
+  and in all three the only thing that caught it was mutating the guard the fixture claimed
+  to cover.
+  Also swept: `grc20votes`' `move` core, ten mutations, **all ten already caught** — the
+  overdraft guard, both balance legs, both `addVotes` legs, the sign of the debit, both
+  `delegateeOf` routings, and both input guards. The token's transfer core needs no fixture;
+  the rows are in the batch to keep it that way.
+  Batch now 390 rows: 389 caught, 0 not caught, one surviving by design.
+
 - **v0.98 — the p/ layer's constants: my prediction was WRONG (9 of 12 already caught), and
   I then committed the exact defect I had spent two versions documenting.**
   v0.97 sized this target and guessed the `p/` packages would be "presumably in the same
