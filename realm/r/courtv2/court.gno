@@ -246,6 +246,12 @@ type Court struct {
 	queueSeq        uint64
 	records         *bptree.BPTree // addr -> *answerRecord (records.gno)
 	qualifiedCount  int            // addresses at score ≥ priorityNetRecord
+
+	// Moderation state (moderation.gno) — render-layer only; no money path
+	// reads it. Lazily created on first moderation touch (ensureMod), so a
+	// court that is never moderated carries a single nil pointer. See
+	// MODERATION.md §2 (the constitution) and §4 (state homes).
+	mod *courtMod
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.
