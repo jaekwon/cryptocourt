@@ -54,6 +54,12 @@ func Buy(cur realm, slug string) int64 {
 	}
 	c.minted += delta // monotonic curve position
 	c.coin.Mint(buyer, delta)
+	// Track cumulative GNOT burned into this court and keep the directory's
+	// burn-ordered index in step. Burned GNOT is the one un-sybil-able signal a
+	// court can accrue — you cannot fake having burned real money — which is why
+	// the front page ranks on it (MODERATION.md §3.2). Render-layer only: no
+	// money path reads the index.
+	reindexBurn(c, spent)
 
 	// BURN the spent GNOT: send it to the keyless sink. Verifiable on-chain;
 	// never described as a scarcity feature (§7.4 / Munchee).

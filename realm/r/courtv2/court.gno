@@ -271,6 +271,13 @@ type Court struct {
 	// Lazily created; keyed so ascending iteration IS nearest-deadline-first.
 	stripIdx   *bptree.BPTree // be(deadline)|be(claimID) -> claimID
 	pendingIdx *bptree.BPTree // be(openedAt)|be(claimID) -> claimID
+
+	// Directory ordering (modrender.gno): cumulative GNOT burned into this
+	// court's curve — the un-sybil-able front-page rank — plus this court's
+	// current key in the burn index and its creation sequence.
+	burnedGNOT int64
+	burnKey    string
+	createdSeq uint64
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.
@@ -342,6 +349,7 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 	c.lastAccrual = c.createdAt
 	c.gov.Adopt(disputeKind{}, disputeRules(c.params))
 	courts.Set(slug, c)
+	indexNewCourt(c) // directory ordering (burn-desc / creation-newest)
 	if directoryAdmin == "" {
 		directoryAdmin = admin
 	}

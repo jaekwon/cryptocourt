@@ -28,6 +28,11 @@ func Render(path string) string {
 	if len(parts) == 1 {
 		return renderCourt(parts[0])
 	}
+	// The moderation log is a named sub-route, so it must be carved out BEFORE
+	// the numeric-id parse below (MODERATION.md §4).
+	if parts[1] == "mod" {
+		return renderModLog(parts[0])
+	}
 	id, err := strconv.ParseUint(parts[1], 10, 64)
 	if err != nil {
 		return "## Not found\nA claim id must be a number."
@@ -43,11 +48,31 @@ func renderDirectory() string {
 	b.WriteString("# CryptoCourt V2\n\nStake on claims of fact. Your principal always returns 1×.\n\n")
 	afterHeader := b.Len()
 	writeTier(&b, "Featured", tierFeatured)
-	writeTier(&b, "Courts", tierListed)
+	// The listed tier ranks by cumulative GNOT burned into each court — the one
+	// signal nobody can fake, so the front page needs no gameable activity or
+	// vote score (MODERATION.md §3.2).
+	writeListedByBurn(&b)
 	if b.Len() == afterHeader {
 		b.WriteString("_No courts yet._\n")
 	}
 	return b.String()
+}
+
+func writeListedByBurn(b *strings.Builder) {
+	slugs := listedPage("burn", 0, renderPageSize)
+	if len(slugs) == 0 {
+		return
+	}
+	b.WriteString("## Courts\n\n")
+	for _, s := range slugs {
+		c := mustCourt(s)
+		if c.tier != tierListed {
+			continue
+		}
+		b.WriteString("- [" + sanitize.InlineText(c.name) + "](/r/cryptocourt/courtv2:" + s + ") — " +
+			strconv.FormatUint(c.nextID, 10) + " claims\n")
+	}
+	b.WriteString("\n")
 }
 
 // renderPageSize bounds every render loop to a constant so a page's gas cost
@@ -104,13 +129,23 @@ func renderCourt(slug string) string {
 	}
 	for id := c.nextID; id >= lo; id-- {
 		cs := mustClaim(c, id)
-		b.WriteString("- [" + sanitize.InlineText(cs.title) + "](/r/cryptocourt/courtv2:" + slug + "/" +
+		// The ONE place a hide bit subtracts: ordinary discovery listings. The
+		// claim stays reachable by deep link, and if it is still policeable it
+		// stays on the "needs review" strip below (§5.3).
+		if HiddenFromListing(slug, id) {
+			continue
+		}
+		b.WriteString("- [" + claimTitleFor(c, cs) + "](/r/cryptocourt/courtv2:" + slug + "/" +
 			strconv.FormatUint(id, 10) + ") — " + claimStatus(cs) + "\n")
 	}
 	if lo > 1 {
 		b.WriteString("- _…and " + strconv.FormatUint(lo-1, 10) +
 			" older; open any by id at /r/cryptocourt/courtv2:" + slug + "/<id>_\n")
 	}
+	b.WriteString("\n")
+	writeStrip(&b, slug)
+	writePending(&b, slug)
+	b.WriteString("[Moderation log](/r/cryptocourt/courtv2:" + slug + "/mod)\n")
 	return b.String()
 }
 
@@ -124,7 +159,15 @@ func renderClaim(slug string, id uint64) string {
 	}
 	cs := mustClaim(c, id)
 	b := strings.Builder{}
-	b.WriteString("# " + sanitize.InlineText(cs.title) + "\n\n")
+	// A deep link ALWAYS renders — hiding removes a claim from lists, never from
+	// its own page — with a banner naming the authority. Text itself is withheld
+	// only by the global (legal-hold) bit or a purge, and even then IDs, state,
+	// deadlines and balances still render so a participant can always act.
+	b.WriteString("# " + claimTitleFor(c, cs) + "\n\n")
+	b.WriteString(hideBanner(c, cs))
+	if cs.seeded {
+		b.WriteString("_Seeded by a moderator to start this court; the author earns nothing from it._\n\n")
+	}
 
 	b.WriteString("## Signal\n\n")
 	total := cs.yesStake + cs.noStake
