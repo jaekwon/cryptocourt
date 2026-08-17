@@ -3,3 +3,8 @@
 # the next run recovers from it — but it must never be committed, because a
 # committed backup is a half-mutated tree that looks like source.
 *.mutate-backup
+
+# scripts/ became importable in v0.70 (stagelock.py is shared by three runners),
+# so running any of them now leaves bytecode beside the sources. Never source.
+__pycache__/
+*.selftest-backup
