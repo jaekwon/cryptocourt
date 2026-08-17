@@ -66,10 +66,17 @@ func TestPostAnswerBondsAndFreezes(cur realm, t *testing.T) {
 
 func TestAnswerBelowFloorRefused(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("an2-alice")
-	testCourt(cur, "an2", alice, 10_000_000_000)
+	c := testCourt(cur, "an2", alice, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := OpenClaim(cross(cur), "an2", "Thin claim")
-	matureOI(cur, "an2", id, alice, 10_000_000) // 10 CC << the 100 CC floor
+	// Staked BELOW THE FLOOR, derived — not "10 CC because the floor is 100".
+	// The floor is a fraction of the court's own supply (v0.27), so a literal
+	// here asserts against a number that moved: at 10 bps on a 10,000 CC court
+	// the floor is 10 CC, and the old fixture's 20 CC trailing average would
+	// have CLEARED the bar it was written to fail. matureOI's three buckets
+	// average 2x their amount, so a sixth of the floor stays under it with
+	// margin at any fraction.
+	matureOI(cur, "an2", id, alice, effMinAnswerX(c)/6)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "below the minimum", func() {
 		PostAnswer(cross(cur), "an2", id, sideYES)

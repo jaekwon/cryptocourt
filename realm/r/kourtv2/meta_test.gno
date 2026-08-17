@@ -245,9 +245,9 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	// than DECIDING one — the incumbency-lock-by-price that mustElectionInvariants
 	// forbids in the election lane and that the appeals lane never guarded.
 	supply := mc.coin.PastTotal(mc.coin.Epoch() - 1)
-	wantX := supply * metaAnswerXBps / 10000
+	wantX := supply * answerXFloorBps / 10000
 	uassert.Equal(t, wantX, effMinAnswerX(mc), "answerability is a fraction of meta supply")
-	uassert.Equal(t, supply*metaDepositBps/10000, effMinDeposit(mc),
+	uassert.Equal(t, supply*depositFloorBps/10000, effMinDeposit(mc),
 		"the deposit has its own fraction, unpegged from answerability/100")
 	// The property the deploy invariant certifies, checked on real state.
 	filing := wantX * (10000 + answerBondBps) / 10000

@@ -200,7 +200,16 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 	Stake(cross(cur), "f9c", id, sideYES, 100_000_000_000) // 100k CC
 	testing.SkipHeights(4 * periodBlocks)                  // bank conviction AND raw
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Unstake(cross(cur), "f9c", id, sideYES, 99_900_000_000) // raw stops; conviction kept
+	// Retain twice the answerability floor — DERIVED, like the two drain probes
+	// in quality_test.gno. v0.27 made that floor a fraction of the court's own
+	// supply, so "unstake to a sliver, then answer" is no longer a legal shape:
+	// the floor bounds how far a position may diverge and still be answerable.
+	// That MOVES the boundary this test probes rather than invalidating it, and
+	// moves it in the test's favour — the most extreme reachable divergence is
+	// now the strongest probe the rules permit, and the F9 cap has more headroom
+	// against it than the old fixture claimed to show.
+	keep := effMinAnswerX(c) * 2
+	Unstake(cross(cur), "f9c", id, sideYES, 100_000_000_000-keep) // raw stops; conviction kept
 	testing.SkipHeights(6 * periodBlocks)                   // openBlocks grows, raw does not
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "f9c", id, sideYES)

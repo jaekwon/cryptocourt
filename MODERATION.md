@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.26 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.27 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,72 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.27 — ordinary courts get the supply-relative floor, at a TENTH of
+  meta's fraction (3 identical economists; unanimous on shape, 2/3 on the
+  number)**. v0.26 established the bug; the panel established that my intended
+  fix was wrong in a way I had not seen.
+  - **The asymmetry is real, 3/3, and by a mechanism I had half wrong.** `Stake`
+    transfers coins into escrow, so CC backing claim A genuinely cannot back
+    claim B — per-claim floors SUM. Each answered claim locks **1.5×** the floor
+    (stake plus the 50%·X̄ bond), and the lock outlives the answer: `Unstake`
+    panics once frozen, so principal returns only at settlement, weeks later.
+    Aggregate demand is `N × 1.5 × bps` — **a pure number, independent of
+    supply** — so the fraction decides how many claims a court may run at once.
+    Meta never feels it because its claim count is O(1) forever; an ordinary
+    court's N grows with its own success. **At 50 bps a court supports ~40
+    concurrent answered claims, and the dispute machine jams near 127**, because
+    escrowed CC cannot vote while `quorumFloor`'s dominant arm reads RAW supply.
+  - **The number that settles it (agent A): 50 bps overtakes a flat 100 CC at
+    only 20,000 CC of supply.** Applying meta's fraction to ordinary courts would
+    have been *more expensive than the constant v0.26 condemned*, for every court
+    above that. My failing fixture was the proof and I had misread it: 80,050 CC
+    × 50 bps = 400.25 CC against X̄ = exactly 400 CC — it failed by a quarter of a
+    coin, against a floor four times the one being removed.
+  - **So: `ordAnswerXFloorBps = 10`, `ordDepositFloorBps = 1`; meta keeps 50/2.**
+    Two lanes, deliberately not unified. The panel's doctrine, which is v0.15's
+    own words turned on their point: *on meta the claim IS a franchise-scoped act
+    — an appeal installs or suspends moderator sets — so pinning it to the
+    franchise is dimensionally right. On an ordinary court the verdict binds one
+    claim, the market prices it, and the floor's only job is to exclude dust.* A
+    bridge set at franchise scale on a docket court is the bridge doing the
+    pricing.
+  - **Raw supply, 2/3** — votable was rejected for the reason v0.15 gave and the
+    panel sharpened: it is deflatable for free by the very activity it meters,
+    and it is *seductive* precisely because it self-limits, which is the griefing
+    vector rather than a fix. (Agent A dissented, arguing the deflation attack
+    costs 100× compliance; recorded, not taken.)
+  - **Too high is far worse than too low, 3/3 — and it is the asymmetry that
+    justifies erring low.** A too-high floor panics at `PostAnswer` *after* the
+    author paid and stakers locked, is **correlated with success** (a court that
+    raises capital walls off its own small claims), **jams the dispute and
+    quality quorums** via escrow starvation, reads from outside as "nobody
+    answered" rather than as a parameter bug, and is **unfixable by anyone** —
+    params freeze at `StartCourt`. A floor is a floor: the market can always
+    exceed it and can never get under it.
+  - **`answerDustCC` deleted; `params.minAnswerX` is now the dust arm**, exactly
+    as `minClaimDepositCC` already serves `effMinDeposit`. That keeps the param
+    alive and meaningful instead of leaving it read only by `mustSane` — the
+    same no-dead-state rule this changelog has been enforcing since v0.16.
+  - **`mustInvariants` now runs BOTH pairs through all three checks.** A gate
+    that certifies one of two constant pairs certifies nothing about the other,
+    and the ordinary pair is the one every court uses.
+  - **A lid off-by-one, found by agent B.** `supplyFloor`'s clamp made filing
+    cost *exactly* the quorum bar at every supply — the runtime clamp admitted
+    the equality the deploy invariant rejects on the constants. One bps of slack
+    restores the strict inequality, and it matters precisely where the lid binds:
+    the low-supply case the dust arm reaches.
+  - **And the correction to my own method.** I had "fixed" the 17 failing tests
+    by shrinking their courts 10× so a 600 CC claim became 7.5% of the coin, and
+    reported that the fixtures were unrealistic. Two agents rejected that
+    independently: *rewriting the court sizes encodes the assumption this change
+    exists to remove* — the judgment "unrealistic fixture" was downstream of the
+    number I had already chosen, and it only holds if a court may never have more
+    than ~13 concurrent claims. **The parameter was dictating what a court is
+    allowed to look like.** Reverted. At 10 bps not one court needed resizing;
+    only **four** genuine floor-probes needed adapting, and all four now DERIVE
+    their stake from `effMinAnswerX` instead of restating it as a literal:
+    `TestAnswerBelowFloorRefused`, `TestF9CapHeadroomAtTheExtreme`, and the two
+    drain probes. v0.26's "blast radius is ONE test" was wrong; it is four.
 - **v0.26 — ORDINARY courts have meta's decayed-constant bug too, and worse.
   Premise corrected, quantified, NOT YET FIXED.** The backlog carried this as
   low-priority on the grounds that "unlike meta, an ordinary court's params ARE

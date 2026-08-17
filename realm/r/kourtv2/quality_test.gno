@@ -657,8 +657,15 @@ func TestDrainedStakeCannotUndercollateralizeTheSlash(cur realm, t *testing.T) {
 	testing.SkipHeights(11 * periodBlocks)                  // 11 weeks of accrual (< 12wk dead-claim)
 
 	// Drain to the answer floor, then let the 3h window forget the big position.
+	// DERIVED from the floor, which is the test's own stated intent ("leaves
+	// minAnswerX") — the literal 99_900_000_000 encoded a flat 100 CC floor that
+	// v0.27 replaced with a fraction of the court's own supply. 2x the floor, so
+	// the trailing average clears it without the drain being any less extreme in
+	// the ratio that matters: conviction banked over 11 weeks against a raw
+	// position the answer window has almost entirely forgotten.
+	keep := effMinAnswerX(c) * 2
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Unstake(cross(cur), "drn1", id, sideYES, 99_900_000_000) // leaves 100 CC = minAnswerX
+	Unstake(cross(cur), "drn1", id, sideYES, 100_000_000_000-keep)
 	testing.SkipHeights(answerWindow + epochBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "drn1", id, sideYES)
@@ -721,7 +728,13 @@ func TestDrainedClaimPricesBarsOffLifetimeStake(cur realm, t *testing.T) {
 	Stake(cross(cur), "bar1", id, sideYES, 100_000_000_000) // 100k CC
 	testing.SkipHeights(11 * periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Unstake(cross(cur), "bar1", id, sideYES, 99_900_000_000) // drain to 100 CC
+	// Derived from the floor, same reason as the sibling probe above: the drain
+	// target IS "the minimum still answerable", and v0.27 made that a fraction
+	// of the court's own supply rather than a flat 100 CC. The lifetime average
+	// this test asserts on is dominated by 11 weeks at 100,000 CC, so a 2,000 CC
+	// tail instead of a 100 CC one leaves the drain-resistance claim untouched.
+	keepBar := effMinAnswerX(c) * 2
+	Unstake(cross(cur), "bar1", id, sideYES, 100_000_000_000-keepBar)
 	testing.SkipHeights(answerWindow + epochBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "bar1", id, sideYES)
