@@ -185,6 +185,21 @@ else:
             argv=["python3", "scripts/check-isolation.py",
                   "--only", "TestAMalformedRulesPayloadIsRefusedAtTheDoor"])
 
+    # The failure this guard itself suffered, and the reason this file exists.
+    # Its package list used to be a hand-kept COPY of the Makefile's, and the two
+    # drifted: courtv2 — the realm under active development — was never checked
+    # for its entire life, while the guard kept printing "all N tests across M
+    # packages pass alone as well as together". The list is derived from the
+    # Makefile now, so drift is impossible; what remains is the derivation itself
+    # breaking. It must break LOUDLY, never by quietly reading a shorter list.
+    control("a guard that lost its coupling to the Makefile",
+            os.path.join(REPO, "Makefile"),
+            "for r in govern offerer court courtv2; do",
+            "for rlm in govern offerer court courtv2; do",
+            "cannot read realm-test's package lists",
+            argv=["python3", "scripts/check-isolation.py",
+                  "--only", "TestAMalformedRulesPayloadIsRefusedAtTheDoor"])
+
     # mutate.py takes its work on stdin rather than from a file it owns, so its
     # controls are shaped differently: feed it a mutation and require the right
     # verdict. The first three are the ways it can report a non-result as a

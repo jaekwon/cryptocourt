@@ -484,3 +484,57 @@ func TestOverturnedAnswererDrawsNoSlice(cur realm, t *testing.T) {
 		t.Fatalf("the overturned answerer's bonus must be zero: got %d", got)
 	}
 }
+
+// The Finalize twin of TestSettleRetainsNothingAfterDustLowNoSlash (v0.45 gap 3).
+// Finalize's retention gate is `pendingSlash == 0 && !slotConsumed`, and the
+// !slotConsumed half was never discriminated: every existing Finalize fixture has
+// pendingSlash > 0 (which IMPLIES slotConsumed, so both clauses hold together) or
+// an unconsumed slot. Only a conclusive flag that consumes the slot WITHOUT
+// reserving a slash — a dust low, below the full bar — isolates it.
+func TestFinalizeRetainsNothingAfterDustLowNoSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fdl-alice")
+	bob := testutils.TestAddress("fdl-bob")
+	eve := testutils.TestAddress("fdl-eve")
+	c := testCourt(cur, "fdl1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(eve, 1_000_000_000) // >= demotionBar, < the full bar
+	c.params.escrowMinBlocks, c.params.escrowMaxBlocks = 10, 10
+
+	// A FAILED round leaves the claim Finalize-able with decidedRounds == 0.
+	id := stakeAnswerDispute(cur, "fdl1", alice, bob)
+	ab := AnswerBond("fdl1", id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "fdl1", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "fdl1", id)
+
+	// A dust LOW: conclusive (slot consumed, tier final) but below the full bar,
+	// so no slash is reserved — the state that isolates the !slotConsumed clause.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "fdl1", id)
+	testing.SetRealm(testing.NewUserRealm(eve))
+	VoteQuality(cross(cur), "fdl1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "fdl1", id)
+	cs := mustClaim(c, id)
+	if !cs.slotConsumed || cs.pendingSlash != 0 {
+		t.Fatalf("setup: slot consumed with NO slash reserved; got consumed=%v pending=%d",
+			cs.slotConsumed, cs.pendingSlash)
+	}
+
+	// A consumed slot admits no future flag, so no slash can follow: Finalize must
+	// withhold NOTHING. (Without the !slotConsumed clause it retains slashSizeFor
+	// against a slash that can never land, holding the answerer's coin to crystallize.)
+	if now := runtimeHeight(); now < cs.escrowUntil {
+		testing.SkipHeights(cs.escrowUntil - now + 1)
+	}
+	before := c.coin.BalanceOf(alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "fdl1", id)
+	if cs.answerBond != 0 {
+		t.Fatalf("nothing may be retained once the slot is consumed: %d", cs.answerBond)
+	}
+	if got := c.coin.BalanceOf(alice) - before; got != ab {
+		t.Fatalf("the whole bond must return at Finalize: got %d want %d", got, ab)
+	}
+}

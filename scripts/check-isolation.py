@@ -49,15 +49,31 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Everything `make realm-test` compiles, staged the same way it stages them.
-DEP = (os.path.join(REPO, "realm/p/checkpoint"),
-       "examples/gno.land/p/cryptocourt/checkpoint/v0")
-REALMS = [
-    (os.path.join(REPO, "realm/p/checkpoint"), "examples/gno.land/p/cryptocourt/checkpoint/v0"),
-    (os.path.join(REPO, "realm/p/grc20votes"), "examples/gno.land/p/cryptocourt/grc20votes/v0"),
-    (os.path.join(REPO, "realm/p/governor"), "examples/gno.land/p/cryptocourt/governor/v0"),
-    (os.path.join(REPO, "realm/r/govern"), "examples/gno.land/r/cryptocourt/govern"),
-    (os.path.join(REPO, "realm/r/offerer"), "examples/gno.land/r/cryptocourt/offerer"),
-]
+#
+# These lists are READ FROM THE MAKEFILE, not copied from it. They used to be a
+# hand-maintained copy, and they drifted: the packages list lost twap/cshares/
+# tickbook/curve and the realms list lost court/courtv2, so for its entire life
+# this check silently skipped the V2 realm — every line of the system under
+# active development — while still printing "all N tests across M packages pass
+# alone as well as together". A guard that measures less than it claims is worse
+# than no guard, so the coupling is now enforced rather than documented.
+def realm_sets():
+    mk = open(os.path.join(REPO, "Makefile")).read()
+    pkgs = re.search(r"for p in ([\w\s]+?); do", mk)
+    rlms = re.search(r"for r in ([\w\s]+?); do", mk)
+    if not pkgs or not rlms:
+        raise SystemExit("check-isolation: cannot read realm-test's package lists "
+                         "from the Makefile — the loops moved; fix this script")
+    return pkgs.group(1).split(), rlms.group(1).split()
+
+
+PKGS, RLMS = realm_sets()
+REALMS = (
+    [(os.path.join(REPO, "realm/p", p), f"examples/gno.land/p/cryptocourt/{p}/v0")
+     for p in PKGS]
+    + [(os.path.join(REPO, "realm/r", r), f"examples/gno.land/r/cryptocourt/{r}")
+       for r in RLMS]
+)
 
 
 def stage(root):

@@ -8,8 +8,20 @@ import (
 )
 
 func TestDirectoryTiers(cur realm, t *testing.T) {
-	admin := DirectoryAdmin() // the first court's creator, set across the suite
+	// The directory admin is whoever creates the FIRST court in the process
+	// (court.gno: `if directoryAdmin == "" { directoryAdmin = admin }`). This test
+	// used to read it as "set across the suite" and so depended on a neighbour
+	// having created one: run alone, `other` created the first court, became the
+	// admin itself, and the "a non-admin cannot curate" arm below asserted
+	// nothing. Seed the directory here so the admin is established either way.
+	seeder := testutils.TestAddress("dir-seeder")
+	testing.SetRealm(testing.NewUserRealm(seeder))
+	StartCourt(cross(cur), "dir-seed", "Directory Seed Court")
+	admin := DirectoryAdmin()
 	other := testutils.TestAddress("dir-other")
+	if admin == other || admin == "" {
+		t.Fatalf("the non-admin arm needs a real admin distinct from `other`: %s", admin)
+	}
 
 	testing.SetRealm(testing.NewUserRealm(other))
 	StartCourt(cross(cur), "dir-court", "Directory Court")
