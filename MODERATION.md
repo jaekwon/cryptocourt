@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.18 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.19 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,39 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.19 — moderation on a real node, and the read that contradicted its own
+  write path**. `kourtv2_moderation.txtar` asserts the §2 constitution through
+  the surface a reader actually meets — a node's `qrender` over RPC, not
+  `Render()`'s return value in-process. Covered: a hidden claim leaves the court
+  listing while its **deep link still renders with the banner naming the
+  authority**; the `/<slug>/mod` log is a real sub-route (carved out before the
+  numeric-id parse); unhide restores discovery; `GlobalHide` withholds text
+  while IDs, state and money keep answering; and a purge reaches **all four**
+  surfaces — `ClaimTitle`, the claim page, the court listing, and the
+  `/<slug>/<id>/<addr>` positions route, which was once the single render path
+  that skipped the text gate. Throughout, the lifecycle reads keep answering:
+  a moderator must never be able to strand a position. The appeal lifecycle is
+  **not** covered (answer → 72h → execute needs thousands of blocks; it lives in
+  `meta_test.gno`), and the file says so rather than implying coverage.
+
+  **Writing it immediately found a bug no unit test could have.** `IsCourtMod`
+  returned **false** for the creator of a court that had never been moderated —
+  while `HideItem(creator)` on that same court **succeeds**. Moderation state is
+  created lazily (`ensureMod` bootstraps the admin as a 1-of-1 on the first
+  act), so before any act there is no object to read, and the query answered
+  "no" where the write path answers "yes". Wrong in the direction that misleads:
+  a UI would tell the one person who can moderate that they cannot. `IsCourtMod`
+  and `ModThreshold` now report the set the write path will act on, and the mod
+  log page names the bootstrap moderator instead of only saying "no acts yet".
+  The unit suite never asked, because every unit test moderates first and
+  queries after; the txtar asked in the natural order a real user would.
+  **The general form:** lazily-created state gives every read a second branch —
+  *not yet materialised* — and that branch must answer what the write path will
+  do, not what is currently stored.
+
+  One small true thing recorded in the file: category codes come back
+  markdown-escaped (`CSAM\\-2258A`), because they go through `sanitize.InlineText`
+  like every other rendered string.
 - **v0.18 — kourtv2 had no filetest, so nothing guarded "a read that writes"**.
   Following v0.17's drift into the sibling guards. Two turned out fine and one
   did not:

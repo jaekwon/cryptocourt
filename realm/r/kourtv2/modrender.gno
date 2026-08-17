@@ -286,6 +286,11 @@ func renderModLog(slug string) string {
 	b.WriteString("# Moderation log — " + courtNameFor(c) + "\n\n")
 	b.WriteString("Every moderation act on this court is recorded here: who acted, what they did, and when. Moderation controls what is listed; it never moves a coin or changes a verdict.\n\n")
 	if c.mod == nil {
+		// Lazily created, so there is no object yet — but the set is not empty:
+		// the admin is the 1-of-1 until an act, an appointment or an election
+		// materialises one. Saying only "no acts yet" hid who could act.
+		b.WriteString("## Moderators\n\n1-of-1 — " + c.admin.String() +
+			" (the court's creator, until an election or an appointment changes it)\n\n")
 		b.WriteString("_No moderation acts yet._\n")
 		return b.String()
 	}

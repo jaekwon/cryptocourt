@@ -1,0 +1,153 @@
+# Moderation against a real node. The claim a unit harness cannot make: that the
+# CONSTITUTION holds through the actual render path a reader meets over RPC.
+#
+# MODERATION.md §2 says moderation is render-layer authority only — it controls
+# DISCOVERY, never money, and a hidden claim stays reachable by direct link. In
+# package kourtv2 that is asserted against Render()'s return value; here it is
+# asserted against what a node actually serves for a qrender path, which is the
+# only surface an attacker or a censored author ever sees.
+#
+# Specifically checked: a hidden claim leaves the court listing but its deep link
+# still renders with a banner; the moderation log is a real sub-route; a purged
+# claim's text is gone from EVERY surface including the /<slug>/<id>/<addr>
+# positions route, which was once the one render path that bypassed the text
+# gate; and the money reads keep answering throughout, because a moderator must
+# never be able to strand a position.
+#
+# NOT covered here: the appeal lifecycle (answer -> 72h settle -> execute). That
+# needs thousands of blocks, so it lives in realm/r/kourtv2/meta_test.gno.
+
+loadpkg gno.land/p/kourt/checkpoint/v0
+loadpkg gno.land/p/kourt/grc20votes/v0
+loadpkg gno.land/p/kourt/governor/v0
+loadpkg gno.land/p/kourt/twap/v0
+loadpkg gno.land/p/kourt/curve/v0
+loadpkg gno.land/r/kourt/kourtv2
+
+gnoland start
+
+env TEST1=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
+
+# --- A court, and two claims in it ---------------------------------------------
+# The creator bootstraps as the court's 1-of-1 moderator set, so test1 can
+# moderate its own court without any appointment.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# Claims cost a refundable CC deposit, so buy into the court's curve first.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args orem -args 'Is the sky blue?' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args orem -args 'Is water wet?' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.IsCourtMod(\"orem\", \"${TEST1}\")"
+stdout 'true'
+
+# Both claims are discoverable on the court page.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem"
+stdout 'Is the sky blue\?'
+stdout 'Is water wet\?'
+
+# --- Hide: DISCOVERY changes, reachability does not ----------------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func HideItem -args orem -args 1 -args 'off-topic' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.HiddenFromListing(\"orem\", 1)"
+stdout 'true'
+
+# Gone from the listing; its neighbour is untouched.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem"
+! stdout 'Is the sky blue\?'
+stdout 'Is water wet\?'
+
+# THE constitutional claim: the deep link still renders, with the banner naming
+# the authority, and the title is still there. Hiding is not deletion.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/1"
+stdout 'Hidden by this court.s moderators'
+stdout 'Is the sky blue\?'
+stdout 'reachable here'
+
+# And the money reads still answer for that claim — a moderator cannot strand a
+# position (I1/I2). The title read is the same one every surface goes through.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimTitle(\"orem\", 1)"
+stdout 'Is the sky blue\?'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimClosed(\"orem\", 1)"
+stdout 'false'
+
+# The moderation log is a real sub-route, carved out before the numeric-id parse.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/mod"
+stdout 'hide'
+
+# --- Unhide restores discovery -------------------------------------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func UnhideItem -args orem -args 1 -args 'resolved' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem"
+stdout 'Is the sky blue\?'
+
+# --- The global DAO: redaction, then purge -------------------------------------
+# The DAO bootstraps from the directory admin, which is the address that deployed
+# this realm — the same one that created the review court at init.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.DirectoryAdmin()"
+stdout ${TEST1}
+
+# GlobalHide withholds TEXT everywhere while IDs, state and money still render,
+# so a participant can always act on a position they hold.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func GlobalHide -args orem -args 1 -args 'DMCA-512c' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimTitle(\"orem\", 1)"
+stdout 'text withheld'
+! stdout 'Is the sky blue\?'
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/1"
+stdout 'Text withheld pending review'
+! stdout 'Is the sky blue\?'
+
+# Purge is the one power that removes text, and it must reach EVERY surface.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func PurgeClaim -args orem -args 1 -args 'CSAM-2258A' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimPurged(\"orem\", 1)"
+stdout 'true'
+
+# Surface 1: the single title read every other surface funnels through. The
+# category code arrives markdown-escaped ("CSAM\-2258A") because it goes through
+# sanitize.InlineText like every other rendered string — hence the loose match.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimTitle(\"orem\", 1)"
+stdout 'removed'
+stdout 'CSAM.*2258A'
+! stdout 'Is the sky blue\?'
+
+# Surface 2: the claim's own page.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/1"
+stdout 'Removed on legal grounds'
+stdout 'CSAM.*2258A'
+! stdout 'Is the sky blue\?'
+
+# Surface 3: the court listing.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem"
+! stdout 'Is the sky blue\?'
+
+# Surface 4: the POSITIONS route, /<slug>/<id>/<addr>. This one is the reason the
+# test exists — it takes an arbitrary address string, is reachable by anyone, and
+# was once the single render path that skipped the text gate, leaving purged text
+# publicly readable at a URL nobody thought to check.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/1/${TEST1}"
+! stdout 'Is the sky blue\?'
+stdout 'Your positions'
+
+# A purge removes TEXT and nothing else: the lifecycle read still answers.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimClosed(\"orem\", 1)"
+stdout 'false'
+
+# --- Suspension disarms the set without touching the claims --------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func GlobalSuspendSet -args orem -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtSuspended(\"orem\")"
+stdout 'true'
+
+# A suspended set cannot hide, but may still UNHIDE — clearing your own bits is
+# de-escalatory and survives suspension by design.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func HideItem -args orem -args 2 -args 'nope' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.HiddenFromListing(\"orem\", 2)"
+stdout 'false'

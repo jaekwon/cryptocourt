@@ -812,16 +812,29 @@ func CourtSuspended(courtSlug string) bool {
 }
 
 // IsCourtMod reports set membership (render shows the set; tests assert it).
+//
+// A court's moderation state is created LAZILY — ensureMod bootstraps the
+// admin as a 1-of-1 on the first act — so before any act there is no object to
+// read. Answering "no" then was wrong, and wrong in the direction that
+// misleads: HideItem(admin) SUCCEEDS on a court whose IsCourtMod(admin) said
+// false, so a UI would tell the one person who can moderate that they cannot.
+// The read now reports the set the write path will actually act on. Found by
+// the moderation txtar, which is the first thing to ask this question of a
+// court that had not been moderated yet.
 func IsCourtMod(courtSlug string, who address) bool {
 	c := mustCourt(courtSlug)
-	return c.mod != nil && c.mod.members.Has(who.String())
+	if c.mod == nil {
+		return who == c.admin
+	}
+	return c.mod.members.Has(who.String())
 }
 
-// ModThreshold returns a court's m and n.
+// ModThreshold returns a court's m and n — 1-of-1 before the set materialises,
+// for the same reason IsCourtMod does.
 func ModThreshold(courtSlug string) (m, n int) {
 	c := mustCourt(courtSlug)
 	if c.mod == nil {
-		return 0, 0
+		return 1, 1
 	}
 	return c.mod.m, c.mod.n
 }
