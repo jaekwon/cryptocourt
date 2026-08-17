@@ -1610,6 +1610,60 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.45 — test-gap sweep: pinning guards that would have survived deletion.** A
+  dedicated completeness critic asked not "is the code right" but "which guarantees are
+  UNPROVEN — which guards would survive being deleted?" It found several money-path
+  guards standing behind fixtures that satisfy every clause at once and therefore pin
+  none of them — the same non-discriminating shape the v0.44 vet caught in this
+  session's own regression. **No source logic changed; these are proofs, not fixes.**
+  Every item below was verified by explicitly mutating the guard and confirming the new
+  test fails (and, where noted, that the old one did not):
+  - **A decided verdict cannot be silently flipped back** (highest value). TWO separate
+    permissionless entrypoints could reassign `provisional` from the overturn winner
+    back to the answer, redirecting the entire winners' slice and locking the true
+    winners out of `WithdrawBonus` — and both guards were unpinned. `SettleUndisputed`'s
+    `disputeOpen || round > 0`: the only fixture settled while the dispute was OPEN, so
+    both clauses held; since `disputeOpen ⟹ round > 0`, only a RESOLVED round isolates
+    the load-bearing clause. `ResolveDispute`'s `if firstResolution` in the
+    failed-quorum branch: every fixture already had `provisional == answer`, making the
+    assignment a no-op and the guard invisible. `TestOverturnedVerdictCannotBeFlippedBack`
+    drives overturn → refused settle → failed reopen → finalize → crystallize and
+    asserts the verdict holds at each step AND that the money follows it. Both mutants
+    die.
+  - **`Crystallize` refuses while a slash is in flight.** The gate
+    `flagOpen || counterOpen || pendingSlash > 0` had NO test at all. Without it,
+    crystallize would zero `answerBond` mid-slash and a later winning counter-flag
+    (`refundSlash` credits the reserve back) would restore coin to a field nothing pays
+    out again — stranding it in escrow permanently. `TestCrystallizeRefusesWhileSlashPending`
+    reaches the state where the pending slash is the ONLY remaining blocker (the 24 h
+    quiet window closes ~6 days before the counter window), asserts the refusal, then
+    closes the window and proves escrow drains to zero.
+  - **The burned deposit cannot resurrect.** `TestCrystallizeLowTierZeroDrawCarrotStillPays`
+    asserted `cs.deposit == 0` after crystallize — trivially true in both worlds, since
+    Crystallize zeroes the field *after* paying. So dropping the burn-site zeroing would
+    have refunded an already-burned deposit to the author **out of staked principal**,
+    invisibly. Now asserts the author's balance and total supply are unchanged across
+    Crystallize, plus escrow drains to zero. The old assertion did not catch the mutant;
+    the new one does.
+  **CORRECTION — the isolation guard measures less than it claims.**
+  `scripts/check-isolation.py`'s `REALMS` list stages only 3 `p/` packages
+  (checkpoint, grc20votes, governor) and 2 `r/` realms (govern, offerer), while its own
+  comment says "everything `make realm-test` compiles" — which is 7 `p/` + 4 `r/`,
+  **including courtv2**. So its cheerful "all 151 tests across 5 packages pass alone as
+  well as together" has never included the V2 realm, and earlier changelog entries
+  citing isolation as cover for courtv2 work (v0.42–v0.44) overstated it; the line in
+  v0.44 is corrected in place. Nothing regressed — the claim was simply weaker than
+  written. Registered as the next tooling fix (extend `REALMS` to the full realm-test
+  set, then work through whatever order-dependence it exposes). Note also that
+  `make isolation-test` currently fails outright for an unrelated environmental reason:
+  a second worktree (`cryptocourt-mod`, branch courtv2-moderation) stages into the SAME
+  `$GNOROOT/examples/.../cryptocourt` path and `rm -rf`s it on exit, deleting this run's
+  staged tree mid-copy. Per-worktree GNOROOT (or staging dir) is the durable fix.
+  Remaining registered gaps from the same sweep (lower value, none a known defect): the
+  F9/Q7 bonus caps never bind in any fixture; the conclusive-low half-burn branch
+  (full bar, low in [½, ⅔)) is untested; `Finalize`'s `!slotConsumed` reserve clause has
+  the same non-discriminating shape as the settle one did (timing-only money); the P2
+  per-voter carrot clamp never binds.
 - **v0.44 — retention symmetry closed, and a mutation-tested guard.** With v0.43 shipped,
   `SettleUndisputed` was left the *less* precise sibling: it retained a reserve
   unconditionally, including when the flag slot was already consumed or a slash was
@@ -1634,8 +1688,10 @@ Newest first.
   Verified by explicit mutation — with `!slotConsumed` deleted, the old test PASSES and
   `TestSettleRetainsNothingAfterDustLowNoSlash` FAILS. §12 row 35 restated around the
   real invariant ("a slash can still land"), naming which clause carries it and which is
-  defence-in-depth. `make check` + txtar + **isolation (151 tests, 5 packages, alone and
-  together)** green.
+  defence-in-depth. `make check` + txtar green, and `make isolation-test` green —
+  **but see the correction in v0.45: that guard does NOT stage courtv2**, so it never
+  covered any of this work. The mutation checks, not isolation, are what carry these
+  claims.
 - **v0.43 — the SECOND Finalize twin: the missing slash reserve (HIGH), fixed +
   vetted.** The v0.42 vet surfaced an orthogonal twin in the same function, found by
   chasing the same meta-pattern ("a guard added to one sibling but not the other").

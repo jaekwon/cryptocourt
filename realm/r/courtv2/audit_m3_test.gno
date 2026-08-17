@@ -138,6 +138,68 @@ func TestSettleRetainsNothingAfterConsumedSlot(cur realm, t *testing.T) {
 	}
 }
 
+// TestCrystallizeRefusesWhileSlashPending covers the crystallize gate
+// `flagOpen || counterOpen || pendingSlash > 0`, which had NO test at all
+// (audit convergence v0.45). `pendingSlash > 0` is its load-bearing clause
+// (counterOpen implies it). Without the gate, Crystallize would zero answerBond
+// while a slash is still in flight, and a later winning counter-flag (refundSlash
+// credits the reserve back to answerBond) would restore coin to a field nothing
+// pays out again — stranding the answerer's reserve in escrow permanently.
+func TestCrystallizeRefusesWhileSlashPending(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cqp-alice")
+	bob := testutils.TestAddress("cqp-bob")
+	carol := testutils.TestAddress("cqp-carol")
+	c := testCourt(cur, "cqp1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cqp1", "Junk with a slash in flight")
+	matureOI(cur, "cqp1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cqp1", id, sideYES)
+
+	// A conclusive-low slash-grade flag reserves a slash; settle makes the verdict
+	// final, so every OTHER crystallize precondition is satisfied.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "cqp1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "cqp1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "cqp1", id)
+	SettleUndisputed(cross(cur), "cqp1", id)
+	cs := mustClaim(c, id)
+	if cs.pendingSlash <= 0 || cs.flagOpen || cs.counterOpen {
+		t.Fatalf("setup: only the pending slash may block; pending=%d flag=%v counter=%v",
+			cs.pendingSlash, cs.flagOpen, cs.counterOpen)
+	}
+
+	// The 24h quiet window closes ~6 days before the counter-flag window, so the
+	// pending slash is the ONLY remaining blocker at this height.
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "quality question is still open", func() {
+		Crystallize(cross(cur), "cqp1", id)
+	})
+	if cs.crystallized {
+		t.Fatal("a refused Crystallize must not mark the claim crystallized")
+	}
+
+	// Close the window: the slash burns, the draw crystallizes, and nothing is
+	// stranded — escrow drains to zero once the stake is withdrawn.
+	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	ResolveSlashWindow(cross(cur), "cqp1", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SkipHeights(periodBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cqp1", id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	WithdrawStake(cross(cur), "cqp1", id, sideYES)
+	if got := c.coin.BalanceOf(c.escrow); got != 0 {
+		t.Fatalf("escrow must drain to zero, nothing stranded: %d", got)
+	}
+}
+
 // TestSettleRetainsNothingAfterDustLowNoSlash pins the LOAD-BEARING half of that
 // gate. Because the slash carve happens after the slot latch on one straight-line
 // path, pendingSlash > 0 always implies slotConsumed — so the test above satisfies
