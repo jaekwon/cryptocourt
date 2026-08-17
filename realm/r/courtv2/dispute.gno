@@ -372,8 +372,15 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 
 	cs.verdictAt = now
 	cs.route = "vote"
-	if !cs.tierFinal {
-		cs.tier = tierMidX // the default; a conclusive tally (ride or flag) already set it otherwise
+	// The default mid tier — UNLESS a conclusive tally already set it. A
+	// slash-grade conclusive-low flag leaves slotConsumed=true but tierFinal=false
+	// for its counter-flag window (quality.gno slashGrade branch), and a failed
+	// dispute round keeps verdictAt=0/decidedRounds=0 so Finalize is reachable
+	// in that window. Without the slotConsumed guard this clobbers LOW→MID and a
+	// junk claim draws full mid emission — the exact twin of the v0.40
+	// SettleUndisputed fix (session.gno), which this mirrors.
+	if !cs.tierFinal && !cs.slotConsumed {
+		cs.tier = tierMidX
 	}
 	if cs.answerBond > 0 {
 		// The answer stood (an overturned bond was burned at its round).

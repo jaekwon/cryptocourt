@@ -1610,6 +1610,31 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.42 — convergence re-sweep: the Finalize tier-reset twin (HIGH), fixed +
+  vetted.** Per "any applied change resets the sweep," a fresh holistic pass after
+  v0.41 re-vetted the math commit SAFE and found a genuine HIGH: `Finalize`
+  (dispute.gno) reset the quality tier guarded only by `!cs.tierFinal` — the
+  UNTREATED TWIN of the v0.40 `SettleUndisputed` fix (session.gno, which got
+  `&& !cs.slotConsumed`). Reachable exploit: a mill's junk claim survives a FAILED
+  dispute round (which keeps verdictAt=0/decidedRounds=0), is flagged slash-grade
+  conclusive-LOW (which leaves slotConsumed=true but tierFinal=false for the
+  counter-flag window), then `Finalize` runs in that window and clobbers the tier
+  LOW→MID → the junk claim draws full mid-tier emission at Crystallize, breaking the
+  D=0 invariant the tier-low mechanism exists to guarantee. FIX: mirror the sibling
+  guard exactly (`if !cs.tierFinal && !cs.slotConsumed`). Proven load-bearing —
+  regression `TestConclusiveLowSurvivesLateFinalize` fails on the exact tier-clobber
+  assertion with the guard reverted, passes with it. Adversarial vet:
+  **FIX-CORRECT-AND-COMPLETE** — tierFinal/slotConsumed are one-way latches, so the
+  new clause is dead for every conclusive mid/high/non-slash outcome (all already set
+  tierFinal=true) and live ONLY for slash-grade-low (where tier must stay low); no
+  third unguarded quality-tier site (directory.gno's `Court.tier` is unrelated
+  curation state); the slash-window closers touch only tierFinal, and the
+  bond/coin accounting is untouched. `make check` (11 suites + doc guards) +
+  txtar-test green. The vet surfaced a SECOND, orthogonal twin — `Finalize` refunds
+  the FULL answer bond with no slash reserve (unlike SettleUndisputed's M3-HIGH-1
+  retention), so a claim flagged slash-grade-low AFTER a failed-round Finalize
+  slashes nothing (a deterrent gap; D=0 still holds and no funds are mis-sent) —
+  registered as the next convergence round.
 - **v0.41 — adversarial overflow/underflow math audit (owner-directed).** A
   dedicated fresh-eyes pass over every arithmetic site — `×Bps`, `×10000`,
   `×2`/`×3`, all subtractions, the u128 conviction integrals — from an attacker's
