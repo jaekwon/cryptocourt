@@ -49,18 +49,22 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Everything `make realm-test` compiles, staged the same way it stages them.
-# DERIVED from the Makefile, deliberately, because the hand-maintained version
-# of this list drifted and nothing noticed: it swept 151 tests while realm-test
-# compiled 388, and every package it skipped was the newer half of the tree
-# (kourtv1, kourtv2, p/twap, p/cshares, p/tickbook, p/curve). A gate whose scope
-# is maintained by hand fails open — a passing run looks identical whether it
-# covered everything or a third of it, and the only symptom is a count that
-# stops moving.
+# DERIVED from the Makefile, not copied from it. The hand-maintained copy
+# drifted and nothing noticed: it swept 151 tests while realm-test compiled 388,
+# and every package it skipped was the newer half of the tree (kourtv1, kourtv2,
+# p/twap, p/cshares, p/tickbook, p/curve) — i.e. the system under active
+# development. A guard that measures less than it claims is worse than no guard,
+# because a passing run looks identical either way and the only symptom is a
+# count that stops moving. So the coupling is now enforced rather than
+# documented.
+#
+# (Both sessions working this repo found this independently, in the same week,
+# and reached the same fix. Treat that as evidence about the failure mode rather
+# than about either reader: hand-maintained scope lists fail open, silently.)
 #
 # Parsing a Makefile is not elegant, but it fails LOUDLY: if either loop stops
 # matching, realms() raises and the sweep refuses to run, where the previous
-# arrangement just quietly swept less. One source of truth, and it is the same
-# one the build uses.
+# arrangement just quietly swept less.
 def realms():
     mk = open(os.path.join(REPO, "Makefile")).read()
     pkgs = re.search(r"for p in ([\w \t-]+); do", mk)

@@ -1508,7 +1508,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 28b | **Draw-proportional slash — ADOPTED v0.40** (three-designer convergence + code-audit) | `slash = min(bond, max(4.5%·X̄ floor, 1.6·midGross))`, midGross = winning-pool mid draw (the mill's would-be take). Drags the patient 12-wk mill q\* 0.45→0.22 and flattens the hold-time curve; floor keeps the fast-claim deterrent; clamped to the bond (invariant guarantees the draw arm fits at the hot-rate max) | Residual: idle-capital q\* floors at ~0.27 — the answer-bond ceiling structurally caps idle-capital deterrence (V3 weight-at-risk frontier); a bigger k would just permanently clamp |
 | 37 | **deposit / fee (econ-vet P7 v0.39)** | **1 CC / 0.1 CC — no change.** Owner-available lever: 1→5 CC drops typical q\* 0.22→0.15, patient 0.45→0.37, honest-claim-safe (refunded on default-mid) | Not applied: it taxes honest thin-claim openers to chase a mill that is economically the intended p=1 reward, and can't close the patient gap without an ~18 CC wall. Pull it if tighter absolute-EV margins are wanted pre-launch |
 | 29 | Answer-bond custody (v0.35) | Bond stays escrowed through UPHELD rounds, returning only at VERDICT_FINAL — reopens stay collateralized; comp arms read the posted magnitude | V1's return-at-each-decision frees honest capital ~1–3wk sooner but leaves reopen rounds with nothing at stake (comp anchor = 0) |
-| 30 | provClose reachability (v0.35) | Kept V1's window geometry: with 1-week votes, 3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds and Finalize the defaulted verdict | Stretching small-claim escrows to fit round 3 delays every honest small claim ~2 extra weeks to serve a rare griefing path |
+| 30 | provClose reachability (v0.35; **premise corrected v0.49**) | Kept V1's window geometry. The original rationale — "3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds" — is **FALSE on any court past bootstrap**: `escrowWindow` adds `X̄·Price(minted)/5e8` days over a `room` of only (362880−120960)/17280 = **14 days**, so the window pins at the 3-week `escrowMaxBlocks` as soon as `X̄·Price ≥ 7e9` — which a modest claim clears once the curve has any real price. So three failed rounds fit on essentially EVERY claim, not just large ones, and provClose is correspondingly more reachable than this row claimed. The griefing path it dismisses as rare (≈3.5×base ≈ 70 CC of net burn buys three quorum-less rounds → provClose → the whole draw zeroed) is therefore live court-wide | Left as-is pending an owner decision: capping `extraDays` would restore the documented geometry but re-opens the "honest small claims wait 3 weeks" cost the row was written to avoid, and the fix belongs with the dispute-bond pricing rather than the window alone |
 | 32 | Crystallize gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
 | 33 | Cap-dust disposition (v0.36) | Scale-then-cap dust and cap-cut remainders stay juniorReserved and UNMINTED forever — economically a burn, always under the ceiling | Returning dust to R needs per-claim pull tracking (a walk) or a sweep entrypoint; the leak is bounded per claim by D and only reduces emission |
 | 34 | Carrot enqueue ordering (v0.36) | Per-voter senior entitlements enqueue at PullCarrot time (FCFS by pull), not at crystallize — avoids walking the voter set | Earlier pullers sit earlier in the senior queue; amounts are unaffected (never scaled), only payout timing |
@@ -1610,6 +1610,142 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.50 — the ride lane could not levy a slash (HIGH, reproduced); origination and
+  disposal now share one site.** A fresh sweep found, and I reproduced, that v0.47 shut
+  `slashGrade`'s door to purchased immunity and left `resolveQualityRide`'s wide open.
+  `pendingSlash` had exactly ONE origination site (ResolveFlag's slashGrade branch), while
+  a conclusive ride latches `slotConsumed` — a one-way latch `OpenFlag` refuses forever. So
+  **a full-bar ⅔-low verdict delivered on the RIDE permanently foreclosed the only path
+  that could levy the slash it had just voted for.** The mill sock-disputes in the block
+  after the answer (votingBlocks 7 d > settleDelay 72 h, so no flag can have resolved, and
+  OpenFlag refuses while `disputeOpen`); the honest crowd then does exactly what the
+  mechanism asks — upholds the true answer, votes the junk claim low — and thereby DESTROYS
+  the slash. Measured: `pendingSlash=0` where 18 000 000 was owed. Price ~4 %·X̄ (the sock's
+  burned dispute bond less minted comp) to avoid up to 30.8 %·X̄ — **v0.47's exact purchase
+  through a different door**, again below the 4.5 %·X̄ flat floor. My blind spot precisely:
+  v0.47 used "slotConsumed ⇒ ResolveFlag unreachable" as PROOF the `decidedRounds` clause
+  was redundant and never asked whether the conclusive-ride branch was itself safe, and
+  `TestDecidedRoundBuysNoSlashImmunity` asserts the ride is INCONCLUSIVE — scoped away from
+  this exact state.
+  **Three reviewers on identical prompts converged 3–0 on "let the ride originate"**, and
+  each contributed a guard the others missed:
+  - **`slashLevied`** — a one-way, exactly-once-per-claim latch across BOTH lanes. The flag
+    lane was bounded by `slotConsumed`; the ride is not, so a reopen chain levied a fresh
+    `slashSizeFor` out of the REMAINING bond every round (reachable inside a 3-week escrow:
+    round 1 fails @7 d, flag resolves @14 d, window closes @21 d, reopen @21 d < 28 d).
+    Mutation-demonstrated: without it a second 18 000 000 is carved from the 182 000 000
+    remainder.
+  - **`slashFlagger`** — the bounty beneficiary recorded AT origination. `settleSlash` must
+    not fall back to `cs.flagger`, which on a ride path is either the zero address —
+    `grc20votes.Mint` calls `mustBeValid` and PANICS, so the entitlement is unpayable
+    forever while `reservedTail` (monotone, written only as `mustAdd`) has already advanced,
+    permanently shrinking `reservoirR` for **every later junior draw in the court** — or a
+    STALE flagger from an earlier inconclusive cycle whose bond already came back whole
+    under T1, who would then mint a bounty for a slash the RIDE levied. I verified both legs
+    (`mustBeValid` rejects the empty address; `reservedTail` has exactly one write site).
+  - **the originate/dispose split** — `disposeSlashOnRide` scores a reserve the round
+    INHERITED; one the round's own ride just levied gets its counter-flag window instead.
+    Running both on the same tally settles the slash in the very call that levied it, with
+    no window and no Q5 challenge. Mutation-demonstrated.
+  Also shipped: a conclusive-LOW **ride now burns deposit+fee** like the flag lane
+  (`burnConclusiveLowDust`, shared) — skipping them refunded the junk author at crystallize
+  on exactly the claims the crowd demoted; and origination is a single shared
+  `originateSlash` used by both lanes, so the two can no longer drift, the same "one sizer,
+  two callers" discipline `slashSizeAt` established in v0.46. `tierFinal` stays false while
+  a ride-levied reserve stands, preserving the answerer's one v0.31/Q5 counter re-vote.
+  All four guards mutation-verified; `make check` + txtar green; **no existing test needed
+  changing**, which is itself evidence no fixture had ever covered the ride's low path.
+  **Registered, NOT fixed — three residuals from the same family, each needing its own
+  vet:** (1) `parkCounter` clears `counterUsed`, the sole gate on `CounterFlag`, so an
+  answerer's own sock can re-mint the one-shot Q5 challenge at ~4 %·X̄ a shot (bounded at
+  3–4 by `escrowUntil`) — the v0.48 implementation vet found this, and `audit_m3_test.gno`
+  currently ASSERTS the extra challenge as correct; (2) `slotConsumed` latches on a DUST low
+  at the supply-floorless `demotionBar` in both lanes, so ~X̄/4 of sock weight self-flags,
+  gets the bond back whole plus ~0.88 CC of minted bounty, and permanently disarms the
+  full-bar slash at a NET PROFIT; (3) the quality RIDE has no vote deadline — `VoteQuality`
+  guards `flagVoteEnd` and `counterVoteEnd` but not the dispute case, which since v0.48
+  makes a ~30 %·X̄ decision a mempool race. Counting v0.47, that is **four doors to the same
+  purchase**, which says the defect was never any single gate but that origination and
+  disposal did not share a predicate — now they do.
+- **v0.49 — the isolation guard was measuring less than half the system.**
+  `scripts/check-isolation.py` kept its package list as a hand-maintained COPY of the
+  Makefile's, and the two drifted: it staged 3 `p/` + 2 `r/` packages while
+  `make realm-test` compiled 7 + 4. So **courtv2 — the realm under active development,
+  every line of V2 — was never checked at all**, for its entire life, while the guard
+  kept printing "all 151 tests across 5 packages pass alone as well as together". A guard
+  that reports success while measuring nothing is worse than no guard; it is also the
+  exact failure `make selftest` exists to catch, and no control was armed for it.
+  **Fixed at the root:** the lists are now READ FROM the Makefile rather than copied, so
+  drift is structurally impossible; if those loops ever move, the script exits loudly
+  instead of quietly reading a shorter list. A dead `DEP` binding went with it. Coverage:
+  **5 packages → 11, 151 tests → 343.** A new selftest control breaks the Makefile
+  coupling on purpose and requires the guard to notice (verified it fires).
+  **What the widened sweep found:** exactly one order-dependent test, and it was a
+  genuinely vacuous assertion — V1's `TestDirectoryTiers` opened with
+  `admin := DirectoryAdmin() // set across the suite`, depending on a NEIGHBOUR having
+  created the first court. `directoryAdmin` is set to the first court's creator, so run
+  alone the address the test calls `other` created the first court, became the admin
+  itself, and the "a non-admin cannot curate" arm expected an abort that could never
+  fire. It passed in company for the wrong reason. Now the test seeds the directory from
+  a distinct address and asserts `admin != other`, so the arm can never silently
+  degenerate again. Test-only: no V1 realm code touched. All ~190 newly-covered courtv2
+  tests pass alone — worth stating, since many of them assert exact bond and slash
+  arithmetic written during v0.40–v0.48.
+  Final board: **all 343 tests across 11 packages pass alone as well as together.**
+  **Two of the four v0.45 test gaps closed in the same pass**, both mutation-verified:
+  - `TestFinalizeRetainsNothingAfterDustLowNoSlash` — Finalize's retention gate is
+    `pendingSlash == 0 && !slotConsumed`, and the `!slotConsumed` half was never
+    discriminated: every existing fixture either had `pendingSlash > 0` (which IMPLIES
+    slotConsumed, so both clauses held together and neither was pinned) or an unconsumed
+    slot. Only a conclusive flag that consumes the slot WITHOUT reserving a slash — a
+    dust low — isolates it. Dropping the clause now withholds 22.5 M against a slash that
+    can never land, and the test catches it. This is the Finalize twin of the exact
+    non-discriminating shape the v0.44 vet caught in this session's own work.
+  - `TestConclusiveLowBelowTwoThirdsHalfBurnsTheBond` — the T2 "failed slash attempt"
+    branch had NO test: every conclusive-low fixture was either slash-grade (full bar AND
+    ≥⅔ low) or below the full bar (dust low, T1 full return), so the band between them was
+    never exercised. The new fixture sits at `qLowW/turnout` = 10/18 — median-low but short
+    of ⅔ — at full-bar turnout, and pins that the flagger pays half the bond. (My first
+    version asserted the wrong burn total; the supply also drops by the deposit+fee every
+    conclusive low carries, independent of the slash question. Corrected against the
+    measured 5.1 M rather than argued.)
+  **Third v0.45 gap resolved — and it was not a missing test.** "The F9/Q7 bonus caps
+  never bind in any fixture" turns out to be because they are **unreachable**, not
+  because the fixtures are weak. `capBonus`'s bound is `tier·(positionRaw/openBlocks)/2`
+  = HALF the position's time-averaged stake at mid tier (`tierMidX == 1`), while the
+  gross it caps is conviction-scaled and bounded at ≤19.27%·X̄ over a 12-week life — the
+  *same* 0.1927-vs-0.5 relationship that keeps the answer bond above the slash. The ratio
+  `gross/bound` is `2·rate·openBlocks`, so binding needs `openBlocks > 1/(2·rate)` ≈ 1.1e7
+  blocks ≈ **91 weeks**, far past the 12-week dead-claim timeout `PostAnswer` now
+  enforces (v0.48). Measured at the most extreme legal shape — stake 100k CC, bank
+  conviction, unstake (F9 keeps it), then age the claim 10 of its 12 permitted weeks so
+  `openBlocks` dilutes `rawAvg` — the headroom is still **~9×** (bound 2.0e10 vs gross
+  2.2e9). Higher tiers only double the bound. `TestF9CapHeadroomAtTheExtreme` pins the
+  RELATIONSHIP rather than a number, so if rates, windows, or the timeout ever change
+  enough to invert it, F9 starts binding honest positions and the test says so.
+  (Methodology note worth keeping: the first version of this probe read the position's
+  conviction BEFORE `WithdrawBonus`, which calls `accrue()` to settle it — the stale read
+  was 0.15% low and made an equality assertion lie. Read settled state after the call.)
+  **Fourth v0.45 gap closed, with a different answer from F9.** The P2 per-voter carrot
+  clamp (`b0/2 - 1`) bites a sole voter when `carrotTotal` = 7%·midGross exceeds 1%·X̄,
+  i.e. `midGross > 14.3%·X̄`. Measured on a cold court at 11 of the 12 permitted weeks:
+  only **49%** of the clamp (carrotTotal 4.91e8 vs clamp 1.00e9). The limiter is not the
+  claim's age but the RATE — `dEffBpsFP = min(curBudgetBpsFP, dReal)` where `dReal` is the
+  EMA'd **realized** mint rate, so a single-claim court that emits almost nothing sits at
+  the cold r0 (~63.8 bps/wk), and `emaMinted` decays by ¾ every roll so it cannot be
+  seeded either. On a BUSY court at the hot rate `midGross/X̄ ≤ 19.27%` gives
+  `carrotTotal` = 1.35%·X̄ against a 1%·X̄ clamp, so **P2 does bind in production** —
+  unlike F9, which is unreachable at any rate. `TestP2CarrotClampBindsForASoleVoter`
+  therefore asserts the cold-court measurement as a guard (if natural flow ever reaches
+  the clamp, build the natural fixture) and then exercises the clamp directly by crafting
+  a carrot above it. Mutation-verified: without the clamp the sole voter takes 3.00e9
+  instead of 1.00e9.
+  **All four v0.45 test gaps are now closed** — two by writing the missing fixture, two by
+  establishing reachability first and pinning the relationship that governs it.
+  Also corrected in this pass, both by verification rather than assumption: §12 row 30's
+  provClose-reachability premise (false on any court past bootstrap — see the row) and
+  v0.46's "the flag bounty does not rise under B" residual (stale — B fixed it; see the
+  v0.46 entry).
 - **v0.48 — the unslash leg: opening a dispute no longer forgives an adjudicated
   slash.** The second half of v0.47's hole, flagged by all three reviewers. `OpenDispute`
   called `unslash` UNCONDITIONALLY — before a single vote — so a **zero-vote,
@@ -1757,9 +1893,15 @@ Newest first.
   repro still passes without B (proving A and B cover different ground and no single
   fixture could pin both). `make check` + txtar green.
   **Registered residuals** (named, not hidden): B raises `quorumFloor`/`fullBar` ~2× and
-  pins `escrowWindow` at its cap on drained claims; the flag **bounty** does NOT rise
-  under B (that arm is pinned by 80%×(deposit+fee)) — the **carrot** does, ~1 → ~999 CC,
-  and that is where policing pay actually lives; a self-dispute-upheld path buys a mill
+  pins `escrowWindow` at its cap on drained claims. **Corrected v0.49:** the claim that
+  "the flag bounty does NOT rise under B" is imprecise and was carried over from the
+  pre-B analysis. `bountyFor(bond, burns)` caps at the flagger's OWN bond
+  (`flagBondFor` = 2%·X̄frozen), and `PullCarrot`'s per-voter clamp keys off the same
+  `b0` — so once B redefined `xBarFrozen` as `max(3h, lifetime)`, **both** the carrot
+  AND the slash-path bounty price off the honest lifetime size on a drained claim. Only
+  the DUST-LOW branch stays pinned at 80%×(deposit+fee), and correctly so: no slash
+  burned there, so there is nothing to pay a bounty out of. Policing pay on drained
+  claims is therefore resolved by v0.46, not an open residual; a self-dispute-upheld path buys a mill
   permanent slash immunity for ~4 CC net (`decidedRounds=1` gates `slashGrade` off)
   — its own finding, not addressed here; and §12 row 30's "small claims cap at 2 failed
   rounds" premise is false on any court with real `minted`, since `escrowWindow` is

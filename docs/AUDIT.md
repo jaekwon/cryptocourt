@@ -513,3 +513,54 @@ uses 3h. One item is a genuine product call left to the owner: §3.4 says the ba
 claim itself — never 'uphold the answer'", but the shipped governor vote (and the wireframe
 faithfully) frames it as "OVERTURN the answer?" — code and doc-principle disagree, and which
 should win is an epistemic-design decision, not a typo.
+
+---
+
+## `r/cryptocourt/courtv2` (V2) — economic hardening, v0.40–v0.49
+
+**Scope note, so absence is not read as clearance.** Everything above audits the `/p/`
+packages and the V1 `r/cryptocourt/court` realm. V2 lives under `realm/r/courtv2/` and its
+decision record is `PLAN.md` §13, which carries the reasoning, the rejected alternatives and
+the measured numbers. This section exists so that a reader of the authoritative audit record
+does not conclude V2 was audited clean merely because it was not mentioned.
+
+**Two CONFIRMED economic vulnerabilities, both reproduced with concrete numbers before any
+fix was written, both now fixed.**
+
+| # | Finding | Measured | Fix |
+|---|---|---|---|
+| V2-H1 | The anti-mill slash is sized off LIFETIME conviction but was collateralized by a bond sized off a 3-HOUR trailing stake average — and `Unstake` is free, permissionless, and KEEPS conviction (F9). Draining to `minAnswerX` two hours before answering nullified the v0.40 deterrent | bond **50 CC** against **11 220 CC** of earned slash exposure — a **224×** shortfall; break-even detection moved 0.385 → **0.99**, profitable at 90 % detection | v0.46: `xBarFrozen = max(3h trailing, lifetime time-averaged stake)` (the P6 base, drain-resistant), plus a collateralization floor in `PostAnswer` using the SAME sizer `ResolveFlag` later draws with |
+| V2-H2 | `slashGrade` required `decidedRounds == 0`, so ONE decided dispute round retired the slash permanently. A sock-wallet dispute deliberately lost cost ~3–4 %·X̄ after comp — **below even the 4.5 %·X̄ flat slash floor**, so buying immunity dominated at every hold time | ~4 %·X̄ buys off up to **30.8 %·X̄**; the repo already contained the attack as a fixture (`TestWeightlessContestEarnsNoCredential`) which asserted only that the CREDENTIAL was denied while the same round granted the SHIELD | v0.47: clause deleted (it was redundant — `slotConsumed` and the overturn's `answerBond = 0` already cover every case v0.28 wrote it for); v0.48: `OpenDispute` no longer forgives an adjudicated slash, the round's OUTCOME disposes it |
+
+**Structural fixes alongside.** A dead-claim answerability gate (conviction accrued
+indefinitely on unclosed claims, so past ~19.5 weeks the draw arm crossed the bond **on a
+perfectly constant pool**, no drain required); `mustInvariants` demoted from a safety proof
+to a calibration, since a check over constants cannot carry a runtime guarantee; and
+`Finalize`'s retention gate made character-identical to `SettleUndisputed`'s, closing the
+sibling asymmetry that had produced two prior HIGHs (a guard added to one twin but not the
+other — the recurring shape in this codebase).
+
+**Method, for reproducibility.** Design decisions went to three subagents on identical
+prompts, iterated to convergence (both V2-H2 and the X̄ base split 2–1 on the first round and
+converged 3–0 on the second, in each case reversing the initial majority). Every guard is
+mutation-verified: the guard is reverted and the test must fail, because a test that passes
+with the guard deleted proves nothing. Where a "missing test" turned out to be an
+unreachable code path (the F9 bonus cap needs ~91 weeks against a 12-week claim life), the
+artifact is a test pinning the governing RELATIONSHIP rather than a contrived fixture that
+would pass while proving nothing about the deployed configuration.
+
+**Tooling defect found and fixed (v0.49).** `scripts/check-isolation.py` kept its package
+list as a hand-maintained copy of the Makefile's; they had drifted, so the guard staged 5 of
+11 packages and **never checked courtv2 at all** while printing "all 151 tests across 5
+packages pass alone as well as together". The list is now read from the Makefile, coverage is
+**343 tests across 11 packages**, and a `selftest` control breaks the coupling on purpose and
+requires the guard to notice. The one order-dependent test it exposed was a vacuous assertion
+in V1's `TestDirectoryTiers` (it depended on a neighbour creating the first court; run alone,
+the address it called a non-admin *became* the admin, so its expected abort could never fire).
+
+**Open, awaiting an owner decision.** §12 row 30's provClose-reachability premise is false on
+any court past bootstrap: `escrowWindow` pins at its 3-week cap once `X̄·Price ≥ 7e9`, so
+three failed rounds fit on essentially every claim and the ~70 CC "three quorum-less rounds →
+draw zeroed" grief is live court-wide rather than rare. The row is corrected; the behaviour is
+deliberately unchanged, because capping `extraDays` trades that against the "honest small
+claims wait 3 weeks" cost the row exists to avoid.

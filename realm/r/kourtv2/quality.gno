@@ -343,6 +343,28 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 	// The dust-low dispositions land NOW, exactly once: the deposit is
 	// slashed and burned, the fee burns, and the bounty — burn-dominated,
 	// min(bond, 80% × what actually burned) — senior-queues to the flagger.
+	burns := burnConclusiveLowDust(c, cs)
+
+	if slashGrade {
+		// The slash RESERVES only (Q5): the draw-proportional size (v0.40) out
+		// of what remains of the answer bond, escrowed one counter-flag window.
+		// Its burn and the full bounty settle at the window's close.
+		originateSlash(c, cs, now, cs.flagger)
+		// The dust bounty pays now against the dust burns; the slash's share
+		// of the bounty waits for the window (exactly-once, per component).
+	} else {
+		cs.tierFinal = true
+	}
+	if bounty := bountyFor(cs.flagBondPosted(), burns); bounty > 0 {
+		enqueueSenior(c, cs.flagger, bounty, "bounty")
+	}
+}
+
+// burnConclusiveLowDust burns the deposit and fee — the dispositions EVERY
+// conclusive low carries (§3.1.7), whichever lane asked the question and whether
+// or not a slash was in reach. Returns the CC burned (the bounty base).
+// Exactly-once: both fields zero here, so a second call burns nothing.
+func burnConclusiveLowDust(c *Court, cs *claimState) int64 {
 	burns := int64(0)
 	if cs.deposit > 0 {
 		c.coin.Burn(c.escrow, cs.deposit)
@@ -356,33 +378,45 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 		burns += cs.fee
 		cs.fee = 0
 	}
-
-	if slashGrade {
-		// The slash RESERVES only (Q5): the draw-proportional size (v0.40) out
-		// of what remains of the answer bond, escrowed one counter-flag window.
-		// Its burn and the full bounty settle at the window's close.
-		slash := slashSizeFor(cs)
-		if slash > cs.answerBond {
-			slash = cs.answerBond
-		}
-		if slash > 0 {
-			cs.answerBond -= slash
-			cs.pendingSlash = slash
-			cs.pendingSlashUntil = now + c.params.votingBlocks
-		}
-		// The dust bounty pays now against the dust burns; the slash's share
-		// of the bounty waits for the window (exactly-once, per component).
-	} else {
-		cs.tierFinal = true
-	}
-	// Record what ACTUALLY burned, so settleSlash can size its top-up against
-	// reality instead of re-deriving a params figure that a waived-deposit
-	// (seeded) claim never paid. Accumulates, though the deposit/fee can only
-	// burn once (they zero on disposition).
+	// Record what ACTUALLY burned, so settleSlash sizes its top-up against
+	// reality rather than re-deriving a params deposit+fee that a waived-deposit
+	// (moderator-seeded) claim never paid. Recorded HERE, at the one site that
+	// burns, because both lanes reach it — the ride calls this too, and a
+	// caller-side record would leave the ride's top-up sized against zero.
+	// Accumulates, though the fields can only burn once (they zero above).
 	cs.dustBurns += burns
-	if bounty := bountyFor(cs.flagBondPosted(), burns); bounty > 0 {
-		enqueueSenior(c, cs.flagger, bounty, "bounty")
+	return burns
+}
+
+// originateSlash is the ONE origination site for pendingSlash — the flag lane and
+// the dispute ride share it, so the two can never drift apart the way the sizer
+// and the bond floor did before slashSizeAt (v0.46). It reserves out of what
+// remains of the answer bond and escrows one counter-flag window.
+//
+// `flagger` is the bounty beneficiary: the flag's poster, or "" on a RIDE, where
+// nobody posted a bond and so no policing pay is owed (riders are paid by the
+// carrot). Recording it per-slash rather than reading cs.flagger later is
+// load-bearing — see slashFlagger's comment in claim.gno.
+//
+// slashLevied makes origination exactly-once per claim ACROSS BOTH LANES. The
+// flag lane was bounded by slotConsumed; the ride is not, so a reopen chain could
+// otherwise levy a fresh slashSizeFor out of the remaining bond every round.
+func originateSlash(c *Court, cs *claimState, now int64, flagger address) {
+	if cs.slashLevied || cs.pendingSlash > 0 || cs.answerBond <= 0 {
+		return
 	}
+	slash := slashSizeFor(cs)
+	if slash > cs.answerBond {
+		slash = cs.answerBond
+	}
+	if slash <= 0 {
+		return
+	}
+	cs.answerBond -= slash
+	cs.pendingSlash = slash
+	cs.pendingSlashUntil = now + c.params.votingBlocks
+	cs.slashFlagger = flagger
+	cs.slashLevied = true
 }
 
 // flagBondPosted recomputes the bond this cycle posted (the live field is
@@ -448,15 +482,48 @@ func bountyFor(bond, burned int64) int64 {
 func resolveQualityRide(c *Court, cs *claimState) {
 	tier, conclusive, turnout := applyQualityTally(c, cs)
 	if !conclusive {
-		return
+		return // below-bar rides leave the tier standing (default mid)
 	}
+	now := runtime.ChainHeight()
+	_, fullBar := qualityBars(c, cs)
 	cs.tier = int64(tier)
 	cs.conclusiveSeq = cs.qVoteSeq
 	cs.conclusiveTurnout = turnout
-	// A decided ride settles quality with the verdict — but never a slash:
-	// a disputed answer is not slashable (v0.28: undisputed-only).
-	cs.tierFinal = true
 	cs.slotConsumed = true
+
+	// A conclusive LOW carries the flag lane's dust dispositions wherever it is
+	// delivered. Skipping them REFUNDED the junk author their deposit and fee at
+	// crystallize on exactly the claims the crowd demoted, while an identical
+	// flag-lane low burned both (v0.50). Already-zero fields make this a no-op if
+	// a flag burned them first.
+	if tier == qualityLow {
+		burnConclusiveLowDust(c, cs)
+	}
+
+	// v0.50 — THE RIDE ORIGINATES THE SLASH. `pendingSlash` had exactly one
+	// origination site (ResolveFlag), while `OpenFlag` panics forever on the
+	// one-way slotConsumed latch this function sets. So a full-bar ⅔-low verdict
+	// delivered on the RIDE foreclosed the only path that could levy the slash it
+	// had just voted for: a sock dispute filed in the block after the answer
+	// (votingBlocks 7d > settleDelay 72h, so no flag can have resolved, and
+	// OpenFlag refuses while disputeOpen) bought immunity for the same ~4%·X̄ that
+	// v0.47 closed on the flag lane's door. Winning an argument about whether the
+	// ANSWER is right settles nothing about whether the CLAIM was worth answering —
+	// and neither does which lane ASKED the quality question.
+	//
+	// The predicate is ResolveFlag's slashGrade, never merely "conclusive":
+	// applyQualityTally goes conclusive-LOW at the supply-floorless demotionBar, and
+	// a dust ride must not levy what a dust ride cannot lift (the same asymmetry
+	// disposeSlashOnRide is scored on). `answerBond > 0`, inside originateSlash,
+	// suppresses this on the OVERTURN branch, where the bond already burned.
+	if tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {
+		originateSlash(c, cs, now, "") // "" — a ride posts no bond, so no bounty
+	}
+	// tierFinal stays FALSE while a reserve this ride levied stands, so the answerer
+	// keeps the one v0.31/Q5 counter re-vote exactly as the flag lane leaves it.
+	// Both terminal paths' tier-clobber guards read `!tierFinal && !slotConsumed`
+	// and slotConsumed is already true, so nothing can reset the LOW meanwhile.
+	cs.tierFinal = cs.pendingSlash == 0
 }
 
 // ------------------------------------------------------------------ reads --
@@ -610,16 +677,25 @@ func settleSlash(c *Court, cs *claimState) {
 	}
 	cs.pendingSlash = 0
 	c.coin.Burn(c.escrow, slash)
-	// The top-up is the bounty on the slash ON TOP OF the dust bounty already
-	// paid at ResolveFlag — so it must subtract what that bounty was actually
-	// sized against. Reading the PARAMS deposit+fee here (the pre-moderation
-	// code) assumes every claim paid one, which a moderator-seeded claim never
-	// does: the phantom base silently under-paid the flagger whenever the bond
-	// clamped. cs.dustBurns is what really burned.
-	bond := flagBondFor(cs)
-	if topUp := bountyFor(bond, cs.dustBurns+slash) - bountyFor(bond, cs.dustBurns); topUp > 0 {
-		enqueueSenior(c, cs.flagger, topUp, "bounty")
+	// Two independent corrections, both needed.
+	//
+	// WHO: pay the beneficiary RECORDED AT ORIGINATION, never cs.flagger. On a
+	// ride-levied slash that field is the zero address (an unpayable entitlement
+	// that would strand accrual in the monotone reservedTail forever) or a stale
+	// flagger from an earlier inconclusive cycle whose bond already came back
+	// whole under T1, who would mint a bounty for a slash the RIDE levied.
+	//
+	// AGAINST WHAT: size the top-up on cs.dustBurns, what the deposit and fee
+	// ACTUALLY burned. Re-deriving params.minClaimDepositCC + its fee assumes
+	// every claim paid one, which a moderator-seeded claim never does — the
+	// phantom base silently under-paid the flagger whenever the bond clamped.
+	if cs.slashFlagger != "" {
+		bond := flagBondFor(cs)
+		if topUp := bountyFor(bond, cs.dustBurns+slash) - bountyFor(bond, cs.dustBurns); topUp > 0 {
+			enqueueSenior(c, cs.slashFlagger, topUp, "bounty")
+		}
 	}
+	cs.slashFlagger = ""
 	cs.tierFinal = true
 }
 
@@ -639,6 +715,7 @@ func refundSlash(c *Court, cs *claimState) {
 	if slash <= 0 {
 		return
 	}
+	cs.slashFlagger = ""
 	if cs.provClose {
 		c.coin.Transfer(c.escrow, cs.answerer, slash)
 		return
@@ -657,6 +734,7 @@ func unslash(c *Court, cs *claimState) {
 	}
 	cs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)
 	cs.pendingSlash = 0
+	cs.slashFlagger = ""
 	cs.counterOpen = false
 }
 

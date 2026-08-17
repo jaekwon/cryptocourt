@@ -881,3 +881,194 @@ func TestDustRideCannotLiftTheSlash(cur realm, t *testing.T) {
 		t.Fatalf("a dust ride must not promote the tier: got tier=%d final=%v", tier, final)
 	}
 }
+
+// The T2 "failed slash attempt" half-burn branch (v0.45 gap 2) had NO test: every
+// conclusive-low fixture is either slash-grade (full bar AND >=2/3 low) or below
+// the full bar (dust low, T1 full return). This hits the band between them —
+// qLowW/turnout in [1/2, 2/3) at full-bar turnout — where the electorate demoted
+// the claim but fell short of the supermajority a slash requires, and the flagger
+// pays half the bond for the failed attempt.
+func TestConclusiveLowBelowTwoThirdsHalfBurnsTheBond(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("t2-alice")
+	bob := testutils.TestAddress("t2-bob")     // flagger
+	low := testutils.TestAddress("t2-low")     // 10B low
+	mid := testutils.TestAddress("t2-mid")     // 8B mid
+	c := testCourt(cur, "t2c", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(low, 10_000_000_000)
+	c.coin.Mint(mid, 8_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "t2c", "Demoted, but short of the supermajority")
+	matureOI(cur, "t2c", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "t2c", id, sideYES)
+
+	bond := FlagBondNext("t2c", id)
+	bobBefore := c.coin.BalanceOf(bob)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "t2c", id)
+	testing.SetRealm(testing.NewUserRealm(low))
+	VoteQuality(cross(cur), "t2c", id, qualityLow)
+	testing.SetRealm(testing.NewUserRealm(mid))
+	VoteQuality(cross(cur), "t2c", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+
+	// 10B low of 18B turnout: median-low (10*2 >= 18) but short of 2/3
+	// (10*3 = 30 < 36), at full-bar turnout — exactly the T2 band.
+	cs := mustClaim(c, id)
+	_, fullBar := qualityBars(c, cs)
+	turnout := cs.qLowW + cs.qMidW + cs.qHighW
+	if turnout < fullBar || cs.qLowW*2 < turnout || cs.qLowW*3 >= turnout*2 {
+		t.Fatalf("fixture must sit in [1/2, 2/3) at full-bar turnout: low=%d turnout=%d bar=%d",
+			cs.qLowW, turnout, fullBar)
+	}
+
+	supplyBefore := c.coin.TotalSupply()
+	ResolveFlag(cross(cur), "t2c", id)
+
+	half := bond / 2
+	if got := bobBefore - c.coin.BalanceOf(bob); got != bond-half {
+		t.Fatalf("a failed slash attempt costs the flagger half the bond: lost %d want %d",
+			got, bond-half)
+	}
+	// Supply drops by the burned half PLUS the dust burns every conclusive low
+	// carries (deposit + fee), which are independent of the slash question.
+	dep := c.params.minClaimDepositCC
+	fee := dep * depositFeeBps / 10000
+	if got, want := supplyBefore-c.coin.TotalSupply(), bond-half+dep+fee; got != want {
+		t.Fatalf("the other half burns, with the low's deposit+fee: burned %d want %d", got, want)
+	}
+	if cs.pendingSlash != 0 {
+		t.Fatalf("short of 2/3 reserves NO slash: %d", cs.pendingSlash)
+	}
+	if tier, final := QualityTier("t2c", id); tier != qualityLow || !final {
+		t.Fatalf("the claim is still conclusively demoted and final: tier=%d final=%v", tier, final)
+	}
+}
+
+// REPRO (sweep finding, post-v0.49): v0.47 shut slashGrade's door to purchased
+// immunity, but resolveQualityRide's is open. pendingSlash is ORIGINATED in
+// exactly one place — ResolveFlag's slashGrade branch — while a conclusive ride
+// latches slotConsumed, which OpenFlag refuses forever. So a full-bar 2/3-low
+// verdict delivered ON THE RIDE forecloses the only path that could ever levy the
+// slash. The mill buys that by sock-disputing in the block after the answer:
+// votingBlocks (7d) > settleDelay (72h), so no flag can have resolved, and
+// OpenFlag panics while disputeOpen. The honest crowd then does exactly what the
+// mechanism asks — upholds the true answer and votes the junk claim LOW — and in
+// doing so destroys the slash. EXPECTED TO FAIL until the ride can originate.
+func TestConclusiveLowRideMustLevyTheSlash(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rid-alice") // author + answerer (the mill)
+	sock := testutils.TestAddress("rid-sock")   // the mill's second wallet
+	crowd := testutils.TestAddress("rid-crowd") // honest, full-bar weight
+	c := testCourt(cur, "rid1", alice, 50_000_000_000)
+	c.coin.Mint(sock, 10_000_000_000)
+	c.coin.Mint(crowd, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rid1", "Junk but true — slash me if you can")
+	matureOI(cur, "rid1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rid1", id, sideYES)
+	cs := mustClaim(c, id)
+	exposure := slashSizeFor(cs)
+	if exposure <= 0 {
+		t.Fatal("setup: the claim must carry real slash exposure")
+	}
+
+	// The purchase: dispute in the next block, before any flag can exist.
+	testing.SetRealm(testing.NewUserRealm(sock))
+	OpenDispute(cross(cur), "rid1", id)
+	// The honest crowd upholds the true answer AND votes the claim junk.
+	testing.SetRealm(testing.NewUserRealm(crowd))
+	VoteDispute(cross(cur), "rid1", id, "no")
+	testing.SetRealm(testing.NewUserRealm(crowd))
+	VoteQuality(cross(cur), "rid1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "rid1", id)
+
+	if tier, _ := QualityTier("rid1", id); tier != qualityLow {
+		t.Fatalf("setup: the ride must land a conclusive LOW, got tier=%d", tier)
+	}
+	if !cs.slotConsumed {
+		t.Fatal("setup: a conclusive ride latches the flag slot")
+	}
+	// THE HOLE: a full-bar 2/3-low verdict, and no slash exists or ever can.
+	if cs.pendingSlash != exposure {
+		t.Fatalf("a full-bar 2/3-low RIDE must levy the slash like the flag lane does: "+
+			"pendingSlash=%d want %d (slot consumed=%v, so OpenFlag is refused forever)",
+			cs.pendingSlash, exposure, cs.slotConsumed)
+	}
+	// A conclusive low burns the junk claim's deposit and fee whichever lane asked;
+	// skipping them refunded the mill its stake at crystallize.
+	if cs.deposit != 0 || cs.fee != 0 {
+		t.Fatalf("a conclusive-low ride must burn deposit+fee: %d/%d", cs.deposit, cs.fee)
+	}
+	// And it pays NO bounty: nobody posted a bond on a ride. Paying cs.flagger here
+	// would either strand accrual at the zero address forever (reservedTail is
+	// monotone) or mint to a stale flagger whose bond already came back under T1.
+	if cs.slashFlagger != "" {
+		t.Fatalf("a ride-levied slash has no bounty beneficiary, got %s", cs.slashFlagger)
+	}
+	// The answerer keeps the one Q5 challenge: tierFinal stays false while it stands.
+	if cs.tierFinal {
+		t.Fatal("a reserve levied by the ride leaves the counter-flag window open")
+	}
+}
+
+// The slashLevied latch: origination is exactly-once per claim ACROSS BOTH LANES.
+// The flag lane was bounded by slotConsumed, but the ride is not — so without the
+// latch a reopen chain levies a fresh slashSizeFor out of the REMAINING bond every
+// round, which fits inside a 3-week escrow.
+func TestSlashIsLeviedAtMostOncePerClaim(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("lev-alice")
+	bob := testutils.TestAddress("lev-bob")
+	carol := testutils.TestAddress("lev-carol")
+	c := testCourt(cur, "lev1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "lev1", "Levy me twice if you can")
+	matureOI(cur, "lev1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "lev1", id, sideYES)
+	c.params.escrowMinBlocks, c.params.escrowMaxBlocks = 900_000, 900_000
+
+	// A failed round keeps the claim slashable; the FLAG lane then levies.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "lev1", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "lev1", id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "lev1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "lev1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "lev1", id)
+	cs := mustClaim(c, id)
+	first := cs.pendingSlash
+	if first <= 0 || !cs.slashLevied {
+		t.Fatalf("setup: the flag lane must levy once: pending=%d levied=%v", first, cs.slashLevied)
+	}
+	// Close the window: the slash burns and the bond keeps its remainder.
+	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	ResolveSlashWindow(cross(cur), "lev1", id)
+	remainder := cs.answerBond
+	if cs.pendingSlash != 0 || remainder <= 0 {
+		t.Fatalf("setup: settled, with bond remaining: pending=%d bond=%d", cs.pendingSlash, remainder)
+	}
+
+	// A reopen whose ride is ALSO a full-bar 2/3-low must NOT levy a second time.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "lev1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "lev1", id, "no")
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "lev1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "lev1", id)
+	if cs.pendingSlash != 0 || cs.answerBond != remainder {
+		t.Fatalf("a claim is slashed at most once: pending=%d bond=%d want 0/%d",
+			cs.pendingSlash, cs.answerBond, remainder)
+	}
+}
