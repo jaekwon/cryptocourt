@@ -1016,16 +1016,20 @@ decision must be made before launch, not after.
   - `realm/p/grc20votes/grc20votes.gno` package-doc example, `web/README.md`
     heading, and two `REGULATIONS.md` headings.
 
-  **SURFACED, DELIBERATELY NOT CHANGED — for the owner.** govern's
-  `tokenSymbol` is still **`"COURT"`**, and `tokenID` is
-  `"gno.land/r/kourt/govern." + tokenSymbol`, so the symbol is part of the
-  token's wire identity. Three things collide here: the platform ticker is
-  **KOURT**; per-court coins already render `KOURT:SLUG`; and kourtv1's internal
-  `COURT` symbol is explicitly exempted from the rename. A *governance* token
-  called `COURT` is confusable with all three. Changing it is free today (the
-  realm is undeployed and a realm cannot be redeployed at its path) and
-  impossible later. Not decided here because retickering is an owner call and
-  the owner has been specific about tickers.
+  **RESOLVED by the owner (v0.21): govern's `tokenSymbol` is `KOURT`.** It had
+  still been `"COURT"`, and since `tokenID` is
+  `"gno.land/r/kourt/govern." + tokenSymbol` the symbol is wire identity — free
+  to choose before deploy, unfixable after, because a realm cannot be redeployed
+  at its path. The decisive argument was not the three-way confusability with
+  the platform ticker, the per-court `KOURT:SLUG` coins and kourtv1's exempted
+  internal `COURT`; it was that **kourtv2's own slug deny-list reserves `court`
+  precisely so no user can mint a coin displaying as COURT beside KOURT**, so
+  shipping the governance token as COURT would have had the platform doing the
+  exact thing it forbids its users. No collision is possible the other way
+  either: `kourt` is itself a reserved slug, so no court coin can carry the
+  symbol. The scheme now reads whole — **KOURT** is the platform token, a court
+  coin is `uppercase(slug)` rendered `KOURT:SLUG`, and the review court is
+  `KOURT:META`.
 - **v0.19 — moderation on a real node, and the read that contradicted its own
   write path**. `kourtv2_moderation.txtar` asserts the §2 constitution through
   the surface a reader actually meets — a node's `qrender` over RPC, not
@@ -1309,8 +1313,10 @@ decision must be made before launch, not after.
   token named "Pledge", reads "plugger", spells PLeDGeR, and is one char from
   PLTR; PLEA is unclaimed across 18,438 CoinGecko coins + Dexscreener + CMC +
   US equities). Per-court symbol = `uppercase(slug)` displayed `PLEA:SLUG`,
-  with a reserved deny-list at slug registration. **Live bug recorded**: every
-  court currently mints its ledger with the literal symbol `"COURT"`
+  with a reserved deny-list at slug registration. **Live bug recorded** (CLOSED — `courtSymbol(slug) = uppercase(slug)`, slugs
+  capped at 11 for GRC20's symbol bound, deny-list enforced; and as of v0.21
+  govern's own symbol is KOURT): every
+  court then minted its ledger with the literal symbol `"COURT"`
   (court.gno) — a phishing vector, since wallets key display on symbol not
   pkgpath. Trademark red flag: "Pleadger" is a homophone of "Pledger", a live
   fintech in an adjacent sector — clearance search recommended (§13.9).

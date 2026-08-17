@@ -58,7 +58,7 @@ func main(cur realm) {
 // Output:
 // minter is empty: true
 // name:            Kourt Governance
-// symbol:          COURT
+// symbol:          KOURT
 // decimals:        6
 // supply:          0
 // balance of a stranger: 0

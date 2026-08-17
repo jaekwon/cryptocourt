@@ -14,8 +14,20 @@ import (
 // the ledger takes them as arguments precisely so it does not have to be
 // forked to do it.
 const (
-	tokenName     = "Kourt Governance"
-	tokenSymbol   = "COURT"
+	tokenName = "Kourt Governance"
+	// KOURT, not COURT. kourtv2's slug deny-list reserves "court" precisely so
+	// that no user can mint a coin which displays as COURT beside the platform
+	// ticker — a wallet keys display on symbol, not package path — and shipping
+	// the governance token AS COURT would have had the platform doing the exact
+	// thing it forbids its users. The symbol is part of tokenID below, so it is
+	// wire identity: free to choose now, unfixable after deploy, because a realm
+	// cannot be redeployed at its path.
+	//
+	// No collision is possible in the other direction either: "kourt" is itself
+	// a reserved slug, so no court coin can ever carry this symbol. The scheme
+	// reads whole — KOURT is the platform token, a court coin is uppercase(slug)
+	// rendered KOURT:SLUG, and the review court is KOURT:META.
+	tokenSymbol   = "KOURT"
 	tokenDecimals = 6
 	tokenID       = "gno.land/r/kourt/govern." + tokenSymbol
 )

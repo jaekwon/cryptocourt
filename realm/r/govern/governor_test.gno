@@ -2204,7 +2204,7 @@ func TestTheProposalPageRendersSupplyLikeTheFrontPage(cur realm, t *testing.T) {
 	offerAndAdopt(setFee{}, Rules{
 		QuorumBps: 2000, ThresholdBps: 6600, VotingBlocks: 50 * epochBlocks,
 	})
-	Mint(cross(cur), gAlice, 1500000) // 1.5 COURT at six decimals
+	Mint(cross(cur), gAlice, 1500000) // 1.5 KOURT at six decimals
 	advanceEpochs(1)
 
 	testing.SetRealm(testing.NewUserRealm(gAlice))
