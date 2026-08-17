@@ -1,6 +1,8 @@
 package kourtv2
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -174,6 +176,33 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	Crystallize(cross(cur), metaSlug, ap2)
 	if AppealLatchHolder(verbHide, "mtx2", 1) != 0 {
 		t.Fatal("a terminal transition must free the target's review slot")
+	}
+
+	// ---- 6c. the ballot must SHOW what it is asking voters to approve -------
+	// Without this the electorate votes on an opaque title string and cannot see
+	// which addresses a setmods appeal would seat — the amplifier that made the
+	// bait-and-switch finding worth a HIGH.
+	testing.SkipHeights(1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	seatMe := testutils.TestAddress("mtx-seat")
+	candID := RegisterModCandidate(cross(cur), "mtx1", []address{seatMe}, 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	shown := OpenClaim(cross(cur), metaSlug,
+		"mod:setmods:mtx1/"+strconv.FormatUint(candID, 10))
+	page := Render(metaSlug + "/" + strconv.FormatUint(shown, 10))
+	if !strings.Contains(page, "Review request") || !strings.Contains(page, "setmods") {
+		t.Fatalf("a valid appeal must render its action:\n%s", page)
+	}
+	if !strings.Contains(page, seatMe.String()) {
+		t.Fatalf("a setmods appeal must list the addresses it would seat:\n%s", page)
+	}
+	// An appeal naming a candidate that does not exist yet is the bait-and-switch
+	// shape and must be called out, not rendered blank.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ghost := OpenClaim(cross(cur), metaSlug, "mod:setmods:mtx1/9999")
+	gp := Render(metaSlug + "/" + strconv.FormatUint(ghost, 10))
+	if !strings.Contains(gp, "does not exist yet") {
+		t.Fatalf("an unregistered candidate must be flagged:\n%s", gp)
 	}
 
 	// ---- 6. FIRST-TO-ANSWER takes the target's review slot ------------------

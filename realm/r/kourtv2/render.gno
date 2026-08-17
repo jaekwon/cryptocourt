@@ -166,6 +166,7 @@ func renderClaim(slug string, id uint64) string {
 	// deadlines and balances still render so a participant can always act.
 	b.WriteString("# " + claimTitleFor(c, cs) + "\n\n")
 	b.WriteString(hideBanner(c, cs))
+	writeAppeal(&b, c, cs)
 	if cs.seeded {
 		b.WriteString("_Seeded by a moderator to start this court; the author earns nothing from it._\n\n")
 	}

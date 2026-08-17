@@ -486,6 +486,16 @@ func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64, byElect
 	}
 }
 
+// mustModRead is the READ-ONLY counterpart of ensureMod: a query must never
+// allocate and persist a courtMod as a side effect of being asked a question.
+func mustModRead(courtSlug string) *courtMod {
+	c := mustCourt(courtSlug)
+	if c.mod == nil {
+		panic("kourtv2: this court has no moderation state yet")
+	}
+	return c.mod
+}
+
 // ---- reads ----------------------------------------------------------------
 
 // ElectionOpen reports whether a court has a live ballot.
@@ -496,23 +506,23 @@ func ElectionOpen(courtSlug string) bool {
 
 // ElectionWindows returns (nominateEnd, voteEnd) of the open ballot.
 func ElectionWindows(courtSlug string) (int64, int64) {
-	e := ensureMod(mustCourt(courtSlug)).mustOpenElection()
+	e := mustModRead(courtSlug).mustOpenElection()
 	return e.nominateEnd, e.voteEnd
 }
 
 // ElectionFloorOf is the quorum/margin floor pinned at open.
 func ElectionFloorOf(courtSlug string) int64 {
-	return ensureMod(mustCourt(courtSlug)).mustOpenElection().floor
+	return mustModRead(courtSlug).mustOpenElection().floor
 }
 
 // ElectionBondOf is the per-candidate bond pinned at open.
 func ElectionBondOf(courtSlug string) int64 {
-	return ensureMod(mustCourt(courtSlug)).mustOpenElection().bond
+	return mustModRead(courtSlug).mustOpenElection().bond
 }
 
 // ElectionTally exposes a line's approving weight and retain's, for render.
 func ElectionTally(courtSlug string, candidateID uint64) (candW, retainW, turnout int64) {
-	e := ensureMod(mustCourt(courtSlug)).mustOpenElection()
+	e := mustModRead(courtSlug).mustOpenElection()
 	if v := e.lines.Get(beClaimKey(candidateID)); v != nil {
 		candW = v.(*ballotLine).weight
 	}
@@ -523,7 +533,7 @@ func ElectionTally(courtSlug string, candidateID uint64) (candW, retainW, turnou
 // render can DIFF it against the incumbent (the other half of the anti-decoy
 // rule: a one-address swap must be visible, not just flagged).
 func CandidateMembers(courtSlug string, candidateID uint64) []address {
-	cand := ensureMod(mustCourt(courtSlug)).mustCandidate(candidateID)
+	cand := mustModRead(courtSlug).mustCandidate(candidateID)
 	out := make([]address, len(cand.members))
 	copy(out, cand.members)
 	return out

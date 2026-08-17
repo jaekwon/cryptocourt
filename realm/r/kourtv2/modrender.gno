@@ -228,6 +228,53 @@ func writePending(b *strings.Builder, slug string) {
 	b.WriteString("\n")
 }
 
+// writeAppeal renders a meta claim's parsed instruction — the verb, the target,
+// and for a setmods appeal the exact moderator set it would install.
+//
+// This closes the amplifier on the setmods bait-and-switch: the ballot is a
+// claim TITLE, so without decoding it here the electorate votes on an opaque
+// string and cannot see which addresses they are seating. It renders the STORED
+// parse, which survives a purge, so a redacted appeal still shows verb+target
+// (realm-validated, category-code-class strings) rather than blinding its own
+// voters.
+func writeAppeal(b *strings.Builder, c *Court, cs *claimState) {
+	if c.id != metaSlug {
+		return
+	}
+	verb, court, target, valid := AppealParse(cs.id)
+	if !valid {
+		b.WriteString("> _Not a valid review request — this is an ordinary claim on the review court._\n\n")
+		return
+	}
+	b.WriteString("## Review request\n\n")
+	b.WriteString("- action: **" + sanitize.InlineText(verb) + "**\n")
+	b.WriteString("- court: " + sanitize.InlineText(court) + "\n")
+	if verb == verbSetmods {
+		b.WriteString("- installs candidate set #" + strconv.FormatUint(target, 10) + ":\n")
+		if !Exists(court) {
+			b.WriteString("  - _that court does not exist_\n\n")
+			return
+		}
+		tc := mustCourt(court)
+		if tc.mod == nil || tc.mod.candidates == nil ||
+			tc.mod.candidates.Get(beClaimKey(target)) == nil {
+			// An unregistered id is exactly the bait-and-switch shape: say so
+			// loudly rather than rendering a blank.
+			b.WriteString("  - **this candidate set does not exist yet — do not approve**\n\n")
+			return
+		}
+		cand := tc.mod.candidates.Get(beClaimKey(target)).(*modCandidate)
+		for _, a := range cand.members {
+			b.WriteString("  - " + sanitize.InlineText(a.String()) + "\n")
+		}
+		b.WriteString("  - threshold: " + strconv.Itoa(cand.m) + " of " +
+			strconv.Itoa(len(cand.members)) + " must agree\n")
+	} else if target != 0 {
+		b.WriteString("- claim: " + strconv.FormatUint(target, 10) + "\n")
+	}
+	b.WriteString("\n")
+}
+
 // ---- the moderation log route (<slug>/mod) --------------------------------
 
 func renderModLog(slug string) string {
@@ -261,9 +308,12 @@ func renderModLog(slug string) string {
 		}
 		b.WriteString("\n")
 	}
-	// Newest acts first, one page (the N3 bound).
+	// Newest acts first, one page (the N3 bound). ReverseIterate matters: claim
+	// keys are big-endian ids, so a forward walk starts at the OLDEST moderated
+	// claim — once those filled a page, no recent act was ever visible, which is
+	// the opposite of what a moderation log is for.
 	rows := []string{}
-	cm.claims.Iterate("", "", func(_ string, v any) bool {
+	cm.claims.ReverseIterate("", "", func(_ string, v any) bool {
 		clm, ok := v.(*claimMod)
 		if !ok {
 			return false
