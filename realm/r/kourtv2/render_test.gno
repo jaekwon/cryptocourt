@@ -326,3 +326,65 @@ func hasWordAPR(s string) bool {
 func isAlnumByte(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
 }
+
+// N3, the render's page bound, found by the audit-marker sweep. The mutation that
+// removes it does not merely survive — it HANGS the suite past ten minutes, which is
+// itself the finding: the bound is what stops an attacker-openable, deposit-priced claim
+// count turning a page render into unbounded work. Deep links still reach anything the
+// capped list omits, so the cap costs no reachability.
+//
+// Pinned by asserting the cap BINDS on a court with more claims than a page, rather than
+// by removing the constant — a fixture that has to survive its own mutation cannot use a
+// mutation that hangs.
+func TestClaimListIsPageBounded(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("n3p-alice")
+	c := testCourt(cur, "n3p", alice, 500_000_000_000)
+	// The bound is written here INDEPENDENTLY of the constant. Sizing the setup from
+	// renderPageSize instead made this fixture self-referential — mutating the constant
+	// moved the setup and the expectation together, so the mutation survived. A
+	// deliberate page-size change must now update this line, which is the point.
+	const wantPage = 50
+	if renderPageSize != wantPage {
+		t.Fatalf("N3's page bound changed (%d, expected %d): confirm the new cost bound "+
+			"is intended, then update this fixture", renderPageSize, wantPage)
+	}
+	over := wantPage + 5
+	for i := 0; i < over; i++ {
+		testing.SetRealm(testing.NewUserRealm(alice))
+		OpenClaim(cross(cur), "n3p", "claim "+strconv.Itoa(i))
+	}
+	if c.nextID != uint64(over) {
+		t.Fatalf("setup: %d claims must exist, got %d", over, c.nextID)
+	}
+
+	page := Render("n3p")
+	// The court page emits ONE other link under this prefix — the moderation log
+	// at :<slug>/mod — so a bare prefix count reads 51 and the cap looks breached.
+	// Subtracting it is the whole correction: the prefix identifies the ROUTE, not
+	// the claim list, and a route added later will surface here rather than be
+	// silently counted as a claim.
+	listed := countSub(page, "](/r/kourt/kourtv2:n3p/") -
+		countSub(page, "](/r/kourt/kourtv2:n3p/mod)")
+	if listed > wantPage {
+		t.Fatalf("N3: the claim list must cap at %d entries, rendered %d",
+			wantPage, listed)
+	}
+	if listed < wantPage {
+		t.Fatalf("fixture must EXCEED one page so the cap actually binds: listed %d of %d",
+			listed, over)
+	}
+}
+
+// countSub counts non-overlapping occurrences; the realm imports no strings package.
+func countSub(s, sub string) int {
+	n, i := 0, 0
+	for i+len(sub) <= len(s) {
+		if s[i:i+len(sub)] == sub {
+			n++
+			i += len(sub)
+			continue
+		}
+		i++
+	}
+	return n
+}

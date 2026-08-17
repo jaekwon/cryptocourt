@@ -83,6 +83,12 @@ func accrueSegment(c *Court, blocks int64) {
 // rate (audit H1): rateAcc is what conviction settles against — no position is
 // ever priced at a rate that wasn't live while it accrued.
 func advanceRateAcc(c *Court, blocks int64) {
+	// UNREACHABLE and kept: the mutation harness reports this early return as a
+	// survivor. `blocks` is always now-minus-lastTouch and touch() never runs
+	// backwards, so it is never negative and a zero is already a no-op. It stays
+	// because the failure it prevents is rateAcc moving DOWN, which would reprice
+	// every live position's conviction — the same class H1 exists to stop, from the
+	// other direction. Not claimed as verified; see PLAN §13 v0.66.
 	if blocks <= 0 {
 		return
 	}
@@ -101,6 +107,9 @@ func rollPeriod(c *Court) {
 
 	s := c.coin.TotalSupply()
 	if s > 0 {
+		// Also a harness survivor, and the source already called it what it is:
+		// emittedTotal is monotone so this cannot fire. Fail-loud rather than
+		// silent-wrong if that monotonicity is ever broken upstream.
 		if c.emaMinted < 0 {
 			panic("kourtv2: negative realized mint") // emittedTotal is monotone; defensive
 		}

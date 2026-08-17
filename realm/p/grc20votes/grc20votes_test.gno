@@ -526,17 +526,17 @@ func TestBurningMovesTheDenominator(t *testing.T) {
 
 // mustBeValid and mustBePositive guard seven call sites between them and NO test
 // exercised either with a rejected input. That matters beyond this package:
-// courtv2's claim.gno builds a security guard on the STATED behaviour of this one —
+// kourtv2's claim.gno builds a security guard on the STATED behaviour of this one —
 // its slashFlagger field carries a comment reasoning that "grc20votes.Mint calls
 // mustBeValid and PANICS, so the entitlement is unpayable forever while reservedTail
 // has already advanced", which is why v0.50 added a `slashFlagger != ""` check
 // instead of falling back to cs.flagger. A consumer's money-path design resting on
 // an untested validator in its dependency is exactly the coupling worth pinning.
 //
-// The zero address is the case that reaches courtv2: an unset `address` field is "",
+// The zero address is the case that reaches kourtv2: an unset `address` field is "",
 // which IsValid rejects.
 //
-// Mutation testing showed courtv2's conclusion is ROBUST but its stated reason is
+// Mutation testing showed kourtv2's conclusion is ROBUST but its stated reason is
 // over-specific: with mustBeValid deleted from Mint the call still panics, one layer
 // down, as "checkpoint: a key may not be empty". So the unpayable-entitlement
 // reasoning survives even if this guard moves — two layers reject it, not one. The
@@ -549,12 +549,12 @@ func TestInvalidAddressIsRejectedAtEveryEntryPoint(t *testing.T) {
 	l := fresh()
 	l.Mint(alice, 1_000_000)
 
-	var zero address // the unset field courtv2 reasons about
+	var zero address // the unset field kourtv2 reasons about
 	if zero.IsValid() {
 		t.Fatal("premise: the zero address must be invalid")
 	}
 
-	// Mint — the site courtv2's comment names.
+	// Mint — the site kourtv2's comment names.
 	mustPanic(t, "grc20votes: not an address", func() { l.Mint(zero, 1) })
 	// Transfer/move — the same guard on the recipient.
 	mustPanic(t, "grc20votes: not an address", func() { l.Transfer(alice, zero, 1) })

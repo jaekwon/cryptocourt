@@ -462,3 +462,175 @@ func TestParticipantsCannotVoteTheirOwnVerdict(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(sock))
 	VoteDispute(cross(cur), "pvg", id, "no")
 }
+
+// escrowWindow's two arms, both unpinned: making it ignore extraDays entirely (always
+// the minimum) failed no test. The window is min + one day per 500 GNOT of X̄·Price,
+// clamped at max — so it is the reopen budget, and how fast it grows decides how many
+// rounds fit inside one claim.
+//
+// This also makes PLAN §12 row 30 MEASURABLE instead of prose. That row's original
+// premise was "3 failed rounds fit only inside >2-week escrows (large claims); small
+// claims cap at 2 failed rounds", corrected in v0.49 to: the window pins at the 3-week
+// max as soon as X̄·Price clears the room, which a modest claim reaches once the curve
+// has any real price. The second case below pins exactly that — the cap arm binding on a
+// claim that is not large — so a future change to the geometry fails here rather than
+// silently changing how much griefing fits in a window.
+func TestEscrowWindowGrowsThenPinsAtTheCap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ewn-alice")
+	// The curve must have been BOUGHT INTO for the window to grow at all: Price(0) is
+	// zero, so extraDays is zero and every claim sits at escrowMin. That is not an
+	// artefact — it is the cold-start half of §12 row 30's corrected premise, that the
+	// window only starts growing "once the curve has any real price".
+	// Price(s) = s/d with integer division and d ~= 1e9, so a small buy still floors
+	// the price to zero. Buy enough to move it off zero.
+	fundAndBuy(cur, "ewn", alice, 5_000_000_000)
+	c := mustCourt("ewn")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ewn", "the reopen budget")
+	cs := mustClaim(c, id)
+
+	room := (c.params.escrowMaxBlocks - c.params.escrowMinBlocks) / oneDayBlocks
+	if room <= 1 {
+		t.Fatalf("setup: the default params must leave room to grow: %d days", room)
+	}
+
+	// A claim whose X̄·Price buys ZERO extra days sits exactly at the minimum.
+	cs.xBarFrozen = 0
+	if got := escrowWindow(c, cs); got != c.params.escrowMinBlocks {
+		t.Fatalf("no X̄ buys no extra days: got %d want %d", got, c.params.escrowMinBlocks)
+	}
+
+	// One that buys SOME grows by whole days — the arm that "always the minimum" breaks.
+	price := c.crv.Price(c.minted)
+	if price <= 0 {
+		t.Fatal("setup: the curve must quote a price")
+	}
+	cs.xBarFrozen = 500_000_000 / price * 2 // ~2 days' worth
+	grown := escrowWindow(c, cs)
+	if grown <= c.params.escrowMinBlocks {
+		t.Fatalf("X̄·Price must buy extra days: got %d min %d (xBar=%d price=%d)",
+			grown, c.params.escrowMinBlocks, cs.xBarFrozen, price)
+	}
+	if grown >= c.params.escrowMaxBlocks {
+		t.Fatalf("fixture must sit strictly between the arms: got %d max %d",
+			grown, c.params.escrowMaxBlocks)
+	}
+	if (grown-c.params.escrowMinBlocks)%oneDayBlocks != 0 {
+		t.Fatalf("the window grows in WHOLE days: %d", grown-c.params.escrowMinBlocks)
+	}
+
+	// And one that buys more than the room pins at the cap, never past it (§12 row 30).
+	cs.xBarFrozen = 500_000_000 / price * (room + 5)
+	if got := escrowWindow(c, cs); got != c.params.escrowMaxBlocks {
+		t.Fatalf("past the room the window pins at the cap: got %d want %d",
+			got, c.params.escrowMaxBlocks)
+	}
+}
+
+// The dispute bond's TWO ARMS — min(20%·X̄frozen, 40%·answer bond) — and its floor.
+// Four of the five mutations over OpenDispute's copy of this formula survived, and the
+// reason is one measurement: on an uncapped court the answer bond is exactly half of
+// X̄, so 20%·X̄ and 40%·(X̄/2) are IDENTICALLY EQUAL and the min is a no-op. Every
+// fixture in the suite is uncapped, so reversing the comparison, or deleting the
+// second arm outright, changed nothing anywhere.
+//
+// The arm exists for the case the source names — a BOND-CAPPED court, where it "keeps
+// round 1 at q > 1/3 on every claim" — and nothing built one. Capped, the arms differ
+// by 20x here, so the min's direction is finally observable.
+//
+// Note this pins OPENDISPUTE's copy of the formula, not the quote's. The two are
+// separate copies of the same arithmetic (disputeBond0 says "factored for
+// DisputeBondNext" but is a duplicate), so the charge is asserted against the quote as
+// well: that equality is what stops the two drifting apart.
+func TestDisputeBondTakesTheSmallerArmOnACappedCourt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bcap-alice")
+	bob := testutils.TestAddress("bcap-bob")
+	c := testCourt(cur, "bcap", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	// Capping the answer bond pulls it off the X̄/2 identity that makes the two arms
+	// equal. PostAnswer's collateralization floor then sets the final figure — the cap
+	// is the lever, the floor is what it lands on — and either way the bond ends up
+	// well under X̄/2, which is all this fixture needs.
+	c.params.answerBondCapCC = 10_000_000
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "bcap", "a capped-bond claim")
+	matureOI(cur, "bcap", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "bcap", id, sideYES)
+
+	cs := mustClaim(c, id)
+	armX := cs.xBarFrozen * disputeBondXBps / 10000
+	armB := cs.answerBond0 * disputeBondOfAnswerBps / 10000
+	if armB >= armX || armB <= 0 {
+		t.Fatalf("setup: the answer-bond arm must bind and stay positive: armX=%d "+
+			"armB=%d (bond0=%d xBar=%d)", armX, armB, cs.answerBond0, cs.xBarFrozen)
+	}
+
+	if got := DisputeBondNext("bcap", id); got != armB {
+		t.Fatalf("the quote must take the SMALLER arm: got %d, arms %d/%d", got, armX, armB)
+	}
+	// And the CHARGE must agree with the quote — OpenDispute computes the figure over
+	// again from its own copy, so this is the only thing holding the two together.
+	before := c.coin.BalanceOf(bob)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "bcap", id)
+	if charged := before - c.coin.BalanceOf(bob); charged != armB {
+		t.Fatalf("the charge must equal the quote on a capped court: charged %d, "+
+			"quoted %d (the other arm is %d)", charged, armB, armX)
+	}
+}
+
+// The REOPEN lane's escrow window, found surviving. It is the only thing that makes
+// the lane finite before anybody finalizes.
+//
+// The neighbouring guard, `verdictAt != 0`, looks like it covers this and covers it
+// only AFTER someone has called Finalize — and Finalize is permissionless, so nobody
+// is obliged to. In the gap between the window lapsing and whoever gets round to
+// finalizing, `verdictAt` is still zero, and with the window guard gone a reopen
+// lands. Since each reopen resets nothing about the window (the escrow clock is set
+// ONCE, at the first resolution) but does open a fresh round, the claim's draw can be
+// held off indefinitely by a party willing to keep paying bonds — which is the bound
+// the three-week window exists to impose, and the geometry §12 row 30 turns on.
+//
+// The fixture asserts `verdictAt == 0` at the point of refusal, so the arm cannot pass
+// on the final-verdict guard by accident.
+func TestReopenRefusedOnceTheEscrowWindowHasPassed(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("esw-alice")
+	bob := testutils.TestAddress("esw-bob")
+	c := testCourt(cur, "esw", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "esw", "a standing provisional verdict")
+	matureOI(cur, "esw", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "esw", id, sideYES)
+
+	// Round one fails quorum, which leaves a standing provisional verdict and starts
+	// the escrow clock — set once here and never reset by a later round.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "esw", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "esw", id)
+
+	cs := mustClaim(c, id)
+	if cs.provisional < 0 || cs.escrowUntil <= runtimeHeight() || cs.verdictAt != 0 {
+		t.Fatalf("setup: need a live reopen lane inside its window: provisional=%d "+
+			"until=%d now=%d verdictAt=%d", cs.provisional, cs.escrowUntil,
+			runtimeHeight(), cs.verdictAt)
+	}
+
+	// Past the window, and deliberately WITHOUT finalizing.
+	testing.SkipHeights(cs.escrowUntil - runtimeHeight())
+	if cs.verdictAt != 0 {
+		t.Fatal("setup: nothing may have finalized this claim, or the wrong guard answers")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "the escrow window has passed", func() {
+		OpenDispute(cross(cur), "esw", id)
+	})
+	if cs.disputeOpen {
+		t.Fatal("and no round may have opened")
+	}
+}

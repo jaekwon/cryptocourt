@@ -135,6 +135,17 @@ func (c Curve) Minted(from, coin int64) (delta, spent int64) {
 	hi := fh + ph + carry
 	r := isqrt128(hi, lo)
 
+	// UNREACHABLE AND LOAD-BEARING, which is not a contradiction — the same standing
+	// as the hi2 >= m guard above, and it is worth being explicit because no test can
+	// pin it. Nothing reaches it while the domain check at the top of this function
+	// stands: on fall-through coin < full, so the operand is at most cap²−1 and r is
+	// at most cap−1. There is NO margin in that bound (r does reach exactly cap−1), and
+	// the clamp is the second line, not a redundant one. Delete BOTH and, on a curve
+	// New will happily build, Minted(1, -1) returns 9223372036854775807 units for a
+	// spend of 0 — measured, not argued: uint64(-1) makes the operand exceed isqrt128's
+	// exact range, r comes back as its search bound 2^63, int64(r) is MinInt64, and
+	// s1 - from WRAPS to MaxInt64, which the delta <= 0 exit below then waves through
+	// as a positive mint.
 	var s1 int64
 	if r > uint64(c.cap) {
 		s1 = c.cap // clamp before the correction so Cost never sees an over-cap span

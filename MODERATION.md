@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.42 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.43 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,62 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.43 — merged the other branch's 23 commits: it had been building the same
+  mutation harness in parallel, and its infrastructure is better than mine, so I
+  took it wholesale.** Their 199-row batch plus my 93 gives **236 rows**, every
+  anchor verified. **WHEN TWO SESSIONS BUILD THE SAME HARNESS, TAKE THE BETTER
+  INFRA WHOLESALE AND RE-APPLY YOUR OWN ADDITIONS ON TOP** — resolving line by
+  line would have preserved my slower, lock-based staging out of nothing but
+  authorship.
+  - **`gnoroot.py`: every runner gets its own GNOROOT shadow.** This retires the
+    shared staging lock and with it the *never two gates at once* rule I had been
+    working under for the whole session. **Verified rather than assumed**: two
+    `make check` runs exited 0 while the 236-row batch held its own root, with
+    exactly one live shadow visible under the shared temp base. The base is
+    deliberately shared across worktrees so the reaper can find roots abandoned by
+    runs that died.
+  - **`mutate.py` got two real fixes**: it mutates the *staged copy* rather than
+    the repo's sources, and it consults an **importer graph** so only the suites
+    that could plausibly object to a mutation run — the package's own tests plus
+    its importers. Nine suites down to one in the common case, which is the entire
+    reason my 93-row batch took 55 minutes. Their corrected graph also drops
+    `cshares` and `tickbook`, which only V1 imports.
+  - **Five rounds of fixes, every one found by a gate rather than by reading.**
+    Worth stating plainly, because the same 23 commits looked clean on inspection
+    each time.
+    1. Nineteen of their anchors quote `panic("courtv2: …")` against my `kourtv2:`
+       source, and six `dispute.gno` anchors needed my v0.34 `mustSpendable` line
+       threaded in — their anchor spans exactly that region.
+    2. **My keep-both conflict resolution dropped closing braces** in two test
+       files, because the conflict region began before my functions' `}`. gno
+       reports *"expected '(', found TestX"* when the parser is inside an unclosed
+       function reading `func` as a literal. **`gofmt` IS THE CHEAP PARSE CHECK
+       AFTER ANY CONFLICT RESOLUTION.**
+    3. **Their fixtures are calibrated to their constants.**
+       `TestAnswerBondCapBindsWhenTheFloorIsBelowIt` staked for X̄ = 400 CC, below
+       my v0.27 answer floor of 500. The fixture needs X̄ in a **window** — above my
+       floor but below ~1111 CC, or 4.5%·X̄ exceeds their 50 CC cap and the *floor*
+       binds instead of the cap, defeating the test's own purpose. Recalibrated by
+       measurement, with the window documented. (My first measurement read the
+       *dust* arm, because `effMinAnswerX` only switches to the supply arm once the
+       first epoch seals.)
+    4. A test counting the old link target exposed a **production** defect the
+       merge carried in: `quality.gno` panicked with `"courtv2: the dispute vote
+       has closed"` while every other message in the realm says `kourtv2:`.
+    5. `TestClaimListIsPageBounded` rendered 51 against a cap of 50, and the cause
+       was **mine**: the court page emits one other link under the prefix their
+       test counts — the moderation log at `:<slug>/mod`, from v0.19. **A PREFIX
+       COUNT IDENTIFIES A ROUTE, NOT A LIST**; when a page grows a second link
+       under the same prefix, a substring-counting test silently changes meaning.
+  - **My own verification was broken twice, in ways worth naming.** The post-merge
+    name grep reported *clean* because I piped a completeness check through `head`
+    and read a truncated list. The corrected grep *also* reported clean, because
+    `grep -rn … | grep -v kourtv2` filters on the **path**, and every file under
+    `realm/r/kourtv2/` carries that token in its path — so it silently excluded the
+    one directory most in need of checking. A python content-only scan with a
+    negative lookbehind found all four hits at once. **NEVER PIPE A COMPLETENESS
+    CHECK THROUGH `head`, AND NEVER FILTER `grep -rn` OUTPUT ON A TOKEN THAT
+    APPEARS IN THE PATH.**
 - **v0.42 — all 13 of `meta.gno`'s measured guards are pinned. Batch 93, gaps
   empty.** The last four closed as §13–§16 of `TestMetaLifecycleGuards`, and three
   of them taught something about the fixture rather than the code.

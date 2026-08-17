@@ -247,3 +247,107 @@ func shouldPanic(t *testing.T, name string, fn func()) {
 	}()
 	fn()
 }
+
+// The DOMAIN contract of Cost and Minted, stated for the benefit of a SECOND consumer:
+// this is a /p/ package, so the contract has to stand on its own rather than resting on
+// kourtv2's call discipline (which only ever passes from >= 0 and coin > 0).
+//
+// Four guards here survived the harness, and the first reading of that — "defensive
+// depth, every rejected input is rejected again downstream, all four are equivalent
+// mutations" — was WRONG on the one that mattered, in the way this codebase warns
+// about most often. Recorded because the wrong reasoning is the instructive part:
+//
+//	Cost's domain check  LOAD-BEARING. The argument said a negative span borrows,
+//	                     so hi is all ones, so `hi2 >= m` re-rejects it. It does
+//	                     not: bits.Add64(lo, m-1, 0) CARRIES, hi+carry wraps back
+//	                     to zero, and the overflow guard sees nothing. Cost answers
+//	                     (0, TRUE) — a valid quote for a span that runs backwards.
+//	                     It survived only because the pairs first written into the
+//	                     table below ({10,-1}) are too far from the origin to
+//	                     diverge. It is caught now.
+//	Minted's domain      Value-equivalent, and NOT a gas nit either: with it gone,
+//	                     a negative `from` walks the correction loop s1-from times,
+//	                     up to ~9.2e18 divisions. Same answer, no answer in
+//	                     practice.
+//	Minted's s1 clamp    Unreachable while the domain check stands, with no margin —
+//	                     r reaches exactly cap-1. Unreachable is not dead: see the
+//	                     note beside it in curve.gno.
+//	Minted's zero-delta  Value-equivalent while the two above stand.
+//
+// So the four are not independently redundant, they are MUTUALLY PROTECTIVE, and only
+// the first can be pinned by a test — the others' removal changes no return value on
+// its own. That is why the arms below assert results and only the Cost table is
+// adversarially chosen; it is also why none of the four should be removed as dead.
+func TestCostAndMintedRefuseTheirDomain(t *testing.T) {
+	c := New(2, 1_000_000)
+
+	// Cost reports NOT-OK rather than a number for anything outside its domain, so a
+	// caller that ignores `ok` cannot silently price a nonsense span.
+	for _, k := range []struct{ from, delta int64 }{
+		// Only the first three of these DISCRIMINATE — measured, with the guard
+		// deleted, on this exact curve. The rest are contract documentation, and
+		// saying which is which is the point: a table of pairs that are merely
+		// obviously invalid proves nothing, because the invalid ones are refused
+		// downstream anyway.
+		//
+		// {1,-1}, {2,-1} — a negative span, answered (0, TRUE). The 128-bit
+		//   subtract borrows so hi is all ones, but bits.Add64(lo, m-1, 0) CARRIES
+		//   and hi+carry WRAPS BACK TO ZERO, so the `hi2 >= m` overflow guard never
+		//   fires. That is a free rewind of the curve position reported as a valid
+		//   quote — the "walking it backward would let the same region be bought
+		//   twice" failure this package's doc names. Needs from² − s1² ≤ 2d−1, so on
+		//   this d=2 curve only a span ending near the origin exposes it.
+		// {-631917,1} — the worse family: a FABRICATED PRICE. uint64() of a
+		//   negative from injects a 2^65·|from| term, and both magnitude checks
+		//   (`hi2 >= m`, and the quotient against MaxInt64) bound SIZE, not domain,
+		//   so for |from| < d they pass and a price comes back. Deleting the guard
+		//   quotes this span at 9223372036854459850 with ok=true.
+		// {-1,10}, {-1,-1}, {cap+1,1} — refused either way. {-1,10} in particular
+		//   only just misses: it exits on the quotient check by a margin of 21, so
+		//   it is not protection, it is a coincidence of d=2. Do not let it stand in
+		//   for the negative-from case; that is what {-631917,1} is for.
+		{1, -1}, {2, -1}, {-631917, 1}, {-1, 10}, {10, -1}, {-1, -1}, {c.Cap() + 1, 1},
+	} {
+		if got, ok := c.Cost(k.from, k.delta); ok || got != 0 {
+			t.Fatalf("Cost(%d,%d) must be refused: got %d,%v", k.from, k.delta, got, ok)
+		}
+	}
+	// A span that ENDS past the cap is refused too — the curve is finite, and a
+	// partially-fillable span must not be priced as if it fitted.
+	if got, ok := c.Cost(c.Cap()-1, 5); ok || got != 0 {
+		t.Fatalf("a span ending past the cap must be refused: got %d,%v", got, ok)
+	}
+	// The boundary itself is priced: ending exactly AT the cap is legal.
+	if _, ok := c.Cost(c.Cap()-1, 1); !ok {
+		t.Fatal("a span ending exactly at the cap must be priced")
+	}
+
+	// Minted returns (0,0) — never a mint, never a charge — outside its domain.
+	for _, k := range []struct{ from, coin int64 }{
+		{-1, 100}, {c.Cap(), 100}, {c.Cap() + 1, 100}, {0, 0}, {0, -1},
+	} {
+		if d, sp := c.Minted(k.from, k.coin); d != 0 || sp != 0 {
+			t.Fatalf("Minted(%d,%d) must mint and charge nothing: got %d,%d",
+				k.from, k.coin, d, sp)
+		}
+	}
+
+	// A payment larger than the whole remaining curve mints exactly to the cap and
+	// charges exactly that, never past it — this is the clamp the harness found
+	// unpinned, and without it the correction loop sees an over-cap span.
+	full, ok := c.Cost(0, c.Cap())
+	if !ok {
+		t.Fatal("setup: filling the whole curve must be priceable")
+	}
+	d, sp := c.Minted(0, full*2)
+	if d != c.Cap() {
+		t.Fatalf("an over-large payment mints exactly to the cap: got %d want %d", d, c.Cap())
+	}
+	if sp != full {
+		t.Fatalf("and is charged only the cost of the cap: got %d want %d", sp, full)
+	}
+	// At the cap there is nothing left to mint, at any price.
+	if d, sp := c.Minted(c.Cap(), full); d != 0 || sp != 0 {
+		t.Fatalf("a filled curve mints nothing: got %d,%d", d, sp)
+	}
+}

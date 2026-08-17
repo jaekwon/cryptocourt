@@ -180,3 +180,129 @@ func TestDEffIsCappedByTheWeeklyBudget(cur realm, t *testing.T) {
 			c.dEffBpsFP, c.curBudgetBpsFP)
 	}
 }
+
+// The senior QUEUE's own invariants, called DIRECTLY because these are internal —
+// the approach settled in v0.60 for mulDiv128 and capBonus and used again in v0.69
+// for Params.mustSane. Three guards here survived the harness, and the middle one is
+// the expensive kind.
+//
+// Without the seq bump, the second Set lands on the FIRST entitlement's key. The
+// first payee's claim disappears, while reservedTail and seniorOwed still count
+// both amounts — a debt the court believes it owes and nobody can ever pull. Note
+// what makes it invisible: the queue has no removal (paid entitlements stay with
+// paid==amount), so there is no "missing entry" to notice, only a wrong one.
+//
+// The other two are cheap to hold and awkward to reason about later. A non-positive
+// entitlement would sit in the queue forever emitting an event for nothing, and a
+// NEGATIVE junior reservation would REDUCE juniorReserved — dragging a later
+// senior's start cursor back under the junior stretch, which is precisely the
+// overlap M3-CRITICAL-1 exists to prevent.
+func TestSeniorQueueRefusesJunkAndNeverOverwrites(cur realm, t *testing.T) {
+	mustPanicWith := func(want string, fn func()) {
+		t.Helper()
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatalf("expected a panic saying %q; nothing panicked", want)
+			}
+			got, ok := r.(string)
+			if !ok || !containsSub(got, want) {
+				t.Fatalf("panic %v, want one saying %q", r, want)
+			}
+		}()
+		fn()
+	}
+
+	alice := testutils.TestAddress("sq1-alice")
+	bob := testutils.TestAddress("sq1-bob")
+	c := testCourt(cur, "sq1", alice, 50_000_000_000)
+
+	before := QueueLen("sq1")
+	s1 := enqueueSenior(c, alice, 1_000, "comp")
+	s2 := enqueueSenior(c, bob, 2_000, "bounty")
+	if s1 == s2 {
+		t.Fatalf("two entitlements must take distinct seqs, got %d twice", s1)
+	}
+	if got := QueueLen("sq1"); got != before+2 {
+		t.Fatalf("the queue must grow by two: %d vs %d", got, before+2)
+	}
+	// Both must still be there, each with its OWN payee and amount — the assertion
+	// an overwrite fails, since the survivor would answer for both seqs.
+	if to, amt, _, _ := SeniorEntitlement("sq1", s1); to != alice || amt != 1_000 {
+		t.Fatalf("the first entitlement was lost: to=%s amount=%d", to, amt)
+	}
+	if to, amt, _, _ := SeniorEntitlement("sq1", s2); to != bob || amt != 2_000 {
+		t.Fatalf("the second entitlement is wrong: to=%s amount=%d", to, amt)
+	}
+
+	// Junk is refused rather than parked in a queue that never forgets.
+	mustPanicWith("must be positive", func() { enqueueSenior(c, alice, 0, "comp") })
+	mustPanicWith("must be positive", func() { enqueueSenior(c, alice, -1, "comp") })
+
+	// reserveJunior CLAMPS rather than aborting (F4 — it is on a shared settlement
+	// path), and it clamps from below as well as above.
+	jr := c.juniorReserved
+	if got := reserveJunior(c, -5_000); got != 0 {
+		t.Fatalf("a negative junior reservation must reserve nothing, got %d", got)
+	}
+	if c.juniorReserved != jr {
+		t.Fatalf("and must not move juniorReserved: %d vs %d", c.juniorReserved, jr)
+	}
+}
+
+// P10 — "flooring never loses a unit across a period" — which the source states in
+// accrueSegment's own comment and nothing checked. Both halves of the carry survived
+// the harness: not adding the carried remainder back in, and discarding it instead of
+// keeping it.
+//
+// TestAccrualIsExactOverAPeriod looks like it covers this and does not, for a reason
+// worth writing down: rollTo jumps a WHOLE period in ONE segment, so the numerator is
+// budget x periodBlocks, divides exactly, and the remainder machinery never runs. The
+// invariant is about PARTIAL segments — the case every real court is in, since any
+// state-changing call touches the clock mid-period.
+//
+// Walked in uneven segments, the carry is what makes the total exact: the numerators
+// sum to budget x periodBlocks, so the floors plus the carry chain come to exactly
+// budget with nothing left over. Discard the remainder and each segment floors on its
+// own, so the period pays SHORT — a slow leak against everyone the accrual owes,
+// invisible per segment and permanent in aggregate.
+func TestAccrualCarriesItsRemainderAcrossSegments(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("p10-alice")
+	c := testCourt(cur, "p10", alice, 10_000_000_000)
+	rollTo(c, 1)
+	budget := c.curPeriodBudget
+	if budget <= 0 {
+		t.Fatalf("setup: period 1 must carry a live budget, got %d", budget)
+	}
+	if c.accrualRem != 0 {
+		t.Fatalf("setup: period 0 pays nothing, so the carry starts empty: %d",
+			c.accrualRem)
+	}
+	acc0 := c.cumAccrual
+
+	// One period, in three UNEVEN segments instead of one jump.
+	spans := []int64{40_321, 40_321, periodBlocks - 2*40_321}
+	sawRemainder := false
+	for _, span := range spans {
+		testing.SkipHeights(span)
+		touch(c)
+		if c.accrualRem != 0 {
+			sawRemainder = true
+		}
+	}
+	// Without this the arms below would pass on spans that all divided exactly,
+	// which is the same nothing the whole-period jump proves.
+	if !sawRemainder {
+		t.Fatal("setup: every span divided exactly, so the carry was never exercised " +
+			"— choose spans where budget*blocks is not a multiple of periodBlocks")
+	}
+	if got := c.cumAccrual - acc0; got != budget {
+		t.Fatalf("a period walked in segments must accrue exactly its budget, not %d "+
+			"of %d (short by %d)", got, budget, budget-got)
+	}
+	// And the chain closes: an exact period leaves nothing carried.
+	if c.accrualRem != 0 {
+		t.Fatalf("a period that came out exact must carry nothing forward: %d",
+			c.accrualRem)
+	}
+}

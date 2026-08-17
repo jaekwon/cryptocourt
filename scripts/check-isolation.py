@@ -23,30 +23,32 @@ wrong thing.
     python3 scripts/check-isolation.py
     python3 scripts/check-isolation.py --only TestSomething   # one test
 
-The whole sweep runs each suite once per test — 388 of them, about ten minutes
-— so it is its own target rather than part of realm-test. --only exists so a control
-can prove this guard fires without paying for the sweep.
+The whole sweep runs each suite once per test — every Test function in every
+staged package, presently a few hundred of them and a quarter of an hour — so it
+is its own target rather than part of realm-test. --only exists so a control can
+prove this guard fires without paying for the sweep.
+
+That cost is stated as a range on purpose. It read "143 of them, a few minutes"
+for as long as the realm lists were a hand-copy, and stayed at 143 through the
+fix that added kourtv2 and quadrupled the real number. A figure nobody can
+recompute from the tree is a figure that will be wrong again.
 
 Everything `make realm-test` compiles, not just the realm most likely to have
 the problem. Covering where somebody has already looked is opt-in coverage, and
 opt-in coverage is how a citation goes unregistered, a filetest unbudgeted and a
 guard uncontrolled. The point of a sweep is the instance nobody predicted.
 
-grc20 and qcards matter more than govern here, on the plain grounds that the
-binary ships against grc20 and nothing ships against govern yet. Both were clean
-the first time they were swept, which is worth knowing rather than assuming.
-
 Needs a gno toolchain; skips without one unless REQUIRE_GNO is set, and says so
 rather than passing quietly.
 """
 
-import contextlib
 import os
 import re
 import shutil
 import subprocess
 import sys
-import time
+
+import gnoroot
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -88,41 +90,6 @@ def realms():
 
 REALMS = realms()
 
-@contextlib.contextmanager
-def stage_lock(root):
-    """Serialize the shared staging area.
-
-    Every runner stages into the SAME $GNOROOT/examples/gno.land/{p,r}/kourt
-    and rm -rf's it on exit. The location cannot be parameterized: the import paths
-    baked into the sources are what make gno resolve siblings there at all. So two
-    concurrent runners delete each other's tree mid-run, and the loser reports a
-    phantom compile error in code that is fine — which is exactly how a
-    "c.mod undefined" failure and an outright `make isolation-test` failure were
-    manufactured. mkdir is atomic, so it is the lock.
-
-    THE NAME IS THE CONTRACT. Every runner that stages must use this exact path
-    — the Makefile's realm-test, check-storage.py, and the scratchpad staging
-    script all take it. Two runners holding two DIFFERENTLY NAMED locks exclude
-    nothing while looking fully protected, which is strictly worse than no lock
-    at all. (That very thing happened when the rename left this one behind.)
-    """
-    lock = os.path.join(root, "examples/gno.land/.kourt-stage.lock")
-    for _ in range(600):
-        try:
-            os.mkdir(lock)
-            break
-        except FileExistsError:
-            time.sleep(1)
-    else:
-        print(f"check-isolation: the stage lock at {lock} has been held for 10 "
-              f"minutes; remove it if it is stale", file=sys.stderr)
-        raise SystemExit(1)
-    try:
-        yield
-    finally:
-        shutil.rmtree(lock, ignore_errors=True)
-
-
 def stage(root):
     for src, rel in REALMS:
         dst = os.path.join(root, rel)
@@ -133,20 +100,8 @@ def stage(root):
                 shutil.copy(os.path.join(src, f), dst)
 
 
-def cleanup(root):
-    for _, rel in REALMS:
-        shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/p/kourt"), ignore_errors=True)
-    shutil.rmtree(os.path.join(root, "examples/gno.land/r/kourt"), ignore_errors=True)
-
-
 def main():
-    try:
-        root = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
-                              text=True, timeout=30).stdout.strip()
-    except (FileNotFoundError, subprocess.SubprocessError):
-        root = ""
-    if not root or not os.path.isdir(root):
+    if not gnoroot.real_root():
         if os.environ.get("REQUIRE_GNO"):
             print("check-isolation: gno not installed", file=sys.stderr)
             return 1
@@ -177,7 +132,7 @@ def main():
     bad, total = [], 0
     red = set()   # (pkg, test) pairs that fail WITH their package too
     rered = []    # packages whose suite is red as a whole
-    with stage_lock(root):
+    with gnoroot.shadow("check-isolation") as root:
         stage(root)
         # The together-run comes FIRST, and unconditionally. It used to run only
         # for packages that had already produced a per-test failure, which meant
@@ -188,7 +143,8 @@ def main():
         # package, against N runs per package for the sweep itself: free.
         for rel, names in work:
             r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
-                               capture_output=True, text=True)
+                               capture_output=True, text=True,
+                               env={**os.environ, "GNOROOT": root})
             if r.returncode != 0:
                 out = r.stdout + r.stderr
                 rered.append((rel, out.strip().split("\n")))
@@ -200,10 +156,10 @@ def main():
             for t in names:
                 total += 1
                 r = subprocess.run(["gno", "test", "-run", f"^{t}$", "."], cwd=base,
-                                   capture_output=True, text=True)
+                                   capture_output=True, text=True,
+                                   env={**os.environ, "GNOROOT": root})
                 if r.returncode != 0:
                     bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
-        cleanup(root)
 
     alone = [(rel, t, out) for rel, t, out in bad if (rel, t) not in red]
     broken = [(rel, t, out) for rel, t, out in bad if (rel, t) in red]

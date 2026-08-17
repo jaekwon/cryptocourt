@@ -12,7 +12,7 @@ import (
 const gnotDenom = "ugnot"
 
 // burnSinkPath derives the keyless burn address (pin P14): a sub-realm
-// identity of THIS realm that is never created. Only courtv2 itself could ever
+// identity of THIS realm that is never created. Only kourtv2 itself could ever
 // instantiate it (realm.Sub is parent-only), and it never does — so no key,
 // no code, no path to the coins, ever.
 const burnSinkPath = "gno.land/r/kourt/kourtv2:burned"

@@ -191,7 +191,7 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	// closed persist into every later round and window — transaction ordering, not
 	// the electorate, deciding a reserve worth up to 30.8%·X̄.
 	if cs.disputeOpen && c.gov.State(cs.proposalID) != "active" {
-		panic("courtv2: the dispute vote has closed; resolve the round")
+		panic("kourtv2: the dispute vote has closed; resolve the round")
 	}
 	if isParticipant(cs, who) {
 		panic("kourtv2: the claim's participants cannot vote its quality (Q2)")

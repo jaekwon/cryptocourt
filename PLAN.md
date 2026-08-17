@@ -1624,6 +1624,696 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.83 — the DISPUTE BOND's two arms were unpinned because on an uncapped court they
+  are ARITHMETICALLY IDENTICAL, and the reopen lane's only finite bound was unpinned too.**
+  Nineteen mutations over `OpenDispute`. Nine already held: the bond posted, the refund
+  recorded, the disputer recorded, the quorum floor, the flag void (M3-LOW-1), the live
+  counter lane closing, the one re-ask, the round counter, and the per-failed-round
+  doubling.
+  **Five came back BAD ANCHOR, which is itself the finding.** The bond formula exists
+  TWICE in `dispute.gno` — once in `OpenDispute` and once in `disputeBond0`, whose comment
+  says "OpenDispute's formula, factored for DisputeBondNext" when it is a byte-identical
+  COPY, not a factoring. They agree today; nothing makes them keep agreeing. (v0.81's fix
+  to the summary earned its keep immediately: these five would previously have vanished
+  into a "0 survived" headline.)
+  **Re-run against `OpenDispute`'s copy, four of five survived**, and the cause is one
+  measurement: on an uncapped court the answer bond is EXACTLY half of X̄, so
+  `20%·X̄` and `40%·(X̄/2)` are identically equal and the `min` between them is a no-op.
+  Reversing the comparison, or deleting the second arm outright, therefore changed nothing
+  anywhere in the suite. The arm exists for the case the source names — a bond-CAPPED
+  court, where it "keeps round 1 at q > 1/3 on every claim" — and no fixture had ever built
+  one. Capped, the arms differ by 20×, and the new fixture pins the direction; it also
+  asserts the CHARGE equals the QUOTE, which is the only thing holding the two copies of
+  the formula together.
+  **The reopen lane's escrow window.** `verdictAt != 0` looks like it covers this and
+  covers it only AFTER someone calls Finalize — which is permissionless, so nobody is
+  obliged to. In the gap between the window lapsing and whoever gets round to finalizing,
+  `verdictAt` is still zero and a reopen lands. The escrow clock is set ONCE at the first
+  resolution and no round resets it, so a party willing to keep paying bonds could hold a
+  claim's draw off indefinitely — the bound the three-week window imposes, and the geometry
+  §12 row 30 turns on. The fixture asserts `verdictAt == 0` at the point of refusal so the
+  arm cannot pass on the neighbouring guard.
+  **Two survived and are unreachable**, both behind things already documented. The shift
+  clamp cannot fire because `provClose` bounds `failedRounds ≤ 2` and the clamp sits at 2 —
+  which the source comment already says ("the clamp guards the shift regardless"). And the
+  bond's floor of one cannot be reached while an answer exists: `answerBondCapCC = 1` does
+  NOT produce a bond of 1, because PostAnswer's collateralization floor overrides the cap
+  — measured, the bond came out 18,000,000 — so `40%·bond` never rounds to zero. That is
+  the SECOND guard this version whose unreachability traces to that floor (the first was
+  `originateSlash`'s clamp, v0.82). The floor is carrying more of the design than its own
+  docstring claims.
+  Also worth recording against item 1's brief: the code deliberately does NOT clear
+  `counterUsed` at open, though the brief asks for it. Clearing it re-minted the one-shot
+  Q5 challenge on demand — counter, self-dispute to cancel, counter again, indefinitely
+  inside the escrow window — so what the answerer is owed is the TIME, which
+  `rearmSlashWindow` returns by reopening the lane. That divergence is already in the
+  source comment; noting it here because the brief still names the other behaviour.
+  Batch now 199 rows, 0 not caught (11m28s — it is a background job now).
+
+- **v0.82 — the refund/rearm half of the slash lane: A19's fold-back was unpinned, and it
+  is invisible in every field it touches.** Thirteen mutations over `originateSlash`,
+  `refundSlash`, `unslash` and `rearmSlashWindow` — the complement of v0.81's `settleSlash`
+  sweep. Nine already held: the carve out of the bond, the beneficiary recorded at
+  origination, the once-per-claim latch, the window length, the refund's return to the bond,
+  the tier finalization, and both halves of the re-arm (the fresh window and the spent
+  challenge's lane reopening).
+  **`unslash`'s fold-back — the real gap, and the reason it hid.** An overturn burns the
+  answer bond in full, reserve included (A19). The overturn branch reads in order: `unslash`,
+  then `burned := cs.answerBond`, then the burn. Delete the fold-back and the second step
+  reads a smaller number while the escrow balance is unchanged: `pendingSlash` is zeroed and
+  its coin sits in escrow accounted to NOTHING — not burned with the bond, not refunded to
+  anyone, not reserved any longer. A conservation break rather than a wrong number.
+  It hid because **every field agrees with the mutant**: `pendingSlash` is zero either way,
+  `answerBond` is zero either way once the burn has run. Only the amount of coin that left
+  existence tells them apart, so the fixture asserts on SUPPLY. It also pins, on the way
+  past, that opening the round does not forgive the reserve (v0.47) — so what disposes it is
+  the OUTCOME.
+  **Three survived and all three are EQUIVALENT, each established differently.**
+  `originateSlash`'s `pendingSlash > 0` clause is redundant BY CONSTRUCTION, which beats any
+  probe: `slashLevied` is written in exactly one place, `= true` at origination, and never
+  cleared, so a live reserve implies the latch and the first clause already refuses.
+  `originateSlash`'s `answerBond <= 0` clause is backstopped by the clamp below it —
+  measured, an origination against a drained bond is an exact no-op, because the clamp
+  assigns `slash = answerBond ≤ 0` and the `slash <= 0` return fires. That is worth
+  recording for a second reason: the clamp carries a comment calling itself UNREACHABLE
+  behind the collateralization floor and warning against cleaning it up on the strength of
+  its survivor report. It is unreachable, and it is also exactly this clause's backstop —
+  the two are mutually protective, the same structure found in `curve`. The warning was
+  right.
+  `refundSlash`'s `provClose` arm is unreachable on today's ordering: `disposeSlashOnRide`
+  runs BEFORE `provCloseClaim`, so a refund rejoins the bond and leaves by the ordinary
+  exit. The source comment already says precisely this — that the ordering is "a preference
+  for the common path, not a strand guard" — and the surviving mutation CORROBORATES the
+  comment rather than contradicting it. Item 1's strand fix is present in the code and
+  waiting for a reordering that has not happened.
+  Batch now 187 rows, 0 not caught.
+
+- **v0.81 — FOUR ways to spend the answerer's Q5 challenge without holding a vote, and a
+  flaw in the harness's own summary that hid a row for several batches.**
+  The slash disposal lane: eleven mutations over `ResolveCounter`, `ResolveSlashWindow` and
+  `settleSlash`. The money DIRECTION was well held — inverting the second two-thirds,
+  always-settle and always-refund are all caught, as are the exactly-once zeroing, the burn
+  itself, the window-lapse requirement and the dispute-first bar. Four survived, and they
+  are one family: **dispose the reserve while the challenge that was supposed to decide it
+  has not been held.**
+  `ResolveCounter`'s `now < counterVoteEnd` — resolve the challenge the block it opens, on
+  an empty tally. Sub-bar turnout scores as "the whale failed to clear it", so the slash
+  settles and the one counter is spent unvoted.
+  `ResolveCounter`'s `!counterOpen` — the BACK DOOR, and the sharpest of the four.
+  `ResolveCounter` never checks `pendingSlash`, so without this it disposes a reserve with
+  no counter process at all — which is `ResolveSlashWindow`'s window deadline bypassed
+  entirely, by calling the other function.
+  `ResolveSlashWindow`'s `counterOpen` — settle DURING a live challenge, and not as a
+  corner case: `pendingSlashUntil` is origination+votingBlocks while `counterVoteEnd` is
+  counter-open+votingBlocks, so any counter opened after origination outlives the window
+  BY CONSTRUCTION and every challenge passes through that band.
+  `ResolveCounter`'s `turnout >= fullBar` — weakened to `turnout > 0`, one small confederate
+  voting anything but low gives `qLowW == 0`, the second two-thirds passes trivially, and
+  the reserve is refunded on a turnout nobody would call a verdict.
+  `TestCounterRevoteInconclusiveSlashStands` cannot see that last one: its counter draws NO
+  votes, and at zero turnout both readings settle. The discriminating case needs turnout
+  above zero and below the bar. One fixture walks the whole geometry and asserts the reserve
+  survives all three out-of-lane resolves, then that a sub-bar challenge SETTLES — burn
+  observed in supply, nothing returned to the bond.
+  **And the harness was hiding a row.** The 177-row run printed `BAD ANCHOR (matched 2x)`
+  for an H1 row and then `0 survived or invalid, of 177`, because a bad anchor was printed
+  but never counted. So the headline read "all 177 exercised" while one had silently not run
+  since at least the 117-row batch — this file's own failure mode, a non-result reported as
+  a result, committed by its own summary line. Every "all caught, of N" in v0.76 through
+  v0.80 should be read as N−1 exercised. **No coverage was lost:** the row's anchor was
+  ambiguous between `stake.gno`'s two freeze-cap sites, and both are caught by
+  `TestConvictionAccruesExactly` once the anchors are split per site. Fixed both ways — the
+  row is now two unambiguous rows, and BAD ANCHOR counts toward the headline, which is
+  renamed to "not caught (survived, invalid, or never applied)" so it cannot mean anything
+  narrower than it says. The existing self-test control for BAD ANCHOR still fires, and a
+  fresh control confirms such a row now appears in the count.
+  Batch now 178 rows, 0 not caught — and this is the first run where that headline
+  genuinely covers every row in it.
+
+- **v0.80 — OpenFlag swept: eight preconditions, and the one that survives is the only
+  one no neighbour re-refuses — an UNANSWERED claim was flaggable.** Eleven mutations over
+  `OpenFlag` and `openQualityTally`. Eight already held, including both halves of the
+  M3-MED-1 re-flag cooldown (removing it and starting it a cycle late are both caught), the
+  bond actually being posted, the flagger being the bounty beneficiary rather than the
+  answerer, the consumed-slot latch, the dispute-open bar, and both halves of the fresh
+  tally — the seq bump and the accumulator reset.
+  **The real one: `cs.frozenAt == 0`.** Measured with the guard removed, the flag OPENS on
+  a claim that was never answered — `flagOpen` latches, a bond moves into escrow, the
+  flagger is recorded — against a claim with nothing to judge, since quality is a verdict
+  on an ANSWER. Two details make it worse than a stray write. The bond is at its FLOOR: b0
+  is a share of `xBarFrozen`, which `PostAnswer` sets, so on an unanswered claim it is zero
+  and b0 falls back to `flagMinCC` — the cheapest the flag lane ever gets. And staking is
+  still open (`frozenAt == 0` is what that means), so the flag runs against a pool that is
+  still moving. The fixture asserts every OTHER precondition is satisfied first, so the arm
+  cannot pass by way of a neighbour, and that a refused flag moves no coin either way.
+  **Two survived and are EQUIVALENT, both measured.** `OpenFlag`'s `cs.lastFlagAt` restamp
+  is a DEAD WRITE: the cooldown is gated on `flagCycles >= 1`, and the only place that
+  becomes true is `ResolveFlag`'s inconclusive branch, which sets `lastFlagAt` itself. So
+  the anchor that gates the cooldown is always the resolve's, and the open's value is
+  overwritten before anything can read it — confirmed by removing it and watching the
+  cooldown still refuse a back-to-back reflag. (Removable as a simplification; left alone,
+  since it is harmless and this is a money path.) And `cs.pendingSlash > 0` is re-refused by
+  `slotConsumed`, which the probe confirms is true whenever `pendingSlash` is positive —
+  the slash-grade path latches both.
+  **The v0.79 refactor was confirmed by an accident.** The batch outgrew a ten-minute
+  ceiling and was KILLED mid-run. Under the old design that left a mutation in the source;
+  now the realm came out clean with no backup files and nothing to recover — the property
+  claimed last version, tested by a real interruption rather than a constructed one.
+  What it did leave was its shadow GNOROOT, and two had accumulated. `gnoroot.build` now
+  REAPS roots whose owning pid is gone before making its own: the pid is already in the
+  name, so an abandoned root is distinguishable from a live one, and live ones are never
+  touched — deleting the tree a running suite is testing against would be the very
+  collision this module exists to remove. Two more self-test controls, one per direction.
+  Batch now 166 rows, all caught, none invalid — and at ~9¼ minutes it no longer fits in
+  one foreground run.
+
+- **v0.79 — the ACCRUAL CLOCK swept: P10's carry was unpinned, and the test that looks
+  like it covers P10 cannot, because it walks a period in one segment.** `emission.gno`'s
+  clock is the other half of the minting path and it governs the LOCKED ceiling. Nine
+  guards; six already held, including the R_max pause, the step-down, the EMA smoothing,
+  **the ceiling itself** (`d_eff = min(realized, budget)` — inverting the comparison is
+  caught), the period budget being sized off the ceiling rather than off `d_eff`, and
+  `touch` clamping a segment to the period boundary.
+  **Both halves of the P10 carry survived** — not adding the carried remainder back in,
+  and discarding it instead of keeping it — and the reason is the interesting part.
+  `TestAccrualIsExactOverAPeriod` reads like the test for this and is not: `rollTo` jumps
+  a WHOLE period in ONE segment, so the numerator is `budget × periodBlocks`, divides
+  exactly, and the remainder machinery never runs at all. P10 is a claim about PARTIAL
+  segments — the case every real court is in, since any state-changing call touches the
+  clock mid-period. So the invariant had a test named after it that structurally could not
+  exercise it, which is a worse position than having none: it reads as covered.
+  The new fixture walks one period in three UNEVEN segments. The carry is exactly what
+  makes that exact: the numerators sum to `budget × periodBlocks`, so the floors plus the
+  carry chain come to precisely `budget` with nothing left over, and the fixture asserts
+  the total, the closing remainder of zero, AND that some intermediate remainder was
+  non-zero — without that last check it would pass on spans that all divided exactly,
+  which is the same nothing the whole-period jump proves. Discard the remainder and each
+  segment floors alone, so the period pays SHORT: a slow leak against everyone the accrual
+  owes, invisible per segment and permanent in aggregate.
+  One more survived and is EQUIVALENT, measured this time rather than argued:
+  `accrueSegment`'s `blocks <= 0 || curPeriodBudget <= 0` fast path. With it removed both
+  cases are exact no-ops, and the reason generalizes beyond the probe — `accrualRem` is a
+  modulus, hence always `< periodBlocks`, so `num = rem` floors to 0 and leaves `rem`
+  unchanged whatever the state. Same standing as `advanceRateAcc`'s `blocks <= 0`, which
+  the source already documents as unreachable-and-kept (v0.66) — except that one is
+  recorded as *not* claimed verified, and this one now is. No batch row, per v0.76.
+  Batch now 157 rows, all caught, none invalid.
+
+- **v0.78 — the MINTING path swept: 9 of 14 guards already held, three real holes closed,
+  and the worst of them loses a payee without leaving a gap to notice.** `emission.gno` is
+  where coin is created, so it was the last large unswept money surface. What already held
+  is worth stating, because it is the expensive half: **the cranker cannot redirect a
+  payment** (`PullSenior` pays `e.to`, and pointing it at the caller is caught), payment is
+  clamped to the entitlement's amount, the paid ledger advances, `seniorOwed` falls,
+  `reservedTail` advances, the F4 reservoir clamp on junior draws holds, `mintEmission`
+  refuses a non-positive amount, and **BOTH halves of M3-CRITICAL-1** — the start cursor
+  clearing `juniorReserved` at enqueue, and `PullSenior` honouring that offset — are pinned.
+  Three survived.
+  **`c.queueSeq++`, the serious one.** Without it the second `queue.Set` lands on the
+  FIRST entitlement's key. The first payee's claim is gone while `reservedTail` and
+  `seniorOwed` still count both amounts: a debt the court believes it owes and nobody can
+  pull. What makes it invisible is the queue's own design — there is no removal, paid
+  entitlements stay with `paid == amount`, so there is no missing entry to spot, only a
+  wrong one. The fixture asserts both seqs answer with their OWN payee and amount, which
+  is what an overwrite fails: the survivor would answer for both.
+  **A non-positive entitlement** would sit in a queue that never forgets, emitting an event
+  for nothing. **A negative junior reservation** would REDUCE `juniorReserved`, dragging a
+  later senior's start cursor back under the junior stretch — which is exactly the overlap
+  M3-CRITICAL-1 exists to prevent, arriving from the other direction. All three are pinned
+  by one fixture calling the internals directly, as settled in v0.60 and v0.69.
+  **Two more survived and are EQUIVALENT, both verified in the VM rather than argued.**
+  `PullSenior`'s `pay <= 0` fast path: `cumAccrual` is only ever `mustAdd`-ed, so it never
+  decreases and a negative `pay` is unreachable; at `pay == 0` every following statement is
+  a no-op and the function returns 0 either way. The one real difference is that the
+  removal EMITS a zero-value `seniorPaid` event, and since anyone may crank permissionlessly
+  that is indexer noise rather than money — recorded, not tested. And the unknown-seq nil
+  check: removed, the type assertion aborts the call anyway, so it buys a clear message.
+  Neither gets a batch row, for the reason set out in v0.76 — a row that always survives
+  would break the all-caught invariant that makes the batch legible.
+  Batch now 149 rows, all caught, none invalid.
+
+- **v0.77 — the STAKING lane is fully covered (8 of 8), and advertising parallelism
+  exposed a real bug in the harness itself: two mutate runs in one worktree silently
+  corrupted each other.** The staking lane first, since it is where principal-is-no-loss
+  lives: `Stake` and `Unstake`, eight guards — both per-side pool routings, the
+  over-unstake bar, both freeze gates, the closed-claim gate and both positive-amount
+  checks — and **all eight already caught**. Notable because `Stake`'s per-side routing is
+  the exact counterpart of the one that survived in `WithdrawStake` last version; here the
+  pin comes from the X̄-frozen fixtures, which read the pools afterwards.
+  **Then the harness bug, which is the substantial part.** `mutate.py` wrote mutations
+  into the REPO's sources and reverted them afterwards. Running a second batch while the
+  136-row batch was going produced `mutate: recovered claim.gno from a run that did not
+  finish` — the second run had found the first's backup files and "recovered" them, which
+  means it REVERTED a mutation that was at that moment under test. That row then reports
+  SURVIVED because nothing was broken: the harness's own signature failure, a non-result
+  reported as a result, in a fourth form beside the three its header already warns about.
+  Those results were discarded and the batch re-run alone.
+  Note the provenance: this was reachable before, but nothing reached it until v0.74 made
+  parallel runs a thing anyone would try. Removing a serialization is also a claim that
+  nothing needed it, and that claim was wrong about one resource — the sources — even
+  though it was right about the staged tree.
+  **Fixed structurally rather than with a lock.** Mutations now go to the STAGED COPY,
+  inside the run's own shadow GNOROOT, between staging and testing. The repo is never
+  written to. That removes the whole class rather than guarding it: no `.mutate-backup`
+  files, no recovery pass, no `*.mutate-backup` in .gitignore, no standing rule to check
+  `git diff` before trusting a green suite — and a killed run can no longer leave a
+  mutation in the source at all, which is what cost an hour earlier in this work.
+  Verified three ways: the same five rows return the same verdicts as before (three
+  caught, one equivalent survivor, one BAD ANCHOR); the realm sources are untouched after
+  a run; and **two batches run concurrently in ONE worktree now both report correctly,
+  with no "recovered" line between them.** Full batch re-run alone: 136 rows, all caught,
+  none invalid, realm clean throughout.
+
+- **v0.76 — the ADJUDICATION core swept: both vote deadlines were unguarded by any test,
+  and a late vote is a first-mover veto rather than merely a late vote.** `VoteQuality` is
+  where the system decides things, so it was the next target after the payouts. Nine
+  guards, six already pinned — Q2's participant bar, the one-vote-per-tally latch, the
+  tally-seq in the vote key, both bucket routings, and the dispute lane's own deadline —
+  and three surviving.
+  **Both remaining deadlines.** Between `flagVoteEnd` and whoever gets round to calling
+  `ResolveFlag`, the running tally sits on chain for anyone to read while the window is,
+  on paper, shut. The same holds for the counter re-vote. Without the guard a late voter
+  reads the result and then tips it, which is worth naming precisely: it is not a late
+  vote, it is a veto over every vote cast honestly, held by whoever moves last. Nothing
+  caught it because every existing fixture does SkipHeights-then-Resolve and never tries
+  to vote in the gap — the guard was only ever exercised from the side where the window
+  was open.
+  **The checkpointed-weight requirement.** Without it any address enrols in the claim's
+  vote tree. It adds nothing to the tally, since it adds its own zero, but it is recorded
+  as a voter and later writes a carrot-claim key as well.
+  All three are pinned by one fixture, because a refused vote cannot disturb the tally it
+  was refused from: flag, slash, counter in a single narrative.
+  `VoteDispute` came out better — it delegates eligibility to the governor and only records
+  the choice for the carrot, and both halves of that record are pinned (by the fixture
+  written for the carrot last version: the recorded choice, and the round it was cast in).
+  Its `!cs.disputeOpen` guard SURVIVED and is **equivalent**, checked rather than argued:
+  `disputeOpen` is cleared only at the end of `ResolveDispute`, which is gated on the
+  proposal no longer being active, so the guard rejects only what the governor also
+  rejects. With it removed, a never-disputed claim aborts with `govern: no such proposal`
+  and a resolved round still aborts — measured in the VM both ways. It is defensive depth
+  (a clearer message, and independence from the governor's policy), so it gets no fixture
+  and deliberately no batch row: a row that always survives would break the batch's
+  all-caught invariant, which is the property that makes the batch readable at a glance.
+  Batch now 136 rows, all caught, none invalid.
+
+- **v0.75 — `PullCarrot`'s electorate was half-unpinned, and one of the survivors is the
+  invariant item 4's NO-CHANGE verdict was argued FROM.** Policing pay lives in the carrot,
+  so it was the next target after the draw family. Six guards mutated, three already
+  pinned by `cz2` (participants never take it, one claim only, the latch is written), three
+  surviving — all three on the question of WHO gets paid and HOW MUCH.
+  **The against-verdict voter.** Drop the `carrotChoice` half of the decided branch's test
+  and someone who voted AGAINST the verdict draws the policing pay of the round that went
+  the other way. Nothing caught it because no fixture had ever built a CONTESTED decided
+  round: `cz6` has a single voter, so every recorded vote equals `carrotChoice` by
+  construction and the comparison is true whatever it compares. The new fixture makes the
+  round contested and refuses the loser by name — and the loser DID vote, so the arm cannot
+  pass by way of the non-voter branch instead.
+  **The non-voter.** On the standalone branch a complete non-voter was refused by a guard
+  no test exercised. Pinned in the above-full-bar fixture, which is the one with a live pot.
+  **The pot clamp — `share > carrotPool ⇒ share = carrotPool`.** This is the one worth
+  recording carefully. v0.71's item-4 econ vet concluded NO-CHANGE on policing pay, and its
+  second reason was, verbatim, that "the carrot is a **pot**, not a per-voter entitlement
+  (`share > carrotPool ⇒ share = carrotPool`) — so the WHOLE electorate together is paid
+  less than one flagger's own bond, and '~999 CC each' is arithmetically impossible."
+  That clamp had no test. The design argument was sound and the code was correct, but the
+  line the argument rests on was one edit away from being false with nothing to notice. A
+  conclusion is only as durable as the guard it cites, and citing a guard is now a reason
+  to go and check that something pins it.
+  The clamp arm leaves a single unit in the pot and requires a voter whose own share is of
+  the same order to take only that unit; the arm's discriminating power is established by
+  the mutation being caught, not asserted in the fixture.
+  Batch now 123 rows, all caught, none invalid.
+
+- **v0.74 — item 5 is DONE, including the half recorded as needing an owner decision:
+  every runner now gets its own GNOROOT, so two worktrees can test at the same time.**
+  The decision that was parked was between two bad options — keep sharing one tree, or
+  rewrite import paths at staging time so each worktree could have its own directory,
+  which would mean the code under test differs textually from the code that is committed.
+  There is a third way, and it needs no decision: **GNOROOT itself is honoured from the
+  environment**, so a runner can have its own. `scripts/gnoroot.py` builds a shadow —
+  every top-level entry SYMLINKED, except `examples`, which is a real copy — and the
+  runner points GNOROOT at that. Import paths are untouched; the staged sources are
+  byte-identical to the committed ones.
+  Only `examples` has to be real, and that is the load-bearing detail: gno's package
+  discovery WALKS the examples tree and does not follow symlinks, so a symlink farm alone
+  fails with `gno: downloading gno.land/p/nt/bptree/v0` and a network error. A symlink
+  farm plus one real copy of examples works, and examples is 14MB — about half a second.
+  Everything expensive (gnovm, tm2, the stdlibs) stays a symlink and resolves fine
+  through it.
+  **There were FIVE staging sites, not the three the item named** — realm-test,
+  check-isolation, mutate, txtar's TestMain, and `check-storage.py`, which staged into
+  the shared tree while taking no lock at all and ends by removing the whole of
+  `p/cryptocourt`. So a guard whose only job was to measure a filetest's storage could
+  delete another runner's staged packages out from under it. All five now build their own
+  root, which is why this is a better fix than adding a fourth lock call site.
+  `scripts/stagelock.py` is deleted. Nothing takes it any more, and a lock nobody takes
+  is worse than no lock: it tells a reader that staging is serialized when it is not.
+  **Demonstrated rather than assumed:** two `make realm-test` runs launched concurrently
+  from one checkout both exit 0, no shadow roots are left behind, and the real tree has no
+  cryptocourt staging in it afterwards. That is the property item 5 actually wanted and it
+  is now a measured result. Six self-test controls replace the three lock ones, covering
+  both directions that fail silently: that two shadows are isolated and neither leaks into
+  the real root, and — the catastrophic direction — that `remove()` refuses anything that
+  is not a shadow and unlinks symlinks rather than following them into a real gno
+  checkout. Without that last one a bug here deletes the monorepo, and no test in this
+  repo would survive to report it.
+  **Hardened after watching the other worktree run.** `cryptocourt-mod` was mid-suite
+  during this work, which showed two things the first draft got wrong. The copy of
+  examples/ now SKIPS the staging directories (`cryptocourt` and the renamed `kourt`):
+  they are the only volatile part of that tree, and another runner part way through its
+  own rm -rf would otherwise fail this copy with an error about a path nobody asked for.
+  Skipping them is both the correct result — a staged realm must not reach the real tree's
+  copy of itself — and the robust one. `.git` is now left out rather than symlinked as
+  well: nothing here needs it, and a link would mean any tool that ran git inside a shadow
+  was working on the real checkout's index. Cost is about a second, once per run.
+  **Then re-verified under real concurrency:** the 117-row batch and the 393-test isolation
+  sweep run at the SAME TIME from this worktree, while the renamed worktree ran its own
+  check, isolation, txtar and mutate — five test workloads across two checkouts, all green.
+  Note for anyone reading the old entries: **`gno env GNOROOT` is cwd-dependent.** Run
+  from a gno monorepo checkout it reports that checkout; run from this repo it falls back
+  to `~/gopath/src/github.com/gnolang/gno`. The tooling runs from here, so that is what it
+  shadows — but a figure quoted from a shell sitting somewhere else will disagree.
+
+- **v0.73 — the withdraw family swept: five of six guards already pinned, and the one
+  survivor is the one that changes nothing the caller can see.** `WithdrawStake` is the
+  function that moves real GNOT out of escrow, so it was the natural next target after the
+  two bonus twins. It came out well: the zeroing, the empty position, and BOTH clauses of
+  the early-withdrawal gate are all pinned, as is `WithdrawBonus`'s winning-side check.
+  The one that survived is **the per-side pool bookkeeping** — swap the branches so a
+  withdrawal debits the OTHER side's pool and nothing objected. That is exactly the profile
+  of a gap this sweep is now looking for: every other guard aborts or changes what the
+  caller receives, whereas this one pays the withdrawer correctly and leaves the damage
+  behind in the claim.
+  Not cosmetic. `advancePools` builds the per-side ∫stake·dt from these totals — its own
+  comment requires it to run BEFORE any mutation of them — and that integral is the F9 cap
+  base every bonus is clamped against; the totals also feed the OI and YES observations.
+  So a misdirected debit corrupts the conviction accounting of a side that did nothing, and
+  because the losing side may leave EARLY while the claim is still live (F7/A12), it can do
+  so while those numbers are still being used.
+  The discriminating assertion is the one after the FIRST withdrawal: once both sides have
+  gone, a swapped debit has subtracted both amounts either way and only the two totals
+  separately still carry the trace. **The fixture's first draft was wrong** and the harness
+  caught it as BASELINE IS RED rather than as a green pass — it asserted pools of 200M/300M,
+  but `matureOI` stakes repeatedly to mature the observation window, so YES was 600M. Fixed
+  by asserting the RELATION the test actually needs (both live, and unequal — equal pools
+  would hide a swapped debit by symmetry) instead of figures copied from the setup call.
+  Batch now 117 rows, all caught, none invalid.
+
+- **v0.72 — `AuthorBonus` had the same three gaps as its twin, and two of the four
+  vectors in v0.71's `Cost` table were decorative.** The pattern behind both v0.71 and
+  this entry is now explicit and worth naming: **a guard exercised only on the side where
+  it does nothing is indistinguishable from a covered guard.** Every draw function is
+  called by the party entitled to draw, once, in a fixture whose point was the arithmetic —
+  so the identity checks and the one-draw latches were all asked only of the party that
+  passes them. `AuthorBonus` repeated `AnswererBonus` exactly: identity, latch, and the F9
+  cap, three of three surviving. In the happy path the author IS the answerer, which is
+  why one fixture hid two functions' worth of gaps.
+  The cap arm drives the F9 time-average to ZERO instead of crafting a bound, because that
+  is what F9 asserts — a position with no measurable capital-time draws nothing however
+  large the slice it would otherwise take — and because an expectation recomputed from
+  `capBonus`'s own arithmetic would be compared with itself (the v0.61 self-reference
+  lesson). Also pinned: the latch holds even when the draw paid zero, or the cap becomes a
+  retry loop.
+  **And a correction to v0.71's own fix.** Adding `{1,-1}` caught the guard, so the table
+  looked done. Measured with the guard deleted on the fixture's own curve, only three of
+  its seven pairs discriminate at all: `{1,-1}` and `{2,-1}` (the wrap family), and
+  `{-631917,1}`, which was missing. That last one is the WORSE failure — not `ok` flipping
+  on a zero cost but a FABRICATED PRICE of 9223372036854459850 with `ok=true`, because
+  `uint64()` of a negative `from` injects a 2^65·|from| term and both magnitude checks
+  bound SIZE, not domain. `{-1,10}`, which had been standing in for the negative-`from`
+  case, is refused either way: it misses the quotient check by a margin of **21**, so it
+  was never protection, only a coincidence of d=2. With it alone, deleting just the
+  `from < 0` clause survives. Each pair is now labelled with whether it discriminates.
+  **Three independent reviewers converged 3/3** on the shape of the `curve` verdict: the
+  domain check is load-bearing, the other three are value-equivalent but chained. One of
+  them additionally proposed fixing the in-code comment at the `hi2 >= m` guard, which
+  says that deleting it would violate `bits.Div64`'s `hi < m` precondition — reporting 0
+  such violations across six million inputs. **That correction was checked and REFUSED.**
+  Its sweeps deleted the DOMAIN check, where a negative span wraps `hi2` to zero and no
+  violation can occur; the guard's own removal is a different path. Removed for real, on
+  the court's own shape, `Cost(0, 2e14)` panics with `math/bits: integer overflow`, exactly
+  as the comment says — and `Cost(0, 1.9e14)` still returns `(0, false)`, placing the
+  threshold where the comment places it. A measurement that swept the wrong mutation is
+  still a measurement, and it read like a finding. The comment stands unchanged.
+  That guard IS pinned, but by `TestBuyMintsAndBurnsGNOT` in the realm rather than by
+  anything in `curve` — coverage by importer, which the harness counts and which is worth
+  knowing is what is holding it up.
+  Batch now 112 rows, all caught, none invalid.
+
+- **v0.71 — `AnswererBonus` had FIVE of five guards unpinned, and the `curve` "all four
+  are equivalent mutations" reading of v0.70 was WRONG on the one that mattered.**
+  **`AnswererBonus` is the first function found with no guard covered at all.** Five
+  mutations, five survivors: the tier bound never binding, the bound taken as a whole bond
+  instead of half, the bound read one tier high, the slice drawable twice, and *anyone*
+  drawing the answerer's slice. The last two both reach `mintEmission` — one mints to a
+  stranger, the other mints again on every call — so neither is an equivalence.
+  The instructive part is that the function was NOT untested. Two fixtures call it:
+  the mid happy path asserts the answerer draws exactly its slice (so the bound is never
+  reached), and the M3 overturn fixture asserts zero — but by way of `drawAnswerer == 0`,
+  not the bound. Both call it AS the answerer, once. Every guard was exercised on the side
+  where it does nothing, which is indistinguishable from coverage until something breaks it
+  on purpose. The new fixture drives the bound DOWN below the natural slice rather than the
+  slice up past the bound, so the clamp is tested against the cap and not against the
+  emission budget; it fails loudly if the cap ever starts binding on its own.
+  **RETRACTION.** v0.70's reading of the four `curve` survivors — "defensive depth, every
+  input they reject is rejected again downstream, all four equivalent" — was right about
+  three and wrong about `Cost`'s domain check, in this repo's signature failure mode. The
+  argument was that a negative span borrows, so `hi` is all ones, so `hi2 >= m` re-rejects
+  it. It does not: `bits.Add64(lo, m-1, 0)` CARRIES, `hi + carry` WRAPS BACK TO ZERO, and
+  the overflow guard sees nothing. `Cost(1, -1)` answers `(0, TRUE)` — a valid quote for a
+  span that runs backwards, which is exactly the "walking it backward would let the same
+  region be bought twice" failure the package doc names. So I reasoned about a wrap guard
+  and got caught by a wrap. It survived only because the pairs first written into the table
+  ({10,-1}) sit too far from the origin to diverge — the divergence needs
+  from² − s1² ≤ 2d−1. Now caught, in the real VM, including the isolated `delta < 0` clause.
+  The other three ARE value-equivalent, but not independently redundant — they are MUTUALLY
+  PROTECTIVE, and the clamp is the one that must not be removed as dead. Measured, not
+  argued: with the domain check and the clamp both gone, on a curve `New` will happily
+  build, `Minted(1, -1)` returns **9223372036854775807 units for a spend of 0**. `uint64(-1)`
+  pushes the operand past `isqrt128`'s exact range, `r` comes back as its search bound 2^63,
+  `int64(r)` is MinInt64, and `s1 - from` wraps to MaxInt64, which the `delta <= 0` exit then
+  waves through as a positive mint. Recorded beside the clamp, since that is where somebody
+  would go to delete it. Also corrected: v0.70 called the domain check's cost "bounded work,
+  up to cap steps" — for a negative `from` it is up to ~9.2e18 divisions, an unconditional
+  hang, not a gas nit.
+  None of this changes `curve` logic — the guards are all present and correct; the finding
+  is that one of them was unpinned and the other three are load-bearing in combination.
+  Batch now 107 rows, all caught, none invalid.
+
+- **v0.70 — the isolation sweep is clean at full scope; the staging lock could call a
+  LIVE holder stale, and the fix removes the last hand-copy.** Three results, none of
+  them a realm change.
+  **The isolation sweep now covers what it claims and passes: all 390 tests across 11
+  packages pass alone as well as together.** v0.62 fixed the staging (the realm lists are
+  read from the Makefile, not copied), but the sweep at full scope had never actually been
+  RUN — so "courtv2 is now covered" was a statement about the script, not a result. It is
+  now a result: no test in the V2 realm depends on a neighbour having run first, so the
+  order-dependence this item expected to expose does not exist. Worth having asked, since
+  the two instances that motivated the guard (an unregistered kind, a clock nobody rewound)
+  were both invisible until swept.
+  **The staging lock's patience ceiling had become shorter than its longest legitimate
+  hold.** All three runners waited 600s and then told the operator to "remove it if it is
+  stale" — but the sweep above legitimately holds the lock for a quarter of an hour, so the
+  ceiling that was meant to catch a DEAD holder had started firing on a live one, and the
+  advice it gave was to delete the one piece of state whose deletion while live re-creates
+  the exact race the lock exists to prevent. A holder now records its pid, so a waiter can
+  KNOW rather than guess: a dead holder's lock is reclaimed automatically (by rename, so
+  two waiters cannot delete each other's fresh lock), a live one is waited on by name, and
+  an unidentified one — a lock from the old inline loops — is never touched. The two stale
+  locks this session recovered by hand no longer need a human.
+  **And it is now ONE implementation, in `scripts/stagelock.py`.** It was three hand-copied
+  loops, which is precisely the arrangement that let check-isolation's realm lists drift out
+  of step with the Makefile's for an entire development cycle; repeating it after fixing
+  that would have been the same mistake with the serial numbers filed off. The Makefile
+  shells out to it and holds it with the SHELL's pid, since the shell's liveness is what
+  the hold means.
+  Three self-test controls added, and the coverage rule extended: it compared `exercised`
+  against `scripts/check-*.py` only, so a runner not named `check-` sailed through with no
+  control — `mutate.py` had been in that blind spot all along. Also fixed two drifted facts
+  in check-isolation's docstring: a test count that read 143 through the very change that
+  quadrupled it (now stated as a recomputable range, since a figure nobody can derive will
+  drift again), and a paragraph about `grc20`/`qcards`, packages this repo does not contain.
+  Also recorded: **items 1–4 of the standing priority list are closed**, verified by
+  reading rather than assumed — the unslash leg (`disposeSlashOnRide`/`rearmSlashWindow`,
+  both named tests inverted not deleted), and all four v0.45 test gaps, one of whose
+  fixtures names itself "v0.45 gap 2".
+
+- **v0.69 — `Params.mustSane` had six unexercised guards, and a note on why
+  `mustInvariants` is NOT mutation-testable.** `court.gno` was the last thin file by
+  ratio: 348 lines, two batch rows. Thirteen guards live in it — seven in
+  `mustInvariants` and six in `mustSane` — and none of the latter had a test.
+  They are unreachable today (StartCourt hardcodes `defaultParams()` and there is no
+  params setter anywhere), so the fixture calls the method DIRECTLY, the approach settled
+  in v0.60 for `mulDiv128` and `capBonus`. Worth pinning now rather than later because
+  `mustSane` becomes load-bearing the moment a setter exists, and §12 row 37 already
+  contemplates one (the deposit lever, 1 CC → 5 CC): a validator nobody has ever
+  exercised is a poor thing to discover a governance path with. All seven mutations
+  caught, including BOTH edges of the threshold band — weakening the lower bound to 5000
+  would let a TIE overturn an answer, and the fixture asserts 5001 and 10000 are accepted
+  so the guard cannot pass by rejecting everything. Also pinned: equal escrow bounds stay
+  legal (a fixed-length window, which several fixtures set) and a zero bond cap stays the
+  documented "uncapped" sentinel.
+  **`mustInvariants` is deliberately NOT in the batch, and the reason is worth recording.**
+  It runs at `init()`, so mutating any constant it checks panics the PACKAGE LOAD rather
+  than failing a test. The harness would print "caught" — but nothing was judged by a
+  test; the realm simply refused to load. That is the same false signal as counting a
+  build failure as a catch, which this file's header warns about, arriving through a third
+  door. The deploy check IS its own enforcement and needs no fixture; what it does not
+  need is a batch row implying a test stands behind it.
+  Batch now 100 rows, all caught, none invalid — including two `directory.gno` rows that
+  were mutation-verified back in v0.58 and never recorded.
+
+- **v0.68 — the CLAIM LIFECYCLE was almost entirely unpinned: six survivors in one
+  batch, the worst run of the session.** The remaining thin files (`claim.gno`,
+  `court.gno`, one row each) turned out to be thin because nothing tested them.
+  **`CloseDeadClaim` would kill an ANSWERED claim.** Removing the "it settles, it does
+  not die" guard failed no test. An answered claim has a bond in escrow and a settle
+  path; dying instead refunds the deposit, sets `closed`, and leaves `Crystallize`
+  panicking on `closed` forever — the bond stranded. Reachable because `deadClaimTimeout`
+  and the answerability window are both 12 weeks, so an answer landing late leaves a claim
+  that is both answered and past the timeout.
+  **`StartCourt` would overwrite a taken slug**, replacing the `Court` value the tree
+  holds and orphaning every claim, position and escrowed balance under it while the coin
+  ledger keeps the funds. Three of my own test-slug collisions this session surfaced that
+  panic — as a SETUP failure, which is not the same as asserting it, and is exactly why it
+  read as covered.
+  Also unpinned and now closed: a repeat `CloseDeadClaim` (exactly-once holds by field
+  zeroing, so the guard pins the CONTRACT rather than the payout), the dead-claim refund
+  going to the author rather than the burn, and `OpenClaim`'s 1..200 title bounds — the
+  title is attacker-chosen and reaches every render path.
+  **`escrowWindow` is now measurable, which turns §12 row 30 from prose into a fixture.**
+  Both arms were unpinned; making it ignore `extraDays` entirely failed no test.
+  `TestEscrowWindowGrowsThenPinsAtTheCap` pins zero-X̄ at the minimum, a middle case
+  growing in WHOLE days strictly between the arms, and the cap arm binding past the room —
+  which is row 30's corrected premise. Writing it surfaced the cold-start half too:
+  `Price(s) = s/d` with integer division and d ≈ 1e9, so on a court nobody has bought into
+  the price FLOORS TO ZERO and every claim sits at `escrowMin` regardless of X̄. That is
+  not an artefact of the fixture — it is why row 30 says the window grows "once the curve
+  has any real price", and it took a 5 GNOT buy to move it off zero.
+  Batch now 91 rows, all caught, none invalid.
+
+- **v0.67 — batch-coverage sweep: `answer.gno` had two mutations for the file that sizes
+  the bond, and the cap's binding half was open.** Checked the batch against the source
+  tree — every courtv2 file had at least one row, but `claim.gno`, `court.gno`,
+  `directory.gno` and `answer.gno` had one or two each, and `answer.gno` is where the bond
+  is sized and the freeze is pinned. Seven mutations there; six caught (the flat-arm half
+  of the floor, H1's write side, the P6 base pin, the escrow transfer, and both floor
+  removals once well-formed), one surviving: the court's `answerBondCapCC` clamp.
+  `TestBondCollateralizesSlashUnderCourtCap` sets the cap to 1 and asserts
+  `bond >= slashSizeFor`, so it pins the case where the FLOOR overrides a tiny cap — and an
+  uncapped bond of 50%·X̄ satisfies that too. The half nothing covered is the cap actually
+  BINDING, which is the knob's only purpose. `TestAnswerBondCapBindsWhenTheFloorIsBelowIt`
+  places the cap strictly between the flat floor (4.5%·X̄) and the uncapped bond (50%·X̄) and
+  requires the bond to equal the cap; together the two fixtures pin the ordering
+  answer.gno spells out — floor applied AFTER the cap, because an uncollateralized slash is
+  worse than an over-large bond and "the cap must not re-open the hole".
+  **THIRD correction on the collateralization floor, and this one retires the topic.** I
+  reported it as a survivor twice: in v0.62 on a mutation I had written as `_ = 0`
+  appended (a no-op that tested nothing), and again this firing on one that failed to
+  BUILD. Well-formed, it is CAUGHT by the existing fixture, and so is the
+  floor-before-cap reordering. The floor was never unpinned; my mutations were malformed.
+  Three strikes on the same guard is worth stating plainly: I was pattern-matching "audit
+  round 2 comment, therefore probably untested" instead of reading the harness's verdict
+  column, which said INVALID both times and not SURVIVED. Batch now 84 rows.
+
+- **v0.66 — swept the audit-named invariants systematically; N3 was open, and the
+  "documented means unpinned" pattern I claimed in v0.65 is WRONG.** Instead of guessing
+  areas, grepped the source for emphatic invariant markers (`audit X`, `M3-*`, `NOTE-*`,
+  `Do NOT`, `CRITICAL`) and mutated the guard beside each. That list is a good map: H1,
+  C1, M3-CRITICAL-1, M2-1, M3-MED-1 and M3-LOW-1 were already covered by earlier firings.
+  **M3-HIGH-1 is WELL pinned** — three mutations of the retention amount in both terminal
+  paths (whole bond returned in `SettleUndisputed`, the same in `Finalize`, and a subtle
+  half-size retention) were all caught. That matters because it **refutes the pattern I
+  asserted in v0.65**, that "documentation and verification are inversely correlated here".
+  M3-HIGH-1 is the most heavily commented invariant in the realm and it is also the best
+  tested. The real distinction is narrower: a guard is pinned when the FIX that introduced
+  it shipped with a fixture, and unpinned when it was added as REASONING — H1's freeze cap,
+  the P7 winners' slice and §7.4's other three terms were all argued in prose and never
+  driven. I overstated a two-point correlation into a law; the corrected version is about
+  provenance, not about how much prose a guard carries.
+  **N3 (the render page bound) was open, and its mutation HANGS the suite** rather than
+  surviving — which is itself the finding: removing the bound makes an attacker-openable,
+  deposit-priced claim count turn a page render into unbounded work, enough to blow a
+  ten-minute budget. Pinned by asserting the cap BINDS on a court with more claims than a
+  page (a fixture cannot use a mutation that hangs), and **the first version of that
+  fixture was self-referential** — it sized the setup from `renderPageSize`, so mutating
+  the constant moved setup and expectation together and the mutation survived. The bound is
+  now written independently, with a mismatch check so a deliberate page-size change fails
+  loudly instead of silently widening the assertion.
+  **Two survivors documented rather than faked:** `advanceRateAcc`'s `blocks <= 0` early
+  return (blocks is always now-minus-lastTouch and touch never runs backwards, so it cannot
+  be negative; kept because the failure it prevents is rateAcc moving DOWN, repricing every
+  live position — H1's class from the other side) and the negative-realized-mint panic,
+  which the source already labels "defensive" since `emittedTotal` is monotone.
+  **Second timeout of the session, and my v0.62 rule paid for itself:** the killed run left
+  `renderPageSize = 1000000` in the source and a stale stage lock. Checked `git diff` on
+  the realm first, restored from `.mutate-backup`, cleared the lock with `rmdir`. Batch now
+  77 rows, all caught, none invalid.
+
+- **v0.65 — the P7 draw split was open on the side the code warns about.** Eight
+  mutations over `PullSenior`'s payable math, `reservoirR`'s two subtractions, and the
+  80/8/5 split. Seven caught — the senior lane's paid-deduction, its `paid` bookkeeping,
+  both reservoir subtractions, and the author and answerer slices — and ONE surviving:
+  `drawWinners = d`, the whole draw to the winners with no 80/93.
+  That is precisely the edit `crystallize.gno`'s own comment forbids: "D is the WHOLE
+  claim draw and the 80/8/5 split is taken OUT of it — so a winner receives 80/93 =
+  0.860·midGross, NOT the full midGross … Do NOT 'fix' toward §3.5 — it would inflate
+  every draw 16%." The author slice was pinned and the winners' was not, so the one
+  documented-forbidden change was the one nothing would have caught. Closed by
+  `TestP7SplitTakesEightyOfNinetyThreeForWinners`, asserted as a RATIO against the
+  observed total rather than against `d` (which is not exported and whose three slices
+  floor independently): if the split is taken, `winners × 93 == total × 80` up to a few
+  units of floor loss, and if the whole draw goes to the winners the total becomes
+  `d × 106/93` and the identity breaks by ~1.8·d.
+  Batch now 70 rows, all caught, none invalid. Slug grepped BEFORE writing this time.
+
+- **v0.64 — `make mutate`, plus H1 and the credential accounting were both unpinned.**
+  Added a Makefile target for the batch, because the batch was otherwise invisible:
+  `mutate.py` sat in this repo through the whole of the v0.51–v0.62 work and went unused
+  because nothing pointed at it, so every guard was mutated by hand. The target's comment
+  carries the two recovery notes a killed run needs (check `git diff` on the realm; the
+  `.mutate-backup` files and the stale stage lock).
+  **H1 (audit-named) was surviving.** `effectiveRateAcc` caps a claim's era integral at
+  its freeze snapshot so FROZEN conviction can never be repriced by later d_eff moves —
+  and removing that cap failed no test. Without it every position's settlement changes
+  retroactively whenever the court's rate moves after the answer, so the same votes and
+  the same stake pay differently depending on when you settle.
+  `TestFrozenConvictionIsNotRepricedByLaterRateMoves` pins it on the function the
+  invariant lives in, and pins the complement too — an UNFROZEN claim must still track the
+  court, so the guard cannot pass by pinning everything.
+  **The credential accounting was surviving.** `resetOverturned` decrements
+  `qualifiedCount` only when the record WAS qualified; making it unconditional failed no
+  test. The count is an `int` with no floor and drives `priorityGateActive`'s cold-start
+  guard (R5e), so overturning answerers who never reached `priorityNetRecord` = 3 drives it
+  NEGATIVE and the 24h priority window then stays off however many genuine credentials the
+  court later earns. Pinned along with three neighbours: qualifying exactly once at the
+  threshold rather than per win, the overturn burning the WHOLE career score rather than
+  decaying it, and `releasePriority` freeing only the slot it holds.
+  **Third slug collision of the session**, same cause every time — I know the check
+  (`grep testCourt slugs | uniq -d`) and skipped it again. The harness's baseline-red
+  gate caught it, as it did in v0.59. Worth stating as a rule since I have now proved I do
+  not remember it: pick the slug LAST, after grepping.
+  Batch now 63 rows, all caught, none invalid.
+
+- **v0.63 — the harness now judges a mutation by its OBSERVERS, and the whole batch runs
+  in 2.5 minutes instead of timing out.** `run_suite` ran all staged suites for every
+  mutation, which is what made 56 rows exceed a ten-minute budget and get killed
+  mid-mutation (v0.62). But the principle in its own docstring is narrower than "all": a
+  mutation should be judged by its package's own tests PLUS every staged tree that imports
+  it, because "caught by neither" is the finding. An `OBSERVERS` map encodes exactly that —
+  courtv2 mutations run courtv2's suite alone; a grc20votes mutation runs grc20votes,
+  courtv2 and govern; checkpoint runs its four transitive importers. Staging is unchanged
+  (every tree is still staged, since imports must resolve), and the BASELINE still runs
+  every suite, so a red tree anywhere is still caught before any mutation is judged.
+  **Also corrected a v0.57 claim of mine:** I registered `cshares` and `tickbook` as trees
+  courtv2 needs staged. It does not — the import graph shows only the V1 `court` realm uses
+  them, and V1 is deliberately absent from this harness, so they were adding two suite runs
+  to every mutation for nothing. courtv2's actual imports are curve, governor, grc20votes
+  and twap, plus checkpoint transitively. Pruned.
+  **Result: 56 rows, 0 survived, 0 invalid, 2m27s** — the batch is now something a
+  contributor can actually run before a money-path change rather than a file that times
+  out. `make selftest` still reports every control firing.
+
 - **v0.62 — the money-IN path: one guard pinned, three unreachable, and ONE THAT NO TEST
   IN THIS HARNESS CAN COVER.** Eight mutations against `buy.gno`, never touched before.
   **Pinned:** `IsUserCall` against deletion, the mint going to the buyer, the zero-send
@@ -1663,7 +2353,8 @@ Newest first.
   that hangs the suite gets the whole run timed out, and the source is left broken … It
   cost an hour once"), and its on-disk `.mutate-backup` files are what made recovery a
   one-liner. Two rules: run slices of ~10 rows, and after ANY interrupted run check
-  `git diff` on the realm before trusting a green suite. The kill ALSO left a stale
+  `git diff` on the realm before trusting a green suite — and FIXED in v0.63, so the
+  slicing rule is no longer needed. The kill ALSO left a stale
   stage lock — `stage_lock`'s `finally` does not run when the process is killed — and the
   10-minute ceiling I gave it in v0.57 reported that clearly instead of hanging, which is
   what it was for. Clearing it is `rmdir`, and the message says so.

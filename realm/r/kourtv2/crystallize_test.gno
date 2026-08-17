@@ -394,6 +394,37 @@ func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
 	if carrot <= 0 {
 		t.Fatal("above the full bar the carrot is tier-invariant and must be paid")
 	}
+
+	// Two guards on the STANDALONE branch, both found surviving. This is the fixture
+	// that has a live pot to take, so it is where they belong.
+	//
+	// First: the electorate is the tally's own voters. A complete non-voter is refused.
+	gus := testutils.TestAddress("cz5-gus") // never voted on anything
+	testing.SetRealm(testing.NewUserRealm(gus))
+	uassert.AbortsContains(t, cur, "conclusive quality tally", func() {
+		PullCarrot(cross(cur), "cz5", id)
+	})
+
+	// Second: the carrot is a POT, not a per-voter entitlement. That is not a detail —
+	// it is the invariant the item-4 econ vet's NO-CHANGE verdict rested on ("the WHOLE
+	// electorate together is paid less than one flagger's own bond"), and it had no test.
+	// Eve takes her pro-rata share, then the pot is left holding a single unit and
+	// Frank — whose own share is of the same order as Eve's — must take only that unit.
+	testing.SetRealm(testing.NewUserRealm(eve))
+	evesShare := PullCarrot(cross(cur), "cz5", id)
+	if evesShare <= 1 {
+		t.Fatalf("setup: shares here must exceed a single unit for the clamp arm below "+
+			"to mean anything: %d", evesShare)
+	}
+	cs.carrotPool = 1
+	testing.SetRealm(testing.NewUserRealm(frank))
+	if share := PullCarrot(cross(cur), "cz5", id); share != 1 {
+		t.Fatalf("a share must be clamped to what is left in the pot, not paid in "+
+			"full: got %d want 1", share)
+	}
+	if cs.carrotPool != 0 {
+		t.Fatalf("and the pot must be empty afterwards, not negative: %d", cs.carrotPool)
+	}
 }
 
 // The `decidedPID == 0` clause of v0.55's withholding, pinned. On a DECIDED claim the
@@ -563,4 +594,275 @@ func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
 	if got := capBonus(cs, -5, 0, 100); got != 0 {
 		t.Fatalf("a negative gross floors at zero: got %d", got)
 	}
+}
+
+// The P7 draw split, found SURVIVING by the mutation harness: setting
+// `drawWinners = d` — the whole draw to the winners, with no 80/93 — failed no test.
+// The author slice IS pinned, so only the winners' side was open, and it is the side
+// that matters: crystallize.gno's own comment says the 80/8/5 split is taken OUT of D,
+// that a winner receives 80/93 = 0.860 x midGross rather than the full midGross, and
+// "Do NOT 'fix' toward §3.5 — it would inflate every draw 16%". That exact edit would
+// have passed.
+//
+// Asserted as a RATIO against the observed total rather than against d, because d is
+// not exported and the three slices are floored independently. If the split is taken,
+// winners x 93 == total x 80 exactly up to floor loss; if the whole draw goes to the
+// winners, total becomes d x 106/93 and the identity breaks by ~1.8 x d.
+func TestP7SplitTakesEightyOfNinetyThreeForWinners(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("p7s-alice")
+	flagger := testutils.TestAddress("p7s-flag")
+	voter := testutils.TestAddress("p7s-voter")
+	c := testCourt(cur, "p7s", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(voter, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "p7s", "the split comes out of D")
+	matureOI(cur, "p7s", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "p7s", id, sideYES)
+	// A conclusive MID keeps the tier at 1 so D > 0 and every slice is payable.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "p7s", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "p7s", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "p7s", id)
+	SettleUndisputed(cross(cur), "p7s", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "p7s", id)
+
+	w, a, ans, _ := DrawSlices("p7s", id)
+	if w <= 0 || a <= 0 || ans <= 0 {
+		t.Fatalf("setup: a MID claim must pay all three slices: %d/%d/%d", w, a, ans)
+	}
+	total := w + a + ans
+	// Floor loss is at most one unit per slice, so allow a few units of slack and no
+	// more — the mutation misses by ~1.8x the draw, not by units.
+	const slack = int64(4)
+	lhs, rhs := w*(splitWinners+splitAuthor+splitAnswerer), total*splitWinners
+	if lhs > rhs+slack*splitWinners || lhs < rhs-slack*splitWinners {
+		t.Fatalf("P7: winners take %d/%d of the draw, not the whole of it: "+
+			"w=%d total=%d (w*93=%d vs total*80=%d)",
+			splitWinners, splitWinners+splitAuthor+splitAnswerer, w, total, lhs, rhs)
+	}
+	// And the author/answerer shares are the other 8 and 5, so the three exhaust D.
+	if a*splitWinners < w*splitAuthor-slack*splitWinners ||
+		a*splitWinners > w*splitAuthor+slack*splitWinners {
+		t.Fatalf("P7: the author slice must be %d/%d of the winners': a=%d w=%d",
+			splitAuthor, splitWinners, a, w)
+	}
+}
+
+// AnswererBonus had FIVE surviving mutations — every guard in the function, which
+// is the worst-covered money path found since v0.68. Two of them stand between a
+// caller and mintEmission: delete `who != cs.answerer` and ANYONE draws the
+// answerer's slice into their own balance; delete `answererPaid` and the answerer
+// draws it again, and again. Neither is an equivalence — both mint.
+//
+// The function was not untested, which is why this went unnoticed. Two fixtures
+// call it: TestCrystallizeMidHappyPathDrainsEscrow asserts the answerer draws
+// exactly its slice (so the tier bound is never reached), and the M3 overturn
+// fixture asserts zero — but by way of drawAnswerer == 0, not the bound. Both call
+// it AS the answerer, once. Every guard was therefore exercised on the side where
+// it does nothing, which is indistinguishable from coverage until something breaks
+// it on purpose.
+func TestAnswererBonusGuardsItsSliceAndItsCap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ab1-alice")
+	bob := testutils.TestAddress("ab1-bob")
+	c := testCourt(cur, "ab1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ab1", "The answerer's slice and its cap")
+	matureOI(cur, "ab1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "ab1", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "ab1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "ab1", id)
+	testing.SkipHeights(100_000) // the reservoir starts empty; cross a period
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "ab1", id)
+
+	// Only the answerer, and the check must be the ANSWERER's identity rather than
+	// mere participation: bob staked, settled and is a live participant here.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "only the answerer draws this slice", func() {
+		AnswererBonus(cross(cur), "ab1", id)
+	})
+
+	_, _, ans, _ := DrawSlices("ab1", id)
+	if ans <= 0 {
+		t.Fatalf("setup: this claim must have a live answerer slice, got %d", ans)
+	}
+	cs := mustClaim(c, id)
+	if cs.tier <= 0 {
+		t.Fatalf("setup: an undisputed mid claim must carry a positive tier, got %d",
+			cs.tier)
+	}
+	// The bound is tier x b0 / 2 and the natural fixture sits UNDER it, exactly as
+	// the happy path asserts. So drive the bound down to half the slice instead of
+	// driving the slice up past the bound: clamping DOWN keeps the mint smaller
+	// than one the reservoir has already funded, whereas an inflated draw would
+	// test the cap against the emission budget as much as against the cap.
+	if natural := cs.tier * cs.answerBond0 / 2; ans > natural {
+		t.Fatalf("this fixture assumes the cap is slack (slice %d, bound %d); it now "+
+			"binds on its own, so assert the natural value instead of squeezing it",
+			ans, natural)
+	}
+	cs.answerBond0 = ans / cs.tier
+	want := cs.tier * cs.answerBond0 / 2
+	if want <= 0 || want >= ans {
+		t.Fatalf("the squeeze must land strictly between 0 and the slice: "+
+			"bound %d, slice %d", want, ans)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	got := AnswererBonus(cross(cur), "ab1", id)
+	if got != want {
+		t.Fatalf("the tier bound must clamp the answerer's slice to %d, not pay %d "+
+			"(uncapped slice %d)", want, got, ans)
+	}
+
+	// One draw only. Without this latch the clamped slice is mintable on every call.
+	uassert.AbortsContains(t, cur, "already drawn", func() {
+		AnswererBonus(cross(cur), "ab1", id)
+	})
+}
+
+// AuthorBonus is AnswererBonus's twin and had the same three gaps: the identity
+// check, the one-draw latch, and the F9 cap. Same cause, too — the happy-path
+// fixture's author IS its answerer and draws once, so "only the author" was only
+// ever asked of the author.
+//
+// The cap arm drives the F9 time-average to ZERO rather than crafting a bound,
+// because that is what F9 says: the bonus is capped by capital-time, so a position
+// with no measurable capital-time draws nothing however large the slice it would
+// otherwise take. Inflating openBlocks is the cheapest way to say that — it is the
+// divisor of the raw integral — and it keeps the assertion (pay is 0 while the
+// slice is live) independent of the formula under test, instead of recomputing
+// capBonus's own arithmetic and comparing it with itself.
+func TestAuthorBonusGuardsItsSliceAndItsF9Cap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("au1-alice")
+	bob := testutils.TestAddress("au1-bob")
+	c := testCourt(cur, "au1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "au1", "The author's slice and its F9 cap")
+	matureOI(cur, "au1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "au1", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "au1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "au1", id)
+	testing.SkipHeights(100_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "au1", id)
+
+	// Not the author — and bob is a staker who settled this very claim, so what is
+	// refused here is the AUTHOR's identity and not mere standing.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "only the author draws this slice", func() {
+		AuthorBonus(cross(cur), "au1", id)
+	})
+
+	_, a, _, _ := DrawSlices("au1", id)
+	if a <= 0 {
+		t.Fatalf("setup: this claim must have a live author slice, got %d", a)
+	}
+	// Stretch the claim's open life so far that the author's time-averaged stake
+	// floors to zero. The slice stays live; only the F9 bound moves.
+	cs := mustClaim(c, id)
+	cs.openBlocks = int64(1) << 60 // far above any raw integral this fixture can bank
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	got := AuthorBonus(cross(cur), "au1", id)
+	if got != 0 {
+		t.Fatalf("with no measurable capital-time the F9 cap must pay nothing, not "+
+			"%d of a %d slice", got, a)
+	}
+
+	// One draw only, and the latch holds even though that draw paid zero — a
+	// no-op draw must still consume the slice, or the cap becomes a retry loop.
+	uassert.AbortsContains(t, cur, "already drawn", func() {
+		AuthorBonus(cross(cur), "au1", id)
+	})
+}
+
+// The DECIDED round's carrot electorate, found SURVIVING: drop the carrotChoice half
+// of PullCarrot's first branch and a voter who voted AGAINST the verdict draws the
+// policing pay of the round that went the other way. That is the whole point of the
+// carrot — it pays for being right, and paying both sides pays for turning up.
+//
+// Nothing caught it because no fixture had ever built a CONTESTED decided round. cz6
+// has a single voter, so every recorded vote equals carrotChoice by construction and
+// the comparison is true whatever it compares. Here the round is contested and the
+// losing voter is refused by name.
+func TestDecidedCarrotRefusesTheAgainstVerdictVoter(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cvd1-alice") // author + answerer
+	bob := testutils.TestAddress("cvd1-bob")     // disputer
+	carol := testutils.TestAddress("cvd1-carol") // votes NO, wins, big weight
+	dan := testutils.TestAddress("cvd1-dan")     // votes YES, loses
+	c := testCourt(cur, "cvd1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 1_000_000_000)
+	c.coin.Mint(carol, 5_000_000_000)
+	c.coin.Mint(dan, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cvd1", "a decided round pays only its own side")
+	matureOI(cur, "cvd1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cvd1", id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+
+	// Round 1 fails quorum, which opens the escrow window the decided round needs.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cvd1", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cvd1", id)
+
+	// A CONTESTED round: NO carries on weight, so the YES voter is on the losing side
+	// of the verdict while still having voted.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cvd1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "cvd1", id, "no")
+	testing.SetRealm(testing.NewUserRealm(dan))
+	VoteDispute(cross(cur), "cvd1", id, "yes")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cvd1", id)
+
+	cs := mustClaim(c, id)
+	if cs.decidedPID == 0 || cs.carrotChoice != "no" {
+		t.Fatalf("setup: need a decided round carried by NO: pid=%d choice=%q",
+			cs.decidedPID, cs.carrotChoice)
+	}
+
+	testing.SkipHeights(EscrowUntil("cvd1", id) - runtimeHeight())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "cvd1", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cvd1", id)
+	if _, _, _, carrot := DrawSlices("cvd1", id); carrot <= 0 {
+		t.Fatalf("setup: a decided round must leave a carrot to fight over: %d", carrot)
+	}
+
+	// The voter who voted WITH the verdict is paid.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	if share := PullCarrot(cross(cur), "cvd1", id); share <= 0 {
+		t.Fatalf("the with-verdict voter must be paid: %d", share)
+	}
+	// The one who voted against it is not — and note it is refused for the RIGHT
+	// reason: dan did vote, so this cannot pass by way of the non-voter branch.
+	testing.SetRealm(testing.NewUserRealm(dan))
+	uassert.AbortsContains(t, cur, "with-verdict voters", func() {
+		PullCarrot(cross(cur), "cvd1", id)
+	})
 }

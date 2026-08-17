@@ -1,4 +1,4 @@
-// Package courtv2 is kourt V2: no-loss conviction staking. Each court is
+// Package kourtv2 is kourt V2: no-loss conviction staking. Each court is
 // its own coin, governor, and one-way bonding curve, with claims resolved by the
 // V1 answer/dispute machine — but the market layer is gone. Stakers back YES or
 // NO directly; losers always withdraw 1×; winners share a bounded, stepped-down

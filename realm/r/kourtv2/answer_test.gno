@@ -271,3 +271,46 @@ func TestXBarFrozenTakesTheTrailingArmOnAGrowingClaim(cur realm, t *testing.T) {
 			"trailing=%d life=%d", cs.xBarFrozen, trailing, life)
 	}
 }
+
+// The court's answer-bond cap, found SURVIVING: removing the clamp entirely failed no
+// test. TestBondCollateralizesSlashUnderCourtCap covers the case where the
+// collateralization FLOOR overrides a tiny cap — it asserts `bond >= slashSizeFor` — so
+// an uncapped bond (50%·X̄, comfortably above the floor) satisfies it too. The half
+// nothing covered is the cap actually BINDING, which is the knob's whole purpose.
+//
+// That ordering is the invariant answer.gno spells out: the floor is applied AFTER the
+// cap deliberately, because an uncollateralized slash is worse than an over-large bond
+// and "the cap must not re-open the hole". Both halves are needed to pin it: the cap
+// binds when the floor is below it, and the floor wins when it is not.
+func TestAnswerBondCapBindsWhenTheFloorIsBelowIt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("acap-alice")
+	c := testCourt(cur, "acap", alice, 500_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "acap", "the cap binds")
+	// 350 CC per stake, giving a trailing X̄ of 700 CC. Calibrated against a
+	// WINDOW, not picked: the two-lane answer floor (v0.27) demands X̄ >= 0.10% of
+	// this court's 500k supply = 500 CC, while the cap below only BINDS while the
+	// slash floor 4.5%·X̄ stays under it, i.e. X̄ < ~1111 CC. 200 CC per stake gave
+	// X̄ = 400 and fell through the bottom of that window once the supply arm
+	// replaced the dust arm at the first epoch seal.
+	matureOI(cur, "acap", id, alice, 350_000_000)
+
+	// A cap ABOVE the flat slash floor (4.5%·X̄) and BELOW the uncapped bond (50%·X̄),
+	// so the cap is the binding constraint and the floor is not.
+	c.params.answerBondCapCC = 50_000_000
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "acap", id, sideYES)
+
+	cs := mustClaim(c, id)
+	uncapped := cs.xBarFrozen * answerBondBps / 10000
+	floor := slashSizeFor(cs)
+	if !(floor < c.params.answerBondCapCC && c.params.answerBondCapCC < uncapped) {
+		t.Fatalf("fixture must place the cap strictly between the floor and the "+
+			"uncapped bond: floor=%d cap=%d uncapped=%d",
+			floor, c.params.answerBondCapCC, uncapped)
+	}
+	if cs.answerBond != c.params.answerBondCapCC {
+		t.Fatalf("the court cap must bind: bond=%d cap=%d (uncapped would be %d)",
+			cs.answerBond, c.params.answerBondCapCC, uncapped)
+	}
+}
