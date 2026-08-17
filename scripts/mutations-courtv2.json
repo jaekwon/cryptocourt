@@ -1685,5 +1685,152 @@
   "label": "provCloseClaim: a closed claim is left at the MID tier",
   "find": "\tcs.tier = tierLowX",
   "replace": "\tcs.tier = tierMidX"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "creditUpheld: qualifiedCount counts every credit, not the crossing",
+  "find": "\tif !wasQualified && r.score >= priorityNetRecord {",
+  "replace": "\t_ = wasQualified\n\tif r.score >= priorityNetRecord {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "creditUpheld: qualifiedCount never grows",
+  "find": "\t\tc.qualifiedCount++",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "creditUpheld: an upheld answer earns no point",
+  "find": "\tr.score++",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "resetOverturned: qualifiedCount is decremented for an UNQUALIFIED address",
+  "find": "\tif r.score >= priorityNetRecord {\n\t\tc.qualifiedCount--\n\t}",
+  "replace": "\tc.qualifiedCount--"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "resetOverturned: qualifiedCount never shrinks",
+  "find": "\tif r.score >= priorityNetRecord {\n\t\tc.qualifiedCount--\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "resetOverturned: the credential survives an overturn",
+  "find": "\tr.score = 0",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "mayAnswerInPriority: an UNQUALIFIED address may answer in priority",
+  "find": "\treturn r.score >= priorityNetRecord && r.activePriority == 0",
+  "replace": "\treturn r.activePriority == 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "mayAnswerInPriority: a holder may take a SECOND priority claim",
+  "find": "\treturn r.score >= priorityNetRecord && r.activePriority == 0",
+  "replace": "\treturn r.score >= priorityNetRecord"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "releasePriority: releases whatever slot is held, not the matching claim",
+  "find": "\tif r.activePriority == claimID {",
+  "replace": "\tif true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "holdPriority: the slot is never taken",
+  "find": "\tgetRecord(c, who).activePriority = claimID",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "priorityGateActive: the gate is always on, cold start or not",
+  "find": "func priorityGateActive(c *Court) bool { return c.qualifiedCount >= priorityColdStartN }",
+  "replace": "func priorityGateActive(c *Court) bool { return true || c.qualifiedCount >= priorityColdStartN }"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "priorityGateActive: the gate is never on",
+  "find": "func priorityGateActive(c *Court) bool { return c.qualifiedCount >= priorityColdStartN }",
+  "replace": "func priorityGateActive(c *Court) bool { return false && c.qualifiedCount >= priorityColdStartN }"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: resolves with no flag vote open",
+  "find": "\tif !cs.flagOpen {\n\t\tpanic(\"courtv2: no flag vote to resolve\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: resolves BEFORE the flag vote closes",
+  "find": "\tif now < cs.flagVoteEnd {\n\t\tpanic(\"courtv2: the flag vote is still open\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: the flag is left open, so it resolves twice",
+  "find": "\tcs.flagOpen = false\n\tcs.lastFlagEventAt = now",
+  "replace": "\tcs.lastFlagEventAt = now"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: the flag-event timestamp is not stamped",
+  "find": "\tcs.flagOpen = false\n\tcs.lastFlagEventAt = now",
+  "replace": "\tcs.flagOpen = false"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: an inconclusive cycle does not count, so the bond never doubles",
+  "find": "\t\tcs.flagCycles++\n\t\tcs.lastFlagAt = now",
+  "replace": "\t\tcs.lastFlagAt = now"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: the cooldown anchors at the OPEN, not the close",
+  "find": "\t\tcs.flagCycles++\n\t\tcs.lastFlagAt = now",
+  "replace": "\t\tcs.flagCycles++"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: the T1/T2 boundary is inverted",
+  "find": "\t\tif tier == qualityLow {",
+  "replace": "\t\tif tier != qualityLow {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: an inconclusive MID returns the bond whole (T2 half-burn gone)",
+  "find": "\t\t\thalf := cs.flagBond / 2",
+  "replace": "\t\t\thalf := cs.flagBond"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveFlag: the burned half of a T2 bond is not burned",
+  "find": "\t\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t\t}",
+  "replace": ""
  }
 ]

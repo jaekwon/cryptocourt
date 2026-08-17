@@ -2152,3 +2152,61 @@ func TestOverturnBurnsTheSlashWithTheBond(cur realm, t *testing.T) {
 			cs.pendingSlash, cs.answerBond)
 	}
 }
+
+// ResolveFlag's FIRST precondition, found surviving — and it is the one that keeps the
+// whole function from being callable by anyone at any time.
+//
+// Without it the deadline guard beneath is no defence: a claim that was never flagged has
+// flagVoteEnd == 0, so `now < flagVoteEnd` is false and execution falls straight into the
+// tally. On a claim with no votes that reaches the INCONCLUSIVE branch, which
+//
+//   - increments flagCycles — and the flag bond DOUBLES per cycle, so a few free calls
+//     price the next honest flagger out (frozen at 4xb0 after three), and
+//   - stamps lastFlagAt, arming the 7-day re-flag cooldown.
+//
+// So a stranger who never posted a bond can make the quality lane expensive and then shut
+// it for a week, repeatedly. Worse on a claim whose DISPUTE RIDE has accumulated real
+// quality weight: the same call would reach the CONCLUSIVE branch instead and consume the
+// slot, land a tier and burn the deposit on a flag nobody ever opened.
+//
+// Both arms below matter: never-flagged, and already-resolved. The second is what stops a
+// resolved flag being resolved again.
+func TestResolveFlagRefusesWhenNoFlagIsOpen(cur realm, t *testing.T) {
+	c, id, _, bob, _, dust := qfSetup(cur, t, "rfo")
+	cs := mustClaim(c, id)
+
+	// Never flagged: no bond was posted and no vote was held.
+	if cs.flagOpen || cs.flagVoteEnd != 0 {
+		t.Fatalf("setup: this claim must never have been flagged: open=%v end=%d",
+			cs.flagOpen, cs.flagVoteEnd)
+	}
+	cyclesBefore, anchorBefore := cs.flagCycles, cs.lastFlagAt
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "no flag vote to resolve", func() {
+		ResolveFlag(cross(cur), "rfo", id)
+	})
+	if cs.flagCycles != cyclesBefore || cs.lastFlagAt != anchorBefore {
+		t.Fatalf("a refused resolve must not price the next flag or arm the cooldown: "+
+			"cycles %d->%d anchor %d->%d", cyclesBefore, cs.flagCycles,
+			anchorBefore, cs.lastFlagAt)
+	}
+
+	// And after a real flag has been resolved, it cannot be resolved a second time.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "rfo", id)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "rfo", id, qualityMid) // dust weight: inconclusive
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "rfo", id)
+	if cs.flagOpen {
+		t.Fatal("setup: the flag must have closed")
+	}
+	cyclesAfter, anchorAfter := cs.flagCycles, cs.lastFlagAt
+	uassert.AbortsContains(t, cur, "no flag vote to resolve", func() {
+		ResolveFlag(cross(cur), "rfo", id)
+	})
+	if cs.flagCycles != cyclesAfter || cs.lastFlagAt != anchorAfter {
+		t.Fatalf("nor may a second resolve of the same flag: cycles %d->%d anchor %d->%d",
+			cyclesAfter, cs.flagCycles, anchorAfter, cs.lastFlagAt)
+	}
+}

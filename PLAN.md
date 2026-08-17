@@ -1624,6 +1624,43 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.88 — the CREDENTIAL economy is fully covered (12 of 12, a clean sweep), and
+  ResolveFlag's first precondition was free suppression of the quality lane.**
+  Two sweeps this version. `records.gno` — the non-transferable difficulty credential —
+  came out CLEAN: all twelve mutations caught, including both directions of
+  `qualifiedCount`'s hand-maintained counter (counting every credit instead of the
+  crossing, and never growing), both of `resetOverturned`'s (decrementing for an
+  unqualified address, and never shrinking), both clauses of `mayAnswerInPriority`,
+  `releasePriority`'s claim match, `holdPriority`'s write, and both directions of the
+  cold-start gate. Worth recording as clean: `qualifiedCount` is a derived counter kept by
+  hand at two sites, the same shape as v0.86's ledger, but unlike that one it has a reader
+  (`priorityGateActive`) and its arithmetic was already pinned from both ends.
+  Two rows needed re-running for harness reasons, both of which the harness reported rather
+  than hid: one was INVALID (dropping `!wasQualified` leaves the variable unused, so it did
+  not build) and two were BAD ANCHOR because `priorityGateActive` is a ONE-LINER — the
+  anchor assumed a function body on its own line. Both classes are exactly what v0.81's
+  summary fix was for; they appeared in the count instead of vanishing.
+  **`ResolveFlag` came out well too — eight of nine — and the survivor is the serious
+  find.** Without `!cs.flagOpen`, the deadline guard beneath it is no defence: a claim that
+  was never flagged has `flagVoteEnd == 0`, so `now < flagVoteEnd` is false and execution
+  falls straight into the tally. On a claim with no votes that reaches the INCONCLUSIVE
+  branch, which increments `flagCycles` — and **the flag bond DOUBLES per cycle** — and
+  stamps `lastFlagAt`, arming the 7-day re-flag cooldown. So a stranger who never posted a
+  bond can price the next honest flagger out (frozen at 4×b₀ after three) and then shut the
+  lane for a week, repeatedly, for gas. Worse on a claim whose DISPUTE RIDE has accumulated
+  real quality weight: the same call reaches the CONCLUSIVE branch instead and consumes the
+  slot, lands a tier and burns the deposit on a flag nobody opened.
+  The fixture covers both arms — never-flagged and already-resolved — and asserts the
+  refusal moves neither `flagCycles` nor the cooldown anchor, since those are the two things
+  the attack is actually after.
+  Also confirmed on this sweep: ResolveFlag's `lastFlagAt` write is the load-bearing one,
+  which closes the loop on v0.80. That version found `OpenFlag`'s restamp to be a DEAD
+  write; here, removing the resolve-time stamp is caught, and the source comment says why —
+  anchoring at the open would give a near-zero cooldown, because votingBlocks and the
+  cooldown are both about a week.
+  Batch now 262 rows, 0 not caught — 8m10s, 21 more rows for the same wall clock as
+  241 took, which is the sharding paying for itself.
+
 - **v0.87 — the batch is sharded: 14m42s to 8m07s on the same 241 rows, same verdict —
   and where the time goes was MEASURED before anything was changed.** The batch had grown
   past a quarter of an hour and grows with every guard pinned, so it was worth fixing
