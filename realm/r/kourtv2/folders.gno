@@ -193,10 +193,19 @@ func FolderItems(courtSlug string, folderID uint64) []uint64 {
 }
 
 // FolderPurged reports whether a folder's text was tombstoned.
+//
+// The nil branch PANICS, matching FolderName and FolderItems above and the
+// mustFolder they share. It used to return false, which made the same
+// nonexistent folder answer two different ways depending on whether the court
+// happened to hold any moderation state at all: false on a court with no mod
+// object, "no such folder" on one that had ever been moderated. A caller
+// probing an id it had not validated would see the discrepancy only on the
+// second kind of court. The v0.19 rule again — a lazily-created read's
+// not-yet-materialised branch must answer what the materialised one would.
 func FolderPurged(courtSlug string, folderID uint64) bool {
 	c := mustCourt(courtSlug)
 	if c.mod == nil {
-		return false
+		panic("kourtv2: no such folder")
 	}
 	return c.mod.mustFolder(folderID).purged
 }

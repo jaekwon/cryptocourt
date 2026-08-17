@@ -114,3 +114,43 @@ func TestFolderPurgeMofN(cur realm, t *testing.T) {
 		t.Fatal("purge tombstones text, not the claim-ID list")
 	}
 }
+
+// The three folder reads must agree about a folder that does not exist,
+// whatever moderation state the court happens to hold. FolderPurged used to
+// return false on a court with no mod object while its two siblings panicked —
+// so the same bad id answered differently depending on whether the court had
+// ever been moderated, and a caller would only meet the discrepancy on the
+// second kind of court. Same rule as IsCourtMod: a lazily-created read's
+// not-yet-materialised branch must answer what the materialised one would.
+func TestFolderReadsAgreeOnAMissingFolder(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fld-agree")
+
+	// A court with NO moderation state at all.
+	testCourt(cur, "fldag1", alice, 10_000_000_000)
+	if FolderCount("fldag1") != 0 {
+		t.Fatal("a fresh court has no folders")
+	}
+	for _, probe := range []struct {
+		name string
+		fn   func()
+	}{
+		{"FolderName", func() { FolderName("fldag1", 999) }},
+		{"FolderItems", func() { FolderItems("fldag1", 999) }},
+		{"FolderPurged", func() { FolderPurged("fldag1", 999) }},
+	} {
+		// PanicsContains, not AbortsContains: these are plain reads, not
+		// crossing calls, so they panic rather than abort a cross-realm frame.
+		uassert.PanicsContains(t, cur, "no such folder", probe.fn)
+	}
+
+	// And a court that HAS moderation state answers the same way.
+	testCourt(cur, "fldag2", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CreateFolder(cross(cur), "fldag2", "a real folder", "")
+	if FolderCount("fldag2") != 1 {
+		t.Fatal("fixture: the folder should exist")
+	}
+	uassert.PanicsContains(t, cur, "no such folder", func() {
+		FolderPurged("fldag2", 999)
+	})
+}

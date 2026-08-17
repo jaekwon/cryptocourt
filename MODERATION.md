@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.21 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.22 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,31 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.22 — the rest of the lazily-created reads**. A sweep for the v0.19 bug
+  class: every read with a *not-yet-materialised* branch must answer what the
+  WRITE path would do, not what is currently stored. Nine reads audited, one
+  wrong, and the wrongness was an inconsistency rather than a plain error.
+  - **`FolderPurged` returned `false` for a folder that does not exist**, while
+    its two siblings `FolderName` and `FolderItems` panic `"no such folder"` —
+    and `FolderPurged` itself panics once the court holds any moderation state,
+    because it then routes through the shared `mustFolder`. So the same bad id
+    answered two different ways depending on whether the court had ever been
+    moderated, and a caller probing an unvalidated id would only meet the
+    discrepancy on the second kind of court. Now panics, consistently.
+  - Confirmed CORRECT, and listed so the sweep is not repeated: `FolderCount`
+    (0 — folders only exist via moderation), `FolderName`/`FolderItems` (panic —
+    matches `mustFolder`), `claimTitleFor` (no mod ⇒ nothing purged or withheld
+    ⇒ the sanitized title), `hideBanner` and the `courtPurged` check (no mod ⇒
+    no banner, not purged), and `writeAppeal`'s candidate lookup (no mod ⇒ no
+    candidates ⇒ "this candidate set does not exist yet", which is exactly the
+    bait-and-switch warning it should print).
+  - Regression: `TestFolderReadsAgreeOnAMissingFolder` probes all three reads on
+    a court with **no** moderation state and on one **with** it, and requires the
+    same answer from both.
+
+  Testing note worth keeping: these are plain reads, not crossing calls, so they
+  panic rather than abort a cross-realm frame — `uassert.PanicsContains`, not
+  `AbortsContains`, which does not catch them and lets the panic escape the test.
 - **v0.21 — bounded reads (audit-N3), and what the backlog got wrong about
   them**. Checked before changing, and two of the three suspects were already
   fine: `writeStrip` and `writePending` both page at `renderPageSize` **and**
