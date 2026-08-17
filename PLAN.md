@@ -1624,6 +1624,43 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.93 — the LAST residual is closed: Buy's IsUserCall is now TESTED, on a real node,
+  and the downgrade is demonstrated to open the bypass.** Swept `Buy` — the money-IN path,
+  where real GNOT becomes CC. Four guards already held (the zero-send bar, the monotonic
+  curve position, minting to the BUYER, and the burn actually happening); four survived, and
+  only one of them was a genuine gap.
+  **`prev.IsUserCall()`** is the one AGENTS.md flags by name: a realm taking payment must
+  guard on IsUserCall, not IsUser, because IsUser ACCEPTS a `maketx run` ephemeral realm,
+  which can consume the origin-send envelope before calling and so bypass the payment
+  check. Buy reads `unsafe.OriginSend()` under that guard, so the guard IS its payment
+  authentication. This has been on the residual list for many versions as "not testable in
+  this harness; rests on code review", and that was correct about the UNIT harness:
+  `testing.SetRealm(NewUserRealm(...))` makes IsUser and IsUserCall both true and there is
+  no way to produce an ephemeral realm at all.
+  The txtar suite CAN produce one. `gnokey maketx run` executes a script in an ephemeral
+  realm, so the new `courtv2_paymentauth.txtar` calls Buy that way with a real `-send` and
+  requires the refusal, alongside a direct-call CONTROL — without which the test would pass
+  equally against a Buy that refuses everything.
+  **Verified the way the batch cannot verify it: by hand.** With `IsUserCall` downgraded to
+  `IsUser` in the source, the txtar FAILS — the ephemeral realm's buy goes through. So the
+  test discriminates, on a real node, and the bypass is now a demonstrated fact rather than
+  a read of the code. (Two attempts: the run script needs `func main(cur realm)` and
+  `cross(cur)`; the first version failed type-check, which is a failure to write gno, not a
+  finding.)
+  **The mutation batch will still report that row as a survivor for ever**, because
+  `mutate.py` runs `gno test` and not the txtar suite. The row is deliberately NOT in the
+  batch — it would break the all-caught invariant — so this is the first guard whose
+  coverage lives somewhere the batch cannot see. Worth stating plainly: a green batch is
+  not the whole of the suite's coverage, and now provably so.
+  The other three survivors are equivalent, each for a different reason. `buyer ==
+  cur.Address()` is dead behind IsUserCall, which the txtar just proved refuses realm
+  callers. The burn sending `sent` rather than `spent` is identical because `spent == sent`
+  exactly at this granularity (measured in v0.62). And `delta <= 0` is unreachable: probing
+  it showed a 1-ugnot buy mints 44_721 units, so the branch needs the curve at its CAP —
+  and filling this curve costs more GNOT than an int64 can hold, which is the same reason
+  the refund branch below it is documented unreachable.
+  Batch now 318 rows, 0 not caught (10m20s).
+
 - **v0.92 — PostAnswer is CLEAN (12 of 12), and a premise of mine about §7.4 was wrong —
   the gap was not the pages, it was the STATE they were read in.**
   `PostAnswer` — the freeze, the bond sizing and every answerability gate — came out with

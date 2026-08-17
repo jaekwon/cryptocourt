@@ -2196,5 +2196,33 @@
   "label": "7.4: a PRE-crystallize-only branch renders backing",
   "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")",
   "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "Buy: a zero-GNOT buy is accepted",
+  "find": "\tif sent <= 0 {\n\t\tpanic(\"courtv2: send GNOT to buy the coin\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "Buy: the curve position does not advance, so the same region sells twice",
+  "find": "\tc.minted += delta // monotonic curve position",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "Buy: the coin is minted to the REALM, not the buyer",
+  "find": "\tc.coin.Mint(buyer, delta)",
+  "replace": "\tc.coin.Mint(cur.Address(), delta)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "buy.gno",
+  "label": "Buy: the spent GNOT is never burned",
+  "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
+  "replace": ""
  }
 ]
