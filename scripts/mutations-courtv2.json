@@ -1832,5 +1832,131 @@
   "label": "ResolveFlag: the burned half of a T2 bond is not burned",
   "find": "\t\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t\t}",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: HIGH promotes without clearing the full bar",
+  "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
+  "replace": "\tif cs.qHighW*3 >= turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: HIGH promotes without the two-thirds",
+  "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
+  "replace": "\tif turnout >= fullBar {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: HIGH's two-thirds is strict, so an exact 2/3 fails",
+  "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
+  "replace": "\tif turnout >= fullBar && cs.qHighW*3 > turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: the median tie no longer goes LOW",
+  "find": "\tmedianLow := cs.qLowW*2 >= turnout && turnout > 0",
+  "replace": "\tmedianLow := cs.qLowW*2 > turnout && turnout > 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: an EMPTY tally reads as low",
+  "find": "\tmedianLow := cs.qLowW*2 >= turnout && turnout > 0",
+  "replace": "\tmedianLow := cs.qLowW*2 >= turnout"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: the median reads MID weight instead of low",
+  "find": "\tmedianLow := cs.qLowW*2 >= turnout && turnout > 0",
+  "replace": "\tmedianLow := cs.qMidW*2 >= turnout && turnout > 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: a sub-demotion-bar low is CONCLUSIVE (T1 gone)",
+  "find": "\t\tif turnout < demotionBar {\n\t\t\treturn qualityLow, false, turnout // inconclusive-low (T1)\n\t\t}",
+  "replace": "\t\t_ = demotionBar"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: the demotion bar is inclusive, so a low exactly AT it is inconclusive",
+  "find": "\t\tif turnout < demotionBar {",
+  "replace": "\t\tif turnout <= demotionBar {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: MID is conclusive below the full bar",
+  "find": "\tif turnout >= fullBar {\n\t\treturn qualityMid, true, turnout\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "applyQualityTally: the two bars are read in the wrong order",
+  "find": "\tdemotionBar, fullBar := qualityBars(c, cs)",
+  "replace": "\tfullBar, demotionBar := qualityBars(c, cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the escrow's own holdings count as votable",
+  "find": "\tvotable := supply - c.coin.PastVotes(c.escrow, cs.qualityEpoch)",
+  "replace": "\tvotable := supply"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the votable arm is a HALF, not a third",
+  "find": "\tif third := votable / 3; third < arm {",
+  "replace": "\tif third := votable / 2; third < arm {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the arm takes the LARGER of X-bar and a third of votable",
+  "find": "\tif third := votable / 3; third < arm {",
+  "replace": "\tif third := votable / 3; third > arm {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the demotion bar is not quartered",
+  "find": "\tdemotionBar = arm / 4",
+  "replace": "\tdemotionBar = arm"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the demotion bar is halved, not quartered",
+  "find": "\tdemotionBar = arm / 4",
+  "replace": "\tdemotionBar = arm / 2"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the full bar loses its 5%-of-supply floor",
+  "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {\n\t\tfullBar = fivePct\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the supply floor takes the SMALLER",
+  "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {",
+  "replace": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct < fullBar {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the supply floor is sized off VOTABLE, not supply",
+  "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {",
+  "replace": "\tif fivePct := mulDiv128(votable, quorumSupplyBps, 10000); fivePct > fullBar {"
  }
 ]

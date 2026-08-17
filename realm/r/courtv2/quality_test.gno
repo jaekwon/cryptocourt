@@ -2210,3 +2210,185 @@ func TestResolveFlagRefusesWhenNoFlagIsOpen(cur realm, t *testing.T) {
 			cyclesAfter, cs.flagCycles, anchorAfter, cs.lastFlagAt)
 	}
 }
+
+// applyQualityTally's DECISION BOUNDARIES. Ten mutations over the function; four
+// survived, and every one of them is an edge the existing fixtures step over rather
+// than land on: an exact two-thirds for HIGH, an exact median tie for LOW, turnout
+// exactly AT the demotion bar, and an EMPTY tally.
+//
+// The empty-tally one is not a rounding curiosity. Drop `turnout > 0` and a flag nobody
+// voted reads as inconclusive-LOW instead of inconclusive-MID — and those two pay
+// differently: T1 returns the flag bond WHOLE, T2 half-burns it. So the guard is what
+// stops an unvoted flag being free, which is the suppression chain the T2 comment in
+// ResolveFlag exists to price.
+//
+// Called directly, as settled for pure internals in v0.60: the function is a decision
+// over (tally, bars) and nothing else, so a table says more than any amount of driving
+// it through the lane. The cases are built FROM the bars read at runtime rather than
+// from literals, so they stay on the boundary if the bar formulas ever move.
+func TestApplyQualityTallyOnEveryBoundary(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("aqt-alice")
+	c := testCourt(cur, "aqt", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "aqt", "the tally's edges")
+	matureOI(cur, "aqt", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "aqt", id, sideYES)
+
+	cs := mustClaim(c, id)
+	d, f := qualityBars(c, cs)
+	if d < 2 || f < 3 || 2*d >= f {
+		t.Fatalf("setup: the cases below need 2 <= demotionBar and 2*demotionBar < "+
+			"fullBar: d=%d f=%d", d, f)
+	}
+
+	for _, k := range []struct {
+		name             string
+		low, mid, high   int64
+		wantTier         int
+		wantConclusive   bool
+	}{
+		// An empty tally is inconclusive MID, not low: nobody voted, so nobody was
+		// "directionally backed", and the bond must not come back whole.
+		{"empty tally", 0, 0, 0, qualityMid, false},
+
+		// The median goes LOW on an exact tie — low wins at one half, not above it.
+		{"median exactly half", d, d, 0, qualityLow, true},
+		{"median just under half", d - 1, d + 1, 0, qualityMid, false},
+
+		// The demotion bar is the CONCLUSIVE side of its own boundary.
+		{"low exactly at the demotion bar", d, 0, 0, qualityLow, true},
+		{"low one short of it", d - 1, 0, 0, qualityLow, false},
+
+		// HIGH needs the full bar AND two thirds, and an exact two thirds promotes.
+		{"high exactly two thirds at the bar", 0, f, 2 * f, qualityHigh, true},
+		{"high one weight short of two thirds", 0, f + 1, 2*f - 1, qualityMid, true},
+		// Two thirds without the bar is not a promotion.
+		{"high two thirds below the bar", 0, 1, 2, qualityMid, false},
+	} {
+		cs.qLowW, cs.qMidW, cs.qHighW = k.low, k.mid, k.high
+		tier, conclusive, turnout := applyQualityTally(c, cs)
+		if tier != k.wantTier || conclusive != k.wantConclusive {
+			t.Fatalf("%s (low=%d mid=%d high=%d turnout=%d, d=%d f=%d): got tier=%d "+
+				"conclusive=%v, want tier=%d conclusive=%v", k.name, k.low, k.mid,
+				k.high, turnout, d, f, tier, conclusive, k.wantTier, k.wantConclusive)
+		}
+		if turnout != k.low+k.mid+k.high {
+			t.Fatalf("%s: turnout must be the sum of the three buckets: %d vs %d",
+				k.name, turnout, k.low+k.mid+k.high)
+		}
+	}
+}
+
+// THE TWO BARS. Eleven mutations over qualityBars and EIGHT survived — the numbers every
+// adjudication decision in the realm reads were almost entirely unpinned. Nothing noticed
+// the escrow's holdings counted as votable, the votable arm taken as a half instead of a
+// third, or the demotion bar losing its quarter.
+//
+// The escrow one is the worst. The escrow holds every staked coin, every bond and every
+// deposit, so it is a large slice of supply — and it never votes. Count it as votable and
+// both bars rise to a turnout no electorate can reach, which does not break the quality
+// lane loudly; it just makes every flag inconclusive for ever.
+//
+// It takes TWO fixtures, because the two arms of `min(X̄, votable/3)` cannot both bind at
+// once and neither can the 5%-of-supply floor coexist with the third. When the third binds
+// it is about supply/3, and 5% of supply is always less than that — so the floor is dead
+// exactly when the third is live. A single fixture would have pinned one regime and left
+// the other's arithmetic free, which is what eight survivors look like.
+//
+// This is the regime where the CLAIM is large relative to the whole court: votable/3 binds,
+// so the escrow exclusion and both divisors are observable here.
+func TestQualityBarsWhenTheVotableThirdBinds(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qbr-alice")
+	bob := testutils.TestAddress("qbr-bob")
+	c := testCourt(cur, "qbr", alice, 1_400_000_000)
+	c.coin.Mint(bob, 100_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qbr", "a claim that is most of its court")
+	matureOI(cur, "qbr", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "qbr", id, sideNO, 100_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qbr", id, sideYES)
+
+	cs := mustClaim(c, id)
+	supply := c.coin.PastTotal(cs.qualityEpoch)
+	escrowW := c.coin.PastVotes(c.escrow, cs.qualityEpoch)
+	votable := supply - escrowW
+	third := votable / 3
+	fivePct := mulDiv128(supply, quorumSupplyBps, 10000)
+
+	if escrowW <= 0 {
+		t.Fatalf("setup: the escrow must hold checkpointed weight, or excluding it "+
+			"cannot matter: %d", escrowW)
+	}
+	if third >= cs.xBarFrozen {
+		t.Fatalf("setup: the votable third must be the binding arm here, or its "+
+			"divisor cannot matter: third=%d xbar=%d supply=%d escrow=%d",
+			third, cs.xBarFrozen, supply, escrowW)
+	}
+	if third/4 < 2 {
+		t.Fatalf("setup: the arm must have room to be quartered: arm=%d", third)
+	}
+	if fivePct > third {
+		t.Fatalf("setup: in this regime the supply floor must NOT bind, or the arm "+
+			"is not what sets the full bar: fivePct=%d arm=%d", fivePct, third)
+	}
+
+	d, f := qualityBars(c, cs)
+	if d != third/4 {
+		t.Fatalf("the demotion bar is min(X-bar, votable/3)/4 = %d, got %d "+
+			"(supply=%d escrow=%d votable=%d)", third/4, d, supply, escrowW, votable)
+	}
+	if f != third {
+		t.Fatalf("with the floor slack the full bar IS the arm = %d, got %d", third, f)
+	}
+}
+
+// The other regime, and the ordinary one: an established court where a single claim's X̄
+// is small against total supply. X-bar binds, and the 5%-of-supply floor lifts the full
+// bar above it — so this is where the floor's BASE is observable (supply, not votable).
+func TestQualityBarsWhenTheSupplyFloorBinds(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qbs-alice")
+	bob := testutils.TestAddress("qbs-bob")
+	c := testCourt(cur, "qbs", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qbs", "one claim among many")
+	matureOI(cur, "qbs", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "qbs", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qbs", id, sideYES)
+
+	cs := mustClaim(c, id)
+	supply := c.coin.PastTotal(cs.qualityEpoch)
+	escrowW := c.coin.PastVotes(c.escrow, cs.qualityEpoch)
+	votable := supply - escrowW
+	fivePct := mulDiv128(supply, quorumSupplyBps, 10000)
+	fivePctOfVotable := mulDiv128(votable, quorumSupplyBps, 10000)
+
+	if cs.xBarFrozen > votable/3 {
+		t.Fatalf("setup: X-bar must be the binding arm here: xbar=%d third=%d",
+			cs.xBarFrozen, votable/3)
+	}
+	if fivePct <= cs.xBarFrozen {
+		t.Fatalf("setup: the supply floor must bind, or its base cannot matter: "+
+			"fivePct=%d xbar=%d", fivePct, cs.xBarFrozen)
+	}
+	if fivePctOfVotable == fivePct {
+		t.Fatalf("setup: supply and votable must differ, or the floor's base cannot "+
+			"matter: supply=%d votable=%d", supply, votable)
+	}
+
+	d, f := qualityBars(c, cs)
+	if d != cs.xBarFrozen/4 {
+		t.Fatalf("the demotion bar is X-bar/4 = %d here, got %d", cs.xBarFrozen/4, d)
+	}
+	if f != fivePct {
+		t.Fatalf("the full bar is 5%% of SUPPLY = %d, got %d (5%% of votable would be "+
+			"%d)", fivePct, f, fivePctOfVotable)
+	}
+}

@@ -1624,6 +1624,42 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.89 — THE BARS: 8 of 11 mutations survived on the two numbers every adjudication
+  decision in the realm reads, and the reason needed two fixtures, not one.** Swept
+  `applyQualityTally` and `qualityBars` — the decision and the thresholds it decides
+  against.
+  `applyQualityTally` lost four boundaries: HIGH's two-thirds taken as strict (an exact ⅔
+  no longer promotes), the median tie no longer going LOW, turnout exactly AT the demotion
+  bar, and an EMPTY tally. Every one is an edge the existing fixtures step over rather than
+  land on. The empty-tally guard is not a rounding curiosity: drop `turnout > 0` and a flag
+  NOBODY VOTED reads as inconclusive-LOW instead of inconclusive-MID, and those pay
+  differently — T1 returns the flag bond whole, T2 half-burns it. So that clause is what
+  stops an unvoted flag being free, which is precisely the suppression chain ResolveFlag's
+  own T2 comment exists to price. One table-driven fixture, called directly as settled for
+  pure internals, pins all of them; its cases are built FROM the bars read at runtime, so
+  they stay on the boundary if the formulas move.
+  **`qualityBars` was worse: eight survivors, and the fix needed the REGIMES separated.**
+  The first attempt asserted the documented formula in one fixture and its own setup guard
+  refused it — `third = 19_866_300_000` against `xbar = 500_000_000`, so the votable third
+  is never the binding arm on an ordinary court, which is exactly why its divisor survived.
+  The two arms of `min(X̄, votable/3)` cannot both bind at once, and the 5%-of-supply floor
+  cannot coexist with the third at all: when the third binds it is about supply/3, and 5%
+  of supply is always less than that. **The floor is dead exactly when the third is live.**
+  So one fixture could only ever pin one regime and leave the other's arithmetic free —
+  which is what eight survivors looked like. Two now: a court where the CLAIM is most of
+  the court (the third binds, so the escrow exclusion and both divisors are observable), and
+  an ordinary court where X̄ binds and the supply floor lifts the full bar (so the floor's
+  BASE — supply, not votable — is observable).
+  The escrow exclusion is the worst of the eight. The escrow holds every staked coin, every
+  bond and every deposit, so it is a large slice of supply, and it never votes. Count it as
+  votable and both bars rise to a turnout no electorate can reach — which does not break the
+  quality lane loudly, it just makes every flag inconclusive for ever.
+  Three survived and are defensive floors on quantities that cannot reach them:
+  `demotionBar < 1` needs `arm ≤ 3`, `fullBar < 1` needs an essentially empty court, and
+  `votable < 0` needs the escrow's checkpointed weight to exceed total supply, which the
+  token's own invariant forbids. Recorded, not tested.
+  Batch now 280 rows, 0 not caught (8m23s).
+
 - **v0.88 — the CREDENTIAL economy is fully covered (12 of 12, a clean sweep), and
   ResolveFlag's first precondition was free suppression of the quality lane.**
   Two sweeps this version. `records.gno` — the non-transferable difficulty credential —
