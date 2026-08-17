@@ -439,5 +439,54 @@
   "label": "releasePriority frees a slot it does not hold",
   "find": "\tif r.activePriority == claimID {",
   "replace": "\tif true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "P7: winners take the whole draw (the section 3.5 'fix')",
+  "find": "\tcs.drawWinners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)",
+  "replace": "\tcs.drawWinners = d"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "P7: the author slice is not paid",
+  "find": "\tcs.drawAuthor = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)",
+  "replace": "\tcs.drawAuthor = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "P7: the answerer slice is not paid",
+  "find": "\tcs.drawAnswerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)",
+  "replace": "\tcs.drawAnswerer = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "SENIOR: already-paid not deducted (pays in full each pull)",
+  "find": "\tpay := covered - e.paid",
+  "replace": "\tpay := covered"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "SENIOR: paid is not recorded (double-pull)",
+  "find": "\te.paid += pay",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "RESERVOIR: reservedTail not subtracted",
+  "find": "\tpast := c.cumAccrual - c.reservedTail",
+  "replace": "\tpast := c.cumAccrual"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "RESERVOIR: juniorReserved not subtracted",
+  "find": "\tr := past - c.juniorReserved",
+  "replace": "\tr := past"
  }
 ]

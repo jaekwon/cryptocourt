@@ -555,3 +555,62 @@ func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
 		t.Fatalf("a negative gross floors at zero: got %d", got)
 	}
 }
+
+// The P7 draw split, found SURVIVING by the mutation harness: setting
+// `drawWinners = d` — the whole draw to the winners, with no 80/93 — failed no test.
+// The author slice IS pinned, so only the winners' side was open, and it is the side
+// that matters: crystallize.gno's own comment says the 80/8/5 split is taken OUT of D,
+// that a winner receives 80/93 = 0.860 x midGross rather than the full midGross, and
+// "Do NOT 'fix' toward §3.5 — it would inflate every draw 16%". That exact edit would
+// have passed.
+//
+// Asserted as a RATIO against the observed total rather than against d, because d is
+// not exported and the three slices are floored independently. If the split is taken,
+// winners x 93 == total x 80 exactly up to floor loss; if the whole draw goes to the
+// winners, total becomes d x 106/93 and the identity breaks by ~1.8 x d.
+func TestP7SplitTakesEightyOfNinetyThreeForWinners(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("p7s-alice")
+	flagger := testutils.TestAddress("p7s-flag")
+	voter := testutils.TestAddress("p7s-voter")
+	c := testCourt(cur, "p7s", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(voter, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "p7s", "the split comes out of D")
+	matureOI(cur, "p7s", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "p7s", id, sideYES)
+	// A conclusive MID keeps the tier at 1 so D > 0 and every slice is payable.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "p7s", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "p7s", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "p7s", id)
+	SettleUndisputed(cross(cur), "p7s", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "p7s", id)
+
+	w, a, ans, _ := DrawSlices("p7s", id)
+	if w <= 0 || a <= 0 || ans <= 0 {
+		t.Fatalf("setup: a MID claim must pay all three slices: %d/%d/%d", w, a, ans)
+	}
+	total := w + a + ans
+	// Floor loss is at most one unit per slice, so allow a few units of slack and no
+	// more — the mutation misses by ~1.8x the draw, not by units.
+	const slack = int64(4)
+	lhs, rhs := w*(splitWinners+splitAuthor+splitAnswerer), total*splitWinners
+	if lhs > rhs+slack*splitWinners || lhs < rhs-slack*splitWinners {
+		t.Fatalf("P7: winners take %d/%d of the draw, not the whole of it: "+
+			"w=%d total=%d (w*93=%d vs total*80=%d)",
+			splitWinners, splitWinners+splitAuthor+splitAnswerer, w, total, lhs, rhs)
+	}
+	// And the author/answerer shares are the other 8 and 5, so the three exhaust D.
+	if a*splitWinners < w*splitAuthor-slack*splitWinners ||
+		a*splitWinners > w*splitAuthor+slack*splitWinners {
+		t.Fatalf("P7: the author slice must be %d/%d of the winners': a=%d w=%d",
+			splitAuthor, splitWinners, a, w)
+	}
+}

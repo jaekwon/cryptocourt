@@ -1624,6 +1624,23 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.65 — the P7 draw split was open on the side the code warns about.** Eight
+  mutations over `PullSenior`'s payable math, `reservoirR`'s two subtractions, and the
+  80/8/5 split. Seven caught — the senior lane's paid-deduction, its `paid` bookkeeping,
+  both reservoir subtractions, and the author and answerer slices — and ONE surviving:
+  `drawWinners = d`, the whole draw to the winners with no 80/93.
+  That is precisely the edit `crystallize.gno`'s own comment forbids: "D is the WHOLE
+  claim draw and the 80/8/5 split is taken OUT of it — so a winner receives 80/93 =
+  0.860·midGross, NOT the full midGross … Do NOT 'fix' toward §3.5 — it would inflate
+  every draw 16%." The author slice was pinned and the winners' was not, so the one
+  documented-forbidden change was the one nothing would have caught. Closed by
+  `TestP7SplitTakesEightyOfNinetyThreeForWinners`, asserted as a RATIO against the
+  observed total rather than against `d` (which is not exported and whose three slices
+  floor independently): if the split is taken, `winners × 93 == total × 80` up to a few
+  units of floor loss, and if the whole draw goes to the winners the total becomes
+  `d × 106/93` and the identity breaks by ~1.8·d.
+  Batch now 70 rows, all caught, none invalid. Slug grepped BEFORE writing this time.
+
 - **v0.64 — `make mutate`, plus H1 and the credential accounting were both unpinned.**
   Added a Makefile target for the batch, because the batch was otherwise invisible:
   `mutate.py` sat in this repo through the whole of the v0.51–v0.62 work and went unused
