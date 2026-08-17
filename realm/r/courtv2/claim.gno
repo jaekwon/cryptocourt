@@ -98,6 +98,28 @@ type claimState struct {
 	flagBond        int64
 	flagVoteEnd     int64
 	flagCycles      int64 // inconclusive reopens; bond frozen at 4xb0 after 3
+	// slotConsumed is a one-way latch meaning "a CONCLUSIVE tally landed", written at
+	// exactly two sites (ResolveFlag, resolveQualityRide) and never cleared. It is far
+	// more load-bearing than its name suggests: SEVEN behavioural readers depend on it,
+	// and they do NOT all want the same predicate. Enumerated because three reviewers
+	// costing a change here each under-counted them, and because the cheapest-looking
+	// fix to any one of these silently breaks the others:
+	//   1. quality.gno OpenFlag  — one flag slot per claim (the name's own job)
+	//   2. quality.gno reaskQualityTally — v0.51's "before anything is adjudicated
+	//      every round asks fresh"; un-latching re-opens the tally re-roll
+	//   3. quality.gno resolveQualityRide — v0.54's mandate ratchet gate
+	//   4. session.gno SettleUndisputed — tier-clobber guard (do not overwrite a
+	//      conclusive tier with the default mid)
+	//   5. session.gno SettleUndisputed — the slash-reserve retention
+	//   6. dispute.gno Finalize — the same tier-clobber guard
+	//   7. dispute.gno Finalize — the same slash-reserve retention
+	// Plus two display readers (FlagState, render.gno) that must be changed IN STEP with
+	// (1) or the UI reports "consumed" while OpenFlag still accepts.
+	//
+	// The known consequence of that overloading is PLAN §13 v0.56's open owner decision:
+	// jobs (1), (5) and (7) key slash-eligibility to a tally that may have been decided
+	// at the supply-floorLESS demotionBar, so a sub-bar low disarms the full-bar slash.
+	// Splitting the latch means splitting all seven readers, not editing one predicate.
 	slotConsumed    bool
 	lastFlagEventAt int64 // restamped at vote close/reopen/void — the 24h rule
 	lastFlagAt      int64 // cooldown anchor once the bond is frozen
