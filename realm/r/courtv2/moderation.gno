@@ -263,6 +263,14 @@ func AppointMods(cur realm, courtSlug string, mods []address, m int) {
 	if c.mod != nil && c.mod.creatorUnseated {
 		panic("courtv2: an election has installed a set; the creator's appointment power is spent")
 	}
+	// A suspended set may not be re-appointed around. AppointMods is
+	// creator-only and FREE, so if it cleared (or ignored) the suspension a
+	// suspended creator would self-unsuspend for zero cost — turning meta's
+	// bonded, voted disarm into a no-op. Only the bonded/voted peers (an
+	// election install or a meta verdict) clear a suspension.
+	if c.mod != nil && c.mod.suspended {
+		panic("courtv2: this moderator set is suspended; only an election or a meta verdict may reinstate it")
+	}
 	if len(mods) == 0 {
 		panic("courtv2: a moderator set may not be empty")
 	}
@@ -539,6 +547,42 @@ func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string
 	clm.tombstone = code
 	clm.appendLog(who, "purge:"+code, "")
 	emitPurge(c.id, claimID, code, who)
+}
+
+// ResetModSet is the SET-LEVEL global recovery verb (setmods vet, unanimous):
+// `ClearAnyBit` is per-claim, so before this existed a hostile moderator set —
+// e.g. puppets seated by a captured meta court — was globally irreversible, and
+// the constitution's "backstopped by the global DAO" claim was false for
+// installs. Whack-a-mole on individual bits does not work against a set that
+// keeps setting new ones, and the only other set-level hammer was the nuclear,
+// permanent PurgeCourt.
+//
+// It DISARMS rather than appoints: the set is emptied, so nobody can act until
+// the court's own electorate installs one (or, if no election has yet unseated
+// them, the creator re-appoints). That preserves subsidiarity — the global DAO
+// gets a cure, never the power to choose a court's moderators. m-of-n, because
+// wiping a set is consequential.
+func ResetModSet(cur realm, courtSlug string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	d := ensureGlobalDAO()
+	if !d.members.Has(who.String()) {
+		panic("courtv2: only a global DAO member may reset a moderator set")
+	}
+	c := mustCourt(courtSlug)
+	cm := ensureMod(c)
+	fire, _ := approveAction(d.pending, "resetmods:"+c.id, who, "", d.purgeM)
+	if !fire {
+		return
+	}
+	cm.members = bptree.NewBPTree32()
+	cm.n = 0
+	cm.m = 1 // n==0 means nobody is a member, so nothing can act
+	cm.suspended = false
+	cm.setActHeight = runtime.ChainHeight()
+	emitGlobalAct(c.id, 0, "reset-mod-set", who)
 }
 
 // PurgeCourt tombstones a whole court's text and gates new claims: on a purged

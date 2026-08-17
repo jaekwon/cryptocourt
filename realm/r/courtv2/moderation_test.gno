@@ -207,3 +207,55 @@ func TestModGlobalRedactAndRecovery(cur realm, t *testing.T) {
 		t.Fatal("global clear should fully un-redact and un-hide")
 	}
 }
+
+// Set-level global recovery (setmods vet, unanimous): ClearAnyBit is per-claim,
+// so a hostile SET needs its own cure. ResetModSet disarms it — and does not
+// appoint, so the court's own electorate still chooses who moderates.
+func TestResetModSetIsTheSetLevelCure(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("rms-creator")
+	puppet := testutils.TestAddress("rms-puppet")
+	g2 := testutils.TestAddress("rms-g2")
+	testCourt(cur, "rms", creator, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "rms", []address{puppet}, 1)
+	if !IsCourtMod("rms", puppet) {
+		t.Fatal("the puppet should be seated for the test")
+	}
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), g2)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+
+	// One approval is not enough.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	ResetModSet(cross(cur), "rms")
+	if !IsCourtMod("rms", puppet) {
+		t.Fatal("one of two approvals must not reset the set")
+	}
+	// The second fires it: the set is emptied, so nothing can act.
+	testing.SetRealm(testing.NewUserRealm(g2))
+	ResetModSet(cross(cur), "rms")
+	if IsCourtMod("rms", puppet) {
+		t.Fatal("the reset must disarm the hostile set")
+	}
+	if _, n := ModThreshold("rms"); n != 0 {
+		t.Fatalf("the set should be empty, got n=%d", n)
+	}
+}
+
+// A suspended creator may not re-appoint around the suspension: AppointMods is
+// free and creator-only, so allowing it would make meta's bonded, voted disarm
+// a no-op.
+func TestSuspendedCreatorCannotReappoint(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("scr-creator")
+	other := testutils.TestAddress("scr-other")
+	testCourt(cur, "scr", creator, 10_000_000_000)
+	c := mustCourt("scr")
+	suspendSet(c, creator)
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "suspended", func() {
+		AppointMods(cross(cur), "scr", []address{other}, 1)
+	})
+}

@@ -408,7 +408,7 @@ func ResolveElection(cur realm, courtSlug string) {
 
 	if winner != nil {
 		cand := cm.mustCandidate(winner.candID)
-		installModSet(c, cm, cand, now)
+		installModSet(c, cm, cand, now, true)
 		chain.Emit("ModSetInstalled",
 			"court", c.id, "by", "election",
 			"candidate", strconv.FormatUint(cand.id, 10),
@@ -421,13 +421,26 @@ func ResolveElection(cur realm, courtSlug string) {
 	cm.electionCooldownUntil = now + flagCooldownBlocks
 }
 
-// installModSet is the shared primitive: it replaces a court's moderator set,
-// stamps the membership height, clears the suspension (a freshly installed set
-// starts ARMED — otherwise the remedy would deliver a pre-disarmed set), and
-// permanently unseats the creator's appointment power. The meta court's
-// `mod:setmods` peer path reuses this exact function, so both peers write
-// identical state and last-writer-wins is well defined.
-func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64) {
+// installModSet is the shared primitive both peers use to replace a court's
+// moderator set, so last-writer-wins is well defined. It always replaces the
+// members/threshold, stamps setActHeight, and CLEARS the suspension — a freshly
+// installed set starts ARMED, because a suspension is a judgment about the set
+// that was judged, not a property of the court; carrying it onto an unjudged
+// set would punish a party no authority evaluated and would make the verb inert
+// in the very case that motivates it (negligent mods).
+//
+// Two effects are ELECTION-ONLY (the setmods vet's consensus). A meta install
+// must not:
+//   - stamp lastElectionAt, or one cheap meta appeal would poison every other
+//     in-flight appeal on that court (including restorative unhides, whose
+//     staleness reads exactly that field — M-A40 through the back door); nor
+//   - burn creatorUnseated, or one cheap meta appeal would permanently destroy
+//     the free, instant AppointMods repair path of a court that has never held
+//     an election.
+//
+// The local electorate's own verdict is a different thing: it legitimately ends
+// the creator's appointment power and legitimately stamps the election clock.
+func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64, byElection bool) {
 	fresh := bptree.NewBPTree32()
 	for _, a := range cand.members {
 		fresh.Set(a.String(), true)
@@ -437,8 +450,10 @@ func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64) {
 	cm.m = cand.m
 	cm.suspended = false
 	cm.setActHeight = at
-	cm.lastElectionAt = at
-	cm.creatorUnseated = true
+	if byElection {
+		cm.lastElectionAt = at
+		cm.creatorUnseated = true
+	}
 }
 
 // ---- reads ----------------------------------------------------------------
