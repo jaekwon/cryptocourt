@@ -456,7 +456,21 @@ denominator exists to time or to hold hostage.
   carry on ~1.5X̄ locked at zero yield); vet B restored it: **a median-low
   tier-0 kills the mill at flag-frequency q ≈ 12%, X̄-invariant** — my
   pre-analysis P1 was right via B's sharper mechanism, and the slash is
-  police-FUNDING, never mill-killing. Vet B then showed the deeper truth that
+  police-FUNDING, never mill-killing.
+  **CHALLENGED v0.56 — read this row with the caveat.** One half of that sentence is
+  arithmetically false and the other is unresolved. FALSE: the slash is not a garnish.
+  Because `slashDrawBps` = 1.6 > 1 and `slashSizeFor` = max(4.5%·X̄, 1.6·midGross) is
+  never clamped at the ceiling (1.6 × 19.27%·X̄ = 30.8%·X̄ < the 50%·X̄ bond), the slash
+  is at least `k/(1+k)` = **61.5% of the per-claim money punishment BY CONSTRUCTION**,
+  and 73.7% on a one-week claim — v0.40 chose k > 1 precisely so punishment exceeds the
+  take. UNRESOLVED: the "q ≈ 12%" break-even is a claim about FREQUENCY, not money, so
+  it does not follow from the split above being wrong. But three disarm reviewers
+  re-derived tier-0-alone independently and got **0.45 and 0.767** (the third declined a
+  number), both far above 0.12 — and they disagree with each other by ~70%, so the
+  carry model is what needs re-deriving, not simply the figure. Until someone does that
+  derivation, treat 12% as unverified rather than replaced. Practical consequence: do
+  NOT reason from "tier-0 alone suffices" when pricing anything that disarms the slash
+  (which is exactly the mistake v0.56 records me making). Vet B then showed the deeper truth that
   invalidates every reachable-bar slash design (mine AND vet A's
   undisputed-gate): **quality-vote weight is costless, reusable, and never
   escrowed by voting** — one weight pool services unlimited concurrent
@@ -1648,8 +1662,10 @@ Newest first.
   `slash/(slash + midGross) >= k/(1+k) = 61.5%` BY CONSTRUCTION — v0.40 chose k > 1 exactly
   so punishment exceeds the take at every hold time. 73.7% at one week. In q\* terms the
   patient 12-week mill sits at 0.45 disarmed versus 0.22 with the slash, re-opening the
-  profitable band decisions 28/28b closed. **§12 rows 24/28/28b should be re-read against
-  this; the "12%" figure is not what the model gives.**
+  profitable band decisions 28/28b closed. §3.4's v0.28 row now carries the caveat inline.
+  Note the two reviewers who gave numbers DISAGREE with each other (0.295/0.767 versus
+  0.22/0.45), so what is established is the direction and the money split, not a
+  replacement figure; the carry model needs its own derivation.
   **MY v0.55 MADE THIS WORSE, and I did not see it.** Two of three reviewers found the
   composition independently: withholding the sub-bar carrot removed the crowd's pay for
   voting in a poll that MIGHT land sub-bar, and because turnout is sealed they cannot tell
