@@ -1624,6 +1624,33 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.60 — fourth hunt: PRINCIPAL-IS-NO-LOSS is pinned, three pure-function guards
+  were not.** Ten more mutations. The good news first: all three attacks on the owner's
+  second locked promise are CAUGHT — a 1% haircut on withdrawal, paying from escrow while
+  leaving the position open, and withdrawing before any verdict. So is M2-1's credEligible
+  weight bar and the dispute bond's per-round doubling. Batch now 48 rows, all caught.
+  **Three survivors, all pure functions, all now tested by DIRECT CALL** rather than by
+  crafting protocol state the design forbids: `mulDiv128`'s domain guard, its
+  `hi >= den` quotient guard, and `capBonus`'s F9 bound. The last is instructive —
+  `TestF9CapHeadroomAtTheExtreme` already establishes that cap is UNREACHABLE by natural
+  flow (~9x headroom), which is exactly why loosening it 1000x survived; but `capBonus`
+  takes its inputs as arguments, so the clamp is testable on its own terms. Same for
+  `mulDiv128`, whose guards are fail-loud defence at magnitudes the protocol never reaches.
+  When a guard is unreachable through the protocol but its function is pure, test the
+  FUNCTION — that is the middle path between faking reachable state and leaving it
+  unverified.
+  **Writing the fixture taught me the code has a THIRD mulDiv128 guard I had not seen.**
+  `hi >= den` only bounds the quotient to uint64; a quotient in (MaxInt64, 2^64) would
+  wrap silently through `int64(q)`, so math-audit NOTE-6 added a separate `q > MaxInt64`
+  panic with its own message. My first fixture asserted the wrong one and the mismatch is
+  what surfaced it. All three are now pinned separately.
+  **And a gno-specific trap worth recording:** `uassert.AbortsContains` recovers panics
+  from CROSSING calls only. An internal call's panic escapes it, so the assertion fails
+  with the panic propagating rather than reporting a mismatch. The grc20votes suite already
+  had a local `defer`/`recover` helper for the same reason (a /p/ test cannot supply
+  `cur realm`); courtv2 now has one too. Use `uassert` for entrypoints, a local recover for
+  internals.
+
 - **v0.59 — second and third hunts: four more surviving guards, one of them the LOCKED
   CEILING's own enforcement point.** Twenty-one further mutations against pre-existing
   guards. The batch now stands at 38 rows, all caught, none invalid.

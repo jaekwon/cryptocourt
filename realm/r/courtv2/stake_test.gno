@@ -221,3 +221,74 @@ func TestRawIntegralAccruesAndFreezeCaps(cur realm, t *testing.T) {
 		t.Fatalf("raw must stop at the freeze: %d -> %d", before, p.rawLo)
 	}
 }
+
+// mulDiv128's two guards, both found SURVIVING by the mutation harness: removing
+// either failed no test. They are fail-loud defence at magnitudes the protocol does
+// not reach — audit C1 added the 128-bit intermediate because the naive uint64 product
+// wraps at ~485k CC of supply, a silent 34x under-budget — so rather than crafting
+// unreachable protocol state, this calls the function directly. It is a pure helper
+// and its contract is testable on its own terms.
+func TestMulDiv128RefusesItsDomainAndOverflow(cur realm, t *testing.T) {
+	// The happy path first, so the guards are not passing by rejecting everything.
+	if got := mulDiv128(6, 7, 3); got != 14 {
+		t.Fatalf("mulDiv128(6,7,3) = %d, want 14", got)
+	}
+	if got := mulDiv128(0, 5, 1); got != 0 {
+		t.Fatalf("a zero numerator is fine: %d", got)
+	}
+
+	// uassert.AbortsContains recovers panics from CROSSING calls; mulDiv128 is an
+	// internal call, so its panic escapes it. Recover locally instead, the way the
+	// grc20votes suite does for the same reason.
+	mustPanicWith := func(want string, fn func()) {
+		t.Helper()
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatalf("expected a panic saying %q; nothing panicked", want)
+			}
+			got, ok := r.(string)
+			if !ok || !containsSub(got, want) {
+				t.Fatalf("panic %v, want one saying %q", r, want)
+			}
+		}()
+		fn()
+	}
+
+	// DOMAIN: negatives and a non-positive denominator are caller bugs, not values to
+	// silently coerce — the u128 path has no sign.
+	for _, c := range []struct{ a, b, den int64 }{
+		{-1, 1, 1}, {1, -1, 1}, {-1, -1, 1}, {1, 1, 0}, {1, 1, -1},
+	} {
+		mustPanicWith("mulDiv128 domain", func() { mulDiv128(c.a, c.b, c.den) })
+	}
+
+	// QUOTIENT OVERFLOW, the hi>=den guard: a product whose 128-bit high word reaches
+	// the denominator cannot yield a uint64 quotient at all.
+	mustPanicWith("mulDiv128 quotient overflow", func() {
+		mulDiv128(9223372036854775807, 9223372036854775807, 1)
+	})
+	// And the THIRD guard, which I did not know was there until this fixture hit it:
+	// hi<den only bounds q to uint64, so a quotient in (MaxInt64, 2^64) would wrap
+	// silently through int64(q). math-audit NOTE-6 fails loud instead, with its own
+	// message. Both paths are unreachable at bounded inputs; both are pinned because
+	// the discipline is fail-loud, never silent-wrong.
+	mustPanicWith("mulDiv128 quotient exceeds int64", func() {
+		mulDiv128(9223372036854775807, 4, 2)
+	})
+	// The boundary just inside every guard still computes.
+	if got := mulDiv128(9223372036854775807, 2, 4); got <= 0 {
+		t.Fatalf("a quotient that fits must be returned: %d", got)
+	}
+}
+
+// containsSub is strings.Contains; the realm imports no strings package and a test
+// should not be the first thing to.
+func containsSub(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}

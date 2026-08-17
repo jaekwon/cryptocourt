@@ -264,5 +264,75 @@
   "label": "CloseDeadClaim ignores the timeout",
   "find": "\tif runtime.ChainHeight() < cs.openedAt+deadClaimTimeout {",
   "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "PRINCIPAL: withdraw returns less than the stake",
+  "find": "\tamount := p.stake\n\tp.stake = 0",
+  "replace": "\tamount := p.stake - p.stake/100\n\tp.stake = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "PRINCIPAL: withdraw leaves the position open",
+  "find": "\tamount := p.stake\n\tp.stake = 0",
+  "replace": "\tamount := p.stake"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "session.gno",
+  "label": "PRINCIPAL: withdraw before any verdict",
+  "find": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0 && side != int(cs.provisional)) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "M2-1: credEligible needs no adversarial weight",
+  "find": "\t\tif yes >= floor/4 {",
+  "replace": "\t\tif true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "dispute bond never doubles per failed round",
+  "find": "\tbond := mustMul(base, int64(1)<<uint(shift))",
+  "replace": "\tbond := base"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "mulDiv128 quotient overflow guard removed",
+  "find": "\tif hi >= uint64(den) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "mulDiv128 domain guard removed",
+  "find": "\tif a < 0 || b < 0 || den <= 0 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "mulDiv128 NOTE-6 int64 guard removed",
+  "find": "\tif q > 9223372036854775807 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "capBonus F9 bound loosened 1000x",
+  "find": "\tbound := mustMul(cs.tier, rawAvg) / 2",
+  "replace": "\tbound := mustMul(cs.tier, rawAvg) * 1000"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "capBonus drops its negative floor",
+  "find": "\tif gross < 0 {\n\t\tgross = 0\n\t}",
+  "replace": ""
  }
 ]

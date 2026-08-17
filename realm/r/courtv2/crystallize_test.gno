@@ -522,3 +522,36 @@ func TestCrystallizeWaitsOutTheQuietWindow(cur realm, t *testing.T) {
 		t.Fatal("past the quiet window the draw must crystallize")
 	}
 }
+
+// capBonus's F9 bound, found SURVIVING: multiplying it by 1000 failed no test, because
+// TestF9CapHeadroomAtTheExtreme establishes the cap is UNREACHABLE by natural flow
+// (~9x headroom at the extreme). That makes it defence rather than a live clamp — but
+// capBonus is a pure function taking its inputs as arguments, so the clamp itself is
+// testable directly without crafting protocol state the design forbids.
+func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
+	cs := &claimState{tier: tierMidX, openBlocks: 1}
+	// rawAvg = 100, tier 1 -> bound = 50.
+	if got := capBonus(cs, 1_000, 0, 100); got != 50 {
+		t.Fatalf("gross above the bound must clamp to (tier x rawAvg)/2: got %d want 50", got)
+	}
+	// Below the bound, gross passes through untouched.
+	if got := capBonus(cs, 10, 0, 100); got != 10 {
+		t.Fatalf("gross below the bound is unchanged: got %d want 10", got)
+	}
+	// The bound scales with the tier: HIGH doubles it.
+	cs.tier = tierHighX
+	if got := capBonus(cs, 1_000, 0, 100); got != 100 {
+		t.Fatalf("the bound is tier-scaled: got %d want 100", got)
+	}
+	// At tier LOW the bound is zero, so nothing is payable — the same reason a low
+	// tier zeroes the draw.
+	cs.tier = tierLowX
+	if got := capBonus(cs, 1_000, 0, 100); got != 0 {
+		t.Fatalf("tier LOW bounds the bonus to zero: got %d", got)
+	}
+	// And the floor: a negative gross never becomes a payout.
+	cs.tier = tierMidX
+	if got := capBonus(cs, -5, 0, 100); got != 0 {
+		t.Fatalf("a negative gross floors at zero: got %d", got)
+	}
+}
