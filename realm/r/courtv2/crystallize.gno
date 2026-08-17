@@ -94,8 +94,10 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	}
 
 	// The carrot: 7 points of the MID-weight gross, tier-invariant (paid even
-	// at low — F2), senior-lane, per-voter clamped at pull (P2).
-	cs.carrotTotal = midGross * splitCarrot / 100
+	// at low — F2), senior-lane, per-voter clamped at pull (P2). 128-bit: midGross
+	// is conviction (stake×time), not supply-bounded, so a bare ×7 could wrap and
+	// then panic PullCarrot at extreme scale (math-audit NOTE-2).
+	cs.carrotTotal = mulDiv128(midGross, splitCarrot, 100)
 	cs.carrotPool = cs.carrotTotal
 
 	// N1 lands here: the deposit refunds unless a conclusive low already
