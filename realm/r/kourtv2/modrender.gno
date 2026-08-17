@@ -317,12 +317,22 @@ func renderModLog(slug string) string {
 	// keys are big-endian ids, so a forward walk starts at the OLDEST moderated
 	// claim — once those filled a page, no recent act was ever visible, which is
 	// the opposite of what a moderation log is for.
+	//
+	// TWO bounds, not one. Stopping only when ROWS fill a page is a bound on
+	// output, not on work: a claimMod carrying few or no acts costs a step and
+	// buys no row, so a court with many lightly-moderated claims walks them all.
+	// Nothing mints an act-less row today (ensureClaimMod runs only after the
+	// m-of-n fires), but that is an invariant elsewhere in the file, and a
+	// render should not silently depend on one. So the WALK is bounded too.
 	rows := []string{}
+	visited := 0
+	truncated := false
 	cm.claims.ReverseIterate("", "", func(_ string, v any) bool {
 		clm, ok := v.(*claimMod)
 		if !ok {
 			return false
 		}
+		visited++
 		for i := len(clm.log) - 1; i >= 0; i-- {
 			a := clm.log[i]
 			line := "- height " + strconv.FormatInt(a.height, 10) + " · " +
@@ -332,8 +342,13 @@ func renderModLog(slug string) string {
 			}
 			rows = append(rows, line)
 			if len(rows) >= renderPageSize {
+				truncated = true
 				return true
 			}
+		}
+		if visited >= renderPageSize {
+			truncated = true
+			return true
 		}
 		return false
 	})
@@ -344,6 +359,17 @@ func renderModLog(slug string) string {
 	}
 	for _, r := range rows {
 		b.WriteString(r + "\n")
+	}
+	// SAY SO when the page is not the whole log. A moderation log is an
+	// accountability record, and one that silently shows a slice of itself
+	// invites the reader to conclude that nothing else happened. The exact
+	// remaining count is deliberately not computed — that would re-walk
+	// everything this bound exists to avoid — but the claim count is O(1) and
+	// tells a reader how much history there is.
+	if truncated {
+		b.WriteString("\n_Showing the " + strconv.Itoa(len(rows)) +
+			" most recent acts. This court has moderated " + strconv.Itoa(cm.claims.Size()) +
+			" claims; older acts are not shown._\n")
 	}
 	return b.String()
 }

@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.20 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.21 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,37 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.21 — bounded reads (audit-N3), and what the backlog got wrong about
+  them**. Checked before changing, and two of the three suspects were already
+  fine: `writeStrip` and `writePending` both page at `renderPageSize` **and**
+  already print "…and N more". `StripPage`/`PendingPage` stop the iteration when
+  the page fills, so they are O(offset+limit) rather than O(index). The item was
+  overstated; recorded here so the next reader does not re-litigate it.
+  - **`renderModLog` was the real one, and for a subtler reason than "unbounded".**
+    It stopped once ROWS filled a page — a bound on *output*, not on *work*. A
+    `claimMod` carrying few or no acts costs a step and buys no row, so a court
+    with many lightly-moderated claims walks all of them. Nothing mints an
+    act-less row today (v0.16 moved `ensureClaimMod` after the m-of-n fires), but
+    that is an invariant in a different file, and a render should not silently
+    depend on one. The walk is now bounded on **two** terms: rows *and* claims
+    visited.
+  - **It also truncated silently, which for a moderation log is the worse half.**
+    The log is an accountability record; a page of it presented as the whole
+    thing invites the reader to conclude nothing else happened. It now says how
+    many acts it is showing and how many claims the court has moderated. The
+    exact remaining act count is deliberately *not* computed — that would re-walk
+    everything the bound exists to avoid — while `claims.Size()` is O(1) and
+    tells a reader how much history is behind the page.
+  - `PendingPage` now skips with `IterateByOffset` (O(log n)) instead of stepping
+    over the offset. `StripPage` deliberately keeps the linear skip: its
+    per-actor cap counts across the whole prefix **on purpose**, so that a deep
+    page stays consistent with the pages before it, and an offset descent would
+    silently change that rule.
+
+  Regression: `TestModLogReportsItsOwnTruncation` asserts both directions — a
+  long log says it is truncated and renders exactly one page, and a short one
+  does not claim truncation, so the notice carries information instead of
+  decorating every page.
 - **v0.20 — the rename's survivors, and one ticker question for the owner**.
   The 2026-08-16 cryptocourt→Kourt rename moved directories and import paths but
   left five *strings* behind, three of them user-visible. Found by grepping the

@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -196,4 +197,46 @@ func TestQualifiedSymbolRendering(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "reserved", func() {
 		StartCourt(cross(cur), "court", "impostor")
 	})
+}
+
+// A moderation log is an accountability record, so a page of it that is not the
+// whole thing must SAY so — a reader shown a silent slice concludes nothing else
+// happened. The walk is bounded on two terms (rows AND claims visited), because
+// bounding on rows alone bounds output rather than work: a claimMod carrying few
+// acts costs a step and buys no row.
+func TestModLogReportsItsOwnTruncation(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mdr9-alice")
+	testCourt(cur, "mdr9", alice, 500_000_000_000)
+
+	// One act each on more claims than a page holds.
+	for i := 0; i < renderPageSize+5; i++ {
+		testing.SetRealm(testing.NewUserRealm(alice))
+		id := OpenClaim(cross(cur), "mdr9", "claim "+strconv.Itoa(i))
+		testing.SetRealm(testing.NewUserRealm(alice))
+		HideItem(cross(cur), "mdr9", id, "spam")
+	}
+
+	page := Render("mdr9/mod")
+	if !strings.Contains(page, "older acts are not shown") {
+		t.Fatal("a truncated moderation log must say it is truncated")
+	}
+	if !strings.Contains(page, "most recent acts") {
+		t.Fatal("the notice should say how many acts are shown")
+	}
+	// The bound really binds: a page, not the whole history.
+	if n := strings.Count(page, "· hide ·"); n != renderPageSize {
+		t.Fatalf("the log rendered %d acts, want exactly one page of %d", n, renderPageSize)
+	}
+
+	// And a court whose log fits says nothing about truncation, so the notice
+	// carries information rather than decorating every page.
+	bob := testutils.TestAddress("mdr9-bob")
+	testCourt(cur, "mdr9b", bob, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	small := OpenClaim(cross(cur), "mdr9b", "just the one")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	HideItem(cross(cur), "mdr9b", small, "spam")
+	if strings.Contains(Render("mdr9b/mod"), "older acts are not shown") {
+		t.Fatal("a log that fits on one page must not claim to be truncated")
+	}
 }

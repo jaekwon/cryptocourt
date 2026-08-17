@@ -200,18 +200,16 @@ func PendingPage(courtSlug string, offset, limit int) []uint64 {
 	if c.pendingIdx == nil || limit <= 0 {
 		return out
 	}
-	skipped := 0
-	c.pendingIdx.Iterate("", "", func(_ string, v any) bool {
-		id, ok := v.(uint64)
-		if !ok {
-			return false
+	// IterateByOffset descends to the offset in O(log n) instead of stepping
+	// over it. The strip page below cannot do this — its per-actor cap counts
+	// across the whole prefix ON PURPOSE, so that a deep page stays consistent
+	// with the pages before it — but the pending list has no such term, and a
+	// caller-supplied offset is otherwise a linear walk they pay gas for.
+	c.pendingIdx.IterateByOffset(offset, limit, func(_ string, v any) bool {
+		if id, ok := v.(uint64); ok {
+			out = append(out, id)
 		}
-		if skipped < offset {
-			skipped++
-			return false
-		}
-		out = append(out, id)
-		return len(out) >= limit
+		return false
 	})
 	return out
 }
