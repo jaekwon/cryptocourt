@@ -1,4 +1,4 @@
-.PHONY: check realm-test chain-test txtar-test isolation-test selftest fmt vet
+.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet
 
 # Everything that can run without a node.
 #
@@ -80,6 +80,22 @@ txtar-test:
 # ran before it. Slow — each suite once per test — hence its own target.
 isolation-test:
 	python3 scripts/check-isolation.py
+
+# Break the MONEY PATH on purpose and check the suite objects: 56 named mutations over
+# courtv2 and the packages it imports, each applied and reverted in turn. Run this before
+# any money-path change — a green suite proves nothing on its own, since it passes
+# against correct code and against code whose guard you deleted.
+#
+# Exists as a target because the batch is otherwise invisible: mutate.py was in this repo
+# for the whole of the v0.51-v0.62 work and went unused because nothing pointed at it,
+# so every guard was mutated by hand instead. ~2.5 minutes.
+#
+# If a run is interrupted, check `git diff` on the realm before trusting a green suite:
+# a killed run can leave a mutation applied. mutate.py writes .mutate-backup files beside
+# the sources and recovers them on its next run, and it may also leave a stale
+# .cryptocourt-stage.lock, which the next runner reports rather than hanging on.
+mutate:
+	python3 scripts/mutate.py < scripts/mutations-courtv2.json
 
 # Break each guard on purpose and check it notices. Periodic rather than
 # per-commit: a check that reports success while measuring nothing is the

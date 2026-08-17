@@ -390,5 +390,54 @@
   "label": "BUY: the spent GNOT is not burned",
   "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "H1: frozen conviction repriced by later d_eff",
+  "find": "\tacc := c.rateAccFP\n\tif cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {\n\t\tacc = cs.rateAccAtFreeze\n\t}",
+  "replace": "\tacc := c.rateAccFP"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "H1: the freeze cap pins EVERY claim, frozen or not",
+  "find": "\tif cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {",
+  "replace": "\tif cs.rateAccAtFreeze < acc {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "F9 cap base keeps accruing past the freeze",
+  "find": "\tif cs.frozenAt != 0 && cs.frozenAt < h {\n\t\th = cs.frozenAt\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "staking is not frozen by an answer",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"courtv2: staking is frozen \u2014 this claim has an answer\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "overturn decrements qualifiedCount unconditionally",
+  "find": "\tif r.score >= priorityNetRecord {",
+  "replace": "\tif true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "an overturn only halves the score",
+  "find": "\tr.score = 0\n}",
+  "replace": "\tr.score = r.score / 2\n}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "records.gno",
+  "label": "releasePriority frees a slot it does not hold",
+  "find": "\tif r.activePriority == claimID {",
+  "replace": "\tif true {"
  }
 ]

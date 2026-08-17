@@ -292,3 +292,61 @@ func containsSub(s, sub string) bool {
 	}
 	return false
 }
+
+// H1, an audit-named invariant found SURVIVING by the mutation harness: removing
+// effectiveRateAcc's freeze cap failed no test. The cap is what stops a claim's FROZEN
+// conviction being repriced by later d_eff moves — without it, every position's
+// settlement changes retroactively whenever the court's rate moves after the answer,
+// so a payout computed today differs from the same payout computed next week on
+// identical votes and identical stake.
+//
+// Exercised on effectiveRateAcc directly: it is the single function the invariant lives
+// in, and driving a d_eff move through natural emission would take more periods than a
+// harness can run while proving the same one comparison.
+func TestFrozenConvictionIsNotRepricedByLaterRateMoves(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("h1c-alice")
+	c := testCourt(cur, "h1c", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "h1c", "frozen means frozen")
+	matureOI(cur, "h1c", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "h1c", id, sideYES)
+
+	cs := mustClaim(c, id)
+	if cs.frozenAt == 0 || cs.rateAccAtFreeze <= 0 {
+		t.Fatalf("setup: the answer must pin the era integral: frozenAt=%d accAtFreeze=%d",
+			cs.frozenAt, cs.rateAccAtFreeze)
+	}
+	atFreeze := effectiveRateAcc(c, cs)
+	if atFreeze != cs.rateAccAtFreeze {
+		t.Fatalf("setup: a frozen claim settles against its pin: %d vs %d",
+			atFreeze, cs.rateAccAtFreeze)
+	}
+
+	// The court's era integral keeps growing after the freeze — that is normal, other
+	// claims are still live.
+	testing.SkipHeights(epochBlocks * 24 * 30)
+	touch(c)
+	if c.rateAccFP <= cs.rateAccAtFreeze {
+		t.Fatalf("setup: the COURT's integral must advance past the pin: %d vs %d",
+			c.rateAccFP, cs.rateAccAtFreeze)
+	}
+
+	// THE GUARD: this claim still settles against the pin, not the court's new total.
+	if got := effectiveRateAcc(c, cs); got != cs.rateAccAtFreeze {
+		t.Fatalf("H1: a frozen claim must not be repriced by later rate moves: "+
+			"got %d want %d (court is at %d)", got, cs.rateAccAtFreeze, c.rateAccFP)
+	}
+
+	// And the cap is a cap, not an override: a claim that is NOT frozen tracks the
+	// court's integral, so the guard cannot pass by pinning everything.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	live := OpenClaim(cross(cur), "h1c", "still open")
+	lcs := mustClaim(c, live)
+	if lcs.frozenAt != 0 {
+		t.Fatal("setup: the second claim must be unfrozen")
+	}
+	if got := effectiveRateAcc(c, lcs); got != c.rateAccFP {
+		t.Fatalf("an unfrozen claim tracks the court: got %d want %d", got, c.rateAccFP)
+	}
+}

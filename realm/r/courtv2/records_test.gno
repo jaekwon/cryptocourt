@@ -73,3 +73,52 @@ func TestOneActivePriorityClaim(cur realm, t *testing.T) {
 		t.Fatal("finalizing the held claim frees the slot")
 	}
 }
+
+// resetOverturned's qualification check, found SURVIVING by the mutation harness:
+// decrementing qualifiedCount UNCONDITIONALLY failed no test. The count exists only to
+// drive priorityGateActive's cold-start guard (R5e: the 24h window binds only once the
+// court has real qualified answerers), and it is an int with no floor — so overturning
+// answerers who never qualified drives it NEGATIVE and the gate then stays off no
+// matter how many genuine credentials the court later earns.
+//
+// Exercised directly on the record helpers, since driving three contested-and-upheld
+// rounds plus an overturn through the dispute machine for each address would test the
+// dispute machine rather than this accounting.
+func TestOverturnOnlyDecrementsAQualifiedRecord(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("recq-alice")
+	unqual := testutils.TestAddress("recq-unqual")
+	c := testCourt(cur, "recq", alice, 1_000_000_000)
+
+	// An address that never reached the threshold: overturning it must not decrement.
+	creditUpheld(c, unqual) // score 1, still under priorityNetRecord (3)
+	if c.qualifiedCount != 0 {
+		t.Fatalf("setup: one win must not qualify: %d", c.qualifiedCount)
+	}
+	resetOverturned(c, unqual)
+	if c.qualifiedCount != 0 {
+		t.Fatalf("overturning an UNQUALIFIED record must not decrement the count "+
+			"(it has no floor, so this goes negative and disables the gate): %d",
+			c.qualifiedCount)
+	}
+
+	// A qualified address: the count rises once at the threshold, not per win, and
+	// falls once on overturn.
+	for i := 0; i < priorityNetRecord; i++ {
+		creditUpheld(c, alice)
+	}
+	if c.qualifiedCount != 1 {
+		t.Fatalf("reaching the threshold qualifies exactly once: %d", c.qualifiedCount)
+	}
+	creditUpheld(c, alice) // a further win must not double-count
+	if c.qualifiedCount != 1 {
+		t.Fatalf("a win beyond the threshold must not re-qualify: %d", c.qualifiedCount)
+	}
+	resetOverturned(c, alice)
+	if c.qualifiedCount != 0 {
+		t.Fatalf("overturning a qualified record decrements once: %d", c.qualifiedCount)
+	}
+	// And the credential burns entirely rather than decaying.
+	if r := getRecord(c, alice); r.score != 0 {
+		t.Fatalf("an overturn burns the whole career score: %d", r.score)
+	}
+}

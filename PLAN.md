@@ -1624,6 +1624,34 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.64 — `make mutate`, plus H1 and the credential accounting were both unpinned.**
+  Added a Makefile target for the batch, because the batch was otherwise invisible:
+  `mutate.py` sat in this repo through the whole of the v0.51–v0.62 work and went unused
+  because nothing pointed at it, so every guard was mutated by hand. The target's comment
+  carries the two recovery notes a killed run needs (check `git diff` on the realm; the
+  `.mutate-backup` files and the stale stage lock).
+  **H1 (audit-named) was surviving.** `effectiveRateAcc` caps a claim's era integral at
+  its freeze snapshot so FROZEN conviction can never be repriced by later d_eff moves —
+  and removing that cap failed no test. Without it every position's settlement changes
+  retroactively whenever the court's rate moves after the answer, so the same votes and
+  the same stake pay differently depending on when you settle.
+  `TestFrozenConvictionIsNotRepricedByLaterRateMoves` pins it on the function the
+  invariant lives in, and pins the complement too — an UNFROZEN claim must still track the
+  court, so the guard cannot pass by pinning everything.
+  **The credential accounting was surviving.** `resetOverturned` decrements
+  `qualifiedCount` only when the record WAS qualified; making it unconditional failed no
+  test. The count is an `int` with no floor and drives `priorityGateActive`'s cold-start
+  guard (R5e), so overturning answerers who never reached `priorityNetRecord` = 3 drives it
+  NEGATIVE and the 24h priority window then stays off however many genuine credentials the
+  court later earns. Pinned along with three neighbours: qualifying exactly once at the
+  threshold rather than per win, the overturn burning the WHOLE career score rather than
+  decaying it, and `releasePriority` freeing only the slot it holds.
+  **Third slug collision of the session**, same cause every time — I know the check
+  (`grep testCourt slugs | uniq -d`) and skipped it again. The harness's baseline-red
+  gate caught it, as it did in v0.59. Worth stating as a rule since I have now proved I do
+  not remember it: pick the slug LAST, after grepping.
+  Batch now 63 rows, all caught, none invalid.
+
 - **v0.63 — the harness now judges a mutation by its OBSERVERS, and the whole batch runs
   in 2.5 minutes instead of timing out.** `run_suite` ran all staged suites for every
   mutation, which is what made 56 rows exceed a ten-minute budget and get killed
