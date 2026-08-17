@@ -1624,6 +1624,48 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.81 — FOUR ways to spend the answerer's Q5 challenge without holding a vote, and a
+  flaw in the harness's own summary that hid a row for several batches.**
+  The slash disposal lane: eleven mutations over `ResolveCounter`, `ResolveSlashWindow` and
+  `settleSlash`. The money DIRECTION was well held — inverting the second two-thirds,
+  always-settle and always-refund are all caught, as are the exactly-once zeroing, the burn
+  itself, the window-lapse requirement and the dispute-first bar. Four survived, and they
+  are one family: **dispose the reserve while the challenge that was supposed to decide it
+  has not been held.**
+  `ResolveCounter`'s `now < counterVoteEnd` — resolve the challenge the block it opens, on
+  an empty tally. Sub-bar turnout scores as "the whale failed to clear it", so the slash
+  settles and the one counter is spent unvoted.
+  `ResolveCounter`'s `!counterOpen` — the BACK DOOR, and the sharpest of the four.
+  `ResolveCounter` never checks `pendingSlash`, so without this it disposes a reserve with
+  no counter process at all — which is `ResolveSlashWindow`'s window deadline bypassed
+  entirely, by calling the other function.
+  `ResolveSlashWindow`'s `counterOpen` — settle DURING a live challenge, and not as a
+  corner case: `pendingSlashUntil` is origination+votingBlocks while `counterVoteEnd` is
+  counter-open+votingBlocks, so any counter opened after origination outlives the window
+  BY CONSTRUCTION and every challenge passes through that band.
+  `ResolveCounter`'s `turnout >= fullBar` — weakened to `turnout > 0`, one small confederate
+  voting anything but low gives `qLowW == 0`, the second two-thirds passes trivially, and
+  the reserve is refunded on a turnout nobody would call a verdict.
+  `TestCounterRevoteInconclusiveSlashStands` cannot see that last one: its counter draws NO
+  votes, and at zero turnout both readings settle. The discriminating case needs turnout
+  above zero and below the bar. One fixture walks the whole geometry and asserts the reserve
+  survives all three out-of-lane resolves, then that a sub-bar challenge SETTLES — burn
+  observed in supply, nothing returned to the bond.
+  **And the harness was hiding a row.** The 177-row run printed `BAD ANCHOR (matched 2x)`
+  for an H1 row and then `0 survived or invalid, of 177`, because a bad anchor was printed
+  but never counted. So the headline read "all 177 exercised" while one had silently not run
+  since at least the 117-row batch — this file's own failure mode, a non-result reported as
+  a result, committed by its own summary line. Every "all caught, of N" in v0.76 through
+  v0.80 should be read as N−1 exercised. **No coverage was lost:** the row's anchor was
+  ambiguous between `stake.gno`'s two freeze-cap sites, and both are caught by
+  `TestConvictionAccruesExactly` once the anchors are split per site. Fixed both ways — the
+  row is now two unambiguous rows, and BAD ANCHOR counts toward the headline, which is
+  renamed to "not caught (survived, invalid, or never applied)" so it cannot mean anything
+  narrower than it says. The existing self-test control for BAD ANCHOR still fires, and a
+  fresh control confirms such a row now appears in the count.
+  Batch now 178 rows, 0 not caught — and this is the first run where that headline
+  genuinely covers every row in it.
+
 - **v0.80 — OpenFlag swept: eight preconditions, and the one that survives is the only
   one no neighbour re-refuses — an UNANSWERED claim was flaggable.** Eleven mutations over
   `OpenFlag` and `openQualityTally`. Eight already held, including both halves of the

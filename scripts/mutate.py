@@ -226,7 +226,13 @@ def main():
         label = m["label"]
         n = open(where(m)).read().count(m["find"])
         if n != 1:
+            # Counted, not just printed. A row whose anchor never matched was never
+            # tested, and the summary used to exclude it — so "0 survived or invalid,
+            # of 177" read as "all 177 were exercised" while one had silently not
+            # run for several batches. That is this file's own failure mode, a
+            # non-result reported as a result, committed by its own summary line.
             print(f"{label:<46} BAD ANCHOR (matched {n}x)")
+            survivors.append(label + " [bad anchor]")
             continue
 
         ok, out = run_suite(root, m.get("pkg", "govern"), mut=m)
@@ -255,7 +261,8 @@ def main():
         else:
             print(f"{label:<46} caught: {hits[0] if hits else 'failed'}")
 
-    print(f"\n{len(survivors)} survived or invalid, of {len(muts)}")
+    print(f"\n{len(survivors)} not caught (survived, invalid, or never applied), "
+          f"of {len(muts)}")
     for s in survivors:
         print(f"  {s}")
 

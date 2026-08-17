@@ -1978,3 +1978,122 @@ func TestOpenFlagRefusesAnUnansweredClaim(cur realm, t *testing.T) {
 		t.Fatal("and must leave no open flag behind")
 	}
 }
+
+// THE THREE WAYS TO SPEND THE ANSWERER'S Q5 CHALLENGE WITHOUT HOLDING A VOTE.
+// All three guards survived the harness, all three are permissionless, and all three
+// end the same way: the reserve is disposed while the challenge that was supposed to
+// decide it has not been held.
+//
+//	ResolveCounter's `now < counterVoteEnd`  — resolve the challenge the block it
+//	  opens, on an empty tally. Turnout under the bar scores as "the whale failed to
+//	  clear it", so settleSlash runs and the one counter is spent unvoted.
+//	ResolveCounter's `!counterOpen`          — the BACK DOOR. ResolveCounter never
+//	  checks pendingSlash, so with this gone it disposes a reserve with no counter
+//	  process at all, which is the window deadline in ResolveSlashWindow bypassed.
+//	ResolveSlashWindow's `counterOpen`       — settle DURING a live challenge. Not a
+//	  corner case: pendingSlashUntil is origination+votingBlocks and counterVoteEnd is
+//	  counter-open+votingBlocks, so any counter opened after origination outlives the
+//	  window by construction, and every challenge passes through this band.
+//
+// The fixture walks that geometry once and asserts the reserve survives all three,
+// which is the property the three of them jointly hold up.
+func TestSlashDisposalRefusesEveryOutOfLaneResolve(cur realm, t *testing.T) {
+	c, id, alice, bob, carol, dust := qfSetup(cur, t, "sdw")
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "sdw", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "sdw", id, qualityLow) // full bar + 2/3 low: slash-grade
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "sdw", id)
+
+	cs := mustClaim(c, id)
+	reserved := cs.pendingSlash
+	if reserved <= 0 || cs.counterOpen || runtimeHeight() >= cs.pendingSlashUntil {
+		t.Fatalf("setup: need a live reserve in an unchallenged window: pending=%d "+
+			"counterOpen=%v now=%d until=%d", reserved, cs.counterOpen,
+			runtimeHeight(), cs.pendingSlashUntil)
+	}
+
+	// The back door: no counter has been opened, so there is nothing to resolve —
+	// and ResolveCounter must say so rather than scoring the reserve anyway.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "no counter re-vote to resolve", func() {
+		ResolveCounter(cross(cur), "sdw", id)
+	})
+
+	// The answerer opens the challenge partway through the window, so its vote
+	// necessarily runs past the window's own end.
+	testing.SkipHeights(c.params.votingBlocks / 2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "sdw", id)
+	if !cs.counterOpen || cs.counterVoteEnd <= cs.pendingSlashUntil {
+		t.Fatalf("setup: the challenge must outlive the window: open=%v end=%d until=%d",
+			cs.counterOpen, cs.counterVoteEnd, cs.pendingSlashUntil)
+	}
+
+	// Resolving it the moment it opens would score an empty tally.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "the counter re-vote is still open", func() {
+		ResolveCounter(cross(cur), "sdw", id)
+	})
+
+	// Now into the band where the window has lapsed but the challenge is live. This
+	// is where the last guard earns its keep.
+	testing.SkipHeights(c.params.votingBlocks/2 + 2)
+	if runtimeHeight() < cs.pendingSlashUntil || runtimeHeight() >= cs.counterVoteEnd {
+		t.Fatalf("setup: must sit past the window and inside the vote: now=%d until=%d "+
+			"end=%d", runtimeHeight(), cs.pendingSlashUntil, cs.counterVoteEnd)
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "the counter re-vote is running", func() {
+		ResolveSlashWindow(cross(cur), "sdw", id)
+	})
+
+	// Through all three, the reserve is untouched and the challenge unspent.
+	if cs.pendingSlash != reserved {
+		t.Fatalf("the reserve must survive every refused resolve: %d vs %d",
+			cs.pendingSlash, reserved)
+	}
+	if !cs.counterOpen {
+		t.Fatal("and the challenge must still be open to be voted")
+	}
+
+	// FOURTH, and a separate guard: the challenge must clear the FULL BAR to cancel
+	// anything. `turnout >= fullBar` also survived, and weakening it to `turnout > 0`
+	// hands the answerer an escape — one small confederate voting anything but low
+	// gives qLowW == 0, so the second two-thirds passes trivially and the reserve is
+	// refunded on a turnout nobody would call a verdict.
+	//
+	// TestCounterRevoteInconclusiveSlashStands cannot see this: its counter draws NO
+	// votes, and at zero turnout both readings settle. The discriminating case needs
+	// turnout ABOVE zero and BELOW the bar, which is what dust is for here.
+	_, fullBar := qualityBars(c, cs)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "sdw", id, qualityMid)
+	turnout := cs.qLowW + cs.qMidW + cs.qHighW
+	if turnout <= 0 || turnout >= fullBar || cs.qLowW != 0 {
+		t.Fatalf("setup: need turnout strictly between zero and the bar, with no low "+
+			"weight: turnout=%d bar=%d low=%d", turnout, fullBar, cs.qLowW)
+	}
+
+	testing.SkipHeights(c.params.votingBlocks)
+	supplyBefore := c.coin.TotalSupply()
+	bondBefore := cs.answerBond
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveCounter(cross(cur), "sdw", id)
+
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a resolved counter must dispose the reserve either way: %d",
+			cs.pendingSlash)
+	}
+	// SETTLED, not refunded: the coin is burned and the bond does not get it back.
+	if got := supplyBefore - c.coin.TotalSupply(); got != reserved {
+		t.Fatalf("a sub-bar challenge settles the slash, burning %d; supply fell by %d",
+			reserved, got)
+	}
+	if cs.answerBond != bondBefore {
+		t.Fatalf("and nothing returns to the answer bond: %d vs %d",
+			cs.answerBond, bondBefore)
+	}
+}

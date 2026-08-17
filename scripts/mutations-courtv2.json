@@ -401,9 +401,16 @@
  {
   "pkg": "courtv2",
   "file": "stake.gno",
-  "label": "H1: the freeze cap pins EVERY claim, frozen or not",
-  "find": "\tif cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {",
-  "replace": "\tif cs.rateAccAtFreeze < acc {"
+  "label": "H1: effectiveRateAcc's freeze cap pins EVERY claim, frozen or not",
+  "find": "\tacc := c.rateAccFP\n\tif cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {",
+  "replace": "\tacc := c.rateAccFP\n\tif cs.rateAccAtFreeze < acc {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "H1: accrue's freeze cap pins EVERY claim, frozen or not",
+  "find": "\tif cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {\n\t\tacc = cs.rateAccAtFreeze\n\t}\n\thi, lo := p.convHi, p.convLo",
+  "replace": "\tif cs.rateAccAtFreeze < acc {\n\t\tacc = cs.rateAccAtFreeze\n\t}\n\thi, lo := p.convHi, p.convLo"
  },
  {
   "pkg": "courtv2",
@@ -1160,5 +1167,82 @@
   "label": "openQualityTally: the accumulators are not reset",
   "find": "\tcs.qVoteSeq++\n\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0",
   "replace": "\tcs.qVoteSeq++"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: the full bar is ignored when scoring the counter",
+  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
+  "replace": "\tif turnout > 0 && cs.qLowW*3 < turnout*2 && fullBar >= 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: the second two-thirds test is inverted",
+  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
+  "replace": "\tif turnout >= fullBar && cs.qLowW*3 > turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: the counter always SETTLES the slash",
+  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
+  "replace": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 && false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: the counter always REFUNDS the slash",
+  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
+  "replace": "\tif turnout >= fullBar || cs.qLowW*3 < turnout*2 || true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: the counter re-vote resolves while still open",
+  "find": "\tif now < cs.counterVoteEnd {\n\t\tpanic(\"courtv2: the counter re-vote is still open\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: resolves with no counter re-vote running",
+  "find": "\tif !cs.counterOpen {\n\t\tpanic(\"courtv2: no counter re-vote to resolve\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveCounter: resolves while a dispute is open",
+  "find": "\tif cs.disputeOpen {\n\t\tpanic(\"courtv2: a dispute is open; its quality ride decides the slash first\")\n\t}\n\tif !cs.counterOpen {",
+  "replace": "\tif !cs.counterOpen {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveSlashWindow: the counter-flag window need not have lapsed",
+  "find": "\tif runtime.ChainHeight() < cs.pendingSlashUntil {\n\t\tpanic(\"courtv2: the counter-flag window is still open\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ResolveSlashWindow: settles while a counter re-vote is running",
+  "find": "\tif cs.counterOpen {\n\t\tpanic(\"courtv2: the counter re-vote is running; resolve it instead\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "settleSlash: the reserve is not zeroed, so it can settle twice",
+  "find": "\tcs.pendingSlash = 0\n\tc.coin.Burn(c.escrow, slash)",
+  "replace": "\tc.coin.Burn(c.escrow, slash)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "settleSlash: the reserve is never burned",
+  "find": "\tcs.pendingSlash = 0\n\tc.coin.Burn(c.escrow, slash)",
+  "replace": "\tcs.pendingSlash = 0"
  }
 ]
