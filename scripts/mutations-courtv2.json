@@ -859,5 +859,96 @@
   "label": "PullCarrot: the claim latch is never written",
   "find": "\tcs.qVoted.Set(claimedKey, true)",
   "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: a participant votes its own claim's quality (Q2)",
+  "find": "\tif isParticipant(cs, who) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: a zero-weight address votes",
+  "find": "\tif w <= 0 {\n\t\tpanic(\"courtv2: no checkpointed weight at the claim's quality epoch\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: an address votes the same tally twice",
+  "find": "\tif cs.qVoted.Has(k) {\n\t\tpanic(\"courtv2: already voted this quality tally\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: the vote key drops the tally seq",
+  "find": "\tk := beClaimKey(cs.qVoteSeq) + string(who)",
+  "replace": "\tk := string(who)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: a LOW vote is counted as MID",
+  "find": "\tcase qualityLow:\n\t\tcs.qLowW = mustAdd(cs.qLowW, w)",
+  "replace": "\tcase qualityLow:\n\t\tcs.qMidW = mustAdd(cs.qMidW, w)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: a HIGH vote is counted as MID",
+  "find": "\tdefault:\n\t\tcs.qHighW = mustAdd(cs.qHighW, w)",
+  "replace": "\tdefault:\n\t\tcs.qMidW = mustAdd(cs.qMidW, w)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: the flag vote accepts votes after it closed",
+  "find": "\tif cs.flagOpen && runtime.ChainHeight() >= cs.flagVoteEnd {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: the counter re-vote accepts votes after it closed",
+  "find": "\tif cs.counterOpen && runtime.ChainHeight() >= cs.counterVoteEnd {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "VoteQuality: the dispute lane accepts votes after the proposal closed",
+  "find": "\tif cs.disputeOpen && c.gov.State(cs.proposalID) != \"active\" {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "VoteDispute: the carrot record always says yes",
+  "find": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
+  "replace": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), \"yes\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "VoteDispute: the carrot record drops the round it was cast in",
+  "find": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
+  "replace": "\tcs.qVoted.Set(\"d\"+string(who), choice)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "VoteDispute: the vote is never cast with the governor",
+  "find": "\tc.gov.Vote(who, cs.proposalID, choice)",
+  "replace": "\t_ = choice"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "ResolveDispute: a round resolves while its vote is still open",
+  "find": "\tif c.gov.State(cs.proposalID) == \"active\" {",
+  "replace": "\tif false {"
  }
 ]

@@ -1852,3 +1852,70 @@ func TestInconclusiveMidHalfBurnsTheFlagBond(cur realm, t *testing.T) {
 		t.Fatalf("the other half must BURN: burned %d want %d", burned, bond-half)
 	}
 }
+
+// WHO may vote, and UNTIL WHEN. Three of VoteQuality's nine guards survived the
+// harness, and all three are on the adjudication core rather than on the payout:
+// the checkpointed-weight requirement, and BOTH vote deadlines — the flag lane's
+// and the counter re-vote's.
+//
+// The deadlines are the serious pair. Between flagVoteEnd and whoever gets round to
+// calling ResolveFlag, the running tally is on chain for anyone to read while the
+// window is, on paper, shut. Without the guard a late voter reads the result and
+// then tips it, which is not a late vote so much as a first-mover veto over every
+// vote cast honestly. Nothing caught it because every existing fixture does
+// SkipHeights-then-Resolve and never tries to vote in that gap.
+//
+// The weight check confines the electorate to addresses holding checkpointed weight
+// at the claim's quality epoch. Without it any address at all enrolls in the claim's
+// vote tree — it adds nothing to the tally, since it adds its own zero, but it is
+// recorded as a voter and later writes a carrot-claim key too.
+//
+// A refused vote cannot disturb the tally it was refused from, so all three arms fit
+// in one narrative: flag, slash, counter.
+func TestVoteQualityNeedsWeightAndAnOpenWindow(cur realm, t *testing.T) {
+	c, id, alice, bob, carol, dust := qfSetup(cur, t, "qfw")
+	ghost := testutils.TestAddress("qfw-ghost") // never held a coin
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qfw", id)
+
+	// No checkpointed weight, no vote — while the window is still open, so this is
+	// the weight check answering and not a deadline.
+	testing.SetRealm(testing.NewUserRealm(ghost))
+	uassert.AbortsContains(t, cur, "no checkpointed weight", func() {
+		VoteQuality(cross(cur), "qfw", id, qualityLow)
+	})
+
+	// The real tally: carol alone clears the full bar with a 2/3 low, so this flag is
+	// slash-grade and opens a counter window below.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qfw", id, qualityLow)
+
+	// Past the close but before anyone resolves: dust HAS weight and has not voted,
+	// so only the deadline stands between it and the open tally.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	uassert.AbortsContains(t, cur, "the flag vote has closed", func() {
+		VoteQuality(cross(cur), "qfw", id, qualityMid)
+	})
+
+	ResolveFlag(cross(cur), "qfw", id)
+	cs := mustClaim(c, id)
+	if cs.pendingSlash <= 0 {
+		t.Fatalf("setup: need a slash-grade low to open a counter window: pending=%d",
+			cs.pendingSlash)
+	}
+
+	// The same again on the counter lane, which has its own deadline and its own
+	// fresh tally — so dust is eligible here even though it was refused above.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "qfw", id)
+	if !cs.counterOpen {
+		t.Fatal("setup: the counter re-vote must be open")
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	uassert.AbortsContains(t, cur, "the counter re-vote has closed", func() {
+		VoteQuality(cross(cur), "qfw", id, qualityMid)
+	})
+}

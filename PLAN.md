@@ -1624,6 +1624,38 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.76 — the ADJUDICATION core swept: both vote deadlines were unguarded by any test,
+  and a late vote is a first-mover veto rather than merely a late vote.** `VoteQuality` is
+  where the system decides things, so it was the next target after the payouts. Nine
+  guards, six already pinned — Q2's participant bar, the one-vote-per-tally latch, the
+  tally-seq in the vote key, both bucket routings, and the dispute lane's own deadline —
+  and three surviving.
+  **Both remaining deadlines.** Between `flagVoteEnd` and whoever gets round to calling
+  `ResolveFlag`, the running tally sits on chain for anyone to read while the window is,
+  on paper, shut. The same holds for the counter re-vote. Without the guard a late voter
+  reads the result and then tips it, which is worth naming precisely: it is not a late
+  vote, it is a veto over every vote cast honestly, held by whoever moves last. Nothing
+  caught it because every existing fixture does SkipHeights-then-Resolve and never tries
+  to vote in the gap — the guard was only ever exercised from the side where the window
+  was open.
+  **The checkpointed-weight requirement.** Without it any address enrols in the claim's
+  vote tree. It adds nothing to the tally, since it adds its own zero, but it is recorded
+  as a voter and later writes a carrot-claim key as well.
+  All three are pinned by one fixture, because a refused vote cannot disturb the tally it
+  was refused from: flag, slash, counter in a single narrative.
+  `VoteDispute` came out better — it delegates eligibility to the governor and only records
+  the choice for the carrot, and both halves of that record are pinned (by the fixture
+  written for the carrot last version: the recorded choice, and the round it was cast in).
+  Its `!cs.disputeOpen` guard SURVIVED and is **equivalent**, checked rather than argued:
+  `disputeOpen` is cleared only at the end of `ResolveDispute`, which is gated on the
+  proposal no longer being active, so the guard rejects only what the governor also
+  rejects. With it removed, a never-disputed claim aborts with `govern: no such proposal`
+  and a resolved round still aborts — measured in the VM both ways. It is defensive depth
+  (a clearer message, and independence from the governor's policy), so it gets no fixture
+  and deliberately no batch row: a row that always survives would break the batch's
+  all-caught invariant, which is the property that makes the batch readable at a glance.
+  Batch now 136 rows, all caught, none invalid.
+
 - **v0.75 — `PullCarrot`'s electorate was half-unpinned, and one of the survivors is the
   invariant item 4's NO-CHANGE verdict was argued FROM.** Policing pay lives in the carrot,
   so it was the next target after the draw family. Six guards mutated, three already
