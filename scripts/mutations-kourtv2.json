@@ -2056,5 +2056,33 @@
     "label": "moderation/PurgeModLogRow: kourtv2: that claim has no moderation log",
     "find": "\t\tpanic(\"kourtv2: that claim has no moderation log\")\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "render/writeListedByBurn: the directory is ordered newest-first, not by GNOT burn",
+    "find": "\tslugs := listedPage(\"burn\", 0, renderPageSize)\n",
+    "replace": "\tslugs := listedPage(\"new\", 0, renderPageSize)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "render/writeListedByBurn: an UNLISTED court appears on the front page",
+    "find": "\t\tif c.tier != tierListed {\n\t\t\tcontinue\n\t\t}\n",
+    "replace": "\t\tif c.tier != tierListed {\n\t\t\t_ = c\n\t\t}\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "render/claimStatus: a provisional YES verdict reads as merely answered (>= 0 -> > 0)",
+    "find": "\tcase cs.provisional >= 0:\n",
+    "replace": "\tcase cs.provisional > 0:\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "canonicalMembers: a malformed bech32 address is seated as a moderator",
+    "find": "\t\tif !a.IsValid() {\n\t\t\tpanic(\"kourtv2: not a valid address for a moderator set\")\n\t\t}\n",
+    "replace": ""
   }
 ]

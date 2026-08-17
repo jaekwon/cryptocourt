@@ -38,7 +38,7 @@ func TestElectionHonestMajorityUnseatsCapturedMinority(cur realm, t *testing.T) 
 	c.coin.Mint(honest, 50_000_000) // bond money
 
 	testing.SetRealm(testing.NewUserRealm(honest))
-	cand := RegisterModCandidate(cross(cur), "ev1", []address{newMod}, 1)
+	cand := RegisterModCandidate(cross(cur), "ev1", 1, newMod)
 	testing.SetRealm(testing.NewUserRealm(honest))
 	OpenElection(cross(cur), "ev1", cand)
 
@@ -64,7 +64,7 @@ func TestElectionHonestMajorityUnseatsCapturedMinority(cur realm, t *testing.T) 
 	// The creator's appointment power is spent once an election installs.
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "appointment power is spent", func() {
-		AppointMods(cross(cur), "ev1", []address{creator}, 1)
+		AppointMods(cross(cur), "ev1", 1, creator)
 	})
 }
 
@@ -81,7 +81,7 @@ func TestElectionBelowQuorumRetains(cur realm, t *testing.T) {
 	c.coin.Mint(dust, 50_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(dust))
-	cand := RegisterModCandidate(cross(cur), "ev2", []address{newMod}, 1)
+	cand := RegisterModCandidate(cross(cur), "ev2", 1, newMod)
 	testing.SetRealm(testing.NewUserRealm(dust))
 	OpenElection(cross(cur), "ev2", cand)
 	testing.SkipHeights(nominationWindow)
@@ -125,9 +125,9 @@ func TestElectionDecoyLosesToEarliestNomination(cur realm, t *testing.T) {
 
 	// The honest set, nominated FIRST; then a decoy that swaps in a puppet.
 	testing.SetRealm(testing.NewUserRealm(big))
-	orig := RegisterModCandidate(cross(cur), "ev3", []address{honestMod}, 1)
+	orig := RegisterModCandidate(cross(cur), "ev3", 1, honestMod)
 	testing.SetRealm(testing.NewUserRealm(small))
-	decoy := RegisterModCandidate(cross(cur), "ev3", []address{puppet}, 1)
+	decoy := RegisterModCandidate(cross(cur), "ev3", 1, puppet)
 
 	testing.SetRealm(testing.NewUserRealm(big))
 	OpenElection(cross(cur), "ev3", orig)
@@ -171,9 +171,9 @@ func TestElectionBondsAddAndRefundOnlyOnInstall(cur realm, t *testing.T) {
 		[]address{voter, loserPoster}, []int64{800_000_000, 100_000_000})
 
 	testing.SetRealm(testing.NewUserRealm(voter))
-	winner := RegisterModCandidate(cross(cur), "ev4", []address{winMod}, 1)
+	winner := RegisterModCandidate(cross(cur), "ev4", 1, winMod)
 	testing.SetRealm(testing.NewUserRealm(loserPoster))
-	loser := RegisterModCandidate(cross(cur), "ev4", []address{loseMod}, 1)
+	loser := RegisterModCandidate(cross(cur), "ev4", 1, loseMod)
 
 	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenElection(cross(cur), "ev4", winner)
@@ -218,9 +218,9 @@ func TestElectionNominationGuards(cur realm, t *testing.T) {
 	c := electionCourt(cur, "ev5", creator, []address{voter}, []int64{900_000_000})
 
 	testing.SetRealm(testing.NewUserRealm(voter))
-	a := RegisterModCandidate(cross(cur), "ev5", []address{m1}, 1)
+	a := RegisterModCandidate(cross(cur), "ev5", 1, m1)
 	testing.SetRealm(testing.NewUserRealm(voter))
-	b := RegisterModCandidate(cross(cur), "ev5", []address{m2}, 1)
+	b := RegisterModCandidate(cross(cur), "ev5", 1, m2)
 	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenElection(cross(cur), "ev5", a)
 
@@ -263,9 +263,9 @@ func TestElectionTurnoutIsDistinctVoters(cur realm, t *testing.T) {
 	c.coin.Mint(other, 60_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(voter))
-	a := RegisterModCandidate(cross(cur), "ev6", []address{m1}, 1)
+	a := RegisterModCandidate(cross(cur), "ev6", 1, m1)
 	testing.SetRealm(testing.NewUserRealm(voter))
-	b := RegisterModCandidate(cross(cur), "ev6", []address{m2}, 1)
+	b := RegisterModCandidate(cross(cur), "ev6", 1, m2)
 	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenElection(cross(cur), "ev6", a)
 	testing.SetRealm(testing.NewUserRealm(other))
@@ -307,9 +307,9 @@ func TestElectionZeroApprovalCandidateCannotInstall(cur realm, t *testing.T) {
 	_ = c
 
 	testing.SetRealm(testing.NewUserRealm(griefer))
-	puppetSet := RegisterModCandidate(cross(cur), "ev7", []address{puppet}, 1)
+	puppetSet := RegisterModCandidate(cross(cur), "ev7", 1, puppet)
 	testing.SetRealm(testing.NewUserRealm(small))
-	honestSet := RegisterModCandidate(cross(cur), "ev7", []address{honestMod}, 1)
+	honestSet := RegisterModCandidate(cross(cur), "ev7", 1, honestMod)
 
 	// The griefer opens, so their puppet is the EARLIEST line on the ballot.
 	testing.SetRealm(testing.NewUserRealm(griefer))
@@ -349,7 +349,7 @@ func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
 
 	cand1 := testutils.TestAddress("eb1-cand")
 	testing.SetRealm(testing.NewUserRealm(holder))
-	id1 := RegisterModCandidate(cross(cur), "ebond1", []address{cand1}, 1)
+	id1 := RegisterModCandidate(cross(cur), "ebond1", 1, cand1)
 	testing.SetRealm(testing.NewUserRealm(holder))
 	OpenElection(cross(cur), "ebond1", id1)
 
@@ -377,7 +377,7 @@ func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
 
 	cand2 := testutils.TestAddress("eb2-cand")
 	testing.SetRealm(testing.NewUserRealm(holder2))
-	id2 := RegisterModCandidate(cross(cur), "ebond2", []address{cand2}, 1)
+	id2 := RegisterModCandidate(cross(cur), "ebond2", 1, cand2)
 	testing.SetRealm(testing.NewUserRealm(holder2))
 	OpenElection(cross(cur), "ebond2", id2)
 
@@ -425,7 +425,7 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 	c.params.votingBlocks = 200
 
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "deposed", []address{oldA, oldB}, 2)
+	AppointMods(cross(cur), "deposed", 2, oldA, oldB)
 	testing.SetRealm(testing.NewUserRealm(holder))
 	id := OpenClaim(cross(cur), "deposed", "a claim the old set wanted buried")
 
@@ -443,7 +443,7 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 
 	// The electorate replaces them with a DISJOINT set.
 	testing.SetRealm(testing.NewUserRealm(holder))
-	cand := RegisterModCandidate(cross(cur), "deposed", []address{newX, newY}, 2)
+	cand := RegisterModCandidate(cross(cur), "deposed", 2, newX, newY)
 	testing.SetRealm(testing.NewUserRealm(holder))
 	OpenElection(cross(cur), "deposed", cand)
 	testing.SkipHeights(nominationWindow)
@@ -503,7 +503,7 @@ func TestElectionFloorIsPinnedAtOpenAndNeverFalls(cur realm, t *testing.T) {
 
 	cand := testutils.TestAddress("epin-cand")
 	testing.SetRealm(testing.NewUserRealm(holder))
-	id := RegisterModCandidate(cross(cur), "epin", []address{cand}, 1)
+	id := RegisterModCandidate(cross(cur), "epin", 1, cand)
 	testing.SetRealm(testing.NewUserRealm(holder))
 	OpenElection(cross(cur), "epin", id)
 
@@ -545,27 +545,35 @@ func TestRegisterModCandidateValidatesItsSet(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "candidate set may not be empty", func() {
-		RegisterModCandidate(cross(cur), "regcand", []address{}, 1)
+		RegisterModCandidate(cross(cur), "regcand", 1)
 	})
 	// Both ends of the m-of-n range, so the bound cannot be half-deleted.
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
-		RegisterModCandidate(cross(cur), "regcand", []address{m1}, 0)
+		RegisterModCandidate(cross(cur), "regcand", 0, m1)
 	})
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
-		RegisterModCandidate(cross(cur), "regcand", []address{m1}, 2)
+		RegisterModCandidate(cross(cur), "regcand", 2, m1)
 	})
 	// canonicalMembers refuses the zero address on both paths, and nothing
 	// else in the suite ever passes one.
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "moderator address may not be zero", func() {
-		RegisterModCandidate(cross(cur), "regcand", []address{m1, ""}, 1)
+		RegisterModCandidate(cross(cur), "regcand", 1, m1, "")
 	})
-	// A well-formed set registers, so the four refusals above are about their
+	// A MALFORMED address, which is a different failure from the zero one and now
+	// reachable for real: these entrypoints are called with strings over the wire,
+	// and the argument conversion does not check bech32. Without this guard a
+	// typo is seated as a moderator and counted in the threshold.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "not a valid address", func() {
+		RegisterModCandidate(cross(cur), "regcand", 1, m1, "g1nothingvalidhere")
+	})
+	// A well-formed set registers, so the five refusals above are about their
 	// own reasons and not about a call that was broken to begin with.
 	testing.SetRealm(testing.NewUserRealm(creator))
-	if id := RegisterModCandidate(cross(cur), "regcand", []address{m1}, 1); id == 0 {
+	if id := RegisterModCandidate(cross(cur), "regcand", 1, m1); id == 0 {
 		t.Fatal("a well-formed candidate set must register and return an id")
 	}
 }
@@ -583,9 +591,9 @@ func TestOnlyOneElectionOpenPerCourt(cur realm, t *testing.T) {
 	electionCourt(cur, "onelect", creator, []address{voter}, []int64{900_000_000})
 
 	testing.SetRealm(testing.NewUserRealm(voter))
-	a := RegisterModCandidate(cross(cur), "onelect", []address{m1}, 1)
+	a := RegisterModCandidate(cross(cur), "onelect", 1, m1)
 	testing.SetRealm(testing.NewUserRealm(voter))
-	b := RegisterModCandidate(cross(cur), "onelect", []address{m2}, 1)
+	b := RegisterModCandidate(cross(cur), "onelect", 1, m2)
 
 	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenElection(cross(cur), "onelect", a)
@@ -611,11 +619,11 @@ func TestBallotRefusesAFullBoardAndADuplicateLine(cur realm, t *testing.T) {
 		[]int64{900_000_000, 900_000_000, 900_000_000})
 
 	testing.SetRealm(testing.NewUserRealm(opener))
-	a := RegisterModCandidate(cross(cur), "ballotfl", []address{m1}, 1)
+	a := RegisterModCandidate(cross(cur), "ballotfl", 1, m1)
 	testing.SetRealm(testing.NewUserRealm(opener))
-	b := RegisterModCandidate(cross(cur), "ballotfl", []address{m2}, 1)
+	b := RegisterModCandidate(cross(cur), "ballotfl", 1, m2)
 	testing.SetRealm(testing.NewUserRealm(opener))
-	d := RegisterModCandidate(cross(cur), "ballotfl", []address{m3}, 1)
+	d := RegisterModCandidate(cross(cur), "ballotfl", 1, m3)
 	// OpenElection nominates its own candidate, so `a` is on the board and the
 	// opener has spent its one nomination.
 	testing.SetRealm(testing.NewUserRealm(opener))
@@ -668,9 +676,9 @@ func TestVotingWindowAndWeightGates(cur realm, t *testing.T) {
 	c := electionCourt(cur, "votegate", creator, []address{voter}, []int64{900_000_000})
 
 	testing.SetRealm(testing.NewUserRealm(voter))
-	onBallot := RegisterModCandidate(cross(cur), "votegate", []address{m1}, 1)
+	onBallot := RegisterModCandidate(cross(cur), "votegate", 1, m1)
 	testing.SetRealm(testing.NewUserRealm(voter))
-	offBallot := RegisterModCandidate(cross(cur), "votegate", []address{m2}, 1)
+	offBallot := RegisterModCandidate(cross(cur), "votegate", 1, m2)
 	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenElection(cross(cur), "votegate", onBallot)
 
@@ -743,7 +751,7 @@ func TestElectionReadsRefuseEveryMissingState(cur realm, t *testing.T) {
 	m1 := testutils.TestAddress("lk-m1")
 	testCourt(cur, "lknoreg", creator, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "lknoreg", []address{m1}, 1)
+	AppointMods(cross(cur), "lknoreg", 1, m1)
 	uassert.PanicsContains(t, cur, "no such candidate", func() {
 		CandidateMembers("lknoreg", 1)
 	})
@@ -752,7 +760,7 @@ func TestElectionReadsRefuseEveryMissingState(cur realm, t *testing.T) {
 	// The registered candidate is read back FIRST, so the refusal below is about
 	// the id and not about a registry that failed to appear.
 	testing.SetRealm(testing.NewUserRealm(creator))
-	id := RegisterModCandidate(cross(cur), "lknoreg", []address{m1}, 1)
+	id := RegisterModCandidate(cross(cur), "lknoreg", 1, m1)
 	if got := CandidateMembers("lknoreg", id); len(got) != 1 || got[0] != m1 {
 		t.Fatal("a registered candidate must read back before its absence means anything")
 	}
@@ -780,7 +788,7 @@ func TestAResolvedElectionIsNoLongerOpen(cur realm, t *testing.T) {
 	c := electionCourt(cur, "lkdone", creator, []address{voter}, []int64{900_000_000})
 
 	testing.SetRealm(testing.NewUserRealm(voter))
-	id := RegisterModCandidate(cross(cur), "lkdone", []address{mod}, 1)
+	id := RegisterModCandidate(cross(cur), "lkdone", 1, mod)
 	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenElection(cross(cur), "lkdone", id)
 	if !ElectionOpen("lkdone") {

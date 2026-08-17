@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.48 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.49 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,59 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+  - **A THIRD FINDING OF MINE THAT WAS WRONG, AND THE CORRECTION MATTERS MORE THAN
+    THE FINDING WOULD HAVE.** Having fixed the moderator path, I swept the same
+    axis and reported that five money entrypoints in `govern/token.gno` —
+    `Transfer`, `Approve`, `TransferFrom`, `Mint`, `Delegate` — accept an address
+    with no format check. **They do check.** The validation lives one level down:
+    `grc20votes`' ledger calls `mustBeValid` in `Approve` (on `spender`), `Mint`,
+    `Delegate`, and in the shared `move` helper that BOTH `Transfer` and
+    `TransferFrom` funnel through. Four guard sites cover all five paths, and
+    `move` is exactly the shared chokepoint that a per-entrypoint sweep would have
+    argued for. I scanned the realm's entrypoint bodies and concluded about
+    validation, when validation belongs to the package they delegate to.
+    **MEASURING THE WRONG SURFACE IS STILL RECALL** — third instance this session,
+    and the reason the line is in the doctrine at all.
+  - **The argument I built on top of it was also wrong, in three separate ways, and
+    a consensus round caught all three.** I had claimed `Delegate` deserved a guard
+    even if the others did not, because parking voting weight at an unspendable
+    address harms third parties by moving quorum. Corrected:
+    - *Direction.* Total supply, and therefore the quorum denominator, is
+      unchanged; only the voteable pool shrinks. So the bar RISES and proposals get
+      harder to pass. That is a liveness grief against everyone, not leverage — it
+      makes nothing passable that was not already.
+    - *Reversibility.* `Delegate` is called by the holder, so the holder simply
+      re-delegates and the harm evaporates. The m-of-n precedent does not transfer:
+      there the bad member is counted in a threshold the set itself must clear.
+    - *And decisively, the guard cannot stop the attack it was justified by.*
+      `IsValid` checks bech32 format and checksum, nothing else. An attacker who
+      wants to strand weight generates a **valid-format** address, throws away the
+      key, and delegates to it. The check passes. A griefing story that a guard
+      cannot interdict is not an argument for that guard.
+  - **The consensus round confirmed the code and refuted me, 3-0 on both counts.**
+    All three agents chose option (d), guard at the ledger chokepoint — which is
+    what `grc20votes` already does, and which one of them showed is the platform's
+    own idiom: upstream `p/demo/tokens/grc20/token.gno` guards `IsValid` at the
+    ledger across six write methods rather than at any API. All three also rejected
+    singling out `Delegate`, and one supplied a case sharper than mine: **`Mint` is
+    the worse door.** Minting to an unspendable address *raises* total supply —
+    the quorum denominator — while adding zero votable weight, which is a genuine
+    quorum-inflation lever in the hands of whoever holds mint authority, where
+    `Delegate` only strands weight the holder can re-delegate away. That case is
+    guarded too.
+  - **One recommendation of theirs is worth keeping as a rule even though nothing
+    needs changing: panic on writes, never on reads.** A no-op on an irreversible
+    money path is a second failure mode, not the cautious option — the caller is
+    told the transfer succeeded. But a READ of a malformed address must return zero
+    and must never panic, or a malformed address in a URL becomes a render-path
+    denial of service. `kourtv2`'s positions route already answers that correctly
+    ("not a valid address"), which is worth knowing was checked rather than assumed.
+  - **What this means for the guard I did ship.** `canonicalMembers`' new check is
+    still worth having, but only as what its comment already calls it: a filter on
+    **mistyped** addresses, whose cost falls on a court's users rather than on the
+    person who made the typo. It is not an attack defence and must not be described
+    as one — the same valid-format-keyless-address bypass applies there.
+    **A FORMAT CHECK IS A TYPO FILTER, NEVER AN ATTACK DEFENCE.**
 - **v0.48 — THE GLOBAL DAO'S ENTIRE AUTHORITY PERIMETER WAS UNPINNED. Eleven
   guards, one structural cause, and it took a batch to see it.** `moderation.gno`
   was the worst surface on v0.47's site table — 153 of 156 decision sites untouched
@@ -1118,6 +1171,91 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.49 — TWO ENTRYPOINTS WERE UNCALLABLE BY ANY TRANSACTION, AND THE ELECTION
+  REMEDY WITH THEM.** Measured, not guessed: `gnokey maketx call -func AppointMods`
+  fails on a real node with *"deliver transaction failed: log:recovered: unexpected
+  slice type in contract arg"*.
+  - `AppointMods(cur, courtSlug string, mods []address, m int)` and
+    `RegisterModCandidate(cur, courtSlug string, members []address, m int)` are the
+    ONLY two crossing entrypoints in the realm that take a slice, and
+    `convertArgToGno`'s `*SliceType` arm handles `[]uint8` alone. So no court could
+    install a real m-of-n moderator set — basic moderation survives only because
+    `ensureMod` seeds the creator as a sole 1-of-1 — and since `OpenElection` needs a
+    candidate id that only `RegisterModCandidate` can mint, **the electorate's whole
+    remedy against a captured moderator set was unreachable in production.**
+  - **474 unit tests were blind to this by construction**: an in-package test passes a
+    native Go slice and never traverses the CLI argument conversion. **A UNIT SUITE
+    CANNOT SEE THE TRANSACTION BOUNDARY.** It surfaced only from asking which
+    entrypoints had no txtar and then which of those took an argument shape a unit
+    test cannot exercise — 13 of 59 crossing entrypoints had a txtar, and exactly two
+    took a slice.
+  - `gnoland/testdata/kourtv2_appoint.txtar` now pins it, with `StartCourt` plus an
+    `IsCourtMod` query as the positive control so the refusals cannot be explained by
+    a node or realm that never came up.
+  - **THE FIX, BY 3-SUBAGENT CONSENSUS (identical prompts), AND IT IS NOT THE ONE I
+    PUT TO THEM.** I offered five options — a CSV companion, base64 `[]uint8`, fixed
+    address parameters, an in-place delimited-string signature, or documenting
+    `maketx run`. Two of three chose to **replace the signatures in place** rather
+    than add a companion, and the third supplied a mechanism I had not listed and
+    which is strictly better than any of mine: **a trailing variadic `...address`**.
+    - **Verified in the platform, not taken on trust.** `VMKeeper.Call` converts a
+      variadic's arguments using its ELEMENT type —
+      `vargType = ft.Params[len(ft.Params)-1].Type.(*gno.SliceType).Elt`, under the
+      comment *"For the variadic argument, we need to use the type of the elements
+      contained on the slice"* — so each repeated `-args` goes through the `address`
+      conversion and never reaches the `*SliceType` arm that panics. Upstream ships
+      exactly this shape for exactly this purpose: `r/sys/params`'
+      `ProposeAddUnrestrictedAcctsRequest(cur realm, addrs ...address)`, and
+      `variadic.txtar` exercises repeated `-args` end to end.
+    - So the fix needs **no delimiter, no parser, no base64, and no second
+      entrypoint**: it keeps the `address` type, keeps one public entrypoint per
+      action, and changes internal callers by one token (`mods...`). `m` moves ahead
+      of the variadic. A CSV companion — which also has upstream precedent in
+      `disperse.gno`'s `DisperseUgnotString` — was rejected 2–1 on the ground that it
+      would strand a permanently uncallable exported function on an immutable path.
+    - **All three agreed `maketx run` is not a fix, and two of them corrected my
+      reasoning for why.** I had argued the run script's ephemeral realm becomes the
+      caller and fails the court-creator check. That is wrong: `DerivePkgBech32Addr`
+      special-cases `IsGnoRunPath`, so for `gno.land/e/<addr>/run` the realm's address
+      IS the signer's, and an address-equality creator check passes — which I then
+      confirmed in the source myself. The correct reason to reject it is different and
+      better: `IsUserCall()` is false there, and the entrypoints stay unreachable from
+      every wallet, gnoweb button and tx builder that speaks `MsgCall`. **Requiring
+      the electorate to author Gno source to reach its only remedy is not a remedy.**
+      Recorded because the conclusion survived while my argument for it did not.
+  - **A second finding fell out of the review, independent of the encoding.**
+    `convertArgToGno` does **not** validate bech32 — the string arm simply
+    `SetString`s it. `canonicalMembers` rejects only the zero address and enforces the
+    32-member cap, so a mistyped address arriving from the CLI would be canonicalised
+    and seated as a moderator, in a set whose threshold then counts a key nobody
+    holds. Two of the three raised it unprompted. A per-member validity check belongs
+    in `canonicalMembers`, where both entrypoints already funnel.
+  - **SHIPPED, and proven at the boundary that produced the bug.** Both signatures
+    now read `(cur realm, courtSlug string, m int, mods ...address)` — `m` ahead of
+    the variadic, because a variadic must come last. Inside the function a variadic
+    parameter *is* a `[]address`, so the bodies and `canonicalMembers` are untouched;
+    59 call sites moved by one token each, scripted and asserted (found 59, rewrote
+    59, and a python scan confirmed no call still passes a slice literal). Every
+    caller was a test, which is itself the tell: nothing in the realm called these,
+    and nothing outside it could.
+  - `gnoland/testdata/kourtv2_appoint.txtar` now proves the route works instead of
+    recording that it did not: a real transaction installs a **2-of-2 set and a query
+    shows both addresses in it**, a one-element call exercises the variadic's edge,
+    `RegisterModCandidate` mints a candidate whose members read back, and the
+    malformed-address refusal fires with the set left unchanged. The threshold
+    assertions match a single `(N int)` on purpose — `ModThreshold` returns two
+    values and the separator between them is not something to guess, so both sets
+    appointed here are symmetric and the assertion is separator-proof.
+  - **The bech32 guard is in `canonicalMembers`, kept SEPARATE from and AFTER the
+    zero-address check** so the commonest mistake keeps its own precise message. Its
+    comment names the consequence rather than the rule: a typo'd member is counted in
+    the threshold, so an m-of-2 set with one bad address can never reach its own
+    threshold again — the same permanent-freeze shape as the `{A,A,B}` with `m=3` case
+    one guard below it.
+  - The `m`-after-dedupe advice the third agent gave is **already implemented** and
+    carries a comment naming the exact case — `{A,A,B}` with `m=3` installing n=2/m=3,
+    a set that can never reach its own threshold, so any standing hide became locally
+    permanent. Recorded so the next reader does not re-fix it.
 - **v0.47 — `modvote.gno` measured at the site level, and 10 of its 16 guards
   were deletable in silence. Eleven election tests pin six.** The frontier v0.46
   named turned out to be the worst surface in the realm, and it is the one that

@@ -1,0 +1,84 @@
+# Can a court creator actually APPOINT MODERATORS on a real node?
+#
+# The claim no unit harness can make. AppointMods and RegisterModCandidate are the
+# only two crossing entrypoints in kourtv2 that take a LIST of addresses, and an
+# in-package test calls them with a native Go slice — so it never touches the layer
+# that turns a transaction's strings into VM values. That layer is convertArgToGno
+# (gno.land/pkg/sdk/vm/convert.go), whose *SliceType arm handles only []uint8.
+#
+# When these took `mods []address` this file recorded the consequence: every call
+# died with "unexpected slice type in contract arg", so no court could install an
+# m-of-n set, and because OpenElection takes a candidate id that only
+# RegisterModCandidate can mint, the electorate's whole remedy against a captured
+# moderator set was unreachable — while 474 unit tests passed.
+#
+# They now take a trailing variadic `...address`. VMKeeper.Call converts a
+# variadic's arguments using its ELEMENT type, so each repeated -args goes through
+# the address conversion and never reaches the arm that panics. This file is what
+# proves that end to end; a fix asserted only by a unit test would be invisible to
+# the very boundary that produced the bug.
+
+loadpkg gno.land/p/kourt/checkpoint/v0
+loadpkg gno.land/p/kourt/grc20votes/v0
+loadpkg gno.land/p/kourt/governor/v0
+loadpkg gno.land/p/kourt/twap/v0
+loadpkg gno.land/p/kourt/curve/v0
+loadpkg gno.land/r/kourt/kourtv2
+
+gnoland start
+
+env TEST1=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
+env KOURTV2=g1ulvf0h879a8jg7kdhv23z9zwvnm6r04rm3ks9k
+
+# --- A court, whose creator holds the appointment power --------------------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# The creator IS its court's 1-of-1 moderator without any appointment, which is why
+# moderation worked at all while the appointment path was dead.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.IsCourtMod(\"orem\", \"${TEST1}\")"
+stdout 'true'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ModThreshold(\"orem\")"
+stdout '\(1 int\)'
+
+# --- THE FIX: a two-member 2-of-2 set installed by a real transaction ------------
+# Two repeated -args for the variadic, m ahead of them. This single line is the
+# whole finding: before the signature change it was impossible.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AppointMods -args orem -args 2 -args ${TEST1} -args ${KOURTV2} -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# The state a query serves, not just the tx receipt: n and m both moved, and both
+# named addresses are in the set.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ModThreshold(\"orem\")"
+stdout '\(2 int\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.IsCourtMod(\"orem\", \"${TEST1}\")"
+stdout 'true'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.IsCourtMod(\"orem\", \"${KOURTV2}\")"
+stdout 'true'
+
+# --- A single-member call, because one element is the variadic's edge ------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AppointMods -args orem -args 1 -args ${TEST1} -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ModThreshold(\"orem\")"
+stdout '\(1 int\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.IsCourtMod(\"orem\", \"${KOURTV2}\")"
+stdout 'false'
+
+# --- The candidate registry, the other half the election depends on -------------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func RegisterModCandidate -args orem -args 2 -args ${TEST1} -args ${KOURTV2} -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CandidateMembers(\"orem\", 1)"
+stdout ${TEST1}
+
+# --- And the guard that only this boundary can reach -----------------------------
+# The argument conversion does NOT validate bech32 — its string arm just sets the
+# value — so a mistyped address arrives in the realm intact. Unguarded it would be
+# canonicalised and SEATED, in a set whose m-of-n then counts a key nobody holds.
+# This is the one arm whose risk exists only because a transaction, not a Go
+# caller, supplies the argument.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AppointMods -args orem -args 1 -args g1nothingvalidhere -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'not a valid address'
+
+# The set is unchanged by the refusal.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.IsCourtMod(\"orem\", \"${TEST1}\")"
+stdout 'true'

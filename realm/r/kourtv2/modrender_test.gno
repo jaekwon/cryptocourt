@@ -257,7 +257,7 @@ func TestPendingProposalsRenderWithoutTheirReason(cur realm, t *testing.T) {
 	m2 := testutils.TestAddress("mdrp-m2")
 	testCourt(cur, "mdrp", alice, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "mdrp", []address{alice, m2}, 2)
+	AppointMods(cross(cur), "mdrp", 2, alice, m2)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := OpenClaim(cross(cur), "mdrp", "a claim")
 

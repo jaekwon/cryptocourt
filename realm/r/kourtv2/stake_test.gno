@@ -176,7 +176,7 @@ func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 	// the ballot, because opening it is a commitment like any other.
 	cand := testutils.TestAddress("lk-cand")
 	testing.SetRealm(testing.NewUserRealm(alice))
-	candID := RegisterModCandidate(cross(cur), "lk1", []address{cand}, 1)
+	candID := RegisterModCandidate(cross(cur), "lk1", 1, cand)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
 		OpenElection(cross(cur), "lk1", candID)

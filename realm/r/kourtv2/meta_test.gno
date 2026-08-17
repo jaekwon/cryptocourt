@@ -196,7 +196,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	testing.SkipHeights(1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	seatMe := testutils.TestAddress("mtx-seat")
-	candID := RegisterModCandidate(cross(cur), "mtx1", []address{seatMe}, 1)
+	candID := RegisterModCandidate(cross(cur), "mtx1", 1, seatMe)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	shown := OpenClaim(cross(cur), metaSlug,
 		"mod:setmods:mtx1/"+strconv.FormatUint(candID, 10))
@@ -433,7 +433,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	// first and therefore predictable allocation on a fresh court.
 	puppet := testutils.TestAddress("mtx12-puppet")
 	testing.SetRealm(testing.NewUserRealm(alice))
-	if got := RegisterModCandidate(cross(cur), "mtx12", []address{puppet}, 1); got != 1 {
+	if got := RegisterModCandidate(cross(cur), "mtx12", 1, puppet); got != 1 {
 		t.Fatalf("fixture: the attack needs the predictable first id, got %d", got)
 	}
 
@@ -535,7 +535,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	testing.SkipHeights(epochBlocks * 2) // seal the mint before the floors read it
 	newMod15 := testutils.TestAddress("mtx15-new")
 	testing.SetRealm(testing.NewUserRealm(alice))
-	cand15 := RegisterModCandidate(cross(cur), "mtx15", []address{newMod15}, 1)
+	cand15 := RegisterModCandidate(cross(cur), "mtx15", 1, newMod15)
 	testing.SkipHeights(epochBlocks * 2) // court AND candidate must predate the appeal
 
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -568,7 +568,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	// here the install shares the verdict's height and the comparison reads equal.
 	testing.SkipHeights(1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "mtx15", []address{localMod}, 1)
+	AppointMods(cross(cur), "mtx15", 1, localMod)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "moderator set changed after this verdict", func() {
@@ -621,8 +621,8 @@ func TestMetaEscrowIsThisRealm(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("mesc-alice")
 	testCourt(cur, "mescrow", alice, 1_000_000)
 
-	fromConstant := CourtEscrow(metaSlug)  // chain.PackageAddress(metaRealmPath)
-	fromFrame := CourtEscrow("mescrow")    // cur.Address()
+	fromConstant := CourtEscrow(metaSlug) // chain.PackageAddress(metaRealmPath)
+	fromFrame := CourtEscrow("mescrow")   // cur.Address()
 	if fromConstant != fromFrame {
 		t.Fatalf("metaRealmPath does not name this realm: the review court's "+
 			"escrow is %s but the realm's own address is %s — every appeal bond "+

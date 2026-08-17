@@ -83,6 +83,18 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	mustContain("provisional", "withdraw 1× now")
 	mustContain("provisional", "failed dispute rounds: 1 of 3")
 
+	// The SAME arm on the OTHER side, because sideYES is 0 and the guard reads
+	// `cs.provisional >= 0`. Exercised only on NO, tightening that bound to
+	// `> 0` still matches NO and the line still renders, so the boundary is
+	// invisible — and the arm it falls through to says "answered — staking
+	// frozen", dropping the sentence that tells the losing side it may withdraw
+	// 1× now. A two-valued arm tested on one value leaves the boundary unpinned
+	// when the boundary sits at the other value.
+	cs.provisional = int8(sideYES)
+	mustContain("provisional YES", "provisional verdict YES")
+	mustContain("provisional YES", "withdraw 1× now")
+	cs.provisional = int8(sideNO)
+
 	cs.verdictAt, cs.route, cs.tier = 100, "vote", tierMidX
 	mustContain("settled", "settled — every stake withdraws 1×")
 	mustContain("settled", "verdict: NO — vote")
@@ -387,4 +399,77 @@ func countSub(s, sub string) int {
 		i++
 	}
 	return n
+}
+
+// The front page's two curation rules, both unpinned until measured.
+// TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never the PAGE,
+// and it even exercises the "new" ordering to prove both paginate — which is
+// exactly what made the mutation invisible: both keys are valid and separately
+// tested, so swapping which one writeListedByBurn passes changes nothing the
+// index test looks at. A TEST OF THE PRIMITIVE DOES NOT PIN THE CALLER'S CHOICE
+// OF ARGUMENT; only an assertion on the rendered page can.
+func TestFrontPageRanksByBurnAndSkipsHidden(cur realm, t *testing.T) {
+	a := testutils.TestAddress("fp-a")
+	testCourt(cur, "fpburnhi", a, 1_000_000)
+	testCourt(cur, "fpburnlo", a, 1_000_000)
+	testCourt(cur, "fphidden", a, 1_000_000)
+	// Burns far above anything another test sets, so all three sit inside the
+	// first renderPageSize rows of the burn-ordered index and what follows is
+	// about ORDER rather than about pagination.
+	reindexBurn(mustCourt("fpburnhi"), 900_000_000_000)
+	reindexBurn(mustCourt("fphidden"), 850_000_000_000)
+	reindexBurn(mustCourt("fpburnlo"), 800_000_000_000)
+
+	// tierHidden is curation, not custody: the court still works for anyone
+	// holding its address, it just leaves the directory. SetTier is a global-DAO
+	// power, and DirectoryAdmin() must be read AFTER a court exists or it is the
+	// zero address — which is a silent no-op rather than a refusal.
+	dadmin := DirectoryAdmin()
+	if dadmin == "" {
+		t.Fatal("the directory admin must exist before SetTier can be called")
+	}
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetTier(cross(cur), "fphidden", int(tierHidden))
+	// A FEATURED court is the case the in-loop tier check actually protects.
+	// listedPage already drops tierHidden before writeListedByBurn ever sees a
+	// row, so hidden cannot reach that check — but it lets tierFeatured through,
+	// and the check is what keeps a featured court out of the plain list where it
+	// would appear a second time under its own section. Probing with hidden alone
+	// measures listedPage and leaves this guard untouched.
+	testCourt(cur, "fpfeat", a, 1_000_000)
+	reindexBurn(mustCourt("fpfeat"), 870_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetTier(cross(cur), "fpfeat", int(tierFeatured))
+
+	page := Render("")
+	hi := strings.Index(page, "fpburnhi")
+	lo := strings.Index(page, "fpburnlo")
+	if hi < 0 || lo < 0 {
+		t.Fatalf("both listed courts must appear on the front page: hi=%d lo=%d", hi, lo)
+	}
+	if hi > lo {
+		t.Fatal("the front page must rank by GNOT burn DESCENDING, so the higher-burn court comes first")
+	}
+	// The hidden court out-burns the lower one, so under burn ordering alone it
+	// would sit BETWEEN the two above. Its absence is therefore about the tier
+	// and not about pagination or about where it would have landed.
+	if strings.Contains(page, "fphidden") {
+		t.Fatal("a hidden court must not appear in the front-page directory")
+	}
+	// The featured court IS on the page — renderDirectory writes "## Featured"
+	// before "## Courts" — so its absence has to be asserted against the plain
+	// section alone, not the whole page. Everything from "## Courts" to the end
+	// IS that section, because it is written last.
+	if !strings.Contains(page, "fpfeat") {
+		t.Fatal("a featured court must still appear on the front page, in its own section")
+	}
+	plain := page[strings.Index(page, "## Courts"):]
+	if strings.Contains(plain, "fpfeat") {
+		t.Fatal("a featured court must not ALSO be listed in the plain ## Courts section")
+	}
+	// ...and the two listed courts are in that section, so the assertion above is
+	// about the tier and not about a section that turned out to be empty.
+	if !strings.Contains(plain, "fpburnhi") || !strings.Contains(plain, "fpburnlo") {
+		t.Fatal("both listed courts belong in the plain ## Courts section")
+	}
 }

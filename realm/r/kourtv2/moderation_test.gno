@@ -82,7 +82,7 @@ func TestModMofN(cur realm, t *testing.T) {
 	id := OpenClaim(cross(cur), "modn", "needs two mods")
 
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "modn", []address{m1, m2, m3}, 2)
+	AppointMods(cross(cur), "modn", 2, m1, m2, m3)
 	if m, n := ModThreshold("modn"); m != 2 || n != 3 {
 		t.Fatalf("threshold = %d-of-%d", m, n)
 	}
@@ -235,7 +235,7 @@ func TestResetModSetIsTheSetLevelCure(cur realm, t *testing.T) {
 	g2 := testutils.TestAddress("rms-g2")
 	testCourt(cur, "rms", creator, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "rms", []address{puppet}, 1)
+	AppointMods(cross(cur), "rms", 1, puppet)
 	if !IsCourtMod("rms", puppet) {
 		t.Fatal("the puppet should be seated for the test")
 	}
@@ -274,7 +274,7 @@ func TestSuspendedCreatorCannotReappoint(cur realm, t *testing.T) {
 	suspendSet(c, creator)
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "suspended", func() {
-		AppointMods(cross(cur), "scr", []address{other}, 1)
+		AppointMods(cross(cur), "scr", 1, other)
 	})
 }
 
@@ -294,7 +294,7 @@ func TestMetaInstalledSetCannotSeed(cur realm, t *testing.T) {
 
 	// Now simulate a meta verdict seating a puppet set.
 	testing.SetRealm(testing.NewUserRealm(creator))
-	cand := RegisterModCandidate(cross(cur), "mis", []address{puppet}, 1)
+	cand := RegisterModCandidate(cross(cur), "mis", 1, puppet)
 	installModSet(c, cm, cm.mustCandidate(cand), 100, false) // byElection=false => meta
 	testing.SetRealm(testing.NewUserRealm(puppet))
 	uassert.AbortsContains(t, cur, "may not seed", func() {
@@ -319,7 +319,7 @@ func TestInstallClearsSuspensionOnlyIfSetChanges(cur realm, t *testing.T) {
 	a2 := testutils.TestAddress("ics-a2")
 	c := testCourt(cur, "ics", creator, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "ics", []address{a1}, 1)
+	AppointMods(cross(cur), "ics", 1, a1)
 	cm := ensureMod(c)
 
 	suspendSet(c, creator)
@@ -328,14 +328,14 @@ func TestInstallClearsSuspensionOnlyIfSetChanges(cur realm, t *testing.T) {
 	}
 	// Re-installing the identical set must NOT clear the suspension.
 	testing.SetRealm(testing.NewUserRealm(creator))
-	same := RegisterModCandidate(cross(cur), "ics", []address{a1}, 1)
+	same := RegisterModCandidate(cross(cur), "ics", 1, a1)
 	installModSet(c, cm, cm.mustCandidate(same), 200, true)
 	if !CourtSuspended("ics") {
 		t.Fatal("re-seating the judged set must not escape the suspension")
 	}
 	// Installing a genuinely different set clears it.
 	testing.SetRealm(testing.NewUserRealm(creator))
-	diff := RegisterModCandidate(cross(cur), "ics", []address{a2}, 1)
+	diff := RegisterModCandidate(cross(cur), "ics", 1, a2)
 	installModSet(c, cm, cm.mustCandidate(diff), 300, true)
 	if CourtSuspended("ics") {
 		t.Fatal("installing a different set delivers it ARMED")
@@ -380,17 +380,17 @@ func TestModSetSizeIsCapped(cur realm, t *testing.T) {
 	}
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "at most 32 members", func() {
-		AppointMods(cross(cur), "capset", over, 1)
+		AppointMods(cross(cur), "capset", 1, over...)
 	})
 	// The candidate registry is the other way in, and it must be capped too —
 	// otherwise the same set arrives via a meta setmods install.
 	testing.SetRealm(testing.NewUserRealm(creator))
 	uassert.AbortsContains(t, cur, "at most 32 members", func() {
-		RegisterModCandidate(cross(cur), "capset", over, 1)
+		RegisterModCandidate(cross(cur), "capset", 1, over...)
 	})
 	// Exactly at the cap still works, so the bound is off-by-one clean.
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "capset", over[:maxModSetSize], 1)
+	AppointMods(cross(cur), "capset", 1, over[:maxModSetSize]...)
 	if !IsCourtMod("capset", over[0]) {
 		t.Fatal("a set exactly at the cap must install")
 	}
@@ -406,7 +406,7 @@ func TestUnfiredApprovalAllocatesNothing(cur realm, t *testing.T) {
 	m2 := testutils.TestAddress("noalloc-m2")
 	c := testCourt(cur, "noalloc", creator, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(creator))
-	AppointMods(cross(cur), "noalloc", []address{creator, m2}, 2)
+	AppointMods(cross(cur), "noalloc", 2, creator, m2)
 
 	testing.SetRealm(testing.NewUserRealm(creator))
 	id := OpenClaim(cross(cur), "noalloc", "a claim one mod dislikes")
@@ -548,7 +548,7 @@ func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
 	m2 := testutils.TestAddress("ttl-m2")
 	testCourt(cur, "ttlc", alice, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "ttlc", []address{m1, m2}, 2)
+	AppointMods(cross(cur), "ttlc", 2, m1, m2)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := OpenClaim(cross(cur), "ttlc", "a claim")
 	key := "hide:" + strconv.FormatUint(id, 10)
@@ -593,7 +593,7 @@ func TestApprovalDeadlineIsFixedNotSliding(cur realm, t *testing.T) {
 	m3 := testutils.TestAddress("slide-m3")
 	testCourt(cur, "slidec", alice, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "slidec", []address{m1, m2, m3}, 3)
+	AppointMods(cross(cur), "slidec", 3, m1, m2, m3)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := OpenClaim(cross(cur), "slidec", "a claim")
 
@@ -628,16 +628,16 @@ func TestModerationRangeAndAuthorityGates(cur realm, t *testing.T) {
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
-		AppointMods(cross(cur), "mrgc", pair, 0)
+		AppointMods(cross(cur), "mrgc", 0, pair...)
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
-		AppointMods(cross(cur), "mrgc", pair, 3)
+		AppointMods(cross(cur), "mrgc", 3, pair...)
 	})
 	// THE CONTROL: 2-of-2 installs. Without it both refusals above would pass
 	// just as well if AppointMods refused everything for an unrelated reason.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "mrgc", pair, 2)
+	AppointMods(cross(cur), "mrgc", 2, pair...)
 	if m, n := ModThreshold("mrgc"); m != 2 || n != 2 {
 		t.Fatalf("an in-range threshold must install: got %d-of-%d", m, n)
 	}
@@ -684,7 +684,7 @@ func TestAppointModsDiscardsTheOutgoingSetsApprovals(cur realm, t *testing.T) {
 	testCourt(cur, "apnt", alice, 10_000_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "apnt", []address{oldA, oldB}, 2)
+	AppointMods(cross(cur), "apnt", 2, oldA, oldB)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := OpenClaim(cross(cur), "apnt", "a claim the old set wanted buried")
 
@@ -702,7 +702,7 @@ func TestAppointModsDiscardsTheOutgoingSetsApprovals(cur realm, t *testing.T) {
 
 	// The creator swaps in a DISJOINT set.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	AppointMods(cross(cur), "apnt", []address{newX, newY}, 2)
+	AppointMods(cross(cur), "apnt", 2, newX, newY)
 	if IsCourtMod("apnt", oldA) {
 		t.Fatal("fixture: the old set must be gone")
 	}
@@ -1059,10 +1059,10 @@ func TestGlobalDAOStateGuardsRefuseNoOps(cur realm, t *testing.T) {
 	// argument, so neither can stand in for the other.
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	uassert.AbortsContains(t, cur, "only the court creator appoints moderators", func() {
-		AppointMods(cross(cur), "noopc", []address{alice}, 1)
+		AppointMods(cross(cur), "noopc", 1, alice)
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "a moderator set may not be empty", func() {
-		AppointMods(cross(cur), "noopc", []address{}, 1)
+		AppointMods(cross(cur), "noopc", 1)
 	})
 }

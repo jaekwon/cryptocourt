@@ -185,7 +185,7 @@ func electionBond(c *Court, at uint32) int64 {
 // Permissionless (it is only a named address list; nominating it costs the
 // bond). Members are canonicalized — sorted and deduped — so a mere reordering
 // is not a distinct candidate, which is half of the anti-decoy rule.
-func RegisterModCandidate(cur realm, courtSlug string, members []address, m int) uint64 {
+func RegisterModCandidate(cur realm, courtSlug string, m int, members ...address) uint64 {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
@@ -227,6 +227,20 @@ func canonicalMembers(in []address) []address {
 	for _, a := range in {
 		if a == "" {
 			panic("kourtv2: a moderator address may not be zero")
+		}
+		// The zero check above is kept SEPARATE and FIRST because it names the
+		// commonest mistake precisely. This one catches everything else: the
+		// argument conversion that turns a transaction's strings into VM values
+		// does NOT validate bech32 — its string arm simply sets the value — so a
+		// mistyped address arrives here intact, gets canonicalised, and is SEATED
+		// as a moderator. The set then carries a member nobody holds the key to,
+		// and its m-of-n threshold counts that member: an m-of-2 set with one
+		// typo can never reach its own threshold again, which is the same
+		// permanent-freeze shape the {A,A,B} m=3 case produces one guard below.
+		// Both entry points funnel through here, so this is the only place it has
+		// to be said.
+		if !a.IsValid() {
+			panic("kourtv2: not a valid address for a moderator set")
 		}
 		dup := false
 		for _, b := range out {

@@ -313,7 +313,7 @@ func ensureMod(c *Court) *courtMod {
 // AppointMods lets the court creator set the moderator addresses and the m-of-n
 // threshold, until a replacement election unseats the appointment power
 // (modvote.gno). Addresses-only; no free text.
-func AppointMods(cur realm, courtSlug string, mods []address, m int) {
+func AppointMods(cur realm, courtSlug string, m int, mods ...address) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
