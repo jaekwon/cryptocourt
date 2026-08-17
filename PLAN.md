@@ -1624,6 +1624,33 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.91 — the slash lane's LAST switch, and its cheapest-looking guard turns out to zero
+  the draw on ordinary claims.** Swept `disposeSlashOnRide` — item 1's converged four-way
+  disposal — and `compAmount`. Twelve mutations, nine already held: every money DIRECTION
+  in the switch (a below-bar ride re-arms rather than burning, the electorate's rescue
+  refunds rather than settling, the v0.53 unoffered-challenge re-arm, a confirmed slash
+  settling rather than being forgiven) and both of compAmount's arms.
+  **The find is `if cs.pendingSlash <= 0 { return }`** — which reads like a trivial
+  fast-path and is not, for a reason worth recording. MOST claims carry no reserve, and
+  every upheld full-bar round with low under two-thirds reaches this function, so those
+  calls are the ORDINARY case rather than an edge. Without the early return they fall into
+  the REFUND arm, and `refundSlash` sets `tierFinal` BEFORE it checks the amount. Measured
+  with the guard removed: `tierFinal` goes false→true while `tier` is still the zero value,
+  `tierLowX` — which is zero D. Both terminal paths then skip their default-mid assignment
+  because `tierFinal` is set, so the claim draws NOTHING, for ever, with no reserve involved
+  anywhere. A guard that looks like an optimisation was the only thing standing between an
+  ordinary upheld round and a zeroed draw.
+  Also pinned: the first arm's bar is STRICT. A ride landing exactly ON the full bar has
+  adjudicated something and must be scored; relaxing `<` to `<=` sends it back to a fresh
+  window instead of confirming the reserve. Driven directly, because hitting the bar exactly
+  through a real round would mean choosing voter weights to match a number the fixture
+  cannot read until it has already voted.
+  One survived and is defensive: `compAmount`'s `comp < 0` floor. Both arms are non-negative
+  by construction — `compOwnX × ownBond` on a bond, and `80% × burned` on a burn — so a
+  negative comp needs a conservation break upstream, which is the thing this floor could
+  not fix anyway.
+  Batch now 301 rows, 0 not caught (9m37s).
+
 - **v0.90 — the RIDE's own decisions: five real gaps, including a bounty minted for a slash
   nobody bonded.** Swept `resolveQualityRide` — the dispute lane's quality arm, and the last
   large logic block in quality.gno. Eleven mutations, six not caught, five of them real.

@@ -2496,3 +2496,83 @@ func TestRideRatchetAndSlashPredicate(cur realm, t *testing.T) {
 			cs.qMidW+cs.qHighW)
 	}
 }
+
+// disposeSlashOnRide AT the full bar. Its first arm is `turnout < fullBar` — strictly
+// below — so a ride landing EXACTLY on the bar has adjudicated something and must be
+// scored, not re-armed. Nothing tested that edge, and relaxing it to `<=` sends a ride
+// that cleared the bar back to a fresh window instead of confirming the reserve.
+//
+// Driven directly: the arm turns on turnout against the bar and on counterUsed, and
+// reaching exactly-the-bar through a real dispute round would mean choosing voter weights
+// to hit a number the fixture cannot see until it has already voted.
+func TestRideDisposalAtExactlyTheFullBar(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dsr-alice")
+	c := testCourt(cur, "dsr", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "dsr", "a ride exactly on the bar")
+	matureOI(cur, "dsr", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "dsr", id, sideYES)
+
+	cs := mustClaim(c, id)
+	_, f := qualityBars(c, cs)
+	// A standing reserve whose challenge has already been spent, so the default arm is
+	// the one under test rather than the counterUsed re-arm.
+	reserve := cs.answerBond / 4
+	if reserve <= 0 || f <= 0 {
+		t.Fatalf("setup: need a live bond and bar: bond=%d f=%d", cs.answerBond, f)
+	}
+	cs.answerBond -= reserve
+	cs.pendingSlash, cs.slashLevied, cs.counterUsed = reserve, true, true
+	cs.pendingSlashUntil = runtimeHeight() + c.params.votingBlocks
+
+	// Turnout EXACTLY the bar, carried two-thirds low: this ride confirms the slash.
+	cs.qLowW, cs.qMidW, cs.qHighW = f, 0, 0
+	if turnout := cs.qLowW + cs.qMidW + cs.qHighW; turnout != f {
+		t.Fatalf("setup: turnout must be exactly the bar: %d vs %d", turnout, f)
+	}
+
+	supplyBefore := c.coin.TotalSupply()
+	disposeSlashOnRide(c, cs)
+
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a ride ON the bar has adjudicated: the reserve must be disposed, "+
+			"not re-armed on a fresh window (pending=%d until=%d)", cs.pendingSlash,
+			cs.pendingSlashUntil)
+	}
+	if got := supplyBefore - c.coin.TotalSupply(); got != reserve {
+		t.Fatalf("and a two-thirds low ON the bar SETTLES it: burned %d, want %d",
+			got, reserve)
+	}
+
+	// SECOND, the early return, which is the ordinary case rather than an edge: most
+	// claims carry NO reserve, and every upheld full-bar round with low under two
+	// thirds reaches this function. Without `pendingSlash <= 0` those calls fall into
+	// the REFUND arm, and refundSlash sets tierFinal BEFORE it checks the amount — so a
+	// claim with nothing to refund is frozen at whatever tier stands. Measured, that is
+	// the zero value, tierLowX: tierFinal goes false->true with tier still 0, which is
+	// zero D. Both terminal paths then skip their default-mid assignment because
+	// tierFinal is set, and the claim draws nothing for ever.
+	fresh := OpenClaim(cross(cur), "dsr", "a claim with no reserve at all")
+	matureOI(cur, "dsr", fresh, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "dsr", fresh, sideYES)
+	fcs := mustClaim(c, fresh)
+	if fcs.pendingSlash != 0 {
+		t.Fatalf("setup: this claim must carry no reserve, got %d", fcs.pendingSlash)
+	}
+	// The refund arm's own shape: full bar, low short of two thirds.
+	fcs.qLowW, fcs.qMidW, fcs.qHighW = 16*f/10, 14*f/10, 0
+	tier, final, bond := fcs.tier, fcs.tierFinal, fcs.answerBond
+	supply := c.coin.TotalSupply()
+	disposeSlashOnRide(c, fcs)
+	if fcs.tierFinal != final || fcs.tier != tier {
+		t.Fatalf("with no reserve to dispose, nothing may be decided: tier %d->%d "+
+			"tierFinal %v->%v", tier, fcs.tier, final, fcs.tierFinal)
+	}
+	if fcs.answerBond != bond || c.coin.TotalSupply() != supply {
+		t.Fatalf("and no coin may move: bond %d->%d supply delta %d", bond,
+			fcs.answerBond, supply-c.coin.TotalSupply())
+	}
+}

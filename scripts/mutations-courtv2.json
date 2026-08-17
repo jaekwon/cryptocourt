@@ -2028,5 +2028,82 @@
   "label": "ride: the slot is not consumed",
   "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
   "replace": "\tcs.conclusiveTurnout = turnout"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: a below-bar ride BURNS instead of re-arming",
+  "find": "\tcase turnout < fullBar:\n\t\trearmSlashWindow(c, cs) // adjudicated nothing about quality",
+  "replace": "\tcase turnout < fullBar:\n\t\tsettleSlash(c, cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: the bar is inclusive, so a ride exactly AT it re-arms",
+  "find": "\tcase turnout < fullBar:",
+  "replace": "\tcase turnout <= fullBar:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: the rescue's two-thirds is inverted",
+  "find": "\tcase cs.qLowW*3 < turnout*2:",
+  "replace": "\tcase cs.qLowW*3 > turnout*2:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: the electorate's rescue BURNS the reserve",
+  "find": "\t\trefundSlash(c, cs) // the electorate failed the second \u2154 (ResolveCounter's rescue)",
+  "replace": "\t\tsettleSlash(c, cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: an unoffered Q5 challenge is annihilated (v0.53 premature burn)",
+  "find": "\tcase !cs.counterUsed:",
+  "replace": "\tcase cs.counterUsed:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: the re-arm on an unoffered challenge SETTLES instead",
+  "find": "\t\trearmSlashWindow(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag",
+  "replace": "\t\tsettleSlash(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: a confirmed slash is FORGIVEN instead of settled",
+  "find": "\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag",
+  "replace": "\t\trefundSlash(c, cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "disposeSlashOnRide: runs with no reserve pending",
+  "find": "func disposeSlashOnRide(c *Court, cs *claimState) {\n\tif cs.pendingSlash <= 0 {\n\t\treturn\n\t}",
+  "replace": "func disposeSlashOnRide(c *Court, cs *claimState) {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "compAmount: the own-bond arm loses its multiple",
+  "find": "\tcomp := mustMul(compOwnX, ownBond)",
+  "replace": "\tcomp := ownBond"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "compAmount: the burn arm is dropped",
+  "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {\n\t\tcomp = arm\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "compAmount: the two arms take the LARGER",
+  "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {",
+  "replace": "\tif arm := burned * compOfBurnBps / 10000; arm > comp {"
  }
 ]
