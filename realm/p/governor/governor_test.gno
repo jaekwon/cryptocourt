@@ -564,3 +564,113 @@ func TestPayloadAndBatchBoundsHoldAtTheirLimit(t *testing.T) {
 		t.Errorf("a batch of 17 members must be refused")
 	}
 }
+
+// countingDispatch is a dispatcher that records how many times it was asked to
+// run a kind, so a double execution is a number rather than an inference.
+type countingDispatch struct{ n int }
+
+func (c *countingDispatch) run(k Kind, sub, pay string) error {
+	c.n++
+	return dispatch(k, sub, pay)
+}
+
+// reenterer is a dispatcher that calls back into the governor that is running
+// it, keeping whatever it was refused with.
+//
+// A struct with methods rather than closures: a func literal declared INSIDE
+// another func literal, capturing the outer one's locals, crashes the GnoVM
+// outright (nil dereference in doOpFuncLit -> GetPointerToIntDirect). Legal Go,
+// so worth writing down — a test here has to keep its closures one level deep,
+// which a method's deferred recover is.
+type reenterer struct {
+	g      *Governor
+	id     int64
+	other  int64
+	inner  *countingDispatch
+	reVote any
+	reExec any
+}
+
+func (r *reenterer) tryVote() {
+	defer func() { r.reVote = recover() }()
+	r.g.Vote(gCarl, r.other, "yes")
+}
+
+func (r *reenterer) tryExecute() {
+	defer func() { r.reExec = recover() }()
+	r.g.Execute(gCarl, r.id, r.inner.run)
+}
+
+func (r *reenterer) run(k Kind, sub, pay string) error {
+	r.tryVote()
+	r.tryExecute()
+	return dispatch(k, sub, pay)
+}
+
+// Nothing may re-enter the governor while a kind is running, and until now
+// nothing tested it — three guards, all of them dead in every fixture.
+//
+// The Dispatch seam is what makes this reachable rather than theoretical. A kind
+// is CODE THE HOLDERS ADOPTED, run with a live realm, and the dispatcher that
+// invokes it belongs to the consuming realm; so the one thing an executing kind
+// certainly can do is call back into the governor that is running it. Two of
+// those calls have to be refused:
+//
+//	Execute, because the proposal is still SUCCEEDED at that moment — the state
+//	only becomes executed after the run returns. A re-entrant Execute therefore
+//	passes the state check and runs the kind A SECOND TIME, which for a kind that
+//	pays or mints is the whole exploit.
+//
+//	Vote, because a tally that moves while a decision derived from it is being
+//	carried out is a tally that can contradict the thing it authorised.
+//
+// Both are refused by one latch, so the sharpest mutation is not either guard
+// but `g.executing = true` itself: delete that line and both go quiet at once.
+// That is what this test is really holding.
+//
+// The vote aims at a SECOND, still-open proposal on purpose. Voting on the
+// proposal being executed would be refused for being closed, which would answer
+// this question by accident and pass with the latch removed.
+func TestExecutionCannotReEnterTheGovernor(t *testing.T) {
+	g, _, ran := armed(t, gAlice, gBob, gCarl)
+	id := g.Propose(gAlice, "fee", "11", "eleven")
+	g.Vote(gAlice, id, "yes")
+	g.Vote(gBob, id, "yes")
+	if got := g.State(id); got != "succeeded" {
+		t.Fatalf("setup: the proposal is %q, want succeeded", got)
+	}
+	other := g.Propose(gAlice, "fee", "12", "twelve")
+
+	inner := &countingDispatch{}
+	r := &reenterer{g: g, id: id, other: other, inner: inner}
+	g.Execute(gCarl, id, r.run)
+
+	if r.reVote == nil {
+		t.Error("a kind voted from inside its own execution; that must be refused")
+	} else if got, _ := r.reVote.(string); !contains(got, "cannot vote from inside an execution") {
+		t.Errorf("the re-entrant vote was refused with %q", got)
+	}
+	if r.reExec == nil {
+		t.Error("a kind executed a proposal from inside an execution; that must be refused")
+	} else if got, _ := r.reExec.(string); !contains(got, "re-entrant execution") {
+		t.Errorf("the re-entrant execution was refused with %q", got)
+	}
+	if inner.n != 0 {
+		t.Errorf("the kind ran %d extra time(s) from inside its own execution — a "+
+			"proposal that pays or mints would have done it twice", inner.n)
+	}
+
+	// And the refusals do not break the legitimate execution they interrupted:
+	// both guards fire before their function touches any state, so a recovered
+	// re-entry leaves nothing half-written.
+	if got := g.State(id); got != "executed" {
+		t.Errorf("the proposal is %q after its kind ran, want executed", got)
+	}
+	if *ran != 11 {
+		t.Errorf("the kind recorded %d, want the 11 the proposal described", *ran)
+	}
+	if yes, _, _, _ := g.Tally(other); yes != 0 {
+		t.Errorf("the still-open proposal recorded %d yes weight from inside an "+
+			"execution", yes)
+	}
+}

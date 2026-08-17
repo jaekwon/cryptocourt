@@ -3065,5 +3065,313 @@
   "label": "ValueAt: the descent has no lower bound at all",
   "find": "\ta.t.ReverseIterate(key+Sep, ",
   "replace": "\ta.t.ReverseIterate(\"\", "
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: a vote may be cast from inside an execution",
+  "find": "\tif g.executing {\n\t\tpanic(\"govern: cannot vote from inside an execution\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: a CLOSED proposal still accepts votes",
+  "find": "\tif p.state != stateActive {\n\t\tpanic(\"govern: that proposal is closed\")\n\t}",
+  "replace": "\tif p.state != stateActive && id < 0 {\n\t\tpanic(\"govern: that proposal is closed\")\n\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: the same address may vote TWICE",
+  "find": "\tif p.voted.Has(string(who)) {",
+  "replace": "\tif p.voted.Has(string(who)) && id < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: weight is read at the CURRENT epoch, not the snapshot",
+  "find": "\tw := g.voters.PastVotes(who, p.epoch)",
+  "replace": "\tw := g.voters.PastVotes(who, g.voters.Epoch()-1)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: a zero-weight address may vote",
+  "find": "\tif w <= 0 {",
+  "replace": "\tif w < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: a YES is tallied as a NO",
+  "find": "\tcase \"yes\":\n\t\tp.yes += w",
+  "replace": "\tcase \"yes\":\n\t\tp.no += w"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: an ABSTAIN is tallied against the proposal",
+  "find": "\t\tp.abstain += w",
+  "replace": "\t\tp.no += w"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: the ballot is never recorded on the roll",
+  "find": "\tp.voted.Set(string(who), packBallot(choice, w))\n\tg.settle(p)",
+  "replace": "\tg.settle(p)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "castVote: the deciding vote does not settle the proposal",
+  "find": "\tp.voted.Set(string(who), packBallot(choice, w))\n\tg.settle(p)",
+  "replace": "\tp.voted.Set(string(who), packBallot(choice, w))"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "packBallot: the weight shift does not clear the two tag bits",
+  "find": "\t\treturn ballot(weight<<2 | ballotYes)",
+  "replace": "\t\treturn ballot(weight<<1 | ballotYes)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "packBallot: a NO is filed under YES",
+  "find": "\t\treturn ballot(weight<<2 | ballotNo)",
+  "replace": "\t\treturn ballot(weight<<2 | ballotYes)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "unpack: one tag bit is read where three choices need two",
+  "find": "\tswitch int64(b) & 3 {",
+  "replace": "\tswitch int64(b) & 1 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "unpack: the weight is recovered with the wrong shift",
+  "find": "\treturn choice, int64(b) >> 2",
+  "replace": "\treturn choice, int64(b) >> 1"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the consumer's absolute quorum floor is ignored",
+  "find": "\t\tif p.quorumFloor > 0 {",
+  "replace": "\t\tif p.quorumFloor < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the absolute quorum floor is exclusive at its own value",
+  "find": "\t\t\tquorum = cast >= p.quorumFloor",
+  "replace": "\t\t\tquorum = cast > p.quorumFloor"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the quorum fraction is exclusive at its own value",
+  "find": "\t\t\tquorum = cast*bps >= p.engaged*p.rules.QuorumBps",
+  "replace": "\t\t\tquorum = cast*bps > p.engaged*p.rules.QuorumBps"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: EARLY success ignores the votes not yet cast (rest = 0)",
+  "find": "\t\trest := p.total - cast",
+  "replace": "\t\trest := int64(0)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: early success is scored on cast votes only, not the whole roll",
+  "find": "\t\tif quorum && p.yes > 0 && p.yes*bps >= (p.yes+p.no+rest)*p.rules.ThresholdBps {",
+  "replace": "\t\tif quorum && p.yes > 0 && p.yes*bps >= (p.yes+p.no)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: an ALL-ABSTAIN proposal passes early on an empty denominator",
+  "find": "\t\tif quorum && p.yes > 0 && p.yes*bps >= (p.yes+p.no+rest)*p.rules.ThresholdBps {",
+  "replace": "\t\tif quorum && p.yes*bps >= (p.yes+p.no+rest)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: early success is exclusive at the threshold",
+  "find": "\t\tif quorum && p.yes > 0 && p.yes*bps >= (p.yes+p.no+rest)*p.rules.ThresholdBps {",
+  "replace": "\t\tif quorum && p.yes > 0 && p.yes*bps > (p.yes+p.no+rest)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: nobody-in-favour is judged on cast votes, defeating a live proposal",
+  "find": "\t\tif p.yes+rest == 0 {",
+  "replace": "\t\tif p.yes == 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the nobody-in-favour early defeat is dropped",
+  "find": "\t\tif p.yes+rest == 0 {",
+  "replace": "\t\tif p.yes+rest == 0 && now < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the unreachable-threshold defeat is inclusive, killing a proposal AT the bar",
+  "find": "\t\tif (p.yes+rest)*bps < (p.yes+rest+p.no)*p.rules.ThresholdBps {",
+  "replace": "\t\tif (p.yes+rest)*bps <= (p.yes+rest+p.no)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the unreachable-threshold early defeat is dropped",
+  "find": "\t\tif (p.yes+rest)*bps < (p.yes+rest+p.no)*p.rules.ThresholdBps {",
+  "replace": "\t\tif (p.yes+rest)*bps < (p.yes+rest+p.no)*p.rules.ThresholdBps && now < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the deadline is exclusive, so a proposal never closes on it",
+  "find": "\t\tif now >= p.closes {",
+  "replace": "\t\tif now > p.closes {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: ABSTAIN counts against the threshold at the deadline",
+  "find": "\t\t\tif quorum && p.yes > 0 && p.yes*bps >= forAndAgainst(p)*p.rules.ThresholdBps {",
+  "replace": "\t\t\tif quorum && p.yes > 0 && p.yes*bps >= turnout(p)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: an all-abstain proposal passes at the deadline",
+  "find": "\t\t\tif quorum && p.yes > 0 && p.yes*bps >= forAndAgainst(p)*p.rules.ThresholdBps {",
+  "replace": "\t\t\tif quorum && p.yes*bps >= forAndAgainst(p)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the deadline threshold is exclusive at its own value",
+  "find": "\t\t\tif quorum && p.yes > 0 && p.yes*bps >= forAndAgainst(p)*p.rules.ThresholdBps {",
+  "replace": "\t\t\tif quorum && p.yes > 0 && p.yes*bps > forAndAgainst(p)*p.rules.ThresholdBps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: the grace period expires one block early",
+  "find": "\t\tif at, expires := expiresAt(p); expires && now > at {",
+  "replace": "\t\tif at, expires := expiresAt(p); expires && now >= at {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "settle: an unchanged state is written again, restamping the timelock",
+  "find": "\tif next == p.state {\n\t\treturn\n\t}",
+  "replace": "\tif next == p.state && now < 0 {\n\t\treturn\n\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "settle: there is no timelock \u2014 ready is now",
+  "find": "\t\tp.ready = now + p.rules.DelayBlocks",
+  "replace": "\t\tp.ready = now"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: a dispatcher is not required",
+  "find": "\tif run == nil {",
+  "replace": "\tif run == nil && id < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: execution may re-enter itself",
+  "find": "\tif g.executing {\n\t\tpanic(\"govern: re-entrant execution\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: a proposal that did not SUCCEED may be run",
+  "find": "\tif p.state != stateSucceeded {",
+  "replace": "\tif p.state != stateSucceeded && id < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: the delay window is not enforced",
+  "find": "\tif now := runtime.ChainHeight(); inDelay(p, now) {",
+  "replace": "\tif now := runtime.ChainHeight(); inDelay(p, now) && id < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: a RETIRED kind still runs",
+  "find": "\tif e == nil || !e.live {",
+  "replace": "\tif e == nil {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: the payload is not re-checked against the world as it is now",
+  "find": "\tif err := g.checkKind(k, p.payload); err != nil {",
+  "replace": "\tif err := g.checkKind(k, p.payload); err != nil && id < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: the re-entrancy latch is never set",
+  "find": "\tg.executing = true\n\tdefer func() { g.executing = false }()",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: the kind is handed the realm's OWN capability, not a sub-realm",
+  "find": "\t\terr = run(k, subPathOf(p.kind), p.payload)",
+  "replace": "\t\terr = run(k, \"\", p.payload)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: a failed run is recorded as executed",
+  "find": "\tif err != nil {\n\t\tg.setState(p, stateFailed, err.Error())\n\t\treturn\n\t}",
+  "replace": "\t_ = err"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Execute: a run proposal stays SUCCEEDED and can be executed again",
+  "find": "\tg.setState(p, stateExecuted, \"\")",
+  "replace": "\tg.setState(p, stateSucceeded, \"\")"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "turnout: an abstention is not turnout",
+  "find": "func turnout(p *proposal) int64 { return p.yes + p.no + p.abstain }",
+  "replace": "func turnout(p *proposal) int64 { return p.yes + p.no }"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "forAndAgainst: abstentions are counted in the threshold denominator",
+  "find": "func forAndAgainst(p *proposal) int64 { return p.yes + p.no }",
+  "replace": "func forAndAgainst(p *proposal) int64 { return p.yes + p.no + p.abstain }"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "inDelay: the delay window is off by one",
+  "find": "func inDelay(p *proposal, now int64) bool { return now < p.ready }",
+  "replace": "func inDelay(p *proposal, now int64) bool { return now < p.ready-1 }"
  }
 ]

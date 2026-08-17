@@ -1624,6 +1624,48 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.02 — the governor's decision core: 38 of 45 caught, and the gap was RE-ENTRANCY —
+  three guards, every one of them dead in every fixture.**
+  2,042 lines carrying nine rows, all of them constants, so the tally, the vote path, the
+  state machine and execution had never been mutated. Forty-five mutations over `castVote`,
+  the packed ballot, `wouldBe`, `settle` and `Execute`.
+  Thirty-eight were already held, and the set is worth naming because it is the arithmetic a
+  governance engine lives or dies on: both quorum boundaries at their exact values, the early
+  success test with and without the votes not yet cast, both early-defeat arms, the deadline
+  comparison, abstain's asymmetry (turnout for quorum, absent from the threshold) in both
+  directions, the vote weighed at the proposal's snapshot rather than the newest epoch, the
+  packed ballot's two tag bits and its shift, the timelock, and — the one whose failure would
+  be worst — a kind handed the realm's OWN capability instead of a sub-realm.
+  **The gap is a cluster of three: `castVote`'s `g.executing` refusal, `Execute`'s, and the
+  `g.executing = true` latch that arms them both.** All three survived, because no test ever
+  called back into the governor from inside a running kind. That is not an exotic path: the
+  `Dispatch` seam exists precisely so a consuming realm can run code the holders adopted, with
+  a live realm, and the one thing such code can certainly do is re-enter the engine executing
+  it. The sharpest consequence is `Execute`: the proposal is still SUCCEEDED at that moment,
+  because the state only becomes executed after the run RETURNS — so a re-entrant call passes
+  the state check and runs the kind A SECOND TIME. For a kind that pays or mints, that is the
+  whole exploit, and deleting one line (`g.executing = true`) opens it.
+  `TestExecutionCannotReEnterTheGovernor` closes all three at once. It aims its re-entrant
+  vote at a SECOND, still-open proposal deliberately: voting on the proposal being executed is
+  refused for being closed, which would have answered the question by accident and passed with
+  the latch removed. It also counts the inner run, so a double execution reads as a number.
+  **A GnoVM finding fell out of writing it, worth recording as an environment constraint.** A
+  func literal declared INSIDE another func literal, capturing the outer one's locals, crashes
+  the VM outright — nil dereference in `doOpFuncLit` -> `GetPointerToIntDirect`. That is legal
+  Go and it is not cryptocourt's bug, but a test in this repo has to keep its closures one
+  level deep; the fixture uses a struct with methods, whose deferred `recover` is one level.
+  One equivalent mutant, excluded with its argument: dropping the `expires` bool from the
+  grace-period test changes nothing, because `saneRules` refuses `GraceBlocks <= 0` and
+  `settle` is the only path into `stateSucceeded` and always stamps a non-zero `p.ready` — so
+  `expiresAt` cannot return false there. Its own comment already says that arm is "defence
+  rather than policy"; the mutation simply proves it.
+  Three rows needed re-anchoring, and two of them are a lesson about anchor uniqueness rather
+  than about the code: `if p.state != stateActive {` occurs twice in the file and
+  `case "abstain":` occurs in both `castVote` and `packBallot`, so each matched twice and was
+  reported BAD ANCHOR rather than silently mutating the wrong site — which is the behaviour
+  that made them findable.
+  Batch now 482 rows: 481 caught, 0 not caught, one surviving by design.
+
 - **v1.01 — checkpoint, the last unswept `p/` package: 18 of 23 caught, and the one real gap
   was a separator that is load-bearing only above page 2^24.**
   307 lines carrying two rows, both constants. Twenty-three mutations over `SetAt`'s roll,
