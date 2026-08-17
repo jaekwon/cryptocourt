@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.30 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.31 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,120 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.31 — the two moderation powers that had never run on a node, and a
+  vacuous refusal caught by insisting on the message**. `SetTier` and
+  `PurgeModLogRow` were the last two moderation entrypoints with no on-chain
+  coverage: both were unit-tested in-process, but neither had ever been reached
+  through a real transaction, a real signer and a real render. Both now are, in
+  `kourtv2_moderation.txtar` — tier moves and comes back, a hide writes a log row
+  that renders with the row id `PurgeModLogRow` addresses it by, the purge takes
+  the moderator's free-text reason out of the rendered log, and the row survives
+  with its height, actor and act code so the audit trail still shows that
+  something happened and who did it. The hide itself is untouched: a text purge
+  is not an unhide.
+  - **The interesting part is a test that was passing for the wrong reason.** The
+    non-DAO refusal leg asserted `! gnokey ... SetTier ... test2`, and the
+    harness ships only `test1` — so the call did fail, but with `Key test2 not
+    found`, never reaching the authorization check it claimed to prove. The
+    negation passed on a missing key. What exposed it was asserting the *message*
+    as well as the failure; a bare `!` would have shipped green forever. Fixed by
+    declaring a funded `stranger` key via `adduser` (which must precede `gnoland
+    start`), so the refusal is now the guard's own.
+  - Auditing the rest of the file for the same shape found exactly one more bare
+    `!`: the suspended-set hide refusal, which had a following state read proving
+    the hide did not land but nothing proving *why*. It now asserts the
+    suspension message too. **A NEGATION IS ONLY AS STRONG AS THE REASON IT
+    PINS** — a `!` with no message is a test that the command failed, not a test
+    that your guard fired.
+  - The purge assertions were verified by positive control rather than assumed:
+    with the `PurgeModLogRow` call deleted the script fails on the `! stdout`
+    line, so the negative genuinely measures the purge. The negatives are also
+    bracketed by positives on the same render output (`row 1`, `hide`), so a
+    render that broke outright could not read as a successful purge.
+  - **Also closed, without a code change: the meta-only deposit fee.** A standing
+    backlog item wanted `depositFeeBps` split so the meta court could charge a
+    higher flood fee than an ordinary court. Checking the premise first killed
+    it: the fee is `dep · depositFeeBps`, and `dep` is `effMinDeposit(c)`, which
+    has branched meta (`depositFloorBps` = 2) against ordinary
+    (`ordDepositFloorBps` = 1) **since v0.27**. The fee is therefore already both
+    meta-scaled and supply-scaled *through its base*; a second `metaDepositFeeBps`
+    would stack a second meta multiplier on an already-differentiated base and
+    double-count. The other half of the premise was right and needs nothing: the
+    fee burns only on the dead-claim paths (expiry, conclusive low quality) and
+    refunds on the live ones (settlement, crystallization), so a flooder always
+    pays it and an answered honest claim never does. `depositFeeBps` stays global
+    because, riding a differentiated base, it is a pure *what share of the filing
+    cost is at risk* dial, and that share has no reason to vary per court. Second
+    backlog item this round whose premise did not survive being read.
+  - **And the recorded v0.29 dissent on `electionFloor` is resolved: 3/3 KEEP
+    NETTING.** One v0.29 reviewer wanted `electionFloor`'s netted base
+    (`q·votable`, shipped v0.14) replaced by `min(q·raw, votable/3)` — uniformly
+    stricter, equal only at zero escrow. A fresh panel of three rejected it
+    unanimously. The doctrine *franchise-scoped authority prices on supply* is
+    sound but was being applied to the wrong instrument: supply is a **proxy** for
+    the franchise, and under transfer-based staking escrowed coins are
+    disenfranchised by construction, so `votable` **is** the franchise. A turnout
+    floor is not a price — it is a quorum, and a quorum denominated in units that
+    cannot participate is a disenfranchisement multiplier on everyone else
+    (`q·raw/votable`: 10% at half escrow, 25% at 80%, pinned at 33% by the
+    reachability arm — bars a dispersed token electorate does not clear). It would
+    also have made removal hardest exactly when the docket is busiest, which is
+    when moderator abuse is most likely, and handed a captured set a free
+    near-1:1 voter-suppression lever (escrow instead of voting: abstain *and*
+    raise the bar). Note the convergence that settles it: if item 18 ships,
+    `votable == raw` and `min(q·raw, raw/3) = q·raw = q·votable` — NETTING and
+    CLAMP become the same formula, so netting today already reaches the dissent's
+    own end state without an intervening period of harder-than-intended elections
+    and without an irreversible two-armed formula.
+  - **The vector that prompted the review is real in sign and dominated in
+    magnitude — 20:1.** Because `Stake` is a `Transfer`, raw is unchanged by
+    staking and only `votable` falls, so parking stake *lowers* the election floor
+    and cheapens deposing a set. But `∂floor/∂escrow = −q = −0.05`: parking a coin
+    removes 0.05 from the requirement while **voting** that same coin adds 1.0. Any
+    coin is 20× more useful held and voted, so the attack is strictly dominated by
+    honest participation, and for a self-funded attacker parking is monotonically
+    self-defeating (`A ≥ q·V + (1−q)·S`). Two panelists caught an error in the
+    prompt's own framing, since verified in code: buying CC **mints** to the buyer
+    (`Buy`), so raw and escrow both rise by the same delta and `votable` is
+    *unchanged* — the bonding curve is not an attack surface here at all. Moving
+    `votable` requires buying existing float on a secondary market, one-way, then
+    handing the position to the defender as a hostage, because any bystander can
+    freeze it by posting an answer.
+  - **Three mechanical preconditions the verdict rests on, each verified in code
+    rather than assumed** — a future reader re-proposing CLAMP should re-check
+    these first, because if any fails the panel said its answer flips:
+    1. **The base is pinned, not live.** The `election` record stores `floor` and
+       `bond` at open and the resolve path reads the stored values, never
+       recomputing. The snapshot height is `Epoch()-1`, a previous-epoch read that
+       predates the election, and `votableAt` reads total and escrow at that *same*
+       height. Both panels named live recomputation as the one thing that would
+       turn a dominated attack into a purchasable option — an attacker who could
+       watch the turnout shortfall and *then* park exactly enough to erase it.
+       Invariant: **the floor of a live election never decreases** — and because
+       naming an invariant is not enforcing it, this one is now *asserted* by
+       `TestElectionFloorIsPinnedAtOpenAndNeverFalls`, which opens a ballot, parks
+       80% of supply into the escrow afterwards, and requires the pinned floor to
+       be unmoved **while a live recomputation at the current epoch comes back
+       strictly lower**. That second half is the positive control: asserting only
+       that the pinned floor held would pass equally well if the parking had done
+       nothing. It also surfaced a detail worth knowing — the votable base after
+       opening is 195 CC, not 200, because the nomination bond is itself a transfer
+       into the escrow, which is precondition 2 visible in miniature.
+    2. **Escrow cannot grow without a 1:1 lockup by the party that benefits.**
+       This is what the 20:1 tax rests on. Every `Mint` in the realm targets a
+       *user*; none mints into the escrow account. Every path that grows escrow is
+       a transfer of the payer's own CC (stake, the answer/dispute/quality/election
+       bonds, the claim deposit). Protocol-side escrow accrual, or fees routed to
+       escrow, would break the tax and was named as the flip condition.
+    3. **The floor is not the only gate.** Installation also requires a margin,
+       `maxW − retainW ≥ floor`, so clearing turnout alone cannot remove a set —
+       and both gates read the pinned value.
+  - Residual, recorded and not acted on: *mint and abstain* raises the floor under
+    netting (raw and votable rise together), so capital can buy a higher removal
+    bar. It is dominated by the same factor in the defender's direction — minting
+    `M` and abstaining raises the bar by `0.05M`, while voting `M` to retain raises
+    the margin requirement by `M` — so it is 20× cheaper to defend a set by voting
+    than by buying immunity. Symmetric and self-correcting; no guard added.
 - **v0.30 — nobody votes on their own verdict, and a note on exactly what that
   is worth**. `VoteQuality` has refused participants since V2 — quality moves
   their own payout multiplier, and nobody votes their own multiplier.

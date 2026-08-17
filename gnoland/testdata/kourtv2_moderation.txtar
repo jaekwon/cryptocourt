@@ -24,6 +24,12 @@ loadpkg gno.land/p/kourt/twap/v0
 loadpkg gno.land/p/kourt/curve/v0
 loadpkg gno.land/r/kourt/kourtv2
 
+# A second key, for the authorization refusals. The harness ships only test1, so
+# without this a `! gnokey ... test2` would "pass" on "Key test2 not found" —
+# refused for the wrong reason, which is a vacuous test. adduser must precede
+# gnoland start.
+adduser stranger 100000000ugnot
+
 gnoland start
 
 env TEST1=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
@@ -166,5 +172,63 @@ stdout 'true'
 # A suspended set cannot hide, but may still UNHIDE — clearing your own bits is
 # de-escalatory and survives suspension by design.
 ! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func HideItem -args orem -args 2 -args 'nope' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stderr 'only clearing its own bits is allowed'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.HiddenFromListing(\"orem\", 2)"
 stdout 'false'
+
+# --- Tier curation is a GLOBAL DAO power, and it is evented ---------------------
+# Tier is moderation: hiding a court from the front page is the first power the
+# global DAO was described as having. It was gated on a lone directoryAdmin key
+# until v0.24, which left the realm with two unrelated moderation authorities —
+# one of them with no m-of-n, no membership management and no way to hand over.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func SetTier -args orem -args 0 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtTier(\"orem\")"
+stdout '(0 int)'
+
+# A stranger is refused, on chain and not merely in the unit harness.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func SetTier -args orem -args 2 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test stranger
+stderr 'only a global DAO member'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtTier(\"orem\")"
+stdout '(0 int)'
+
+# Put it back so the rest of the script reads a listed court.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func SetTier -args orem -args 1 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# --- Purge reaches the moderation log itself ------------------------------------
+# The log is a TEXT SURFACE, and until v0.24 the one power that removes text
+# could not reach it. A row's reason is free text a moderator wrote, so it can
+# carry the very thing the purge was called in to remove — and "we removed the
+# claim" is no answer when the removal notice repeats what it removed.
+#
+# The set is suspended from the section above, and a suspended set cannot hide,
+# so lift it first — that is the global DAO's recovery power, exercised here.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func ClearCourtSuspension -args orem -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtSuspended(\"orem\")"
+stdout 'false'
+
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func HideItem -args orem -args 2 -args 'poster listed a home address' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# The log prints the row id, because that is the handle PurgeModLogRow takes —
+# a power addressed by an id nobody can see is a power nobody can use.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/mod"
+stdout 'row 1'
+stdout 'poster listed a home address'
+
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func PurgeModLogRow -args orem -args 2 -args 1 -args 'DOXX-1' -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# The prose is gone; the ROW SURVIVES with its height, actor and act code, so the
+# audit trail still shows that something happened and who did it.
+gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/mod"
+! stdout 'poster listed a home address'
+stdout 'reason removed on legal grounds'
+stdout 'row 1'
+stdout 'hide'
+
+# And the hide itself is untouched — a text purge is not an unhide.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.HiddenFromListing(\"orem\", 2)"
+stdout 'true'

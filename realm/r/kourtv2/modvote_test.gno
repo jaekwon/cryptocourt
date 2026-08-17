@@ -447,3 +447,55 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 		t.Fatal("the incoming set's own two approvals should fire")
 	}
 }
+
+// The floor of a live election never decreases. This is the invariant the v0.31
+// panel named as the one thing standing between a DOMINATED attack and a
+// PURCHASABLE OPTION, and it was structural but unwatched: electionFloor nets
+// the escrow, so parking stake lowers it, and if the floor were recomputed at
+// resolve time an attacker could watch the turnout shortfall and then park
+// exactly enough to erase it. Pinning it at open costs the attacker that
+// information — they must commit blind, at 20 coins parked per coin of relief.
+//
+// The second assertion is the point of the test. Asserting only that the pinned
+// floor did not move would pass just as well if the parking had done nothing at
+// all, so this recomputes the floor live at the current epoch and requires it to
+// be STRICTLY LOWER. That is the positive control: the escrow really did move,
+// a live implementation really would have quoted a cheaper bar, and the pinned
+// one really did ignore it.
+func TestElectionFloorIsPinnedAtOpenAndNeverFalls(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("epin-creator")
+	holder := testutils.TestAddress("epin-holder")
+	parker := testutils.TestAddress("epin-parker")
+	c := electionCourt(cur, "epin", creator,
+		[]address{holder, parker}, []int64{200_000_000, 800_000_000}) // 1,000 CC
+
+	cand := testutils.TestAddress("epin-cand")
+	testing.SetRealm(testing.NewUserRealm(holder))
+	id := RegisterModCandidate(cross(cur), "epin", []address{cand}, 1)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	OpenElection(cross(cur), "epin", id)
+
+	pinned := ElectionFloorOf("epin")
+	uassert.Equal(t, int64(50_000_000), pinned, "a twentieth of the 1,000 CC votable at open")
+
+	// The parker moves 80% of supply into the escrow AFTER the ballot is open —
+	// the whole point being that under a live base this is bought turnout relief.
+	c.coin.Transfer(parker, c.escrow, 800_000_000)
+	testing.SkipHeights(epochBlocks * 2) // seal the epoch that holds the parked balance
+
+	uassert.Equal(t, pinned, ElectionFloorOf("epin"),
+		"the open election's floor moved after the escrow grew: the base is live, not pinned")
+
+	// POSITIVE CONTROL — a live recomputation at the current epoch is strictly
+	// cheaper, so the assertion above is measuring the pinning and not a no-op.
+	live := electionFloor(c, c.coin.Epoch()-1)
+	if live >= pinned {
+		t.Fatalf("fixture did not move the base: live floor %d is not below the pinned %d", live, pinned)
+	}
+	// 195 CC, not 200: the nomination bond is itself a transfer into the escrow,
+	// so opening the ballot already shrank the votable base by 5 CC. That is
+	// consistent — every path that grows the escrow is paid 1:1 by the party that
+	// benefits, which is exactly what makes the 20:1 tax on this attack hold.
+	uassert.Equal(t, int64(9_750_000), live,
+		"a twentieth of the 195 CC still votable — what an attacker would have bought")
+}
