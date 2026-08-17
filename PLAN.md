@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.04 — the adoption path and the terms: 26 of 39 caught, and all thirteen survivors were
+  VALIDATOR LEGS nothing had ever exercised.** The third governor unit: `isReserved`, `Offer`,
+  `mustBeUsableName`, `mustBeUsableTitle`, `TextOnly`, `saneRules`, `BootstrapRules`,
+  `installBuiltins`, `adoptKind` and `retireKind` — the surface that decides what code may run
+  with the realm's authority.
+  The catastrophic cases were all already held, which is the right way round: a built-in being
+  withdrawn (`govern:retire` on `govern:adopt`, after which nothing could ever be adopted again
+  and no proposal could restore it), an offered kind going LIVE without a vote, the re-offer
+  attack that rewrites code already under a vote, a title carrying page structure, `isReserved`
+  returning false for everything, and all five bootstrap terms including the two-thirds
+  threshold and the two-day timelock.
+  **What was missing was the interior of four validators — every leg without a story attached.**
+  `saneRules` had tests for exactly the two legs with anecdotes (a grace of zero, a proposer bar
+  above the whole supply) and nothing on the other eight. The NEGATIVE legs are the ones that do
+  damage rather than merely bricking a kind: a negative quorum makes quorum TRIVIAL rather than
+  strict, since `cast*bps >= engaged*QuorumBps` is satisfied by any turnout when the right-hand
+  side is negative; a negative threshold passes every tally for the same reason. Together they
+  are a kind any single holder can carry at will, adopted by a vote whose page rendered the
+  terms as percentages. The new test states all ten refusals AND the eight boundary values that
+  must still be ACCEPTED, so closing the holes cannot over-refuse — a quorum of zero, a
+  threshold of unanimity and no timelock are all coherent things to want.
+  `mustBeUsableName` had only its SPACE leg tested (the one with the batch-parsing story); the
+  empty name, the length bound and the non-ASCII byte had nothing.
+  **And one gap is a lesson about two entry points to one validator.** `Offer` and `Adopt` each
+  call `mustBeUsableName` themselves, and every test that reached it went through `Adopt` — so
+  deleting `Offer`'s call left the function working perfectly and nothing noticed. A shared
+  validator needs a test per CALLER, not per validator, or one of them is silently unguarded.
+  Its sibling row (`Offer` not checking the terms) was caught, which is exactly why this one was
+  easy to miss: the same function, one arm covered and one not.
+  `adopt` and `retire` each state three preconditions and only the built-in one was held. They
+  matter because the check runs at Propose AND again at Execute, so an unmet precondition should
+  be a refusal at the door rather than a proposal that passes a vote and then fails.
+  Also pinned: the bare prefix `govern:` counts as reserved. A kind named exactly that would sit
+  on a page beside the governor's own kinds looking like one of them, and would take the
+  reserved lanes `Propose` keeps for them.
+  No equivalent mutants this time — all 39 rows are valid and caught.
+  Batch now 557 rows: 556 caught, 0 not caught, one surviving by design.
+
 - **v1.03 — the governor's proposal book: 27 of 38 caught, and a guard whose stated reason was
   BACKWARDS.** The second governor unit — `propose`, `ReleaseRoll`, `Cancel`, `setState`, the
   sweep, `clip` and `digest`. Already held: the roll that cannot be reclaimed out from under a

@@ -783,3 +783,183 @@ func TestTheReasonBoundIsWhereItSays(t *testing.T) {
 		t.Errorf("a clipped reason is %d bytes, past the bound plus its ellipsis", n)
 	}
 }
+
+// refuses and accepts state what saneRules must do with one set of terms.
+func refuses(t *testing.T, what string, r Rules) {
+	t.Helper()
+	if err := saneRules(r); err == nil {
+		t.Errorf("saneRules accepted %s", what)
+	}
+}
+
+func accepts(t *testing.T, what string, r Rules) {
+	t.Helper()
+	if err := saneRules(r); err != nil {
+		t.Errorf("saneRules refused %s: %v", what, err)
+	}
+}
+
+// Every leg of saneRules, five of which nothing held.
+//
+// This is the one definition of terms the realm will accept, and its own comment
+// records that it exists because two copies drifted apart and BOTH missed
+// ProposeBps. The legs that were tested were the two with a story attached — a
+// grace of zero, and a proposer bar above the whole supply. The NEGATIVE legs had
+// nothing, and they are the ones that do damage rather than merely bricking a
+// kind:
+//
+//	a negative quorum makes quorum TRIVIAL, not strict. The bar is
+//	`cast*bps >= engaged*QuorumBps`, so a negative right-hand side is satisfied by
+//	any turnout including none.
+//
+//	a negative threshold passes anything, since `yes*bps >= forAndAgainst*neg`
+//	holds for every tally.
+//
+// Together they are a kind that any single holder can carry at will, adopted by a
+// vote whose page rendered the terms as percentages nobody reads twice. The two
+// upper bounds are the milder direction — a kind adopted and then unusable — and
+// were equally unheld.
+func TestEveryTermIsCheckedForSanity(t *testing.T) {
+	if bps != 10000 {
+		t.Fatalf("bps is %d; the bounds below are stated as 10000/10001 outright so "+
+			"they fail when the scale moves rather than moving with it", bps)
+	}
+	sane := Rules{
+		QuorumBps: 5000, ThresholdBps: 5000,
+		VotingBlocks: 100, DelayBlocks: 10, GraceBlocks: 1000,
+	}
+	accepts(t, "ordinary terms", sane)
+
+	b := sane
+	b.QuorumBps = -1
+	refuses(t, "a negative quorum, which makes quorum trivial rather than strict", b)
+	b = sane
+	b.QuorumBps = 10001
+	refuses(t, "a quorum above the whole supply", b)
+	b = sane
+	b.ThresholdBps = -1
+	refuses(t, "a negative threshold, which passes every tally", b)
+	b = sane
+	b.ThresholdBps = 10001
+	refuses(t, "a threshold above every vote cast", b)
+	b = sane
+	b.ProposeBps = -1
+	refuses(t, "a negative proposer bar", b)
+	b = sane
+	b.ProposeBps = 10001
+	refuses(t, "a proposer bar above the whole supply", b)
+	b = sane
+	b.VotingBlocks = 0
+	refuses(t, "a vote with no period", b)
+	b = sane
+	b.VotingBlocks = -1
+	refuses(t, "a negative voting period", b)
+	b = sane
+	b.GraceBlocks = 0
+	refuses(t, "a grace of zero, which holds its slot for the life of the realm", b)
+	b = sane
+	b.DelayBlocks = -1
+	refuses(t, "a negative delay", b)
+
+	// And the values exactly AT each bound, every one of which is a coherent
+	// thing to want — so the guards must not over-refuse in closing the above.
+	b = sane
+	b.QuorumBps = 0
+	accepts(t, "a quorum of zero: any turnout at all decides", b)
+	b = sane
+	b.QuorumBps = 10000
+	accepts(t, "a quorum of everything: the whole supply must turn out", b)
+	b = sane
+	b.ThresholdBps = 0
+	accepts(t, "a threshold of zero", b)
+	b = sane
+	b.ThresholdBps = 10000
+	accepts(t, "a threshold of unanimity", b)
+	b = sane
+	b.ProposeBps = 10000
+	accepts(t, "only the holder of the entire supply may propose", b)
+	b = sane
+	b.DelayBlocks = 0
+	accepts(t, "no timelock, which is a choice and not a mistake", b)
+	b = sane
+	b.VotingBlocks, b.GraceBlocks = 1, 1
+	accepts(t, "one block to vote and one to run", b)
+}
+
+// A kind's name has to work in all three places a name is used, and three of the
+// four legs that enforce that were unheld — only the SPACE was tested.
+//
+// The last assertion is a different claim from the rest: that Offer APPLIES the
+// check. Offer and Adopt each call mustBeUsableName themselves, and every test
+// that reached it went through Adopt — so deleting Offer's call left the function
+// working perfectly and nothing noticed. Two entry points to one validator need
+// two tests, or one of them is unguarded.
+func TestAKindNameMustBeUsableEverywhere(t *testing.T) {
+	if maxKindName != 64 {
+		t.Fatalf("maxKindName is %d; the lengths below are stated as 64/65 outright", maxKindName)
+	}
+	mustPanicContains(t, "a kind needs a name", func() { mustBeUsableName("") })
+	mustPanicContains(t, "too long", func() { mustBeUsableName(strings.Repeat("k", 65)) })
+	// Every byte of a multi-byte character is >= 0x80, which the upper bound
+	// refuses — a name is a registry key, a batch field and a sub-path, not prose.
+	mustPanicContains(t, "printable ASCII", func() { mustBeUsableName("kïnd") })
+	// The two edges that must pass: the longest allowed name, and the printable
+	// extremes either side of the range.
+	mustNotPanic(t, func() { mustBeUsableName(strings.Repeat("k", 64)) })
+	mustNotPanic(t, func() { mustBeUsableName("!~") })
+
+	// Offer's own call, which nothing exercised.
+	g, _ := fresh()
+	mustPanicContains(t, "printable ASCII", func() {
+		g.Offer(gAlice, setFee{name: "bad name", ran: new(int64)}, BootstrapRules())
+	})
+	if offered, _ := g.KindStatus("bad name"); offered {
+		t.Error("a kind with an unusable name was shelved anyway")
+	}
+}
+
+// adopt and retire each state three preconditions, and only the built-in one was
+// held. They are what stop a proposal being opened that cannot do what it says:
+// the check runs at Propose AND again at Execute, so an unmet precondition is a
+// refusal at the door rather than a proposal that passes a vote and then fails.
+func TestAdoptAndRetireCheckTheirPreconditions(t *testing.T) {
+	g, _ := fresh()
+
+	// Nothing offered under the name at all.
+	if err := (adoptKind{}).check(g, "nothing/here"); err == nil {
+		t.Error("adopting a name nothing was offered under was accepted")
+	}
+	if err := (retireKind{}).check(g, "nothing/here"); err == nil {
+		t.Error("retiring a name nothing was offered under was accepted")
+	}
+
+	// Offered but not live: adoptable, and not retirable.
+	g.Offer(gAlice, setFee{name: "shelved/k", ran: new(int64)}, BootstrapRules())
+	if err := (adoptKind{}).check(g, "shelved/k"); err != nil {
+		t.Errorf("a shelved kind cannot be adopted: %v", err)
+	}
+	if err := (retireKind{}).check(g, "shelved/k"); err == nil {
+		t.Error("retiring a kind that was never live was accepted")
+	}
+
+	// Live: retirable, and not adoptable a second time.
+	g.Adopt(setFee{name: "live/k", ran: new(int64)}, BootstrapRules())
+	if err := (retireKind{}).check(g, "live/k"); err != nil {
+		t.Errorf("a live kind cannot be retired: %v", err)
+	}
+	if err := (adoptKind{}).check(g, "live/k"); err == nil {
+		t.Error("adopting an already-live kind was accepted")
+	}
+
+	// The built-ins, however live, are not withdrawable — and the BARE PREFIX
+	// counts as reserved. A kind named exactly "govern:" would otherwise sit on a
+	// page beside the governor's own kinds looking like one of them, and would
+	// take the reserved lanes Propose keeps for them.
+	if err := (retireKind{}).check(g, reserved+"adopt"); err == nil {
+		t.Error("govern:adopt can be retired — after which nothing could ever be " +
+			"adopted again and no proposal could restore it")
+	}
+	if !isReserved(reserved) {
+		t.Error(`the bare prefix "govern:" is not treated as reserved`)
+	}
+}

@@ -3625,5 +3625,278 @@
   "label": "digest: the separator between kind and payload is dropped",
   "find": "\th := sha256.Sum256([]byte(kind + \"\\x00\" + payload))",
   "replace": "\th := sha256.Sum256([]byte(kind + payload))"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "isReserved: no name is reserved at all",
+  "find": "\treturn len(name) >= len(reserved) && name[:len(reserved)] == reserved",
+  "replace": "\treturn false"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "isReserved: any name as long as the prefix counts as reserved",
+  "find": "\treturn len(name) >= len(reserved) && name[:len(reserved)] == reserved",
+  "replace": "\treturn len(name) >= len(reserved)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "isReserved: the prefix itself is not reserved",
+  "find": "\treturn len(name) >= len(reserved) && name[:len(reserved)] == reserved",
+  "replace": "\treturn len(name) > len(reserved) && name[:len(reserved)] == reserved"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Offer: the kind's name is not validated",
+  "find": "\tname := k.Name()\n\tmustBeUsableName(name)",
+  "replace": "\tname := k.Name()"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Offer: a stranger may publish under the governor's own prefix",
+  "find": "\tif isReserved(name) {\n\t\tpanic(\"govern: that prefix belongs to the governor\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Offer: the terms are not checked for sanity",
+  "find": "\tg.mustBeSaneRules(r)\n\n\t// A name, once offered, is bound to that code forever.",
+  "replace": "\n\t// A name, once offered, is bound to that code forever."
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Offer: a name may be RE-OFFERED, rewriting code that is already under a vote",
+  "find": "\tif g.entryOf(name) != nil {\n\t\tpanic(\"govern: that name is taken; publish a new one rather than \" +\n\t\t\t\"rewriting what may already be under a vote\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Offer: an offered kind is LIVE without a vote",
+  "find": "\tg.kinds.Set(name, &entry{kind: k, rules: r})",
+  "replace": "\tg.kinds.Set(name, &entry{kind: k, rules: r, live: true})"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "mustBeUsableName: an empty name is accepted",
+  "find": "\tif name == \"\" {\n\t\tpanic(\"govern: a kind needs a name\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "mustBeUsableName: the length bound is not enforced",
+  "find": "\tif len(name) > maxKindName {\n\t\tpanic(\"govern: that name is too long\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "mustBeUsableName: a SPACE is allowed in a kind name",
+  "find": "\t\tif c := name[i]; c <= ' ' || c > '~' {",
+  "replace": "\t\tif c := name[i]; c < ' ' || c > '~' {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "mustBeUsableName: a non-ASCII byte is allowed in a kind name",
+  "find": "\t\tif c := name[i]; c <= ' ' || c > '~' {",
+  "replace": "\t\tif c := name[i]; c <= ' ' {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "mustBeUsableTitle: the title length bound is not enforced",
+  "find": "\tif len(title) > maxTitle {\n\t\tpanic(\"govern: that title is too long\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "mustBeUsableTitle: a title may carry page STRUCTURE (a forged proposal row)",
+  "find": "\tif err := TextOnly(title); err != nil {\n\t\tpanic(\"govern: a title \" + err.Error())\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "TextOnly: a DEL byte is text",
+  "find": "\t\tif c := s[i]; c < 0x20 || c == 0x7f {",
+  "replace": "\t\tif c := s[i]; c < 0x20 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "TextOnly: control characters are text",
+  "find": "\t\tif c := s[i]; c < 0x20 || c == 0x7f {",
+  "replace": "\t\tif c := s[i]; c == 0x7f {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a quorum above the whole supply is accepted",
+  "find": "\tif r.QuorumBps < 0 || r.QuorumBps > bps || r.ThresholdBps < 0 || r.ThresholdBps > bps {",
+  "replace": "\tif r.QuorumBps < 0 || r.ThresholdBps < 0 || r.ThresholdBps > bps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a NEGATIVE quorum is accepted (quorum becomes trivial)",
+  "find": "\tif r.QuorumBps < 0 || r.QuorumBps > bps || r.ThresholdBps < 0 || r.ThresholdBps > bps {",
+  "replace": "\tif r.QuorumBps > bps || r.ThresholdBps < 0 || r.ThresholdBps > bps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a threshold above 100% is accepted",
+  "find": "\tif r.QuorumBps < 0 || r.QuorumBps > bps || r.ThresholdBps < 0 || r.ThresholdBps > bps {",
+  "replace": "\tif r.QuorumBps < 0 || r.QuorumBps > bps || r.ThresholdBps < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a NEGATIVE threshold is accepted (everything passes)",
+  "find": "\tif r.QuorumBps < 0 || r.QuorumBps > bps || r.ThresholdBps < 0 || r.ThresholdBps > bps {",
+  "replace": "\tif r.QuorumBps < 0 || r.QuorumBps > bps || r.ThresholdBps > bps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a proposer bar above the whole supply is accepted",
+  "find": "\tif r.ProposeBps < 0 || r.ProposeBps > bps {",
+  "replace": "\tif r.ProposeBps < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a proposer bar may be negative",
+  "find": "\tif r.ProposeBps < 0 || r.ProposeBps > bps {",
+  "replace": "\tif r.ProposeBps > bps {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a zero voting period is accepted",
+  "find": "\tif r.VotingBlocks <= 0 {",
+  "replace": "\tif r.VotingBlocks < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a zero grace period is accepted (the slot leaks forever)",
+  "find": "\tif r.GraceBlocks <= 0 {",
+  "replace": "\tif r.GraceBlocks < 0 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "saneRules: a negative delay is accepted",
+  "find": "\tif r.DelayBlocks < 0 {",
+  "replace": "\tif r.DelayBlocks < -1 {"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST BootstrapRules quorum 2000 -> 200",
+  "find": "\t\tQuorumBps: 2000,",
+  "replace": "\t\tQuorumBps: 200,"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST BootstrapRules threshold 6600 -> a simple majority",
+  "find": "\t\tThresholdBps: 6600,",
+  "replace": "\t\tThresholdBps: 5000,"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST BootstrapRules voting period a week -> one block",
+  "find": "\t\tVotingBlocks: 7 * 24 * 60 * 60 / 5,",
+  "replace": "\t\tVotingBlocks: 1,"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST BootstrapRules timelock two days -> none",
+  "find": "\t\tDelayBlocks: 2 * 24 * 60 * 60 / 5,",
+  "replace": "\t\tDelayBlocks: 0,"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "P-CONST BootstrapRules grace a fortnight -> one block",
+  "find": "\t\tGraceBlocks: 14 * 24 * 60 * 60 / 5,",
+  "replace": "\t\tGraceBlocks: 1,"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "installBuiltins: govern:adopt is registered but not live",
+  "find": "\tg.kinds.Set(adoptKind{}.Name(), &entry{kind: adoptKind{}, rules: bootstrap, live: true})",
+  "replace": "\tg.kinds.Set(adoptKind{}.Name(), &entry{kind: adoptKind{}, rules: bootstrap})"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "installBuiltins: govern:rules is never registered",
+  "find": "\tg.kinds.Set(rulesKind{}.Name(), &entry{kind: rulesKind{}, rules: bootstrap, live: true})",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "installBuiltins: govern:batch is never registered",
+  "find": "\tg.kinds.Set(batchKind{}.Name(), &entry{kind: batchKind{}, rules: bootstrap, live: true})",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "adopt: a name nothing was offered under passes its check",
+  "find": "\te := g.entryOf(payload)\n\tif e == nil {\n\t\treturn errNoSuchKind\n\t}\n\tif e.live {\n\t\treturn errAlreadyLive\n\t}",
+  "replace": "\te := g.entryOf(payload)\n\tif e.live {\n\t\treturn errAlreadyLive\n\t}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "adopt: an already-live kind may be adopted again",
+  "find": "\tif e.live {\n\t\treturn errAlreadyLive\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "adopt: adoption RETIRES the kind",
+  "find": "\te.live = true\n\treturn nil",
+  "replace": "\te.live = false\n\treturn nil"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "retire: a BUILT-IN may be withdrawn (govern:adopt, unrecoverably)",
+  "find": "\tif isReserved(payload) {\n\t\treturn errCannotRetireBuiltin\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "retire: a kind that is not live may be retired",
+  "find": "\tif !e.live {\n\t\treturn errNotLive\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "retire: retirement makes the kind LIVE",
+  "find": "\te.live = false\n\treturn nil",
+  "replace": "\te.live = true\n\treturn nil"
  }
 ]
