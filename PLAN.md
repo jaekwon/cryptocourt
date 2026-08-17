@@ -1624,6 +1624,37 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.95 — the CREATION paths, and a test that could not see what it was asserting.**
+  Swept `OpenClaim` and `StartCourt`. Nine of twelve held: the provisional sentinel (int8
+  zero is sideYES, so `-1` must be explicit — and it is checked), both title bounds, the
+  deposit-and-fee intake, the fee formula, the claim-id advance, the slug-taken bar, slug
+  validation, and a new court not listing itself as FEATURED.
+  **The find is `admin := cur.Previous().Address()` in StartCourt, and the interesting part
+  is WHY it survived a test that exists for it.** The first court's creator latches as
+  `directoryAdmin`, which gates `SetTier`. `TestSetTierIsAdminOnlyAndRangeChecked` covers
+  that guard and reads `owner := DirectoryAdmin()` deliberately, because the latch is
+  process-wide and an earlier fixture may already own it — a sound accommodation, and
+  documented. But it means the test cannot see WHO latched: replace the creator with the
+  realm's own address and the guard compares the realm against itself, the fixture drives
+  it from that same address, and every assertion still passes.
+  It is not cosmetic. No caller can produce a `Previous` equal to the realm, so a
+  realm-owned `directoryAdmin` makes `SetTier` uncallable and freezes every court at Listed
+  for ever — Featured and Hidden become unreachable states. The missing assertion is the
+  discriminating half of "the admin is the creating account": that it is NOT the realm.
+  Recorded as a lesson about a shape this sweep has now hit twice: a fixture that reads its
+  expectation from the code under test can only check consistency, never correctness.
+  v0.89's bar fixture had the same defect in a different form, where the arms were
+  arithmetically equal so restating the formula proved nothing.
+  Two survived and are equivalent. `Court.admin` itself is documented "recorded, unused —
+  no retune path exists", and that is true — its only consequence is the directoryAdmin
+  latch above. And `defaultParams().mustSane()` → `defaultParams()` changes nothing, because
+  the defaults are sane by construction; v0.69 already recorded that mustSane's guards are
+  unreachable today since StartCourt hardcodes the defaults and no setter exists.
+  Also confirmed this version, and worth knowing because it bounds a whole risk class: Buy
+  is the ONLY function in courtv2 that reads `OriginSend` or takes a banker. The AGENTS.md
+  payment-bypass class has exactly one instance in this realm, and v0.93 covered it.
+  Batch now 330 rows: 329 caught, 0 not caught, one surviving by design (11m02s).
+
 - **v0.94 — the batch can now SAY that a guard is covered somewhere it cannot look, which
   is the bookkeeping v0.93 left open.** Closing Buy's IsUserCall in txtar created a row that
   survives here for ever, and the only options were to count it as a finding (false) or omit

@@ -2232,5 +2232,82 @@
   "find": "\tif !prev.IsUserCall() {",
   "replace": "\tif !prev.IsUser() {",
   "elsewhere": "gnoland/testdata/courtv2_paymentauth.txtar"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: the provisional sentinel is the int8 zero, which reads as sideYES",
+  "find": "\t\tprovisional: -1, // int8 zero is sideYES \u2014 the sentinel must be explicit",
+  "replace": "\t\tprovisional: 0,"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: a title of any length is accepted",
+  "find": "\tif len(title) == 0 || len(title) > 200 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: an EMPTY title is accepted",
+  "find": "\tif len(title) == 0 || len(title) > 200 {",
+  "replace": "\tif len(title) > 200 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: the deposit and fee are never taken",
+  "find": "\tc.coin.Transfer(who, c.escrow, dep+fee)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: the deposit fee is zero",
+  "find": "\tfee := dep * depositFeeBps / 10000",
+  "replace": "\tfee := int64(0)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: the claim id does not advance, so claims overwrite",
+  "find": "\tc.nextID++\n\tid := c.nextID",
+  "replace": "\tid := c.nextID"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "OpenClaim: the claim is never inserted",
+  "find": "\tc.claims.Set(beClaimKey(id), cs)",
+  "replace": "\t_ = cs"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "StartCourt: a taken slug is overwritten",
+  "find": "\tif courts.Has(slug) {\n\t\tpanic(\"courtv2: that slug is taken\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "StartCourt: the slug is not validated",
+  "find": "\tmustSlug(slug)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "StartCourt: the court admins itself",
+  "find": "\tadmin := cur.Previous().Address()",
+  "replace": "\tadmin := cur.Address()"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "StartCourt: a new court lists itself as FEATURED",
+  "find": "\t\ttier:      tierListed,",
+  "replace": "\t\ttier:      tierFeatured,"
  }
 ]
