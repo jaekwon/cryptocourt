@@ -282,7 +282,36 @@ purge never editorial.
   emission neutralizes this +EV while raising the forgery price to ~20%·X̄).
 - Reserved schemas (strict parse; near-miss → "not a valid appeal" badge):
   `mod:unhide:<c>/<id>` · `mod:clear:<c>/<id>` · `mod:hide:<c>/<id>` ·
-  `mod:suspend:<c>` / `mod:unsuspend:<c>`.
+  `mod:suspend:<c>` / `mod:unsuspend:<c>` · **`mod:setmods:<c>/<candidateID>`**
+  (owner addition v0.9 — see the peer rule below).
+- **Meta and the local electorate are PEERS over a court's moderator set
+  (owner decision v0.9)**: the meta court can not only *disarm* a rogue set
+  (suspend) but *install* one (`mod:setmods`), because suspend is the wrong
+  tool for the case that motivates this — **negligent/absent moderators**,
+  where disarming an already-idle set only deepens the gap; installing a
+  working set is what that needs. Rules that keep it from flapping:
+  - **Both peers act only through their own bonded/voted process**: meta via a
+    `mod:setmods` appeal verdict (answer bond → dispute → sealed vote), the
+    court via its coin-holder election. Neither can re-set for free; each
+    override costs a bond or an election cycle, so an override-war is slow and
+    self-limiting.
+  - **Last-writer-wins by height stamp**: the most recent valid install (from
+    *either* peer) is authoritative; whoever acted last holds until the other
+    runs its full process again. Both installs stamp the set's `setActHeight`
+    (already the meta staleness field) so the guards compose.
+  - **The candidate set (addresses + m-of-n) is pre-registered by ID**
+    (`RegisterModCandidate` → id) so the title stays short and any set size is
+    allowed, mirroring the election's addresses-only candidate.
+  - **Why safe:** installing is render-layer only (no meta act ever touches a
+    coin), so a captured meta seating puppets can at worst censor discovery —
+    reversed by the local electorate and backstopped by the global DAO. This is
+    also a genuine mutual check: a court whose *local* coin is captured (a whale
+    seats bad mods) can be corrected by meta, and a court meta wrongly targets
+    is defended by its own electorate. Suspend remains the *fast* lever (freeze
+    now, before a replacement set is known); `setmods` is the *corrective* one.
+  - **Vet status: PENDING** — one adversarial pass on the flap/harassment
+    economics (can a griefer ping-pong a court's set cheaply?) before build,
+    per §13.7's discipline; a bounded render-layer addition, not a re-converge.
   - **Parse = stored structured state** in `meta.gno` (keyed by claimID, not
     the shared `claimState`): written at open, rewritten on each edit. **Purge
     marks the stored parse render-only / non-bindable** (round 4 F3, resolving
@@ -312,7 +341,7 @@ purge never editorial.
   never stamp anything): (1) target exists & strictly predates `openedAt`;
   (2) a persisted binding parse exists; (3) `Verdict()==YES` (the `provisional`
   field, non-provClose — note `route`'s third value `"closed"` is excluded
-  here); (4) aggressive verbs (`hide`/`suspend`/`unsuspend`) require
+  here); (4) aggressive verbs (`hide`/`suspend`/`unsuspend`/`setmods`) require
   `route=="vote"`; (5) **not already executed** (a per-appeal `executed` flag
   in `meta.gno` — round 4 F1, the exactly-once guard); (6) staleness; then
   apply, set `executed`, and stamp `executedAt` **at most once per appeal**.
@@ -682,6 +711,17 @@ except where noted)
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.9 — owner decision (meta can INSTALL a mod set, not just suspend)**: the
+  meta court and the local coin-holder electorate are **peers** over a court's
+  moderator set (`mod:setmods`), because suspend-only deepens the gap in the
+  motivating case (negligent/absent mods). Both act through their own
+  bonded/voted process, last-writer-wins by height stamp; suspend stays as the
+  fast disarm lever. Safe because it is render-layer only (no meta act touches
+  a coin) and reversible by the local electorate + global DAO. Meta-CC decided
+  **transferable, normal emission** (owner, risk-tolerant) — noted for counsel:
+  meta-CC is then a tradeable securities-analysis unit tied to platform power,
+  and forgery costs ~4%·X̄, so meta integrity rests on the deployer's genesis
+  vote-dominance. **Flap/harassment vet PENDING** before the `setmods` build.
 - **v0.6** — round 5 (1 HIGH + 1 MED-HIGH; verification lens CONVERGED):
   - *Election, structurally different fix* (M-A33/M-A44, HIGH): the v0.5 bond
     auction put the capital key on *ballot access* — a capital-dominant but
