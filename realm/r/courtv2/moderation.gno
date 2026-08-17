@@ -553,6 +553,11 @@ func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string
 	}
 	clm.purged = true
 	clm.tombstone = code
+	if c.id == metaSlug {
+		// A purge BEFORE the binding persists makes the appeal render-only; a
+		// purge after it never blocks execution (meta.gno).
+		poisonMetaParse(claimID)
+	}
 	clm.appendLog(who, "purge:"+code, "")
 	emitPurge(c.id, claimID, code, who)
 }
@@ -658,14 +663,6 @@ func courtIsPurged(c *Court) bool {
 // CourtPurged is the render/test read.
 func CourtPurged(courtSlug string) bool {
 	return courtIsPurged(mustCourt(courtSlug))
-}
-
-// onTitleEdited is called by EditClaimTitle so the meta court can re-parse a
-// `mod:` appeal's title while it is still editable (MODERATION.md §3.3). No-op
-// for ordinary courts; the meta module (module 7) fills in the parse for the
-// meta court's own claims.
-func onTitleEdited(c *Court, cs *claimState) {
-	// meta-parser re-run lands here in the meta module.
 }
 
 // ---- meta / suspension internal hooks (called by ExecuteMetaVerdict) ------

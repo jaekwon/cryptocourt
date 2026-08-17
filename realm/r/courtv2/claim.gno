@@ -220,6 +220,8 @@ func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 	if seeded {
 		pendingEnter(c, cs)
 	}
+	// On the meta court, store the parsed `mod:` instruction (meta.gno).
+	onClaimOpened(c, cs)
 	// Claim-lane event: clients enumerate claims off events (no on-chain
 	// address→claims index exists; MODERATION.md §2/I3). No user text beyond the
 	// title, which is the claim's whole public content.

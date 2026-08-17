@@ -1,0 +1,410 @@
+// The meta court: the appeals layer (MODERATION.md §3.3).
+//
+// It is not a special authority bolted onto moderation — it IS a court,
+// deployed at realm init under the reserved slug "meta", and it decides appeals
+// through the same bonded machinery every other claim uses: answer bond → 72h →
+// optional dispute → sealed vote → verdict. What makes a claim an appeal is
+// only its title: a reserved `mod:` schema naming a verb and a target. When
+// such a claim reaches a final YES verdict, anyone may execute it, and the
+// execution flips a render-layer bit (or replaces a moderator set).
+//
+// Everything here is bounded by the constitution: an execution can hide, unhide,
+// suspend, or reseat — it can never move a coin. A captured meta court censors
+// discovery and nothing else, and the global DAO can undo every one of its acts
+// (ClearAnyBit, ClearCourtSuspension, ResetModSet).
+//
+// The guard set is the expensive part. Three independent adversarial vets shaped
+// it, and every guard below exists because a specific attack got through
+// without it — the comments name them.
+package courtv2
+
+import (
+	"chain"
+	"chain/runtime"
+	"strconv"
+	"strings"
+
+	unsafe "chain/runtime/unsafe"
+
+	bptree "gno.land/p/nt/bptree/v0"
+)
+
+// realmPath is this realm's own package path — the same one buy.gno derives its
+// burn sink from. init cannot ask `cur` for the realm address, so the escrow
+// address is derived from the path instead.
+const metaRealmPath = "gno.land/r/cryptocourt/courtv2"
+
+const (
+	metaPrefix   = "mod:"
+	metaCourtNm  = "Review Court"
+	metaExecuted = "MetaExecuted"
+)
+
+// The verbs. Restorative verbs may execute from the undisputed (silence) route:
+// silence may RESTORE visibility. Aggressive verbs may not — silence must never
+// remove visibility, disarm a court, re-arm one, or reseat its moderators.
+const (
+	verbUnhide    = "unhide"    // restorative: clear the courtMod bit
+	verbClear     = "clear"     // restorative: clear the meta bit
+	verbHide      = "hide"      // aggressive: set the meta bit
+	verbSuspend   = "suspend"   // aggressive: disarm a moderator set
+	verbUnsuspend = "unsuspend" // aggressive: re-arm one (it re-applies masked hides)
+	verbSetmods   = "setmods"   // aggressive: install a moderator set
+)
+
+func verbIsAggressive(v string) bool {
+	return v == verbHide || v == verbSuspend || v == verbUnsuspend || v == verbSetmods
+}
+
+// modParse is a claim title parsed into a binding instruction. It is STORED
+// STRUCTURED STATE, not re-derived at read time: a purged title is unrecoverable
+// text, so a render-time re-parse would both blind the appeal's own electorate
+// and orphan its latch.
+type modParse struct {
+	valid     bool
+	verb      string
+	court     string
+	target    uint64 // claimID for item verbs, candidateID for setmods
+	hasTarget bool
+	poisoned  bool // purged before the binding was persisted: render-only
+}
+
+// metaState holds the meta court's per-claim parses, latches, and execution
+// flags. Keyed by the meta court's own claim ids — it is deliberately NOT a
+// field on the shared claimState, which every court's claims carry.
+type metaState struct {
+	parses   *bptree.BPTree // claimID -> *modParse (stored at open, rewritten on edit)
+	bindings *bptree.BPTree // claimID -> *modParse (persisted at PostAnswer; the only thing execution reads)
+	latches  *bptree.BPTree // latchKey -> claimID
+	executed *bptree.BPTree // claimID -> true (exactly-once)
+}
+
+var meta = &metaState{
+	parses:   bptree.NewBPTree32(),
+	bindings: bptree.NewBPTree32(),
+	latches:  bptree.NewBPTree32(),
+	executed: bptree.NewBPTree32(),
+}
+
+// init deploys the meta court. init has no `cur` to ask, and MsgAddPackage sets
+// OriginCaller to the deployer — the r/govern/token.gno pattern, and the only
+// moment the deployer can be read without a caller influencing it. It calls
+// startCourt directly rather than StartCourt, because the public path reserves
+// this slug precisely so only init can take it.
+func init() {
+	startCourt(unsafe.OriginCaller(), chain.PackageAddress(metaRealmPath), metaSlug, metaCourtNm, 0)
+}
+
+// parseModTitle reads a reserved title. Anything that is not an exact match is
+// simply an ordinary meta-court claim (render badges it "not a valid appeal", so
+// a near-miss cannot masquerade as binding).
+//
+//	mod:unhide:<court>/<claimID>   mod:clear:<court>/<claimID>
+//	mod:hide:<court>/<claimID>     mod:setmods:<court>/<candidateID>
+//	mod:suspend:<court>            mod:unsuspend:<court>
+func parseModTitle(title string) modParse {
+	p := modParse{}
+	if !strings.HasPrefix(title, metaPrefix) {
+		return p
+	}
+	rest := title[len(metaPrefix):]
+	slash := strings.Index(rest, ":")
+	if slash < 0 {
+		return p
+	}
+	verb := rest[:slash]
+	arg := rest[slash+1:]
+	switch verb {
+	case verbUnhide, verbClear, verbHide, verbSetmods:
+		cut := strings.Index(arg, "/")
+		if cut <= 0 || cut == len(arg)-1 {
+			return p
+		}
+		id, err := strconv.ParseUint(arg[cut+1:], 10, 64)
+		if err != nil || id == 0 {
+			return p
+		}
+		p.court, p.target, p.hasTarget = arg[:cut], id, true
+	case verbSuspend, verbUnsuspend:
+		if arg == "" || strings.Contains(arg, "/") {
+			return p
+		}
+		p.court = arg
+	default:
+		return p
+	}
+	// The slug charset is [a-z0-9-], so a malformed target cannot hide in it.
+	for i := 0; i < len(p.court); i++ {
+		ch := p.court[i]
+		if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-') {
+			return modParse{}
+		}
+	}
+	p.verb, p.valid = verb, true
+	return p
+}
+
+// latchKey serialises appeals so one target cannot host a swarm of them.
+// setmods is keyed per COURT, not per candidate: a per-candidate key would let
+// an attacker bank unlimited parallel installs on one court and discharge them
+// one after each local election.
+func latchKey(p modParse) string {
+	switch p.verb {
+	case verbSetmods:
+		return "set:" + p.court
+	case verbSuspend, verbUnsuspend:
+		return "sus:" + p.court
+	default:
+		return "item:" + p.court + ":" + strconv.FormatUint(p.target, 10)
+	}
+}
+
+// ---- lifecycle hooks (called from the claim/answer paths) -----------------
+
+// onClaimOpened stores the parse for a meta-court claim, and puts a valid
+// unanswered appeal on the pending list so it is force-visible from birth (an
+// appeal nobody can find is an appeal nobody can contest).
+func onClaimOpened(c *Court, cs *claimState) {
+	if c.id != metaSlug {
+		return
+	}
+	p := parseModTitle(cs.title)
+	meta.parses.Set(beClaimKey(cs.id), &p)
+	if p.valid {
+		pendingEnter(c, cs)
+	}
+}
+
+// onTitleEdited re-parses a meta claim whose title changed inside the polish
+// window. It deliberately performs NO latch work: edits are provably pre-answer
+// (the window closes before a claim can mature enough to answer) and the latch
+// binds at PostAnswer, so an edit-time acquire would reopen the camp it closed.
+func onTitleEdited(c *Court, cs *claimState) {
+	if c.id != metaSlug {
+		return
+	}
+	p := parseModTitle(cs.title)
+	meta.parses.Set(beClaimKey(cs.id), &p)
+	if p.valid {
+		pendingEnter(c, cs)
+	} else {
+		pendingExit(c, cs)
+	}
+}
+
+// onClaimAnswered persists the BINDING parse and takes the target's latch.
+// First-to-answer takes it, which forces anyone who wants to hold a target's
+// appeal lane onto the bonded, disputable path rather than a 0.1-CC claim that
+// is never answered.
+func onClaimAnswered(c *Court, cs *claimState) {
+	if c.id != metaSlug {
+		return
+	}
+	v := meta.parses.Get(beClaimKey(cs.id))
+	if v == nil {
+		return
+	}
+	p := v.(*modParse)
+	if !p.valid || p.poisoned {
+		return // an ordinary claim, or a purged-before-binding one: never executable
+	}
+	k := latchKey(*p)
+	if held := meta.latches.Get(k); held != nil {
+		if held.(uint64) != cs.id {
+			panic("courtv2: another appeal already holds this target's review slot")
+		}
+	}
+	meta.latches.Set(k, cs.id)
+	bind := *p
+	meta.bindings.Set(beClaimKey(cs.id), &bind)
+}
+
+// releaseMetaLatch frees a target's slot once its appeal can no longer execute.
+func releaseMetaLatch(cs *claimState) {
+	v := meta.bindings.Get(beClaimKey(cs.id))
+	if v == nil {
+		return
+	}
+	k := latchKey(*v.(*modParse))
+	if held := meta.latches.Get(k); held != nil && held.(uint64) == cs.id {
+		meta.latches.Remove(k)
+	}
+}
+
+// poisonMetaParse marks a purged appeal's parse render-only. The parse still
+// RENDERS (verb+target are realm-validated strings, the same speech class as a
+// category code, so redacting them would blind the appeal's electorate for no
+// legal-hold gain) but it can no longer bind an execution.
+func poisonMetaParse(claimID uint64) {
+	if v := meta.parses.Get(beClaimKey(claimID)); v != nil {
+		v.(*modParse).poisoned = true
+	}
+}
+
+// ---- execution ------------------------------------------------------------
+
+// ExecuteMetaVerdict applies a decided appeal. Permissionless: the verdict is
+// the authority, not the caller.
+//
+// The guard order is FIXED and validity comes before state, so a call that
+// should do nothing can never leave a mark (an earlier ordering let a non-final
+// call stamp the re-hide cooldown).
+func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	mc := mustCourt(metaSlug)
+	cs := mustClaim(mc, metaClaimID)
+
+	// 1. A binding parse must exist. Purged-before-binding executes nothing;
+	//    a purge AFTER the binding never blocks execution, which is what stops
+	//    purge from becoming a veto over the appeals layer.
+	bv := meta.bindings.Get(beClaimKey(metaClaimID))
+	if bv == nil {
+		panic("courtv2: this claim carries no binding appeal")
+	}
+	p := *bv.(*modParse)
+
+	// 2. The target must exist and STRICTLY predate the appeal, so no appeal can
+	//    be aimed at something created after voters judged it.
+	if !Exists(p.court) {
+		panic("courtv2: the target court does not exist")
+	}
+	tc := mustCourt(p.court)
+	if tc.createdAt >= cs.openedAt {
+		panic("courtv2: the target court does not predate this appeal")
+	}
+	var target *claimState
+	if p.hasTarget && p.verb != verbSetmods {
+		target = mustClaim(tc, p.target)
+		if target.openedAt >= cs.openedAt {
+			panic("courtv2: the target claim does not predate this appeal")
+		}
+	}
+
+	// 3. A final YES verdict — read from `provisional`, the field a dispute
+	//    OVERTURNS, never from the posted answer.
+	if cs.verdictAt == 0 || cs.provClose {
+		panic("courtv2: no final verdict")
+	}
+	if int(cs.provisional) != sideYES {
+		panic("courtv2: the verdict was not YES")
+	}
+
+	// 4. Aggressive verbs need a genuinely contested route. `route == "vote"`
+	//    alone is forgeable: it is stamped for ANY once-disputed claim, including
+	//    one whose only round FAILED QUORUM — so silence plus a self-dispute
+	//    would seat a principal on someone else's court for ~10% of a
+	//    self-chosen stake. decidedRounds proves a quorate round classified it.
+	if verbIsAggressive(p.verb) {
+		if cs.route != "vote" || cs.decidedRounds == 0 {
+			panic("courtv2: this verb needs a decided contested vote, not silence")
+		}
+		if p.verb == verbSetmods && !cs.credEligible {
+			panic("courtv2: a manufactured contest cannot reseat a court's moderators")
+		}
+	}
+
+	// 5. Exactly-once. Without it, anyone could re-call a settled appeal every
+	//    votingBlocks-1 and extend the respondent's cooldown forever — the
+	//    livelock, mirrored onto the moderator side.
+	if meta.executed.Has(beClaimKey(metaClaimID)) {
+		panic("courtv2: already executed")
+	}
+
+	// 6. Execution expiry: a verdict is not a sleeper round. Without this a
+	//    party could bank K decided appeals and discharge one after each local
+	//    election, inverting last-writer-wins into oldest-ammunition-wins.
+	now := runtime.ChainHeight()
+	if now > cs.verdictAt+mc.params.votingBlocks {
+		panic("courtv2: this verdict has expired; re-appeal")
+	}
+
+	// 7. Staleness, per verb. setmods anchors on verdictAt — NOT openedAt: the
+	//    local electorate is always faster than a meta appeal, so an openedAt
+	//    anchor would hand it a permanent free veto and meta's duty cycle would
+	//    be zero. An install between the verdict and its execution refuses.
+	cm := ensureMod(tc)
+	switch p.verb {
+	case verbSetmods:
+		if cm.setActHeight > cs.verdictAt {
+			panic("courtv2: the moderator set changed after this verdict; re-appeal")
+		}
+	case verbSuspend, verbUnsuspend:
+		if cm.lastElectionAt > cs.openedAt || cm.setActHeight > cs.verdictAt {
+			panic("courtv2: the moderator set changed under this appeal; re-appeal")
+		}
+	case verbUnhide:
+		// Only an ELECTION refuses an unhide. A third-party CLEAR is
+		// same-direction as the verdict, and refusing on it once let a
+		// moderator re-hide for free after a global clear.
+		if cm.lastElectionAt > cs.openedAt {
+			panic("courtv2: the moderator set changed under this appeal; re-appeal")
+		}
+	}
+
+	meta.executed.Set(beClaimKey(metaClaimID), true)
+	applyMetaVerb(mc, tc, cm, p, cs, target)
+	releaseMetaLatch(cs)
+	chain.Emit(metaExecuted,
+		"appeal", strconv.FormatUint(metaClaimID, 10),
+		"verb", p.verb, "court", p.court,
+		"target", strconv.FormatUint(p.target, 10),
+	)
+}
+
+func applyMetaVerb(mc, tc *Court, cm *courtMod, p modParse, cs, target *claimState) {
+	by := cs.answerer
+	switch p.verb {
+	case verbUnhide:
+		// A no-op unhide (the bit is already clear) stamps NOTHING: otherwise a
+		// chain of appeals against an always-visible item would hold a
+		// moderator's hide power off pre-emptively.
+		clm := lookupClaimMod(cm, p.target)
+		if clm == nil || !clm.court {
+			return
+		}
+		clearCourtBitByMeta(tc, p.target, by)
+	case verbClear:
+		clearMetaBit(tc, p.target, by)
+	case verbHide:
+		setMetaBit(tc, p.target, by)
+	case verbSuspend:
+		suspendSet(tc, by)
+	case verbUnsuspend:
+		unsuspendSet(tc, by)
+	case verbSetmods:
+		cand := cm.mustCandidate(p.target)
+		installModSet(tc, cm, cand, runtime.ChainHeight(), false)
+		chain.Emit("ModSetInstalled",
+			"court", tc.id, "by", "meta",
+			"candidate", strconv.FormatUint(cand.id, 10),
+			"height", strconv.FormatInt(runtime.ChainHeight(), 10),
+		)
+	}
+}
+
+// ---- reads ----------------------------------------------------------------
+
+// AppealParse exposes a meta claim's parsed instruction for render: the verb and
+// target of a valid appeal, or "" when the title is not a reserved schema.
+func AppealParse(claimID uint64) (verb, court string, target uint64, valid bool) {
+	v := meta.parses.Get(beClaimKey(claimID))
+	if v == nil {
+		return "", "", 0, false
+	}
+	p := v.(*modParse)
+	return p.verb, p.court, p.target, p.valid
+}
+
+// AppealExecuted reports whether an appeal has already been applied.
+func AppealExecuted(claimID uint64) bool { return meta.executed.Has(beClaimKey(claimID)) }
+
+// AppealLatchHolder is the claim currently holding a target's review slot.
+func AppealLatchHolder(verb, court string, target uint64) uint64 {
+	p := modParse{verb: verb, court: court, target: target}
+	if v := meta.latches.Get(latchKey(p)); v != nil {
+		return v.(uint64)
+	}
+	return 0
+}

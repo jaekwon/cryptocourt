@@ -92,6 +92,11 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// was waiting on the pending list moves over. Non-panicking by contract.
 	pendingExit(c, cs)
 	stripEnter(c, cs)
+	// On the meta court: persist the BINDING appeal parse and take the target's
+	// review slot. Refuses if another appeal already holds it (meta.gno) — the
+	// one moderation read that gates a money entrypoint, and it reads only the
+	// latch, never a hide bit (MODERATION.md §2 read gate #4).
+	onClaimAnswered(c, cs)
 }
 
 // ------------------------------------------------------------------ reads --
