@@ -4367,5 +4367,138 @@
   "label": "proposalLine: a row does not end its markdown list item",
   "find": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** \u2014 `%s` \u00b7 %s\\n\",",
   "replace": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** \u2014 `%s` \u00b7 %s\","
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "dispatch: a kind is handed THIS REALM's own capability, not a sub-realm",
+  "find": "\t\treturn k.Do(0, cur.Sub(subpath), payload)",
+  "replace": "\t\treturn k.Do(0, cur, payload)"
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "dispatch: every kind shares ONE sub-realm identity",
+  "find": "\t\treturn k.Do(0, cur.Sub(subpath), payload)",
+  "replace": "\t\treturn k.Do(0, cur.Sub(\"kind\"), payload)"
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "Propose: the proposer is the REALM, not the caller",
+  "find": "\treturn engine.Propose(cur.Previous().Address(), kind, payload, title)",
+  "replace": "\treturn engine.Propose(cur.Address(), kind, payload, title)"
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "Vote: the vote is cast by the REALM, not the caller",
+  "find": "\tengine.Vote(cur.Previous().Address(), id, choice)",
+  "replace": "\tengine.Vote(cur.Address(), id, choice)"
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "Cancel: the canceller is the REALM, not the caller",
+  "find": "\tengine.Cancel(cur.Previous().Address(), id)",
+  "replace": "\tengine.Cancel(cur.Address(), id)"
+ },
+ {
+  "pkg": "govern",
+  "file": "token.gno",
+  "label": "Transfer: the sender is the REALM, not the caller",
+  "find": "\tledger.Transfer(cur.Previous().Address(), to, amount)",
+  "replace": "\tledger.Transfer(cur.Address(), to, amount)"
+ },
+ {
+  "pkg": "govern",
+  "file": "token.gno",
+  "label": "Burn: the caller burns the MINTER's tokens",
+  "find": "\tledger.Burn(cur.Previous().Address(), amount)",
+  "replace": "\tledger.Burn(minter, amount)"
+ },
+ {
+  "pkg": "govern",
+  "file": "token.gno",
+  "label": "Mint: ANYBODY may mint",
+  "find": "\tif cur.Previous().Address() != minter {\n\t\tpanic(\"govern: only the minter may mint\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "govern",
+  "file": "token.gno",
+  "label": "Mint: a fixed supply may be minted into",
+  "find": "\tif minter == \"\" {\n\t\tpanic(\"govern: the supply is fixed; minting was given up\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "govern",
+  "file": "token.gno",
+  "label": "Mint: the recipient is the caller, not the address named",
+  "find": "\tledger.Mint(to, amount)",
+  "replace": "\tledger.Mint(cur.Previous().Address(), amount)"
+ },
+ {
+  "pkg": "govern",
+  "file": "minter.gno",
+  "label": "minter Check: \"none\" is checked as an address, so the mint can never be given up",
+  "find": "\tif payload == noMinter {\n\t\treturn nil\n\t}\n\tif !address(payload).IsValid() {",
+  "replace": "\tif !address(payload).IsValid() {"
+ },
+ {
+  "pkg": "govern",
+  "file": "minter.gno",
+  "label": "minter Check: the mint may be handed to whoever already holds it",
+  "find": "\tif address(payload) == minter {\n\t\treturn govErr(\"that is already the minter\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "govern",
+  "file": "minter.gno",
+  "label": "minter Do: giving the mint up instead stores a nonsense address",
+  "find": "\tif payload == noMinter {\n\t\t// The empty address can never sign",
+  "replace": "\tif payload == \"\\x01unreachable\" {\n\t\t// The empty address can never sign"
+ },
+ {
+  "pkg": "govern",
+  "file": "minter.gno",
+  "label": "minter Do: handing the mint on gives it up instead",
+  "find": "\tminter = address(payload)\n\treturn nil",
+  "replace": "\tminter = \"\"\n\treturn nil"
+ },
+ {
+  "pkg": "govern",
+  "file": "minter.gno",
+  "label": "minter Name: the kind drops the reserved prefix",
+  "find": "func (minterKind) Name() string { return governor.Reserved + \"minter\" }",
+  "replace": "func (minterKind) Name() string { return \"minter\" + governor.Reserved }"
+ },
+ {
+  "pkg": "govern",
+  "file": "minter.gno",
+  "label": "noMinter: a BLANK payload gives up the supply forever",
+  "find": "const noMinter = \"none\"",
+  "replace": "const noMinter = \"\""
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "minterNote: a fixed supply is left to be inferred from silence",
+  "find": "\tif minter == \"\" {",
+  "replace": "\tif minter == \"\\x01unreachable\" {"
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "Render: the page never says who may mint",
+  "find": "func Render(path string) string { return engine.Render(path, minterNote()) }",
+  "replace": "func Render(path string) string { return engine.Render(path, \"\") }"
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "NewRules: the re-export mis-routes two of its six terms",
+  "find": "\treturn governor.NewRules(quorumBps, thresholdBps, votingBlocks, delayBlocks, graceBlocks, proposeBps)",
+  "replace": "\treturn governor.NewRules(thresholdBps, quorumBps, votingBlocks, delayBlocks, graceBlocks, proposeBps)"
  }
 ]

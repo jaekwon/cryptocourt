@@ -2880,3 +2880,36 @@ func TestAGraceOfZeroIsRefusedSoEverySlotComesBack(cur realm, t *testing.T) {
 		Offer(cross(cur), named{}, NewRules(2000, 5100, 100, 0, -1, 0))
 	})
 }
+
+// The mint is governed on the BOOTSTRAP terms, which nothing asserted.
+//
+// New supply is new voting power, so an unchecked minter can out-vote every
+// holder at will — which makes govern:minter the one power whose terms must not
+// be cheap. Installed on a 0.01% quorum with a one-block vote and no timelock it
+// would still be installed, still adoptable, and still read as governed.
+//
+// This pins the terms the LIVE engine carries. It does not pin init()'s own line,
+// because resetLedger re-installs the same kind with the same rules when it
+// rebuilds the engine — one decision written in two places, which is the drift
+// this codebase elsewhere fixes by having one function and two callers. Noted in
+// PLAN 13 rather than refactored here: the mint is a money path and the change is
+// the owner's to take.
+func TestTheMintIsGovernedOnTheBootstrapTerms(t *testing.T) {
+	name := governor.Reserved + "minter"
+	offered, live := engineKind(name)
+	if !offered || !live {
+		t.Fatalf("%s is offered=%v live=%v — without it the mint can never move, "+
+			"and no proposal could restore it", name, offered, live)
+	}
+	got, ok := KindRules(name)
+	if !ok {
+		t.Fatalf("%s carries no terms", name)
+	}
+	want := governor.BootstrapRules()
+	if got != want {
+		t.Errorf("the mint is governed on quorum=%d threshold=%d voting=%d delay=%d "+
+			"grace=%d, where the bootstrap terms are %d/%d/%d/%d/%d",
+			got.QuorumBps, got.ThresholdBps, got.VotingBlocks, got.DelayBlocks, got.GraceBlocks,
+			want.QuorumBps, want.ThresholdBps, want.VotingBlocks, want.DelayBlocks, want.GraceBlocks)
+	}
+}

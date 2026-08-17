@@ -1624,6 +1624,49 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.08 — `r/govern`, the realm that authenticates: 16 of 28 caught, and the twelve survivors
+  split three ways — one real gap, six unreachable BY LANGUAGE, and five that no suite here can
+  observe.** The batch had ZERO rows on `r/govern`: ~440 lines of source carrying ~4,000 lines of
+  tests, never mutation-swept. It is the authentication layer — the only thing that holds a
+  `cur realm`, checks it is live, and reads who is calling.
+  The critical rows were all already held, which is the right way round: **a kind handed THIS
+  REALM's own capability instead of a sub-realm** (the documented catastrophe — with it a kind
+  could cross() into any realm that trusts this one, issue its tokens and drain its banker),
+  every kind sharing one sub-realm identity, **anybody minting**, and the caller identity on
+  Propose, Vote, Cancel and Transfer each swapped for the realm's own address.
+  **The real gap: `Burn` is never called anywhere in this suite.** A public entrypoint that
+  destroys supply and moves voting weight had no realm test at all, so pointing it at the minter
+  instead of the caller changed nothing any assertion could see. The new fixture makes the minter
+  the victim on purpose — she is the address a misrouted burn would most plausibly hit, and the
+  one the /p/ layer cannot protect, since grc20votes is handed an address and debits it.
+  **Six survivors are the `errStaleRealm` family, and they are unreachable BY LANGUAGE
+  CONSTRUCTION rather than merely untested — measured, not argued.** The source calls them
+  "defence in depth" and says no exploit is known; the experiment sharpens that. A test that
+  builds a zero `realm` and passes it to a crossing function does not fail at runtime, it fails
+  at PREPROCESS:
+  `only `cur` or `cross(rlm)` are allowed as the first argument to a crossing function but got zero`.
+  So `cur.IsCurrent()` cannot be false at any entrypoint, in any program the VM will accept. The
+  guards stay — one line each, and they document the intent — but they are excluded from the
+  batch, and this is why. Anyone tempted to write a fixture for them should read that error first.
+  **A confirmed harness-level finding, and an owner decision.** Two rows mutate `init()`'s
+  installation of `govern:minter` — deleting it, and installing the mint on a 0.01% quorum with a
+  one-block vote and NO TIMELOCK. Both survive, and not because nothing checks the mint's terms:
+  the new fixture checks them and still passes. The cause is that `resetLedger()` in
+  clock_test.gno RE-INSTALLS the same kind with the same rules when it rebuilds the engine, so
+  init's own decision is invisible to every test that resets. One decision written in two places
+  — exactly the drift this codebase fixes elsewhere by having one function and two callers
+  (`saneRules`' own comment records that history). The fix is to extract
+  `installOwnPowers(e *governor.Governor)` and call it from both. **Not taken here: it is on the
+  mint path, and the discipline reserves money-path changes for a vetted process. Owner's call.**
+  Measured either way, so the next firing does not have to rediscover it.
+  A fifth unobservable, registered: `Offer`'s caller identity is used ONLY in the emitted
+  `KindOffered` event — the entry stores no offerer — and NO suite in this repo asserts events,
+  in `_test.gno` or in txtar. So who published a kind is visible only in the event stream, and
+  a holder judging an adoption proposal cannot see it on the page at all. Whether that belongs on
+  the page is a design question, not a defect; the coverage gap is real and needs event-reading
+  the harness does not have.
+  Batch now 643 rows: 642 caught, 0 not caught, one surviving by design.
+
 - **v1.07 — the render path, and the governor is now swept end to end: 21 of 31 caught, and
   every survivor was a claim the page MAKES rather than a guard it keeps.**
   The last unswept governor surface — `render`, `renderOne`, `span`, `plural`, `units`, `scale`,
