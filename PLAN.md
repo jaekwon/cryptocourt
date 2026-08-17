@@ -1635,10 +1635,27 @@ Newest first.
   first (roll one), watch the crowd re-confirm low, then sock-dispute to spend the
   ride's still-unspent wipe (roll two), erasing that low and voting mid alone over the
   bar — refunding the reserve for ~4%·X̄, the identical purchase v0.47, v0.50 and v0.51
-  each closed at a different door. Latching makes the budget ORDER-INDEPENDENT: at most
-  one fresh tally per lane and never two for one party. A sock that disputes first
-  spends the ride's wipe and the answerer still gets their own poll; an answerer that
-  counters first spends both, and every later round votes their accumulating tally.
+  each closed at a different door. Latching bounds the budget to **at most one fresh
+  tally per lane**: a sock that disputes first spends the ride's wipe and the answerer
+  still gets their own poll; an answerer that counters first spends both, and every
+  later round votes their accumulating tally.
+  **CORRECTION to this commit's own message, which overclaimed.** I wrote "never two
+  for one party". That is FALSE, and enumerating the three wipe sites against their
+  gates shows why: post-adjudication the total is 1 if `CounterFlag` fires first (it
+  latches, so the ride never wipes) but 2 if `OpenDispute` fires first (it latches, yet
+  `CounterFlag` still wipes unconditionally — which is the whole point of the fix). The
+  answerer's coalition can FORCE the second ordering with a sybil disputer, since the
+  self-dispute guard is by its own comment "hygiene only (a sybil wallet trivially
+  evades it)". So the answerer can buy BOTH polls — a ride poll plus their counter poll
+  — for one dispute bond: net ~10%·X̄ on a quorum-less round (half the bond returns), or
+  net ~4%·X̄ on an upheld round where the bond burns whole and comp pays back
+  min(2·answerBond0, 80%·burned). Against a draw-proportional slash reaching 30.8%·X̄
+  that is profitable optionality. Two things keep this a RESIDUAL rather than a
+  regression: it is bounded at TWO polls, where pre-v0.51 every reopen wiped without
+  limit; and it is not introduced here — post-v0.47 the answerer could always sock-
+  dispute for a ride poll, so v0.51/v0.52 strictly narrowed it. Closing it properly
+  means pricing the ride poll to the answerer rather than bounding the wipe, which is a
+  dispute-bond question and belongs with the same econ vet as PLAN §12 row 30.
   Latching costs the answerer nothing they are owed, since their wipe is unconditional
   either way and `counterUsed` already bounds them to one challenge. Mutation-verified
   in BOTH directions, the two fixtures now pinning each other in opposition: drop the
