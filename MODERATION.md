@@ -1,6 +1,11 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.8 — CONVERGED (round 7). The election's approval-voting re-spec
+> **STATUS: v0.10 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> added the meta/local peer install (owner), v0.10 folded in its three-way vet
+> consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
+> `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
+>
+> Historical status (round 7): The election's approval-voting re-spec
 > held on the 5th check; round 7's residuals (β ceiling, turnout definition +
 > churn-dual, m-of-n set rule, canonical sets, window timing, two-pass
 > resolution) are all folded in-doc/as-build-notes — none was a mechanical
