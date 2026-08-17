@@ -1307,5 +1307,89 @@
   "label": "rearmSlashWindow: the reserve gets no fresh window",
   "find": "\tcs.pendingSlashUntil = now + c.params.votingBlocks\n\tcs.lastFlagEventAt = now",
   "replace": "\tcs.lastFlagEventAt = now"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the bond takes the LARGER of the two arms",
+  "find": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tc.coin.Transfer(who, c.escrow, bond)",
+  "replace": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm > base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tc.coin.Transfer(who, c.escrow, bond)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the answer-bond arm is dropped",
+  "find": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tc.coin.Transfer(who, c.escrow, bond)",
+  "replace": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tc.coin.Transfer(who, c.escrow, bond)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the bond does not double per failed round",
+  "find": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tc.coin.Transfer(who, c.escrow, bond)",
+  "replace": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := int64(0)\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tc.coin.Transfer(who, c.escrow, bond)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the dispute bond is never posted",
+  "find": "\tc.coin.Transfer(who, c.escrow, bond)",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the disputer's refund is recorded as zero",
+  "find": "\tcs.disputeBond = bond",
+  "replace": "\tcs.disputeBond = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the answerer is recorded as the disputer",
+  "find": "\tcs.disputer = who",
+  "replace": "\tcs.disputer = cs.answerer"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the round is proposed with no quorum floor",
+  "find": "\tfloor := quorumFloor(c, cs.xBarFrozen)",
+  "replace": "\tfloor := int64(0)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: an open flag is not voided (M3-LOW-1)",
+  "find": "\tvoidFlag(c, cs)\n\tcs.counterOpen = false",
+  "replace": "\tcs.counterOpen = false"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: a live counter re-vote is left open",
+  "find": "\tvoidFlag(c, cs)\n\tcs.counterOpen = false",
+  "replace": "\tvoidFlag(c, cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the quality question is not re-asked",
+  "find": "\treaskQualityTally(cs)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the round counter never advances",
+  "find": "\tcs.round++\n",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: a reopen ignores the escrow window",
+  "find": "\t} else if now >= cs.escrowUntil {\n\t\tpanic(\"courtv2: the escrow window has passed; Finalize the verdict\")\n\t}",
+  "replace": "\t}"
  }
 ]

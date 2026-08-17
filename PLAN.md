@@ -1624,6 +1624,52 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.83 — the DISPUTE BOND's two arms were unpinned because on an uncapped court they
+  are ARITHMETICALLY IDENTICAL, and the reopen lane's only finite bound was unpinned too.**
+  Nineteen mutations over `OpenDispute`. Nine already held: the bond posted, the refund
+  recorded, the disputer recorded, the quorum floor, the flag void (M3-LOW-1), the live
+  counter lane closing, the one re-ask, the round counter, and the per-failed-round
+  doubling.
+  **Five came back BAD ANCHOR, which is itself the finding.** The bond formula exists
+  TWICE in `dispute.gno` — once in `OpenDispute` and once in `disputeBond0`, whose comment
+  says "OpenDispute's formula, factored for DisputeBondNext" when it is a byte-identical
+  COPY, not a factoring. They agree today; nothing makes them keep agreeing. (v0.81's fix
+  to the summary earned its keep immediately: these five would previously have vanished
+  into a "0 survived" headline.)
+  **Re-run against `OpenDispute`'s copy, four of five survived**, and the cause is one
+  measurement: on an uncapped court the answer bond is EXACTLY half of X̄, so
+  `20%·X̄` and `40%·(X̄/2)` are identically equal and the `min` between them is a no-op.
+  Reversing the comparison, or deleting the second arm outright, therefore changed nothing
+  anywhere in the suite. The arm exists for the case the source names — a bond-CAPPED
+  court, where it "keeps round 1 at q > 1/3 on every claim" — and no fixture had ever built
+  one. Capped, the arms differ by 20×, and the new fixture pins the direction; it also
+  asserts the CHARGE equals the QUOTE, which is the only thing holding the two copies of
+  the formula together.
+  **The reopen lane's escrow window.** `verdictAt != 0` looks like it covers this and
+  covers it only AFTER someone calls Finalize — which is permissionless, so nobody is
+  obliged to. In the gap between the window lapsing and whoever gets round to finalizing,
+  `verdictAt` is still zero and a reopen lands. The escrow clock is set ONCE at the first
+  resolution and no round resets it, so a party willing to keep paying bonds could hold a
+  claim's draw off indefinitely — the bound the three-week window imposes, and the geometry
+  §12 row 30 turns on. The fixture asserts `verdictAt == 0` at the point of refusal so the
+  arm cannot pass on the neighbouring guard.
+  **Two survived and are unreachable**, both behind things already documented. The shift
+  clamp cannot fire because `provClose` bounds `failedRounds ≤ 2` and the clamp sits at 2 —
+  which the source comment already says ("the clamp guards the shift regardless"). And the
+  bond's floor of one cannot be reached while an answer exists: `answerBondCapCC = 1` does
+  NOT produce a bond of 1, because PostAnswer's collateralization floor overrides the cap
+  — measured, the bond came out 18,000,000 — so `40%·bond` never rounds to zero. That is
+  the SECOND guard this version whose unreachability traces to that floor (the first was
+  `originateSlash`'s clamp, v0.82). The floor is carrying more of the design than its own
+  docstring claims.
+  Also worth recording against item 1's brief: the code deliberately does NOT clear
+  `counterUsed` at open, though the brief asks for it. Clearing it re-minted the one-shot
+  Q5 challenge on demand — counter, self-dispute to cancel, counter again, indefinitely
+  inside the escrow window — so what the answerer is owed is the TIME, which
+  `rearmSlashWindow` returns by reopening the lane. That divergence is already in the
+  source comment; noting it here because the brief still names the other behaviour.
+  Batch now 199 rows, 0 not caught (11m28s — it is a background job now).
+
 - **v0.82 — the refund/rearm half of the slash lane: A19's fold-back was unpinned, and it
   is invisible in every field it touches.** Thirteen mutations over `originateSlash`,
   `refundSlash`, `unslash` and `rearmSlashWindow` — the complement of v0.81's `settleSlash`
