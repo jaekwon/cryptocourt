@@ -242,3 +242,86 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 			bound, gross)
 	}
 }
+
+// P2 per-voter carrot clamp probe (v0.45 gap 4). The clamp is b0/2 - 1 where
+// b0 = max(flagMinCC, 2%·X̄frozen), so it bites a SOLE voter (w == denom, share ==
+// carrotTotal) exactly when carrotTotal = 7%·midGross exceeds 1%·X̄, i.e. when
+// midGross > 14.3%·X̄. midGross/X̄ = rate·T, so unlike the F9 cap (which needs ~91
+// weeks and is unreachable) this one needs ~9 weeks at the hot rate — inside the
+// 12-week life PostAnswer permits. This drives a long-lived claim with a single
+// conclusive-tally voter to find out.
+func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("p2-alice")   // author/answerer/staker
+	flagger := testutils.TestAddress("p2-flag")
+	voter := testutils.TestAddress("p2-voter")   // sole non-participant voter
+	c := testCourt(cur, "p2c", alice, 1_000_000_000_000)
+	c.coin.Mint(flagger, 50_000_000_000)
+	c.coin.Mint(voter, 200_000_000_000) // >= fullBar, so the flag is CONCLUSIVE
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "p2c", "Long-lived claim, one carrot voter")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "p2c", id, sideYES, 100_000_000_000) // 100k CC held throughout
+	testing.SkipHeights(11 * periodBlocks)                 // bank conviction (< 12wk timeout)
+	// observePools only fires on stake/unstake, so a single opening Stake leaves
+	// the trailing ring with one filled bucket and PostAnswer refuses ("not enough
+	// stake history"). Three dust stakes an epoch apart mature it without
+	// materially moving X̄ (3 CC against 100k).
+	matureOI(cur, "p2c", id, alice, 1_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "p2c", id, sideYES)
+
+	// A conclusive MID flag: consumes the slot, sets the tally the carrot pays.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "p2c", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "p2c", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "p2c", id)
+	if tier, _ := QualityTier("p2c", id); tier != qualityMid {
+		t.Fatalf("setup: need a conclusive MID tally, got tier=%d", tier)
+	}
+	SettleUndisputed(cross(cur), "p2c", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SkipHeights(periodBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "p2c", id)
+
+	cs := mustClaim(c, id)
+	b0 := cs.xBarFrozen * flagBondXBps / 10000
+	if b0 < flagMinCC {
+		b0 = flagMinCC
+	}
+	clamp := b0/2 - 1
+	uncapped := cs.carrotTotal // sole voter: w == denom, so share == carrotTotal
+
+	// MEASURED: on this cold court the natural carrot reaches only ~49% of the
+	// clamp at 11 of the 12 permitted weeks (carrotTotal 4.91e8 vs clamp 1.00e9).
+	// The reason is not the claim's age but the RATE: dEffBpsFP = min(budget,
+	// dReal) where dReal is the EMA'd REALIZED mint rate, so a single-claim court
+	// that emits almost nothing sits at the cold r0 (~63.8 bps/wk) — and emaMinted
+	// decays by 3/4 every roll, so it cannot be seeded either. On a busy court at
+	// the hot rate the ratio is midGross/X̄ ≤ 19.27%, giving carrotTotal = 7% of
+	// that = 1.35%·X̄ against a 1%·X̄ clamp, so P2 DOES bind there — unlike the F9
+	// cap, which is unreachable at any rate. Reachable in production, not by
+	// natural flow in a single-claim harness.
+	if uncapped >= clamp {
+		t.Fatalf("cold-court assumption broke — the natural carrot now reaches the "+
+			"clamp, so build the natural fixture: carrotTotal=%d clamp=%d", uncapped, clamp)
+	}
+
+	// So exercise the clamp itself, which is what was never covered: craft a
+	// carrot above the bound and require the pull to be cut to exactly b0/2-1.
+	cs.carrotTotal = clamp * 3
+	cs.carrotPool = cs.carrotTotal
+	testing.SetRealm(testing.NewUserRealm(voter))
+	got := PullCarrot(cross(cur), "p2c", id)
+	if got != clamp {
+		t.Fatalf("a sole voter must be clamped to b0/2-1: got %d clamp %d (uncapped share %d)",
+			got, clamp, cs.carrotTotal)
+	}
+	if cs.carrotPool != cs.carrotTotal-clamp {
+		t.Fatalf("only the clamped amount leaves the pool: pool=%d want %d",
+			cs.carrotPool, cs.carrotTotal-clamp)
+	}
+}

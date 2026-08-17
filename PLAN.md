@@ -1669,9 +1669,22 @@ Newest first.
   (Methodology note worth keeping: the first version of this probe read the position's
   conviction BEFORE `WithdrawBonus`, which calls `accrue()` to settle it — the stale read
   was 0.15% low and made an equality assertion lie. Read settled state after the call.)
-  Still open from v0.45: the P2 per-voter carrot clamp never binds — same question to
-  answer (`carrotTotal > b0/2` needs `midGross > 14.3%·X̄`, i.e. ~9 weeks at the hot rate,
-  which IS inside the 12-week life, so this one is probably genuinely reachable).
+  **Fourth v0.45 gap closed, with a different answer from F9.** The P2 per-voter carrot
+  clamp (`b0/2 - 1`) bites a sole voter when `carrotTotal` = 7%·midGross exceeds 1%·X̄,
+  i.e. `midGross > 14.3%·X̄`. Measured on a cold court at 11 of the 12 permitted weeks:
+  only **49%** of the clamp (carrotTotal 4.91e8 vs clamp 1.00e9). The limiter is not the
+  claim's age but the RATE — `dEffBpsFP = min(curBudgetBpsFP, dReal)` where `dReal` is the
+  EMA'd **realized** mint rate, so a single-claim court that emits almost nothing sits at
+  the cold r0 (~63.8 bps/wk), and `emaMinted` decays by ¾ every roll so it cannot be
+  seeded either. On a BUSY court at the hot rate `midGross/X̄ ≤ 19.27%` gives
+  `carrotTotal` = 1.35%·X̄ against a 1%·X̄ clamp, so **P2 does bind in production** —
+  unlike F9, which is unreachable at any rate. `TestP2CarrotClampBindsForASoleVoter`
+  therefore asserts the cold-court measurement as a guard (if natural flow ever reaches
+  the clamp, build the natural fixture) and then exercises the clamp directly by crafting
+  a carrot above it. Mutation-verified: without the clamp the sole voter takes 3.00e9
+  instead of 1.00e9.
+  **All four v0.45 test gaps are now closed** — two by writing the missing fixture, two by
+  establishing reachability first and pinning the relationship that governs it.
   Also corrected in this pass, both by verification rather than assumption: §12 row 30's
   provClose-reachability premise (false on any court past bootstrap — see the row) and
   v0.46's "the flag bounty does not rise under B" residual (stale — B fixed it; see the
