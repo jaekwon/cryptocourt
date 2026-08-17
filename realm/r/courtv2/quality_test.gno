@@ -1350,3 +1350,77 @@ func TestCounterFlagAlwaysGetsAnIndependentPoll(cur realm, t *testing.T) {
 			cs.pendingSlash, cs.answerBond, remainder+slash)
 	}
 }
+
+// v0.53 (HIGH regression, found in the post-commit vet of v0.51): a ride may CONFIRM
+// a slash only once the answerer has actually been offered their v0.31/Q5 challenge.
+// v0.51 replaced the failed-quorum branch's unconditional rearm with a full score,
+// which let a quorum-less round SETTLE a reserve while counterUsed was still false —
+// annihilating the challenge with no block in which the answerer could act, by the
+// same race-free construction v0.52 closed at the counter lane: ResolveFlag is
+// permissionless, so the sock's OpenDispute lands in the block the reserve is carved
+// in, CounterFlag panics on disputeOpen for the whole round, and after settleSlash it
+// panics on pendingSlash <= 0 forever. Half a dispute bond destroyed up to 30.8%·X̄
+// plus the poll.
+//
+// The reserve is NOT forgiven by re-arming: ResolveSlashWindow still settles it
+// unconditionally once the window lapses, and the RESCUE arm is untouched (see
+// TestFailedQuorumRideAtFullBarLiftsTheSlash) — a ride can still LIFT a slash, it
+// just cannot BURN one behind the answerer's back.
+func TestQuorumlessRideCannotAnnihilateTheQ5Window(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp6-alice") // author + answerer
+	bob := testutils.TestAddress("wp6-bob")     // round-1 disputer, then flagger
+	carol := testutils.TestAddress("wp6-carol") // the honest low bloc
+	dave := testutils.TestAddress("wp6-dave")   // the flagger's sock
+	c := testCourt(cur, "wp6", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 30_000_000_000)
+	c.coin.Mint(dave, 8_000_000_000)
+	cs, slash := levySlash(cur, c, "wp6", alice, bob, carol)
+	if slash <= 0 || cs.counterUsed {
+		t.Fatal("setup: an unspent challenge over a standing reserve")
+	}
+
+	// The sock's round makes CounterFlag unreachable for its whole duration, and the
+	// low bloc re-states low on the fresh seq — a full-bar ⅔-low ride.
+	testing.SetRealm(testing.NewUserRealm(dave))
+	OpenDispute(cross(cur), "wp6", cs.id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "a dispute is open", func() {
+		CounterFlag(cross(cur), "wp6", cs.id)
+	})
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp6", cs.id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1) // nobody votes the VERDICT
+	ResolveDispute(cross(cur), "wp6", cs.id)       // failed quorum
+	if FailedRounds("wp6", cs.id) != 2 {
+		t.Fatalf("setup: the round must fail quorum, got %d", FailedRounds("wp6", cs.id))
+	}
+
+	// THE GUARD: the reserve stands on a fresh window, challenge still unspent.
+	if cs.pendingSlash != slash {
+		t.Fatalf("a quorum-less ride must not burn the reserve before the answerer's "+
+			"challenge was ever offered: pending=%d want %d", cs.pendingSlash, slash)
+	}
+	if cs.counterUsed {
+		t.Fatal("the challenge must still be unspent")
+	}
+	if cs.pendingSlashUntil <= runtimeHeight() {
+		t.Fatal("the reserve must get a usable window")
+	}
+	// And the answerer can now actually use it.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "wp6", cs.id)
+	if !cs.counterOpen || !cs.counterUsed {
+		t.Fatal("the answerer's challenge must be reachable after the round")
+	}
+	// The reserve is not forgiven: an unrescued challenge still settles it.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveCounter(cross(cur), "wp6", cs.id)
+	if cs.pendingSlash != 0 {
+		t.Fatalf("an unrescued challenge settles the reserve: %d", cs.pendingSlash)
+	}
+	if burned := supplyBefore - c.coin.TotalSupply(); burned < slash {
+		t.Fatalf("the reserve must burn, not vanish: burned %d want >= %d", burned, slash)
+	}
+}

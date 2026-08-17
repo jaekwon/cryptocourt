@@ -132,11 +132,15 @@ type claimState struct {
 	// qualityReasked is the one-way EXACTLY-ONCE latch on the DISPUTE RIDE's tally
 	// wipe — the dual of slashLevied, which bounds ORIGINATION. Once a conclusive
 	// tally has adjudicated quality, a ride resets the tally AT MOST ONCE more; every
-	// later round votes the same ACCUMULATING tally. It does NOT gate CounterFlag,
-	// which is answerer-gated and one-way via counterUsed and therefore cannot be
-	// used to re-roll — gating it here let a stranger's round spend the answerer's
-	// guaranteed-fresh v0.31/Q5 ballot, which is the one thing the doctrine promises
-	// them. Without this latch the wipe was the re-roll:
+	// later round votes the same ACCUMULATING tally. CounterFlag is the field's OTHER
+	// writer: it does not READ this latch (its wipe is unconditional, because gating
+	// it let a stranger's round spend the answerer's guaranteed-fresh v0.31/Q5 ballot,
+	// the one thing the doctrine promises them) but it does SET it, which is what
+	// keeps the budget order-independent — otherwise the answerer could counter-flag,
+	// see the result, and then sock-dispute to spend the ride's still-unspent wipe.
+	// Post-adjudication total: 1 wipe if CounterFlag moves first, 2 if a ride does,
+	// and one party can hold both by sock-disputing (see PLAN §13 v0.52's correction).
+	// Without this latch the wipe was the re-roll:
 	// each reopen handed a sock a fresh coin flip at the price of a dispute bond,
 	// erasing the honest low weight that had already answered the question, so the
 	// slash (and, after it disposed, the whole tier and its draw) could be re-rolled
