@@ -664,3 +664,73 @@ func TestDrainedClaimPricesBarsOffLifetimeStake(cur realm, t *testing.T) {
 		t.Fatalf("bond must still collateralize the slash: %d < %d", cs.answerBond, slashSizeFor(cs))
 	}
 }
+
+// v0.47: a DECIDED dispute round buys no slash immunity. dave brings real
+// overturn weight (>= floor/4, so the round is credEligible — the strongest form
+// of the rejected alternative gate) but carol's larger uphold carries it, and
+// NOBODY rides the quality question, so the ride is inconclusive: the round
+// adjudicated the ANSWER and never the CLAIM. Reverting slashGrade to
+// `decidedRounds == 0` fails the Finalize leg; gating it on `!credEligible`
+// instead fails the slash leg. The fixture asserts its own preconditions so it
+// degrades loudly rather than silently weakening.
+func TestDecidedRoundBuysNoSlashImmunity(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sim-alice")
+	bob := testutils.TestAddress("sim-bob")
+	carol := testutils.TestAddress("sim-carol")
+	dave := testutils.TestAddress("sim-dave")
+	c := testCourt(cur, "sim1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	c.coin.Mint(dave, 8_000_000_000)
+	c.params.escrowMinBlocks, c.params.escrowMaxBlocks = 10, 10
+
+	id := stakeAnswerDispute(cur, "sim1", alice, bob)
+	ab := AnswerBond("sim1", id)
+
+	// A decided round: dave votes to overturn with real weight, carol upholds
+	// with more (threshold 5001 bps, so a tie never overturns).
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "sim1", id)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "sim1", id, "yes")
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "sim1", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "sim1", id)
+
+	cs := mustClaim(c, id)
+	if cs.decidedRounds != 1 || Provisional("sim1", id) != sideYES {
+		t.Fatal("fixture: the round must DECIDE and uphold the answer")
+	}
+	if cs.slotConsumed || cs.tierFinal {
+		t.Fatal("fixture: nobody rode quality, so the ride must be inconclusive")
+	}
+	wantReserve := slashSizeFor(cs) // immutable after the answer (v0.43)
+
+	// LOCKSTEP LEG: a decided round must no longer free the slash reserve.
+	testing.SkipHeights(cs.escrowUntil - runtimeHeight() + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "sim1", id)
+	if cs.answerBond != wantReserve {
+		t.Fatalf("a decided round must not free the reserve: answerBond=%d want %d (bond was %d)",
+			cs.answerBond, wantReserve, ab)
+	}
+
+	// GATE LEG: a full-bar 2/3-low flag still slashes a contested-and-upheld claim.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "sim1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "sim1", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "sim1", id)
+	if cs.pendingSlash != wantReserve {
+		t.Fatalf("an upheld-but-junk claim must still slash: pendingSlash=%d want %d",
+			cs.pendingSlash, wantReserve)
+	}
+	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveSlashWindow(cross(cur), "sim1", id)
+	if got := supplyBefore - c.coin.TotalSupply(); got != wantReserve {
+		t.Fatalf("the slash must burn the retained reserve: burned %d want %d", got, wantReserve)
+	}
+}

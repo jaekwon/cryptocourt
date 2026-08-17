@@ -295,14 +295,29 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 		return
 	}
 
-	// Conclusive LOW. Two tiers (v0.28/v0.29):
-	//   T2 free-roll price: where a slash was POSSIBLE (undisputed answer) and
-	//   the vote reached the full bar but missed the ⅔-low supermajority, the
-	//   bond half-burns — the failed-slash-attempt price. Where no slash was
-	//   ever in reach (a decided-dispute claim), a conclusive low just
-	//   returns the bond.
-	slashGrade := turnout >= fullBar && cs.qLowW*3 >= turnout*2 && cs.decidedRounds == 0
-	if turnout >= fullBar && cs.decidedRounds == 0 && !slashGrade {
+	// Conclusive LOW. Two tiers (v0.28/v0.29, regated v0.47):
+	//   T2 free-roll price: where a slash was POSSIBLE and the vote reached the
+	//   full bar but missed the ⅔-low supermajority, the bond half-burns — the
+	//   failed-slash-attempt price. Where no slash was ever in reach, a
+	//   conclusive low just returns the bond.
+	//
+	// "In reach" is now asked directly — `answerBond > 0` — instead of via
+	// `decidedRounds == 0`. That clause was v0.28's BELT on top of the
+	// load-bearing supply-floored-bar + ⅔ braces, and it was purchasable: one
+	// sock-wallet dispute deliberately lost costs ~3-4%·X̄ after comp (below even
+	// the 4.5%·X̄ flat slash floor) and permanently retired a slash worth up to
+	// 30.8%·X̄ — so buying it dominated at every hold time, capping the whole
+	// v0.40 draw-proportional deterrent at a flat ~4%. It was also redundant for
+	// every case it was written for: a CONCLUSIVE ride latches slotConsumed and
+	// OpenFlag panics on that, so ResolveFlag is unreachable once a round has
+	// judged quality; and an OVERTURN zeroes answerBond, which the clamp below
+	// already turns into slash == 0. Its only live domain was an UPHELD round
+	// whose ride adjudicated NOTHING — precisely where immunity is unearned.
+	// Winning an argument about whether the ANSWER is right establishes nothing
+	// about whether the CLAIM was worth answering (v0.25: the answerer is the
+	// gatekeeper of the slot they occupy).
+	slashGrade := turnout >= fullBar && cs.qLowW*3 >= turnout*2 && cs.answerBond > 0
+	if turnout >= fullBar && cs.answerBond > 0 && !slashGrade {
 		half := cs.flagBond / 2
 		if half > 0 {
 			c.coin.Transfer(c.escrow, cs.flagger, half)
@@ -365,19 +380,13 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 // already disposed when the bounty is sized).
 func (cs *claimState) flagBondPosted() int64 { return flagBondFor(cs) }
 
-// winMidGross is the winning-side pool's mid-weight gross draw in CC — the
-// counterfactual take the mill would have received at the default mid tier,
-// i.e. exactly crystallize's midGross for the answer side. Keyed on cs.answer
-// (undisputed: the winning side IS the answer; slashGrade gates decidedRounds
-// == 0), and read from the pool conviction accumulators, which freeze at the
-// answer (advancePools settles them in PostAnswer; stake/unstake refuse after)
-// — so it is identical at settle, ResolveFlag, and crystallize.
-func winMidGross(cs *claimState) int64 {
-	hi, lo := cs.sideConv(int(cs.answer))
-	return convToCC(hi, lo)
-}
-
-// sideConv is one side's pool conviction accumulator (u128).
+// sideConv is one side's pool conviction accumulator (u128). The winning side's
+// mid-weight gross draw is convToCC of this, keyed on cs.answer — the
+// counterfactual take at the default mid tier, i.e. exactly crystallize's
+// midGross for the answer side. It is read from accumulators that freeze at the
+// answer (advancePools settles them in PostAnswer; stake/unstake refuse after),
+// so the value is identical at PostAnswer, settle, ResolveFlag and crystallize —
+// which is what lets the bond floor and the slash share one sizer.
 func (cs *claimState) sideConv(side int) (hi, lo uint64) {
 	if side == sideYES {
 		return cs.yesConvHi, cs.yesConvLo

@@ -113,8 +113,22 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 	if !Settled("dp1", id) || Verdict("dp1", id) != sideYES || VerdictRoute("dp1", id) != "vote" {
 		t.Fatal("the finalized verdict must record with the vote route")
 	}
-	if c.coin.BalanceOf(alice) != aliceBefore+ab {
-		t.Fatal("the upheld answer bond returns at VERDICT_FINAL")
+	// v0.47: an upheld round no longer confers slash immunity, so Finalize
+	// retains the slash-sized reserve exactly as SettleUndisputed does — the
+	// bond returns MINUS that reserve, and the remainder follows at crystallize
+	// if no conclusive-low flag lands. (Before v0.47 a decided round returned
+	// the bond whole, which is what made the immunity purchasable.)
+	cs := mustClaim(c, id)
+	reserve := slashSizeFor(cs)
+	if reserve > ab {
+		reserve = ab
+	}
+	if c.coin.BalanceOf(alice) != aliceBefore+ab-reserve {
+		t.Fatalf("the upheld bond returns less the slash reserve: got %d want %d",
+			c.coin.BalanceOf(alice), aliceBefore+ab-reserve)
+	}
+	if cs.answerBond != reserve {
+		t.Fatalf("the reserve stays collateralized: answerBond=%d want %d", cs.answerBond, reserve)
 	}
 	if AnswerRecord("dp1", alice) != 1 {
 		t.Fatal("contested-and-upheld must credit the difficulty record")
