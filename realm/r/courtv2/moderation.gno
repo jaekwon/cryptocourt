@@ -165,9 +165,12 @@ type courtMod struct {
 	claims  *bptree.BPTree // claimID (be64) -> *claimMod
 	pending *bptree.BPTree // actionKey -> *approval
 
-	// election / folders / strip-index state land in modvote.gno / folders.gno /
-	// the strip module; they hang off this struct so a court's whole moderation
-	// footprint is one lazily-created object.
+	folders   *bptree.BPTree // folderID (be64) -> *folder (folders.gno)
+	folderSeq uint64
+
+	// election / strip-index state land in modvote.gno / the strip module; they
+	// hang off this struct so a court's whole moderation footprint is one
+	// lazily-created object.
 }
 
 // claimMod is the per-claim hide word + log. Created only for a claim that is
@@ -227,6 +230,7 @@ func ensureMod(c *Court) *courtMod {
 		m:       1,
 		claims:  bptree.NewBPTree32(),
 		pending: bptree.NewBPTree32(),
+		folders: bptree.NewBPTree32(),
 	}
 	cm.members.Set(c.admin.String(), true)
 	c.mod = cm
