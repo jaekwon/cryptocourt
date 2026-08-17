@@ -335,9 +335,16 @@ func renderModLog(slug string) string {
 		visited++
 		for i := len(clm.log) - 1; i >= 0; i-- {
 			a := clm.log[i]
-			line := "- height " + strconv.FormatInt(a.height, 10) + " · " +
+			// The row id is PRINTED because it is the handle PurgeModLogRow
+			// takes (I11). A power addressed by an id nobody can see is a
+			// power nobody can use.
+			line := "- row " + strconv.FormatUint(a.rowID, 10) +
+				" · height " + strconv.FormatInt(a.height, 10) + " · " +
 				sanitize.InlineText(a.code) + " · by " + sanitize.InlineText(a.actor.String())
-			if a.reason != "" && !a.purged {
+			switch {
+			case a.purged:
+				line += " — _[reason removed on legal grounds]_"
+			case a.reason != "":
 				line += " — " + sanitize.InlineText(a.reason)
 			}
 			rows = append(rows, line)

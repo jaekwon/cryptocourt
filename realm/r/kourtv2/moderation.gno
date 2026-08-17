@@ -805,6 +805,66 @@ func ClaimPurged(courtSlug string, claimID uint64) bool {
 	return clm != nil && clm.purged
 }
 
+// PurgeModLogRow tombstones ONE moderation-log row's text, addressed by its
+// stable rowID. m-of-n, irreversible, unappealable — the same terms as
+// PurgeClaim, because it is the same power (MODERATION.md I11).
+//
+// It exists because the moderation log is itself a text surface, and until now
+// the only power that removes text could not reach it. A row's `reason` is FREE
+// TEXT a moderator wrote: it can carry the very thing a purge was called in to
+// remove — a name, a slur, a link — and "we removed the claim" is no answer
+// when the removal notice repeats what it removed. The row itself stays, with
+// its height, actor and act code, so the audit trail still shows that something
+// happened and who did it; only the prose goes.
+//
+// renderModLog has honoured modAct.purged since it was written. Nothing set it,
+// which is the inverse of the v0.16 sweep's complaint: state that LOOKS
+// load-bearing but is never WRITTEN is the same hazard as one never read.
+func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	d := ensureGlobalDAO()
+	if !d.members.Has(who.String()) {
+		panic("kourtv2: only a global DAO member may purge")
+	}
+	if len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {
+		panic("kourtv2: purge needs a statutory category code")
+	}
+	c := mustCourt(courtSlug)
+	cm := ensureMod(c)
+	clm := lookupClaimMod(cm, claimID)
+	if clm == nil {
+		panic("kourtv2: that claim has no moderation log")
+	}
+	// Resolve the row BEFORE the vote, so an unreachable id is refused on the
+	// first approval rather than after m-of-n has been spent on it.
+	idx := -1
+	for i := range clm.log {
+		if clm.log[i].rowID == rowID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		panic("kourtv2: no such moderation-log row")
+	}
+	if clm.log[idx].purged {
+		return // already tombstoned; a second purge is a no-op, not an error
+	}
+	key := "purgerow:" + c.id + ":" + strconv.FormatUint(claimID, 10) + ":" +
+		strconv.FormatUint(rowID, 10)
+	fire, code := approveAction(d.pending, key, who, categoryCode, d.purgeM)
+	if !fire {
+		return
+	}
+	clm.log[idx].purged = true
+	clm.log[idx].reason = "" // gone from state, not merely hidden at render
+	clm.appendLog(who, "purgerow:"+code, "")
+	emitPurge(c.id, claimID, code, who)
+}
+
 // CourtSuspended reports whether a court's moderator set is suspended (masked).
 func CourtSuspended(courtSlug string) bool {
 	c := mustCourt(courtSlug)

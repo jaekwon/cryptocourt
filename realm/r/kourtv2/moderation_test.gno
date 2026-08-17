@@ -2,6 +2,7 @@ package kourtv2
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -419,4 +420,102 @@ func TestUnfiredApprovalAllocatesNothing(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "no such claim", func() {
 		HideItem(cross(cur), "noalloc", 9999, "spam")
 	})
+}
+
+// I11: purge must reach the moderation log itself. A row's reason is FREE TEXT
+// a moderator wrote, so it can carry the very thing the purge was called in to
+// remove — and "we removed the claim" is no answer when the removal notice
+// repeats what it removed. The row survives with its height, actor and act
+// code, so the audit trail still shows what happened and who did it; only the
+// prose goes, and it goes from STATE, not merely from the render.
+func TestPurgeReachesTheModerationLog(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("prow-alice")
+	c := testCourt(cur, "prow", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "prow", "a claim")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "prow", id, "contains a home address")
+
+	page := Render("prow/mod")
+	if !strings.Contains(page, "contains a home address") {
+		t.Fatal("fixture: the reason should render before the purge")
+	}
+	if !strings.Contains(page, "row 1") {
+		t.Fatal("the log must print row ids — PurgeModLogRow is addressed by one")
+	}
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeModLogRow(cross(cur), "prow", id, 1, "DOXX-1")
+
+	page = Render("prow/mod")
+	if strings.Contains(page, "contains a home address") {
+		t.Fatal("a purged row's reason must be gone from every surface")
+	}
+	if !strings.Contains(page, "reason removed on legal grounds") {
+		t.Fatal("the row should stay, marked, so the audit trail survives")
+	}
+	// Gone from STATE, not just hidden at render — a purge that only stops
+	// printing leaves the text on chain for anyone reading the tree.
+	cm := ensureMod(c)
+	clm := lookupClaimMod(cm, id)
+	for _, a := range clm.log {
+		if a.reason == "contains a home address" {
+			t.Fatal("the purged text is still in state")
+		}
+	}
+
+	// An id nobody can reach is refused before the m-of-n is spent on it.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "no such moderation-log row", func() {
+		PurgeModLogRow(cross(cur), "prow", id, 9999, "DOXX-1")
+	})
+	// And only the global DAO may do it at all. The refuser must be an address
+	// that provably is NOT a member: alice cannot play that role, because the
+	// global DAO bootstraps from whoever created the FIRST court in the process
+	// — run alone, that is alice, and this arm would assert nothing. The same
+	// trap as kourtv1's TestDirectoryTiers, and the isolation sweep caught it
+	// here too.
+	outsider := testutils.TestAddress("prow-outsider")
+	if outsider == dadmin {
+		t.Fatal("fixture: the refuser must not be the global DAO admin")
+	}
+	testing.SetRealm(testing.NewUserRealm(outsider))
+	uassert.AbortsContains(t, cur, "only a global DAO member", func() {
+		PurgeModLogRow(cross(cur), "prow", id, 2, "DOXX-1")
+	})
+}
+
+// Tier is moderation — hiding a court from the front page is the first power
+// the global DAO was described as having — so it is a DAO power, not a lone
+// key's, and it emits like every other act (I6).
+func TestSetTierIsAGlobalDAOPower(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tier-alice")
+	stranger := testutils.TestAddress("tier-stranger")
+	testCourt(cur, "tierc", alice, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only a global DAO member", func() {
+		SetTier(cross(cur), "tierc", int(tierHidden))
+	})
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetTier(cross(cur), "tierc", int(tierHidden))
+	if CourtTier("tierc") != int(tierHidden) {
+		t.Fatal("a global DAO member should be able to hide a court")
+	}
+
+	// A second DAO member can act too — the point of the migration is that the
+	// power is no longer one key's.
+	second := testutils.TestAddress("tier-second")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), second)
+	testing.SetRealm(testing.NewUserRealm(second))
+	SetTier(cross(cur), "tierc", int(tierFeatured))
+	if CourtTier("tierc") != int(tierFeatured) {
+		t.Fatal("any global DAO member may set a tier")
+	}
 }

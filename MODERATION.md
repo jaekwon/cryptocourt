@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.23 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.24 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,59 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.24 — the unimplemented spec, two built and one handed back**.
+  - **I11, row-level mod-log purge — BUILT.** `modAct.rowID` and `modAct.purged`
+    both existed and `renderModLog` had honoured `purged` since it was written,
+    but **nothing ever set it**: the inverse of the v0.16 complaint, and the same
+    hazard. State that looks load-bearing and is never *written* misleads exactly
+    as much as state that is never *read*.
+    Why it matters beyond spec-compliance: **the moderation log is itself a text
+    surface**, and the one power that removes text could not reach it. A row's
+    `reason` is free text a moderator wrote, so it can carry the very thing the
+    purge was called in to remove — a name, a slur, a link — and "we removed the
+    claim" is no answer when the removal notice repeats what it removed.
+    `PurgeModLogRow(court, claimID, rowID, code)` is global-DAO m-of-n on the
+    same terms as `PurgeClaim`. The row SURVIVES with its height, actor and act
+    code, so the audit trail still shows that something happened and who did it;
+    only the prose goes — **and it goes from state, not merely from the render**,
+    since a purge that only stops printing leaves the text on chain for anyone
+    reading the tree. The row is resolved *before* the vote, so an unreachable id
+    is refused on the first approval rather than after m-of-n has been spent.
+    `renderModLog` now prints row ids, because a power addressed by an id nobody
+    can see is a power nobody can use.
+  - **`SetTier` → global DAO, and evented (I6) — BUILT.** It was gated on the
+    bare `directoryAdmin`, so the realm had *two* unrelated moderation
+    authorities: a lone key with no m-of-n, no membership management and no
+    handover, beside a DAO that had all three. Tier is moderation — hiding a
+    court from the front page is the first power the global DAO was ever
+    described as having. The DAO's founding member *is* `directoryAdmin`, so this
+    widens who may act without changing who can act today. Single-key like
+    `GlobalHide` rather than m-of-n like purge: a tier change moves nothing,
+    removes no text, and reverses in one call, so speed beats ceremony. The event
+    carries the tier code only, never user text, because events are unpurgeable
+    history. No log row — the moderation log is per-claim by construction and a
+    tier change is court-level, exactly like suspension, which emits with claim
+    id 0 for the same reason.
+  - **§6 annotations / title relabels — NOT BUILT, returned to the owner.** The
+    owner's original framing was *"possibly (and you can override me on this)
+    re-wording claim titles or bodies"*, and §6 still carries a **VETTING** tag.
+    That is an open design question, not an unimplemented decision, and building
+    it silently would convert one into the other. The tension worth deciding on:
+    letting moderators rewrite a claim's text is in real friction with §6's own
+    "immutable after first stake" rule and with I1 — people staked on the words
+    that were there. An annotation (an appended, attributed note that leaves the
+    original intact) has none of that problem; a relabel has all of it.
+  **The isolation sweep caught one of these tests, and it is worth recording
+  which.** `TestPurgeReachesTheModerationLog` asserted that a non-member is
+  refused — using **alice**, the court's creator. The global DAO bootstraps from
+  whoever creates the FIRST court in the process, so run alone alice *is* the
+  sole member and the refusal arm asserted nothing. That is exactly the
+  kourtv1 `TestDirectoryTiers` trap from v0.17, written again by the same hand
+  an hour later, in a test *about* moderation authority. Two lessons kept: the
+  bootstrap-from-first-court rule is a standing trap for any test that needs a
+  non-authority, so **name a distinct outsider and assert it is not the admin**;
+  and this is the second time the widened sweep has paid for itself on work that
+  had already passed the ordinary suite.
 - **v0.23 — the review court's escrow is a string constant, now checked**.
   `init()` has no `cur` to ask for the realm's own address, so meta's escrow is
   derived from the **`metaRealmPath` constant**. Every other court gets
