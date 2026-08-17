@@ -1624,6 +1624,50 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.58 — first real hunt with the harness pointed at courtv2: three PRE-EXISTING
+  guards were surviving, two of them load-bearing.** Twelve mutations against guards
+  nobody wrote this session — the ones that had never been broken on purpose because
+  the harness could not reach the realm. Nine were caught, and the three survivors were
+  exactly the shape the harness header predicts: "a rule the source states in a comment
+  and nothing checks."
+  **SURVIVOR 1 (fixed): the v0.50 `slashFlagger != ""` guard.** Replacing it with
+  `if true` failed no test. That guard is the one whose own comment spells out the cost
+  — an entitlement for the zero address is unpayable (`grc20votes.Mint` rejects it, now
+  itself pinned as of the previous entry) while `reservedTail` is monotone and has
+  already advanced past it, permanently shrinking the reservoir for every later junior
+  draw; and the fallback it forbids, `cs.flagger`, would pay a STALE flagger from an
+  earlier inconclusive cycle whose bond already came back whole under T1. No fixture had
+  ever SETTLED a ride-levied reserve, so nothing objected. Closed by
+  `TestRideLeviedSlashEnqueuesNoBounty`, which reaches the state through the v0.50 path
+  (a sock disputes in the block after the answer, the honest crowd upholds the answer
+  while voting the claim junk, so the RIDE originates with `slashFlagger` unset) and
+  asserts the reserve BURNS in full while `seniorOwed` does not move.
+  **SURVIVOR 2 (fixed): Q2's STAKER branch.** `isParticipant` returning `false` for both
+  staker checks failed no test — author and answerer are covered by the early return, but
+  no fixture had a STAKER try to vote their own claim's quality, which is the branch that
+  matters most since the tier multiplies the staker's own payout. Closed by
+  `TestQ2BarsAStakerFromVotingQuality`, with one staker per side (staking freezes at the
+  answer, so both positions must be taken before it) so `posKey(who, sideYES)` and
+  `posKey(who, sideNO)` are each exercised — a second mutation confirms checking only
+  the YES side now fails too. It also carries the control the guard needs: a
+  NON-participant holding the same weight is admitted, so the check rejects
+  participation rather than everyone.
+  **SURVIVOR 3 (documented, deliberately not fixed): `originateSlash`'s clamp to the
+  remaining bond.** Genuinely unreachable behind PostAnswer's collateralization floor,
+  which sizes the bond to cover `slashSizeFor`, and `slashLevied` bounds origination to
+  the single carve where that guarantee holds. A fixture would have to break the floor
+  first, i.e. pin a state the design forbids. Left in place with the survivor report
+  named in the comment, because the cost of the floor ever drifting is `answerBond`
+  going NEGATIVE — a conservation break, not a wrong number. Same treatment as
+  `settleSlash`'s unreachable `counterOpen = false`: kept, labelled, and NOT claimed as
+  verified.
+  The nine caught are now rows in `scripts/mutations-courtv2.json` (24 total, re-runnable
+  in one command) rather than facts about guards that happened to hold on the day. Among
+  them, several invariants this loop has been reasoning from all session are confirmed
+  fail-detectable for the first time: the F3 ⅔ ratchet on HIGH promotion, the quality
+  bar's 5%-supply floor, comp's 80%-of-burn arm, provClose at `maxFailedRounds`, the
+  M3-CRITICAL-1 senior/junior interval tiling, and both terminal tier-clobber guards.
+
 - **v0.57 — the mutation harness could not reach courtv2, and it disproved one of my
   own coverage claims within a minute of being able to.** `scripts/mutate.py` — this
   repo's own tool for the exact discipline the loop mandates — had a `PKGS` registry

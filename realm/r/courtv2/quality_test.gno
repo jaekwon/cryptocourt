@@ -1632,3 +1632,123 @@ func TestQualityBarsQuotesTheBarsResolveFlagUses(cur realm, t *testing.T) {
 			afterDemotion, afterFull, wantDemotion, wantFull)
 	}
 }
+
+// A RIDE-levied slash has no flagger, and settling it must enqueue NOTHING. v0.50
+// added the `slashFlagger != ""` guard for this and its comment spells out the cost:
+// the zero address is unpayable (grc20votes.Mint rejects it), so an entitlement
+// created for it can never be pulled — while reservedTail, which is monotone and
+// never decremented, has already advanced past it, permanently shrinking the
+// reservoir for every later junior draw. The alternative it warns against is worse:
+// falling back to cs.flagger would pay a STALE flagger from an earlier inconclusive
+// cycle whose bond already came back whole under T1.
+//
+// The mutation harness found this guard SURVIVING — no fixture settled a ride-levied
+// reserve, so nothing objected when the guard was replaced with `if true`. Reached
+// here through the v0.50 path: a sock disputes in the block after the answer, before
+// any flag can exist, and the honest crowd upholds the answer while voting the claim
+// junk, so the RIDE originates with slashFlagger unset.
+func TestRideLeviedSlashEnqueuesNoBounty(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rnb-alice") // author + answerer
+	sock := testutils.TestAddress("rnb-sock")
+	crowd := testutils.TestAddress("rnb-crowd")
+	c := testCourt(cur, "rnb", alice, 50_000_000_000)
+	c.coin.Mint(sock, 10_000_000_000)
+	c.coin.Mint(crowd, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rnb", "the ride levies, so nobody is owed a bounty")
+	matureOI(cur, "rnb", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rnb", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(sock))
+	OpenDispute(cross(cur), "rnb", id)
+	testing.SetRealm(testing.NewUserRealm(crowd))
+	VoteDispute(cross(cur), "rnb", id, "no")
+	testing.SetRealm(testing.NewUserRealm(crowd))
+	VoteQuality(cross(cur), "rnb", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "rnb", id)
+
+	cs := mustClaim(c, id)
+	slash := cs.pendingSlash
+	if slash <= 0 {
+		t.Fatal("setup: the ride must levy the slash (v0.50)")
+	}
+	if cs.slashFlagger != "" {
+		t.Fatalf("setup: a ride posts no bond, so it records no beneficiary: %q",
+			cs.slashFlagger)
+	}
+
+	// Settle the unchallenged window. The reserve must BURN and nothing may be owed.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	owedBefore := SeniorOwed("rnb")
+	supplyBefore := c.coin.TotalSupply()
+	ResolveSlashWindow(cross(cur), "rnb", id)
+	if cs.pendingSlash != 0 {
+		t.Fatalf("the reserve must settle: %d", cs.pendingSlash)
+	}
+	if burned := supplyBefore - c.coin.TotalSupply(); burned != slash {
+		t.Fatalf("the reserve must burn in full: burned %d want %d", burned, slash)
+	}
+	if got := SeniorOwed("rnb"); got != owedBefore {
+		t.Fatalf("a ride-levied slash owes no bounty — an entitlement for the zero "+
+			"address is unpayable while reservedTail has already advanced: %d vs %d",
+			got, owedBefore)
+	}
+}
+
+// Q2's STAKER branch, which the mutation harness found surviving: no fixture had a
+// staker try to vote their own claim's quality. Author and answerer are covered by
+// isParticipant's early return, but a staker is exactly who has the strongest motive
+// — the quality tier multiplies their own payout — so this is the branch that matters
+// most and it was the one nothing broke on purpose.
+func TestQ2BarsAStakerFromVotingQuality(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("q2s-alice")  // author + answerer
+	flagger := testutils.TestAddress("q2s-flag")
+	noSide := testutils.TestAddress("q2s-no")   // stakes NO
+	yesSide := testutils.TestAddress("q2s-yes")  // stakes YES
+	c := testCourt(cur, "q2s", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(noSide, 20_000_000_000)
+	c.coin.Mint(yesSide, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "q2s", "a staker may not price their own payout")
+	matureOI(cur, "q2s", id, alice, 200_000_000)
+	// Both stakers back a side BEFORE the answer — staking freezes at the answer, and
+	// isParticipant checks posKey on BOTH sides, so one of each covers both branches.
+	testing.SetRealm(testing.NewUserRealm(noSide))
+	Stake(cross(cur), "q2s", id, sideNO, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(yesSide))
+	Stake(cross(cur), "q2s", id, sideYES, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "q2s", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "q2s", id)
+
+	// Q2: a staker is a participant and is refused, despite holding weight at the
+	// claim's quality epoch. Both sides, since isParticipant checks each.
+	for _, who := range []address{noSide, yesSide} {
+		testing.SetRealm(testing.NewUserRealm(who))
+		uassert.AbortsContains(t, cur, "participants cannot vote its quality (Q2)",
+			func() {
+				VoteQuality(cross(cur), "q2s", id, qualityMid)
+			})
+	}
+	cs := mustClaim(c, id)
+	if cs.qMidW != 0 || cs.qLowW != 0 || cs.qHighW != 0 {
+		t.Fatalf("a refused vote must not reach the tally: %d/%d/%d",
+			cs.qLowW, cs.qMidW, cs.qHighW)
+	}
+	// The control: a NON-participant holding weight is admitted, so the guard
+	// rejects participation rather than everyone. The flagger qualifies —
+	// isParticipant covers author, answerer and stakers, and posting a flag bond
+	// makes you none of those.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	VoteQuality(cross(cur), "q2s", id, qualityMid)
+	if cs.qMidW <= 0 {
+		t.Fatalf("a non-participant's vote must reach the tally: %d", cs.qMidW)
+	}
+}

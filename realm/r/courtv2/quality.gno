@@ -439,6 +439,15 @@ func originateSlash(c *Court, cs *claimState, now int64, flagger address) {
 		return
 	}
 	slash := slashSizeFor(cs)
+	// UNREACHABLE behind PostAnswer's collateralization floor, and kept anyway. The
+	// mutation harness reports this clamp as a SURVIVOR — deleting it fails no test —
+	// because the floor sizes the bond to cover slashSizeFor, and slashLevied bounds
+	// origination to the single carve where that guarantee holds. So there is no
+	// fixture that can reach it without first breaking the floor, and writing one
+	// would pin a state the design forbids. It stays because the cost of the floor
+	// ever drifting is `answerBond` going NEGATIVE here, which is a conservation
+	// break rather than a wrong number. Do not "clean this up" on the strength of the
+	// survivor report; the report is the reason the comment exists.
 	if slash > cs.answerBond {
 		slash = cs.answerBond
 	}
