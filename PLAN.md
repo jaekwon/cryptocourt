@@ -1610,6 +1610,78 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.56 — the sub-bar-low SLASH DISARM: vetted 3x, NO CONVERGENCE, OWNER DECISION.
+  Shipped only a pure read.** The mechanism is confirmed by all three reviewers: a
+  conclusive LOW below the supply-floorless `fullBar` latches `slotConsumed`, `OpenFlag`
+  panics on that latch forever, and the answer bond then escapes `slashSizeFor` =
+  max(4.5%·X̄, 1.6·midGross) — up to 30.8%·X̄ — entirely. Reachable on default params, and
+  the flag can be posted by the ANSWERER in person: `OpenFlag` has no `isParticipant`
+  check at all (only `VoteQuality` does), so just one non-participant wallet holding
+  `demotionBar` at the sealed `qualityEpoch` is needed, weight that voting never escrows
+  and that services every claim with X̄ ≤ 4W in parallel.
+  **Verdicts: 2/3 NO-CHANGE, 1/3 "split the latch".** Not convergence, so nothing was
+  changed on the money path. The dissent's design is specific and worth keeping on file: a
+  `slashQuestionClosed(c, cs)` helper (`slashLevied || (slotConsumed && conclusiveTurnout
+  >= fullBar)`) replacing the bare `slotConsumed` at `OpenFlag`'s guard and at BOTH
+  retention clauses, plus arming `flagCycles++`/`lastFlagAt` on the sub-bar branch to price
+  the reopened cycle, plus porting v0.54's mandate ratchet into `ResolveFlag` (which has
+  none, having never needed one while it could fire only once). It also inverts
+  `TestSettleRetainsNothingAfterDustLowNoSlash` and its Finalize twin.
+  **FOUR of my own premises were wrong, and the reviewers agreed unanimously on each.**
+  (1) I named the wrong escape door. `votingBlocks` (120 960) > `settleDelay` (51 840), so
+  on the natural ordering `SettleUndisputed` runs with `slotConsumed` still false and
+  RETAINS the full reserve; the bond escapes at `crystallize.gno:149-152`, which is
+  UNCONDITIONAL. The retention clause governs WHEN the coin moves, never WHETHER — which
+  makes lever (i) (retain-unless-full-bar) economically INERT, worth ~24h of delay, not a
+  fix. (2) "The bond doubling and the 7-day cooldown already price a chain" is FALSE:
+  `flagCycles++` and `lastFlagAt = now` live only inside the `!conclusive` branch, so a
+  sub-bar CONCLUSIVE low arms neither — which is why lever (ii) alone is a free permanent
+  Crystallize blockade (M3-MED-1 re-opened) unless the cycle is armed too, and once armed
+  the 7-day cooldown exceeds the 24h quiet window so the mill crystallizes before the
+  replacement flag can open. (3) "The answerer forgoes nothing" conditions on DETECTION:
+  tier 0 lands with CERTAINTY while the slash is escaped only with probability
+  (q_f − p_m), because the tally is SEALED and the crowd votes in the mill's own poll for
+  FREE — if they clear the bar with ⅔ low, `slashGrade` fires against the mill. The disarm
+  is insurance priced at the whole draw, break-even q ≈ 0.88. (4) "Tier-zero is most of the
+  mill deterrent" is arithmetically FALSE, and so is §3.4 v0.28's "the slash is
+  police-FUNDING, never mill-killing": since `slashDrawBps` = 1.6 > 1,
+  `slash/(slash + midGross) >= k/(1+k) = 61.5%` BY CONSTRUCTION — v0.40 chose k > 1 exactly
+  so punishment exceeds the take at every hold time. 73.7% at one week. In q\* terms the
+  patient 12-week mill sits at 0.45 disarmed versus 0.22 with the slash, re-opening the
+  profitable band decisions 28/28b closed. **§12 rows 24/28/28b should be re-read against
+  this; the "12%" figure is not what the model gives.**
+  **MY v0.55 MADE THIS WORSE, and I did not see it.** Two of three reviewers found the
+  composition independently: withholding the sub-bar carrot removed the crowd's pay for
+  voting in a poll that MIGHT land sub-bar, and because turnout is sealed they cannot tell
+  in advance whether it will — so `p_m` fell precisely where the disarm lives. v0.55 is
+  still right on its own terms (it closed an X̄-scaled faucet at a reachable bar) but its
+  cost is a thinner electorate in the band that matters most. Recorded here rather than
+  reverted, because the faucet it closed was the larger leak.
+  **SHIPPED: `QualityBars(courtSlug, claimID)`, a pure read.** Both bars read a sealed past
+  epoch, so a sophisticated party could always reconstruct them from the checkpoint archive
+  while an ordinary elector could not — and v0.55 then made clearing the full bar the
+  condition for being paid at all. Quoting the bars is what lets an elector choose to
+  over-shoot rather than land unpaid, which is the one lever that moves `p_m` without
+  touching a bond, a bar, or a disposition. It exposes no bucket: the tally stays sealed,
+  so it still says nothing about how much weight has arrived or which way it voted.
+  Mutation-verified (swapping the returned pair fails the fixture).
+  **NEW LEAK, registered, one reviewer only, not address-fixable:** `originateSlash`
+  records `cs.flagger` as `slashFlagger` and `settleSlash` pays it, so a SELF-FLAGGING
+  answerer collects the bounty on their own slash — up to 2%·X̄, a >=44% haircut on the
+  4.5%·X̄ floor arm. Self-flagging is therefore weakly DOMINANT rather than merely cheap:
+  sub-bar disarms outright, and full-bar ⅔-low still claws back 44%. The sybil rule
+  forecloses an address-keyed fix.
+  **Root cause, agreed by all three: the poll is FIRST-COME and EXCLUSIVE, so the policed
+  party can always own it.** Bounded extra polls are exhausted by the mill winning each
+  cooldown race; unbounded polls are a Crystallize blockade; concurrent polls are the A21
+  faucet; address-keyed priority dies to a sock (v0.55 refuted that form); and pricing the
+  consumption caps at `b0` = 2%·X̄ against a 30.8%·X̄ escape while destroying v0.29/T1's
+  cheap-when-right property. What remains is putting the triggering WEIGHT at risk, which
+  PLAN already places outside V2 scope. The owner decision is therefore not a predicate
+  choice but a scope question: accept the A21 dead zone at whale scale (NO-CHANGE, and
+  re-word §3.4 v0.28's deterrent claim to match the arithmetic), or take the dissent's
+  five-part latch split with its own econ vet.
+
 - **v0.55 — the sub-bar carrot was A21's faucet through the one leg the burn invariant
   never reached (converged 3/3).** A conclusive tally BELOW the supply-floored `fullBar`
   can only be a LOW — mid and high both gate on the bar — and there `ResolveFlag` returns

@@ -1590,3 +1590,45 @@ func standingMid(cur realm, c *Court, slug string, alice, bob, mid address) uint
 	ResolveFlag(cross(cur), slug, id)
 	return id
 }
+
+// QualityBars is a pure read, and it must agree exactly with the bars ResolveFlag
+// scores against — otherwise it would tell an elector to clear a bar the mechanism
+// does not use. Pinned against the internal predicate on the same claim, and pinned
+// as SEALED-SAFE: the bars are not the tally, so this read must expose no bucket.
+func TestQualityBarsQuotesTheBarsResolveFlagUses(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qb-alice")
+	bob := testutils.TestAddress("qb-bob")
+	carol := testutils.TestAddress("qb-carol")
+	c := testCourt(cur, "qb1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 4_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qb1", "the bars are quotable")
+	matureOI(cur, "qb1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qb1", id, sideYES)
+
+	cs := mustClaim(c, id)
+	wantDemotion, wantFull := qualityBars(c, cs)
+	gotDemotion, gotFull := QualityBars("qb1", id)
+	if gotDemotion != wantDemotion || gotFull != wantFull {
+		t.Fatalf("the quoted bars must be the scored bars: got %d/%d want %d/%d",
+			gotDemotion, gotFull, wantDemotion, wantFull)
+	}
+	if gotDemotion <= 0 || gotFull < gotDemotion {
+		t.Fatalf("bars must be positive and ordered: %d/%d", gotDemotion, gotFull)
+	}
+
+	// Both bars read a SEALED past epoch, so they are claim-constant for life: a
+	// voter can act on the quote and it cannot be moved under them mid-vote. This is
+	// what the fix in resolveQualityRide's authority test also relies on.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qb1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qb1", id, qualityLow)
+	afterDemotion, afterFull := QualityBars("qb1", id)
+	if afterDemotion != wantDemotion || afterFull != wantFull {
+		t.Fatalf("the bars must not move once the epoch is sealed: %d/%d want %d/%d",
+			afterDemotion, afterFull, wantDemotion, wantFull)
+	}
+}

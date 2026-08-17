@@ -662,6 +662,23 @@ func FlagCycles(courtSlug string, claimID uint64) int64 {
 	return mustClaim(mustCourt(courtSlug), claimID).flagCycles
 }
 
+// QualityBars quotes the two turnout bars a voter is judged against: the demotion
+// bar (a LOW below it is inconclusive) and the full bar (nothing but LOW can go
+// conclusive below it, and since v0.55 nothing below it is PAID).
+//
+// Exported because the asymmetry was one-sided and it was mine to create. Both bars
+// read a SEALED past epoch (cs.qualityEpoch), so a sophisticated party has always
+// been able to reconstruct them from the checkpoint archive, while an ordinary
+// elector could not — and v0.55 then made clearing the full bar the condition for
+// being paid at all. Quoting them is what lets an elector decide to over-shoot the
+// bar rather than land in the unpaid band. Neither bar is the TALLY: the three
+// buckets stay sealed (see FlagState), so this still says nothing about how much
+// weight has already arrived or which way it voted.
+func QualityBars(courtSlug string, claimID uint64) (demotionBar, fullBar int64) {
+	c := mustCourt(courtSlug)
+	return qualityBars(c, mustClaim(c, claimID))
+}
+
 // ------------------------------------------------- the counter-flag window --
 
 // CounterFlag is the slashed answerer's ONE forced re-vote (v0.31, Q5): the
