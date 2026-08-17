@@ -1512,7 +1512,7 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 32 | Crystallize gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
 | 33 | Cap-dust disposition (v0.36) | Scale-then-cap dust and cap-cut remainders stay juniorReserved and UNMINTED forever — economically a burn, always under the ceiling | Returning dust to R needs per-claim pull tracking (a walk) or a sweep entrypoint; the leak is bounded per claim by D and only reduces emission |
 | 34 | Carrot enqueue ordering (v0.36) | Per-voter senior entitlements enqueue at PullCarrot time (FCFS by pull), not at crystallize — avoids walking the voter set | Earlier pullers sit earlier in the senior queue; amounts are unaffected (never scaled), only payout timing |
-| 35 | Slash-reserve retention (v0.37, audit M3-HIGH) | SettleUndisputed retains 4.5%·X̄ of the bond through the quality slot, returning the rest; the reserve returns at crystallize if unslashed | Returning the whole bond at 72h (the old behavior) makes the mill-slash unreachable on undisputed claims — the exact ones it targets |
+| 35 | Slash-reserve retention (v0.37, audit M3-HIGH; extended to Finalize v0.43) | BOTH terminal paths retain the draw-proportional slash size through the quality slot, returning the rest: SettleUndisputed (undisputed claims) and Finalize (claims that reached finality through FAILED rounds, which keep decidedRounds==0 and so stay slash-eligible). Retention is gated `pendingSlash==0 && decidedRounds==0 && !slotConsumed` — no slash can follow a consumed slot or a decided round. The reserve returns at crystallize if unslashed | Returning the whole bond (the old behavior on both paths) makes the mill-slash unreachable on exactly the claims it targets; on the Finalize path this was the common case, since votingBlocks (7d) exceeds the escrow window so the flag resolves after finality |
 | 36 | Inconclusive re-flag cooldown (v0.37, audit M3-MED) | 7-day cooldown after EVERY inconclusive cycle, not just past the freeze | Immediate reopens let a dust-low chain block crystallize for free; the cost is a 7-day wait for honest re-flags after an absent-electorate inconclusive (bond already returned) |
 | 31 | Credential weight bar (v0.35.1, audit M2-1) | contested-and-upheld credits only when an upheld round's overturn side carried ≥ ¼ × quorum floor — weightless (self-manufactured) contests mint nothing; near-unanimous upholds also credit nothing | Dropping the bar re-opens credential farming at ~20% of a dispute bond per point; softening to the unfloored demotion bar prices it at idle-mill scale (~25 CC) instead of whale scale |
 
@@ -1610,6 +1610,36 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.43 — the SECOND Finalize twin: the missing slash reserve (HIGH), fixed +
+  vetted.** The v0.42 vet surfaced an orthogonal twin in the same function, found by
+  chasing the same meta-pattern ("a guard added to one sibling but not the other").
+  `SettleUndisputed` retains a slash-sized reserve out of the answer bond through the
+  quality slot (M3-HIGH-1, whose own comment warns "returning the whole bond here let
+  the slash clamp to zero") — but `Finalize` refunded the bond **whole**. A claim that
+  reaches finality through FAILED dispute rounds keeps `decidedRounds == 0` and so is
+  still slash-eligible (`slashGrade` gates on exactly that), and since votingBlocks
+  (7 d) exceeds the escrow window the conclusive-low flag typically resolves AFTER
+  Finalize — so the slash clamped to a zero bond and the mill paid **nothing**. This
+  was the common case on that path, not an edge. D = 0 still held throughout and no
+  funds were ever misdirected: the loss was the deterrent itself. FIX: mirror the
+  sibling's retention, gated `pendingSlash == 0 && decidedRounds == 0 &&
+  !slotConsumed`. Proven load-bearing — `TestSlashSurvivesFinalize` (twin of
+  `TestSlashSurvivesSettle`) fails `answerBond=0 want 22500000` without it. Adversarial
+  vet: **FIX-CORRECT-AND-COMPLETE**, with a proof worth recording — `slashSizeFor` is
+  *provably immutable* after the answer (PostAnswer advances the pools BEFORE pinning
+  `frozenAt`/`rateAccAtFreeze`, so every later `advancePools` delta is exactly 0, and
+  Stake/Unstake panic post-freeze). Hence the reserve computed at Finalize and the slash
+  computed at ResolveFlag are identical **including under the clamp**, so a retained
+  reserve can never come up short. The vet also proved no strand (every crystallize
+  blocker has a permissionless closer, and the 7-day re-flag cooldown exceeds the 24 h
+  quiet window), no double-pay, and that overturn is double-locked out of retention
+  (`answerBond = 0` AND `decidedRounds++`). Its one correction is folded in: the
+  original gate lacked `!slotConsumed` and so withheld a second reserve after an
+  already-settled slash — money that still returned at crystallize, but needlessly late.
+  §12 row 35 updated (retention is now a property of BOTH terminal paths).
+  `make check` + txtar-test green. **Noted for a later pass:** `SettleUndisputed` is now
+  the *less* precise sibling — it retains unconditionally, even when a slash is already
+  pending or the slot is consumed. Same benign class (a delayed return, never a loss).
 - **v0.42 — convergence re-sweep: the Finalize tier-reset twin (HIGH), fixed +
   vetted.** Per "any applied change resets the sweep," a fresh holistic pass after
   v0.41 re-vetted the math commit SAFE and found a genuine HIGH: `Finalize`
