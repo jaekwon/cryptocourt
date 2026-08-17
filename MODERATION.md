@@ -825,6 +825,81 @@ scale with supply, so `minAnswerX` stops being the forgery dial it is called.
    carry the heaviest test coverage here (the r6 fix set A–F maps to concrete
    test cases). Everything *else* in the doc converged cleanly by round 5.
 
+### 13.9 Naming — "Pleadger", ticker PLEA, and a live symbol bug (3/3 unanimous)
+
+**Project name (owner):** Pleadger — *plead* + *ledger*.
+
+**Ticker: `PLEA`, not PLGR.** Three independent researchers reached this
+unanimously, and the reasoning is not aesthetic:
+
+- **PLGR is taken** by a defunct BEP-20 literally named **"Pledge"**; its dead
+  pages persist on CoinMarketCap, Coinbase, Crypto.com, LiveCoinWatch,
+  CryptoCompare and Yahoo (`PLGR-USD`). Adopting it means the top result for
+  your own ticker is the exact word people already mishear the brand as.
+- **PLGR reads "plugger"** — the established nickname for the AN/PSN-11
+  Precision Lightweight GPS Receiver (Smithsonian-catalogued).
+- **PLGR's consonant skeleton spells PLeDGeR**, the wrong word; Pleadger's is
+  P-L-D-G-R. The ticker would actively cement the misreading.
+- **PLGR is one character from PLTR** (Palantir) — a mega-cap in an adjacent
+  surveillance/legal space, with six tokenised-PLTR assets already listed.
+- **PLEA is genuinely unclaimed**: zero exact matches across 18,438 active
+  CoinGecko coins, Dexscreener, CoinMarketCap and US equities. It is the literal
+  first four letters of Pleadger, one syllable, spellable from hearing, and
+  on-narrative — *entering a plea* is the product's core action.
+
+**Per-court coin symbols — and a REAL BUG shipping today.** `court.gno` mints
+every court's ledger with the literal symbol `"COURT"`:
+
+    coin := grc20votes.NewLedger(name, "COURT", coinDecimals, epochBlocks)
+
+Wallets, explorers and indexers key their display on **symbol**, not package
+path, so every court's coin renders identically while having genuinely
+different backing and zero fungibility (each is its own one-way curve with no
+redemption). That is a live phishing vector — a malicious court's coin is
+pixel-identical to the flagship's — and presenting distinct assets with
+distinct risk under one label is a consumer-protection problem independent of
+any securities question. **Fix before a second court exists.**
+
+The scheme (2/3 preferred, and it needs no new registry):
+
+- **symbol = `uppercase(slug)`, hyphens preserved.** A bijection with the slug,
+  so uniqueness and the paid-deposit anti-squat property are inherited from the
+  slug registry that already exists. Do NOT truncate or strip hyphens — both
+  break injectivity (`ab-c` and `abc` would collide).
+- **Cap slugs at 11 characters** at registration, so the symbol always satisfies
+  GRC20's `MaxSymbolLen`.
+- **Canonical display is namespaced: `PLEA:OREM`.** A bare court symbol appears
+  only inside that court's own page, so a court coin can never read as "the
+  Pleadger token".
+- **Reserved deny-list enforced at slug registration**: `plea`, `pleadger`,
+  `gno`, `gnot`, `ugnot`, `btc`, `eth`, `usdc`, `usdt` — otherwise someone
+  registers the slug `plea` and mints a coin that impersonates the platform.
+
+**Owner red flags (all three raised these independently):**
+
+1. **"Pleadger" is a homophone of "Pledger"**, which is a LIVE fintech in an
+   adjacent sector (pledger.fr, and pledger.finance in Palo Alto), plus a US
+   `PLEDGER, LLC` mark and a "Pledger Charitable" app. "Plead" is also a Seoul
+   legal-tech company. Sight/sound/meaning is exactly the trademark confusion
+   test. **Commission a real clearance search in classes 9/36/42, US and EU,
+   before spending on brand.** PLEA mitigates this (it anchors the *plead*
+   vowel); PLGR would amplify it.
+2. **Publish the pronunciation** (PLEE-jer) in the first line of every doc —
+   the ticker is the cheapest, most-repeated enforcement of it.
+3. `pleadger.com` is registered; `.io`, `.xyz`, `.org` and the social handles
+   were still free at research time. Claim them before any public post — a
+   coined misspelling with zero prior web results is trivially squatted the hour
+   it is announced.
+4. Defensively mint `PLEA` on other chains at launch: clean four-letter
+   English-word tickers get squatted by memecoins within days, and a squatter
+   with volume outranks you on every aggregator.
+
+**Sequencing:** the rename is cross-cutting (docs, realm paths, README, PLAN,
+this file) and touches the other session's files, so it lands LAST, after the
+code audit, with a coordinated merge. **Realm import paths are write-once** —
+`gno.land/r/cryptocourt/courtv2` cannot be renamed after deploy, so the path
+decision must be made before launch, not after.
+
 ## 14. Changelog
 - **v0.1–v0.4**: see prior entries (constitution; policing strips; purge; meta
   court; suspension; election; write-once sequencing). r1 ~40/1 CRITICAL-legal;
@@ -851,6 +926,15 @@ scale with supply, so `minAnswerX` stops being the forgery dial it is called.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.12 — naming (3/3 unanimous)**: ticker **PLEA**, not PLGR (PLGR is a dead
+  token named "Pledge", reads "plugger", spells PLeDGeR, and is one char from
+  PLTR; PLEA is unclaimed across 18,438 CoinGecko coins + Dexscreener + CMC +
+  US equities). Per-court symbol = `uppercase(slug)` displayed `PLEA:SLUG`,
+  with a reserved deny-list at slug registration. **Live bug recorded**: every
+  court currently mints its ledger with the literal symbol `"COURT"`
+  (court.gno) — a phishing vector, since wallets key display on symbol not
+  pkgpath. Trademark red flag: "Pleadger" is a homophone of "Pledger", a live
+  fintech in an adjacent sector — clearance search recommended (§13.9).
 - **v0.11 — the meta-franchise vet (owner proposal; 3 identical passes, all
   ADOPT WITH FIXES; §13.8 carries the full consensus)**. Distributing meta-CC
   pro-rata to GNOT burned on every court makes meta's security budget
