@@ -315,4 +315,65 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if CourtSuspended("mtx9") {
 		t.Fatal("a manufactured contest must not suspend a court's moderators")
 	}
+
+	// ---- 10. a stale verdict cannot overturn the GLOBAL DAO -----------------
+	// The global DAO is the legal backstop, and its suspension verbs used to
+	// stamp nothing at all — so a meta verdict filed BEFORE a global decision
+	// could execute after it and silently undo it. Here the global DAO suspends
+	// mtx10 and then clears it while the appeal is in flight; the appeal's
+	// `suspend` verdict must refuse rather than re-suspend a court the backstop
+	// just released. Only OPPOSITE-direction acts refuse — a same-direction one
+	// has already achieved the verdict's goal.
+	carol := testutils.TestAddress("mtx-carol")
+	mc.coin.Mint(carol, 100_000_000_000) // enough to clear floor/4, not to outvote alice
+	testCourt(cur, "mtx10", alice, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // seal the mint AND let the target predate
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ap10 := OpenClaim(cross(cur), metaSlug, "mod:suspend:mtx10")
+	matureOI(cur, metaSlug, ap10, alice, 2*effMinAnswerX(mc))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), metaSlug, ap10, sideYES)
+
+	// A genuinely contested round: carol carries real overturn weight (>= floor/4,
+	// so credEligible is set) and alice's larger uphold carries it.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), metaSlug, ap10)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), metaSlug, ap10, "yes")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	VoteDispute(cross(cur), metaSlug, ap10, "no")
+	testing.SkipHeights(mc.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), metaSlug, ap10)
+
+	cs10 := mustClaim(mc, ap10)
+	if cs10.decidedRounds != 1 || Provisional(metaSlug, ap10) != sideYES {
+		t.Fatal("fixture: the round must DECIDE and uphold")
+	}
+	if !cs10.credEligible {
+		t.Fatal("fixture: carol's overturn weight must make the round credEligible")
+	}
+
+	// The global DAO acts while the verdict is in flight: suspend, then clear.
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalSuspendSet(cross(cur), "mtx10")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	ClearCourtSuspension(cross(cur), "mtx10")
+	if CourtSuspended("mtx10") {
+		t.Fatal("fixture: the global DAO must have released the court")
+	}
+
+	testing.SkipHeights(cs10.escrowUntil - runtimeHeight() + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), metaSlug, ap10)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "global DAO changed this court's suspension", func() {
+		ExecuteMetaVerdict(cross(cur), ap10)
+	})
+	if CourtSuspended("mtx10") {
+		t.Fatal("a stale verdict must not re-suspend a court the global DAO released")
+	}
 }

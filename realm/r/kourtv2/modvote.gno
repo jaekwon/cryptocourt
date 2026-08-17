@@ -201,6 +201,16 @@ func RegisterModCandidate(cur realm, courtSlug string, members []address, m int)
 // canonicalMembers sorts and dedupes an address list (insertion sort — a
 // moderator set is small, and gno needs determinism, not speed).
 func canonicalMembers(in []address) []address {
+	// The size cap is enforced HERE because this is the one chokepoint both
+	// entry points share (AppointMods and RegisterModCandidate). Uncapped, a
+	// set could be grown until currentSetID — which concatenates every member
+	// into one string and therefore costs O(n²) — no longer fits in a
+	// transaction. currentSetID sits on the SUSPEND path, so that is not merely
+	// slow: it would blunt the global DAO's and the meta court's emergency
+	// hammer against exactly the set that made itself too big to suspend.
+	if len(in) > maxModSetSize {
+		panic("kourtv2: a moderator set is at most 32 members")
+	}
 	out := []address{}
 	for _, a := range in {
 		if a == "" {

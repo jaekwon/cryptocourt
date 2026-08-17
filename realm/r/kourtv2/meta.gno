@@ -381,6 +381,17 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 		if cm.lastElectionAt > cs.openedAt || cm.setActHeight > cs.verdictAt {
 			panic("kourtv2: the moderator set changed under this appeal; re-appeal")
 		}
+		// The global DAO's own term. Its suspension verbs are the legal
+		// backstop, so a meta verdict that predates a global decision must not
+		// silently overturn it — a stale `suspend` could re-suspend a court the
+		// global DAO just cleared, and a stale `unsuspend` could release one it
+		// just suspended. Only OPPOSITE-direction acts refuse, which is the same
+		// rule verbUnhide settled on: refusing on a same-direction act buys
+		// nothing (the verdict's goal is already achieved) and costs a re-appeal.
+		if cm.suspendActByGlobal > cs.openedAt &&
+			cm.suspended == (p.verb == verbUnsuspend) {
+			panic("kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal")
+		}
 	case verbUnhide:
 		// Only an ELECTION refuses an unhide. A third-party CLEAR is
 		// same-direction as the verdict, and refusing on it once let a

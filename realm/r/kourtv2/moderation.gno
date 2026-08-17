@@ -24,6 +24,9 @@ import (
 
 const (
 	maxReasonLen = 200
+	// maxModSetSize bounds currentSetID's O(n²) concatenation, which sits on the
+	// suspend path — see canonicalMembers. 32 is far above any real m-of-n.
+	maxModSetSize = 32
 	// The re-set window mirrors the DMCA §512(g) counter-notice period (~2
 	// weeks): re-setting a global redaction that a global act cleared inside
 	// this window needs m-of-n (MODERATION.md §3.2, round-4 F5). Outside it a
@@ -160,7 +163,11 @@ type courtMod struct {
 	m       int // m-of-n decision threshold
 
 	suspended      bool
-	suspendedAt    int64
+	suspendedAt    int64 // when the CURRENT suspension began (render)
+	// suspendActByGlobal stamps the two GLOBAL DAO suspension verbs. The meta
+	// staleness guard reads it so a verdict cannot silently overturn a global
+	// decision taken after the appeal was filed — see meta.gno's guard 7.
+	suspendActByGlobal int64
 	suspendedSetID string // WHICH set was judged — an install of the SAME set must not clear the flag
 	setActHeight   int64  // last membership change (for the meta staleness stamp)
 	lastElectionAt int64
@@ -205,15 +212,16 @@ type claimMod struct {
 	purged    bool   // claim title tombstoned (global purge)
 	tombstone string // the category code shown in place of text
 
-	// Per-bit last-act height, split by actor CLASS so a respondent's own act
-	// never sets the refusing stamp the meta staleness guard reads (§3.3 g4).
-	courtActByOthers int64 // global/meta writes to the court bit
-	metaActByOthers  int64
-	globalActHeight  int64
-	globalClearedAt  int64 // for the windowed-m-of-n re-set rule
-	executedAt       int64 // meta-verdict cooldown anchor (module 7)
-
-	stripEnteredAt int64 // strip membership key (module 3); 0 = not resident
+	// There were once three more stamps here — courtActByOthers, metaActByOthers
+	// and globalActHeight — carrying a per-claim "a third party already acted"
+	// term for the meta staleness guard. That refusal was deliberately REMOVED
+	// (see verbUnhide in meta.gno: refusing on a same-direction third-party
+	// clear let a moderator re-hide for free), and nothing ever read them again.
+	// They are gone rather than left looking load-bearing; the mod log carries
+	// the same who/when for render. A stripEnteredAt field went the same way —
+	// the strip key already encodes the deadline it would have duplicated.
+	globalClearedAt int64 // for the windowed-m-of-n re-set rule
+	executedAt      int64 // meta-verdict cooldown anchor (module 7)
 
 	logSeq uint64
 	log    []modAct
@@ -231,12 +239,13 @@ type modAct struct {
 	purged bool
 }
 
-// approval accumulates distinct-member approvals for an m-of-n action.
+// approval accumulates distinct-member approvals for an m-of-n action. It
+// deliberately carries no proposer or timestamp: both were stored and never
+// read. Re-add them together with a sweep when pending entries get an expiry —
+// today a member can leave unfired proposals outstanding forever.
 type approval struct {
 	approvers *bptree.BPTree // addr -> true
 	reason    string
-	actor0    address
-	height    int64
 }
 
 // ensureMod lazily creates a court's moderation object with a 1-of-1 creator
@@ -372,7 +381,7 @@ func approveAction(pending *bptree.BPTree, key string, who address, reason strin
 	if v := pending.Get(key); v != nil {
 		a = v.(*approval)
 	} else {
-		a = &approval{approvers: bptree.NewBPTree32(), reason: reason, actor0: who, height: runtime.ChainHeight()}
+		a = &approval{approvers: bptree.NewBPTree32(), reason: reason}
 	}
 	if a.approvers.Has(who.String()) {
 		return false, ""
@@ -400,18 +409,25 @@ func HideItem(cur realm, courtSlug string, claimID uint64, reason string) {
 	cm := ensureMod(c)
 	requireActiveMod(cm, who)
 	checkReason(reason)
-	clm := ensureClaimMod(c, cm, claimID)
+	_ = mustClaim(c, claimID) // the claim must exist, whether or not this fires
 	// The re-hide cooldown (I8). Without reading executedAt, a moderator who
 	// LOST an unhide appeal — after the appellant spent weeks and real bonds —
 	// re-hid in the very next block for free, nullifying the restorative half of
 	// the appeals layer. Global-DAO verbs and meta executions do not route here.
-	if clm.executedAt != 0 && runtime.ChainHeight() < clm.executedAt+c.params.votingBlocks {
+	// Read through lookupClaimMod: an absent row means no verdict ever landed.
+	if clm := lookupClaimMod(cm, claimID); clm != nil && clm.executedAt != 0 &&
+		runtime.ChainHeight() < clm.executedAt+c.params.votingBlocks {
 		panic("kourtv2: a review verdict just cleared this; the set may not re-hide yet")
 	}
 	fire, r := approveAction(cm.pending, "hide:"+strconv.FormatUint(claimID, 10), who, reason, cm.m)
 	if !fire {
 		return
 	}
+	// Allocate only now that the act is FIRING. Allocating before the m-of-n
+	// resolves let a single member of an m>1 set mint an empty claimMod per
+	// claim — rows that carry no act, cost storage, and that renderModLog and
+	// every claims-tree walk must then step over.
+	clm := ensureClaimMod(c, cm, claimID)
 	clm.court = true
 	clm.appendLog(who, "hide", r)
 	emitModAct(c.id, claimID, "hide", who)
@@ -458,20 +474,21 @@ func GlobalHide(cur realm, courtSlug string, claimID uint64, categoryCode string
 	checkReason(categoryCode)
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
-	clm := ensureClaimMod(c, cm, claimID)
+	_ = mustClaim(c, claimID) // the claim must exist, whether or not this fires
 	now := runtime.ChainHeight()
 	// Windowed m-of-n re-set (round-4 F5): re-setting a redaction a global act
 	// cleared within the counter-notice window needs m-of-n, so a lone rogue
 	// key can't win the reversal race and camp a competitor redacted.
-	if !clm.global && clm.globalClearedAt != 0 && now < clm.globalClearedAt+reSetWindowBlocks {
+	if prev := lookupClaimMod(cm, claimID); prev != nil && !prev.global &&
+		prev.globalClearedAt != 0 && now < prev.globalClearedAt+reSetWindowBlocks {
 		d := ensureGlobalDAO()
 		fire, _ := approveAction(d.pending, "reset:"+c.id+":"+strconv.FormatUint(claimID, 10), who, categoryCode, d.purgeM)
 		if !fire {
 			return
 		}
 	}
+	clm := ensureClaimMod(c, cm, claimID) // only once the hide is certain
 	clm.global = true
-	clm.globalActHeight = now
 	clm.appendLog(who, "global-hide:"+categoryCode, "")
 	emitGlobalAct(c.id, claimID, "global-hide", who)
 }
@@ -515,11 +532,8 @@ func ClearAnyBit(cur realm, courtSlug string, claimID uint64) {
 	if clm == nil {
 		panic("kourtv2: nothing to clear on that claim")
 	}
-	now := runtime.ChainHeight()
 	clm.court = false
 	clm.meta = false
-	clm.courtActByOthers = now
-	clm.metaActByOthers = now
 	clm.appendLog(who, "clear-any", "")
 	emitGlobalAct(c.id, claimID, "clear-any", who)
 }
@@ -540,6 +554,7 @@ func ClearCourtSuspension(cur realm, courtSlug string) {
 		panic("kourtv2: that court's set is not suspended")
 	}
 	cm.suspended = false
+	cm.suspendActByGlobal = runtime.ChainHeight()
 	emitGlobalAct(c.id, 0, "clear-suspension", who)
 }
 
@@ -561,11 +576,12 @@ func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string
 	}
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
-	clm := ensureClaimMod(c, cm, claimID)
+	_ = mustClaim(c, claimID) // the claim must exist, whether or not this fires
 	fire, code := approveAction(d.pending, "purge:"+c.id+":"+strconv.FormatUint(claimID, 10), who, categoryCode, d.purgeM)
 	if !fire {
 		return
 	}
+	clm := ensureClaimMod(c, cm, claimID) // only once the purge is certain
 	clm.purged = true
 	clm.tombstone = code
 	if c.id == metaSlug {
@@ -601,6 +617,7 @@ func GlobalSuspendSet(cur realm, courtSlug string) {
 		return
 	}
 	suspendSet(c, who)
+	cm.suspendActByGlobal = runtime.ChainHeight()
 	emitGlobalAct(c.id, 0, "global-suspend-set", who)
 }
 
@@ -705,9 +722,11 @@ func clearMetaBit(c *Court, claimID uint64, by address) {
 	emitModAct(c.id, claimID, "meta-clear", by)
 }
 
-// clearCourtBitByMeta clears the courtMod bit via a meta unhide verdict. Marks
-// the transition as by-a-third-party so the staleness guard (module 7) treats
-// it correctly.
+// clearCourtBitByMeta clears the courtMod bit via a meta unhide verdict. It
+// stamps executedAt, which arms the I8 re-hide cooldown — that is what stops
+// the losing set re-hiding in the next block for free. It does NOT stamp a
+// "by a third party" marker: that refusal was removed deliberately (see
+// verbUnhide in meta.gno), and the stamps for it are gone (v0.16).
 func clearCourtBitByMeta(c *Court, claimID uint64, by address) {
 	cm := ensureMod(c)
 	clm := lookupClaimMod(cm, claimID)
@@ -715,7 +734,6 @@ func clearCourtBitByMeta(c *Court, claimID uint64, by address) {
 		return
 	}
 	clm.court = false
-	clm.courtActByOthers = runtime.ChainHeight()
 	clm.executedAt = runtime.ChainHeight()
 	clm.appendLog(by, "meta-unhide", "")
 	emitModAct(c.id, claimID, "meta-unhide", by)

@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strconv"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -345,4 +346,77 @@ func TestGlobalSuspendSet(cur realm, t *testing.T) {
 	if !CourtSuspended("gss") {
 		t.Fatal("two approvals should suspend the set")
 	}
+}
+
+// currentSetID concatenates every member into one string, so it costs O(n²) —
+// and it sits on the SUSPEND path. An uncapped set could therefore be grown
+// until the global DAO's and the meta court's emergency hammer no longer fit in
+// a transaction: the set makes itself too big to suspend. The cap is enforced at
+// canonicalMembers, the one chokepoint both entry points share.
+func TestModSetSizeIsCapped(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("cap-creator")
+	testCourt(cur, "capset", creator, 10_000_000_000)
+
+	over := make([]address, maxModSetSize+1)
+	for i := range over {
+		over[i] = testutils.TestAddress("cap-m" + strconv.Itoa(i))
+	}
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "at most 32 members", func() {
+		AppointMods(cross(cur), "capset", over, 1)
+	})
+	// The candidate registry is the other way in, and it must be capped too —
+	// otherwise the same set arrives via a meta setmods install.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "at most 32 members", func() {
+		RegisterModCandidate(cross(cur), "capset", over, 1)
+	})
+	// Exactly at the cap still works, so the bound is off-by-one clean.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "capset", over[:maxModSetSize], 1)
+	if !IsCourtMod("capset", over[0]) {
+		t.Fatal("a set exactly at the cap must install")
+	}
+}
+
+// A moderation row must be allocated only once the m-of-n actually FIRES.
+// Allocating on the first approval let one member of an m>1 set mint an empty
+// claimMod per claim: rows carrying no act, costing storage, that renderModLog
+// and every claims-tree walk must then step over. One member, many claims, no
+// decision — pure griefing of a set the griefer cannot otherwise act for.
+func TestUnfiredApprovalAllocatesNothing(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("noalloc-creator")
+	m2 := testutils.TestAddress("noalloc-m2")
+	c := testCourt(cur, "noalloc", creator, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "noalloc", []address{creator, m2}, 2)
+
+	testing.SetRealm(testing.NewUserRealm(creator))
+	id := OpenClaim(cross(cur), "noalloc", "a claim one mod dislikes")
+	cm := ensureMod(c)
+	before := cm.claims.Size()
+
+	testing.SetRealm(testing.NewUserRealm(creator))
+	HideItem(cross(cur), "noalloc", id, "spam") // 1 of 2 — must not fire
+	if HiddenFromListing("noalloc", id) {
+		t.Fatal("one of two approvals must not hide")
+	}
+	if got := cm.claims.Size(); got != before {
+		t.Fatalf("an unfired approval allocated a moderation row: %d rows, want %d", got, before)
+	}
+
+	// The second approval fires, and only now is the row real.
+	testing.SetRealm(testing.NewUserRealm(m2))
+	HideItem(cross(cur), "noalloc", id, "spam")
+	if !HiddenFromListing("noalloc", id) {
+		t.Fatal("the second approval should hide")
+	}
+	if cm.claims.Size() != before+1 {
+		t.Fatal("a fired act must allocate exactly one row")
+	}
+	// The guard still refuses a claim that does not exist at all.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	uassert.AbortsContains(t, cur, "no such claim", func() {
+		HideItem(cross(cur), "noalloc", 9999, "spam")
+	})
 }
