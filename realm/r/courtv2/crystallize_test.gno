@@ -466,3 +466,59 @@ func TestDecidedRoundCarrotSurvivesAStaleSubBarTally(cur realm, t *testing.T) {
 		t.Fatalf("the with-verdict voter must be paid: %d", share)
 	}
 }
+
+// The 24h quiet window (Q6), found SURVIVING by the mutation harness: replacing
+// `now < cs.lastFlagEventAt+priorityWindowBlocks` with `if false` failed no test.
+// The window exists so Crystallize cannot RACE a flag event — every flag close,
+// reopen and void restamps lastFlagEventAt precisely so the draw cannot be frozen
+// in the same breath as a quality outcome that a party has not had time to react to.
+// Nothing pinned it, so nothing objected to removing the reaction period entirely.
+func TestCrystallizeWaitsOutTheQuietWindow(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qw-alice")
+	flagger := testutils.TestAddress("qw-flag")
+	voter := testutils.TestAddress("qw-voter")
+	c := testCourt(cur, "qwin", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(voter, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qwin", "the draw waits for the reaction period")
+	matureOI(cur, "qwin", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qwin", id, sideYES)
+
+	// A conclusive MID flag: consumes the slot, restamps lastFlagEventAt at its close.
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "qwin", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "qwin", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "qwin", id)
+	SettleUndisputed(cross(cur), "qwin", id)
+
+	cs := mustClaim(c, id)
+	if cs.lastFlagEventAt == 0 {
+		t.Fatal("setup: the flag close must restamp the quiet-window anchor")
+	}
+	// Inside the window: refused, even for a participant with everything else ready.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "24h quiet window", func() {
+		Crystallize(cross(cur), "qwin", id)
+	})
+	if cs.crystallized {
+		t.Fatal("a refused Crystallize must not have crystallized")
+	}
+	// One block short is still short — the boundary, not just the middle.
+	testing.SkipHeights(priorityWindowBlocks - 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "24h quiet window", func() {
+		Crystallize(cross(cur), "qwin", id)
+	})
+	// And once it passes, the same call succeeds — so the guard is a delay, not a bar.
+	testing.SkipHeights(2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "qwin", id)
+	if !cs.crystallized {
+		t.Fatal("past the quiet window the draw must crystallize")
+	}
+}

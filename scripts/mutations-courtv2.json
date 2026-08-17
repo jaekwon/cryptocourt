@@ -166,5 +166,103 @@
   "label": "voidFlag does not return the bond",
   "find": "\tif cs.flagBond > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.flagger, cs.flagBond)\n\t\tcs.flagBond = 0\n\t}\n\tcs.flagOpen = false",
   "replace": "\tcs.flagOpen = false"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "CEILING: dEff not capped by the weekly budget",
+  "find": "\t\tif dReal < c.curBudgetBpsFP {",
+  "replace": "\t\tif true {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "CEILING: dEff always the budget (min collapsed the other way)",
+  "find": "\t\tif dReal < c.curBudgetBpsFP {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "Crystallize ignores the 24h quiet window",
+  "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "quiet window one block short",
+  "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
+  "replace": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks-1 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "T1/T2 boundary: T2 predicate drops the full-bar requirement",
+  "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {",
+  "replace": "\tif cs.answerBond > 0 && !slashGrade {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "2A: inconclusive-MID half-burn becomes a full return",
+  "find": "\t\t} else {\n\t\t\thalf := cs.flagBond / 2",
+  "replace": "\t\t} else {\n\t\t\thalf := cs.flagBond"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "T2 failed-attempt half-burn becomes a full return",
+  "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2",
+  "replace": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "Crystallize runs with a quality question open",
+  "find": "\tif cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "carrot pull is not once-per-address",
+  "find": "\tif cs.qVoted.Has(claimedKey) {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "P2 per-voter carrot clamp removed",
+  "find": "\tif clamp := b0/2 - 1; share > clamp {\n\t\tshare = clamp // P2: the sybil-margin invariant, per voter\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "junior reservation not clamped to the reservoir",
+  "find": "\tr := c.reservoirR()\n\tif want > r {\n\t\twant = r\n\t}",
+  "replace": "\tr := c.reservoirR()\n\t_ = r"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "budget never steps down",
+  "find": "\tc.curBudgetBpsFP = c.curBudgetBpsFP * stepDownNum / stepDownDen",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "re-flag cooldown after an inconclusive cycle removed",
+  "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim ignores the timeout",
+  "find": "\tif runtime.ChainHeight() < cs.openedAt+deadClaimTimeout {",
+  "replace": "\tif false {"
  }
 ]

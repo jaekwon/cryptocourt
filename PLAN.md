@@ -1624,6 +1624,48 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.59 — second and third hunts: four more surviving guards, one of them the LOCKED
+  CEILING's own enforcement point.** Twenty-one further mutations against pre-existing
+  guards. The batch now stands at 38 rows, all caught, none invalid.
+  **THE CEILING (fixed, the most serious survivor of the session).** `rollPeriod`
+  computes `d_eff = min(budget ceiling, 4-period EMA of minted/supply)`, and replacing
+  that comparison with `if true` — so d_eff tracks realized dilution UNCAPPED — failed no
+  test. d_eff feeds `rateBpsFP`, which drives conviction accrual, hence `cumAccrual`, hence
+  `reservoirR`: an uncapped d_eff raises the emission ceiling itself, the one constraint
+  the owner has locked. Reachable rather than theoretical, and the mechanism is the point:
+  `curBudgetBpsFP` steps DOWN on every roll while `emaMinted` decays only 3/4, so realized
+  dilution above the now-lower ceiling is exactly the state the min() exists for. Closed by
+  `TestDEffIsCappedByTheWeeklyBudget`, which pins BOTH directions — the cap binding when
+  dReal is above it, and d_eff tracking dReal when it is below — so neither collapse of the
+  min() survives.
+  **THE T1/T2 BOUNDARY (fixed, and it is one this loop reasoned from).** Dropping
+  `turnout >= fullBar` from the T2 half-burn predicate failed no test: nothing
+  distinguished "a sub-bar low returns the flag bond WHOLE" from "a full-bar non-⅔-low
+  half-burns it". That boundary IS v0.29/T1's cheap-when-right property, and v0.55, v0.56
+  and this session's sub-bar-low pricing all rest on it — the free-roll arithmetic, the
+  disarm's zero cost, the refutation of the half-burn lever. An invariant argued from that
+  often should not have rested on no fixture. Closed by
+  `TestSubBarLowReturnsTheFlagBondWhole`, measured on the FLAGGER'S BALANCE, since
+  asserting escrow drains cannot tell a return from a burn.
+  **Also fixed:** the 24h quiet window before Crystallize (Q6's reaction period —
+  `if false` failed no test, and the fixture pins the boundary one block short as well as
+  the middle), and 2A's inconclusive-MID half-burn, the rule that stops suppression chains
+  being free.
+  **Three of my own mutations were malformed, which the harness caught rather than
+  flattered.** One matched twice (BAD ANCHOR), one matched zero times, and one I wrote as
+  `_ = 0` appended — a no-op that "SURVIVED" while testing nothing, and I nearly recorded
+  it as a finding about PostAnswer's collateralization floor. A fourth reported INVALID
+  (did not build) rather than surviving: "Crystallize is not participant-only" was never a
+  real survivor and a pre-existing test catches it once the mutation compiles. The harness
+  distinguishing all four states — caught, survived, bad anchor, did not build — is why it
+  should have been used from firing one instead of hand-rolled `sed`.
+  **And it caught me shipping a red suite.** After adding the ceiling fixture the baseline
+  went RED: my new slug `cap1` collided with the pre-existing
+  `TestBondCollateralizesSlashUnderCourtCap`. Filtered runs passed; the full suite did not.
+  Second slug collision of the session (after `rr1`), same cause both times — I checked
+  slug uniqueness the first time and did not the second. Fixed, and the whole-suite check
+  now runs before any batch.
+
 - **v0.58 — first real hunt with the harness pointed at courtv2: three PRE-EXISTING
   guards were surviving, two of them load-bearing.** Twelve mutations against guards
   nobody wrote this session — the ones that had never been broken on purpose because

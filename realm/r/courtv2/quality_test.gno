@@ -1752,3 +1752,103 @@ func TestQ2BarsAStakerFromVotingQuality(cur realm, t *testing.T) {
 		t.Fatalf("a non-participant's vote must reach the tally: %d", cs.qMidW)
 	}
 }
+
+// T1 vs T2, the two halves of the flag bond's disposition on a LOW — and the harness
+// found the boundary between them unpinned: dropping `turnout >= fullBar` from the T2
+// predicate failed no test, so nothing distinguished "sub-bar low returns the bond
+// WHOLE" from "full-bar non-⅔-low half-burns it".
+//
+// That boundary is v0.29/T1's cheap-when-right property, and this session priced the
+// sub-bar-low free roll and the slash disarm on it repeatedly ("the bond returns whole
+// below the full bar"). An invariant reasoned from that often should not have rested on
+// no fixture. Measured on the FLAGGER'S BALANCE, which is what distinguishes a return
+// from a burn — asserting escrow drains cannot, since a burn also empties escrow.
+func TestSubBarLowReturnsTheFlagBondWhole(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("t1b-alice")
+	flagger := testutils.TestAddress("t1b-flag")
+	dust := testutils.TestAddress("t1b-dust") // >= demotionBar, < fullBar
+	c := testCourt(cur, "t1b", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(dust, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "t1b", "a correct dust flag is free")
+	matureOI(cur, "t1b", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "t1b", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "t1b", id)
+	cs := mustClaim(c, id)
+	bond := cs.flagBond
+	if bond <= 0 {
+		t.Fatal("setup: the flag must post a bond")
+	}
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "t1b", id, qualityLow)
+	_, fullBar := qualityBars(c, cs)
+	demotionBar, _ := qualityBars(c, cs)
+	if cs.qLowW >= fullBar || cs.qLowW < demotionBar {
+		t.Fatalf("fixture must sit in [demotionBar, fullBar): low=%d bars=%d/%d",
+			cs.qLowW, demotionBar, fullBar)
+	}
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	before := c.coin.BalanceOf(flagger)
+	ResolveFlag(cross(cur), "t1b", id)
+	if cs.tier != tierLowX || !cs.slotConsumed {
+		t.Fatalf("setup: a sub-bar low is still CONCLUSIVE: tier=%d consumed=%t",
+			cs.tier, cs.slotConsumed)
+	}
+	// THE GUARD: whole, not half. A half-burn here would price a CORRECT dust flag at
+	// half the bond and destroy T1.
+	if got := c.coin.BalanceOf(flagger) - before; got != bond {
+		t.Fatalf("a sub-bar low returns the flag bond WHOLE: got %d want %d", got, bond)
+	}
+}
+
+// The 2A rule, also found surviving: an inconclusive-MID flag HALF-burns. A full
+// return would make suppression chains free — open a flag, let it go inconclusive,
+// collect the bond back, repeat — which is why v0.28 split the two inconclusive
+// outcomes: inconclusive-LOW returns whole (the flagger was directionally right and
+// the electorate was absent), inconclusive-MID does not.
+func TestInconclusiveMidHalfBurnsTheFlagBond(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("2ab-alice")
+	flagger := testutils.TestAddress("2ab-flag")
+	dust := testutils.TestAddress("2ab-dust")
+	c := testCourt(cur, "2ab", alice, 50_000_000_000)
+	c.coin.Mint(flagger, 10_000_000_000)
+	c.coin.Mint(dust, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "2ab", "an inconclusive mid is not free")
+	matureOI(cur, "2ab", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "2ab", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "2ab", id)
+	cs := mustClaim(c, id)
+	bond := cs.flagBond
+	// A sub-bar MID: not medianLow, and under the full bar, so INCONCLUSIVE-mid.
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "2ab", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	before := c.coin.BalanceOf(flagger)
+	supplyBefore := c.coin.TotalSupply()
+	ResolveFlag(cross(cur), "2ab", id)
+
+	if cs.slotConsumed {
+		t.Fatal("setup: an inconclusive outcome must NOT consume the slot")
+	}
+	if cs.flagCycles != 1 {
+		t.Fatalf("setup: an inconclusive cycle must be counted: %d", cs.flagCycles)
+	}
+	half := bond / 2
+	if got := c.coin.BalanceOf(flagger) - before; got != half {
+		t.Fatalf("inconclusive-mid returns HALF the bond: got %d want %d", got, half)
+	}
+	if burned := supplyBefore - c.coin.TotalSupply(); burned != bond-half {
+		t.Fatalf("the other half must BURN: burned %d want %d", burned, bond-half)
+	}
+}
