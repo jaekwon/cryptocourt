@@ -165,7 +165,9 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	}
 	touch(c)
 
-	c.coin.Transfer(who, c.escrow, amount)
+	// A LOCK, not a transfer (lock.gno): the coins stay here and keep voting.
+	mustSpendable(c, who, amount)
+	lockStake(c, who, amount)
 	advancePools(c, cs)
 	p := getPos(c, cs, who, side)
 	accrue(c, cs, p, side)
@@ -204,12 +206,12 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 	}
 	accrue(c, cs, p, side)
 	p.stake -= amount
+	releaseStake(c, who, amount)
 	if side == sideYES {
 		cs.yesStake -= amount
 	} else {
 		cs.noStake -= amount
 	}
-	c.coin.Transfer(c.escrow, who, amount)
 	observePools(cs)
 }
 

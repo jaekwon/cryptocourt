@@ -428,12 +428,17 @@ func TestAMalformedRulesPayloadIsRefusedAtTheDoor(cur realm, t *testing.T) {
 	Mint(cross(cur), gAlice, 1000)
 	advanceEpochs(1)
 
-	// Registered here rather than relied on from another test. resetLedger does
-	// not clear the kind registry, so "fee" is usually still lying around from
-	// whatever ran before; run alone, this test would refuse every payload with
-	// "no kind by that name has been offered" instead of the messages it is
-	// checking for. An assertion on the shared "govern:" prefix would match
-	// that too, which is how such a dependency stays invisible.
+	// Registered here rather than relied on from another test. This is now
+	// REQUIRED rather than defensive: resetLedger builds a whole new governor
+	// (`engine = governor.New(...)`), so the kind registry does not survive it and
+	// "fee" is never left lying around by whatever ran before. Without this the
+	// test refuses every payload with "no kind by that name has been offered"
+	// instead of the messages it is checking for — alone AND in company. An
+	// assertion on the shared "govern:" prefix would match that too, which is how
+	// such a dependency stays invisible.
+	//
+	// The earlier note here said resetLedger did not clear the registry, which
+	// stopped being true when the ledger and governor became values.
 	engine.Adopt(setFee{}, Rules{
 		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1_000_000,
 	})

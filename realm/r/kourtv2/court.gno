@@ -330,8 +330,10 @@ type Court struct {
 	gov  *governor.Governor // the dispute arbiter; electorate = coin
 	crv  curve.Curve        // one-way GNOT -> CC; proceeds are burned
 
-	// escrow holds staked CC, deposits, and bonds, and it never votes — the coins
-	// are physically here, not with their owners.
+	// escrow holds deposits and bonds — NOT stake, since v0.34 — and it never
+	// votes, because those coins are physically here rather than with their
+	// owners. It holds them because it has to be able to burn or redirect them
+	// on a loss; that is what makes them custodial and stake not.
 	//
 	// It is NOT "netted out of the quorum floor", which this comment used to
 	// claim (v0.29). quorumFloor and qualityBars net the escrow only on their X̄
@@ -342,14 +344,19 @@ type Court struct {
 	// carry a total reachability clamp instead; the netting still does not happen
 	// and should not be assumed.
 	//
-	// Note also what escrow does and does not buy. Stake principal is never
-	// slashed and never burned — WithdrawStake returns it 1× on both sides — so
-	// custody buys exactly one thing: disenfranchisement. And it disenfranchises
-	// COURT-WIDE, while the design only wants it CLAIM-SCOPED, which is what the
-	// next clause does properly: participants of a claim are excluded from that
-	// claim's quality lane BY RULE (isParticipant), not by where the coins sit.
-	// Locking stake in place rather than transferring it would make votable equal
-	// supply and retire this whole question; that is a V3-scale change.
+	// STAKE IS NO LONGER HERE (v0.34, lock.gno). It used to be, and it bought
+	// exactly one thing: disenfranchisement. Stake principal is never slashed and
+	// never burned — WithdrawStake returns it 1× on both sides — so custody
+	// secured nothing, while removing the staker's vote COURT-WIDE when the design
+	// only ever wanted it CLAIM-SCOPED, which the next clause already does
+	// properly: participants of a claim are excluded from that claim's quality
+	// lane BY RULE (isParticipant), not by where their coins sit.
+	//
+	// Stake is a lock recorded against the holder's own balance now, so the coins
+	// stay put and keep voting. What custody had been doing invisibly was making
+	// double-commitment impossible — the ledger refused a second spend of coins
+	// that had left — so that check now lives in this realm, on every path that
+	// moves a user's CC in here. See lock.gno; it is the whole risk of the change.
 	escrow address
 
 	minted int64 // cumulative curve position (never decremented; prices mints)
@@ -381,6 +388,11 @@ type Court struct {
 	queue           *bptree.BPTree // entitlement seq (be64) -> *entitlement
 	queueSeq        uint64
 	records         *bptree.BPTree // addr -> *answerRecord (records.gno)
+	// locked is addr -> staked CC still sitting in that holder's own balance
+	// (lock.gno). Created eagerly with the others: it is a money-path read on
+	// every deposit and bond, and a lazily-built tree would give each of those
+	// a second branch that has to agree with the write path.
+	locked          *bptree.BPTree // addr -> int64 (lock.gno)
 	qualifiedCount  int            // addresses at score ≥ priorityNetRecord
 
 	// Moderation state (moderation.gno) — render-layer only; no money path
@@ -479,6 +491,7 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 		claims:         bptree.NewBPTree32(),
 		queue:          bptree.NewBPTree32(),
 		records:        bptree.NewBPTree32(),
+		locked:         bptree.NewBPTree32(),
 		params:         p.mustSane(),
 		createdAt:      runtime.ChainHeight(),
 		curBudgetBpsFP: budgetBpsFPStart,

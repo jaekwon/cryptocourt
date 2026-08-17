@@ -107,6 +107,7 @@ func OpenFlag(cur realm, courtSlug string, claimID uint64) {
 	touch(c)
 
 	bond := flagBondFor(cs)
+	mustSpendable(c, who, bond)
 	c.coin.Transfer(who, c.escrow, bond)
 	cs.flagOpen = true
 	cs.flagger = who

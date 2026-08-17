@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.33 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.34 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,98 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.34 — STAKE IS A LOCK IN PLACE, NOT A TRANSFER. Staking no longer costs the
+  staker their vote.** The last backlog item, endorsed 3/3 by two independent
+  panels. `Stake` used to `Transfer(who, escrow, amount)`; it now records a claim
+  against the holder's own balance (`lock.gno`) and the coins never move. Custody
+  secured nothing — stake principal is never slashed and never burned, and
+  `WithdrawStake` returns it 1× whichever way the verdict went — while it removed
+  the staker's vote **court-wide**, on every election and every quality poll in
+  that court, for as long as they were staked. The design only ever wanted a
+  claim-scoped exclusion, and it already had one that works by rule rather than by
+  custody (`isParticipant`). The deposit and the five bonds are **not** locks and
+  still transfer: the realm has to be able to burn or redirect those on a loss, so
+  it must actually hold them. That is the line between the two — custodial means
+  *the realm may have to take it*.
+  - **What custody was silently enforcing, and the reason this is the risky part.**
+    Custody made double-commitment arithmetically impossible: the coins had left
+    the balance, so the **ledger** refused a second spend, automatically, on every
+    path, including paths nobody had thought about. A lock does not. The coins are
+    still sitting there and the ledger will happily let them be spent again — and
+    the second spend is one the realm cannot honour. Stake 100, post a 100 bond
+    against the same 100, and at unstake the realm owes CC it does not hold and
+    would have to **mint** to return, breaking supply conservation, which is the
+    one invariant a token cannot lose. So a total, automatic check moved out of the
+    ledger and into this realm, where it is a *list* — and a list can be one entry
+    short. Every path that moves a user's CC into the escrow now sizes itself
+    against `spendable(c, who) = BalanceOf − locked`, never `BalanceOf`, and
+    `TestLockedStakeCannotBeSpentTwice` walks **all five** of them (another stake,
+    the claim deposit, the answer bond, the flag bond, the dispute bond) with a
+    fully-locked balance, then asserts no coin moved and the lock is intact. A new
+    spend path belongs in that test. **WHEN REMOVING A MECHANISM THAT BUYS
+    NOTHING, ASK WHAT IT WAS ENFORCING FOR FREE.**
+  - Scoping was worth more than the edit. Conviction accrual reads
+    `stakePos.stake`, the per-claim record, and **never** the escrow balance, so
+    accrual is untouched. And — the assumption I had backwards — **no formula
+    changes** in `votableAt`, `electionFloor`, `quorumFloor` or `qualityBars`:
+    they keep netting the escrow, and the escrow simply stops containing stake.
+    The expressions were already right for the world after the change. Exactly
+    three sites move `stakePos.stake` (`Stake`, `Unstake`, the settlement
+    withdrawal), which is what made the paired lock/release safe to reason about.
+  - **A real behaviour change, in the direction the v0.31 ruling wanted.** Votable
+    is now larger, so all three turnout bars sit higher in absolute CC. That is
+    correct rather than incidental: the bar is a fraction of the people who *can
+    turn out*, and stakers now can. Every coin added to the base is a coin that
+    can also vote, which is precisely the property the netting-vs-clamp argument
+    turned on. It also **retires item 17 outright** — votable now differs from
+    supply only by bonds and deposits, so `q·votable` and `min(q·raw, votable/3)`
+    converge, as the panel predicted they would.
+  - `LockedOf` and `SpendableOf` are the new reads, because a balance that is
+    partly committed and partly not is unusable to a client that can only see the
+    total. `TestStakingDoesNotDisenfranchise` asserts the point of the whole
+    change: a staker's `PastVotes` and the court's votable base are both unmoved
+    across a stake, and the escrow's votes equal the deposit and fee alone.
+  - **Exercised through a real transaction, not only in process.** The money txtar
+    asserted that staking grows the escrow; it no longer does, so that section now
+    pins the opposite on a real ledger — escrow unchanged across stake *and*
+    unstake, the position recorded as a lock, and `LockedOf` + `SpendableOf`
+    partitioning the balance exactly. Both halves are asserted deliberately: a
+    lock that recorded nothing would leave spendable whole, and one that
+    double-counted would leave it short. The figures were **measured, not
+    guessed** — my first pass invented two plausible balances and both were wrong,
+    which is the standing rule about fixtures earning its keep again.
+  - **Blast radius: one test in 437.** `TestSettleUndisputedAndWithdraw` asserted
+    that withdrawal *increases* the balance. It no longer does and should not: a
+    withdrawal is a lock RELEASE, so it reports the full principal while the
+    balance stays exactly where it was. The rewritten assertion requires the
+    balance to be **unmoved**, which is the one that would catch a release path
+    that also paid out — i.e. that minted principal from nothing.
+  - **And the isolation guard was giving the wrong diagnosis.** It reported that
+    test as *"passes only in company"* when it in fact failed **both** alone and
+    with its package, because running each test alone was the only thing the guard
+    ever did: with no together-baseline it could not distinguish a test that needs
+    its neighbours from one that is simply broken, and it labelled both as the
+    former — sending the reader to hunt for cross-test state that was never there.
+    It now runs the suite once per affected package (only when something already
+    failed) and classifies **per test**, scanning that run for the test's own
+    failure marker. Per-package would have been too coarse: one unrelated red test
+    would relabel every genuine isolation failure beside it as ordinary.
+    - Both labels have a control now, and getting them took three wrong turns
+      worth recording. My first `BROKEN` control inserted a function **above the
+      import block**, so the package would not parse — it was measuring the parser,
+      not the classifier. My second used `panic` instead of `t.Error`, which aborts
+      before the per-test marker prints.
+    - And **the pre-existing `ALONE` control's premise was dead.** It deleted a
+      kind registration from `TestAMalformedRulesPayloadIsRefusedAtTheDoor` to
+      reproduce a test that passed only in company. That test now fails *both*
+      ways, verified by running it, because `resetLedger` builds a **whole new
+      governor** — so the kind registry does not survive a reset and the leak it
+      reproduced cannot happen any more. The in-code comment still asserted the
+      opposite and has been corrected. The control is replaced by a real one:
+      kourtv2's package-global `courts` tree genuinely is never reset, so a test
+      reading a court a neighbour created panics alone and passes in company.
+      **A CONTROL HAS TO FAIL FOR THE REASON IT NAMES** — the file already said so
+      about a different arm; this is the second arm it was true of.
 - **v0.33 — the merge brought back a bug I had already fixed once, and item 18
   turns out to be a fifth the size it was filed as, for a reason that also
   sharpens what it is actually buying.**

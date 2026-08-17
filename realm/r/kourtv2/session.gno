@@ -115,7 +115,7 @@ func WithdrawStake(cur realm, courtSlug string, claimID uint64, side int) int64 
 	} else {
 		cs.noStake -= amount
 	}
-	c.coin.Transfer(c.escrow, who, amount)
+	releaseStake(c, who, amount)
 	return amount
 }
 

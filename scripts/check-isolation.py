@@ -175,6 +175,7 @@ def main():
         return 1
 
     bad, total = [], 0
+    red = set()  # (pkg, test) pairs that fail WITH their package too
     with stage_lock(root):
         stage(root)
         for rel, names in work:
@@ -185,17 +186,46 @@ def main():
                                    capture_output=True, text=True)
                 if r.returncode != 0:
                     bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
+        # Only now, and only for packages that actually produced a failure, run the
+        # suite TOGETHER. Without this baseline every failure reads as an isolation
+        # problem, because running a test alone is the only thing this guard did:
+        # an ordinary broken test looks identical to one that needs its neighbours,
+        # and the report sent you hunting for cross-test state that was never
+        # there. One extra run per affected package, and none at all when green.
+        #
+        # PER-TEST, not per-package. The package exit code is too coarse: one
+        # unrelated red test would relabel every genuine isolation failure beside
+        # it as ordinary. So the together-run's output is scanned for THIS test's
+        # own failure marker.
+        for rel in sorted({rel for rel, _, _ in bad}):
+            r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
+                               capture_output=True, text=True)
+            out = r.stdout + r.stderr
+            for t in {t for rl, t, _ in bad if rl == rel}:
+                if f'failed: "{t}"' in out or f"--- FAIL: {t}" in out:
+                    red.add((rel, t))
         cleanup(root)
 
-    for rel, t, out in bad:
+    alone = [(rel, t, out) for rel, t, out in bad if (rel, t) not in red]
+    broken = [(rel, t, out) for rel, t, out in bad if (rel, t) in red]
+    for rel, t, out in broken:
+        print(f"BROKEN  {t} ({os.path.basename(rel)}) fails alone AND with its "
+              f"package — an ordinary failure, not an isolation problem")
+        for line in out[:4]:
+            print(f"        {line}")
+    for rel, t, out in alone:
         print(f"ALONE   {t} ({os.path.basename(rel)}) fails when it is the only "
-              f"test that runs")
+              f"test that runs, but passes with its package")
         for line in out[:4]:
             print(f"        {line}")
     if bad:
-        print(f"\n{len(bad)} of {total} tests pass only in company. A test that "
-              f"needs its neighbours is reporting on their state, not on the "
-              f"thing it names.")
+        if alone:
+            print(f"\n{len(alone)} of {total} tests pass only in company. A test "
+                  f"that needs its neighbours is reporting on their state, not on "
+                  f"the thing it names.")
+        if broken:
+            print(f"{len(broken)} of {total} tests fail either way. Fix those "
+                  f"first: a red suite tells you nothing about isolation.")
         return 1
     print(f"all {total} tests across {len(work)} packages pass alone as well as "
           f"together.")

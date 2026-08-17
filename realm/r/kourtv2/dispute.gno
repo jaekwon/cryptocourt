@@ -138,6 +138,7 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 		shift = maxFailedRounds - 1
 	}
 	bond := mustMul(base, int64(1)<<uint(shift))
+	mustSpendable(c, who, bond)
 	c.coin.Transfer(who, c.escrow, bond)
 
 	floor := quorumFloor(c, cs.xBarFrozen)

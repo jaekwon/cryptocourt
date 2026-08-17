@@ -33,8 +33,26 @@ func TestStakeUnstakeConservesEscrow(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(bob))
 	Stake(cross(cur), "st1", id, sideNO, 2_000_000_000)
 
-	if got := c.coin.BalanceOf(c.escrow); got != 5_000_000_000+dep+fee {
-		t.Fatalf("escrow should hold stakes+deposit+fee, got %d", got)
+	// The escrow holds the DEPOSIT AND FEE ONLY. Stake is a lock in place now, so
+	// the staked coins never left alice and bob — which is the entire point: the
+	// old arrangement disenfranchised them court-wide for as long as they staked,
+	// on every election and quality poll, to secure principal that was never at
+	// risk in the first place.
+	if got := c.coin.BalanceOf(c.escrow); got != dep+fee {
+		t.Fatalf("escrow should hold deposit+fee only, got %d", got)
+	}
+	if got := c.coin.BalanceOf(alice); got != 10_000_000_000-dep-fee {
+		t.Fatalf("alice's staked CC must stay in her own balance, got %d", got)
+	}
+	if got := c.coin.BalanceOf(bob); got != 5_000_000_000 {
+		t.Fatalf("bob's staked CC must stay in his own balance, got %d", got)
+	}
+	// Held, but committed: locked and spendable must partition the balance.
+	if got := LockedOf("st1", alice); got != 3_000_000_000 {
+		t.Fatalf("alice locked = %d", got)
+	}
+	if got := SpendableOf("st1", alice); got != 10_000_000_000-dep-fee-3_000_000_000 {
+		t.Fatalf("alice spendable = %d", got)
 	}
 	yes, no := StakePools("st1", id)
 	if yes != 3_000_000_000 || no != 2_000_000_000 {
@@ -50,12 +68,146 @@ func TestStakeUnstakeConservesEscrow(cur realm, t *testing.T) {
 	Unstake(cross(cur), "st1", id, sideYES, 2_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	Unstake(cross(cur), "st1", id, sideNO, 2_000_000_000)
-	// Everyone whole: escrow holds only the deposit+fee.
+	// Everyone whole and nothing locked: escrow still holds only the deposit+fee,
+	// and the lock rows are GONE rather than sitting at zero — a zero row is rent
+	// on state nobody reads.
 	if got := c.coin.BalanceOf(c.escrow); got != dep+fee {
 		t.Fatalf("after full unstake escrow holds only deposit+fee, got %d", got)
 	}
 	if c.coin.BalanceOf(alice) != 10_000_000_000-dep-fee || c.coin.BalanceOf(bob) != 5_000_000_000 {
 		t.Fatal("principals must return 1x")
+	}
+	if LockedOf("st1", alice) != 0 || LockedOf("st1", bob) != 0 {
+		t.Fatal("full unstake must clear the lock")
+	}
+	if c.locked.Has(string(alice)) || c.locked.Has(string(bob)) {
+		t.Fatal("a released lock should remove its row, not park a zero in it")
+	}
+}
+
+// THE invariant the lock has to buy back. Custody used to make double-committing
+// impossible for free: the coins physically left the balance, so the LEDGER
+// refused the second spend, on every path, including paths nobody had thought
+// about. A lock does not — the coins are still sitting there and the ledger will
+// happily let them be spent again.
+//
+// What makes that fatal rather than untidy: the second spend is one the realm
+// cannot honour. Stake the whole balance, post a bond against the same coins, and
+// at unstake the realm owes CC it does not hold and would have to MINT to return
+// it. Supply conservation is the one invariant a token cannot lose, so the check
+// that used to be the ledger's is now this realm's, on every path that moves a
+// user's CC into the escrow.
+//
+// Every one of those paths appears here. If a new one is added, it belongs here
+// too — that is the whole reason this test enumerates them instead of spot-
+// checking one.
+func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("lk-alice")
+	bob := testutils.TestAddress("lk-bob")
+	c := testCourt(cur, "lk1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "lk1", "Can locked CC be spent twice?")
+
+	// Alice builds the trailing average first, so the claim is ANSWERABLE before
+	// bob is tested against the answer path. Otherwise bob's refusal would come
+	// back "not enough stake history" and the test would pass without ever
+	// reaching the guard it names.
+	matureOI(cur, "lk1", id, alice, 200_000_000)
+
+	// Bob locks his ENTIRE balance as stake. Nothing is spendable after this.
+	// Ordering matters: staking freezes once an answer lands, so every path that
+	// needs an open claim is exercised before alice answers.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "lk1", id, sideNO, 10_000_000_000)
+	if got := SpendableOf("lk1", bob); got != 0 {
+		t.Fatalf("bob staked everything; spendable = %d", got)
+	}
+	// ...while his balance and his VOTES are untouched. Both halves matter: the
+	// balance is why the ledger cannot refuse the second spend, and the votes are
+	// why the change was worth making.
+	if got := c.coin.BalanceOf(bob); got != 10_000_000_000 {
+		t.Fatalf("locked CC must stay in bob's balance, got %d", got)
+	}
+	if got := c.coin.VotesOf(bob); got != 10_000_000_000 {
+		t.Fatalf("locked CC must keep voting, got %d votes", got)
+	}
+
+	// PATH 1 — another stake on the same coins.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		Stake(cross(cur), "lk1", id, sideYES, 1)
+	})
+	// PATH 2 — a claim deposit.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		OpenClaim(cross(cur), "lk1", "Filed with coins already staked")
+	})
+	// PATH 3 — an answer bond, on a claim that is answerable.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		PostAnswer(cross(cur), "lk1", id, sideYES)
+	})
+
+	// Alice answers out of her own unlocked balance; the claim freezes.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "lk1", id, sideYES)
+
+	// PATH 4 — a quality flag bond.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		OpenFlag(cross(cur), "lk1", id)
+	})
+	// PATH 5 — a dispute bond.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		OpenDispute(cross(cur), "lk1", id)
+	})
+
+	// Nothing above moved a coin, and SUPPLY IS UNCHANGED — the assertion the
+	// whole test exists for. A refusal that leaked would show up here as a mint.
+	if got := c.coin.BalanceOf(bob); got != 10_000_000_000 {
+		t.Fatalf("a refused commitment moved bob's coins: %d", got)
+	}
+	if got := LockedOf("lk1", bob); got != 10_000_000_000 {
+		t.Fatalf("a refused commitment changed the lock: %d", got)
+	}
+}
+
+// The lock's reason for existing, stated as a test: staking must not cost the
+// staker their vote. Under custody this was impossible to assert at all — the
+// coins were gone, so votable fell by exactly the staked amount and every
+// turnout bar in the court moved with it.
+func TestStakingDoesNotDisenfranchise(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("df-alice")
+	c := testCourt(cur, "df1", alice, 8_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "df1", "Does staking cost a vote?")
+	dep := c.params.minClaimDepositCC
+	fee := dep * depositFeeBps / 10000
+
+	testing.SkipHeights(epochBlocks * 2)
+	at := c.coin.Epoch() - 1
+	beforeVotes := c.coin.PastVotes(alice, at)
+	beforeVotable := votableAt(c, at)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "df1", id, sideYES, 4_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	at2 := c.coin.Epoch() - 1
+
+	if got := c.coin.PastVotes(alice, at2); got != beforeVotes {
+		t.Fatalf("staking moved alice's votes from %d to %d", beforeVotes, got)
+	}
+	if got := votableAt(c, at2); got != beforeVotable {
+		t.Fatalf("staking moved the court's votable base from %d to %d",
+			beforeVotable, got)
+	}
+	// And the escrow — whose balance is what votableAt nets — holds only the
+	// custodial deposit and fee, never the stake.
+	if got := c.coin.PastVotes(c.escrow, at2); got != dep+fee {
+		t.Fatalf("escrow votes = %d, want the deposit+fee only", got)
 	}
 }
 

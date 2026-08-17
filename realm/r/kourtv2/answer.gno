@@ -134,6 +134,7 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	if bond < 1 {
 		bond = 1
 	}
+	mustSpendable(c, who, bond)
 	c.coin.Transfer(who, c.escrow, bond)
 
 	// FREEZE: conviction is pinned here — immutable by construction (audit H1).

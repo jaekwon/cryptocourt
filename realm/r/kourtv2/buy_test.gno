@@ -107,3 +107,4 @@ func TestBuyRefusesNonUserCallsSelfBuysAndDustPayments(cur realm, t *testing.T) 
 	}
 	testing.SetOriginSend(nil)
 }
+

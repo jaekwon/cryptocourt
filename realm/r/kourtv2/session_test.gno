@@ -52,12 +52,26 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 		SettleUndisputed(cross(cur), "se1", id)
 	})
 
-	// Both sides withdraw 1×: the loser loses nothing.
+	// Both sides withdraw 1×: the loser loses nothing. Since v0.34 that is a lock
+	// RELEASE, not a payment — bob's principal never left his balance, so the
+	// withdrawal reports the full amount while the balance does not move. The
+	// balance-unchanged assertion is the one that would catch a release path that
+	// paid out as well as unlocking, which would mint principal from nothing.
 	bobBefore := c.coin.BalanceOf(bob)
+	if got := LockedOf("se1", bob); got != 300_000_000 {
+		t.Fatalf("bob's stake should be locked, not escrowed: locked = %d", got)
+	}
 	testing.SetRealm(testing.NewUserRealm(bob))
 	got := WithdrawStake(cross(cur), "se1", id, sideNO)
-	if got != 300_000_000 || c.coin.BalanceOf(bob) != bobBefore+300_000_000 {
-		t.Fatal("the losing side withdraws its full principal")
+	if got != 300_000_000 {
+		t.Fatalf("the losing side withdraws its full principal: got %d", got)
+	}
+	if c.coin.BalanceOf(bob) != bobBefore {
+		t.Fatalf("withdrawal is a release, not a transfer: balance moved %d",
+			c.coin.BalanceOf(bob)-bobBefore)
+	}
+	if got := LockedOf("se1", bob); got != 0 {
+		t.Fatalf("withdrawal must clear the lock: locked = %d", got)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	WithdrawStake(cross(cur), "se1", id, sideYES)

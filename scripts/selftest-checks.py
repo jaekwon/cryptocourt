@@ -110,6 +110,7 @@ CITE = "scripts/check-citations.py"
 STORE = "scripts/check-storage.py"
 NONTRANS = "scripts/check-nontransferable.py"
 GOVERN = "realm/r/govern"
+KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
 
 print("check-citations")
@@ -190,22 +191,42 @@ else:
             argv=["python3", "scripts/check-docnumbers.py"])
 
     print("\ncheck-isolation")
-    # One of the two real dependencies: a test asserting messages that need a
-    # kind to exist, without registering it. resetLedger does not clear the kind
-    # registry, so in company some earlier test always had. --only keeps the
-    # control cheap; the full sweep runs the suite once per test.
-    #
-    # Deliberately NOT the other one — an assertion on a literal epoch 1. Fixing
-    # that test added an empty epoch at its start, which makes epoch 1 genuinely
-    # empty when it runs first, so putting the literal back no longer recreates
-    # the bug. A control has to fail for the reason it names.
-    control("a test that passes only in company", f"{GOVERN}/governor_test.gno",
-            '\tengine.Adopt(setFee{}, Rules{\n'
-            '\t\tQuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100, GraceBlocks: 1_000_000,\n'
-            '\t})\n',
-            "", "ALONE",
+    # Appended AFTER an existing function, not after the package clause: a
+    # declaration inserted above the import block is a PARSE error, and a package
+    # that will not parse never runs a test, so the control would be measuring the
+    # parser rather than the classification. (It did, briefly.)
+    control("an ordinary failure misreported as isolation",
+            f"{GOVERN}/clock_test.gno",
+            "func resumeClock() { advanceBlocks(0) }",
+            "func resumeClock() { advanceBlocks(0) }\n\n"
+            "func TestSelfTestBrokenEitherWay(t *testing.T) {\n"
+            "\tt.Error(\"deliberate\")\n}",
+            "fail either way",
             argv=["python3", "scripts/check-isolation.py",
-                  "--only", "TestAMalformedRulesPayloadIsRefusedAtTheDoor"])
+                  "--only", "TestSelfTestBrokenEitherWay"])
+
+    # The genuine article: a test that reads a court a NEIGHBOUR created. kourtv2's
+    # package-global `courts` tree is never reset between tests, so alone this
+    # panics with "no such court" and in company it passes — which is exactly the
+    # dependency this guard exists to surface, and the label that must not be
+    # confused with the one above.
+    #
+    # This used to be done in govern, by deleting the kind registration from
+    # TestAMalformedRulesPayloadIsRefusedAtTheDoor. That control is retired
+    # because its premise is dead, not because it was noisy: resetLedger now
+    # builds a WHOLE NEW governor (`engine = governor.New(...)`), so the kind
+    # registry no longer survives a reset and the leak it reproduced cannot
+    # happen. Verified by running it — the test fails alone AND with its package
+    # now, so the old control was pointing the new classifier at the wrong label.
+    control("a test that passes only in company", f"{KOURTV2}/stake_test.gno",
+            "// THE invariant the lock has to buy back.",
+            "func TestSelfTestNeedsANeighboursCourt(cur realm, t *testing.T) {\n"
+            "\tif StakePools(\"st1\", 1); false {\n"
+            "\t\tt.Fatal(\"unreachable\")\n\t}\n}\n\n"
+            "// THE invariant the lock has to buy back.",
+            "ALONE",
+            argv=["python3", "scripts/check-isolation.py",
+                  "--only", "TestSelfTestNeedsANeighboursCourt"])
 
     # The failure this guard itself suffered, and the reason this file exists.
     # Its package list used to be a hand-kept COPY of the Makefile's, and the two

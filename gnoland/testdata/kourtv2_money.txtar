@@ -24,6 +24,7 @@ gnoland start
 # a typo queries the wrong account and fails loudly.
 env COURTV2=g1ulvf0h879a8jg7kdhv23z9zwvnm6r04rm3ks9k
 env SINK=g1xskc47gkn4975avrpsdgxy2cxm2ddz4fhm2yls
+env USER_ADDR=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
 
 # --- Fresh realm: only the review court, hygiene from block one ---------------
 # A fresh realm is NOT empty: the meta (appeals) court is deployed at init under
@@ -90,20 +91,36 @@ stdout 'OK!'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinBalanceOf(\"orem\",\"${COURTV2}\")"
 stdout '\(1100000 int64\)'
 
-# Stake 0.5 CC on YES: escrow grows by exactly the stake.
+# Stake 0.5 CC on YES. Since v0.34 staking is a LOCK IN PLACE, so the escrow does
+# NOT grow: the coins stay in the staker's own balance and keep their vote. That is
+# the whole point of the change, and this is the only place it is exercised through
+# a real transaction on a real ledger rather than in-process.
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args orem -args 1 -args 0 -args 500000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinBalanceOf(\"orem\",\"${COURTV2}\")"
-stdout '\(1600000 int64\)'
+stdout '\(1100000 int64\)'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.StakePools(\"orem\",1)"
 stdout '500000 int64'
 
-# Unstake it all: the escrow returns to exactly deposit+fee. Conservation, on a
-# real ledger, not a mock.
+# The position is recorded as a lock against test1's own balance, and locked plus
+# spendable partition it. Asserting both halves is what makes this more than a
+# restatement of the stake: a lock that recorded nothing would leave spendable
+# whole, and a lock that double-counted would leave it short.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.LockedOf(\"orem\",\"${USER_ADDR}\")"
+stdout '\(500000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.SpendableOf(\"orem\",\"${USER_ADDR}\")"
+stdout '\(330062479 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinBalanceOf(\"orem\",\"${USER_ADDR}\")"
+stdout '\(330562479 int64\)'
+
+# Unstake it all: the lock clears and the escrow is untouched throughout, because
+# the stake was never in it. Conservation, on a real ledger, not a mock.
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Unstake -args orem -args 1 -args 0 -args 500000 -gas-fee 1000000ugnot -gas-wanted 100000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinBalanceOf(\"orem\",\"${COURTV2}\")"
 stdout '\(1100000 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.LockedOf(\"orem\",\"${USER_ADDR}\")"
+stdout '\(0 int64\)'
 
 # --- Public pages: the §7.4 hygiene walls ----------------------------------------
 # Court and claim pages exist, show absolute CC figures, and never render the

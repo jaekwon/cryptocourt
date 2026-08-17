@@ -316,6 +316,7 @@ func addNomination(c *Court, cm *courtMod, e *election, cand *modCandidate, who 
 	if e.lines.Has(beClaimKey(cand.id)) {
 		panic("kourtv2: that candidate is already on the ballot")
 	}
+	mustSpendable(c, who, e.bond)
 	c.coin.Transfer(who, c.escrow, e.bond) // the poster's own CC (the I2 carve-out)
 	e.nominators.Set(who.String(), true)
 	e.lines.Set(beClaimKey(cand.id), &ballotLine{
