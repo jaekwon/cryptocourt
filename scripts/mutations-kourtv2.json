@@ -1692,5 +1692,103 @@
     "label": "folders: a purge needs no statutory category code",
     "find": "\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
     "replace": ""
+  },
+  {
+    "label": "strips: the per-actor cap never binds on a court strip",
+    "find": "\tcapBinds := c.stripIdx.Size() > renderPageSize\n",
+    "replace": "\tcapBinds := false\n",
+    "pkg": "kourtv2",
+    "file": "strips.gno"
+  },
+  {
+    "label": "strips: a single actor may fill a contended court page",
+    "find": "\t\t\tif perAnswerer[a] >= stripActorCap || perAuthor[b] >= stripActorCap {\n\t\t\t\treturn false // this actor already holds its share of a contended page\n\t\t\t}\n",
+    "replace": "",
+    "pkg": "kourtv2",
+    "file": "strips.gno"
+  },
+  {
+    "label": "strips: the court page has no limit",
+    "find": "\t\tout = append(out, id)\n\t\treturn len(out) >= limit\n",
+    "replace": "\t\tout = append(out, id)\n\t\treturn false\n",
+    "pkg": "kourtv2",
+    "file": "strips.gno"
+  },
+  {
+    "label": "strips: the seeded exemption is dropped",
+    "find": "\t\tif capBinds && !cs.seeded {\n",
+    "replace": "\t\tif capBinds {\n",
+    "pkg": "kourtv2",
+    "file": "strips.gno"
+  },
+  {
+    "label": "strips: the directory strip's per-court cap never binds",
+    "find": "\tcapBinds := globalStripIdx.Size() > renderPageSize\n",
+    "replace": "\tcapBinds := false\n",
+    "pkg": "kourtv2",
+    "file": "strips.gno"
+  },
+  {
+    "label": "strips: one court may fill the directory strip",
+    "find": "\t\t\tif perCourt[r.slug] >= stripActorCap {\n",
+    "replace": "\t\t\tif false {\n",
+    "pkg": "kourtv2",
+    "file": "strips.gno"
+  },
+  {
+    "label": "records: qualifiedCount rises on every credit, not the crossing",
+    "find": "\twasQualified := r.score >= priorityNetRecord\n\tr.score++\n\tif !wasQualified && r.score >= priorityNetRecord {\n",
+    "replace": "\twasQualified := r.score >= priorityNetRecord\n\t_ = wasQualified\n\tr.score++\n\tif r.score >= priorityNetRecord {\n",
+    "pkg": "kourtv2",
+    "file": "records.gno"
+  },
+  {
+    "label": "records: an overturn does not decrement the qualified count",
+    "find": "\tif r.score >= priorityNetRecord {\n\t\tc.qualifiedCount--\n\t}\n",
+    "replace": "",
+    "pkg": "kourtv2",
+    "file": "records.gno"
+  },
+  {
+    "label": "records: an overturn does not burn the record",
+    "find": "\tr.score = 0\n",
+    "replace": "",
+    "pkg": "kourtv2",
+    "file": "records.gno"
+  },
+  {
+    "label": "records: the cold-start gate binds immediately",
+    "find": "func priorityGateActive(c *Court) bool { return c.qualifiedCount >= priorityColdStartN }",
+    "replace": "func priorityGateActive(c *Court) bool { return true }",
+    "pkg": "kourtv2",
+    "file": "records.gno"
+  },
+  {
+    "label": "records: an answerer may hold two priority claims at once",
+    "find": "\treturn r.score >= priorityNetRecord && r.activePriority == 0",
+    "replace": "\treturn r.score >= priorityNetRecord",
+    "pkg": "kourtv2",
+    "file": "records.gno"
+  },
+  {
+    "label": "modrender: a purged claim renders its title instead of the tombstone",
+    "find": "\t\t\tif clm.purged {\n\t\t\t\treturn \"[removed · \" + sanitize.InlineText(clm.tombstone) + \"]\"\n\t\t\t}\n",
+    "replace": "",
+    "pkg": "kourtv2",
+    "file": "modrender.gno"
+  },
+  {
+    "label": "modrender: a globally redacted claim renders its title",
+    "find": "\t\t\tif clm.global {\n\t\t\t\treturn \"[text withheld]\"\n\t\t\t}\n",
+    "replace": "",
+    "pkg": "kourtv2",
+    "file": "modrender.gno"
+  },
+  {
+    "label": "modrender: a hidden claim's deep link carries no banner",
+    "find": "\tclm := lookupClaimMod(c.mod, cs.id)\n\tif clm == nil {\n\t\treturn \"\"\n\t}\n",
+    "replace": "\tclm := lookupClaimMod(c.mod, cs.id)\n\tif clm == nil {\n\t\treturn \"\"\n\t}\n\treturn \"\"\n",
+    "pkg": "kourtv2",
+    "file": "modrender.gno"
   }
 ]

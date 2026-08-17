@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.44 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.46 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,89 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.46 — `records.gno` and `modrender.gno` measured; every source file in the
+  realm now has mutation coverage. Batch 256, and the zero-coverage list is
+  empty.** Both files also have **no panics**, so both were mutated on their
+  expressions.
+  - **`records.gno` was better covered than the first run suggested, and the
+    apparent gap was mine.** Four of five caught immediately — including by an
+    existing `TestOverturnOnlyDecrementsAQualifiedRecord`, which turns out to pin
+    the decrement, the record burn *and* the crossing detector. The fifth came back
+    **INVALID rather than survived**: dropping `!wasQualified` leaves the local
+    unused, so the mutant did not build. Rewritten to keep it live, it is caught
+    too. **AN INVALID MUTANT LOOKS LIKE A GAP AND IS NOT ONE** — the harness
+    reporting invalid separately from survived is what kept me from writing a test
+    for coverage that already existed.
+  - **`modrender.gno`'s global-redaction arm was genuinely unpinned.** The purge
+    tombstone and the hide banner were both caught, but the `global` →
+    *"[text withheld]"* substitution was not: `TestModGlobalRedactAndRecovery`
+    asserted the **bits** — `TextRedacted`, `HiddenFromListing` — and never once the
+    rendered text. **A BIT THAT IS SET WHILE THE WORDS STILL RENDER IS NOT A
+    REDACTION**, and I3's requirement is the text, not the flag. Pinned in both
+    directions: withheld while redacted, and the title back after the clear, since
+    the second half is what makes it a substitution rather than a permanent blank.
+  - **What "no file has zero coverage" does and does not mean.** It means every
+    source file in `kourtv2` now has at least one mutation asserting something about
+    it, and that the six surfaces this audit opened — moderation, meta, folders,
+    strips, records, modrender — each had guards that could be deleted silently, and
+    no longer do. It does **not** mean every guard is pinned: the batch covers the
+    guards I chose to mutate, and I chose them by reading. The next honest step is
+    not another file but a different question — which *expressions* in the covered
+    files still have no mutation at all.
+  - **So that question was measured, and the answer is sobering: 162 of 1081
+    decision sites, or 15%.** Counting a decision site as a `panic` or a
+    branch/bound line, and counting it touched only when a batch anchor actually
+    contains that line:
+
+    | untouched | sites | muts | file |
+    |---:|---:|---:|---|
+    | **85** | **85** | 2 | **modvote.gno** |
+    | 144 | 147 | 8 | moderation.gno |
+    | 98 | 142 | 53 | quality.gno |
+    | 64 | 65 | 11 | render.gno |
+    | 74 | 87 | 13 | meta.gno |
+
+    **`modvote.gno` has zero of its 85 decision sites touched by any mutation** —
+    the election machinery, I12's territory, and where the v0.25 deposed-signature
+    bug lived. Its two existing mutations both target non-branch lines. That is not
+    the same as untested: the file has many election tests. It means nothing
+    *measures* which of its branches those tests actually pin, which is precisely
+    the state every surface in this audit was in before it was measured, and
+    precisely the state in which `folders.gno` had four tests and pinned none of its
+    rules. **A FILE-LEVEL COVERAGE CLAIM CAN BE TRUE AND STILL HIDE A 15%
+    SITE-LEVEL REALITY.** Recorded here as the frontier rather than left as a
+    feeling that the sweep was finished.
+- **v0.45 — I9's ANTI-FLOOD SPINE WAS ENTIRELY UNPINNED. All six arms survived;
+  all six are now caught. Batch 248.** `strips.gno` has **no panics at all** — its
+  behaviour lives in ordering and bounds, which is precisely what I9 names (the
+  deadline spine, per-actor caps binding under overflow, pagination, seeded exempt).
+  So this is the first batch of the audit to mutate **expressions rather than
+  guards**, and every one of them survived: the per-actor cap on the court strip,
+  a single actor filling a contended page, the page bound, the seeded exemption, the
+  directory strip's per-court cap, and one court filling the directory strip.
+  **WHERE A FILE HAS NO PANICS, ITS BEHAVIOUR IS IN ITS EXPRESSIONS.** The
+  sybil-blockade property was a claim in this document and nowhere in the suite.
+  - **The rows are constructed, and the reason is stated in the test.** Driving 51
+    claims through `matureOI` and `PostAnswer` to make `capBinds` true would cost far
+    more than it proves: the answer-to-strip path already has its own test, and what
+    is under test here is the cap and bound arithmetic. Deadlines are set **late** on
+    purpose — the strip is deadline-ordered and `globalStripIdx` is package-global
+    and never reset, so early deadlines would have pushed a neighbour's row off the
+    first directory page. The test removes its sixty rows at the end for the same
+    reason.
+  - **The page bound needed a second arm, because the cap hides it.** With the
+    flooder held to its share the page is short, so a missing limit never shows.
+    Giving every row a distinct actor stops the cap cutting, and then only the bound
+    holds the page to one page — plus a caller-supplied limit below it.
+  - **And the seeded exemption survived my first fixture, for an instructive
+    reason.** I gave the one seeded row to an innocent third party who owned nothing
+    else — so the cap would not have excluded it either way, and the test passed
+    whether or not the exemption existed. **AN EXEMPTION ONLY MEANS ANYTHING WHEN
+    THE EXEMPT ROW'S OWNER IS ALREADY OVER QUOTA.** Reassigned to the flooder and
+    placed last by deadline, it is excluded without the exemption and present with
+    it. The cap assertion had to be corrected in the same breath, to count only
+    **non-exempt** rows — otherwise the exemption makes the cap look breached by its
+    own rule.
 - **v0.44 — `folders.gno` had folder tests and pinned none of its rules. All six
   now caught; batch 242.** Curation is the shallow end of the moderation
   constitution, which is presumably why it was never measured: four folder tests

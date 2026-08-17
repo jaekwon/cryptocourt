@@ -200,6 +200,13 @@ func TestModGlobalRedactAndRecovery(cur realm, t *testing.T) {
 	if !TextRedacted("modg", id) || !HiddenFromListing("modg", id) {
 		t.Fatal("global hide should redact and hide")
 	}
+	// THE TEXT ITSELF, not just the bit. This test asserted the flags and never the
+	// rendering, so the substitution that makes a redaction mean anything — the title
+	// replaced by a withheld notice — could be deleted with nothing noticing. A bit
+	// that is set while the words still render is not a redaction.
+	if got := claimTitleFor(mustCourt("modg"), mustClaim(mustCourt("modg"), id)); got != "[text withheld]" {
+		t.Fatalf("a globally redacted claim must render a withheld notice, got %q", got)
+	}
 	// Clear-any recovery lifts the court + meta bits (not the global bit).
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	ClearAnyBit(cross(cur), "modg", id)
@@ -211,6 +218,11 @@ func TestModGlobalRedactAndRecovery(cur realm, t *testing.T) {
 	GlobalClear(cross(cur), "modg", id)
 	if TextRedacted("modg", id) || HiddenFromListing("modg", id) {
 		t.Fatal("global clear should fully un-redact and un-hide")
+	}
+	// ...and the words come back, which is the half that makes the assertion above a
+	// substitution rather than a permanent blank.
+	if got := claimTitleFor(mustCourt("modg"), mustClaim(mustCourt("modg"), id)); got != "redact me" {
+		t.Fatalf("a cleared claim must render its title again, got %q", got)
 	}
 }
 
