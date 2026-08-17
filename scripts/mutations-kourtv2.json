@@ -523,5 +523,12 @@
     "label": "mod: the purge threshold accepts any number",
     "find": "\t\tpanic(\"kourtv2: the purge threshold must be in 1..n\")\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: AppointMods keeps the outgoing set's approvals",
+    "find": "\tclearPendingOnMembershipChange(&cm.pending)\n",
+    "replace": ""
   }
 ]

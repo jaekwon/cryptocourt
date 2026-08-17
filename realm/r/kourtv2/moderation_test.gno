@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"chain/runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -652,4 +653,67 @@ func TestModerationRangeAndAuthorityGates(cur realm, t *testing.T) {
 	// THE CONTROL: 1 is in range for any n >= 1, which holds by construction.
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	SetPurgeThreshold(cross(cur), 1)
+}
+
+// AppointMods discards the outgoing set's banked approvals. Same class as the
+// election-install case (v0.25), reached by the other route: the creator holds the
+// appointment power until an election spends it, so a creator can swap the set
+// directly, and a signature banked by the old set must not complete the new set's
+// quorum.
+//
+// Observable in a way ResetModSet's clear is not: the new set can act immediately
+// after an appointment, with no other clear in between. Mutation-verified.
+func TestAppointModsDiscardsTheOutgoingSetsApprovals(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("apnt-alice")
+	oldA := testutils.TestAddress("apnt-oldA")
+	oldB := testutils.TestAddress("apnt-oldB")
+	newX := testutils.TestAddress("apnt-newX")
+	newY := testutils.TestAddress("apnt-newY")
+	testCourt(cur, "apnt", alice, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "apnt", []address{oldA, oldB}, 2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "apnt", "a claim the old set wanted buried")
+
+	// The outgoing set banks one of the two it needs.
+	testing.SetRealm(testing.NewUserRealm(oldA))
+	HideItem(cross(cur), "apnt", id, "pretextual")
+	if HiddenFromListing("apnt", id) {
+		t.Fatal("fixture: one of two must not fire")
+	}
+	hideAt := runtime.ChainHeight()
+	hideKey := "hide:" + strconv.FormatUint(id, 10)
+	if n, _ := PendingApproval("apnt", hideKey); n != 1 {
+		t.Fatalf("fixture: the old set must have ONE banked approval, got %d", n)
+	}
+
+	// The creator swaps in a DISJOINT set.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "apnt", []address{newX, newY}, 2)
+	if IsCourtMod("apnt", oldA) {
+		t.Fatal("fixture: the old set must be gone")
+	}
+
+	// The premise, asserted rather than assumed: the approval is gone because the
+	// APPOINTMENT discarded it, not because it timed out.
+	if runtime.ChainHeight() >= hideAt+pendingTTLBlocks {
+		t.Fatal("fixture went vacuous: the pending TTL elapsed, so the banked " +
+			"approval would have expired with or without the clear")
+	}
+
+	// ONE member of the incoming set acts. Under the bug, oldA's banked signature
+	// completes the 2-of-2 and this hides the claim.
+	testing.SetRealm(testing.NewUserRealm(newX))
+	HideItem(cross(cur), "apnt", id, "reviewing")
+	if HiddenFromListing("apnt", id) {
+		t.Fatal("a deposed set's signature completed the incoming set's quorum")
+	}
+	// ...and the incoming set CAN act on its own two signatures, so the refusal
+	// above is the stale approval being discarded and not a broken set.
+	testing.SetRealm(testing.NewUserRealm(newY))
+	HideItem(cross(cur), "apnt", id, "reviewing")
+	if !HiddenFromListing("apnt", id) {
+		t.Fatal("the incoming set's own 2-of-2 must fire")
+	}
 }

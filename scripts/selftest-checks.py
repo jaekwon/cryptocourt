@@ -109,6 +109,7 @@ def have_gno():
 CITE = "scripts/check-citations.py"
 STORE = "scripts/check-storage.py"
 NONTRANS = "scripts/check-nontransferable.py"
+MEMCLEAR = "scripts/check-membership-clears.py"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
@@ -152,6 +153,27 @@ control("a guard that lost the tree it watches", NONTRANS,
         'REALMS = ["kourtv9_moved"]',
         "measuring nothing",
         argv=["python3", NONTRANS])
+
+print("\ncheck-membership-clears")
+# The guard exists because ResetModSet's clear cannot be pinned by any TEST — it
+# empties the set, so nothing can act until AppointMods or installModSet
+# re-installs one, and both clear on the way in. Its effect is always superseded,
+# so a mutation deleting it survives every possible test and always will. What can
+# still go wrong is a FOURTH install path that forgets to clear, which is
+# structural, so it gets a script instead of a test.
+control("a membership write that forgets to clear", f"{KOURTV2}/moderation.gno",
+        "func ResetModSet(cur realm, courtSlug string) {",
+        "func SelfTestSneakyInstall(c *Court, cm *courtMod) {\n\tcm.n = 1\n}\n\n"
+        "func ResetModSet(cur realm, courtSlug string) {",
+        "changes without discarding its pending approvals",
+        argv=["python3", MEMCLEAR])
+# Fail CLOSED: a write pattern that stops matching the code must be an error, not
+# an empty scan reported as a clean one.
+control("a membership pattern that drifted off the code", MEMCLEAR,
+        r'r"^\s*cm\.(members\s*=|n\s*=|n\+\+|n--)"',
+        r'r"^\s*cmNOPE\.(members)"',
+        "cannot be right",
+        argv=["python3", MEMCLEAR])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")

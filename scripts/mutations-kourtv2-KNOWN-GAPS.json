@@ -2,20 +2,6 @@
   {
     "pkg": "kourtv2",
     "file": "moderation.gno",
-    "label": "mod: AppointMods keeps the outgoing set's approvals",
-    "find": "\tclearPendingOnMembershipChange(&cm.pending)\n",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "moderation.gno",
-    "label": "mod: ResetModSet keeps the wiped set's approvals",
-    "find": "\tclearPendingOnMembershipChange(&cm.pending) // stale approvals die with the set\n",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "moderation.gno",
     "label": "mod: AddGlobalMod keeps stale approvals",
     "find": "\t\tclearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over\n",
     "replace": ""

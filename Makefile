@@ -27,6 +27,7 @@ realm-test:
 	python3 scripts/check-docnumbers.py || exit 1; \
 	python3 scripts/check-storage.py || exit 1; \
 	python3 scripts/check-nontransferable.py || exit 1; \
+	python3 scripts/check-membership-clears.py || exit 1; \
 	root=$$(gno env GNOROOT); \
 	rbase="$$root/examples/gno.land/r/kourt"; \
 	pbase="$$root/examples/gno.land/p/kourt"; \

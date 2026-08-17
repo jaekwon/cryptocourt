@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.38 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.39 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,42 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.39 — `AppointMods` pinned, and one guard proved UNPINNABLE BY ANY TEST, so
+  it got a structural check instead.** Two more of the six closed, by opposite
+  means, and the second is the interesting one.
+  - **`AppointMods` discards the outgoing set's approvals** — the same v0.25 class
+    reached by the other route, since a creator holds the appointment power until an
+    election spends it and can therefore swap the set directly. Pinned, and
+    mutation-verified. Observable where `ResetModSet` is not: the incoming set can
+    act immediately, with no other clear in between. The fixture carries the same
+    two premise assertions the repaired v0.25 one does (one banked approval before
+    the swap; the TTL not yet elapsed when the new set acts) **plus** a closing
+    control — the incoming set fires on its *own* 2-of-2, so the refusal is the
+    stale approval being discarded and not simply a broken set.
+  - **`ResetModSet`'s clear cannot be pinned by any test, and that is a fact about
+    the design rather than a gap.** It empties the set, so nobody can act until
+    `AppointMods` or `installModSet` re-installs one — and **both of those clear on
+    the way in.** Its effect is therefore always superseded, a mutation deleting it
+    survives every possible test, and always will. Verified exhaustively rather
+    than argued: only three functions in the realm write `cm.members` or `cm.n`,
+    and all three clear.
+    - So it is defence in depth, it stays, and the thing that could make it
+      load-bearing — **a fourth install path that forgets to clear** — is drift a
+      test cannot see. That gets `scripts/check-membership-clears.py`: every
+      function changing a set's membership must discard its pending approvals, or
+      the build fails. Two controls, both firing: a fourth path with no clear trips
+      it, and a write pattern that stops matching the code **fails closed** rather
+      than scanning nothing and reporting clean. Six guards in `scripts/` now, all
+      controlled.
+    - Its mutation is removed from **both** batches. Keeping it in the main one
+      would leave a standing survivor; keeping it in known-gaps would assert a gap
+      that no test can ever close. **WHEN A GUARD IS UNPINNABLE BY CONSTRUCTION,
+      SAY SO AND ENFORCE THE CONSTRUCTION** — the reasoning lives in the check
+      script, where the next person to add an install path will read it.
+  - Main batch **76, all caught**; known gaps down to **four**, all of them the
+    global-DAO clears (`AddGlobalMod`, `RemoveGlobalMod`, `SetPurgeThreshold`,
+    `TransferGlobalAdmin`), which share one body and need a second DAO member plus
+    a raised threshold before any approval can be banked at all.
 - **v0.38 — three of the nine unpinned moderation guards are now pinned; six
   remain, and they are all the same shape.** `TestModerationRangeAndAuthorityGates`
   closes the cheap three: `AppointMods`' m-of-n range (0 and n+1 both refused),
