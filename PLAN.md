@@ -1610,6 +1610,72 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v0.52 — v0.51's latch was one latch too wide (HIGH, caught in the post-commit
+  vet); the answerer's Q5 challenge is an INDEPENDENT poll again.** Two independent
+  reviewers converged on the same defect in v0.51 as committed: `qualityReasked` was a
+  single per-claim latch shared by `OpenDispute` and `CounterFlag`, so whichever fired
+  first spent it — and a third party always fires first, **race-free**. `ResolveFlag`
+  is permissionless, so the flagger submits `ResolveFlag` and `OpenDispute` at the same
+  height; `CounterFlag` panics on `pendingSlash <= 0` before the first and on
+  `disputeOpen` after the second, so there is no block in between in which the answerer
+  could have acted. The severity comes from a property I had treated purely as a
+  virtue: `qVoted` keys on `qVoteSeq|addr`, so a frozen seq **locks out every address
+  that already voted**. An honest elector who changes their mind cannot, and their
+  earlier low keeps counting against the answerer. §3.4's "a capture-whale must win ⅔
+  TWICE, the second against maximal mobilization (p² ≈ 0)" presupposes the counter
+  re-vote is an independent second poll; inheriting the ride's tally collapses p² to p.
+  A reviewer's worked case (low bloc 0.80·fullBar + 0.38·fullBar) burns the reserve
+  where the pre-v0.51 code refunded it — **same electorate, same weight, same beliefs**,
+  the only difference being that one honest voter's earlier ballot is frozen. Fix:
+  `CounterFlag` re-opens the tally UNCONDITIONALLY **and latches**. **The reviewers'
+  literal one-line fix — wipe without latching — reintroduces the purchase, and my own
+  v0.51 fixture is what caught it.** Both reviewers asserted the resulting budget was
+  "one for the ride plus one for the answerer, strictly the doctrine"; neither priced
+  ORDERING. Unlatched, the answerer takes TWO rolls by choosing the order: counter-flag
+  first (roll one), watch the crowd re-confirm low, then sock-dispute to spend the
+  ride's still-unspent wipe (roll two), erasing that low and voting mid alone over the
+  bar — refunding the reserve for ~4%·X̄, the identical purchase v0.47, v0.50 and v0.51
+  each closed at a different door. Latching makes the budget ORDER-INDEPENDENT: at most
+  one fresh tally per lane and never two for one party. A sock that disputes first
+  spends the ride's wipe and the answerer still gets their own poll; an answerer that
+  counters first spends both, and every later round votes their accumulating tally.
+  Latching costs the answerer nothing they are owed, since their wipe is unconditional
+  either way and `counterUsed` already bounds them to one challenge. Mutation-verified
+  in BOTH directions, the two fixtures now pinning each other in opposition: drop the
+  latch and `TestSockDisputeCannotEraseTheCounterTally` fails (the sock erases the
+  counter tally); gate the wipe and `TestCounterFlagAlwaysGetsAnIndependentPoll` fails
+  (the answerer inherits the ride). Neither error mode can slip through alone — which
+  is the lesson: this defect and its fix are a matched pair, and a test for either half
+  by itself would have passed the broken version. **Also closes**, per the same reviewer,
+  a second path: the governor leaves `stateActive` BEFORE `p.closes` on three
+  verdict-tally predicates (`governor.gno:1032/1050/1057`), so a whale could have spent
+  the shared wipe on a ride with zero votable blocks; with the answerer's ballot no
+  longer spendable, that buys nothing. **Vet results worth recording as PROVEN, not
+  assumed:** STRAND none and CONSERVATION proven, by closure over every write to
+  `pendingSlash`/`counterOpen`/`slashLevied`/`slotConsumed` — `counterOpen ⟹
+  pendingSlash > 0` holds, the two closers partition all heights, and
+  `counterVoteEnd = pendingSlashUntil` is load-bearing (shorter would leave a stretch
+  where `ResolveCounter` is early and `ResolveSlashWindow` is blocked). FREEZE none: the
+  new ride guard is the exact complement of `ResolveDispute`'s. And the first-mover
+  poison I was most worried about **does not price out** — pre-seeding hurts the
+  answerer only when the griefer's low weight exceeds `2·fullBar` (≥10% of court supply
+  held non-staking), at which point they win the ⅔ contest outright and need no grief;
+  below it, banked adverse weight counts toward the turnout bar the answerer must clear,
+  so accumulation HELPS them. **Corrections to my own v0.51 comments:** the
+  failed-quorum branch's claim that the reverse ordering "would strand in escrow with
+  no later payout path" is FALSE — `refundSlash` has a `provClose` arm that pays the
+  answerer directly, so both orders are safe and the ordering is a preference for the
+  common path; and that branch scores the RESERVE only, deliberately not the TIER, so
+  an identical full-bar non-⅔-low ride refunds while leaving `tier` LOW where a decided
+  round promotes to MID. That asymmetry errs conservative in both directions it can err,
+  and widening it moves draw money, so it stays pending its own econ vet. Documented the
+  voter-facing rule neither v0.51 nor its reviewers had written down: across an
+  accumulating tally an address's FIRST quality vote is its ONLY one, which changes the
+  elector's optimal play on a ride to "commit once, late". **Residual:**
+  `lastFlagEventAt` is not restamped on the two `ResolveDispute` dispose paths, unlike
+  every other closer — harmless while `slotConsumed` bars a re-flag, but the 24h
+  Crystallize quiet window is inconsistently maintained.
+
 - **v0.51 — the TALLY WIPE was the re-roll (HIGH); the quality question is now
   re-asked exactly once and then accumulates.** v0.48 fixed a stranger's dispute
   spending the answerer's one-shot Q5 challenge by having `parkCounter` CANCEL the

@@ -129,10 +129,14 @@ type claimState struct {
 	// a STALE flagger from an earlier inconclusive cycle whose bond already came back
 	// whole under T1, who would then mint a bounty for a slash the RIDE levied.
 	slashFlagger address
-	// qualityReasked is the one-way EXACTLY-ONCE latch on the TALLY WIPE — the dual
-	// of slashLevied, which bounds ORIGINATION. Once a conclusive tally has
-	// adjudicated quality, the tally resets AT MOST ONCE more; every later round and
-	// window votes the same ACCUMULATING tally. Without it the wipe was the re-roll:
+	// qualityReasked is the one-way EXACTLY-ONCE latch on the DISPUTE RIDE's tally
+	// wipe — the dual of slashLevied, which bounds ORIGINATION. Once a conclusive
+	// tally has adjudicated quality, a ride resets the tally AT MOST ONCE more; every
+	// later round votes the same ACCUMULATING tally. It does NOT gate CounterFlag,
+	// which is answerer-gated and one-way via counterUsed and therefore cannot be
+	// used to re-roll — gating it here let a stranger's round spend the answerer's
+	// guaranteed-fresh v0.31/Q5 ballot, which is the one thing the doctrine promises
+	// them. Without this latch the wipe was the re-roll:
 	// each reopen handed a sock a fresh coin flip at the price of a dispute bond,
 	// erasing the honest low weight that had already answered the question, so the
 	// slash (and, after it disposed, the whole tier and its draw) could be re-rolled

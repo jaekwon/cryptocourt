@@ -1257,3 +1257,96 @@ func TestRideVoteClosesWithTheRoll(cur realm, t *testing.T) {
 		VoteQuality(cross(cur), "wp4", id, qualityMid)
 	})
 }
+
+// v0.51 follow-up (HIGH, found by two independent reviewers): the answerer's ONE
+// v0.31/Q5 challenge must be an INDEPENDENT poll, not a continuation of a
+// stranger's. Gating CounterFlag on the shared qualityReasked latch made the
+// challenge third-party consumable RACE-FREE: ResolveFlag is permissionless, so the
+// flagger submits ResolveFlag and OpenDispute at the same height, and CounterFlag
+// panics on pendingSlash<=0 before the first and on disputeOpen after the second —
+// there is no block in between. The answerer then inherits the ride's tally, and
+// because qVoted keys on qVoteSeq|addr a frozen seq LOCKS OUT everyone who already
+// voted: an honest elector who changes their mind cannot, and their earlier low
+// still counts against the answerer. §3.4's "win ⅔ TWICE, the second against
+// maximal mobilization (p² ≈ 0)" collapses to p.
+//
+// Weights are chosen so the two worlds diverge on the SAME electorate and beliefs:
+// carol 0.8xfullBar, dan 0.35xfullBar. carol alone is sub-bar (the ride re-arms);
+// carol+dan clears the bar; and carol >= 2xdan, so an inherited carol-low would
+// hold the ⅔ and SETTLE where a fresh tally REFUNDS.
+func TestCounterFlagAlwaysGetsAnIndependentPoll(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("wp5-alice") // author + answerer
+	bob := testutils.TestAddress("wp5-bob")     // round-1 disputer, flagger, then sock
+	carol := testutils.TestAddress("wp5-carol")
+	dan := testutils.TestAddress("wp5-dan")
+	c := testCourt(cur, "wp5", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 2_550_000_000)
+	c.coin.Mint(dan, 1_115_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "wp5", "the counter re-vote is its own poll")
+	matureOI(cur, "wp5", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "wp5", id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+
+	// Round 1 fails quorum → decidedRounds stays 0, so the flag can still slash.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "wp5", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp5", id)
+
+	// The flag: carol AND dan low, over the full bar → conclusive ⅔-low, slash.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "wp5", id)
+	for _, v := range []address{carol, dan} {
+		testing.SetRealm(testing.NewUserRealm(v))
+		VoteQuality(cross(cur), "wp5", id, qualityLow)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "wp5", id)
+	cs := mustClaim(c, id)
+	slash := cs.pendingSlash
+	if slash <= 0 {
+		t.Fatal("setup: the slash must reserve")
+	}
+	remainder := cs.answerBond
+
+	// A stranger's round lands before the answerer can counter-flag, and spends the
+	// ride's one re-ask. carol re-states low, but alone she is sub-bar.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "wp5", id)
+	if !cs.qualityReasked {
+		t.Fatal("setup: the stranger's round must consume the ride's one re-ask")
+	}
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "wp5", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "wp5", id) // quorum-less: sub-bar ride re-arms
+	if cs.pendingSlash != slash {
+		t.Fatalf("setup: a sub-bar ride leaves the reserve standing: %d", cs.pendingSlash)
+	}
+
+	// THE GUARD: the answerer's challenge opens a FRESH tally regardless.
+	seq := cs.qVoteSeq
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "wp5", id)
+	if cs.qVoteSeq == seq {
+		t.Fatal("the answerer's one challenge must open a fresh tally, not inherit the ride's")
+	}
+	if cs.qLowW != 0 {
+		t.Fatalf("a fresh tally starts empty: qLowW=%d", cs.qLowW)
+	}
+	// carol must be able to vote AGAIN, having voted low on the ride moments ago.
+	for _, v := range []address{carol, dan} {
+		testing.SetRealm(testing.NewUserRealm(v))
+		VoteQuality(cross(cur), "wp5", id, qualityMid)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveCounter(cross(cur), "wp5", id)
+	if cs.pendingSlash != 0 || cs.answerBond != remainder+slash {
+		t.Fatalf("a full-bar non-⅔-low challenge refunds the reserve: pending=%d bond=%d want 0/%d",
+			cs.pendingSlash, cs.answerBond, remainder+slash)
+	}
+}

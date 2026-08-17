@@ -214,14 +214,26 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 			c.coin.Burn(c.escrow, rest)
 		}
 		cs.disputeBond = 0
-		// The VERDICT question failed quorum; the QUALITY question has its own,
+		// The VERDICT question failed quorum, but the RESERVE's question has its own,
 		// higher bar and can be answered on a round the governor's floor rejected
 		// (v0.51). Scoring the ride here rather than re-arming blindly is what stops
 		// a full-bar rescue tally from being discarded and then burned by the
 		// unconditional ResolveSlashWindow — a below-bar ride still re-arms, which is
-		// the v0.47 behavior verbatim. Runs BEFORE provCloseClaim below, so a refund
-		// rejoins answerBond and is paid out there; reversed, it would strand in
-		// escrow with no later payout path.
+		// the v0.47 behavior verbatim.
+		//
+		// Scores the RESERVE only, deliberately not the TIER: this branch does not
+		// call resolveQualityRide, so an identical full-bar non-⅔-low ride refunds
+		// here while leaving cs.tier LOW, where a DECIDED round would promote it to
+		// MID. That asymmetry errs conservative in both directions it can err (it
+		// cannot promote a tier on a round nobody carried, and it cannot burn a
+		// reserve the electorate just rescued), and widening it moves draw money, so
+		// it stays until it has its own econ vet.
+		//
+		// Runs BEFORE provCloseClaim so a refund rejoins answerBond and leaves on the
+		// ordinary bond exit. Note the reverse order would ALSO be safe — refundSlash
+		// has a provClose arm that pays the answerer directly — so this ordering is a
+		// preference for the common path, not a strand guard. (An earlier version of
+		// this comment claimed it was a strand guard; it is not.)
 		disposeSlashOnRide(c, cs)
 		// Only the FIRST failed round defaults the verdict to the answer; a
 		// failed reopen leaves a standing decided verdict untouched.

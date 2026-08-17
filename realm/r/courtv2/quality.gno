@@ -122,13 +122,17 @@ func openQualityTally(cs *claimState) {
 	cs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0
 }
 
-// reaskQualityTally re-poses the quality question for a lane that did NOT open
-// the slot itself (the dispute ride, the counter re-vote). Before anything has
-// been adjudicated every round asks fresh; afterwards the question is re-asked
-// EXACTLY ONCE (v0.31/Q5 doctrine: "forces one re-vote"), and every later round
-// and window then votes the SAME accumulating tally. Accumulation is what makes
-// a reopen chain cost weight instead of buying a fresh coin flip: qVoted keys on
-// qVoteSeq|addr, so a frozen seq also freezes each address to one vote.
+// reaskQualityTally re-poses the quality question for the DISPUTE RIDE — the one
+// lane a third party can open at will. Before anything has been adjudicated every
+// round asks fresh; afterwards the ride re-asks EXACTLY ONCE and every later round
+// votes the SAME accumulating tally. Accumulation is what makes a reopen chain cost
+// weight instead of buying a fresh coin flip: qVoted keys on qVoteSeq|addr, so a
+// frozen seq also freezes each address to one vote.
+//
+// The counter re-vote does NOT come through here — see CounterFlag. That freezing
+// property is exactly why: it is correct against a sock buying round after round,
+// and wrong against the answerer's single answerer-gated challenge, which the
+// doctrine grants as an INDEPENDENT poll.
 func reaskQualityTally(cs *claimState) {
 	if !cs.slotConsumed {
 		openQualityTally(cs) // nothing adjudicated yet: each round asks fresh
@@ -198,6 +202,15 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}
+	// One vote per address PER TALLY. Since v0.51 a ride does not reset the tally
+	// after the first re-ask, so the voter-facing rule is stronger than it reads:
+	// across an accumulating tally an address's FIRST quality vote is its ONLY one,
+	// and it cannot be revised as later rounds bring information. That is deliberate
+	// against a sock buying round after round — banked weight is what makes a reopen
+	// cost weight instead of buying a coin flip — and it is why CounterFlag keeps an
+	// unconditional fresh tally: the answerer's one challenge must be a poll every
+	// holder can actually vote in, including one who already voted low on a ride.
+	// Elector's consequence: on a ride, commit once and late.
 	k := beClaimKey(cs.qVoteSeq) + string(who)
 	if cs.qVoted.Has(k) {
 		panic("courtv2: already voted this quality tally")
@@ -623,7 +636,29 @@ func CounterFlag(cur realm, courtSlug string, claimID uint64) {
 	cs.counterUsed = true
 	cs.counterOpen = true
 	cs.counterVoteEnd = runtime.ChainHeight() + c.params.votingBlocks
-	reaskQualityTally(cs)
+	// UNCONDITIONAL, unlike the ride (v0.51 follow-up). The v0.31/Q5 grant is an
+	// INDEPENDENT second poll — "a capture-whale must win ⅔ TWICE, the second
+	// against maximal mobilization (p² ≈ 0)" — and inheriting the ride's tally
+	// collapses p² to p: qVoted keys on qVoteSeq|addr, so a frozen seq LOCKS OUT
+	// every address that already voted. An honest voter who changes their mind
+	// cannot, and their earlier low still counts against the answerer.
+	//
+	// It also LATCHES, which is what keeps the budget order-independent. Wiping here
+	// without latching would let the answerer take TWO rolls by choosing the order:
+	// counter-flag first (roll one), watch the crowd re-confirm low, then sock-dispute
+	// to spend the ride's still-unspent wipe (roll two), erasing that low and voting
+	// mid alone over the bar — refunding the reserve for ~4%·X̄, the same purchase
+	// v0.47, v0.50 and v0.51 each closed at a different door. Latching costs the
+	// answerer nothing they are owed: their wipe is unconditional either way, and
+	// counterUsed already bounds them to one challenge.
+	//
+	// Net budget, whichever lane moves first: unlimited before anything is
+	// adjudicated, then AT MOST ONE fresh tally per lane and never two for one party.
+	// A sock that disputes first spends the ride's wipe and the answerer still gets
+	// their own poll; an answerer that counters first spends both and every later
+	// round votes their accumulating tally.
+	cs.qualityReasked = true
+	openQualityTally(cs)
 }
 
 // ResolveCounter settles the re-vote. The slash STANDS unless the re-vote
