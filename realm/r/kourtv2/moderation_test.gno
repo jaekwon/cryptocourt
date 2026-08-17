@@ -11,6 +11,8 @@ import (
 
 // A hidden claim's lifecycle is byte-identical to an unhidden one's (I1): hiding
 // changes no money-path read, and the claim still dead-closes and refunds.
+// Enforces I2 (a moderation entrypoint moves no money) and part of I1 (a
+// hidden claim's lifecycle is byte-identical, including the refund).
 func TestModHideDoesNotTouchLifecycle(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("mod-l-alice")
 	c := testCourt(cur, "modl", alice, 10_000_000_000)
@@ -181,6 +183,7 @@ func TestModPurgeMofN(cur realm, t *testing.T) {
 }
 
 // Global redaction: single-key to set, explicit clear, and clear-any recovery.
+// Enforces I3's global arm: a global redact removes TEXT and nothing else.
 func TestModGlobalRedactAndRecovery(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("mod-g-alice")
 	testCourt(cur, "modg", alice, 10_000_000_000)
@@ -592,4 +595,61 @@ func TestApprovalDeadlineIsFixedNotSliding(cur realm, t *testing.T) {
 	if HiddenFromListing("slidec", id) {
 		t.Fatal("a mid-window approval must not extend the original deadline")
 	}
+}
+
+// The three cheapest of the nine guards the moderation mutation batch showed to
+// be unpinned: two range gates and one authority gate, each deletable today
+// without a single test noticing. They are cheap precisely because they need no
+// membership choreography — a call with a bad argument, and a control proving the
+// refusal came from the range check rather than from a blanket refusal.
+func TestModerationRangeAndAuthorityGates(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mrg-alice")
+	stranger := testutils.TestAddress("mrg-stranger")
+	testCourt(cur, "mrgc", alice, 10_000_000_000)
+
+	// AppointMods' m-of-n range. alice is the creator, so she holds the
+	// appointment power until an election spends it.
+	pair := []address{
+		testutils.TestAddress("mrg-m1"),
+		testutils.TestAddress("mrg-m2"),
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
+		AppointMods(cross(cur), "mrgc", pair, 0)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
+		AppointMods(cross(cur), "mrgc", pair, 3)
+	})
+	// THE CONTROL: 2-of-2 installs. Without it both refusals above would pass
+	// just as well if AppointMods refused everything for an unrelated reason.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mrgc", pair, 2)
+	if m, n := ModThreshold("mrgc"); m != 2 || n != 2 {
+		t.Fatalf("an in-range threshold must install: got %d-of-%d", m, n)
+	}
+
+	// SetPurgeThreshold's authority gate. The global DAO bootstraps with the
+	// directory admin as its sole member, so that address is the only one that may
+	// move the threshold.
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "only the global DAO admin sets the purge threshold", func() {
+		SetPurgeThreshold(cross(cur), 1)
+	})
+
+	// ...and its range gate. 9999 rather than n+1: other tests add DAO members, so
+	// n is order-dependent, and a bound that has to be computed is a bound that can
+	// be computed wrong.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "purge threshold must be in 1..n", func() {
+		SetPurgeThreshold(cross(cur), 0)
+	})
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "purge threshold must be in 1..n", func() {
+		SetPurgeThreshold(cross(cur), 9999)
+	})
+	// THE CONTROL: 1 is in range for any n >= 1, which holds by construction.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
 }

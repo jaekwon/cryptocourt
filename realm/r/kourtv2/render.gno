@@ -294,6 +294,26 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	b.WriteString("- conviction so far — YES: " + strconv.FormatInt(yConv, 10) +
 		"   NO: " + strconv.FormatInt(nConv, 10) + " (the reward weight)\n")
 
+	// The wallet-level picture, which nothing rendered before staking became a
+	// lock in place. It matters now for a reason that is invisible from the
+	// balance alone: staked CC STAYS in the holder's balance and keeps voting, so
+	// a client showing only the balance tells someone they have coins to bond
+	// when those coins are already committed, and the refusal then reads as a bug
+	// in the realm rather than as the arithmetic it is.
+	//
+	// COURT-WIDE, not claim-scoped, and labelled as such — the numbers above are
+	// this claim's, these are every claim in this court plus any live bond, so
+	// showing them side by side without saying which is which would be worse than
+	// showing neither.
+	bal := c.coin.BalanceOf(who)
+	locked := lockedOf(c, who)
+	b.WriteString("\n## Your CC in this court (all claims)\n\n")
+	b.WriteString("- held: " + strconv.FormatInt(bal, 10) +
+		" (CC base units) — every unit votes, committed or not\n")
+	b.WriteString("- committed as stake: " + strconv.FormatInt(locked, 10) + "\n")
+	b.WriteString("- free to commit: " + strconv.FormatInt(spendable(c, who), 10) +
+		" — what a new stake, deposit or bond draws on\n")
+
 	// Roles on this claim.
 	roles := ""
 	if who == cs.author {

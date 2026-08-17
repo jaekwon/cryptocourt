@@ -40,6 +40,13 @@ Usage — a JSON list of mutations on stdin, each applied and reverted in turn:
 
 A saved batch for the kourtv2 money path lives at scripts/mutations-kourtv2.json:
 
+Everything in that batch is CAUGHT, and it is meant to stay that way: a batch with
+a standing survivor is a batch whose output people learn to skim. Guards that are
+known to be unpinned live in scripts/mutations-kourtv2-KNOWN-GAPS.json instead —
+every entry there survives, deliberately, and the file shrinks as tests are
+written. Run it the same way; a CAUGHT result means one can move to the main batch.
+
+
     python3 scripts/mutate.py < scripts/mutations-kourtv2.json
 
 Needs a gno toolchain. PKGS below lists every tree this can stage or mutate.

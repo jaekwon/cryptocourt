@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.35 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.38 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -967,6 +967,122 @@ decision must be made before launch, not after.
   indexes (§3.2). And **no GNOT creation fee** — a fixed fee can't be sized
   without a USD oracle, so court-count floods are storage-deposit-priced (no
   oracle) and `StartCourt` stays realm-callable (§2, §13.5).
+- **v0.38 — three of the nine unpinned moderation guards are now pinned; six
+  remain, and they are all the same shape.** `TestModerationRangeAndAuthorityGates`
+  closes the cheap three: `AppointMods`' m-of-n range (0 and n+1 both refused),
+  `SetPurgeThreshold`'s authority gate (a stranger refused), and its range gate
+  (0 and 9999 refused). Verified by mutation, not by passing — all three come back
+  **caught**, and they have graduated from the known-gaps file into the main batch,
+  which now stands at **75, all caught**.
+  - **Every refusal is paired with a success.** A 2-of-2 install and a threshold of
+    1 sit beside the six refusals, because without them all six would pass equally
+    well if those functions were refusing *everything* for some unrelated reason —
+    a stale realm, a spent appointment power, a missing court. **PAIR EVERY REFUSAL
+    WITH A SUCCESS, OR A BLANKET REFUSAL PASSES AS A RANGE CHECK.**
+  - The range test uses **9999 rather than n+1** deliberately: other tests add
+    global DAO members, so `n` is order-dependent at the point this test runs, and
+    **a bound you have to compute is a bound you can compute wrong.** An obviously
+    out-of-range literal cannot drift.
+  - **The six that remain are every other `clearPendingOnMembershipChange` call
+    site** — `AppointMods`, `ResetModSet`, `AddGlobalMod`, `RemoveGlobalMod`,
+    `SetPurgeThreshold`, `TransferGlobalAdmin`. Each needs the same choreography
+    v0.25's fixture needed: bank an approval, change WHO may act, then have the new
+    body try to fire on the old signature. And each must conclude **inside**
+    `pendingTTLBlocks`, or it goes vacuous exactly the way v0.25's did. Note the
+    four global-DAO sites share one body, so a single fixture may cover several —
+    but **one test catching four mutations is fine; one test *claimed* to catch
+    four and catching one is the trap**, so each is verified separately.
+- **v0.37 — THE v0.25 DEPOSED-SIGNATURE FIX WAS NOT PINNED BY THE TEST NAMED
+  AFTER IT, and the moderation constitution has no mutation coverage at all.**
+  Measuring mutation coverage per file — rather than recalling what had been
+  tested — showed the batch weighted almost entirely to the money path:
+  `quality.gno` 15 mutations, `crystallize.gno` 10, `dispute.gno` 8, and
+  **`moderation.gno` zero across 1063 lines and 51 guards**, plus nothing at all
+  on `meta.gno`, `folders.gno`, `strips.gno`, `modrender.gno` or `records.gno`.
+  **MUTATION COVERAGE FOLLOWS ATTENTION, NOT RISK.** Ten mutations were written
+  for the moderation path and **all ten survived.**
+  - **The one that matters.** `TestInstallModSetDiscardsTheDeposedSetsApprovals`
+    exists, exercises the right attack, and did **not** fail when the fix it is
+    named after was deleted. The cause is a second mechanism doing the work: the
+    election takes `nominationWindow + votingBlocks` = 138,240 blocks to conclude,
+    while `pendingTTLBlocks` is 120,960 — so the outgoing set's banked signature
+    **expired by rule** before the incoming set ever acted, and the test passed
+    with or without `clearPendingOnMembershipChange`. A guard and a clock were both
+    sufficient, so neither was necessary, and the test could not tell them apart.
+  - **The vulnerability is real, which is why this matters rather than merely
+    being untidy.** A court sets its own voting window, and any court with one
+    shorter than about six days leaves the deposed set's signature live. The
+    default is simply longer than the TTL — so the *default* court is safe by
+    accident, and every faster court is exposed. Fixed by giving the fixture a
+    200-block voting window so the election concludes well inside the TTL, and the
+    mutation is now **caught**.
+  - **The premise is asserted, not assumed, both ways.** The fixture now checks
+    that the outgoing set really banked one approval (`PendingApproval` = 1) before
+    the election, and that the election has **not** outlived the TTL at the moment
+    the new set acts. If a future change lengthens the window past the TTL again,
+    that assertion fires instead of the test quietly going vacuous a second time.
+    **WHEN TWO MECHANISMS WOULD EACH SUFFICE, A TEST PROVES NEITHER — PIN THE ONE
+    YOU MEAN.**
+  - Also corrected: my first batch was **mislabelled**. It aimed at "installModSet"
+    but `installModSet` lives in `modvote.gno`, so the mutation deleted
+    `AppointMods`' clear in `moderation.gno` instead and I nearly recorded the
+    wrong conclusion. All seven `clearPendingOnMembershipChange` call sites are now
+    labelled with the function they are actually in.
+  - **Nine survivors remain, each a real gap and none yet closed**: the clears in
+    `AppointMods`, `ResetModSet`, `AddGlobalMod`, `RemoveGlobalMod`,
+    `SetPurgeThreshold` and `TransferGlobalAdmin`; the `m-of-n must be in 1..n`
+    range gate; the `only the global DAO admin sets the purge threshold` authority
+    gate; and the `purge threshold must be in 1..n` range gate. Every one can be
+    deleted today without a single test noticing. Recorded here rather than left
+    implicit, because a survivor list nobody wrote down is a survivor list nobody
+    closes.
+    - They live in `scripts/mutations-kourtv2-KNOWN-GAPS.json`, **not** in the main
+      batch. The main batch is all-caught and has to stay that way: a batch with a
+      standing survivor is a batch whose output people learn to skim, which is the
+      same failure this document keeps finding in other guards. Every entry in the
+      gaps file survives on purpose, the file shrinks as tests are written, and a
+      CAUGHT result there means an entry graduates to the main batch.
+- **v0.36 — the positions page shows what you hold, what is committed, and what is
+  free, because after v0.34 the balance alone is misleading.** Locked CC stays in
+  the holder's balance and keeps voting, so a client that shows only the balance
+  tells someone they have coins to bond when those coins are already committed —
+  and the refusal then reads as a bug in the realm rather than as the arithmetic
+  it is. The positions route (`…/<slug>/<id>/<addr>`) is the only per-address
+  surface, so it is where this belongs.
+  - Labelled **court-wide, "all claims"**, deliberately: the stake and conviction
+    figures directly above it are *this claim's*, and two adjacent sets of numbers
+    at different scopes with no label is worse than showing neither. Locked spans
+    every claim in the court.
+  - **The partition is the assertion, not the three numbers.** `held` must equal
+    `committed + free`; checking each figure separately would pass just as well if
+    the page printed the balance three times under different labels. Asserted both
+    in the rendered text and against the reads.
+  - Four mutations added, because a render path with no mutation coverage is
+    exactly how §7.4 came to be enforced on one word on one page: drop the section,
+    print the raw balance as *free to commit*, print committed as zero, and drop
+    the court-wide label. All four caught. One first came back **INVALID rather
+    than caught** — zeroing the figure left the local unused, so the mutant did not
+    build, and `mutate.py` correctly refuses to score a non-building mutant as
+    caught. Rewritten to keep the variable live, so it tests the assertion instead
+    of the compiler.
+  - Nothing added to the claim page: it already links to this route, and
+    duplicating a court-wide figure onto a claim-scoped page would reintroduce the
+    scope confusion the label exists to prevent.
+  - **I1–I12 audited against the code after five rounds of change, and the finding
+    is traceability rather than coverage.** Four — **I2, I3, I8, I12** — were named
+    in no test at all. That is not the same as untested, and checking before
+    claiming it mattered: each is in fact enforced. I2's money-neutrality is
+    asserted as *"hiding must not move escrow"*; I3 by the deep-link, tombstone and
+    global-redact render tests; I8 by the ten-section meta lifecycle scenario; I12
+    by the install-rule, turnout and bond tests. So the invariants hold — but you
+    could not get from an invariant to its test, or back, for a third of them.
+    Every one now cites the invariant it enforces. **AN ENFORCED INVARIANT NOBODY
+    CAN FIND IS HARD TO KEEP ENFORCED** — the converse of this document's own rule
+    that naming an invariant is not enforcing it.
+    - Checked specifically for rot from v0.34, and none: I2's carve-out is still
+      exactly the candidate-bond legs (the new `mustSpendable` is a read, not a
+      money write); I1's *"purged authors still refund"* draws on the deposit,
+      which is still custodial; and no invariant mentions where stake is held.
 - **v0.35 — the mutation batch found that v0.34's own test walked five of six
   paths, and the isolation guard was reporting a success it had never checked.**
   `lock.gno` shipped as a new money-path file with **zero mutation coverage**,

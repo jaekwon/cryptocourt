@@ -467,5 +467,61 @@
     "label": "lock: releasing more than is locked is tolerated",
     "find": "\tif amount > l {\n\t\tpanic(\"kourtv2: releasing more stake than is locked\")\n\t}\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "positions: the wallet section is not rendered at all",
+    "find": "\tb.WriteString(\"\\n## Your CC in this court (all claims)\\n\\n\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "positions: free-to-commit shows the raw balance instead",
+    "find": "\tb.WriteString(\"- free to commit: \" + strconv.FormatInt(spendable(c, who), 10) +",
+    "replace": "\tb.WriteString(\"- free to commit: \" + strconv.FormatInt(bal, 10) +"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "positions: committed shows zero regardless of the lock",
+    "find": "\tb.WriteString(\"- committed as stake: \" + strconv.FormatInt(locked, 10) + \"\\n\")",
+    "replace": "\tb.WriteString(\"- committed as stake: \" + strconv.FormatInt(locked-locked, 10) + \"\\n\")"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "positions: the court-wide scope label is dropped",
+    "find": "\"\\n## Your CC in this court (all claims)\\n\\n\"",
+    "replace": "\"\\n## Your CC\\n\\n\""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "mod: installModSet keeps the deposed set's approvals",
+    "find": "\tclearPendingOnMembershipChange(&cm.pending)\n\tcm.setActHeight = at",
+    "replace": "\tcm.setActHeight = at"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: the m-of-n threshold accepts any number",
+    "find": "\t\tpanic(\"kourtv2: the m-of-n threshold must be in 1..n\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: anyone may set the purge threshold",
+    "find": "\t\tpanic(\"kourtv2: only the global DAO admin sets the purge threshold\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "mod: the purge threshold accepts any number",
+    "find": "\t\tpanic(\"kourtv2: the purge threshold must be in 1..n\")\n",
+    "replace": ""
   }
 ]

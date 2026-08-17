@@ -131,6 +131,31 @@ func TestRenderPositionsPage(cur realm, t *testing.T) {
 	if !strings.Contains(out, "staking is open") {
 		t.Fatal("pre-answer, the hint is that staking is open")
 	}
+	// The court-wide wallet picture. Bob holds 10,000 CC and has committed 300 of
+	// them, so 9,700 are free. Since staking became a lock in place the balance
+	// alone is misleading — the staked CC is still in it — and a client that shows
+	// only the balance tells him he can bond coins that are already committed.
+	//
+	// The PARTITION is the assertion that matters: held must equal committed plus
+	// free. Checking the three numbers separately would pass just as well if the
+	// page printed the balance three times under different labels.
+	if !strings.Contains(out, "held: 10000000000") {
+		t.Fatalf("the page must show what bob holds:\n%s", out)
+	}
+	if !strings.Contains(out, "committed as stake: 300000000") {
+		t.Fatalf("the page must show what is committed:\n%s", out)
+	}
+	if !strings.Contains(out, "free to commit: 9700000000") {
+		t.Fatalf("the page must show what is free:\n%s", out)
+	}
+	if got := LockedOf("rp1", bob) + SpendableOf("rp1", bob); got != CoinBalanceOf("rp1", bob) {
+		t.Fatalf("committed + free = %d, but bob holds %d", got, CoinBalanceOf("rp1", bob))
+	}
+	// It is labelled court-wide, because the stake figures above it are this
+	// claim's and the two would otherwise be read as the same scope.
+	if !strings.Contains(out, "all claims") {
+		t.Fatal("the wallet section must say it is court-wide, not claim-scoped")
+	}
 	// The claim page links to the positions route.
 	if !strings.Contains(Render("rp1/1"), "append your address") {
 		t.Fatal("the claim page must hint the positions route")

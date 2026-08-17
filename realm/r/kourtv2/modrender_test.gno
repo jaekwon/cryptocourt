@@ -11,6 +11,7 @@ import (
 
 // Hiding removes a claim from the court's LIST but never from its own page:
 // the deep link still renders, with a banner naming the authority.
+// Enforces I3: hiding controls DISCOVERY, so the deep link still renders.
 func TestRenderHiddenDropsFromListNotDeepLink(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("rr1-alice")
 	testCourt(cur, "mdr1", alice, 10_000_000_000)
@@ -37,6 +38,7 @@ func TestRenderHiddenDropsFromListNotDeepLink(cur realm, t *testing.T) {
 
 // A purged claim renders a category-code tombstone instead of its text, on
 // every surface — but its money state still renders.
+// Enforces I3's purge arm: a purged claim renders a tombstone, not its text.
 func TestRenderPurgedShowsTombstone(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("rr2-alice")
 	testCourt(cur, "mdr2", alice, 10_000_000_000)

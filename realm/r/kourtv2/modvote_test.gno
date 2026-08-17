@@ -1,6 +1,8 @@
 package kourtv2
 
 import (
+	"chain/runtime"
+	"strconv"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -25,6 +27,7 @@ func electionCourt(cur realm, slug string, creator address, holders []address, a
 // silent zero-approval default) the 31% would have HELD, because abstention
 // counted for the incumbent. With retain as a real approvable line judged by
 // most-approvals-over-retain, the majority wins mechanically.
+// Enforces I12's install rule: argmax-approval over {candidates, retain}.
 func TestElectionHonestMajorityUnseatsCapturedMinority(cur realm, t *testing.T) {
 	creator := testutils.TestAddress("ev1-creator")
 	honest := testutils.TestAddress("ev1-honest")
@@ -67,6 +70,7 @@ func TestElectionHonestMajorityUnseatsCapturedMinority(cur realm, t *testing.T) 
 
 // Turnout below the quorum floor retains the current set (fail-safe on
 // indecision — don't unseat moderators without a mandate).
+// Enforces I12's turnout arm: below quorum, retain wins by default.
 func TestElectionBelowQuorumRetains(cur realm, t *testing.T) {
 	creator := testutils.TestAddress("ev2-creator")
 	whale := testutils.TestAddress("ev2-whale")
@@ -155,6 +159,8 @@ func TestElectionDecoyLosesToEarliestNomination(cur realm, t *testing.T) {
 
 // Bonds ADD candidates and never exclude one; the bond refunds only on install
 // and half-burns otherwise (so self-approved junk always costs).
+// Enforces I2's ONLY carve-out — the candidate-bond legs — and I12's bond
+// rule: refunded on install, otherwise half-burned.
 func TestElectionBondsAddAndRefundOnlyOnInstall(cur realm, t *testing.T) {
 	creator := testutils.TestAddress("ev4-creator")
 	voter := testutils.TestAddress("ev4-voter")
@@ -406,6 +412,18 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 	newY := testutils.TestAddress("dep-newY")
 
 	c := electionCourt(cur, "deposed", creator, []address{holder}, []int64{1_000_000_000})
+	// A SHORT voting window, and this is the whole fixture. With the default
+	// 120_960-block window the election takes 138_240 blocks to conclude, which is
+	// LONGER than pendingTTLBlocks (120_960) — so the outgoing set's banked
+	// signature expired by rule before the new set ever acted, and this test
+	// passed whether or not the fix existed. Deleting the clear from
+	// installModSet survived the mutation batch because of exactly that.
+	//
+	// The vulnerability is real on any court whose voting window is shorter than
+	// about six days, which is most of them: a court sets its own. So the fixture
+	// has to conclude INSIDE the TTL to test the fix rather than the clock.
+	c.params.votingBlocks = 200
+
 	testing.SetRealm(testing.NewUserRealm(creator))
 	AppointMods(cross(cur), "deposed", []address{oldA, oldB}, 2)
 	testing.SetRealm(testing.NewUserRealm(holder))
@@ -416,6 +434,11 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 	HideItem(cross(cur), "deposed", id, "pretextual")
 	if HiddenFromListing("deposed", id) {
 		t.Fatal("fixture: one of two must not fire")
+	}
+	hideAt := runtime.ChainHeight()
+	hideKey := "hide:" + strconv.FormatUint(id, 10)
+	if n, _ := PendingApproval("deposed", hideKey); n != 1 {
+		t.Fatalf("fixture: the old set must have ONE banked approval, got %d", n)
 	}
 
 	// The electorate replaces them with a DISJOINT set.
@@ -431,6 +454,15 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 	ResolveElection(cross(cur), "deposed")
 	if !IsCourtMod("deposed", newX) || IsCourtMod("deposed", oldA) {
 		t.Fatal("fixture: the election must have installed the new set")
+	}
+
+	// THE PREMISE, asserted rather than assumed: the deposed set's approval is
+	// gone because the INSTALL discarded it, and not because it timed out. If a
+	// future change lengthens the election past the TTL again, this fires instead
+	// of the test quietly going vacuous.
+	if runtime.ChainHeight() >= hideAt+pendingTTLBlocks {
+		t.Fatal("fixture went vacuous: the election outlived the pending TTL, so " +
+			"the banked approval would have expired with or without the fix")
 	}
 
 	// ONE member of the incoming set acts. Under the bug, oldA's banked

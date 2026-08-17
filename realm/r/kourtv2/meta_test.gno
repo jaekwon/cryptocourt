@@ -60,6 +60,8 @@ func TestMetaParser(cur realm, t *testing.T) {
 // must live in one function, or a later test writes a coin checkpoint at a
 // lower epoch than an earlier one ("the clock went backwards"). Hence one
 // sequential scenario covering every execution guard.
+// Enforces I8: ExecuteMetaVerdict's fixed check order, exactly-once execution,
+// direction-scoped cooldown, and the PostAnswer latch.
 func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("mtx-alice")
 	bob := testutils.TestAddress("mtx-bob")
