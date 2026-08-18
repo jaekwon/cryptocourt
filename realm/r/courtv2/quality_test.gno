@@ -2619,3 +2619,65 @@ func TestFlagStateNamesEverySlotPhase(cur realm, t *testing.T) {
 		t.Errorf("a crystallized claim's slot is %q, want settled", got)
 	}
 }
+
+// A conclusive ride records its AUTHORITY MARKS, both of which were unheld.
+//
+// `conclusiveTurnout` is not bookkeeping. crystallize reads it twice, and both
+// readings are money:
+//
+//	crystallize.gno:126 compares it against the full bar and ZEROES the whole
+//	participation carrot when it falls short — the P2/F2 withholding, which the
+//	source argues at length is the only lever that survives a two-wallet split.
+//
+//	crystallize.gno:301 uses the same figure as the carrot's PER-VOTER DIVISOR.
+//
+// Unwritten it is zero, which fails both: every ride-resolved claim would withhold
+// the carrot from voters who had in fact cleared the bar, and any that slipped
+// through would divide by nothing. `conclusiveSeq` is the companion mark that
+// selects which tally's voters may claim at all.
+//
+// Driven by calling resolveQualityRide directly with the buckets set, the way
+// TestRideRatchetAndSlashPredicate does: reaching a conclusive ride through a whole
+// dispute round would test the round.
+func TestAConclusiveRideRecordsItsAuthorityMarks(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("crm-alice")
+	c := testCourt(cur, "crm", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "crm", "a ride's authority marks")
+	matureOI(cur, "crm", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "crm", id, sideYES)
+
+	cs := mustClaim(c, id)
+	_, fullBar := qualityBars(c, cs)
+	if fullBar < 5 {
+		t.Fatalf("setup: need a live full bar, got %d", fullBar)
+	}
+	// A conclusive MID comfortably ABOVE the bar: low misses the weighted median, so
+	// the tally classifies mid, and the turnout is twice what the bar asks.
+	cs.tier, cs.slotConsumed, cs.tierFinal = tierMidX, false, false
+	cs.qVoteSeq++
+	seq := cs.qVoteSeq
+	cs.qLowW, cs.qMidW, cs.qHighW = 0, 2*fullBar, 0
+	want := 2 * fullBar
+
+	resolveQualityRide(c, cs)
+
+	if !cs.slotConsumed {
+		t.Fatal("setup: an above-bar ride must go conclusive, or nothing below applies")
+	}
+	if cs.conclusiveSeq != seq {
+		t.Errorf("the conclusive sequence is %d, want the ride's own %d — the carrot "+
+			"pays that tally's voters and no other", cs.conclusiveSeq, seq)
+	}
+	if cs.conclusiveTurnout != want {
+		t.Errorf("the recorded turnout is %d, want %d", cs.conclusiveTurnout, want)
+	}
+	// Stated as the comparison crystallize actually makes, so the failure names the
+	// consequence rather than the field.
+	if cs.conclusiveTurnout < fullBar {
+		t.Errorf("the recorded turnout %d does not clear the %d full bar, so crystallize "+
+			"would withhold the entire carrot from a ride that cleared it",
+			cs.conclusiveTurnout, fullBar)
+	}
+}

@@ -5200,5 +5200,96 @@
   "label": "SeniorEntitlement: the amount and the paid figure are swapped",
   "find": "\treturn e.to, e.amount, e.paid, p",
   "replace": "\treturn e.to, e.paid, e.amount, p"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the conclusive turnout mark is not recorded",
+  "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
+  "replace": "\tcs.slotConsumed = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the conclusive sequence mark is not recorded",
+  "find": "\tcs.tier = int64(tier)\n\tcs.conclusiveSeq = cs.qVoteSeq\n\tcs.conclusiveTurnout = turnout",
+  "replace": "\tcs.tier = int64(tier)\n\tcs.conclusiveTurnout = turnout"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf: a non-staker is not guarded",
+  "find": "\tv := cs.stakers.Get(posKey(who, side))\n\tif v == nil {\n\t\treturn 0\n\t}",
+  "replace": "\tv := cs.stakers.Get(posKey(who, side))"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf: the un-walked tail is not previewed",
+  "find": "\tif tail := runtime.ChainHeight() - c.lastAccrual; tail > 0 {\n\t\tacc = mustAdd(acc, mustMul(rateBpsFP(c), tail))\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf: the previewed tail is double-counted",
+  "find": "\t\tacc = mustAdd(acc, mustMul(rateBpsFP(c), tail))",
+  "replace": "\t\tacc = mustAdd(acc, mustMul(rateBpsFP(c), tail*2))"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf (the PREVIEW copy): the freeze cap is ignored",
+  "find": "\tif cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {\n\t\tacc = cs.rateAccAtFreeze\n\t}\n\thi, lo := p.convHi, p.convLo",
+  "replace": "\thi, lo := p.convHi, p.convLo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf: the preview shows only the tail, not the settled conviction",
+  "find": "\thi, lo := p.convHi, p.convLo",
+  "replace": "\thi, lo := uint64(0), uint64(0)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf: the preview drops the tail from what it returns",
+  "find": "\treturn convToCC(hi, lo)\n}",
+  "replace": "\treturn convToCC(p.convHi, p.convLo)\n}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "ConvictionOf: the previewed delta is signed the wrong way",
+  "find": "\tif delta := acc - p.lastRateAcc; delta > 0 && p.stake > 0 {",
+  "replace": "\tif delta := p.lastRateAcc - acc; delta > 0 && p.stake > 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "reask: before adjudication the rounds SHARE one frozen tally",
+  "find": "\tif !cs.slotConsumed {\n\t\topenQualityTally(cs) // nothing adjudicated yet: each round asks fresh\n\t\treturn\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "reask: the one-re-ask latch is dropped, so every round re-opens the poll",
+  "find": "\tif !cs.qualityReasked {\n\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)\n\t}",
+  "replace": "\tcs.qualityReasked = true\n\topenQualityTally(cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "reask: the latch is never set",
+  "find": "\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)",
+  "replace": "\t\topenQualityTally(cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "reask: the re-ask never opens a poll",
+  "find": "\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)",
+  "replace": "\t\tcs.qualityReasked = true"
  }
 ]

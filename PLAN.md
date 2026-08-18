@@ -1624,6 +1624,43 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.13 — closed v1.12's own registered residual, and found the THIRD duplication. Also: the
+  per-function measure has false positives, and saying so matters more than the number.**
+  First, the residual v1.12 specified rather than built: `resolveQualityRide`'s two authority
+  marks. It turned out **cheap**, not heavy — the existing `TestRideRatchetAndSlashPredicate`
+  calls `resolveQualityRide` directly with the buckets set, so the new fixture does the same
+  instead of driving a whole dispute round and a crystallize. Registering a residual with its
+  shape named made it a ten-minute job a firing later; the estimate that it needed the heavy
+  chain was wrong, and worth noticing — "too heavy to verify now" deserves re-checking against
+  the fixtures that already exist.
+  `conclusiveTurnout` earns the fixture. crystallize reads it TWICE and both readings are money:
+  at :126 it is compared against the full bar and **zeroes the entire participation carrot** when
+  it falls short (the P2/F2 withholding the source argues at length is the only lever surviving a
+  two-wallet split), and at :301 it is the carrot's **per-voter divisor**. Unwritten it is zero,
+  which fails both — every ride-resolved claim would withhold the carrot from voters who had in
+  fact cleared the bar. The assertion is written as the comparison crystallize actually makes, so
+  the failure names the consequence rather than the field.
+  **Then the honest correction to v1.11's method.** Re-running it shows 10 uncovered functions,
+  down from 15 — but `resolveQualityRide` is still ON that list despite gaining sixteen rows last
+  firing, because my labels read "ride: …" and the heuristic matches on the function NAME. So the
+  count is a lead generator, not a coverage measure, and three more entries are false positives
+  for related reasons (`div128` and `getPos` have rows that were deliberately excluded as
+  unreachable; `mustInvariants` is un-mutatable; `defaultParams` is value-pinned). The real
+  remaining list is four functions, not ten.
+  Which the probe then confirmed from the other direction: `ConvictionOf` (22 lines) and
+  `reaskQualityTally` (9), both flagged as uncovered, came back **10 of 11 caught** — the existing
+  suite holds them thoroughly, it just does not name them. `reaskQualityTally`'s one-re-ask latch,
+  which is what stops a sock buying a fresh poll every round, is held three ways.
+  **And the duplication detector fired a third time**, on the H1 audit invariant itself: the
+  freeze cap `if cs.frozenAt != 0 && cs.rateAccAtFreeze < acc` lives in BOTH `effectiveRateAcc`
+  (the settle path) and `ConvictionOf` (the preview path). The batch already pinned the settle
+  copy; the preview copy is now pinned separately, and `TestFreezeStopsEverything` catches it.
+  Three duplications in three firings — `disputeBond0`/`OpenDispute`, `PullSenior`/
+  `SeniorEntitlement`, and now this — every one of them a quote-versus-charge or
+  preview-versus-settle pair. That is a pattern in the codebase, not three coincidences: wherever
+  a figure is both SHOWN and USED, it is computed twice.
+  Batch now 756 rows: 755 caught, 0 not caught, one surviving by design (25:43 at 467% CPU).
+
 - **v1.12 — the per-function measurement pays off again, and the duplication detector fires on
   the PAYOUT path: the senior queue's quote and its payment are two copies of one formula, and
   nothing had ever checked the quote.** Continuing v1.11's method on the next three uncovered
