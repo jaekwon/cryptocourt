@@ -5291,5 +5291,47 @@
   "label": "reask: the re-ask never opens a poll",
   "find": "\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)",
   "replace": "\t\tcs.qualityReasked = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: a reserve is retained on an ALREADY-adjudicated slot",
+  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\t\tif cs.pendingSlash == 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "capBonus: the F9 cap clause never binds",
+  "find": "\tif gross > bound {\n\t\tgross = bound\n\t}",
+  "replace": "\t_ = bound"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "capBonus: the F9 base is the frozen height, not the claim's open life",
+  "find": "\trawAvg := div128(rawHi, rawLo, cs.openBlocks)",
+  "replace": "\trawAvg := div128(rawHi, rawLo, cs.openBlocks+1)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "crystallize.gno",
+  "label": "P2: the sybil margin loses its minus-one",
+  "find": "\tif clamp := b0/2 - 1; share > clamp {",
+  "replace": "\tif clamp := b0/2; share > clamp {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "half-burn: the burned remainder stays in escrow instead",
+  "find": "\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "half-burn: the returned half goes to the ANSWERER, not the flagger",
+  "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2\n\t\tif half > 0 {\n\t\t\tc.coin.Transfer(c.escrow, cs.flagger, half)\n\t\t}",
+  "replace": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2\n\t\tif half > 0 {\n\t\t\tc.coin.Transfer(c.escrow, cs.answerer, half)\n\t\t}"
  }
 ]

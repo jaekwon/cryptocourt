@@ -1624,6 +1624,44 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.14 — the four v0.45 test gaps are ALL closed, and the mutation harness proves it in a way
+  reading could not. The loop's own priority list was the stale artefact.**
+  The standing priority list carried four named gaps from v0.45: the F9/Q7 bonus caps never
+  binding in any fixture, the conclusive-low half-burn branch (full bar, low in [1/2, 2/3))
+  untested, `Finalize`'s `!slotConsumed` reserve clause non-discriminating, and the P2 per-voter
+  carrot clamp never binding. An earlier firing recorded them as "verified closed by reading",
+  which is precisely the weak form of verification this work has spent fourteen versions learning
+  to distrust. So they were re-checked with the method instead.
+  **Three were already provably closed by rows the batch carries.** A row that mutates a bound and
+  is CAUGHT can only be caught if some fixture's value crosses that bound — so
+  `capBonus F9 bound loosened 1000x` being caught IS the proof that the F9 cap binds, and
+  `P2 per-voter carrot clamp removed` likewise. The half-burn branch was covered too, under a row
+  named `T2 failed-attempt half-burn` whose `find` targets exactly
+  `turnout >= fullBar && cs.answerBond > 0 && !slashGrade` — the gap read as open only because
+  the row's NAME does not match the note's words.
+  **The fourth was open in the batch and closed in the suite**, which is the interesting case.
+  `Finalize`'s reserve clause had a row targeting the clause's BODY (`reserve = slashSizeFor`) and
+  none targeting its `!cs.slotConsumed` condition. Mutating that leg is caught — by
+  `TestFinalizeRetainsNothingAfterDustLowNoSlash`, a fixture some earlier firing built and named
+  almost exactly as the v0.45 note had asked for. So the guard was tested and the batch simply did
+  not represent it; the row now exists.
+  Named for the record, since the note asked whether they existed: `TestCapBonusClampsToTheF9Bound`,
+  `TestConclusiveLowBelowTwoThirdsHalfBurnsTheBond`,
+  `TestFinalizeRetainsNothingAfterDustLowNoSlash`, `TestP2CarrotClampBindsForASoleVoter`. Four
+  gaps, four fixtures, all four now with batch rows behind them.
+  Five adjacent legs of the same four mechanisms were unrepresented and are now pinned: the F9 cap
+  CLAUSE as distinct from its bound, the F9 base's denominator, P2's minus-one sybil margin, and
+  the half-burn's two halves — the burned remainder and which party receives the returned one.
+  One equivalence, and the source states it: dropping `&& cs.answerBond > 0` from `slashGrade`
+  changes nothing, because both consumers handle a zero bond independently — the outer condition
+  tests it directly and `originateSlash`'s own clamp turns it into `slash == 0`. The comment two
+  lines above says so ("an OVERTURN zeroes answerBond, which the clamp below already turns into
+  slash == 0"), which is the second time this firing that the answer was already written down.
+  **The lesson is about the LEDGER, not the code.** Twice in one firing a "known gap" turned out to
+  be closed work that nobody had struck off. A priority list that is not re-verified against the
+  harness decays into a list of things that used to be true, and re-reading it is not enough to
+  tell — only mutating the guard is. Batch now 762 rows: 761 caught, 0 not caught, one surviving by design (24:26 at 480% CPU).
+
 - **v1.13 — closed v1.12's own registered residual, and found the THIRD duplication. Also: the
   per-function measure has false positives, and saying so matters more than the number.**
   First, the residual v1.12 specified rather than built: `resolveQualityRide`'s two authority
