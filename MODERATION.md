@@ -1171,6 +1171,56 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.53 — THE TEST CLOCK'S SEAL REWINDS THE CLOCK, AND ANY USER CAN TRIGGER IT.**
+  Findings on `testclock.gno`, which arrived from the other workstream while this
+  one was mid-flight. **The file is not this workstream's to edit, so nothing here
+  is applied** — it is written down so the owner can decide. A 3-0 consensus round
+  (three subagents, identical prompts) plus direct verification.
+  - **THE ONE THAT MATTERS: `sealTestClock()` zeroes `tcSkew`.** All three
+    reviewers found it independently and none was asked to look for it. Zeroing
+    the skew makes `nowTime()` jump BACKWARD, while the stamps already written
+    into claims — `openedAtTime`, `answeredAtTime`, `verdictAtTime`,
+    `escrowUntilAt` — stay in the skewed future. That is precisely the rewind the
+    file's own header forbids: *"it cannot rewind (checkpoint refuses a backwards
+    clock, and a rewound deadline would un-settle a settled claim)."* And the
+    trigger is not privileged: `startCourtUser` calls `sealTestClock()`
+    unconditionally, so **anyone's `StartCourt` rewinds the clock** on an armed
+    chain. Sealing should FREEZE the skew, not discard it.
+  - **The seal buys almost no security, and blocks the feature's whole purpose.**
+    `EnableTestClock` already requires the deployer AND `CourtCount() <= 1`, so a
+    non-deployer can never arm and nobody can re-arm once a real court exists —
+    "sealed" and "not virgin" become true in the same instant. The seal's only
+    non-redundant effect is disarming a clock the DEPLOYER armed, an address that
+    is already meta admin and directory admin. Meanwhile it makes the feature
+    unusable for what it was built for: a claim needs a court, the only public
+    path to a court is `StartCourt`, and `StartCourt` disarms. Consensus minimal
+    change: drop the call from `startCourtUser`, keep deployer-only
+    `SealTestClock`, and have sealing freeze rather than zero.
+  - **The authors' own test concedes the gap.** `TestTestClockCarriesAClaimPastItsDeadline`
+    writes `tcArmed, tcSealed = true, false` after creating a court, commented "the
+    scenario chain stays armed" — a write only in-package code can make. **A
+    FEATURE THAT ONLY ITS OWN IN-PACKAGE TEST CAN REACH IS NOT AVAILABLE TO THE
+    INTEGRATION TESTS IT WAS BUILT FOR.**
+  - **Separately, and verified by direct scan: `EnableTestClock` and
+    `SealTestClock` call `cur.Previous()` without `cur.IsCurrent()`.** They are the
+    ONLY two crossing entrypoints in the entire realm that do — every other one
+    guards first. AGENTS.md names that a security bug, and the same file imports
+    `chain/runtime/unsafe`, which that doc calls a red flag alongside `cur realm`.
+    The `unsafe.OriginCaller()` in `init()` is defensible on the file's stated
+    reasoning (init has no `cur`, and meta.gno seats its admin the same way); the
+    two exported functions are not.
+  - **WHAT IS REACHABLE TODAY, measured rather than assumed.** The meta court is
+    created by `init()`, not `startCourtUser`, so a claim on it never trips the
+    seal — and the path is NOT circular as first feared: `Buy` accepts `metaSlug`
+    (`accrueFranchise` skips meta precisely because Buy mints there directly), and
+    on a fresh chain the deposit floor falls to its 1 CC dust arm. So
+    `OpenClaim` -> `AdvanceTestClock` -> `CloseDeadClaim` walks the **12-week
+    dead-claim timeout end to end in one transaction**. The settle window does not
+    walk on any route: `PostAnswer` needs three matured TWAP buckets (~2160
+    blocks), heights are deliberately not skewable, and the txtar node runs with
+    `CreateEmptyBlocks=false`. Reaching settle end-to-end would need a height skew,
+    which is a separate decision with real consequences for the accounting clock.
+
 - **v0.52 — A SUSPENDED SET COULD LOOSEN ITS OWN THRESHOLD AND WALK OUT.**
   Implements the 3-0 consensus recorded in v0.51a. `currentSetID` becomes
   membership-only, `suspendSet` records the judged threshold in a new
