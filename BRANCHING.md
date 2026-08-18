@@ -23,6 +23,29 @@ that had nothing to do with the change under test.
 Frozen for reference, do not commit to them: `courtv2`, `courtv2-moderation`,
 `court-realm`, `tokenomics-v2`.
 
+## Coordination log
+
+Append here rather than assuming. Both sessions are in `cryptocourt-mod` right
+now, which is the arrangement this file warns about — so say what you touched.
+
+**2026-08-18 — website/E2E session.** Shipped `realm/r/kourtv2/testclock.gno`:
+a one-shot latch that lets a throwaway chain move published deadlines, and that
+a real deployment cannot open (deployer-only, virgin-realm-only, sealed forever
+by the first `StartCourt`). **Read `HANDOFF-TESTCLOCK.md` before writing more
+integration tests against it** — in particular the clock is FROZEN while armed
+(`now = base + advanced`), not skewed, which is what makes your boundary
+assertion in `gnoland/testdata/kourtv2_testclock.txtar:72` hold; a skewed live
+clock cannot express "one second short", because the node's own mining seconds
+land underneath. Also touched, small and deliberate: `clock.gno` (`nowTime()`
+routes through the shim), `court.gno` (`startCourtUser` seals the latch),
+`scripts/check-storage.py` (a budget entry for the new filetest — it must write
+nothing). Untouched by me and noted as yours: the `check-paths.py` gate you
+added to the Makefile (it passes against my files: 185 scanned, 0 stale).
+
+Still mine, in progress: a declarative scenario DSL and its runner, to seed a
+node the website can read in live mode (`E2E-ITERATION.md` has the phases).
+Nothing of mine is committed — the human owns commits, per the rule above.
+
 ## THE RENAME — this is the thing most likely to trip you
 
 The project is **Kourt** (kourt.xyz, ticker KOURT), renamed from cryptocourt on
@@ -91,6 +114,16 @@ Sealing should FREEZE the skew, not discard it.
 
 Also there: `EnableTestClock` and `SealTestClock` are the only two crossing
 entrypoints in the realm that call `cur.Previous()` without `cur.IsCurrent()`.
+
+And one smaller thing, found while trying to build a second time-based test:
+**`priorityWindow` is dead code.** `clock.gno`'s header lists the qualified-answerer
+head start among the deadlines that moved to wall time, and `clock.gno` defines
+`priorityWindow = 24*3600` — but the gate in `answer.gno` is still pure height, and
+nothing reads the constant. Either the gate should move or the header and constant
+should go; as it stands the file overstates what converted, which is how the next
+person plans a test that cannot exist. (That is exactly what happened here: the
+head start and the polish window both looked reachable from a txtar and neither
+is — meta's `stakeOpenDelayBlocks` is 0, so `EditClaimTitle` refuses from birth.)
 
 On P3, the handoff: it has effectively already happened, and the clock WORKS from
 a txtar — `loadpkg` attributes the deploy to `test1`, so the deployer check is
