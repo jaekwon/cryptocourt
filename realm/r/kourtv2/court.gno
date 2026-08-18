@@ -11,7 +11,7 @@
 // their deploy-checked invariants, the directory, and StartCourt. Mechanics land
 // in sibling files (buy, stake, claim, answer, session, dispute, emission,
 // quality, records, render). PLAN.md (v0.32, design-converged) is the spec; the
-// V1 realm at realm/r/court is untouched and remains the audited reference.
+// V1 realm at realm/r/kourtv1 is untouched and remains the audited reference.
 package kourtv2
 
 import (

@@ -1,10 +1,21 @@
-.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet
+.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet anchors paths
 
 # Everything that can run without a node.
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet realm-test
+check: fmt vet anchors paths realm-test
+
+# Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
+# target exits 0 early when gno is missing, so every guard inside it is skipped
+# on a machine without one. Neither of these needs a toolchain, a staged tree or
+# a lock, so neither should be switched off by a missing binary. check-paths.py
+# was inside realm-test and moved here for that reason.
+anchors:
+	python3 scripts/check-mutation-anchors.py
+
+paths:
+	python3 scripts/check-paths.py
 
 fmt:
 	gofmt -l .

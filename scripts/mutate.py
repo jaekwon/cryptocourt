@@ -197,6 +197,26 @@ def run_suite(root, pkg=None, mut=None):
     return passed, out
 
 
+# Absolute paths throughout, since a mutation may name a file in either tree and
+# there is no single directory to sit in.
+#
+# Module level, not nested in main(), so scripts/check-mutation-anchors.py can
+# import these two instead of restating them. It re-implemented both and the
+# copies were free to drift — the same argument this file makes for PKGS being
+# defined once.
+def where(m):
+    pkg = m.get("pkg", "govern")
+    if pkg not in PKGS:
+        raise SystemExit(f"mutate: no such pkg {pkg!r}; have {sorted(PKGS)}")
+    return os.path.join(PKGS[pkg][0], m["file"])
+
+
+def anchor_count(m):
+    """How many times a row's anchor occurs in its target. Exactly 1 or the row
+    measured nothing: 0 means nothing was mutated, >1 means an ambiguous edit."""
+    return open(where(m)).read().count(m["find"])
+
+
 def main():
     muts = json.load(sys.stdin)
     # One shadow GNOROOT for the whole batch, removed at exit. atexit does not run
@@ -205,13 +225,6 @@ def main():
     # replaces would block every later run until a human removed it.
     root = gnoroot.build(gnoroot.real_root(), "mutate")
     atexit.register(gnoroot.remove, root)
-    # Absolute paths throughout, since a mutation may name a file in either
-    # tree and there is no single directory to sit in.
-    def where(m):
-        pkg = m.get("pkg", "govern")
-        if pkg not in PKGS:
-            raise SystemExit(f"mutate: no such pkg {pkg!r}; have {sorted(PKGS)}")
-        return os.path.join(PKGS[pkg][0], m["file"])
 
     # Nothing below writes to the repo. Anchors are counted against the sources
     # READ-ONLY and the mutation is applied to the staged copy inside run_suite.
@@ -236,7 +249,7 @@ def main():
         # is `bm` now, but the capture stays: it is the row's own data and belongs at
         # the top.
         covered = m.get("elsewhere", "")
-        n = open(where(m)).read().count(m["find"])
+        n = anchor_count(m)
         if n != 1:
             # Counted, not just printed. A row whose anchor never matched was never
             # tested, and the summary used to exclude it — so "0 survived or invalid,

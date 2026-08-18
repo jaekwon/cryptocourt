@@ -778,6 +778,95 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	// that set the flag ever votes for.
 	testing.SetRealm(testing.NewUserRealm(repair))
 	OpenClaimSeeded(cross(cur), "mtx19", "a locally appointed set may seed again")
+
+	// ---- 20. setmods MUST NOT DO WHAT unsuspend IS FORBIDDEN TO DO ----------
+	// Both verbs end at the same write, cm.suspended = false — unsuspend through
+	// unsuspendSet, setmods through installModSet's re-arm rule. Until v0.55 only
+	// the suspend/unsuspend arm of ExecuteMetaVerdict's staleness switch consulted
+	// suspendActByGlobal, and GlobalSuspendSet never moves setActHeight, so
+	// nothing on the setmods path examined the global act at all.
+	//
+	// Section 10 proves the unsuspend half. This is the same act aimed through
+	// setmods, and it USED TO SUCCEED: the verb name was the only difference, so
+	// `setmods` was a cheaper `unsuspend` than `unsuspend`.
+	testCourt(cur, "mtx20", alice, 10_000_000_000)
+	newMod20 := testutils.TestAddress("mtx20-new")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	cand20 := RegisterModCandidate(cross(cur), "mtx20", 1, newMod20)
+	testing.SkipHeights(epochBlocks * 2) // court AND candidate must predate the appeal
+
+	// The appeal opens BEFORE the global act, which is the staleness case the
+	// guard is scoped to (suspendActByGlobal > cs.openedAt).
+	ap20 := aggressive("mod:setmods:mtx20/" + strconv.FormatUint(cand20, 10))
+
+	// Establish the global threshold rather than inheriting section 10's: purgeM
+	// is package-global, and a test that leans on a neighbour's setup is
+	// reporting on the neighbour.
+	dadmin20 := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin20))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin20))
+	GlobalSuspendSet(cross(cur), "mtx20")
+	if !CourtSuspended("mtx20") {
+		t.Fatal("fixture: the global DAO must have suspended the set, or nothing below means anything")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "the global DAO changed this court's suspension", func() {
+		ExecuteMetaVerdict(cross(cur), ap20)
+	})
+	// A refusal must leave BOTH halves untouched — the suspension standing and the
+	// set unseated. Asserting only the flag would pass on a verdict that installed
+	// the set and then panicked, which is a partial effect, not a refusal.
+	if !CourtSuspended("mtx20") {
+		t.Fatal("a setmods verdict predating a global DAO suspension cleared it — " +
+			"the same act the guard refuses when it is spelled `unsuspend`")
+	}
+	if IsCourtMod("mtx20", newMod20) {
+		t.Fatal("the refused verdict seated its candidate set anyway")
+	}
+	// The verdict must stay UNexecuted, or the refusal costs the appellant their
+	// appeal as well: a re-appeal is the sanctioned way out, and it only works if
+	// this one did not consume its exactly-once flag.
+	if AppealExecuted(ap20) {
+		t.Fatal("a refused verdict must not be marked executed")
+	}
+
+	// ---- 21. ...AND THE REFUSAL IS DIRECTION-SCOPED, BOTH WAYS ---------------
+	// Section 20 pins that the guard FIRES. Dropping the `cm.suspended &&` half of
+	// it broke no test at all — measured, as a survivor in the mutation batch — so
+	// the direction-scoping every reviewer called "free" was the unpinned half.
+	// A FIX THAT CAN FAIL MUST FAIL CLOSED BOTH WAYS, and only this arm says so.
+	//
+	// ClearCourtSuspension is the discriminating call: it stamps
+	// suspendActByGlobal and leaves cm.suspended FALSE. So a clear landing after
+	// the appeal opened satisfies the stale term and fails the direction term, and
+	// a legitimate install must still land. Without the scoping, the global DAO's
+	// own act of UNsuspending a court would block the very verdict that seats its
+	// replacement moderators.
+	// The SAME verdict, once the global DAO clears. ClearCourtSuspension is the
+	// discriminating call: it stamps suspendActByGlobal — so the stale term is
+	// still satisfied, exactly as it was a moment ago — and leaves cm.suspended
+	// FALSE, so the direction term now fails and the install must land. Reusing
+	// ap20 is what makes this an A/B on ONE bit: same appeal, same court, same
+	// candidate, same window, opposite direction.
+	//
+	// No new appeal, deliberately. Staking LOCKS rather than transfers (lock.gno),
+	// so twenty-one appeals' stakes are all still held and alice's SPENDABLE
+	// balance will not fund another one. Topping her up would raise meta's sealed
+	// supply, and the answerability floor is a fraction of it, so every earlier
+	// section's derived stake would move with it.
+	testing.SetRealm(testing.NewUserRealm(dadmin20))
+	ClearCourtSuspension(cross(cur), "mtx20")
+	if CourtSuspended("mtx20") {
+		t.Fatal("fixture: the global clear must have lifted the suspension")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap20)
+	if !IsCourtMod("mtx20", newMod20) {
+		t.Fatal("a global CLEAR after the appeal opened refused a legitimate " +
+			"setmods install — the guard has lost its direction scope")
+	}
 }
 
 // metaRealmPath is a STRING CONSTANT, and meta's escrow is derived from it,

@@ -128,7 +128,7 @@
   {
     "pkg": "kourtv2",
     "file": "dispute.gno",
-    "label": "comp loses its 80%-of-burn arm",
+    "label": "compAmount: the 80%-of-burn arm is dropped",
     "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {\n\t\tcomp = arm\n\t}",
     "replace": ""
   },
@@ -142,7 +142,7 @@
   {
     "pkg": "kourtv2",
     "file": "emission.gno",
-    "label": "senior start ignores juniorReserved (M3-CRITICAL-1)",
+    "label": "enqueueSenior: the start cursor ignores juniorReserved (M3-CRITICAL-1)",
     "find": "\tstart := mustAdd(c.reservedTail, c.juniorReserved)",
     "replace": "\tstart := c.reservedTail"
   },
@@ -226,7 +226,7 @@
   {
     "pkg": "kourtv2",
     "file": "crystallize.gno",
-    "label": "carrot pull is not once-per-address",
+    "label": "PullCarrot: the carrot is not once-per-address, so it can be claimed twice",
     "find": "\tif cs.qVoted.Has(claimedKey) {",
     "replace": "\tif false {"
   },
@@ -240,7 +240,7 @@
   {
     "pkg": "kourtv2",
     "file": "emission.gno",
-    "label": "junior reservation not clamped to the reservoir",
+    "label": "reserveJunior: a junior draw is not clamped to the reservoir",
     "find": "\tr := c.reservoirR()\n\tif want > r {\n\t\twant = r\n\t}",
     "replace": "\tr := c.reservoirR()\n\t_ = r"
   },
@@ -254,7 +254,7 @@
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "re-flag cooldown after an inconclusive cycle removed",
+    "label": "OpenFlag: the re-flag cooldown after an inconclusive cycle never applies (M3-MED-1)",
     "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
     "replace": "\tif false {"
   },
@@ -373,7 +373,7 @@
   {
     "pkg": "kourtv2",
     "file": "buy.gno",
-    "label": "BUY: minted goes to the court, not the buyer",
+    "label": "Buy: the coin is minted to the REALM, not the buyer",
     "find": "\tc.coin.Mint(buyer, delta)",
     "replace": "\tc.coin.Mint(cur.Address(), delta)"
   },
@@ -387,7 +387,7 @@
   {
     "pkg": "kourtv2",
     "file": "buy.gno",
-    "label": "BUY: the spent GNOT is not burned",
+    "label": "Buy: the spent GNOT is never burned",
     "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
     "replace": ""
   },
@@ -604,8 +604,8 @@
   {
     "pkg": "kourtv2",
     "file": "meta.gno",
-    "label": "meta: a suspension changed under the appeal is ignored",
-    "find": "\t\t\tpanic(\"kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal\")\n",
+    "label": "meta: a suspension changed under the appeal is ignored (suspend/unsuspend arm)",
+    "find": "\t\tif cm.suspendActByGlobal > cs.openedAt &&\n\t\t\tcm.suspended == (p.verb == verbUnsuspend) {\n\t\t\tpanic(\"kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal\")\n\t\t}\n",
     "replace": ""
   },
   {
@@ -702,7 +702,7 @@
   {
     "pkg": "kourtv2",
     "file": "records.gno",
-    "label": "releasePriority frees a slot it does not hold",
+    "label": "releasePriority: frees whatever slot is held, not the matching claim",
     "find": "\tif r.activePriority == claimID {",
     "replace": "\tif true {"
   },
@@ -835,14 +835,14 @@
   {
     "pkg": "kourtv2",
     "file": "answer.gno",
-    "label": "the freeze does not pin rateAcc (H1's write side)",
+    "label": "PostAnswer: the freeze does not pin rateAcc — H1's conviction pin is never taken",
     "find": "\tcs.rateAccAtFreeze = c.rateAccFP",
     "replace": ""
   },
   {
     "pkg": "kourtv2",
     "file": "answer.gno",
-    "label": "xBarFrozen is not pinned (P6 base unset)",
+    "label": "PostAnswer: xBarFrozen is never pinned, so every %-of-X quantity reads zero (P6 base unset)",
     "find": "\tcs.xBarFrozen = xbar // P6: the one base for every later %-of-X̄ quantity",
     "replace": ""
   },
@@ -884,14 +884,14 @@
   {
     "pkg": "kourtv2",
     "file": "claim.gno",
-    "label": "OpenClaim accepts any title length",
+    "label": "OpenClaim: a title of any length is accepted",
     "find": "\tif len(title) == 0 || len(title) > 200 {",
     "replace": "\tif false {"
   },
   {
     "pkg": "kourtv2",
     "file": "claim.gno",
-    "label": "dead-claim close burns the deposit instead of refunding",
+    "label": "CloseDeadClaim: the deposit is burned instead of refunded",
     "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
     "replace": "\t\tc.coin.Burn(c.escrow, cs.deposit)"
   },
@@ -1094,13 +1094,6 @@
   {
     "pkg": "kourtv2",
     "file": "crystallize.gno",
-    "label": "PullCarrot: the carrot can be claimed twice",
-    "find": "\tif cs.qVoted.Has(claimedKey) {",
-    "replace": "\tif false {"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "crystallize.gno",
     "label": "PullCarrot: an against-verdict voter draws the carrot",
     "find": "\t\tif v == nil || v.(string) != cs.carrotChoice {",
     "replace": "\t\tif v == nil {"
@@ -1262,13 +1255,6 @@
   {
     "pkg": "kourtv2",
     "file": "emission.gno",
-    "label": "enqueueSenior: the start cursor ignores junior draws (M3-CRITICAL-1)",
-    "find": "\tstart := mustAdd(c.reservedTail, c.juniorReserved)",
-    "replace": "\tstart := c.reservedTail"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "emission.gno",
     "label": "enqueueSenior: a non-positive entitlement is enqueued",
     "find": "\tif amount <= 0 {\n\t\tpanic(\"kourtv2: a senior entitlement must be positive\")\n\t}",
     "replace": ""
@@ -1293,13 +1279,6 @@
     "label": "enqueueSenior: the queue seq is not advanced, so entitlements overwrite",
     "find": "\tc.queueSeq++\n",
     "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "emission.gno",
-    "label": "reserveJunior: a junior draw is not clamped to the reservoir",
-    "find": "\tr := c.reservoirR()\n\tif want > r {\n\t\twant = r\n\t}",
-    "replace": "\tr := c.reservoirR()\n\t_ = r"
   },
   {
     "pkg": "kourtv2",
@@ -1370,13 +1349,6 @@
     "label": "OpenFlag: an unanswered claim can be flagged",
     "find": "\tif cs.frozenAt == 0 {\n\t\tpanic(\"kourtv2: only an answered claim can be quality-flagged\")\n\t}",
     "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "quality.gno",
-    "label": "OpenFlag: the re-flag cooldown never applies (M3-MED-1)",
-    "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
-    "replace": "\tif false {"
   },
   {
     "pkg": "kourtv2",
@@ -1764,7 +1736,7 @@
     "file": "records.gno"
   },
   {
-    "label": "records: an answerer may hold two priority claims at once",
+    "label": "mayAnswerInPriority: a holder may take a SECOND priority claim",
     "find": "\treturn r.score >= priorityNetRecord && r.activePriority == 0",
     "replace": "\treturn r.score >= priorityNetRecord",
     "pkg": "kourtv2",
@@ -2410,13 +2382,6 @@
   {
     "pkg": "kourtv2",
     "file": "claim.gno",
-    "label": "CloseDeadClaim: the deposit is burned instead of refunded",
-    "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
-    "replace": "\t\tc.coin.Burn(c.escrow, cs.deposit)"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "claim.gno",
     "label": "OpenClaim: the court's deposit ledger is not incremented",
     "find": "\tc.deposit += dep + fee",
     "replace": ""
@@ -2553,20 +2518,6 @@
     "label": "mayAnswerInPriority: an UNQUALIFIED address may answer in priority",
     "find": "\treturn r.score >= priorityNetRecord && r.activePriority == 0",
     "replace": "\treturn r.activePriority == 0"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "records.gno",
-    "label": "mayAnswerInPriority: a holder may take a SECOND priority claim",
-    "find": "\treturn r.score >= priorityNetRecord && r.activePriority == 0",
-    "replace": "\treturn r.score >= priorityNetRecord"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "records.gno",
-    "label": "releasePriority: releases whatever slot is held, not the matching claim",
-    "find": "\tif r.activePriority == claimID {",
-    "replace": "\tif true {"
   },
   {
     "pkg": "kourtv2",
@@ -2767,14 +2718,14 @@
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "ride F3: the mandate applies even on a FIRST adjudication",
+    "label": "ride F3: the mandate gates un-adjudicated tiers too, so it applies on a FIRST adjudication",
     "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
     "replace": "\tif tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
   },
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "ride F3: the mandate applies to DEMOTIONS too",
+    "label": "ride F3: the mandate gates DEMOTIONS as well as promotions",
     "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
     "replace": "\tif cs.slotConsumed && bucketW(cs, tier)*3 < turnout*2 {"
   },
@@ -2795,7 +2746,7 @@
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "ride: a conclusive LOW skips the dust burns (v0.50 refund bug)",
+    "label": "ride: a conclusive LOW skips the dust burns (deposit and fee) — the v0.50 refund bug",
     "find": "\tif tier == qualityLow {\n\t\tburnConclusiveLowDust(c, cs)\n\t}",
     "replace": ""
   },
@@ -2823,14 +2774,14 @@
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "ride: the tier finalizes even with a live reserve, spending the Q5 counter",
+    "label": "ride: the tier is finalised while a reserve still stands, spending the Q5 re-vote counter",
     "find": "\tcs.tierFinal = cs.pendingSlash == 0",
     "replace": "\tcs.tierFinal = true"
   },
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "ride: the slot is not consumed",
+    "label": "ride: the slot latch is not consumed",
     "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
     "replace": "\tcs.conclusiveTurnout = turnout"
   },
@@ -2900,13 +2851,6 @@
   {
     "pkg": "kourtv2",
     "file": "dispute.gno",
-    "label": "compAmount: the burn arm is dropped",
-    "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {\n\t\tcomp = arm\n\t}",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "dispute.gno",
     "label": "compAmount: the two arms take the LARGER",
     "find": "\tif arm := burned * compOfBurnBps / 10000; arm < comp {",
     "replace": "\tif arm := burned * compOfBurnBps / 10000; arm > comp {"
@@ -2941,20 +2885,6 @@
   },
   {
     "pkg": "kourtv2",
-    "file": "answer.gno",
-    "label": "PostAnswer: H1's conviction pin is never taken",
-    "find": "\tcs.rateAccAtFreeze = c.rateAccFP",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "answer.gno",
-    "label": "PostAnswer: X-bar is never frozen, so every %-of-X quantity reads zero",
-    "find": "\tcs.xBarFrozen = xbar // P6: the one base for every later %-of-X̄ quantity",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
     "file": "render.gno",
     "label": "7.4: a PRE-crystallize-only branch renders backing",
     "find": "\t\t\tb.WriteString(\"- flag slot open — bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")",
@@ -2965,20 +2895,6 @@
     "file": "buy.gno",
     "label": "Buy: the curve position does not advance, so the same region sells twice",
     "find": "\tc.minted += delta // monotonic curve position",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "buy.gno",
-    "label": "Buy: the coin is minted to the REALM, not the buyer",
-    "find": "\tc.coin.Mint(buyer, delta)",
-    "replace": "\tc.coin.Mint(cur.Address(), delta)"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "buy.gno",
-    "label": "Buy: the spent GNOT is never burned",
-    "find": "\tb.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),\n\t\tchain.Coins{chain.NewCoin(gnotDenom, spent)})",
     "replace": ""
   },
   {
@@ -2995,13 +2911,6 @@
     "label": "OpenClaim: the provisional sentinel is the int8 zero, which reads as sideYES",
     "find": "\t\tprovisional: -1, // int8 zero is sideYES — the sentinel must be explicit",
     "replace": "\t\tprovisional: 0,"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "claim.gno",
-    "label": "OpenClaim: a title of any length is accepted",
-    "find": "\tif len(title) == 0 || len(title) > 200 {",
-    "replace": "\tif false {"
   },
   {
     "pkg": "kourtv2",
@@ -5610,20 +5519,6 @@
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
-    "label": "ride: the mandate gates un-adjudicated tiers too",
-    "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
-    "replace": "\tif tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "quality.gno",
-    "label": "ride: the mandate gates DEMOTIONS as well as promotions",
-    "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
-    "replace": "\tif cs.slotConsumed && bucketW(cs, tier)*3 < turnout*2 {"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "quality.gno",
     "label": "ride: the ⅔ mandate is exclusive at its own value",
     "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
     "replace": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 <= turnout*2 {"
@@ -5634,20 +5529,6 @@
     "label": "ride: the tier is never applied",
     "find": "\tcs.tier = int64(tier)\n\tcs.conclusiveSeq = cs.qVoteSeq",
     "replace": "\tcs.conclusiveSeq = cs.qVoteSeq"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "quality.gno",
-    "label": "ride: the slot latch is not consumed",
-    "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
-    "replace": "\tcs.conclusiveTurnout = turnout"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "quality.gno",
-    "label": "ride: a conclusive LOW does not carry the dust dispositions (v0.50)",
-    "find": "\tif tier == qualityLow {\n\t\tburnConclusiveLowDust(c, cs)\n\t}",
-    "replace": ""
   },
   {
     "pkg": "kourtv2",
@@ -5676,13 +5557,6 @@
     "label": "ride: the ride pays a bounty it did not post a bond for",
     "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" — a ride posts no bond, so no bounty",
     "replace": "\t\toriginateSlash(c, cs, now, \"x\") // \"\" — a ride posts no bond, so no bounty"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "quality.gno",
-    "label": "ride: the tier is finalised while a reserve still stands (the Q5 re-vote is lost)",
-    "find": "\tcs.tierFinal = cs.pendingSlash == 0",
-    "replace": "\tcs.tierFinal = true"
   },
   {
     "pkg": "kourtv2",
@@ -5900,5 +5774,285 @@
     "label": "half-burn: the returned half goes to the ANSWERER, not the flagger",
     "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2\n\t\tif half > 0 {\n\t\t\tc.coin.Transfer(c.escrow, cs.flagger, half)\n\t\t}",
     "replace": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2\n\t\tif half > 0 {\n\t\t\tc.coin.Transfer(c.escrow, cs.answerer, half)\n\t\t}"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "SettleUndisputed: settles twice",
+    "find": "\tif cs.verdictAt != 0 {\n\t\tpanic(\"kourtv2: already settled\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Finalize: finalizes twice",
+    "find": "\tif cs.verdictAt != 0 {\n\t\tpanic(\"kourtv2: already final\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Finalize: finalizes with a live dispute",
+    "find": "\tif cs.disputeOpen {\n\t\tpanic(\"kourtv2: a dispute is active; cannot finalize\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Finalize: finalizes with no provisional verdict",
+    "find": "\tif cs.provisional < 0 {\n\t\tpanic(\"kourtv2: no provisional verdict to finalize\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "ResolveFlag: resolves with no flag vote open",
+    "find": "\tif !cs.flagOpen {\n\t\tpanic(\"kourtv2: no flag vote to resolve\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "ResolveFlag: resolves BEFORE the flag vote closes",
+    "find": "\tif now < cs.flagVoteEnd {\n\t\tpanic(\"kourtv2: the flag vote is still open\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "PostAnswer: a claim can be answered twice",
+    "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"kourtv2: this claim already has an answer\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "PostAnswer: an immature stake history is answerable",
+    "find": "\tif !mature {\n\t\tpanic(\"kourtv2: not enough stake history to answer yet\")\n\t}",
+    "replace": "\t_ = mature"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "buy.gno",
+    "label": "Buy: a zero-GNOT buy is accepted",
+    "find": "\tif sent <= 0 {\n\t\tpanic(\"kourtv2: send GNOT to buy the coin\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "Stake: a CLOSED claim still accepts stake",
+    "find": "\tif cs.closed {\n\t\tpanic(\"kourtv2: this claim is closed\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "Unstake: a FROZEN claim still releases principal",
+    "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"kourtv2: stakes are frozen — withdraw at settlement (principal is never withheld)\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "Unstake: more than is staked may be withdrawn",
+    "find": "\tif p.stake < amount {\n\t\tpanic(\"kourtv2: unstaking more than is staked\")\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "StartCourt: the court admins itself",
+    "find": "\treturn startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 0)",
+    "replace": "\treturn startCourtUser(cur.Address(), cur.Address(), slug, name, 0)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "StartCourt: a new court lists itself as FEATURED",
+    "find": "\t\ttier:           tierListed,",
+    "replace": "\t\ttier:           tierFeatured,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM disputeThresholdBps 5001 -> 6000 (a higher overturn bar)",
+    "find": "\t\tdisputeThresholdBps:  5001,",
+    "replace": "\t\tdisputeThresholdBps:  6000,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM votingBlocks halved (1 week -> half)",
+    "find": "\t\tvotingBlocks:         120_960,",
+    "replace": "\t\tvotingBlocks:         60_480,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM graceBlocks halved (24h -> 12h)",
+    "find": "\t\tgraceBlocks:          17_280,",
+    "replace": "\t\tgraceBlocks:          8_640,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM minAnswerX halved (1 CC -> 0.5 CC, off its dust arm)",
+    "find": "\t\tminAnswerX:           1_000_000, // 1 CC — a DUST arm; the fraction carries policy",
+    "replace": "\t\tminAnswerX:           500_000,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM answerBondCapCC wired from 0 to 1 CC (the knob three guards depend on being 0)",
+    "find": "\t\tanswerBondCapCC:      0,",
+    "replace": "\t\tanswerBondCapCC:      1_000_000,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM minClaimDepositCC doubled (1 CC -> 2 CC)",
+    "find": "\t\tminClaimDepositCC:    1_000_000, // 1 CC",
+    "replace": "\t\tminClaimDepositCC:    2_000_000,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM escrowMinBlocks halved (1 week -> half)",
+    "find": "\t\tescrowMinBlocks:      120_960,",
+    "replace": "\t\tescrowMinBlocks:      60_480,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "PARAM escrowMaxBlocks halved (3 weeks -> 1.5)",
+    "find": "\t\tescrowMaxBlocks:      362_880,",
+    "replace": "\t\tescrowMaxBlocks:      181_440,"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "mustSlug: an empty slug is accepted",
+    "find": "\tif len(slug) == 0 || len(slug) > maxSlugLen {",
+    "replace": "\tif len(slug) > maxSlugLen {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "court.gno",
+    "label": "mustSlug: the length bound is not enforced",
+    "find": "\tif len(slug) == 0 || len(slug) > maxSlugLen {",
+    "replace": "\tif len(slug) == 0 {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "SettleUndisputed: the 72h settlement minimum is not waited out",
+    "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.answerHeight+settleDelay) {\n\t\tpanic(\"kourtv2: the answer has not aged the 72h settlement minimum\")\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "Finalize: finalizes before the escrow window passes",
+    "find": "\tif (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {\n\t\tpanic(\"kourtv2: the escrow window has not passed\")\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "claim.gno",
+    "label": "CloseDeadClaim: the dead-claim timeout is not waited out",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {\n\t\tpanic(\"kourtv2: the dead-claim timeout has not passed\")\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "PostAnswer: a claim past the dead-claim timeout is still answerable",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && passed) ||\n\t\t(!known && now >= cs.openedAt+deadClaimTimeout) {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "PostAnswer: trailing stake below the answer floor is answerable",
+    "find": "\tif xbar < effMinAnswerX(c) {",
+    "replace": "\tif false {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "PostAnswer: the priority window never expires",
+    "find": "\tif priorityGateActive(c) && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {",
+    "replace": "\tif priorityGateActive(c) {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "PostAnswer: the priority window binds before the cold-start gate arms",
+    "find": "\tif priorityGateActive(c) && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {",
+    "replace": "\tif now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "claim.gno",
+    "label": "OpenClaim: the deposit fee is zero",
+    "find": "\t\tfee = dep * depositFeeBps / 10000",
+    "replace": "\t\tfee = int64(0)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "Stake: the pools are not settled before the totals move",
+    "find": "\tadvancePools(c, cs)\n\tp := getPos(c, cs, who, side)\n\taccrue(c, cs, p, side)\n\tp.stake = mustAdd(p.stake, amount)",
+    "replace": "\tp := getPos(c, cs, who, side)\n\taccrue(c, cs, p, side)\n\tp.stake = mustAdd(p.stake, amount)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "Stake: the era integral is not walked first",
+    "find": "\ttouch(c)\n\n\t// A LOCK, not a transfer (lock.gno): the coins stay here and keep voting.",
+    "replace": "\t// A LOCK, not a transfer (lock.gno): the coins stay here and keep voting."
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modrender.gno",
+    "label": "modrender: a court NAME reaches every page unsanitized",
+    "find": "\treturn sanitize.InlineText(c.name)",
+    "replace": "\treturn c.name"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modrender.gno",
+    "label": "modrender: a claim TITLE reaches every page unsanitized",
+    "find": "\treturn sanitize.InlineText(cs.title)",
+    "replace": "\treturn cs.title"
+  },
+  {
+    "pkg": "checkpoint",
+    "file": "checkpoint.gno",
+    "label": "ValueAt: the page is scanned ASCENDING, returning the oldest match",
+    "find": "\ta.t.ReverseIterate(key+Sep, pageKey(key, at/PageEpochs), func(_ string, pv any) bool {\n\t\ts := pv.(*page).packed\n\t\tfor i := len(s)/12 - 1; i >= 0; i-- {",
+    "replace": "\ta.t.ReverseIterate(key+Sep, pageKey(key, at/PageEpochs), func(_ string, pv any) bool {\n\t\ts := pv.(*page).packed\n\t\tfor i := 0; i < len(s)/12; i++ {"
+  },
+  {
+    "pkg": "checkpoint",
+    "file": "checkpoint.gno",
+    "label": "ValueAt: the descent has no lower bound at all",
+    "find": "\ta.t.ReverseIterate(key+Sep, pageKey(key, at/PageEpochs), func(_ string, pv any) bool {",
+    "replace": "\ta.t.ReverseIterate(\"\", pageKey(key, at/PageEpochs), func(_ string, pv any) bool {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "v0.55: setmods is a cheaper `unsuspend` — the global term is dropped",
+    "find": "\t\tif cm.suspended && cm.suspendActByGlobal > cs.openedAt {\n\t\t\tpanic(\"kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal\")\n\t\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "v0.55: the setmods global term loses its direction scope, refusing a legitimate install",
+    "find": "\t\tif cm.suspended && cm.suspendActByGlobal > cs.openedAt {",
+    "replace": "\t\tif cm.suspendActByGlobal > cs.openedAt {"
   }
 ]

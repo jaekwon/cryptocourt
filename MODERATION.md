@@ -1171,6 +1171,138 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.55 — `setmods` WAS A CHEAPER `unsuspend` THAN `unsuspend`, AND THE VERB
+  NAME WAS THE ONLY DIFFERENCE.** v0.51a logged this as a lead, verified its three
+  structural facts, and then refused to call it a finding without a fixture:
+  *"DO NOT WRITE THIS UP AS A FINDING UNTIL A TEST DEMONSTRATES IT."* The fixture
+  is now written (`meta_test.gno` §20, court `mtx20`) and the scenario RUNS.
+  - **MEASURED, not argued.** Open a `mod:setmods:mtx20/<cand>` appeal, win it,
+    THEN have the global DAO call `GlobalSuspendSet("mtx20")`, then execute the
+    now-stale verdict. It installed the set AND cleared the suspension.
+    `CourtSuspended` went false. Spelled `mod:unsuspend:mtx20`, the identical act
+    is refused by the guard at `meta.gno:391`. **The test failed with exactly the
+    message written for the defect, which is when a disagreement between a test
+    and the code is the code's.**
+  - **The mechanism is a guard written against a verb's NOMINAL effect.** The
+    `verbSetmods` arm checks only `cm.setActHeight > cs.verdictAt`, because setmods
+    looks like a membership verb. But `installModSet` RE-ARMS a suspended court —
+    the same `cm.suspended = false` that `unsuspendSet` performs — and
+    `GlobalSuspendSet` stamps `suspendActByGlobal` while deliberately NOT moving
+    `setActHeight`. So the one term that arm does check is structurally blind to a
+    global suspension. A GUARD SCOPED TO A VERB LABEL WILL MISS A SECOND EFFECT
+    THE VERB'S PRIMITIVE HAS.
+  - **Cost of the bypass: a registered candidate, which is free and
+    permissionless.** And the two verbs latch in separate lanes (`latchKey` returns
+    `"set:"+court` vs `"sus:"+court`), so the bypass does not even contend for the
+    latch the guarded verb occupies.
+  - **3-0 that it is a bug; 2-1 on the fix. Shipped (a)**, the direction-scoped
+    term added to the `verbSetmods` arm:
+    `if cm.suspended && cm.suspendActByGlobal > cs.openedAt { panic(...) }`.
+    Two of the three wrote that predicate independently, character for character.
+    Direction-scoping needs no second clause because `installModSet` can only ever
+    CLEAR the flag, so `cm.suspended` IS the opposite-direction test — a global
+    `ClearCourtSuspension` also stamps the field but leaves the flag false, so a
+    legitimate install still proceeds.
+  - **THE DISSENT WAS SPECIFIC AND WAS REFUTED IN THE CODE, WHICH IS WHY IT LOST.**
+    It argued (a) hands the global DAO a pre-emptive veto the architecture denies
+    it — the DAO bootstraps 1-of-1 and `GlobalSuspendSet` is free, so one key could
+    kill any in-flight appeal repeatedly. But `GlobalSuspendSet` REFUSES while
+    already suspended (`moderation.gno:701`), so the veto cannot be re-armed
+    without first clearing the suspension the appellant wants gone. The cost is one
+    re-appeal per global act — exactly what the sibling arm's comment already
+    prices in. A MAJORITY IS NOT AN ARGUMENT; the dissent lost on a fact.
+  - **Anchored on `openedAt`, unlike the `setActHeight` term beside it.** §3.3
+    ruled against an `openedAt` anchor for this verb, but its reason is about the
+    LOCAL electorate — fast enough on a cadence to veto meta permanently. The
+    global DAO is m-of-n and rate-limited by the refusal above. AN ASYMMETRIC
+    ANCHOR BETWEEN TWO ARMS OF ONE SWITCH IS WHAT PRODUCED THIS BUG.
+  - **No dead state, checked before shipping.** An appeal opened AFTER the global
+    act is not stale, so it passes; and `ClearCourtSuspension`, `ResetModSet` and
+    the court's own `ResolveElection` all still clear the flag. The refusal also
+    leaves the verdict UNexecuted, so the re-appeal route is not consumed —
+    asserted, not assumed. The fixture asserts BOTH halves of the refusal (the
+    suspension standing and the set unseated), because asserting only the flag
+    would pass on a verdict that installed the set and then panicked.
+  - **The new guard's own mutation row exposed a second-order effect immediately.**
+    Reusing the sibling arm's panic message made that message occur twice, which
+    silently broke the existing row anchored on it — `check-mutation-anchors.py`
+    (v0.54) caught it within a minute of the edit, which is the case that guard was
+    built for. The old row is widened to include its `if`; the message stays
+    shared, because the caller is told the same fact either way.
+  - **ALL THREE flagged the same secondary lead, and it stays a lead.**
+    `ResolveElection` has no upper deadline (`modvote.gno:430` refuses only
+    `now < e.voteEnd`), so a won-but-unresolved election is bankable and can clear
+    a later global suspension through the same `installModSet` path. It is weaker —
+    it needs a real quorate win, and an unresolved election blocks that court's next
+    one — and the authority behind it is live rather than stale. Meta has an
+    execution expiry for exactly this reason; the election lane never got one.
+    NOT MEASURED, so not a finding: the fixture is win an election, do not resolve,
+    `GlobalSuspendSet`, then `ResolveElection`, and read `CourtSuspended`.
+- **v0.54 — 45 STRANDED MUTATION ROWS WERE THREE PROBLEMS, AND THE CORPUS WAS
+  BILLING 843 FOR 825.** The branch merge ported 518 of the other branch's 563
+  unique rows; 45 anchored nowhere and were dropped as lost coverage. Recomputing
+  them found the drop was almost entirely MECHANICAL, and the count was the
+  misleading part:
+  - **19 rows quoted a PANIC STRING, and the rename moved the prefix `courtv2:`
+    to `kourtv2:`.** A half-rename hiding in DATA rather than in a path — which
+    is exactly where `check-paths.py` cannot see it, because `courtv2:` inside a
+    panic message is not a path. Fifteen needed nothing but the prefix swap in
+    `find` and `replace`; the other four had moved as well.
+  - **7 of the 8 `court.gno` PARAM rows died to WHITESPACE.**
+    `stakeOpenDelayBlocks` was added to `defaultParams()`; being the longest field
+    name in the block, gofmt re-aligned every other line by one space. For those
+    seven, nothing about the values or the guards changed. **THE EIGHTH LOOKED
+    LIKE THE SAME DEFECT AND WAS NOT**: `minAnswerX` had also gone 100 CC → 1 CC
+    in `a2b1123`, so it belongs with the moved code below.
+    **AND THE FIRST CLASSIFICATION WAS WRONG TWICE, BOTH TIMES MINE.** First I
+    recorded all eight as calibrated values that had moved; then, correcting that,
+    as eight that had lost a space. Seven and one. A UNIFORM SYMPTOM IS NOT A
+    UNIFORM CAUSE, and the correction of a bad classification can be a bad
+    classification.
+  - **The remainder tracked code that really moved**: the four deadline guards
+    became the two-arm `pastDeadline(stamp, secs)` form; the answer floor became
+    `effMinAnswerX(c)`; sanitization moved out of `render.gno` into the
+    `modrender` helpers `courtName`/`claimTitle`; and stake escrow became a LOCK
+    (`lockStake`/`releaseStake` — "the coins stay here and keep voting").
+  - **38 re-aimed, all 38 CAUGHT, zero survivors.** 7 dropped with reasons rather
+    than fabricated anchors: 2 `stake.gno` escrow-transfer rows whose successors
+    (`lock: staking records no lock`, `lock: unstake never releases the lock`) are
+    already in the corpus; 2 `render.gno` sanitize rows whose two call sites each
+    collapsed into ONE helper, so four anchors honestly make two rows; and 3 that
+    were duplicates of existing rows under different wording. A ROW WHOSE TARGET
+    IS NOW DEAD CODE SHOULD BE DROPPED, NOT RE-AIMED — **but check WHICH constant
+    is dead.** A standing note here said `priorityWindow` was dead and its two
+    rows should go. Dead is `priorityWindow` (seconds, `clock.gno`);
+    `priorityWindowBlocks` (17_280, `court.gno`) is live at `answer.gno:67`. Two
+    live rows were nearly discarded over a name collision.
+  - **The PARAM rows are caught by one test, and that bounds what they prove.**
+    All eight fail `TestDefaultParamsAreTheCalibratedValues`, which pins the
+    literals. So they pin the constants AS CALIBRATION; they do not show that
+    anything downstream reads them. For `minAnswerX` that distinction is live —
+    it feeds `supplyFloor` as a dust arm the fraction usually dominates.
+  - **THE CORPUS WAS OVERSTATING ITSELF BY 18 ROWS.** Checking the re-aimed rows
+    against the corpus turned up 3 that were exact `(file, find, replace)`
+    duplicates of existing rows under different labels — so the whole corpus was
+    checked, and **18 such pairs were already in it**, an artifact of the merge
+    deduping by LABEL. One mutation, two rows, two names: the batch runs both,
+    reports both caught, and 825 distinct mutations read as 843. Deduped to 825,
+    keeping one of each pair with a MERGED label so neither the audit tag
+    (`M3-CRITICAL-1`, `M3-MED-1`, F3, v0.50) nor the function name was lost.
+    **825 distinct `(file, find, replace, pkg, elsewhere)` tuples before AND
+    after — no coverage lost, only duplicate billing**, and 18 redundant
+    full-suite runs removed from every batch. A ROW THAT APPLIES CAN STILL BE A
+    DUPLICATE; dedupe on the MUTATION, never on the label.
+  - **New guard `scripts/check-mutation-anchors.py`.** `mutate.py` already reports
+    a rotted anchor as BAD ANCHOR, so this closes no hole in the batch — it moves
+    the check to where it can act. The batch stages a gno checkout, runs whole
+    suites per row, takes minutes, holds a lock and cannot run beside anything
+    else, so it is the gate run last and least; this is a sub-second text scan in
+    `make check`. It also makes two checks the batch structurally CANNOT, because
+    it sees one row at a time: duplicate triples and duplicate labels. Wired as
+    its own `anchors` target, deliberately NOT inside `realm-test` — that target
+    exits 0 early with no `gno` toolchain, and A GUARD PLACED BEHIND AN EARLY EXIT
+    IS SWITCHED OFF BY WHATEVER TRIGGERS THAT EXIT. (`check-paths.py` has the same
+    shape and is still inside it; noted for the commit that wires it up.)
 - **v0.53 — THE TEST CLOCK'S SEAL REWINDS THE CLOCK, AND ANY USER CAN TRIGGER IT.**
   Findings on `testclock.gno`, which arrived from the other workstream while this
   one was mid-flight. **The file is not this workstream's to edit, so nothing here
@@ -1474,6 +1606,8 @@ decision must be made before launch, not after.
     by one address. **DO NOT WRITE THIS UP AS A FINDING UNTIL A TEST DEMONSTRATES
     IT.** Next step is a fixture that globally suspends a court and then executes a
     `setmods` verdict against it, and simply observes what `CourtSuspended` says.
+    **RESOLVED IN v0.55: the fixture was written, the scenario RUNS, and it is a
+    bug.** The lead is discharged; see below.
 - **v0.50 — WHY THE META FRANCHISE IS TWO TRANSACTIONS, WRITTEN DOWN BEFORE
   SOMEBODY "FIXES" IT.** Asked why a buyer needs a second transaction to receive
   KOURT:META after buying a court coin, I gave two wrong answers before finding

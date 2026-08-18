@@ -377,6 +377,31 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 		if cm.setActHeight > cs.verdictAt {
 			panic("kourtv2: the moderator set changed after this verdict; re-appeal")
 		}
+		// The global DAO's term applies to THIS verb too (v0.55, 3-0). setmods
+		// looks like a membership verb, so this arm was written against
+		// setActHeight alone — but installModSet RE-ARMS a suspended court, the
+		// same `cm.suspended = false` unsuspendSet performs, and GlobalSuspendSet
+		// stamps suspendActByGlobal WITHOUT moving setActHeight. So a stale
+		// verdict was invisible on this path: `setmods` was a cheaper `unsuspend`
+		// than `unsuspend`, qualified only by its spelling, and a registered
+		// candidate is free and permissionless.
+		//
+		// Anchored on openedAt, unlike the setActHeight term above. That term's
+		// verdictAt anchor is about the LOCAL electorate, which moves on a cadence
+		// fast enough to veto meta permanently; the global DAO's is m-of-n and
+		// GlobalSuspendSet REFUSES while already suspended, so it cannot re-arm
+		// the veto without first clearing the suspension the appellant wants gone.
+		// The cost is one re-appeal per global act, exactly what the arm below
+		// already prices in. An asymmetric anchor between two arms of one switch
+		// is what produced this bug.
+		//
+		// Direction-scoping needs no second clause: installModSet can only ever
+		// CLEAR the flag, so `cm.suspended` IS the opposite-direction test. A
+		// global ClearCourtSuspension also stamps suspendActByGlobal but leaves
+		// the flag false, so a legitimate install still proceeds.
+		if cm.suspended && cm.suspendActByGlobal > cs.openedAt {
+			panic("kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal")
+		}
 	case verbSuspend, verbUnsuspend:
 		if cm.lastElectionAt > cs.openedAt || cm.setActHeight > cs.verdictAt {
 			panic("kourtv2: the moderator set changed under this appeal; re-appeal")

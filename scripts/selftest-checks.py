@@ -124,6 +124,8 @@ NONTRANS = "scripts/check-nontransferable.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
 PATHS = "scripts/check-paths.py"
+ANCHORS = "scripts/check-mutation-anchors.py"
+MUTS = "scripts/mutations-kourtv2.json"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
@@ -253,6 +255,89 @@ control("a pattern that grew greedy enough to flag correct paths", PATHS,
         r'(re.compile(r"kourt/court"),',
         r'(re.compile(r"kourt/"),',
         "fires on", argv=["python3", PATHS])
+
+print("\ncheck-mutation-anchors")
+# Each arm PREPENDS a row to the real corpus and wants a verdict that NAMES the
+# injected row, so no arm can be satisfied by a pre-existing problem elsewhere in
+# the 863. The guard's own fixtures pin each verdict behind an INJECTED resolver,
+# which proves nothing about the real one — these arms are what exercise the pkg
+# lookup, the path join and the file read against the actual tree.
+#
+# Written as a JSON round-trip, not a string splice. The first version anchored on
+# the literal "[\n {\n", which is the corpus's `indent=1` head — and the corpus is
+# `indent=2`. Re-serialising it at the right indent silently turned all six arms
+# into BROKEN CONTROL. An arm must not depend on the whitespace of the file it
+# edits.
+def inject(label, rows, want):
+    backup = MUTS + ".selftest-backup"
+    exercised.add(os.path.basename(ANCHORS))
+    shutil.copy(MUTS, backup)
+    try:
+        with open(MUTS, "w") as fh:
+            json.dump(rows + json.load(open(backup)), fh,
+                      indent=2, ensure_ascii=False)
+            fh.write("\n")
+        r = subprocess.run(["python3", ANCHORS], capture_output=True, text=True)
+        out = r.stdout + r.stderr
+        if want in out:
+            print(f"  {label:<44} fires")
+        else:
+            print(f"  {label:<44} SILENT — the guard did not notice")
+            failures.append(label)
+    finally:
+        shutil.move(backup, MUTS)
+
+
+def srow(label, **kw):
+    r = {"pkg": "kourtv2", "file": "buy.gno", "label": label,
+         "find": "NoSourceLineSaysThis", "replace": "x"}
+    r.update(kw)
+    return r
+
+
+inject("a row whose anchor has rotted away", [srow("SELFTEST rotted")],
+       "matched 0x on 'SELFTEST rotted'")
+inject("a row whose anchor is ambiguous",
+       [srow("SELFTEST ambiguous", find="\t")],
+       # Names the row rather than pinning a count: a bare tab occurs hundreds of
+       # times in buy.gno, and only a BAD ANCHOR verdict prints "matched Nx on".
+       "on 'SELFTEST ambiguous'")
+# The check the batch cannot make: it sees one row at a time, so two rows holding
+# the same mutation both report caught and the corpus reads bigger than it is.
+# Not hypothetical — a merge left 18 such pairs, each carrying two different
+# labels for one identical mutation.
+inject("two rows carrying one identical mutation",
+       [srow("SELFTEST twin A"), srow("SELFTEST twin B")],
+       "SELFTEST twin A")
+inject("two rows sharing one label",
+       [srow("SELFTEST shared"), srow("SELFTEST shared", find="AlsoAbsentHere")],
+       "DUPLICATE LABEL 'SELFTEST shared'")
+# An unknown pkg is worse than a missing one: mutate.py's OBSERVERS lookup falls
+# back to EVERY package, so any unrelated red suite reads as this row's catch.
+inject("a pkg mutate.py cannot stage",
+       [srow("SELFTEST unknown pkg", pkg="nosuchpkg")],
+       "UNKNOWN PKG 'nosuchpkg'")
+inject("an `elsewhere` excuse pointing at a deleted file",
+       [srow("SELFTEST stale excuse",
+             elsewhere="gnoland/testdata/no_such_file.txtar")],
+       "STALE ELSEWHERE 'gnoland/testdata/no_such_file.txtar'")
+# A row that is not shaped like a row used to crash with a KeyError, and one
+# missing only `file` was reported as UNKNOWN PKG — naming a package that was
+# right there in the map.
+inject("a row that is not shaped like a row",
+       [{"pkg": "kourtv2", "label": "SELFTEST malformed", "find": "x"}],
+       "MALFORMED ROW 'SELFTEST malformed'")
+# Fail CLOSED when the pkg map moves. It is IMPORTED from mutate.py so there is
+# only one copy; the cost is a guard that resolves nothing if the name goes away,
+# and resolving nothing must never read as clean.
+control("a pkg map this guard can no longer find", ANCHORS,
+        'getattr(mutate, "PKGS", None)', 'getattr(mutate, "PKGS_MOVED", None)',
+        "could not read PKGS", argv=["python3", ANCHORS])
+# And fail closed on the fixtures themselves, the way check-paths does: a verdict
+# that has quietly stopped being produced must break the build, not report clean.
+control("a verdict the guard no longer produces", ANCHORS,
+        '"UNKNOWN PKG"),', '"UNKNOWN PKG THAT IS NEVER PRINTED"),',
+        "SELFTEST no row verdict contains", argv=["python3", ANCHORS])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")
