@@ -549,13 +549,29 @@ func installModSet(c *Court, cm *courtMod, cand *modCandidate, at int64, byElect
 	cm.setActHeight = at
 	cm.installedByMeta = !byElection
 	// Clear the suspension UNLESS this install re-seats the very set that was
-	// judged: always-clearing would make suspension escapable at zero cost by
-	// re-installing the same addresses, while never-clearing would deliver a
-	// pre-disarmed remedy. A one-address swap still escapes — that is the
-	// accepted decoy residual, and it now costs a real membership change.
-	if currentSetID(cm) != cm.suspendedSetID {
+	// judged: always-clearing would make suspension escapable by re-installing
+	// the same addresses, while never-clearing would deliver a pre-disarmed
+	// remedy. A one-address swap still escapes — that is the accepted decoy
+	// residual, and it costs a real membership change.
+	//
+	// THE THRESHOLD IS NOT A MEMBERSHIP CHANGE (v0.52, 3-0 consensus). The
+	// identity used to be `m + ":" + members` compared whole, so a 2-of-2 {A,B}
+	// could re-install itself as 1-of-2 {A,B} and walk out of its own
+	// suspension: the same people, not one seat surrendered, and strictly EASIER
+	// to act than the body that was judged. The election route could not even
+	// see it — a ballot exposes members and not m — so the membership diff
+	// voters are asked to perform was blind to a threshold-only clone.
+	//
+	// So membership is compared on its own, and an unchanged membership lifts a
+	// suspension only by TIGHTENING. Raising m is de-escalatory: it hands the
+	// judged actors strictly less unilateral power, which is a real remedy and
+	// worth rewarding. Holding or lowering it is not. Nothing is stranded
+	// either way — `mod:unsuspend` and the global DAO's ClearCourtSuspension
+	// remain explicit re-arm paths that answer to their own authority.
+	if currentSetID(cm) != cm.suspendedSetID || cm.m > cm.suspendedM {
 		cm.suspended = false
 		cm.suspendedSetID = ""
+		cm.suspendedM = 0
 	}
 	if byElection {
 		cm.lastElectionAt = at
@@ -614,6 +630,17 @@ func CandidateMembers(courtSlug string, candidateID uint64) []address {
 	out := make([]address, len(cand.members))
 	copy(out, cand.members)
 	return out
+}
+
+// CandidateThreshold reports how many of a candidate set's members would have to
+// agree. Voters need it standing next to CandidateMembers: the addresses alone
+// do not say how many must sign, so a candidate that keeps every incumbent and
+// only LOOSENS the rule is otherwise invisible on the ballot — and that is
+// precisely the change the suspension rule refuses to treat as a remedy. The
+// meta court's appeal page has shown this since the setmods vet (writeAppeal);
+// the election ballot had no equivalent.
+func CandidateThreshold(courtSlug string, candidateID uint64) int {
+	return mustModRead(courtSlug).mustCandidate(candidateID).m
 }
 
 // ElectionCooldownUntil is the height a failed election blocks a new one until.

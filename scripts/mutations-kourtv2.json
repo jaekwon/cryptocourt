@@ -262,8 +262,8 @@
     "pkg": "kourtv2",
     "file": "claim.gno",
     "label": "CloseDeadClaim ignores the timeout",
-    "find": "\tif runtime.ChainHeight() < cs.openedAt+deadClaimTimeout {",
-    "replace": "\tif false {"
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {\n\t\tpanic(\"kourtv2: the dead-claim timeout has not passed\")\n\t}\n",
+    "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {\n\t\t_ = passed\n\t}\n"
   },
   {
     "pkg": "kourtv2",
@@ -1648,8 +1648,8 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "OpenDispute: a reopen ignores the escrow window",
-    "find": "\t} else if now >= cs.escrowUntil {\n\t\tpanic(\"kourtv2: the escrow window has passed; Finalize the verdict\")\n\t}",
-    "replace": "\t}"
+    "find": "\t} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {\n\t\tpanic(\"kourtv2: the escrow window has passed; Finalize the verdict\")\n\t}\n",
+    "replace": "\t}\n"
   },
   {
     "pkg": "kourtv2",
@@ -2238,5 +2238,40 @@
     "label": "moderation/AppointMods: a creator appointment no longer clears the meta taint",
     "find": "\tcm.installedByMeta = false // a creator appointment is a local act\n",
     "replace": "\t// a creator appointment is a local act\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/installModSet: a TIGHTENED threshold no longer re-arms an unchanged membership",
+    "find": "\tif currentSetID(cm) != cm.suspendedSetID || cm.m > cm.suspendedM {\n",
+    "replace": "\tif currentSetID(cm) != cm.suspendedSetID {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/installModSet: re-seating the judged set at the SAME threshold escapes (> -> >=)",
+    "find": "\tif currentSetID(cm) != cm.suspendedSetID || cm.m > cm.suspendedM {\n",
+    "replace": "\tif currentSetID(cm) != cm.suspendedSetID || cm.m >= cm.suspendedM {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/installModSet: LOOSENING the threshold escapes the suspension too (> -> !=)",
+    "find": "\tif currentSetID(cm) != cm.suspendedSetID || cm.m > cm.suspendedM {\n",
+    "replace": "\tif currentSetID(cm) != cm.suspendedSetID || cm.m != cm.suspendedM {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/installModSet: a genuinely DIFFERENT set no longer re-arms (membership half dropped)",
+    "find": "\tif currentSetID(cm) != cm.suspendedSetID || cm.m > cm.suspendedM {\n",
+    "replace": "\tif cm.m > cm.suspendedM {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/suspendSet: the judged THRESHOLD is not recorded, so any install looks like a tightening",
+    "find": "\tcm.suspendedM = cm.m                 // ...and the decision rule it was judged under\n",
+    "replace": "\tcm.suspendedM = 0                    // ...and the decision rule it was judged under\n"
   }
 ]

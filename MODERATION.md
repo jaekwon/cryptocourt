@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.51 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.52 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -1171,6 +1171,42 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.52 — A SUSPENDED SET COULD LOOSEN ITS OWN THRESHOLD AND WALK OUT.**
+  Implements the 3-0 consensus recorded in v0.51a. `currentSetID` becomes
+  membership-only, `suspendSet` records the judged threshold in a new
+  `suspendedM`, and `installModSet` lifts a suspension on an UNCHANGED membership
+  only when `m` strictly exceeds the one that was judged. `CandidateThreshold` is
+  added so election voters can see what appeal voters have seen since the setmods
+  vet — without it a candidate that keeps every incumbent and only loosens the
+  rule is invisible on the ballot, which is exactly the change now being refused.
+  - **The comparison is against the JUDGED threshold, not the previous install,
+    and that distinction is the whole property.** My first test asserted that a
+    2-of-2 judged, loosened to 1-of-2, then returned to 2-of-2 should re-arm. It
+    failed, and the CODE was right: returning to 2-of-2 is re-seating exactly the
+    configuration that was judged, which is the escape the rule exists to refuse.
+    Because `suspendedM` is not rewritten by an install, no sequence of threshold
+    moves ending at or below the judged rule can walk a set out — only a
+    membership change or an explicit unsuspend does that. The test now pins all
+    three: loosening does not lift, returning to the judged value does not lift,
+    and tightening STRICTLY past it does.
+  - **It takes a three-member set to state the case at all.** The existing test's
+    two installs are both 1-of-1, and even a 2-member set cannot express "strictly
+    tighter than what was judged" in both directions — judged at 2-of-2 there is
+    no higher `m`. So the positive control judges a 1-of-3 and tightens to 2-of-3.
+    **A TWO-VALUED ARM TESTED ON ONE VALUE LEAVES THE BOUNDARY UNPINNED**, and a
+    fixture too small to hold the boundary is the same failure one level down.
+  - **A second self-inflicted lesson.** The first draft seated the trio with
+    `AppointMods` and died on *"an election has installed a set; the creator's
+    appointment power is spent"* — because the two installs above it pass
+    `byElection=true`. That is precisely the `creatorUnseated` effect v0.51 had
+    just finished pinning, and I walked into it anyway: I had anticipated the
+    OTHER interaction (AppointMods refuses on a suspended set) and written a
+    comment about it. **ANTICIPATING ONE INTERACTION IS NOT CHECKING FOR THEM.**
+    The fixture now seats the trio the way the arms above do.
+  - Five mutation rows, each caught by a different assertion: dropping the
+    tighten clause, `>` weakened to `>=`, `>` weakened to `!=`, dropping the
+    membership half, and `suspendSet` failing to record the judged threshold.
+
 - **v0.51 — THE APPEALS LAYER APPLIES SIX VERBS AND THE SUITE ASSERTS ONE.**
   `meta.gno` looked nearly finished: 13 of its 16 panics were already covered. But
   it has **69 non-panic branch sites and zero were touched**, and that is where an

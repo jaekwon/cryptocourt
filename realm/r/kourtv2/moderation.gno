@@ -191,7 +191,8 @@ type courtMod struct {
 	// staleness guard reads it so a verdict cannot silently overturn a global
 	// decision taken after the appeal was filed — see meta.gno's guard 7.
 	suspendActByGlobal int64
-	suspendedSetID     string // WHICH set was judged — an install of the SAME set must not clear the flag
+	suspendedSetID     string // WHICH membership was judged — a re-seat of the same one must not clear the flag
+	suspendedM         int    // ...and how tightly it had to agree; only TIGHTENING earns a lift
 	setActHeight       int64  // last membership change (for the meta staleness stamp)
 	lastElectionAt     int64
 	// installedByMeta: this set was seated by a meta verdict rather than by the
@@ -831,14 +832,22 @@ func suspendSet(c *Court, by address) {
 	cm := ensureMod(c)
 	cm.suspended = true
 	cm.suspendedAt = runtime.ChainHeight()
-	cm.suspendedSetID = currentSetID(cm) // remember WHICH set was judged
+	cm.suspendedSetID = currentSetID(cm) // remember WHICH membership was judged
+	cm.suspendedM = cm.m                 // ...and the decision rule it was judged under
 	emitModAct(c.id, 0, "suspend", by)
 }
 
-// currentSetID is a canonical identity for a moderator set: its sorted members
-// and threshold. Sets are stored canonically, so equal sets produce equal IDs.
+// currentSetID is a canonical identity for a moderator set's MEMBERSHIP: its
+// sorted members, and nothing else. Sets are stored canonically, so equal
+// memberships produce equal IDs.
+//
+// The THRESHOLD is deliberately not part of this. It used to be, as an `m:`
+// prefix, and folding the two into one string meant the suspension rule could
+// only compare them together — which let a judged set loosen its own threshold
+// and walk out of its suspension. installModSet weighs the two separately now,
+// and both callers of this function (suspendSet, installModSet) are that rule.
 func currentSetID(cm *courtMod) string {
-	s := strconv.Itoa(cm.m) + ":"
+	s := ""
 	cm.members.Iterate("", "", func(k string, _ any) bool {
 		s += k + ","
 		return false

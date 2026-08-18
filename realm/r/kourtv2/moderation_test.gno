@@ -340,6 +340,72 @@ func TestInstallClearsSuspensionOnlyIfSetChanges(cur realm, t *testing.T) {
 	if CourtSuspended("ics") {
 		t.Fatal("installing a different set delivers it ARMED")
 	}
+
+	// ---- the THRESHOLD is not a membership change (v0.52) -------------------
+	// Both installs above are 1-of-1, so neither can express this case at all.
+	// Re-seating the SAME addresses under a LOOSER rule is not a remedy, it is a
+	// promotion — and it used to clear the suspension, because the identity
+	// folded m into the membership string and any difference lifted the flag.
+	//
+	// THREE members, not two, because the comparison is against the threshold
+	// that was JUDGED and a 2-member set cannot express "strictly tighter than
+	// what was judged" in both directions.
+	//
+	// The trio is seated the way the arms above install, NOT via AppointMods:
+	// both installs above passed byElection=true, and an election spends the
+	// creator's appointment power for good. (AppointMods also refuses on a
+	// suspended set, so it is doubly unavailable here.)
+	b1 := testutils.TestAddress("ics-b1")
+	b2 := testutils.TestAddress("ics-b2")
+	b3 := testutils.TestAddress("ics-b3")
+	testing.SetRealm(testing.NewUserRealm(creator))
+	strict := RegisterModCandidate(cross(cur), "ics", 3, b1, b2, b3)
+	installModSet(c, cm, cm.mustCandidate(strict), 350, true)
+	suspendSet(c, creator) // judged: {b1,b2,b3} at 3-of-3
+	if m, n := ModThreshold("ics"); m != 3 || n != 3 {
+		t.Fatalf("fixture: the judged set must be 3-of-3, got %d-of-%d", m, n)
+	}
+
+	// LOOSENED to 1-of-3. The install lands, and the suspension must survive it:
+	// otherwise a judged trio buys back unilateral power without surrendering a
+	// single seat, which is the opposite of the remedy.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	loose := RegisterModCandidate(cross(cur), "ics", 1, b1, b2, b3)
+	installModSet(c, cm, cm.mustCandidate(loose), 400, true)
+	if m, _ := ModThreshold("ics"); m != 1 {
+		t.Fatalf("fixture: the loosened install must actually have LANDED, got m=%d", m)
+	}
+	if !CourtSuspended("ics") {
+		t.Fatal("loosening the threshold on the judged membership must not escape the suspension")
+	}
+
+	// And RETURNING to the judged 3-of-3 does not re-arm either. The comparison
+	// is against what was judged, not against the previous install — so no
+	// sequence of threshold moves that ends at or below the judged rule can walk
+	// a set out of its own suspension. Only a membership change or an explicit
+	// unsuspend does that.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	back := RegisterModCandidate(cross(cur), "ics", 3, b1, b2, b3)
+	installModSet(c, cm, cm.mustCandidate(back), 450, true)
+	if !CourtSuspended("ics") {
+		t.Fatal("re-seating the judged threshold is the judged set again; it must not re-arm")
+	}
+
+	// THE POSITIVE CONTROL. Judge the loose configuration, then tighten past it:
+	// 2-of-3 is strictly less unilateral power than the 1-of-3 that was judged,
+	// which is a genuine structural remedy and re-arms. Without this arm the
+	// three above would pass just as well against a rule that NEVER lifts on an
+	// unchanged membership — a permanent sentence rather than a judgment.
+	testing.SetRealm(testing.NewUserRealm(creator))
+	loosen2 := RegisterModCandidate(cross(cur), "ics", 1, b1, b2, b3)
+	installModSet(c, cm, cm.mustCandidate(loosen2), 500, true)
+	suspendSet(c, creator) // judged afresh: {b1,b2,b3} at 1-of-3
+	testing.SetRealm(testing.NewUserRealm(creator))
+	tighter := RegisterModCandidate(cross(cur), "ics", 2, b1, b2, b3)
+	installModSet(c, cm, cm.mustCandidate(tighter), 550, true)
+	if CourtSuspended("ics") {
+		t.Fatal("tightening strictly past the judged rule is a real remedy and must re-arm the set")
+	}
 }
 
 // The global DAO can SET a suspension, not only clear one (m-of-n).
