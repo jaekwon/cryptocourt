@@ -2,9 +2,12 @@
 """Give a runner its own GNOROOT, so staging cannot collide with anything.
 
 Every gno-based runner here stages the realms into
-$GNOROOT/examples/gno.land/{p,r}/cryptocourt and removes that tree afterwards.
-The path cannot be changed: the import paths baked into the sources are what make
-`gno test` resolve a sibling package there at all. So the tree was shared by five
+$GNOROOT/examples/gno.land/{p,r}/kourt and removes that tree afterwards. The path
+follows the import paths baked into the sources — they are what make `gno test`
+resolve a sibling package there at all, so it moved when they did in the
+2026-08-16 rename. STAGED below still accepts the pre-rename org name as well,
+and the reason is in the comment above it: a tree left behind under the old name
+must stay removable. So the tree was shared by five
 runners across every worktree on the machine — realm-test, check-isolation,
 mutate, check-storage and the txtar TestMain — each of them ending with an rm -rf
 of a directory the others might be reading. That produced a "c.mod undefined"

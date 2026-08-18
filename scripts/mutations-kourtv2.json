@@ -2987,7 +2987,7 @@
     "label": "Buy: IsUserCall downgraded to IsUser (the maketx-run envelope bypass)",
     "find": "\tif !prev.IsUserCall() {",
     "replace": "\tif !prev.IsUser() {",
-    "elsewhere": "gnoland/testdata/courtv2_paymentauth.txtar"
+    "elsewhere": "gnoland/testdata/kourtv2_paymentauth.txtar"
   },
   {
     "pkg": "kourtv2",

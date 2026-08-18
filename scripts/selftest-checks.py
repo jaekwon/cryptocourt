@@ -123,6 +123,7 @@ STORE = "scripts/check-storage.py"
 NONTRANS = "scripts/check-nontransferable.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
+PATHS = "scripts/check-paths.py"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
@@ -213,6 +214,45 @@ control("a read pattern that drifted off the code", READPURE,
         r'EXPORTED = re.compile(r"^funcNOPE ([A-Z]\w*)\(([^)]*)\)")',
         "cannot be right",
         argv=["python3", READPURE])
+
+print("\ncheck-paths")
+# Every want below NAMES THE FILE the mutation exposes. An earlier version of
+# these arms wanted bare "STALE" and "ALLOWLIST", which the baseline output
+# already contained while two real stale paths were outstanding — so two arms
+# printed "fires" without their mutation doing anything. A fixture that cannot
+# distinguish the arm it names proves nothing.
+control("a retired path in a file nobody exempted", PATHS,
+        '    "MODERATION.md": (1,',
+        '    "MODERATION-gone.md": (1,', "STALE MODERATION.md",
+        argv=["python3", PATHS])
+# The count is the pin, because an allowlisted file can acquire a NEW stale
+# mention alongside its deliberate ones — gnoroot.py did exactly that, carrying
+# an intentional spelling and a rotted docstring in the same file.
+control("an allowlist count that drifted", PATHS,
+        '    "PLAN.md": (2,',
+        '    "PLAN.md": (9,', "PLAN.md carries 2 retired-path mention(s), pinned at 9",
+        argv=["python3", PATHS])
+# An exemption for a file with nothing to exempt shrinks coverage silently,
+# which is the failure check-citations names about its own stale manifest rows.
+control("an exemption that guards nothing", PATHS,
+        '    "PLAN.md": (2,',
+        '    "Makefile": (2,', "Makefile is exempt",
+        argv=["python3", PATHS])
+# Fail CLOSED on a rotted regex. This is not hypothetical: the half-rename
+# pattern shipped as `kourt/court(?![a-z0-9])`, which matched `kourt/court` and
+# therefore NOT `kourt/courtv2` — the V2 half-rename escaped the pattern written
+# for half-renames. The fixtures are what turn that into a build break.
+control("a retired pattern that can no longer match", PATHS,
+        r'(re.compile(r"(?:[pr]|\{p,r\})/cryptocourt"),',
+        r'(re.compile(r"(?:[pr]|\{p,r\})/cryptocourtZZZ"),',
+        "SELFTEST no pattern fires", argv=["python3", PATHS])
+# And fail closed the OTHER way: a pattern that grew too greedy would flag
+# correct paths, and a guard that cries wolf gets switched off faster than one
+# with a known edge.
+control("a pattern that grew greedy enough to flag correct paths", PATHS,
+        r'(re.compile(r"kourt/court"),',
+        r'(re.compile(r"kourt/"),',
+        "fires on", argv=["python3", PATHS])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")
