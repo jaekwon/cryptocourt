@@ -340,3 +340,26 @@ func TestDefaultParamsAreTheCalibratedValues(t *testing.T) {
 			p.disputeThresholdBps)
 	}
 }
+
+// A slug's LENGTH bound, the one leg of mustSlug nothing held. It matters for the
+// same reason its alphabet does: a slug is written raw into every markdown link on
+// the directory and court pages, and an unbounded one is an unbounded page.
+func TestASlugsLengthBoundIsEnforced(cur realm, t *testing.T) {
+	who := testutils.TestAddress("sl-a")
+	testing.SetRealm(testing.NewUserRealm(who))
+	// 65 characters, stated outright: the bound is 64.
+	long := ""
+	for i := 0; i < 65; i++ {
+		long += "a"
+	}
+	uassert.AbortsContains(t, cur, "1..64 characters", func() {
+		StartCourt(cross(cur), long, "too long a slug")
+	})
+	// And 64 exactly is accepted, so closing the hole did not over-refuse.
+	ok := long[:64]
+	testing.SetRealm(testing.NewUserRealm(who))
+	StartCourt(cross(cur), ok, "exactly at the bound")
+	if !Exists(ok) {
+		t.Error("a 64-character slug was refused")
+	}
+}

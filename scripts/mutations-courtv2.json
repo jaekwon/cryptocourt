@@ -4500,5 +4500,215 @@
   "label": "NewRules: the re-export mis-routes two of its six terms",
   "find": "\treturn governor.NewRules(quorumBps, thresholdBps, votingBlocks, delayBlocks, graceBlocks, proposeBps)",
   "replace": "\treturn governor.NewRules(thresholdBps, quorumBps, votingBlocks, delayBlocks, graceBlocks, proposeBps)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "render: a court NAME reaches the directory unsanitized",
+  "find": "\t\tb.WriteString(\"- [\" + sanitize.InlineText(c.name) + \"](/r/cryptocourt/courtv2:\" + s + \") \u2014 \" +",
+  "replace": "\t\tb.WriteString(\"- [\" + c.name + \"](/r/cryptocourt/courtv2:\" + s + \") \u2014 \" +"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "render: a court NAME reaches its own page unsanitized",
+  "find": "\tb.WriteString(\"# \" + sanitize.InlineText(c.name) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"# \" + c.name + \"\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "render: a claim TITLE reaches the claim page unsanitized",
+  "find": "\tb.WriteString(\"# \" + sanitize.InlineText(cs.title) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"# \" + cs.title + \"\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "render: a claim TITLE reaches the positions page unsanitized",
+  "find": "\tb.WriteString(\"Claim: \" + sanitize.InlineText(cs.title) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"Claim: \" + cs.title + \"\\n\\n\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSlug: any character is allowed in a slug (raw in every markdown link)",
+  "find": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'\n\t\tif !ok {",
+  "replace": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'\n\t\tif !ok && len(slug) < 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSlug: UPPERCASE is allowed in a slug",
+  "find": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'",
+  "replace": "\t\tok := (ch >= 'A' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSlug: an empty slug is accepted",
+  "find": "\tif len(slug) == 0 || len(slug) > 64 {",
+  "replace": "\tif len(slug) > 64 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "court.gno",
+  "label": "mustSlug: the length bound is not enforced",
+  "find": "\tif len(slug) == 0 || len(slug) > 64 {",
+  "replace": "\tif len(slug) == 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "Render: the path is not trimmed of its slashes",
+  "find": "\tpath = strings.Trim(path, \"/\")",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "Render: an extra path segment is folded into the address instead of refused",
+  "find": "\tparts := strings.SplitN(path, \"/\", 3)",
+  "replace": "\tparts := strings.Split(path, \"/\")"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "Render: a claim id that is not a number is not refused",
+  "find": "\tid, err := strconv.ParseUint(parts[1], 10, 64)\n\tif err != nil {",
+  "replace": "\tid, _ := strconv.ParseUint(parts[1], 10, 64)\n\tif false {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "Render: the positions page is never reached",
+  "find": "\tif len(parts) == 3 {\n\t\treturn renderPositions(parts[0], id, parts[2])\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "writeTier: the directory list is unbounded (audit N3)",
+  "find": "\tif shown > renderPageSize {\n\t\tshown = renderPageSize\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "renderCourt: the claims list is unbounded (audit N3)",
+  "find": "\tif c.nextID > renderPageSize {\n\t\tlo = c.nextID - renderPageSize + 1\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "renderCourt: the claims window is off by one",
+  "find": "\t\tlo = c.nextID - renderPageSize + 1",
+  "replace": "\t\tlo = c.nextID - renderPageSize"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "P-CONST renderPageSize 50 -> 500",
+  "find": "const renderPageSize = 50",
+  "replace": "const renderPageSize = 500"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "renderClaim: an OPEN flag vote is not announced, so the page offers the slot instead",
+  "find": "\t\tcase cs.flagOpen:",
+  "replace": "\t\tcase cs.flagOpen && cs.round < 0:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "renderClaim: an OPEN counter re-vote is not announced",
+  "find": "\t\tcase cs.counterOpen:",
+  "replace": "\t\tcase cs.counterOpen && cs.round < 0:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "renderClaim: an escrowed slash is not announced",
+  "find": "\tcase cs.pendingSlash > 0:",
+  "replace": "\tcase cs.pendingSlash < 0:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "renderClaim: an open dispute's running tally is not sealed off",
+  "find": "\t\tif cs.disputeOpen {",
+  "replace": "\t\tif cs.disputeOpen && cs.round < 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "claimStatus: a CLOSED claim reads as open",
+  "find": "\tcase cs.closed:",
+  "replace": "\tcase cs.closed && cs.round < 0:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "claimStatus: a claim closed without a decision reads as something else",
+  "find": "\tcase cs.provClose:",
+  "replace": "\tcase cs.provClose && cs.round < 0:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "claimStatus: a SETTLED claim reads as provisional",
+  "find": "\tcase cs.verdictAt != 0:\n\t\treturn \"settled \u2014 every stake withdraws 1\u00d7\"",
+  "replace": "\tcase cs.verdictAt < 0:\n\t\treturn \"settled \u2014 every stake withdraws 1\u00d7\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "claimStatus: a provisional YES verdict is not shown at all (sideYES is 0)",
+  "find": "\tcase cs.provisional >= 0:",
+  "replace": "\tcase cs.provisional > 0:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "pct: a zero denominator is divided by",
+  "find": "\tif den <= 0 || num < 0 {",
+  "replace": "\tif den < 0 || num < 0 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "pct: the percentage uses 64-bit arithmetic that a whale's conviction wraps (MED-1)",
+  "find": "\tbps := mulDiv128(num, 10000, den)",
+  "replace": "\tbps := num * 10000 / den"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "pct: the whole part is scaled wrong",
+  "find": "\treturn strconv.FormatInt(bps/100, 10) + \".\" + pad2(bps%100) + \"%\"",
+  "replace": "\treturn strconv.FormatInt(bps/1000, 10) + \".\" + pad2(bps%100) + \"%\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "pad2: the fraction is not zero-padded (one bps reads as ten)",
+  "find": "\tif v < 10 {\n\t\treturn \"0\" + strconv.FormatInt(v, 10)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "sideName: every side renders as NO",
+  "find": "\tif side == sideYES {\n\t\treturn \"YES\"\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "render.gno",
+  "label": "tierName: low and high are swapped",
+  "find": "\tcase tierLowX:\n\t\treturn \"low\"\n\tcase tierHighX:\n\t\treturn \"high\"",
+  "replace": "\tcase tierLowX:\n\t\treturn \"high\"\n\tcase tierHighX:\n\t\treturn \"low\""
  }
 ]

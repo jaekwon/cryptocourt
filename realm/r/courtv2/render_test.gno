@@ -418,3 +418,232 @@ func TestNoRenderSurfaceLeaksTheForbiddenVocabulary(cur realm, t *testing.T) {
 	Crystallize(cross(cur), "r74", id)
 	sweep("crystallized")
 }
+
+// No user string can open page structure of its own, on ANY page.
+//
+// A court name and a claim title are free text from whoever creates them and
+// NEITHER is validated at the door: StartCourt stores `name` unchecked and
+// OpenClaim stores `title` the same way. The render-time sanitizer is the only
+// thing between them and the page — and four of its five call sites had nothing
+// holding them, so a name could add a heading and a list row of its own to the
+// directory, to the court page, and to the positions page.
+//
+// The payload is what an attacker would actually write: a forged verdict line
+// under a heading that looks like the realm's own.
+func TestNoUserStringOpensStructureOnAnyPage(cur realm, t *testing.T) {
+	const inject = "x\n## Ratified by the foundation\n- verdict: YES"
+	who := testutils.TestAddress("inj-a")
+	testing.SetRealm(testing.NewUserRealm(who))
+	StartCourt(cross(cur), "aaa-inj", inject)
+	c := mustCourt("aaa-inj")
+	c.coin.Mint(who, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(who))
+	id := OpenClaim(cross(cur), "aaa-inj", inject)
+
+	pages := []string{
+		Render(""),                              // the directory: the court name
+		Render("aaa-inj"),                          // the court page: the name and the title
+		Render("aaa-inj/" + strconv.FormatUint(id, 10)),
+		Render("aaa-inj/" + strconv.FormatUint(id, 10) + "/" + who.String()),
+	}
+	if !strings.Contains(pages[0], "/r/cryptocourt/courtv2:aaa-inj)") {
+		t.Fatal("setup: the injecting court is not on the directory page, so the " +
+			"directory arm below would prove nothing — the list is capped at " +
+			"renderPageSize per tier and this suite creates many courts, which is " +
+			"why the slug is chosen to sort first")
+	}
+	for i, page := range pages {
+		if strings.Contains(page, "\n## Ratified") {
+			t.Errorf("page %d: a user string opened a heading of its own:\n%s", i, page)
+		}
+		if strings.Contains(page, "\n- verdict: YES") {
+			t.Errorf("page %d: a user string opened a list row of its own:\n%s", i, page)
+		}
+	}
+}
+
+// claimStatus names every phase, and the precedence between them.
+//
+// The states are set outright rather than driven through the lifecycle: this is
+// the RENDERER under test, and reaching six phases through the machine would test
+// the machine six times and the renderer once.
+//
+// The sharpest of these is the provisional line. sideYES is ZERO, so the guard has
+// to be `provisional >= 0`; written `> 0` a provisional YES verdict falls through
+// and the page reports the claim as merely answered — hiding both the escrow
+// window it can be reopened in and the losing side's right to withdraw now.
+func TestTheClaimStatusNamesEveryPhase(cur realm, t *testing.T) {
+	who := testutils.TestAddress("cst-a")
+	c := testCourt(cur, "cst1", who, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(who))
+	id := OpenClaim(cross(cur), "cst1", "every phase")
+	cs := mustClaim(c, id)
+
+	if got := claimStatus(cs); !strings.Contains(got, "open — stake") {
+		t.Errorf("a fresh claim reads %q", got)
+	}
+	cs.frozenAt, cs.answerHeight = 100, 100
+	if got := claimStatus(cs); !strings.Contains(got, "answered — staking frozen") {
+		t.Errorf("an answered claim reads %q", got)
+	}
+	cs.provisional, cs.escrowUntil = sideYES, 500
+	if got := claimStatus(cs); !strings.Contains(got, "provisional verdict YES") {
+		t.Errorf("a provisional YES verdict reads %q — sideYES is zero, so a bar "+
+			"written `> 0` hides this whole phase", got)
+	}
+	cs.disputeOpen = true
+	if got := claimStatus(cs); !strings.Contains(got, "disputed") {
+		t.Errorf("an open dispute reads %q", got)
+	}
+	cs.disputeOpen = false
+	cs.verdictAt = 200
+	if got := claimStatus(cs); !strings.Contains(got, "settled") {
+		t.Errorf("a settled claim reads %q", got)
+	}
+	cs.provClose = true
+	if got := claimStatus(cs); !strings.Contains(got, "closed without a decision") {
+		t.Errorf("a claim closed without a decision reads %q", got)
+	}
+	cs.provClose = false
+	cs.closed = true
+	if got := claimStatus(cs); !strings.Contains(got, "closed — never answered") {
+		t.Errorf("a closed claim reads %q — dropped, it invites staking on a claim "+
+			"that can never be answered", got)
+	}
+}
+
+// The two names a verdict page turns on. sideName decides what the verdict SAYS,
+// and it had nothing on it: every side rendering as NO is a page that reports the
+// opposite outcome on every YES claim in the realm.
+func TestSideAndTierNamesAreNotSwapped(t *testing.T) {
+	if got := sideName(sideYES); got != "YES" {
+		t.Errorf("sideYES renders as %q", got)
+	}
+	if got := sideName(sideNO); got != "NO" {
+		t.Errorf("sideNO renders as %q", got)
+	}
+	if got := tierName(tierLowX); got != "low" {
+		t.Errorf("tierLowX renders as %q", got)
+	}
+	if got := tierName(tierHighX); got != "high" {
+		t.Errorf("tierHighX renders as %q", got)
+	}
+	if got := tierName(tierMidX); got != "mid" {
+		t.Errorf("tierMidX renders as %q", got)
+	}
+}
+
+// An escrowed slash is announced, found surviving. Without the line the page falls
+// through to the flag-slot row and OFFERS a slot whose bond is already committed
+// elsewhere — it invites a user to pay for something the claim is not in a state
+// to sell.
+func TestAnEscrowedSlashIsAnnounced(cur realm, t *testing.T) {
+	who := testutils.TestAddress("esl-a")
+	c := testCourt(cur, "esl1", who, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(who))
+	id := OpenClaim(cross(cur), "esl1", "an escrowed slash")
+	cs := mustClaim(c, id)
+	cs.frozenAt, cs.answerHeight, cs.answerBond0 = 100, 100, 1000
+	cs.pendingSlash = 500
+
+	page := Render("esl1/" + strconv.FormatUint(id, 10))
+	if !strings.Contains(page, "slash is escrowed") {
+		t.Errorf("the page does not mention the escrowed slash:\n%s", page)
+	}
+	if strings.Contains(page, "flag slot open") {
+		t.Errorf("the page offers a flag slot while a slash is escrowed:\n%s", page)
+	}
+}
+
+// The DIRECTORY's N3 page bound, which was unheld while its twin on the claims
+// list was already covered by TestRenderCourtPaginatesClaims.
+//
+// The bound is on the WORK, not the output: a court list that grows with an
+// attacker-openable, deposit-priced count makes the cost of the page every user
+// reads grow with it. Deep links reach whatever the cap omits, which is what makes
+// capping it safe rather than lossy.
+//
+// It creates only as many courts as it needs to cross the cap, and asserts it HAS
+// crossed it. The first version created 51 outright and tripled the mutation
+// batch's wall clock — 51 ledger allocations on every one of 673 runs — for a
+// property that only needs the population to exceed renderPageSize by one.
+func TestTheDirectoryListIsBounded(t *testing.T) {
+	if renderPageSize != 50 {
+		t.Fatalf("renderPageSize is %d; this test reasons about its exact value", renderPageSize)
+	}
+	// Registered directly rather than through StartCourt. writeTier reads only a
+	// court's name and claim count, and StartCourt allocates a whole ledger per
+	// court — which the mutation batch then pays for on all 673 runs. Constructing
+	// what the renderer actually reads is both cheaper and narrower.
+	for i := len(ListByTier(int(tierListed))); i <= renderPageSize; i++ {
+		slug := "n3dir" + strconv.Itoa(i)
+		courts.Set(slug, &Court{id: slug, name: "dir court " + strconv.Itoa(i), tier: tierListed})
+	}
+	listed := len(ListByTier(int(tierListed)))
+	if listed <= renderPageSize {
+		t.Fatalf("setup: %d listed courts does not exceed the %d-row cap, so nothing "+
+			"below can discriminate", listed, renderPageSize)
+	}
+
+	dir := Render("")
+	if n := strings.Count(dir, "](/r/cryptocourt/courtv2:"); n > 2*renderPageSize {
+		t.Errorf("the directory rendered %d rows across its two tiers, past the "+
+			"%d-per-tier bound", n, renderPageSize)
+	}
+	if !strings.Contains(dir, "more; open any court directly") {
+		t.Errorf("the directory does not say what it omitted:\n%s", dir)
+	}
+}
+
+// An OPEN counter re-vote is announced and its tally sealed, found surviving —
+// the flag-vote line beside it was held and this one was not. Same failure: the
+// page falls through and offers a flag slot while a re-vote is running.
+func TestAnOpenCounterReVoteIsAnnounced(cur realm, t *testing.T) {
+	who := testutils.TestAddress("ocr-a")
+	c := testCourt(cur, "ocr1", who, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(who))
+	id := OpenClaim(cross(cur), "ocr1", "an open counter re-vote")
+	cs := mustClaim(c, id)
+	cs.frozenAt, cs.answerHeight, cs.answerBond0 = 100, 100, 1000
+	cs.counterOpen = true
+
+	page := Render("ocr1/" + strconv.FormatUint(id, 10))
+	if !strings.Contains(page, "counter re-vote open") {
+		t.Errorf("the page does not announce the open counter re-vote:\n%s", page)
+	}
+	if strings.Contains(page, "flag slot open") {
+		t.Errorf("the page offers a flag slot during a counter re-vote:\n%s", page)
+	}
+}
+
+// Render's path handling: the shapes it accepts and the ones it must refuse.
+//
+// Three legs were unheld. The TRIM is what makes a leading slash work at all, and
+// without it every "/slug" link lands on "no court by that slug". SplitN's cap of
+// three is what keeps a fourth segment from being folded into the address instead
+// of refused. And a non-numeric id has to be refused as one rather than falling
+// through as id zero.
+func TestRenderAcceptsAndRefusesEveryPathShape(cur realm, t *testing.T) {
+	who := testutils.TestAddress("rp-a")
+	testCourt(cur, "rps1", who, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(who))
+	id := OpenClaim(cross(cur), "rps1", "path shapes")
+	sid := strconv.FormatUint(id, 10)
+
+	// A leading or trailing slash names the same page as none.
+	if Render("/rps1") != Render("rps1") {
+		t.Errorf("a leading slash changes the court page:\n%s", Render("/rps1"))
+	}
+	if Render("rps1/"+sid+"/") != Render("rps1/"+sid) {
+		t.Error("a trailing slash changes the claim page")
+	}
+	// A claim id that is not a number is refused as that, not as a missing claim.
+	if got := Render("rps1/notanumber"); !strings.Contains(got, "must be a number") {
+		t.Errorf("a non-numeric id renders %q", got)
+	}
+	// A fourth segment is refused rather than folded into the address.
+	if got := Render("rps1/" + sid + "/" + who.String() + "/extra"); !strings.Contains(got, "Not found") {
+		t.Errorf("a fourth path segment rendered a page:\n%s", got)
+	}
+}
+

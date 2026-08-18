@@ -1624,6 +1624,65 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.09 — courtv2's render path, the thinnest-covered file in the repo: 15 of 31 caught, and
+  the sanitizer that AGENTS.md names by hand had FOUR of five call sites unheld.**
+  Target chosen by measurement rather than instinct: rows per hundred lines, by file. Every
+  courtv2 file sat between 5.6 and 17.6 except two at **2.3** — `render.gno` and `stake.gno`.
+  Render first, because AGENTS.md names `Render(path)` as an attacker-controlled surface and §7.4
+  lives there.
+  **The finding: `StartCourt` does not validate `name` AT ALL** — no length bound, no TextOnly —
+  and `OpenClaim` stores `title` the same way. So the render-time `sanitize.InlineText` is the
+  entire defence, and four of its five call sites had nothing holding them: a court name could
+  open a heading and a list row of its own on the directory, on the court page, and a claim title
+  on the positions page. Only the claim page's title was pinned. The new fixture writes what an
+  attacker would actually write — a forged verdict line under a heading that looks like the
+  realm's own — and checks all four pages.
+  Twelve more real gaps, and the pattern is that the tests which existed drove the LIFECYCLE and
+  read the page as a by-product, so anything the lifecycle does not naturally reach was unheld:
+  `claimStatus`'s closed phase (dropped, a closed claim invites staking on a claim that can never
+  be answered); its provisional phase, where `sideYES` is ZERO so a bar written `> 0` hides a
+  provisional YES verdict entirely — both the escrow window and the losing side's right to
+  withdraw now; `sideName`, which decides what the verdict SAYS and had nothing on it, so every
+  side rendering as NO would misreport every YES claim in the realm; the DIRECTORY's audit-N3
+  bound (the claims one was held, its twin was not); the counter-re-vote and escrowed-slash
+  lines, whose absence makes the page offer a flag slot that is already committed; `mustSlug`'s
+  length bound — the alphabet leg was held, and the alphabet is the reason a slug is written RAW
+  into every markdown link; and three of `Render`'s path shapes, including the trim without which
+  every leading-slash link lands on "no court by that slug".
+  One equivalence, predicted and confirmed: the positions page sanitizes `addrStr`, but the value
+  has already passed `address(addrStr).IsValid()`, and a valid bech32 address cannot carry
+  markdown structure. Defence in depth; excluded.
+  **Three notes against my own fixtures.** The N3 test first read 51 rows against a working
+  50-row bound, because the "…and N older" notice names the same path and was counted as a row.
+  The injection test's directory arm was VACUOUS as first written: the directory is capped at
+  renderPageSize per tier and this suite creates dozens of courts, so a court whose slug sorted
+  late never appeared on the page at all — it now uses a slug chosen to sort first AND asserts
+  that premise outright, so the arm fails loudly if it ever stops discriminating.
+  The third is a misdiagnosis worth recording in full, because both halves of it are useful.
+  The batch's wall clock read 41 minutes against a remembered 12, and I blamed my own N3 fixture:
+  it created 51 courts and 51 claims outright, which is 51 ledger allocations on every one of 673
+  runs, so the theory fit and I rewrote it twice on that basis.
+  Two things were actually true. **Orphaned workers were inflating the reading** — killing a
+  background batch kills the shell wrapper and NOT the process group, so a `mutate-parallel.py`
+  and its four shards survived and kept competing for CPU, found still running at 29:58 elapsed
+  long after the run that spawned them had been "stopped". So `pkill -f mutate-parallel.py`
+  before trusting any batch timing. **And the batch really has got slower, for the dullest of
+  reasons:** a clean uncontended run measures **36:52 wall, 8,860s user, 417% CPU** — four cores
+  genuinely saturated. The row count has gone 372 -> 673 since the 11-minute measurement and the
+  courtv2 suite has grown every firing, so ~1.8x the rows over a slower suite is the whole story.
+  The fixture rewrites were still worth keeping — the claims arm duplicated
+  `TestRenderCourtPaginatesClaims`, which already held that row, and the directory arm now
+  registers courts directly instead of allocating a ledger each, since `writeTier` reads only a
+  name and a claim count. A fixture's cost IS multiplied by the batch. But it was not the cause,
+  and the number that sent me looking was measuring something else.
+  Cheap next step, not taken here: `mutate-parallel.py` defaults to
+  `min(6, cores/2)` = 4 shards on this 8-core machine, and 417% CPU says there is headroom for 6.
+  Registered, not fixed: neither a court name nor a claim title has any LENGTH bound. The
+  sanitizer makes them safe; nothing makes them small, and both are rendered on pages bounded
+  only in row count. A bound belongs at the door, which is a behaviour change on a live entrypoint
+  — owner's call.
+  Batch now 673 rows: 672 caught, 0 not caught, one surviving by design.
+
 - **v1.08 — `r/govern`, the realm that authenticates: 16 of 28 caught, and the twelve survivors
   split three ways — one real gap, six unreachable BY LANGUAGE, and five that no suite here can
   observe.** The batch had ZERO rows on `r/govern`: ~440 lines of source carrying ~4,000 lines of
