@@ -1624,6 +1624,48 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.12 — the per-function measurement pays off again, and the duplication detector fires on
+  the PAYOUT path: the senior queue's quote and its payment are two copies of one formula, and
+  nothing had ever checked the quote.** Continuing v1.11's method on the next three uncovered
+  functions: `resolveQualityRide` (21 lines), `FlagState` (18), `SeniorEntitlement` (16).
+  The ride lane came out well — its heavily-argued guards are held. The v0.54 promotion mandate
+  dropped outright, its scope in both directions (gating un-adjudicated tiers, gating demotions),
+  the ⅔ boundary, the tier not applied, the slot latch, v0.50's dust dispositions, v0.50's
+  ride-originates-the-slash, the dust-ride asymmetry, the bounty a ride must not pay, and
+  `tierFinal` in both directions — all caught. That is the part of the realm with the longest
+  comment history, and the tests match it.
+  **`FlagState` was the opposite: three of six cases unheld**, on a PUBLIC query a client reads to
+  decide whether flagging is possible at all — and the tally behind it is sealed, so this string
+  is the only thing a user has. Settled, voting, and the cooldown's exclusive boundary now pinned
+  by walking the precedence chain upward, each phase asserted to beat the ones below it.
+  **The find: `PullSenior` and `SeniorEntitlement` duplicate the same four lines** — coverage as
+  `cumAccrual - start`, clamped to the amount, minus what is already paid — one to PAY and one to
+  QUOTE. The harness flagged it exactly as it flagged `disputeBond0` in v1.11: four rows reported
+  BAD ANCHOR (matched 2x). Reading that as duplication rather than as a bad anchor is one firing
+  old and has now found two instances, both on money paths.
+  This one was WORSE than the dispute bond's, because the dispute bond has charge==quote asserted
+  and this had nothing: **the only existing assertion on `SeniorEntitlement` reads `to` and
+  `amount` and discards the payable with `_, _`.** So a claimant asking how much they are owed got
+  a figure no test had ever checked, from a copy that can drift from the one that pays. Inverting
+  `covered - paid` and dropping the coverage clamp both survived the whole suite. The new fixture
+  asserts the quote EQUALS what `PullSenior` then hands over, at three stages of an entitlement's
+  life, which is what stops the copies drifting.
+  Four excluded. Two are unreachable and now argued rather than assumed: dropping the quote's
+  `v == nil` check still panics, on the type assertion instead, so both forms refuse; and the
+  payable's `p < 0` floor cannot fire because `e.paid` only ever grows by `covered - paid`, so
+  `paid <= covered` always holds and `cumAccrual` never decreases.
+  The other two are a registered residual worth naming precisely. `resolveQualityRide` writes
+  `conclusiveSeq` and `conclusiveTurnout`, and BOTH writes are unheld — the turnout mark because
+  no test drives a conclusive RIDE and then crystallizes, and the seq because it is a 2x anchor
+  (the same mark is written on the flag path too). `conclusiveTurnout` is not decoration: it is
+  read at crystallize.gno:126 against `fullBar` and again at :301 as a DRAW DENOMINATOR. Reaching
+  it needs a conclusive ride followed by a crystallize that asserts the accuracy pool's divisor —
+  a heavier fixture than this firing had room to verify, so it is written down with the exact
+  shape needed rather than built in a hurry.
+  Batch now 743 rows: 742 caught, 0 not caught, one surviving by design.
+  27:27 at 464% CPU — FASTER than v1.11's 38:49 on 25 fewer rows, because the orphan check from
+  v1.09 ran first. The lesson holds: clear the process group before believing a timing.
+
 - **v1.11 — a better way to pick the target, and the money-sizing formulas it found. Also: the
   harness detects DUPLICATED CODE, which I had not noticed it could do.**
   Rows-per-file has stopped discriminating now that both 2.3-per-100 outliers are closed, so the

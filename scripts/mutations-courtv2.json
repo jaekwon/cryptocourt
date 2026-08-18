@@ -5025,5 +5025,180 @@
   "label": "disputeBond0: the doubling is one round ahead",
   "find": "\treturn mustMul(base, int64(1)<<uint(shift))",
   "replace": "\treturn mustMul(base, int64(1)<<uint(shift+1))"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: a BELOW-BAR ride applies its tier anyway",
+  "find": "\tif !conclusive {\n\t\treturn // below-bar rides leave the tier standing (default mid)\n\t}",
+  "replace": "\t_ = conclusive"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the v0.54 promotion mandate is dropped entirely",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a \u2154 mandate (\u00a73.4 F3)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the mandate gates un-adjudicated tiers too",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "\tif tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the mandate gates DEMOTIONS as well as promotions",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "\tif cs.slotConsumed && bucketW(cs, tier)*3 < turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the \u2154 mandate is exclusive at its own value",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
+  "replace": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 <= turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the tier is never applied",
+  "find": "\tcs.tier = int64(tier)\n\tcs.conclusiveSeq = cs.qVoteSeq",
+  "replace": "\tcs.conclusiveSeq = cs.qVoteSeq"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the slot latch is not consumed",
+  "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
+  "replace": "\tcs.conclusiveTurnout = turnout"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: a conclusive LOW does not carry the dust dispositions (v0.50)",
+  "find": "\tif tier == qualityLow {\n\t\tburnConclusiveLowDust(c, cs)\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the ride never originates the slash (v0.50's sock-dispute immunity)",
+  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {\n\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty\n\t}",
+  "replace": "\t_, _ = now, fullBar"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: a DUST ride levies a slash it could not lift",
+  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
+  "replace": "\t_ = fullBar\n\tif tier == qualityLow && cs.qLowW*3 >= turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the slash's \u2154-low bar is exclusive",
+  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
+  "replace": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 > turnout*2 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the ride pays a bounty it did not post a bond for",
+  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty",
+  "replace": "\t\toriginateSlash(c, cs, now, \"x\") // \"\" \u2014 a ride posts no bond, so no bounty"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the tier is finalised while a reserve still stands (the Q5 re-vote is lost)",
+  "find": "\tcs.tierFinal = cs.pendingSlash == 0",
+  "replace": "\tcs.tierFinal = true"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "ride: the tier is never finalised",
+  "find": "\tcs.tierFinal = cs.pendingSlash == 0",
+  "replace": "\tcs.tierFinal = false"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: a settled claim does not read as settled",
+  "find": "\tcase cs.crystallized:\n\t\treturn \"settled\"",
+  "replace": "\tcase false:\n\t\treturn \"settled\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: an open flag vote does not read as voting",
+  "find": "\tcase cs.flagOpen:\n\t\treturn \"voting\"",
+  "replace": "\tcase false:\n\t\treturn \"voting\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: an escrowed slash does not read as a counter window",
+  "find": "\tcase cs.pendingSlash > 0:\n\t\treturn \"counter-window\"",
+  "replace": "\tcase false:\n\t\treturn \"counter-window\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: a consumed slot reads as open",
+  "find": "\tcase cs.slotConsumed:\n\t\treturn \"consumed\"",
+  "replace": "\tcase false:\n\t\treturn \"consumed\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: the cooldown is never reported",
+  "find": "\tcase cs.flagCycles >= 1 &&\n\t\truntime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks:",
+  "replace": "\tcase false:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: the cooldown needs two cycles rather than one",
+  "find": "\tcase cs.flagCycles >= 1 &&",
+  "replace": "\tcase cs.flagCycles >= 2 &&"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "FlagState: the cooldown boundary is inclusive",
+  "find": "\t\truntime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks:",
+  "replace": "\t\truntime.ChainHeight() <= cs.lastFlagAt+flagCooldownBlocks:"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "SeniorEntitlement (the QUOTE copy): the coverage is measured backwards",
+  "find": "\te := v.(*entitlement)\n\tcovered := c.cumAccrual - e.start\n\tif covered > e.amount {\n\t\tcovered = e.amount\n\t}\n\tp := covered - e.paid",
+  "replace": "\te := v.(*entitlement)\n\tcovered := e.start - c.cumAccrual\n\tif covered > e.amount {\n\t\tcovered = e.amount\n\t}\n\tp := covered - e.paid"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "SeniorEntitlement (the QUOTE copy): coverage is not clamped to the amount",
+  "find": "\tcovered := c.cumAccrual - e.start\n\tif covered > e.amount {\n\t\tcovered = e.amount\n\t}\n\tp := covered - e.paid",
+  "replace": "\tcovered := c.cumAccrual - e.start\n\tp := covered - e.paid"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "SeniorEntitlement: the payable is what was already paid, not what is owed",
+  "find": "\tp := covered - e.paid",
+  "replace": "\tp := e.paid - covered"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "emission.gno",
+  "label": "SeniorEntitlement: the amount and the paid figure are swapped",
+  "find": "\treturn e.to, e.amount, e.paid, p",
+  "replace": "\treturn e.to, e.paid, e.amount, p"
  }
 ]

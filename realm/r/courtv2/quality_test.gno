@@ -2576,3 +2576,46 @@ func TestRideDisposalAtExactlyTheFullBar(cur realm, t *testing.T) {
 			fcs.answerBond, supply-c.coin.TotalSupply())
 	}
 }
+
+// FlagState names every slot phase, and its precedence between them. Three of its
+// six cases were unheld — it is a public query a client reads to decide whether
+// flagging is even possible, and the tally it stands in front of is sealed, so this
+// string is the only thing a user has to go on.
+func TestFlagStateNamesEverySlotPhase(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fsp-alice")
+	c := testCourt(cur, "fsp", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fsp", "every slot phase")
+	cs := mustClaim(c, id)
+
+	if got := FlagState("fsp", id); got != "open" {
+		t.Errorf("a fresh claim's slot is %q, want open", got)
+	}
+	// The cooldown, which needs a cycle behind it and a recent flag.
+	cs.flagCycles, cs.lastFlagAt = 1, runtimeHeight()
+	if got := FlagState("fsp", id); got != "cooldown" {
+		t.Errorf("inside the cooldown the slot is %q, want cooldown", got)
+	}
+	// One block past the window it reopens, so the boundary is exclusive.
+	cs.lastFlagAt = runtimeHeight() - flagCooldownBlocks
+	if got := FlagState("fsp", id); got != "open" {
+		t.Errorf("at exactly lastFlagAt+cooldown the slot is %q, want open", got)
+	}
+	// Precedence upward from here: each phase must beat the ones below it.
+	cs.slotConsumed = true
+	if got := FlagState("fsp", id); got != "consumed" {
+		t.Errorf("a consumed slot is %q", got)
+	}
+	cs.pendingSlash = 500
+	if got := FlagState("fsp", id); got != "counter-window" {
+		t.Errorf("with a slash escrowed the slot is %q, want counter-window", got)
+	}
+	cs.flagOpen = true
+	if got := FlagState("fsp", id); got != "voting" {
+		t.Errorf("with a flag vote open the slot is %q, want voting", got)
+	}
+	cs.crystallized = true
+	if got := FlagState("fsp", id); got != "settled" {
+		t.Errorf("a crystallized claim's slot is %q, want settled", got)
+	}
+}
