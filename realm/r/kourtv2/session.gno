@@ -26,13 +26,21 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	if cs.verdictAt != 0 {
 		panic("kourtv2: already settled")
 	}
-	if runtime.ChainHeight() < cs.answerHeight+settleDelay {
+	// The deadline is a date now (clock.gno); the height arithmetic remains the
+	// fallback for claims answered before the stamps existed. One message
+	// either way — the caller is told the same fact.
+	if passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||
+		(!known && runtime.ChainHeight() < cs.answerHeight+settleDelay) {
 		panic("kourtv2: the answer has not aged the 72h settlement minimum")
 	}
 	touch(c)
 
 	cs.verdictAt = runtime.ChainHeight()
+	cs.verdictAtTime = nowTime()
 	cs.route = "undisputed"
+	// The record froze with the pools; clip its hourly tail to the final week
+	// now — no later stake op will ever ride a trim past this point.
+	trimClaimHistory(c, cs, uint32(cs.frozenAt/epochBlocks)+1)
 	cs.provisional = cs.answer
 	// The undisputed default is mid — UNLESS a conclusive flag already decided
 	// quality (slotConsumed). A slash-grade LOW leaves tierFinal false while its

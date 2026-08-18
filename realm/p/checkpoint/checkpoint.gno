@@ -152,6 +152,12 @@ type Series struct {
 // Value is what the series holds now, without consulting anything.
 func (s *Series) Value() int64 { return s.cur }
 
+// Prev is the older of the two inline points: its epoch and value. A zero
+// epoch means that slot was never used (the series has at most one point).
+// Callers assembling a full history read the archive, then Prev, then
+// Since/Value — ascending by construction, since points only roll outward.
+func (s *Series) Prev() (uint32, int64) { return s.e1, s.prev }
+
 // Since is the epoch the current value has held from.
 //
 // Useful for asserting that something did NOT write — a caller that expects an
@@ -305,3 +311,73 @@ func rd64(s string, off int) int64 {
 }
 
 func pageKey(key string, page uint32) string { return key + Sep + be32(page) }
+
+// Trim deletes archive pages of key that lie entirely below keepFrom — except
+// the newest such page — oldest-first, at most maxPages per call. It returns
+// how many pages were removed.
+//
+// The exception is the floor-preservation invariant: a value set below the
+// horizon and unchanged since is still the correct answer for epochs INSIDE
+// the kept window, and its floor entry lives in the newest all-below page.
+// Sparing that one page keeps ValueAt exact at and above keepFrom through
+// every intermediate state of a bounded, multi-call trim. A page straddling
+// the horizon is never a candidate (it is not entirely below), so up to
+// PageEpochs-1 epochs of over-retention are kept deliberately.
+//
+// Deletion frees the page object's bytes; on chains with storage deposits the
+// locked amount is released by the same mechanism that charged it. Trim never
+// touches the two inline points — recent reads stay exact by construction.
+//
+// The walk is collect-then-remove because the tree forbids mutation from an
+// iteration callback, and it is bounded to maxPages+1 keys of collection, so
+// a call's cost is a constant of the caller's choosing.
+func (a *Archive) Trim(key string, keepFrom uint32, maxPages int) int {
+	mustBeUsable(key)
+	if maxPages <= 0 {
+		return 0
+	}
+	// Candidates are pages strictly below the horizon's own page: page P
+	// covers epochs [P*PageEpochs, P*PageEpochs+PageEpochs-1], so P <
+	// keepFrom/PageEpochs puts every epoch in P below keepFrom. Iterate is
+	// [start, end) ascending, which is exactly the candidate range.
+	end := pageKey(key, keepFrom/PageEpochs)
+	keys := []string{}
+	a.t.Iterate(key+Sep, end, func(k string, _ any) bool {
+		keys = append(keys, k)
+		return len(keys) >= maxPages+1
+	})
+	var del []string
+	if len(keys) == maxPages+1 {
+		// The budget's worth, oldest-first. The newest collected candidate —
+		// and anything beyond it the bounded walk never reached — survives,
+		// so the newest all-below page survives.
+		del = keys[:maxPages]
+	} else if len(keys) > 0 {
+		// The walk exhausted the candidates: the last one collected IS the
+		// newest all-below page. Spare it.
+		del = keys[:len(keys)-1]
+	}
+	for _, k := range del {
+		a.t.Remove(k)
+	}
+	return len(del)
+}
+
+// WalkDesc visits key's ARCHIVED checkpoints newest-first, stopping when fn
+// returns true. The two inline points are the Series' own fields and are not
+// visited — a caller assembling a history appends them itself (they are always
+// newer than anything archived, because points only ever roll OUT of the
+// inline slots). Bounded by the key's page prefix like every other walk here.
+func (a *Archive) WalkDesc(key string, fn func(e uint32, v int64) bool) {
+	mustBeUsable(key)
+	a.t.ReverseIterate(key+Sep, pageKey(key, ^uint32(0)), func(_ string, pv any) bool {
+		s := pv.(*page).packed
+		for i := len(s)/12 - 1; i >= 0; i-- {
+			off := i * 12
+			if fn(rd32(s, off), rd64(s, off+4)) {
+				return true
+			}
+		}
+		return false
+	})
+}

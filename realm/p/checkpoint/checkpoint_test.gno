@@ -554,3 +554,178 @@ func TestMaxKeyIsWhereItSays(t *testing.T) {
 			"changed with it rather than following along quietly", MaxKey)
 	}
 }
+
+// ---------------------------------------------------------------- Trim -----
+
+// trimFixture writes one change per given epoch under key, hot path included:
+// the two NEWEST land in the inline slots, everything older pages out.
+func trimFixture(t *testing.T, arch *Archive, key string, epochs []uint32) *Series {
+	t.Helper()
+	var s Series
+	for i, e := range epochs {
+		s.SetAt(arch, key, e, int64(i+1)*10)
+	}
+	return &s
+}
+
+func TestTrimDeletesOnlyWholePagesBelowTheHorizon(t *testing.T) {
+	arch := NewArchive()
+	// Pages: 0 (epochs 5, 20), 1 (40), 3 (100), plus inline (130, 140).
+	s := trimFixture(t, arch, "k", []uint32{5, 20, 40, 100, 130, 140})
+	if got := arch.Size(); got != 3 {
+		t.Fatalf("fixture pages = %d, want 3 (0, 1, 3)", got)
+	}
+	// Horizon 170 (page 5): candidates are pages 0, 1, 3. The newest candidate
+	// (page 3) is the floor for kept-window queries and must survive.
+	if got := s; got == nil {
+		t.Fatal("unreachable")
+	}
+	removed := arch.Trim("k", 170, 10)
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2 (pages 0 and 1; page 3 spared)", removed)
+	}
+	if got := arch.Size(); got != 1 {
+		t.Errorf("pages after trim = %d, want 1", got)
+	}
+	// Floor preservation: epoch 120 is INSIDE the kept window (>= horizon
+	// would be 170; 120 is below — but the spared page must still answer the
+	// kept-window floor). The value set at 100 and unchanged until 130 must
+	// still answer for any at in [100, 129].
+	if got := s.ValueAt(arch, "k", 120); got != 40 {
+		t.Errorf("floor across the spared page = %d, want 40", got)
+	}
+	// Below the deleted pages the tier no longer answers: zero, the routing
+	// signal — the caller asks the coarser tier there.
+	if got := s.ValueAt(arch, "k", 30); got != 0 {
+		t.Errorf("below the trimmed horizon = %d, want 0 (ask the daily tier)", got)
+	}
+}
+
+func TestTrimKeepsAStraddlingPageWhole(t *testing.T) {
+	arch := NewArchive()
+	// Page 1 holds epochs 40 and 50; the horizon lands between them.
+	s := trimFixture(t, arch, "k", []uint32{40, 50, 100, 110})
+	if removed := arch.Trim("k", 45, 10); removed != 0 {
+		t.Errorf("removed = %d, want 0 — page 1 straddles the horizon (45/32 == 40/32)", removed)
+	}
+	if got := s.ValueAt(arch, "k", 41); got != 10 {
+		t.Errorf("entry below keepFrom inside a straddling page = %d, want 10", got)
+	}
+}
+
+func TestTrimIsIdempotentAndBounded(t *testing.T) {
+	arch := NewArchive()
+	// Changes every 32 epochs: pages 1..6 filled one entry each, inline holds
+	// the two newest.
+	epochs := []uint32{32, 64, 96, 128, 160, 192, 224, 256}
+	s := trimFixture(t, arch, "k", epochs)
+	if got := arch.Size(); got != 6 {
+		t.Fatalf("fixture pages = %d, want 6", got)
+	}
+	_ = s
+	// maxPages=1 removes exactly the oldest candidate per call.
+	if removed := arch.Trim("k", 300, 1); removed != 1 {
+		t.Errorf("bounded trim removed = %d, want 1", removed)
+	}
+	if removed := arch.Trim("k", 300, 1); removed != 1 {
+		t.Errorf("second bounded trim removed = %d, want 1", removed)
+	}
+	// Converges: repeated calls stop at the spared newest-below page.
+	total := 0
+	for i := 0; i < 10; i++ {
+		total += arch.Trim("k", 300, 3)
+	}
+	if got := arch.Size(); got != 1 {
+		t.Errorf("pages after convergence = %d, want exactly the spared one", got)
+	}
+	if total != 3 {
+		t.Errorf("converged removals = %d, want 3 (5 candidates, 1 spared, 1+1 already gone)", total)
+	}
+	// Idempotent at the fixed point.
+	if removed := arch.Trim("k", 300, 5); removed != 0 {
+		t.Errorf("trim at the fixed point removed = %d, want 0", removed)
+	}
+}
+
+func TestTrimIsolatesOtherKeys(t *testing.T) {
+	arch := NewArchive()
+	a := trimFixture(t, arch, "aa", []uint32{5, 40, 100, 130})
+	b := trimFixture(t, arch, "ab", []uint32{5, 40, 100, 130})
+	sizeBefore := arch.Size()
+	arch.Trim("aa", 1000, 10)
+	if got := b.ValueAt(arch, "ab", 60); got != 20 {
+		t.Errorf("neighbour key's floor after trimming aa = %d, want 20", got)
+	}
+	if got := arch.Size(); got != sizeBefore-1 {
+		// aa archived pages 0 and 1 (the two newest points are inline); the
+		// newest candidate is spared, so exactly one page went. ab untouched.
+		t.Errorf("pages after trimming aa = %d, want %d", got, sizeBefore-1)
+	}
+	_ = a
+}
+
+func TestTrimDegenerates(t *testing.T) {
+	arch := NewArchive()
+	var s Series
+	// Never-archived series (inline only): nothing to remove.
+	s.SetAt(arch, "k", 10, 1)
+	s.SetAt(arch, "k", 20, 2)
+	if removed := arch.Trim("k", 1000, 10); removed != 0 {
+		t.Errorf("inline-only trim removed = %d, want 0", removed)
+	}
+	// Zero/low horizons and zero budget: no-ops.
+	if removed := arch.Trim("k", 0, 10); removed != 0 {
+		t.Errorf("keepFrom=0 removed = %d, want 0", removed)
+	}
+	if removed := arch.Trim("k", 1000, 0); removed != 0 {
+		t.Errorf("maxPages=0 removed = %d, want 0", removed)
+	}
+	// A key that was never written: nothing, no panic.
+	if removed := arch.Trim("ghost", 1000, 10); removed != 0 {
+		t.Errorf("ghost-key trim removed = %d, want 0", removed)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Error("Trim on a Sep-bearing key must panic like every entrypoint")
+		}
+	}()
+	arch.Trim("bad\x00key", 10, 1)
+}
+
+// ------------------------------------------------------------- WalkDesc ----
+
+func TestWalkDescVisitsArchivedNewestFirst(t *testing.T) {
+	arch := NewArchive()
+	s := trimFixture(t, arch, "k", []uint32{5, 40, 100, 130, 140})
+	// Inline: 130, 140. Archived: 5, 40, 100.
+	got := []uint32{}
+	arch.WalkDesc("k", func(e uint32, v int64) bool {
+		got = append(got, e)
+		return false
+	})
+	want := []uint32{100, 40, 5}
+	if len(got) != len(want) {
+		t.Fatalf("visited %d entries, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("visit %d = epoch %d, want %d", i, got[i], want[i])
+		}
+	}
+	// Early stop.
+	n := 0
+	arch.WalkDesc("k", func(e uint32, v int64) bool { n++; return true })
+	if n != 1 {
+		t.Errorf("early-stop visited %d, want 1", n)
+	}
+	// Values ride along and the inline points are the caller's to merge.
+	if s.Value() != 50 {
+		t.Errorf("inline cur = %d, want 50", s.Value())
+	}
+	// Key isolation: a neighbour's walk sees nothing of k.
+	seen := 0
+	arch.WalkDesc("kk", func(e uint32, v int64) bool { seen++; return false })
+	if seen != 0 {
+		t.Errorf("neighbour walk visited %d entries, want 0", seen)
+	}
+}

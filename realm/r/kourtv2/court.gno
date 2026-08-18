@@ -18,6 +18,7 @@ import (
 	"chain/runtime"
 	"strings"
 
+	checkpoint "gno.land/p/kourt/checkpoint/v0"
 	curve "gno.land/p/kourt/curve/v0"
 	governor "gno.land/p/kourt/governor/v0"
 	grc20votes "gno.land/p/kourt/grc20votes/v0"
@@ -400,6 +401,12 @@ type Court struct {
 	// court that is never moderated carries a single nil pointer. See
 	// MODERATION.md §2 (the constitution) and §4 (state homes).
 	mod *courtMod
+
+	// Per-claim stake-history pages (stakeseries.gno) — one shared archive for
+	// all this court's claims, keys "cs:<id>:yh|nh|yd|nd". Lazily created on
+	// the first recorded stake move, so old courts carry a nil until touched.
+	// Separate from the coin's own archive (inside the Ledger) by construction.
+	csArch *checkpoint.Archive
 
 	// Policing surfaces (strips.gno, MODERATION.md §5.3). Deliberately NOT on
 	// courtMod: the money path writes them at lifecycle transitions, and going

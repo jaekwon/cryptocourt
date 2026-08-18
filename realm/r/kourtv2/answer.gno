@@ -39,7 +39,8 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// life. Conviction keeps accruing on an un-closed claim, so past ~19.5 weeks
 	// (hot) the draw arm crosses the 50%·X̄ bond even on a perfectly CONSTANT
 	// pool: the calibration below would be falsified with no drain at all.
-	if now >= cs.openedAt+deadClaimTimeout {
+	if passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && passed) ||
+		(!known && now >= cs.openedAt+deadClaimTimeout) {
 		panic("kourtv2: this claim is past the dead-claim timeout; it closes, it is not answered")
 	}
 	// Answerability: mature trailing X̄ at or above the floor.
@@ -148,6 +149,7 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	cs.answerBond0 = bond
 	cs.qualityEpoch = c.coin.Epoch() - 1
 	cs.answerHeight = now
+	cs.answeredAtTime = nowTime()
 	if inPriority {
 		holdPriority(c, who, claimID)
 	}

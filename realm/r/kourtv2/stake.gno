@@ -178,6 +178,7 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 		cs.noStake = mustAdd(cs.noStake, amount)
 	}
 	observePools(cs)
+	recordPools(c, cs)
 }
 
 // Unstake withdraws principal from a live claim. Accrued conviction is kept —
@@ -213,6 +214,7 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 		cs.noStake -= amount
 	}
 	observePools(cs)
+	recordPools(c, cs)
 }
 
 // observePools records both rings at the current height (§3.9).

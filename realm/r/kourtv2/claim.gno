@@ -7,6 +7,7 @@ import (
 	"chain/runtime"
 	"strconv"
 
+	checkpoint "gno.land/p/kourt/checkpoint/v0"
 	twap "gno.land/p/kourt/twap/v0"
 	bptree "gno.land/p/nt/bptree/v0"
 )
@@ -30,6 +31,13 @@ type claimState struct {
 	fee      int64 // 10% of deposit: burned on dead/conclusive-low, else refunded
 	seeded   bool  // moderator-seeded (deposit/fee waived; author draw = 0, I5)
 	openedAt int64
+	// Wall-clock stamps for the published deadlines (clock.gno). Heights above
+	// and below stay as reference; these decide. Zero on pre-upgrade claims,
+	// which keep their original height gates.
+	openedAtTime   int64
+	answeredAtTime int64
+	verdictAtTime  int64
+	escrowUntilAt  int64 // absolute: the reopen window's close, in unix seconds
 	closed   bool // dead-claim close (unanswered past the timeout)
 	// dustBurns is what the deposit+fee ACTUALLY burned at a conclusive low —
 	// recorded because settleSlash must size its bounty top-up against real
@@ -59,6 +67,14 @@ type claimState struct {
 	// pool (the ratio series). Observed on every stake/unstake.
 	oi  twap.Ring // total stake, hourly, one week
 	yes twap.Ring // YES pool, hourly, one week
+	// Drawable stake history (stakeseries.gno): the two pools as checkpoint
+	// series, hourly (trimmed past a week) and daily (kept). VALUE fields on
+	// this record deliberately — a pointer would be a second object. The twap
+	// rings above are NOT replaced: they are bounded windows feeding X̄; these
+	// are the archive a chart reads.
+	yesH, noH     checkpoint.Series // hourly grain, epoch = height/720 + 1
+	yesD, noD     checkpoint.Series // daily grain, epoch = height/17280 + 1
+	histTrimmedTo uint32            // newest hourly epoch a trim rode on (throttle)
 
 	// Answer-freeze markers (answer.gno sets them; stake/unstake refuse after).
 	// rateAccAtFreeze pins the era integral at the freeze height so frozen
@@ -266,7 +282,8 @@ func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 		deposit:     dep,
 		fee:         fee,
 		seeded:      seeded,
-		openedAt:    runtime.ChainHeight(),
+		openedAt:     runtime.ChainHeight(),
+		openedAtTime: nowTime(),
 		stakers:     bptree.NewBPTree32(),
 		oi:          twap.New(epochBlocks, twapBuckets, 8),
 		yes:         twap.New(epochBlocks, twapBuckets, 8),
@@ -312,7 +329,8 @@ func EditClaimTitle(cur realm, courtSlug string, claimID uint64, newTitle string
 	if cs.closed || cs.frozenAt != 0 {
 		panic("kourtv2: the claim is no longer editable")
 	}
-	if runtime.ChainHeight() >= cs.openedAt+c.params.stakeOpenDelayBlocks {
+	if passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && passed) ||
+		(!known && runtime.ChainHeight() >= cs.openedAt+c.params.stakeOpenDelayBlocks) {
 		panic("kourtv2: the polish window has closed; the title is frozen")
 	}
 	if cs.yesStake != 0 || cs.noStake != 0 {
@@ -339,7 +357,8 @@ func CloseDeadClaim(cur realm, courtSlug string, claimID uint64) {
 	if cs.frozenAt != 0 {
 		panic("kourtv2: this claim has an answer; it settles, it does not die")
 	}
-	if runtime.ChainHeight() < cs.openedAt+deadClaimTimeout {
+	if passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||
+		(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {
 		panic("kourtv2: the dead-claim timeout has not passed")
 	}
 	cs.closed = true

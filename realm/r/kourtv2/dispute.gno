@@ -93,10 +93,12 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 		// First round: the 72h settle delay IS the dispute window — after it,
 		// only SettleUndisputed. The two guards partition every height, so no
 		// settle/dispute race exists.
-		if now >= cs.answerHeight+settleDelay {
+		if passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && passed) ||
+			(!known && now >= cs.answerHeight+settleDelay) {
 			panic("kourtv2: the dispute window has passed; the answer settles undisputed")
 		}
-	} else if now >= cs.escrowUntil {
+	} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||
+		(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {
 		panic("kourtv2: the escrow window has passed; Finalize the verdict")
 	}
 	touch(c)
@@ -344,6 +346,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 	// recomputed — a reopen does not reset it (V1 §3.6).
 	if firstResolution && !cs.provClose {
 		cs.escrowUntil = runtime.ChainHeight() + escrowWindow(c, cs)
+		cs.escrowUntilAt = nowTime() + blocksToSecs(escrowWindow(c, cs))
 	}
 	cs.disputeOpen = false
 }
@@ -384,6 +387,7 @@ func compAmount(ownBond, burned int64) int64 {
 func provCloseClaim(c *Court, cs *claimState) {
 	cs.provClose = true
 	cs.verdictAt = runtime.ChainHeight()
+	cs.verdictAtTime = nowTime()
 	cs.route = "closed"
 	cs.tier = tierLowX
 	cs.tierFinal = true
@@ -434,7 +438,8 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 		panic("kourtv2: no provisional verdict to finalize")
 	}
 	now := runtime.ChainHeight()
-	if now < cs.escrowUntil {
+	if (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||
+		(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {
 		panic("kourtv2: the escrow window has not passed")
 	}
 	if now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {
@@ -443,7 +448,11 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	touch(c)
 
 	cs.verdictAt = now
+	cs.verdictAtTime = nowTime()
 	cs.route = "vote"
+	// Clip the frozen record's hourly tail to its final week (stakeseries.gno);
+	// no later stake op will ride a trim past this point.
+	trimClaimHistory(c, cs, uint32(cs.frozenAt/epochBlocks)+1)
 	// The default mid tier — UNLESS a conclusive tally already set it. A
 	// slash-grade conclusive-low flag leaves slotConsumed=true but tierFinal=false
 	// for its counter-flag window (quality.gno slashGrade branch), and a failed
