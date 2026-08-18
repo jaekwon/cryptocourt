@@ -79,7 +79,7 @@ Integer-only, no LP, O(levels crossed). Pull-settled makers.
   price grid, the thing every gno market currently lacks.
 - **Court uses it for:** the market on each claim (`COURTS_TOKENOMICS.md` §3.1).
 
-### 4. `r/kourt/court` — the court realm (the consumer)
+### 4. `r/kourt/kourtv1` — the court realm (the consumer)
 
 Not a library. Ties the above to `grc20votes` and `governor`, and holds the
 court-specific rules: the one-way curve, claims (title + append-only body),
@@ -125,7 +125,7 @@ Started alongside the packages, not after.
   door (F1), and document the inclusive-threshold tie-at-5000 (F2). All strictly
   additive — govern/offerer behaviour unchanged (one govern test updated to assert
   the new clamp instead of the old refusal).
-- [x] `r/kourt/court` — V1 BUILT, 10 files, 22 tests, make realm-test green.
+- [x] `r/kourt/kourtv1` — V1 BUILT, 10 files, 22 tests, make realm-test green.
   court/params + directory + StartCourt; buy (one-way curve); claim (append-only
   body + deposit-escrow); market (MintSet/RedeemSet, priceScale=100, 20% OI ceiling,
   OI-twap); book (RestSell/RestBid/TakeBuy/TakeSell/Collect/CancelOrder + ask/bid
@@ -208,7 +208,7 @@ concrete failing input). Outcome:
 `make check` is green: 34 citations hold, doc-numbers match, storage ceilings
 pass, all packages + the two consuming realms test clean, gofmt + vet clean.
 
-Cross-cutting obligations the audit surfaced for `r/kourt/court` are listed
+Cross-cutting obligations the audit surfaced for `r/kourt/kourtv1` are listed
 at the end of `AUDIT.md` (observe-twap-on-every-change + `StaleBy` gating; a
 tickbook minimum order size; drive the governor with `grc20votes` and
 `ThresholdBps>5000`; sweep escrow-pool dust).

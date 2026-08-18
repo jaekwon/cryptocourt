@@ -108,7 +108,7 @@ answer is a money/authority bug.
   is now stated hard in the package and `Average` docs, and a new `StaleBy(height)`
   reports how far a read has drifted from the newest observation so a caller can
   gate on recency. Regression: `TestStaleTailIsFlaggedByStaleBy`.
-  **Court obligation (enforce when building `r/kourt/court`):** Observe OI
+  **Court obligation (enforce when building `r/kourt/kourtv1`):** Observe OI
   and price on every change, or immediately before any gating read.
 - Coverage added: aliasing (value-semantics), `width>1` bucketing, boundary
   maturity. Docs: the oversold flash-resistance claim now carries its precondition.
@@ -245,7 +245,7 @@ all six packages + both realms, gofmt + vet. COURTS_STRUCTURE.md storage numbers
 updated (tick 16→20 B, checkpoint entry 16→12 B). A convergence pass adversarially
 re-verifies the two repacks (the only new logic).
 
-## Cross-cutting obligations for `r/kourt/court`
+## Cross-cutting obligations for `r/kourt/kourtv1`
 
 Carried forward from the audit so they are not lost:
 1. **Observe twap on every OI/price change** (or immediately before a gating
@@ -257,7 +257,7 @@ Carried forward from the audit so they are not lost:
 4. **Escrow pools:** the court owns the ask/bid pools; a periodic sweep of the
    accrued (safe-direction) dust to the treasury keeps them tidy.
 
-## Money-conservation audit of `r/kourt/court`
+## Money-conservation audit of `r/kourt/kourtv1`
 
 An adversarial two-ledger audit of the court's money flows (GNOT treasury + CC
 escrow), run with probe tests against every branch. **Verdict: conservation is
@@ -516,10 +516,10 @@ should win is an epistemic-design decision, not a typo.
 
 ---
 
-## `r/cryptocourt/courtv2` (V2) — economic hardening, v0.40–v0.49
+## `r/kourt/kourtv2` (V2) — economic hardening, v0.40–v0.49
 
 **Scope note, so absence is not read as clearance.** Everything above audits the `/p/`
-packages and the V1 `r/cryptocourt/court` realm. V2 lives under `realm/r/courtv2/` and its
+packages and the V1 `r/kourt/kourtv1` realm. V2 lives under `realm/r/kourtv2/` and its
 decision record is `PLAN.md` §13, which carries the reasoning, the rejected alternatives and
 the measured numbers. This section exists so that a reader of the authoritative audit record
 does not conclude V2 was audited clean merely because it was not mentioned.

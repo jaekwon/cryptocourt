@@ -36,8 +36,13 @@ If you were working on `courtv2`, your muscle memory is wrong. Grep in Python fo
 the old names after any merge; a shell grep through a pipe has lied about this
 before.
 
-Two artifacts still carry the old names and are listed as known issues below:
-`scripts/mutations-courtv2.json` and `gnoland/testdata/courtv2_paymentauth.txtar`.
+The two artifacts that still carried the old names were fixed in the merge:
+`mutations-courtv2.json` was folded into `scripts/mutations-kourtv2.json` (843
+rows, both corpora unified) and `courtv2_paymentauth.txtar` was renamed
+`kourtv2_paymentauth.txtar` with its import paths corrected. Expect residue
+anyway — a hand search for the old spellings missed `realm/r/court` without its
+trailing slash, `{p,r}/cryptocourt` inside a docstring, and the half-renamed
+`r/kourt/court`, which is a path that has never existed.
 
 ## Conventions that are not negotiable
 

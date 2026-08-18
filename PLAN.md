@@ -4709,7 +4709,8 @@ Newest first.
   the curve, burning lowers it at the burner's sole cost. Economics vet
   launched on this sizing + a fresh full-design audit at the 20% numbers
   (owner asked for another audit). **IMPLEMENTATION BEGINS**: V1 code stays
-  untouched; V2 lands as new modules in `realm/r/courtv2/` per §10.
+  untouched; V2 lands as new modules in `realm/r/courtv2/` per §10 (renamed
+  `realm/r/kourtv2/` in the 2026-08-16 kourt rename).
 - **v0.31** — (iteration 52) **T2 final — and with it the ledger: CONVERGED,
   no unvetted mechanism remains** (the micro-pass's own closing line). The
   weight time-lock was confirmed unimplementable against V1's actual
