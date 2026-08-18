@@ -713,7 +713,17 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
 	// Snapshotted with the rest, so a bar cannot move under an open vote.
 	engaged := g.voters.EngagedTotal(at)
 	if engaged <= 0 {
-		// An electorate that engages nobody makes every quorum unreachable.
+		// An electorate that engages nobody makes every quorum TRIVIAL, which is
+		// the opposite of what this comment said for a long time and the reason
+		// the guard is load-bearing rather than tidy. The bar is
+		// `cast*bps >= engaged*QuorumBps`; at engaged == 0 the right-hand side is
+		// zero and the comparison holds for any turnout, including none — so
+		// quorum stops existing, and at the deadline one yes vote carries the
+		// question however few showed up.
+		//
+		// Reachable with an honest electorate rather than a broken one:
+		// EngagedTotal is there so a realm can drop idle weight out of the
+		// denominator, and one where all weight is idle returns zero truthfully.
 		panic("govern: the engaged weight has to be positive")
 	}
 	if engaged > total {

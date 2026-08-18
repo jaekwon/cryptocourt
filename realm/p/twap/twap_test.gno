@@ -333,3 +333,48 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// Average's unheld decisions. The whole batch had no twap rows at all until now: this ring
+// produces xBarFrozen, the base for every %-of-X̄ quantity in the court — both quality
+// bars, the answer bond, the flag bond, the dispute bond, the slash floor, the carrot clamp
+// — so a wrong average, or a wrongly-mature one, mis-prices all of them at once.
+//
+// Six of ten mutations were already caught, including the one twap.gno's own comment warns
+// about (maturity measured against the CAPPED k) and the overflow refusal. Two were not.
+//
+// A third survivor turned out to be EQUIVALENT, and the argument is worth keeping because
+// it is short: uncapping k cannot change maturity, since `filled` never exceeds n and the
+// maturity clause requires `filled >= want` — so when want > n the answer is immature
+// whatever k is. The cap only bounds how many iterations the scan runs when the ring is
+// stale and every bucket reads `last` without breaking. It is a gas guard, not a
+// correctness one.
+func TestAverageMaturityAndWindowEdges(t *testing.T) {
+	// (1) A window matures only when every bucket asked for was actually SCANNED.
+	//     Queried at a height before the last observation, the scan runs off the oldest
+	//     bucket ever held and must report immature — even though `filled` on its own
+	//     would satisfy the request, which is what makes the count clause load-bearing.
+	s := New(hour, 4, 8)
+	for i := int64(0); i < 4; i++ {
+		s = s.Observe((10+i)*hour, 100+i)
+	}
+	if s.Filled() < 4 {
+		t.Fatalf("setup: the ring must be full: filled=%d", s.Filled())
+	}
+	if avg, mature := s.Average(10*hour, 4*hour); mature {
+		t.Errorf("a window reaching past the oldest bucket held must be immature: "+
+			"avg=%d mature=%v (filled=%d alone would satisfy it)", avg, mature, s.Filled())
+	}
+
+	// (2) A window NARROWER than one bucket is widened to one, not answered with
+	//     nothing: the caller asked for less resolution than the ring has, which is a
+	//     request the ring can satisfy exactly. This needs a ring whose width is more
+	//     than one height-unit — with the file's hour==1 there is no sub-width window to
+	//     ask for, which is why nothing here had covered it.
+	const wide = int64(10)
+	w := New(wide, 4, 8)
+	w = w.Observe(3*wide, 777)
+	if avg, mature := w.Average(3*wide, 1); !mature || avg != 777 {
+		t.Errorf("a sub-width window reads the current bucket: avg=%d mature=%v, "+
+			"want 777,true", avg, mature)
+	}
+}

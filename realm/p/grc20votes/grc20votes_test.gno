@@ -289,6 +289,22 @@ func TestTheSupplyCannotOutgrowTheTally(t *testing.T) {
 		"grc20votes: supply would exceed what a tally can weigh without overflowing",
 		func() { l.Mint(bob, 1) })
 
+	// The OTHER arm of that guard, found surviving: an amount large enough that
+	// the SUM wraps rather than merely exceeding the ceiling. The comparison
+	// against MaxSupply cannot catch this on its own — a wrapped sum is NEGATIVE,
+	// so `next > MaxSupply` is false and the mint is accepted, leaving a negative
+	// total supply beside an astronomical balance and voting weight. That is the
+	// overflow.Add64 `!ok` arm, and it is what makes MaxSupply's promise — "capped
+	// at mint, so a tally needs no overflow checks" — true for every amount rather
+	// than only for plausible ones.
+	//
+	// It has to be asked HERE, with a supply already standing: on a fresh ledger
+	// 0+MaxInt64 does not wrap, so the ceiling arm answers instead and this proves
+	// nothing. Do not move it above the mint.
+	mustPanic(t,
+		"grc20votes: supply would exceed what a tally can weigh without overflowing",
+		func() { l.Mint(bob, 9223372036854775807) })
+
 	// And the boundary is reachable rather than one short of it.
 	if got := l.TotalSupply(); got != MaxSupply {
 		t.Errorf("the supply stopped at %d rather than the %d it allows", got, MaxSupply)
@@ -584,11 +600,30 @@ func TestNonPositiveAmountsAreRejected(t *testing.T) {
 	for _, amt := range []int64{0, -1, -1_000_000} {
 		mustPanic(t, "grc20votes: amount must be positive", func() { l.Mint(bob, amt) })
 		mustPanic(t, "grc20votes: amount must be positive", func() { l.Transfer(alice, bob, amt) })
+		// Burn belongs in this loop and was missing from it, which is the one hole
+		// in the ledger's non-positive coverage — found by mutation, and the
+		// sharpest of the three. A negative burn does not merely fail to destroy:
+		// `a.balance < amount` is false for any negative amount, so the two
+		// subtractions below it both ADD, crediting the balance and the voting
+		// weight and RAISING l.total. It is a mint that never passes the MaxSupply
+		// ceiling — the ceiling that exists so `yes*Bps` cannot wrap and report a
+		// won vote as lost. And it is publicly reachable: r/govern's Burn hands
+		// this function the caller's amount with no validation of its own, so
+		// mustBePositive here is the only thing in the path.
+		mustPanic(t, "grc20votes: amount must be positive", func() { l.Burn(alice, amt) })
 	}
 	if got := l.BalanceOf(bob); got != 0 {
 		t.Fatalf("no rejected amount may reach a balance: %d", got)
 	}
 	if got := l.BalanceOf(alice); got != 1_000_000 {
 		t.Fatalf("a rejected transfer must not debit the sender: %d", got)
+	}
+	// The supply and the weight are what a negative burn moves that the balances
+	// above do not imply: Burn writes l.total and the votes series directly.
+	if got := l.TotalSupply(); got != 1_000_000 {
+		t.Fatalf("a rejected burn must not move the supply: %d", got)
+	}
+	if got := l.VotesOf(alice); got != 1_000_000 {
+		t.Fatalf("a rejected burn must not move voting weight: %d", got)
 	}
 }

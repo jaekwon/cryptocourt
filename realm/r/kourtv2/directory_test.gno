@@ -36,6 +36,20 @@ func TestSetTierIsDAOOnlyAndRangeChecked(cur realm, t *testing.T) {
 	if owner == "" {
 		t.Fatal("the directory admin must latch at the first court")
 	}
+	// It must be the CREATING ACCOUNT, and the discriminating half of that is that it
+	// is not the realm. Reading the admin from DirectoryAdmin() above is what lets
+	// this test cope with the process-wide latch, but it also means the test cannot
+	// see WHO latched — so `admin := cur.Address()` in StartCourt would pass every
+	// assertion below, since the guard would compare the realm against itself and the
+	// fixture would happily drive it from that same address. A realm-owned admin is
+	// not a cosmetic error: no caller can produce a Previous equal to the realm, so
+	// SetTier becomes uncallable and the directory's tiers freeze permanently at
+	// Listed.
+	if owner == cur.Address() {
+		t.Fatalf("the directory admin must be the creating account, not the realm "+
+			"itself (%s) — a realm-owned admin can never be called as, so tiering "+
+			"would be frozen for ever", owner)
+	}
 
 	// A stranger cannot curate.
 	testing.SetRealm(testing.NewUserRealm(stranger))

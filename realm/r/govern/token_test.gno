@@ -174,3 +174,43 @@ func TestTheMintIsThisRealmsPolicyAndNotTheLedgers(cur realm, t *testing.T) {
 // It is defence in depth rather than a live hole — see errStaleRealm — and the
 // thing that actually holds it is that all fourteen entrypoints are one line
 // each, checkable by reading.
+
+// Burn destroys the CALLER's own tokens and nobody else's.
+//
+// Found surviving, and the reason is stark: govern.Burn is never called anywhere
+// in this suite. A public entrypoint that destroys supply and moves voting weight
+// had no realm test at all, so pointing it at the minter instead of the caller
+// changed nothing any assertion could see.
+//
+// Alice is the MINTER here on purpose. She is the address a misrouted burn would
+// most plausibly be pointed at, and the one whose balance the /p/ layer cannot
+// protect: grc20votes is handed an address and debits it.
+func TestBurnDestroysTheCallersOwnTokens(cur realm, t *testing.T) {
+	resumeClock()
+	resetLedger()
+	minter = alice
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Mint(cross(cur), alice, 1000)
+	Mint(cross(cur), bob, 400)
+	before := TotalSupply()
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Burn(cross(cur), 150)
+	if got := BalanceOf(bob); got != 250 {
+		t.Errorf("bob holds %d after burning 150 of 400, want 250", got)
+	}
+	if got := BalanceOf(alice); got != 1000 {
+		t.Errorf("alice holds %d — a burn debited somebody who did not call it", got)
+	}
+	if got := TotalSupply(); got != before-150 {
+		t.Errorf("supply is %d, want %d", got, before-150)
+	}
+	// The weight goes with the coin: burned tokens must not keep a say.
+	if got := VotesOf(bob); got != 250 {
+		t.Errorf("bob votes %d after burning 150, want 250", got)
+	}
+	// And nobody burns more than they hold.
+	uassert.AbortsContains(t, cur, "insufficient balance", func() {
+		Burn(cross(cur), 10_000)
+	})
+}

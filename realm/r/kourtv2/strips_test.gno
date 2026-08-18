@@ -51,7 +51,12 @@ func TestStripShowsHiddenAnsweredClaim(cur realm, t *testing.T) {
 	if !found {
 		t.Fatal("the strip must ignore courtMod/meta/global hide bits")
 	}
-	slugs, ids := DirectoryStripPage(0, 50)
+	// The WHOLE index, not a fixed 50-row window. globalStripIdx is ordered by
+	// deadline and every test in the package contributes rows to it, so a
+	// hardcoded window silently stops covering this claim as the suite grows —
+	// which is exactly what happened. The per-court cap does not hide it either:
+	// str1 holds one row, well under stripActorCap.
+	slugs, ids := DirectoryStripPage(0, DirectoryStripSize())
 	dfound := false
 	for i := range ids {
 		if ids[i] == id && slugs[i] == "str1" {

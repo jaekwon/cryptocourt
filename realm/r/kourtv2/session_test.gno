@@ -160,3 +160,44 @@ func TestWithdrawStakeDebitsItsOwnSidesPool(cur realm, t *testing.T) {
 		t.Fatalf("both pools must end empty, got %d/%d", yes2, no2)
 	}
 }
+
+// Settling releases the answerer's ONE priority slot, found surviving. Without it the
+// slot stays pointed at a claim that is already settled, and since the design allows
+// "ONE active priority claim per address at a time" the answerer never gets another —
+// an earned credential is spent permanently on its first use.
+//
+// It survives every other check because nothing about the settled claim is wrong: the
+// verdict, the tier, the bond refund and the retention are all correct. What is wrong
+// is in the ANSWERER's record, on a different tree, and only a second claim would ever
+// reveal it. TestPriorityWindowGates builds this exact state and stops at the gate,
+// asserting the slot is HELD; nothing asserted it comes back.
+func TestSettleReleasesTheAnswererPrioritySlot(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("prel-alice") // author
+	pro := testutils.TestAddress("prel-pro")     // the qualified answerer
+	c := testCourt(cur, "prel", alice, 50_000_000_000)
+	c.coin.Mint(pro, 10_000_000_000)
+	// Arm the gate: the priority window binds only once three addresses qualify.
+	for _, a := range []address{pro, testutils.TestAddress("prel-q2"),
+		testutils.TestAddress("prel-q3")} {
+		for i := 0; i < priorityNetRecord; i++ {
+			creditUpheld(c, a)
+		}
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "prel", "answered inside the priority window")
+	matureOI(cur, "prel", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(pro))
+	PostAnswer(cross(cur), "prel", id, sideYES)
+	if mayAnswerInPriority(c, pro) {
+		t.Fatal("setup: answering in priority must take the answerer's one slot")
+	}
+
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "prel", id)
+
+	if !mayAnswerInPriority(c, pro) {
+		t.Fatal("settling must give the priority slot back; otherwise the credential " +
+			"is spent forever on one claim")
+	}
+}

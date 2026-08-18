@@ -93,6 +93,12 @@ isolation-test:
 # any money-path change — a green suite proves nothing on its own, since it passes
 # against correct code and against code whose guard you deleted.
 #
+# Sharded across concurrent runners (scripts/mutate-parallel.py), which is safe now
+# that each builds its own GNOROOT and mutates only its staged copy. Where the time
+# goes was measured, not guessed: staging a shard is 0.03s and one courtv2 suite run
+# is 3.67s, so staging is 1% and the cost is irreducibly one suite per mutation.
+# The output is still every row plus ONE verdict; shard boundaries are not shown.
+#
 # Exists as a target because the batch is otherwise invisible: mutate.py was in this repo
 # for the whole of the v0.51-v0.62 work and went unused because nothing pointed at it,
 # so every guard was mutated by hand instead. ~2.5 minutes.
@@ -103,7 +109,7 @@ isolation-test:
 # directory in the system temp named after a pid that no longer exists, and the next run
 # builds its own.
 mutate:
-	python3 scripts/mutate.py < scripts/mutations-kourtv2.json
+	python3 scripts/mutate-parallel.py scripts/mutations-kourtv2.json
 
 # Break each guard on purpose and check it notices. Periodic rather than
 # per-commit: a check that reports success while measuring nothing is the

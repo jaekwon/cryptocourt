@@ -2267,3 +2267,540 @@ func TestOpenFlagRefusesEveryClosedState(cur realm, t *testing.T) {
 		t.Fatal("an in-window counter must open, or the lapse above proves nothing")
 	}
 }
+
+// ResolveFlag's FIRST precondition, found surviving — and it is the one that keeps the
+// whole function from being callable by anyone at any time.
+//
+// Without it the deadline guard beneath is no defence: a claim that was never flagged has
+// flagVoteEnd == 0, so `now < flagVoteEnd` is false and execution falls straight into the
+// tally. On a claim with no votes that reaches the INCONCLUSIVE branch, which
+//
+//   - increments flagCycles — and the flag bond DOUBLES per cycle, so a few free calls
+//     price the next honest flagger out (frozen at 4xb0 after three), and
+//   - stamps lastFlagAt, arming the 7-day re-flag cooldown.
+//
+// So a stranger who never posted a bond can make the quality lane expensive and then shut
+// it for a week, repeatedly. Worse on a claim whose DISPUTE RIDE has accumulated real
+// quality weight: the same call would reach the CONCLUSIVE branch instead and consume the
+// slot, land a tier and burn the deposit on a flag nobody ever opened.
+//
+// Both arms below matter: never-flagged, and already-resolved. The second is what stops a
+// resolved flag being resolved again.
+func TestResolveFlagRefusesWhenNoFlagIsOpen(cur realm, t *testing.T) {
+	c, id, _, bob, _, dust := qfSetup(cur, t, "rfo")
+	cs := mustClaim(c, id)
+
+	// Never flagged: no bond was posted and no vote was held.
+	if cs.flagOpen || cs.flagVoteEnd != 0 {
+		t.Fatalf("setup: this claim must never have been flagged: open=%v end=%d",
+			cs.flagOpen, cs.flagVoteEnd)
+	}
+	cyclesBefore, anchorBefore := cs.flagCycles, cs.lastFlagAt
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "no flag vote to resolve", func() {
+		ResolveFlag(cross(cur), "rfo", id)
+	})
+	if cs.flagCycles != cyclesBefore || cs.lastFlagAt != anchorBefore {
+		t.Fatalf("a refused resolve must not price the next flag or arm the cooldown: "+
+			"cycles %d->%d anchor %d->%d", cyclesBefore, cs.flagCycles,
+			anchorBefore, cs.lastFlagAt)
+	}
+
+	// And after a real flag has been resolved, it cannot be resolved a second time.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "rfo", id)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	VoteQuality(cross(cur), "rfo", id, qualityMid) // dust weight: inconclusive
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "rfo", id)
+	if cs.flagOpen {
+		t.Fatal("setup: the flag must have closed")
+	}
+	cyclesAfter, anchorAfter := cs.flagCycles, cs.lastFlagAt
+	uassert.AbortsContains(t, cur, "no flag vote to resolve", func() {
+		ResolveFlag(cross(cur), "rfo", id)
+	})
+	if cs.flagCycles != cyclesAfter || cs.lastFlagAt != anchorAfter {
+		t.Fatalf("nor may a second resolve of the same flag: cycles %d->%d anchor %d->%d",
+			cyclesAfter, cs.flagCycles, anchorAfter, cs.lastFlagAt)
+	}
+}
+
+// applyQualityTally's DECISION BOUNDARIES. Ten mutations over the function; four
+// survived, and every one of them is an edge the existing fixtures step over rather
+// than land on: an exact two-thirds for HIGH, an exact median tie for LOW, turnout
+// exactly AT the demotion bar, and an EMPTY tally.
+//
+// The empty-tally one is not a rounding curiosity. Drop `turnout > 0` and a flag nobody
+// voted reads as inconclusive-LOW instead of inconclusive-MID — and those two pay
+// differently: T1 returns the flag bond WHOLE, T2 half-burns it. So the guard is what
+// stops an unvoted flag being free, which is the suppression chain the T2 comment in
+// ResolveFlag exists to price.
+//
+// Called directly, as settled for pure internals in v0.60: the function is a decision
+// over (tally, bars) and nothing else, so a table says more than any amount of driving
+// it through the lane. The cases are built FROM the bars read at runtime rather than
+// from literals, so they stay on the boundary if the bar formulas ever move.
+func TestApplyQualityTallyOnEveryBoundary(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("aqt-alice")
+	c := testCourt(cur, "aqt", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "aqt", "the tally's edges")
+	matureOI(cur, "aqt", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "aqt", id, sideYES)
+
+	cs := mustClaim(c, id)
+	d, f := qualityBars(c, cs)
+	if d < 2 || f < 3 || 2*d >= f {
+		t.Fatalf("setup: the cases below need 2 <= demotionBar and 2*demotionBar < "+
+			"fullBar: d=%d f=%d", d, f)
+	}
+
+	for _, k := range []struct {
+		name             string
+		low, mid, high   int64
+		wantTier         int
+		wantConclusive   bool
+	}{
+		// An empty tally is inconclusive MID, not low: nobody voted, so nobody was
+		// "directionally backed", and the bond must not come back whole.
+		{"empty tally", 0, 0, 0, qualityMid, false},
+
+		// The median goes LOW on an exact tie — low wins at one half, not above it.
+		{"median exactly half", d, d, 0, qualityLow, true},
+		{"median just under half", d - 1, d + 1, 0, qualityMid, false},
+
+		// The demotion bar is the CONCLUSIVE side of its own boundary.
+		{"low exactly at the demotion bar", d, 0, 0, qualityLow, true},
+		{"low one short of it", d - 1, 0, 0, qualityLow, false},
+
+		// HIGH needs the full bar AND two thirds, and an exact two thirds promotes.
+		{"high exactly two thirds at the bar", 0, f, 2 * f, qualityHigh, true},
+		{"high one weight short of two thirds", 0, f + 1, 2*f - 1, qualityMid, true},
+		// Two thirds without the bar is not a promotion.
+		{"high two thirds below the bar", 0, 1, 2, qualityMid, false},
+	} {
+		cs.qLowW, cs.qMidW, cs.qHighW = k.low, k.mid, k.high
+		tier, conclusive, turnout := applyQualityTally(c, cs)
+		if tier != k.wantTier || conclusive != k.wantConclusive {
+			t.Fatalf("%s (low=%d mid=%d high=%d turnout=%d, d=%d f=%d): got tier=%d "+
+				"conclusive=%v, want tier=%d conclusive=%v", k.name, k.low, k.mid,
+				k.high, turnout, d, f, tier, conclusive, k.wantTier, k.wantConclusive)
+		}
+		if turnout != k.low+k.mid+k.high {
+			t.Fatalf("%s: turnout must be the sum of the three buckets: %d vs %d",
+				k.name, turnout, k.low+k.mid+k.high)
+		}
+	}
+}
+
+// THE TWO BARS. Eleven mutations over qualityBars and EIGHT survived — the numbers every
+// adjudication decision in the realm reads were almost entirely unpinned. Nothing noticed
+// the escrow's holdings counted as votable, the votable arm taken as a half instead of a
+// third, or the demotion bar losing its quarter.
+//
+// The escrow one is the worst. The escrow holds every staked coin, every bond and every
+// deposit, so it is a large slice of supply — and it never votes. Count it as votable and
+// both bars rise to a turnout no electorate can reach, which does not break the quality
+// lane loudly; it just makes every flag inconclusive for ever.
+//
+// It takes TWO fixtures, because the two arms of `min(X̄, votable/3)` cannot both bind at
+// once and neither can the 5%-of-supply floor coexist with the third. When the third binds
+// it is about supply/3, and 5% of supply is always less than that — so the floor is dead
+// exactly when the third is live. A single fixture would have pinned one regime and left
+// the other's arithmetic free, which is what eight survivors look like.
+//
+// This is the regime where the CLAIM is large relative to the whole court: votable/3 binds,
+// so the escrow exclusion and both divisors are observable here.
+func TestQualityBarsWhenTheVotableThirdBinds(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qbr-alice")
+	bob := testutils.TestAddress("qbr-bob")
+	c := testCourt(cur, "qbr", alice, 1_400_000_000)
+	c.coin.Mint(bob, 100_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qbr", "a claim that is most of its court")
+	// 300 CC, not 200: the regime this test names (votable/3 binding) is a
+	// relation between the CLAIM's X̄ and the COURT's supply, and the answer
+	// floor moving to a supply-relative fraction shifted it. matureOI stakes its
+	// amount three times, so X̄ lands near 2×amt + bob's late 100 CC / 3 — at
+	// 200 CC that was 433 CC against a votable third of 499 CC, i.e. the OTHER
+	// arm bound and the divisor under test could not matter. The setup guard
+	// below is what caught it; keep them in step.
+	matureOI(cur, "qbr", id, alice, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "qbr", id, sideNO, 100_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qbr", id, sideYES)
+
+	cs := mustClaim(c, id)
+	supply := c.coin.PastTotal(cs.qualityEpoch)
+	escrowW := c.coin.PastVotes(c.escrow, cs.qualityEpoch)
+	votable := supply - escrowW
+	third := votable / 3
+	fivePct := mulDiv128(supply, quorumSupplyBps, 10000)
+
+	if escrowW <= 0 {
+		t.Fatalf("setup: the escrow must hold checkpointed weight, or excluding it "+
+			"cannot matter: %d", escrowW)
+	}
+	if third >= cs.xBarFrozen {
+		t.Fatalf("setup: the votable third must be the binding arm here, or its "+
+			"divisor cannot matter: third=%d xbar=%d supply=%d escrow=%d",
+			third, cs.xBarFrozen, supply, escrowW)
+	}
+	if third/4 < 2 {
+		t.Fatalf("setup: the arm must have room to be quartered: arm=%d", third)
+	}
+	if fivePct > third {
+		t.Fatalf("setup: in this regime the supply floor must NOT bind, or the arm "+
+			"is not what sets the full bar: fivePct=%d arm=%d", fivePct, third)
+	}
+
+	d, f := qualityBars(c, cs)
+	if d != third/4 {
+		t.Fatalf("the demotion bar is min(X-bar, votable/3)/4 = %d, got %d "+
+			"(supply=%d escrow=%d votable=%d)", third/4, d, supply, escrowW, votable)
+	}
+	if f != third {
+		t.Fatalf("with the floor slack the full bar IS the arm = %d, got %d", third, f)
+	}
+}
+
+// The other regime, and the ordinary one: an established court where a single claim's X̄
+// is small against total supply. X-bar binds, and the 5%-of-supply floor lifts the full
+// bar above it — so this is where the floor's BASE is observable (supply, not votable).
+func TestQualityBarsWhenTheSupplyFloorBinds(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("qbs-alice")
+	bob := testutils.TestAddress("qbs-bob")
+	c := testCourt(cur, "qbs", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "qbs", "one claim among many")
+	matureOI(cur, "qbs", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "qbs", id, sideNO, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "qbs", id, sideYES)
+
+	cs := mustClaim(c, id)
+	supply := c.coin.PastTotal(cs.qualityEpoch)
+	escrowW := c.coin.PastVotes(c.escrow, cs.qualityEpoch)
+	votable := supply - escrowW
+	fivePct := mulDiv128(supply, quorumSupplyBps, 10000)
+	fivePctOfVotable := mulDiv128(votable, quorumSupplyBps, 10000)
+
+	if cs.xBarFrozen > votable/3 {
+		t.Fatalf("setup: X-bar must be the binding arm here: xbar=%d third=%d",
+			cs.xBarFrozen, votable/3)
+	}
+	if fivePct <= cs.xBarFrozen {
+		t.Fatalf("setup: the supply floor must bind, or its base cannot matter: "+
+			"fivePct=%d xbar=%d", fivePct, cs.xBarFrozen)
+	}
+	if fivePctOfVotable == fivePct {
+		t.Fatalf("setup: supply and votable must differ, or the floor's base cannot "+
+			"matter: supply=%d votable=%d", supply, votable)
+	}
+
+	d, f := qualityBars(c, cs)
+	if d != cs.xBarFrozen/4 {
+		t.Fatalf("the demotion bar is X-bar/4 = %d here, got %d", cs.xBarFrozen/4, d)
+	}
+	if f != fivePct {
+		t.Fatalf("the full bar is 5%% of SUPPLY = %d, got %d (5%% of votable would be "+
+			"%d)", fivePct, f, fivePctOfVotable)
+	}
+}
+
+// THE RIDE'S OWN DECISIONS. Eleven mutations over resolveQualityRide, six not caught, and
+// five of those are real: the F3 ratchet's scope and bucket, and three clauses of the
+// predicate that decides whether a ride LEVIES A SLASH.
+//
+// Driven directly. The function is applyQualityTally plus dispositions, so a table over
+// (buckets, prior tier, slot state) separates cases that would each need their own dispute
+// round to reach through the lane — and the two F3 cases differ only in whether the slot
+// was already consumed, which is invisible from outside.
+//
+// The one worth reading twice is the beneficiary. A ride posts no bond, so it must record
+// NO bounty beneficiary; the source says so and settleSlash pays whoever origination
+// recorded. Pass cs.flagger instead and a stale flagger from an earlier inconclusive cycle
+// — whose own bond already came back whole under T1 — is minted a bounty for a slash the
+// RIDE levied. Nothing else in the suite noticed.
+func TestRideRatchetAndSlashPredicate(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rqr-alice")
+	stale := testutils.TestAddress("rqr-stale")
+	c := testCourt(cur, "rqr", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rqr", "what a ride may decide")
+	matureOI(cur, "rqr", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "rqr", id, sideYES)
+
+	cs := mustClaim(c, id)
+	d, f := qualityBars(c, cs)
+	bond := cs.answerBond
+	if d < 1 || f < 5 || bond <= 0 {
+		t.Fatalf("setup: need live bars and a live bond: d=%d f=%d bond=%d", d, f, bond)
+	}
+	// A stale flagger on record, as an earlier inconclusive cycle would leave.
+	cs.flagger = stale
+
+	reset := func(tier int64, consumed bool) {
+		cs.tier, cs.slotConsumed = tier, consumed
+		cs.pendingSlash, cs.slashLevied, cs.slashFlagger = 0, false, ""
+		cs.answerBond, cs.tierFinal = bond, false
+		cs.qVoteSeq++
+	}
+
+	// (1) A DUST conclusive low must not levy: a ride that cannot lift a slash must not
+	//     be able to impose one (the asymmetry disposeSlashOnRide is scored on).
+	reset(tierMidX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = d, 0, 0
+	resolveQualityRide(c, cs)
+	if cs.tier != tierLowX {
+		t.Fatalf("a dust ride still demotes: tier=%d", cs.tier)
+	}
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a dust ride must levy NO slash, got %d", cs.pendingSlash)
+	}
+
+	// (2) A full-bar low that misses the two-thirds must not levy either.
+	reset(tierMidX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = 16*f/10, 14*f/10, 0
+	if cs.qLowW*2 < cs.qLowW+cs.qMidW || cs.qLowW*3 >= (cs.qLowW+cs.qMidW)*2 {
+		t.Fatalf("setup: this case needs low in [1/2, 2/3): low=%d turnout=%d",
+			cs.qLowW, cs.qLowW+cs.qMidW)
+	}
+	resolveQualityRide(c, cs)
+	if cs.tier != tierLowX {
+		t.Fatalf("a full-bar majority low demotes: tier=%d", cs.tier)
+	}
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a low short of two-thirds must levy NO slash, got %d", cs.pendingSlash)
+	}
+
+	// (3) A full-bar two-thirds low DOES levy — with NO bounty beneficiary.
+	reset(tierMidX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = 2*f, f, 0
+	resolveQualityRide(c, cs)
+	if cs.pendingSlash <= 0 {
+		t.Fatalf("a full-bar two-thirds low must levy the slash, got %d", cs.pendingSlash)
+	}
+	if cs.slashFlagger != "" {
+		t.Fatalf("a ride posts no bond, so it must record NO beneficiary; got %s "+
+			"(the stale flagger is %s)", cs.slashFlagger, stale)
+	}
+
+	// (4) F3 is PROMOTION-out-of-an-ADJUDICATED-tier only. On a FIRST adjudication the
+	//     residual mid stands with no mandate at all — gating it here would refuse an
+	//     honest first verdict.
+	reset(tierLowX, false)
+	cs.qLowW, cs.qMidW, cs.qHighW = 49*f/100*3, 0, 51*f/100*3
+	resolveQualityRide(c, cs)
+	if cs.tier != tierMidX {
+		t.Fatalf("a first adjudication needs no mandate to land the residual mid: "+
+			"tier=%d (low=%d mid=%d high=%d)", cs.tier, cs.qLowW, cs.qMidW, cs.qHighW)
+	}
+
+	// (5) And when the slot IS consumed, the mandate is read in the PROMOTED tier's own
+	//     bucket. Mid carries two thirds here, so the promotion stands; read the high
+	//     bucket instead and it would be refused.
+	reset(tierLowX, true)
+	cs.qLowW, cs.qMidW, cs.qHighW = 0, 2*f, f
+	resolveQualityRide(c, cs)
+	if cs.tier != tierMidX {
+		t.Fatalf("a promotion carrying two thirds of its OWN bucket must stand: "+
+			"tier=%d (mid=%d high=%d turnout=%d)", cs.tier, cs.qMidW, cs.qHighW,
+			cs.qMidW+cs.qHighW)
+	}
+}
+
+// disposeSlashOnRide AT the full bar. Its first arm is `turnout < fullBar` — strictly
+// below — so a ride landing EXACTLY on the bar has adjudicated something and must be
+// scored, not re-armed. Nothing tested that edge, and relaxing it to `<=` sends a ride
+// that cleared the bar back to a fresh window instead of confirming the reserve.
+//
+// Driven directly: the arm turns on turnout against the bar and on counterUsed, and
+// reaching exactly-the-bar through a real dispute round would mean choosing voter weights
+// to hit a number the fixture cannot see until it has already voted.
+func TestRideDisposalAtExactlyTheFullBar(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dsr-alice")
+	c := testCourt(cur, "dsr", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "dsr", "a ride exactly on the bar")
+	matureOI(cur, "dsr", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "dsr", id, sideYES)
+
+	cs := mustClaim(c, id)
+	_, f := qualityBars(c, cs)
+	// A standing reserve whose challenge has already been spent, so the default arm is
+	// the one under test rather than the counterUsed re-arm.
+	reserve := cs.answerBond / 4
+	if reserve <= 0 || f <= 0 {
+		t.Fatalf("setup: need a live bond and bar: bond=%d f=%d", cs.answerBond, f)
+	}
+	cs.answerBond -= reserve
+	cs.pendingSlash, cs.slashLevied, cs.counterUsed = reserve, true, true
+	cs.pendingSlashUntil = runtimeHeight() + c.params.votingBlocks
+
+	// Turnout EXACTLY the bar, carried two-thirds low: this ride confirms the slash.
+	cs.qLowW, cs.qMidW, cs.qHighW = f, 0, 0
+	if turnout := cs.qLowW + cs.qMidW + cs.qHighW; turnout != f {
+		t.Fatalf("setup: turnout must be exactly the bar: %d vs %d", turnout, f)
+	}
+
+	supplyBefore := c.coin.TotalSupply()
+	disposeSlashOnRide(c, cs)
+
+	if cs.pendingSlash != 0 {
+		t.Fatalf("a ride ON the bar has adjudicated: the reserve must be disposed, "+
+			"not re-armed on a fresh window (pending=%d until=%d)", cs.pendingSlash,
+			cs.pendingSlashUntil)
+	}
+	if got := supplyBefore - c.coin.TotalSupply(); got != reserve {
+		t.Fatalf("and a two-thirds low ON the bar SETTLES it: burned %d, want %d",
+			got, reserve)
+	}
+
+	// SECOND, the early return, which is the ordinary case rather than an edge: most
+	// claims carry NO reserve, and every upheld full-bar round with low under two
+	// thirds reaches this function. Without `pendingSlash <= 0` those calls fall into
+	// the REFUND arm, and refundSlash sets tierFinal BEFORE it checks the amount — so a
+	// claim with nothing to refund is frozen at whatever tier stands. Measured, that is
+	// the zero value, tierLowX: tierFinal goes false->true with tier still 0, which is
+	// zero D. Both terminal paths then skip their default-mid assignment because
+	// tierFinal is set, and the claim draws nothing for ever.
+	fresh := OpenClaim(cross(cur), "dsr", "a claim with no reserve at all")
+	matureOI(cur, "dsr", fresh, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "dsr", fresh, sideYES)
+	fcs := mustClaim(c, fresh)
+	if fcs.pendingSlash != 0 {
+		t.Fatalf("setup: this claim must carry no reserve, got %d", fcs.pendingSlash)
+	}
+	// The refund arm's own shape: full bar, low short of two thirds.
+	fcs.qLowW, fcs.qMidW, fcs.qHighW = 16*f/10, 14*f/10, 0
+	tier, final, bond := fcs.tier, fcs.tierFinal, fcs.answerBond
+	supply := c.coin.TotalSupply()
+	disposeSlashOnRide(c, fcs)
+	if fcs.tierFinal != final || fcs.tier != tier {
+		t.Fatalf("with no reserve to dispose, nothing may be decided: tier %d->%d "+
+			"tierFinal %v->%v", tier, fcs.tier, final, fcs.tierFinal)
+	}
+	if fcs.answerBond != bond || c.coin.TotalSupply() != supply {
+		t.Fatalf("and no coin may move: bond %d->%d supply delta %d", bond,
+			fcs.answerBond, supply-c.coin.TotalSupply())
+	}
+}
+
+// FlagState names every slot phase, and its precedence between them. Three of its
+// six cases were unheld — it is a public query a client reads to decide whether
+// flagging is even possible, and the tally it stands in front of is sealed, so this
+// string is the only thing a user has to go on.
+func TestFlagStateNamesEverySlotPhase(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fsp-alice")
+	c := testCourt(cur, "fsp", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fsp", "every slot phase")
+	cs := mustClaim(c, id)
+
+	if got := FlagState("fsp", id); got != "open" {
+		t.Errorf("a fresh claim's slot is %q, want open", got)
+	}
+	// The cooldown, which needs a cycle behind it and a recent flag.
+	cs.flagCycles, cs.lastFlagAt = 1, runtimeHeight()
+	if got := FlagState("fsp", id); got != "cooldown" {
+		t.Errorf("inside the cooldown the slot is %q, want cooldown", got)
+	}
+	// One block past the window it reopens, so the boundary is exclusive.
+	cs.lastFlagAt = runtimeHeight() - flagCooldownBlocks
+	if got := FlagState("fsp", id); got != "open" {
+		t.Errorf("at exactly lastFlagAt+cooldown the slot is %q, want open", got)
+	}
+	// Precedence upward from here: each phase must beat the ones below it.
+	cs.slotConsumed = true
+	if got := FlagState("fsp", id); got != "consumed" {
+		t.Errorf("a consumed slot is %q", got)
+	}
+	cs.pendingSlash = 500
+	if got := FlagState("fsp", id); got != "counter-window" {
+		t.Errorf("with a slash escrowed the slot is %q, want counter-window", got)
+	}
+	cs.flagOpen = true
+	if got := FlagState("fsp", id); got != "voting" {
+		t.Errorf("with a flag vote open the slot is %q, want voting", got)
+	}
+	cs.crystallized = true
+	if got := FlagState("fsp", id); got != "settled" {
+		t.Errorf("a crystallized claim's slot is %q, want settled", got)
+	}
+}
+
+// A conclusive ride records its AUTHORITY MARKS, both of which were unheld.
+//
+// `conclusiveTurnout` is not bookkeeping. crystallize reads it twice, and both
+// readings are money:
+//
+//	Crystallize (crystallize.gno) compares it against the full bar and ZEROES the
+//	whole participation carrot when it falls short — the P2/F2 withholding, which
+//	the source argues at length is the only lever that survives a two-wallet split.
+//
+//	PullCarrot (crystallize.gno) uses the same figure as the carrot's PER-VOTER
+//	DIVISOR.
+//
+// Unwritten it is zero, which fails both: every ride-resolved claim would withhold
+// the carrot from voters who had in fact cleared the bar, and any that slipped
+// through would divide by nothing. `conclusiveSeq` is the companion mark that
+// selects which tally's voters may claim at all.
+//
+// Driven by calling resolveQualityRide directly with the buckets set, the way
+// TestRideRatchetAndSlashPredicate does: reaching a conclusive ride through a whole
+// dispute round would test the round.
+func TestAConclusiveRideRecordsItsAuthorityMarks(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("crm-alice")
+	c := testCourt(cur, "crm", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "crm", "a ride's authority marks")
+	matureOI(cur, "crm", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "crm", id, sideYES)
+
+	cs := mustClaim(c, id)
+	_, fullBar := qualityBars(c, cs)
+	if fullBar < 5 {
+		t.Fatalf("setup: need a live full bar, got %d", fullBar)
+	}
+	// A conclusive MID comfortably ABOVE the bar: low misses the weighted median, so
+	// the tally classifies mid, and the turnout is twice what the bar asks.
+	cs.tier, cs.slotConsumed, cs.tierFinal = tierMidX, false, false
+	cs.qVoteSeq++
+	seq := cs.qVoteSeq
+	cs.qLowW, cs.qMidW, cs.qHighW = 0, 2*fullBar, 0
+	want := 2 * fullBar
+
+	resolveQualityRide(c, cs)
+
+	if !cs.slotConsumed {
+		t.Fatal("setup: an above-bar ride must go conclusive, or nothing below applies")
+	}
+	if cs.conclusiveSeq != seq {
+		t.Errorf("the conclusive sequence is %d, want the ride's own %d — the carrot "+
+			"pays that tally's voters and no other", cs.conclusiveSeq, seq)
+	}
+	if cs.conclusiveTurnout != want {
+		t.Errorf("the recorded turnout is %d, want %d", cs.conclusiveTurnout, want)
+	}
+	// Stated as the comparison crystallize actually makes, so the failure names the
+	// consequence rather than the field.
+	if cs.conclusiveTurnout < fullBar {
+		t.Errorf("the recorded turnout %d does not clear the %d full bar, so crystallize "+
+			"would withhold the entire carrot from a ride that cleared it",
+			cs.conclusiveTurnout, fullBar)
+	}
+}

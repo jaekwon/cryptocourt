@@ -64,13 +64,24 @@ func writeListedByBurn(b *strings.Builder) {
 		return
 	}
 	b.WriteString("## Courts\n\n")
+	shown := 0
 	for _, s := range slugs {
 		c := mustCourt(s)
 		if c.tier != tierListed {
 			continue
 		}
+		shown++
 		b.WriteString("- [" + courtNameFor(c) + "](/r/kourt/kourtv2:" + s + ") · " +
 			qualifiedSymbol(c) + " — " + strconv.FormatUint(c.nextID, 10) + " claims\n")
+	}
+	// A CAPPED LIST MUST SAY WHAT IT DROPPED. writeTier has always announced its
+	// omissions; when the listed tier moved to burn-ranking it stopped, and a
+	// silently truncated directory reads as the whole directory — a court past
+	// row 50 looks like it does not exist. Counted against the live tier rather
+	// than the page, because the page is what was capped.
+	if total := len(ListByTier(int(tierListed))); total > shown {
+		b.WriteString("- _…and " + strconv.Itoa(total-shown) +
+			" more; open any court directly at /r/kourt/kourtv2:<slug>_\n")
 	}
 	b.WriteString("\n")
 }

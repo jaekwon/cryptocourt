@@ -1,0 +1,46 @@
+# THE ONE GUARD A UNIT HARNESS CANNOT TEST: Buy's IsUserCall.
+#
+# AGENTS.md flags this exact downgrade — a realm taking payment must guard on
+# cur.Previous().IsUserCall(), not IsUser(), because IsUser ACCEPTS a `maketx run`
+# ephemeral realm, which can consume the origin-send envelope before calling and so
+# bypass the payment check. Buy reads unsafe.OriginSend() under that guard, so the
+# guard is the whole of its payment authentication.
+#
+# In-harness the two are indistinguishable: testing.SetRealm(NewUserRealm(...)) makes
+# IsUser and IsUserCall both true, and there is no way to produce an ephemeral realm.
+# The mutation harness therefore reports the downgrade as a SURVIVOR and always will —
+# it runs `gno test`, not this suite. Recorded in PLAN §13 as the one residual resting
+# on code review; this file is what takes it off that list.
+#
+# Both directions are here on purpose. A test that only asserts the refusal would pass
+# equally against a Buy that refuses everything.
+
+loadpkg gno.land/p/kourt/checkpoint/v0
+loadpkg gno.land/p/kourt/grc20votes/v0
+loadpkg gno.land/p/kourt/governor/v0
+loadpkg gno.land/p/kourt/twap/v0
+loadpkg gno.land/p/kourt/curve/v0
+loadpkg gno.land/r/kourt/kourtv2
+
+gnoland start
+
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# --- CONTROL: a DIRECT user call is the sanctioned form and must work -----------
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# --- THE GUARD: the same buy through a `maketx run` ephemeral realm is refused ---
+# The script's realm is the caller, so IsUserCall is false while IsUser would be true.
+! gnokey maketx run -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1 $WORK/ephemeral_buy.gno
+stderr 'direct user call'
+
+-- ephemeral_buy.gno --
+package main
+
+import "gno.land/r/kourt/kourtv2"
+
+func main(cur realm) {
+	kourtv2.Buy(cross(cur), "orem")
+}

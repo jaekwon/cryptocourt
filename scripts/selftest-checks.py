@@ -339,6 +339,27 @@ else:
     feed("a pkg that does not exist", [{
         "pkg": "checkpont", "file": "checkpoint.gno", "label": "x",
         "find": "x", "replace": "y"}], "no such pkg")
+    # A row annotated `elsewhere` says "this guard is covered by a suite mutate.py
+    # does not run" — today only the txtar tests. It must never be able to hide a
+    # finding, so both directions are controlled: an annotated row that SURVIVES is
+    # reported in its own block rather than vanishing, and one that turns out to be
+    # caught here says so, since a stale excuse would mask a future regression.
+    # A no-op replacement is the deterministic way to force a survivor: it applies
+    # cleanly (so it is not a BAD ANCHOR) and changes nothing (so no test can object).
+    noop = {"pkg": "governor", "file": "governor.gno",
+            "label": "a row that cannot fail here",
+            "find": "const maxLive = 64", "replace": "const maxLive = 64",
+            "elsewhere": "somewhere this harness cannot run"}
+    feed("an `elsewhere` row is named on its own line", [noop], "covered elsewhere")
+    feed("and listed in the summary, never omitted", [noop], "survive here BY DESIGN")
+    # The other direction: an annotation that is no longer true must say so, or a
+    # stale excuse would mask a future regression.
+    feed("a STALE `elsewhere` annotation is called out", [{
+        "pkg": "governor", "file": "governor.gno",
+        "label": "a row that IS caught here",
+        "find": "const maxLive = 64", "replace": "const maxLive = 65",
+        "elsewhere": "somewhere this harness cannot run"}], "drop its `elsewhere`")
+
     control("a suite that is already failing", f"{GOVERN}/clock_test.gno",
             "func resumeClock() { advanceBlocks(0) }",
             "func resumeClock() { advanceBlocks(0) }\n\nfunc TestSelfTestDeliberateFailure(t *testing.T) {\n\tt.Error(\"deliberate\")\n}",
@@ -346,6 +367,37 @@ else:
             argv=["python3", os.path.join(REPO, "scripts/mutate.py")],
             stdin='[{"pkg":"governor","file":"governor.gno","label":"x","find":"const maxLive = 64","replace":"const maxLive = 63"}]',
             cwd=os.path.join(REPO, GOVERN))
+
+# --------------------------------------------------------- mutate-parallel --
+# The batch is sharded now, so one more way to report a non-result as a result:
+# a shard that DIES while its siblings pass. Its rows never ran, and if the driver
+# merged what it got it would print a clean verdict over a hole. Both arms below
+# feed it a shard that cannot survive and require it to refuse the whole run.
+if not have_gno():
+    print("\nmutate-parallel: gno not installed - NOT CHECKED")
+    failures.append("mutate-parallel arms were not run")
+else:
+    print("\nmutate-parallel.py")
+    exercised.add("mutate-parallel.py")
+    bad = json.dumps([
+        {"pkg": "governor", "file": "governor.gno", "label": "a row that runs",
+         "find": "const maxLive = 64", "replace": "const maxLive = 63"},
+        {"pkg": "nosuchpkg", "file": "x.gno", "label": "a shard that must die",
+         "find": "a", "replace": "b"},
+    ])
+    r = subprocess.run(["python3", "scripts/mutate-parallel.py", "--shards", "2"],
+                       input=bad, capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    if "NOT a result" in out:
+        print(f"  {'a dead shard fails the whole run':<44} fires")
+    else:
+        print(f"  {'a dead shard fails the whole run':<44} SILENT — merged anyway")
+        failures.append("a dead shard fails the whole run")
+    if r.returncode != 0:
+        print(f"  {'and the exit code says so':<44} fires")
+    else:
+        print(f"  {'and the exit code says so':<44} SILENT — exited 0")
+        failures.append("a dead shard exits nonzero")
 
 # ----------------------------------------------------------------- gnoroot --
 # Each runner now gets its OWN GNOROOT — symlinks to everything but a private copy
@@ -463,7 +515,7 @@ else:
 # the same opt-in coverage this file complains about elsewhere, but the
 # alternative — every scripts/*.py — demands a control for this file itself,
 # and a self-test that must break itself to prove it works is a worse trade.
-RUNNERS = {"mutate.py", "gnoroot.py"}
+RUNNERS = {"mutate.py", "gnoroot.py", "mutate-parallel.py"}
 print("\ncoverage")
 guards = {os.path.basename(p) for p in glob.glob(os.path.join(REPO, "scripts/check-*.py"))}
 guards |= RUNNERS

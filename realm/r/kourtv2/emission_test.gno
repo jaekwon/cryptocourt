@@ -306,3 +306,67 @@ func TestAccrualCarriesItsRemainderAcrossSegments(cur realm, t *testing.T) {
 			c.accrualRem)
 	}
 }
+
+// The senior QUOTE is what is actually PAID, and the payable figure is correct at
+// every stage of an entitlement's life.
+//
+// PullSenior and SeniorEntitlement are two separate copies of the same four lines
+// — `covered = cumAccrual - start`, clamped to the amount, minus what is already
+// paid — one to pay and one to quote. The mutation harness found the duplication by
+// reporting four of my rows as matching TWICE.
+//
+// Nothing held the quote side: the only existing assertion reads `to` and `amount`
+// and discards the payable with `_, _`. So a claimant asking how much they are owed
+// got a number no test had ever checked, from a copy that can drift from the one
+// that pays. Inverting `covered - paid` and dropping the zero floor both survived
+// the whole suite.
+func TestTheSeniorQuoteIsWhatGetsPaid(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sqp-alice")
+	carol := testutils.TestAddress("sqp-carol")
+	c := testCourt(cur, "sqp", alice, 50_000_000_000)
+	rollTo(c, 1)
+	budget := c.curPeriodBudget
+	// Larger than one period's accrual, so the partial-coverage arm is live and the
+	// clamp has something to clamp.
+	seq := enqueueSenior(c, carol, budget+budget/2, "comp")
+
+	// Nothing accrued for it yet: nothing owed, nothing paid.
+	if _, _, paid, payable := SeniorEntitlement("sqp", seq); paid != 0 || payable != 0 {
+		t.Errorf("a fresh entitlement quotes paid=%d payable=%d, want 0/0", paid, payable)
+	}
+
+	// One period of accrual. The quote must equal what the payment then hands over —
+	// that equality is the whole point, because the two are separate copies of the
+	// same arithmetic.
+	rollTo(c, 2)
+	_, _, _, quoted := SeniorEntitlement("sqp", seq)
+	if quoted != budget {
+		t.Fatalf("after one period the quote is %d, want the %d budget", quoted, budget)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	got := PullSenior(cross(cur), "sqp", seq)
+	if got != quoted {
+		t.Errorf("the quote said %d and the payment was %d — the two copies of the "+
+			"entitlement arithmetic disagree", quoted, got)
+	}
+
+	// Straight after paying, nothing further is owed. Without the zero floor the
+	// quote goes NEGATIVE once paid catches up with coverage, and a negative owed
+	// figure on a page reads as a claim on the court.
+	_, _, paidNow, payableNow := SeniorEntitlement("sqp", seq)
+	if payableNow != 0 {
+		t.Errorf("straight after payment the quote is %d, want 0", payableNow)
+	}
+	if paidNow != got {
+		t.Errorf("the entitlement records %d paid, want the %d just transferred", paidNow, got)
+	}
+
+	// And however long the reservoir runs past it, the quote never carries the
+	// entitlement past its own amount.
+	rollTo(c, 12)
+	_, amount, paidLate, payableLate := SeniorEntitlement("sqp", seq)
+	if paidLate+payableLate != amount {
+		t.Errorf("paid %d + payable %d is not the %d entitlement — coverage is not "+
+			"clamped to what was promised", paidLate, payableLate, amount)
+	}
+}
