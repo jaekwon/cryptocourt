@@ -4948,5 +4948,82 @@
   "label": "Stake: the position is settled AFTER its new stake is recorded",
   "find": "\taccrue(c, cs, p, side)\n\tp.stake = mustAdd(p.stake, amount)",
   "replace": "\tp.stake = mustAdd(p.stake, amount)\n\taccrue(c, cs, p, side)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "flagBondFor: the bond is sized off the answer bond, not X\u0304",
+  "find": "\tb0 := cs.xBarFrozen * flagBondXBps / 10000",
+  "replace": "\tb0 := cs.answerBond0 * flagBondXBps / 10000"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "flagBondFor: there is no minimum flag bond, so a dust claim is flagged free",
+  "find": "\tif b0 < flagMinCC {\n\t\tb0 = flagMinCC\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "flagBondFor: the re-flag multiplier is uncapped",
+  "find": "\tif exp > 2 {\n\t\texp = 2 // 2^2 = the frozen 4\u00d7 multiplier\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "flagBondFor: the multiplier cap is one cycle too high",
+  "find": "\tif exp > 2 {",
+  "replace": "\tif exp > 3 {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "flagBondFor: the multiplier is doubled",
+  "find": "\treturn mustMul(b0, int64(1)<<uint(exp))",
+  "replace": "\treturn mustMul(b0, int64(1)<<uint(exp+1))"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "bountyFor: the bounty is sized off the BOND rather than what was burned",
+  "find": "\tb := burned * compOfBurnBps / 10000",
+  "replace": "\tb := bond * compOfBurnBps / 10000"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "bountyFor: the bounty may exceed the bond that was posted",
+  "find": "\tif bond < b {\n\t\tb = bond\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "quality.gno",
+  "label": "bountyFor: a negative bounty is paid",
+  "find": "\tif b < 0 {\n\t\tb = 0\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "disputeBond0 (the QUOTE copy): the own-answer arm is dropped",
+  "find": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}",
+  "replace": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "disputeBond0 (the QUOTE copy): the two arms take the MAX instead of the min",
+  "find": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {",
+  "replace": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm > base {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "dispute.gno",
+  "label": "disputeBond0: the doubling is one round ahead",
+  "find": "\treturn mustMul(base, int64(1)<<uint(shift))",
+  "replace": "\treturn mustMul(base, int64(1)<<uint(shift+1))"
  }
 ]

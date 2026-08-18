@@ -1624,6 +1624,52 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.11 — a better way to pick the target, and the money-sizing formulas it found. Also: the
+  harness detects DUPLICATED CODE, which I had not noticed it could do.**
+  Rows-per-file has stopped discriminating now that both 2.3-per-100 outliers are closed, so the
+  measurement moved to **rows per FUNCTION**: which functions of ≥8 lines have no row naming
+  them. Fifteen. That is the same shift that found the real gaps in `governor`, applied to the
+  realm, and it is sharper than per-file because a well-covered file hides an untouched function
+  inside it.
+  The top entry is worth recording as a NEGATIVE result. `court.gno:mustInvariants` — 26 lines,
+  zero rows — is the deploy gate that enforces the audited cross-constant couplings, including
+  the **20%/yr inflation ceiling the owner has locked** (`budgetWeeklyBps*52 > 2000`). It is
+  **structurally un-mutatable**: deleting a check is invisible because the constants satisfy it,
+  and changing a constant is caught by the value pins from v0.96 rather than by the gate. A
+  fixture that re-derives the bounds would agree with the code by construction and catch
+  nothing. Two of its checks bind EXACTLY at their boundary (`answerBondBps` vs `tierMidX·5000`,
+  and the 93-point split equality), so the gate does work — it just cannot be shown to by
+  mutation, and no vacuous test was added to pretend otherwise. Testing it properly means making
+  the bounds functions of parameters, which is a refactor of the deploy gate.
+  **What the method did find: eleven newly-pinned guards across four money-sizing functions.**
+  `flagBondFor`'s floor (without it a drained claim is flagged for ~nothing, and the flag lane is
+  how a slash is adjudicated) and its capped re-flag multiplier, stated 1/2/4/4/4 as literals so
+  a wider cap cannot move the expectation with it. `bountyFor`'s bond bound (a payout exceeding
+  what was posted) and its zero floor (a negative bounty is a Transfer that WITHDRAWS from the
+  recipient). Both are pure functions, so both are called directly — driving three re-flag cycles
+  through the machine would have tested the machine.
+  **And the methodological find. Five of my `disputeBond0` rows came back BAD ANCHOR (matched
+  2x), which is the harness reporting that the code exists TWICE** — `OpenDispute` duplicates
+  `disputeBond0`'s entire eleven-line body verbatim, differing only in `return` vs assignment.
+  Previous 2x anchors in this work were coincidental text matches; a whole function body matching
+  twice is a duplication detector, and I had not been reading it that way. The duplication itself
+  was already known and documented in `dispute_test.gno`, with charge==quote asserted as the
+  thing that stops the copies drifting — and that equality earns its keep here: it caught two of
+  the four rows once they were anchored to the QUOTE copy alone.
+  Two registered residuals, measured rather than guessed. The quote copy's **X̄-arm rate** and its
+  **failed-round cap** are unobservable in every fixture, and for a stated reason: the own-answer
+  arm is the smaller of the two on every court the suite builds, so the X̄ arm's rate never
+  reaches the `min`. Reaching it needs a claim whose answer bond EXCEEDS half its X̄ — which is
+  exactly where PostAnswer's collateralization floor binds, on a drained pool. The cap needs
+  `failedRounds == maxFailedRounds`, which coincides with provClose. Both are excluded from the
+  batch rather than left as permanent survivors.
+  Also noted, not fixed: `div128` lacks the `q > MaxInt64` guard its sibling `mulDiv128` carries
+  and documents (math-audit NOTE-6). Both of `div128`'s own guards are unreachable given its two
+  callers — one floors the denominator at 1, the other's is positive by lifecycle — so this is an
+  inconsistency in the fail-loud discipline rather than a live hole. Adding the guard is a
+  money-path change.
+  Batch now 718 rows: 717 caught, 0 not caught, one surviving by design (38:49 at 424% CPU).
+
 - **v1.10 — stake.gno, the money path and the other 2.3-rows/100 outlier: 23 of 39 caught, and
   the gaps are conviction created out of nothing.** Conviction IS the reward weight, so
   conviction that should not exist is minted money. Already held: all three `mulDiv128` guards,

@@ -767,3 +767,67 @@ func TestFinalizeCreditsNothingForAQuorumlessDefault(cur realm, t *testing.T) {
 		t.Fatal("and finalizing must give the priority slot back")
 	}
 }
+
+// The flag bond's floor and its capped re-flag multiplier, neither of which was
+// held. flagBondFor is a pure function of the claim, so it is called directly:
+// driving three re-flag cycles through the machine would test the machine.
+func TestFlagBondIsFlooredAndCapped(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fb-alice")
+	c := testCourt(cur, "fb1", alice, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fb1", "flag bond sizing")
+	cs := mustClaim(c, id)
+
+	// A dust X̄ floors at flagMinCC. Without the floor, flagging a drained claim
+	// costs ~nothing, and the flag lane is what a slash is adjudicated through.
+	cs.xBarFrozen, cs.flagCycles = 1, 0
+	if got := flagBondFor(cs); got != flagMinCC {
+		t.Errorf("a dust claim's flag bond is %d, want the %d floor", got, flagMinCC)
+	}
+	// Above the floor the bond is the X̄ share, un-multiplied on the first cycle.
+	big := int64(1_000_000_000)
+	cs.xBarFrozen = big
+	want := big * flagBondXBps / 10000
+	if want <= flagMinCC {
+		t.Fatalf("setup: %d must exceed the floor for this arm to mean anything", want)
+	}
+	if got := flagBondFor(cs); got != want {
+		t.Errorf("the first-cycle bond is %d, want %d", got, want)
+	}
+	// The multiplier doubles per cycle and STOPS at 4×: the frozen bound. Stated
+	// as 1/2/4/4/4 outright rather than as 1<<exp, so a wider cap cannot move the
+	// expectation with it.
+	for _, tc := range []struct {
+		cycles, mult int64
+	}{{0, 1}, {1, 2}, {2, 4}, {3, 4}, {9, 4}} {
+		cs.flagCycles = tc.cycles
+		if got := flagBondFor(cs); got != want*tc.mult {
+			t.Errorf("after %d cycles the bond is %d, want %dx = %d",
+				tc.cycles, got, tc.mult, want*tc.mult)
+		}
+	}
+}
+
+// bountyFor is bounded by BOTH the burn it is a share of and the bond it is paid
+// from, and floored at zero. Only the burn share was held.
+//
+// The bond bound is what stops a payout exceeding what was posted; the zero floor
+// is what stops a negative burn paying a negative bounty, which in a Transfer is a
+// withdrawal from the recipient.
+func TestTheBountyIsBoundedByBothTheBurnAndTheBond(t *testing.T) {
+	// The ordinary case: a share of what burned, well under the bond.
+	if got, want := bountyFor(1_000_000, 100_000), int64(100_000*compOfBurnBps/10000); got != want {
+		t.Errorf("the bounty is %d, want the %d share of the burn", got, want)
+	}
+	// Clamped by the bond when the burn's share would exceed it.
+	if got := bountyFor(7, 1_000_000); got != 7 {
+		t.Errorf("the bounty is %d, want it clamped to the 7 that was posted", got)
+	}
+	// And never negative, whichever input is.
+	if got := bountyFor(1_000_000, -1_000_000); got != 0 {
+		t.Errorf("a negative burn paid a bounty of %d, want 0", got)
+	}
+	if got := bountyFor(-5, 1_000_000); got != 0 {
+		t.Errorf("a negative bond paid a bounty of %d, want 0", got)
+	}
+}
