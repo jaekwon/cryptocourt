@@ -1221,6 +1221,29 @@ decision must be made before launch, not after.
     `CreateEmptyBlocks=false`. Reaching settle end-to-end would need a height skew,
     which is a separate decision with real consequences for the accounting clock.
 
+  - **RESOLVED, same day, and better than the consensus proposed.** The E2E
+    session acted on all of it, and their fix is the stronger one: rather than
+    freezing the skew at seal, `tcNow` now keeps a **`tcFloor`** — "the highest
+    instant this clock ever showed; never rewound past". Sealing still zeroes the
+    skew, but the floor makes the clock MONOTONIC, which is the invariant the
+    finding was actually about; the consensus's "freeze the skew" would have left
+    a sealed chain permanently displaced instead. `tcNow` also gained a
+    fail-closed panic on a non-positive instant. The missing `cur.IsCurrent()` is
+    fixed on both entrypoints — a fresh realm-wide scan finds zero crossing
+    functions calling `cur.Previous()` unguarded. And they went past the report:
+    `render.gno` now prepends a "Test chain — the dates on this page are
+    fabricated" banner to EVERY page, on the stated ground that "an accessor
+    nobody reads is not a disclosure", which is a better answer to the disclosure
+    question than TestClockActive() alone.
+  - **They also changed the semantics in response to the integration test, and
+    the reason is worth keeping.** The clock is now FROZEN while armed
+    (`now = base + advanced`) rather than skewed off live time. Their handoff
+    credits this txtar's boundary assertion: a skew added to a LIVE clock cannot
+    express "one second short", because the seconds the node spends mining the
+    intervening blocks are added underneath. Frozen time makes a scenario exactly
+    reproducible. A test that asserts a boundary is therefore not only a test — it
+    is a constraint on what the clock has to be.
+
 - **v0.52 — A SUSPENDED SET COULD LOOSEN ITS OWN THRESHOLD AND WALK OUT.**
   Implements the 3-0 consensus recorded in v0.51a. `currentSetID` becomes
   membership-only, `suspendSet` records the judged threshold in a new
