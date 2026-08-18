@@ -1,0 +1,164 @@
+# The passage of TIME against a real node, which no unit harness can claim.
+#
+# Published deadlines gate on wall-clock time (clock.gno), so until testclock.gno
+# there was no way to walk one end to end: a test cannot wait 72 hours, and the
+# integration harness cannot skew a chain's clock. testing.SkipHeights moves
+# HEIGHT, which these gates deliberately no longer read.
+#
+# What this covers: the 12-week DEAD-CLAIM timeout, in one transaction, on the
+# meta court — an unanswered claim really dies, and only once the date has passed.
+#
+# Why the meta court and not a fresh one. The meta court is created by init(), not
+# by startCourtUser, and startCourtUser calls sealTestClock() unconditionally — so
+# the first StartCourt disarms the clock. Meta is the one court reachable with the
+# latch still armed.
+#
+# Sealing used to be worse than a constraint: it ZEROED the skew, so nowTime()
+# fell back behind stamps already written into the future — the rewind
+# testclock.gno's own header forbids — and any user's StartCourt triggered it.
+# Reported as MODERATION.md v0.53 and since FIXED: tcNow keeps a tcFloor, the
+# highest instant the clock ever showed, so the clock is monotonic even after the
+# skew is dropped. The floor itself is NOT asserted here and cannot usefully be:
+# comparing two instants needs arithmetic a txtar has none of, and the floored
+# value and real time are both ten-digit unix seconds, so no pattern separates
+# them. It belongs in the in-package suite. What the seal section below pins is
+# the part a txtar can see — that the latch really closes and stays closed.
+#
+# NOT covered, and not for want of trying: the 72h settle window. PostAnswer
+# requires three matured TWAP buckets (~2160 blocks of stake history) and heights
+# are deliberately NOT skewable — the accounting clock stays honest — so no
+# amount of date-skew reaches an answered claim. That needs a height skew, which
+# is a separate decision.
+
+loadpkg gno.land/p/kourt/checkpoint/v0
+loadpkg gno.land/p/kourt/grc20votes/v0
+loadpkg gno.land/p/kourt/governor/v0
+loadpkg gno.land/p/kourt/twap/v0
+loadpkg gno.land/p/kourt/curve/v0
+loadpkg gno.land/r/kourt/kourtv2
+
+adduser stranger 100000000ugnot
+
+gnoland start
+
+env USER_ADDR=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
+
+# --- The clock is OFF on arrival, and says so ---------------------------------
+# TestClockActive is public precisely so no surface ever shows a fabricated date
+# without telling the reader. A chain that reports true here is not a real chain.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+stdout 'false'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockSkew()"
+stdout '\(0 int64\)'
+
+# --- A stranger cannot arm it, even on a virgin realm -------------------------
+# The deployer check is the load-bearing half: virginity alone would lose a race
+# on a public chain, where anyone watching the deploy can land the next block.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test stranger
+stderr 'only the deployer may drive'
+
+# --- Arm it, as the deployer, on a realm that is still virgin ------------------
+# Only the address that deployed the package may arm, and only while the meta
+# court is the only court in existence.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+stdout 'true'
+
+# --- A claim on the review court, funded by buying meta CC --------------------
+# Buy accepts the meta slug: accrueFranchise skips meta exactly because Buy mints
+# there directly. On a fresh chain the deposit floor sits on its dust arm.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args meta -send 20000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args meta -args 'Will this claim die of old age?' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# The id below is 1 because this is meta's first claim — asserted, not assumed.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimCount(\"meta\")"
+stdout '\(1 uint64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimClosed(\"meta\",1)"
+stdout 'false'
+
+# --- Too early: the date has not passed, so the claim may not be closed --------
+# This is the assertion that makes the later one mean something. Without it a
+# CloseDeadClaim that always succeeded would look identical.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args meta -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'dead-claim timeout has not passed'
+
+# --- Twelve weeks, in one transaction ------------------------------------------
+# deadClaimSecs is 12*7*86400 = 7257600. One second short first: the boundary is
+# the point, and a test that only jumps far past it cannot tell a >= from a >.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 7257599 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args meta -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'dead-claim timeout has not passed'
+
+# One more second carries it over.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args meta -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# --- The claim really died, and only once ------------------------------------
+# A successful transaction is not a state change: without this read, a close that
+# closed nothing would look identical. The second call proves the exactly-once
+# disposition too — CloseDeadClaim refunds the deposit and burns the fee, and a
+# repeatable close would repeat both.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimClosed(\"meta\",1)"
+stdout 'true'
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args meta -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'already closed'
+
+# --- The skew is disclosed, never silent --------------------------------------
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockSkew()"
+stdout '\(7257600 int64\)'
+
+# --- Forward only, and bounded ------------------------------------------------
+# AdvanceTestClock refuses a non-positive step: a backwards clock would un-settle
+# a settled claim. It also refuses an enormous one — an audit proved two maximal
+# int64 "forward" steps wrapped the sum negative and walked the clock backwards,
+# so both the step (10y) and the running total (100y) are capped now.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args -3600 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'moves forward'
+
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 9223372036854775807 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'at most ten years'
+
+# --- A court does NOT seal the latch (changed 2026-08-18; see BRANCHING.md) ----
+# EDITED BY THE WEBSITE/E2E SESSION. startCourtUser used to call sealTestClock()
+# unconditionally, which this file pinned. Two independent reviews killed that
+# rule on the same day: an audit proved the implicit seal REWOUND the clock
+# under stamps already written (a permissionless StartCourt could reopen an
+# expired escrow window), and the scenario-DSL design showed it makes the whole
+# point impossible — you cannot seed a court and then advance time.
+#
+# What replaced it: arming now requires a PRISTINE realm (no user court, and the
+# meta court carrying no claims and no coin), so a chain with history can never
+# be armed; once armed, the chain is a test chain and stays one. Sealing is
+# explicit, deployer-only, and keeps tcFloor so it never rewinds.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# Still armed — this is the property the scenario runner needs.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+stdout 'true'
+
+# And the explicit seal still closes it for good, without rewinding.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func SealTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+stdout 'false'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockSkew()"
+stdout '\(0 int64\)'
+
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'not armed'
+
+# And it is one-way: the deployer cannot re-arm a realm that has been used.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'sealed'
