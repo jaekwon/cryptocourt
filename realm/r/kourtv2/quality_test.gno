@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"chain/runtime"
 	"math/bits"
 	"testing"
 
@@ -2163,5 +2164,106 @@ func TestOverturnBurnsTheSlashWithTheBond(cur realm, t *testing.T) {
 	if cs.pendingSlash != 0 || cs.answerBond != 0 {
 		t.Fatalf("and leaves neither behind: pending=%d bond=%d",
 			cs.pendingSlash, cs.answerBond)
+	}
+}
+
+// The "nothing to act on" refusals across the quality lane. Every one survived
+// its mutation for the same structural reason the global-DAO no-op guards did in
+// v0.48: the suite drives these verbs only on state where they succeed, so the
+// arms that refuse an absent vote or an absent slash were never reached.
+func TestQualityRefusesWhenNothingIsOpen(cur realm, t *testing.T) {
+	_, id, alice, bob, carol, _ := qfSetup(cur, t, "qnone")
+
+	// The bucket range is VoteQuality's FIRST substantive guard, so it answers
+	// before any state question — and both ends are named, so the bound cannot be
+	// half-deleted.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "quality is 0 (low), 1 (mid) or 2 (high)", func() {
+		VoteQuality(cross(cur), "qnone", id, qualityHigh+1)
+	})
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "quality is 0 (low), 1 (mid) or 2 (high)", func() {
+		VoteQuality(cross(cur), "qnone", id, qualityLow-1)
+	})
+
+	// A VALID bucket with no flag, no dispute and no counter open, so this refusal
+	// is about the absent vote and not about the argument above it.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "no quality vote is open on this claim", func() {
+		VoteQuality(cross(cur), "qnone", id, qualityMid)
+	})
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "no flag vote to resolve", func() {
+		ResolveFlag(cross(cur), "qnone", id)
+	})
+	// Called by the ANSWERER, who would pass the authority check one guard later,
+	// so what refuses here is the missing slash and not the caller.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "no slash is pending on this claim", func() {
+		CounterFlag(cross(cur), "qnone", id)
+	})
+
+	// THE CONTROL. Opening a flag makes the identical VoteQuality call land, so
+	// the refusals above are about the state and not about a lane that refuses
+	// everything put to it.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qnone", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qnone", id, qualityMid)
+}
+
+// OpenFlag's closed-state arms, plus the counter window's deadline. Each needs a
+// DIFFERENT terminal or in-flight state, and the paths that produce them —
+// crystallize, provisional close, a slash-grade flag — are each exercised in
+// full elsewhere in this file, so the states are CONSTRUCTED and restored
+// between arms and every refusal is read one at a time.
+func TestOpenFlagRefusesEveryClosedState(cur realm, t *testing.T) {
+	c, id, alice, bob, _, _ := qfSetup(cur, t, "qshut")
+	cs := mustClaim(c, id)
+
+	cs.crystallized = true
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "the draw has crystallized", func() {
+		OpenFlag(cross(cur), "qshut", id)
+	})
+	cs.crystallized = false
+
+	// provClose and closed share ONE message and are SEPARATE fields, so both are
+	// exercised: a message assertion cannot tell which of them spoke.
+	cs.provClose = true
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "there is no quality to vote", func() {
+		OpenFlag(cross(cur), "qshut", id)
+	})
+	cs.provClose = false
+	cs.closed = true
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "there is no quality to vote", func() {
+		OpenFlag(cross(cur), "qshut", id)
+	})
+	cs.closed = false
+
+	// A pending slash owns the lane until its counter-flag window closes: no new
+	// flag may open on top of one.
+	cs.pendingSlash, cs.pendingSlashUntil = 1, runtime.ChainHeight()+1000
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "a slash is in its counter-flag window", func() {
+		OpenFlag(cross(cur), "qshut", id)
+	})
+
+	// The same window bounds the answerer's counter. Backdating ONLY the deadline
+	// leaves the slash pending and the caller correct, so the refusal is the
+	// deadline and nothing else...
+	cs.pendingSlashUntil = 1
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "the counter-flag window has lapsed", func() {
+		CounterFlag(cross(cur), "qshut", id)
+	})
+	// ...and with the window restored the very same call opens the counter.
+	cs.pendingSlashUntil = runtime.ChainHeight() + 1000
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "qshut", id)
+	if !cs.counterOpen {
+		t.Fatal("an in-window counter must open, or the lapse above proves nothing")
 	}
 }

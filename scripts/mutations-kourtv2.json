@@ -2084,5 +2084,61 @@
     "label": "canonicalMembers: a malformed bech32 address is seated as a moderator",
     "find": "\t\tif !a.IsValid() {\n\t\t\tpanic(\"kourtv2: not a valid address for a moderator set\")\n\t\t}\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/OpenFlag:82: kourtv2: quality is settled; the draw has crystallized",
+    "find": "\t\tpanic(\"kourtv2: quality is settled; the draw has crystallized\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/OpenFlag:85: kourtv2: this claim closed without a draw; there is no quality t",
+    "find": "\t\tpanic(\"kourtv2: this claim closed without a draw; there is no quality to vote\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/OpenFlag:97: kourtv2: a slash is in its counter-flag window",
+    "find": "\t\tpanic(\"kourtv2: a slash is in its counter-flag window\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/VoteQuality:176: kourtv2: quality is 0 (low), 1 (mid) or 2 (high)",
+    "find": "\t\tpanic(\"kourtv2: quality is 0 (low), 1 (mid) or 2 (high)\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/VoteQuality:179: kourtv2: no quality vote is open on this claim",
+    "find": "\t\tpanic(\"kourtv2: no quality vote is open on this claim\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/ResolveFlag:314: kourtv2: no flag vote to resolve",
+    "find": "\t\tpanic(\"kourtv2: no flag vote to resolve\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/CounterFlag:736: kourtv2: no slash is pending on this claim",
+    "find": "\t\tpanic(\"kourtv2: no slash is pending on this claim\")\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "quality/CounterFlag:748: kourtv2: the counter-flag window has lapsed",
+    "find": "\t\tpanic(\"kourtv2: the counter-flag window has lapsed\")\n",
+    "replace": ""
   }
 ]

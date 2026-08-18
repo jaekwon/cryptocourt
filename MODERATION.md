@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.49 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.50 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -1171,6 +1171,77 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.50 — WHY THE META FRANCHISE IS TWO TRANSACTIONS, WRITTEN DOWN BEFORE
+  SOMEBODY "FIXES" IT.** Asked why a buyer needs a second transaction to receive
+  KOURT:META after buying a court coin, I gave two wrong answers before finding
+  the right one, and the right one is a tokenomics invariant that currently
+  exists only as a comment inside `franchise_test.gno`.
+  - **Wrong answer 1: the curve cap.** `ClaimMetaFranchise` clamps silently when
+    meta's curve is at `curveCap` and keeps the entitlement, so I cited that as
+    why the grant cannot be atomic. Measured: filling one court's curve costs
+    ~1.06 × 10²⁰ ugnot, which is **11.5× more than int64 can represent** — it is
+    the "very steep curve" branch `curve.gno` already documents, i.e. `Cost`
+    returns `ok=false` and the cap is unreachable by payment. `curveCap` is an
+    OVERFLOW GUARD keeping `isqrt128`'s operand under `cap²` and satisfying the two
+    `init` supply invariants, not an economic ceiling. That justification was dead.
+  - **Wrong answer 2: coupling and gas.** Truer, and still not the reason.
+  - **The actual reason: meta's supply is its ENGAGED electorate, and quorum is a
+    fraction of supply.** Lazy minting means meta CC exists roughly for people who
+    chose to claim it. Mint on every buy and supply instead tracks total platform
+    buying — every passerby who bought one court coin holds appeals weight they
+    will never vote. The denominator rises, turnout as a fraction of it falls, and
+    appeals stall on a quorum nobody can reach. It is the same mechanism the v0.49
+    consensus round named for `Mint`: raising the quorum denominator with weight
+    that never votes. `franchise_test.gno` asserts it directly — *"burning must not
+    airdrop meta-CC"* — so folding the claim into `Buy` would have meant rewriting
+    the evidence for the invariant, which is where I stopped.
+  - **And nothing is lost by waiting**, which is what makes the lazy mint good
+    rather than merely defensible: the entitlement is a durable balance, and
+    `franchise_test` shows the escalator is real — an identical burn claimed later
+    buys strictly less appeals weight, because the claim advances meta's shared
+    monotone curve position. Deferring costs the claimant, so the incentive to
+    claim arrives exactly when they intend to participate.
+  - **Measured, not merely argued.** The inline version was built and run before
+    being reverted: of 475 tests exactly ONE failed — `TestMetaFranchise`, with
+    *"the entitlement is the µGNOT actually burned, got 0"*, because the buy had
+    already consumed the entitlement it was asserting. A single red test, and it
+    is the one that encodes the invariant. That is the difference between reading
+    a comment and pricing the change.
+  - **If the UX is still wanted, the shape that preserves the invariant is
+    OPT-IN** — a `BuyAndClaim` entrypoint or a flag on `Buy` — not an unconditional
+    inline mint. Recorded with the working patch at `/tmp/inline-franchise.patch`
+    and NOT applied.
+  - **The quality lane's "nothing to act on" arms were unpinned too — the same
+    shape as v0.48's global-DAO no-ops, in a money-adjacent file.** `quality.gno`
+    was the largest untouched surface at 98 of 142 decision sites, and it decides
+    tiers, which decide carrot payouts and the slash. Eighteen guards mutated:
+    **10 caught, 8 survived.**
+  - **The control first**: `VoteQuality`'s Q2 rule — a claim's own participants may
+    not grade it — was caught, along with the flag/counter/dispute deadline arms
+    and `CounterFlag`'s one-shot re-vote latch. So the harness reaches this file
+    and the survivor count is a property of the suite.
+  - Every survivor refuses an ABSENT thing: voting with no vote open, resolving
+    with no flag, countering with no slash, flagging a claim that has crystallized
+    or closed without a draw, flagging over a pending slash, and the counter
+    window's own deadline. A suite drives a verb where it succeeds, so the arm
+    that says *"there is nothing here"* is the one nothing ever reaches.
+  - **Four fixture decisions worth keeping**, because each is the difference
+    between an assertion and a coincidence. The bucket range is exercised at BOTH
+    ends and is `VoteQuality`'s first substantive guard, so it answers before any
+    state question. `CounterFlag`'s no-slash arm is called **by the answerer**, who
+    would pass the authority check one guard later — so what refuses is the missing
+    slash and not the caller. `provClose` and `closed` share ONE message and are
+    SEPARATE fields, so each is set independently; a message assertion cannot tell
+    which of them spoke. And the lapsed-window arm backdates **only**
+    `pendingSlashUntil`, leaving the slash pending and the caller correct, then
+    restores it so the identical call opens the counter — the deadline is what is
+    being measured, and it is measured against its own success.
+  - The closed states are CONSTRUCTED and restored between arms, because the paths
+    that produce them — crystallize, provisional close, a slash-grade flag — are
+    each exercised in full elsewhere in the same file. Batch 298 -> 306.
+  - Doctrine: **AN ANSWER THAT SURVIVES ONLY BECAUSE NOBODY PRICED IT IS NOT A
+    REASON.** Two of my three explanations dissolved on measurement; the surviving
+    one was never mentioned in the code I had read, only in a test.
 - **v0.49 — TWO ENTRYPOINTS WERE UNCALLABLE BY ANY TRANSACTION, AND THE ELECTION
   REMEDY WITH THEM.** Measured, not guessed: `gnokey maketx call -func AppointMods`
   fails on a real node with *"deliver transaction failed: log:recovered: unexpected
