@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	grc20votes "gno.land/p/kourt/grc20votes/v0"
 	testutils "gno.land/p/nt/testutils/v0"
 )
 
@@ -708,6 +709,45 @@ func TestTheDirectoryListIsBounded(t *testing.T) {
 	}
 	if !strings.Contains(dir, "more; open any court directly") {
 		t.Errorf("the directory does not say what it omitted:\n%s", dir)
+	}
+
+	// ---- the FEATURED tier, which is the arm writeTier actually serves -------
+	// Everything above registers tierLISTED courts, and v0.49 moved the listed
+	// tier to burn-ranking in writeListedByBurn — leaving writeTier serving
+	// FEATURED alone. So this test stopped reaching writeTier's bound at all, and
+	// a mutation making that bound unbounded survived a full 843-row batch: the
+	// test kept passing under a name that had stopped describing what it measured.
+	for i := len(ListByTier(int(tierFeatured))); i <= renderPageSize; i++ {
+		slug := "n3feat" + strconv.Itoa(i)
+		courts.Set(slug, &Court{
+			id: slug, name: "feat court " + strconv.Itoa(i), tier: tierFeatured,
+			// writeTier renders qualifiedSymbol, so unlike the listed loop above
+			// these need a coin: it iterates ListByTier directly, while
+			// writeListedByBurn pages a burn index nothing here is in. A bare
+			// Ledger is the whole requirement — no governor, curve or claim book.
+			coin: grc20votes.NewLedger(slug, courtSymbol(slug), coinDecimals, epochBlocks),
+		})
+	}
+	if featured := len(ListByTier(int(tierFeatured))); featured <= renderPageSize {
+		t.Fatalf("setup: %d featured courts does not exceed the %d-row cap, so "+
+			"nothing below can discriminate", featured, renderPageSize)
+	}
+
+	// writeTier's OWN section, isolated. Counting the whole page cannot pin this:
+	// the listed tier is capped too, so a page-wide count stays under its bound
+	// even with writeTier unbounded. writeTier writes "## Featured";
+	// writeListedByBurn writes "## Courts" after it.
+	dir = Render("")
+	fstart, fend := strings.Index(dir, "## Featured"), strings.Index(dir, "## Courts")
+	if fstart < 0 || fend <= fstart {
+		t.Fatalf("both tier sections must be present for this to measure writeTier:\n%s", dir)
+	}
+	feat := dir[fstart:fend]
+	if n := strings.Count(feat, "](/r/kourt/kourtv2:"); n > renderPageSize {
+		t.Errorf("the featured tier rendered %d rows, past its own %d-row bound", n, renderPageSize)
+	}
+	if !strings.Contains(feat, "more; open any court directly") {
+		t.Errorf("the featured tier does not say what it omitted:\n%s", feat)
 	}
 }
 
