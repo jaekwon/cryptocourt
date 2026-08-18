@@ -1,0 +1,1286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kourt — interface wireframes (as shipped)</title>
+<style>
+/* ------------------------------------------------------------------ tokens --
+   These are the SHIPPED site's tokens (web/index.html), not a new palette:
+   cold archive paper, fountain-pen indigo court-stamp, and semantic verdict inks
+   — reconciled 2026-08-17 with gno_grc20vote/wireframes/courts-wireframe.html.   */
+:root{
+  --paper:#eaeef1; --surface:#f7f9fa; --surface-2:#e2e8ec; --inset:#e2e8ec;
+  --ink:#16202a; --ink-2:#4a5b68; --muted:#56646f;
+  --line:#dbe3e8; --line-2:#c8d2d9;
+  --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
+  --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8;
+  --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec;
+  --good:#1c6551;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:3px; --r-sm:3px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
+    --ink:#e6edf2; --ink-2:#a3b2bd; --muted:#8a99a4;
+    --line:#212b33; --line-2:#2b3843;
+    --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
+    --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16;
+    --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b;
+    --good:#6fc0a5;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--sans)}
+h1,h2,h3,h4{font-family:var(--serif);font-weight:600;text-wrap:balance;margin:0}
+a{color:var(--accent-2);text-underline-offset:2px}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 20px 96px}
+
+/* masthead */
+.masthead{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:14px}
+.masthead h1{font-size:clamp(26px,4vw,38px);letter-spacing:-.01em}
+.masthead p{color:var(--ink-2);max-width:64ch;margin:8px 0 0}
+.eyebrow{font:600 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:10px}
+.notice0{background:var(--escrow-wash);border:1px solid var(--escrow);border-left-width:4px;padding:12px 14px;border-radius:3px;font-size:13.5px;margin:18px 0 44px;max-width:80ch}
+
+/* screen frames */
+.screen{margin-bottom:56px}
+.screen>figcaption{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line-2);padding-bottom:7px;margin-bottom:14px}
+.screen>figcaption b{font:600 11px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent-2)}
+.screen>figcaption span{color:var(--muted);font-size:13px}
+.chrome{background:var(--surface);border:1px solid var(--line-2);border-radius:3px;overflow:hidden}
+.chrome>.bar{display:flex;align-items:center;gap:8px;background:var(--surface-2);border-bottom:1px solid var(--line-2);padding:7px 12px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.chrome>.bar .dot{width:8px;height:8px;border-radius:50%;background:var(--line-2)}
+.pad{padding:20px}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:820px){.duo{grid-template-columns:1fr}}
+
+/* shipped-site components, condensed */
+.crumbs{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);margin-bottom:6px}
+.crumbs i{font-style:normal;color:var(--line-2);padding:0 5px}
+.seal{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--accent);color:var(--accent);border-radius:var(--r);padding:4px 8px;white-space:nowrap;vertical-align:middle}
+.page-h{font-family:var(--serif);font-size:clamp(22px,3vw,30px);font-weight:600;letter-spacing:-.015em;line-height:1.12}
+.page-sub{color:var(--ink-2);margin-top:8px;max-width:66ch;font-size:14px}
+.pill{display:inline-block;font:600 10.5px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:2px;border:1px solid var(--line-2);white-space:nowrap}
+.pill.open{background:var(--escrow-wash);color:var(--escrow);border-color:var(--escrow)}
+.pill.good{background:var(--yes-wash);color:var(--yes);border-color:var(--yes)}
+.pill.escrow{background:var(--escrow-wash);color:var(--escrow);border-color:var(--escrow)}
+.pill.void{background:transparent;color:var(--muted)}
+.pill.no{background:var(--no-wash);color:var(--no);border-color:var(--no)}
+.intro{background:var(--accent-wash);border:1px solid var(--line-2);border-radius:var(--r);padding:14px 16px;font-size:13.5px;max-width:78ch;margin:14px 0 4px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;padding:1px;background:transparent;border:none;margin:16px 0}
+.stat{background:var(--surface);border:none;border-radius:0;padding:11px 13px;box-shadow:0 0 0 1px var(--line-2)}
+.stat .k{font:600 10.5px/1.3 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat .v{margin-top:5px;font-family:var(--mono);font-size:18px}
+.stat .v small{font-size:11px;color:var(--muted);font-family:var(--sans)}
+.stat .sub{font-size:11.5px;color:var(--ink-2);margin-top:4px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.btn{display:inline-flex;flex-direction:column;align-items:center;gap:2px;padding:9px 16px;border-radius:var(--r-sm);background:var(--surface);border:1px solid var(--line-2);color:var(--ink);font-weight:560;font-size:13.5px;text-decoration:none}
+.btn small{font-weight:500;font-size:10.5px;color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary small{color:var(--accent-ink);opacity:.8}
+.btn.yes{border-color:var(--yes);color:var(--yes)} .btn.no{border-color:var(--no);color:var(--no)}
+.btn.inert{opacity:.66;border-style:dashed}
+.clitog{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--muted);border:1px solid var(--line-2);border-radius:6px;padding:3px 7px;align-self:center}
+.signbtn{font-size:11.5px;color:var(--accent-2);border:1px solid var(--accent);border-radius:6px;padding:3px 8px;background:transparent;align-self:center}
+.cliblock{background:var(--inset);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:10px 12px;font:11.5px/1.5 var(--mono);white-space:pre;overflow-x:auto;margin-top:8px;min-width:0;max-width:min(640px,100%)}
+.primer{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;margin:14px 0}
+.primer h3{font:600 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.primer ol{margin:0;padding-left:20px}
+.primer li{font-size:13.5px;color:var(--ink-2);margin:5px 0}
+.primer li b{color:var(--ink);font-weight:600}
+.docket{display:flex;flex-direction:column}
+.docket .row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:11px 6px;border-bottom:1px solid var(--line)}
+.docket .row.claim{grid-template-columns:52px minmax(0,1fr) 64px 124px;align-items:baseline}
+.docket .row.claim .px,.docket .row.claim .pill{justify-self:end}
+.docket .row.court{grid-template-columns:minmax(52px,auto) minmax(0,1fr) auto 124px;align-items:center}
+.docket .row.court .pill{justify-self:end}
+.row.folderrow{background:var(--accent-wash)} .row.folderrow .icn{color:var(--accent)} .row.folderrow .t{color:var(--accent-2)}
+.panel{border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface)}
+.icn{width:14px;height:12px;flex:none}
+.docket .id{display:flex;align-items:center;gap:6px}
+.row.court .icn{color:var(--escrow)}
+.frow{display:flex;align-items:center;gap:8px;padding:9px 6px;background:var(--accent-wash);border-bottom:1px solid var(--line);color:var(--accent-2)}
+.frow .icn{color:var(--accent)}
+.frow .fname{font-family:var(--serif);font-weight:600;font-size:14.5px}
+.frow .fcount{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:auto}
+.frow.sub{background:var(--surface-2)} .frow.sub .fname{font-size:13.5px}
+.frow.ghost{background:transparent;color:var(--muted)} .frow.ghost .icn{opacity:.45} .frow.ghost .fname{font-size:13.5px;color:var(--muted)}
+.docket .id{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+.docket .row .t{font-family:var(--serif);font-size:15.5px}
+.docket .row .m{font-size:12px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
+.px{display:inline-flex;flex-direction:column;align-items:flex-end;min-width:64px}
+.px b{font-family:var(--mono);font-size:13px;font-weight:500}
+.px small{font-size:10px;color:var(--muted)}
+.spark{width:60px;height:16px;display:block;margin-bottom:2px}
+.spark polyline{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-linejoin:round}
+.spark line{stroke:var(--line);stroke-width:1}
+.bigchart{margin:2px 0 6px}
+.bigchart figcaption{display:flex; justify-content:space-between; gap:12px; font-size:12px; color:var(--muted); margin-bottom:6px; align-items:baseline}
+.bigchart figcaption b{font-family:var(--mono); font-weight:500; color:var(--ink)}
+.bigchart svg{display:block; width:100%; height:auto; overflow:visible}
+.bigchart .grid{stroke:var(--line); stroke-width:1}
+.bigchart .axis{stroke:var(--line-2); stroke-width:1}
+.bigchart .mid{stroke:var(--line-2); stroke-width:1; stroke-dasharray:2 3}
+.bigchart .ln{fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+.bigchart .ar{fill:var(--accent); opacity:.1}
+.bigchart .ref{stroke:var(--accent); stroke-width:1.5; stroke-dasharray:5 4; opacity:.75}
+.bigchart .band{stroke:var(--accent); stroke-width:4; opacity:.45; stroke-linecap:round}
+.bigchart .wash{fill:var(--escrow-wash); opacity:.55}
+.bigchart .washf{fill:var(--void-wash); opacity:.5}
+.bigchart .tickL{font:10px var(--mono); fill:var(--muted)}
+.bigchart .zone{font:9.5px var(--sans); fill:var(--muted); letter-spacing:.08em; text-transform:uppercase}
+.bigchart .evt{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:2 2}
+.bigchart .evtDot{fill:var(--ink-2)}
+.bigchart .evtL{font:10px var(--sans); fill:var(--ink-2)}
+.bigchart .hit{fill:transparent}
+.bigchart .hit:hover + .evtDot, .bigchart .hit:focus + .evtDot{r:5}
+.bigchart .note{font:10.5px var(--sans); fill:var(--muted)}
+.bigchart .end{fill:var(--accent); stroke:var(--surface); stroke-width:2}
+.bigchart .endL{font:600 12px var(--mono); fill:var(--accent)}
+.bigchart .endS{font:9.5px var(--sans); fill:var(--muted)}
+.srcnote{font-size:10.5px; color:var(--muted); margin:6px 0 0}
+.chartchips{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; font-family:var(--mono); font-size:11.5px; color:var(--ink-2)}
+.chartchips span{border:1px solid var(--line-2); border-radius:2px; padding:3px 7px; background:var(--surface)}
+.noticebox{border-radius:var(--r);padding:13px 16px;font-size:13.5px;display:flex;gap:10px;align-items:flex-start;margin:12px 0}
+.noticebox.warn{background:var(--escrow-wash);border:1px solid var(--escrow);border-left-width:4px} .noticebox.good{background:var(--yes-wash);border:1px solid var(--yes);border-left-width:4px} .noticebox.void{background:var(--void-wash);border:1px solid var(--void);border-left-width:4px}
+.noticebox .g{flex:none}
+.ticket{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:16px 18px;margin:12px 0}
+.ticket h3{font-size:16px;margin-bottom:6px}
+.ticket .hint{font-size:12.5px;color:var(--ink-2);margin-bottom:10px}
+.ticket .line{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-top:1px dotted var(--line)}
+.ticket .line .r{font-family:var(--mono)}
+.never{background:var(--inset);border-radius:var(--r-sm);padding:9px 12px;font-size:12px;color:var(--ink-2);margin-top:10px}
+.meter{margin:8px 0}
+.meter .track{position:relative;height:10px;background:var(--inset);border:1px solid var(--line);border-radius:3px;overflow:hidden}
+.meter .y{position:absolute;inset:0 auto 0 0;background:var(--yes)}
+.meter .legend{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:5px}
+.meter .legend b{font-family:var(--mono);color:var(--ink);font-weight:500}
+table.data{width:100%;border-collapse:collapse;font-size:13px}
+table.data th{font:600 10px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:0 0 6px;border-bottom:1px solid var(--line-2)}
+table.data th:first-child{text-align:left}
+table.data td{padding:6px 0;text-align:right;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12.5px}
+table.data td:first-child{text-align:left;font-family:var(--sans)}
+.sec-h{font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line-2);padding-bottom:6px;margin:18px 0 8px}
+.sec-h .count{font-family:var(--mono);text-transform:none;letter-spacing:0;color:var(--ink-2);margin-left:8px}
+.txnote{font-size:12px;color:var(--ink-2);margin-top:6px}
+.chain{max-width:72ch;font:14px/1.6 var(--mono);color:var(--ink-2)}
+.chain h2{font-family:var(--mono);font-size:15px;color:var(--ink);margin:14px 0 6px}
+.foot{margin-top:44px;border-top:1px solid var(--line-2);padding-top:16px;color:var(--muted);font-size:12.5px;max-width:80ch}
+.foot p{margin:0 0 8px}
+.anno{font-size:12px;color:var(--muted);border-left:3px solid var(--line-2);padding:2px 0 2px 12px;margin:12px 0}
+
+/* site parity — join panel (generated from the live joinPanel function) */
+.panel h4{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
+aside .panel{padding:14px; margin-bottom:14px}
+.tnum{font-variant-numeric:tabular-nums}
+.small{font-size:12.5px} .muted{color:var(--muted)}
+.kv .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
+.kv .v{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px}
+button.btn{font:inherit; cursor:default}
+.buyrcpt{padding:12px 14px; margin:0 0 4px; background:var(--inset)}
+.buyrcpt .line{font-size:13px}
+.buyrcpt .line .r small{display:block; font-weight:400; color:var(--muted)}
+.buyrcpt input{width:9ch; min-width:0; background:var(--surface); border:1px solid var(--line-2); border-radius:2px;
+  color:var(--ink); font:inherit; font-weight:600; font-variant-numeric:tabular-nums; padding:3px 7px; text-align:right}
+.ack{display:flex; gap:8px; align-items:flex-start; margin:10px 0 0; cursor:pointer; color:var(--ink-2)}
+.ack input{margin-top:2px; accent-color:var(--accent)}
+.pager{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:8px 0; color:var(--ink-2)}
+.pager .chips{display:flex; gap:6px}
+.pager a.pill{text-decoration:none}
+.pager .pill.off{opacity:.35}
+.cols{display:grid; grid-template-columns:minmax(0,1fr) 288px; gap:22px; align-items:start}
+.cols aside .panel+.panel{margin-top:14px}
+.crow.argrow{grid-template-columns:52px minmax(0,1fr) auto 124px}
+p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
+.panel .kv+.kv{margin-top:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <span class="eyebrow">kourt · r/kourt/kourtv2 · as shipped</span>
+  <h1>Kourt — interface wireframes</h1>
+  <p>Every screen of the shipped overlay (<code class="mono">web/index.html</code>), drawn as static
+  frames with the same demo data the page boots with. The chain carries all the information;
+  the overlay only makes it prettier. Every figure below is producible by a real kourtv2 court —
+  curve prices, conviction caps, bond formulas, and draw splits were audited against the realm source.</p>
+</header>
+
+<div class="notice0"><b>Reading these frames:</b> every action button on the real page carries three
+paths — a <b>gnoweb $help link</b> with arguments pre-filled (the baseline; works from file://), a
+<b>CLI toggle</b> revealing the equivalent copyable <span class="mono">gnokey</span> command, and, in
+live mode with Adena connected, a <b>✍ Sign</b> button that signs and broadcasts. Demo mode renders
+actions inert and makes zero network calls. Screen 2 draws the anatomy once; later frames abbreviate.</div>
+
+<!-- ============================================================ SCREEN 1 -->
+<figure class="screen">
+  <figcaption><b>Screen 1</b> <span>The directory (#/) — a dismissible first-visit strip before any jargon, then courts in the realm's own tiers: Featured, then Listed. Hidden courts never appear here but remain reachable by slug.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/ · Demo data</div>
+  <div class="pad">
+    <h2 class="page-h">Courts of record</h2>
+    <p class="page-sub">Stake on claims of fact. Your staked coin always returns 1×, and conviction —
+    stake × time held — earns the reward when the verdict goes your way.</p>
+    <div class="intro"><b>New here?</b> Four things before the jargon.
+      A <b>court</b> is a small venue for one topic, and it runs its own coin (shown as CC, for court coin).
+      The <b>coin is voice</b>: minting it burns GNOT (the chain’s native coin) — spent, held by no one — and gives you
+      staking and voting weight in that court only. A <b>claim</b> is one fixed sentence; stake YES or NO on it.
+      Your principal always returns 1×; only the reward rides on being right. <b>Verdicts</b> are the court’s
+      conclusion, not the truth. &nbsp;<span class="btn" style="padding:5px 12px;font-size:12px">Got it</span></div>
+    <div class="sec-h">Featured</div>
+    <div class="docket">
+      <div class="row court"><span class="id"><svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z" fill="currentColor"/></svg>/orem</span>
+        <div><div class="t">Orem Truth Court</div><div class="m">8 claims</div></div>
+        <span class="px"><b>118</b><small>µGNOT/unit · 118,500 CC</small></span>
+        <span class="pill open">★ featured</span></div>
+    </div>
+    <div class="sec-h">Courts</div>
+    <div class="docket">
+      <div class="row court"><span class="id"><svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z" fill="currentColor"/></svg>/ledger</span>
+        <div><div class="t">The Ledger of Denver</div><div class="m">1 claim</div></div>
+        <span class="px"><b>74</b><small>µGNOT/unit · 74,300 CC</small></span>
+        <span class="pill void">listed</span></div>
+    </div>
+    <div class="actions"><span class="btn primary">Start a court <small>slug + name</small></span><span class="clitog">CLI</span></div>
+  </div></div>
+  <div class="anno">Failed stat reads say “unavailable — the node did not answer”; they never spin forever.
+  The court list in live mode is parsed from the realm’s own Render (Featured/Courts headings, tolerant of the
+  <span class="mono">· SYMBOL</span> infix), so the directory is always whatever the chain says.</div>
+</figure>
+
+<!-- ============================================================ SCREEN 2 -->
+<figure class="screen">
+  <figcaption><b>Screen 2</b> <span>Anatomy of an action — one button, three ways to send the same transaction. This trio hangs off every action in every later frame.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> any action, expanded · Live node · Adena connected</div>
+  <div class="pad">
+    <div class="actions">
+      <span class="btn yes">Stake YES <small>1 CC</small></span>
+      <span class="clitog">CLI</span>
+      <span class="signbtn">✍ Sign</span>
+    </div>
+    <div class="cliblock"># demo data — these entities exist on no chain; switch Source to a live node first
+gnokey maketx call \
+  --pkgpath "gno.land/r/kourt/kourtv2" --func "Stake" \
+  --args "orem" \
+  --args "1" \
+  --args "0" \
+  --args "1000000" \
+  --send  \
+  --gas-fee 10000ugnot --gas-wanted 10000000 --broadcast \
+  --chainid "sapphire-1" --remote "https://rpc.sapphire.testnets.gno.land:443" YOURKEY</div>
+    <div class="txnote">✍ Sign: probes window.adena on click → chain-id guard (refuses if the wallet can’t be
+    read; offers SwitchNetwork on mismatch) → every argument confirmed in a prompt → DoContract signs
+    <em>and</em> broadcasts → “Sent. tx 4f2c9a01e3d2…” · re-renders after the block. Cancel says
+    “Cancelled — nothing was signed.” Double-clicks are locked out in flight.</div>
+  </div></div>
+  <div class="anno">The gnoweb link fills arguments by <em>name</em>; CLI and Adena are positional — all three
+  were audited against the realm signatures (26 functions). The comment line on demo-mode CLI blocks means a
+  blind paste cannot broadcast at entities that don’t exist. Copy is a real keyboard-reachable button; on
+  clipboard-less origins it selects the text and says “press Ctrl/⌘-C”.</div>
+</figure>
+
+<!-- ============================================================ SCREEN 3 -->
+<figure class="screen">
+  <figcaption><b>Screen 3</b> <span>Court home (#/c/orem) — the reference’s Screen-2 layout: clickable folders, then the docket sectioned into Open and Recently settled with each claim carrying its folder as meta, and the join panel in the aside. A long docket never nests.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court</div>
+    <h2 class="page-h">Orem Truth Court <span class="seal">orem</span></h2>
+    <p class="sub">Claims of fact from Orem's public record — certifications, inspections, filings. The court decides only what it is asked to decide.<span class="small muted"> · demo copy — the chain stores only a name</span></p>
+    <div class="stats">
+      <div class="stat"><div class="k">coin price</div><div class="v">118<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 CC = 1,000,000 units</div></div>
+      <div class="stat"><div class="k">coin supply</div><div class="v">118,500 <small>CC</small></div><div class="sub">8.90 CC of it earned as rewards</div></div>
+      <div class="stat"><div class="k">reward reservoir</div><div class="v">2.10 <small>CC</small></div><div class="sub">available to claims crystallizing — settling and paying out</div></div>
+      <div class="stat"><div class="k">senior queue owed</div><div class="v">0.64 <small>CC</small></div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
+    </div>
+        <div class="cols"><div id="qscope"><section data-qfold><div class="sec-h">Folders <span class="count">3</span></div>
+       <div class="docket"><a class="crow folderrow" href="#/c/orem/f/0">
+    <span class="id"><svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 1.5h4.2l1.4 1.8H13a.6.6 0 0 1 .6.6v6.6a.9.9 0 0 1-.9.9H1.3a.9.9 0 0 1-.9-.9V2.1a.6.6 0 0 1 .6-.6z" fill="currentColor"/></svg></span>
+    <span><span class="t">Municipal record</span><span class="m" style="display:block">4 claims · 1 subfolder</span></span>
+    <span class="px"><b>4</b><small>claims</small></span>
+    <span class="pill void">folder</span></a><a class="crow folderrow" href="#/c/orem/f/1">
+    <span class="id"><svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 1.5h4.2l1.4 1.8H13a.6.6 0 0 1 .6.6v6.6a.9.9 0 0 1-.9.9H1.3a.9.9 0 0 1-.9-.9V2.1a.6.6 0 0 1 .6-.6z" fill="currentColor"/></svg></span>
+    <span><span class="t">Infrastructure</span><span class="m" style="display:block">3 claims</span></span>
+    <span class="px"><b>3</b><small>claims</small></span>
+    <span class="pill void">folder</span></a><a class="crow folderrow" href="#/c/orem/f/2">
+    <span class="id"><svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 1.5h4.2l1.4 1.8H13a.6.6 0 0 1 .6.6v6.6a.9.9 0 0 1-.9.9H1.3a.9.9 0 0 1-.9-.9V2.1a.6.6 0 0 1 .6-.6z" fill="currentColor"/></svg></span>
+    <span><span class="t">Filings &amp; audits</span><span class="m" style="display:block">3 claims</span></span>
+    <span class="px"><b>3</b><small>claims</small></span>
+    <span class="pill void">folder</span></a></div></section><div class="addrbar qbar"><input id="q" type="search" class="mono" placeholder="title or #id" spellcheck="false" autocomplete="off" aria-label="filter loaded titles or jump to a claim id" aria-describedby="qcap">
+    <span id="qcap" class="mono small muted" role="status">searches all 11 claim titles — the sample is complete</span></div><section data-qsec style="margin-top:22px"><div class="sec-h">Open docket <span class="count">8</span></div><div class="docket" data-sortable data-sortkind="dk"><a class="crow" data-id="11" data-yes="53.6" data-q="#11 The county's posted inspection log lists the north span as 'load-restricted' for the same period." href="#/c/orem/11">
+    <span class="id">#11</span>
+    <span><span class="t">The county's posted inspection log lists the north span as 'load-restricted' for the same period.</span><span class="m" style="display:block">Infrastructure</span><span class="m" style="display:block" id="clk-orem-11"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,7.4 30.0,7.8 58.0,7.6"></polyline></svg><b>53.6%</b><small>YES now</small></span>
+    <span class="pill void">open</span></a><a class="crow" data-id="10" data-yes="71" data-q="#10 The mayor's Oct 12 email to the planning director opposed the rezoning." href="#/c/orem/10">
+    <span class="id">#10</span>
+    <span><span class="t">The mayor's Oct 12 email to the planning director opposed the rezoning.</span><span class="m" style="display:block">Municipal record</span><span class="m" style="display:block" id="clk-orem-10"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,5.1 30.0,5.7 58.0,5.5"></polyline></svg><b>71.0%</b><small>YES now</small></span>
+    <span class="pill void">open</span></a><a class="crow" data-id="9" data-yes="53.1" data-q="#9 The city's 2025 annual report is accurate on its headline claims." href="#/c/orem/9">
+    <span class="id">#9</span>
+    <span><span class="t">The city's 2025 annual report is accurate on its headline claims.</span><span class="m" style="display:block">Filings &amp; audits</span><span class="m" style="display:block" id="clk-orem-9"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,7.6 30.0,7.6 58.0,7.6"></polyline></svg><b>53.1%</b><small>YES now</small></span>
+    <span class="pill void">open</span></a><a class="crow" data-id="7" data-yes="52.2" data-q="#7 The reservoir release logs match the stated schedule." href="#/c/orem/7">
+    <span class="id">#7</span>
+    <span><span class="t">The reservoir release logs match the stated schedule.</span><span class="m" style="display:block">Infrastructure</span><span class="m" style="display:block" id="clk-orem-7">reopenable until ≈block 4,805,000 — in about 6 hours</span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,7.3 30.0,7.4 58.0,7.7"></polyline></svg><b>52.2%</b><small>YES now</small></span>
+    <span class="pill escrow">settling</span></a><a class="crow" data-id="6" data-yes="93.2" data-q="#6 The vendor's audit found zero critical findings." href="#/c/orem/6">
+    <span class="id">#6</span>
+    <span><span class="t">The vendor's audit found zero critical findings.</span><span class="m" style="display:block">Filings &amp; audits</span><span class="m" style="display:block" id="clk-orem-6">the settle window has passed — anyone may settle it now</span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,3.3 30.0,3.0 58.0,2.8"></polyline></svg><b>93.2%</b><small>YES now</small></span>
+    <span class="pill open">answered</span></a><a class="crow" data-id="3" data-yes="52.2" data-q="#3 The bridge inspection rated the north span 'serviceable'." href="#/c/orem/3">
+    <span class="id">#3</span>
+    <span><span class="t">The bridge inspection rated the north span 'serviceable'.</span><span class="m" style="display:block">Infrastructure</span><span class="m" style="display:block" id="clk-orem-3">a sealed vote is deciding — no close height is published</span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,7.5 30.0,7.8 58.0,7.7"></polyline></svg><b>52.2%</b><small>YES now</small></span>
+    <span class="pill escrow">in dispute</span></a><a class="crow" data-id="2" data-yes="93.5" data-q="#2 SpaceX Starship Flight 12 reached orbital velocity." href="#/c/orem/2">
+    <span class="id">#2</span>
+    <span><span class="t">SpaceX Starship Flight 12 reached orbital velocity.</span><span class="m" style="display:block" id="clk-orem-2">settles undisputed at ≈block 4,809,000 — in about 12 hours unless disputed</span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,2.7 30.0,2.8 58.0,2.8"></polyline></svg><b>93.5%</b><small>YES now</small></span>
+    <span class="pill open">answered</span></a><a class="crow" data-id="1" data-yes="77.4" data-q="#1 The county certified 12,412 mail ballots on Nov 6, 2025." href="#/c/orem/1">
+    <span class="id">#1</span>
+    <span><span class="t">The county certified 12,412 mail ballots on Nov 6, 2025.</span><span class="m" style="display:block">Municipal record · Elections</span><span class="m" style="display:block" id="clk-orem-1"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,4.6 30.0,5.1 58.0,4.7"></polyline></svg><b>77.4%</b><small>YES now</small></span>
+    <span class="pill void">open</span></a></div><div class="actions" style="margin-top:10px"><span class="act"><button class="btn  inert" data-inert="1"><span class="g">↗</span> Open a claim</button></span></div></section><section data-qsec style="margin-top:22px"><div class="sec-h">Recently settled <span class="count">3</span></div><div class="docket" data-sortable data-sortkind="dk"><a class="crow" data-id="8" data-yes="57.1" data-q="#8 The archived forum post predates the patent filing." href="#/c/orem/8">
+    <span class="id">#8</span>
+    <span><span class="t">The archived forum post predates the patent filing.</span><span class="m" style="display:block">Filings &amp; audits</span><span class="m" style="display:block" id="clk-orem-8"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,6.8 30.0,7.2 58.0,7.1"></polyline></svg><b>57.1%</b><small>YES now</small></span>
+    <span class="pill void">never answered</span></a><a class="crow" data-id="5" data-yes="52" data-q="#5 The mayor privately opposed the rezoning before the vote." href="#/c/orem/5">
+    <span class="id">#5</span>
+    <span><span class="t">The mayor privately opposed the rezoning before the vote.</span><span class="m" style="display:block">Municipal record</span><span class="m" style="display:block" id="clk-orem-5"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,7.7 30.0,7.8 58.0,7.8"></polyline></svg><b>52.0%</b><small>YES now</small></span>
+    <span class="pill void">no decision</span></a><a class="crow" data-id="4" data-yes="90" data-q="#4 Q3 city revenue exceeded the June forecast." href="#/c/orem/4">
+    <span class="id">#4</span>
+    <span><span class="t">Q3 city revenue exceeded the June forecast.</span><span class="m" style="display:block">Municipal record</span><span class="m" style="display:block" id="clk-orem-4"></span></span>
+    <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,3.2 30.0,3.2 58.0,3.2"></polyline></svg><b>90.0%</b><small>YES now</small></span>
+    <span class="pill good">settled</span></a></div></section><section data-qfold style="margin-top:22px"><div class="sec-h">Needs review <span class="count">4 · the chain's own list</span></div>
+        <p class="small muted" style="margin:0 0 8px">answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
+        <div class="docket"><a class="crow argrow" href="#/c/orem/7">
+        <span class="id">#7</span>
+        <span><span class="t">The reservoir release logs match the stated schedule.</span><span class="m" style="display:block">settles at height 4,550,000</span></span>
+        <span class="pill escrow">settling</span></a><a class="crow argrow" href="#/c/orem/3">
+        <span class="id">#3</span>
+        <span><span class="t">The bridge inspection rated the north span 'serviceable'.</span><span class="m" style="display:block">settles at height 4,690,000</span></span>
+        <span class="pill escrow">in dispute</span></a><a class="crow argrow" href="#/c/orem/6">
+        <span class="id">#6</span>
+        <span><span class="t">The vendor's audit found zero critical findings.</span><span class="m" style="display:block">settles at height 4,798,000</span></span>
+        <span class="pill open">answered</span></a><a class="crow argrow" href="#/c/orem/2">
+        <span class="id">#2</span>
+        <span><span class="t">SpaceX Starship Flight 12 reached orbital velocity.</span><span class="m" style="display:block">settles at height 4,809,000</span></span>
+        <span class="pill open">answered</span></a></div>
+        </section><div id="qempty" class="empty qhide"><div class="g">◌</div><p>No loaded title matches.</p><p class="small muted">clear to browse, or go to a claim by id</p></div></div><aside><div class="panel"><h4>Join this court</h4>
+        <p class="small" style="margin:0 0 10px"><b>Buying OREM is permanent</b> — the GNOT is burned: spent, held by no one. There is no sell-back, now or ever.</p>
+        <div class="ticket buyrcpt">
+          <div class="line"><span class="l"><label for="buyamt">You send</label></span>
+            <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="100" autocomplete="off" aria-describedby="buynote"> GNOT
+              <small id="buyugnot">= 100,000,000 µGNOT</small></span></div>
+          <div id="buyrows" aria-live="polite"><div class="line"><span class="l">You receive</span><span class="r tnum">0.84 CC <small>843,942 units</small></span></div><div class="line"><span class="l">Average price you pay</span><span class="r tnum">118.4915 <small>µGNOT/unit</small></span></div><div class="line"><span class="l">Returned to you</span><span class="r tnum">27 <small>µGNOT, sent back in the same transaction</small></span></div><div class="line"><span class="l">Price after your buy</span><span class="r tnum">118 <small>µGNOT/unit · now 118</small></span></div><div class="line"><span class="l">Your voice share</span><span class="r tnum">&lt;0.1%</span></div></div>
+        </div>
+        <p id="buynote" class="small muted" style="margin:8px 0 0">Sample data — computed from the demo court, no chain involved.</p>
+        <label class="ack small"><input type="checkbox" id="buyack"> I understand OREM cannot be sold back to the court.</label>
+        <div class="actions" style="margin-top:10px" id="buyactions"><span class="act"><button class="btn primary inert" data-inert="1"><span class="g">↗</span> Buy 0.84 CC <small>GNOT in, one-way</small></button></span></div>
+        <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as money spent for a voice, not money moved.</p>
+       </div><div class="panel"><h4>Court record</h4>
+        <p class="small muted" style="margin:0 0 10px" id="cr-scope">of this court's 11 claims</p>
+        <div class="kv"><div class="k">settled undisputed</div><div class="v tnum"><span id="cr-undis">0</span></div></div>
+        <div class="kv"><div class="k">settled by vote</div><div class="v tnum"><span id="cr-vote">1</span> <small><span id="cr-ov">1 overturned the answer</span></small></div></div>
+        <div class="kv"><div class="k">closed without a decision</div><div class="v tnum"><span id="cr-nodec">1</span></div></div>
+        <div class="kv"><div class="k">expired unanswered</div><div class="v tnum"><span id="cr-unans">1</span></div></div>
+        <div class="kv"><div class="k">live now</div><div class="v tnum"><span id="cr-live">8</span></div></div>
+        <div class="kv"><div class="k">dispute rounds failed</div><div class="v tnum"><span id="cr-failed">6</span> <small><span id="cr-dec">· 1 ended in a verdict</span></small></div></div>
+        <div class="kv"><div class="k">GNOT burned here</div><div class="v tnum"><span id="cr-burn">7,020,070 GNOT</span> <small>destroyed at a keyless address, not held; nothing redeems it</small></div></div>
+        <p class="small muted" style="margin:10px 0 0">Published because they are the only reason to trust a verdict: a court that hides its record has nothing behind its decisions.</p>
+       </div><div class="panel"><h4>Senior queue</h4>
+        <p class="small" style="margin:0 0 10px">Earned payouts (comps, bounties, voter rewards) are pulled, not pushed — bring your queue ticket.</p>
+        <div class="actions"><span class="act"><button class="btn  inert" data-inert="1"><span class="g">↗</span> Pull senior payout <small>seq = your queue ticket</small></button></span></div>
+       </div><section><div class="primer"><h3>Four things, before any button</h3><ol>
+    <li>Buying the coin is <b>permanent</b> — GNOT flows one way and is burned; there is no sell-back.</li>
+    <li>Staked coin comes back <b>1×, win or lose</b>; only the <b>reward</b> rides on the verdict. (The GNOT that minted the coin was already burned — that part was spent, not staked.)</li>
+    <li>The reward is <b>conviction</b> — stake × time on the winning side — drawn from newly-minted coin, capped so it can never be farmed.</li>
+    <li>Anyone may <b>answer</b> (with a bond; seasoned courts reserve the first day for qualified answerers), anyone but the answerer may <b>dispute</b>, and anyone may <b>flag</b>; bonds spend real money with no undo — staking is the one act you can unwind, until an answer posts.</li>
+  </ol></div></section></aside></div>
+  </div></div>
+  <div class="anno">A claim is one fixed sentence — the realm stores no body text, so the docket row IS the claim.
+  Folders are overlay-level organisation: clickable rows (blueish wash + folder icon) opening a folder page (#/c/orem/f/0) that lists subfolders and member claims; a claim with no folder simply carries no folder meta (#2). Courts carry the court icon in a different ink. Folders ARE on-chain (folders.gno) and live courts now READ them: chainFolders() fetches the flat chain shape (FolderCount + name/items per folder, purge tombstones escaped verbatim), and every folder surface composes ONE labeled source — local curation ?? chain ?? demo sample ?? none, never merged (local enforces nesting and one-folder-per-claim; the chain is flat and allows multi-membership, so a merged tree would have no honest caption). Chain folder pages live at #/c/:slug/f/<fid> (the folder's own stable id); members beyond the parsed docket window resolve by real per-id reads, fail closed, with omitted rows counted. Each claim row carries the selling point: a sparkline of the three ratio series the realm actually keeps (lifetime conviction → trailing week → instantaneous YES%) — no invented history. Pills classify the realm’s own status strings most-specific-first (“settles undisputed” never false-matches
+  <em>settled</em>; “never answered” never badges as <em>answered</em>). The court name comes from the Render heading,
+  which tombstones purged courts. The join panel is a receipt printed before purchase — type a GNOT amount and the page runs the realm’s own integer curve math (BigInt: floor-price, ceil-cost, largest Δ that fits, remainder refunded in the same transaction), so You receive / average price / price after / voice share are exact, the acknowledgement gates the one-click paths, and a live node is quoted from its CurvePosition read — never derived from supply−emitted, which burns would skew. Demo quotes are labeled sample and computed offline. The scope line is overlay copy (labeled — the chain stores only a name; live hides it), and the Court record panel is adverse disclosure: outcome census, dispute rounds failed, overturns, and the GNOT burned into this court’s curve — demo counts its own dataset by the same rules the live fill reads over the last 20 claims (bounded and labeled), and a row hides rather than guesses when its read fails.</div>
+</figure>
+
+
+<!-- ====================================================== SCREEN 3b -->
+<figure class="screen">
+  <figcaption><b>Screen 3b</b> <span>The map (#/c/orem/map) — the court's structure as a picture: folder boxes take position, part-of arrows carry the argument, and nothing overlaps by construction.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/map · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Map</div>
+    <h2 class="page-h">Orem Truth Court — map <span class="seal">orem</span></h2>
+    <p class="small mono" style="margin:10px 0 2px">11 claims, 11 shown</p>
+    <p class="small muted" style="margin:0 0 8px">sample curation — the chain stores folders; relations are overlay curation, recorded nowhere</p>
+    <svg style="width:100%;height:auto;background:var(--card-sunk,#f2f2f2)" xmlns="http://www.w3.org/2000/svg" class="mapsvg" viewBox="0 0 1376 524" tabindex="0" role="img" aria-label="Map of orem — folders and claims; every node is a link.">
+<rect class="mfold" x="24" y="24" width="320" height="432" data-fid="0"/>
+<a href="#/c/orem/f/0"><rect class="mhdr" x="24" y="24" width="320" height="28" data-fid="0"/><text class="mtext mhdr-t" x="32" y="43" font-size="13" textLength="161.2" lengthAdjust="spacingAndGlyphs" data-owner="h0">Municipal record · 4</text></a>
+<rect class="mfold" x="44" y="304" width="280" height="132" data-fid="1"/>
+<a href="#/c/orem/f/0.0"><rect class="mhdr" x="44" y="304" width="280" height="28" data-fid="1"/><text class="mtext mhdr-t" x="52" y="323" font-size="13" textLength="104.8" lengthAdjust="spacingAndGlyphs" data-owner="h1">Elections · 1</text></a>
+<rect class="mfold" x="400" y="24" width="280" height="284" data-fid="2"/>
+<a href="#/c/orem/f/1"><rect class="mhdr" x="400" y="24" width="280" height="28" data-fid="2"/><text class="mtext mhdr-t" x="408" y="43" font-size="13" textLength="145.1" lengthAdjust="spacingAndGlyphs" data-owner="h2">Infrastructure · 3</text></a>
+<rect class="mfold" x="736" y="24" width="280" height="284" data-fid="3"/>
+<a href="#/c/orem/f/2"><rect class="mhdr" x="736" y="24" width="280" height="28" data-fid="3"/><text class="mtext mhdr-t" x="744" y="43" font-size="13" textLength="161.2" lengthAdjust="spacingAndGlyphs" data-owner="h3">Filings &amp; audits · 3</text></a>
+<rect class="mfold pseudo" x="1072" y="24" width="280" height="132" data-fid="4"/>
+<rect class="mhdr" x="1072" y="24" width="280" height="28" data-fid="4"/><text class="mtext mhdr-t" x="1080" y="43" font-size="13" textLength="120.9" lengthAdjust="spacingAndGlyphs" data-owner="h4">(no folder) · 1</text>
+<polyline class="medge part" points="660,104 664,104 664,480 752,480 752,256 756,256" data-e="0" data-from="3" data-to="9"/>
+<polygon class="marrow" points="756,256 750,252.5 750,259.5" data-e="0"/>
+<polyline class="medge part" points="284,104 328,104 328,490 747,490 747,256 756,256" data-e="1" data-from="4" data-to="9"/>
+<polygon class="marrow" points="756,256 750,252.5 750,259.5" data-e="1"/>
+<polyline class="medge part" points="660,180 669,180 669,500 742,500 742,256 756,256" data-e="2" data-from="7" data-to="9"/>
+<polygon class="marrow" points="756,256 750,252.5 750,259.5" data-e="2"/>
+<polyline class="medge bears yes" points="996,104 1000,104 1000,256 996,256" data-e="3" data-from="6" data-to="9"/>
+<polyline class="medge bears no" points="660,256 674,256 674,104 660,104" data-e="4" data-from="11" data-to="3"/>
+<polyline class="medge sup" points="284,256 333,256 333,180 284,180" data-e="5" data-from="10" data-to="5"/>
+<a href="#/c/orem/4" class="mnode-a" data-id="4">
+<rect class="mnode" x="44" y="72" width="240" height="64" data-id="4" rx="3"/>
+<circle class="mdot g" cx="272" cy="86" r="4" data-owner="c4"/>
+<text class="mtext" x="52" y="88" font-size="12" textLength="89.3" lengthAdjust="spacingAndGlyphs" data-owner="c4">#4 · settled</text>
+<text class="mtext mtitle" x="52" y="106" font-size="11" textLength="191" lengthAdjust="spacingAndGlyphs" data-owner="c4">Q3 city revenue exceeded the</text>
+<text class="mtext mtitle" x="52" y="120" font-size="11" textLength="34.1" lengthAdjust="spacingAndGlyphs" data-owner="c4">June…</text>
+<title>#4 · settled — Q3 city revenue exceeded the June forecast.</title></a>
+<a href="#/c/orem/5" class="mnode-a" data-id="5">
+<rect class="mnode" x="44" y="148" width="240" height="64" data-id="5" rx="3"/>
+<circle class="mdot vd" cx="272" cy="162" r="4" data-owner="c5"/>
+<text class="mtext" x="52" y="164" font-size="12" textLength="119" lengthAdjust="spacingAndGlyphs" data-owner="c5">#5 · no decision</text>
+<text class="mtext mtitle" x="52" y="182" font-size="11" textLength="211.4" lengthAdjust="spacingAndGlyphs" data-owner="c5">The mayor privately opposed the</text>
+<text class="mtext mtitle" x="52" y="196" font-size="11" textLength="61.4" lengthAdjust="spacingAndGlyphs" data-owner="c5">rezoning…</text>
+<title>#5 · no decision — The mayor privately opposed the rezoning before the vote.</title></a>
+<a href="#/c/orem/10" class="mnode-a" data-id="10">
+<rect class="mnode" x="44" y="224" width="240" height="64" data-id="10" rx="3"/>
+<circle class="mdot v" cx="272" cy="238" r="4" data-owner="c10"/>
+<text class="mtext" x="52" y="240" font-size="12" textLength="74.4" lengthAdjust="spacingAndGlyphs" data-owner="c10">#10 · open</text>
+<text class="mtext mtitle" x="52" y="258" font-size="11" textLength="211.4" lengthAdjust="spacingAndGlyphs" data-owner="c10">The mayor's Oct 12 email to the</text>
+<text class="mtext mtitle" x="52" y="272" font-size="11" textLength="61.4" lengthAdjust="spacingAndGlyphs" data-owner="c10">planning…</text>
+<title>#10 · open — The mayor's Oct 12 email to the planning director opposed the rezoning.</title></a>
+<a href="#/c/orem/1" class="mnode-a" data-id="1">
+<rect class="mnode" x="64" y="352" width="240" height="64" data-id="1" rx="3"/>
+<circle class="mdot v" cx="292" cy="366" r="4" data-owner="c1"/>
+<text class="mtext" x="72" y="368" font-size="12" textLength="67" lengthAdjust="spacingAndGlyphs" data-owner="c1">#1 · open</text>
+<text class="mtext mtitle" x="72" y="386" font-size="11" textLength="218.2" lengthAdjust="spacingAndGlyphs" data-owner="c1">The county certified 12,412 mail</text>
+<text class="mtext mtitle" x="72" y="400" font-size="11" textLength="54.6" lengthAdjust="spacingAndGlyphs" data-owner="c1">ballots…</text>
+<title>#1 · open — The county certified 12,412 mail ballots on Nov 6, 2025.</title></a>
+<a href="#/c/orem/3" class="mnode-a" data-id="3">
+<rect class="mnode" x="420" y="72" width="240" height="64" data-id="3" rx="3"/>
+<circle class="mdot e" cx="648" cy="86" r="4" data-owner="c3"/>
+<text class="mtext" x="428" y="88" font-size="12" textLength="111.6" lengthAdjust="spacingAndGlyphs" data-owner="c3">#3 · in dispute</text>
+<text class="mtext mtitle" x="428" y="106" font-size="11" textLength="211.4" lengthAdjust="spacingAndGlyphs" data-owner="c3">The bridge inspection rated the</text>
+<text class="mtext mtitle" x="428" y="120" font-size="11" textLength="40.9" lengthAdjust="spacingAndGlyphs" data-owner="c3">north…</text>
+<title>#3 · in dispute — The bridge inspection rated the north span 'serviceable'.</title></a>
+<a href="#/c/orem/7" class="mnode-a" data-id="7">
+<rect class="mnode" x="420" y="148" width="240" height="64" data-id="7" rx="3"/>
+<circle class="mdot ed" cx="648" cy="162" r="4" data-owner="c7"/>
+<text class="mtext" x="428" y="164" font-size="12" textLength="96.7" lengthAdjust="spacingAndGlyphs" data-owner="c7">#7 · settling</text>
+<text class="mtext mtitle" x="428" y="182" font-size="11" textLength="218.2" lengthAdjust="spacingAndGlyphs" data-owner="c7">The reservoir release logs match</text>
+<text class="mtext mtitle" x="428" y="196" font-size="11" textLength="27.3" lengthAdjust="spacingAndGlyphs" data-owner="c7">the…</text>
+<title>#7 · settling — The reservoir release logs match the stated schedule.</title></a>
+<a href="#/c/orem/11" class="mnode-a" data-id="11">
+<rect class="mnode" x="420" y="224" width="240" height="64" data-id="11" rx="3"/>
+<circle class="mdot v" cx="648" cy="238" r="4" data-owner="c11"/>
+<text class="mtext" x="428" y="240" font-size="12" textLength="74.4" lengthAdjust="spacingAndGlyphs" data-owner="c11">#11 · open</text>
+<text class="mtext mtitle" x="428" y="258" font-size="11" textLength="204.6" lengthAdjust="spacingAndGlyphs" data-owner="c11">The county's posted inspection</text>
+<text class="mtext mtitle" x="428" y="272" font-size="11" textLength="27.3" lengthAdjust="spacingAndGlyphs" data-owner="c11">log…</text>
+<title>#11 · open — The county's posted inspection log lists the north span as 'load-restricted' for the same period.</title></a>
+<a href="#/c/orem/6" class="mnode-a" data-id="6">
+<rect class="mnode" x="756" y="72" width="240" height="64" data-id="6" rx="3"/>
+<circle class="mdot o" cx="984" cy="86" r="4" data-owner="c6"/>
+<text class="mtext" x="764" y="88" font-size="12" textLength="96.7" lengthAdjust="spacingAndGlyphs" data-owner="c6">#6 · answered</text>
+<text class="mtext mtitle" x="764" y="106" font-size="11" textLength="197.8" lengthAdjust="spacingAndGlyphs" data-owner="c6">The vendor's audit found zero</text>
+<text class="mtext mtitle" x="764" y="120" font-size="11" textLength="61.4" lengthAdjust="spacingAndGlyphs" data-owner="c6">critical…</text>
+<title>#6 · answered — The vendor's audit found zero critical findings.</title></a>
+<a href="#/c/orem/8" class="mnode-a" data-id="8">
+<rect class="mnode" x="756" y="148" width="240" height="64" data-id="8" rx="3"/>
+<circle class="mdot vf" cx="984" cy="162" r="4" data-owner="c8"/>
+<text class="mtext" x="764" y="164" font-size="12" textLength="141.4" lengthAdjust="spacingAndGlyphs" data-owner="c8">#8 · never answered</text>
+<text class="mtext mtitle" x="764" y="182" font-size="11" textLength="218.2" lengthAdjust="spacingAndGlyphs" data-owner="c8">The archived forum post predates</text>
+<text class="mtext mtitle" x="764" y="196" font-size="11" textLength="27.3" lengthAdjust="spacingAndGlyphs" data-owner="c8">the…</text>
+<title>#8 · never answered — The archived forum post predates the patent filing.</title></a>
+<a href="#/c/orem/9" class="mnode-a" data-id="9">
+<rect class="mnode" x="756" y="224" width="240" height="64" data-id="9" rx="3"/>
+<circle class="mdot v" cx="984" cy="238" r="4" data-owner="c9"/>
+<text class="mtext" x="764" y="240" font-size="12" textLength="67" lengthAdjust="spacingAndGlyphs" data-owner="c9">#9 · open</text>
+<text class="mtext mtitle" x="764" y="258" font-size="11" textLength="218.2" lengthAdjust="spacingAndGlyphs" data-owner="c9">The city's 2025 annual report is</text>
+<text class="mtext mtitle" x="764" y="272" font-size="11" textLength="61.4" lengthAdjust="spacingAndGlyphs" data-owner="c9">accurate…</text>
+<title>#9 · open — The city's 2025 annual report is accurate on its headline claims.</title></a>
+<a href="#/c/orem/2" class="mnode-a" data-id="2">
+<rect class="mnode" x="1092" y="72" width="240" height="64" data-id="2" rx="3"/>
+<circle class="mdot o" cx="1320" cy="86" r="4" data-owner="c2"/>
+<text class="mtext" x="1100" y="88" font-size="12" textLength="96.7" lengthAdjust="spacingAndGlyphs" data-owner="c2">#2 · answered</text>
+<text class="mtext mtitle" x="1100" y="106" font-size="11" textLength="170.5" lengthAdjust="spacingAndGlyphs" data-owner="c2">SpaceX Starship Flight 12</text>
+<text class="mtext mtitle" x="1100" y="120" font-size="11" textLength="54.6" lengthAdjust="spacingAndGlyphs" data-owner="c2">reached…</text>
+<title>#2 · answered — SpaceX Starship Flight 12 reached orbital velocity.</title></a>
+</svg>
+    <p class="small muted" style="margin:8px 0 0">scroll to zoom, drag to pan, click a claim to open it · full titles appear as you zoom in</p>
+  </div></div>
+  <div class="anno">This SVG is generated by the live mapLayout/mapSvg functions and geometrically VERIFIED by map_test.js
+  (a claim page's "on the map →" arrives as ?focus=id: the node wears a ring, the camera lands centered on it at
+  title-legible zoom, and an id outside the drawn window gets an honest miss line naming the window size instead):
+  node pairs disjoint (≥4 units), every label inside its box (textLength-capped), labels pairwise disjoint, folders
+  nested-or-disjoint, edges crossing zero non-endpoint nodes and zero headers, distinct routing lanes, everything in the
+  viewBox — in both text modes, on the demo court and a 50-claim synthetic, with a negative control proving the harness
+  detects corruption. Folder containment takes position (a partition drawn as disjoint boxes); part-of keeps primacy as
+  the heaviest edge (solid arrow, child→parent) and orders claims within folders; supports/contradicts dash by stance,
+  supersedes dots. Nodes carry id + phase word + the verbatim sentence — no stake sizing, no amounts (§7.4). The page adds
+  wheel/slider/± zoom, drag pan, a titles/ids toggle (relayout, center preserved), CSS-only label LOD, hover highlighting
+  (dim .35), and every node is a real link. Live mode ships as one dashed "docket — newest 50" box with real statuses at
+  zero extra reads, captioned that the overlay reads no live folders yet and no relations are recorded on chain — unless local curation is present, in which case the map shows yours, labeled.</div>
+</figure>
+
+
+<!-- ====================================================== SCREEN 8b -->
+<figure class="screen">
+  <figcaption><b>Screen 8b</b> <span>Curate (#/c/orem/curate) — the honest split: real bond-free moderator calls above, the browser-local curation file below, shown here mid-import with the diff preview.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/curate · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Curate</div>
+    <h2 class="page-h">Curate — Orem Truth Court <span class="seal">orem</span></h2>
+    <p style="margin:8px 0 0"><span class="pill void">local tool — writes nothing to any chain</span></p>
+    <p class="small mono" style="margin:10px 0 14px">source: sample (demo) · 3 folders · 6 relations</p>
+    <div class="sec-h">On-chain curation <span class="count">moderators — no bonds, gas only</span></div>
+    <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders are flat, append-order lists; nesting, ordering, descriptions, and relations exist only in the local layer below.</p>
+    <div class="panel"><h4>Folders</h4><div class="actions"><span class="btn">↗ Create folder</span><span class="btn">↗ Rename folder</span><span class="btn">↗ Add claim to folder</span><span class="btn">↗ Remove claim from folder</span></div></div>
+    <div class="panel" style="margin-top:14px"><h4>Docket</h4><div class="actions"><span class="btn">↗ Open a seeded claim <small>deposit and fee waived</small></span><span class="btn">↗ Hide from listing <small>m of n moderators</small></span></div></div>
+    <div class="sec-h" style="margin-top:22px">Local curation <span class="count">anyone — this browser only</span></div>
+    <p class="small" style="margin:0 0 10px">What the chain cannot hold yet — a court description, nested folders,
+   relations — lives in a JSON file the curator keeps: exported, edited,
+   imported, held in THIS BROWSER's storage and written to no chain. Every
+   surface that renders it says so. cleanCuration follows cleanCfg's
+   fail-hard philosophy: reject with precise errors, never partial-apply. */
+const CURATION_V = 1;
+function curKey(slug){ return "cc.cur."+(CFG.mode==="demo"?"demo":(CFG.chainid||"dev"))+"."+slug; }
+function cleanCuration(raw, slug, validIds){
+  const errs=[], warn=[], out={kourtCuration:CURATION_V, court:slug, chain:(CFG.mode==="demo"?"demo":(CFG.chainid||"dev")), note:"local curation — held in a browser, recorded on no chain", desc:"", folders:[], relations:[]};
+  if(typeof raw!=="object"||raw===null||Array.isArray(raw)){ return {errs:["not a JSON object"], warn, cur:null}; }
+  if(raw.kourtCuration!==CURATION_V) errs.push("kourtCuration must be "+CURATION_V);
+  if(raw.court!==slug) errs.push(`court must be "${slug}" (got ${JSON.stringify(raw.court)})`);
+  if(raw.chain!=null && raw.chain!==out.chain) warn.push(`chain "${raw.chain}" ≠ current "${out.chain}" — claim ids are chain-relative`);
+  if(raw.desc!=null){
+    if(typeof raw.desc!=="string") errs.push("desc must be a string");
+    else if(raw.desc.length>240) errs.push("desc over 240 chars");
+    else if(/\n/.test(raw.desc)) errs.push("desc must be a single paragraph");
+    else out.desc=raw.desc;
+  }
+  const known=new Set(["kourtCuration","court","chain","note","desc","folders","relations"]);
+  const stripped=Object.keys(raw).filter(k=>!known.has(k));
+  if(stripped.length) warn.push("unknown keys stripped: "+stripped.join(", "));
+  const seenClaim=new Set(); let folderN=0;
+  function cleanFolder(f, depth, path){
+    if(depth>4){ errs.push(path+": folders nested deeper than 4"); return null; }
+    if(typeof f!=="object"||f===null){ errs.push(path+": folder must be an object"); return null; }
+    if(typeof f.name!=="string"||!f.name.trim()||f.name.length>60){ errs.push(path+": folder name must be 1–60 chars"); return null; }
+    if(++folderN>100){ errs.push("more than 100 folders"); return null; }
+    const cf={name:f.name.trim(), claims:[], folders:[]};
+    for(const id of (Array.isArray(f.claims)?f.claims:[])){
+      if(!Number.isInteger(id)||id<1){ errs.push(path+": claim id "+JSON.stringify(id)+" is not a positive integer"); continue; }
+      if(seenClaim.has(id)){ errs.push("claim #"+id+" is in more than one folder"); continue; }
+      seenClaim.add(id); cf.claims.push(id);
+    }
+    (Array.isArray(f.folders)?f.folders:[]).forEach((sub,i)=>{
+      const c=cleanFolder(sub, depth+1, path+"."+i); if(c) cf.folders.push(c);
+    });
+    return cf;
+  }
+  (Array.isArray(raw.folders)?raw.folders:[]).forEach((f,i)=>{
+    const c=cleanFolder(f,1,"folders["+i+"]"); if(c) out.folders.push(c);
+  });
+  const seenRel=new Set(); const parentOf={};
+  (Array.isArray(raw.relations)?raw.relations:[]).forEach((r,i)=>{
+    const pfx="relations["+i+"]";
+    if(typeof r!=="object"||r===null){ errs.push(pfx+": not an object"); return; }
+    if(!Number.isInteger(r.from)||!Number.isInteger(r.to)||r.from<1||r.to<1){ errs.push(pfx+": from/to must be positive integers"); return; }
+    if(r.from===r.to){ errs.push(pfx+": from equals to"); return; }
+    if(!["part","bears","supersedes"].includes(r.type)){ errs.push(pfx+": type must be part|bears|supersedes"); return; }
+    if(r.type==="bears" && !["supports","contradicts"].includes(r.stance)){ errs.push(pfx+": bears needs stance supports|contradicts"); return; }
+    if(r.type!=="bears" && r.stance!=null){ errs.push(pfx+": stance only belongs on bears"); return; }
+    const key=r.type+":"+r.from+":"+r.to+":"+(r.stance||"");
+    if(seenRel.has(key)){ errs.push(pfx+": duplicate relation"); return; }
+    seenRel.add(key);
+    if(r.type==="part"){
+      if(parentOf[r.from]!=null){ errs.push(pfx+": claim #"+r.from+" already has a part-parent"); return; }
+      parentOf[r.from]=r.to;
+    }
+    if(out.relations.length>=300){ errs.push("more than 300 relations"); return; }
+    out.relations.push(r.type==="bears"? {from:r.from,to:r.to,type:"bears",stance:r.stance} : {from:r.from,to:r.to,type:r.type});
+  });
+  // part cycles
+  for(const start of Object.keys(parentOf).map(Number)){
+    let cur=start; const seen=new Set();
+    while(parentOf[cur]!=null){ if(seen.has(cur)){ errs.push("part-of cycle through #"+cur); break; } seen.add(cur); cur=parentOf[cur]; }
+  }
+  if(validIds){
+    const bad=[];
+    out.folders.forEach(function chk(f){ f.claims=f.claims.filter(id=>{ const okId=validIds.has(id); if(!okId) bad.push(id); return true; }); (f.folders||[]).forEach(chk); });
+    out.relations.forEach(r=>{ if(!validIds.has(r.from)) bad.push(r.from); if(!validIds.has(r.to)) bad.push(r.to); });
+    const uniq=[...new Set(bad)];
+    if(uniq.length) warn.push(uniq.length+" claim id"+(uniq.length>1?"s are":" is")+" not on this chain — held, not rendered until the docket reaches them");
+  }
+  if(JSON.stringify(out).length>65536) errs.push("curation over 64KB");
+  return {errs, warn, cur: errs.length? null : out};
+}
+/* precedence: local (this browser) ?? demo sample ?? none */
+function curationFor(slug){
+  const rawS = store.get(curKey(slug));
+  if(rawS){
+    try{
+      const {cur} = cleanCuration(JSON.parse(rawS), slug, null);
+      if(cur) return {desc:cur.desc, folders:cur.folders, relations:cur.relations, source:"local"};
+    }catch(_){}
+  }
+  if(CFG.mode==="demo"){
+    const c=demoCourt(slug);
+    if(c) return {desc:c.desc||"", folders:c.folders||[], relations:(DEMO.relations&&DEMO.relations[slug])||[], source:"sample"};
+  }
+  return null;
+}
+const CUR_LABEL = "your local curation — held in this browser, not on any chain";
+
+/* ============================ the map ================================
+   A dedicated, interactive view of the court's structure. Folder containment
+   takes POSITION (disjoint boxes — a partition drawn as one); part-of keeps
+   PRIMACY as the heaviest edge and orders claims within a folder; bears/
+   supersedes are lighter cross-links. The layout is deterministic (pure
+   cumulative sums — same input, same bytes) and overlap-free BY CONSTRUCTION;
+   map_test.js re-verifies the generated SVG geometrically (nodes, labels,
+   edge crossings) on every change. No stake sizing, no amounts anywhere:
+   a node is an id, a phase, and the verbatim sentence (§7.4). */
+const MAPK = {
+  node: { titles:{w:240,h:64}, ids:{w:64,h:28} },
+  vgap:12, hgap:12, cgap:16, padMin:16, headerH:28, fgap:56,
+  busGap:24, track:10, laneP:5, margin:24, tpad:8,
+  fs:{header:13, id:12, title:11}, charW:0.62, maxTitleLines:2, colRows:8,
+};
+function mapWrapTitle(title, innerW){
+  const budget = Math.floor(innerW/(MAPK.fs.title*MAPK.charW));
+  const words = String(title).split(/\s+/); const lines=[]; let cur="";
+  for(const w of words){
+    const t = cur? cur+" "+w : w;
+    if(t.length<=budget) cur=t;
+    else { if(cur) lines.push(cur); cur=w.slice(0,budget); if(lines.length+1>=MAPK.maxTitleLines) break; }
+  }
+  if(cur && lines.length<MAPK.maxTitleLines) lines.push(cur);
+  if(lines.join(" ").length < String(title).length && lines.length)
+    lines[lines.length-1] = lines[lines.length-1].slice(0, Math.max(1,budget-1))+"…";
+  return lines;
+}
+function mapLayout(data, mode){
+  const N = MAPK.node[mode], K = MAPK;
+  const parentOf = {};
+  for(const r of (data.relations||[])) if(r.type==="part") parentOf[r.from]=r.to;
+  const inFolder = new Set();
+  (function walk(fs){ for(const f of fs||[]){ (f.claims||[]).forEach(c=>inFolder.add(c)); walk(f.folders); } })(data.folders);
+  const loose = data.all.filter(id=>!inFolder.has(id));
+  const tops = (data.folders||[]).concat(loose.length? [{name:data.looseName||"(no folder)", claims:loose, folders:[], pseudo:true}]:[]);
+  const orderClaims = cs => [...cs].sort((a,b)=>{
+    const ka = parentOf[a]!==undefined? [0,parentOf[a],a]:[1,0,a];
+    const kb = parentOf[b]!==undefined? [0,parentOf[b],b]:[1,0,b];
+    return ka[0]-kb[0]||ka[1]-kb[1]||ka[2]-kb[2];
+  });
+  // lane demand per (top column, side) → folder pad holds every channel lane
+  const topIdxOf = {};
+  tops.forEach((f,i)=>(function mark(g){ (g.claims||[]).forEach(c=>topIdxOf[c]=i); (g.folders||[]).forEach(mark); })(f));
+  const laneCount = {}; const laneKey=(col,side)=>col+":"+side;
+  for(const r of (data.relations||[])){
+    const a=topIdxOf[r.from], b=topIdxOf[r.to];
+    if(a===b) laneCount[laneKey(a,"right")]=(laneCount[laneKey(a,"right")]||0)+1;
+    else if(a<b){ laneCount[laneKey(a,"right")]=(laneCount[laneKey(a,"right")]||0)+1; laneCount[laneKey(b,"left")]=(laneCount[laneKey(b,"left")]||0)+1; }
+    else { laneCount[laneKey(a,"left")]=(laneCount[laneKey(a,"left")]||0)+1; laneCount[laneKey(b,"right")]=(laneCount[laneKey(b,"right")]||0)+1; }
+  }
+  const maxLanes = Math.max(1, ...Object.values(laneCount), 1);
+  const pad = Math.max(K.padMin, 6+(maxLanes-1)*K.laneP+4);
+  // measure + place: cumulative sums only. Wide folders wrap into columns of
+  // colRows; edges attach to a node's outer side, so multi-column folders are
+  // for the edge-free live box — the harness enforces this if data evolves.
+  const nodes=[], folders=[];
+  function measure(f){
+    const nc=(f.claims||[]).length;
+    const cols = Math.max(1, Math.ceil(nc/K.colRows));
+    const rows = nc? Math.min(nc, K.colRows) : 0;
+    const hClaims = rows? rows*N.h+(rows-1)*K.vgap : 0;
+    const wClaims = nc? cols*N.w+(cols-1)*K.hgap : 0;
+    const kids=(f.folders||[]).map(measure);
+    const wIn=Math.max(wClaims, N.w, ...kids.map(k=>k.w), 0);
+    const hKids=kids.reduce((sum,k)=>sum+k.h,0)+(kids.length? kids.length*K.cgap:0);
+    return {f, kids, cols, w:wIn+2*pad, h:K.headerH+pad+hClaims+hKids+pad, hClaims};
+  }
+  function place(m, x, y, top, path){
+    const fr={name:m.f.name, x, y, w:m.w, h:m.h, headerH:K.headerH, pseudo:!!m.f.pseudo, top, path,
+      count:(function cnt(g){ return (g.claims||[]).length+(g.folders||[]).reduce((a,q)=>a+cnt(q),0); })(m.f)};
+    folders.push(fr);
+    const ordered = orderClaims(m.f.claims||[]);
+    ordered.forEach((id,k)=>{
+      const col=Math.floor(k/K.colRows), row=k%K.colRows;
+      nodes.push({id, x:x+pad+col*(N.w+K.hgap), y:y+K.headerH+pad+row*(N.h+K.vgap), w:N.w, h:N.h, top});
+    });
+    let cy = y+K.headerH+pad+m.hClaims+(ordered.length? K.cgap:0);
+    m.kids.forEach((k,i)=>{ place(k, x+pad, cy, top, path==null? null : path+"."+i); cy+=k.h+K.cgap; });
+    return fr;
+  }
+  let x=K.margin; const topRects=[];
+  tops.forEach((f,i)=>{
+    const m=measure(f);
+    topRects.push(place(m, x, K.margin, i, f.pseudo? null : String(i)));
+    x+=m.w+K.fgap;
+  });
+  const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const maxBottom=topRects.length? Math.max(...topRects.map(f=>f.y+f.h)) : K.margin;
+  const busY0=maxBottom+K.busGap;
+  const laneUsed={}; const takeLane=k=>(laneUsed[k]=(laneUsed[k]??-1)+1);
+  const chX=(col,side,lane)=> side==="right"
+    ? topRects[col].x+topRects[col].w-pad+4+lane*K.laneP
+    : topRects[col].x+pad-4-lane*K.laneP;
+  let trackI=0;
+  const edges=(data.relations||[]).map(r=>{
+    const F=nodeById[r.from], T=nodeById[r.to];
+    if(!F||!T) return null;
+    const a=F.top, b=T.top, fcy=F.y+F.h/2, tcy=T.y+T.h/2;
+    let pts;
+    if(a===b){
+      const cx0=chX(a,"right",takeLane(laneKey(a,"right")));
+      pts=[[F.x+F.w,fcy],[cx0,fcy],[cx0,tcy],[T.x+T.w,tcy]];
+    }else{
+      const dir=a<b, sA=dir?"right":"left", sB=dir?"left":"right";
+      const cA=chX(a,sA,takeLane(laneKey(a,sA)));
+      const cB=chX(b,sB,takeLane(laneKey(b,sB)));
+      const busY=busY0+(trackI++)*K.track;
+      pts=[[dir?F.x+F.w:F.x,fcy],[cA,fcy],[cA,busY],[cB,busY],[cB,tcy],[dir?T.x:T.x+T.w,tcy]];
+    }
+    return {...r, pts};
+  }).filter(Boolean);
+  const totalW=topRects.length? x-K.fgap+K.margin : 2*K.margin+MAPK.node[mode].w;
+  const totalH=(trackI? busY0+(trackI-1)*K.track : maxBottom)+K.margin;
+  return {nodes, folders, edges, pad, viewBox:[0,0,totalW,totalH], mode};
+}
+function mapDotClass(short){
+  // seven phases, pill-family tokens; text is the primary signal, the dot a
+  // second non-hue channel (solid / washed / hollow / dashed)
+  if(short==="settled") return "g";
+  if(short==="in dispute") return "e";
+  if(short==="settling") return "ed";
+  if(short==="answered") return "o";
+  if(short==="no decision") return "vd";
+  if(short==="never answered") return "vf";
+  return "v"; // open
+}
+function mapSvg(L, data, slug){
+  const K=MAPK, [vx,vy,vw,vh]=L.viewBox, out=[];
+  const est=(t,fs)=>Math.round(t.length*fs*K.charW*10)/10;
+  out.push(`<svg xmlns="http://www.w3.org/2000/svg" class="mapsvg" viewBox="${vx} ${vy} ${vw} ${vh}" tabindex="0" role="img" aria-label="Map of ${esc(slug)} — folders and claims; every node is a link.">`);
+  L.folders.forEach((f,i)=>{
+    out.push(`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" data-fid="${i}"/>`);
+    const hdr=`<rect class="mhdr" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.headerH}" data-fid="${i}"/>`;
+    const budget=Math.floor((f.w-2*K.tpad)/(K.fs.header*K.charW));
+    const label=`${f.name} · ${f.count}`;
+    const nm=label.length>budget? label.slice(0,Math.max(1,budget-1))+"…" : label;
+    const txt=`<text class="mtext mhdr-t" x="${f.x+K.tpad}" y="${f.y+19}" font-size="${K.fs.header}" textLength="${Math.min(est(nm,K.fs.header), f.w-2*K.tpad)}" lengthAdjust="spacingAndGlyphs" data-owner="h${i}">${esc(nm)}</text>`;
+    if(!f.pseudo && f.path!=null && data.linkFolders) out.push(`<a href="#/c/${esc(slug)}/f/${f.path}">${hdr}${txt}</a>`);
+    else out.push(hdr+txt);
+  });
+  L.edges.forEach((e,i)=>{
+    const cls = e.type==="part"? "part" : e.type==="supersedes"? "sup" : "bears "+(e.stance==="supports"?"yes":"no");
+    out.push(`<polyline class="medge ${cls}" points="${e.pts.map(q=>q.join(",")).join(" ")}" data-e="${i}" data-from="${e.from}" data-to="${e.to}"/>`);
+    if(e.type==="part"){
+      const n=e.pts.length, [ex,ey]=e.pts[n-1], [px,py]=e.pts[n-2];
+      const dx=Math.sign(ex-px), dy=Math.sign(ey-py);
+      const a = dx!==0
+        ? `${ex},${ey} ${ex-6*dx},${ey-3.5} ${ex-6*dx},${ey+3.5}`
+        : `${ex},${ey} ${ex-3.5},${ey-6*dy} ${ex+3.5},${ey-6*dy}`;
+      out.push(`<polygon class="marrow" points="${a}" data-e="${i}"/>`);
+    }
+  });
+  for(const n of L.nodes){
+    const c=data.claims[n.id]; if(!c) continue;
+    const pc=phaseClass(c.statusText);
+    out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
+    out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
+    out.push(`<circle class="mdot ${mapDotClass(pc.short)}" cx="${n.x+n.w-12}" cy="${n.y+14}" r="4" data-owner="c${n.id}"/>`);
+    const l1=`#${n.id} · ${pc.short}`;
+    const innerW=n.w-2*K.tpad-14;
+    out.push(`<text class="mtext" x="${n.x+K.tpad}" y="${n.y+16}" font-size="${K.fs.id}" textLength="${Math.min(est(l1,K.fs.id), innerW)}" lengthAdjust="spacingAndGlyphs" data-owner="c${n.id}">${esc(l1)}</text>`);
+    if(L.mode==="titles"){
+      mapWrapTitle(c.title, n.w-2*K.tpad).forEach((ln,i)=>
+        out.push(`<text class="mtext mtitle" x="${n.x+K.tpad}" y="${n.y+34+i*14}" font-size="${K.fs.title}" textLength="${Math.min(est(ln,K.fs.title), n.w-2*K.tpad)}" lengthAdjust="spacingAndGlyphs" data-owner="c${n.id}">${esc(ln)}</text>`));
+    }
+    out.push(`<title>#${n.id} · ${esc(pc.short)} — ${esc(c.title)}</title></a>`);
+  }
+  out.push(`</svg>`);
+  return out.join("\n");
+}
+
+/* The join panel is a receipt printed before purchase: what you send, what the
+   curve gives back, and what that does to the price — the same integer math
+   the realm runs. */
+function joinPanel(slug, s){
+  const sym = esc(slug).toUpperCase();
+  const minted = s.minted!=null? s.minted : null;
+  BUYQ = null; BUYCTX = null;
+  let body;
+  if(minted==null){
+    BUYCTX = {slug, noquote:true};
+    body = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)} <small>µGNOT/unit</small></div></div>
+        <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply)}</div></div>
+        <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when you buy.</p>
+        <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
+        <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,null)}</div>`;
+  }else{
+    BUYCTX = {slug, minted, supply:s.supply, price:s.price};
+    const q = BUYQ = curveQuote(minted, s.supply, 100000000n);
+    body = `<div class="ticket buyrcpt">
+          <div class="line"><span class="l"><label for="buyamt">You send</label></span>
+            <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="100" autocomplete="off" aria-describedby="buynote"> GNOT
+              <small id="buyugnot">= ${fmtN(1e8)} µGNOT</small></span></div>
+          <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price)}</div>
+        </div>
+        <p id="buynote" class="small muted" style="margin:8px 0 0">${isLive()
+          ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
+          : "Sample data — computed from the demo court, no chain involved."}</p>
+        <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
+        <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>`;
+  }
+  return `<div class="panel"><h4>Join this court</h4>
+        <p class="small" style="margin:0 0 10px"><b>Buying ${sym} is permanent</b> — the GNOT is burned: spent, held by no one. There is no sell-back, now or ever.</p>
+        ${body}
+        <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as money spent for a voice, not money moved.</p>
+       </div>`;
+}
+function recomputeBuy(){
+  const inp=document.getElementById("buyamt"); if(!inp||!BUYCTX||BUYCTX.noquote) return;
+  const x=parseGnot(inp.value);
+  BUYQ = x==null? null : curveQuote(BUYCTX.minted, BUYCTX.supply, x);
+  const echo=document.getElementById("buyugnot");
+  if(echo) echo.textContent = x==null? "= not a GNOT amount" : "= "+x.toLocaleString("en-US")+" µGNOT";
+  const rows=document.getElementById("buyrows");
+  if(rows) rows.innerHTML = buyRowsHtml(BUYQ, BUYCTX.price);
+  refreshBuyActions();
+}
+function refreshBuyActions(){
+  const wrap=document.getElementById("buyactions"); if(!wrap||!BUYCTX) return;
+  const hadCli=!!wrap.querySelector(".cliblock");
+  wrap.innerHTML = buyActionsHtml(BUYCTX.slug, BUYQ);
+  // an open CLI block survives a retype: rebuild it from the fresh data-cli
+  if(hadCli){ const t=wrap.querySelector(".clitog"); if(t) t.click(); }
+}
+document.addEventListener("input", ev=>{ if(ev.target && ev.target.id==="buyamt") recomputeBuy(); });
+document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack") refreshBuyActions(); });
+function courtBody(slug, s, claims, pager){
+  const cur = curationFor(slug);
+  const fmeta = cur && cur.folders.length? folderMeta(cur.folders,"",{}) : {};
+  const open = claims.filter(cl=>!isDone(cl)), done = claims.filter(isDone);
+  // folders are court-level organisation — they head page 1 only
+  const foldersSec = (pageOf()===1 && cur && cur.folders.length)
+    ? `<section><div class="sec-h">Folders <span class="count">${cur.folders.length}${cur.source==="local"?` · ${CUR_LABEL}`:""}</span></div>
+       <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,String(i))).join("")}</div></section>` : "";
+  const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id])).join("");
+  return `<div class="cols"><div>`
+    + foldersSec
+    + (pager||"")
+    + `<section${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket <span class="count">${open.length}</span></div>`
+    + (open.length? `<div class="docket">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}</div>`
+        : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
+        : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}</p></div>`)
+    + `</section>`
+    + (done.length? `<section style="margin-top:22px"><div class="sec-h">Recently settled <span class="count">${done.length}</span></div><div class="docket">${rows(done)}</div></section>` : "")
+    + (pager? `<div style="margin-top:10px">${pager}</div>`:"")
+    + `</div><aside>`
+    + joinPanel(slug, s)
+    + courtRecordPanel(slug, s)
+    + `<div class="panel"><h4>Senior queue</h4>
+        <p class="small" style="margin:0 0 10px">Earned payouts (comps, bounties, voter rewards) are pulled, not pushed — bring your queue ticket.</p>
+        <div class="actions">${btn("Pull senior payout","PullSenior",{courtSlug:slug,seq:1},"","seq = your queue ticket")}</div>
+       </div>`
+    + fourThings()
+    + `</aside></div>`;
+}
+/* --- curate: bond-free on-chain calls + the local curation tool --- */
+on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
+  loading();
+  let cs=null; try{ cs=await courtStats(slug); }catch(_){}
+  if(!cs){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No such court on this node (or the node did not answer)."); return; }
+  const cur = curationFor(slug);
+  const srcLine = cur
+    ? (cur.source==="local"
+        ? `source: ${CUR_LABEL} · ${cur.folders.length} folder${cur.folders.length===1?"":"s"} · ${cur.relations.length} relation${cur.relations.length===1?"":"s"} · desc ${cur.desc? "set":"empty"}`
+        : `source: sample (demo) · ${cur.folders.length} folders · ${cur.relations.length} relations`)
+    : "source: none — export the empty skeleton to begin";
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs.name,href:"#/c/"+slug},{label:"Curate"}])
+    + `<h1 class="page-h">Curate — ${safeInline(cs.name)} <span class="seal">${esc(slug)}</span></h1>
+       <div class="tagrow"><span class="pill void">local tool — writes nothing to any chain</span>
+         <a class="small" href="#/c/${esc(slug)}" style="color:var(--accent-2)">docket →</a>
+         <a class="small" href="#/c/${esc(slug)}/map" style="color:var(--accent-2)">map →</a></div>
+       <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
+    + `<section><div class="sec-h">On-chain curation <span class="count">moderators — no bonds, gas only</span></div>
+       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders are flat, append-order lists; nesting, ordering, descriptions, and relations exist only in the local layer below.</p>
+       <div class="panel"><h4>Folders</h4><div class="actions">
+         ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
+         ${btn("Rename folder","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
+         ${btn("Add claim to folder","AddToFolder",{courtSlug:slug,folderID:1,claimID:1})}
+         ${btn("Remove claim from folder","RemoveFromFolder",{courtSlug:slug,folderID:1,claimID:1})}</div></div>
+       <div class="panel" style="margin-top:14px"><h4>Docket</h4><div class="actions">
+         ${btn("Open a seeded claim","OpenClaimSeeded",{courtSlug:slug,title:"Your claim of fact"},"","deposit and fee waived")}
+         ${btn("Hide from listing","HideItem",{courtSlug:slug,claimID:1,reason:"Why this is hidden"},"","m of n moderators")}
+         ${btn("Unhide","UnhideItem",{courtSlug:slug,claimID:1,reason:"Why this returns"},"","m of n moderators")}</div></div>
+       <div class="panel" style="margin-top:14px"><h4>Court</h4><div class="actions">
+         ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}</div></div>
+      </section>`
+    + `<section style="margin-top:22px"><div class="sec-h">Local curation <span class="count">anyone — this browser only</span></div>
+       <p class="small" style="margin:0 0 10px">What the chain cannot hold yet — description, nested folders, relations — lives in a file you keep. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>
+    <div class="ticket"><h3>What Apply would change</h3>
+      <div class="line"><span class="l">folders</span><span class="r">3 → 5</span></div>
+      <div class="line"><span class="l">relations</span><span class="r">6 → 8</span></div>
+      <div class="line"><span class="l">description</span><span class="r">changed</span></div>
+      <div class="line"><span class="l">note</span><span class="r">2 claim ids are not on this chain — held, not rendered until the docket reaches them</span></div>
+      <div class="actions" style="margin-top:10px"><span class="btn primary">✓ Apply to this browser</span></div></div>
+  </div></div>
+  <div class="anno">The section copy above is extracted verbatim from the live route. The split is the point: folders, seeded
+  claims (deposit and fee waived), hiding, and moderator appointment are ALREADY bond-free on chain — one active moderator
+  and gas — so those render as the site's ordinary three-path actions; what the chain cannot hold (description, nested
+  folders, relations) lives in an exported/imported JSON file held in this browser and labeled everywhere it shows. Import
+  validates hard (one folder per claim, one part-parent, no cycles, ids only — titles never travel) and previews the diff
+  before Apply; local curation then lights the docket folders, the map, and the argument section up even in live mode,
+  each surface saying "your local curation — held in this browser, not on any chain". The filter row searches only what the page loaded — live captions state "the N loaded of M"; the pager hides while a query is active and returns when the box clears; Enter jumps to a claim id ("7", "#7", "orem/7", case-blind). The box sits above the sections it filters and never collapses with them, so a zero-match query always leaves the box, its caption, and Escape reachable.
+  Cross-links (D3): a claim's tagrow names the folder that holds it ("filed under …", local or sample curation only — the overlay never sweeps chain folders for one chip, and a missing chip asserts nothing) and links "on the map →" with ?focus=id, gated to the map's drawn window on live. /needs rows and /me pull rows land on the claim's Resolution section via ?at=resolution (an allowlisted hash param — literal #anchors would break the router). The about page ends in "Specimen files — one claim in each state": seven real sample claims, one per lifecycle state, pills and titles read from the dataset at render so they cannot drift; in live mode the tour collapses to a switch-to-Demo line rather than pointing sample ids at a real chain. Every route but the directory and the about page carries a one-line first-visit exit in the crumbs ("first time here?…"), sharing the directory strip's single dismissal key.
+  Order and sorting (D4): every listing now states its order even when it fits one page ("all 11 claims · newest first", "all N claims · curated order") — the pager caption is the single order-statement, and sort chips live beside it. The docket offers newest / oldest / %YES now over the loaded window (keys stamped by the same reads that draw the sparklines; keyless rows sink; captions close "stakes, never ballots" — no sealed tally is ever read). The directory offers busiest on page 1 only, hiding the page pills while active because a busiest-ranked page 2 does not exist on the chain. ?sort rides the hash like ?p and ?q; folder pages, the specimen tour, and /needs never sort — their order is the record.
+  Disclosure and clocks (D5): the directory opens with office-door counts (courts listed / featured / claims filed on this page — never money summed across courts) and a hidden-courts line that COUNTS tier-0 courts without ever rendering a hidden slug ("N courts hidden by moderation — hidden from the listing, not from access"; zero reads as a certificate: "this register is complete"); the sample carries a hidden exemplar court (the Annex) so the ruling is demonstrable offline. Docket rows wear their operative clock — answered rows name the settle block, provisional rows the reopen block, and a disputed row always says "a sealed vote is deciding — no close height is published" in both modes because the realm publishes none; open and settled rows carry no clock. A short id-window discloses its own gap ("K claims de-listed by moderation in this window — their pages still answer by id"). Claim pages name their opener ("opened by g1…", one read); /me shows the realm's answer-record credential only when nonzero, because the read cannot distinguish never-answered from overturned.
+  Moderation provenance (D6-2): a claim page states its own listing state in the chain's words — "De-listed by moderation… reachable by direct link — you are on that link now; the lifecycle is unaffected", "Text withheld pending review" (the gated title renders verbatim, never re-styled), "Removed on legal grounds" — one administrative banner, precedence purged › redacted › hidden, each linking the moderation log; a seeded claim carries the realm's own tagrow line ("the author earns nothing from it"). Four boolean reads, claim route only; a failed read renders nothing. The hidden sample court holds one specimen of each state (annex 2/3/4), linked from the about tour; demo listings omit hidden claims exactly as the chain's render does. Live /me now reads the seeded bit before offering an author's draw the realm would refuse.
+  The chain's policing lists (D6-3): the court page restores the two render sections the overlay used to discard — "Needs review · the chain's own list" (answered and not yet settled, nearest deadline first; it IGNORES moderation, so a claim hidden from the docket still appears while it can still be flagged — the sample proves it with a hidden answered claim) and "Awaiting an answer" (seeded claims nobody answered, oldest first). Zero new reads: the rows are parsed from the same render markdown listClaims already downloads. Their order is the content — never sorted, folded during search, the overflow footer honestly named ("…and K more — the chain's page shows the nearest 50").
+  Open ballots (D6-4): /needs now aggregates the sealed votes running in courts whose coin the visitor holds — the one surface where they ARE "the rest of the court". One question per row (overturn the answer?), the sealed-means-un-summed line, the snapshot hedge ("buying now adds nothing"), and a split-out excluded list for claims they staked ("the rest of the court votes"); no tallies, no amounts, no reward line — a reward beside a live ballot would read as a vote-buying advertisement. Ballots come from the docket parse plus a strip-completion pass (hidden disputes stay discoverable); classification is phaseClass-only, never a bare /disput/ match ("answered" contains "undisputed").
+  The recorded signal (stake history): the realm now keeps each claim's two stake pools as checkpoint series — hourly points held for a week, daily points for the claim's life, change-only (a quiet epoch stores nothing), pruned by a bounded lazy trim — and serves them through one read, ClaimSeries(slug, id, grain) → "grain,width,now,more;epoch:yes:no,…". The chart draws that record as a step-after path (a value HOLDS until its next change — interpolation would invent motion), with a hairline seam at the −7d hourly boundary, a knee that gives the dense week 65% of the plot when the daily tail is long, a flat tail after the freeze, and a terminal riser only when the live pools moved inside the unsealed hour. Live deployments without the read fall back to the three-ratio display byte-identically; the demo carries sample series in the chain's exact grammar, so one parser serves both modes and the fallback's own note ("This shape is drawn here, not read from the chain — the chain keeps only those three numbers for this claim.") survives only on the series-less exemplars, where it is still true.
+  The moderation log (D6-1): every court and curate page opens a passage to the chain's own moderation-log render (#/raw/:slug/mod) — the moderator set, the m-of-n threshold, suspension state, in-flight proposals with their approval counts and 7-day expiry, and the acts log, served verbatim through the raw block; the sample mirrors the same shape offline. No bulk sync-to-chain exists —
+  that would forge a write path the realm lacks.</div>
+</figure>
+
+<!-- ============================================================ SCREEN 4 -->
+<figure class="screen">
+  <figcaption><b>Screen 4</b> <span>An open claim (#/c/orem/1) — the signal drawn big (the Polymarket treatment, honest: the same three series the docket sparkline plots), the stake ticket, and what has to happen before anything settles.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/1 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #1</div>
+    <h2 class="page-h">The county certified 12,412 mail ballots on Nov 6, 2025.</h2>
+    <p style="margin:8px 0 0"><span class="pill void">open · no answer yet</span> <a class="mono" style="font-size:12px">as the chain serves it →</a></p>
+    <div class="sec-h">The signal <span class="count">staking live</span></div>
+    <figure class="bigchart"><figcaption><span>YES-share of stakes — <b>the recorded path · lifetime · now</b></span><span>now 77.4% · week 74% · lifetime 78.3%</span></figcaption>
+<svg viewBox="0 0 640 150" role="img" aria-label="Sample data in the chain's real form — YES-share of stakes, recorded history: 14 change points since block 4,596,480; now 77.4% · week 74% · lifetime 78.3%; events at real block heights."><line class="grid" x1="8" y1="12" x2="606" y2="12"></line>
+<line class="mid" x1="8" y1="68" x2="606" y2="68"></line>
+<line class="axis" x1="8" y1="124" x2="606" y2="124"></line>
+<text class="tickL" x="610" y="15">100</text><text class="tickL" x="610" y="71">50</text><text class="tickL" x="610" y="127">0</text><rect class="washf" x="583.9" y="12" width="22.1" height="112"></rect><path class="ar" d="M 30.1 124 L 30.1 63 L 77.2 63 L 77.2 42.6 L 124.2 42.6 L 124.2 57.6 L 171.2 57.6 L 171.2 45.6 L 218.2 45.6 L 218.2 42.6 L 265.2 42.6 L 265.2 42.1 L 277 42.1 L 277 42 L 357.3 42 L 357.3 40.7 L 421.9 40.7 L 421.9 38.1 L 459.1 38.1 L 459.1 41.3 L 494.4 41.3 L 494.4 38.8 L 531.6 38.8 L 531.6 38.9 L 561 38.9 L 561 37.9 L 578.6 37.9 L 578.6 37.3 L 583.9 37.3 L 583.9 124 Z"></path><path class="ln" d="M 30.1 63 H 77.2 V 42.6 H 124.2 V 57.6 H 171.2 V 45.6 H 218.2 V 42.6 H 265.2 V 42.1 H 277 V 42 H 357.3 V 40.7 H 421.9 V 38.1 H 459.1 V 41.3 H 494.4 V 38.8 H 531.6 V 38.9 H 561 V 37.9 H 578.6 V 37.3 H 583.9" fill="none"></path><line class="ref" x1="8" y1="36.3" x2="606" y2="36.3"><title>Lifetime conviction ratio 78.3% YES.</title></line><line class="seam" x1="254.8" y1="12" x2="254.8" y2="124"></line><text class="zone" x="258.8" y="140">−7d · hourly</text><circle class="end" cx="583.9" cy="37.3" r="4"></circle>
+<text class="endL" x="612" y="41.3">77.4%</text><text class="endS" x="612" y="53.3">YES now</text><g><line class="evt" x1="30.1" y1="25" x2="30.1" y2="124"></line><circle class="hit" cx="30.1" cy="124" r="10"><title>The chain's stake record for this claim begins at ≈block 4,596,480 (≈11.8d ago).</title></circle><circle class="evtDot" cx="30.1" cy="124" r="3"></circle><text class="evtL" x="34.1" y="22">records begin</text></g><g><line class="evt" x1="583.9" y1="12" x2="583.9" y2="103"></line><circle class="hit" cx="583.9" cy="124" r="10"><title>Chain height ≈4,800,000.</title></circle><circle class="evtDot" cx="583.9" cy="124" r="3"></circle><text class="evtL" x="560" y="112">now</text></g><text class="zone" x="8" y="140">block 4,596,480 · ≈11.8d ago · sample</text><text class="zone" x="606" y="140" text-anchor="end">block 4,800,000 · now</text></svg>
+<div class="srcnote">sample data — a sample series in the chain's real form (hourly for a week, daily beyond; a flat run means the pools did not change). YES-share of stakes, not a price.</div></figure>
+    <div class="chartchips"><span>staked YES 41.0 CC</span><span>NO 12.0 CC</span><span>conviction 9.40 / 2.60 CC</span></div>
+    <div class="ticket"><h3>Stake the claim</h3>
+      <div class="hint">Take the side you believe. Free to unstake until an answer posts — then it locks and your <b>conviction</b> (stake × time held) becomes your reward weight.</div>
+      <div class="line"><span>Your principal</span><span class="r">returns 1×, either way</span></div>
+      <div class="line"><span>If your side wins</span><span class="r">1× + accuracy reward</span></div>
+      <div class="line"><span>If your side loses</span><span class="r">1×, nothing lost</span></div>
+      <div class="never"><b>Reward = conviction, not stake.</b> Staking early and holding earns more than a last-second flood; the number that pays is stake × time, and it survives an honest unstake. Principal is not a wager — it always comes home.</div>
+      <div class="actions"><span class="btn yes">Stake YES <small>1 CC</small></span><span class="btn no">Stake NO <small>1 CC</small></span><span class="btn">Unstake YES</span><span class="btn">Unstake NO</span></div>
+    </div>
+    <div class="ticket" style="margin-bottom:12px"><h3>Resolution so far</h3><div class="line"><span class="l tnum">≈block 4,800,000 <small>about 1 min</small></span><span class="r">now <small>chain height</small></span></div>
+      <div class="line"><span class="l tnum">—</span><span class="r">awaiting an answer — anyone may post one with a bond</span></div></div>
+    <div class="noticebox warn"><span class="g">◔</span><div><b>No answer yet.</b> Once the trailing total stake clears the answerability floor, an answer may be posted with a bond sized so lying does not pay. Once a court has seasoned answerers, they hold the first day; a young court opens to anyone at once. A claim nobody ever answers dies at its timeout — anyone may close it then. Posting freezes staking; an undisputed answer settles 72 hours later.
+      <div class="actions"><span class="btn yes">Answer YES</span><span class="btn no">Answer NO</span><span class="btn">Close dead claim <small>if its timeout passed</small></span></div></div></div>
+  </div></div>
+</figure>
+
+
+<!-- ====================================================== SCREEN 4b -->
+<figure class="screen">
+  <figcaption><b>Screen 4b</b> <span>The argument (#/c/orem/9) — a composite claim resting on three checkable parts, with outside evidence and a counter-document; relations are labeled sample curation and move nothing mechanical.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/9 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #9</div>
+    <h2 class="page-h">The city's 2025 annual report is accurate on its headline claims.</h2>
+    <section style="margin-top:22px"><div class="sec-h">The argument <span class="count">sample curation — the chain stores no relations</span></div><div class="sec-h" style="margin-top:6px">Rests on <span class="count">1 of 3 parts settled</span></div><p class="small muted" style="margin:0 0 8px">2 of 3 parts are still undecided — any verdict here is reached without them.</p><div class="docket"><a class="crow argrow" href="#/c/orem/3">
+    <span class="id">#3</span>
+    <span><span class="t">The bridge inspection rated the north span 'serviceable'.</span></span>
+    <span class="pill void">one part</span>
+    <span class="pill escrow">in dispute</span></a><a class="crow argrow" href="#/c/orem/4">
+    <span class="id">#4</span>
+    <span><span class="t">Q3 city revenue exceeded the June forecast.</span></span>
+    <span class="pill void">one part</span>
+    <span class="pill good">settled</span></a><a class="crow argrow" href="#/c/orem/7">
+    <span class="id">#7</span>
+    <span><span class="t">The reservoir release logs match the stated schedule.</span></span>
+    <span class="pill void">one part</span>
+    <span class="pill escrow">settling</span></a></div><div class="sec-h" style="margin-top:14px">Related</div><div class="docket"><a class="crow argrow" href="#/c/orem/6">
+    <span class="id">#6</span>
+    <span><span class="t">The vendor's audit found zero critical findings.</span></span>
+    <span class="pill void">supports</span>
+    <span class="pill open">answered</span></a></div><p class="small muted" style="margin:10px 0 0">Curation, not mechanics: relations move no stake, no bond, no bar, no verdict — each claim is decided alone. They are here so you need not leave the page you vote on to find the argument.</p></section>
+  </div></div>
+  <div class="anno">Three relation types, matching the repo's own future design (COURTS_STRUCTURE.md §5): <em>part of</em> (one
+  parent — the children are what the case rests on), <em>bears on</em> (supports / contradicts — outside evidence), and
+  <em>supersedes</em> (a sharper re-filing after a no-decision, which this court mechanically produces). Rows carry title +
+  relation chip + status pill only — no YES%, because a stance chip next to a number reads as a trading hint. The section is
+  generated from the live argumentSection function; live mode renders nothing (the chain stores no relations) unless local curation supplies relations — then the section shows yours, labeled — and a relationless claim omits the section entirely.</div>
+</figure>
+
+<!-- ============================================================ SCREEN 5 -->
+<figure class="screen">
+  <figcaption><b>Screen 5</b> <span>An answered claim (#/c/orem/2) — the bond on the table, the 72-hour clock, and the price of disagreeing.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/2 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #2</div>
+    <h2 class="page-h">SpaceX Starship Flight 12 reached orbital velocity.</h2>
+    <p style="margin:8px 0 0"><span class="pill open">answered YES</span></p>
+    <div class="sec-h">The signal <span class="count">frozen at the answer</span></div>
+    <div class="meter"><div class="track"><div class="y" style="width:93.5%"></div></div>
+      <div class="legend"><span>frozen <b>93.5% YES</b></span><span>YES 130.00 CC · NO 9.00 CC · conviction 24.00 / 1.50 CC</span></div></div>
+    <div class="noticebox warn"><span class="g">◷</span><div><b>Answered YES</b> by g1answe…0000, backed by a bond of 70.00 CC that burns if the answer is overturned. It settles undisputed in about 12 hours if nobody disputes it. Disputing now costs 28.00 CC. The answerer's contested-and-upheld record here is 2.
+      <div class="actions"><span class="btn no">Dispute this answer</span></div></div></div>
+    <div class="ticket"><h3>Staking is frozen</h3>
+      <div class="hint">An answer has been posted, so stakes are locked until the verdict is final — except that once a provisional verdict stands, the side it runs against may withdraw 1× early rather than wait out further rounds. Principal is never withheld; both sides withdraw 1× at settlement.</div></div>
+    <div class="sec-h">Quality &amp; rewards</div>
+    <p style="font-size:13px;color:var(--ink-2)">Quality tier: <b>mid</b> (default — the flag lane may re-vote it). A flag questions whether a claim carries information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half.
+    <span class="actions" style="display:inline-flex"><span class="btn">Flag as low-information</span></span></p>
+  </div></div>
+</figure>
+
+<!-- ============================================================ SCREEN 6 -->
+<figure class="screen">
+  <figcaption><b>Screen 6</b> <span>Answered and overdue, with a flag vote running (#/c/orem/6) — the window has passed, the settle button appears, and the quality lane offers the vote it announces.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/6 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #6</div>
+    <h2 class="page-h">The vendor's audit found zero critical findings.</h2>
+    <p style="margin:8px 0 0"><span class="pill open">answered YES</span></p>
+    <div class="noticebox warn"><span class="g">◷</span><div><b>Answered YES</b> by g1answe…0000, backed by a bond of 59.00 CC that burns if the answer is overturned. Its 72-hour window has passed — the next touch settles it.
+      <div class="actions"><span class="btn">Settle (aged &amp; undisputed)</span></div></div></div>
+    <div class="sec-h">Quality &amp; rewards</div>
+    <p style="font-size:13px;color:var(--ink-2)">A quality flag vote is open — was this claim low-information? The tally is <b>sealed</b> until it closes.</p>
+    <div class="actions"><span class="btn no">Vote: low</span><span class="btn">Vote: mid</span><span class="btn yes">Vote: high</span><span class="btn">Resolve flag (after close)</span></div>
+  </div></div>
+  <div class="anno">Buttons never contradict their own copy: past the settle window the Dispute button is gone
+  (the realm would panic it), and the Settle button appears only once aged. No live tally is ever shown while
+  any vote runs — the page renders only “sealed until it closes.”</div>
+</figure>
+
+<!-- ============================================================ SCREEN 7 -->
+<figure class="screen">
+  <figcaption><b>Screen 7</b> <span>A dispute (#/c/orem/3) — the court itself voting, weighed at a sealed epoch, with the claim’s own participants excluded.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/3 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #3</div>
+    <h2 class="page-h">The bridge inspection rated the north span 'serviceable'.</h2>
+    <p style="margin:8px 0 0"><span class="pill escrow">⚖ dispute under way · tally sealed</span></p>
+    <div class="ticket" style="margin-bottom:12px"><h3>Resolution so far</h3><div class="line"><span class="l tnum">≈block 4,800,000 <small>about 1 min</small></span><span class="r">now <small>chain height</small></span></div><div class="line"><span class="l tnum">≈block 4,886,400 <small>about 5 days</small></span><span class="r">vote closes <small>the round's scheduled close</small></span></div>
+      </div>
+    <div class="noticebox warn"><span class="g">⚖</span><div><b>A dispute is under way</b> (after 1 failed round).
+      The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim’s own participants.</div></div>
+    <div class="ticket" style="margin-top:12px"><h3>The ballot — overturn the answer?</h3>
+      <div class="hint">One question, one vote per address, no changes: overturn the YES answer posted by g1answe…0000, whose 80.0 CC bond rides on it?</div>
+      <div class="line"><span>uphold</span><span class="r">the YES answer stands provisionally; the disputer's bond burns</span></div>
+      <div class="line"><span>overturn</span><span class="r">the verdict flips to NO; the answer bond burns whole</span></div>
+      <div class="line"><span>round 1</span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div><div class="line"><span>round 2</span><span class="r">voting now at 64.0 CC — the bond doubles each failed round, and the count resets when a round decides</span></div><div class="line"><span>vote closes</span><span class="r">in about 5 days (≈block 4,886,400)</span></div><div class="line"><span>turnout bar</span><span class="r">a new dispute today would face 5,925 CC; the running round's own bar was fixed when it opened and is not republished</span></div>
+      <div class="line"><span>threshold</span><span class="r">overturn needs more than half of the yes/no weight cast — the constant sits a hair above half and is stated here, not read; ties and all-abstain rounds uphold</span></div>
+      <p class="small muted" style="margin:8px 0 0">The tally stays sealed until the vote closes — each ballot is a public transaction on the chain, but this page will not add them up mid-vote: a running count would make copying the first big voter everyone's best move. Sealed means un-summed, not secret.</p>
+      <p class="small muted" style="margin:6px 0 0">Any OREM holder may vote, weighed by balance at the sealed hourly epoch before the round opened — buying now adds nothing. Excluded: this claim's author, answerer, and stakers (staker records persist across withdrawal); the realm refuses them at signing. The sample address holds a stake on this very claim, so it is excluded — a real signer in its position would be refused; the buttons stay to show the transaction's shape.<span id="voteelig"></span></p>
+      <div class="actions" style="margin-top:10px">
+        <span class="act"><button class="btn no inert" data-inert="1"><span class="g">↗</span> Vote to overturn</button></span>
+        <span class="act"><button class="btn yes inert" data-inert="1"><span class="g">↗</span> Vote to uphold</button></span>
+        <span class="act"><button class="btn  inert" data-inert="1"><span class="g">↗</span> Abstain <small>counts to turnout only, never to a side</small></button></span>
+        <span class="act"><button class="btn  inert" data-inert="1"><span class="g">↗</span> Resolve (after close)</button></span></div>
+      <div class="never"><b>Nothing ever moves between adversaries — forfeits burn, make-goods mint; there is no pot to steer.</b><br>
+        Quorum fails — half the disputer's bond burns, half returns; the answer bond stays on the table; a third failure closes the claim with no decision, everyone 1×.<br>
+        Overturned — the answer bond burns whole; the disputer's bond returns, plus a make-good of at most 2× their bond and at most 80% of the burn, newly minted and queued behind earlier awards.<br>
+        Upheld — the disputer's bond burns; the answer bond stays escrowed until Finalize, and the answerer's make-good — at most 2× their bond, at most 80% of the burn — is newly minted and queued behind earlier awards.</div>
+     </div>
+    <div class="sec-h">Quality &amp; rewards</div>
+    <p style="font-size:13px;color:var(--ink-2)">Quality rides this dispute — the same electorate also votes the claim's tier, sealed like the verdict. No separate flag can open while the dispute runs. Participants in the claim (author, answerer, stakers) are excluded.</p>
+    <div class="actions"><span class="btn no">Vote: low</span><span class="btn">Vote: mid</span><span class="btn yes">Vote: high</span></div>
+  </div></div>
+  <div class="anno">Voting weight comes from the hourly snapshot taken before the vote opened — voice bought
+  mid-vote counts for nothing. The ballot ticket is generated from the live disputeTicket function: both outcomes stated
+  concretely, the round ladder from the failed-rounds read, the demo round’s scheduled close (live mode says the chain
+  exposes no close height rather than inventing one), the turnout bar labeled as the bar a NEW dispute faces (the running
+  round’s own bar was fixed at open and is not republished), the &gt;50% threshold stated-not-read, and the who-pays-whom
+  inset in burn/mint language — nothing ever moves between adversaries. The sealed tally is un-summed, not secret; no
+  running count appears anywhere before close. The sample address stakes this very claim, so the page teaches that it is
+  excluded — a real signer in its position would be refused at signing.</div>
+</figure>
+
+<!-- ============================================================ SCREEN 8 -->
+<figure class="screen">
+  <figcaption><b>Screen 8</b> <span>A provisional verdict in escrow (#/c/orem/7) — reopenable at a doubling price, with the losing side free to leave, and a slash pending in the quality lane.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/7 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #7</div>
+    <h2 class="page-h">The reservoir release logs match the stated schedule.</h2>
+    <p style="margin:8px 0 0"><span class="pill escrow">provisional NO · reopenable</span></p>
+    <div class="noticebox warn"><span class="g">⏳</span><div><b>Provisional NO, in escrow.</b>
+      A new dispute can still reopen it before it locks. Reopenable until block 4,805,000 (in about 6 hours). The next dispute bond is 102.40 CC (it doubles each failed round). The side it runs against may withdraw 1× now — their outcome can't improve.
+      <div class="actions"><span class="btn no">Reopen (dispute again)</span><span class="btn">Withdraw (losing side)</span></div></div></div>
+    <div class="sec-h">Quality &amp; rewards</div>
+    <p style="font-size:13px;color:var(--ink-2)">A slash is pending — the answerer may counter-flag to force one re-vote; if the window lapses unchallenged, anyone may close it.</p>
+    <div class="actions"><span class="btn no">Vote: low</span><span class="btn">Vote: mid</span><span class="btn yes">Vote: high</span><span class="btn">Counter-flag <small>answerer</small></span><span class="btn">Resolve counter re-vote <small>if a re-vote ran</small></span><span class="btn">Close lapsed window <small>if unchallenged</small></span></div>
+  </div></div>
+  <div class="anno">While escrow runs, Finalize is hidden (the realm refuses it); once the window closes the
+  frame flips — Reopen disappears, “participants may finalize now; anyone may after a week” appears.</div>
+</figure>
+
+<!-- ============================================================ SCREEN 9 -->
+<figure class="screen">
+  <figcaption><b>Screen 9</b> <span>Settled and crystallized (#/c/orem/4) — the verdict shows its route, both sides withdraw 1×, and every earned pool is pullable from the page.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/c/orem/4 · Demo data</div>
+  <div class="pad">
+    <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #4</div>
+    <h2 class="page-h">Q3 city revenue exceeded the June forecast.</h2>
+    <p style="margin:8px 0 0"><span class="pill good">✓ settled YES · vote</span></p>
+    <div class="noticebox good"><span class="g">✓</span><div><b>Settled YES</b> — vote.
+      Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the claim crystallizes.
+      <div class="actions"><span class="btn yes">Withdraw (YES side)</span><span class="btn no">Withdraw (NO side)</span><span class="btn">Pull accuracy reward</span><span class="btn">Pull author bonus <small>author only</small></span><span class="btn">Pull answerer bonus <small>answerer only</small></span><span class="btn">Pull voter carrot <small>deciding-round voters</small></span></div></div></div>
+    <div class="ticket"><h3>Staking is closed</h3>
+      <div class="hint">This claim has concluded — every stake withdraws 1×. The winning side also draws its accuracy reward once the claim crystallizes.</div>
+      <div class="line"><span>Your principal</span><span class="r">withdraw 1× now</span></div>
+      <div class="line"><span>Winning side</span><span class="r">1× + accuracy reward</span></div></div>
+    <div class="sec-h">Quality &amp; rewards</div>
+    <p style="font-size:13px;color:var(--ink-2)">Quality tier: <b>high</b> (final).</p>
+    <div class="ticket" style="margin-top:8px"><div class="line" style="border-top:none"><span>Reward pools</span><span class="r">accuracy 1.64 CC · author 0.16 CC · answerer 0.10 CC · voters 0.01 CC</span></div></div>
+  </div></div>
+  <div class="anno">The pools split the crystallized draw exactly 80 / 8 / 5 of 93 — these demo numbers are the
+  realm’s own floor arithmetic, not invented. “Vote” in the pill is the verdict’s route; the only other route
+  is “undisputed.”</div>
+</figure>
+
+<!-- =========================================================== SCREEN 10 -->
+<figure class="screen">
+  <figcaption><b>Screen 10</b> <span>The two ways a claim ends without a verdict — closed-never-answered (#/c/orem/8) and closed-without-decision (#/c/orem/5).</span></figcaption>
+  <div class="duo">
+    <div class="chrome"><div class="bar"><span class="dot"></span> #/c/orem/8</div>
+    <div class="pad">
+      <h3 class="page-h" style="font-size:19px">The archived forum post predates the patent filing.</h3>
+      <p style="margin:8px 0 0"><span class="pill void">closed · never answered</span></p>
+      <div class="noticebox void"><span class="g">◌</span><div><b>Closed — never answered.</b>
+        The dead-claim timeout passed with no answer. The author's deposit refunded; the filing fee burned (the spam price). Stakes were never frozen — unstake freely.</div></div>
+      <div class="ticket"><h3>Closed — never answered</h3>
+        <div class="hint">Nobody answered within the window, so the claim died. Stakes were never frozen: unstake freely, 1×. New staking is closed.</div>
+        <div class="actions"><span class="btn">Unstake YES</span><span class="btn">Unstake NO</span></div></div>
+    </div></div>
+    <div class="chrome"><div class="bar"><span class="dot"></span> #/c/orem/5</div>
+    <div class="pad">
+      <h3 class="page-h" style="font-size:19px">The mayor privately opposed the rezoning before the vote.</h3>
+      <p style="margin:8px 0 0"><span class="pill void">closed · no decision</span></p>
+      <div class="noticebox void"><span class="g">◌</span><div><b>Closed without a decision.</b>
+        Three dispute rounds failed to produce a quorate verdict — nobody's answer stands. Everyone withdraws their principal 1×; the deposit and fee were refunded.
+        <div class="actions"><span class="btn">Withdraw (YES side)</span><span class="btn">Withdraw (NO side)</span></div></div></div>
+    </div></div>
+  </div>
+</figure>
+
+<!-- =========================================================== SCREEN 11 -->
+<figure class="screen">
+  <figcaption><b>Screen 11</b> <span>Your positions (#/me) — the chain is public, so a court reads holdings by address; connect Adena or paste any address.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/me · Demo data</div>
+  <div class="pad">
+    <h2 class="page-h">Your positions</h2>
+    <p class="page-sub">Render has no idea who is asking, so a court reads holdings by address. Connect Adena in
+    the left rail, or paste an address, to see stakes and accrued conviction. Withdraw from each claim's own page,
+    where the actions match its state. (Demo mode shows a sample address.)</p>
+    <p class="mono" style="font-size:12px;color:var(--muted)">g1youde…0000 &nbsp;<span class="btn" style="padding:5px 12px;font-size:12px">Read positions</span></p>
+    <div class="grid stats" style="margin:10px 0">
+      <div class="stat"><div class="k">open positions</div><div class="v">6</div><div class="sub">across 2 courts — coins are per-court, never summed</div></div>
+      <div class="stat"><div class="k">you can pull now</div><div class="v">4</div><div class="sub">principal and earned pools — open each claim</div></div>
+      <div class="stat"><div class="k">maybe — the realm knows</div><div class="v">1</div><div class="sub">voter carrots — a pull costs only gas</div></div>
+      <div class="stat"><div class="k">senior tickets</div><div class="v">listed below</div><div class="sub">owed payouts — paid as budget accrues</div></div>
+    </div>
+    <div class="sec-h">You can pull these now <span class="count">4</span></div>
+    <div class="ticket">
+      <div class="line"><span class="l">#4 · orem</span><span class="r">withdraw your stake — returns 1×; principal, not a prize</span></div>
+      <div class="line"><span class="l">#4 · orem</span><span class="r">draw your accuracy reward (conviction) — winning side, one draw</span></div>
+      <div class="line"><span class="l">#4 · orem</span><span class="r">draw the author's slice — one draw</span></div>
+      <div class="line"><span class="l">#2 · ledger</span><span class="r">finalize the verdict — opens 1× withdrawals for everyone; participants first week</span></div>
+      <div class="actions" style="margin-top:8px"><span class="btn">↗ Withdraw #4</span><span class="btn">↗ WithdrawBonus #4</span><span class="btn">↗ AuthorBonus #4</span><span class="btn">↗ Finalize #2</span></div>
+    </div>
+    <div class="sec-h" style="margin-top:14px">Senior queue — Orem Truth Court <span class="count">1 of 2 tickets are yours</span></div>
+    <div class="ticket">
+      <div class="line"><span class="l">ticket #1</span><span class="r">0.39 CC payable now <small>of 0.64 CC still owed to you — paid as budget accrues, the court's pace, not a promise</small></span></div>
+      <div class="actions" style="margin-top:8px"><span class="btn">↗ Pull senior ticket #1 <small>owed, not earned</small></span></div>
+    </div>
+    <div class="sec-h" style="margin-top:14px">Orem Truth Court <span class="count">38.40 CC coin balance · 49.00 CC in positions</span></div>
+    <table class="data">
+      <tr><th>Claim</th><th>YES stake</th><th>NO stake</th><th>conviction</th></tr>
+      <tr><td>SpaceX Starship Flight 12 reached orbital velocity.</td><td>12.00 CC</td><td>0.00 CC</td><td>6.40 CC</td></tr>
+      <tr><td>The bridge inspection rated the north span 'serviceable'.</td><td>8.00 CC</td><td>4.00 CC</td><td>6.00 CC</td></tr>
+      <tr><td>Q3 city revenue exceeded the June forecast.</td><td>20.00 CC</td><td>0.00 CC</td><td>10.80 CC</td></tr>
+      <tr><td>The vendor's audit found zero critical findings.</td><td>0.00 CC</td><td>5.00 CC</td><td>2.10 CC</td></tr>
+      <tr><td>The reservoir release logs match the stated schedule.</td><td>0.00 CC</td><td>0.00 CC</td><td>2.00 CC</td></tr>
+    </table>
+  </div></div>
+  <div class="anno">Live mode scans claims by id (1..ClaimCount) across every court from the unbounded tier
+  enumeration — positions in hidden or beyond-the-docket-cap courts still appear. Failed reads are counted and
+  the view says “may be incomplete” rather than asserting a confident nothing; a pull row is NEVER guessed — an
+  unreadable paid-flag drops the row. Pull decisions come only from readable state (PullState paid flags, roles,
+  phases); reward rows carry no amounts (the cap that scales them is unexposed — an estimate would read as a
+  promised gain), while senior tickets DO show exact figures because `payable` is the realm's own owed
+  entitlement — "owed, not earned", with no date promised. The one undecidable pull, the voter carrot, appears
+  only as a court-level "maybe — the realm knows" line: every position-scanned claim is a participant claim, and
+  participants are decidably carrot-free. Below everything, "Since you were last here" diffs THIS BROWSER's
+  memory of its own prior reads (phase transitions only — sealed votes never move here) and is labeled so;
+  a partial view is never memorized. The last table row is a conviction-only position: fully unstaked, still
+  owed its reward.</div>
+</figure>
+
+<!-- =========================================================== SCREEN 12 -->
+<figure class="screen">
+  <figcaption><b>Screen 12</b> <span>What needs you (#/needs) — the screen the security assumption depends on: live answers on claims you hold reward-weight in, flagged by whether the standing verdict runs against you.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/needs · Demo data</div>
+  <div class="pad">
+    <h2 class="page-h">What needs you</h2>
+    <p class="page-sub">Answers posted on claims you've staked — flagged when the answer runs <b>against your side</b>.
+    Nobody is more motivated to contest a false answer than the stakers whose reward it would deny. It's a
+    notification, not a role — you cannot vote on a claim you've staked (the rest of the court votes), but you can open the dispute.</p>
+    <p class="mono" style="font-size:12px;margin:0 0 8px">5 answers stand on claims you staked — 2 against your side · 3 with you</p>
+    <div class="noticebox warn"><span class="g">⚑</span><div><b>Closing soonest:</b> The vendor's audit found zero critical findings. — the settle window has passed — anyone may settle it now. A new dispute posts 23.60 CC.</div></div>
+    <div class="sec-h" style="margin-top:14px">Against your side <span class="count">2</span></div>
+    <div class="docket">
+      <div class="row"><div><div class="t">The vendor's audit found zero critical findings.</div><div class="m">Orem Truth Court · answered YES · the settle window has passed — anyone may settle it now</div><div class="m">their bond 59.0 CC · a new dispute posts 23.60 CC</div><div style="margin-top:6px"><span class="btn">↗ Settle (aged &amp; undisputed)</span></div></div><span class="pill no">⚑ against your side</span></div>
+      <div class="row"><div><div class="t">The reservoir release logs match the stated schedule.</div><div class="m">Orem Truth Court · provisional NO · reopenable until ≈block 4,805,000 — in about 6 hours</div><div class="m">their bond 64.0 CC · a new dispute posts 102.40 CC</div><div style="margin-top:6px"><span class="btn no">↗ Reopen (dispute again)</span></div></div><span class="pill no">⚑ against your side</span></div>
+    </div>
+    <div class="sec-h" style="margin-top:14px">With your side <span class="count">3</span></div>
+    <div class="docket">
+      <div class="row"><div><div class="t">SpaceX Starship Flight 12 reached orbital velocity.</div><div class="m">Orem Truth Court · answered YES · you may dispute until ≈block 4,809,000 — in about 12 hours</div></div><span class="pill good">matches you</span></div>
+      <div class="row"><div><div class="t">The bridge inspection rated the north span 'serviceable'.</div><div class="m">Orem Truth Court · answered YES · a sealed vote is deciding — no close height is published</div></div><span class="pill good">matches you</span></div>
+      <div class="row"><div><div class="t">The 2025 audit letter was filed before the March 31 statutory deadline.</div><div class="m">The Ledger of Denver · provisional YES · the reopen window has closed — finalizable</div></div><span class="pill good">matches you</span></div>
+    </div>
+  </div></div>
+  <div class="anno">“Against” compares the <em>standing</em> verdict — a successful dispute flips it away from the
+  answer, so during a reopen window the flag follows the provisional side. Side-weighting includes conviction:
+  an honestly-unstaked holder (row 2, conviction-only YES) is still warned, because the realm still pays them.</div>
+</figure>
+
+<!-- =========================================================== SCREEN 13 -->
+<figure class="screen">
+  <figcaption><b>Screen 13</b> <span>The same claim as the chain itself serves it (#/raw/orem/2) — no overlay, plain Render. Every figure above appears here; the overlay only draws it better.</span></figcaption>
+  <div class="chrome"><div class="bar"><span class="dot"></span><span class="dot"></span> kourt.xyz/#/raw/orem/2 · the realm’s own markdown</div>
+  <div class="pad"><div class="chain">
+    <h2># SpaceX Starship Flight 12 reached orbital velocity.</h2>
+    <h2>## Signal</h2>
+    <p>- staked now: 139000000 (YES 130000000 / NO 9000000)<br>
+    - instantaneous: 93.5% YES</p>
+    <h2>## Status</h2>
+    <p>answered — staking frozen; disputable, then it settles undisputed</p>
+  </div></div></div>
+  <div class="anno">The court page’s raw render also carries the coin line, price (“ugnot per CC unit”), supply,
+  reservoir, senior queue, and the docket — the overlay’s parsers are gated to the Render’s own section headings
+  so moderation strips can never double-list claims.</div>
+</figure>
+
+<footer class="foot">
+  <p><b>What is deliberately not on any screen:</b> live tallies while a vote is sealed; the inflation ceiling;
+  any “backing”, “redeem”, “cash out”, APR, or return-percentage language; a paraphrased claim title (titles
+  render verbatim, HTML-escaped). A verdict always shows its route. Principal is never framed as a wager.</p>
+  <p><b>Provenance:</b> drawn 2026-08-17 from web/index.html at loop convergence (41 rounds, 27 critic sweeps —
+  see WEBSITE-ITERATION.md). Demo figures are realm-producible: prices sit on the curve (floor(minted/1e9)),
+  convictions under the hot-rate cap, bonds at 50%·X̄ with disputes at 40%·bond₀×2^rounds, draw splits exact.
+  The wireframe idiom follows gno_grc20vote/wireframes/courts-wireframe.html; screens 3–5 of that file
+  (argument graphs, folders) have no analog here because kourtv2 claims are flat, title-only sentences.</p>
+</footer>
+
+</div>
+</body>
+</html>

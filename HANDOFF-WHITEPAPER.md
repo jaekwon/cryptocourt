@@ -56,7 +56,11 @@ Three files are involved, all new, all untracked, none of yours touched:
    a decision would let §5 say something stronger.
 2. **govern's `tokenSymbol = "COURT"`** (token.gno:18) — already sent to
    another session; whitepaper never mentions govern.
-3. The example's breaking-news node (#9) is deliberately OPEN/unverified.
+3. The mockup's "claims reference real documents and events" assertion is
+   fact-checked (round-2 critic, web-verified: EcoHealth grant, DEFUSE, intel
+   split, Fauci-Fifth July 2026 w/ Al Jazeera source, raccoon-dog samples).
+   Keep those citations handy for launch comms — the whitepaper itself carries
+   no footnotes by register, so the receipts live in the iteration log.
 
 ## When the loop finishes
 
@@ -67,4 +71,18 @@ stays valid, and the iteration file's round log shows exactly where it
 stopped. To resume by hand: read WHITEPAPER-ITERATION.md top to bottom, then
 continue the round protocol described there.
 
-*Status: loop ACTIVE as of 2026-08-17 (round 1 complete, critics running).*
+**OWNER DIRECTIVE (2026-08-17, via the influence session): COMMIT the
+whitepaper files (WHITEPAPER.md, WHITEPAPER-ITERATION.md, HANDOFF-WHITEPAPER.md)
+and the website (web/**, WEBSITE-ITERATION.md, HANDOFF-WEBSITE.md) to the
+courtv2-moderation branch. The influence session never commits by standing
+constraint — this repo is yours. The reskin SETTLED 2026-08-17
+(sign-off sweep: zero findings) — everything is stable; commit when ready.**
+
+*Status: **CONVERGED AND FINAL**, 2026-08-17. 34 rounds, ~116 findings applied
+across 9 critic lenses; converged on 4 consecutive clean rounds after 22+
+substantive ones. Every mechanism claim verified against realm code with
+file:line; the example's real-world references web-verified (sources in
+WHITEPAPER-ITERATION.md). The document is publication-ready pending owner
+read-through and the counsel checkpoint PLAN §7.5 calls for. The loop has
+moved to phase 2 (website UX) per the owner directive — see
+WEBSITE-ITERATION.md.*

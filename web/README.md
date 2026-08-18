@@ -1,6 +1,6 @@
 # Kourt web overlay (V2)
 
-A single, self-contained page that reads a deployed `r/kourt/courtv2` realm and
+A single, self-contained page that reads a deployed `r/kourt/kourtv2` realm and
 renders it. **The chain carries all the information; this overlay only makes it
 prettier.** Every screen here can also be served by the realm's own `Render` (see the
 "as the chain serves it →" link on every court and claim), and every button is a normal
@@ -12,8 +12,8 @@ is optional, not load-bearing.
 Open `index.html` in any browser — no build, no dependencies, no server needed.
 
 - **Demo (default):** a faithful offline sample so you can explore every screen and
-  state (open · answered · disputed-and-sealed · settled-by-vote · closed-without-decision
-  · flagged) without a node. In demo mode the page makes **no network calls**.
+  state (open · answered · disputed-and-sealed · provisional-in-escrow · settled-by-vote ·
+  closed-without-decision · closed-never-answered · flagged · counter-flag-window) without a node. In demo mode the page makes **no network calls**.
 - **Live node:** in the left rail, switch **Source → Live node** and enter an RPC
   endpoint (a local `gnodev` is `http://127.0.0.1:26657`) and the gnoweb host used to
   build the transaction links (default `https://gno.land`). The page then reads the real
@@ -21,6 +21,18 @@ Open `index.html` in any browser — no build, no dependencies, no server needed
 
 Your choices persist in `localStorage`; nothing leaves the page except the ABCI queries
 to the node you name and the transaction links you click.
+
+## The wallet (optional)
+
+With the [Adena](https://adena.app) extension installed, **Connect Adena** in the
+left rail links your address: "Your positions" and "What needs you" read it
+automatically, and — in **live mode** — every action gains a **✍ Sign** button
+that signs and broadcasts through the wallet — demo mode never signs, since its
+entities don't exist on any chain. Each argument is confirmed before signing, and
+`Buy` asks for the ugnot amount (which is burned). The page still works fully
+without a wallet: every action remains a gnoweb link and a copyable `gnokey`
+command. Note: browser extensions do not run on `file://` pages — to use the
+wallet, serve the folder (`python3 -m http.server`) and open it over http.
 
 ## How it queries the chain
 

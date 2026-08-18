@@ -68,7 +68,7 @@ then on. A claim cannot become a different claim after it starts winning.
 Stake accrues conviction over time: coins staked for months count for more
 than coins parked yesterday. A losing position forfeits rewards, never
 principal. Stakes move freely until an answer is posted; an answer freezes the
-claim's stakes until settlement, and at settlement principal returns in full,
+claim's stakes until settlement, and at settlement principal is released in full,
 whichever way the verdict went. People stake their true position when a wrong one
 cannot ruin them.
 
@@ -83,8 +83,9 @@ cannot manufacture one. The lean measures net stake, not headcount.
 **Answered.** An answerer posts a side, TRUE or FALSE, and bonds it. The bond
 is sized so that posting junk answers costs more than it can pay.
 
-**Disputed.** Anyone except the answerer can dispute the answer. A dispute
-sends the claim to a vote.
+**Disputed.** Anyone except the answerer can dispute the answer, posting a
+bond of their own. The dispute sends the claim to a vote, and the side the
+vote decides against loses its bond.
 
 **Voted.** Voting weight is the court's coin as of an epoch: an hourly
 snapshot of holdings, already sealed when the vote opened. By the time a vote
@@ -94,10 +95,11 @@ a dispute, not those who plan one: a buyer can wait out the hour and open the
 dispute himself. What it removes is the crowd that arrives once a dispute is
 visible.
 
-**Crystallized.** The verdict is recorded and never revised:
-TRUE, FALSE, or still OPEN with the live stakes visible. Accuracy rewards are
-minted from the court's emission and paid to the answerer, the stakers on the
-verdict's side, and the voters of the deciding round. Forfeited bonds are
+**Crystallized.** The verdict, TRUE or FALSE, is recorded and never revised.
+A claim not yet carried to verdict stays OPEN, its live stakes visible. Accuracy rewards are
+minted from the court's emission and paid to the prevailing bonder (answerer
+or disputer), the stakers on the verdict's side, and the voters of the
+deciding round. Forfeited bonds are
 burned. No one in Kourt is paid from anyone else's loss.
 
 A verdict is not the truth. It is the recorded conclusion of a particular
@@ -164,7 +166,7 @@ expensive to say in public. On the record, with money invited against them,
 they settled fast, because each reduces to documents, and staking against a
 published document predictably loses. Claim #5 settled FALSE: a favorite argument of
 the lab-leak side, retired in a court whose root leans lab-leak. Claim #8
-settled FALSE the same way for the other side: the 2023 market samples were
+settled FALSE the same way for the other side: the market samples were
 environmental, and no infected animal was ever found, however widely the
 opposite was reported. Each camp lost its weakest claim in public, which is
 what makes the root's open 58/42 worth reading. Claims #9 and #10 show intake:
@@ -180,8 +182,9 @@ VERDICT: FALSE. Month 14, 71/29, heavy stakes on both sides, dissent
 preserved.
 
 That FALSE lands where several European health authorities landed, and
-against where hundreds of US universities stood. Unlike either, it shows who backed
-which side, at what weight, and what the minority said on the way down. In the
+against the position hundreds of US universities took. Unlike either, it shows who backed
+which side, at what weight, and that the minority held its ground to the end;
+the dissenting weights are as permanent as the verdict. In the
 same court, the claim "COVID-19 vaccines substantially reduced severe disease
 and death in adults" settled TRUE early and was never seriously challenged.
 The same electorate rejected pediatric mandates and settled adult efficacy
@@ -193,7 +196,7 @@ a scientific controversy, an election claim, a corporate scandal, a historical
 argument, a product's safety record. What accumulates in each court has not
 existed before: a map of the argument. What is claimed, what each claim rests
 on, what died and what killed it, what is still live. The weight on each side
-is denominated in the one unit the internet cannot counterfeit: money someone
+is denominated in money someone
 chose to burn for a voice.
 
 Wikipedia records the winner's summary. Threads record the fight, without
@@ -235,14 +238,15 @@ answer and dispute.
 
 Coins also flow to work. Each court runs a bounded emission: 0.38% of live
 supply per week at genesis, stepping down weekly, falling by half over each
-two-year span, ceilinged for all time under +80% of everything minted on the curve.
-(The Review Court, described next, runs a small fixed weekly budget instead.)
-The rate decays because a court needs its work funded hardest at the start. It
-is ceilinged so the worst case is arithmetic rather than trust. Emission pays
+two-year span. Over a court's whole life, emission adds less than 80% on top
+of what its curve has minted. The rate decays because a court needs its work
+funded hardest at the start. It is ceilinged so the worst case is arithmetic
+rather than trust. Emission pays
 for staking on the verdict's side, answering, disputing bad answers, voting in
 deciding rounds, and policing junk. Beyond a four-week reservoir, unspent
 budget is forgone, not banked. Over time the coin concentrates in the hands of
-the people doing the judging.
+the people doing the judging. The Review Court, described next, runs a small
+fixed weekly budget instead.
 
 ## 5. The Review Court
 
@@ -315,9 +319,9 @@ rogue moderator set, though it cannot appoint one: after a disarm, the court's
 own electorate installs the next set, or its creator does if no election has
 yet been held. A court's first moderator set is likewise its creator's
 appointment; once an election installs a set, the creator's power to appoint
-is spent. By its configured threshold of keys, one at genesis and set by its own admin,
-it can purge text, up to a whole court, for legal compliance: a tombstone
-that removes words while every position stays withdrawable. Re-imposing a redaction that was cleared
+is spent. It can purge text for legal compliance, up to a whole court: a tombstone that
+removes words while every position stays withdrawable. The purge threshold is
+m-of-n keys, set by its own admin; at genesis it is one key. Re-imposing a redaction that was cleared
 requires that same threshold inside a counter-notice window modeled on the
 DMCA's.
 
@@ -339,7 +343,8 @@ use.
 
 **No one's future efforts stand behind the coins.** A gno realm, the chain's
 unit of deployed contract code, cannot be redeployed or changed at its path
-once published, by its deployer or anyone else. The rules described here are
+once published; not even its deployer can change it. The rules described here
+are
 the rules, checkable in public source. The operator's remaining roles are
 legal compliance and front-page curation, both fenced away from money by the
 rule in section 6. A thing whose value depended on continuing management
@@ -350,7 +355,7 @@ stay wrong. The remedy is the record and the fork, not an oracle.
 
 **Emission dilutes.** Holding without participating means a slow, scheduled
 dilution in favor of the people doing the work. That is its purpose. The
-lifetime ceiling is under +80% of curve-minted supply, and half of all
+lifetime ceiling adds less than 80% on top of curve-minted supply, and half of all
 emission lands in roughly a court's first two years.
 
 **This is early software on a young chain.** It has had internal audit rounds
@@ -360,8 +365,8 @@ Assume a coin can end up worthless, and size participation like the burn it
 is.
 
 **Disclosure.** Kourt's designers hold GNOT, the token every curve burns,
-and may hold positions in courts they found, minted on the same public curve
-as anyone else's and visible on-chain like any others. Readers should weigh
+and may hold positions in courts they have founded, minted on the same public
+curve as anyone else's and visible on-chain like any others. Readers should weigh
 this document accordingly.
 
 **Nothing here is legal, financial, or medical advice.** That includes the
