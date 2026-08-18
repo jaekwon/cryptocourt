@@ -256,9 +256,51 @@ a.card:hover{border-color:var(--line-2)}
 .ticket{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
 .ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
 .ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
-.ticket .line{display:flex; justify-content:space-between; padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
+/* A ticket row is a label and what it says. The label is the bold thing on the
+   LEFT and the text reads left-to-right from its own aligned column: two real
+   grid tracks with a gutter, because space-between put the emphasis on the
+   right, ragged-left, and closed the gap entirely once a row's text filled it. */
+.ticket .line{display:grid; grid-template-columns:minmax(0,20ch) minmax(0,1fr); column-gap:24px;
+  align-items:baseline; padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
 .ticket .line:first-of-type{border-top:none}
-.ticket .line .l{color:var(--ink-2)} .ticket .line .r{font-weight:600; font-variant-numeric:tabular-nums}
+.ticket .line>*:first-child{font-weight:600; color:var(--ink)}
+.ticket .line .r{font-weight:400; color:var(--ink-2); text-align:left; font-variant-numeric:tabular-nums}
+.ticket .line .r b{color:var(--ink)}
+.ticket .line.spent>*:first-child{color:var(--muted); font-weight:400}
+.ticket .line.spent .r{color:var(--muted)}
+@media (max-width:640px){ .ticket .line{grid-template-columns:minmax(0,1fr); row-gap:2px} }
+/* the clock ladder: what happened on the left, when on the right — the dates
+   align in their own column because the grid lives on the container, not the
+   row, and the column sits just past the labels rather than at the far edge */
+.ticket .clockrows{display:grid; grid-template-columns:minmax(0,30ch) max-content;
+  column-gap:28px; justify-content:start; align-items:baseline}
+.ticket .clockrows>*{padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
+.ticket .clockrows>*:nth-child(-n+2){border-top:none}
+.ticket .clockrows .ev{font-weight:600; color:var(--ink)}
+.ticket .clockrows .dt{color:var(--ink-2); font-variant-numeric:tabular-nums; white-space:nowrap}
+.ticket .clockrows .ev small,.ticket .clockrows .dt small{font-weight:400; color:var(--muted)}
+.ticket .clockrows .ev small{display:block; margin-top:1px}
+@media (max-width:640px){ .ticket .clockrows{grid-template-columns:minmax(0,1fr) max-content; column-gap:14px}
+  .ticket .clockrows .dt{white-space:normal} }
+/* Helper modals: the long "why" lives one click away, so a ballot reads as a
+   ballot. Native <dialog> — Escape, the backdrop and focus come with it. */
+dialog.helper{border:1px solid var(--line-2); border-radius:var(--r); padding:0;
+  max-width:min(640px,92vw); background:var(--surface); color:var(--ink); box-shadow:var(--shadow)}
+dialog.helper::backdrop{background:rgba(12,18,24,.5)}
+dialog.helper .hd{display:flex; justify-content:space-between; align-items:baseline; gap:18px;
+  padding:16px 18px; border-bottom:1px solid var(--line)}
+dialog.helper .hd h3{font-family:var(--serif); font-size:17px; margin:0}
+dialog.helper .bd{padding:16px 18px 18px; font-size:14px; line-height:1.6; color:var(--ink-2)}
+dialog.helper .bd h4{color:var(--ink); font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+  margin:16px 0 6px; font-family:var(--mono)}
+dialog.helper .bd h4:first-child{margin-top:0}
+dialog.helper .bd p{margin:0 0 8px}
+dialog.helper .bd ul{margin:4px 0 0; padding-left:18px}
+dialog.helper .bd li{margin:5px 0}
+dialog.helper .bd b{color:var(--ink)}
+button.helplink{color:var(--accent-2); cursor:pointer; text-decoration:underline; background:none;
+  border:0; padding:0; font:inherit; font-size:inherit}
+button.helplink:hover{color:var(--accent)}
 .ticket .never{margin-top:12px; background:var(--inset); border-radius:var(--r-sm); padding:11px 13px; font-size:12.5px; color:var(--ink-2)}
 .ticket .never b{color:var(--ink)}
 /* buy receipt — reuses the ticket's row token inside the join panel */
@@ -345,6 +387,12 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 
 .rawblock{background:var(--inset); border:1px solid var(--line); border-radius:var(--r); padding:18px; font-family:var(--mono); font-size:12.5px; white-space:pre-wrap; line-height:1.5; color:var(--ink-2); overflow-x:auto}
 
+/* The seeded-chain warning. Full-bleed above the page rather than inside it,
+   because it describes the NODE and not whatever route you happen to be on. */
+#tcbanner{grid-column:1/-1}
+.tcbar{background:var(--contra-wash); color:var(--ink); border:1px solid var(--contra);
+  border-left-width:4px; border-radius:var(--r); padding:11px 16px; margin:0 0 14px;
+  font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice{border-radius:var(--r); padding:13px 16px; font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice.warn{background:var(--escrow-wash); color:var(--ink); border:1px solid var(--escrow); border-left-width:4px}
 .notice.refuse{background:var(--no-wash); border:1px solid var(--no); border-left-width:4px; color:var(--ink)}
@@ -449,6 +497,8 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
     <button class="themebtn" id="themebtn"><span class="g">◐</span> <span id="themelab">Theme</span></button>
   </div>
 </aside>
+
+<div id="tcbanner" role="status" hidden></div>
 
 <main class="main" id="main"></main>
 
@@ -1138,8 +1188,51 @@ let renderSeq = 0, paintedSeq = 0;
 /* Query params ride the hash (#/c/orem?p=2) so pages, back/forward, and
    shared links all land on the same window. Routes match the path part. */
 let QP = {};
+/* The seeded-chain warning. A node whose test clock was ever armed carries
+   fabricated dates FOREVER — sealing takes away the steering wheel, not the
+   invented history — so this asks TestClockFabricated rather than
+   TestClockActive, and a sealed demo chain still says so.
+
+   It sits outside #main on purpose: every route replaces main.innerHTML, and a
+   warning that blinks out on navigation is worse than none. Cached per RPC
+   endpoint, so it costs one query per node and not one per page.
+   Demo mode never shows it — nothing there claims to be a chain. */
+let TCFAB = null, TCFAB_FOR = null;
+async function testClockState(){
+  if(!isLive()) return null;
+  if(TCFAB_FOR===CFG.rpc) return TCFAB;
+  TCFAB_FOR = CFG.rpc; TCFAB = null;
+  try{
+    const fab = await one("TestClockFabricated()");
+    if(fab!==true) return TCFAB=null;
+    let secs = null, live = false;
+    try{ secs = await one("TestClockPeakSkew()"); }catch(_){}
+    try{ live = (await one("TestClockActive()"))===true; }catch(_){}
+    return TCFAB = {secs: (typeof secs==="number" && isFinite(secs))? secs : null, live};
+  }catch(e){
+    // An older realm has no such function. That is not a warning-worthy state:
+    // a node without the entrypoint never had a test clock to arm.
+    return TCFAB=null;
+  }
+}
+async function paintTestClockBanner(){
+  const el = document.getElementById("tcbanner");
+  if(!el) return;
+  const st = await testClockState();
+  if(!st){ el.hidden = true; el.innerHTML = ""; return; }
+  const days = st.secs!=null? Math.round(st.secs/86400) : null;
+  const moved = days!=null? ` — its dates were moved forward ${fmtN(days)} day${days===1?"":"s"}` : "";
+  const tail = st.live
+    ? "The clock is still open, so they can move again."
+    : "The clock is sealed, so they are now fixed.";
+  el.innerHTML = `<div class="tcbar"><span class="g">⏱</span><div><b>Test chain — the dates here are fabricated.</b>
+    This node's clock was set by hand${moved}. ${tail} Heights, balances and stakes are real.</div></div>`;
+  el.hidden = false;
+}
+
 async function render(){
   const seq = ++renderSeq;
+  paintTestClockBanner();
   const raw = location.hash.replace(/^#/,"") || "/";
   const qx = raw.indexOf("?");
   const hash = qx<0? raw : raw.slice(0,qx);
@@ -1176,6 +1269,15 @@ window.addEventListener("hashchange", async ()=>{
   if(document.activeElement && document.activeElement!==document.body && main.contains(document.activeElement)) return;
   const h = main.querySelector(".page-h");
   if(h){ h.setAttribute("tabindex","-1"); h.focus(); }
+});
+// helper modals: open on [data-help], close on the button or the backdrop
+document.addEventListener("click", ev=>{
+  const open = ev.target.closest("[data-help]");
+  if(open){ const dlg=document.getElementById(open.getAttribute("data-help"));
+    if(dlg && dlg.showModal){ dlg.showModal(); ev.preventDefault(); } return; }
+  const close = ev.target.closest("dialog.helper [data-close]");
+  if(close){ close.closest("dialog").close(); return; }
+  if(ev.target.matches("dialog.helper")) ev.target.close(); // the backdrop is the dialog itself
 });
 document.addEventListener("click", ev=>{
   const b = ev.target.closest("[data-introdismiss]"); if(!b) return;
@@ -1440,7 +1542,7 @@ on(/^\/$/, async ()=>{
     ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="rank" aria-pressed="${QP.sort!=="claims"}">GNOT burned</button><button class="pill void" data-sort="claims" aria-pressed="${QP.sort==="claims"}">busiest</button></span>` : "";
   const dirPager = pagerHtml("/", page, listed.length, listedTotal, "courts",
     dirTotFailed? "ranked by GNOT burned — the full count did not read" : "ranked by GNOT burned", dirChips);
-  // the office-door counts: everything a loaded page can honestly state, no money
+  // the office-door counts: everything a loaded page can honestly state, no balances
   const featTotal = featured.length + (courts.moreFeatured||0);
   const loadedWithClaims = ((page===1? featured:[]).concat(listed)).filter(c=>c.claims!=null);
   const claimsSum = loadedWithClaims.reduce((t,c)=>t+c.claims,0);
@@ -1656,7 +1758,7 @@ function curveQuote(minted, supply, ugnot){
     share: Number(units)/(supply+Number(units))};
 }
 /* GNOT with up to 6 decimals → whole µGNOT. String-parsed: parseFloat would
-   round 6-decimal amounts and a money field must not. Bounded by int64 —
+   round 6-decimal amounts and an amount field must not. Bounded by int64 —
    a send no transaction can carry is not an amount. */
 function parseGnot(v){
   const m = String(v).trim().match(/^(\d+)(?:\.(\d{1,6}))?$/);
@@ -1778,35 +1880,64 @@ async function fillCourtRecord(slug, count, minted){
    Everything here is a real read or the realm's stated rule. The one number
    the chain does not expose — the running round's close height — is said to
    be unexposed rather than guessed, and the tally is never summed mid-vote. */
+/* The ballot's fine print, in plain words. Same facts as the realm enforces —
+   only the sentences changed. */
+function voteHelpModal(slug, d){
+  const SYM = "KOURT:" + esc(slug).toUpperCase(); // canonical display (MODERATION.md §13.9)
+  return `<dialog class="helper" id="help-vote" aria-labelledby="help-vote-h">
+    <div class="hd"><h3 id="help-vote-h">How this vote works</h3><button class="pill void" data-close>Close</button></div>
+    <div class="bd">
+      <h4>Why you can't see the count yet</h4>
+      <p>Every vote is a public transaction on the chain, so nothing here is hidden. What this page will not do is add the votes up while the vote is still running.</p>
+      <p>The reason is simple: if you could watch a running total, the best move would be to wait and copy whoever voted with the most weight. The result would then be one voter's opinion, repeated. So the count is left un-summed until the vote closes. <b>Sealed means un-summed, not secret.</b></p>
+      <h4>Who can vote</h4>
+      <p>Anyone holding ${SYM}, this court's own token. Your weight is your balance as it stood at the last hourly snapshot before this round opened — so buying more coin now adds nothing to this vote.</p>
+      <p>Three people are shut out: whoever wrote the claim, whoever answered it, and anyone who staked on it. Holding ${SYM} on one side of the outcome disqualifies you from judging it, and the realm refuses their vote at signing, whatever this page shows.</p>
+      <h4>Where the tokens go</h4>
+      <p><b>Nothing moves from one side to the other.</b> There is no pot to win here, so there is nothing to steer. ${SYM} that is forfeited is burned, and ${SYM} that is owed is newly minted — the two never touch.</p>
+      <ul>
+        <li><b>If too few people vote</b> — half the challenger's bond is burned and half returns; the answer's bond stays where it is. A third failed round closes the claim with no decision, and every stake comes back 1×.</li>
+        <li><b>If the answer is overturned</b> — the answer's bond is burned in full. The challenger gets their bond back plus a make-good: newly minted, never more than twice their bond nor more than 80% of what was burned, and paid in turn behind earlier awards.</li>
+        <li><b>If the answer is upheld</b> — the challenger's bond is burned. The answer's bond stays held until the claim is finalised, and the answerer receives the same kind of make-good on the same limits.</li>
+      </ul>
+      <p>Whichever way it goes, staked ${SYM} is never touched: it returns 1× to everyone who staked, on both sides.</p>
+    </div></dialog>`;
+}
 function disputeTicket(slug, id, d, nowH){
   const posted = d.disputeBondNext? cc(d.disputeBondNext) : null;
   const k = d.round||0;
   let ladder="";
-  for(let i=1;i<=k;i++) ladder+=`<div class="line"><span>round ${i}</span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div>`;
-  ladder+=`<div class="line"><span>round ${k+1}</span><span class="r">voting now${posted?` at ${posted}`:""} — the bond doubles each failed round, and the count resets when a round decides</span></div>`;
+  for(let i=1;i<=k;i++) ladder+=`<div class="line spent"><span><s>round ${i}</s></span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div>`;
+  ladder+=`<div class="line"><span>✓ round ${k+1}</span><span class="r">voting now${posted?` at ${posted}`:""} — the bond doubles each failed round, and the count resets when a round decides</span></div>`;
+  const closeWhen = (()=>{
+    if(!d.voteEndsAt) return null;
+    if(nowH==null) return `≈block ${fmtN(d.voteEndsAt)}`;
+    if(d.voteEndsAt<=nowH) return "the window has passed — Resolve works now";
+    // same words as the resolution ladder: a projected date, then how far off
+    const secs = (d.voteEndsAt-nowH)*BLOCK_SECS;
+    const nowT = Math.floor(Date.now()/1000);
+    return `≈ ${stampDate(nowT+secs,false)} <small>${esc(sinceWords(nowT, nowT+secs))}</small> <small>(≈block ${fmtN(d.voteEndsAt)})</small>`;
+  })();
   const closes = d.voteEndsAt
-    ? `<div class="line"><span>vote closes</span><span class="r">${nowH!=null? (d.voteEndsAt>nowH? "in "+wall(nowH,d.voteEndsAt)+" (≈block "+fmtN(d.voteEndsAt)+")" : "the window has passed — Resolve works now") : "≈block "+fmtN(d.voteEndsAt)}</span></div>`
+    ? `<div class="line"><span>vote closes</span><span class="r">${closeWhen}</span></div>`
     : `<div class="line"><span>vote closes</span><span class="r">about 7 days from the round's opening — the chain exposes no close height to read; Resolve simply refuses until it has passed</span></div>`;
-  const quorum = d.quorumFloor? `<div class="line"><span>turnout bar</span><span class="r">a new dispute today would face ${cc(d.quorumFloor)}; the running round's own bar was fixed when it opened and is not republished</span></div>`:"";
+  const quorum = d.quorumFloor? `<div class="line"><span>required quorum</span><span class="r">the minimum total weight that must be cast for this round to decide anything — miss it and the round fails no matter which way the votes leaned. A new dispute today would face ${cc(d.quorumFloor)}; this round's own bar was fixed when it opened and is not republished.</span></div>`:"";
   const demoExcluded = CFG.mode==="demo" && (()=>{ const p=DEMO.positions[slug+"/"+id]; return !!(p && (p.yes||p.no||p.cy||p.cn)); })();
   return `<div class="ticket" style="margin-top:12px"><h3>The ballot — overturn the answer?</h3>
       <div class="hint">One question, one vote per address, no changes: overturn the ${sideName(d.answer)} answer posted by ${shortAddr(d.answerer)}${d.answerBond? `, whose ${cc(d.answerBond)} bond rides on it?` : ` — its bond already burned in an earlier overturned round.`}</div>
       <div class="line"><span>uphold</span><span class="r">the ${sideName(d.answer)} answer stands provisionally; the disputer's bond burns</span></div>
       <div class="line"><span>overturn</span><span class="r">the verdict flips to ${sideName(1-d.answer)}${d.answerBond? `; the answer bond burns whole` : ` — no bond is left to burn`}</span></div>
       ${ladder}${closes}${quorum}
-      <div class="line"><span>threshold</span><span class="r">overturn needs more than half of the yes/no weight cast — the constant sits a hair above half and is stated here, not read; ties and all-abstain rounds uphold</span></div>
-      <p class="small muted" style="margin:8px 0 0">The tally stays sealed until the vote closes — each ballot is a public transaction on the chain, but this page will not add them up mid-vote: a running count would make copying the first big voter everyone's best move. Sealed means un-summed, not secret.</p>
-      <p class="small muted" style="margin:6px 0 0">Any ${esc(slug).toUpperCase()} holder may vote, weighed by balance at the sealed hourly epoch before the round opened — buying now adds nothing. Excluded: this claim's author, answerer, and stakers (staker records persist across withdrawal); the realm refuses them at signing.${demoExcluded? " The sample address holds a stake on this very claim, so it is excluded — a real signer in its position would be refused; the buttons stay to show the transaction's shape.":""}<span id="voteelig"></span></p>
+      <div class="line"><span>threshold</span><span class="r">overturn needs more than half of the yes/no weight cast; ties and all-abstain rounds uphold</span></div>
+      <p class="small muted" style="margin:10px 0 0">The count stays sealed until the vote closes. <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></p>
+      <p class="small muted" style="margin:6px 0 0">Any KOURT:${esc(slug).toUpperCase()} holder may vote, by their balance at the snapshot before this round opened; the claim's author, answerer and stakers are excluded.${demoExcluded? " The sample address is a staker here, so it is excluded — the buttons stay to show the transaction's shape.":""} <button type="button" class="helplink" data-help="help-vote">Who can vote →</button><span id="voteelig"></span></p>
       <div class="actions" style="margin-top:10px">
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
         ${btn("Abstain","VoteDispute",{courtSlug:slug,claimID:id,choice:"abstain"},"","counts to turnout only, never to a side")}
         ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div>
-      <div class="never"><b>Nothing ever moves between adversaries — forfeits burn, make-goods mint; there is no pot to steer.</b><br>
-        Quorum fails — half the disputer's bond burns, half returns; the answer bond stays on the table; a third failure closes the claim with no decision, everyone 1×.<br>
-        Overturned — the answer bond burns whole; the disputer's bond returns, plus a make-good of at most 2× their bond and at most 80% of the burn, newly minted and queued behind earlier awards.<br>
-        Upheld — the disputer's bond burns; the answer bond stays escrowed until Finalize, and the answerer's make-good — at most 2× their bond, at most 80% of the burn — is newly minted and queued behind earlier awards.</div>
-     </div>`;
+      <p class="small muted" style="margin:10px 0 0">No KOURT:${esc(slug).toUpperCase()} moves between the two sides — forfeits are burned, awards are newly minted. <button type="button" class="helplink" data-help="help-vote">What happens to the tokens →</button></p>
+      ${voteHelpModal(slug, d)}`;
 }
 async function fillVoteEligibility(slug, id, d){
   const el=document.getElementById("voteelig"); if(!el || !CFG.addr) return;
@@ -2201,7 +2332,7 @@ function mapSvg(L, data, slug){
    curve gives back, and what that does to the price — the same integer math
    the realm runs. */
 function joinPanel(slug, s){
-  const sym = esc(slug).toUpperCase();
+  const sym = "KOURT:" + esc(slug).toUpperCase(); // canonical display (MODERATION.md §13.9)
   const minted = s.minted!=null? s.minted : null;
   BUYQ = null; BUYCTX = null;
   let body;
@@ -2230,7 +2361,7 @@ function joinPanel(slug, s){
   return `<div class="panel"><h4>Join this court</h4>
         <p class="small" style="margin:0 0 10px"><b>Buying ${sym} is permanent</b> — the GNOT is burned: spent, held by no one. There is no sell-back, now or ever.</p>
         ${body}
-        <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as money spent for a voice, not money moved.</p>
+        <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
        </div>`;
 }
 function recomputeBuy(){
@@ -3142,7 +3273,8 @@ function resolutionLadder(d, nowH, tl){
       const gloss = known && !r.now? sinceWords(nowT, r.t) : "";
       const title = known? `block ${fmtN(r.h)}${r.est?" — projected from the current pace":""}`
         : "this claim predates the chain's date stamps; only its height is recorded";
-      return `<div class="line" title="${esc(title)}"><span class="l">${esc(when)}${gloss?` <small>${esc(gloss)}</small>`:""}</span><span class="r">${esc(r.what)}${r.sub?` <small>${esc(r.sub)}</small>`:""}</span></div>`;
+      return `<div class="ev" title="${esc(title)}">${esc(r.what)}${r.sub?`<small>${esc(r.sub)}</small>`:""}</div>`
+        + `<div class="dt" title="${esc(title)}">${esc(when)}${gloss?` <small>${esc(gloss)}</small>`:""}</div>`;
     }).join("");
     let fut2=null;
     if(d.phase==="open") fut2="awaiting an answer — anyone may post one with a bond";
@@ -3150,9 +3282,9 @@ function resolutionLadder(d, nowH, tl){
     else if(d.phase==="settled") fut2="settled — every stake withdraws 1×";
     else if(d.phase==="provClose") fut2="closed without a decision — everyone 1×";
     else if(d.phase==="closed") fut2="closed — never answered";
-    return `<div class="ticket" style="margin-bottom:12px"><h3>Resolution so far</h3>${body}
-      ${fut2?`<div class="line"><span class="l">—</span><span class="r">${esc(fut2)}</span></div>`:""}
-      <p class="small muted" style="margin:8px 0 0">Dates are the chain's own record; hover a row for its block. A date marked ≈ is projected from the current pace.</p></div>`;
+    return `<div class="ticket" style="margin-bottom:12px"><h3>Resolution so far</h3>
+      <div class="clockrows">${body}${fut2?`<div class="ev">${esc(fut2)}</div><div class="dt">—</div>`:""}</div>
+      <p class="small muted" style="margin:10px 0 0">Dates are the chain's own record; hover a row for its block. A date marked ≈ is projected from the current pace.</p></div>`;
   }
   if(d.answered && d.settleAt) rows.push([d.settleAt-51840, "answered"+(d.answer!=null?" "+sideName(d.answer):""), "derived: settle deadline − 72h"]);
   // SettleDeadline persists after freeze, but once a dispute/vote decided the
@@ -3245,7 +3377,7 @@ function qualitySection(slug,id,d){
   const voteQ = btn("Vote: low","VoteQuality",{courtSlug:slug,claimID:id,bucket:0},"no")
         + btn("Vote: mid","VoteQuality",{courtSlug:slug,claimID:id,bucket:1})
         + btn("Vote: high","VoteQuality",{courtSlug:slug,claimID:id,bucket:2},"yes");
-  if(d.phase==="disputed"){ line = "Quality rides this dispute — the same electorate also votes the claim's tier, sealed like the verdict. No separate flag can open while the dispute runs. Participants in the claim (author, answerer, stakers) are excluded.";
+  if(d.phase==="disputed"){ line = "While a dispute is running, the same voters also grade the claim — was it worth asking? — on the same ballot, sealed until the vote closes. No separate quality flag can be opened until the dispute ends. Anyone holding KOURT:" + esc(slug).toUpperCase() + " staked on the claim (its author, its answerer, its stakers) is excluded from both questions.";
     act = voteQ; }
   else if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? The tally is <b>sealed</b> until it closes.";
     act = voteQ + btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id}); }
@@ -3324,12 +3456,12 @@ function fourThings(){
     <li>Buying the coin is <b>permanent</b> — GNOT flows one way and is burned; there is no sell-back.</li>
     <li>Staked coin comes back <b>1×, win or lose</b>; only the <b>reward</b> rides on the verdict. (The GNOT that minted the coin was already burned — that part was spent, not staked.)</li>
     <li>The reward is <b>conviction</b> — stake × time on the winning side — drawn from newly-minted coin, capped so it can never be farmed.</li>
-    <li>Anyone may <b>answer</b> (with a bond; seasoned courts reserve the first day for qualified answerers), anyone but the answerer may <b>dispute</b>, and anyone may <b>flag</b>; bonds spend real money with no undo — staking is the one act you can unwind, until an answer posts.</li>
+    <li>Anyone may <b>answer</b> (with a bond; seasoned courts reserve the first day for qualified answerers), anyone but the answerer may <b>dispute</b>, and anyone may <b>flag</b>; bonds spend real tokens with no undo — staking is the one act you can unwind, until an answer posts.</li>
   </ol></div></section>`;
 }
 
 /* Every court slug, unbounded — the directory Render caps each section at 50
-   and omits hidden courts, but money is per-court. ListByTier returns []string;
+   and omits hidden courts, but balances are per-court. ListByTier returns []string;
    qeval's slice syntax varies by gnovm version, so extract the quoted slug
    tokens permissively and fall back to the (capped) directory if none parse. */
 async function allCourtSlugs(){
@@ -3345,7 +3477,7 @@ async function allCourtSlugs(){
 }
 
 /* All claim ids in a court. The rendered docket caps at the 50 newest and
-   hides moderated claims, but positions are read by id — so the money views
+   hides moderated claims, but positions are read by id — so the holdings views
    scan 1..ClaimCount (ids are 1-based and inclusive — the realm increments nextID before assigning) instead of parsing the docket. */
 const SCAN_DEPTH = 100;
 async function claimIdsFor(slug, depth){
@@ -3730,7 +3862,7 @@ on(/^\/about$/, async ()=>{
       <h2>Claims, and staking</h2>
       <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small deposit plus a fee. Both return when the claim runs its course; a claim voted junk burns both, and one that dies unanswered burns the fee (the spam price). Then anyone <b>stakes</b> coin on YES or NO. Staking is <b>no-loss</b>: your principal always returns 1×, whichever way the claim resolves. What you earn is a reward proportional to your <b>conviction</b> — stake × time held on the winning side — drawn from newly-minted coin under a hard per-claim cap, so it rewards early, accurate belief and can't be farmed. Unstaking is free until an answer posts; the reward weight you've already earned is kept.</p>
       <h2>Answers, disputes, and flags</h2>
-      <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later. To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice bought mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so no money ever moves between adversaries. Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
+      <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later. To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice bought mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so nothing ever moves between adversaries. Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
       <h2>The overlay is optional</h2>
       <p>Everything here is read from the realm's own <code>Render</code> and its public reads, and every button is a normal gnoweb transaction signed in your wallet. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore every state offline.</p>
       ${aboutTour()}

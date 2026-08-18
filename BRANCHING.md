@@ -42,6 +42,29 @@ routes through the shim), `court.gno` (`startCourtUser` seals the latch),
 nothing). Untouched by me and noted as yours: the `check-paths.py` gate you
 added to the Makefile (it passes against my files: 185 scanned, 0 stale).
 
+**2026-08-18, later — same session, semantics CHANGED under you.** An audit of
+the clock returned four HIGH findings and I applied all of them, which moved
+rules your `kourtv2_testclock.txtar` pinned. I edited that file rather than
+leave the suite red; please re-read it. What changed:
+
+1. `AdvanceTestClock` is **deployer-only** now (it checked nothing — arming had
+   handed the wheel to any address, which matured every deadline in the realm).
+2. Advancing is **capped** (10y/step, 100y total): two maximal int64 steps
+   wrapped the sum negative and walked the clock *backwards*.
+3. **`StartCourt` no longer seals.** The implicit seal rewound the clock beneath
+   stamps already written — a permissionless call could reopen an expired escrow
+   window — and it made scenarios impossible. Arming instead demands a PRISTINE
+   realm (meta court with no claims and no coin), so a used chain can never arm.
+4. Sealing keeps a **floor**: the clock never falls below the highest instant it
+   ever showed.
+5. `Render()` now prefixes a "test chain — dates fabricated" banner while armed,
+   and `ClaimTimeline` carries `testclock:<skew>:0`. Your render assertions may
+   need the extra first line.
+6. New: `EnableTestClockAt(cur, base)` for reproducible dates.
+
+Gates after all of it: `make check` 0, `make isolation-test` 0 (557 tests),
+`make txtar-test` 0 including your file.
+
 Still mine, in progress: a declarative scenario DSL and its runner, to seed a
 node the website can read in live mode (`E2E-ITERATION.md` has the phases).
 Nothing of mine is committed — the human owns commits, per the rule above.
