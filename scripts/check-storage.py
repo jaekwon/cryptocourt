@@ -71,7 +71,14 @@ TARGETS = [
         # — writes zero bytes. Worth stating because two reads in this realm HAD
         # started writing (five election reads via ensureMod; ensureClaimMod
         # ahead of the m-of-n gating it) and both were caught by hand, not here.
-        "budgets": {"z_read_filetest.gno": None},
+        "budgets": {
+            "z_read_filetest.gno": None,
+            # The test clock's arming path, from a fresh deploy. It reads two
+            # scalars and is then refused, so it must write nothing at all —
+            # a latch that allocated on a REFUSED arm would be a way to make a
+            # realm pay for strangers' attempts.
+            "z_testclock_filetest.gno": None,
+        },
     },
 ]
 

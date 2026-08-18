@@ -28,7 +28,6 @@ package kourtv2
 import (
 	"chain/runtime"
 	"strconv"
-	"time"
 )
 
 // Durations in seconds, each the wall-clock meaning its block constant was
@@ -40,8 +39,9 @@ const (
 	finalizeGraceSec = int64(7 * 86400)      // 7 days: participants finalize first
 )
 
-// nowTime is the block's timestamp in unix seconds.
-func nowTime() int64 { return time.Now().Unix() }
+// nowTime is the block's timestamp in unix seconds — through the test-clock
+// shim (testclock.gno), which is inert unless a throwaway chain armed it.
+func nowTime() int64 { return tcNow() }
 
 // deadlineTime answers a claim-scoped deadline in wall-clock terms, or 0 when
 // this claim predates the stamps (the caller then keeps its height gate).
@@ -100,5 +100,13 @@ func ClaimTimeline(courtSlug string, claimID uint64) string {
 	if cs.escrowUntil != 0 {
 		out += ";reopen:" + itoa(cs.escrowUntilAt) + ":" + itoa(cs.escrowUntil)
 	}
-	return out + ";now:" + itoa(nowTime()) + ":" + itoa(heightNow())
+	out += ";now:" + itoa(nowTime()) + ":" + itoa(heightNow())
+	// Fabricated, not Active: the marker has to survive sealing, or a seeded
+	// chain's timeline goes quiet the moment it stops being drivable.
+	if TestClockFabricated() {
+		// A consumer plotting these dates must be able to tell a test chain
+		// from a real one without reading prose.
+		out += ";testclock:" + itoa(TestClockPeakSkew()) + ":0"
+	}
+	return out
 }

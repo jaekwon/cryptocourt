@@ -20,6 +20,31 @@ import (
 //	"<slug>/<id>"         one claim
 //	"<slug>/<id>/<addr>"  one address's positions on a claim ("your page")
 func Render(path string) string {
+	// An armed test clock fabricates every date below. Say so on EVERY page,
+	// first thing: an accessor nobody reads is not a disclosure, and gnoweb
+	// serves this output directly to readers who have no other signal.
+	return testClockBanner() + render(path)
+}
+
+// testClockBanner is empty on any ordinary chain.
+func testClockBanner() string {
+	if !TestClockFabricated() {
+		return ""
+	}
+	// Keyed on Fabricated, not Active: a SEALED test chain can no longer be
+	// driven but is still full of invented dates, and that is precisely when a
+	// reader is most likely to mistake it for a real one.
+	tail := " Heights and balances are real."
+	if !TestClockActive() {
+		tail = " The clock is now sealed, so these dates are fixed history;" +
+			" heights and balances are real."
+	}
+	return "> **Test chain — the dates on this page are fabricated.** Its clock was " +
+		"set by the deployer and advanced " + strconv.FormatInt(TestClockPeakSkew(), 10) +
+		" seconds." + tail + "\n\n"
+}
+
+func render(path string) string {
 	path = strings.Trim(path, "/")
 	if path == "" {
 		return renderDirectory()
