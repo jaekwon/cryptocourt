@@ -1,6 +1,6 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
-> **STATUS: v0.50 — CONVERGED + BUILDING. Design converged at round 7; v0.9
+> **STATUS: v0.51 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch
 > `courtv2-moderation`; modules 6 (render) and 7 (meta court) remain.**
@@ -1171,6 +1171,200 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.51 — THE APPEALS LAYER APPLIES SIX VERBS AND THE SUITE ASSERTS ONE.**
+  `meta.gno` looked nearly finished: 13 of its 16 panics were already covered. But
+  it has **69 non-panic branch sites and zero were touched**, and that is where an
+  appeal's actual EFFECT lives. Mutating `applyMetaVerb`'s dispatch returned **5 of
+  5 survivors**, including three that invert what a verdict does:
+    - `verbClear` SETS the meta bit instead of clearing it,
+    - `verbSuspend` UNsuspends the moderator set,
+    - `verbUnsuspend` SUSPENDS it,
+    - a meta install claims the ELECTION-ONLY effects `installModSet`'s own comment
+      forbids (`false` -> `true`: one cheap appeal would stamp `lastElectionAt` and
+      burn `creatorUnseated`),
+    - and a NO-OP unhide stamps a moderation act anyway.
+  - **Five survivors and no catch in the same batch is uninterpretable, so the
+    cause was measured rather than assumed.** Classifying all fourteen
+    `ExecuteMetaVerdict` calls in the suite by whether they sit inside an
+    `AbortsContains`: exactly TWO are successful executions, and **both are
+    `unhide`.** Every other verb — hide, clear, suspend, unsuspend, setmods —
+    appears only as a refusal. The dispatch arms for those verbs are never reached
+    on a path that lands, so inverting them changes nothing any test observes.
+    **THE SUITE PROVES WHEN AN APPEAL IS REFUSED AND, FOR ONE VERB IN SIX, WHAT IT
+    DOES.** That is v0.48's perimeter finding again — tested only from one side —
+    but for EFFECTS rather than authority, and in the layer whose entire purpose is
+    correcting moderation.
+  - **The no-op unhide survivor is a different animal and worth separating.** A test
+    for it EXISTS and is named for it: section 3 of `TestMetaLifecycleGuards`
+    asserts `ModLogLen` is unchanged after unhiding a never-hidden claim. It
+    survives because the outcome has TWO sufficient causes — the guard's early
+    return, and `clearCourtBitByMeta` no-opping on its own when there is no bit.
+    **WHEN TWO MECHANISMS WOULD EACH SUFFICE, A TEST PROVES NEITHER.**
+    - I first proposed the guard's SECOND disjunct as the discriminating fixture —
+      a claim where `clm != nil` but `!clm.court`. **That was wrong, and reading
+      the callee is what showed it.** `clearCourtBitByMeta` opens with the same
+      `clm == nil || !clm.court` test, character for character, so both disjuncts
+      are masked equally: the two guards are one predicate written twice, and
+      NEITHER COPY IS INDIVIDUALLY OBSERVABLE.
+    - The only behavioural difference the mutant can produce is the `ensureMod(tc)`
+      call the outer guard skips, which ALLOCATES a moderator set seeded with the
+      court admin. That is invisible too, and deliberately so: `ModThreshold`
+      returns `1, 1` for an unallocated set and `IsCourtMod` answers `who ==
+      c.admin`, which are exactly the answers a freshly seeded set gives. The
+      read surface is built to make the two states indistinguishable.
+    - So the row goes in **NO batch** — the second redundant-by-construction guard
+      this iteration, after `parseModTitle`'s slash check. Keeping both copies is
+      still right (each is a cheap local statement of an invariant the other file
+      cannot see), but no mutation can hold them to it individually. Section 17
+      pins the COMPOSITE instead, on the state section 3 cannot reach.
+  - **`parseModTitle` fared far better: 5 of 7 caught** by an existing
+    `TestMetaParser`, which is what makes the `applyMetaVerb` zero interpretable —
+    the harness plainly reaches this file. The two gaps are both reachable:
+    - the `mod:` prefix gate, whose removal is MASKED for most inputs by the
+      separator guard one line later — a title only slips through if it happens to
+      contain a colon after position 4, e.g. `xxxxsuspend:foo`, which no test uses;
+    - and `mod:suspend:foo/bar`, a suspend target carrying a slash path.
+  - **The prefix gate is now pinned, by an input that reads as ordinary English.**
+    The verb only has to START at index 4, and `"why "` is four characters — so
+    **`why suspend:foo`**, a plausible claim title anyone might file, becomes a
+    BINDING suspend appeal against court `foo` the moment that gate stops holding.
+    Added to `TestMetaParser`'s bad list; the batch went to **6 of 7 caught**.
+    **A GUARD WHOSE DELETION IS MASKED FOR EVERY INPUT THE SUITE USES STILL HAS A
+    DISCRIMINATING INPUT** — every other bad title dies one line later on the
+    missing separator, which is precisely why the masking held.
+  - **The slash row is REDUNDANT BY CONSTRUCTION and gets no test.** For a suspend
+    target `strings.Contains(arg, "/")` rejects a strict subset of what the charset
+    loop below rejects, since `/` is not in `[a-z0-9-]` — so no input distinguishes
+    them, and `mod:suspend:foo/1` (already in the bad list) stays invalid under the
+    mutation. Worth stating precisely: only the `strings.Contains` HALF of that
+    disjunct is redundant. The `arg == ""` half is load-bearing and is not — an
+    empty court would run the charset loop zero times and parse as VALID.
+  - **THE FIX: four new sections that make every verb LAND.** `TestMetaLifecycleGuards`
+    gains sections 17-19, and the measurement that motivated them moves from
+    **2 successful executions (both `unhide`) to 8, covering all six verbs** —
+    `hide` and `clear` on one claim, `suspend` and `unsuspend` as a pair, and
+    `setmods` installing a 2-of-2 set. Refusals still outnumber them 12 to 8, which
+    is the right ratio for a gate; what changed is that the gate now has a far
+    side.
+    - **The contested-route preconditions are constructed, not re-earned.**
+      Aggressive verbs need `route == "vote"`, `decidedRounds != 0` and
+      `credEligible`, and the honest path to those — dispute, quorate vote,
+      resolve, escrow wait — is already driven end to end three times above, each
+      time to reach a REFUSAL. Sections 17-19 set exactly those three fields
+      directly, the same idiom section 16 already uses for `provClose`. **WHEN THE
+      PATH TO A STATE IS ALREADY TESTED ELSEWHERE, CONSTRUCT THE STATE AND SAY SO.**
+    - **`setmods` is asserted on three things, not one:** the seated members and
+      the candidate's own 2-of-2 threshold; that a review-seated set may NOT seed
+      claims (`installedByMeta`, the free-claim-faucet defence); and that the
+      creator's `AppointMods` repair path SURVIVES (`creatorUnseated` unburned).
+      The last two are the election-only effects `installModSet`'s comment forbids
+      a meta install from having, and both derive from the same boolean argument —
+      so asserting them is what makes that argument's value observable at all.
+      Order matters and is commented: `AppointMods` clears `installedByMeta`, so
+      the seed refusal has to be watched before the repair.
+    - **`unhide` is now pinned as distinct from `clear`.** With a review-court hide
+      standing, an `unhide` must leave it alone — otherwise the aggressive verb's
+      own product becomes reversible by the restorative route, which needs no
+      contest at all.
+  - **RESULT: the `applyMetaVerb` batch went 5-of-5-surviving to 4 OF 5 CAUGHT**,
+    the fifth being the redundant-by-construction row above. A follow-up batch of
+    four rows aimed at what the landings newly reach came back **4 of 4 caught**.
+    The corpus is at **320 rows, all caught**, every anchor re-verified to match
+    exactly once.
+  - **One of those four exposes the sharpest version of a rule already in this
+    log, so it is worth naming.** `installedByMeta` turned out to have a test
+    already — `TestMetaInstalledSetCannotSeed` — and that test calls
+    `installModSet(c, cm, cand, 100, false)` **with the literal `false` written in
+    the test body**. It therefore pins what the PRIMITIVE does when handed `false`,
+    and says nothing whatever about whether `applyMetaVerb` hands it `false`. That
+    is exactly the gap the surviving caller-side row occupied: invert the argument
+    at the call site and the primitive's own test still passes, because it never
+    consults the call site. **A TEST OF THE PRIMITIVE DOES NOT PIN THE CALLER'S
+    CHOICE OF ARGUMENT** — and the corollary, learned here: an argument's value is
+    observable only through an effect that READS it, so the way to pin a boolean
+    flag is to assert a consequence downstream of the real call, not to re-assert
+    the primitive with the flag spelled out by hand.
+  - **A CLAIM OF MINE THAT WAS WRONG, AND HOW.** I reported the suspension-escape
+    rule (`installModSet`: clear the suspension only when the incoming set differs
+    from the judged one) as "documented three times in source and tested nowhere",
+    on the strength of a grep for `suspendedSetID` and `currentSetID` across the
+    test tree. **`TestInstallClearsSuspensionOnlyIfSetChanges` (moderation_test.gno:316)
+    exists and covers both arms** — re-seating the judged set does not clear, a
+    different set does. It simply drives the rule through `suspendSet`,
+    `installModSet` and `CourtSuspended` without naming either field. I searched
+    for the FIELD NAMES and concluded something about the BEHAVIOUR. **A PATTERN
+    SCAN FLAGS SHAPES, NOT CLAIMS** — the rule I already wrote down, applied to the
+    wrong kind of identifier.
+  - **What survives that correction is narrower and sharper: the existing test
+    never varies `m`.** Both of its installs are 1-of-1, so the THRESHOLD dimension
+    of the identity is unpinned — which is exactly where a 3-0 consensus round then
+    found a real gap.
+
+- **v0.51a — CONSENSUS 3-0: THE SUSPENSION IDENTITY SHOULD NOT LIFT ON A
+  THRESHOLD-ONLY CHANGE.** Three subagents, identical prompts, independent reads.
+  `currentSetID` (moderation.gno:840) is `strconv.Itoa(cm.m) + ":"` followed by the
+  sorted members, so a 2-of-2 {A,B} that gets re-installed as 1-of-2 {A,B} produces
+  a different ID and **clears its own suspension with no membership change at all**,
+  ending up strictly EASIER to act with than the body that was judged. Both
+  `installModSet`'s comment and MODERATION.md §3.3 promise the escape residual
+  "costs a real membership change"; this one costs none.
+  - **All three rejected "zero cost" as the frame, correctly.** `ResolveElection`
+    charges a bond that REFUNDS to the winner, plus quorum and a margin over
+    retain; `setmods` needs a credEligible contested verdict. The price is
+    legitimacy, not tokens — so the right test is not what the install costs but
+    **whether the judged principals end up with equal or greater authority.**
+  - **The observability half, which I verified myself rather than take on trust:**
+    the election route cannot even see the change. `CandidateMembers`
+    (modvote.gno:612) returns `[]address` and nothing else, and none of the seven
+    exported election reads exposes `cand.m`. A candidate's threshold IS rendered —
+    but at modrender.gno:271, inside `writeAppeal`, which is the META appeal page,
+    not the ballot. So on the route where a threshold-only clone is cheapest to
+    run, the anti-decoy diff voters are supposed to perform is blind to it.
+  - **Direction matters and the fix should respect it.** Raising `m` is
+    de-escalatory; lowering it hands the judged actors unilateral power. Nothing is
+    stranded by refusing to lift, either: `mod:unsuspend` and the global DAO's
+    `ClearCourtSuspension` remain explicit re-arm paths.
+  - **DECISION: clear on an unchanged membership only when `m` strictly RISES.**
+    Pair it with exposing the candidate threshold to election voters the way
+    `writeAppeal` already does for appeals. NOT YET IMPLEMENTED — v0.51 is a
+    test-only change and this is a behaviour change, so it lands separately with
+    its own mutation rows. Draft at /tmp/v052-threshold-fix.md.
+  - **The MECHANISM departs from what all three recommended, on safety grounds.**
+    They proposed splitting `suspendedSetID` at its `m:` prefix to avoid a new
+    state field. Implementing it showed that **it fails OPEN**: parsing `m` back
+    out of a string we composed means handling a parse failure, and the natural
+    fallback of 0 makes `cm.m > judged` true, which LIFTS the suspension. A remedy
+    that disarms itself on a malformed record fails in the wrong direction. It also
+    reaches for the least-proven primitive for the most safety-critical compare —
+    neither `strconv.Atoi` nor `strings.Cut` appears anywhere in this realm. So
+    `currentSetID` becomes membership-only and `suspendSet` records the judged
+    threshold in a new `suspendedM int`, which is fail-closed and needs no parsing.
+    The SEMANTICS the round decided are unchanged; only the mechanism differs.
+  - **A SECOND LEAD THE ROUND TURNED UP, STATED AS A LEAD AND NOT YET AS A FINDING.**
+    One reviewer observed that `verbSetmods` may be a cheaper `unsuspend` than
+    `unsuspend`. THE STRUCTURAL FACTS ARE VERIFIED — I checked each directly rather
+    than relying on the report:
+      - `suspendActByGlobal` is read in exactly ONE place in the whole realm,
+        meta.gno:391, inside `case verbSuspend, verbUnsuspend:`. The `verbSetmods`
+        arm of that same switch checks only `cm.setActHeight > cs.verdictAt`.
+      - `GlobalSuspendSet` (moderation.gno:689, an m-of-n global DAO action) calls
+        `suspendSet` and then stamps `suspendActByGlobal`.
+      - `installModSet` clears `cm.suspended` on any set-identity change, with no
+        reference to `suspendActByGlobal` and no knowledge of who imposed it.
+    The guard those facts bypass is the one whose own comment says the global DAO's
+    suspension verbs "are the legal backstop, so a meta verdict that predates a
+    global decision must not silently overturn it" — and it is scoped precisely to
+    the STALE case (`suspendActByGlobal > cs.openedAt`), i.e. an appeal filed before
+    the global act and executed after it. A `setmods` appeal appears to reach that
+    same outcome without meeting that test.
+    **WHAT IS NOT ESTABLISHED: that the scenario actually runs.** There may be a
+    guard elsewhere on the path, and the behaviour may be intended — installing a
+    genuinely DIFFERENT set is arguably compliance with the judgment rather than
+    defiance of it, which is exactly what "a suspension judges a set, not a court"
+    means. The decoy residual is what makes it uncomfortable: S' can differ from S
+    by one address. **DO NOT WRITE THIS UP AS A FINDING UNTIL A TEST DEMONSTRATES
+    IT.** Next step is a fixture that globally suspends a court and then executes a
+    `setmods` verdict against it, and simply observes what `CourtSuspended` says.
 - **v0.50 — WHY THE META FRANCHISE IS TWO TRANSACTIONS, WRITTEN DOWN BEFORE
   SOMEBODY "FIXES" IT.** Asked why a buyer needs a second transaction to receive
   KOURT:META after buying a court coin, I gave two wrong answers before finding

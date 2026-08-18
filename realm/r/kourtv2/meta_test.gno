@@ -35,6 +35,13 @@ func TestMetaParser(cur realm, t *testing.T) {
 		"xmod:hide:foo/1", "mod:hide:foo", "mod:hide:foo/", "mod:hide:/1",
 		"mod:hide:foo/0", "mod:hide:FOO/1", "mod:bogus:foo/1", "mod:suspend:foo/1",
 		"mod:hide:foo/abc", "ordinary claim title", "mod:",
+		// The `mod:` prefix gate, which every other entry above fails to reach:
+		// each of them dies one line later on the missing verb separator, so
+		// deleting the prefix check leaves them all still invalid. The verb only
+		// has to START AT INDEX 4, and "why " is four characters — so this is an
+		// ordinary English title that becomes a BINDING suspend appeal against
+		// court "foo" the moment the prefix gate stops holding.
+		"why suspend:foo",
 	}
 	for _, ti := range bad {
 		if parseModTitle(ti).valid {
@@ -599,6 +606,178 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 		ExecuteMetaVerdict(cross(cur), ap15)
 	})
 	cs15.provClose = false // leave the fixture as section 15 left it
+
+	// ---- 17. THE VERBS THAT LAND -------------------------------------------
+	// Everything above tests the GATE: which appeals are refused, and why. Only
+	// sections 1 and 4 ever execute one, and both are `unhide` — so of the six
+	// verbs applyMetaVerb dispatches, the suite had watched exactly one actually
+	// apply. Inverting the rest changed nothing any test could see: `clear`
+	// SETTING the bit it is named for clearing, `suspend` UNsuspending,
+	// `unsuspend` SUSPENDING, all five survived a mutation run. A suite that only
+	// ever refuses a verb never learns what it does.
+	//
+	// The route to a decided, credible contest is driven end to end three times
+	// above (10, 12, 15) — each time to reach a REFUSAL, and each time paying for
+	// a dispute, a quorate vote, a resolve and an escrow wait. What is under test
+	// from here down is the effect applied once the gate opens, so the gate's
+	// contested-route preconditions are set directly rather than re-earned four
+	// more times. The fields are exactly the three ExecuteMetaVerdict step 4
+	// reads.
+	decide := func(id uint64) uint64 {
+		cs := mustClaim(mc, id)
+		cs.route = "vote"
+		cs.decidedRounds = 1
+		cs.credEligible = true
+		return id
+	}
+	aggressive := func(title string) uint64 { return decide(appeal(title)) }
+
+	// Sixteen sections of stakes are still locked and nothing here withdraws, so
+	// the five appeals below need their own funding. See section 15 on why
+	// minting converges instead of chasing the floor it raises.
+	mc.coin.Mint(alice, 900_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // seal the mint before any floor reads it
+
+	testCourt(cur, "mtx17", alice, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2) // the court must predate the appeal
+	testing.SetRealm(testing.NewUserRealm(alice))
+	t17 := OpenClaim(cross(cur), "mtx17", "a claim the review court will hide")
+	if HiddenFromListing("mtx17", t17) {
+		t.Fatal("fixture: mtx17's claim must start visible")
+	}
+	tgt17 := "mtx17/" + strconv.FormatUint(t17, 10)
+
+	// hide LANDS. It is the one aggressive verb exempt from credEligible, on the
+	// ground that it is low-harm and globally reversible.
+	ap17 := aggressive("mod:hide:" + tgt17)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap17)
+	if !HiddenFromListing("mtx17", t17) {
+		t.Fatal("a hide verdict must actually hide the claim")
+	}
+
+	// The no-op unhide's SECOND disjunct: mod state now EXISTS for this claim
+	// (the hide wrote it) but the COURT bit is not set, so a meta unhide has
+	// nothing to clear. Section 3's claim has no mod state at all and cannot
+	// reach this arm.
+	//
+	// What this pins is the COMPOSITE, and the distinction matters. applyMetaVerb's
+	// pre-check and clearCourtBitByMeta's own `clm == nil || !clm.court` are the
+	// same test written twice, so NEITHER COPY IS INDIVIDUALLY OBSERVABLE —
+	// delete one and the other still holds. The seeding side effect is invisible
+	// too, deliberately: ModThreshold and IsCourtMod both answer for an
+	// unallocated set exactly as they answer for a set ensureMod has just seeded.
+	// Deleting BOTH is what this catches, and the second assertion is why it is
+	// worth catching — the meta bit must survive an unhide, or `unhide` quietly
+	// becomes `clear` and the review court's own hides fall to the cheaper
+	// restorative route that needs no contest at all.
+	before17 := ModLogLen("mtx17", t17)
+	ap17b := appeal("mod:unhide:" + tgt17)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap17b)
+	if ModLogLen("mtx17", t17) != before17 {
+		t.Fatal("an unhide with no court bit to clear must not write a moderation act")
+	}
+	if !HiddenFromListing("mtx17", t17) {
+		t.Fatal("an unhide must not clear the review court's OWN hide; that is what clear is for")
+	}
+
+	// clear LANDS. Restorative, so it executes from silence.
+	ap17c := appeal("mod:clear:" + tgt17)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap17c)
+	if HiddenFromListing("mtx17", t17) {
+		t.Fatal("a clear verdict must clear the review court's own hide")
+	}
+	if ModLogLen("mtx17", t17) <= before17 {
+		t.Fatal("a landed clear must write a moderation act")
+	}
+
+	// ---- 18. suspend and unsuspend, both LANDING ---------------------------
+	// Section 9 proves a manufactured contest cannot suspend and section 10 proves
+	// a stale verdict cannot. Neither ever watched a good one succeed, so with both
+	// arms transposed the review court would disarm a moderator set on `unsuspend`
+	// and rearm it on `suspend`, and every assertion above would still pass.
+	testCourt(cur, "mtx18", alice, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	if CourtSuspended("mtx18") {
+		t.Fatal("fixture: mtx18 must start unsuspended")
+	}
+	ap18 := aggressive("mod:suspend:mtx18")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap18)
+	if !CourtSuspended("mtx18") {
+		t.Fatal("a suspend verdict must suspend the moderator set")
+	}
+
+	// The release, on a SECOND appeal opened after the suspension landed. The
+	// pair is the point: a set that can be disarmed and never rearmed is a
+	// one-way ratchet, and suspend/unsuspend share one latch per court — so this
+	// also shows a successful execution frees that latch for the opposite verb.
+	ap18b := aggressive("mod:unsuspend:mtx18")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap18b)
+	if CourtSuspended("mtx18") {
+		t.Fatal("an unsuspend verdict must release the moderator set")
+	}
+
+	// ---- 19. setmods LANDS, and the two effects it must NOT have -----------
+	// Sections 12 and 15 refuse a setmods on staleness; this one installs. The
+	// threshold is 2-of-2 so the candidate's OWN m and n are observable rather
+	// than coinciding with the 1-of-1 an unallocated set reports.
+	testCourt(cur, "mtx19", alice, 10_000_000_000)
+	modA := testutils.TestAddress("mtx19-a")
+	modB := testutils.TestAddress("mtx19-b")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	cand19 := RegisterModCandidate(cross(cur), "mtx19", 2, modA, modB)
+	testing.SkipHeights(epochBlocks * 2) // court AND candidate must predate the appeal
+	ap19 := aggressive("mod:setmods:mtx19/" + strconv.FormatUint(cand19, 10))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), ap19)
+
+	if !IsCourtMod("mtx19", modA) || !IsCourtMod("mtx19", modB) {
+		t.Fatal("a setmods verdict must seat the candidate set")
+	}
+	if IsCourtMod("mtx19", alice) {
+		t.Fatal("a setmods verdict must REPLACE the incumbent set, not extend it")
+	}
+	if m, n := ModThreshold("mtx19"); m != 2 || n != 2 {
+		t.Fatalf("the candidate's own threshold must be installed, got %d-of-%d", m, n)
+	}
+
+	// installedByMeta. A set the review court seated may not seed claims: seeding
+	// waives the deposit AND the fee while the emission slices still mint, so a
+	// captured review court seating puppets would otherwise hand them a free
+	// claim faucet. installModSet derives this flag from the SAME argument the
+	// two election stamps read, which is what makes that argument's value
+	// observable at all.
+	testing.SetRealm(testing.NewUserRealm(modA))
+	uassert.AbortsContains(t, cur, "may not seed claims", func() {
+		OpenClaimSeeded(cross(cur), "mtx19", "a free claim for a seated puppet")
+	})
+
+	// creatorUnseated — the other election-only effect, and the one with teeth.
+	// A court that has never held an election keeps its creator's free, instant
+	// AppointMods repair path, and one cheap meta appeal must not destroy it:
+	// otherwise capturing the review court once permanently removes a court's
+	// ability to fix itself without running a full election.
+	//
+	// LAST in the section on purpose. AppointMods is a local act and clears
+	// installedByMeta, so the seed refusal has to be observed before it runs.
+	repair := testutils.TestAddress("mtx19-repair")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mtx19", 1, repair)
+	if !IsCourtMod("mtx19", repair) || IsCourtMod("mtx19", modA) {
+		t.Fatal("the creator's appointment power must survive a meta install")
+	}
+
+	// And the taint LIFTS with the set that carried it — a creator appointment is
+	// a local act, so the set it installs may seed again. Without this the
+	// refusal above would be a one-way door: a single meta install would cost the
+	// court its seeding verb permanently, which is a harsher remedy than the vet
+	// that set the flag ever votes for.
+	testing.SetRealm(testing.NewUserRealm(repair))
+	OpenClaimSeeded(cross(cur), "mtx19", "a locally appointed set may seed again")
 }
 
 // metaRealmPath is a STRING CONSTANT, and meta's escrow is derived from it,

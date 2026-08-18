@@ -2140,5 +2140,103 @@
     "label": "quality/CounterFlag:748: kourtv2: the counter-flag window has lapsed",
     "find": "\t\tpanic(\"kourtv2: the counter-flag window has lapsed\")\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/applyMetaVerb: a meta install claims ELECTION-ONLY effects (false -> true)",
+    "find": "\t\tinstallModSet(tc, cm, cand, runtime.ChainHeight(), false)\n",
+    "replace": "\t\tinstallModSet(tc, cm, cand, runtime.ChainHeight(), true)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/applyMetaVerb: verbClear SETS the meta bit instead of clearing it",
+    "find": "\tcase verbClear:\n\t\tclearMetaBit(tc, p.target, by)\n",
+    "replace": "\tcase verbClear:\n\t\tsetMetaBit(tc, p.target, by)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/applyMetaVerb: verbSuspend UNsuspends the set",
+    "find": "\tcase verbSuspend:\n\t\tsuspendSet(tc, by)\n",
+    "replace": "\tcase verbSuspend:\n\t\tunsuspendSet(tc, by)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/applyMetaVerb: verbUnsuspend SUSPENDS the set",
+    "find": "\tcase verbUnsuspend:\n\t\tunsuspendSet(tc, by)\n",
+    "replace": "\tcase verbUnsuspend:\n\t\tsuspendSet(tc, by)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/parseModTitle: any title parses as an appeal (the mod: prefix gate is gone)",
+    "find": "\tif !strings.HasPrefix(title, metaPrefix) {\n\t\treturn p\n\t}\n",
+    "replace": "\tif !strings.HasPrefix(title, metaPrefix) {\n\t\t_ = title\n\t}\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/parseModTitle: a title with no verb separator still parses",
+    "find": "\tif slash < 0 {\n\t\treturn p\n\t}\n",
+    "replace": "\tif slash < 0 {\n\t\t_ = slash\n\t}\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/parseModTitle: an empty court or an empty id is accepted",
+    "find": "\t\tif cut <= 0 || cut == len(arg)-1 {\n",
+    "replace": "\t\tif cut < 0 {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/parseModTitle: claim id 0 is accepted as a target",
+    "find": "\t\tif err != nil || id == 0 {\n",
+    "replace": "\t\tif err != nil {\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/parseModTitle: a court slug outside [a-z0-9-] is accepted",
+    "find": "\t\t\treturn modParse{}\n",
+    "replace": "\t\t\t_ = ch\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/parseModTitle: an unknown verb falls through as a valid appeal",
+    "find": "\tdefault:\n\t\treturn p\n\t}\n",
+    "replace": "\tdefault:\n\t\t_ = verb\n\t}\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "meta.gno",
+    "label": "meta/applyMetaVerb: verbHide CLEARS the meta bit instead of setting it",
+    "find": "\tcase verbHide:\n\t\tsetMetaBit(tc, p.target, by)\n",
+    "replace": "\tcase verbHide:\n\t\tclearMetaBit(tc, p.target, by)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/installModSet: installedByMeta is inverted (a meta seat may seed claims)",
+    "find": "\tcm.installedByMeta = !byElection\n",
+    "replace": "\tcm.installedByMeta = byElection\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "modvote/installModSet: the ELECTION-ONLY stamps fire for a meta install too",
+    "find": "\tif byElection {\n\t\tcm.lastElectionAt = at\n\t\tcm.creatorUnseated = true\n\t}\n",
+    "replace": "\tif true {\n\t\tcm.lastElectionAt = at\n\t\tcm.creatorUnseated = true\n\t}\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "moderation.gno",
+    "label": "moderation/AppointMods: a creator appointment no longer clears the meta taint",
+    "find": "\tcm.installedByMeta = false // a creator appointment is a local act\n",
+    "replace": "\t// a creator appointment is a local act\n"
   }
 ]
