@@ -1624,6 +1624,41 @@ capital against 2× lock: negative, as designed.
 
 Newest first.
 
+- **v1.10 — stake.gno, the money path and the other 2.3-rows/100 outlier: 23 of 39 caught, and
+  the gaps are conviction created out of nothing.** Conviction IS the reward weight, so
+  conviction that should not exist is minted money. Already held: all three `mulDiv128` guards,
+  H1's freeze cap in three forms, the F9 cap base past the freeze, staking frozen by an answer,
+  both `accrue` accumulators, three of `advancePools`' four legs, and both markers' non-advance.
+  **Six real gaps.** `Stake` dropping `touch(c)` leaves the era integral stale at the moment of
+  staking, so the interval since anyone last walked it stays uncredited — and the NEXT settle
+  credits it at the new, larger stake. Adding to a position therefore BACK-PAYS the addition for
+  time it was not staked. `Unstake`'s side routing is the same defect already found and fixed in
+  `WithdrawStake` (v0.9x's `TestWithdrawStakeDebitsItsOwnSidesPool`); its pre-answer sibling was
+  left, and it hides for the same reason — the unstaker receives the right coin either way and the
+  damage stays in the per-side totals every reward is drawn against. **Both trailing rings** were
+  unheld: `cs.oi` is X̄'s source, so pointing it at the YES side alone halves the answerability
+  gate and every %-of-X̄ quantity, and `cs.yes` is the numerator of the rendered ratio.
+  `lifeAvgStake` counting one side halves the P6 base outright. And `posKey`'s `|y`/`|n` suffix —
+  collapse it and one staker's two sides merge into a single `stakePos`, sharing one conviction
+  accumulator and one `bonusPaid` latch; invisible because nothing in the suite had a single
+  address staking both ways, and `StakeOf` reads through the same key it wrote.
+  **Six equivalences, each with a reason worth keeping.** Three are unreachable at bounded
+  magnitudes and say so in their own comments (`add128`'s 128-bit check, `mustAdd`, `mustMul` —
+  the last needing ~585 years of untouched blocks). `lifeAvgStake`'s `den < 1` has exactly ONE
+  caller, PostAnswer, which cannot run before the trailing average matures, so `now > openedAt`
+  always.
+  `getPos`'s baseline is the interesting one: zeroing `lastRateAcc` looks like a free-conviction
+  exploit and is harmless, because `accrue` runs BEFORE the new stake is recorded — the position
+  has zero stake at its first settle, so the enormous delta multiplies by nothing. That ordering
+  is load-bearing and was itself unpinned, so it is now a row of its own: settle-after-record IS
+  caught, by the same fixture.
+  And the sixth is a lesson about assertion strings. `Stake`'s `amount <= 0` guard looks covered —
+  `TestStakeGuards` asserts a Stake of 0 aborts with `"must be positive"` — but with the guard
+  deleted the call reaches `grc20votes`' own `mustBePositive`, whose message contains **the same
+  substring**. The test passes either way and cannot tell which layer refused. A substring
+  assertion spanning two layers is a test that cannot fail for the reason it names.
+  Batch now 707 rows: 706 caught, 0 not caught, one surviving by design (41:18 at 393% CPU).
+
 - **v1.09 — courtv2's render path, the thinnest-covered file in the repo: 15 of 31 caught, and
   the sanitizer that AGENTS.md names by hand had FOUR of five call sites unheld.**
   Target chosen by measurement rather than instinct: rows per hundred lines, by file. Every

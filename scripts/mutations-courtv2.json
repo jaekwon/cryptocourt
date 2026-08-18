@@ -4710,5 +4710,243 @@
   "label": "tierName: low and high are swapped",
   "find": "\tcase tierLowX:\n\t\treturn \"low\"\n\tcase tierHighX:\n\t\treturn \"high\"",
   "replace": "\tcase tierLowX:\n\t\treturn \"high\"\n\tcase tierHighX:\n\t\treturn \"low\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "accrue: the settle marker is never advanced, so conviction double-counts",
+  "find": "\tdelta := acc - p.lastRateAcc\n\tp.lastRateAcc = acc",
+  "replace": "\tdelta := acc - p.lastRateAcc"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "accrue: the conviction delta is signed the wrong way",
+  "find": "\tdelta := acc - p.lastRateAcc",
+  "replace": "\tdelta := p.lastRateAcc - acc"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "accrue: no conviction is ever credited",
+  "find": "\t\thi, lo := bits.Mul64(uint64(p.stake), uint64(delta))\n\t\tp.convHi, p.convLo = add128(p.convHi, p.convLo, hi, lo)",
+  "replace": "\t\thi, lo := bits.Mul64(uint64(p.stake), uint64(delta))\n\t\t_, _ = hi, lo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "accrue: the RAW marker is never advanced, so the F9 cap base double-counts",
+  "find": "\trawDelta := rh - p.lastRawAt\n\tp.lastRawAt = rh",
+  "replace": "\trawDelta := rh - p.lastRawAt"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "accrue: the raw integral is never credited (the Q7 cap base stays zero)",
+  "find": "\t\thi, lo := bits.Mul64(uint64(p.stake), uint64(rawDelta))\n\t\tp.rawHi, p.rawLo = add128(p.rawHi, p.rawLo, hi, lo)",
+  "replace": "\t\thi, lo := bits.Mul64(uint64(p.stake), uint64(rawDelta))\n\t\t_, _ = hi, lo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "accrue: the raw integral runs past the freeze",
+  "find": "\trh := rawHeight(cs)\n\trawDelta := rh - p.lastRawAt",
+  "replace": "\trh := runtime.ChainHeight()\n\trawDelta := rh - p.lastRawAt"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the pool integral ignores the freeze cap",
+  "find": "func advancePools(c *Court, cs *claimState) {\n\tacc := effectiveRateAcc(c, cs)",
+  "replace": "func advancePools(c *Court, cs *claimState) {\n\tacc := c.rateAccFP"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the YES pool integral accrues on the NO total",
+  "find": "\tif d := acc - cs.yesLastAcc; d > 0 && cs.yesStake > 0 {\n\t\thi, lo := bits.Mul64(uint64(cs.yesStake), uint64(d))",
+  "replace": "\tif d := acc - cs.yesLastAcc; d > 0 && cs.yesStake > 0 {\n\t\thi, lo := bits.Mul64(uint64(cs.noStake), uint64(d))"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the YES conviction lands on the NO pool",
+  "find": "\t\tcs.yesConvHi, cs.yesConvLo = add128(cs.yesConvHi, cs.yesConvLo, hi, lo)",
+  "replace": "\t\tcs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the NO pool never accrues conviction",
+  "find": "\t\thi, lo := bits.Mul64(uint64(cs.noStake), uint64(d))\n\t\tcs.noConvHi, cs.noConvLo = add128(cs.noConvHi, cs.noConvLo, hi, lo)",
+  "replace": "\t\thi, lo := bits.Mul64(uint64(cs.noStake), uint64(d))\n\t\t_, _ = hi, lo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the YES raw integral is never credited",
+  "find": "\t\thi, lo := bits.Mul64(uint64(cs.yesStake), uint64(d))\n\t\tcs.yesRawHi, cs.yesRawLo = add128(cs.yesRawHi, cs.yesRawLo, hi, lo)",
+  "replace": "\t\thi, lo := bits.Mul64(uint64(cs.yesStake), uint64(d))\n\t\t_, _ = hi, lo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the conviction markers are never advanced (the pool double-counts)",
+  "find": "\tcs.yesLastAcc, cs.noLastAcc = acc, acc",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "advancePools: the raw markers are never advanced",
+  "find": "\tcs.yesLastRawAt, cs.noLastRawAt = rh, rh",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "rawHeight: the freeze cap is inverted",
+  "find": "\tif cs.frozenAt != 0 && cs.frozenAt < h {",
+  "replace": "\tif cs.frozenAt != 0 && cs.frozenAt > h {"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "lifeAvgStake: the denominator runs from the FREEZE, not the claim's open",
+  "find": "\tden := now - cs.openedAt",
+  "replace": "\tden := now - cs.frozenAt"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "lifeAvgStake: only the YES side counts toward the lifetime average",
+  "find": "\thi, lo := add128(cs.yesRawHi, cs.yesRawLo, cs.noRawHi, cs.noRawLo)",
+  "replace": "\thi, lo := cs.yesRawHi, cs.yesRawLo"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: a CLOSED claim still accepts stake",
+  "find": "\tif cs.closed {\n\t\tpanic(\"courtv2: this claim is closed\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: the coin is never transferred into escrow",
+  "find": "\tc.coin.Transfer(who, c.escrow, amount)\n\tadvancePools(c, cs)",
+  "replace": "\tadvancePools(c, cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: the pools are not settled before the totals move",
+  "find": "\tc.coin.Transfer(who, c.escrow, amount)\n\tadvancePools(c, cs)",
+  "replace": "\tc.coin.Transfer(who, c.escrow, amount)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: the era integral is not walked first",
+  "find": "\ttouch(c)\n\n\tc.coin.Transfer(who, c.escrow, amount)",
+  "replace": "\tc.coin.Transfer(who, c.escrow, amount)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: a restake REPLACES the position instead of adding to it",
+  "find": "\tp.stake = mustAdd(p.stake, amount)",
+  "replace": "\tp.stake = amount"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: the amount lands on the other side's pool",
+  "find": "\tif side == sideYES {\n\t\tcs.yesStake = mustAdd(cs.yesStake, amount)\n\t} else {\n\t\tcs.noStake = mustAdd(cs.noStake, amount)\n\t}",
+  "replace": "\tif side == sideYES {\n\t\tcs.noStake = mustAdd(cs.noStake, amount)\n\t} else {\n\t\tcs.yesStake = mustAdd(cs.yesStake, amount)\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: the rings never observe the new totals",
+  "find": "\t\tcs.noStake = mustAdd(cs.noStake, amount)\n\t}\n\tobservePools(cs)",
+  "replace": "\t\tcs.noStake = mustAdd(cs.noStake, amount)\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Unstake: a FROZEN claim still releases principal",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"courtv2: stakes are frozen \u2014 withdraw at settlement (principal is never withheld)\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Unstake: more than is staked may be withdrawn",
+  "find": "\tif p.stake < amount {\n\t\tpanic(\"courtv2: unstaking more than is staked\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Unstake: conviction for the interval before the exit is lost (F9)",
+  "find": "\taccrue(c, cs, p, side)\n\tp.stake -= amount",
+  "replace": "\tp.stake -= amount"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Unstake: a partial exit removes the whole position",
+  "find": "\tp.stake -= amount",
+  "replace": "\tp.stake = 0"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Unstake: the debit lands on the other side's pool",
+  "find": "\tif side == sideYES {\n\t\tcs.yesStake -= amount\n\t} else {\n\t\tcs.noStake -= amount\n\t}",
+  "replace": "\tif side == sideYES {\n\t\tcs.noStake -= amount\n\t} else {\n\t\tcs.yesStake -= amount\n\t}"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Unstake: the principal is never paid back out",
+  "find": "\tc.coin.Transfer(c.escrow, who, amount)\n\tobservePools(cs)",
+  "replace": "\tobservePools(cs)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "observePools: the OI ring tracks only the YES side",
+  "find": "\tcs.oi = cs.oi.Observe(h, mustAdd(cs.yesStake, cs.noStake))",
+  "replace": "\tcs.oi = cs.oi.Observe(h, cs.yesStake)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "observePools: the YES ring tracks the NO side",
+  "find": "\tcs.yes = cs.yes.Observe(h, cs.yesStake)",
+  "replace": "\tcs.yes = cs.yes.Observe(h, cs.noStake)"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "convToCC: the divisor loses a factor of a million (every reward 1e6x)",
+  "find": "\tden := uint64(periodBlocks) * 10_000 * 1_000_000",
+  "replace": "\tden := uint64(periodBlocks) * 10_000"
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "posKey: a staker's YES and NO positions share one key",
+  "find": "\t\treturn string(who) + \"|y\"",
+  "replace": "\t\treturn string(who) + \"|n\""
+ },
+ {
+  "pkg": "courtv2",
+  "file": "stake.gno",
+  "label": "Stake: the position is settled AFTER its new stake is recorded",
+  "find": "\taccrue(c, cs, p, side)\n\tp.stake = mustAdd(p.stake, amount)",
+  "replace": "\tp.stake = mustAdd(p.stake, amount)\n\taccrue(c, cs, p, side)"
  }
 ]

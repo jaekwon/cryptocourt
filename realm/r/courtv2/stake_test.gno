@@ -350,3 +350,168 @@ func TestFrozenConvictionIsNotRepricedByLaterRateMoves(cur realm, t *testing.T) 
 		t.Fatalf("an unfrozen claim tracks the court: got %d want %d", got, c.rateAccFP)
 	}
 }
+
+// A fresh stake earns nothing for time before it existed. Two mutations survive
+// here and both are free-conviction bugs — the reward weight is the whole draw, so
+// conviction created out of nothing is minted money.
+//
+//	getPos's baseline. A new position records lastRateAcc = the court's era
+//	integral NOW. Zero it and the first accrue credits stake × the WHOLE court
+//	history, so a latecomer's first stake arrives with the conviction of somebody
+//	who had been there since the court opened.
+//
+//	Stake's touch(c). Without it the era integral is stale at the moment of
+//	staking, so the interval since anyone last walked it stays uncredited — and the
+//	NEXT settle credits that interval at the new, larger stake. Adding to a position
+//	therefore back-pays the addition for time it was not staked.
+//
+// The court has to be AGED and untouched for either to show, which is why the
+// existing fixtures miss both: they stake into a court whose integral is still ~0.
+func TestAFreshStakeEarnsNothingForTimeBeforeIt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fs-alice")
+	testCourt(cur, "fs1", alice, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fs1", "conviction starts at zero")
+
+	// Age the court without touching it, so rateAccFP is behind the clock.
+	testing.SkipHeights(periodBlocks / 2)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "fs1", id, sideYES, 1_000_000)
+	// Nothing has elapsed WHILE staked, so there is nothing to have earned.
+	if got := ConvictionOf("fs1", id, sideYES, alice); got != 0 {
+		t.Errorf("a fresh stake already holds %d conviction — it was credited for "+
+			"time before it existed", got)
+	}
+
+	// Now let time pass at 1_000_000, and record what that interval is worth.
+	testing.SkipHeights(periodBlocks / 4)
+	small := ConvictionOf("fs1", id, sideYES, alice)
+	if small <= 0 {
+		t.Fatalf("setup: a live stake must accrue over time, got %d", small)
+	}
+
+	// Add a thousand times as much, then immediately read again. The addition
+	// cannot have earned anything yet, so the total must still be about `small` —
+	// not `small` scaled by the new stake.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "fs1", id, sideYES, 1_000_000_000)
+	after := ConvictionOf("fs1", id, sideYES, alice)
+	if after > small*2 {
+		t.Errorf("adding to a position back-paid it: conviction went %d -> %d with "+
+			"no time elapsed between the two reads", small, after)
+	}
+}
+
+// Unstake debits its OWN side's pool. The same defect was found and fixed in
+// WithdrawStake (TestWithdrawStakeDebitsItsOwnSidesPool); its pre-answer sibling
+// was left, and swapping the branches here goes unnoticed for the same reason it
+// did there — the unstaker receives the right coin either way, and the damage is
+// left behind in the claim's per-side totals, which feed the conviction integrals
+// every reward is drawn against.
+func TestUnstakeDebitsItsOwnSidesPool(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("up-alice")
+	bob := testutils.TestAddress("up-bob")
+	c := testCourt(cur, "up1", alice, 20_000_000_000)
+	c.coin.Mint(bob, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "up1", "whose pool an unstake leaves")
+
+	// Unequal on purpose: equal pools hide a swap by symmetry.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "up1", id, sideYES, 400_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "up1", id, sideNO, 900_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Unstake(cross(cur), "up1", id, sideNO, 300_000_000)
+	yes, no := StakePools("up1", id)
+	if no != 600_000_000 {
+		t.Errorf("the NO pool is %d after a 300M NO exit, want 600000000", no)
+	}
+	if yes != 400_000_000 {
+		t.Errorf("the YES pool moved to %d on somebody else's exit, want 400000000", yes)
+	}
+}
+
+// Both trailing rings track their own series, which nothing held.
+//
+// cs.oi is TOTAL open interest — it is X̄'s source, so the answerability gate and
+// every %-of-X̄ quantity read it; cs.yes is the YES side alone, and the two are
+// divided against each other for the rendered trailing ratio. Point either at the
+// wrong total and X̄ halves or the ratio inverts, with no other symptom.
+func TestBothTrailingRingsTrackTheirOwnSeries(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tr-alice")
+	c := testCourt(cur, "tr1", alice, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "tr1", "two rings")
+	cs := mustClaim(c, id)
+
+	// Set the totals outright and observe once: this is the recorder under test.
+	// Unequal, and not a multiple of each other, so no swap can coincide.
+	cs.yesStake, cs.noStake = 100_000, 700_000
+	observePools(cs)
+	h := runtimeHeight()
+	// A sub-width window widens to one bucket, so this reads the value just written.
+	if got, _ := cs.oi.Average(h, 1); got != 800_000 {
+		t.Errorf("the OI ring recorded %d, want the 800000 TOTAL", got)
+	}
+	if got, _ := cs.yes.Average(h, 1); got != 100_000 {
+		t.Errorf("the YES ring recorded %d, want the 100000 YES side", got)
+	}
+}
+
+// The lifetime average counts BOTH sides. It is the P6 base — PostAnswer takes
+// max(3h trailing, this) and every bond, slash, bar and clamp is priced off the
+// result — so dropping a side halves the price of contesting a claim.
+//
+// Called directly with the integrals set, because reaching a chosen lifetime
+// average through the machine means solving for it, and a test that does
+// arithmetic to check arithmetic proves nothing.
+func TestTheLifetimeAverageCountsBothSides(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("la-alice")
+	c := testCourt(cur, "la1", alice, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "la1", "both sides count")
+	cs := mustClaim(c, id)
+
+	cs.openedAt = 0
+	cs.yesRawHi, cs.yesRawLo = 0, 1_000
+	cs.noRawHi, cs.noRawLo = 0, 3_000
+	if got := lifeAvgStake(cs, 100); got != 40 {
+		t.Errorf("the lifetime average is %d, want (1000+3000)/100 = 40", got)
+	}
+}
+
+// One staker on BOTH sides keeps two positions. posKey's "|y"/"|n" suffix is the
+// only thing separating them, and collapsing it went unnoticed because nothing in
+// the suite had a single address staking both ways: the pool totals stay correct
+// either way, and StakeOf reads through the same key it was written with, so both
+// sides report the merged figure and agree with each other.
+//
+// What merges is the stakePos — one conviction accumulator and one bonusPaid latch
+// for two positions, so the winner draw is paid once for a staker who earned it on
+// the winning side and staked the losing one too.
+func TestOneStakerOnBothSidesKeepsTwoPositions(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bs-alice")
+	testCourt(cur, "bs1", alice, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "bs1", "hedged both ways")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "bs1", id, sideYES, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "bs1", id, sideNO, 500_000_000)
+
+	if got := StakeOf("bs1", id, sideYES, alice); got != 200_000_000 {
+		t.Errorf("the YES position reads %d, want 200000000", got)
+	}
+	if got := StakeOf("bs1", id, sideNO, alice); got != 500_000_000 {
+		t.Errorf("the NO position reads %d, want 500000000", got)
+	}
+	// And the pools agree, so the two positions are separate rather than the reads
+	// being separately wrong.
+	if yes, no := StakePools("bs1", id); yes != 200_000_000 || no != 500_000_000 {
+		t.Errorf("the pools read %d/%d, want 200000000/500000000", yes, no)
+	}
+}
