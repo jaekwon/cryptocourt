@@ -186,6 +186,30 @@ that binds only under contention (a flat per-IP quota would throttle two people
 talking while 24 of 30 slots sat idle); a global budget that **sheds rather than
 denies**, since a flat global 429 is one attacker muting the whole product.
 
+**What "under contention" turns out to mean, measured.** Not what the constants look
+like they say. The rule is `courtTotal >= 30 && courtMine >= 3`, and the obvious
+reading — a busy room tightens up for everybody — is wrong. Twelve people talking at
+one message per twenty seconds is 36 a minute, comfortably past the cap, and **nothing
+is refused**: the window holds three rounds and an author's own pending message is not
+counted yet, so `courtMine` peaks at 2 however many people are present.
+
+So the second clause keys on how fast ONE address talks, not on how crowded the court
+is. It bites when a busy court also contains somebody posting faster than three a
+minute, and then it caps *them* at three while a newcomer who has said nothing still
+gets in. That is the property worth having, and it is the one the fixtures pin:
+`TestOrdinaryConversationIsNeverThrottled` at 2, 5 and 12 people, and
+`TestUnderContentionAFairShareStillLetsANewcomerSpeak` for the other arm.
+
+Two smaller things the same measurement settled. `TestAQuietCourtHoldsNobodyToTheFairShare`
+exists because deleting `courtTotal >= 30` — turning the rule into a flat three a
+minute — survived every other fixture, since none of them had a fast talker in an empty
+room. And the global shed's "already posted" is counted across ALL courts, so a shed
+address is one that has said nothing anywhere. Saturating that window at all needs at
+least 30 addresses — `PerIPMax` caps each at 10 a minute — and they have to speak
+concurrently, since the 2s interval is per address rather than global. Advancing a
+fixture's clock per message instead of per round spreads 300 messages over fifteen
+minutes and the window never holds more than twenty.
+
 ## 6. The scanner
 
 Deterministic detectors run first, in `kourtchat`, and their outputs are stated
@@ -538,6 +562,41 @@ is why `-for` is required rather than defaulted.
 Both are §5 working as written: the cross-site refusal is the CSRF defence, and same
 host on a different port is same-site, which is the real deployment. Opening the demo
 page off disk gives a working read-only panel; serve the directory to post from it.
+
+**YOU BANNED THE WRONG PERSON.** The likeliest thing you will get wrong, and the only
+mistake in this system with somebody waiting on the other end of it — a banned address
+cannot post, so they cannot appeal through the chat, which is what `--appeal-to` is for.
+
+    kourtchatctl hash <their IP>       the ip_hash, if you have the address
+    kourtchatctl list -ip <hash>       their consequences and the state column
+    kourtchatctl why <id>              what it was based on: the evidence COPY,
+                                       the network it matched, who it hit
+    kourtchatctl unban <id>            reverses it (`revoke` is the same command)
+
+`status` is the SERVICE's health — backlog and scanner age — not a person's. `list -ip`
+is the per-address view, and it takes a `net_hash` as readily as an `ip_hash`
+(`ip_hash = ? OR net_hash = ?`), which is how you find everyone a manual ban caught.
+
+Three things to expect, all measured in `TestTheOperatorsViewOfABadBan`:
+
+**The ban probably took somebody else with it.** A manual consequence matches `net_hash`
+as well as `ip_hash` (§2), so everyone sharing that network — a household, an office, a
+university — is silenced too. Their messages stay visible, because hiding keys on
+`ip_hash` alone and they wrote nothing wrong. A silenced person with all their words
+still on screen is the normal appearance of this mistake, and `list -ip <net_hash>` is
+how you find out who else is in it.
+
+**`unban` gives back both halves or it has given back nothing.** Reversing restores the
+ability to post AND un-hides what the ban hid. Check the second one: `status` reading
+`ok` while the messages stay hidden is a person nominally unbanned and still erased.
+The reversal is a RECOMPUTE, not a blanket un-hide, so a message another live
+consequence covers correctly stays down — including a disclosed secret, which nothing
+un-hides.
+
+**The row stays, marked REVERSED.** Reversing does not delete the record, and should
+not: the next operator needs to see that something happened and what it was. It also
+means a wrongly banned person is not left one rung up the ladder — manual consequences
+never counted toward escalation, and a revoked one would not count either way.
 
 **A message the scanner flagged and did NOT act on is waiting for a person.** That is
 §7's carve-out working as intended, and `review` is where those live:
