@@ -587,6 +587,31 @@ because `unban` restores a punished author's hidden messages and cannot restore 
 are gone. Rows that gave up ARE prunable: a decision was made about them, a bad one, and
 that is what the unscannable count is for.
 
+**A CITATION MUST NOT OUTLIVE THE MESSAGE IT CITES,** and it did. Note that the third refusal
+above says "in force" — so a revoked or expired consequence's message IS deletable, while
+infractions are never pruned at all. `messages.id` is a bare INTEGER PRIMARY KEY, which is a
+rowid, and SQLite hands out `max(rowid)+1` with no high-water mark. Empty the table and ids
+restart at 1, so a surviving citation points at a future stranger's message.
+
+Both consumers of `evidence_id` were then wrong about that message, and neither said anything:
+
+    revoked citation    sqlAwaitingReview's NOT EXISTS matched the stale row, so a freshly
+                        flagged message left the review queue and reached no human
+    expired citation    worse — an unrelated revocation for the same address HID the new
+                        message, because Revoke's recompute matches evidence_id and an
+                        expired kick is not a revoked one. Two of three messages visible,
+                        and nothing to tell the author why
+
+Prune clears the citation when it deletes the row, which is what a reference to a deleted row
+should do, and is written as "not in messages" so it repairs anything an earlier prune left
+behind. **The appeal record is the `evidence` and `detail` copies**, which is what they were
+taken for; the id was only a link to a row nobody can read. An existing fixture asserted the
+opposite — "the dangling evidence_id is fine" — and its read half still holds while its premise
+does not.
+
+Not fixed by preventing reuse: SQLite cannot add `AUTOINCREMENT` without rebuilding the table,
+and §9 promises migrations are column additions with defaults only.
+
 Dry run by default, and it reports the refusals even when they are zero — on the screen
 where somebody is about to delete a month of history, "nothing is waiting for review" is
 worth reading. Bounded per call, because §1's argument for one database file rests on
