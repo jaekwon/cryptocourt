@@ -68,7 +68,28 @@ func pastDeadline(stamp, secs int64) (passed, known bool) {
 func blocksToSecs(b int64) int64 { return b * 5 }
 
 // heightNow is the reference height recorded beside every stamp.
-func heightNow() int64 { return runtime.ChainHeight() }
+// heightNow is the ONLY height read in this realm. Everything accounting —
+// conviction per block, emission periods, vote closes, twap maturity, the
+// quality quiet window — reads it, so a test chain can advance them all
+// together rather than mining. On an ordinary chain tcHeightSkew is zero and
+// this is exactly runtime.ChainHeight().
+//
+// The floor matters for the same reason the time floor does: once sealed, the
+// skew is dropped, and without a floor the chain would report a height BELOW
+// ones it already wrote into claims — reopening every window keyed on a stored
+// height. scripts/check-height-shim.py enforces that nothing bypasses this.
+func heightNow() int64 {
+	var h int64
+	if tcArmed {
+		h = tcHeightBase + tcHeightSkew // frozen: only AdvanceTestHeight moves it
+	} else {
+		h = runtime.ChainHeight()
+		if h < tcHeightFloor {
+			h = tcHeightFloor // a sealed test chain never falls below what it showed
+		}
+	}
+	return h
+}
 
 func itoa(v int64) string { return strconv.FormatInt(v, 10) }
 
@@ -106,7 +127,45 @@ func ClaimTimeline(courtSlug string, claimID uint64) string {
 	if TestClockFabricated() {
 		// A consumer plotting these dates must be able to tell a test chain
 		// from a real one without reading prose.
-		out += ";testclock:" + itoa(TestClockPeakSkew()) + ":0"
+		// seconds:blocks. The second field was a reserved 0 until the override
+		// grew a height half; a consumer that trusted the dates also needs to
+		// know the HEIGHTS were moved, since every block-denominated figure on
+		// the page — conviction, emission, the trailing average — derives from
+		// a block count the scenario supplied.
+		out += ";testclock:" + itoa(TestClockPeakSkew()) + ":" + itoa(TestHeightPeakSkew())
 	}
 	return out
+}
+
+// realmClock hands this realm's height to the pure packages that need it.
+// grc20votes quantises vote epochs by it and the governor gates every voting
+// window on it, and neither may import a realm — so the realm supplies the
+// height instead of them reading the chain. Without this a fast-forwarded test
+// chain could age conviction, emission and every deadline EXCEPT the votes,
+// which is the one thing a dispute waits on.
+//
+// Stateless by design: it holds nothing, so persisting it inside the ledger
+// stores a reference and no data.
+type realmClock struct{}
+
+// Height satisfies grc20votes.Clock and, through the ledger, the governor's
+// Electorate.
+func (realmClock) Height() int64 { return heightNow() }
+
+// eventHeight is the height an EMITTED EVENT should carry, as a string.
+//
+// It is heightNow() — the realm's own clock, so an event agrees with the state
+// written in the same transaction. On a fabricated chain that disagrees with
+// the height the CHAIN stamps on the transaction, and an indexer joining the
+// two would see one transaction reporting two heights with nothing to tell it
+// which is which. So a fabricated height says so, in the value itself: an
+// ordinary chain emits "4812", a seeded one emits "121861~test". A consumer
+// that splits on the tilde gets the number; one that does not gets something
+// obviously not a plain height rather than a plausible lie.
+func eventHeight() string {
+	h := strconv.FormatInt(heightNow(), 10)
+	if TestClockFabricated() {
+		return h + "~test"
+	}
+	return h
 }

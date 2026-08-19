@@ -4,7 +4,6 @@ package kourtv2
 
 import (
 	"chain"
-	"chain/runtime"
 	"strconv"
 
 	checkpoint "gno.land/p/kourt/checkpoint/v0"
@@ -38,7 +37,7 @@ type claimState struct {
 	answeredAtTime int64
 	verdictAtTime  int64
 	escrowUntilAt  int64 // absolute: the reopen window's close, in unix seconds
-	closed   bool // dead-claim close (unanswered past the timeout)
+	closed         bool  // dead-claim close (unanswered past the timeout)
 	// dustBurns is what the deposit+fee ACTUALLY burned at a conclusive low —
 	// recorded because settleSlash must size its bounty top-up against real
 	// burns, not against params (a seeded claim burns nothing, and the params
@@ -121,11 +120,11 @@ type claimState struct {
 
 	// The quality lane (quality.gno, §10.2 Q2-Q5). One flag slot per claim;
 	// a court-local sealed 3-bucket tally rides flags AND dispute rounds.
-	flagOpen        bool
-	flagger         address
-	flagBond        int64
-	flagVoteEnd     int64
-	flagCycles      int64 // inconclusive reopens; bond frozen at 4xb0 after 3
+	flagOpen    bool
+	flagger     address
+	flagBond    int64
+	flagVoteEnd int64
+	flagCycles  int64 // inconclusive reopens; bond frozen at 4xb0 after 3
 	// slotConsumed is a one-way latch meaning "a CONCLUSIVE tally landed", written at
 	// exactly two sites (ResolveFlag, resolveQualityRide) and never cleared. It is far
 	// more load-bearing than its name suggests: SEVEN behavioural readers depend on it,
@@ -276,18 +275,18 @@ func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 	c.nextID++
 	id := c.nextID
 	cs := &claimState{
-		id:          id,
-		title:       title,
-		author:      who,
-		deposit:     dep,
-		fee:         fee,
-		seeded:      seeded,
-		openedAt:     runtime.ChainHeight(),
+		id:           id,
+		title:        title,
+		author:       who,
+		deposit:      dep,
+		fee:          fee,
+		seeded:       seeded,
+		openedAt:     heightNow(),
 		openedAtTime: nowTime(),
-		stakers:     bptree.NewBPTree32(),
-		oi:          twap.New(epochBlocks, twapBuckets, 8),
-		yes:         twap.New(epochBlocks, twapBuckets, 8),
-		provisional: -1, // int8 zero is sideYES — the sentinel must be explicit
+		stakers:      bptree.NewBPTree32(),
+		oi:           twap.New(epochBlocks, twapBuckets, 8),
+		yes:          twap.New(epochBlocks, twapBuckets, 8),
+		provisional:  -1, // int8 zero is sideYES — the sentinel must be explicit
 	}
 	c.claims.Set(beClaimKey(id), cs)
 	// A seeded claim is force-visible on the pending list from birth: the set
@@ -330,7 +329,7 @@ func EditClaimTitle(cur realm, courtSlug string, claimID uint64, newTitle string
 		panic("kourtv2: the claim is no longer editable")
 	}
 	if passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && passed) ||
-		(!known && runtime.ChainHeight() >= cs.openedAt+c.params.stakeOpenDelayBlocks) {
+		(!known && heightNow() >= cs.openedAt+c.params.stakeOpenDelayBlocks) {
 		panic("kourtv2: the polish window has closed; the title is frozen")
 	}
 	if cs.yesStake != 0 || cs.noStake != 0 {
@@ -358,7 +357,7 @@ func CloseDeadClaim(cur realm, courtSlug string, claimID uint64) {
 		panic("kourtv2: this claim has an answer; it settles, it does not die")
 	}
 	if passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||
-		(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {
+		(!known && heightNow() < cs.openedAt+deadClaimTimeout) {
 		panic("kourtv2: the dead-claim timeout has not passed")
 	}
 	cs.closed = true
@@ -410,7 +409,7 @@ func StakePools(courtSlug string, claimID uint64) (yes, no int64) {
 // TrailingOI is the flash-resistant trailing average of total stake (X̄).
 func TrailingOI(courtSlug string, claimID uint64, window int64) (avg int64, mature bool) {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
-	return cs.oi.Average(runtime.ChainHeight(), window)
+	return cs.oi.Average(heightNow(), window)
 }
 
 // PoolConviction is each side's lifetime rate-weighted conviction in CC units —
@@ -426,7 +425,7 @@ func PoolConviction(courtSlug string, claimID uint64) (yes, no int64) {
 // numerator of the trailing-week ratio (TrailingOI is its denominator).
 func TrailingYes(courtSlug string, claimID uint64, window int64) (avg int64, mature bool) {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
-	return cs.yes.Average(runtime.ChainHeight(), window)
+	return cs.yes.Average(heightNow(), window)
 }
 
 func mustClaim(c *Court, id uint64) *claimState {

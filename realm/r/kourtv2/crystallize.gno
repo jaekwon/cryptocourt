@@ -9,7 +9,6 @@
 package kourtv2
 
 import (
-	"chain/runtime"
 	"math/bits"
 )
 
@@ -36,7 +35,7 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {
 		panic("kourtv2: a quality question is still open")
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now < cs.lastFlagEventAt+priorityWindowBlocks {
 		panic("kourtv2: the 24h quiet window after the last flag event has not passed")
 	}

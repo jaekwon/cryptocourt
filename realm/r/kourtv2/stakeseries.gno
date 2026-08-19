@@ -11,7 +11,6 @@ package kourtv2
 // This is render/read-layer state: no money path reads any of it.
 
 import (
-	"chain/runtime"
 	"strconv"
 	"strings"
 
@@ -70,7 +69,7 @@ func setIfChanged(a *checkpoint.Archive, s *checkpoint.Series, key string, e uin
 // Within one epoch the writes coalesce on the inline slots for free; the trim
 // rides at most once per hourly epoch per claim.
 func recordPools(c *Court, cs *claimState) {
-	h := runtime.ChainHeight()
+	h := heightNow()
 	a := ensureCSArch(c)
 	hE := uint32(h/epochBlocks) + 1 // 1-based, the coin's own epoch clock
 	dE := uint32(h/dailyBlocks) + 1
@@ -175,7 +174,7 @@ func ClaimSeries(courtSlug string, claimID uint64, grain string) string {
 	default:
 		panic(`kourtv2: grain is "hourly" or "daily"`)
 	}
-	now := uint32(runtime.ChainHeight()/width) + 1
+	now := uint32(heightNow()/width) + 1
 	ys, moreY := collectSeriesKeyed(c.csArch, yS, yKey)
 	ns, moreN := collectSeriesKeyed(c.csArch, nS, nKey)
 

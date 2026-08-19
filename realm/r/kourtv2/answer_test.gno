@@ -192,11 +192,11 @@ func TestXBarFrozenSurvivesAPreAnswerDrain(cur realm, t *testing.T) {
 	matureOI(cur, "f9d", id, alice, 1_000_000)
 
 	cs := mustClaim(c, id)
-	trailing, mature := cs.oi.Average(runtimeHeight(), answerWindow)
+	trailing, mature := cs.oi.Average(heightNow(), answerWindow)
 	if !mature {
 		t.Fatal("setup: the trailing ring must be mature")
 	}
-	life := lifeAvgStake(cs, runtimeHeight())
+	life := lifeAvgStake(cs, heightNow())
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "f9d", id, sideYES)
 
@@ -226,7 +226,7 @@ func TestXBarFrozenSurvivesAPreAnswerDrain(cur realm, t *testing.T) {
 	}
 	// No withdrawal can lower the lifetime arm — past capital-time is immutable. The
 	// integrals are frozen at the answer, so a later read is identical.
-	if again := lifeAvgStake(cs, runtimeHeight()); again != life {
+	if again := lifeAvgStake(cs, heightNow()); again != life {
 		t.Fatalf("the frozen lifetime average must not drift: %d vs %d", again, life)
 	}
 }
@@ -255,11 +255,11 @@ func TestXBarFrozenTakesTheTrailingArmOnAGrowingClaim(cur realm, t *testing.T) {
 	matureOI(cur, "f9g", id, alice, 1_000_000)
 
 	cs := mustClaim(c, id)
-	trailing, mature := cs.oi.Average(runtimeHeight(), answerWindow)
+	trailing, mature := cs.oi.Average(heightNow(), answerWindow)
 	if !mature {
 		t.Fatal("setup: the trailing ring must be mature")
 	}
-	life := lifeAvgStake(cs, runtimeHeight())
+	life := lifeAvgStake(cs, heightNow())
 	if life >= trailing {
 		t.Fatalf("fixture must ramp UP so the lifetime arm is the smaller one: "+
 			"life=%d trailing=%d", life, trailing)

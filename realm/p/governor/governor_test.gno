@@ -1,6 +1,7 @@
 package governor
 
 import (
+	"chain/runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,6 +30,9 @@ func (c *council) PastVotes(who address, at uint32) int64 {
 func (c *council) PastTotal(at uint32) int64    { return int64(len(c.members)) }
 func (c *council) EngagedTotal(at uint32) int64 { return c.PastTotal(at) }
 func (c *council) Epoch() uint32                { return c.epoch }
+
+// Height satisfies Electorate; see the note in changes_test.gno.
+func (c *council) Height() int64 { return runtime.ChainHeight() }
 
 // coin is the minimum a page needs to name what is being voted.
 type coin struct{ supply int64 }

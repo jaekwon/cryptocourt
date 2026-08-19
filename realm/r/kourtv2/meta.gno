@@ -20,7 +20,6 @@ package kourtv2
 
 import (
 	"chain"
-	"chain/runtime"
 	"strconv"
 	"strings"
 
@@ -362,7 +361,7 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 	// 6. Execution expiry: a verdict is not a sleeper round. Without this a
 	//    party could bank K decided appeals and discharge one after each local
 	//    election, inverting last-writer-wins into oldest-ammunition-wins.
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now > cs.verdictAt+mc.params.votingBlocks {
 		panic("kourtv2: this verdict has expired; re-appeal")
 	}
@@ -458,11 +457,11 @@ func applyMetaVerb(mc, tc *Court, cm *courtMod, p modParse, cs, target *claimSta
 		unsuspendSet(tc, by)
 	case verbSetmods:
 		cand := cm.mustCandidate(p.target)
-		installModSet(tc, cm, cand, runtime.ChainHeight(), false)
+		installModSet(tc, cm, cand, heightNow(), false)
 		chain.Emit("ModSetInstalled",
 			"court", tc.id, "by", "meta",
 			"candidate", strconv.FormatUint(cand.id, 10),
-			"height", strconv.FormatInt(runtime.ChainHeight(), 10),
+			"height", eventHeight(),
 		)
 	}
 }

@@ -25,7 +25,6 @@ package kourtv2
 
 import (
 	"chain"
-	"chain/runtime"
 	"strconv"
 
 	grc20votes "gno.land/p/kourt/grc20votes/v0"
@@ -205,7 +204,7 @@ func RegisterModCandidate(cur realm, courtSlug string, m int, members ...address
 	cm.candSeq++
 	id := cm.candSeq
 	cm.candidates.Set(beClaimKey(id), &modCandidate{
-		id: id, members: canon, m: m, by: who, at: runtime.ChainHeight(),
+		id: id, members: canon, m: m, by: who, at: heightNow(),
 	})
 	return id
 }
@@ -289,7 +288,7 @@ func OpenElection(cur realm, courtSlug string, candidateID uint64) uint64 {
 	if cm.election != nil && !cm.election.resolved {
 		panic("kourtv2: an election is already open for this court")
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now < cm.electionCooldownUntil {
 		panic("kourtv2: this court is in its post-election cooldown")
 	}
@@ -325,7 +324,7 @@ func NominateCandidate(cur realm, courtSlug string, candidateID uint64) {
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	e := cm.mustOpenElection()
-	if runtime.ChainHeight() >= e.nominateEnd {
+	if heightNow() >= e.nominateEnd {
 		panic("kourtv2: the nomination window has closed")
 	}
 	cand := cm.mustCandidate(candidateID)
@@ -346,7 +345,7 @@ func addNomination(c *Court, cm *courtMod, e *election, cand *modCandidate, who 
 	c.coin.Transfer(who, c.escrow, e.bond) // the poster's own CC (the I2 carve-out)
 	e.nominators.Set(who.String(), true)
 	e.lines.Set(beClaimKey(cand.id), &ballotLine{
-		candID: cand.id, nomAt: runtime.ChainHeight(), bond: e.bond, poster: who,
+		candID: cand.id, nomAt: heightNow(), bond: e.bond, poster: who,
 	})
 }
 
@@ -380,7 +379,7 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	e := cm.mustOpenElection()
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now < e.nominateEnd {
 		panic("kourtv2: voting opens when the nomination window closes")
 	}
@@ -426,7 +425,7 @@ func ResolveElection(cur realm, courtSlug string) {
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	e := cm.mustOpenElection()
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now < e.voteEnd {
 		panic("kourtv2: the voting window has not closed")
 	}

@@ -27,7 +27,6 @@
 package kourtv2
 
 import (
-	"chain/runtime"
 	"strconv"
 
 	governor "gno.land/p/kourt/governor/v0"
@@ -88,7 +87,7 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 	if cs.verdictAt != 0 {
 		panic("kourtv2: the verdict is final")
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if cs.provisional < 0 {
 		// First round: the 72h settle delay IS the dispute window — after it,
 		// only SettleUndisputed. The two guards partition every height, so no
@@ -345,7 +344,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 	// The escrow clock is set ONCE, at the first resolution, and never
 	// recomputed — a reopen does not reset it (V1 §3.6).
 	if firstResolution && !cs.provClose {
-		cs.escrowUntil = runtime.ChainHeight() + escrowWindow(c, cs)
+		cs.escrowUntil = heightNow() + escrowWindow(c, cs)
 		cs.escrowUntilAt = nowTime() + blocksToSecs(escrowWindow(c, cs))
 	}
 	cs.disputeOpen = false
@@ -386,7 +385,7 @@ func compAmount(ownBond, burned int64) int64 {
 // deposit AND fee refund (provClose is not a conclusive low — §3.1.7).
 func provCloseClaim(c *Court, cs *claimState) {
 	cs.provClose = true
-	cs.verdictAt = runtime.ChainHeight()
+	cs.verdictAt = heightNow()
 	cs.verdictAtTime = nowTime()
 	cs.route = "closed"
 	cs.tier = tierLowX
@@ -437,7 +436,7 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	if cs.provisional < 0 {
 		panic("kourtv2: no provisional verdict to finalize")
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||
 		(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {
 		panic("kourtv2: the escrow window has not passed")
@@ -682,5 +681,5 @@ func DisputeBondNext(courtSlug string, claimID uint64) int64 {
 func Reopenable(courtSlug string, claimID uint64) bool {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	return cs.provisional >= 0 && cs.verdictAt == 0 && !cs.disputeOpen &&
-		runtime.ChainHeight() < cs.escrowUntil
+		heightNow() < cs.escrowUntil
 }

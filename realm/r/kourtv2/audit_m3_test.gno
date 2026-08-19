@@ -86,7 +86,7 @@ func TestSlashSurvivesSettle(cur realm, t *testing.T) {
 	if cs.pendingSlash != reserve {
 		t.Fatalf("the slash must reserve the retained bond: pendingSlash=%d want %d", cs.pendingSlash, reserve)
 	}
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	supplyBefore := c.coin.TotalSupply()
 	ResolveSlashWindow(cross(cur), "m3h1", id)
 	if got := supplyBefore - c.coin.TotalSupply(); got != reserve {
@@ -187,7 +187,7 @@ func TestCrystallizeRefusesWhileSlashPending(cur realm, t *testing.T) {
 
 	// Close the window: the slash burns, the draw crystallizes, and nothing is
 	// stranded — escrow drains to zero once the stake is withdrawn.
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	ResolveSlashWindow(cross(cur), "cqp1", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SkipHeights(periodBlocks)
@@ -279,8 +279,8 @@ func TestSlashSurvivesFinalize(cur realm, t *testing.T) {
 	wantReserve := slashSizeFor(cs) // frozen conviction → stable; ≤ bond (deploy invariant)
 
 	// Finalize after escrow: most of the bond returns, the slash reserve stays.
-	if runtimeHeight() < cs.escrowUntil {
-		testing.SkipHeights(cs.escrowUntil - runtimeHeight() + 1)
+	if heightNow() < cs.escrowUntil {
+		testing.SkipHeights(cs.escrowUntil - heightNow() + 1)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "fbz1", id)
@@ -299,7 +299,7 @@ func TestSlashSurvivesFinalize(cur realm, t *testing.T) {
 	if cs.pendingSlash != wantReserve {
 		t.Fatalf("the slash must reserve the retained bond: pendingSlash=%d want %d", cs.pendingSlash, wantReserve)
 	}
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	supplyBefore := c.coin.TotalSupply()
 	ResolveSlashWindow(cross(cur), "fbz1", id)
 	if got := supplyBefore - c.coin.TotalSupply(); got != wantReserve {
@@ -463,7 +463,7 @@ func TestOverturnedAnswererDrawsNoSlice(cur realm, t *testing.T) {
 	if Provisional("mf1", id) != sideNO {
 		t.Fatal("the answer must be overturned to NO")
 	}
-	testing.SkipHeights(EscrowUntil("mf1", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("mf1", id) - heightNow())
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "mf1", id)
 	if AnswerRecord("mf1", alice) != 0 {
@@ -529,7 +529,7 @@ func TestFinalizeRetainsNothingAfterDustLowNoSlash(cur realm, t *testing.T) {
 	// A consumed slot admits no future flag, so no slash can follow: Finalize must
 	// withhold NOTHING. (Without the !slotConsumed clause it retains slashSizeFor
 	// against a slash that can never land, holding the answerer's coin to crystallize.)
-	if now := runtimeHeight(); now < cs.escrowUntil {
+	if now := heightNow(); now < cs.escrowUntil {
 		testing.SkipHeights(cs.escrowUntil - now + 1)
 	}
 	before := c.coin.BalanceOf(alice)

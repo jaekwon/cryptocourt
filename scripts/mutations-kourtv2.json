@@ -255,15 +255,15 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "OpenFlag: the re-flag cooldown after an inconclusive cycle never applies (M3-MED-1)",
-    "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
+    "find": "\tif cs.flagCycles >= 1 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {",
     "replace": "\tif false {"
   },
   {
     "pkg": "kourtv2",
     "file": "claim.gno",
     "label": "CloseDeadClaim ignores the timeout",
-    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {\n\t\tpanic(\"kourtv2: the dead-claim timeout has not passed\")\n\t}\n",
-    "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {\n\t\t_ = passed\n\t}\n"
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.openedAt+deadClaimTimeout) {\n\t\tpanic(\"kourtv2: the dead-claim timeout has not passed\")\n\t}\n",
+    "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.openedAt+deadClaimTimeout) {\n\t\t_ = passed\n\t}\n"
   },
   {
     "pkg": "kourtv2",
@@ -1165,14 +1165,14 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "VoteQuality: the flag vote accepts votes after it closed",
-    "find": "\tif cs.flagOpen && runtime.ChainHeight() >= cs.flagVoteEnd {",
+    "find": "\tif cs.flagOpen && heightNow() >= cs.flagVoteEnd {",
     "replace": "\tif false {"
   },
   {
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "VoteQuality: the counter re-vote accepts votes after it closed",
-    "find": "\tif cs.counterOpen && runtime.ChainHeight() >= cs.counterVoteEnd {",
+    "find": "\tif cs.counterOpen && heightNow() >= cs.counterVoteEnd {",
     "replace": "\tif false {"
   },
   {
@@ -1354,8 +1354,8 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "OpenFlag: the cooldown starts one cycle late",
-    "find": "\tif cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {",
-    "replace": "\tif cs.flagCycles >= 2 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {"
+    "find": "\tif cs.flagCycles >= 1 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {",
+    "replace": "\tif cs.flagCycles >= 2 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {"
   },
   {
     "pkg": "kourtv2",
@@ -1452,7 +1452,7 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "ResolveSlashWindow: the counter-flag window need not have lapsed",
-    "find": "\tif runtime.ChainHeight() < cs.pendingSlashUntil {\n\t\tpanic(\"kourtv2: the counter-flag window is still open\")\n\t}",
+    "find": "\tif heightNow() < cs.pendingSlashUntil {\n\t\tpanic(\"kourtv2: the counter-flag window is still open\")\n\t}",
     "replace": ""
   },
   {
@@ -2117,8 +2117,8 @@
     "pkg": "kourtv2",
     "file": "meta.gno",
     "label": "meta/applyMetaVerb: a meta install claims ELECTION-ONLY effects (false -> true)",
-    "find": "\t\tinstallModSet(tc, cm, cand, runtime.ChainHeight(), false)\n",
-    "replace": "\t\tinstallModSet(tc, cm, cand, runtime.ChainHeight(), true)\n"
+    "find": "\t\tinstallModSet(tc, cm, cand, heightNow(), false)\n",
+    "replace": "\t\tinstallModSet(tc, cm, cand, heightNow(), true)\n"
   },
   {
     "pkg": "kourtv2",
@@ -2909,7 +2909,7 @@
     "pkg": "kourtv2",
     "file": "claim.gno",
     "label": "OpenClaim: the provisional sentinel is the int8 zero, which reads as sideYES",
-    "find": "\t\tprovisional: -1, // int8 zero is sideYES — the sentinel must be explicit",
+    "find": "\t\tprovisional:  -1, // int8 zero is sideYES — the sentinel must be explicit",
     "replace": "\t\tprovisional: 0,"
   },
   {
@@ -3329,7 +3329,7 @@
     "pkg": "grc20votes",
     "file": "grc20votes.gno",
     "label": "Epoch: the epoch is 0-based, so 'never' and the first epoch collide",
-    "find": "\treturn uint32(runtime.ChainHeight()/l.epochBlocks) + 1",
+    "find": "\treturn uint32(l.Height()/l.epochBlocks) + 1",
     "replace": "\treturn uint32(runtime.ChainHeight() / l.epochBlocks)"
   },
   {
@@ -3875,8 +3875,8 @@
     "pkg": "governor",
     "file": "governor.gno",
     "label": "Execute: the delay window is not enforced",
-    "find": "\tif now := runtime.ChainHeight(); inDelay(p, now) {",
-    "replace": "\tif now := runtime.ChainHeight(); inDelay(p, now) && id < 0 {"
+    "find": "\tif now := g.voters.Height(); inDelay(p, now) {",
+    "replace": "\tif now := g.voters.Height(); inDelay(p, now) && id < 0 {"
   },
   {
     "pkg": "governor",
@@ -4834,15 +4834,15 @@
     "pkg": "governor",
     "file": "governor.gno",
     "label": "renderOne: an active proposal never says when voting closes",
-    "find": "\tif st == stateActive {\n\t\tout += ufmt.Sprintf(\"\\n_Voting closes in %d blocks, at height %d._\\n\",\n\t\t\tp.closes-runtime.ChainHeight(), p.closes)\n\t}",
+    "find": "\tif st == stateActive {\n\t\tout += ufmt.Sprintf(\"\\n_Voting closes in %d blocks, at height %d._\\n\",\n\t\t\tp.closes-g.voters.Height(), p.closes)\n\t}",
     "replace": ""
   },
   {
     "pkg": "governor",
     "file": "governor.gno",
     "label": "renderOne: the countdown to close runs backwards",
-    "find": "\t\t\tp.closes-runtime.ChainHeight(), p.closes)",
-    "replace": "\t\t\truntime.ChainHeight()-p.closes, p.closes)"
+    "find": "\t\t\tp.closes-g.voters.Height(), p.closes)",
+    "replace": "\t\t\tg.voters.Height()-p.closes, p.closes)"
   },
   {
     "pkg": "governor",
@@ -5276,7 +5276,7 @@
     "file": "stake.gno",
     "label": "accrue: the raw integral runs past the freeze",
     "find": "\trh := rawHeight(cs)\n\trawDelta := rh - p.lastRawAt",
-    "replace": "\trh := runtime.ChainHeight()\n\trawDelta := rh - p.lastRawAt"
+    "replace": "\trh := heightNow()\n\trawDelta := rh - p.lastRawAt"
   },
   {
     "pkg": "kourtv2",
@@ -5597,7 +5597,7 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "FlagState: the cooldown is never reported",
-    "find": "\tcase cs.flagCycles >= 1 &&\n\t\truntime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks:",
+    "find": "\tcase cs.flagCycles >= 1 &&\n\t\theightNow() < cs.lastFlagAt+flagCooldownBlocks:",
     "replace": "\tcase false:"
   },
   {
@@ -5611,8 +5611,8 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "FlagState: the cooldown boundary is inclusive",
-    "find": "\t\truntime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks:",
-    "replace": "\t\truntime.ChainHeight() <= cs.lastFlagAt+flagCooldownBlocks:"
+    "find": "\t\theightNow() < cs.lastFlagAt+flagCooldownBlocks:",
+    "replace": "\t\theightNow() <= cs.lastFlagAt+flagCooldownBlocks:"
   },
   {
     "pkg": "kourtv2",
@@ -5667,7 +5667,7 @@
     "pkg": "kourtv2",
     "file": "stake.gno",
     "label": "ConvictionOf: the un-walked tail is not previewed",
-    "find": "\tif tail := runtime.ChainHeight() - c.lastAccrual; tail > 0 {\n\t\tacc = mustAdd(acc, mustMul(rateBpsFP(c), tail))\n\t}",
+    "find": "\tif tail := heightNow() - c.lastAccrual; tail > 0 {\n\t\tacc = mustAdd(acc, mustMul(rateBpsFP(c), tail))\n\t}",
     "replace": ""
   },
   {
@@ -5947,7 +5947,7 @@
     "pkg": "kourtv2",
     "file": "session.gno",
     "label": "SettleUndisputed: the 72h settlement minimum is not waited out",
-    "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.answerHeight+settleDelay) {\n\t\tpanic(\"kourtv2: the answer has not aged the 72h settlement minimum\")\n\t}\n",
+    "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay) {\n\t\tpanic(\"kourtv2: the answer has not aged the 72h settlement minimum\")\n\t}\n",
     "replace": ""
   },
   {
@@ -5961,7 +5961,7 @@
     "pkg": "kourtv2",
     "file": "claim.gno",
     "label": "CloseDeadClaim: the dead-claim timeout is not waited out",
-    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {\n\t\tpanic(\"kourtv2: the dead-claim timeout has not passed\")\n\t}\n",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.openedAt+deadClaimTimeout) {\n\t\tpanic(\"kourtv2: the dead-claim timeout has not passed\")\n\t}\n",
     "replace": ""
   },
   {
@@ -6073,21 +6073,21 @@
     "pkg": "kourtv2",
     "file": "claim.gno",
     "label": "zero-stamp: CloseDeadClaim loses its height fallback",
-    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.openedAt+deadClaimTimeout) {",
     "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); known && !passed {\n\t\t_ = known"
   },
   {
     "pkg": "kourtv2",
     "file": "claim.gno",
     "label": "zero-stamp: EditClaimTitle's polish window loses its height fallback",
-    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && passed) ||\n\t\t(!known && runtime.ChainHeight() >= cs.openedAt+c.params.stakeOpenDelayBlocks) {",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && passed) ||\n\t\t(!known && heightNow() >= cs.openedAt+c.params.stakeOpenDelayBlocks) {",
     "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); known && passed {\n\t\t_ = known"
   },
   {
     "pkg": "kourtv2",
     "file": "session.gno",
     "label": "zero-stamp: SettleUndisputed's 72h minimum loses its height fallback",
-    "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.answerHeight+settleDelay) {",
+    "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay) {",
     "replace": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); known && !passed {\n\t\t_ = known"
   },
   {

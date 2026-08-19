@@ -16,7 +16,6 @@ package kourtv2
 
 import (
 	"chain"
-	"chain/runtime"
 	"strconv"
 
 	bptree "gno.land/p/nt/bptree/v0"
@@ -354,7 +353,7 @@ func AppointMods(cur realm, courtSlug string, m int, mods ...address) {
 	cm.members = fresh
 	cm.n = n
 	cm.m = m
-	cm.setActHeight = runtime.ChainHeight()
+	cm.setActHeight = heightNow()
 	cm.installedByMeta = false // a creator appointment is a local act
 	clearPendingOnMembershipChange(&cm.pending)
 }
@@ -428,7 +427,7 @@ func (clm *claimMod) appendLog(actor address, code, reason string) uint64 {
 		actor:  actor,
 		code:   code,
 		reason: reason,
-		height: runtime.ChainHeight(),
+		height: heightNow(),
 	})
 	return clm.logSeq
 }
@@ -461,7 +460,7 @@ func (clm *claimMod) appendLog(actor address, code, reason string) uint64 {
 // would tax the honest first mover, and an m-of-n set whose members are afraid
 // to sign first never acts at all.
 func approveAction(pending *bptree.BPTree, key string, who address, reason string, m int) (bool, string) {
-	now := runtime.ChainHeight()
+	now := heightNow()
 	var a *approval
 	if v := pending.Get(key); v != nil {
 		a = v.(*approval)
@@ -505,7 +504,7 @@ func HideItem(cur realm, courtSlug string, claimID uint64, reason string) {
 	// the appeals layer. Global-DAO verbs and meta executions do not route here.
 	// Read through lookupClaimMod: an absent row means no verdict ever landed.
 	if clm := lookupClaimMod(cm, claimID); clm != nil && clm.executedAt != 0 &&
-		runtime.ChainHeight() < clm.executedAt+c.params.votingBlocks {
+		heightNow() < clm.executedAt+c.params.votingBlocks {
 		panic("kourtv2: a review verdict just cleared this; the set may not re-hide yet")
 	}
 	fire, r := approveAction(cm.pending, "hide:"+strconv.FormatUint(claimID, 10), who, reason, cm.m)
@@ -564,7 +563,7 @@ func GlobalHide(cur realm, courtSlug string, claimID uint64, categoryCode string
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	_ = mustClaim(c, claimID) // the claim must exist, whether or not this fires
-	now := runtime.ChainHeight()
+	now := heightNow()
 	// Windowed m-of-n re-set (round-4 F5): re-setting a redaction a global act
 	// cleared within the counter-notice window needs m-of-n, so a lone rogue
 	// key can't win the reversal race and camp a competitor redacted.
@@ -599,7 +598,7 @@ func GlobalClear(cur realm, courtSlug string, claimID uint64) {
 		panic("kourtv2: no global hide on that claim")
 	}
 	clm.global = false
-	clm.globalClearedAt = runtime.ChainHeight()
+	clm.globalClearedAt = heightNow()
 	clm.appendLog(who, "global-clear", "")
 	emitGlobalAct(c.id, claimID, "global-clear", who)
 }
@@ -643,7 +642,7 @@ func ClearCourtSuspension(cur realm, courtSlug string) {
 		panic("kourtv2: that court's set is not suspended")
 	}
 	cm.suspended = false
-	cm.suspendActByGlobal = runtime.ChainHeight()
+	cm.suspendActByGlobal = heightNow()
 	emitGlobalAct(c.id, 0, "clear-suspension", who)
 }
 
@@ -706,7 +705,7 @@ func GlobalSuspendSet(cur realm, courtSlug string) {
 		return
 	}
 	suspendSet(c, who)
-	cm.suspendActByGlobal = runtime.ChainHeight()
+	cm.suspendActByGlobal = heightNow()
 	emitGlobalAct(c.id, 0, "global-suspend-set", who)
 }
 
@@ -743,7 +742,7 @@ func ResetModSet(cur realm, courtSlug string) {
 	cm.m = 1                                    // n==0 means nobody is a member, so nothing can act
 	clearPendingOnMembershipChange(&cm.pending) // stale approvals die with the set
 	cm.suspended = false
-	cm.setActHeight = runtime.ChainHeight()
+	cm.setActHeight = heightNow()
 	emitGlobalAct(c.id, 0, "reset-mod-set", who)
 }
 
@@ -795,7 +794,7 @@ func setMetaBit(c *Court, claimID uint64, by address) {
 	cm := ensureMod(c)
 	clm := ensureClaimMod(c, cm, claimID)
 	clm.meta = true
-	clm.executedAt = runtime.ChainHeight()
+	clm.executedAt = heightNow()
 	clm.appendLog(by, "meta-hide", "")
 	emitModAct(c.id, claimID, "meta-hide", by)
 }
@@ -823,7 +822,7 @@ func clearCourtBitByMeta(c *Court, claimID uint64, by address) {
 		return
 	}
 	clm.court = false
-	clm.executedAt = runtime.ChainHeight()
+	clm.executedAt = heightNow()
 	clm.appendLog(by, "meta-unhide", "")
 	emitModAct(c.id, claimID, "meta-unhide", by)
 }
@@ -831,7 +830,7 @@ func clearCourtBitByMeta(c *Court, claimID uint64, by address) {
 func suspendSet(c *Court, by address) {
 	cm := ensureMod(c)
 	cm.suspended = true
-	cm.suspendedAt = runtime.ChainHeight()
+	cm.suspendedAt = heightNow()
 	cm.suspendedSetID = currentSetID(cm) // remember WHICH membership was judged
 	cm.suspendedM = cm.m                 // ...and the decision rule it was judged under
 	emitModAct(c.id, 0, "suspend", by)
@@ -988,7 +987,7 @@ func PendingApproval(courtSlug, actionKey string) (approvals int, expiresAt int6
 		return 0, 0
 	}
 	a := v.(*approval)
-	if runtime.ChainHeight() >= a.openedAt+pendingTTLBlocks {
+	if heightNow() >= a.openedAt+pendingTTLBlocks {
 		return 0, 0
 	}
 	return a.approvers.Size(), a.openedAt + pendingTTLBlocks
@@ -1057,7 +1056,7 @@ func emitModAct(slug string, claimID uint64, code string, actor address) {
 		"claim", strconv.FormatUint(claimID, 10),
 		"act", code,
 		"by", actor.String(),
-		"height", strconv.FormatInt(runtime.ChainHeight(), 10),
+		"height", eventHeight(),
 	)
 }
 
@@ -1067,7 +1066,7 @@ func emitGlobalAct(slug string, claimID uint64, code string, actor address) {
 		"claim", strconv.FormatUint(claimID, 10),
 		"act", code,
 		"by", actor.String(),
-		"height", strconv.FormatInt(runtime.ChainHeight(), 10),
+		"height", eventHeight(),
 	)
 }
 
@@ -1077,6 +1076,6 @@ func emitPurge(slug string, claimID uint64, categoryCode string, actor address) 
 		"claim", strconv.FormatUint(claimID, 10),
 		"code", categoryCode, // a statutory category enum, not user text
 		"by", actor.String(),
-		"height", strconv.FormatInt(runtime.ChainHeight(), 10),
+		"height", eventHeight(),
 	)
 }

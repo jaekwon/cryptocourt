@@ -7,7 +7,6 @@
 package kourtv2
 
 import (
-	"chain/runtime"
 	"math/bits"
 	"math/overflow"
 )
@@ -115,7 +114,7 @@ func advancePools(c *Court, cs *claimState) {
 // rawHeight is the height the raw integral runs to: now, capped at the freeze
 // (stake stopped counting toward the cap base when the answer landed).
 func rawHeight(cs *claimState) int64 {
-	h := runtime.ChainHeight()
+	h := heightNow()
 	if cs.frozenAt != 0 && cs.frozenAt < h {
 		h = cs.frozenAt
 	}
@@ -160,7 +159,7 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	// Polish window (§9): staking is closed for stakeOpenDelayBlocks after
 	// OpenClaim so the author/moderators can fix wording before anyone bets.
 	// Default 0 → no window, behaviour unchanged for courts that don't opt in.
-	if runtime.ChainHeight() < cs.openedAt+c.params.stakeOpenDelayBlocks {
+	if heightNow() < cs.openedAt+c.params.stakeOpenDelayBlocks {
 		panic("kourtv2: the polish window is open; staking has not started yet")
 	}
 	touch(c)
@@ -219,7 +218,7 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 
 // observePools records both rings at the current height (§3.9).
 func observePools(cs *claimState) {
-	h := runtime.ChainHeight()
+	h := heightNow()
 	cs.oi = cs.oi.Observe(h, mustAdd(cs.yesStake, cs.noStake))
 	cs.yes = cs.yes.Observe(h, cs.yesStake)
 }
@@ -252,7 +251,7 @@ func ConvictionOf(courtSlug string, claimID uint64, side int, who address) int64
 	// stored integral plus the un-walked tail at the current rate (reads must
 	// not mutate; the tail approximation resolves exactly at the next touch).
 	acc := c.rateAccFP
-	if tail := runtime.ChainHeight() - c.lastAccrual; tail > 0 {
+	if tail := heightNow() - c.lastAccrual; tail > 0 {
 		acc = mustAdd(acc, mustMul(rateBpsFP(c), tail))
 	}
 	if cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {
@@ -358,4 +357,3 @@ func add128(aHi, aLo, bHi, bLo uint64) (hi, lo uint64) {
 }
 
 // runtimeHeight exposes the chain height to in-package tests.
-func runtimeHeight() int64 { return runtime.ChainHeight() }

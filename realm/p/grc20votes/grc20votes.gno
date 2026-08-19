@@ -118,7 +118,22 @@ type account struct {
 // trees inside carry that realm's storage stamp, so a method here borrows the
 // consumer's authority for the write and the storage is billed to them. A /p/
 // package's own state is frozen after init and could hold none of this.
+// Clock is where this ledger's sense of height comes from. A realm supplies
+// one so its OWN clock governs epochs; nil means the chain's, which is what an
+// ordinary deployment wants.
+//
+// It exists because a realm that can fast-forward its clock for testing cannot
+// fast-forward this package's: a pure package may not import a realm, and a
+// SETTABLE package global would be a capability any caller could take. Bound at
+// construction by the realm that owns the ledger, it is neither.
+type Clock interface {
+	// Height is the block height this ledger should quantise epochs by.
+	Height() int64
+}
+
 type Ledger struct {
+	// clock is nil on an ordinary deployment; see Clock.
+	clock    Clock
 	name     string
 	symbol   string
 	decimals int
@@ -146,6 +161,14 @@ type Ledger struct {
 //
 // epochBlocks is the quantisation, in blocks. At gno's five-second cadence 720
 // is an hour, which is the figure the rest of this design was measured at.
+// NewLedgerWithClock is NewLedger with the height source named. A realm whose
+// own clock can be fast-forwarded passes itself; everyone else calls NewLedger.
+func NewLedgerWithClock(name, symbol string, decimals int, epochBlocks int64, clk Clock) *Ledger {
+	l := NewLedger(name, symbol, decimals, epochBlocks)
+	l.clock = clk
+	return l
+}
+
 func NewLedger(name, symbol string, decimals int, epochBlocks int64) *Ledger {
 	if name == "" || symbol == "" {
 		panic("grc20votes: a token needs a name and a symbol")
@@ -256,7 +279,18 @@ func (l *Ledger) EngagedTotal(at uint32) int64 { return l.PastTotal(at) }
 func (l *Ledger) Epoch() uint32 {
 	// 1-based, so zero can mean "before this token existed" — which is what
 	// lets an untouched series answer correctly without storing anything.
-	return uint32(runtime.ChainHeight()/l.epochBlocks) + 1
+	return uint32(l.Height()/l.epochBlocks) + 1
+}
+
+// Height is this ledger's clock, and the governor's: it is on the Electorate
+// interface so a governor weighing votes uses the same height the ledger
+// quantised its snapshots by. Falling back to the chain when no clock was
+// supplied keeps every existing construction working unchanged.
+func (l *Ledger) Height() int64 {
+	if l.clock != nil {
+		return l.clock.Height()
+	}
+	return runtime.ChainHeight()
 }
 
 // EpochBlocks is the quantisation this ledger was built with, so a consumer

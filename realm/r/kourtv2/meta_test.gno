@@ -318,7 +318,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if cs9.credEligible {
 		t.Fatal("fixture: nobody opposed, so the round must NOT be credEligible")
 	}
-	testing.SkipHeights(cs9.escrowUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs9.escrowUntil - heightNow() + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), metaSlug, ap9)
 
@@ -383,7 +383,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 		t.Fatal("fixture: the global DAO must have released the court")
 	}
 
-	testing.SkipHeights(cs10.escrowUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs10.escrowUntil - heightNow() + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), metaSlug, ap10)
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -461,7 +461,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if cs12.decidedRounds != 1 || !cs12.credEligible {
 		t.Fatal("fixture: setmods needs a decided, credEligible round to reach the guard")
 	}
-	testing.SkipHeights(cs12.escrowUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs12.escrowUntil - heightNow() + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), metaSlug, ap12)
 
@@ -563,7 +563,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if cs15.decidedRounds != 1 || !cs15.credEligible {
 		t.Fatal("fixture: setmods needs a decided, credEligible round to reach the guard")
 	}
-	testing.SkipHeights(cs15.escrowUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs15.escrowUntil - heightNow() + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), metaSlug, ap15)
 

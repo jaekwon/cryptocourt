@@ -21,7 +21,6 @@ package kourtv2
 
 import (
 	"chain"
-	"chain/runtime"
 	"strconv"
 )
 
@@ -48,7 +47,7 @@ type entitlement struct {
 // period (budget step-down, d_eff repricing) at each boundary. Every
 // state-changing entrypoint calls it first.
 func touch(c *Court) {
-	now := runtime.ChainHeight()
+	now := heightNow()
 	for c.lastAccrual < now {
 		boundary := c.createdAt + (c.periodIndex+1)*periodBlocks
 		segEnd := now

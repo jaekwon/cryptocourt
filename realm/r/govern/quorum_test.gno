@@ -1,6 +1,7 @@
 package govern
 
 import (
+	"chain/runtime"
 	governor "gno.land/p/kourt/governor/v0"
 	grc20votes "gno.land/p/kourt/grc20votes/v0"
 	"strconv"
@@ -38,7 +39,12 @@ func (f *fakeVotes) EngagedTotal(at uint32) int64 {
 	}
 	return f.total
 }
-func (f *fakeVotes) Epoch() uint32                          { return f.epoch }
+func (f *fakeVotes) Epoch() uint32 { return f.epoch }
+
+// Height satisfies governor.Electorate. These tests drive height with
+// testing.SkipHeights, so the chain's own height is the right answer; the
+// interface method exists so a REALM can substitute its own clock.
+func (f *fakeVotes) Height() int64 { return runtime.ChainHeight() }
 
 // Quorum and threshold are counted at their exact boundaries, at the deadline.
 //
@@ -79,7 +85,7 @@ func TestTheBarsAreCountedAtTheirExactBoundary(cur realm, t *testing.T) {
 		engine.Adopt(setFee{name: "q/kind"}, Rules{
 			QuorumBps: 3000, ThresholdBps: 6000, VotingBlocks: 100,
 			GraceBlocks: 1_000_000,
-	})
+		})
 		testing.SetRealm(testing.NewUserRealm(yes))
 		return Propose(cross(cur), "q/kind", strconv.Itoa(run), "on the line")
 	}
@@ -162,7 +168,10 @@ func (c *council) PastVotes(who address, at uint32) int64 {
 }
 func (c *council) PastTotal(at uint32) int64    { return int64(len(c.members)) }
 func (c *council) EngagedTotal(at uint32) int64 { return int64(len(c.members)) }
-func (c *council) Epoch() uint32             { return c.epoch }
+func (c *council) Epoch() uint32                { return c.epoch }
+
+// Height satisfies governor.Electorate; see the note on fakeVotes.
+func (c *council) Height() int64 { return runtime.ChainHeight() }
 
 func TestTheGovernorWorksOnAnElectorateThatIsNotAToken(cur realm, t *testing.T) {
 	resumeClock()

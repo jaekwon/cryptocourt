@@ -49,6 +49,8 @@ package kourtv2
 import (
 	"time"
 
+	runtime "chain/runtime"
+
 	unsafe "chain/runtime/unsafe"
 )
 
@@ -59,6 +61,27 @@ const (
 	// two "forward" steps move the clock backwards.
 	maxAdvanceStep  = int64(10 * 365 * 86400)
 	maxAdvanceTotal = int64(100 * 365 * 86400)
+	// The height caps, in blocks. SIZED AGAINST THE REALM, not against int64 —
+	// which is the mistake the first version made, and an audit proved what it
+	// costs. `touch()` walks emission periods ONE AT A TIME (emission.gno), so
+	// the gas of the next transaction into a court grows with the periods
+	// elapsed since it was last touched. Measured: ~520k gas steady state,
+	// 12,519,425 after one legal step at the old 10M cap (82 periods), and
+	// 713,771,568 at the old 1e9 total (8,267 periods). Past the per-transaction
+	// gas ceiling the touch reverts, `lastAccrual` is never written, the next
+	// attempt costs the same — and EVERY entrypoint that touches first is dead
+	// in that court for ever, sealing included, because the floor holds the
+	// height where it is. A single legal call, irreversible.
+	//
+	// So the total is bounded by what a scenario legitimately needs: the widest
+	// height-denominated journey in the realm is three failed dispute rounds,
+	// 3 x (votingBlocks + graceBlocks) = 414,720 blocks, under 3.5 periods. Ten
+	// periods leaves room and bounds the worst-case catch-up to ten rolls.
+	// Two periods a step, because ONE is not enough for a real gate: closing a
+	// dispute is votingBlocks + graceBlocks = 138,240 blocks, which a one-period
+	// step (120,960) refuses. Caught by the dispute scenario, not by review.
+	maxHeightStep  = 2 * periodBlocks  // ~2 weeks, covers the widest single gate
+	maxHeightTotal = 10 * periodBlocks // ~10 weeks; see above
 	// maxBase is the latest instant a scenario may DECLARE. A base of any size
 	// used to be accepted, and one near int64's ceiling wraps tcBase+tcSkew
 	// NEGATIVE on an advance that was individually legal — tcNow's non-positive
@@ -102,6 +125,29 @@ var (
 	// and leave a chain of invented dates presenting itself as an honest one.
 	tcEverArmed bool
 	tcPeakSkew  int64 // the furthest the clock was ever advanced; kept past sealing
+
+	// HEIGHT. Wall-clock alone was not enough: conviction accrues per block,
+	// emission rolls per period, votes close on a block and the twap ring
+	// matures on one, so a chain that could only fast-forward its CALENDAR
+	// still had to mine its way to every accounting state — ~17,280 blocks to
+	// crystallize, 120,960 to resolve a dispute. The owner reversed the earlier
+	// "accounting clocks must not be faked" ruling for exactly that reason.
+	//
+	// Same shape as the time skew, deliberately: forward-only, capped so the
+	// sum cannot wrap, deployer-only, and floored so a sealed chain never
+	// reports a height below one it already published.
+	tcHeightSkew int64
+	tcHeightPeak int64 // survives sealing, like tcPeakSkew, for the disclosure
+	// tcHeightBase FREEZES the height at arming, exactly as tcBase freezes the
+	// clock. The first version of this half was a LIVE skew — real height plus
+	// the advance — which reintroduced, for height, the precise defect the
+	// "FROZEN, NOT SKEWED" note above records for time. An audit PROVED it: with
+	// a live skew the floor is written from a height that keeps climbing, so on
+	// sealing the realm reports a height BELOW ones already written into claims,
+	// and both p/twap and p/checkpoint correctly refuse a backwards clock —
+	// bricking every Stake and every Transfer in that court for ever.
+	tcHeightBase  int64
+	tcHeightFloor int64
 )
 
 func init() { tcDeployer = unsafe.OriginCaller() }
@@ -140,7 +186,7 @@ func EnableTestClock(cur realm) {
 		panic("kourtv2: this realm has been used; the test clock cannot be armed")
 	}
 	tcArmed = true
-	tcEverArmed = true // never cleared again, not even by sealing
+	tcEverArmed = true         // never cleared again, not even by sealing
 	tcBase = time.Now().Unix() // the clock stops here until the scenario moves it
 	// The cap applies to the CAPTURED base too, or the invariant tcBase <= maxBase
 	// holds at only one of this field's two writers. Block time is the proposer's
@@ -158,6 +204,11 @@ func EnableTestClock(cur realm) {
 		panic("kourtv2: this chain's own clock reads past 2100; check its genesis time")
 	}
 	tcFloor = tcBase
+	// The height freezes here too, for the same reason the clock does: a skew
+	// added to a LIVE height cannot express a boundary, and its floor falls
+	// behind by every block the chain produces between advances.
+	tcHeightBase = runtime.ChainHeight()
+	tcHeightFloor = tcHeightBase
 }
 
 // EnableTestClockAt arms the clock at a CHOSEN instant instead of the deploying
@@ -181,7 +232,15 @@ func EnableTestClockAt(cur realm, base int64) {
 	}
 	EnableTestClock(cur)
 	tcBase = base
-	tcFloor = base
+	// The floor takes the HIGHER of the two. EnableTestClock has just captured
+	// the chain's own instant; a declared base BELOW it used to overwrite the
+	// floor downward. That is safe today only because arming demands a pristine
+	// realm, so no stamp exists yet to be rewound below — a coincidence, not a
+	// guard, and the moment the pristine test is loosened it becomes the same
+	// class of rewind an audit proved for height (see tcHeightBase).
+	if base > tcFloor {
+		tcFloor = base
+	}
 }
 
 // AdvanceTestClock moves the clock forward by secs. Deployer only: arming must
@@ -206,12 +265,52 @@ func AdvanceTestClock(cur realm, secs int64) {
 	}
 }
 
+// AdvanceTestHeight moves the block height forward by n, for the accounting
+// clocks: conviction per block, emission periods, vote windows, twap maturity.
+// Deployer-only and forward-only, like its wall-clock twin.
+func AdvanceTestHeight(cur realm, n int64) {
+	mustDeployer(cur)
+	if !tcArmed {
+		panic("kourtv2: the test clock is not armed")
+	}
+	if n <= 0 || n > maxHeightStep {
+		panic("kourtv2: the test height moves forward, by at most two emission periods a step")
+	}
+	if tcHeightSkew > maxHeightTotal-n {
+		panic("kourtv2: the test height has advanced as far as it may")
+	}
+	tcHeightSkew += n
+	if tcHeightSkew > tcHeightPeak {
+		tcHeightPeak = tcHeightSkew
+	}
+	// From the FROZEN base, not from a live read — the floor and heightNow()
+	// must compute the identical expression or the floor falls behind by every
+	// block the chain produces between advances.
+	if h := tcHeightBase + tcHeightSkew; h > tcHeightFloor {
+		tcHeightFloor = h
+	}
+}
+
+// TestHeightSkew is the blocks the height is currently advanced (0 once sealed).
+func TestHeightSkew() int64 { return tcHeightSkew }
+
+// TestHeightPeakSkew is the furthest it was ever advanced, kept past sealing.
+func TestHeightPeakSkew() int64 { return tcHeightPeak }
+
 // SealTestClock closes the window for good. Deployer only, and it does NOT
 // rewind: the floor keeps the highest instant this chain ever showed, so every
 // stamp already written stays in the past. Without that, sealing after a long
 // advance threw stamps into the future and REOPENED windows that had expired.
 func SealTestClock(cur realm) {
 	mustDeployer(cur)
+	// Refused on a realm that was never armed. Sealing is ONE-WAY, so a seal
+	// typed at the wrong chain permanently forecloses ever arming that realm,
+	// and there is nothing to seal — the clock is already the chain's own.
+	// Deployer-only, so this is a footgun rather than a vulnerability; it is
+	// also the only irreversible one with no upside.
+	if !tcArmed {
+		panic("kourtv2: the test clock was never armed; there is nothing to seal")
+	}
 	sealTestClock()
 }
 
@@ -221,6 +320,11 @@ func sealTestClock() {
 	tcArmed = false
 	tcSkew = 0
 	tcBase = 0
+	// The height skew is dropped but its FLOOR is kept, so heights already
+	// written into state stay in the past. Dropping the floor too would let a
+	// sealed chain report a height below one it had already published, and
+	// every window keyed on a stored height would silently reopen.
+	tcHeightSkew = 0
 }
 
 // TestClockActive reports whether the clock can still be DRIVEN — armed and not

@@ -35,8 +35,6 @@
 package kourtv2
 
 import (
-	"chain/runtime"
-
 	bptree "gno.land/p/nt/bptree/v0"
 )
 
@@ -101,7 +99,7 @@ func OpenFlag(cur realm, courtSlug string, claimID uint64) {
 	// otherwise re-open back-to-back and block Crystallize for free forever.
 	// The 7-day cooldown exceeds the 24h Crystallize quiet window, so every
 	// inconclusive cycle leaves a ~6-day window in which the draw can settle.
-	if cs.flagCycles >= 1 && runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks {
+	if cs.flagCycles >= 1 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {
 		panic("kourtv2: the flag cooldown after an inconclusive vote has not passed")
 	}
 	touch(c)
@@ -112,8 +110,8 @@ func OpenFlag(cur realm, courtSlug string, claimID uint64) {
 	cs.flagOpen = true
 	cs.flagger = who
 	cs.flagBond = bond
-	cs.flagVoteEnd = runtime.ChainHeight() + c.params.votingBlocks
-	cs.lastFlagAt = runtime.ChainHeight()
+	cs.flagVoteEnd = heightNow() + c.params.votingBlocks
+	cs.lastFlagAt = heightNow()
 	openQualityTally(cs)
 }
 
@@ -157,7 +155,7 @@ func voidFlag(c *Court, cs *claimState) {
 		cs.flagBond = 0
 	}
 	cs.flagOpen = false
-	cs.lastFlagEventAt = runtime.ChainHeight()
+	cs.lastFlagEventAt = heightNow()
 }
 
 // VoteQuality casts a sealed quality vote — low 0, mid 1, high 2 — inside an
@@ -178,10 +176,10 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if !cs.flagOpen && !cs.disputeOpen && !cs.counterOpen {
 		panic("kourtv2: no quality vote is open on this claim")
 	}
-	if cs.flagOpen && runtime.ChainHeight() >= cs.flagVoteEnd {
+	if cs.flagOpen && heightNow() >= cs.flagVoteEnd {
 		panic("kourtv2: the flag vote has closed; resolve it")
 	}
-	if cs.counterOpen && runtime.ChainHeight() >= cs.counterVoteEnd {
+	if cs.counterOpen && heightNow() >= cs.counterVoteEnd {
 		panic("kourtv2: the counter re-vote has closed; resolve it")
 	}
 	// The ride's deadline is the governor's own, since disputeOpen stays true until
@@ -313,7 +311,7 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 	if !cs.flagOpen {
 		panic("kourtv2: no flag vote to resolve")
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now < cs.flagVoteEnd {
 		panic("kourtv2: the flag vote is still open")
 	}
@@ -615,7 +613,7 @@ func resolveQualityRide(c *Court, cs *claimState) {
 	if cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {
 		return // a promotion out of an adjudicated tier needs a ⅔ mandate (§3.4 F3)
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	_, fullBar := qualityBars(c, cs)
 	cs.tier = int64(tier)
 	cs.conclusiveSeq = cs.qVoteSeq
@@ -674,7 +672,7 @@ func FlagState(courtSlug string, claimID uint64) string {
 	case cs.slotConsumed:
 		return "consumed"
 	case cs.flagCycles >= 1 &&
-		runtime.ChainHeight() < cs.lastFlagAt+flagCooldownBlocks:
+		heightNow() < cs.lastFlagAt+flagCooldownBlocks:
 		return "cooldown"
 	default:
 		return "open"
@@ -744,13 +742,13 @@ func CounterFlag(cur realm, courtSlug string, claimID uint64) {
 	if cs.disputeOpen {
 		panic("kourtv2: a dispute is open; its quality ride decides the slash first")
 	}
-	if runtime.ChainHeight() >= cs.pendingSlashUntil {
+	if heightNow() >= cs.pendingSlashUntil {
 		panic("kourtv2: the counter-flag window has lapsed")
 	}
 	touch(c)
 	cs.counterUsed = true
 	cs.counterOpen = true
-	cs.counterVoteEnd = runtime.ChainHeight() + c.params.votingBlocks
+	cs.counterVoteEnd = heightNow() + c.params.votingBlocks
 	// UNCONDITIONAL, unlike the ride (v0.51 follow-up). The v0.31/Q5 grant is an
 	// INDEPENDENT second poll — "a capture-whale must win ⅔ TWICE, the second
 	// against maximal mobilization (p² ≈ 0)" — and inheriting the ride's tally
@@ -794,7 +792,7 @@ func ResolveCounter(cur realm, courtSlug string, claimID uint64) {
 	if !cs.counterOpen {
 		panic("kourtv2: no counter re-vote to resolve")
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	if now < cs.counterVoteEnd {
 		panic("kourtv2: the counter re-vote is still open")
 	}
@@ -829,11 +827,11 @@ func ResolveSlashWindow(cur realm, courtSlug string, claimID uint64) {
 	if cs.disputeOpen {
 		panic("kourtv2: a dispute is open; its quality ride decides the slash first")
 	}
-	if runtime.ChainHeight() < cs.pendingSlashUntil {
+	if heightNow() < cs.pendingSlashUntil {
 		panic("kourtv2: the counter-flag window is still open")
 	}
 	touch(c)
-	cs.lastFlagEventAt = runtime.ChainHeight()
+	cs.lastFlagEventAt = heightNow()
 	settleSlash(c, cs)
 }
 
@@ -928,6 +926,7 @@ func unslash(c *Court, cs *claimState) {
 //     then, which is the whole point of re-arming rather than settling.
 //   - counterUsed true: the lane REOPENS, and ResolveSlashWindow then PANICS on
 //     counterOpen. ResolveCounter is the closer on that path.
+//
 // Either way Crystallize cannot strand: it panics on pendingSlash > 0, and one of
 // the two closers is always callable.
 //
@@ -949,7 +948,7 @@ func rearmSlashWindow(c *Court, cs *claimState) {
 	if cs.pendingSlash <= 0 {
 		return
 	}
-	now := runtime.ChainHeight()
+	now := heightNow()
 	cs.pendingSlashUntil = now + c.params.votingBlocks
 	cs.lastFlagEventAt = now
 	if cs.counterUsed {

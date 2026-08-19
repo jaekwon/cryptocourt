@@ -2,7 +2,6 @@ package governor
 
 import (
 	"chain"
-	"chain/runtime"
 	"crypto/sha256"
 	"strconv"
 	"strings"
@@ -788,7 +787,7 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
 	if g.openIdx.Has(d) {
 		panic("govern: an identical proposal is already open")
 	}
-	now := runtime.ChainHeight()
+	now := g.voters.Height()
 	g.propSeq++
 	p := &proposal{
 		id: g.propSeq, kind: kind, payload: payload, title: title, proposer: who,
@@ -1093,7 +1092,7 @@ func (g *Governor) wouldBe(p *proposal, now int64) (int8, string) {
 // settle writes down what wouldBe worked out. Only ever called from a
 // transaction, because only a transaction can record anything.
 func (g *Governor) settle(p *proposal) {
-	now := runtime.ChainHeight()
+	now := g.voters.Height()
 	next, reason := g.wouldBe(p, now)
 	if next == p.state {
 		return
@@ -1149,7 +1148,7 @@ func (g *Governor) Execute(who address, id int64, run Dispatch) {
 	if p.state != stateSucceeded {
 		panic("govern: that proposal is not waiting to be executed")
 	}
-	if now := runtime.ChainHeight(); inDelay(p, now) {
+	if now := g.voters.Height(); inDelay(p, now) {
 		// Says when, because "not yet" without a when is an invitation to poll.
 		// The proposal page has carried this figure all along; the refusal a
 		// caller actually receives did not.
@@ -1343,7 +1342,7 @@ func (g *Governor) Cancel(who address, id int64) {
 func (g *Governor) State(id int64) string {
 	p := g.mustProposal(id)
 	// The pure form: asking what a proposal's state is must not change it.
-	st, _ := g.wouldBe(p, runtime.ChainHeight())
+	st, _ := g.wouldBe(p, g.voters.Height())
 	switch st {
 	case stateActive:
 		return "active"
@@ -1474,7 +1473,7 @@ func (g *Governor) render(path, notes string) string {
 
 	var open, ready, done string
 	nOpen := 0
-	now := runtime.ChainHeight()
+	now := g.voters.Height()
 
 	// The open list IS openIdx: a proposal holds its slot until it reaches a
 	// final state, so what is in there is exactly what belongs above the fold.
@@ -1564,7 +1563,7 @@ func (g *Governor) renderOne(path string) string {
 		return "# no such proposal\n"
 	}
 	p := v.(*proposal)
-	st, reason := g.wouldBe(p, runtime.ChainHeight())
+	st, reason := g.wouldBe(p, g.voters.Height())
 
 	out := ufmt.Sprintf("# #%d — %s\n\n", p.id, p.title)
 	// The description first, and rendered by the kind from the payload alone.
@@ -1638,7 +1637,7 @@ func (g *Governor) renderOne(path string) string {
 	// reached p.closes, so a proposal reading active has not.
 	if st == stateActive {
 		out += ufmt.Sprintf("\n_Voting closes in %d blocks, at height %d._\n",
-			p.closes-runtime.ChainHeight(), p.closes)
+			p.closes-g.voters.Height(), p.closes)
 	}
 
 	// What happens next, for a decision that has been taken and not yet done.
@@ -1649,7 +1648,7 @@ func (g *Governor) renderOne(path string) string {
 	// the open list, apparently unfinished, while a timelock it cannot see runs
 	// down.
 	if st == stateSucceeded {
-		now := runtime.ChainHeight()
+		now := g.voters.Height()
 		expiry, expires := expiresAt(p)
 		switch {
 		case p.state != stateSucceeded:

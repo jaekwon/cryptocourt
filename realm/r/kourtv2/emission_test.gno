@@ -9,7 +9,7 @@ import (
 // rollTo advances k full periods from creation (tests poke via touch).
 func rollTo(c *Court, k int64) {
 	target := c.createdAt + k*periodBlocks
-	testing.SkipHeights(target - runtimeHeight())
+	testing.SkipHeights(target - heightNow())
 	touch(c)
 }
 

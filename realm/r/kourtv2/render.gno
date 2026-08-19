@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"chain/runtime"
-
 	sanitize "gno.land/p/nt/markdown/sanitize/v0"
 )
 
@@ -34,14 +32,30 @@ func testClockBanner() string {
 	// Keyed on Fabricated, not Active: a SEALED test chain can no longer be
 	// driven but is still full of invented dates, and that is precisely when a
 	// reader is most likely to mistake it for a real one.
-	tail := " Heights and balances are real."
+	// No longer claims heights are real: the override covers height too, so a
+	// test chain's block numbers are as fabricated as its dates.
+	tail := " Balances are real."
 	if !TestClockActive() {
-		tail = " The clock is now sealed, so these dates are fixed history;" +
-			" heights and balances are real."
+		// Says what sealing does to the FUTURE, not only to the past. Sealing
+		// drops the skew but keeps a floor, so both clocks sit at that floor
+		// until real time and real height catch up — up to a century and up to
+		// ten weeks of blocks. Anything opened after the seal is stamped at the
+		// floor and its windows are never reached. "Fixed history" was true and
+		// silent about exactly the part a reader would act on.
+		tail = " The clock is now sealed: these dates are fixed history, and" +
+			" this chain's clock stays stopped until the real one catches up," +
+			" so nothing opened from here will reach a deadline. Balances are real."
+	}
+	// A chain whose HEIGHT was moved but whose calendar was not would otherwise
+	// read "advanced 0 seconds", which says nothing was moved at all — while
+	// conviction, emission and every trailing average on the page came from a
+	// block count the scenario handed the chain.
+	moved := strconv.FormatInt(TestClockPeakSkew(), 10) + " seconds"
+	if h := TestHeightPeakSkew(); h > 0 {
+		moved += " and " + strconv.FormatInt(h, 10) + " blocks"
 	}
 	return "> **Test chain — the dates on this page are fabricated.** Its clock was " +
-		"set by the deployer and advanced " + strconv.FormatInt(TestClockPeakSkew(), 10) +
-		" seconds." + tail + "\n\n"
+		"set by the deployer and advanced " + moved + "." + tail + "\n\n"
 }
 
 func render(path string) string {
@@ -214,7 +228,7 @@ func renderClaim(slug string, id uint64) string {
 	if total > 0 {
 		b.WriteString("- instantaneous: " + pct(cs.yesStake, total) + " YES\n")
 	}
-	h := runtime.ChainHeight()
+	h := heightNow()
 	if yAvg, ym := cs.yes.Average(h, periodBlocks); ym {
 		if tAvg, tm := cs.oi.Average(h, periodBlocks); tm && tAvg > 0 {
 			b.WriteString("- trailing week: " + pct(yAvg, tAvg) + " YES\n")

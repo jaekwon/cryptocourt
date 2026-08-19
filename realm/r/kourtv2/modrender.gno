@@ -20,7 +20,6 @@
 package kourtv2
 
 import (
-	"chain/runtime"
 	"math/overflow"
 	"strconv"
 	"strings"
@@ -332,7 +331,7 @@ func renderModLog(slug string) string {
 	pendingRows := []string{}
 	pendingSeen := 0
 	pendingMore := false
-	now := runtime.ChainHeight()
+	now := heightNow()
 	cm.pending.Iterate("", "", func(key string, v any) bool {
 		pendingSeen++
 		if a, ok := v.(*approval); ok {

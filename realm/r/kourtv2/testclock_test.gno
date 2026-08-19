@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,9 @@ func testingTime() int64 { return time.Now().Unix() }
 func resetTestClock(deployer address) {
 	tcDeployer, tcArmed, tcSealed, tcSkew, tcBase, tcFloor = deployer, false, false, 0, 0, 0
 	tcEverArmed, tcPeakSkew = false, 0
+	// The height half too, or a test inherits the previous test's skew and the
+	// suite passes for the wrong reason.
+	tcHeightSkew, tcHeightPeak, tcHeightFloor, tcHeightBase = 0, 0, 0, 0
 }
 
 // NOTE ON SCOPE: every test in this package shares one realm, and by the time
@@ -45,7 +49,9 @@ func TestTestClockSurvivesCourtCreation(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-alice")
 	bob := testutils.TestAddress("tc-bob")
 	resetTestClock(alice)
-	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime() // a fresh scenario chain
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight() // a fresh scenario chain
 
 	// A claim whose settle window is days away — the case no integration test
 	// could reach by waiting.
@@ -77,7 +83,9 @@ func TestTestClockCarriesAClaimPastItsDeadline(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-c")
 	bob := testutils.TestAddress("tc-d")
 	resetTestClock(alice)
-	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime() // armed at deploy
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight() // armed at deploy
 	c := testCourt(cur, "tc2", alice, 50_000_000_000)
 	// StartCourt leaves the clock alone now; the scenario stays armed.
 	c.coin.Mint(bob, 20_000_000_000)
@@ -116,6 +124,7 @@ func TestTestClockRefusesStrangersAndBackwardsTime(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-e")
 	mallory := testutils.TestAddress("tc-m")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 
 	// A stranger cannot arm it, even on a virgin realm — the race a public
 	// chain would otherwise lose.
@@ -139,6 +148,7 @@ func TestTestClockRefusesStrangersAndBackwardsTime(cur realm, t *testing.T) {
 	// Armed (the filetest covers the arming path); time only moves forward.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
 	uassert.AbortsContains(t, cur, "moves forward", func() {
 		AdvanceTestClock(cross(cur), -3600)
 	})
@@ -165,6 +175,7 @@ func TestTestClockRefusesStrangersAndBackwardsTime(cur realm, t *testing.T) {
 func TestTestClockRefusesAUsedRealm(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-f")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	_ = testCourt(cur, "tc3", alice, 1_000_000_000) // uses the realm
 	tcSealed = false                                // even with the seal cleared by hand,
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -182,7 +193,9 @@ func TestAdvanceIsDeployerOnlyWhileArmed(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-g")
 	mallory := testutils.TestAddress("tc-h")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
 
 	testing.SetRealm(testing.NewUserRealm(mallory))
 	uassert.AbortsContains(t, cur, "only the deployer", func() {
@@ -198,7 +211,9 @@ func TestAdvanceIsDeployerOnlyWhileArmed(cur realm, t *testing.T) {
 func TestAdvanceCannotWrapTheClockBackwards(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-i")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
 	testing.SetRealm(testing.NewUserRealm(alice))
 
 	maxI64 := int64(9223372036854775807)
@@ -223,7 +238,9 @@ func TestAdvanceCannotWrapTheClockBackwards(cur realm, t *testing.T) {
 func TestSealingNeverRewindsBelowWhatWasShown(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-j")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	tcArmed, tcBase, tcFloor = true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AdvanceTestClock(cross(cur), maxAdvanceStep) // ten years out
 
@@ -242,6 +259,7 @@ func TestSealingNeverRewindsBelowWhatWasShown(cur realm, t *testing.T) {
 func TestClockNeverReadsTheZeroSentinel(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-k")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	tcArmed, tcBase, tcFloor = true, 1, 1
 	if nowTime() <= 0 {
 		t.Fatal("nowTime() handed out a non-positive instant")
@@ -260,7 +278,9 @@ func TestClockNeverReadsTheZeroSentinel(cur realm, t *testing.T) {
 func TestSealingKeepsTheDisclosure(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-seal-disc")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AdvanceTestClock(cross(cur), 7257600) // twelve weeks, as the smoke scenario does
 
@@ -285,6 +305,12 @@ func TestSealingKeepsTheDisclosure(cur realm, t *testing.T) {
 		t.Error("a sealed test chain must still render its banner")
 	} else if !strings.Contains(b, "sealed") || !strings.Contains(b, "fabricated") {
 		t.Errorf("the sealed banner must say both sealed and fabricated: %q", b)
+	} else if !strings.Contains(b, "stays stopped") {
+		// An audit measured the consequence: after sealing, 50,000 real blocks
+		// moved neither clock, because both sit at their floor until reality
+		// catches up. Anything opened from there never reaches a deadline, and
+		// the banner used to speak only of the past.
+		t.Errorf("the sealed banner must say the clock STAYS stopped: %q", b)
 	}
 }
 
@@ -292,7 +318,9 @@ func TestSealingKeepsTheDisclosure(cur realm, t *testing.T) {
 func TestPeakSkewTracksTheFurthestAdvance(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-peak")
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AdvanceTestClock(cross(cur), 3600)
 	AdvanceTestClock(cross(cur), 7200)
@@ -329,6 +357,7 @@ func TestABaseTooFarOutIsRefusedRatherThanBricking(cur realm, t *testing.T) {
 	// leaning on a neighbour's court instead made it pass only in company, which
 	// is a test reporting on its neighbours' state.
 	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
 	_ = testCourt(cur, "tcmb", alice, 1_000_000_000)
 	resetTestClock(alice) // clears whatever the court creation left on the latch
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -403,4 +432,427 @@ func TestABaseTooFarOutIsRefusedRatherThanBricking(cur realm, t *testing.T) {
 	resetTestClock(alice)
 	tcArmed, tcBase, tcSkew = true, 0, 0
 	uassert.PanicsContains(t, cur, "non-positive instant", func() { _ = tcNow() })
+}
+
+// ---------------------------------------------------- the height half --
+
+// The height skew carries the same guards as the time skew, so it gets the
+// same attacks. These mirror the four HIGH findings the first audit made
+// against the time half, one for one — a second implementation of the same
+// idea is exactly where a fixed bug comes back.
+
+func TestTestHeightRefusesStrangersAndBackwards(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("th-a")
+	mallory := testutils.TestAddress("th-m")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+
+	// HIGH-1's twin: arming must not hand the wheel to the world.
+	testing.SetRealm(testing.NewUserRealm(mallory))
+	uassert.AbortsContains(t, cur, "only the deployer", func() {
+		AdvanceTestHeight(cross(cur), 100)
+	})
+	if TestHeightSkew() != 0 {
+		t.Fatal("a stranger moved the height")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "moves forward", func() {
+		AdvanceTestHeight(cross(cur), -100)
+	})
+	uassert.AbortsContains(t, cur, "moves forward", func() {
+		AdvanceTestHeight(cross(cur), 0)
+	})
+	before := TestHeightSkew()
+	AdvanceTestHeight(cross(cur), 17_280)
+	if TestHeightSkew() != before+17_280 {
+		t.Error("the height skew must accumulate")
+	}
+}
+
+// HIGH-3's twin: two maximal "forward" steps must not wrap int64 and walk the
+// height backwards. The step and the total are both capped for that reason.
+func TestTestHeightCannotWrapBackwards(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("th-w")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	testing.SetRealm(testing.NewUserRealm(alice))
+
+	uassert.AbortsContains(t, cur, "at most", func() {
+		AdvanceTestHeight(cross(cur), maxHeightStep+1)
+	})
+	// Walk to the ceiling in legal steps, then prove the next legal step is
+	// refused rather than wrapping.
+	for i := int64(0); i < maxHeightTotal/maxHeightStep; i++ {
+		AdvanceTestHeight(cross(cur), maxHeightStep)
+	}
+	if TestHeightSkew() != maxHeightTotal {
+		t.Fatalf("expected to sit exactly at the cap, got %d", TestHeightSkew())
+	}
+	uassert.AbortsContains(t, cur, "as far as it may", func() {
+		AdvanceTestHeight(cross(cur), 1)
+	})
+	if heightNow() < 0 {
+		t.Fatal("the height wrapped negative")
+	}
+}
+
+// HIGH-4's twin: sealing must not rewind. A height already written into a claim
+// has to stay in the past, or every window keyed on a stored height reopens.
+func TestSealingKeepsTheHeightFloor(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("th-s")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), 120_960)
+
+	// REAL BLOCKS BETWEEN THE ADVANCE AND THE SEAL. Without this the test
+	// passes against a LIVE skew, which is how the original defect survived
+	// review: an audit found it by inserting exactly one SkipHeights here.
+	// With a live skew, heightNow() climbs with the chain while the floor is
+	// stuck at the value written during the advance, so sealing drops the
+	// reported height by every block produced in between — below heights
+	// already written into claims, which p/twap and p/checkpoint then refuse.
+	testing.SkipHeights(800)
+
+	stamped := heightNow() // what a claim would have recorded
+	SealTestClock(cross(cur))
+	if after := heightNow(); after < stamped {
+		t.Errorf("sealing rewound the height: stamped %d, now %d", stamped, after)
+	}
+	if TestHeightSkew() != 0 {
+		t.Error("sealing must drop the drive")
+	}
+	if TestHeightPeakSkew() != 120_960 {
+		t.Errorf("the peak must survive sealing for the disclosure, got %d",
+			TestHeightPeakSkew())
+	}
+	if !TestClockFabricated() {
+		t.Error("a chain whose heights were moved is fabricated, sealed or not")
+	}
+}
+
+// An unarmed clock must not move the height at all: the latch is the whole
+// safety argument and it guards both halves.
+func TestTestHeightNeedsAnArmedClock(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("th-u")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "not armed", func() {
+		AdvanceTestHeight(cross(cur), 10)
+	})
+}
+
+// The disclosure must name the blocks, not only the seconds. A chain advanced
+// in HEIGHT but not in time would otherwise render "advanced 0 seconds" — which
+// reads as "nothing was moved" on a page whose conviction and emission figures
+// all came from a block count the scenario supplied.
+func TestBannerNamesTheBlocks(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("th-b")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), 17_280)
+
+	b := testClockBanner()
+	if !strings.Contains(b, "17280 blocks") {
+		t.Errorf("the banner must name the blocks advanced: %q", b)
+	}
+	if !strings.Contains(b, "fabricated") {
+		t.Errorf("the banner must still say the dates are fabricated: %q", b)
+	}
+}
+
+// THE ACCEPTANCE TEST for the whole height override: a claim walked from open
+// to crystallized WITHOUT MINING A SINGLE BLOCK. Before this, the same journey
+// cost ~17,280 real blocks — about two hours of a machine doing nothing else —
+// because Crystallize is barred until that height and heights could not be
+// moved. Now it is four transactions.
+func TestClaimReachesCrystallizeWithoutMining(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("acc-a")
+	bob := testutils.TestAddress("acc-b")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+
+	c := testCourt(cur, "acc1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "acc1", "Does the height override reach a draw?")
+	Stake(cross(cur), "acc1", id, sideYES, 9_000_000_000)
+
+	startHeight := heightNow()
+
+	// The answerability ring needs answerWindow of stake history. One
+	// transaction, not 2,160 blocks.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), answerWindow+10)
+	Stake(cross(cur), "acc1", id, sideYES, 1_000_000) // an observation in the new bucket
+
+	cs := mustClaim(c, id)
+	if _, mature := cs.oi.Average(heightNow(), answerWindow); !mature {
+		t.Fatal("the trailing average must be mature after advancing answerWindow blocks")
+	}
+
+	// Freeze an answer by hand: PostAnswer's own path is covered elsewhere, and
+	// what is under test here is that the HEIGHT gates move.
+	touch(c)
+	cs.frozenAt = heightNow()
+	cs.rateAccAtFreeze = c.rateAccFP
+	cs.answerHeight = heightNow()
+	cs.answeredAtTime = nowTime()
+	cs.answer = sideYES
+	cs.answerer = bob
+
+	// Settle is wall-clock gated; the calendar half already handled that.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestClock(cross(cur), 72*3600+1)
+	SettleUndisputed(cross(cur), "acc1", id)
+	if cs.verdictAt == 0 {
+		t.Fatal("the claim should have settled")
+	}
+
+	// Crystallize is barred until priorityWindowBlocks of HEIGHT — the gate
+	// that used to cost two hours of mining.
+	uassert.AbortsContains(t, cur, "quiet window", func() {
+		Crystallize(cross(cur), "acc1", id)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), priorityWindowBlocks+1)
+	Crystallize(cross(cur), "acc1", id)
+	if !cs.crystallized {
+		t.Fatal("the claim should have crystallized after advancing past the quiet window")
+	}
+
+	// And the point: the chain never produced a block for any of it.
+	if moved := heightNow() - startHeight; moved < priorityWindowBlocks {
+		t.Errorf("height should have moved by the override, got %d", moved)
+	}
+	if TestHeightPeakSkew() < answerWindow+priorityWindowBlocks {
+		t.Errorf("the whole journey should be skew, not blocks: peak %d",
+			TestHeightPeakSkew())
+	}
+}
+
+// Acceptance, third of three: EMISSION accrues with no blocks mined. A court's
+// budget is set at its first rollPeriod — createdAt + periodBlocks, i.e. 120,960
+// blocks — and accrual is budget x elapsed blocks, so before the height override
+// a court could not emit anything without a week of real block production.
+//
+// This asserts the INTERNAL accrual rather than the Reservoir read, and the
+// distinction is the point: `reservoirR()` nets cumAccrual against reservedTail
+// and juniorReserved, so a court with a live claim reserving against it can
+// legitimately report zero while emission is working perfectly. A scenario that
+// asserted `Reservoir > 0` failed for exactly that reason and would have been
+// read as the override not working.
+func TestEmissionAccruesWithoutMining(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("em-acc")
+	resetTestClock(alice)
+	defer resetTestClock(alice) // the latch is global; do not leak an armed clock
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	c := testCourt(cur, "emacc", alice, 50_000_000_000)
+
+	touch(c)
+	if c.curPeriodBudget != 0 {
+		t.Fatal("a fresh court has no budget until its first roll")
+	}
+	if c.cumAccrual != 0 {
+		t.Fatal("and nothing accrued")
+	}
+
+	// Three periods — 362,880 blocks — in two transactions, because the step cap
+	// is two periods. That cap is what bounds `touch()`'s catch-up gas, and a
+	// scenario paying one extra transaction to cross three weeks is not a cost
+	// worth trading a permanent brick for.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), 2*periodBlocks)
+	AdvanceTestHeight(cross(cur), periodBlocks)
+	touch(c)
+
+	if c.periodIndex < 3 {
+		t.Errorf("touch must roll every elapsed period, got index %d", c.periodIndex)
+	}
+	if c.curPeriodBudget <= 0 {
+		t.Fatal("the budget must be set once a period has rolled")
+	}
+	if c.cumAccrual <= 0 {
+		t.Fatalf("emission must have accrued over the elapsed blocks, got %d", c.cumAccrual)
+	}
+	// And it is the override that got us here, not block production.
+	if TestHeightPeakSkew() < 3*periodBlocks {
+		t.Errorf("the elapsed height should be skew: peak %d", TestHeightPeakSkew())
+	}
+}
+
+// The cap exists to bound gas, so the test measures gas. `touch()` walks
+// emission periods one at a time, and the audit measured 12,519,425 gas after a
+// single legal step at the old 10-million-block cap and 713,771,568 at the old
+// total — past the per-transaction ceiling, which reverts the touch, never
+// writes lastAccrual, and leaves every entrypoint in that court dead for ever.
+// This walks the ENTIRE legal budget and then touches, so the reported GAS line
+// is the worst case a deployer can now inflict.
+func TestWorstCaseTouchAfterTheFullHeightBudget(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gas-a")
+	resetTestClock(alice)
+	defer resetTestClock(alice)
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	c := testCourt(cur, "gas1", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	for tcHeightSkew < maxHeightTotal {
+		AdvanceTestHeight(cross(cur), maxHeightStep)
+	}
+	if tcHeightSkew != maxHeightTotal {
+		t.Fatalf("expected to sit exactly at the cap, got %d", tcHeightSkew)
+	}
+	// The next legal step must be refused, not wrap or exceed.
+	uassert.AbortsContains(t, cur, "as far as it may", func() {
+		AdvanceTestHeight(cross(cur), 1)
+	})
+
+	// And the catch-up must be payable. Ten periods, not 8,267.
+	touch(c)
+	if c.periodIndex > 11 {
+		t.Errorf("the cap should bound the rolls to ~10, got periodIndex %d", c.periodIndex)
+	}
+	if c.lastAccrual != heightNow() {
+		t.Error("touch must have caught all the way up in one call")
+	}
+}
+
+// MEDIUM-1's closure, proven rather than assumed. An audit noted that a LIVE
+// height skew cannot express a boundary: a scenario advancing to one block
+// short of a gate races real block production, so it passes on a fast machine
+// and fails on a slow one, and the failure reads as a realm bug. That is the
+// same defect the file's "FROZEN, NOT SKEWED" note records for time.
+//
+// With the height frozen (round 40), the boundary is exact and stays exact no
+// matter how many blocks the chain produces underneath. This test asserts BOTH
+// sides of the gate and skips real blocks in between — with a live skew those
+// blocks would carry the claim over the line and the refusal below would fail.
+func TestAHeightBoundaryIsExactUnderRealBlockProduction(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bd-a")
+	resetTestClock(alice)
+	defer resetTestClock(alice)
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	c := testCourt(cur, "bd1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "bd1", "Is a height boundary exact?")
+	Stake(cross(cur), "bd1", id, sideYES, 9_000_000_000)
+	cs := mustClaim(c, id)
+	cs.verdictAt = heightNow() // settled, so only the quiet window stands between
+	cs.answer = sideYES
+	cs.answerer = alice
+
+	// One block SHORT of the quiet window. The gate is `now < lastFlagEventAt +
+	// priorityWindowBlocks` and lastFlagEventAt is 0 on an unflagged claim, so
+	// it is an ABSOLUTE height — advancing by the window from a non-zero base
+	// would sail straight past it, which is how the first draft of this test
+	// crystallized on the call that was supposed to be refused.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), priorityWindowBlocks-1-heightNow())
+	testing.SkipHeights(500) // real blocks, which must not move the gate
+	uassert.AbortsContains(t, cur, "quiet window", func() {
+		Crystallize(cross(cur), "bd1", id)
+	})
+
+	// Exactly one more, by the override.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), 1)
+	testing.SkipHeights(500)
+	Crystallize(cross(cur), "bd1", id)
+	if !cs.crystallized {
+		t.Fatal("one block past the window must clear the gate, exactly")
+	}
+}
+
+// MEDIUM-4: an emitted event carries the realm's height, which on a fabricated
+// chain disagrees with the height the CHAIN stamps on the same transaction. An
+// indexer joining the two sees one transaction reporting two heights, and the
+// event body is the only place a marker can live — TestClockFabricated() is a
+// separate call an indexer has no reason to make.
+func TestEventHeightMarksAFabricatedChain(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ev-a")
+	resetTestClock(alice)
+	defer resetTestClock(alice)
+
+	// Ordinary chain: a plain number, nothing added.
+	if h := eventHeight(); strings.Contains(h, "~") {
+		t.Errorf("an ordinary chain must emit a plain height, got %q", h)
+	}
+
+	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
+	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AdvanceTestHeight(cross(cur), 1_000)
+
+	h := eventHeight()
+	if !strings.HasSuffix(h, "~test") {
+		t.Errorf("a fabricated chain must mark its event height, got %q", h)
+	}
+	// And the number is still there for a consumer that splits on it.
+	if !strings.HasPrefix(h, strconv.FormatInt(heightNow(), 10)) {
+		t.Errorf("the marked height must still carry the number, got %q", h)
+	}
+
+	// The mark outlives sealing, like every other part of the disclosure.
+	SealTestClock(cross(cur))
+	if !strings.Contains(eventHeight(), "~test") {
+		t.Error("a sealed chain's events are still fabricated and must still say so")
+	}
+}
+
+// LOW-1 and LOW-2 from the audit. Both were "safe by coincidence" rather than
+// by guard, which is the category that stops being safe when something nearby
+// changes.
+func TestArmingAtADeclaredBaseNeverLowersTheFloor(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("lo-1")
+	resetTestClock(alice)
+	defer resetTestClock(alice)
+	// A declared base BELOW the chain's own instant used to overwrite the floor
+	// downward. Nothing is stamped yet on a pristine realm, so it did no harm —
+	// but the floor is the thing that stops a rewind, and it must only rise.
+	tcDeployer = alice
+	tcArmed, tcEverArmed = true, true
+	tcBase = testingTime()
+	tcFloor = testingTime()
+	captured := tcFloor
+	// Simulate the tail of EnableTestClockAt with a base in the past.
+	past := captured - 1_000_000
+	tcBase = past
+	if past > tcFloor {
+		tcFloor = past
+	}
+	if tcFloor < captured {
+		t.Errorf("a past base lowered the floor: %d -> %d", captured, tcFloor)
+	}
+}
+
+func TestSealingANeverArmedRealmIsRefused(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("lo-2")
+	resetTestClock(alice)
+	defer resetTestClock(alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	// Sealing is one-way, so a seal aimed at the wrong chain would permanently
+	// foreclose arming that realm — for nothing, since an unarmed clock is
+	// already the chain's own.
+	uassert.AbortsContains(t, cur, "nothing to seal", func() {
+		SealTestClock(cross(cur))
+	})
+	if tcSealed {
+		t.Error("a refused seal must not have latched")
+	}
 }

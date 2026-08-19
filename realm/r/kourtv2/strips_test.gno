@@ -201,7 +201,7 @@ func TestStripCapsBindOnAContendedPage(cur realm, t *testing.T) {
 
 	const rows = 60 // > renderPageSize, which is what makes capBinds true
 	made := []*claimState{}
-	base := runtimeHeight() + 1_000_000
+	base := heightNow() + 1_000_000
 	for i := 0; i < rows; i++ {
 		testing.SetRealm(testing.NewUserRealm(flooder))
 		id := OpenClaim(cross(cur), "scp", "flood "+strconv.Itoa(i))

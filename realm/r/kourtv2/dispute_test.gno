@@ -102,7 +102,7 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "escrow window has not passed", func() {
 		Finalize(cross(cur), "dp1", id)
 	})
-	testing.SkipHeights(EscrowUntil("dp1", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("dp1", id) - heightNow())
 	testing.SetRealm(testing.NewUserRealm(dave))
 	uassert.AbortsContains(t, cur, "participant-only", func() {
 		Finalize(cross(cur), "dp1", id)
@@ -182,7 +182,7 @@ func TestDisputeOverturnPath(cur realm, t *testing.T) {
 		t.Fatal("an overturn flips the provisional verdict")
 	}
 
-	testing.SkipHeights(EscrowUntil("dp2", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("dp2", id) - heightNow())
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "dp2", id)
 	if Verdict("dp2", id) != sideNO {
@@ -264,7 +264,7 @@ func TestOverturnedVerdictCannotBeFlippedBack(cur realm, t *testing.T) {
 
 	// (3) The money follows the verdict: the NO side draws, the overturned YES
 	// side is refused — the consequence both guards exist to protect.
-	if now := runtimeHeight(); now < EscrowUntil("ovf1", id) {
+	if now := heightNow(); now < EscrowUntil("ovf1", id) {
 		testing.SkipHeights(EscrowUntil("ovf1", id) - now)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -404,7 +404,7 @@ func TestWeightlessContestEarnsNoCredential(cur realm, t *testing.T) {
 	if Provisional("dp5", id) != sideYES {
 		t.Fatal("the uphold itself must still work")
 	}
-	testing.SkipHeights(EscrowUntil("dp5", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("dp5", id) - heightNow())
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "dp5", id)
 	if Verdict("dp5", id) != sideYES {
@@ -427,10 +427,10 @@ func TestWeightlessContestEarnsNoCredential(cur realm, t *testing.T) {
 // the defence that stops a manufactured contest. That defence is credEligible,
 // which is capital-keyed: it demands weight voted AGAINST the claim.
 func TestParticipantsCannotVoteTheirOwnVerdict(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("pvg-alice")   // author + answerer
-	bob := testutils.TestAddress("pvg-bob")       // staker on the other side
-	carol := testutils.TestAddress("pvg-carol")   // disputer, never staked
-	sock := testutils.TestAddress("pvg-sock")     // alice's second address
+	alice := testutils.TestAddress("pvg-alice") // author + answerer
+	bob := testutils.TestAddress("pvg-bob")     // staker on the other side
+	carol := testutils.TestAddress("pvg-carol") // disputer, never staked
+	sock := testutils.TestAddress("pvg-sock")   // alice's second address
 	c := testCourt(cur, "pvg", alice, 50_000_000_000)
 	c.coin.Mint(bob, 10_000_000_000)
 	c.coin.Mint(carol, 10_000_000_000)
@@ -615,14 +615,14 @@ func TestReopenRefusedOnceTheEscrowWindowHasPassed(cur realm, t *testing.T) {
 	ResolveDispute(cross(cur), "esw", id)
 
 	cs := mustClaim(c, id)
-	if cs.provisional < 0 || cs.escrowUntil <= runtimeHeight() || cs.verdictAt != 0 {
+	if cs.provisional < 0 || cs.escrowUntil <= heightNow() || cs.verdictAt != 0 {
 		t.Fatalf("setup: need a live reopen lane inside its window: provisional=%d "+
 			"until=%d now=%d verdictAt=%d", cs.provisional, cs.escrowUntil,
-			runtimeHeight(), cs.verdictAt)
+			heightNow(), cs.verdictAt)
 	}
 
 	// Past the window, and deliberately WITHOUT finalizing.
-	testing.SkipHeights(cs.escrowUntil - runtimeHeight())
+	testing.SkipHeights(cs.escrowUntil - heightNow())
 	if cs.verdictAt != 0 {
 		t.Fatal("setup: nothing may have finalized this claim, or the wrong guard answers")
 	}
@@ -684,13 +684,13 @@ func TestFinalizeRefusesUnearnedVerdicts(cur realm, t *testing.T) {
 	}
 
 	// Reopen just inside the window; its vote necessarily runs past the window's end.
-	testing.SkipHeights(cs.escrowUntil - runtimeHeight() - 1)
+	testing.SkipHeights(cs.escrowUntil - heightNow() - 1)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	OpenDispute(cross(cur), "fzg", id)
 	testing.SkipHeights(2) // now past escrowUntil, still inside the vote
-	if !cs.disputeOpen || runtimeHeight() < cs.escrowUntil {
+	if !cs.disputeOpen || heightNow() < cs.escrowUntil {
 		t.Fatalf("setup: must sit past the window with a live round: open=%v now=%d "+
-			"until=%d", cs.disputeOpen, runtimeHeight(), cs.escrowUntil)
+			"until=%d", cs.disputeOpen, heightNow(), cs.escrowUntil)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "a dispute is active", func() {
@@ -744,7 +744,7 @@ func TestFinalizeResetsAnOverturnedRecord(cur realm, t *testing.T) {
 		t.Fatalf("setup: the answer must have been overturned: provisional=%d answer=%d",
 			cs.provisional, cs.answer)
 	}
-	testing.SkipHeights(cs.escrowUntil - runtimeHeight())
+	testing.SkipHeights(cs.escrowUntil - heightNow())
 	testing.SetRealm(testing.NewUserRealm(pro)) // the answerer is a participant
 	Finalize(cross(cur), "fzr", id)
 
@@ -803,7 +803,7 @@ func TestFinalizeCreditsNothingForAQuorumlessDefault(cur realm, t *testing.T) {
 			"provisional=%d answer=%d decided=%d", cs.provisional, cs.answer,
 			cs.decidedRounds)
 	}
-	testing.SkipHeights(cs.escrowUntil - runtimeHeight())
+	testing.SkipHeights(cs.escrowUntil - heightNow())
 	testing.SetRealm(testing.NewUserRealm(steady))
 	Finalize(cross(cur), "fzu", id)
 

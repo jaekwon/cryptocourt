@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"chain/runtime"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -354,9 +355,15 @@ func TestStakeGuards(cur realm, t *testing.T) {
 	})
 }
 
-// testingHeight reads the current height inside tests.
+// testingHeight reads the REAL chain height inside tests — deliberately not
+// heightNow(). Round 33's mass rename pointed it at the shim, which made it
+// circular the moment the height gained a frozen base: a test arming the latch
+// by hand sets tcHeightBase from this, and heightNow() computes tcHeightBase +
+// skew, so the base was set from itself and came out zero. Every stamp written
+// from it was then zero, and SettleUndisputed refused with "no answer to
+// settle" on a claim that plainly had one.
 func testingHeight() int64 {
-	return runtimeHeight()
+	return runtime.ChainHeight()
 }
 
 func TestRawIntegralAccruesAndFreezeCaps(cur realm, t *testing.T) {
@@ -381,7 +388,7 @@ func TestRawIntegralAccruesAndFreezeCaps(cur realm, t *testing.T) {
 
 	// Freeze caps the raw clock: blocks after frozenAt add nothing.
 	touch(c)
-	cs.frozenAt = runtimeHeight()
+	cs.frozenAt = heightNow()
 	cs.rateAccAtFreeze = c.rateAccFP
 	before := p.rawLo
 	testing.SkipHeights(2000)
@@ -649,7 +656,7 @@ func TestBothTrailingRingsTrackTheirOwnSeries(cur realm, t *testing.T) {
 	// Unequal, and not a multiple of each other, so no swap can coincide.
 	cs.yesStake, cs.noStake = 100_000, 700_000
 	observePools(cs)
-	h := runtimeHeight()
+	h := heightNow()
 	// A sub-width window widens to one bucket, so this reads the value just written.
 	if got, _ := cs.oi.Average(h, 1); got != 800_000 {
 		t.Errorf("the OI ring recorded %d, want the 800000 TOTAL", got)

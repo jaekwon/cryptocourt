@@ -236,7 +236,7 @@ func TestSlashWindowClosesUnchallenged(cur realm, t *testing.T) {
 		ResolveSlashWindow(cross(cur), "qf5", id)
 	})
 	cs := mustClaim(c, id)
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	supplyBefore := c.coin.TotalSupply()
 	ResolveSlashWindow(cross(cur), "qf5", id)
 	if got := supplyBefore - c.coin.TotalSupply(); got != slash {
@@ -371,12 +371,12 @@ func TestReopenDisputeSupersedesPendingSlash(cur realm, t *testing.T) {
 	if cs.counterUsed {
 		t.Fatal("a stranger's dispute must not spend the answerer's counter re-vote")
 	}
-	if cs.pendingSlashUntil <= runtimeHeight() {
+	if cs.pendingSlashUntil <= heightNow() {
 		t.Fatal("the surviving reserve must get a fresh counter-flag window")
 	}
 
 	// Finalize returns the bond LESS the standing reserve; the reserve then burns.
-	testing.SkipHeights(EscrowUntil("qf8", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("qf8", id) - heightNow())
 	aliceBefore := c.coin.BalanceOf(alice)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "qf8", id)
@@ -386,7 +386,7 @@ func TestReopenDisputeSupersedesPendingSlash(cur realm, t *testing.T) {
 	}
 	// The long escrow skip above already outran the re-armed window; only wait
 	// when it has not lapsed yet (SkipHeights refuses to go backwards).
-	if now := runtimeHeight(); now < cs.pendingSlashUntil {
+	if now := heightNow(); now < cs.pendingSlashUntil {
 		testing.SkipHeights(cs.pendingSlashUntil - now + 1)
 	}
 	supplyBefore := c.coin.TotalSupply()
@@ -562,7 +562,7 @@ func TestConclusiveLowSurvivesLateSettle(cur realm, t *testing.T) {
 
 	// Close the counter window, then crystallize: the low tier means D = 0.
 	cs := mustClaim(c, id)
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	ResolveSlashWindow(cross(cur), "cl1", id)
 	testing.SkipHeights(priorityWindowBlocks + 1) // 24h quiet
 	testing.SkipHeights(periodBlocks)             // a budget to draw from, if any
@@ -622,8 +622,8 @@ func TestConclusiveLowSurvivesLateFinalize(cur realm, t *testing.T) {
 
 	// Finalize NOW, inside the counter window (escrow lapsed a week ago). A
 	// participant (the author staked+answered) may finalize even in the grace week.
-	if runtimeHeight() < cs.escrowUntil {
-		testing.SkipHeights(cs.escrowUntil - runtimeHeight() + 1)
+	if heightNow() < cs.escrowUntil {
+		testing.SkipHeights(cs.escrowUntil - heightNow() + 1)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "cf1", id)
@@ -632,7 +632,7 @@ func TestConclusiveLowSurvivesLateFinalize(cur realm, t *testing.T) {
 	}
 
 	// Close the counter window and crystallize: the low tier means D = 0.
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	ResolveSlashWindow(cross(cur), "cf1", id)
 	testing.SkipHeights(priorityWindowBlocks + 1) // 24h quiet
 	testing.SkipHeights(periodBlocks)             // a budget to draw from, if any
@@ -799,7 +799,7 @@ func TestDecidedRoundBuysNoSlashImmunity(cur realm, t *testing.T) {
 	wantReserve := slashSizeFor(cs) // immutable after the answer (v0.43)
 
 	// LOCKSTEP LEG: a decided round must no longer free the slash reserve.
-	testing.SkipHeights(cs.escrowUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.escrowUntil - heightNow() + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "sim1", id)
 	if cs.answerBond != wantReserve {
@@ -818,7 +818,7 @@ func TestDecidedRoundBuysNoSlashImmunity(cur realm, t *testing.T) {
 		t.Fatalf("an upheld-but-junk claim must still slash: pendingSlash=%d want %d",
 			cs.pendingSlash, wantReserve)
 	}
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	supplyBefore := c.coin.TotalSupply()
 	ResolveSlashWindow(cross(cur), "sim1", id)
 	if got := supplyBefore - c.coin.TotalSupply(); got != wantReserve {
@@ -907,9 +907,9 @@ func TestDustRideCannotLiftTheSlash(cur realm, t *testing.T) {
 // pays half the bond for the failed attempt.
 func TestConclusiveLowBelowTwoThirdsHalfBurnsTheBond(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("t2-alice")
-	bob := testutils.TestAddress("t2-bob")     // flagger
-	low := testutils.TestAddress("t2-low")     // 10B low
-	mid := testutils.TestAddress("t2-mid")     // 8B mid
+	bob := testutils.TestAddress("t2-bob") // flagger
+	low := testutils.TestAddress("t2-low") // 10B low
+	mid := testutils.TestAddress("t2-mid") // 8B mid
 	c := testCourt(cur, "t2c", alice, 50_000_000_000)
 	c.coin.Mint(bob, 10_000_000_000)
 	c.coin.Mint(low, 10_000_000_000)
@@ -1068,7 +1068,7 @@ func TestSlashIsLeviedAtMostOncePerClaim(cur realm, t *testing.T) {
 		t.Fatalf("setup: the flag lane must levy once: pending=%d levied=%v", first, cs.slashLevied)
 	}
 	// Close the window: the slash burns and the bond keeps its remainder.
-	testing.SkipHeights(cs.pendingSlashUntil - runtimeHeight() + 1)
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
 	ResolveSlashWindow(cross(cur), "lev1", id)
 	remainder := cs.answerBond
 	if cs.pendingSlash != 0 || remainder <= 0 {
@@ -1418,7 +1418,7 @@ func TestQuorumlessRideCannotAnnihilateTheQ5Window(cur realm, t *testing.T) {
 	if cs.counterUsed {
 		t.Fatal("the challenge must still be unspent")
 	}
-	if cs.pendingSlashUntil <= runtimeHeight() {
+	if cs.pendingSlashUntil <= heightNow() {
 		t.Fatal("the reserve must get a usable window")
 	}
 	// And the answerer can now actually use it.
@@ -1718,10 +1718,10 @@ func TestRideLeviedSlashEnqueuesNoBounty(cur realm, t *testing.T) {
 // — the quality tier multiplies their own payout — so this is the branch that matters
 // most and it was the one nothing broke on purpose.
 func TestQ2BarsAStakerFromVotingQuality(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("q2s-alice")  // author + answerer
+	alice := testutils.TestAddress("q2s-alice") // author + answerer
 	flagger := testutils.TestAddress("q2s-flag")
 	noSide := testutils.TestAddress("q2s-no")   // stakes NO
-	yesSide := testutils.TestAddress("q2s-yes")  // stakes YES
+	yesSide := testutils.TestAddress("q2s-yes") // stakes YES
 	c := testCourt(cur, "q2s", alice, 50_000_000_000)
 	c.coin.Mint(flagger, 10_000_000_000)
 	c.coin.Mint(noSide, 20_000_000_000)
@@ -2023,10 +2023,10 @@ func TestSlashDisposalRefusesEveryOutOfLaneResolve(cur realm, t *testing.T) {
 
 	cs := mustClaim(c, id)
 	reserved := cs.pendingSlash
-	if reserved <= 0 || cs.counterOpen || runtimeHeight() >= cs.pendingSlashUntil {
+	if reserved <= 0 || cs.counterOpen || heightNow() >= cs.pendingSlashUntil {
 		t.Fatalf("setup: need a live reserve in an unchallenged window: pending=%d "+
 			"counterOpen=%v now=%d until=%d", reserved, cs.counterOpen,
-			runtimeHeight(), cs.pendingSlashUntil)
+			heightNow(), cs.pendingSlashUntil)
 	}
 
 	// The back door: no counter has been opened, so there is nothing to resolve —
@@ -2055,9 +2055,9 @@ func TestSlashDisposalRefusesEveryOutOfLaneResolve(cur realm, t *testing.T) {
 	// Now into the band where the window has lapsed but the challenge is live. This
 	// is where the last guard earns its keep.
 	testing.SkipHeights(c.params.votingBlocks/2 + 2)
-	if runtimeHeight() < cs.pendingSlashUntil || runtimeHeight() >= cs.counterVoteEnd {
+	if heightNow() < cs.pendingSlashUntil || heightNow() >= cs.counterVoteEnd {
 		t.Fatalf("setup: must sit past the window and inside the vote: now=%d until=%d "+
-			"end=%d", runtimeHeight(), cs.pendingSlashUntil, cs.counterVoteEnd)
+			"end=%d", heightNow(), cs.pendingSlashUntil, cs.counterVoteEnd)
 	}
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "the counter re-vote is running", func() {
@@ -2358,10 +2358,10 @@ func TestApplyQualityTallyOnEveryBoundary(cur realm, t *testing.T) {
 	}
 
 	for _, k := range []struct {
-		name             string
-		low, mid, high   int64
-		wantTier         int
-		wantConclusive   bool
+		name           string
+		low, mid, high int64
+		wantTier       int
+		wantConclusive bool
 	}{
 		// An empty tally is inconclusive MID, not low: nobody voted, so nobody was
 		// "directionally backed", and the bond must not come back whole.
@@ -2647,7 +2647,7 @@ func TestRideDisposalAtExactlyTheFullBar(cur realm, t *testing.T) {
 	}
 	cs.answerBond -= reserve
 	cs.pendingSlash, cs.slashLevied, cs.counterUsed = reserve, true, true
-	cs.pendingSlashUntil = runtimeHeight() + c.params.votingBlocks
+	cs.pendingSlashUntil = heightNow() + c.params.votingBlocks
 
 	// Turnout EXACTLY the bar, carried two-thirds low: this ride confirms the slash.
 	cs.qLowW, cs.qMidW, cs.qHighW = f, 0, 0
@@ -2714,12 +2714,12 @@ func TestFlagStateNamesEverySlotPhase(cur realm, t *testing.T) {
 		t.Errorf("a fresh claim's slot is %q, want open", got)
 	}
 	// The cooldown, which needs a cycle behind it and a recent flag.
-	cs.flagCycles, cs.lastFlagAt = 1, runtimeHeight()
+	cs.flagCycles, cs.lastFlagAt = 1, heightNow()
 	if got := FlagState("fsp", id); got != "cooldown" {
 		t.Errorf("inside the cooldown the slot is %q, want cooldown", got)
 	}
 	// One block past the window it reopens, so the boundary is exclusive.
-	cs.lastFlagAt = runtimeHeight() - flagCooldownBlocks
+	cs.lastFlagAt = heightNow() - flagCooldownBlocks
 	if got := FlagState("fsp", id); got != "open" {
 		t.Errorf("at exactly lastFlagAt+cooldown the slot is %q, want open", got)
 	}

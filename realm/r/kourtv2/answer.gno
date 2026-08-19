@@ -6,8 +6,6 @@
 // %-of-X̄ quantity (bonds, slash, flag bond) reads (P6).
 package kourtv2
 
-import "chain/runtime"
-
 // answerWindow: the trailing window answerability reads. V1's audited 3-hour
 // value — enough history to block a flash-answer without walling off fresh
 // claims (the price-manipulation concern that forced V1's week-long window is
@@ -31,7 +29,7 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 		panic("kourtv2: this claim already has an answer")
 	}
 
-	now := runtime.ChainHeight()
+	now := heightNow()
 	// Answerability ENDS at the dead-claim timeout. CloseDeadClaim is
 	// permissionless but OPTIONAL, so without this a claim stays answerable at any
 	// age — and every X̄-derived bound in the system (court.gno's maxTcWeeks term,

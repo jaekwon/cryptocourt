@@ -58,6 +58,16 @@ type Electorate interface {
 	// Epoch is now. A proposal snapshots Epoch()-1 and stores it; nothing
 	// re-derives it later.
 	Epoch() uint32
+
+	// Height is the block height the governor gates on: when voting opens and
+	// closes, when a delay has elapsed, when a proposal may execute.
+	//
+	// It comes from the electorate rather than from the chain so that a realm
+	// whose clock can be fast-forwarded moves the VOTES with it. Reading
+	// runtime.ChainHeight() here instead would leave a test chain able to age
+	// everything except the one thing a dispute waits on, and would let the
+	// governor and the ledger disagree about what epoch it is.
+	Height() int64
 }
 
 // Token is what a page needs to name the thing being voted: an identity and a

@@ -7,8 +7,6 @@
 // happens by DISPUTING before the delay lapses).
 package kourtv2
 
-import "chain/runtime"
-
 // SettleUndisputed records the answer as the final verdict once the 72h delay
 // has passed with no dispute. Permissionless.
 func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
@@ -30,12 +28,12 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	// fallback for claims answered before the stamps existed. One message
 	// either way — the caller is told the same fact.
 	if passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||
-		(!known && runtime.ChainHeight() < cs.answerHeight+settleDelay) {
+		(!known && heightNow() < cs.answerHeight+settleDelay) {
 		panic("kourtv2: the answer has not aged the 72h settlement minimum")
 	}
 	touch(c)
 
-	cs.verdictAt = runtime.ChainHeight()
+	cs.verdictAt = heightNow()
 	cs.verdictAtTime = nowTime()
 	cs.route = "undisputed"
 	// The record froze with the pools; clip its hourly tail to the final week

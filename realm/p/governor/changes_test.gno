@@ -1,5 +1,7 @@
 package governor
 
+import "chain/runtime"
+
 import "testing"
 
 // stated is an electorate whose totals are declared outright, for the boundary
@@ -14,6 +16,11 @@ func (stated) PastVotes(who address, at uint32) int64 { return 0 }
 func (s stated) PastTotal(at uint32) int64            { return s.total }
 func (s stated) EngagedTotal(at uint32) int64         { return s.engaged }
 func (s stated) Epoch() uint32                        { return s.epoch }
+
+// Height satisfies Electorate. These tests drive height through testing.SkipHeights,
+// so the chain's own height is the right answer here — the point of the interface
+// method is that a REALM may substitute its own, not that every caller must.
+func (s stated) Height() int64 { return runtime.ChainHeight() }
 
 func govFor(e Electorate) *Governor {
 	g := New(e, coin{supply: 1})

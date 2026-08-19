@@ -15,7 +15,6 @@
 package kourtv2
 
 import (
-	"chain/runtime"
 	"strings"
 
 	checkpoint "gno.land/p/kourt/checkpoint/v0"
@@ -161,7 +160,7 @@ const (
 	ordDepositFloorBps = int64(1)  // 0.01% — §5.3's rule is meta-only; opening a
 	//                                claim is the product here, so keep the door
 	//                                a tenth of the answer it opens.
-	maxCourtNameLen  = 100
+	maxCourtNameLen = 100
 	// maxSlugLen keeps uppercase(slug) inside GRC20's symbol-length bound.
 	maxSlugLen        = 11
 	maxStakeOpenDelay = int64(17_280) // 24h
@@ -393,8 +392,8 @@ type Court struct {
 	// (lock.gno). Created eagerly with the others: it is a money-path read on
 	// every deposit and bond, and a lazily-built tree would give each of those
 	// a second branch that has to agree with the write path.
-	locked          *bptree.BPTree // addr -> int64 (lock.gno)
-	qualifiedCount  int            // addresses at score ≥ priorityNetRecord
+	locked         *bptree.BPTree // addr -> int64 (lock.gno)
+	qualifiedCount int            // addresses at score ≥ priorityNetRecord
 
 	// Moderation state (moderation.gno) — render-layer only; no money path
 	// reads it. Lazily created on first moderation touch (ensureMod), so a
@@ -485,7 +484,10 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 	// pixel-identical to the flagship's, while the two are non-fungible and
 	// backed by entirely separate one-way curves. Deriving from the slug makes
 	// the symbol a bijection with an already-unique, deposit-priced name.
-	coin := grc20votes.NewLedger(name, courtSymbol(slug), coinDecimals, epochBlocks)
+	// The ledger reads THIS realm's height, so a fast-forwarded test chain
+	// moves vote epochs with everything else. On an ordinary chain heightNow()
+	// is exactly runtime.ChainHeight().
+	coin := grc20votes.NewLedgerWithClock(name, courtSymbol(slug), coinDecimals, epochBlocks, realmClock{})
 	c := &Court{
 		id:             slug,
 		name:           name,
@@ -500,7 +502,7 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 		records:        bptree.NewBPTree32(),
 		locked:         bptree.NewBPTree32(),
 		params:         p.mustSane(),
-		createdAt:      runtime.ChainHeight(),
+		createdAt:      heightNow(),
 		curBudgetBpsFP: budgetBpsFPStart,
 	}
 	c.lastAccrual = c.createdAt

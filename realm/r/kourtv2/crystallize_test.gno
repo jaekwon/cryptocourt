@@ -222,7 +222,7 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 	// against it than the old fixture claimed to show.
 	keep := effMinAnswerX(c) * 2
 	Unstake(cross(cur), "f9c", id, sideYES, 100_000_000_000-keep) // raw stops; conviction kept
-	testing.SkipHeights(6 * periodBlocks)                   // openBlocks grows, raw does not
+	testing.SkipHeights(6 * periodBlocks)                         // openBlocks grows, raw does not
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "f9c", id, sideYES)
 	testing.SkipHeights(settleDelay)
@@ -272,9 +272,9 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 // 12-week life PostAnswer permits. This drives a long-lived claim with a single
 // conclusive-tally voter to find out.
 func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("p2-alice")   // author/answerer/staker
+	alice := testutils.TestAddress("p2-alice") // author/answerer/staker
 	flagger := testutils.TestAddress("p2-flag")
-	voter := testutils.TestAddress("p2-voter")   // sole non-participant voter
+	voter := testutils.TestAddress("p2-voter") // sole non-participant voter
 	c := testCourt(cur, "p2c", alice, 1_000_000_000_000)
 	c.coin.Mint(flagger, 50_000_000_000)
 	c.coin.Mint(voter, 200_000_000_000) // >= fullBar, so the flag is CONCLUSIVE
@@ -347,7 +347,6 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 	}
 }
 
-
 // The other side of v0.55: tier-invariance is real ABOVE the bar. F2/A11 argues a
 // conclusive LOW must still pay its electorate the same 7%·midGross a mid or high
 // would — what v0.55 withholds is only the SUB-BAR pot, where the flag bond returns
@@ -357,7 +356,7 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("cz5-alice")
 	flagger := testutils.TestAddress("cz5-flagger")
-	eve := testutils.TestAddress("cz5-eve")   // 3 CC low
+	eve := testutils.TestAddress("cz5-eve")     // 3 CC low
 	frank := testutils.TestAddress("cz5-frank") // 2.5 CC mid -> low share 6/11
 	c := testCourt(cur, "cz5", alice, 50_000_000_000)
 	c.coin.Mint(flagger, 1_000_000_000)
@@ -438,8 +437,8 @@ func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
 func TestDecidedRoundCarrotSurvivesAStaleSubBarTally(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("cz6-alice") // author + answerer + staker
 	flagger := testutils.TestAddress("cz6-flag")
-	eve := testutils.TestAddress("cz6-eve")   // dust low: >= demotionBar, < fullBar
-	bob := testutils.TestAddress("cz6-bob")   // disputer
+	eve := testutils.TestAddress("cz6-eve")     // dust low: >= demotionBar, < fullBar
+	bob := testutils.TestAddress("cz6-bob")     // disputer
 	carol := testutils.TestAddress("cz6-carol") // with-verdict voter, clears quorum
 	c := testCourt(cur, "cz6", alice, 50_000_000_000)
 	c.coin.Mint(flagger, 1_000_000_000)
@@ -489,7 +488,7 @@ func TestDecidedRoundCarrotSurvivesAStaleSubBarTally(cur realm, t *testing.T) {
 			cs.decidedPID, cs.conclusiveTurnout)
 	}
 
-	testing.SkipHeights(EscrowUntil("cz6", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("cz6", id) - heightNow())
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "cz6", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
@@ -844,7 +843,7 @@ func TestDecidedCarrotRefusesTheAgainstVerdictVoter(cur realm, t *testing.T) {
 			cs.decidedPID, cs.carrotChoice)
 	}
 
-	testing.SkipHeights(EscrowUntil("cvd1", id) - runtimeHeight())
+	testing.SkipHeights(EscrowUntil("cvd1", id) - heightNow())
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Finalize(cross(cur), "cvd1", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
