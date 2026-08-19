@@ -99,6 +99,27 @@ a trusted proxy wins; everything to the left of it is attacker-authored, so the
 leftmost entry — the one most tutorials take — is precisely the wrong one. A peer
 that is not a trusted proxy is refused rather than treated as ordinary traffic.
 
+**A chain of nothing but trusted hops identifies NO client, and used to name the proxy.** The walk
+returns the first hop from the right that is not a trusted proxy. If every hop is one of ours the
+client was never recorded — and the fallback returned the peer, so every such request shared one
+identity. That is the failure this section opens with, arrived at from the other direction: the
+throttle goes global and the first kick kicks the internet.
+
+Measured while probing the header for a denial of service, which it is not — twenty thousand hops
+walk in 644µs against 375ns for the ordinary case, and Go's header cap bounds it. What was wrong was
+the answer: those hops came back as `127.0.0.1` with no error.
+
+It is reached by configuration rather than by attack. A proxy that appends puts the real client
+rightmost, where it wins at once; but list a whole VPC as `--trusted-proxy` and every client arriving
+from inside it is "ours". Refused now — a 403 tells an operator their range is too wide, and silently
+bucketing everyone together tells them nothing until somebody is kicked.
+
+**Two situations that looked identical are now separate**, and the second had to keep working: a
+header of only malformed hops, or no header at all, is not a chain. That is a request from the proxy
+itself — a health check, an operator's curl — and there the peer IS the client. Both branches are
+asserted, along with a real client behind trusted hops still winning, so this could not become
+"refuse everything with a header".
+
 Implemented in `internal/chat/clientip.go`, with the /64 rule for IPv6 (the host
 half is free to change, so a /128 consequence expires when its target wants) and a
 keyed HMAC whose privacy claim is stated exactly: it defends against a stray copy
