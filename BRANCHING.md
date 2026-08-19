@@ -185,3 +185,29 @@ outside this worktree, so nothing here deletes it.
 Also: a `gnodev` has been running on 26657 since before this work started, and
 it is not ours. `seed-node.sh` refuses any occupied port rather than seeding a
 node it did not start; pass `RPC_PORT=`/`WEB_PORT=` for a free pair.
+
+### The overlay's test suite moved into the repo (2026-08-18, r31)
+
+`web/tests/` holds the 14 harnesses that guard `web/index.html`, plus
+`run.js` which enumerates and runs them; `make web-test` is wired into `check`
+and skips cleanly without node (`REQUIRE_NODE=1` makes a missing node fail).
+
+They used to live in a session scratch directory, which is why this matters:
+nothing could enumerate them. Two had been broken for fourteen rounds by a
+rename nobody re-ran them against, and ten more broke in a single commit that
+was reported green because four of the fourteen were run by hand. 526
+assertions were sitting there unexecuted.
+
+`web/tests/browser/` is the half that needs a real browser: `make web-visual`
+runs it, skips cleanly without puppeteer, and is deliberately NOT in `check`
+(the gate must not require a headless Chrome). It holds `banner_layout.js`,
+which measures geometry at three widths and caught a `grid-row:1/-1` — a rule
+that is meaningless with no explicit rows — putting the whole page body into
+column 1 BELOW the sidebar on every route; reading the CSS had not caught it.
+`render_snapshot.js` beside it is a TOOL, not a check: it prints the rendered
+text of 13 demo routes, so a refactor can be proven behaviour-preserving by
+capture/refactor/capture/diff. That is how the DEMO split was verified.
+
+If you touch `web/index.html`, run `make web-test`. Several harnesses parse the
+file's SOURCE by slicing between anchors, so renaming a function or splitting a
+literal will break them loudly rather than silently — which is the point.
