@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // The four labels, and their severity order. Everything downstream compares
@@ -40,6 +41,31 @@ func Severity(label string) int {
 	default: // clean, unknown, anything unrecognised
 		return 0
 	}
+}
+
+// WhyMaxRunes bounds the model's explanation before it is stored for an operator to read.
+//
+// RUNES, NOT BYTES, and the difference was a live defect. The cap used to be `v.Why[:200]` — a
+// byte slice of a UTF-8 string — so a 200th byte landing mid-rune stored invalid UTF-8.
+// Demonstrated against a fake Ollama returning 199 ASCII characters followed by "é": the stored
+// value came back 200 bytes ending in a dangling 0xc3.
+//
+// The garbled character is the smaller half. A byte cap rations characters by how expensive they
+// are to encode, and gemma3:4b answers in the language it was addressed in. Measured: a
+// 200-character Japanese explanation is 600 bytes, and the byte cap left 66 readable characters
+// and two stray bytes — a third of the room an English explanation got, silently, in the one
+// field whose entire purpose is telling a human why somebody was punished. This repository has
+// made the same unit mistake twice already, in the moniker's limit (letters, not runes) and the
+// body's (runes, not bytes), and both were found by measuring rather than by reading.
+const WhyMaxRunes = 200
+
+// truncateWhy cuts on a rune boundary, so what is stored is always valid UTF-8 and every
+// language gets the same number of characters.
+func truncateWhy(why string) string {
+	if utf8.RuneCountInString(why) <= WhyMaxRunes {
+		return why
+	}
+	return string([]rune(why)[:WhyMaxRunes])
 }
 
 // Verdict is what a classifier returns. `Why` is stored for an operator to read
@@ -236,9 +262,7 @@ func (o *Ollama) Classify(ctx context.Context, target string, prior []string) (V
 		return Verdict{Label: Unknown, Why: "out of schema: " + v.Label}, nil
 	}
 	v.Confidence = normalizeConfidence(v.Confidence)
-	if len(v.Why) > 200 {
-		v.Why = v.Why[:200]
-	}
+	v.Why = truncateWhy(v.Why)
 	return v, nil
 }
 

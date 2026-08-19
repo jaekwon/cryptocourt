@@ -662,6 +662,31 @@ rather than a default worth guessing at. It is pinned as current behaviour in
 `TestAHedgedVerdictReachesNeitherAConsequenceNorAReviewer`, so moving it is a decision
 somebody makes rather than a thing that drifts.
 
+**The explanation was capped in BYTES, which is the third time this repository has got that
+unit wrong.** `why` is the model's own account of the verdict, kept for an operator to read and
+for §7's appeal path to quote. The cap was `v.Why[:200]` — a byte slice of a UTF-8 string — so a
+200th byte landing mid-rune stored invalid UTF-8. Driven with a fake Ollama returning 199 ASCII
+characters and then "é", the stored value came back 200 bytes ending in a dangling `0xc3`.
+
+The garbled character is the smaller half. A byte cap rations characters by how expensive they
+are to encode, and gemma3:4b answers in the language it was addressed in, so the field's budget
+depended on the script it was written in:
+
+    200 characters of English    200 bytes    kept whole
+    200 characters of Japanese   600 bytes    66 readable characters, plus two stray bytes
+
+A third of the room, silently, in the one field whose entire purpose is telling a human why
+somebody was punished — and an appeal is exactly when the explanation matters most. `WhyMaxRunes`
+counts characters now. The same unit mistake had already been made and fixed twice here, in the
+moniker's limit (letters, because a voweled Arabic name costs two or three code points per
+letter) and the body's (code points rather than bytes), and all three were found by measuring
+rather than by reading the line.
+
+Both arms are pinned, and both were run against the old implementation to confirm they fire —
+the invalid-UTF-8 one and the equal-room one, which fails at 68 where it wants 200. The ordinary
+short explanation is asserted unchanged beside them, including one exactly at the limit, because
+a test that only checks truncations would pass just as well if the cap chopped everything.
+
 **THE MONIKER IS NEVER CLASSIFIED**, and that is on evidence, not just the §8 design note.
 `Claim` selects the body; "Kourt Support" and "admin" are invisible to moderation, so a scam's
 credibility half is structurally outside the input. Closing that looked obviously right and
