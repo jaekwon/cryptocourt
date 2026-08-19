@@ -22,8 +22,9 @@
 # COIN arm needs supply > 0 while nextID is still <= 1 — and once coin is minted
 # it never returns to zero. This file takes the first; kourtv2_usedrealm_coin.txtar
 # takes the second. Measured, not assumed: a mutation deleting either arm on its
-# own SURVIVES the whole 873-row mutation gate, because that gate runs the unit
-# suite, which never reaches the line.
+# own SURVIVES the whole mutation gate, because that gate runs the unit suite,
+# which never reaches the line. (No row count here on purpose: the first version
+# of this line quoted one, and the commit that wrote it moved the corpus past it.)
 #
 # The lever is OpenClaimSeeded, which waives the CC deposit and the fee for a
 # moderator bootstrapping a young court (claim.gno, OpenClaimSeeded). It is the
@@ -52,8 +53,12 @@ stdout '\(0 int64\)'
 
 # --- Give the realm a history, with no coin anywhere in it ---------------------
 # Two claims, because the arm is `nextID > 1`: the first seeded claim leaves
-# nextID at 1 and does NOT make the realm used by this arm. That is deliberate
-# and asserted below.
+# nextID at 1 and does NOT make the realm used by this arm. That tolerance is
+# deliberate and is NOT asserted here — asserting it would mean arming
+# successfully at one claim, which consumes the one-shot latch and ends the file.
+# It is harmless: OpenClaimSeeded needs an active moderator, and meta's only
+# moderator at deploy is the deployer, who may arm a pristine realm anyway. A
+# stranger's only route to using this realm is Buy, which the coin arm catches.
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaimSeeded -args meta -args 'Seeded while the realm was still young' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaimSeeded -args meta -args 'And a second, so nextID passes 1' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
@@ -82,14 +87,21 @@ stderr 'this realm has been used'
 ! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClockAt -args 1750000000 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stderr 'this realm has been used'
 
-# --- Nothing was armed, and nothing claims a fabricated date -------------------
-# A refused arm must leave no trace: TestClockFabricated is the disclosure every
-# reader of a date on this chain is entitled to, and a refused attempt must not
-# set it. tcEverArmed is written on the line AFTER tcArmed, so an arming that
-# panicked between them would show true here.
+# --- The refusal is a refusal: the latch is still shut afterwards --------------
+# What this does NOT catch, stated because the first version of this comment
+# claimed it did: a half-written latch. tcEverArmed is written on the line after
+# tcArmed, but an aborted MsgCall is discarded whole, so no partial write is ever
+# observable by a later query — injecting `tcArmed = true` immediately before the
+# usage-gate panic leaves both these files passing. Transaction atomicity does
+# that job and a txtar cannot test it.
+#
+# What it does pin is the post-condition an operator actually reads: the chain
+# still says its dates are its own. TestClockFabricated is the disclosure every
+# reader of a date here is entitled to, and it is written by the arming path, so
+# an arming that half-succeeded in some FUTURE refactor — one that committed —
+# would show true. TestClockSkew is deliberately not read: no arming path writes
+# it (only AdvanceTestClock does), so asserting it here would measure nothing.
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
 stdout 'false'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockFabricated()"
 stdout 'false'
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockSkew()"
-stdout '\(0 int64\)'

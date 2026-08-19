@@ -1171,6 +1171,92 @@ decision must be made before launch, not after.
     **uassert RECORDS AND RETURNS — TO FIND WHICH ASSERTION FAILED, TRIP ON
     t.Failed() AFTER EACH ONE**, because a marker that merely proves execution
     continued proves nothing about the arm it follows.
+- **v0.56 — THE FIX FOR A CLOCK WRAP CONTAINED THE SAME MISTAKE ONE LEVEL OUT, AND
+  BOTH REVIEWS FOUND IT.** Two defects, one shipped and one caught before it could
+  be. Neither was found by reading.
+  - **The original.** `AdvanceTestClock` caps one step at ten years and the total at
+    a century, so the SKEW cannot wrap. `EnableTestClockAt` accepted any positive
+    base, so a base near int64's ceiling wraps `tcBase+tcSkew` NEGATIVE on a step
+    that is individually legal. `tcNow`'s `n <= 0` assertion then fires on EVERY
+    read for ever after — every deadline, every `Render`, every `State`. The realm
+    stops answering instead of the mistake being refused where it was made.
+  - **FOUND FROM A SURVIVING ASSERTION.** Deleting that `n <= 0` panic survived the
+    corpus. The tempting reading is "an assertion, unreachable, fine" — valid only
+    if nothing can reach it. Asking *what would have to be true for this to fire*
+    produced the wrap in one step. A SURVIVING ASSERTION IS A QUESTION ABOUT
+    REACHABILITY, NOT A ROW TO DELETE.
+  - **THE FIRST FIX WAS WRONG IN THE SAME SHAPE.** `maxBase = maxInt64 -
+    maxAdvanceTotal` is "exactly wide enough" for `tcBase+tcSkew` — which is the
+    only addition I enumerated. Every CONSUMER of `tcNow` adds again:
+    `deadlineTime` and `pastDeadline` compute `stamp+secs`, a reopen stamps
+    `nowTime()+blocksToSecs(...)`. At that cap's boundary `tcNow` returns exactly
+    maxInt64, so THOSE wrap, and both reviewers measured the same consequence
+    independently: a claim opened in that block is born past its 12-week timeout —
+    unanswerable, closeable by anyone for a deposit refund, publishing a negative
+    settle stamp. **A loud brick traded for silent mis-gating, which is worse by the
+    fix's own standard.** The unit test I had written *blessed* that boundary.
+  - **AND ARITHMETIC COULD NOT HAVE SAVED IT.** The adversarial pass supplied the
+    fact that settles the design: the downstream addend is UNBOUNDED.
+    `escrowMaxBlocks` is a court parameter checked only for `max >= min >= 1`, and
+    `blocksToSecs` multiplies by five, so no headroom computed from today's window
+    constants stays correct. Widening by `deadClaimSecs` would have closed the case
+    they measured and left the class open.
+  - **Shipped: a PLAUSIBILITY cap, 2100-01-01.** A base below 2100 plus the century
+    of advance leaves every downstream sum nine orders of magnitude clear, whatever
+    windows are added later — the class rather than the two additions. It also
+    refuses the operator error an arithmetic cap arms in silence: a base in
+    MILLISECONDS, which wraps nothing and simply publishes every date in the year
+    57438. The cap is applied at BOTH writers of `tcBase`, including the captured
+    block time, since the chains this latch targets are hand-rolled and a
+    millisecond genesis time is likelier than clock drift.
+  - **THE ARMING GATE'S TWO ARMS WERE BOTH DEAD TO THE MUTATION GATE.**
+    `if m.nextID > 1 || m.coin.TotalSupply() > 0` is the fix for the audited "court
+    count alone called a used realm virgin" bug. Deleting EITHER arm survives the
+    whole corpus, because that gate runs the in-package suite and the line is
+    unreachable there — an earlier test has always seated a court, so the count gate
+    short-circuits. A filetest cannot reach it either (its caller is never the
+    deployer, so it stops at `mustDeployer`, which is all `z_testclock_filetest.gno`
+    ever asserted despite a comment crediting it with more). **A txtar is the only
+    harness where the deployer is the caller.** Two files, because one chain cannot
+    isolate both arms: coin supply never returns to zero, so the claims arm needs
+    `nextID > 1` at zero supply (via `OpenClaimSeeded`, whose waived deposit is
+    exactly why that arm is not redundant) and the coin arm needs the mirror image.
+    Both reviewers independently confirmed no one-file route exists.
+  - **`elsewhere` VERIFIED, NOT ASSERTED.** The corpus excuses a row whose coverage
+    lives outside the mutated package, and nothing makes that annotation true. Each
+    arm was deleted in turn and BOTH files run: a clean diagonal, each failing only
+    for its own arm. The auditor reproduced the diagonal independently.
+  - **THREE OF MY OWN COMMENTS WERE FALSIFIED BY MEASUREMENT, NOT ARGUED WITH.** (a)
+    "a refused arming leaves no trace, and tcEverArmed is written after tcArmed so a
+    panic between them would show true" — an aborted `MsgCall` is discarded whole,
+    so no partial write is observable; injecting `tcArmed = true` before the panic
+    left both txtars passing. Transaction atomicity does that job and a txtar cannot
+    test it. (b) The `TestClockSkew` read in that block is written by no arming path
+    at all — vacuous twice over, now removed. (c) `tcNow() > maxBase` could never be
+    the assertion that failed, because a wrapped sum aborts inside `tcNow` first.
+  - **A test that dies before its cleanup fails its NEIGHBOUR'S file.** The hand-set
+    latch plus a bare `nowTime()` meant a one-line `maxBase` regression failed both
+    this test and `zerostamp_test.gno`, so the row scored on a cascade rather than
+    on the assertion written for it. A `defer resetTestClock` fixes it. Also:
+    `abortOf` reinvented `uassert.PanicsContains`, and `EnableTestClockAt` answered
+    a stranger's argument before `mustDeployer` ran, against the ordering principle
+    stated in the same file.
+  - **Corrected by measurement, twice more.** The backlog recorded `tcNow`'s
+    `tcFloor` clamp as "the v0.53 fix, and nothing pins it" —
+    `TestSealingNeverRewindsBelowWhatWasShown` kills both clamp mutations. It
+    recorded "mustDeployer on all four entrypoints" as missing — five of six probes
+    were already caught. THE BACKLOG'S GUESSES ABOUT ITS OWN COVERAGE WERE WRONG IN
+    BOTH DIRECTIONS.
+  - **Two survivors left standing on purpose, and no rows written for them.**
+    `mustDeployer`'s `!cur.IsCurrent()` check — the harness cannot hand an entrypoint
+    a realm value from a returned frame, as `govern/token_test.gno` worked out for
+    its own fourteen entrypoints; and the captured-base cap, which no harness
+    reaches (unit stops at the court gate, a filetest at the deployer gate, and a
+    txtar cannot set genesis time). An assertion that cannot fail is worse than
+    none, and a row that can never be caught makes the gate permanently red for
+    something unmeasurable. The right substitute for the first is a STATIC guard:
+    101 of the tree's 105 crossing entrypoints already open with the check, so the
+    exemption list is short. Nothing in `scripts/` does that yet.
 - **v0.55 — `setmods` WAS A CHEAPER `unsuspend` THAN `unsuspend`, AND THE VERB
   NAME WAS THE ONLY DIFFERENCE.** v0.51a logged this as a lead, verified its three
   structural facts, and then refused to call it a finding without a fixture:

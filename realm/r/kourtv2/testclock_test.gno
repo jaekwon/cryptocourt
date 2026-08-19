@@ -17,26 +17,6 @@ import (
 // the latch by hand (the public path is covered by the filetest).
 func testingTime() int64 { return time.Now().Unix() }
 
-// abortOf runs f and returns the message it aborted with, or a description of
-// its not aborting. For INTERNAL panics only: uassert.AbortsContains is the tool
-// for anything raised across a crossing call, and recover() cannot catch one of
-// those at all — an attempt to wrap a cross() call in this killed the whole
-// package rather than returning a message. tcNow's own assertion is internal, and
-// AbortsContains walks straight past it.
-func abortOf(f func()) (msg string) {
-	defer func() {
-		if r := recover(); r != nil {
-			if s, ok := r.(string); ok {
-				msg = s
-				return
-			}
-			msg = "aborted, but not with a string"
-		}
-	}()
-	f()
-	return "no abort at all"
-}
-
 func resetTestClock(deployer address) {
 	tcDeployer, tcArmed, tcSealed, tcSkew, tcBase, tcFloor = deployer, false, false, 0, 0, 0
 	tcEverArmed, tcPeakSkew = false, 0
@@ -54,8 +34,10 @@ func resetTestClock(deployer address) {
 //     caller is never the realm's deployer, so the refusal IS the assertion and
 //     the gates behind it are unreachable there too.
 //   * kourtv2_usedrealm_seeded.txtar and kourtv2_usedrealm_coin.txtar are the
-//     only places the usage gate runs, one per arm — a txtar is the one harness
-//     where the deployer is the caller. Measured: deleting either arm of
+//     only places the usage gate FIRES, one per arm — a txtar is the one harness
+//     where the deployer is the caller. It also RUNS, and passes, in
+//     kourtv2_testclock.txtar where arming succeeds; that is not coverage of a
+//     refusal. Measured: deleting either arm of
 //     `m.nextID > 1 || m.coin.TotalSupply() > 0` survives the whole mutation
 //     gate, because that gate runs THIS suite.
 
@@ -335,6 +317,13 @@ func TestPeakSkewTracksTheFurthestAdvance(cur realm, t *testing.T) {
 // arming, so maxBase refuses the arming.
 func TestABaseTooFarOutIsRefusedRatherThanBricking(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("tc-maxbase")
+	// The latch is hand-written below and a bare nowTime() is read afterwards. On
+	// any failure path that read aborts, this test dies before its own cleanup and
+	// the NEXT test in package order inherits an armed clock it never asked for.
+	// Measured: under the maxBase mutation row this file's failure also failed
+	// zerostamp_test.gno, so the row scored on a cascade rather than on the
+	// assertion written for it.
+	defer resetTestClock(alice)
 	// Make the realm deterministically NON-virgin first. Run alone, this test is
 	// otherwise the first thing to touch the realm and the arming below succeeds;
 	// leaning on a neighbour's court instead made it pass only in company, which
@@ -344,17 +333,24 @@ func TestABaseTooFarOutIsRefusedRatherThanBricking(cur realm, t *testing.T) {
 	resetTestClock(alice) // clears whatever the court creation left on the latch
 	testing.SetRealm(testing.NewUserRealm(alice))
 
-	// The base checks sit ahead of every other gate in EnableTestClockAt, which
-	// is why they are reachable from this suite at all while arming is not: the
-	// call never gets as far as the court count. If the ceiling check were
-	// removed, this call would abort with THAT gate's message instead — a
-	// different message, so the row stays killable.
+	// The base checks sit behind mustDeployer and ahead of the court and pristine
+	// gates, so alice — who IS tcDeployer after resetTestClock — reaches them while
+	// the arming itself stays out of reach in this suite. Delete either check and
+	// the call aborts with a gate BEHIND it instead: a different message, so both
+	// rows stay killable.
 	maxI64 := int64(9223372036854775807)
-	uassert.AbortsContains(t, cur, "too far out", func() {
+	uassert.AbortsContains(t, cur, "before 2100", func() {
 		EnableTestClockAt(cross(cur), maxI64)
 	})
-	uassert.AbortsContains(t, cur, "too far out", func() {
+	uassert.AbortsContains(t, cur, "before 2100", func() {
 		EnableTestClockAt(cross(cur), maxBase+1)
+	})
+	// The operator error a purely arithmetic cap accepts in silence: a base in
+	// MILLISECONDS. It wraps nothing — it simply publishes every date in the year
+	// 57438 — so nothing downstream would ever have caught it, and the cap refuses
+	// it only by being a real date.
+	uassert.AbortsContains(t, cur, "before 2100", func() {
+		EnableTestClockAt(cross(cur), 1750000000000)
 	})
 	// maxBase itself is the last ACCEPTABLE base and must clear the ceiling: it
 	// reaches the gate BEHIND the ceiling and is refused by that instead. The
@@ -363,9 +359,20 @@ func TestABaseTooFarOutIsRefusedRatherThanBricking(cur realm, t *testing.T) {
 		EnableTestClockAt(cross(cur), maxBase)
 	})
 
-	// The cap is exactly wide enough to spend the entire advance budget, so arm
-	// AT it — by hand, since the public path cannot reach a virgin realm here —
-	// and spend all of it in legal steps. This is the claim maxBase makes.
+	// Arm AT the cap — by hand, since the public path cannot reach a virgin realm
+	// here — spend the entire advance budget, then check the property an ARITHMETIC
+	// cap got WRONG. maxInt64-maxAdvanceTotal was "exactly wide enough" for
+	// tcBase+tcSkew and left tcNow returning exactly maxInt64: no wrap, no abort.
+	// What wrapped was the addition every CONSUMER performs on that result, so a
+	// claim opened in that block was born past its 12-week timeout — unanswerable,
+	// closeable by anyone for a deposit refund, publishing a negative settle stamp.
+	// A loud brick traded for silent mis-gating, which is worse.
+	//
+	// Asserted on the helpers rather than by opening a claim: they are what every
+	// gate in the realm calls, and a claim's openedAtTime is nowTime() anyway.
+	// `tcNow() > maxBase` was the assertion here first and it was VACUOUS — a
+	// wrapped sum aborts inside tcNow, so the comparison could never be the thing
+	// that failed.
 	resetTestClock(alice)
 	tcArmed, tcBase, tcFloor = true, maxBase, maxBase
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -373,22 +380,27 @@ func TestABaseTooFarOutIsRefusedRatherThanBricking(cur realm, t *testing.T) {
 		AdvanceTestClock(cross(cur), maxAdvanceStep)
 	}
 	if TestClockSkew() != maxAdvanceTotal {
-		t.Errorf("the whole budget must fit above maxBase: want %d, got %d",
+		t.Errorf("the whole budget must fit above the cap: want %d, got %d",
 			maxAdvanceTotal, TestClockSkew())
 	}
-	if got := tcNow(); got <= maxBase {
-		t.Errorf("a century of advance above maxBase must still move forward: got %d", got)
+	stamp := nowTime()
+	if got := deadlineTime(stamp, deadClaimSecs); got <= stamp {
+		t.Errorf("a deadline stamped at the cap must lie in the future: stamp %d, "+
+			"deadline %d", stamp, got)
+	}
+	if passed, known := pastDeadline(stamp, deadClaimSecs); passed || !known {
+		t.Errorf("a claim opened at the cap must not already be past its 12-week "+
+			"timeout: passed=%t known=%t", passed, known)
 	}
 
-	// And the assertion maxBase makes unreachable still works, because a future
-	// entrypoint could reintroduce the state some other way. Set by hand exactly
-	// as the pre-maxBase bug produced it: a legal single step onto a base one
-	// second too high.
+	// And the assertion the cap makes unreachable still works, because a future
+	// entrypoint could reintroduce the state some other way. Both boundaries: the
+	// negative sum the old bug produced, and ZERO — worse than an abort, being
+	// clock.gno's "this claim predates the stamps" sentinel.
 	resetTestClock(alice)
 	tcArmed, tcBase, tcSkew = true, maxI64, 1
-	got := abortOf(func() { _ = tcNow() })
-	if !strings.Contains(got, "non-positive instant") {
-		t.Errorf("a wrapped clock must refuse to answer, got %q", got)
-	}
+	uassert.PanicsContains(t, cur, "non-positive instant", func() { _ = tcNow() })
 	resetTestClock(alice)
+	tcArmed, tcBase, tcSkew = true, 0, 0
+	uassert.PanicsContains(t, cur, "non-positive instant", func() { _ = tcNow() })
 }

@@ -79,8 +79,9 @@ worse than no excuse.
 
 That last one is deliberately STRICTER than `mutate.py`, which only prints the
 value and would accept prose like "the txtar suite". Prose cannot rot detectably;
-a path can. The corpus's one `elsewhere` is a path, so the tightening costs
-nothing today and stops the annotation from decaying into a shrug.
+a path can. Every `elsewhere` in the corpus is a path, so the tightening costs
+nothing today and stops the annotation from decaying into a shrug. (No count here:
+this said "the corpus's one" and there are three.)
 
     python3 scripts/check-mutation-anchors.py
 """

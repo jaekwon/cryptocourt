@@ -6130,8 +6130,8 @@
   {
     "pkg": "kourtv2",
     "file": "testclock.gno",
-    "label": "clock: EnableTestClockAt loses its maxBase ceiling (the int64 wrap that bricks every read)",
-    "find": "\tif base > maxBase {\n\t\tpanic(\"kourtv2: the test clock's base is too far out to advance from\")\n\t}\n",
+    "label": "clock: EnableTestClockAt loses its base ceiling (dates past 2100, and the wrap behind them)",
+    "find": "\tif base > maxBase {\n\t\tpanic(\"kourtv2: the test clock's base must be an instant before 2100\")\n\t}\n",
     "replace": ""
   },
   {
@@ -6144,8 +6144,8 @@
   {
     "pkg": "kourtv2",
     "file": "testclock.gno",
-    "label": "clock: maxBase leaves room for one STEP instead of the whole budget, so a legal advance wraps",
-    "find": "\tmaxBase = int64(9223372036854775807) - maxAdvanceTotal",
-    "replace": "\tmaxBase = int64(9223372036854775807) - maxAdvanceStep"
+    "label": "clock: the base cap widened 1000x, so a MILLISECOND base arms without complaint",
+    "find": "\tmaxBase = int64(4102444800) // 2100-01-01T00:00:00Z",
+    "replace": "\tmaxBase = int64(4102444800000) // 2100-01-01T00:00:00Z"
   }
 ]

@@ -8,10 +8,13 @@
 # What this covers: the 12-week DEAD-CLAIM timeout, in one transaction, on the
 # meta court — an unanswered claim really dies, and only once the date has passed.
 #
-# Why the meta court and not a fresh one. The meta court is created by init(), not
-# by startCourtUser, and startCourtUser calls sealTestClock() unconditionally — so
-# the first StartCourt disarms the clock. Meta is the one court reachable with the
-# latch still armed.
+# Why the meta court and not a fresh one. Arming requires a PRISTINE realm, so at
+# the moment the latch opens the meta court seated by init() is the only court that
+# exists — anything else has to be created after arming. (This paragraph used to
+# say startCourtUser sealed the latch unconditionally, which was true when the file
+# was written and is not now: sealTestClock has exactly one caller, SealTestClock,
+# and the section further down pins the opposite. The reason for choosing meta
+# changed; the choice did not.)
 #
 # Sealing used to be worse than a constraint: it ZEROED the skew, so nowTime()
 # fell back behind stamps already written into the future — the rewind

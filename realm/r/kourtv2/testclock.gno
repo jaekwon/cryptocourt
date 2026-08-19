@@ -37,15 +37,14 @@ package kourtv2
 // mining the intervening blocks are added underneath. That was found by the
 // first integration test written against this feature, not in review.
 //
-// What it deliberately cannot do: rewind (advance is forward-only, capped, and
-// the total is capped so int64 cannot wrap into a negative — an audit proved
-// two maximal "forward" steps otherwise walked the clock backwards; capping the
-// total is only half of it, because a BASE near the ceiling wraps the same sum
-// on a legal step, hence maxBase); touch
-// heights (conviction, emission and voting epochs are denominated in blocks and
-// must stay honest); or hide (TestClockActive is public AND read by Render and
-// ClaimTimeline, so a reader is never shown a fabricated date without being
-// told).
+// What it deliberately cannot do: rewind (advance is forward-only and both the
+// step and the total are capped, so int64 cannot wrap into a negative — an audit
+// proved two maximal "forward" steps otherwise walked the clock backwards, and
+// capping the advance turned out to be only half of it, since a declared BASE
+// near the ceiling wraps the same sums; see maxBase); touch heights (conviction,
+// emission and voting epochs are denominated in blocks and must stay honest); or
+// hide (TestClockActive is public AND read by Render and ClaimTimeline, so a
+// reader is never shown a fabricated date without being told).
 
 import (
 	"time"
@@ -60,21 +59,34 @@ const (
 	// two "forward" steps move the clock backwards.
 	maxAdvanceStep  = int64(10 * 365 * 86400)
 	maxAdvanceTotal = int64(100 * 365 * 86400)
-	// maxBase is the latest instant a scenario may DECLARE. Not a plausibility
-	// limit — an arithmetic one, and it is exactly the arithmetic above: tcNow
-	// reads tcBase+tcSkew, so a base within maxAdvanceTotal of int64's ceiling
-	// makes that sum WRAP NEGATIVE on an advance that was individually legal.
+	// maxBase is the latest instant a scenario may DECLARE. A base of any size
+	// used to be accepted, and one near int64's ceiling wraps tcBase+tcSkew
+	// NEGATIVE on an advance that was individually legal — tcNow's non-positive
+	// assertion then fires on EVERY read for ever after, so the realm stops
+	// answering (every deadline, every Render, every State) instead of the
+	// mistake being refused in the transaction that made it.
 	//
-	// tcNow's own non-positive assertion does catch the result. What it cannot do
-	// is catch it usefully: it fires on EVERY read for ever after, so the realm
-	// stops answering — every deadline, every Render, every State — instead of
-	// the mistake being refused in the transaction that made it. Measured, not
-	// reasoned: EnableTestClockAt(1<<63-1) followed by one AdvanceTestClock(1)
-	// bricked every date-reading surface in the realm.
+	// THIS IS A PLAUSIBILITY CAP, AND THE FIRST VERSION WAS AN ARITHMETIC ONE:
+	// maxInt64 - maxAdvanceTotal, sized so tcNow's own sum could not wrap. That
+	// was the same mistake one level out. Every CONSUMER of tcNow adds again —
+	// deadlineTime and pastDeadline compute stamp+secs, a reopen stamps
+	// nowTime()+blocksToSecs(...) — so at an arithmetic cap's boundary tcNow
+	// returns exactly maxInt64 and THOSE wrap: a claim is born past its 12-week
+	// timeout, unanswerable, closeable by anyone, publishing a negative settle
+	// stamp. A loud brick traded for silent mis-gating, which is worse.
 	//
-	// The cap is exactly wide enough for the advance budget to still fit, which
-	// TestABaseTooFarOutIsRefusedRatherThanBricking arms at and spends in full.
-	maxBase = int64(9223372036854775807) - maxAdvanceTotal
+	// A real date removes the class rather than the two additions I could
+	// enumerate: a base below 2100 plus the century of advance leaves every
+	// downstream sum nine orders of magnitude clear of the ceiling, whatever
+	// windows get added later. It also refuses the operator error an arithmetic
+	// cap arms happily — a base in MILLISECONDS, which wraps nothing and simply
+	// publishes dates in the year 57438.
+	//
+	// And arithmetic alone could not have been made sound here in any case: the
+	// downstream addend is UNBOUNDED. escrowMaxBlocks is a court parameter checked
+	// only for max >= min >= 1 (court.gno), and blocksToSecs multiplies by five, so
+	// no headroom computed from today's window constants stays correct.
+	maxBase = int64(4102444800) // 2100-01-01T00:00:00Z
 )
 
 var (
@@ -130,6 +142,21 @@ func EnableTestClock(cur realm) {
 	tcArmed = true
 	tcEverArmed = true // never cleared again, not even by sealing
 	tcBase = time.Now().Unix() // the clock stops here until the scenario moves it
+	// The cap applies to the CAPTURED base too, or the invariant tcBase <= maxBase
+	// holds at only one of this field's two writers. Block time is the proposer's
+	// (clock.gno says so), and the chains this latch targets are hand-rolled
+	// single-operator ones, so a genesis_time in milliseconds is a likelier way to
+	// arrive here than clock drift — and it publishes year-57438 dates without
+	// wrapping anything.
+	//
+	// NOT MEASURABLE, and deliberately not billed for: no harness reaches this
+	// line. The unit suite stops at the court gate above (an earlier test has
+	// always seated one), a filetest's caller is never the deployer, and a txtar
+	// cannot set a chain's genesis time. A mutation row for it would survive for
+	// ever, so there is none — same treatment as mustDeployer's IsCurrent arm.
+	if tcBase > maxBase {
+		panic("kourtv2: this chain's own clock reads past 2100; check its genesis time")
+	}
 	tcFloor = tcBase
 }
 
@@ -139,11 +166,18 @@ func EnableTestClock(cur realm) {
 // think when the arming transaction landed, so absolute dates drift on every
 // reseed and no scenario can assert one.
 func EnableTestClockAt(cur realm, base int64) {
+	// Deployer first, before the argument is even read. mustDeployer's own comment
+	// gives the reason — a stranger must learn nothing here — and an
+	// argument-validity oracle is that same shape even when the only secret is a
+	// constant. EnableTestClock checks again below; a redundant gate is the safer
+	// failure mode, and it keeps this entrypoint's first line the same as every
+	// other crossing function's in the realm.
+	mustDeployer(cur)
 	if base <= 0 {
 		panic("kourtv2: the test clock's base must be a positive instant")
 	}
 	if base > maxBase {
-		panic("kourtv2: the test clock's base is too far out to advance from")
+		panic("kourtv2: the test clock's base must be an instant before 2100")
 	}
 	EnableTestClock(cur)
 	tcBase = base
