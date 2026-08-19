@@ -110,7 +110,13 @@ var (
 	ErrThrottled = errors.New("too many messages")
 	ErrKicked    = errors.New("posting is blocked for this address")
 	ErrDuplicate = errors.New("the same message was just posted in several courts; post something different, or wait")
-	ErrPurged    = errors.New("this court has been purged")
+	// ErrWithdrawn is a FROZEN court, not a purged one, and the distinction is the one §7 draws:
+	// "stop showing this" and "destroy the evidence" are different decisions and only one of them
+	// cannot be undone. This error was called ErrWithdrawn and read "this court has been purged",
+	// which asserted the irreversible one about the reversible one — and since Unfreeze exists it
+	// is simply false. The server always replaced the text on its way out, so nobody had been
+	// told the wrong thing yet; the wrong word was in the vocabulary rather than on a screen.
+	ErrWithdrawn = errors.New("this court has been withdrawn from service")
 )
 
 // Store owns the database. Two handles on purpose.
@@ -415,7 +421,7 @@ func (s *Store) Post(ctx context.Context, in PostInput) (int64, error) {
 		return 0, err
 	}
 	if frozen > 0 {
-		return 0, ErrPurged
+		return 0, ErrWithdrawn
 	}
 
 	if st, err := statusTx(ctx, tx, in.IPHash, in.NetHash, now); err != nil {
@@ -639,7 +645,7 @@ func (s *Store) Recent(ctx context.Context, chain, court string, since int64, li
 		return nil, err
 	}
 	if frozen {
-		return nil, ErrPurged
+		return nil, ErrWithdrawn
 	}
 	out, err := s.recentFrom(ctx, chain, court, since, limit)
 	if err != nil {

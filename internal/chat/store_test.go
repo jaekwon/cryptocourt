@@ -367,7 +367,7 @@ func TestFrozenCourtRefusesPosts(t *testing.T) {
 	if err := s.Freeze(ctx, "dev", "orem"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := post(t, s, "orem", "ip2", "after the purge"); !errors.Is(err, ErrPurged) {
+	if _, err := post(t, s, "orem", "ip2", "after the purge"); !errors.Is(err, ErrWithdrawn) {
 		t.Fatalf("a frozen court must refuse posts, got %v", err)
 	}
 	// Another court is unaffected — freezing is per court, not a kill switch.

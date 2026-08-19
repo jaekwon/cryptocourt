@@ -265,7 +265,7 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 	}
 	msgs, err := s.Store.Recent(r.Context(), chain, court, since, limit)
 	switch {
-	case errors.Is(err, ErrPurged):
+	case errors.Is(err, ErrWithdrawn):
 		// The same 410 a POST gets, because the court is in the same state either way.
 		// Answering 200 with an empty list would be a lie of a different shape: the panel
 		// would render "nobody has said anything here yet" about a court that was withdrawn.
@@ -439,7 +439,7 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		// constant so the two cannot drift apart.
 		w.Header().Set("Retry-After", strconv.Itoa(int(DupWindow.Seconds())))
 		writeErr(w, http.StatusTooManyRequests, err.Error())
-	case errors.Is(err, ErrPurged):
+	case errors.Is(err, ErrWithdrawn):
 		writeErr(w, http.StatusGone, "this court is no longer served")
 	default:
 		if s.Log != nil {
