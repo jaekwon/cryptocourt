@@ -513,8 +513,21 @@ func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) er
 		`SELECT max(created_at) FROM messages WHERE ip_hash=?`, in.IPHash).Scan(&last); err != nil {
 		return err
 	}
+	// "THIS ADDRESS", NOT "YOU", and the fair-share refusal below already said so.
+	//
+	// Every limit here is keyed on ip_hash, so on a shared connection they are collective.
+	// Measured, two colleagues behind one office router: alice posts, and bob one second later
+	// is told "too many messages: one message every 2s" — for the one message he sent. Nine
+	// different people exhaust PerIPMax for everybody behind the router the same way.
+	//
+	// The service cannot tell a colleague from a second window, and it should not pretend to.
+	// Naming the address costs three words, explains a refusal a shared office would otherwise
+	// find inexplicable, and matches the wording this function already uses further down. §8
+	// carries the same honesty for the KICK — "a bystander behind CGNAT eats the kick" — and
+	// the throttle had been left out of it.
 	if last.Valid && now.Unix()-last.Int64 < int64(MinInterval.Seconds()) {
-		return fmt.Errorf("%w: one message every %s", ErrThrottled, MinInterval)
+		return fmt.Errorf("%w: this address may post one message every %s",
+			ErrThrottled, MinInterval)
 	}
 
 	var mine int
@@ -524,7 +537,8 @@ func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) er
 		return err
 	}
 	if mine >= PerIPMax {
-		return fmt.Errorf("%w: %d per %s", ErrThrottled, PerIPMax, PerIPWindow)
+		return fmt.Errorf("%w: this address may post %d per %s",
+			ErrThrottled, PerIPMax, PerIPWindow)
 	}
 
 	// Fair share, and it binds ONLY under contention. A flat per-address quota

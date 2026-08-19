@@ -2356,3 +2356,75 @@ func TestAnOlderHeartbeatRowParsesWithNoCadence(t *testing.T) {
 			h.ScannerSeen, h.Enforcing)
 	}
 }
+
+// A SHARED CONNECTION IS THE COMMON CASE, AND THE REFUSAL MUST NOT BLAME THE READER FOR IT.
+//
+// Every limit in throttleTx is keyed on ip_hash, so behind an office router, a campus NAT or a
+// carrier CGNAT they are collective. Measured before the wording changed: alice posts, and bob one
+// second later — a different person, same router — was told "too many messages: one message every
+// 2s", for the one message he sent. Nine different people exhaust PerIPMax for everybody behind
+// the router the same way.
+//
+// The service cannot tell a colleague from a second browser window and should not pretend to. The
+// fair-share refusal in the same function already said "this address"; these two did not. §8
+// carries the same honesty for the KICK — "a bystander behind CGNAT eats the kick" — and the
+// throttle had been left out of it.
+func TestTheThrottleBlamesTheAddressRatherThanTheReader(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	post := func(who string) error {
+		_, err := s.Post(ctx, PostInput{
+			Chain: "dev", Court: "orem", Moniker: who,
+			Body:   "a perfectly ordinary sentence from " + who,
+			IPHash: "ip-office", NetHash: "net-office",
+		})
+		return err
+	}
+
+	// THE PAIRED ARM FIRST: an ordinary first message is not refused. Without it a throttle that
+	// rejected everything would satisfy every assertion below.
+	if err := post("alice"); err != nil {
+		t.Fatalf("the first message from an address must be accepted: %v", err)
+	}
+
+	// The interval, hit by a DIFFERENT person one second later.
+	*clock = clock.Add(time.Second)
+	err := post("bob")
+	if err == nil {
+		t.Fatal("a second message one second later must be refused, or this measures nothing")
+	}
+	if !errors.Is(err, ErrThrottled) {
+		t.Fatalf("want ErrThrottled, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "this address") {
+		t.Errorf("bob sent one message and shares a router with alice; the refusal must name "+
+			"the address rather than telling him he sent too many: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), MinInterval.String()) {
+		t.Errorf("and it must still quote the limit that is enforced: %q", err.Error())
+	}
+
+	// The per-minute cap, reached by a crowd rather than by one person.
+	*clock = clock.Add(MinInterval)
+	var capErr error
+	for i := 0; i < 20; i++ {
+		if e := post(fmt.Sprintf("person%d", i)); e != nil {
+			capErr = e
+			break
+		}
+		*clock = clock.Add(MinInterval)
+	}
+	if capErr == nil {
+		t.Fatalf("PerIPMax is %d and should have been reached", PerIPMax)
+	}
+	if !strings.Contains(capErr.Error(), "this address") {
+		t.Errorf("the per-minute cap is collective too and must say whose it is: %q",
+			capErr.Error())
+	}
+	// The limit stays quoted — §5 holds these two refusals up as the example of naming what
+	// would be accepted, and that must survive the rewording.
+	if !strings.Contains(capErr.Error(), PerIPWindow.String()) ||
+		!strings.Contains(capErr.Error(), fmt.Sprint(PerIPMax)) {
+		t.Errorf("the cap refusal must quote both the count and the window: %q", capErr.Error())
+	}
+}

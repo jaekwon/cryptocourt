@@ -1222,6 +1222,24 @@ behind CGNAT eats the kick. That does not sink the design, and the honest framin
 is already in-tree: **chat is a discovery surface with no money path**, so a leaky
 defence is tolerable here in a way it is not anywhere value moves.
 
+**The THROTTLE is collective for the same reason, and it used to blame the reader for it.** Every
+limit in `throttleTx` is keyed on `ip_hash`, so an office router, a campus NAT and a carrier CGNAT
+share one budget. Measured: alice posts, and bob one second later — a different person, same router
+— was told `too many messages: one message every 2s`, for the one message he sent. Nine different
+people exhaust `PerIPMax` for everybody behind the router the same way, and in a contended court
+`FairShare` gives the whole building three messages a minute.
+
+The behaviour is the design and stays; the sentence was wrong. The service cannot tell a colleague
+from a second browser window and should not pretend to, so both per-address refusals name the
+address now — which is what the fair-share refusal three cases along had said all along, `this
+court is busy, and this address has had its share`. §5 holds these two up as the example of naming
+what would be accepted, and they still quote their limits:
+
+    too many messages: this address may post one message every 2s
+    too many messages: this address may post 10 per 1m0s
+
+Three words, and a shared office gets an explicable refusal instead of an accusation.
+
 Hashing the IP is also a one-way door: no later widening a consequence to a
 subnet, no noticing that nine of them are one network. `net_hash` exists because
 of that.
