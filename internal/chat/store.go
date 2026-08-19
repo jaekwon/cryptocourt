@@ -371,7 +371,16 @@ func statusTx(ctx context.Context, q querier, ipHash, netHash string, now time.T
 	err := q.QueryRowContext(ctx, `SELECT id, kind, reason, created_at, expires_at
 	  FROM infractions
 	  WHERE revoked_at IS NULL
-	    AND (ip_hash = ? OR (net_hash <> '' AND net_hash = ?))
+	    -- The network only matches for a MANUAL consequence. An automated kick
+	    -- applies to one address and nothing else.
+	    --
+	    -- Without that clause every scanner kick silently punished the whole /24:
+	    -- found by posting one scam from 203.0.113.50 and watching an untouched
+	    -- 203.0.113.99 get a 403. net_hash exists so an OPERATOR facing a rotation
+	    -- campaign can act on a range in one command — a range is a decision a
+	    -- human makes, never a side effect of a model's opinion.
+	    AND (ip_hash = ?
+	         OR (reason = 'manual' AND net_hash <> '' AND net_hash = ?))
 	    AND (expires_at IS NULL OR expires_at > ?)
 	  ORDER BY (expires_at IS NULL) DESC, expires_at DESC LIMIT 1`,
 		ipHash, netHash, now.Unix()).Scan(&id, &kind, &reason, &createdAt, &expiresAt)
@@ -728,4 +737,80 @@ func (s *Store) RecordFailure(ctx context.Context, id int64) error {
 // has one action available instead of forty.
 func HashPair(h *Hasher, a netip.Addr) (ipHash, netHash string) {
 	return h.Hash(a), h.HashNet(a)
+}
+
+// InfractionRow is a consequence as an operator sees it — including the evidence,
+// because an appeal that cannot be examined is not an appeal.
+type InfractionRow struct {
+	ID         int64
+	IPHash     string
+	NetHash    string
+	Kind       string
+	Reason     string
+	EvidenceID int64
+	Evidence   string
+	Detail     string
+	CreatedAt  int64
+	ExpiresAt  int64 // 0 = never
+	RevokedAt  int64 // 0 = in force
+	RevokedBy  string
+}
+
+// ListInfractions reads consequences, newest first. An empty ipHash lists all of
+// them; revoked rows are included only on request, because the default question is
+// "what is in force".
+func (s *Store) ListInfractions(ctx context.Context, ipHash string, withRevoked bool, limit int) ([]InfractionRow, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	q := `SELECT id, ip_hash, net_hash, kind, reason,
+	        coalesce(evidence_id,0), evidence, detail, created_at,
+	        coalesce(expires_at,0), coalesce(revoked_at,0), revoked_by
+	      FROM infractions WHERE 1=1`
+	var args []any
+	if ipHash != "" {
+		q += ` AND (ip_hash = ? OR net_hash = ?)`
+		args = append(args, ipHash, ipHash)
+	}
+	if !withRevoked {
+		q += ` AND revoked_at IS NULL`
+	}
+	q += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.r.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []InfractionRow
+	for rows.Next() {
+		var r InfractionRow
+		if err := rows.Scan(&r.ID, &r.IPHash, &r.NetHash, &r.Kind, &r.Reason,
+			&r.EvidenceID, &r.Evidence, &r.Detail, &r.CreatedAt,
+			&r.ExpiresAt, &r.RevokedAt, &r.RevokedBy); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// MessageVerdict reports what the scanner concluded about one message, for the
+// operator. It is deliberately not on any public read path.
+func (s *Store) MessageVerdict(ctx context.Context, id int64) (verdict string, body string, err error) {
+	err = s.r.QueryRowContext(ctx,
+		`SELECT verdict, body FROM messages WHERE id=?`, id).Scan(&verdict, &body)
+	return verdict, body, err
+}
+
+// CountInfractions is the cheap form of ListInfractions, for health and tests.
+func (s *Store) CountInfractions(ctx context.Context, withRevoked bool) (int, error) {
+	q := `SELECT count(*) FROM infractions`
+	if !withRevoked {
+		q += ` WHERE revoked_at IS NULL`
+	}
+	var n int
+	err := s.r.QueryRowContext(ctx, q).Scan(&n)
+	return n, err
 }

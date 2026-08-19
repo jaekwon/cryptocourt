@@ -552,3 +552,42 @@ func TestSecretIsStableAcrossCalls(t *testing.T) {
 		t.Fatalf("want a 32-byte key, got %d", len(a))
 	}
 }
+
+// An automated consequence applies to ONE address. It must not reach the network,
+// or one scam message from a shared connection punishes everybody behind it — which
+// is precisely the mass-collateral this design exists to avoid. Found live: an
+// untouched neighbour in the same /24 got a 403.
+func TestAutomatedConsequenceDoesNotReachTheNetwork(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	const net = "shared-net"
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "offender", NetHash: net, Kind: KindKick,
+		Reason: ReasonScam, Duration: time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := s.Status(ctx, "offender", net); err != nil {
+		t.Fatal(err)
+	} else if !st.Blocked() {
+		t.Fatal("the offender must be blocked")
+	}
+	if st, err := s.Status(ctx, "neighbour", net); err != nil {
+		t.Fatal(err)
+	} else if st.Blocked() {
+		t.Fatalf("a neighbour sharing the network must NOT be blocked, got %+v", st)
+	}
+
+	// A MANUAL range ban is the one thing that does reach the network, because an
+	// operator chose it deliberately.
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "irrelevant", NetHash: net, Kind: KindBan, Reason: ReasonManual,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := s.Status(ctx, "neighbour", net); err != nil {
+		t.Fatal(err)
+	} else if st.State != KindBan {
+		t.Fatalf("a manual range ban must reach the network, got %+v", st)
+	}
+}
