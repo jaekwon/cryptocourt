@@ -297,6 +297,12 @@ async function chatFetch(base, chain, court, limit) {
     messages: Array.isArray(d.messages) ? d.messages : [],
     you: d.you || {state: "ok"},
     next: Number(d.next || 0),
+    // `now` is the server's clock and must survive this allowlist, or the skew correction in
+    // mountChat has nothing to learn from. Omitting it failed SILENTLY: the panel fell back to
+    // the local clock, and a browser test reading "10m" for a message posted a second ago is
+    // what caught it — after a hand-simulation of the arithmetic had already "passed", because
+    // the simulation never went through this function.
+    now: Number(d.now || 0),
   };
 }
 
@@ -426,7 +432,23 @@ function mountChat(el, opts) {
   const bodyEl = el.querySelector(".chatinput");
   const sendEl = el.querySelector(".chatsend");
 
-  const nowSec = () => Math.floor((o.now ? o.now() : Date.now()) / 1000);
+  // EVERY RENDERED TIME IS CORRECTED BY ONE OFFSET, because this clock is not the one that
+  // stamped the messages.
+  //
+  // Measured through chatWhen before this existed: a client ten minutes FAST read a message
+  // posted one second ago as "10m", and one two hours SLOW read a two-hour-old message as "just
+  // now" — which in a court misrepresents the order things were said in. Browsers take their time
+  // from the OS.
+  //
+  // The server sends its own clock with every read, so the offset is learned rather than assumed,
+  // and re-learned on each poll. Zero until the first reply arrives, which is the honest default:
+  // with nothing to compare against, the local clock is the only clock there is.
+  let serverSkew = 0;
+  const learnSkew = reply => {
+    const n = reply && reply.now ? Number(reply.now) : 0;
+    if (n > 0) serverSkew = n - Math.floor((o.now ? o.now() : Date.now()) / 1000);
+  };
+  const nowSec = () => Math.floor((o.now ? o.now() : Date.now()) / 1000) + serverSkew;
   const note = t => { if (live()) noteEl.textContent = t || ""; };
 
   // Writing the log has to preserve the reader's scroll position, or someone reading
@@ -502,6 +524,8 @@ function mountChat(el, opts) {
     try {
       const d = await chatFetch(base, chain, court, o.limit || 50);
       if (!live()) return;
+      // Before painting, so the ages in this very repaint are already corrected.
+      learnSkew(d);
       paint(d.messages, d.you);
       note("");
     } catch (e) {

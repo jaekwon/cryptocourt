@@ -1919,6 +1919,7 @@ func TestTheCountdownIsInTheHTTPResponse(t *testing.T) {
 		t.Fatalf("want 200, got %d %s", rec.Code, rec.Body)
 	}
 	var reply struct {
+		Now int64 `json:"now"`
 		You struct {
 			State   string `json:"state"`
 			Until   int64  `json:"until"`
@@ -1937,5 +1938,21 @@ func TestTheCountdownIsInTheHTTPResponse(t *testing.T) {
 	}
 	if reply.You.Until == 0 {
 		t.Error("and keep the absolute deadline, which an appeal can quote")
+	}
+
+	// AND THE SERVER'S OWN CLOCK, which every message's age is rendered against. Asserted here
+	// because a mutation run found nothing covering it: the panel's test stubs its own reply, so
+	// deleting the field server-side broke no test at all while breaking every timestamp a reader
+	// with a skewed clock sees.
+	if reply.Now == 0 {
+		t.Error("the reply must carry the server's clock; without it a client can only " +
+			"subtract its own, which is the skew bug seconds exists to avoid")
+	}
+	// Against the STORE's clock, not the wall clock: these fixtures pin a fake now, so comparing
+	// with time.Now() failed on correct code — which is the same mistake the field exists to stop
+	// a client making, made inside its own test.
+	if reply.Now != s.Now().Unix() {
+		t.Errorf("it must be the clock the server is actually using: got %d, want %d",
+			reply.Now, s.Now().Unix())
 	}
 }

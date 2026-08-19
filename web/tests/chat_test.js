@@ -553,6 +553,50 @@ function mkDoc() {
     }
   }
 
+  // A READER WHOSE CLOCK IS WRONG MUST STILL SEE THE RIGHT AGES.
+  //
+  // Every message carries an absolute created_at and the panel renders it by subtracting. Measured
+  // through the shipped chatWhen before the server sent its own clock: a client ten minutes FAST
+  // read a message posted one second ago as "10m", and one two hours SLOW read a two-hour-old
+  // message as "just now" — which in a court misrepresents the order things were said in.
+  //
+  // This drives the WHOLE path — chatFetch, the offset it learns, and the render — because that is
+  // where the bug actually was. The first fix looked correct and did nothing: chatFetch returns an
+  // explicit allowlist and dropped `now` on the floor, so the panel had nothing to learn from. A
+  // hand-simulation of the arithmetic passed while the code was still broken, because the
+  // simulation never went through chatFetch.
+  {
+    const serverNow = Math.floor(Date.now() / 1000);
+    const reply = withNow => ({ok: true, json: async () => Object.assign({
+      messages: [{id: 1, moniker: "ellery", body: "posted just this second", country: "GB",
+                  suffix: "a1b2c3", created_at: serverNow}],
+      you: {state: "ok"}, next: 1}, withNow ? {now: serverNow} : {})});
+
+    // Ten minutes fast, so an uncorrected answer is "10m" and unmistakable.
+    FETCH = async () => reply(true);
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                chain: "dev", now: () => (serverNow + 600) * 1000});
+    await tickMicro(); await tickMicro();
+    const age = (el.k[".chatlog"].innerHTML.match(/chatage">([^<]*)</) || [])[1] || "";
+    ok("a reader ten minutes fast sees a fresh message as recent: " + JSON.stringify(age),
+       age === "just now");
+    stop();
+
+    // THE DISCRIMINATING CASE: with no `now` in the reply there is nothing to learn from, so the
+    // same panel falls back to the local clock and reads 10m. Without this, the assertion above
+    // would pass for a panel that ignored the clock entirely.
+    FETCH = async () => reply(false);
+    const el2 = mkRoot();
+    const stop2 = mountChat(el2, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                  chain: "dev", now: () => (serverNow + 600) * 1000});
+    await tickMicro(); await tickMicro();
+    const age2 = (el2.k[".chatlog"].innerHTML.match(/chatage">([^<]*)</) || [])[1] || "";
+    ok("...and without the server's clock it falls back, which is what makes that meaningful: "
+       + JSON.stringify(age2), age2 === "10m");
+    stop2();
+  }
+
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);
 })();

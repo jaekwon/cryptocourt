@@ -251,6 +251,16 @@ type getReply struct {
 	Messages []Message `json:"messages"`
 	Next     int64     `json:"next"`
 	You      Status    `json:"you"`
+
+	// Now is this server's clock, so a reader can render `created_at` without trusting its own.
+	//
+	// Every message carries an absolute timestamp and the panel turns it into "5m" by
+	// subtracting. Measured through the shipped chatWhen: a client ten minutes FAST reads a
+	// message posted one second ago as "10m", and one two hours SLOW reads a two-hour-old
+	// message as "just now" — which in a court misrepresents the order in which things were
+	// said. Status.Seconds fixed the same arithmetic for one status line; this fixes it for
+	// every row, and for anything added later that needs to know when the server thinks it is.
+	Now int64 `json:"now"`
 }
 
 func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHash, netHash string) {
@@ -295,7 +305,7 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 	if n := len(msgs); n > 0 {
 		next = msgs[n-1].ID
 	}
-	writeJSON(w, http.StatusOK, getReply{Messages: msgs, Next: next, You: you})
+	writeJSON(w, http.StatusOK, getReply{Messages: msgs, Next: next, You: you, Now: s.Store.Now().Unix()})
 }
 
 // Which field a refusal is about, so the sentence can name it correctly.
