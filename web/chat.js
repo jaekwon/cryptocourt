@@ -176,9 +176,29 @@ function chatValidate(moniker, body) {
   if ([...b].length > CHATLIMITS.body) {
     return "that message is too long (" + CHATLIMITS.body + " characters)";
   }
-  // Matches MaxInputBytes on the server. Reachable with astral characters at the rune cap.
+  // Mirrors MaxInputBytes on the server, and it is NOT reachable today — this comment used to
+  // claim it was, "reachable with astral characters at the rune cap", and the arithmetic says
+  // otherwise. UTF-8 tops out at four bytes per rune, so a body at the rune cap cannot exceed
+  // CHATLIMITS.body * 4 bytes, which is comfortably under CHATLIMITS.bytes; and the rune check
+  // above fires first for anything longer. Measured through this function: a body of astral
+  // characters exactly at the rune cap validates clean, and one character more is refused by the
+  // RUNE check rather than by this one.
+  //
+  // (Spelled with the constants rather than their values on purpose. TestThePanelsLimitsMatch-
+  // TheServers forbids a bare limit literal anywhere in this function, comments included, because
+  // a number written here today is a number copied into the code tomorrow — and it caught this
+  // comment when it was first written with the digits in.)
+  //
+  // Kept rather than deleted, because it stops mirroring the server the moment somebody raises the
+  // rune cap above a quarter of the byte cap — and deleting a guard that becomes necessary exactly
+  // when a constant changes is how the panel drifts from the server. The relationship is pinned in
+  // TestThePanelsByteCapIsUnreachableUntilTheRuneCapMoves, which fails loudly if it goes live.
+  //
+  // It names its limit for that day. Left as a bare "too long" it was the one refusal here that
+  // did not say what would be accepted, and it disagreed with the server's sentence for the same
+  // rule — neither noticed, because the branch never ran.
   if (new TextEncoder().encode(b).length > CHATLIMITS.bytes) {
-    return "that message is too long";
+    return "that message is far too long to process (" + CHATLIMITS.bytes + " bytes)";
   }
   return "";
 }

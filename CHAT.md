@@ -518,6 +518,32 @@ checks each refusal quotes the limit that is enforced AND no other, since a name
 400 would send somebody trimming to the wrong length. The wording follows `chatValidate` so the
 panel and the API do not contradict each other about one rule.
 
+**One of those refusals named no limit, and nobody noticed because it cannot fire.** The panel's
+byte check mirrors `MaxInputBytes`, and its comment claimed it was "reachable with astral characters
+at the rune cap". The arithmetic disagrees: UTF-8 tops out at four bytes per rune, so a body at the
+rune cap cannot exceed four times it, which is well under the byte cap — and the rune check above
+fires first for anything longer. Measured through the shipped function: a body of astral characters
+exactly at the rune cap validates clean, and one character more is refused by the RUNE check.
+
+The two sides order these opposite ways, which is why the copy went unexamined. `clean()` rejects on
+`len(s) > MaxInputBytes` before it counts runes at all, so `ErrOversize` is reachable on the server
+and its sentence is real; the panel's equivalent is dead code, so it had been left as a bare "that
+message is too long" — the one refusal in `chatValidate` that did not say what would be accepted,
+and the one that disagreed with the server about the same rule.
+
+Corrected rather than deleted. A guard removed because it cannot fire today is a guard missing on
+the day a constant moves, and this one goes live as soon as the rune cap passes a quarter of the
+byte cap. `TestThePanelsByteCapIsUnreachableUntilTheRuneCapMoves` pins that relationship, reports
+the arithmetic when it breaks, and warns that the two orderings will then refuse the same input for
+different stated reasons. Three arms, each verified firing: raising the rune cap, deleting the
+check, and reverting the sentence.
+
+A smaller thing worth recording, because it is the guard working: writing that comment with the
+numbers in it FAILED `TestThePanelsLimitsMatchTheServers`, which forbids a bare limit literal
+anywhere in `chatValidate` — comments included. That looked like an over-strict test and is not one:
+a number written in a comment is a number copied into the code later. The comment names the
+constants instead.
+
 **No refusal names the category behind a consequence.** `posting is blocked for this address`, and
 `you: {state, until, ref}` carries no reason — so the evasion oracle stays shut, which
 `chat_moderation.js` checks in the DOM rather than trusting. The same audit renamed `ErrPurged` to

@@ -233,3 +233,52 @@ func TestThePanelReadsTheCountdownFieldTheServerEmits(t *testing.T) {
 			"computing from the local clock anyway is the same bug with a decoration on it")
 	}
 }
+
+// THE PANEL'S BYTE CAP IS DEAD CODE TODAY, AND ITS COMMENT USED TO CLAIM OTHERWISE.
+//
+// chatValidate checks runes before bytes, so anything reaching its byte branch has already passed
+// the rune cap. UTF-8 tops out at four bytes per rune, so the worst case there is
+// MaxBodyRunes * 4 bytes — 1600 against a cap of 4096. The branch cannot fire. Measured through
+// the shipped function: 400 astral characters is 1600 bytes and validates clean, and 401 is
+// refused by the RUNE check.
+//
+// The server orders these the other way: clean() rejects on len(s) > MaxInputBytes before it
+// looks at runes at all, so ErrOversize is reachable there and its sentence is real. That
+// asymmetry is why the panel's copy went unexamined, and its message was the one refusal in
+// chatValidate that named no limit.
+//
+// This test exists for the day somebody raises the rune cap. Past 1024 the branch goes live, its
+// wording starts mattering, and the two sides' orderings start disagreeing about which rule
+// refused a message — so that change should not be silent.
+func TestThePanelsByteCapIsUnreachableUntilTheRuneCapMoves(t *testing.T) {
+	if MaxBodyRunes*4 > MaxInputBytes {
+		t.Fatalf("MaxBodyRunes is %d, so a body at the rune cap can reach %d bytes and exceed "+
+			"MaxInputBytes (%d). web/chat.js's byte branch is now REACHABLE: check that its "+
+			"sentence still names the right limit and that the panel and the server agree about "+
+			"which rule refused the message — the server checks bytes FIRST, the panel checks "+
+			"runes first, so the same input can now be refused for different stated reasons",
+			MaxBodyRunes, MaxBodyRunes*4, MaxInputBytes)
+	}
+
+	// And the branch still has to be THERE, with its limit in it. A guard deleted because it
+	// cannot fire today is a guard missing on the day the constant moves.
+	src, err := os.ReadFile(filepath.Join("..", "..", "web", "chat.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := regexp.MustCompile(`(?s)function chatValidate\(.*?\n\}`).Find(src)
+	if fn == nil {
+		t.Fatal("chatValidate not found in web/chat.js")
+	}
+	if !regexp.MustCompile(`CHATLIMITS\.bytes`).Match(fn) {
+		t.Error("chatValidate no longer checks CHATLIMITS.bytes; it mirrors MaxInputBytes and " +
+			"must stay, because it is what catches a body the server would refuse once the " +
+			"rune cap allows one")
+	}
+	// The limit must be quoted, like every other refusal in that function. §5's rule is that a
+	// refusal says what would be accepted, and this was the one that did not.
+	if !regexp.MustCompile(`far too long to process.*CHATLIMITS\.bytes`).Match(fn) {
+		t.Error("the byte refusal must name its limit and follow the server's wording " +
+			`("far too long to process"), or the two contradict each other about one rule`)
+	}
+}
