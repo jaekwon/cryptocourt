@@ -598,10 +598,37 @@ function mountChat(el, opts) {
     if (r.you) paintState(r.you);
   });
 
+  // WAKE ON RETURN, so the backoff above is a saving rather than a stale room.
+  //
+  // The 60s idle interval is chosen when the timer is SET, so a reader who switches away for two
+  // seconds and comes straight back waits out the rest of that minute in front of a transcript
+  // that is not moving. Their own `you` block is stale for the same minute, and that block is how
+  // somebody learns their timeout has expired — so the cost is not only missed messages.
+  //
+  // Nothing cancelled the timer, because there was no listener for coming back. There is one now,
+  // and it makes the backoff strictly better: idling harder is only safe if returning is instant.
+  //
+  // It has to respect the same generation check as the poller. live() is asserted because an
+  // unmounted panel must not fetch, and the listener is REMOVED on unmount because this panel
+  // remounts on navigation and one leaked listener per visit would tick a discarded generation
+  // forever. The removal is what the unmount arm of the test exists for.
+  const onVisible = () => {
+    if (!live() || document.hidden) return;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    tick();
+  };
+  const canListen = typeof document !== "undefined" &&
+    typeof document.addEventListener === "function";
+  if (canListen) document.addEventListener("visibilitychange", onVisible);
+
   tick();
   return () => {
     if (gen === CHATGEN) CHATGEN++;
     if (timer) clearTimeout(timer);
+    if (canListen) document.removeEventListener("visibilitychange", onVisible);
   };
 }
 

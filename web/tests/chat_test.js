@@ -20,7 +20,19 @@ const SRC = path.join(__dirname, "..", "chat.js");
 let FETCHES = [];
 let FETCH = async () => { throw new Error("no fetch stub installed"); };
 global.fetch = (...a) => { FETCHES.push(a); return FETCH(...a); };
-global.document = {hidden: false};
+// A document fake with real listener bookkeeping, because mountChat now registers a
+// visibilitychange handler and a fake without addEventListener would make that line
+// unreachable from a test — the guard would hold and a mutation deleting it would survive.
+global.document = {
+  hidden: false,
+  _l: {},
+  addEventListener(t, f) { (this._l[t] = this._l[t] || []).push(f); },
+  removeEventListener(t, f) {
+    this._l[t] = (this._l[t] || []).filter(g => g !== f);
+  },
+  dispatchEvent(e) { for (const f of (this._l[e.type] || []).slice()) f(e); },
+  listeners(t) { return this._l[t] || []; },
+};
 const STORE = {};
 global.window = {localStorage: {
   getItem: k => (k in STORE ? STORE[k] : null),
@@ -415,6 +427,61 @@ function mkDoc() {
     ok("an outage does not blank what is already readable",
        /readable/.test(el.k[".chatlog"].innerHTML));
     stop();
+  }
+
+  // COMING BACK TO THE TAB MUST REFRESH AT ONCE.
+  //
+  // The poller backs off to 60s while the tab is hidden, which is right: a court page left open
+  // overnight in a background tab is a poller nobody is reading. But the interval is chosen when
+  // the timer is SET, and nothing listened for coming back — so a reader who switched away for two
+  // seconds and returned waited out the rest of that minute in front of a transcript that was not
+  // moving, and a `you` block that is how somebody learns their own timeout has expired.
+  //
+  // Four arms, because the obvious fix breaks the thing it is helping: a listener that fires
+  // regardless of document.hidden would defeat the backoff entirely, and one that is not removed
+  // would leak per mount on a panel that remounts on navigation.
+  {
+    let fetches = 0;
+    FETCH = async () => { fetches++; return {ok: true, json: async () => ({
+      messages: [], you: {state: "ok"}, next: 1})}; };
+    const el = mkRoot();
+    // Measured as a DELTA, not an absolute: an earlier case above mounts a panel and discards
+    // its stop function, so the global listener list is not empty here and asserting that it is
+    // would fail on somebody else's leak.
+    const before = document.listeners("visibilitychange").length;
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                interval: 5});
+    // The fixture's own precondition. If the guard in mountChat decides this document cannot
+    // listen, every arm below passes without exercising anything.
+    ok("mounting registers a visibility listener",
+       document.listeners("visibilitychange").length === before + 1);
+    await new Promise(r => setTimeout(r, 30));
+    ok("the poller is running while visible", fetches > 0);
+
+    document.hidden = true;
+    await new Promise(r => setTimeout(r, 30));   // one more tick lands, then parks at 60s
+    const parked = fetches;
+    await new Promise(r => setTimeout(r, 40));
+    ok("a hidden tab stops polling", fetches === parked);
+
+    // THE PAIRED NEGATIVE, first: an event while still hidden must change nothing, or the
+    // listener would have undone the backoff it exists to compensate for.
+    document.dispatchEvent({type: "visibilitychange"});
+    await new Promise(r => setTimeout(r, 20));
+    ok("...and an event while STILL hidden does not wake it", fetches === parked);
+
+    document.hidden = false;
+    document.dispatchEvent({type: "visibilitychange"});
+    await new Promise(r => setTimeout(r, 20));
+    ok("returning to the tab refreshes without waiting out the minute", fetches > parked);
+
+    // And the listener is gone on unmount. Asserted on the registration itself rather than on
+    // the fetch count, because live() would also stop a leaked listener from fetching — so
+    // counting fetches would pass with the leak still there.
+    stop();
+    ok("unmounting removes the listener rather than leaving one per visit",
+       document.listeners("visibilitychange").length === before);
+    document.hidden = false;
   }
 
   // THE PANEL MUST NOT CLAIM MODERATION THAT IS NOT HAPPENING.

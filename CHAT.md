@@ -1609,6 +1609,33 @@ and re-entrant, so a poller can outlive the DOM it was writing to. `mountChat`'s
 generation counter makes a stale tick inert; `CHATSTOP` is the half that releases the
 timer rather than leaving it to expire.
 
+**The hidden-tab backoff had no way back, so returning meant waiting out the minute.** The poller
+drops to 60s while `document.hidden`, which is right — a court page left open overnight in a
+background tab is a poller nobody reads. But the interval is chosen when the timer is SET and
+nothing listened for coming back, so a reader who switched away for two seconds and returned sat in
+front of a transcript that was not moving for the rest of that minute. Their own `you` block was
+stale for the same minute, and that block is how somebody learns their timeout has expired — so the
+cost was not only missed messages.
+
+A `visibilitychange` listener now cancels the parked timer and ticks at once, which makes the
+backoff strictly better: idling harder is only safe once returning is instant. Three things had to
+be true at the same time, and each is an arm:
+
+    an event while STILL hidden        must change nothing, or the listener undoes the backoff
+    an event on return                must fetch without waiting out the interval
+    unmount                           must REMOVE the listener, not merely make it inert
+
+The last one is the easy mistake. `live()` already stops a stale tick from fetching, so counting
+fetches would pass with a leaked listener still registered — on a panel that remounts on
+navigation, that is one listener per visit. The assertion reads the registration itself, as a
+delta rather than an absolute, because an earlier case in the same file mounts a panel and discards
+its stop function; asserting an empty list would have failed on somebody else's leak.
+
+The node harness is what demonstrates the parking (5ms interval, 40ms of silence). A real browser
+confirmed the half a fake `document` cannot: with `document.hidden` redefined true and then false,
+`GET /api/chat/dev/orem` went 1 → 2 within 600ms of the event. The browser's own hidden interval
+was NOT evidence of parking — only 2.5s of a 6s poll had elapsed, so nothing was due anyway.
+
 Still not wired, and still for the same reason — `web/tests/` and the Makefile's web
 targets are another workstream's uncommitted work:
 
