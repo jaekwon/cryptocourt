@@ -360,8 +360,8 @@ GeoLite2 needs an account and is licence-restricted.
 ## 10. Status
 
 Implemented and verified live against a running server and a real gemma3:4b, and in a
-real browser against both. 173 Go tests and subtests across three packages (70
-top-level, 103 subtests), plus 219 assertions and
+real browser against both. 186 Go tests and subtests across three packages (78
+top-level, 108 subtests), plus 219 assertions and
 measurements across four web harnesses, and 18 more behind OLLAMA_LIVE=1:
 
 - **`internal/chat`** — sanitiser and skeleton, client-address policy, the store
