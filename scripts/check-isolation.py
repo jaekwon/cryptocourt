@@ -49,6 +49,7 @@ import subprocess
 import sys
 
 import gnoroot
+import repolock
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -101,6 +102,13 @@ def stage(root):
 
 
 def main():
+    # The last guard to take the lock, and the one that needed it most: this is
+    # the heaviest reader in the repo — it stages every realm and runs the suite
+    # once per test — so the window in which a selftest could rewrite a source
+    # underneath it is minutes wide rather than seconds. A test broken on purpose
+    # by another gate would be reported here as an isolation failure, which is a
+    # false finding in a guard whose whole output is a list of suspect tests.
+    repolock.refuse_if_held("check-isolation")
     if not gnoroot.real_root():
         if os.environ.get("REQUIRE_GNO"):
             print("check-isolation: gno not installed", file=sys.stderr)
