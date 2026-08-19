@@ -484,49 +484,32 @@ function mkDoc() {
     document.hidden = false;
   }
 
-  // THE PANEL MUST NOT CLAIM MODERATION THAT IS NOT HAPPENING.
+  // THE PANEL NO LONGER TELLS READERS ABOUT MODERATION MODE, and this replaced the
+  // assertions that it must.
   //
-  // §6 said the panel's label derived from health.enforcing. Nothing in the repo fetched that
-  // endpoint at all — the property was documented and unimplemented, which is the worst of
-  // the three possible states. Now it is fetched once per mount.
+  // It printed "Automatic moderation is not applying timeouts on this server right now"
+  // whenever health.enforcing was false. The reasoning was sound in the abstract —
+  // silence could let the panel imply a protection nobody is providing — but a scanner
+  // that has not been started is the NORMAL state of a fresh deployment, so the line sat
+  // permanently on the live site telling ordinary readers something only an operator can
+  // act on. The panel makes no positive claim about moderation anywhere else, so dropping
+  // it withdraws no promise. Owner's call, 2026-08-19.
+  //
+  // What is asserted instead: that it is GONE, all of it, rather than merely hidden
+  // behind a flag somebody can flip back on by accident.
   {
-    ok("wording is factual, not an invitation",
-       chatDryRunNotice({enforcing: false}) ===
-         "Automatic moderation is not applying timeouts on this server right now.");
-    ok("...and says nothing when moderation IS enforcing",
-       chatDryRunNotice({enforcing: true}) === "");
-    // Not knowing is not the same as knowing it is off. A failed or absent health read must
-    // stay silent, because a wrong warning is worse than none.
-    ok("silent when health is unavailable", chatDryRunNotice(null) === "");
-    ok("silent when the field is missing", chatDryRunNotice({}) === "");
-    ok("silent on a non-boolean", chatDryRunNotice({enforcing: "no"}) === "");
-
-    const now = Math.floor(Date.now() / 1000);
-    const mount = async enforcing => {
-      FETCH = async url => {
-        if (String(url).includes("/health")) {
-          return enforcing === null
-            ? {ok: false, status: 500, json: async () => ({})}
-            : {ok: true, json: async () => ({ok: true, enforcing})};
-        }
-        return {ok: true, json: async () => ({
-          messages: [{id: 1, moniker: "a", body: "a message", country: "", suffix: "",
-                      created_at: now}], you: {state: "ok"}, next: 1})};
-      };
-      const el = mkRoot();
-      const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem"});
-      await tickMicro(); await tickMicro(); await tickMicro();
-      const r = {text: el.k[".chatdry"].textContent, hidden: el.k[".chatdry"].hidden};
-      stop();
-      return r;
-    };
-    let r = await mount(false);
-    ok("a dry-run server is disclosed in the panel", /not applying timeouts/.test(r.text));
-    ok("...and the notice is visible", r.hidden === false);
-    r = await mount(true);
-    ok("an enforcing server says nothing", r.text === "" && r.hidden === true);
-    r = await mount(null);
-    ok("an unreachable health endpoint says nothing", r.text === "" && r.hidden === true);
+    const SRCTEXT = require("fs").readFileSync(SRC, "utf8");   // SRC is a path
+    ok("no reader-facing dry-run wording is exported",
+       typeof chatDryRunNotice === "undefined");
+    ok("the wording is not in the file at all",
+       !/return "Automatic moderation is not applying/.test(SRCTEXT));
+    ok("and there is no slot in the markup for it", !/class="chatdry"/.test(SRCTEXT));
+    ok("nor a style for one", !/\.chatdry\{/.test(SRCTEXT));
+    // `enforcing` stays PUBLIC on the endpoint — CHAT.md keeps it public on an asymmetry
+    // rather than on comfort, and an operator has to be able to see it. The fetch also
+    // still carries appeal_to, which the panel DOES show.
+    ok("health is still fetched", typeof chatHealth === "function");
+    ok("...and appeal_to still reaches the panel", /appeal_to/.test(SRCTEXT));
   }
 
   // Demo mode must not reach the network for this either.

@@ -243,7 +243,6 @@ function chatPanelHtml(slug, moniker, note) {
     +   '<span class="chatdemo" hidden></span>'
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
-    + '<div class="chatdry" hidden></div>'
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
     +   '<input class="chatmoniker" maxlength="' + CHATMONIKERUNITS + '" placeholder="name"'
@@ -331,6 +330,13 @@ async function chatFetch(base, chain, court, limit) {
 //
 // §6 says the panel must not claim moderation that is not happening, and until now nothing
 // implemented that — no client in the repo fetched this endpoint at all, while CHAT.md said
+// WHAT THIS NO LONGER DOES: tell readers when moderation is in dry run. The panel used to
+// print "Automatic moderation is not applying timeouts on this server right now" whenever
+// health.enforcing was false — a scanner that has not been started yet is the normal state
+// of a fresh deployment, so the line sat on the site permanently, telling ordinary readers
+// something only an operator can act on. It is not a protection the panel claims anywhere
+// else, so dropping the line withdraws no promise; `enforcing` stays public on the health
+// endpoint, which is where an operator looks.
 // the panel derived its label from it. One request per mount, and a failure is silent: not
 // knowing is not the same as knowing it is off, and a wrong warning is worse than none.
 async function chatHealth(base) {
@@ -342,16 +348,6 @@ async function chatHealth(base) {
   } catch (e) {
     return null;
   }
-}
-
-// chatDryRunNotice is the wording, kept apart from the fetch so it can be tested directly.
-//
-// Deliberately factual rather than either reassuring or inviting. It does not say "you will
-// not be punished", which reads as an invitation, and it does not stay silent, which would
-// let the panel imply a protection nobody is providing.
-function chatDryRunNotice(health) {
-  if (!health || health.enforcing !== false) return "";
-  return "Automatic moderation is not applying timeouts on this server right now.";
 }
 
 // chatPost sends one message.
@@ -406,7 +402,6 @@ const CHATCSS = `
 .chatempty{opacity:.55;padding:.3rem 0}
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
-.chatdry{margin:.4rem 0;font-size:.9em;opacity:.75}
 .chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
 .chatform{display:flex;gap:.4rem;margin-top:.5rem}
 .chatmoniker{flex:0 0 8rem;min-width:0}
@@ -558,13 +553,8 @@ function mountChat(el, opts) {
       appealTo = h.appeal_to;
       paintState(lastYou); // the line may already be on screen, saying less than it could
     }
-    const notice = chatDryRunNotice(h);
-    if (!notice) return;
-    const el2 = el.querySelector(".chatdry");
-    if (el2) {
-      el2.textContent = notice;
-      el2.hidden = false;
-    }
+    // health.enforcing is deliberately NOT surfaced to readers — see the note
+    // on chatHealth. It stays public on the endpoint for an operator.
   });
 
   let timer = null;
@@ -655,6 +645,6 @@ function mountChat(el, opts) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {chatEsc, chatFlag, chatWhen, chatStatusLine, chatValidate,
     chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatBase,
-    chatFetch, chatPost, chatStyles, chatHealth, chatDryRunNotice, mountChat, CHATCSS,
+    chatFetch, chatPost, chatStyles, chatHealth, mountChat, CHATCSS,
     CHATLIMITS};
 }
