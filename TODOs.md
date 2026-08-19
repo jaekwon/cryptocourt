@@ -4,9 +4,28 @@ Open items with enough detail to act on cold. Newest first. Each item records wh
 was *verified in the source* separately from what was *measured in a run*, because
 the two rot at different rates.
 
+> **`GAMETHEORY.md` is newer than this file and supersedes it wherever they disagree.** Six
+> audit passes since these items were written falsified four claims below — the comp starvation
+> is a drought rather than a permanent tax, its proposed cap must not ship, the dispute-round
+> boundary is one block rather than two, and the quorum relaxation is 5.01× rather than ~10×.
+> Every one is corrected inline in a quoted block, with a pointer to the section that did it.
+> **Nothing here is implemented; `realm/` is untouched.**
+
 ---
 
-## 0. LIVE BUG, HIGHEST SEVERITY — one dispute round can permanently starve a court's junior draw
+## 0. LIVE BUG, HIGHEST SEVERITY — one dispute round starves a court's junior draw for weeks
+
+> **CORRECTED — see `GAMETHEORY.md` §11.8, which falsified two things below.** The starvation
+> is a **drought**, not a permanent tax: `cumAccrual` is monotone and *unbounded*, and
+> `reservedTail` is a high-water **cursor**, not a balance. **M:** a bystander claim
+> crystallizing *after* the drought is paid bit-identically to the control. So this is a
+> **timing** bug, and `Crystallize` being permissionless is the whole of it rather than an
+> aggravating detail. Drought length at 1/5/10/30% of supply: 2/6/11/36 weeks.
+>
+> **And the fix proposed at the bottom of this item must NOT ship.** Capping comp strands
+> **73% of a prevailing challenger's compensation** and moves their break-even overturn
+> probability from 20% to 46.7%, destroying the argument that holders will defend themselves.
+> The real fix is to make the junior draw *delayed rather than scaled*. Details in §11.8.
 
 **This is the actual mechanism by which a disputed claim's draw is destroyed today.** No
 attacker required, no proposal involved, and it invalidates the reassuring measurement in
@@ -26,13 +45,16 @@ c.juniorReserved = mustAdd(c.juniorReserved, want)
 
 The junior pool is `reservoirR() = cumAccrual − reservedTail − juniorReserved`, floored at
 zero (emission.gno:140-150). `comp` is enqueued as a **senior** entitlement
-(`enqueueSenior`, emission.gno:157-183), so **every comp ever paid permanently and
-irreversibly shrinks the reservoir for every later claim in that court.**
+(`enqueueSenior`, emission.gno:157-183), so **every comp ever paid pushes the cursor ahead of
+the junior pool until accrual catches up** — a drought whose length is the comp divided by the
+budget. *(This sentence originally read "permanently and irreversibly shrinks the reservoir for
+every later claim"; that was wrong, because `cumAccrual` is unbounded. See §11.8.)*
 
 And `comp` is unbounded relative to the court's emission budget.
-`compAmount = min(2×ownBond, 80%×burned)` (dispute.gno:370-381) — with a 50% answer bond
-both arms land at **40%·X̄**. Measured, 300,000 CC court with `curPeriodBudget` = 1,132
-CC/week:
+`compAmount = min(2×ownBond, 80%×burned)` (dispute.gno:370-381) — and the two arms are
+**exactly equal by construction**, since `2 × disputeBondOfAnswerBps = compOfBurnBps`
+(2×4000 = 8000), so both land at **40%·X̄** at a 50% answer bond. Measured, 300,000 CC court
+with `curPeriodBudget` = 1,132 CC/week:
 
 ```
 reservedTail   0 → 12,001,200,000     (ONE overturn round)
@@ -58,19 +80,44 @@ same tier (mid, correctly restored), zero payout, because comp had eaten the res
 overturn actually pays depends on the claim's size relative to its court, and the dependence
 is a cliff, not a slope.
 
-### Fix direction
+### Fix direction — SUPERSEDED
 
-Cap comp against the court's own budget — `min(comp, k·curPeriodBudget)` — and decide
+**The cap below must not ship.** `GAMETHEORY.md` §11.8 measured it: capping comp strands
+**73% of a prevailing challenger's compensation** (8,757 of 11,999 CC simply vanishes — there is
+one `enqueueSenior` per disposition, the round's bonds are zeroed on the same tally, and nothing
+queues or expires), and it moves the challenger's break-even overturn probability from **20% to
+46.7%**. The senior lane otherwise **pays in full, time-delayed, never scaled** — so capping is
+the *only* thing that would strand anyone. Worse, the two constraints on the constant are
+**mutually exclusive** above X̄/S ≈ 2.85%, and the cliff moves with court age (3.77% of supply at
+week 1 → 0.95% at week 208), so any fixed constant drives comp → 0 asymptotically.
+
+> **The real fix: make the junior draw DELAYED rather than SCALED.** `reserveJunior` reserves
+> the full `want` on the accrual line and the pulls become partially payable as coverage
+> arrives, exactly as `PullSenior` already works. That satisfies both "the claim must eventually
+> mint the prize it should have minted" *and* the challenger's 2:1 premium, which the cap could
+> not do together — and it removes the timing attack entirely, because no crystallize moment is
+> worse than another.
+>
+> **Cheap interim:** refuse `Crystallize` while `reservoirR() < want` and the senior queue still
+> has unpaid mass. Needs a deadline so a griefer cannot block forever, and it withholds the
+> author's deposit and fee during the wait.
+>
+> **Also fix the flag bounty** — same defect at 1/5 the magnitude (6 weeks of drought at 30% of
+> supply), uncapped, and it can co-occur with a comp on the same claim.
+
+~~Cap comp against the court's own budget — `min(comp, k·curPeriodBudget)`~~ — and decide
 whether `reservedTail` should be reclaimable at all once an entitlement is fully pulled.
-The monotonicity looks deliberate (it is what keeps seniors and juniors tiling a disjoint
-number line, per the long comment at emission.gno:162-170), so the cap is the safer lever;
-touching monotonicity risks the M3-CRITICAL-1 overlap that comment exists to prevent.
+**It should not**, and for a sharper reason than the M3-CRITICAL-1 overlap I originally cited:
+**M:** the accrual line is *exactly tiled* (`cumAccrual − emittedTotal − R = 0.000000`), so
+reclaiming a fully-paid tail hands the junior lane coin **already minted to the senior** — a
+75.7% overshoot of the emission ceiling, i.e. a straight double-spend. And there is nothing to
+reclaim anyway: once `cumAccrual` passes `reservedTail` the offset costs the reservoir nothing.
 
-**Note the interaction with item 1c, which is the strongest argument in this file:** comp
-scales with the answer bond. At 450 bps the same comp is ~0.95 weeks of budget instead of
-10 — an **11.1× improvement** — so cutting the oversized bond fixes most of this for free.
-This is the fourth independent argument against 50%, and the only one that needs no attacker
-at all.
+**The interaction with item 1c is much weaker than stated here.** That "**11.1× improvement**"
+is the **450 bps** figure with the collateralization floor *inert*. At the 600 bps actually
+proposed it is 8.33× inert, and **with the floor binding — the large-draw regime, i.e. the one
+that matters — it is 1.78×** (**M:** comp 22.4%·X̄). So cutting the bond does **not** fix most of
+this for free, and this item is *more* necessary than the original text implied, not less.
 
 ---
 
@@ -132,10 +179,20 @@ From the staged-copy run (`zz_measure_test.gno`, shadow root — full kourtv2 su
 | `escrowMinBlocks` | rounds that fit | `provClose` |
 |---|---|---|
 | 120_960 (**default**) | 2 | **false** — `provisional` = the answer |
-| 120_961 | 2 | false |
+| 120_961 | 2 → **3** | false → **true** |
 | 120_962 | 3 | true |
 
-So the threshold is `votingBlocks + 2`, and the default misses it by two blocks.
+> **CORRECTED — `GAMETHEORY.md` §12.10.** The threshold is **`votingBlocks + 1`**, not `+2`,
+> so the default misses it by **one** block. My 120_961 row was a **fixture artifact**: both my
+> fixture and the shipped idiom resolve at `SkipHeights(votingBlocks + 1)`, but the *earliest
+> legal* resolution is `+votingBlocks`, since the governor closes at `opened + VotingBlocks`.
+> A later audit pinned the window directly and measured 120_961 → 3 rounds.
+>
+> **Consequence for the fix:** the deploy invariant proposed below is **over-strong by a full
+> `votingBlocks`**. The real requirement is `W > votingBlocks·(maxFailedRounds − 2)` — 120_961
+> blocks (~7 days), not 241_921 (14 days). And raising `escrowMinBlocks` at all is now the
+> **rejected** lever, because it taxes an honest *disputed* claim from 14 to 21 days of frozen
+> winning-side principal. Use the defaulted-verdict-only window in §12.10 instead.
 
 Cost to the honest side, same run: the disputer burned **210.000000 CC** across two failed
 rounds (half of each of two doubling bonds) on a claim with `xBarFrozen ≈ 700 CC`, and the
@@ -205,17 +262,37 @@ the claim actually being that big:
 if fivePct := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps); fivePct > floor && xbar >= fivePct {
 ```
 
-Floor becomes exactly X̄ at every claim size; the robbed pool clears it alone in all five
-sweep rows; **the entire existing suite passes unmodified (ok . 7.53s)**.
+Floor becomes exactly X̄ at every claim size; **the entire existing suite passes unmodified
+(ok . 7.53s)**, confirmed twice.
 
-The trade, stated honestly: it lowers the weight needed for a *malicious* overturn of a
-small claim from 5%·S to ~X̄/2 (~10× on a claim at 1% of supply). Not free — the attacker's
-bond burns on an uphold and the answerer is comped 2× — and a whale at 5%·S can already do
-it today, so the relaxation extends the capability to small honest *and* small malicious
-coalitions symmetrically. Since the snipe is currently **free** while a false overturn costs
-a bond, the trade favours relaxing it. But verify `qualityBars` (quality.gno:231-275) and
-`mustElectionInvariants` first — they carry the same shape and were **not** tested against
-this patch.
+> **THREE CORRECTIONS — `GAMETHEORY.md` §12 and the C2 audit.**
+>
+> 1. **"The robbed pool clears it alone" is unreachable by construction.** `VoteDispute`
+>    refuses every *participant*, and a staker record persists across withdrawal — **M:** a
+>    victim holding **100% of the robbed pool** is refused outright. The quorum can only ever
+>    be met by **non-participant** weight. Victims can *fund* a defence and never *vote* one.
+>    (Independently confirmed by the COVID scenario, whose first draft the node rejected for
+>    exactly this — see `scenarios/covid.py`.)
+> 2. **The relaxation is 5.01×, not ~10×, and the landing point is X̄, not X̄/2.** **M:** at 1%
+>    of supply the floor goes 2000.000000 → 399.000000 CC. An attacker voting `yes` unopposed
+>    needs `cast ≥ floor = X̄`. I overstated my own trade by 2×.
+> 3. **"The attacker's bond burns on an uphold" mis-prices the trade — it is not a gamble.**
+>    With `yes > 0, no = 0` the threshold is trivially met, and an uphold requires an opponent
+>    to turn out, which is this item's own premise. **M:** an attacker holding **1.25% of
+>    supply** flips a true answer to an overturn with a cash swing of **−39.90 → +159.60 CC**,
+>    bond returned whole, comp minted, the honest answerer's bond burned. Profit per unit of
+>    required weight is a flat 0.4 at every claim size and repeats on every claim.
+>
+> **The trade still favours relaxing** — the snipe it fixes is currently *free* — but it is
+> bigger than stated. **And the patch must ship with a second change:** it silently re-keys the
+> credential bar (`yes >= floor/4`, dispute.gno:321) from a documented ~1.25% of supply to X̄/4,
+> a 5.01× cut. **M:** two socks totalling 1.125% of supply mint an `AnswerRecord`; three such
+> points buy the 24h answer-priority window. Re-anchor that bar to supply.
+>
+> **Also:** delete the arm rather than gate it (the gated form makes both `:580-582` and the
+> `:607-609` clamp provably dead, 88/88 rows), and **`mustElectionInvariants` cannot be reached
+> by this clause at all** — `electionFloor` is 5% of *votable* with no X̄ arm. `qualityBars`
+> needs no change either, though the two lanes then genuinely disagree in the band this fixes.
 
 Knife edge: even patched, `floor = X̄` and a fully-staked pool's weight is `X̄ − ε`, so it
 falls short by exactly the sniper's dust. One abstain from anyone fixes it (`cast = yes+no+
