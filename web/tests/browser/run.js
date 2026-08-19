@@ -13,6 +13,13 @@
 //                        BELOW the sidebar (main.left=0, main.top=900) on every
 //                        route. Reading the CSS did not catch it; measuring did.
 //
+//   embed_layout.js    — measures the embed routes at exactly the sizes the
+//                        share snippet offers (400x400, 400x240, and 320 wide).
+//                        An embed's whole promise is that it FITS inside someone
+//                        else's page: no scrollbar, no chrome, and a ?theme= that
+//                        really repaints. All four are layout facts, invisible to
+//                        a source-reading harness.
+//
 //   render_snapshot.js — captures the rendered text of 13 demo routes. Used to
 //                        prove a refactor changes nothing: capture, refactor,
 //                        capture, diff. It is how the DEMO split was shown to
@@ -33,7 +40,7 @@ try {
 
 // Only the pass/fail checks run here. render_snapshot.js is a TOOL: it prints a
 // snapshot rather than asserting, so running it in a gate would prove nothing.
-const CHECKS = ["banner_layout.js"];
+const CHECKS = ["banner_layout.js", "embed_layout.js"];
 let failed = 0;
 for (const f of CHECKS) {
   const p = path.join(__dirname, f);

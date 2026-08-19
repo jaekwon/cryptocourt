@@ -109,3 +109,55 @@ alone serves it**.
    realm's functions are crossing (`func F(cur realm, …)`), so gnoweb injects `cur` and the
    links carry only the ordinary arguments. `Buy` needs a GNOT `-send`, which the user
    attaches in the gnoweb help form.
+
+## Sharing: the embed, the card, and the one thing this file cannot do
+
+Polymarket's market pages travel two ways: an `<iframe>` served from a separate
+embed host (`?market=…&theme=…`, 400×400, a live number updating inside someone
+else's article), and a link preview whose image is a picture of *that* market.
+Kourt has equivalents of both, and one of them is honestly different.
+
+**The embed is a route, not a host.** `#/embed/<court>` and `#/embed/<court>/<id>`
+render the same data as the full page with the chrome removed. Because it is the
+same file, an embed reads the chain in live mode and the sample offline exactly
+as every other screen does — there is no second deployment to keep in step, and
+nothing about the embed can drift from the page it quotes. `?theme=light|dark`
+pins it to the host page's palette (an iframe cannot see the theme around it);
+with no `theme` it follows the reader's own. Links inside an embed carry
+`?from=embed` and open the top window, the same signal Polymarket gets from
+`utm_medium=embed`.
+
+The snippet's default sizes are **measured, not copied**: 400×340 for a claim
+and 400×180 for a court. Polymarket's 400×400 is square because their card holds
+a price chart; ours holds a sentence and a stake bar, and 400 tall left 120px of
+dead space. Every card in the sample was measured at 320px wide — the narrowest
+column an article gives a `max-width:100%` iframe — where the tallest claim came
+to 325px and the tallest court to 153px. The claim title is clamped to four
+lines so the dominant term is bounded rather than open-ended; the worst case is
+pinned in `web/tests/browser/embed_layout.js`, so a claim that beats it fails a
+gate instead of quietly growing a scrollbar in somebody's article.
+
+**The share card is drawn in the browser, and this is the real difference.** A
+link preview is minted by a server: the crawler asks for the URL, the server
+renders that market and returns a PNG. This page has no server, and a crawler
+never runs its JavaScript — so `#/c/orem/1` and `#/` are the *same document* to
+every unfurler. That means:
+
+- The `og:`/`twitter:` tags here are **site-level and truthful**. They describe
+  Kourt, not the claim being linked.
+- There is **no `og:image`**. A `data:` URI is ignored by every major crawler,
+  and a fixed hosted image would show a picture of a claim that is not the one
+  being shared. Faking a per-claim preview is the one thing this file must not
+  do.
+- Instead, **share → Download PNG** draws the actual claim — title, stake split,
+  status — onto a 1200×630 canvas, the size every unfurler crops to. The sharer
+  attaches it. The picture is of the real claim because it was drawn from the
+  real claim.
+
+**What a server would have to do** to get automatic per-claim previews, if one
+is ever put in front of this file: answer crawler requests for `/c/<court>/<id>`
+(a real path, not a `#` fragment — fragments are never sent to the server) with
+the same HTML plus `og:title` set to the claim's verbatim title, `og:description`
+to its status line, and `og:image` pointing at a render of that claim. The
+drawing code is already here and already the right size; only the fragment→path
+routing and the render endpoint would be new.

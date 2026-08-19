@@ -4,6 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kourt — the ledger of record</title>
+<meta name="description" content="A court of record for factual claims. Anyone may state a claim; stake decides which claims get answered; the answer and its route are kept on-chain.">
+<!-- Link previews, and the honest limit of them.
+     These are SITE-level and deliberately so. A crawler fetching a URL is served
+     this one file and never runs its JavaScript, so #/c/orem/1 and #/ are the
+     same document to it — a per-claim og:title is not something a hash-routed
+     static page can express, and faking one would show every claim the same
+     preview. There is no og:image for the same reason: a data: URI is ignored by
+     every major crawler, and a fixed hosted image would be a picture of a claim
+     that is not the one being shared. The share panel's downloadable card is the
+     answer instead: the sharer attaches a picture of the actual claim, which is
+     what Polymarket's per-market card achieves through a server this page does
+     not have. web/README.md records what a server would need to do. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kourt">
+<meta property="og:title" content="Kourt — the ledger of record">
+<meta property="og:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kourt — the ledger of record">
+<meta name="twitter:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <style>
 /* ============================================================================
@@ -223,6 +242,56 @@ a.card:hover{border-color:var(--line-2)}
 
 /* stake panel + ratio series */
 .stakewrap{display:grid; grid-template-columns:1.3fr 1fr; gap:16px}
+/* ---- embed mode -------------------------------------------------------
+   Polymarket serves embeds from a separate host (embed.polymarket.com/market
+   ?market=<slug>&theme=&features=) at a default 400x400 in a <figure>. This
+   page cannot do that: web/README.md promises one self-contained file that runs
+   from file:// and makes no network calls in demo mode, so there is no second
+   host to serve. The equivalent is a ROUTE — #/embed/<slug>/<id> — which the
+   same file answers, so an embed needs no infrastructure at all and a reader
+   who saves the file keeps working embeds.
+   The chrome goes away: an iframe has no room for a sidebar, and a nav inside
+   someone else's article is a trap rather than a courtesy. */
+html.embed, html.embed body{margin:0; padding:0; background:var(--paper)}
+html.embed body{display:block; min-height:0}
+html.embed .rail, html.embed #nav{display:none !important}
+/* The page banner is a paragraph; an embed is a fixed box. It would overflow,
+   so the card carries the short form (.esrc) and this stays out of the way. */
+html.embed #tcbanner{display:none !important}
+html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0}
+html.embed #tcbanner{grid-column:1; padding:0}
+.emb{display:flex; flex-direction:column; gap:9px; padding:14px 15px;
+  border:1px solid var(--line); border-radius:var(--r); background:var(--surface);
+  min-height:calc(100vh - 2px); box-sizing:border-box}
+/* NOWRAP, not wrap. A court name is whatever its creator typed; wrapping turned
+   a one-line head into three and pushed the card 9px past the iframe it was
+   sized for — a scrollbar in somebody else's article. One line, and the name is
+   the part that gives way. */
+.emb .ehead{display:flex; align-items:baseline; gap:8px; flex-wrap:nowrap; overflow:hidden;
+  font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted)}
+.emb .ehead .ename{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+.emb .ehead span:not(.ename){flex:0 0 auto}
+/* Four lines, then the browser's own ellipsis. An embed is a FIXED box on
+   someone else's page — it cannot grow to fit, so an unbounded title either
+   overflows into a scrollbar or forces every card to be sized for the longest
+   claim anyone might ever file. Clamping bounds the card, and the ellipsis is
+   what keeps it honest: a cut sentence is MARKED as cut, and "Open on Kourt"
+   is on the same card. The share clip does the same thing for the same reason. */
+.emb .etitle{font-family:var(--serif,inherit); font-size:17px; line-height:1.3; color:var(--ink);
+  font-weight:600; margin:0; display:-webkit-box; -webkit-line-clamp:4;
+  -webkit-box-orient:vertical; overflow:hidden}
+.emb .estat{font-size:12.5px; color:var(--ink-2)}
+.emb .efoot{margin-top:auto; display:flex; justify-content:space-between; align-items:baseline;
+  gap:10px; font-size:11.5px}
+.emb .efoot a{color:var(--accent-2); text-decoration:none; font-weight:600}
+.emb .efoot a:hover{text-decoration:underline}
+.emb .ewhen{font-family:var(--mono); font-size:10.5px; color:var(--muted)}
+/* --escrow is already this page's "provisional / not the real thing" colour —
+   it is what paints the demo dot in the rail — so the note reads the same way
+   in both themes without a new token. */
+.emb .esrc{font-family:var(--mono); font-size:10px; letter-spacing:.04em; line-height:1.35;
+  color:var(--escrow); background:var(--escrow-wash); border:1px solid var(--escrow);
+  border-radius:var(--r-sm); padding:3px 6px; align-self:flex-start; max-width:100%}
 /* The stake split — full chart width, so the proportion is read rather than computed. */
 .sbar{display:flex; width:100%; height:14px; margin:12px 0 0; border-radius:var(--r);
   overflow:hidden; border:1px solid var(--line)}
@@ -456,11 +525,19 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .clitog,.copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
   border:1px solid var(--line-2); border-radius:var(--r); padding:3px 7px; align-self:center}
 .clitog:hover,.copybtn:hover{color:var(--accent-2); border-color:var(--accent-2)}
+/* Three theme buttons with no pressed state left the reader guessing which one
+   built the snippet on screen. aria-pressed carries it to a screen reader. */
+.copybtn[aria-pressed=true]{color:var(--accent-2); border-color:var(--accent-2);
+  background:var(--accent-wash)}
 .copybtn{margin-top:5px}
 .cliblock{flex-basis:100%; background:var(--inset); border:1px solid var(--line-2);
   border-radius:var(--r-sm); padding:10px 12px; font-size:11.5px; line-height:1.5;
   white-space:pre; overflow-x:auto; cursor:copy; margin-top:6px; min-width:0; max-width:min(640px,100%)}
 .cliblock.copied{outline:2px solid var(--good)}
+#share-dlg .cliblock{white-space:pre-wrap; word-break:break-all; max-width:100%}
+#share-dlg h4{margin:14px 0 2px}
+#share-dlg h4 .hint{font-weight:400; font-size:10.5px; letter-spacing:.06em;
+  font-family:var(--mono); color:var(--muted); margin-left:8px; text-transform:none}
 .signbtn{font-size:11.5px; color:var(--accent-2); border:1px solid var(--accent);
   border-radius:var(--r); padding:3px 8px; align-self:center; background:var(--accent-wash)}
 .signbtn:hover{filter:brightness(1.05)}
@@ -1294,11 +1371,25 @@ let QP = {};
    warning that blinks out on navigation is worse than none. Cached per RPC
    endpoint, so it costs one query per node and not one per page.
    Demo mode never shows it — nothing there claims to be a chain. */
-let TCFAB = null, TCFAB_FOR = null;
-async function testClockState(){
-  if(!isLive()) return null;
-  if(TCFAB_FOR===CFG.rpc) return TCFAB;
+/* CACHE THE PROMISE, NOT JUST THE RESULT.
+   This used to publish the cache KEY (TCFAB_FOR) and a null value before doing
+   the reads, so any second caller arriving while the first was still awaiting
+   the chain got the placeholder — null, meaning "no test clock" — and believed
+   it. That was unreachable while the banner was the only caller. It became
+   reachable the moment an embed asked the same question: render() fires
+   paintTestClockBanner() without awaiting it and then runs the route, so the
+   route's sourceNote() lands squarely inside the banner's in-flight read.
+   Found on a real seeded chain, where the embed card showed no disclosure at all
+   while the clip drawn a second later showed it correctly. Demo mode returns
+   before touching this, so nothing offline could have caught it. */
+let TCFAB = null, TCFAB_FOR = null, TCFAB_P = null;
+function testClockState(){
+  if(!isLive()) return Promise.resolve(null);
+  if(TCFAB_FOR===CFG.rpc && TCFAB_P) return TCFAB_P;
   TCFAB_FOR = CFG.rpc; TCFAB = null;
+  return TCFAB_P = tcRead();
+}
+async function tcRead(){
   try{
     const fab = await one("TestClockFabricated()");
     if(fab!==true) return TCFAB=null;
@@ -1318,6 +1409,23 @@ async function testClockState(){
     // a node without the entrypoint never had a test clock to arm.
     return TCFAB=null;
   }
+}
+/* WHERE AN EMBED'S NUMBERS COME FROM, in one short line.
+   The full banner is a paragraph. It is the right size for a page and the wrong
+   size for a 400x340 card pasted into somebody's article — measured, it ate the
+   top third and pushed the card's only exit link below the fold. So an embed
+   suppresses the banner (see `html.embed #tcbanner`) and carries THIS instead.
+   It also covers a case the banner never did: DEMO mode. Demo is the default
+   for any reader who has never opened this page, so an embed's default state is
+   invented courts with invented stakes — and the one element that admitted it
+   ("Demo data", in the rail) is display:none in an embed. A card that travels
+   to other people's websites has to say what it is. Returns null only for the
+   one honest case: a live node whose clock was never faked. */
+async function sourceNote(){
+  if(!isLive()) return "sample data — these courts exist on no chain";
+  const st = await testClockState();
+  if(st) return "test chain — the dates here were set by hand";
+  return null;
 }
 async function paintTestClockBanner(){
   const el = document.getElementById("tcbanner");
@@ -1348,6 +1456,7 @@ async function render(){
     const eq=kv.indexOf("="); const k=eq<0?kv:kv.slice(0,eq);
     if(k){ try{ QP[k]=decodeURIComponent(eq<0?"":kv.slice(eq+1)); }catch(_){ QP[k]=""; } } }
   setNav(hash);
+  embedMark(hash);
   for(const [re,fn] of routes){
     const m = hash.match(re);
     if(m){ try{ await fn(...m.slice(1)); }catch(e){ errorView(e); }
@@ -1386,6 +1495,93 @@ document.addEventListener("click", ev=>{
   if(close){ close.closest("dialog").close(); return; }
   if(ev.target.matches("dialog.helper")) ev.target.close(); // the backdrop is the dialog itself
 });
+/* Share panel: theme switch, copy, and the clip. Delegated like every other
+   handler here, because the dialog is re-rendered with each claim. */
+/* Copy the way the CLI blocks above already do it. The Clipboard API needs a
+   SECURE CONTEXT: served over plain http:// from anything but localhost —
+   which "host index.html on any static host" invites — navigator.clipboard is
+   undefined outright. The first version of this handler was `if(clipboard)
+   … .catch(()=>{})`, so on such a host the block did nothing at all: no copy,
+   no message, and a cursor:copy still promising otherwise. Selecting the text
+   and saying so is the fallback the rest of this file uses. */
+function copyBlock(pre, btn){
+  const say = m => { if(btn){ const o = btn.dataset.label || btn.textContent; btn.dataset.label = o;
+    btn.textContent = m; setTimeout(()=>{ btn.textContent = btn.dataset.label || "Copy"; }, 2200); } };
+  const select = ()=>{
+    const r = document.createRange(); r.selectNodeContents(pre);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    say("Selected — press Ctrl/⌘-C");
+  };
+  const done = ()=>{ pre.classList.add("copied"); setTimeout(()=>pre.classList.remove("copied"), 900);
+    say("Copied ✓"); };
+  if(!navigator.clipboard){ select(); return; }
+  navigator.clipboard.writeText(pre.textContent).then(done).catch(select);
+}
+
+document.addEventListener("click", async ev=>{
+  const th = ev.target.closest("[data-embtheme]");
+  if(th){
+    const m = location.hash.match(/^#\/c\/([a-z0-9-]+)(?:\/(\d+))?/);
+    if(m){
+      const snip = document.getElementById("emb-snip");
+      if(snip) snip.textContent = embedSnippet(m[1], m[2] ? parseInt(m[2],10) : null,
+                                               {theme: th.getAttribute("data-embtheme") || null});
+    }
+    // Which of the three built what is on screen. Three identical buttons and a
+    // changed snippet left that to be inferred.
+    for(const b of document.querySelectorAll("[data-embtheme]"))
+      b.setAttribute("aria-pressed", String(b === th));
+    return;
+  }
+  // The keyboard path. A <pre> takes no focus, so click-to-copy alone made the
+  // link and the snippet mouse-only — the same defect this project already
+  // caught once in the helper-modal triggers.
+  const cbtn = ev.target.closest("[data-copyfor]");
+  if(cbtn){
+    const t = document.getElementById(cbtn.getAttribute("data-copyfor"));
+    if(t) copyBlock(t, cbtn);
+    return;
+  }
+  const pre = ev.target.closest("pre[data-copytext]");
+  if(pre){
+    copyBlock(pre, document.querySelector('[data-copyfor="' + pre.id + '"]'));
+    return;
+  }
+  const clip = ev.target.closest("[data-clip]");
+  if(!clip) return;
+  const say = document.getElementById("clip-say");
+  const m = location.hash.match(/^#\/c\/([a-z0-9-]+)(?:\/(\d+))?/);
+  if(!m) return;
+  const slug = m[1], id = m[2] ? parseInt(m[2],10) : null;
+  try{
+    const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
+                                             id == null ? Promise.resolve(null) : claimDetail(slug, id),
+                                             sourceNote()]);
+    const dark = getComputedStyle(document.body).backgroundColor.match(/^rgb\((\d+)/);
+    const isDark = dark && parseInt(dark[1],10) < 128;
+    const url = shareIsPublic() ? shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id) : null;
+    const cv = drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url);
+    const name = "kourt-" + slug + (id == null ? "" : "-" + id) + ".png";
+    if(clip.getAttribute("data-clip") === "download"){
+      const a = document.createElement("a");
+      a.download = name; a.href = cv.toDataURL("image/png"); a.click();
+      if(say) say.textContent = "saved " + name;
+      return;
+    }
+    // Copying an image needs a Blob and a permission the browser may refuse;
+    // say which happened rather than failing silently.
+    if(!navigator.clipboard || !window.ClipboardItem){
+      if(say) say.textContent = "this browser cannot copy images — use Download"; return;
+    }
+    cv.toBlob(async blob=>{
+      try{
+        await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+        if(say) say.textContent = "copied to clipboard";
+      }catch(e){ if(say) say.textContent = "the browser refused the clipboard — use Download"; }
+    }, "image/png");
+  }catch(e){ if(say) say.textContent = "could not build the image"; }
+});
+
 document.addEventListener("click", ev=>{
   const b = ev.target.closest("[data-introdismiss]"); if(!b) return;
   store.set("cc.intro","1");
@@ -3058,7 +3254,9 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="small" href="#/c/${esc(slug)}/map?focus=${id}" style="color:var(--accent-2)">on the map →</a> ` : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
-    + `<div class="tagrow">${verdictBanner(d)} ${openedBy}${seededSpan}${chip}${mapLink}<a class="small" href="#/raw/${esc(slug)}/${id}" style="color:var(--accent-2)">as the chain serves it →</a></div>`
+    + `<div class="tagrow">${verdictBanner(d)} ${openedBy}${seededSpan}${chip}${mapLink}<a class="small" href="#/raw/${esc(slug)}/${id}" style="color:var(--accent-2)">as the chain serves it →</a>
+        <button type="button" class="helplink" data-help="share-dlg">share ↗</button></div>`
+    + shareDialog(slug, id, d, cs ? cs.name : slug)
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">
@@ -3992,6 +4190,314 @@ on(/^\/raw\/([a-z0-9-]+)(?:\/(\d+|mod))?$/, async (slug,id)=>{
 });
 
 /* --- how it works --- */
+/* ================================= share ================================ */
+/* Polymarket puts a `< >` on every market: pick light or dark, copy an iframe,
+   paste it into a CMS, and it keeps updating in the article, which is what makes
+   it travel. Two things are copied here and one is not. Their word for the
+   number is "odds"; ours is the stake split, and the difference is not cosmetic
+   — see web/README.md's interface contract and REGULATIONS.md.
+
+   THE IFRAME is the same idea and needs no second host — see the embed routes
+   below. The snippet is absolute so it survives being pasted somewhere else,
+   and it is built from THIS page's own location, so a court served from a LAN
+   box or a file:// copy produces a snippet that points at the same source the
+   reader is actually looking at rather than at a canonical host that may not
+   be serving this chain.
+
+   THE CLIP is a PNG drawn in the browser. A prediction site generates share
+   images server-side, per market, on demand; this page has no server and never
+   will, so it draws the card on a canvas and hands it over. It downloads and,
+   where the browser allows it, goes straight to the clipboard.
+
+   WHAT IS NOT COPIED: a per-claim link preview. Those are og:image and
+   og:title, read by a crawler that does not run JavaScript, from a URL whose
+   #fragment is never sent to a server. A hash-routed single file cannot have
+   them for the same reason it needs no host. Stated here rather than
+   half-built, with what it would take written down in web/README.md. */
+
+function shareDialog(slug, id, d, courtName){
+  const link = shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id);
+  return `<dialog class="helper" id="share-dlg" aria-labelledby="share-h">
+    <div class="hd"><h3 id="share-h">Share this ${id == null ? "court" : "claim"}</h3>
+      <button class="pill void" data-close>close</button></div>
+    <div class="bd">
+      ${shareIsPublic() ? "" : `<p class="small" style="margin:0 0 8px; color:var(--escrow)">This page is
+        open from a local file, so the link and the embed below only work on this machine, and the image
+        leaves its address off. Host <code>index.html</code> somewhere first if you mean to share it.</p>`}
+      <h4>Link</h4>
+      <pre class="cliblock mono" data-copytext id="share-link">${esc(link)}</pre>
+      <button type="button" class="copybtn" data-copyfor="share-link" aria-live="polite">Copy</button>
+      <h4>Embed</h4>
+      <p class="small muted" style="margin:0 0 6px">The stake split stays current, updating in place. Pick the
+        theme to match the page you are pasting into — an iframe cannot see it.</p>
+      <div class="actions" style="margin:0 0 8px">
+        <button type="button" class="copybtn" data-embtheme="" aria-pressed="true">reader's theme</button>
+        <button type="button" class="copybtn" data-embtheme="light" aria-pressed="false">light</button>
+        <button type="button" class="copybtn" data-embtheme="dark" aria-pressed="false">dark</button>
+      </div>
+      <pre class="cliblock mono" id="emb-snip" data-copytext>${esc(embedSnippet(slug, id, {}))}</pre>
+      <button type="button" class="copybtn" data-copyfor="emb-snip" aria-live="polite">Copy</button>
+      <h4>Image</h4>
+      <p class="small muted" style="margin:0 0 6px">A 1200×630 PNG, drawn here in your browser — this page
+        has no server to generate one.</p>
+      <div class="actions">
+        <button type="button" class="copybtn" data-clip="download">Download PNG</button>
+        <button type="button" class="copybtn" data-clip="copy">Copy image</button>
+        <span class="small muted" id="clip-say" aria-live="polite"></span>
+      </div>
+    </div></dialog>`;
+}
+
+function shareURLBase(){
+  // Absolute, and derived from where this page actually is.
+  return location.href.replace(/#.*$/, "").replace(/\?.*$/, "");
+}
+/* Is this copy of the page at an address anyone else could open?
+   web/README.md invites running from file://, and there shareURLBase() is a path
+   inside somebody's home directory. That is not merely useless to a reader — the
+   clip DRAWS its address, so a card shared from a local file published the
+   sharer's username and directory layout in a PNG. A PNG cannot be recalled.
+   Nothing outside http(s) gets an address. */
+function shareIsPublic(){ return /^https?:$/.test(location.protocol); }
+function embedSnippet(slug, id, opts){
+  const o = opts || {};
+  const q = o.theme ? "?theme=" + o.theme : "";
+  const path = (id == null) ? ("/embed/" + slug) : ("/embed/" + slug + "/" + id);
+  const src = shareURLBase() + "#" + path + q;
+  // MEASURED, not copied, and measured WITH the disclosure line showing. The
+  // first version of these numbers came from demo mode with nothing to disclose
+  // and no test-clock banner — which is exactly the state that cannot overflow,
+  // so they were 40px short of every card a reader would actually see. Now:
+  // every card in the sample, at 320px wide (the narrowest column an article
+  // gives a max-width:100% iframe), carrying .esrc — tallest claim 369px,
+  // tallest court 197px. The title is line-clamped so the dominant term is
+  // bounded; ../tests/browser/embed_layout.js pins both worst cases.
+  //
+  // A live chain with an honest clock has nothing to disclose and so runs ~40px
+  // short of these. That is the price of a fixed box: size for the card that
+  // says the most, not the least.
+  const w = o.w || 400, h = o.h || (id == null ? 210 : 380);
+  return `<iframe src="${src}" width="${w}" height="${h}" frameborder="0" `
+       + `title="Kourt — ${id == null ? slug : slug + " #" + id}" `
+       + `style="border:1px solid #ddd;border-radius:6px;max-width:100%"></iframe>`;
+}
+
+/* The clip. 1200x630 is the size every link unfurler crops to, so a reader who
+   drops the PNG into a post gets the same framing they would have got from a
+   generated preview — the one thing a serverless page cannot mint for itself. */
+function drawClip(slug, id, d, courtName, theme, note, url){
+  const W = 1200, H = 630, cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const x = cv.getContext("2d");
+  const dark = theme === "dark";
+  const ink = dark ? "#e8eaf0" : "#14171f", mut = dark ? "#8a90a0" : "#6b7280";
+  const yes = dark ? "#6fc0a5" : "#1c6551", no = dark ? "#e08b7c" : "#93362b";
+  const warn = dark ? "#d7b264" : "#7d5c0f";
+  x.fillStyle = dark ? "#12151b" : "#ffffff"; x.fillRect(0, 0, W, H);
+  x.fillStyle = dark ? "#1b1f27" : "#f7f8fa"; x.fillRect(0, 0, W, 96);
+  x.fillStyle = mut; x.font = "500 26px ui-monospace,Menlo,monospace";
+  /* A COURT NAME IS CHOSEN BY WHOEVER CREATED THE COURT, so it is as unbounded
+     as the claim title and needs the same treatment — which the first version of
+     this function gave the title only. Measured, a 68-character name ran the
+     identity line to 1606px on a 1200px canvas: 400px drawn off the edge, with
+     nothing to show it had happened.
+     The NAME is shaved rather than the whole line, because the coin symbol and
+     the claim number are the two things a reader needs to find the claim again.
+     A pathological SLUG can still outgrow the line on its own, so the composed
+     string gets a last-resort pass too. */
+  const idPart = (id == null ? "" : "   ·   #" + id);
+  const headOf = n => ccSym(slug) + "   ·   " + n + idPart;
+  let nm = String(courtName || slug);
+  if(x.measureText(headOf(nm)).width > W - 112){
+    while(nm.length > 4 && x.measureText(headOf(nm + "…")).width > W - 112) nm = nm.slice(0, -1);
+    nm += "…";
+  }
+  let head = headOf(nm);
+  while(head.length > 8 && x.measureText(head).width > W - 112) head = head.slice(0, -1);
+  x.fillText(head, 56, 60);
+  /* THE DISCLOSURE GETS ITS OWN BAND, directly under the identity line. A PNG
+     leaves with no banner, no rail and no URL bar, so a card drawn from the
+     offline sample or a hand-set clock has to say so on its own face — and at
+     the bottom in grey it is one crop away from gone.
+     It is a full-width strip rather than a right-aligned corner because the
+     corner does not fit: the identity line runs to ~710px with a long court
+     name, leaving under 400px, and a 43-character note needs ~570px. The first
+     version shaved the note down to "sample data — these", which discloses
+     nothing. A strip cannot collide with anything. */
+  if(note){
+    x.fillStyle = dark ? "#2e2512" : "#f0e6cd"; x.fillRect(0, 96, W, 48);
+    x.fillStyle = warn; x.font = "500 24px ui-monospace,Menlo,monospace";
+    let nt = note;
+    while(nt.length > 8 && x.measureText(nt).width > W - 112) nt = nt.replace(/\s*\S+$/, "");
+    x.fillText(nt, 56, 128);
+  }
+
+  // Title, wrapped by measurement rather than by a guessed character count.
+  // THE ELLIPSIS IS NOT COSMETIC. A claim is a sentence, and a sentence cut
+  // silently at the third line can assert something its author did not: drop
+  // ", according to a preliminary count" and what is left reads as flat fact.
+  // Three lines is what fits above the bar, so a longer title is MARKED as cut
+  // and the reader is sent to the claim for the rest.
+  x.fillStyle = ink; x.font = "600 52px ui-serif,Georgia,serif";
+  const fits = t => x.measureText(t).width <= W - 112;
+  // Shorten by CHARACTERS. A word-boundary shave cannot help a line that has no
+  // word boundary left, and a title may legitimately carry one: a docket number,
+  // a hash, a URL.
+  const shave = t => { let v = t; while(v.length > 1 && !fits(v + "…")) v = v.slice(0, -1); return v + "…"; };
+  const words = String(d && d.title || courtName || slug).split(/\s+/);
+  const lines = [];
+  let line = "";
+  for(const w of words){
+    const t = line ? line + " " + w : w;
+    if(!fits(t) && line){ lines.push(line); line = w; }
+    else line = t;
+  }
+  if(line) lines.push(line);
+  const MAXL = 3;
+  const cut = lines.length > MAXL;
+  let shown = lines.slice(0, MAXL);
+  // A single token wider than the card cannot be WRAPPED, only shortened — the
+  // loop above puts it on a line of its own and moves on. Without this a
+  // 120-character token is drawn straight off the edge of the PNG, and it is
+  // not the `cut` path that saves it: three lines is not "cut" at all.
+  shown = shown.map(l => fits(l) ? l : shave(l));
+  // And if the title ran past the lines available, mark the last one, dropping
+  // whole words first so the mark reads as a cut sentence rather than a cut word.
+  if(cut && !/…$/.test(shown[MAXL-1])){
+    let l = shown[MAXL-1];
+    while(/\s/.test(l) && !fits(l + "…")) l = l.replace(/\s*\S+$/, "");
+    shown[MAXL-1] = fits(l + "…") ? l + "…" : shave(l);
+  }
+  // The disclosure band ends at 144, so a title baseline of 190 puts the caps
+  // 8px off it and reads as crowded. There is dead space below to spend.
+  const titleY = note ? 214 : 190;
+  shown.forEach((l, i)=> x.fillText(l, 56, titleY + i * 64));
+
+  if(d && (d.yesStake || d.noStake)){
+    const tot = Math.max(1, (d.yesStake || 0) + (d.noStake || 0));
+    const py = (d.yesStake || 0) / tot, barY = 430, barH = 26;
+    x.fillStyle = yes; x.fillRect(56, barY, (W - 112) * py, barH);
+    x.fillStyle = no;  x.fillRect(56 + (W - 112) * py, barY, (W - 112) * (1 - py), barH);
+    x.font = "600 30px ui-sans-serif,system-ui,sans-serif";
+    x.fillStyle = yes; x.fillText("YES " + (py * 100).toFixed(1) + "%", 56, barY + 70);
+    const nt = "NO " + ((1 - py) * 100).toFixed(1) + "%";
+    x.fillStyle = no;  x.fillText(nt, W - 56 - x.measureText(nt).width, barY + 70);
+  }
+  x.fillStyle = mut; x.font = "400 24px ui-sans-serif,system-ui,sans-serif";
+  const status = (d && d.statusText) ? d.statusText : "a court of claims of fact";
+  const hasURL = url && /^https?:\/\//.test(String(url));
+  x.fillText(status.length > 78 ? status.slice(0, 77) + "…" : status, 56, H - (hasURL ? 92 : 52));
+  // Where to check it. A card with no address is an assertion; a card with one
+  // is a citation, and it is the only thing on the PNG a reader can follow.
+  // Guarded here as well as at the call site. The leak is one-way: once the card
+  // is posted the path is public, so this is worth checking twice.
+  if(url && /^https?:\/\//.test(String(url))){
+    x.font = "400 21px ui-monospace,Menlo,monospace";
+    let u = String(url).replace(/^https?:\/\//, "");
+    while(u.length > 12 && x.measureText(u).width > W - 112) u = u.slice(0, -2);
+    x.fillStyle = mut;
+    x.fillText(u, 56, H - 46);
+  }
+  return cv;
+}
+/* ================================ embeds ================================ */
+/* An embed is the same page answering a narrower question. It reads the chain
+   in live mode and the sample offline, exactly as every other route does, so a
+   court's stake split in someone else's article is as current as the court's own page.
+
+   THE THEME IS A PARAMETER, not inherited: an iframe cannot see the host page's
+   colours, so a dark article embedding a light card looks broken through no
+   fault of either. Polymarket's generator has the same switch for the same
+   reason. Absent, the reader's own preference stands.
+
+   NO CHAT POLLER and no wallet here. An embed is a quotation, not a console. */
+function embedTheme(){
+  const t = (QP.theme || "").toLowerCase();
+  return (t === "dark" || t === "light") ? t : null;
+}
+/* WHY THIS IS DRIVEN BY THE ROUTE AND NOT BY embedOpen().
+   embedOpen() used to only ADD the mark, and nothing ever took it off. An embed
+   URL is reachable in a top-level tab — "Open frame in new tab" is in the
+   default right-click menu of every iframe — and from there "Open on Kourt →"
+   navigates the SAME tab with target=_top. The reader then had the whole app
+   with no rail, no nav, and #tcbanner display:none: a navigation dead end and,
+   worse, a permanently suppressed test-clock disclosure. `?theme=` was sticky
+   the same way, pinning the app to the sharer's palette.
+   So the mark is recomputed from the hash on every render. */
+function embedMark(hash){
+  const on = /^\/embed\//.test(hash);
+  document.documentElement.classList.toggle("embed", on);
+  if(!on){ if(document.documentElement.dataset.embedTheme){
+      delete document.documentElement.dataset.embedTheme;
+      // Back to the READER's own choice, not to nothing: CFG.theme is what the
+      // rail's toggle writes, and clearing the attribute outright would drop it.
+      applyTheme(CFG.theme); }
+    return; }
+  const t = embedTheme();
+  if(t){ document.documentElement.dataset.embedTheme = "1";
+         document.documentElement.setAttribute("data-theme", t); }
+}
+function embedOpen(){ /* the views call this; the mark is set by the router */ }
+/* The link back carries where it came from, like Polymarket's
+   utm_medium=embed — an embed that cannot be told apart from direct traffic
+   tells the court nothing about who is quoting it. */
+function embedBackHref(path){ return "#" + path + "?from=embed"; }
+
+const esrc = note => note ? `<div class="esrc">${esc(note)}</div>` : "";
+
+async function embedClaimView(slug, idS){
+  embedOpen();
+  const id = parseInt(idS, 10);
+  const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
+                                           claimDetail(slug, id), sourceNote()]);
+  if(!d){
+    main.innerHTML = `<div class="emb"><p class="estat">No claim ${esc(slug)}/${esc(idS)} on this source.</p>
+      ${esrc(note)}
+      <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_top">Kourt →</a></div></div>`;
+    return;
+  }
+  const tl = parseTimeline(d.timeline);
+  const when = tl && tl.opened ? stampDate(tl.opened.t) : null;
+  main.innerHTML = `<div class="emb">
+      <div class="ehead"><span>${esc(ccSym(slug))}</span><span>·</span>
+        <span class="ename">${esc(cs ? cs.name : slug)}</span><span>·</span><span>#${id}</span></div>
+      <h3 class="etitle">${safeInline(d.title)}</h3>
+      ${stakeBar(d, slug)}
+      <div class="estat">${esc(d.statusText || "")}</div>
+      ${esrc(note)}
+      <div class="efoot">
+        <span class="ewhen">${when ? "filed " + esc(when) : ""}</span>
+        <a href="${embedBackHref("/c/" + slug + "/" + id)}" target="_top">Open on Kourt →</a>
+      </div>
+    </div>`;
+}
+
+async function embedCourtView(slug){
+  embedOpen();
+  const [cs, note] = await Promise.all([courtStats(slug).catch(()=>null), sourceNote()]);
+  if(!cs){
+    main.innerHTML = `<div class="emb"><p class="estat">No court /${esc(slug)} on this source.</p>
+      ${esrc(note)}
+      <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_top">Kourt →</a></div></div>`;
+    return;
+  }
+  main.innerHTML = `<div class="emb">
+      <div class="ehead"><span>${esc(ccSym(slug))}</span><span>·</span><span>court</span></div>
+      <h3 class="etitle">${safeInline(cs.name)}</h3>
+      <div class="estat">${fmtN(cs.claims || 0)} claim${(cs.claims === 1) ? "" : "s"} ·
+        ${esc(cc(cs.supply, slug))} in issue ·
+        ${esc(priceText(cs.price, cs.minted))} µGNOT/unit</div>
+      ${esrc(note)}
+      <div class="efoot">
+        <span class="ewhen">stake on claims of fact</span>
+        <a href="${embedBackHref("/c/" + slug)}" target="_top">Open on Kourt →</a>
+      </div>
+    </div>`;
+}
+
+on(/^\/embed\/([a-z0-9-]+)\/(\d+)$/, async (slug, id)=> embedClaimView(slug, id));
+on(/^\/embed\/([a-z0-9-]+)$/, async (slug)=> embedCourtView(slug));
+
 on(/^\/about$/, async ()=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"How it works"}])
     + `<h1 class="page-h">How a court works</h1>

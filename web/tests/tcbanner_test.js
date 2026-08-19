@@ -22,7 +22,8 @@ global.qeval = async expr => {
 let code = '';
 code += slice('function fmtN(', 'function ugnot(');
 code += slice('function parseTyped(', 'const gstr').replace(/const one =/,'var one =').replace(/const tup =/,'var tup =');
-code += slice('let TCFAB = null', 'async function render()');
+code += slice('let TCFAB = null', '/* WHERE AN EMBED');
+code += slice('async function paintTestClockBanner(', 'async function render()');
 eval(code);
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
@@ -114,6 +115,29 @@ const reset = ()=>{ CFG.rpc = "http://127.0.0.1:"+(PORT++); EL={hidden:true,inne
   CFG.rpc = "http://127.0.0.1:"+(PORT++);
   await paintTestClockBanner();
   ok("re-queries when the endpoint changes", CALLS.length>first);
+
+  // --- the cache must not hand out a placeholder while it is still reading ---
+  // render() calls paintTestClockBanner() WITHOUT awaiting it and then runs the
+  // route, so an embed's sourceNote() lands inside the banner's in-flight read.
+  // The cache used to publish its key and a null value first, so the second
+  // caller got null — "no test clock" — and an embed on a seeded chain showed no
+  // disclosure at all while the clip a second later showed it correctly. Only a
+  // real chain surfaced it; demo mode returns before touching this.
+  reset();
+  ANSWERS = {"TestClockFabricated":"(true bool)", "TestClockActive":"(false bool)",
+             "TestClockPeakSkew":"(7257601 int64)", "TestHeightPeakSkew":"(0 int64)"};
+  let SLOW = 0;
+  const realQ = global.qeval;
+  global.qeval = async expr => { SLOW++; await new Promise(r=>setTimeout(r,15)); return realQ(expr); };
+  const [a, b2] = await Promise.all([testClockState(), testClockState()]);
+  global.qeval = realQ;
+  ok("a concurrent reader does not get a null placeholder", b2 !== null,
+     "second caller saw " + JSON.stringify(b2));
+  ok("both concurrent readers get the same object", a === b2);
+  ok("and the chain is read once, not twice", SLOW <= 4, "reads=" + SLOW);
+  // Same question after it has resolved: still cached, still no re-read.
+  const before = SLOW;
+  ok("a later reader is served from cache", (await testClockState()) === a && SLOW === before);
 
   // structure + copy contract
   ok("banner lives outside #main", src.includes('<div id="tcbanner" role="status" hidden></div>'));
