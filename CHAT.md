@@ -323,8 +323,8 @@ GeoLite2 needs an account and is licence-restricted.
 
 Implemented and verified live against a running server and a real gemma3:4b, and in a
 real browser against both. 173 Go tests and subtests across three packages (70
-top-level, 103 subtests), plus 219 assertions and measurements across four web
-harnesses:
+top-level, 103 subtests), plus 219 assertions and
+measurements across four web harnesses, and 18 more behind OLLAMA_LIVE=1:
 
 - **`internal/chat`** — sanitiser and skeleton, client-address policy, the store
   (schema, throttle, enforcement with the automated ceiling), the HTTP server
@@ -391,7 +391,7 @@ All five run standalone:
     node web/tests/browser/chat_page.js      31 checks, the real court page
     node web/tests/browser/chat_render.js    65 measurements, the panel alone
     node web/tests/browser/chat_live.js      34 checks, against a live server
-    OLLAMA_LIVE=1 node .../chat_moderation.js  19, the loop with a real model
+    OLLAMA_LIVE=1 node .../chat_moderation.js  18, the loop with a real model
 
 **Chat is off in demo mode, deliberately, and that leaves one combination untested.**
 `chatBase` returns "" whenever `CFG.mode === "demo"`, which is what keeps the README's
