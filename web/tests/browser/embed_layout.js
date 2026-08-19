@@ -76,6 +76,10 @@ const CASES = [
         titleText: title ? title.textContent.trim() : "",
         titleW: title ? title.getBoundingClientRect().width : 0,
         linkTarget: link ? link.getAttribute("target") : null,
+        linkRel: link ? link.getAttribute("rel") : null,
+        // every anchor that leaves the card, not just the footer one
+        outLinks: [...document.querySelectorAll('.emb a[href^="#"]')].map(a=>({
+          t:a.getAttribute("target"), r:a.getAttribute("rel"), h:a.getAttribute("href")})),
         linkHref: link ? link.getAttribute("href") : null,
         bodyBg: getComputedStyle(document.body).backgroundColor,
         srcNote: (document.querySelector('.esrc') || {}).textContent || "",
@@ -106,13 +110,25 @@ const CASES = [
          JSON.stringify((m.cardText || "").slice(0, 50)));
     }
     // An embed's link must leave the iframe, or the reader gets the whole app
-    // inside a 400px box.
-    ok(`${t}: the link escapes the frame`, m.linkTarget === "_top", `target=${m.linkTarget}`);
+    // inside a 400px box — but in a NEW TAB, not by replacing the article the
+    // reader is in. _top did the latter; a live embed.polymarket.com card uses
+    // _blank on all six of its links back, and so does this.
+    ok(`${t}: the link opens a new tab`, m.linkTarget === "_blank", `target=${m.linkTarget}`);
+    ok(`${t}: and does not hand over the opener`, /noopener/.test(m.linkRel || ""), `rel=${m.linkRel}`);
     ok(`${t}: the link is attributable to the embed`, /from=embed/.test(m.linkHref || ""),
        `href=${m.linkHref}`);
     // The rail carries "Demo data" on the full page and is display:none here,
     // so without this the card presents the offline sample as a chain record on
     // somebody else's website. Demo is the DEFAULT for any first-time reader.
+    // Polymarket's card links back from its logo, its title, its chart and each
+    // outcome. Ours had exactly one, in the footer.
+    ok(`${t}: links back from more than one place`, m.outLinks.length >= (c.missing ? 1 : 3),
+       `links=${m.outLinks.length}`);
+    ok(`${t}: every one opens a new tab, with noopener`,
+       m.outLinks.every(l=>l.t === "_blank" && /noopener/.test(l.r || "")),
+       JSON.stringify(m.outLinks.map(l=>l.t + "/" + l.r)));
+    ok(`${t}: every one is attributable`, m.outLinks.every(l=>/from=embed/.test(l.h || "")),
+       JSON.stringify(m.outLinks.map(l=>l.h)));
     ok(`${t}: says where its numbers came from`, /no chain|set by hand/.test(m.srcNote || ""),
        `note=${JSON.stringify(m.srcNote)}`);
     ok(`${t}: the note is inside the card`, m.srcW <= m.cardW + 1,

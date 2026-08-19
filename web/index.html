@@ -270,7 +270,13 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .emb .ehead{display:flex; align-items:baseline; gap:8px; flex-wrap:nowrap; overflow:hidden;
   font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted)}
 .emb .ehead .ename{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
-.emb .ehead span:not(.ename){flex:0 0 auto}
+/* Inherit, like Polymarket's: the card should read as a card, not as a page of
+   blue links. The affordance arrives on hover, and the footer link stays the
+   one explicit call to action. */
+.emb .elink{color:inherit; text-decoration:none}
+.emb .elink:hover{text-decoration:underline; text-underline-offset:2px}
+.emb .etitle .elink:hover{color:var(--accent-2)}
+.emb .ehead > :not(.ename){flex:0 0 auto}
 /* Four lines, then the browser's own ellipsis. An embed is a FIXED box on
    someone else's page — it cannot grow to fit, so an unbounded title either
    overflows into a scrollbar or forces every card to be sized for the longest
@@ -4536,8 +4542,23 @@ function embedMark(hash){
 function embedOpen(){ /* the views call this; the mark is set by the router */ }
 /* The link back carries where it came from, like Polymarket's
    utm_medium=embed — an embed that cannot be told apart from direct traffic
-   tells the court nothing about who is quoting it. */
+   tells the court nothing about who is quoting it.
+
+   TARGET=_BLANK, NOT _TOP, and this was a correction. _top REPLACES the article
+   the reader is in: they clicked a card inside somebody's piece and the piece
+   vanished. A new tab answers the same need — an embed must not open the whole
+   app inside a 400px box — without taking the page away from them. Checked
+   against a live embed.polymarket.com card, which uses _blank on all six of its
+   links back; every one of ours does the same.
+
+   AND THERE IS MORE THAN ONE OF THEM. That card links back from its logo, its
+   title, its chart and each outcome. Ours had exactly one, in the footer, so a
+   reader who wanted the claim had to find the small print. The court, the title
+   and the footer now all lead somewhere, each to the thing it names. */
 function embedBackHref(path){ return "#" + path + "?from=embed"; }
+function embedLink(path, inner, cls){
+  return `<a class="${cls || "elink"}" href="${embedBackHref(path)}" target="_blank" rel="noopener">${inner}</a>`;
+}
 
 const esrc = note => note ? `<div class="esrc">${esc(note)}</div>` : "";
 
@@ -4580,22 +4601,22 @@ async function embedClaimView(slug, idS){
   if(!d){
     main.innerHTML = `<div class="emb"><p class="estat">No claim ${esc(slug)}/${esc(idS)} on this source.</p>
       ${esrc(note)}
-      <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_top">Kourt →</a></div></div>`;
+      <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_blank" rel="noopener">Kourt →</a></div></div>`;
     return;
   }
   const tl = parseTimeline(d.timeline);
   const when = tl && tl.opened ? stampDate(tl.opened.t) : null;
   main.innerHTML = `<div class="emb">
-      <div class="ehead"><span>${esc(ccSym(slug))}</span><span>·</span>
-        <span class="ename">${esc(cs ? cs.name : slug)}</span><span>·</span><span>#${id}</span></div>
-      <h3 class="etitle">${safeInline(d.title)}</h3>
+      <div class="ehead">${embedLink("/c/" + slug, esc(ccSym(slug)))}<span>·</span>
+        ${embedLink("/c/" + slug, esc(cs ? cs.name : slug), "elink ename")}<span>·</span><span>#${id}</span></div>
+      <h3 class="etitle">${embedLink("/c/" + slug + "/" + id, safeInline(d.title))}</h3>
       ${embedSpark(ser)}
       ${stakeBar(d, slug)}
       <div class="estat">${esc(d.statusText || "")}</div>
       ${esrc(note)}
       <div class="efoot">
         <span class="ewhen">${when ? "filed " + esc(when) : ""}</span>
-        <a href="${embedBackHref("/c/" + slug + "/" + id)}" target="_top">Open on Kourt →</a>
+        <a href="${embedBackHref("/c/" + slug + "/" + id)}" target="_blank" rel="noopener">Open on Kourt →</a>
       </div>
     </div>`;
 }
@@ -4606,19 +4627,19 @@ async function embedCourtView(slug){
   if(!cs){
     main.innerHTML = `<div class="emb"><p class="estat">No court /${esc(slug)} on this source.</p>
       ${esrc(note)}
-      <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_top">Kourt →</a></div></div>`;
+      <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_blank" rel="noopener">Kourt →</a></div></div>`;
     return;
   }
   main.innerHTML = `<div class="emb">
-      <div class="ehead"><span>${esc(ccSym(slug))}</span><span>·</span><span>court</span></div>
-      <h3 class="etitle">${safeInline(cs.name)}</h3>
+      <div class="ehead">${embedLink("/c/" + slug, esc(ccSym(slug)))}<span>·</span><span>court</span></div>
+      <h3 class="etitle">${embedLink("/c/" + slug, safeInline(cs.name))}</h3>
       <div class="estat">${fmtN(cs.claims || 0)} claim${(cs.claims === 1) ? "" : "s"} ·
         ${esc(cc(cs.supply, slug))} in issue ·
         ${esc(priceText(cs.price, cs.minted))} µGNOT/unit</div>
       ${esrc(note)}
       <div class="efoot">
         <span class="ewhen">stake on claims of fact</span>
-        <a href="${embedBackHref("/c/" + slug)}" target="_top">Open on Kourt →</a>
+        <a href="${embedBackHref("/c/" + slug)}" target="_blank" rel="noopener">Open on Kourt →</a>
       </div>
     </div>`;
 }

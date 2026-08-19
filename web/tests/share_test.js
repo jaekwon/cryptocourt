@@ -301,7 +301,11 @@ ok("the embed head cannot wrap", /flex-wrap:nowrap/.test(
    slice('.emb .ehead{', '.emb .etitle{')));
 ok("and the court name is the part that gives way",
    src.includes('.emb .ehead .ename{overflow:hidden; text-overflow:ellipsis'));
-ok("the claim card tags the name for it", src.includes('<span class="ename">'));
+ok("the claim card tags the name for it", src.includes('"elink ename"'));
+// The head's children are no longer all <span> — the coin symbol is a link —
+// so a span-only rule would have left it shrinkable next to the name.
+ok("everything but the name is held at its natural width",
+   src.includes(".emb .ehead > :not(.ename){flex:0 0 auto}"));
 ok("embed hides the rail and the nav",
    /html\.embed \.rail, html\.embed #nav\{display:none ?!important\}/.test(src));
 // The mark is DRIVEN BY THE ROUTE, not switched on once. embedOpen() only ever
@@ -316,9 +320,24 @@ ok("the router sets it before the route paints",
    /setNav\(hash\);\s*\n\s*embedMark\(hash\);/.test(src));
 ok("leaving an embed restores the reader's own theme, not nothing",
    src.includes("applyTheme(CFG.theme)"));
-// An embed's links open the parent window, not a page inside the iframe.
-ok("embed links break out of the frame", (src.match(/target="_top"/g)||[]).length >= 4);
+// AN EMBED'S LINKS OPEN A NEW TAB, and this replaced target="_top". _top would
+// have replaced the article the reader was in — they clicked a card inside
+// somebody's piece and the piece went away. Checked against a live
+// embed.polymarket.com card: all six of its links back are _blank.
+ok("no link takes the reader's page away from them", !/target="_top"/.test(src));
+ok("embed links open a new tab", (src.match(/target="_blank"/g)||[]).length >= 5);
+ok("and never hand the opener over", !/target="_blank"(?![^>]*rel="noopener")/.test(
+   slice('function embedLink(', 'on(/^\\/about$/')));
 ok("embed links declare where they came from", src.includes('"?from=embed"'));
+// One link back in the footer meant a reader who wanted the claim had to find
+// the small print. The court, the title and the footer each lead to the thing
+// they name.
+ok("there is one helper for every link that leaves the card",
+   src.includes("function embedLink(path, inner, cls)"));
+ok("the claim card links from its court, its title and its footer",
+   (slice('async function embedClaimView(', 'async function embedCourtView(')
+     .match(/embedLink\(|target="_blank"/g) || []).length >= 4);
+ok("the links inherit rather than shouting", src.includes(".emb .elink{color:inherit"));
 
 // The three handlers the buttons declare must exist, or the panel is decoration.
 ok("theme buttons rebuild the snippet", src.includes('ev.target.closest("[data-embtheme]")')
