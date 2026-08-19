@@ -125,7 +125,7 @@ func split(argv []string) (flags, positional []string) {
 // done before parsing.
 func takesValue(f string) bool {
 	switch strings.TrimLeft(f, "-") {
-	case "by", "why", "ip", "n", "db", "for", "secret-file", "msg":
+	case "by", "why", "ip", "n", "db", "for", "secret-file", "msg", "from":
 		return true
 	}
 	return false // -all, -net are booleans
@@ -140,14 +140,31 @@ func usage() {
   kick HASH -for 1h        a bounded manual timeout, short of a ban
   ban HASH [-net] [-why S] a permanent ban, which only a human can issue
   hash ADDR                the address and network hashes for one IP
-  review [-all] [-n N]     messages the scanner flagged and did NOT act on
-  dismiss ID               record that you read one and chose to do nothing
+  review [-all] [-expand]  messages the scanner flagged and did NOT act on,
+                           grouped by author unless -expand
+  dismiss ID | -from HASH  record that you read them and chose to do nothing
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   status                   backlog, scanner heartbeat, counts
 
 Hashes come from list, why, or hash <addr>. With -secret-file, pass the same path
 kourtchat runs with: a different key means every hash here matches nothing.
 `)
+}
+
+// dur renders a duration for a human, and does not round the alarming case to nothing.
+//
+// Truncate(time.Minute) was used at every one of these call sites and it flattened every
+// span under a minute to "0s": a grouped review row read "5 over 0s", and a kick with
+// forty seconds left read "0s left". Five messages in ten seconds is MORE alarming than
+// five over an hour, so the one span worth reading precisely was the one being erased.
+func dur(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Round(time.Second).Seconds()))
+	}
+	return d.Round(time.Minute).String()
 }
 
 func cmdList(ctx context.Context, s *chat.Store, argv []string) {
@@ -178,8 +195,7 @@ func cmdList(ctx context.Context, s *chat.Store, argv []string) {
 		case r.ExpiresAt <= now:
 			state = "expired"
 		default:
-			state = fmt.Sprintf("%s left",
-				(time.Duration(r.ExpiresAt-now) * time.Second).Truncate(time.Minute))
+			state = dur(time.Duration(r.ExpiresAt-now)*time.Second) + " left"
 		}
 		fmt.Printf("%-5d %-6s %-8s %-14s %-10s %s\n",
 			r.ID, r.Kind, r.Reason, short(r.IPHash), state, oneLine(r.Evidence, 44))
@@ -423,10 +439,18 @@ func withAuthor(ctx context.Context, s *chat.Store, msg int64, pos []string, isN
 func cmdReview(ctx context.Context, s *chat.Store, argv []string) {
 	fs := flag.NewFlagSet("review", flag.ExitOnError)
 	all := fs.Bool("all", false, "include ones already dismissed")
+	expand := fs.Bool("expand", false, "every message, not one row per author")
 	limit := fs.Int("n", 50, "how many")
 	flags, _ := split(argv)
 	_ = fs.Parse(flags)
 
+	// Grouped by default, because the flat list is a denial-of-attention surface: one
+	// address inside the throttle put 70 reporting-shaped messages in the queue and left
+	// the single genuine report at position 71 of 71. See chat.ReviewGroups.
+	if !*expand {
+		cmdReviewGrouped(ctx, s, *all, *limit)
+		return
+	}
 	rows, err := s.PendingReview(ctx, *all, *limit)
 	if err != nil {
 		die("%v", err)
@@ -438,7 +462,7 @@ func cmdReview(ctx context.Context, s *chat.Store, argv []string) {
 	now := time.Now().Unix()
 	fmt.Printf("%d message(s) the scanner flagged and did not act on:\n", len(rows))
 	for _, r := range rows {
-		age := (time.Duration(now-r.CreatedAt) * time.Second).Truncate(time.Minute)
+		age := dur(time.Duration(now-r.CreatedAt) * time.Second)
 		vis := "visible in the court"
 		if r.Hidden {
 			vis = "hidden"
@@ -455,10 +479,75 @@ func cmdReview(ctx context.Context, s *chat.Store, argv []string) {
 	fmt.Printf("leave it:    kourtchatctl dismiss <id>\n")
 }
 
+// cmdReviewGrouped prints one row per author.
+//
+// A count is the signal. Nobody files seventy incident reports in twenty minutes, so the
+// number beside an address says more about whether it is a reporter than any single
+// message does — and it says it without the tool having to make that judgement, which is
+// the point: the classifier already demonstrated it cannot tell reporting from sending.
+func cmdReviewGrouped(ctx context.Context, s *chat.Store, all bool, limit int) {
+	groups, err := s.ReviewGroups(ctx, all, limit)
+	if err != nil {
+		die("%v", err)
+	}
+	if len(groups) == 0 {
+		fmt.Println("nothing waiting for review")
+		return
+	}
+	now := time.Now().Unix()
+	total := 0
+	for _, g := range groups {
+		total += g.Count
+	}
+	fmt.Printf("%d message(s) from %d author(s), flagged and not acted on:\n",
+		total, len(groups))
+	for _, g := range groups {
+		age := dur(time.Duration(now-g.LastAt) * time.Second)
+		fmt.Printf("\n  %s  %s/%s  %d message(s), last %s ago\n",
+			short(g.IPHash), g.Chain, g.Court, g.Count, age)
+		if g.Count > 1 {
+			span := dur(time.Duration(g.LastAt-g.FirstAt) * time.Second)
+			extra := ""
+			if g.Monikers > 1 {
+				extra = fmt.Sprintf(", %d different names", g.Monikers)
+			}
+			if g.Courts > 1 {
+				extra += fmt.Sprintf(", across %d courts", g.Courts)
+			}
+			fmt.Printf("  pattern   %d over %s%s\n", g.Count, span, extra)
+		}
+		fmt.Printf("  moniker   %s\n", g.Moniker)
+		fmt.Printf("  latest    [%d] %s\n", g.LatestID, g.Latest)
+	}
+	fmt.Printf("\nread one author:  kourtchatctl review -expand -n 200\n")
+	fmt.Printf("act on one:       kourtchatctl kick -msg <id> -for 1h -why \"...\"\n")
+	fmt.Printf("clear one author: kourtchatctl dismiss -from <address>\n")
+}
+
 func cmdDismiss(ctx context.Context, s *chat.Store, argv []string) {
-	_, pos := split(argv)
+	fs := flag.NewFlagSet("dismiss", flag.ExitOnError)
+	from := fs.String("from", "", "clear every queued message from one address hash")
+	flags, pos := split(argv)
+	_ = fs.Parse(flags)
+
+	// Bulk, because grouping the view without grouping the action would only move the
+	// problem: seeing that seventy messages are one flood, then needing seventy commands
+	// to clear it, loses at the dismissal step instead of the reading step.
+	if *from != "" {
+		if len(pos) > 0 {
+			die("dismiss takes either an id or -from, not both")
+		}
+		n, err := s.MarkReviewedFrom(ctx, *from)
+		if err != nil {
+			die("%v", err)
+		}
+		fmt.Printf("%d message(s) from %s marked reviewed — nothing was hidden and nobody was kicked\n",
+			n, short(*from))
+		fmt.Printf("see them again with: kourtchatctl review -all\n")
+		return
+	}
 	if len(pos) != 1 {
-		die("dismiss needs one message id — read them from `review`")
+		die("dismiss needs one message id, or -from <address hash> — read them from `review`")
 	}
 	id, err := strconv.ParseInt(pos[0], 10, 64)
 	if err != nil {

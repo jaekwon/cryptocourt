@@ -898,6 +898,129 @@ func (s *Store) PendingReview(ctx context.Context, includeDone bool, limit int) 
 	return out, rows.Err()
 }
 
+// ReviewGroup is one AUTHOR's worth of deferred messages.
+type ReviewGroup struct {
+	IPHash   string `json:"ip_hash"`
+	NetHash  string `json:"net_hash"`
+	Monikers int    `json:"monikers"` // how many names one address used
+	Moniker  string `json:"moniker"`  // the most recent
+	Count    int    `json:"count"`
+	Courts   int    `json:"courts"`
+	Court    string `json:"court"`
+	Chain    string `json:"chain"`
+	FirstAt  int64  `json:"first_at"`
+	LastAt   int64  `json:"last_at"`
+	LatestID int64  `json:"latest_id"`
+	Latest   string `json:"latest"`
+}
+
+// ReviewGroups is the review queue collapsed by author, and it exists because the
+// flat one is a denial-of-attention surface.
+//
+// MEASURED, against the flat queue: one address, staying inside the existing throttle,
+// got 70 reporting-shaped messages accepted in about twenty minutes of simulated time.
+// The queue held 71 rows, all twenty of the first rows an operator reads were the
+// attacker's, and the single genuine report sat at position 71 of 71. Near-duplicates
+// evade the skeleton dedup — "incident 1", "incident 2" — so nothing upstream stopped it.
+//
+// That defeats §7's carve-out at its weakest point. The carve-out's whole answer to "the
+// model cannot tell reporting from sending" is that a PERSON will look, and burying the
+// person under seventy decoys is cheaper than evading the classifier.
+//
+// The fix is deliberately not a new punishment. Flooding is indistinguishable from
+// diligent reporting to the same classifier that could not tell reporting from sending in
+// the first place, so acting automatically on the pattern would just move the false
+// positive. Instead the VIEW becomes flood-resistant: seventy messages from one address
+// are one row saying seventy, which is also the clearest possible signal to the operator
+// that it is not a reporter — nobody files seventy incidents in twenty minutes.
+func (s *Store) ReviewGroups(ctx context.Context, includeDone bool, limit int) ([]ReviewGroup, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	where := `verdict NOT IN ('', 'clean', 'unknown')
+	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`
+	if !includeDone {
+		where += ` AND reviewed_at = 0`
+	}
+	// The latest message per author comes from a correlated subquery rather than a
+	// window function: the point of the row is to be READ, so it has to be the one the
+	// operator would judge, not whichever row the aggregate happened to keep.
+	q := `
+	  SELECT ip_hash,
+	         MAX(net_hash),
+	         COUNT(DISTINCT moniker),
+	         COUNT(*),
+	         COUNT(DISTINCT court),
+	         MIN(created_at),
+	         MAX(created_at),
+	         MAX(id)
+	    FROM messages
+	   WHERE ` + where + `
+	GROUP BY ip_hash
+	ORDER BY MAX(id) DESC
+	   LIMIT ?`
+	rows, err := s.r.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ReviewGroup{}
+	for rows.Next() {
+		var g ReviewGroup
+		if err := rows.Scan(&g.IPHash, &g.NetHash, &g.Monikers, &g.Count, &g.Courts,
+			&g.FirstAt, &g.LastAt, &g.LatestID); err != nil {
+			return nil, err
+		}
+		out = append(out, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if err := s.r.QueryRowContext(ctx,
+			`SELECT moniker, body, court, chain FROM messages WHERE id=?`, out[i].LatestID).
+			Scan(&out[i].Moniker, &out[i].Latest, &out[i].Court, &out[i].Chain); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// MarkReviewedFrom dismisses every queued message from one author at once.
+//
+// Without this, grouping the view would have moved the problem rather than solved it: an
+// operator who can SEE that seventy messages are one flood in one row still needs seventy
+// commands to clear it, and the flood wins at the dismissal step instead of the reading
+// step. Scoped to the queue — already-actioned and already-dismissed rows are untouched,
+// so this cannot quietly bulk-clear history.
+func (s *Store) MarkReviewedFrom(ctx context.Context, ipHash string) (int64, error) {
+	// Redundant today and kept anyway: with the predicate below intact, an empty hash
+	// matches nothing and the zero-rows check already refuses. Deleting this guard was
+	// tried and no test noticed, which is the honest reason it is documented rather than
+	// asserted. It is here for the edit that widens the WHERE clause one day, where an
+	// empty author would otherwise mean every author.
+	if ipHash == "" {
+		return 0, errors.New("no author given")
+	}
+	res, err := s.w.ExecContext(ctx, `
+	  UPDATE messages SET reviewed_at=?
+	   WHERE ip_hash=? AND reviewed_at=0
+	     AND verdict NOT IN ('', 'clean', 'unknown')
+	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`,
+		s.Now().Unix(), ipHash)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, fmt.Errorf("nothing queued from %s", ipHash)
+	}
+	return n, nil
+}
+
 // MarkReviewed records that a person looked and chose to do nothing.
 //
 // Separate from doing nothing at all, which is what an unreviewed row already means. The
