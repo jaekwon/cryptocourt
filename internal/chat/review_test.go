@@ -734,3 +734,91 @@ func TestARevokedConsequenceStillClearsTheReviewQueue(t *testing.T) {
 			len(q))
 	}
 }
+
+// DISMISS IS ALSO IRREVERSIBLE, and this records why that is judged acceptable where freeze and a
+// secret-hide were not.
+//
+// Nothing sets `reviewed_at` back to 0 — one write, one direction — and `dismiss -from` has no batch
+// limit, so a mistyped hash sweeps every queued message from that address. The other two
+// irreversible operations found this week both got a reversal: a frozen court was unreachable to
+// everybody, and a secret-hidden report was invisible to everybody. Dismissal is different in kind,
+// and the difference is what this fixture pins: nothing is FORECLOSED by it.
+//
+//	the rows survive          `review -all` still lists them
+//	every action survives     a dismissed message can still be kicked, banned or hidden
+//	the author is unaffected  dismissal is a note that a person looked, not a consequence
+//
+// What would change the judgement: if `-all` grew unusable on a busy court, or if dismissal ever
+// gated an action rather than only a default view, the lost worklist would stop being recoverable
+// and this would need an undo like the others.
+func TestDismissIsIrreversibleButForeclosesNothing(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-a", "dm me and I will sort out your claim for you")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordVerdict(ctx, id, "spam"); err != nil {
+		t.Fatal(err)
+	}
+	if q, err := s.PendingReview(ctx, false, 50); err != nil {
+		t.Fatal(err)
+	} else if len(q) != 1 {
+		t.Fatalf("precondition: it awaits review, got %d", len(q))
+	}
+
+	if err := s.MarkReviewed(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if q, err := s.PendingReview(ctx, false, 50); err != nil {
+		t.Fatal(err)
+	} else if len(q) != 0 {
+		t.Errorf("dismissed, so out of the default queue: got %d", len(q))
+	}
+
+	// 1. THE ROWS SURVIVE. This is the whole reason dismissal needs no undo.
+	all, err := s.PendingReview(ctx, true, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("`review -all` must still list it, got %d — if this ever stops being true, "+
+			"dismissal becomes as irreversible as a freeze was and needs the same undo", len(all))
+	}
+
+	// 2. EVERY ACTION SURVIVES. Dismissal must not gate what an operator can still do.
+	inf, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-a", Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+		EvidenceID: id, Evidence: "…dm me…",
+	})
+	if err != nil {
+		t.Fatalf("a dismissed message must still be actionable: %v", err)
+	}
+	if inf == 0 {
+		t.Error("and the consequence must actually record")
+	}
+	// And that consequence is itself reversible, as any other is.
+	if err := s.Revoke(ctx, inf, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Hiding it also still works, so neither half of moderation is foreclosed.
+	if err := s.HideMessage(ctx, id); err != nil {
+		t.Errorf("a dismissed message must still be hideable: %v", err)
+	}
+	if r, err := s.Reveal(ctx, id); err != nil {
+		t.Fatal(err)
+	} else if !r.OK {
+		t.Error("and revealable again")
+	}
+
+	// 3. NOTHING SET reviewed_at BACK, which is the irreversibility itself — asserted so that if
+	// somebody adds an undo, this fixture is what tells them the reasoning above needs rewriting.
+	if q, err := s.PendingReview(ctx, false, 50); err != nil {
+		t.Fatal(err)
+	} else if len(q) != 0 {
+		t.Error("nothing in this sequence may return it to the default queue; if that changed on " +
+			"purpose, rewrite the comment above with it")
+	}
+}
