@@ -1229,6 +1229,38 @@ func (s *Store) Prune(ctx context.Context, olderThan time.Duration, limit int) (
 	}
 	out.Deleted = int(n)
 
+	// A CITATION MUST NOT OUTLIVE THE MESSAGE IT CITES, because `messages.id` is a bare
+	// INTEGER PRIMARY KEY — a rowid — and SQLite assigns max(rowid)+1. Prune can empty the
+	// table, at which point ids restart at 1 and a stale `evidence_id` points at somebody
+	// else's message. Infractions are never pruned, so the pointer outlives its target by
+	// design.
+	//
+	// The guard above protects evidence only for consequences IN FORCE, so a revoked or an
+	// EXPIRED one's message is deletable while its row survives. Both were demonstrated:
+	//
+	//	revoked citation, reused id    the new message was silently dropped from the review
+	//	                              queue — sqlAwaitingReview's NOT EXISTS matched the
+	//	                              stale row, so a flagged message never reached a human
+	//	expired citation, reused id    worse: an unrelated revocation for the same address
+	//	                              HID the new message, because Revoke's recompute matches
+	//	                              `i.evidence_id = messages.id` and an expired kick is
+	//	                              not a revoked one. Two of three messages visible, and
+	//	                              nothing to tell the author why
+	//
+	// Clearing the pointer is the honest repair rather than keeping the message forever: §7
+	// already says the `evidence` TEXT is a copy taken at the time so an appeal survives
+	// pruning, so the copy is the record and the id is only a link to a row that no longer
+	// exists. Nulling also leaves the UNIQUE(evidence_id, kind) replay guard unconstrained
+	// for that row, which is correct — a deleted message cannot be re-punished.
+	//
+	// Written as "not in messages" rather than "in the set just deleted" so it also repairs
+	// rows dangling from any earlier prune.
+	if _, err := s.w.ExecContext(ctx, `UPDATE infractions SET evidence_id = NULL
+	   WHERE evidence_id IS NOT NULL
+	     AND evidence_id NOT IN (SELECT id FROM messages)`); err != nil {
+		return out, err
+	}
+
 	// What is left, so an operator can tell "nothing to do" from "nothing happened".
 	if err := s.r.QueryRowContext(ctx,
 		`SELECT count(*), COALESCE(MIN(created_at), 0) FROM messages`).

@@ -188,9 +188,21 @@ func TestAnAppealSurvivesPruning(t *testing.T) {
 	if rows[0].Detail != "a classic lure" {
 		t.Errorf("and the reasoning: got %q", rows[0].Detail)
 	}
-	// The dangling evidence_id is fine and must not break the read.
-	if rows[0].EvidenceID != 1 {
-		t.Errorf("the citation is kept even though the row is gone, got %d", rows[0].EvidenceID)
+	// THE CITATION IS CLEARED, and this assertion used to say the opposite.
+	//
+	// It read "the dangling evidence_id is fine and must not break the read", and the read half is
+	// still true — everything above passes. The premise was not: `messages.id` is a rowid, prune
+	// can empty the table, and then ids restart at 1, so a dangling citation is a pointer at
+	// somebody else's future message. Demonstrated both ways in
+	// TestPruneDoesNotLeaveACitationPointingAtSomebodyElsesMessage: a freshly flagged message
+	// dropped out of the review queue, and an unrelated revocation hid an innocent one.
+	//
+	// So the id goes when its row goes, which is what a reference to a deleted row should do. What
+	// makes an appeal survive is the `evidence` and `detail` copies asserted above — that is what
+	// they were taken for — not a number naming a row nobody can read.
+	if rows[0].EvidenceID != 0 {
+		t.Errorf("a citation must not outlive its message: got %d, want it cleared",
+			rows[0].EvidenceID)
 	}
 }
 
@@ -422,5 +434,185 @@ func TestPruningDoesNotStallReaders(t *testing.T) {
 	}
 	if len(msgs) != 1 || msgs[0].Body != "a recent message" {
 		t.Fatalf("the recent message must survive, got %d: %+v", len(msgs), msgs)
+	}
+}
+
+// A CITATION MUST NOT OUTLIVE THE MESSAGE IT CITES.
+//
+// `messages.id` is a bare INTEGER PRIMARY KEY — a rowid — and SQLite assigns max(rowid)+1 with no
+// high-water mark. Prune can empty the table, and then ids restart at 1. Infractions are never
+// pruned, and prune's evidence guard protects only consequences IN FORCE, so a revoked or expired
+// one's message is deletable while its row survives citing an id that will be handed to somebody
+// else.
+//
+// Both consumers of `evidence_id` were then wrong about the new message, and neither said anything:
+//
+//	revoked citation    sqlAwaitingReview's NOT EXISTS matched the stale row, so a freshly
+//	                    flagged message was dropped from the review queue and never reached a human
+//	expired citation    worse — an unrelated revocation for the same address HID the new message,
+//	                    because Revoke's recompute matches `i.evidence_id = messages.id` and an
+//	                    expired kick is not a revoked one. Two of three messages visible, with
+//	                    nothing to tell the author why
+//
+// The fix clears the pointer when its target is deleted, which is the honest repair rather than
+// retaining every cited message for ever: §7 says the `evidence` TEXT is a copy taken at the time
+// so an appeal survives pruning, so the copy is the record and the id is a link to a row that is
+// gone.
+func TestPruneDoesNotLeaveACitationPointingAtSomebodyElsesMessage(t *testing.T) {
+	// The two ways a citation becomes prunable, each producing a different harm.
+	for _, mode := range []string{"revoked", "expired"} {
+		t.Run(mode, func(t *testing.T) {
+			s, clock := newStore(t)
+			ctx := context.Background()
+
+			var old []int64
+			for i := 0; i < 3; i++ {
+				id, err := post(t, s, "orem", "ip-a",
+					"old message "+string(rune('a'+i))+" about the docket ordering")
+				if err != nil {
+					t.Fatal(err)
+				}
+				old = append(old, id)
+				*clock = clock.Add(MinInterval)
+			}
+			inf, err := s.Consequence(ctx, Infraction{
+				IPHash: "ip-a", Kind: KindKick, Reason: ReasonSpam, Duration: time.Minute,
+				EvidenceID: old[2], Evidence: "the body, copied at the time",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mode == "revoked" {
+				if err := s.Revoke(ctx, inf, "operator"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, id := range old {
+				if err := s.RecordVerdict(ctx, id, "clean"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			*clock = clock.Add(48 * time.Hour) // past retention, and past the kick
+
+			res, err := s.Prune(ctx, 24*time.Hour, 1000)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Deleted != 3 {
+				t.Fatalf("precondition: all three must be prunable, deleted %d", res.Deleted)
+			}
+
+			// THE REPAIR: no infraction may still point at a deleted row.
+			var dangling int
+			if err := s.r.QueryRow(`SELECT count(*) FROM infractions
+			   WHERE evidence_id IS NOT NULL
+			     AND evidence_id NOT IN (SELECT id FROM messages)`).Scan(&dangling); err != nil {
+				t.Fatal(err)
+			}
+			if dangling != 0 {
+				t.Errorf("%d citation(s) survive their message; the next id handed out will "+
+					"belong to somebody else", dangling)
+			}
+			// The appeal record must survive, which is what makes clearing the id acceptable.
+			var evidence string
+			if err := s.r.QueryRow(`SELECT evidence FROM infractions WHERE id=?`, inf).
+				Scan(&evidence); err != nil {
+				t.Fatal(err)
+			}
+			if evidence != "the body, copied at the time" {
+				t.Errorf("the evidence COPY must outlive the message, got %q", evidence)
+			}
+
+			// Now walk new traffic onto the reused id and check both consumers.
+			var reused int64
+			for n := 1; n <= 3; n++ {
+				id, err := post(t, s, "orem", "ip-a", "fresh message number "+string(rune('0'+n)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				reused = id
+				*clock = clock.Add(MinInterval)
+			}
+			if reused != old[2] {
+				t.Fatalf("precondition: ids must have restarted onto %d, got %d", old[2], reused)
+			}
+
+			// Consumer one: the review queue.
+			if err := s.RecordVerdict(ctx, reused, "scam"); err != nil {
+				t.Fatal(err)
+			}
+			q, err := s.PendingReview(ctx, false, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(q) != 1 {
+				t.Errorf("a freshly flagged message must await review, got %d — a stale citation "+
+					"to a deleted message is hiding it from the only human who would look", len(q))
+			}
+
+			// Consumer two: Revoke's recompute, via an unrelated consequence for the same address.
+			inf2, err := s.Consequence(ctx, Infraction{
+				IPHash: "ip-a", Kind: KindKick, Reason: ReasonSpam, Duration: time.Hour,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Revoke(ctx, inf2, "operator"); err != nil {
+				t.Fatal(err)
+			}
+			msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(msgs) != 3 {
+				t.Errorf("an unrelated revocation must not hide anybody's message: %d of 3 "+
+					"visible", len(msgs))
+			}
+		})
+	}
+}
+
+// THE PAIRED POSITIVE, and it is the one that matters: clearing dangling citations must not become
+// an excuse to delete evidence somebody still needs. A message cited by a consequence IN FORCE is
+// still refused by prune, and reported as refused.
+func TestPruneStillRefusesEvidenceForAConsequenceInForce(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-b", "send me your seed phrase and I will restore it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordVerdict(ctx, id, "scam"); err != nil {
+		t.Fatal(err)
+	}
+	// A ban: no expiry, so it is in force indefinitely.
+	inf, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-b", Kind: KindBan, Reason: ReasonManual,
+		EvidenceID: id, Evidence: "the body, copied at the time",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(365 * 24 * time.Hour)
+
+	res, err := s.Prune(ctx, 24*time.Hour, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Deleted != 0 {
+		t.Errorf("evidence for a live ban must not be deleted, however old: deleted %d", res.Deleted)
+	}
+	if res.KeptCited != 1 {
+		t.Errorf("and the refusal must be reported: KeptCited = %d", res.KeptCited)
+	}
+	// The citation is intact, because its message is.
+	var evID int64
+	if err := s.r.QueryRow(`SELECT coalesce(evidence_id,0) FROM infractions WHERE id=?`, inf).
+		Scan(&evID); err != nil {
+		t.Fatal(err)
+	}
+	if evID != id {
+		t.Errorf("a live citation must keep pointing at its message: got %d, want %d", evID, id)
 	}
 }
