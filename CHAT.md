@@ -321,9 +321,10 @@ GeoLite2 needs an account and is licence-restricted.
 
 ## 10. Status
 
-Implemented and verified live against a running server and a real gemma3:4b.
-173 Go tests and subtests across three packages (70 top-level, 103 subtests), plus 89
-assertions in the panel harness:
+Implemented and verified live against a running server and a real gemma3:4b, and in a
+real browser against both. 173 Go tests and subtests across three packages (70
+top-level, 103 subtests), plus 219 assertions and measurements across four web
+harnesses:
 
 - **`internal/chat`** — sanitiser and skeleton, client-address policy, the store
   (schema, throttle, enforcement with the automated ceiling), the HTTP server
@@ -333,13 +334,13 @@ assertions in the panel harness:
 - **`cmd/kourtchat`, `cmd/kourtmod`, `cmd/kourtchatctl`**
 - **`web/chat.js`** — the panel: rendering, escaping, the poller, demo mode
 
-**The panel is built** — `web/chat.js`, with `web/tests/chat_test.js` (89 assertions,
-standalone under `node`). It went in as a file of its own rather than as another block
-inside `index.html`, which turned out better than the plan in two ways: everything the
-feature consists of is readable in one place, and it carries its own stylesheet, so it
-does not need the page's theme to grow a chat section. Its own `chatEsc` also removed
-the prerequisite of hardening the page's `esc()` first — that is still worth doing,
-but the panel no longer waits on it.
+**The panel is built and wired** — `web/chat.js`, mounted at the foot of every court
+page (§11). It went in as a file of its own rather than as another block inside
+`index.html`, which turned out better than the plan in two ways: everything the feature
+consists of is readable in one place, and it carries its own stylesheet, so the page's
+theme did not have to grow a chat section. The page's own `esc()` was hardened to escape
+`'` and a backtick anyway — the panel does not depend on it, but `esc()` is what every
+other surface uses.
 
 Three properties are load-bearing and each fails a test if removed. Everything is
 escaped, including `'` and a backtick, because the server preserves markup on purpose
@@ -348,52 +349,48 @@ transcript is REPLACED from a full fetch rather than appended to by id, because
 `Recent` only returns unhidden rows, so an incremental client would keep showing a
 scam for the rest of the session after §7 hid it.
 
-## 11. Wiring the panel into the page
+## 11. The panel in the page
 
-Not done, because `web/index.html` and `web/tests/` are another workstream's
-uncommitted work and `git add` is per file. The hook is three lines plus a config
-field:
+Done. Seven edits to `web/index.html`, and their shape was decided by `web/README.md`
+rather than by convenience. That file promises three times over that the page is
+self-contained — "no build, no dependencies, no server needed", "just share the file" —
+and `chat.js` is the first external file it has ever loaded. So it is loaded OPTIONALLY
+and every call into it is guarded on `typeof`: the page opened with no `chat.js` beside
+it renders every court exactly as before. Verified by aborting the request in a browser
+and checking the docket survived, and by mutation — an unguarded call throws mid-paint
+and takes the court's own content down with it.
 
-```html
-<script src="chat.js"></script>              <!-- beside the other scripts -->
-<div id="courtchat"></div>                   <!-- bottom of the court page -->
-```
+    esc()            now escapes ' and ` as well as & < > "
+    cleanCfg         CFG.chat joins the whitelist, with a rail field
+    <script src>     chat.js, before the inline script, so mountChat exists by
+                     the time the router can paint a court
+    court route      appends the container, mounts, holds the stop in CHATSTOP
 
-```js
-// in the court renderer, after the court is known:
-if (window.CHATSTOP) CHATSTOP();             // previous panel, if any
-CHATSTOP = mountChat(document.getElementById("courtchat"),
-                     {cfg: CFG, chain: CFG.chain, court: slug});
-```
+`cleanCfg` is the one to notice: it rebuilds config from defaults and copies across only
+the keys it knows, so without the whitelist entry the endpoint would have been silently
+forgotten on save. A settings box that loses what you type is worse than no box. Blank
+turns chat off and clears storage rather than leaving a stale endpoint behind.
 
-`CFG.chat` must be added to `cleanCfg`'s whitelist and to the settings form, or the
-endpoint is dropped on save. Absent or `mode:"demo"` means no network at all and a
-sample thread instead, which keeps `web/README.md`'s promise that the demo makes no
-network calls — `chatBase` returns `""` rather than guessing an origin, and a test
-asserts demo mode issues zero fetches.
+The stop function must be called before the container is replaced — `render()` is async
+and re-entrant, so a poller can outlive the DOM it was writing to. `mountChat`'s
+generation counter makes a stale tick inert; `CHATSTOP` is the half that releases the
+timer rather than leaving it to expire.
 
-`mountChat` returns a stop function that MUST be called before the container is
-replaced. `render()` is async and re-entrant, so without it a poller from a previous
-render can wake up and paint one court's messages into another court's page; the
-generation counter inside `chat.js` makes that harmless, and the returned stop is what
-releases the timer.
+Still not wired, and still for the same reason — `web/tests/` and the Makefile's web
+targets are another workstream's uncommitted work:
 
-`web/README.md` needs one line: it currently promises the page talks to nothing but a
-gno RPC node, and with chat configured it also talks to `kourtchat`. That is not a
-private API — it is this repo's own service, documented in §9 — but the README should
-say so rather than leave a reader to discover it.
+    web/tests/run.js            directory scan, picks up chat_test.js already
+    web/tests/browser/run.js    add chat_page.js, chat_render.js, chat_live.js
+                                to CHECKS
+    Makefile                    web-test / web-visual are theirs; the Go half
+                                (gotest, chat, the fmt fix) is committed
 
-Neither test runner is wired either, for the same reason and with the same fix — one
-line each, once `web/tests/` is committed:
+All four run standalone:
 
-    web/tests/run.js                CHECKS is a directory scan; chat_test.js is
-                                    picked up automatically, nothing to do
-    web/tests/browser/run.js        add "chat_render.js" to CHECKS
-
-Until then both run standalone, which is how they were developed:
-
-    node web/tests/chat_test.js             89 assertions, no dependencies
-    node web/tests/browser/chat_render.js   65 measurements, needs puppeteer
+    node web/tests/chat_test.js              89 assertions, no dependencies
+    node web/tests/browser/chat_page.js      31 checks, the real court page
+    node web/tests/browser/chat_render.js    65 measurements, the panel alone
+    node web/tests/browser/chat_live.js      34 checks, against a live server
 
 ## 12. Two kinds of evidence for one property
 
