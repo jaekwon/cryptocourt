@@ -295,8 +295,9 @@ GeoLite2 needs an account and is licence-restricted.
 
 ## 10. Status
 
-Implemented, 162 subtests across three packages, verified live against a running
-server and a real gemma3:4b:
+Implemented and verified live against a running server and a real gemma3:4b.
+173 Go tests and subtests across three packages (70 top-level, 103 subtests), plus 89
+assertions in the panel harness:
 
 - **`internal/chat`** — sanitiser and skeleton, client-address policy, the store
   (schema, throttle, enforcement with the automated ceiling), the HTTP server
@@ -304,14 +305,57 @@ server and a real gemma3:4b:
   scanner loop with escalate-only windowing
 - **`internal/geo`** — the country lookup: none, proxy header, or MaxMind table
 - **`cmd/kourtchat`, `cmd/kourtmod`, `cmd/kourtchatctl`**
+- **`web/chat.js`** — the panel: rendering, escaping, the poller, demo mode
 
-Not done: **the chat panel in the page**. It is the last piece and the only one that
-touches a file another workstream is actively editing, so it waits for their
-in-flight demo-data refactor to land rather than being tangled with it. The design
-for it is §7; the constraint that decides its shape is that all fourteen harnesses in
-`web/tests/` string-slice `index.html` and evaluate pure functions, so the panel must
-be a pure `chatPanelHtml(...) -> string` with a thin mount, and `esc()` needs `'` and
-a backtick added to it first.
+**The panel is built** — `web/chat.js`, with `web/tests/chat_test.js` (89 assertions,
+standalone under `node`). It went in as a file of its own rather than as another block
+inside `index.html`, which turned out better than the plan in two ways: everything the
+feature consists of is readable in one place, and it carries its own stylesheet, so it
+does not need the page's theme to grow a chat section. Its own `chatEsc` also removed
+the prerequisite of hardening the page's `esc()` first — that is still worth doing,
+but the panel no longer waits on it.
+
+Three properties are load-bearing and each fails a test if removed. Everything is
+escaped, including `'` and a backtick, because the server preserves markup on purpose
+(§4). Nothing is ever linkified — a scam works when its link is clickable. And the
+transcript is REPLACED from a full fetch rather than appended to by id, because
+`Recent` only returns unhidden rows, so an incremental client would keep showing a
+scam for the rest of the session after §7 hid it.
+
+## 11. Wiring the panel into the page
+
+Not done, because `web/index.html` and `web/tests/` are another workstream's
+uncommitted work and `git add` is per file. The hook is three lines plus a config
+field:
+
+```html
+<script src="chat.js"></script>              <!-- beside the other scripts -->
+<div id="courtchat"></div>                   <!-- bottom of the court page -->
+```
+
+```js
+// in the court renderer, after the court is known:
+if (window.CHATSTOP) CHATSTOP();             // previous panel, if any
+CHATSTOP = mountChat(document.getElementById("courtchat"),
+                     {cfg: CFG, chain: CFG.chain, court: slug});
+```
+
+`CFG.chat` must be added to `cleanCfg`'s whitelist and to the settings form, or the
+endpoint is dropped on save. Absent or `mode:"demo"` means no network at all and a
+sample thread instead, which keeps `web/README.md`'s promise that the demo makes no
+network calls — `chatBase` returns `""` rather than guessing an origin, and a test
+asserts demo mode issues zero fetches.
+
+`mountChat` returns a stop function that MUST be called before the container is
+replaced. `render()` is async and re-entrant, so without it a poller from a previous
+render can wake up and paint one court's messages into another court's page; the
+generation counter inside `chat.js` makes that harmless, and the returned stop is what
+releases the timer.
+
+`web/README.md` needs one line: it currently promises the page talks to nothing but a
+gno RPC node, and with chat configured it also talks to `kourtchat`. That is not a
+private API — it is this repo's own service, documented in §9 — but the README should
+say so rather than leave a reader to discover it.
 
 Also deferred: pruning old messages (a documented `DELETE`, not code — getting it
 wrong destroys the evidence an appeal needs), and validating a court against the
