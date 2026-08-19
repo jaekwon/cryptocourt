@@ -133,13 +133,44 @@ func joiner(r rune) bool {
 //	Hangul fillers     pad a name to impersonate another
 //	remaining Cf       formatting with no place in a single line
 //
-// Arabic and Syriac format characters (U+0600-0605, U+06DD, U+070F, U+08E2) are
-// part of well-formed text in those scripts and are deliberately NOT erased.
+// THE EXEMPTION IS A UNICODE PROPERTY, not a list. It used to be nine hand-written
+// codepoints — U+0600-0605, U+06DD, U+070F, U+08E2 — described as "Arabic and
+// Syriac format characters ... part of well-formed text in those scripts". That
+// description names an actual Unicode property, Prepended_Concatenation_Mark: the
+// format characters that precede digits and belong to the text. The list was that
+// property as of an older Unicode, and it had since grown, so four members were
+// falling through to the `remaining Cf` catch-all and being erased SILENTLY:
+//
+//	U+0890   ARABIC POUND MARK ABOVE
+//	U+0891   ARABIC PIASTRE MARK ABOVE
+//	U+110BD  KAITHI NUMBER SIGN
+//	U+110CD  KAITHI NUMBER SIGN ABOVE
+//
+// Two Arabic CURRENCY marks, in an application about money and claims, dropped
+// without a diagnostic — a price losing its unit rather than a message being
+// refused. Reading the property instead of a copy of it fixes those four and
+// cannot drift again when Unicode adds a fifth.
+//
+// WHAT IS STILL ERASED DESPITE HAVING LEGITIMATE USE, said plainly because the
+// heading above does not cover it. LRM (U+200E), RLM (U+200F) and ALM (U+061C) are
+// bidi MARKS, not overrides: they cannot reorder text arbitrarily, and they are
+// the standard way to make mixed-direction text render correctly — which a court
+// discussing "claim 7" in Arabic produces constantly. They are erased anyway,
+// because the neutrals whose direction they resolve are, here, claim numbers and
+// amounts, and a mark that can move a digit to the other side of a figure is worth
+// more to an attacker than to a writer. The cost is real and bounded: no character
+// of anybody's message is lost, and some mixed-direction sentences render with
+// punctuation or a trailing number on the wrong side. That is a trade rather than
+// an oversight, and it is the one place this file chooses against the writer.
+// prependedConcatenationMark is looked up once rather than per rune, because erase
+// runs on every character of every message.
+var prependedConcatenationMark = unicode.Properties["Prepended_Concatenation_Mark"]
+
 func erase(r rune) bool {
 	switch {
 	case joiner(r):
 		return false
-	case r >= 0x0600 && r <= 0x0605, r == 0x06DD, r == 0x070F, r == 0x08E2:
+	case unicode.Is(prependedConcatenationMark, r):
 		return false // required by the scripts that use them
 	case r == 0x00AD, r == 0x034F:
 		return true

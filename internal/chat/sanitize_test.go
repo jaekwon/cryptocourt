@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // Every "must be rejected" case is paired with the ordinary text it must NOT
@@ -639,5 +640,110 @@ func TestTheBodyLimitCountsRunesNotLetters(t *testing.T) {
 	}
 	if _, err := SanitizeBody(at); err != nil {
 		t.Errorf("exactly %d runes must be accepted: %v", MaxBodyRunes, err)
+	}
+}
+
+// EVERY PREPENDED CONCATENATION MARK MUST SURVIVE, and this is written against the Unicode
+// PROPERTY rather than a list of codepoints, because a list is exactly what went wrong.
+//
+// erase() exempted nine hand-written codepoints described as "Arabic and Syriac format characters
+// ... part of well-formed text in those scripts". That description names a real Unicode property,
+// Prepended_Concatenation_Mark, and the list was that property as of an older Unicode. It had
+// since gained four members, which fell through to the `remaining Cf` catch-all and were erased
+// SILENTLY — no refusal, no diagnostic, just a character removed from somebody's message:
+//
+//	U+0890   ARABIC POUND MARK ABOVE
+//	U+0891   ARABIC PIASTRE MARK ABOVE
+//	U+110BD  KAITHI NUMBER SIGN
+//	U+110CD  KAITHI NUMBER SIGN ABOVE
+//
+// Two Arabic CURRENCY marks, in an application about money and claims. A price losing its unit is
+// worse than a message being refused, because nobody is told.
+//
+// Iterating the property means a fifth member added by a future Unicode is covered the day the Go
+// toolchain learns about it, rather than the day somebody notices Arabic text is wrong.
+func TestEveryPrependedConcatenationMarkSurvives(t *testing.T) {
+	pcm, ok := unicode.Properties["Prepended_Concatenation_Mark"]
+	if !ok {
+		t.Skip("this Go toolchain does not expose the property; erase() reads the same table")
+	}
+	n := 0
+	for r := rune(0); r <= 0x10FFFF; r++ {
+		if !unicode.Is(pcm, r) {
+			continue
+		}
+		n++
+		// In context, because a lone format character trims to nothing.
+		in := "x" + string(r) + "123"
+		out, err := SanitizeBody(in)
+		if err != nil {
+			t.Errorf("U+%04X: a prepended concatenation mark must not be refused: %v", r, err)
+			continue
+		}
+		if !strings.ContainsRune(out, r) {
+			t.Errorf("U+%04X was ERASED: %q became %q — it belongs to the text of the script "+
+				"that uses it, and dropping it is silent corruption", r, in, out)
+		}
+	}
+	if n < 13 {
+		t.Errorf("only %d members found; the property table looks wrong for this audit", n)
+	}
+	t.Logf("%d prepended concatenation marks, all preserved", n)
+}
+
+// THE PAIRED NEGATIVE: the invisibles that exist to make text read as something else are still
+// erased. Without this the table above would pass for a sanitiser that erases nothing at all.
+//
+// LRM, RLM and ALM are in this list DELIBERATELY and they are the uncomfortable entries: they are
+// bidi marks with legitimate use in mixed-direction text, not overrides. sanitize.go states the
+// trade — the neutrals whose direction they resolve are claim numbers and amounts here — and this
+// fixture pins the choice so that changing it is a decision rather than a drift.
+func TestTheInvisiblesThatDisguiseTextAreStillErased(t *testing.T) {
+	for _, c := range []struct {
+		r     rune
+		label string
+	}{
+		{0x00AD, "soft hyphen, splits a word that renders as one"},
+		{0x034F, "combining grapheme joiner"},
+		{0x200B, "zero-width space"},
+		{0x200E, "LRM — a bidi mark, erased deliberately; see sanitize.go"},
+		{0x200F, "RLM — likewise"},
+		{0x061C, "ALM — likewise"},
+		{0x202E, "right-to-left override, the Trojan Source class"},
+		{0x2066, "left-to-right isolate"},
+		{0x2069, "pop directional isolate"},
+		{0x2060, "word joiner"},
+		{0xFEFF, "zero-width no-break space"},
+		{0x115F, "Hangul choseong filler, pads a name to impersonate"},
+		{0x3164, "Hangul filler"},
+		{0xFFF9, "interlinear annotation anchor"},
+		{0xE0041, "tag character, a prompt-smuggling channel"},
+	} {
+		in := "x" + string(c.r) + "123"
+		out, err := SanitizeBody(in)
+		if err != nil {
+			t.Errorf("U+%04X (%s): erasure is silent, not a refusal: %v", c.r, c.label, err)
+			continue
+		}
+		if strings.ContainsRune(out, c.r) {
+			t.Errorf("U+%04X (%s) survived: %q -> %q", c.r, c.label, in, out)
+		}
+	}
+}
+
+// The case that made this concrete: an Arabic price keeps its currency mark.
+func TestAnArabicPriceKeepsItsCurrencyMark(t *testing.T) {
+	// "the price" then ARABIC POUND MARK ABOVE then Arabic-Indic 50.
+	const price = "السعر ࢐٥٠"
+	out, err := SanitizeBody(price)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if out != price {
+		t.Errorf("the mark was dropped:\n  in  %q\n  out %q", price, out)
+	}
+	if !strings.ContainsRune(out, 0x0890) {
+		t.Error("U+0890 ARABIC POUND MARK ABOVE must survive; a figure without its unit is " +
+			"a different figure")
 	}
 }
