@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -59,6 +60,55 @@ func keyWarning(secretFile, db string) string {
 			"a backup of that directory carries both the hashes and the key. See CHAT.md \u00a79."
 	}
 	return ""
+}
+
+// modeWarning reports a database other users on this host can read.
+//
+// Open creates a NEW database 0600, and SQLite copies that onto -wal and -shm, so a fresh
+// deployment is closed by default. A database created before that change keeps whatever the
+// umask gave it — 0644 under the usual 022 — and nothing would otherwise say so. Measured
+// against the real server before the fix: the key file was 0600 while chat.db, chat.db-wal and
+// chat.db-shm were all -rw-r--r--.
+//
+// ALL THREE FILES ARE CHECKED, not just the one named by --db. In WAL mode the main file can be
+// nothing but a header while every row lives in the -wal, so an operator who reads a warning
+// about chat.db, runs chmod on it alone and sees the warning clear would have protected the
+// header and left the messages readable. Whichever files are actually loose get named.
+//
+// A warning and not a refusal, for the reason keyWarning gives: refusing would break every
+// deployment running this way today, and the operator may have a reason. Not being able to see
+// it is the problem.
+//
+// THE KEY CLAUSE DELIBERATELY REPEATS keyWarning, which fires on exactly the same condition, so
+// the two always print together and the sentence is always redundant on screen. It stays because
+// log lines are read one at a time — grepped, alerted on, pasted into a ticket — and a warning
+// that only makes sense next to its neighbour is worse than one that repeats a clause. Deleting
+// it would leave the line saying "readable by other users" without the part that makes that
+// serious rather than untidy.
+func modeWarning(db, secretFile string) string {
+	var loose []string
+	for _, p := range []string{db, db + "-wal", db + "-shm"} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			// Absent is the common case for -wal and -shm, and a missing or unreadable main
+			// database is diagnosed by chat.Open far better than it could be here.
+			continue
+		}
+		if perm := fi.Mode().Perm(); perm&0o077 != 0 {
+			loose = append(loose, fmt.Sprintf("%s (%04o)", p, perm))
+		}
+	}
+	if len(loose) == 0 {
+		return ""
+	}
+	msg := "readable by other users on this host: " + strings.Join(loose, ", ") +
+		". These hold every message body and the whole consequence history. New databases are " +
+		"created 0600; run chmod 600 on each of the files listed."
+	if secretFile == "" {
+		msg += " With no --secret-file the IP hashing key is inside that same database, so " +
+			"anybody who can read it can reverse the address hashes for an address they guess."
+	}
+	return msg + " See CHAT.md \u00a79."
 }
 
 func main() {
@@ -114,6 +164,11 @@ func main() {
 	// process already announces an unmoderated chat at startup rather than leaving somebody to
 	// infer it. A defence that is not operating should say so where an operator is looking.
 	if w := keyWarning(*secretFile, *db); w != "" {
+		lg.Print(w)
+	}
+	// After Open, so the files exist to be statted, and so a database this process just
+	// created reports the mode it was actually given rather than nothing at all.
+	if w := modeWarning(*db, *secretFile); w != "" {
 		lg.Print(w)
 	}
 	hasher, err := chat.NewHasher(key)

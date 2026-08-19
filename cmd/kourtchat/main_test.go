@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -97,4 +98,111 @@ func TestKeyWarningDoesNotConfuseASiblingDirectoryForTheSameOne(t *testing.T) {
 	if got := keyWarning(filepath.Join(dir, "ip.key"), filepath.Join(dir, "chat.db")); got == "" {
 		t.Error("a key and a database in one directory must warn")
 	}
+}
+
+// THE FILE-MODE WARNING, and the setup it must stay quiet about.
+//
+// Measured against the real server before chat.Open was changed: with --secret-file pointing
+// elsewhere, the key was 0600 and chat.db, chat.db-wal and chat.db-shm were all -rw-r--r--,
+// because SQLite creates a database 0644 under the usual umask. In the DEFAULT configuration
+// there is no --secret-file and the hashing key is a row in that same world-readable file, so
+// any local user could read both the address hashes and the key that reverses them.
+//
+// Open now creates a new database 0600 and SQLite copies that onto -wal and -shm — verified
+// live, all four files came back -rw------- while an ordinary post and GET still worked. This
+// warning is for the databases that already exist, which keep the mode they were given.
+func TestTheFileModeWarningAndWhatItMustNotWarnAbout(t *testing.T) {
+	write := func(t *testing.T, path string, mode os.FileMode) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte("x"), mode); err != nil {
+			t.Fatal(err)
+		}
+		// WriteFile applies the umask, so set the mode explicitly or the fixture measures the
+		// umask of whoever ran the tests rather than the case it means to.
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("a 0600 database is the correct setup and must be silent", func(t *testing.T) {
+		db := filepath.Join(t.TempDir(), "chat.db")
+		write(t, db, 0o600)
+		if w := modeWarning(db, "/etc/kourt/key"); w != "" {
+			t.Errorf("a correctly-moded database must not warn; got: %s", w)
+		}
+	})
+
+	t.Run("a database nobody has created yet must be silent", func(t *testing.T) {
+		// chat.Open diagnoses a bad path far better than this could, and a warning here would
+		// fire before the real diagnosis and bury it.
+		if w := modeWarning(filepath.Join(t.TempDir(), "absent.db"), ""); w != "" {
+			t.Errorf("a missing database is not this warning's business; got: %s", w)
+		}
+	})
+
+	t.Run("a 0644 database is named, with the fix", func(t *testing.T) {
+		db := filepath.Join(t.TempDir(), "chat.db")
+		write(t, db, 0o644)
+		w := modeWarning(db, "/etc/kourt/key")
+		if w == "" {
+			t.Fatal("a world-readable database must be reported")
+		}
+		for _, want := range []string{db, "0644", "chmod 600"} {
+			if !strings.Contains(w, want) {
+				t.Errorf("the warning must contain %q so it is actionable; got: %s", want, w)
+			}
+		}
+	})
+
+	t.Run("a group-readable database counts too", func(t *testing.T) {
+		db := filepath.Join(t.TempDir(), "chat.db")
+		write(t, db, 0o640)
+		if modeWarning(db, "/etc/kourt/key") == "" {
+			t.Error("0640 lets another account read every message body; it must be reported")
+		}
+	})
+
+	// THE HALF-FIXED CASE, and the reason all three files are checked. An operator who reads a
+	// warning about chat.db, runs chmod on that alone and watches the warning clear would have
+	// protected a file that in WAL mode can be nothing but a header, while every row stayed
+	// readable in the -wal beside it.
+	t.Run("a tightened main file with a loose WAL still warns, and names the WAL", func(t *testing.T) {
+		dir := t.TempDir()
+		db := filepath.Join(dir, "chat.db")
+		write(t, db, 0o600)
+		write(t, db+"-wal", 0o644)
+		w := modeWarning(db, "/etc/kourt/key")
+		if w == "" {
+			t.Fatal("the rows live in the WAL; a loose WAL must be reported even when the " +
+				"main file is closed")
+		}
+		if !strings.Contains(w, "chat.db-wal") {
+			t.Errorf("the warning must name the WAL, or the operator cannot act on it; got: %s", w)
+		}
+		if strings.Contains(w, "chat.db (") {
+			t.Errorf("the main file is 0600 and must not be listed as loose; got: %s", w)
+		}
+	})
+
+	// The key clause is conditional, and both directions matter: claiming the key is in the
+	// database when it is not would send an operator to rotate something that was never exposed.
+	//
+	// It fires on the same condition as keyWarning, so on screen the two always appear together
+	// and the sentence is redundant. That is deliberate — see modeWarning — because a log line
+	// gets read on its own. Asserted here so the redundancy cannot be tidied away by accident.
+	t.Run("the key clause tracks whether the key is actually in there", func(t *testing.T) {
+		db := filepath.Join(t.TempDir(), "chat.db")
+		write(t, db, 0o644)
+		withKey := modeWarning(db, "")
+		if !strings.Contains(withKey, "reverse the address hashes") {
+			t.Errorf("with no --secret-file the key is in that file and the warning must say "+
+				"so; got: %s", withKey)
+		}
+		separate := modeWarning(db, "/etc/kourt/key")
+		if strings.Contains(separate, "reverse the address hashes") {
+			t.Errorf("with a separate --secret-file the hashes are not reversible from this "+
+				"file, and saying they are would send an operator to rotate a key that was "+
+				"never exposed; got: %s", separate)
+		}
+	})
 }

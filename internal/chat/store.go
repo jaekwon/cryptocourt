@@ -209,6 +209,35 @@ CREATE TABLE IF NOT EXISTS frozen (chain TEXT, court TEXT, at INTEGER NOT NULL,
 // a concurrent writer gets SQLITE_BUSY instantly rather than waiting, which is the
 // difference between "the scanner is writing" and "chat returned an error".
 func Open(path string) (*Store, error) {
+	// CREATE THE FILE OURSELVES, 0600, BEFORE THE DRIVER GETS TO IT.
+	//
+	// SQLite creates a new database with 0644 masked by the umask, and 0644 is what a default
+	// umask of 022 produces. Measured against the real server: the key file was 0600 and
+	// chat.db, chat.db-wal and chat.db-shm were all -rw-r--r--.
+	//
+	// That matters most in the DEFAULT configuration, where there is no --secret-file and so,
+	// as keyWarning says in as many words, the IP hashing key is stored inside this database.
+	// A world-readable file then carries both the address hashes and the key that reverses
+	// them, and any local user can undo the hashing for an address they can guess. Even with a
+	// separate key the file still holds every message body and the whole consequence history.
+	//
+	// The mode has to be set BEFORE the first write, not after, because SQLite copies the
+	// database file's permissions onto -wal and -shm when it creates them — and the WAL is
+	// where the rows actually live, so a 0600 main file beside a 0644 WAL would protect
+	// nothing. Open runs migrations, which creates the WAL, so this is the only window.
+	//
+	// An EXISTING database is left exactly as it is: silently tightening a file an operator
+	// may have deliberately shared is not this function's decision to make. cmd/kourtchat
+	// warns about it at startup instead.
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		// Failure is deliberately ignored. Every way this can fail — a missing parent, a
+		// read-only directory, a path that is itself a directory — is diagnosed far better by
+		// diagnosePath below, and failing here would replace a good message with a worse one.
+		if f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600); err == nil {
+			f.Close()
+		}
+	}
+
 	dsn := "file:" + path +
 		"?_pragma=journal_mode(WAL)" +
 		"&_pragma=busy_timeout(5000)" +

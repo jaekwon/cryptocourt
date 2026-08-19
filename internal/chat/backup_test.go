@@ -111,3 +111,85 @@ func backupState(path string) (string, int, error) {
 	}
 	return integ, n, nil
 }
+
+// A NEW DATABASE IS CREATED 0600, AND THE WAL INHERITS IT.
+//
+// Measured against the real server before this: the key file was 0600 while chat.db,
+// chat.db-wal and chat.db-shm were all -rw-r--r--, because SQLite creates a database 0644
+// masked by the umask and 022 is the usual umask. In the default configuration there is no
+// --secret-file, so the hashing key is a row in that same file and any local user could read
+// both the address hashes and the key that reverses them.
+//
+// THE WAL ARM IS THE ONE THAT MATTERS. §9's own measurement shows the main file can be 4,096
+// bytes of header while every row lives in the -wal, so a 0600 main file beside a 0644 WAL
+// would protect nothing. SQLite copies the database file's permissions onto the WAL when it
+// creates it, which is why Open sets the mode BEFORE its first write rather than after.
+func TestANewDatabaseIsNotReadableByOtherUsers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "chat.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	// A write, so the WAL certainly exists and certainly holds rows.
+	s.Now = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	if _, err := s.Post(context.Background(), PostInput{
+		Chain: "dev", Court: "orem", Moniker: "alice",
+		Body:   "a message, so the WAL exists and has something in it",
+		IPHash: "ip-a", NetHash: "net-a",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	checked := 0
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		fi, err := os.Stat(path + suffix)
+		if err != nil {
+			continue // -shm in particular need not exist on every platform
+		}
+		checked++
+		if perm := fi.Mode().Perm(); perm&0o077 != 0 {
+			t.Errorf("%s is mode %04o: other users on this host can read it. In the default "+
+				"configuration that file also holds the IP hashing key, so this is the "+
+				"difference between hashed addresses and reversible ones",
+				filepath.Base(path+suffix), perm)
+		}
+	}
+	if checked < 2 {
+		t.Fatalf("only %d of the database's files existed, so the WAL arm — the one that "+
+			"matters, since the rows live there — did not run", checked)
+	}
+}
+
+// AND AN EXISTING DATABASE IS LEFT ALONE. Open documents this: silently tightening a file an
+// operator may have deliberately shared is not its decision, and cmd/kourtchat warns instead.
+// Without this arm the pre-create could grow into an unconditional chmod and nothing would say.
+func TestOpeningAnExistingDatabaseDoesNotChangeItsMode(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "chat.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o644 {
+		t.Errorf("Open changed an existing database's mode from 0644 to %04o. That may be an "+
+			"improvement, but it is a decision this function documents leaving to the operator "+
+			"— change the comment and cmd/kourtchat's warning together if it should now act",
+			perm)
+	}
+}

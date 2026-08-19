@@ -966,8 +966,11 @@ addresses against a direct listener and five come back 429, because they are all
 client. With `--behind-proxy` and no `--trusted-proxy`, the server refuses to start.
 
 **`--secret-file` should be outside the data directory — and `kourtchat` now says so when it is
-not.** Two configurations warn at startup, beside the UNMODERATED line and for the same reason: a
-defence that is not operating should say so where an operator is looking, not only in a document.
+not.** The fallback keeps the key in the database, which is convenient and protects nothing:
+hashing addresses defends against a stray copy of the `.db` file, and if the key is in that file a
+backup carries both. IPv4 is 2^32 — key plus table recovers every address in seconds. Two
+configurations warn at startup, beside the UNMODERATED line and for the same reason: a defence
+that is not operating should say so where an operator is looking, not only in a document.
 
     no --secret-file        the key is a row IN the database; one copy of that file carries the
                             address hashes and the key that reverses them
@@ -981,10 +984,24 @@ refusing would break every deployment running this way today.
 Nothing required it and nothing checked it; the verb is "belongs" now, and the startup warning is
 what lets a recommendation be one.
 
-**`--secret-file` should be outside the data directory.** The fallback keeps the key
-in the database, which is convenient and protects nothing: hashing addresses defends
-against a stray copy of the `.db` file, and if the key is in that file, a backup
-carries both. IPv4 is 2^32 — key plus table recovers every address in seconds.
+**The database file was world-readable, which made all of that worse than it reads.** Measured
+against the running server: the key file was `0600`, and `chat.db`, `chat.db-wal` and
+`chat.db-shm` were every one of them `-rw-r--r--`. SQLite creates a database `0644` masked by the
+umask, and 022 is the usual umask. So in the DEFAULT configuration — no `--secret-file`, key in
+the database — any local account could read both the hashes and the key that reverses them: the
+2^32 recovery above, with no stray copy required.
+
+`Open` now creates a new database `0600`, before the driver's first write. The ordering is the
+whole point. SQLite copies the database file's permissions onto `-wal` and `-shm` as it creates
+them, and the backup measurement below shows the main file can be 4,096 bytes of header while
+every row lives in the WAL — so a `0600` main file beside a `0644` WAL would protect nothing.
+Verified live: all four files came back `-rw-------`, and an ordinary post and read still worked.
+
+An EXISTING database keeps whatever mode it has. Silently tightening a file an operator may have
+deliberately shared is not `Open`'s decision to make, so `kourtchat` warns at startup instead and
+names every one of the three files that is actually loose. That last part is not fussiness: an
+operator who reads a warning about `chat.db`, runs `chmod` on that alone and watches the warning
+clear would have protected the header and left the messages readable.
 
 **Arm the scanner only after watching it.** `--enforce` is off by default. Run the dry
 run against real traffic, read `verdict` out of the messages table, and turn it on
