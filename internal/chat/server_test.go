@@ -295,3 +295,31 @@ func mustAddr(t *testing.T, s string) netip.Addr {
 	}
 	return a
 }
+
+// An empty room must serialise as an empty LIST, not null.
+//
+// Found live: a nil slice marshals as `null`, so a client writing the obvious
+// `for (const m of data.messages)` crashes — on a brand new court, and again the
+// moment moderation hides the only message there.
+func TestEmptyRoomIsAnEmptyList(t *testing.T) {
+	srv, _, _ := newServer(t)
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/quiet", nil))
+	if rec.Code != 200 {
+		t.Fatalf("get: %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), `"messages":null`) {
+		t.Fatalf("an empty room must return [], got %s", rec.Body)
+	}
+	var reply struct {
+		Messages []Message `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &reply); err != nil {
+		t.Fatal(err)
+	}
+	if reply.Messages == nil {
+		t.Fatal("messages decoded as nil; a client iterating it would crash")
+	}
+	if len(reply.Messages) != 0 {
+		t.Fatalf("want an empty list, got %d", len(reply.Messages))
+	}
+}

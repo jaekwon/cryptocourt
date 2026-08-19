@@ -202,6 +202,13 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 		writeErr(w, http.StatusInternalServerError, "cannot read status")
 		return
 	}
+	// A nil slice marshals as `null`, and a client writing the obvious
+	// `for (const m of data.messages)` then crashes on an empty room — which is
+	// exactly the state a court is in before anyone speaks, and the state a
+	// moderated court returns to. An empty list is a list.
+	if msgs == nil {
+		msgs = []Message{}
+	}
 	next := since
 	if n := len(msgs); n > 0 {
 		next = msgs[n-1].ID
