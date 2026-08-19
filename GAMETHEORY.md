@@ -1,12 +1,27 @@
 # GAMETHEORY.md — the answer-bond redesign, stated for audit
 
-**Status: PROPOSED, NOT AUDITED.** Written before the audit deliberately, so the audit has a
-fixed target and cannot be accused of grading a moving one. Every number below is either
-measured (marked **M**) or read out of the source (marked **S**). Nothing here is
-implemented.
+**Status: AUDIT ROUND 1 RETURNED. §C3's load-bearing claim was FALSIFIED and is corrected
+below.** Written before the audit deliberately, so the audit had a fixed target and cannot be
+accused of grading a moving one. Every number is either measured (marked **M**) or read out of
+the source (marked **S**). Nothing here is implemented.
 
-The document exists to be attacked. §9 lists what must be proven and §10 lists what I
-already know is unresolved.
+The document exists to be attacked. §9 lists what must be proven, §10 what is unresolved, and
+**§11 records what the audit broke** — read that first if you read nothing else.
+
+> ### Round-1 headline: three separate errors in §C3, all now corrected
+>
+> 1. **Leverage is not bounded below 1.** It is `(tier + carrot)/k`, so **0.669 at MID but
+>    1.294 at HIGH** — measured end-to-end at 1.2937. HIGH is reachable *on the same round
+>    that leaves a snipe standing*.
+> 2. **I conflated two ceilings.** `slashDrawBps × maxMidGrossBps / 10000` = 30.845%·X̄ bounds
+>    the **bond**, not the leverage. Leverage contains no X̄, no age, no rate, and **no
+>    `answerBondBps`** — so 450 vs 600 buys nothing on the load-bearing property.
+> 3. **Re-keying the floor without the sizer leaks the collateral.** `SettleUndisputed` would
+>    refund **83.83% of the posted bond within 72 hours** (**M**), because `quality.gno:531`
+>    still reads the answered side. C3 must re-key **both**.
+>
+> Also: C3 makes the deterrent **worse than today** on its own axis — required overturn
+> probability rises from **29.2% to 40.1%** — which the original draft did not state.
 
 ---
 
@@ -162,10 +177,11 @@ Three consequences:
   (101) and *exempts* the sniper (45).
 - **`max(yesConv, noConv)` is free for every non-contrarian answer** — bit-identical for the
   majority and even-split rows (**M**). It is the same tax with the sniper's exemption removed.
-- **It closes the snipe by construction**: the floor becomes 1.6× the *destroyable* draw, so
-  destruction leverage is capped at **0.625 at every age and every rate**, with an analytic
-  ceiling of **30.845%·X̄** = `slashDrawBps × maxMidGrossBps / 10000` — the quantity
-  `court.gno:227` already evaluates (S).
+- **It closes the snipe at MID and NOT at HIGH.** ← *corrected by audit; original draft
+  claimed "capped at 0.625 at every age and every rate", which was wrong twice.* The correct
+  derivation is in §11.1. Leverage is `(tier + splitCarrot/100) / (slashDrawBps/10⁴)` =
+  **0.669 at MID, 1.294 at HIGH** (**M: 1.2937 end-to-end**). The 30.845%·X̄ figure is the
+  ceiling on the **bond**, not on leverage.
 
 **Why 600 bps and not 450:** at `answerBondBps == slashXBps == 450` exactly,
 `court.gno:232` holds with **zero margin** and the settle-time reserve equals the *entire*
@@ -447,3 +463,191 @@ the design, so the check becomes a sanity bound.
 - **Whether the meta/appeals lane survives a 600 bps bond** end to end. The filing-vs-quorum
   invariants (`court.gno:243-261`) pass arithmetically, but the absolute-budget path was not
   exercised.
+
+---
+
+## 11. AUDIT ROUND 1 — what broke
+
+Isolated shadow copy; the working tree was verified byte-identical before and after (133
+files, `git status` empty both times). Baseline green at `ok . 7.17s` before patching.
+
+### 11.1 The leverage ceiling — FALSIFIED, and the correct bound
+
+**Counterexample, measured end to end.** Twin claims in one court, 11 weeks at the hot rate
+ceiling, X̄ = 1001.67 CC, 100% NO / 0 YES, sniper declares YES. Honest twin promoted to
+`tierHighX` by a 5%-of-supply flag vote; precondition `tier == tierHighX` asserted and the
+budget clamp verified not binding:
+
+```
+DESTROYED = 361,015,973   bond posted = 279,046,163   LEVERAGE = 1.2937
+```
+
+**The correct derivation.** Destroyed prize (`crystallize.gno:63-90,113`; deposit and fee
+refund on both paths, principal is 1× on both, `capBonus` never binds):
+
+```
+Destroyed ≤ (tier + splitCarrot/100) · mg_opposing
+bond      ≥ (slashDrawBps/10⁴) · mg_max  ≥  1.6 · mg_opposing
+L = Destroyed/bond ≤ (tier + splitCarrot/100)/(slashDrawBps/10⁴)
+                   = 1.07/1.6 = 0.669  (MID)      = 2.07/1.6 = 1.294  (HIGH)
+```
+
+**Three things follow that the original draft got wrong:**
+
+1. The bound contains **no X̄, no claim age, no rate, no d_eff, no pool split, and no
+   `answerBondBps`**. It is `1/k`, tier- and carrot-adjusted. So "below 1 at every age and
+   rate" is provable *at MID* — but for a reason unrelated to `court.gno:227`, which I cited
+   as the proof.
+2. My 0.625 **omitted the carrot**, which is tier-invariant `7%·midGross` and *is* destroyed.
+   The real MID figure is 0.669, and the bound is **exactly attained**, not merely respected.
+3. **HIGH is reachable on the same round that leaves the snipe standing** — the shipped
+   `TestMandatedHighRidePromotesOverAStandingMid` promotes via a dispute **uphold** ride. The
+   band X̄ ∈ [0.10%, ~1.3%] of supply reaches L > 1; above ~1.3% the `curPeriodBudget` clamp
+   pulls it back under, which is luck rather than design.
+
+**Fix (chosen): freeze the tier the floor was sized against**, so a post-answer promotion to
+HIGH cannot double a prize the bond was never collateralized for. Rejected alternative:
+`slashDrawBps > 20,700` bounds L below 1 at HIGH but costs a ~42.4%·X̄ worst-case bond,
+undoing most of C3's access gain — which is the whole point of C3.
+
+**Sweep, 864 points** (ages 1/2/4/8/11/12 wk × cold and hot-at-ceiling × splits 50/50, 90/10,
+99/1, 9999/1 × X̄ ∈ {1 CC, 1k, 1M} × bps ∈ {450, 600, 5000} × tier), using the realm's own
+`slashSizeAt`/`convToCC`/`mulDiv128`:
+
+| bps | keying | tier | worst L | required overturn prob. |
+|---|---|---|---|---|
+| 5000 | answered (**today**) | MID | 0.413 | **29.2%** |
+| 600 | answered | MID | 3.437 | 77.5% |
+| 450 | answered | MID | 4.583 | 82.1% |
+| **600** | **max(both)** | MID | **0.669** | **40.1%** |
+| 450 | max(both) | MID | 0.669 | 40.1% — *bps-independent* |
+| **600** | **max(both)** | **HIGH** | **1.294** | **56.4%** |
+
+### 11.2 Re-keying the floor without the sizer leaks the collateral — NEW BUG, in my proposal
+
+C3 as drafted re-keys the **floor** (`answer.gno:148`) but leaves the **sizer**
+(`quality.gno:531`) reading `cs.sideConv(int(cs.answer))`. **M:** `SettleUndisputed`
+(`session.gno:74-86`) then refunds **233,849,858 of a 278,924,857 bond — 83.83% — within
+72 hours**, retaining only `slashSizeFor`. And `votingBlocks` (7 d) > `settleDelay` (72 h), so
+no flag can have resolved by then.
+
+This is precisely the drift `quality.gno:518-521` says `slashSizeAt` exists to prevent: *"two
+parallel arithmetic paths that a drained pool can pull apart."* **C3 must re-key both, in one
+commit**, or the collateral it appears to post evaporates before it can be forfeited.
+
+### 11.3 The metric itself was wrong — the sharpest finding
+
+**On every realized path, either destruction is zero or forfeiture is zero:**
+
+| path | forfeited | destroyed |
+|---|---|---|
+| undisputed settle, no flag (**modal**) | **0** | 1.07·mg |
+| undisputed + conclusive HIGH flag | **0** | 2.07·mg |
+| dispute → failed quorum (×1–3) | **0** | 1.07·mg |
+| dispute → **uphold** | **0, plus comp MINTED to the sniper** | 1.07–2.07·mg |
+| dispute → overturn | whole bond (**M:** 280,953,112 of 280,953,112 burned) | **0 — draw restored** |
+| undisputed + slash-grade LOW flag | 450 bps·X̄ | 0.07·mg (carrot only) |
+
+So `destroyed/forfeited` is **0 or ∞, never a finite number > 0**. The only well-defined
+quantity is destroyed / bond *posted* — a **collateralization ratio**, not a payoff ratio.
+
+**Consequence: C3's deterrent routes entirely through the dispute lane's whole-bond burn**,
+with expected value `P(overturn) × bond`. That independently confirms §4.2 and §4.4 — the
+failure is **turnout, not incentive** — and it means **C1, C2 and C4b outrank the bond
+constant.** It also means C3 is a **regression on the deterrent axis**: required overturn
+probability rises from 29.2% today to 40.1%. Better than 600-unre-keyed by 37 points; worse
+than the status quo.
+
+### 11.4 Attacking `max` — no manipulation found, and it self-defends
+
+`max ≥ mg_opposing` unconditionally, so the bound cannot be broken by choosing which side is
+the max. **M**, five plays against an identical honest pool (8 wk, hot):
+
+| play | bond | max side | L at MID |
+|---|---|---|---|
+| dust-declare | 200,410,022 = 1.6·mg_NO **exactly** | NO | 0.669 |
+| 20k CC on the declared side, 1 block before | 460,099,999 | NO | 0.291 |
+| 10k CC on **both** sides | 460,099,999 | NO | 0.291 |
+| 20k declared, held 1 day, then **unstaked** | 860,119,999 | NO | 0.158 |
+| 6k declared for the whole life → **max = sniper's side** | 1,227,686,571 | **YES** | 0.111 |
+
+Every play *raises* the bond (2.3×–6.1×) and lowers leverage. Two structural reasons already
+in source: `X̄ = max(3h trailing, lifeAvg)` is monotone in stake (S — `answer.gno:104-106`),
+and conviction freezes at the answer while `Unstake` keeps it (S — `stake.gno:183-217`) — past
+capital-time is not withdrawable.
+
+### 11.5 Separability — §10 was half wrong, and the wrong half is actionable
+
+**§10 is confirmed for any formula over (X̄, convYes, convNo).** Contrarian who staked 100 CC
+early and held, vs sniper who dumps the same 100 CC one block before answering: bonds
+203,117,809 vs 202,996,502 — **0.06% apart**, pure fixture noise. Unseparable, as claimed.
+
+**But there is a fourth input no formula in the design reads: the answerer's own conviction on
+the side they declare.** **M: 12,696,129 vs 13 — a factor of 976,625×, from identical
+principal.** As a share of the opposing pool: 10.0% vs 0.00001%.
+
+That signal is **capital×time-keyed** — the class `MODERATION.md`'s root principle says holds,
+and `stake.gno:130-131` states it: *"moving it costs capital × TIME, and past capital-time is
+immutable."*
+
+**So §5's rejection of a declared-side requirement was wrong in two of its three reasons:**
+
+1. *"Free to a sniper — M: ~0.011%·X̄"* — **that measurement is the reason a CONVICTION
+   minimum is not free.** I measured the right quantity and drew the opposite conclusion. A
+   *stake* minimum is free; a *conviction* minimum costs capital × time.
+2. *"Blocks the uncapitalized expert"* — **stands.** Identical in kind to the cost max-keying
+   already imposes on the contrarian.
+3. *"Creates the conflict `isParticipant` exists to prevent"* — **flatly false, measured.**
+   `isParticipant(answerer) = true` already, via `dispute.gno:558`'s first clause
+   `who == cs.answerer`, with or without a stake record. The answerer is *already* barred from
+   `VoteDispute`, `VoteQuality` and `PullCarrot`.
+
+Other candidate signals, checked rather than assumed: **the claim's own dispute history is
+definitively useless** — `cs.round`, `cs.failedRounds` and `cs.decidedRounds` are all 0 at
+`PostAnswer`. **Credential works, but only across repeated play**, so §5's rejection of a hard
+gate stands. **Stake-time profile is already in use** — the rings plus `lifeAvgStake` are what
+make `mg` small and the floor inert after a recent pile-on.
+
+**Revised position: an answerer-conviction minimum is the one lever that separates the honest
+contrarian from a sniper.** Charging the contrarian up to 30.83%·X̄ for being right early is a
+*chosen* cost, not a forced one. This is the most valuable thing round 1 produced and it needs
+its own design pass.
+
+### 11.6 The 600 bps choice — verified, three builds
+
+- **449 bps: the realm refuses to deploy** — *"kourtv2: the flat slash arm exceeds the base
+  answer bond"* (`court.gno:232`).
+- **450 bps: the settle refund is exactly 0.** My claim was true in both directions.
+- **600 bps: refund = 2500 bps of the bond** = (600−450)/600.
+
+**No value dominates 600**, but two changes are recommended: **derive** it as
+`answerBondBps = slashXBps * 4 / 3` rather than hardcoding, and **tighten `court.gno:232` to a
+margined form** (`slashXBps*4/3 > answerBondBps`). Today `450 == 450` passes, and 450 is
+exactly the value that zeroes the refund — so the invariant is one step short of catching what
+I had to catch by hand.
+
+### 11.7 Corrections to other sections
+
+- **§C0's "11.1× improvement" is measured at 450 bps, not the 600 this settles on.** At 600
+  with the floor inert it is 8.33×; **with the floor binding — the regime with the largest
+  draws, i.e. the one that matters — comp is 22.4%·X̄ and the improvement is 1.78×, not 11.1×.**
+  So **C3 barely helps C0 where it counts, and C0's cap is more necessary than §C0 implied.**
+- **§C4b's implied 2.4%·X̄ dispute bond is 11.2%·X̄ with the floor binding** (**M:**
+  112,381,244) — 1.78× cheaper than today's 20%·X̄, not 8.3×.
+- **§8's "5 shipped fixtures fail" is over-inclusive by two.** Exactly three fail:
+  `TestEconomicConstantsAreTheCalibratedValues`,
+  `TestAnswerBondCapBindsWhenTheFloorIsBelowIt`, `TestSlashReserveDrawProportionalAtSettle`.
+  `TestSlashIsLeviedAtMostOncePerClaim` and `TestOverturnBurnsTheSlashWithTheBond` **pass**.
+- **§C3's "strictly cheaper than the status quo everywhere" is TRUE and provable:** C3's bond
+  ≤ 3083 bps·X̄ < 5000 bps·X̄. Sweep max 3084 vs 5000.
+- **`answerBondCapCC` is applied *before* the floor** (deliberate, S — `answer.gno:110-151`),
+  so a court that caps to keep answers affordable has the cap silently overridden — up to
+  30.83%·X̄ under re-keying, vs `max(4.5%·X̄, 1.6·mg_answered)` today. Same mechanism, larger
+  magnitude. **New, unowned.**
+- **A latent premise, not a demonstrated bug:** `maxTcWeeks = deadClaimTimeout/periodBlocks` is
+  a *block* ratio, but the gate that fires at `answer.gno:40` is wall-clock
+  (`openedAtTime + deadClaimSecs`), and `blocksToSecs` hardcodes 5 s/block with **zero**
+  references to it in `mustInvariants`. The 12-week ceiling therefore scales as
+  (5 s ÷ actual block time). The audit could not demonstrate divergence — gno's `SkipHeights`
+  advances at exactly 5.0 s/block — so this is a **deployment premise that should be pinned**,
+  not a live defect.
