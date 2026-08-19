@@ -612,8 +612,9 @@ live fixtures rather than asserted here — including one that logs loudly if fr
 ever starts diluting, which would make this paragraph wrong.
 
 Ladder: 1h → 24h → 7d on repeats within 30 days, counting only unrevoked
-infractions. `--dry-run` is the default, and the panel's label derives from
-`health.enforcing` so it cannot claim moderation that isn't happening — which was a claim
+infractions. Dry run is the default; `--dry-run` states it explicitly and `--enforce`
+turns it off. The panel's label derives from `health.enforcing` so it cannot claim
+moderation that isn't happening — which was a claim
 this document made for some time before anything implemented it. No client fetched that
 endpoint at all. The panel now asks once per mount and, when timeouts are not being applied,
 says so.
@@ -1221,6 +1222,28 @@ rather than colliding over it.
 
 It is still not something to run on purpose: two daemons do the same Ollama work twice for
 no extra throughput, since the model is the bottleneck and both queue against the same one.
+
+**Stating the mode beats inheriting it.** `--enforce` is what changes behaviour and dry run is
+the default, but for a long time that default was the ONLY way to express a dry run: a systemd
+unit could not say which mode it meant, it could only leave the flag out and trust the default
+not to move. `--dry-run` now says it out loud. The two together are REFUSED rather than
+resolved, because both silent resolutions are worse than a daemon that declines to start —
+letting `--enforce` win applies real timeouts to somebody who asked for none, and letting
+`--dry-run` win leaves somebody who asked for enforcement moderating nothing, quietly, which is
+precisely the failure §6's `unscannable` counter exists to make impossible. An ambiguous
+invocation means the operator's intention is unknown, and there is no honest way to guess it.
+
+That flag exists because this document named it in backticks before the code did. Go's `flag`
+package exits 2 on an unknown flag, so an operator following these notes and doing the careful
+thing — stating the safe mode rather than assuming it — got `flag provided but not defined` and
+no scanner at all. Nothing that ran could have caught it; it turned up in a sweep of every
+backticked identifier in this file against the source.
+`TestEveryFlagTheRunbookNamesActuallyExists` now runs that sweep every build, over the
+`kourtchatctl` verbs as well, and reads both authorities for what a flag is — the `flag`
+declarations and `kourtchatctl`'s own argument switch, which is nine more names and would
+otherwise have reported `--older-than` as undefined the first time prose mentioned it. Both
+halves were checked against a deliberately renamed flag and a deliberately renamed verb before
+being trusted. A runbook is part of the software when an error in it stops a process.
 
 **Losing the hashing key is losing every consequence.** Every `ip_hash` is an HMAC under
 it, so a new key means every kick and ban in the table matches nobody, and every public

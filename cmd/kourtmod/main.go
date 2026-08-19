@@ -6,6 +6,7 @@
 // rather than implying moderation that is not happening.
 //
 //	kourtmod --db ./chat.db --model gemma3:4b            # dry run: logs, punishes nothing
+//	kourtmod --db ./chat.db --model gemma3:4b --dry-run  # the same, said out loud
 //	kourtmod --db ./chat.db --model gemma3:4b --enforce  # applies timeouts
 //
 // DRY RUN IS THE DEFAULT, deliberately. A small quantised model will misclassify,
@@ -16,6 +17,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -27,6 +29,34 @@ import (
 	"github.com/jaekwon/kourt/internal/scan"
 )
 
+// resolveMode decides whether to enforce from the two flags that can say so.
+//
+// --enforce is the one that changes behaviour; --dry-run exists because the default was
+// previously the ONLY way to express a dry run, and a runbook that inherits a default has
+// no defence against the default changing. An operator writing a systemd unit should be
+// able to state the mode rather than rely on it, and `--dry-run` is what they will reach
+// for — it is the near-universal spelling, and CHAT.md named it in backticks for a while
+// before it existed, so anybody following the deployment notes got
+// "flag provided but not defined" and a daemon that would not start.
+//
+// The contradiction is REFUSED rather than resolved, and that is the point of having a
+// function here at all. Both silent resolutions are worse than not starting:
+//
+//	enforce wins    somebody who asked for a dry run gets real timeouts applied
+//	dry-run wins    somebody who asked for enforcement is moderating nothing, quietly
+//
+// The second is the failure this whole service is built to avoid — every indicator green
+// while nothing is enforced — so guessing is not available. Neither flag, or either one
+// alone, is unambiguous and passes through.
+func resolveMode(enforce, dryRun bool) (bool, error) {
+	if enforce && dryRun {
+		return false, errors.New("--enforce and --dry-run contradict each other: pass " +
+			"--enforce to apply timeouts, --dry-run to state the default explicitly, or " +
+			"neither. Refusing to guess which one you meant")
+	}
+	return enforce, nil
+}
+
 func main() {
 	var (
 		db       = flag.String("db", "chat.db", "path to the SQLite database, shared with kourtchat")
@@ -36,10 +66,16 @@ func main() {
 		interval = flag.Duration("interval", 5*time.Second, "pause between cycles when idle")
 		numCtx   = flag.Int("num-ctx", 2048, "context window; the default plus the weights is what blows an 8GB budget")
 		enforce  = flag.Bool("enforce", false, "actually apply timeouts (default: dry run)")
+		dryRun   = flag.Bool("dry-run", false, "explicitly do not apply timeouts; refuses --enforce")
 		once     = flag.Bool("once", false, "scan one batch and exit")
 	)
 	flag.Parse()
 	lg := log.New(os.Stderr, "kourtmod: ", log.LstdFlags)
+
+	enforcing, err := resolveMode(*enforce, *dryRun)
+	if err != nil {
+		lg.Fatal(err)
+	}
 
 	store, err := chat.Open(*db)
 	if err != nil {
@@ -61,12 +97,12 @@ func main() {
 	}
 
 	sc := &scan.Scanner{
-		Store: store, Cls: cls, Enforce: *enforce,
+		Store: store, Cls: cls, Enforce: enforcing,
 		Batch: *batch, Interval: *interval, Log: lg,
 	}
 
 	mode := "DRY RUN — verdicts recorded, nobody punished"
-	if *enforce {
+	if enforcing {
 		mode = "ENFORCING — timeouts will be applied"
 	}
 	lg.Printf("model %s at %s, %s", *model, *ollama, mode)

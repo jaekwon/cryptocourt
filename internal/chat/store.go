@@ -112,7 +112,7 @@ var (
 	ErrDuplicate = errors.New("the same message was just posted in several courts; post something different, or wait")
 	// ErrWithdrawn is a FROZEN court, not a purged one, and the distinction is the one §7 draws:
 	// "stop showing this" and "destroy the evidence" are different decisions and only one of them
-	// cannot be undone. This error was called ErrWithdrawn and read "this court has been purged",
+	// cannot be undone. This error was called ErrPurged and read "this court has been purged",
 	// which asserted the irreversible one about the reversible one — and since Unfreeze exists it
 	// is simply false. The server always replaced the text on its way out, so nobody had been
 	// told the wrong thing yet; the wrong word was in the vocabulary rather than on a screen.
