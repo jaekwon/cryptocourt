@@ -315,6 +315,28 @@ about a person and never reaches a public surface — plus `you: {state, until, 
 so the composer can be disabled before someone types into a box that will 403.
 `since`/`limit` clamped; GET has its own budget.
 
+**A CURSOR IS ONLY MEANINGFUL WITHIN A RETENTION EPOCH,** and the endpoint used to pretend
+otherwise. `next` comes back in every response, which invites incremental polling, and
+`messages.id` is a rowid that restarts at 1 once prune empties a court (§7). So a saved cursor
+asks for `id > 40000` where the newest row is 12 and receives an empty room until forty thousand
+messages accumulate again. Measured: cursor 8, room holding 2, client shown 0.
+
+`Recent` falls back to a full read when the cursor is past every row that exists — a value the
+server cannot have issued for the rows now present — and one fallback re-syncs the client, since
+the read it gets back carries current ids. The idle case is untouched and that is the half worth
+asserting: an idle client's cursor EQUALS the newest visible id, so the fallback does not fire and
+a quiet room still answers with nothing rather than fifty rows.
+
+It does not fix the boundary. If new ids have climbed back to exactly the old cursor,
+`since == max(id)` is indistinguishable from idle using ids alone, and the client keeps a gap below
+its cursor instead of a frozen room. The unbounded case was the one that mattered.
+
+**The panel does not poll incrementally at all,** for an unrelated and better reason: `Recent`
+returns only unhidden messages, so a client appending by id would keep displaying a scam for the
+rest of its session after a moderator hid it. Re-reading the last fifty rows every few seconds is
+how hiding becomes visible. The fix above is for every other client and for the contract this
+endpoint advertises.
+
 Throttle: 2s minimum interval and 10/60s per `ip_hash`; a **fair-share** court cap
 that binds only under contention (a flat per-IP quota would throttle two people
 talking while 24 of 30 slots sat idle); a global budget that **sheds rather than
