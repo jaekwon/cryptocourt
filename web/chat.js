@@ -30,6 +30,20 @@
 // the panel actively invites impersonation. It rotates daily on purpose, so it is
 // recognition within a conversation and never an identity to trust across days.
 
+// CHATLIMITS mirrors the server's limits, and it is one object because it was five values.
+//
+// internal/chat/sanitize.go enforces these; the panel repeats them so a user hears "too long"
+// before a round trip rather than after one. That makes them two definitions of one thing in
+// two languages, which is the shape that has produced most of the bugs in this service — so
+// they are declared once here and internal/chat/paneldrift_test.go reads this file and fails if
+// the numbers stop matching the constants.
+//
+// Drift is bad in both directions and neither is loud: too small refuses text the server would
+// happily take, too large accepts text the server then rejects with a 400 the user cannot act
+// on. `maxlength` is included because it physically stops typing, so a stale value there is a
+// capability quietly removed rather than a message shown.
+const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};
+
 // chatEsc escapes into HTML text or a double-quoted attribute.
 //
 // Single quote and backtick are in here beyond the usual four on purpose: the page's
@@ -112,11 +126,17 @@ function chatValidate(moniker, body) {
   const m = String(moniker == null ? "" : moniker).trim();
   const b = String(body == null ? "" : body).trim();
   if (!m) return "pick a name first";
-  if ([...m].length > 24) return "that name is too long (24 characters)";
+  if ([...m].length > CHATLIMITS.moniker) {
+    return "that name is too long (" + CHATLIMITS.moniker + " characters)";
+  }
   if (!b) return "type something";
-  if ([...b].length > 400) return "that message is too long (400 characters)";
-  // Matches MaxInputBytes on the server. Reachable with 400 astral characters.
-  if (new TextEncoder().encode(b).length > 4096) return "that message is too long";
+  if ([...b].length > CHATLIMITS.body) {
+    return "that message is too long (" + CHATLIMITS.body + " characters)";
+  }
+  // Matches MaxInputBytes on the server. Reachable with astral characters at the rune cap.
+  if (new TextEncoder().encode(b).length > CHATLIMITS.bytes) {
+    return "that message is too long";
+  }
   return "";
 }
 
@@ -162,9 +182,9 @@ function chatPanelHtml(slug, moniker, note) {
     + '<div class="chatdry" hidden></div>'
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
-    +   '<input class="chatmoniker" maxlength="24" placeholder="name"'
+    +   '<input class="chatmoniker" maxlength="' + CHATLIMITS.moniker + '" placeholder="name"'
     +     ' aria-label="your name" value="' + chatEsc(moniker) + '">'
-    +   '<input class="chatinput" maxlength="400" placeholder="say something"'
+    +   '<input class="chatinput" maxlength="' + CHATLIMITS.body + '" placeholder="say something"'
     +     ' aria-label="message">'
     +   '<button class="chatsend" type="submit">send</button>'
     + "</form>"
@@ -477,5 +497,6 @@ function mountChat(el, opts) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {chatEsc, chatFlag, chatWhen, chatStatusLine, chatValidate,
     chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatBase,
-    chatFetch, chatPost, chatStyles, chatHealth, chatDryRunNotice, mountChat, CHATCSS};
+    chatFetch, chatPost, chatStyles, chatHealth, chatDryRunNotice, mountChat, CHATCSS,
+    CHATLIMITS};
 }
