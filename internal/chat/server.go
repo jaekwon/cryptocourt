@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -140,10 +142,60 @@ func csrfOK(r *http.Request) error {
 	if strings.TrimSpace(strings.ToLower(ct)) != "application/json" {
 		return errors.New("posting requires Content-Type: application/json")
 	}
-	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
+	site := r.Header.Get("Sec-Fetch-Site")
+	if site == "cross-site" {
 		return errors.New("cross-site posting is refused")
 	}
+	// WHEN THE HEADER IS ABSENT, COMPARE ORIGIN AGAINST HOST INSTEAD.
+	//
+	// "Absent is allowed" left plain HTTP with no protection at all, and measurement is the only
+	// reason that is known. A hostile page's PREFLIGHT for a cross-origin JSON POST is answered
+	// 204 with `Access-Control-Allow-Origin: *` and POST among the methods, so the browser goes
+	// ahead and sends the write; the Content-Type requirement stops the SAFELISTED shapes (a form
+	// cannot produce application/json) but not this one, which is preflighted on purpose. Measured
+	// against the real server, Origin https://evil.example on 127.0.0.1:
+	//
+	//	POST without Sec-Fetch-Site   200, and the message was in the room
+	//	POST with    Sec-Fetch-Site   403
+	//
+	// So the pair covers HTTPS and localhost completely and a plain-HTTP origin not at all — the
+	// header is only sent to potentially-trustworthy origins.
+	//
+	// Requiring the header there is not available: no browser sends it, so every legitimate post
+	// would be refused too. But Origin and Host are both set by the browser and neither is
+	// forgeable by script, so on a cross-HOST write they are enough on their own.
+	//
+	// Only in the ABSENT case, so nothing that works today changes. When the header arrives it
+	// keeps deciding, which matters because `same-site` covers a SUBDOMAIN split — a page on
+	// www talking to an API on api — that a host comparison would refuse. Those deployments are
+	// on HTTPS by definition of the header arriving at all.
+	if site == "" {
+		if o := r.Header.Get("Origin"); o != "" && !sameHostAsOrigin(o, r.Host) {
+			return errors.New("cross-origin posting is refused")
+		}
+	}
 	return nil
+}
+
+// sameHostAsOrigin compares an Origin header with the Host being addressed, ignoring port.
+//
+// Port is ignored because a chat service on another port of the same host is the deployment §11
+// calls the real one, and it is same-SITE: the browser would have said so if it had been able to.
+// An unparseable or opaque origin — "null", which is what a file:// page sends — is NOT a match,
+// so it is refused rather than waved through.
+func sameHostAsOrigin(origin, host string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return strings.EqualFold(hostWithoutPort(u.Host), hostWithoutPort(host))
+}
+
+func hostWithoutPort(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+	return hostport
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

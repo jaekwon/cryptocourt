@@ -371,15 +371,43 @@ sends without a preflight and executes. CORS withholds only the response, which
 the attacker does not want — they want the side effect, and here identity *is* the
 IP, which the browser attaches for free. So any page could make its visitors post
 scam text and get them kicked. POST therefore requires
-`Content-Type: application/json` (not safelisted, so a cross-origin POST needs a
-preflight we control) and rejects `Sec-Fetch-Site: cross-site`.
+`Content-Type: application/json` — not safelisted, so none of the shapes above can reach this
+endpoint at all — and rejects `Sec-Fetch-Site: cross-site`.
 
-Both halves need their absent-header policy written down, because
-`Sec-Fetch-*` is only sent to potentially-trustworthy origins — on plain HTTP it
-never arrives — and because a `file://` page's fetches are cross-site, which is
-the repo's own documented demo path. Resolved as: TLS or localhost required for
-the strict rule, and the `file://` demo uses the sample thread rather than the
-API.
+**"A preflight we control" was the wrong word, and plain-HTTP deployments paid for it.** The
+preflight is ANSWERED, not controlled: `ACAO: *` with `POST` among the allowed methods, so a
+hostile page's *preflighted* JSON fetch is told to go ahead. Measured against the running server
+with `Origin: https://evil.example`:
+
+    OPTIONS preflight              204, ACAO *, POST allowed
+    POST without Sec-Fetch-Site    200, and the message was in the room
+    POST with    Sec-Fetch-Site    403
+
+So the Content-Type rule is load-bearing only for the requests that arrive WITHOUT a preflight, and
+everything else rested on `Sec-Fetch-Site` alone. That header is sent only to potentially-trustworthy
+origins, so on plain HTTP to anything but localhost it never arrives, "absent is allowed" applied,
+and a page really could make its visitors post — the exact attack this section opens by describing,
+needing no credentials because the identity is the visitor's address.
+
+Requiring the header there is not available: no browser sends it, so every legitimate post would go
+with the attack. But `Origin` and `Host` are both set by the browser and neither is forgeable by
+script, so when `Sec-Fetch-Site` is ABSENT those two are compared instead, ignoring port. Only in
+the absent case — nothing that already worked changes, the whole suite stayed green, and where the
+header does arrive it keeps deciding, which matters because `same-site` covers a subdomain split
+that a host comparison would refuse.
+
+Verified live, and the arms are worth spelling out because two of them answer 429 rather than 200:
+reaching the throttle IS being allowed, and confusing that with a refusal would have read as a
+broken fix.
+
+    hostile origin, no Sec-Fetch-Site     403  cross-origin posting is refused
+    null origin from a file:// page       403  cross-origin posting is refused
+    same host, another port               200  the deployment §11 calls the real one
+    no Origin at all (curl, the CLI)      429  past the guard, stopped by the interval
+    same-site across hosts                429  past the guard, stopped by the interval
+
+A `file://` page's fetches stay refused, which they already were wherever the header arrived; that
+path uses the sample thread rather than the API, and §11 covers what the panel now says about it.
 
 `ACAO: *` on GET, because the demo runs from `file://` and gnodev already does
 this. GET returns an explicit field allowlist — `verdict` is a model's opinion
