@@ -537,7 +537,64 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .addrbar input{font-family:var(--mono); font-size:13px; background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-sm); padding:9px 12px; color:var(--ink); min-width:min(360px,80vw)}
 .muted{color:var(--muted)} .small{font-size:12.5px}
 .hr{height:1px; background:var(--line); margin:26px 0}
-.tagrow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px}
+/* ============================ the utility row ============================
+   The line under a page title: what this thing IS, then what you can do about
+   it. Four routes use it (claim, court, curate, map) and the claim page was the
+   only one that also put facts and an action in it, which is what made it read
+   as a jumble.
+
+   THE SIZE LIVES ON THE ROW. It used to live on each child's `.small`, and
+   `button.helplink` is `font:inherit` — so the share trigger inherited the 15px
+   BODY size while the anchors beside it were 12.5px. That one mismatch is most
+   of "inconsistent in font": it made the button 20% larger than its neighbours
+   and pushed it onto a line of its own.
+
+   TWO ROLES, NOT FOUR VOICES. A fact is --muted and never reacts to the cursor;
+   a link is --accent and grows an underline when you point at it. The pill is
+   the only boxed thing here, and that border is the whole "this is status"
+   signal. Nothing else gets a box, a second family, or a second size. */
+.tagrow{display:flex; flex-wrap:wrap; align-items:center; column-gap:16px; row-gap:8px;
+  margin-top:12px; font-size:12.5px; line-height:1.45; min-width:0}
+/* Facts and actions are two groups, so the row wraps at the SEAM between them
+   rather than wherever a wide status pill happens to push it. That is what
+   stranded "share ↗" alone on line two. */
+.tagrow .tfacts,.tagrow .tacts{display:flex; flex-wrap:wrap; align-items:center;
+  column-gap:16px; row-gap:6px; min-width:0}
+.tagrow .tfacts{column-gap:10px}
+.tagrow .tfact{color:var(--muted)}
+/* the only mono in the row, and only on the machine string inside a fact —
+   "opened by" is prose. SF Mono sets larger than the UI sans at matched px. */
+.tagrow .tfact .mono{font-size:.94em}
+.tagrow .tlink{
+  /* inline-flex buys the 24px target height, and costs the whitespace BETWEEN
+     its children — flex discards it, which ran "filed under" into the folder
+     name. `gap` puts it back, so the markup needs no &nbsp;. */
+  display:inline-flex; align-items:center; gap:.32em;
+  min-height:24px;   /* SC 2.5.8, and free beside a 24.7px pill */
+  color:var(--accent); font:inherit; background:none; border:0; padding:0; cursor:pointer;
+  text-decoration:underline; text-decoration-color:transparent; text-decoration-thickness:1px;
+  text-underline-offset:3px; border-radius:2px; min-width:0;
+  transition:color .12s ease, text-decoration-color .12s ease}
+/* --accent-2 is the HIGHER-contrast variant in both themes, so hover reads as
+   "more". button.helplink had this backwards and dimmed on hover. */
+.tagrow .tlink:hover,.tagrow .tlink:focus-visible{
+  color:var(--accent-2); text-decoration-color:currentColor}
+@media(prefers-reduced-motion:reduce){ .tagrow .tlink{transition:none} }
+/* THE ONLY UNBOUNDED STRING IN THE ROW: a folder label from local curation,
+   which is imported JSON. safeInline() escapes it but does not bound it, and a
+   flex item defaults to min-width:auto — so a 40-character label made this
+   anchor the widest element on the PAGE and gave the whole document a
+   horizontal scrollbar at 390px (scrollWidth 454 vs 390; 140 chars gave 1542).
+   WCAG 1.4.10. Bounded here, and the ellipsis keeps the truncation visible. */
+.tagrow .tname{display:inline-block; max-width:26ch; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; vertical-align:bottom}
+@media(pointer:coarse){ .tagrow .tlink{min-height:32px} }
+@media(max-width:560px){
+  /* the seam becomes a hard break, so facts and actions never interleave */
+  .tagrow{column-gap:0}
+  .tagrow .tfacts,.tagrow .tacts{width:100%}
+  .tagrow .tname{max-width:14ch}
+}
 
 /* mobile */
 @media(max-width:820px){
@@ -2018,12 +2075,11 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
         ${(()=>{ const cu=curationFor(slug); if(!cu||!cu.desc) return "";
           return `<p class="sub">${esc(cu.desc)}<span class="small muted"> · ${cu.source==="local"? CUR_LABEL : "demo copy — the chain stores only a name"}</span></p>`; })()}
-        <div class="tagrow">${tierPill(s.tier)}<span class="small muted">/${esc(slug)}</span>
-          <a class="small" href="#/c/${esc(slug)}/map" style="color:var(--accent-2)">map →</a>
-          <a class="small" href="#/c/${esc(slug)}/curate" style="color:var(--accent-2)">curate →</a>
-         <a class="small" href="#/raw/${esc(slug)}/mod" style="color:var(--accent-2)">moderation log →</a>
-         ${s.tier===0? `<span class="small muted">unlisted — hidden from the directory by moderation; this page is reachable by direct link only.</span>`:""}
-          <a class="small" href="#/raw/${esc(slug)}" style="color:var(--accent-2)">view as the chain serves it →</a></div>
+        <div class="tagrow">
+          <span class="tfacts">${tierPill(s.tier)}<span class="tfact mono">/${esc(slug)}</span></span>
+          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
+<a class="tlink" href="#/raw/${esc(slug)}">view as the chain serves it<span aria-hidden="true">→</span></a></span>
+          ${s.tier===0? `<span class="tfact">unlisted — hidden from the directory by moderation; this page is reachable by direct link only.</span>`:""}</div>
        </div>
        </div>`
     + `<section><div class="grid stats">
@@ -2263,7 +2319,7 @@ async function fillCourtRecord(slug, count, minted){
 function voteHelpModal(slug, d){
   const SYM = "KOURT:" + esc(slug).toUpperCase(); // canonical display (MODERATION.md §13.9)
   return `<dialog class="helper" id="help-vote" aria-labelledby="help-vote-h">
-    <div class="hd"><h3 id="help-vote-h">How this vote works</h3><button class="pill void" data-close>Close</button></div>
+    <div class="hd"><h3 id="help-vote-h">How this vote works</h3><button type="button" class="pill void" data-close>Close</button></div>
     <div class="bd">
       <h4>Why you can't see the count yet</h4>
       <p>Every vote is a public transaction on the chain, so nothing here is hidden. What this page will not do is add the votes up while the vote is still running.</p>
@@ -2840,10 +2896,8 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
     : "source: none — export the empty skeleton to begin";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs.name,href:"#/c/"+slug},{label:"Curate"}])
     + `<h1 class="page-h">Curate — ${safeInline(cs.name)} <span class="seal">${esc(slug)}</span></h1>
-       <div class="tagrow"><span class="pill void">local tool — writes nothing to any chain</span>
-         <a class="small" href="#/c/${esc(slug)}" style="color:var(--accent-2)">docket →</a>
-         <a class="small" href="#/c/${esc(slug)}/map" style="color:var(--accent-2)">map →</a>
-         <a class="small" href="#/raw/${esc(slug)}/mod" style="color:var(--accent-2)">moderation log →</a></div>
+       <div class="tagrow"><span class="tfacts"><span class="pill void">local tool — writes nothing to any chain</span></span>
+         <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
     + `<section><div class="sec-h">On-chain curation <span class="count">moderators — no bonds, gas only</span></div>
        <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders are flat, append-order lists; nesting, ordering, and relations exist only in the local layer below (folder descriptions are stored on chain but not yet readable — see the Owner-notes wishlist).</p>
@@ -3002,10 +3056,8 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs.name,href:"#/c/"+slug},{label:"Map"}])
     + `<h1 class="page-h">${safeInline(cs.name)} — map <span class="seal">${esc(slug)}</span></h1>
-       <div class="tagrow"><span class="pill void">alternate view of the docket</span>
-         <a class="small" href="#/c/${esc(slug)}" style="color:var(--accent-2)">docket →</a>
-         <a class="small" href="#/c/${esc(slug)}/curate" style="color:var(--accent-2)">curate →</a>
-         <a class="small" href="#/raw/${esc(slug)}" style="color:var(--accent-2)">view as the chain serves it →</a></div>
+       <div class="tagrow"><span class="tfacts"><span class="pill void">alternate view of the docket</span></span>
+         <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}">view as the chain serves it<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 2px">${esc(countLine)}</p>
        <p class="small muted" style="margin:0 0 8px">${esc(honesty)}</p>${focusNote}
        <div class="mapctl" role="group" aria-label="map controls">
@@ -3287,7 +3339,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // opened-by: a file names who opened it — one read, claim page only
   const author = isLive()? await one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null)
                          : ((DEMO.claims[slug+"/"+id]||{}).author||null);
-  const openedBy = author? `<span class="small muted mono">opened by ${shortAddr(author)}</span> ` : "";
+  const openedBy = author? `<span class="tfact">opened by <span class="mono">${shortAddr(author)}</span></span>` : "";
   // moderation provenance: four booleans, claim route only; a failed read
   // renders nothing — the page makes no completeness certificate to defend
   let mHidden=null, mRedacted=null, mPurged=null, mSeeded=null;
@@ -3301,7 +3353,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     ]);
   } else { const dd0=DEMO.claims[slug+"/"+id]||{};
     mHidden=dd0.hidden===true; mRedacted=dd0.redacted===true; mPurged=dd0.purged===true; mSeeded=dd0.seeded===true; }
-  const seededSpan = mSeeded===true? `<span class="small muted">seeded by a moderator to start this court; the author earns nothing from it</span> ` : "";
+  const seededSpan = mSeeded===true? `<span class="tfact">seeded by a moderator to start this court; the author earns nothing from it</span>` : "";
   // the recorded stake history — 2 qevals, claim page only; null falls back
   // to the three-ratio display byte-identically
   // the claim's clock, as the chain recorded it (dates, with heights beside)
@@ -3315,13 +3367,15 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // filed-under chip: local/sample curation only — the chain has no reverse
   // read, and a chip must assert nothing this page did not read
   const fmClaim = cu && cu.folders && cu.folders.length? folderMeta(cu.folders,"",{}) : {};
-  const chip = fmClaim[id]? `<a class="small" href="#/c/${esc(slug)}/f/${esc(fmClaim[id].path)}" style="color:var(--accent-2)" title="${cu.source==="local"? esc(CUR_LABEL) : "sample curation"}">filed under ${safeInline(fmClaim[id].label)} · ${cu.source==="local"? "local":"sample"}</a> ` : "";
+  const chip = fmClaim[id]? `<a class="tlink" href="#/c/${esc(slug)}/f/${esc(fmClaim[id].path)}" title="${cu.source==="local"? esc(CUR_LABEL) : "sample curation"}">filed under <span class="tname">${safeInline(fmClaim[id].label)}</span> · ${cu.source==="local"? "local":"sample"}</a>` : "";
   // live maps draw only the newest window — do not offer a link that dead-ends
-  const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="small" href="#/c/${esc(slug)}/map?focus=${id}" style="color:var(--accent-2)">on the map →</a> ` : "";
+  const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">on the map<span aria-hidden="true">→</span></a>` : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
-    + `<div class="tagrow">${verdictBanner(d)} ${openedBy}${seededSpan}${chip}${mapLink}<a class="small" href="#/raw/${esc(slug)}/${id}" style="color:var(--accent-2)">as the chain serves it →</a>
-        <button type="button" class="helplink" data-help="share-dlg">share ↗</button></div>`
+    + `<div class="tagrow">
+        <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
+        <span class="tacts">${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
+        <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
@@ -4358,7 +4412,7 @@ function shareDialog(slug, id, d, courtName){
   const link = shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id);
   return `<dialog class="helper" id="share-dlg" aria-labelledby="share-h">
     <div class="hd"><h3 id="share-h">Share this ${id == null ? "court" : "claim"}</h3>
-      <button class="pill void" data-close>close</button></div>
+      <button type="button" class="pill void" data-close>close</button></div>
     <div class="bd">
       ${shareIsPublic() ? "" : `<p class="small" style="margin:0 0 8px; color:var(--escrow)">This page is
         open from a local file, so the link and the embed below only work on this machine, and the image

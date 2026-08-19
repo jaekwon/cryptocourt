@@ -85,7 +85,11 @@ ok("docket short-window note (hedged per critic F1)", src.includes("hidden or un
 
 // opened-by + answer record
 ok("opened-by reads once, claim route only", (src.match(/ClaimAuthor\(/g)||[]).length===3);
-ok("opened-by chip via shortAddr", src.includes("opened by ${shortAddr(author)}"));
+// "opened by" is prose and sets in the sans; the address is a machine string
+// and is the only mono in the row. The whole span used to be mono, which is
+// why it read as a fourth typeface in a six-item row.
+ok("opened-by chip via shortAddr",
+   src.includes('opened by <span class="mono">${shortAddr(author)}</span>'));
 ok("answer record nonzero-only", src.includes('${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}'));
 ok("answer record footnote", src.includes("an overturn resets it to zero"));
 ok("rail gnoweb exit is live-only", src.includes('id="gwrealm"') && src.includes('gw.style.display = live? "inline-block":"none"'));

@@ -93,7 +93,9 @@ ok("local section copy", src.includes("Nothing here writes to any chain"));
 ok("map local captions", src.includes("your local curation overrides the sample — held in this browser, recorded nowhere") && src.includes("it overrides the chain's ${chainF.folders.length} folder"));
 ok("no bulk sync button", !/sync to chain|publish curation/i.test(src));
 ok("curate route + links", src.includes("/curate$")===false ? src.includes("curate$/") : true);
-ok("curate links on court+map", (src.match(/curate →/g)||[]).length>=2);
+// The arrow moved into an aria-hidden span (a screen reader was reading
+// "curate right arrow"), so pin the HREF — which is the fact — not the glyph.
+ok("curate links on court+map", (src.match(/\/curate">curate/g)||[]).length>=2);
 // §7.4 sweep on the curate page region
 {
   const a=src.indexOf("/* --- curate:"); const b=src.indexOf("/* --- the map ---");

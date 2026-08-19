@@ -53,10 +53,20 @@ ok("§7.4 clean in tour", !/backing|redeem\b|profit|APR|worth|winnings|you win|w
 
 // source checks — chip + map link on the claim route
 ok("chip reads local/sample only (cu, not chain)", src.includes('const fmClaim = cu && cu.folders && cu.folders.length? folderMeta(cu.folders,"",{}) : {};'));
-ok("chip label + folder path link", src.includes('filed under ${safeInline(fmClaim[id].label)}'));
+// The curator-supplied label is now bounded by .tname: unbounded, a 40-char
+// folder name made this anchor the widest element on the page and gave the
+// whole document a horizontal scrollbar at 390px.
+ok("chip label + folder path link",
+   src.includes('filed under <span class="tname">${safeInline(fmClaim[id].label)}</span>'));
 ok("no negative chip anywhere", !src.includes("not filed in a folder"));
 ok("map link gated to the drawn window", src.includes('(!isLive() || (ccount!=null && id>ccount-50))'));
-ok("map link carries ?focus", src.includes('map?focus=${id}" style="color:var(--accent-2)">on the map →'));
+// This used to pin the inline `style="color:var(--accent-2)"` alongside the
+// label. That inline colour is exactly what had to go: it beats any author
+// rule, so no :hover or :focus-visible on these links could ever apply. The
+// pin is the route now, not the paint.
+ok("map link carries ?focus", src.includes('map?focus=${id}">on the map'));
+ok("and no inline colour survives in a tagrow link",
+   !/class="small" href="[^"]*" style="color:var\(--accent-2\)">(on the map|as the chain|docket|curate|map|moderation)/.test(src));
 
 // ?at plumbing
 ok("AT_OK allowlist", src.includes('const AT_OK = new Set(["resolution"])'));

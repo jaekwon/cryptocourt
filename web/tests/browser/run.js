@@ -20,6 +20,13 @@
 //                        really repaints. All four are layout facts, invisible to
 //                        a source-reading harness.
 //
+//   tagrow_layout.js   — the utility row under a page title, on all four routes
+//                        that use it. Every complaint about it was a computed-
+//                        style or layout fact: a button inheriting the 15px body
+//                        size instead of 12.5px, inline colours that made :hover
+//                        unstylable, and a curator-supplied folder label that
+//                        made the page scroll sideways at 390px.
+//
 //   render_snapshot.js — captures the rendered text of 13 demo routes. Used to
 //                        prove a refactor changes nothing: capture, refactor,
 //                        capture, diff. It is how the DEMO split was shown to
@@ -40,7 +47,7 @@ try {
 
 // Only the pass/fail checks run here. render_snapshot.js is a TOOL: it prints a
 // snapshot rather than asserting, so running it in a gate would prove nothing.
-const CHECKS = ["banner_layout.js", "embed_layout.js"];
+const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js"];
 let failed = 0;
 for (const f of CHECKS) {
   const p = path.join(__dirname, f);
