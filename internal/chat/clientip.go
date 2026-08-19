@@ -115,7 +115,29 @@ func parseHostPort(remoteAddr string) (netip.Addr, error) {
 // It is also the reason automated consequences here are bounded kicks and never
 // permanent bans: a /64 can be a household, and a shared IPv4 address can be a
 // campus or an entire mobile carrier. See EscalateKick.
+// UNMAPPED FIRST, in here rather than at the call sites, because a caller that
+// forgets produces a confident wrong answer instead of an error.
+//
+// An IPv4-mapped address — "::ffff:203.0.113.7", which is how a dual-stack log or
+// some proxies spell an IPv4 client — is not Is4(), so it used to take the /64
+// branch. Two things went wrong at once, measured:
+//
+//	hash of ::ffff:203.0.113.7    1689b677c286   prefix ::/64
+//	hash of 203.0.113.7           3cb5bdc7c74a   prefix 203.0.113.7/32
+//
+// The ingest path already called Unmap, so the server stored the second. An
+// operator pasting the mapped form from a log into `kourtchatctl hash` got the
+// first, banned it, was told the consequence was recorded, and the person kept
+// posting. A ban that reports success and does nothing is the worst failure this
+// tool has.
+//
+// And the /64 of any IPv4-mapped address is "::/64" — every one of them collapses
+// to a single prefix, so that one hash nominally covered all of IPv4.
+//
+// Unmapping here makes both impossible from any call site. It is idempotent, so
+// the ingest path is unaffected.
 func Prefix(a netip.Addr) netip.Prefix {
+	a = a.Unmap()
 	if a.Is4() {
 		return netip.PrefixFrom(a, 32)
 	}
@@ -169,6 +191,7 @@ func (h *Hasher) Hash(a netip.Addr) string {
 // Distinct from Prefix, which is the SINGLE HOST (/32, or /64 for v6 because the host
 // half is free to change).
 func NetPrefix(a netip.Addr) netip.Prefix {
+	a = a.Unmap() // see Prefix: a mapped address is not Is4() and took the /48 branch
 	bits := 48
 	if a.Is4() {
 		bits = 24

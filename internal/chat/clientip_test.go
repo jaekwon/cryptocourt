@@ -6,6 +6,21 @@ import (
 	"testing"
 )
 
+// hasherForTest is a fixed key: these fixtures compare hashes to each OTHER, so the
+// key only has to be stable within a run.
+func hasherForTest(t *testing.T) *Hasher {
+	t.Helper()
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i)
+	}
+	h, err := NewHasher(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
 func prefixes(t *testing.T, s string) []netip.Prefix {
 	t.Helper()
 	p, err := MustParsePrefixes(s)
@@ -250,5 +265,152 @@ func TestNetPrefixIsTheRangeHashNetActuallyHashes(t *testing.T) {
 	if h.HashNet(netip.MustParseAddr("203.0.113.7")) ==
 		h.HashNet(netip.MustParseAddr("203.0.114.7")) {
 		t.Fatal("addresses in different /24s must not share a network hash")
+	}
+}
+
+// THE OPERATOR'S HASH MUST EQUAL THE ONE THE SERVER STORED, however the address is spelled.
+//
+// This is the whole contract of `kourtchatctl hash`: an operator reads an address from somewhere,
+// asks for its hash, and bans it. If the two sides disagree the ban is recorded, reported as
+// successful, and does nothing — the worst failure this tool has, because the person keeps posting
+// and every indicator says they were dealt with.
+//
+// They disagreed. An IPv4-mapped address — "::ffff:203.0.113.7", which is how a dual-stack access
+// log and some proxies spell an IPv4 client — is not Is4(), so Prefix took the /64 branch:
+//
+//	hash of ::ffff:203.0.113.7    1689b677c286   prefix ::/64
+//	hash of 203.0.113.7           3cb5bdc7c74a   prefix 203.0.113.7/32
+//
+// ClientIP already unmapped, so the server stored the second and the CLI printed the first. Worse,
+// the /64 of ANY mapped address is "::/64", so every IPv4 client collapsed onto one hash.
+//
+// Fixed in Prefix and NetPrefix rather than at the call site, since a caller that forgets gets a
+// confident wrong answer rather than an error.
+func TestEverySpellingOfOneAddressHashesTheSame(t *testing.T) {
+	h := hasherForTest(t)
+	for _, c := range []struct {
+		label, canonical string
+		forms            []string
+	}{
+		{"IPv4", "203.0.113.7", []string{
+			"203.0.113.7", "::ffff:203.0.113.7", "::ffff:cb00:7107",
+		}},
+		{"IPv6", "2001:db8::1", []string{
+			"2001:db8::1", "2001:DB8::1", "2001:db8:0:0:0:0:0:1", "2001:0db8::1",
+		}},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			want, err := netip.ParseAddr(c.canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantHash, wantNet := h.Hash(want), h.HashNet(want)
+			for _, f := range c.forms {
+				a, err := netip.ParseAddr(f)
+				if err != nil {
+					t.Fatalf("%q: %v", f, err)
+				}
+				if got := h.Hash(a); got != wantHash {
+					t.Errorf("%-22q hashes to %s, but %q hashes to %s — an operator pasting "+
+						"the first form bans nothing", f, got[:12], c.canonical, wantHash[:12])
+				}
+				if got := h.HashNet(a); got != wantNet {
+					t.Errorf("%-22q net-hashes to %s, want %s", f, got[:12], wantNet[:12])
+				}
+			}
+		})
+	}
+}
+
+// THE PAIRED POSITIVE, and it is not decoration: the bug made every IPv4-mapped address share one
+// prefix, so a fixture asserting only "all spellings agree" would pass for a Prefix that collapsed
+// the entire internet onto one hash.
+//
+// The granularities are DIFFERENT by design and the fixture has to respect that, which the first
+// version did not: IPv4 is hashed per address (/32) and IPv6 per /64, because a single IPv6 host is
+// normally delegated a whole /64 and rotating inside it is free. So two addresses in one /64
+// SHARING a hash is correct, and that is asserted below rather than treated as a collision — an
+// operator banning an IPv6 "address" is banning its /64, and needs to know it.
+func TestDifferentAddressesStillHashDifferently(t *testing.T) {
+	h := hasherForTest(t)
+	seen := map[string]string{}
+	for _, s := range []string{
+		// IPv4: distinct addresses, distinct hashes.
+		"203.0.113.7", "203.0.113.8", "203.0.114.7", "198.51.100.7",
+		"::ffff:203.0.113.9", "::ffff:198.51.100.9",
+		// IPv6: one per /64, so distinct hashes.
+		"2001:db8::1", "2001:db8:0:1::1", "2001:db8:1::1", "2001:db9::1",
+	} {
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := h.Hash(a)
+		if prev, dup := seen[got]; dup {
+			t.Errorf("%q and %q hash to the same value %s", prev, s, got[:12])
+		}
+		seen[got] = s
+	}
+
+	// The deliberate sharing, stated so it cannot be mistaken for the bug above.
+	for _, pair := range [][2]string{
+		{"2001:db8::1", "2001:db8::2"},
+		{"2001:db8::1", "2001:db8::ffff:ffff:ffff:ffff"},
+	} {
+		a := netip.MustParseAddr(pair[0])
+		b := netip.MustParseAddr(pair[1])
+		if h.Hash(a) != h.Hash(b) {
+			t.Errorf("%q and %q are one /64 and must share a hash: IPv6 is hashed per /64 "+
+				"because a host is delegated the whole thing", pair[0], pair[1])
+		}
+	}
+	// IPv4 is NOT collapsed that way — neighbours in a /24 are separate addresses.
+	if h.Hash(netip.MustParseAddr("203.0.113.7")) == h.Hash(netip.MustParseAddr("203.0.113.8")) {
+		t.Error("IPv4 is hashed per address; two hosts in a /24 must not share a hash, or every " +
+			"automated kick would take the neighbours with it")
+	}
+
+	// And the prefix labels the operator reads must name the range actually hashed.
+	for _, c := range []struct{ in, prefix, net string }{
+		{"203.0.113.7", "203.0.113.7/32", "203.0.113.0/24"},
+		{"::ffff:203.0.113.7", "203.0.113.7/32", "203.0.113.0/24"},
+		{"2001:db8::1", "2001:db8::/64", "2001:db8::/48"},
+	} {
+		a, err := netip.ParseAddr(c.in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := Prefix(a).String(); got != c.prefix {
+			t.Errorf("Prefix(%q) = %s, want %s — the label beside a hash is how an operator "+
+				"checks the scope before acting", c.in, got, c.prefix)
+		}
+		if got := NetPrefix(a).String(); got != c.net {
+			t.Errorf("NetPrefix(%q) = %s, want %s", c.in, got, c.net)
+		}
+	}
+}
+
+// End to end: what ClientIP derives from a request and what an operator types must meet.
+func TestTheHashAnOperatorTypesMatchesTheOneIngestStored(t *testing.T) {
+	h := hasherForTest(t)
+	pol := IPPolicy{BehindProxy: true, Trusted: prefixes(t, "127.0.0.0/8")}
+	for _, c := range []struct{ remote, xff, typed string }{
+		{"127.0.0.1:5555", "203.0.113.7", "203.0.113.7"},
+		{"127.0.0.1:5555", "::ffff:203.0.113.7", "203.0.113.7"},
+		{"127.0.0.1:5555", "203.0.113.7", "::ffff:203.0.113.7"},
+		{"127.0.0.1:5555", "2001:db8::1", "2001:DB8::1"},
+	} {
+		ingested, err := pol.ClientIP(c.remote, c.xff)
+		if err != nil {
+			t.Fatalf("ClientIP(%q, %q): %v", c.remote, c.xff, err)
+		}
+		typed, err := netip.ParseAddr(c.typed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.Hash(ingested) != h.Hash(typed) {
+			t.Errorf("a client seen as %q stores %s, but an operator typing %q gets %s",
+				c.xff, h.Hash(ingested)[:12], c.typed, h.Hash(typed)[:12])
+		}
 	}
 }
