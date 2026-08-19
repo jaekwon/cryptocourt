@@ -1,11 +1,12 @@
-.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet anchors paths \
+.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat \
+	guards staleguards anchors paths \
 	scenarios scenarios-check demo-physics
 
 # Everything that can run without a node.
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet anchors paths demo-physics scenarios-check realm-test
+check: fmt vet gotest anchors paths guards staleguards demo-physics scenarios-check realm-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -20,14 +21,53 @@ anchors:
 paths:
 	python3 scripts/check-paths.py
 
+# Every committed guard is named in selftest-checks.py, so an unarmed one fails
+# here rather than in the next periodic selftest — which is days later and fails
+# for a reason unrelated to whatever its author is doing. Costs a directory
+# listing; runs no arms and touches no file.
+guards:
+	python3 scripts/check-guards-armed.py
+
+# Every crossing entrypoint refuses a stale realm frame. No test can assert this
+# — cross() is IsCurrent-strict, so a returned frame cannot be handed to an
+# entrypoint from any harness — which is why the invariant is held by reading, and
+# why a machine should do the reading.
+staleguards:
+	python3 scripts/check-stale-guards.py
+
 demo-physics:
 	python3 scripts/check-demo-physics.py
 
+# `gofmt -l` PRINTS the offenders and exits 0, so this target was permanently
+# green: it listed unformatted files and passed anyway. Harmless while every Go
+# file in the tree sat behind a build tag and gofmt found nothing; a real gate now
+# that internal/ and cmd/ exist.
 fmt:
-	gofmt -l .
+	@out=$$(gofmt -l .); \
+	if [ -n "$$out" ]; then echo "unformatted:"; echo "$$out"; exit 1; fi; \
+	echo "gofmt: clean"
 
 vet:
 	go vet -tags gnochain ./...
+
+# The Go tests. `go test ./...` matched NO packages until the chat service arrived —
+# every file in the tree was behind a gnochain or txtar tag — so `check` had no Go
+# test step at all, and 173 tests and subtests would have sat in the tree unrun.
+# That is exactly the position web/tests/ was in before it got a runner.
+gotest:
+	go test ./internal/... ./cmd/...
+
+# The off-chain chat service: an HTTP server, an Ollama-backed scanner, and the
+# operator CLI. Three binaries into ./bin, which is not committed.
+#
+# Nothing here touches a realm: chat needs a client address, a wall clock and a
+# mutable moderation record, none of which a deterministic VM has.
+chat:
+	@mkdir -p bin
+	go build -o bin/kourtchat    ./cmd/kourtchat
+	go build -o bin/kourtmod     ./cmd/kourtmod
+	go build -o bin/kourtchatctl ./cmd/kourtchatctl
+	@echo "built bin/kourtchat bin/kourtmod bin/kourtchatctl"
 
 # The realms' own tests, plus the three guards that hold the documentation to
 # the code.
