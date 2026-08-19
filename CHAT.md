@@ -645,7 +645,20 @@ live fixtures rather than asserted here — including one that logs loudly if fr
 ever starts diluting, which would make this paragraph wrong.
 
 Ladder: 1h → 24h → 7d on repeats within 30 days, counting only unrevoked
-infractions. Dry run is the default; `--dry-run` states it explicitly and `--enforce`
+infractions — **and the hard categories skip the first rung.** Any verdict of severity 2, which is
+`scam` and `hack`, is raised to 24 hours on its FIRST offence; the documented hour is what `spam`
+costs. Measured, one message each against a fresh ladder:
+
+    spam   severity 1   first offence   1h
+    scam   severity 2   first offence   24h
+    hack   severity 2   first offence   24h
+
+That is deliberate — a confident scam verdict is not a nuisance — but it went unwritten here and
+unasserted anywhere: deleting the floor left every package's tests green, including the ladder's
+own, which uses `hack` and checks only that rungs increase and that nothing becomes permanent. A
+24-fold difference in what this system does to a person had no guard and no mention. It is pinned
+per label now, with `spam` as the paired arm, because a floor applied to everything would satisfy
+a test that only looked at the hard cases and would quietly cost a first-time spammer a day. Dry run is the default; `--dry-run` states it explicitly and `--enforce`
 turns it off. The panel's label derives from `health.enforcing` so it cannot claim
 moderation that isn't happening — which was a claim
 this document made for some time before anything implemented it. No client fetched that

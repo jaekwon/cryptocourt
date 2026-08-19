@@ -706,3 +706,85 @@ func TestAWarningThatQuotesALinkStaysVisible(t *testing.T) {
 		t.Errorf("and its author must not be punished, got %q", st.State)
 	}
 }
+
+// THE HARD CATEGORIES START AT THE SECOND RUNG, AND NOTHING ASSERTED IT.
+//
+// CHAT.md described the ladder as "1h → 24h → 7d on repeats", which is the whole story only for
+// spam. scanner.go raises any verdict of severity 2 to 24 hours on its FIRST offence, so the
+// documented first rung never applies to the two labels that matter. Measured:
+//
+//	spam  (severity 1)  first offence  1h
+//	scam  (severity 2)  first offence  24h
+//	hack  (severity 2)  first offence  24h
+//
+// Deleting the floor left the ENTIRE suite green — every package, including the ladder test
+// above, which uses Hack and checks only that durations increase across rungs and that nothing
+// reaches a permanent ban. So a 24-fold difference in what this system does to a person was
+// unpinned by any test and absent from the one document that describes the ladder.
+//
+// The behaviour is deliberate and stays. This pins the value, and spam is the paired arm: without
+// it a floor applied to everything would pass just as well, and that would quietly turn a
+// one-hour first offence for spam into a day.
+func TestTheFirstOffenceCostsMoreForTheHardCategories(t *testing.T) {
+	for _, c := range []struct {
+		label string
+		want  time.Duration
+	}{
+		{Spam, time.Hour},
+		{Scam, 24 * time.Hour},
+		{Hack, 24 * time.Hour},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			cls := &fakeCls{bare: Verdict{Label: c.label, Confidence: 0.95, Why: "measured"}}
+			sc, st, clock := newScanner(t, cls, true)
+			seed(t, st, clock, "ip-first-offence", "a message the classifier condemns")
+			if _, err := sc.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			rows, err := st.ListInfractions(context.Background(), "", true, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != 1 {
+				t.Fatalf("want exactly one first-offence consequence, got %d — with more than "+
+					"one the ladder has already moved and this measures the wrong rung", len(rows))
+			}
+			r := rows[0]
+			if r.ExpiresAt == 0 {
+				t.Fatal("an automated consequence must expire")
+			}
+			// Measured from the row's own stamp rather than the clock, which seed() advanced.
+			got := time.Duration(r.ExpiresAt-r.CreatedAt) * time.Second
+			if got != c.want {
+				t.Errorf("a first-offence %s costs %s, want %s. Severity %d — the floor in "+
+					"scanner.go raises severity 2 to 24h and must not touch severity 1",
+					c.label, got, c.want, Severity(c.label))
+			}
+		})
+	}
+}
+
+// Severity's own contract, because a comment claimed something the code does not do: it said
+// "Unknown sits BELOW clean". Both fall through to the same default and both are 0.
+//
+// The PROPERTY that mattered is still true and is what gets asserted — an unparseable verdict
+// carries no more weight than a clean one, so a scanner that cannot be understood is never the
+// reason anybody is punished. The ordering claim was simply a wrong way of saying it, and the
+// harsher-wins comparison in Tick reads these numbers, so the distinction is worth being exact
+// about rather than leaving a reader to infer a rule that is not there.
+func TestUnknownCarriesNoMoreWeightThanClean(t *testing.T) {
+	if got := Severity(Unknown); got != 0 {
+		t.Errorf("Severity(unknown) = %d, want 0: a verdict nobody can read must not punish", got)
+	}
+	if Severity(Unknown) != Severity(Clean) {
+		t.Errorf("unknown (%d) and clean (%d) are both the do-nothing outcome and must compare "+
+			"equal; the harsher-wins rule in Tick reads these",
+			Severity(Unknown), Severity(Clean))
+	}
+	// And the ones that DO punish still order correctly, or the assertions above are about a
+	// function that returns zero for everything.
+	if !(Severity(Spam) > Severity(Clean) && Severity(Scam) > Severity(Spam)) {
+		t.Errorf("the punishing labels must still order: clean %d, spam %d, scam %d",
+			Severity(Clean), Severity(Spam), Severity(Scam))
+	}
+}

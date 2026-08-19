@@ -177,8 +177,15 @@ func (s *Scanner) one(ctx context.Context, p chat.Pending) error {
 
 	// Every consequence is a bounded kick. There is no path from here to a
 	// permanent ban, and the enforcer clamps it again on the way out — see
-	// chat.statusTx. An attacker on a shared address cannot buy a stranger more
-	// than the ladder allows.
+	// chat.statusTx.
+	//
+	// An attacker on a shared address cannot buy a stranger more than the ladder
+	// allows, and it is worth being concrete about what that is rather than leaving
+	// it as reassurance: on a NAT the ip_hash is shared, so one occupant's first
+	// scam costs every other occupant 24 hours — the floor below, not the ladder's
+	// opening hour — and a determined one reaches MaxAutoKick's seven days. §3
+	// takes that cost knowingly, which is why the rule REFUSES rather than punishes
+	// where it can, and why a range is only ever a human's decision.
 	d, err := s.Store.Escalate(ctx, p.IPHash)
 	if err != nil {
 		return err

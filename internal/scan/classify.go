@@ -30,8 +30,14 @@ const (
 	Unknown = "unknown" // never punishes
 )
 
-// Severity orders the labels. Unknown sits BELOW clean: a scanner that cannot be
-// understood must not be the reason anybody is punished.
+// Severity orders the labels, and only two of them punish.
+//
+// Unknown and clean are the SAME number — both fall through to zero — which is what makes a
+// scanner that cannot be understood harmless: an unparseable verdict carries no more weight than
+// a clean one and is never the reason anybody is punished. This said "unknown sits BELOW clean",
+// which is a wrong statement of a right property; nothing in the code puts one under the other,
+// and Tick's harsher-wins comparison reads these numbers, so the difference between "equal" and
+// "below" is worth being exact about. Asserted in TestUnknownCarriesNoMoreWeightThanClean.
 func Severity(label string) int {
 	switch label {
 	case Spam:
