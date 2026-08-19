@@ -5,7 +5,9 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // takesValue IS A COPY OF THE FLAG DEFINITIONS, so it needs a guard.
@@ -149,5 +151,47 @@ func TestSplitAcceptsFlagsOnEitherSideOfThePositionals(t *testing.T) {
 				t.Errorf("positional = %q, want %q", pos, c.wantPos)
 			}
 		})
+	}
+}
+
+// BAN AND KICK MUST SAY WHAT THEY ACTED ON when given `-msg`.
+//
+// Neither did, and both had the body in hand. A mistyped id — `-msg 14` for `-msg 41` — produced
+// "kicked address 28cb400fe2b6 for 1h [consequence 3]" and nothing to check it against; the
+// operator had to run `why` to discover who they had punished. Message ids are rowids that restart
+// once prune empties a court, so an id read from `review` earlier can resolve to somebody else.
+//
+// It cannot prevent the wrong action — the tool is non-interactive on purpose, and a prompt would
+// break scripting — but it makes the wrong action visible where it happens, beside the unban line
+// that reverses it.
+func TestEvidenceLineShowsTheMessageAndTruncatesByRunes(t *testing.T) {
+	if got := evidenceLine(0, "anything"); got != "" {
+		t.Errorf("a hash-based action cites no message and must print nothing, got %q", got)
+	}
+	if got := evidenceLine(41, "send me your seed phrase"); !strings.Contains(got, "41") ||
+		!strings.Contains(got, "send me your seed phrase") {
+		t.Errorf("the line must name the id and the body, got %q", got)
+	}
+	// The trap: truncating a multibyte body by BYTES severs a character. Cyrillic is two bytes per
+	// rune, so a 100-rune body is 200 bytes and a byte cut would land mid-character.
+	long := strings.Repeat("ф", 100)
+	got := evidenceLine(7, long)
+	if !utf8.ValidString(got) {
+		t.Errorf("the truncated line must still be valid UTF-8: %q", got)
+	}
+	// 72 runes kept, plus the ellipsis. Counted inside the quoted body rather than on the whole
+	// line, which also carries the prefix.
+	body := got[strings.Index(got, "\"")+1 : strings.LastIndex(got, "\"")]
+	if n := len([]rune(body)); n != 73 {
+		t.Errorf("expected 72 runes plus an ellipsis, got %d runes in %q", n, body)
+	}
+	if !strings.HasSuffix(body, "…") {
+		t.Errorf("a truncated body must say so, got %q", body)
+	}
+	// And a short body is untouched — the paired positive, so this is not a formatter that
+	// mangles everything.
+	short := "is the settle window still open"
+	if got := evidenceLine(9, short); !strings.Contains(got, short) || strings.Contains(got, "…") {
+		t.Errorf("a short body must appear whole and unmarked, got %q", got)
 	}
 }

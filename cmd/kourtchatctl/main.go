@@ -319,6 +319,7 @@ func cmdBan(ctx context.Context, s *chat.Store, argv []string) {
 		scope = "network"
 	}
 	fmt.Printf("banned %s %s permanently [consequence %d]\n", scope, short(hash), id)
+	echoEvidence(evID, evText)
 	fmt.Printf("reverse it with: kourtchatctl unban %d\n", id)
 }
 
@@ -363,6 +364,7 @@ func cmdKick(ctx context.Context, s *chat.Store, argv []string) {
 		scope = "network"
 	}
 	fmt.Printf("kicked %s %s for %s [consequence %d]\n", scope, short(pos[0]), *for_, id)
+	echoEvidence(evID, evText)
 	fmt.Printf("reverse it early with: kourtchatctl unban %d\n", id)
 }
 
@@ -396,6 +398,37 @@ func cmdHash(s *chat.Store, secretFile string, argv []string) {
 	fmt.Printf("network  %s   (%s)\n", h.HashNet(addr), chat.NetPrefix(addr))
 	fmt.Printf("\nkick one address for an hour:  kourtchatctl kick %s -for 1h\n", h.Hash(addr))
 	fmt.Printf("ban the network permanently:   kourtchatctl ban -net %s\n", h.HashNet(addr))
+}
+
+// echoEvidence prints the message a `-msg` action was actually about.
+//
+// Neither ban nor kick used to show it, and both had the body in hand. A mistyped id — `-msg 14`
+// for `-msg 41` — therefore produced "kicked address 28cb400fe2b6 for 1h [consequence 3]" and
+// nothing an operator could check it against; they had to run `why` to find out who they had just
+// punished. Message ids are also rowids that restart after a prune empties a court (§7), so an id
+// read from `review` a while ago can resolve to somebody else entirely.
+//
+// This does not prevent the wrong action, because the tool is non-interactive on purpose and a
+// prompt would break scripting. It makes the wrong action VISIBLE at the moment it happens, next
+// to the unban line that reverses it, which is the whole reversibility argument.
+// Split so the formatting is testable without capturing stdout. Truncation is by RUNES: a byte
+// cut would sever a multibyte character and print a replacement box, which in this repo has
+// already been the shape of several bugs.
+func evidenceLine(evID int64, evText string) string {
+	if evID == 0 {
+		return ""
+	}
+	body := evText
+	if r := []rune(body); len(r) > 72 {
+		body = string(r[:72]) + "…"
+	}
+	return fmt.Sprintf("for message %d: %q", evID, body)
+}
+
+func echoEvidence(evID int64, evText string) {
+	if line := evidenceLine(evID, evText); line != "" {
+		fmt.Println(line)
+	}
 }
 
 // withAuthor turns -msg into the hash the caller would otherwise have typed, and into
