@@ -147,6 +147,32 @@ func (h *Hasher) Hash(a netip.Addr) string {
 	return hex.EncodeToString(mac.Sum(nil)[:16])
 }
 
+// HashNet is the same key for the NETWORK an address sits in: /24 for IPv4, /48
+// for IPv6.
+//
+// It exists because two other decisions collide. Automated consequences are
+// capped and permanent bans are manual only, which puts every class-stopping
+// action on a human; and hashing the address destroyed the subnet structure that
+// human would need to act on a range. Without this an operator facing an attacker
+// who rotates a delegated prefix can only ban one address at a time, for ever,
+// against someone generating fresh ones for free.
+//
+// No new privacy is lost: a /24 is LESS identifying than a full address, and §2 of
+// CHAT.md already concedes both are recoverable by anyone holding the key.
+func (h *Hasher) HashNet(a netip.Addr) string {
+	bits := 48
+	if a.Is4() {
+		bits = 24
+	}
+	p, err := a.Prefix(bits)
+	if err != nil {
+		return ""
+	}
+	mac := hmac.New(sha256.New, h.key)
+	mac.Write([]byte("net\x00" + p.String()))
+	return hex.EncodeToString(mac.Sum(nil)[:16])
+}
+
 // PublicSuffix is the short tag shown beside a moniker so two people using the
 // same name are usually distinguishable.
 //
