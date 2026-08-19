@@ -6054,5 +6054,47 @@
     "label": "v0.55: the setmods global term loses its direction scope, refusing a legitimate install",
     "find": "\t\tif cm.suspended && cm.suspendActByGlobal > cs.openedAt {",
     "replace": "\t\tif cm.suspendActByGlobal > cs.openedAt {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "clock.gno",
+    "label": "zero-stamp: pastDeadline calls an absent stamp KNOWN",
+    "find": "\tif stamp == 0 {\n\t\treturn false, false\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "clock.gno",
+    "label": "zero-stamp: an absent stamp reports known=true, so no caller falls back",
+    "find": "\t\treturn false, false\n",
+    "replace": "\t\treturn false, true\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "claim.gno",
+    "label": "zero-stamp: CloseDeadClaim loses its height fallback",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.openedAt+deadClaimTimeout) {",
+    "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); known && !passed {\n\t\t_ = known"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "claim.gno",
+    "label": "zero-stamp: EditClaimTitle's polish window loses its height fallback",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && passed) ||\n\t\t(!known && runtime.ChainHeight() >= cs.openedAt+c.params.stakeOpenDelayBlocks) {",
+    "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); known && passed {\n\t\t_ = known"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "session.gno",
+    "label": "zero-stamp: SettleUndisputed's 72h minimum loses its height fallback",
+    "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && runtime.ChainHeight() < cs.answerHeight+settleDelay) {",
+    "replace": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); known && !passed {\n\t\t_ = known"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "answer.gno",
+    "label": "zero-stamp: PostAnswer's dead-claim gate loses its height fallback",
+    "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && passed) ||\n\t\t(!known && now >= cs.openedAt+deadClaimTimeout) {",
+    "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); known && passed {\n\t\t_ = known"
   }
 ]

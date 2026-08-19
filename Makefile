@@ -1,22 +1,27 @@
 .PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet anchors paths \
-	scenarios scenarios-check
+	scenarios scenarios-check demo-physics
 
 # Everything that can run without a node.
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet anchors paths realm-test
+check: fmt vet anchors paths demo-physics scenarios-check realm-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
 # on a machine without one. Neither of these needs a toolchain, a staged tree or
 # a lock, so neither should be switched off by a missing binary. check-paths.py
-# was inside realm-test and moved here for that reason.
+# was inside realm-test and moved here for that reason, and
+# demo-physics/scenarios-check followed it for the same one — both are pure
+# Python and were silently skipped on a toolchain-less machine.
 anchors:
 	python3 scripts/check-mutation-anchors.py
 
 paths:
 	python3 scripts/check-paths.py
+
+demo-physics:
+	python3 scripts/check-demo-physics.py
 
 fmt:
 	gofmt -l .
@@ -48,8 +53,6 @@ realm-test:
 	python3 scripts/check-nontransferable.py || exit 1; \
 	python3 scripts/check-membership-clears.py || exit 1; \
 	python3 scripts/check-read-purity.py || exit 1; \
-	python3 scripts/check-demo-physics.py || exit 1; \
-	$(MAKE) -s scenarios-check || exit 1; \
 	root=$$(python3 scripts/gnoroot.py build --label realm-test --pid $$$$) || exit 1; \
 	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
 	export GNOROOT="$$root"; \
@@ -103,16 +106,22 @@ scenarios:
 	done
 
 scenarios-check:
-	@for f in scenarios/*.py; do \
+	@rc=0; tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
+	for f in scenarios/*.py; do \
 		[ -e "$$f" ] || continue; \
-		out="gnoland/testdata/scn_$$(basename $$f .py).txtar"; \
-		python3 scripts/scenario.py "$$f" --out "$$out.new" >/dev/null || exit 1; \
-		if ! cmp -s "$$out" "$$out.new"; then \
-			echo "$$out is stale — run 'make scenarios'"; rm -f "$$out.new"; exit 1; \
+		n="$$(basename $$f .py)"; out="gnoland/testdata/scn_$$n.txtar"; \
+		python3 scripts/scenario.py "$$f" --out "$$tmp/$$n.txtar" >/dev/null || exit 1; \
+		if ! cmp -s "$$out" "$$tmp/$$n.txtar"; then \
+			echo "$$out is stale — run 'make scenarios'"; rc=1; \
 		fi; \
-		rm -f "$$out.new"; \
 	done; \
-	echo "scenarios-check: every generated txtar matches its scenario."
+	for t in gnoland/testdata/scn_*.txtar; do \
+		[ -e "$$t" ] || continue; \
+		src="scenarios/$$(basename $$t .txtar | sed 's/^scn_//').py"; \
+		[ -e "$$src" ] || { echo "$$t has no scenario ($$src) — it runs in txtar-test with no source"; rc=1; }; \
+	done; \
+	[ $$rc -eq 0 ] && echo "scenarios-check: every generated txtar matches its scenario."; \
+	exit $$rc
 
 txtar-test:
 	@root=$$(python3 scripts/gnoroot.py build --label txtar --pid $$$$) || exit 1; \
@@ -148,10 +157,12 @@ isolation-test:
 #     root=$(python3 scripts/gnoroot.py build --label t --pid $$)
 #     ...stage as realm-test does, then: GNOROOT=$root gno test .   # in r/kourtv2
 #
-# That number has moved by an order of magnitude inside one project (an earlier
-# version of this comment recorded 3.67s; the same suite measured ~34s), which is
-# why the recipe is here and the digit is not. Two consequences before you either
-# wait on this target or lengthen a test:
+# and time it on an IDLE machine. Three readings of the same kourtv2 suite, all
+# real: 3.67s when an earlier version of this comment was written, ~8s idle today,
+# and ~34s while another session's `make isolation-test` ran alongside. The middle
+# one is the suite's actual growth; the last is contention, and it is 4x. That
+# spread is why the recipe is here and the digit is not. Two consequences before
+# you either wait on this target or lengthen a test:
 #
 #   * Most rows target kourtv2, so each one pays the WHOLE kourtv2 suite.
 #     Lengthening one shared test there multiplies across all of them.
