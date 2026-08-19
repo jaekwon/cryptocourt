@@ -39,6 +39,21 @@ type Server struct {
 		Country(netip.Addr) string
 	}
 
+	// AppealTo is where a punished person is told to complain, and it is empty by default.
+	//
+	// The panel told anyone it paused "You can appeal — quote reference 9" and there was no
+	// channel anywhere: not in the panel, not in kourtchatctl, not in CHAT.md. The whole
+	// operator surface — `why`, `unban`, the evidence copy that survives pruning — exists to
+	// service appeals, and the person being invited to make one had nowhere to send it.
+	//
+	// The brief for that surface said an IP-consequence system with no reversal makes
+	// "appealable" a lie. A reversal nobody can reach is the same lie one step later.
+	//
+	// Empty means the panel says nothing about appealing rather than inventing a route, the
+	// same way an absent CFG.chat means no chat rather than a guessed origin. Promising a
+	// process that does not exist is worse than admitting there is none.
+	AppealTo string
+
 	// HealthDetail serves the operator's numbers — backlog, heartbeat, unscannable — on the
 	// public /api/chat/health. OFF by default, and that default is the finding.
 	//
@@ -138,8 +153,28 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 // publicHealth is what an anonymous caller gets: enough to keep the page honest, and
 // nothing that helps somebody choose a moment.
 type publicHealth struct {
-	OK        bool `json:"ok"`
-	Enforcing bool `json:"enforcing"`
+	OK        bool   `json:"ok"`
+	Enforcing bool   `json:"enforcing"`
+	AppealTo  string `json:"appeal_to,omitempty"`
+}
+
+// appealTo returns the configured contact, refusing anything that is not plainly one line.
+//
+// Operator-supplied and rendered in a page. The panel escapes everything it writes, so this is
+// not the last line of defence — but a control character or a newline in a contact string is a
+// misconfiguration worth swallowing rather than serving, and a very long one is a paste
+// accident.
+func (s *Server) appealTo() string {
+	v := strings.TrimSpace(s.AppealTo)
+	if v == "" || len(v) > 200 {
+		return ""
+	}
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			return ""
+		}
+	}
+	return v
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -152,10 +187,15 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.HealthDetail {
-		writeJSON(w, http.StatusOK, h)
+		writeJSON(w, http.StatusOK, struct {
+			Health
+			AppealTo string `json:"appeal_to,omitempty"`
+		}{h, s.appealTo()})
 		return
 	}
-	writeJSON(w, http.StatusOK, publicHealth{OK: h.OK, Enforcing: h.Enforcing})
+	writeJSON(w, http.StatusOK, publicHealth{
+		OK: h.OK, Enforcing: h.Enforcing, AppealTo: s.appealTo(),
+	})
 }
 
 // path splits /api/chat/{chain}/{court}.

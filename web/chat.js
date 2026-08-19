@@ -91,7 +91,7 @@ function chatWhen(nowSec, thenSec) {
 // category or the classifier's reasoning — those would make the endpoint an oracle
 // for tuning an evasion. So this cannot say what someone did, only that they are
 // paused and until when, and it must not invent a reason.
-function chatStatusLine(you, nowSec) {
+function chatStatusLine(you, nowSec, appealTo) {
   const st = you && you.state ? String(you.state) : "ok";
   if (st === "ok") return "";
   // Not a punishment and must not read like one: the court was withdrawn, which says
@@ -102,18 +102,29 @@ function chatStatusLine(you, nowSec) {
   let when = "";
   if (until > nowSec) {
     const left = until - nowSec;
-    when = left < 3600 ? " for another " + Math.max(1, Math.round(left / 60)) + " minutes"
-         : left < 86400 ? " for another " + Math.round(left / 3600) + " hours"
-         : " for another " + Math.round(left / 86400) + " days";
+    // Pluralised, because "paused for another 1 hours" is what a punished person reads while
+    // deciding whether this service is careless. Noticed in a live walk-through, not a test.
+    const unit = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+    when = " for another " + (left < 3600 ? unit(Math.max(1, Math.round(left / 60)), "minute")
+         : left < 86400 ? unit(Math.round(left / 3600), "hour")
+         : unit(Math.round(left / 86400), "day"));
   }
   const what = st === "ban"
     ? "Posting from your connection is blocked"
     : "Posting from your connection is paused" + when;
-  // The reference exists so an appeal can quote something specific. Saying so is the
-  // difference between a dead end and a process.
-  return ref
-    ? what + ". You can appeal — quote reference " + ref + "."
-    : what + ".";
+  // The reference exists so an appeal can quote something specific — but only say "you can
+  // appeal" when there is somewhere to send it. This line used to promise an appeal with no
+  // channel anywhere in the service: not in this file, not in kourtchatctl, not in CHAT.md.
+  // The whole operator surface exists to service appeals and the person invited to make one
+  // had nowhere to go, which is a dead end wearing the word "process".
+  //
+  // With no contact configured it still gives the reference, because that is useful to somebody
+  // who finds a channel another way, and it makes no claim about one that does not exist.
+  if (!ref) return what + ".";
+  if (appealTo) {
+    return what + ". To appeal, quote reference " + ref + " to " + appealTo + ".";
+  }
+  return what + ". Reference " + ref + ".";
 }
 
 // chatValidate mirrors the server's limits so the answer arrives before the round
@@ -398,9 +409,17 @@ function mountChat(el, opts) {
   // Separate from paintLog, and it has to stay separate: a refused POST carries a
   // `you` and NO messages, and the first version of this function took both at once,
   // so telling somebody they were paused also erased the transcript they were reading.
+  // Declared before paintState uses it: the demo branch paints during the mount, before the
+  // health request has even been made, and a `let` below that point is a temporal dead zone.
+  let appealTo = "";
+  // lastYou is remembered so the status line can be repainted when the appeal contact arrives
+  // after it: the health request and the first transcript read race, and whichever loses would
+  // otherwise leave a punished reader looking at the version with no channel in it.
+  let lastYou = null;
   function paintState(you) {
     if (!live()) return;
-    const line = chatStatusLine(you, nowSec());
+    if (you) lastYou = you;
+    const line = chatStatusLine(lastYou, nowSec(), appealTo);
     stateEl.textContent = line;
     stateEl.hidden = !line;
     // Disabled rather than hidden: someone who is paused should be able to see that
@@ -427,8 +446,15 @@ function mountChat(el, opts) {
   }
 
   // One health request per mount, in live mode only — demo mode makes no network calls.
+  // Health is fetched once per mount and carries two things the page needs: whether timeouts
+  // are being applied, and where to appeal one. Held in a variable because the status line is
+  // repainted on every poll while this is asked for once.
   chatHealth(base).then(h => {
     if (!live()) return;
+    if (h && typeof h.appeal_to === "string") {
+      appealTo = h.appeal_to;
+      paintState(lastYou); // the line may already be on screen, saying less than it could
+    }
     const notice = chatDryRunNotice(h);
     if (!notice) return;
     const el2 = el.querySelector(".chatdry");

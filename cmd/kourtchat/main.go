@@ -42,6 +42,8 @@ func main() {
 		secretFile   = flag.String("secret-file", "", "path to the IP hashing key; defaults to a row in the database")
 		healthDetail = flag.Bool("health-detail", false,
 			"serve backlog and scanner timing on the public health endpoint (helps an attacker time one)")
+		appealTo = flag.String("appeal-to", "",
+			"where a punished person should complain; the panel stays silent about appeals if unset")
 		geoLoc    = flag.String("geo-locations", "", "MaxMind GeoLite2-Country-Locations-en.csv")
 		geoBlocks = flag.String("geo-blocks", "", "comma-separated GeoLite2-Country-Blocks-IPv{4,6}.csv")
 	)
@@ -88,6 +90,7 @@ func main() {
 	srv := &chat.Server{
 		Store: store, Hasher: hasher, Policy: policy,
 		HealthDetail: *healthDetail,
+		AppealTo:     *appealTo,
 		Chains:       names, CountryHeader: *countryHdr, Log: lg,
 	}
 	// Flags are decoration, so a missing or broken geo database must never stop the

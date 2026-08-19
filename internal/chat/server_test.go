@@ -667,3 +667,67 @@ func TestPublicHealthWithholdsOperatorTelemetry(t *testing.T) {
 		}
 	}
 }
+
+// THE APPEAL ROUTE, WHICH THE PANEL PROMISED AND NOTHING PROVIDED.
+//
+// A punished reader was told "You can appeal — quote reference 9", and there was no channel
+// anywhere: not in web/chat.js, not in kourtchatctl, not in CHAT.md. The whole operator surface
+// — `why`, `unban`, the evidence copy that outlives pruning — exists to service appeals, and the
+// person invited to make one had nowhere to send it. The brief for that surface said a system
+// with no reversal makes "appealable" a lie; a reversal nobody can reach is the same lie a step
+// later.
+//
+// Empty by default, and empty means the panel says nothing about appealing rather than inventing
+// a route — the same rule as an absent CFG.chat meaning no chat rather than a guessed origin.
+func TestTheAppealContactIsPublishedOnlyWhenSet(t *testing.T) {
+	srv, _, _ := newServer(t)
+
+	body := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+	if strings.Contains(body, "appeal_to") {
+		t.Errorf("unset, it must be absent rather than empty-but-present: %s", body)
+	}
+
+	srv.AppealTo = "mods@example.org"
+	body = do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+	if !strings.Contains(body, "mods@example.org") {
+		t.Errorf("set, it must reach the panel: %s", body)
+	}
+	// It travels with the detailed form too, or an operator who turned on -health-detail would
+	// lose the one field their users need.
+	srv.HealthDetail = true
+	body = do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+	if !strings.Contains(body, "mods@example.org") || !strings.Contains(body, "backlog") {
+		t.Errorf("with -health-detail both must be present: %s", body)
+	}
+	srv.HealthDetail = false
+
+	// A misconfiguration is swallowed rather than served. The panel escapes what it writes, so
+	// this is not the last line of defence — but a newline or a control character in a contact
+	// string is somebody's mistake, and a 300-character one is a paste accident.
+	for _, bad := range []string{
+		"   ",
+		"mods@example.org\nX-Injected: yes",
+		"mods@example.org\x00",
+		"mods@example.org\x1b[31m",
+		strings.Repeat("a", 201),
+	} {
+		srv.AppealTo = bad
+		body = do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+		if strings.Contains(body, "appeal_to") {
+			t.Errorf("a malformed contact must be withheld, got %s for %q", body, bad)
+		}
+	}
+	// PAIRED POSITIVE: ordinary contacts of every shape an operator would actually use.
+	for _, good := range []string{
+		"mods@example.org",
+		"https://example.org/appeal",
+		"the #court-mods channel",
+		"  mods@example.org  ", // trimmed, not refused
+	} {
+		srv.AppealTo = good
+		body = do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+		if !strings.Contains(body, "appeal_to") {
+			t.Errorf("%q is a reasonable contact and must be published: %s", good, body)
+		}
+	}
+}

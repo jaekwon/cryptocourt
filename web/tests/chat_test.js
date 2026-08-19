@@ -125,8 +125,25 @@ const XSS = '<img src=x onerror=alert(1)>';
   const k = chatStatusLine({state: "kick", until: 1000 + 1800, ref: 42}, 1000);
   ok("a kick says paused", /paused/i.test(k));
   ok("...says how long", /30 minutes/.test(k));
-  ok("...and points at an appeal with a reference", /appeal/i.test(k) && /42/.test(k));
+  // With NO contact configured it gives the reference and promises nothing. The line used to
+  // say "You can appeal" unconditionally, while no channel existed anywhere in the service.
+  ok("...gives the reference", /42/.test(k));
+  ok("...and does not promise an appeal with nowhere to send it", !/appeal/i.test(k));
+  const withContact = chatStatusLine({state: "kick", until: 1000 + 1800, ref: 42}, 1000,
+    "mods@example.org");
+  ok("...but names the route when the operator configured one",
+     /appeal/i.test(withContact) && /mods@example\.org/.test(withContact) &&
+       /42/.test(withContact));
 
+  // Singular where it should be singular. "paused for another 1 hours" is what a punished
+  // person reads while forming a view of whether this service is careless.
+  ok("one hour is singular", /1 hour\b/.test(
+     chatStatusLine({state: "kick", until: 1000 + 3600}, 1000)) &&
+     !/1 hours/.test(chatStatusLine({state: "kick", until: 1000 + 3600}, 1000)));
+  ok("one day is singular", /1 day\b/.test(
+     chatStatusLine({state: "kick", until: 1000 + 86400}, 1000)));
+  ok("one minute is singular", /1 minute\b/.test(
+     chatStatusLine({state: "kick", until: 1000 + 30}, 1000)));
   ok("a long kick reads in hours", /3 hours/.test(
      chatStatusLine({state: "kick", until: 1000 + 3 * 3600}, 1000)));
   ok("a week reads in days", /7 days/.test(
