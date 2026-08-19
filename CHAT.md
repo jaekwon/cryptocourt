@@ -40,6 +40,24 @@ GET behind every POST for up to the busy timeout), no transaction held across an
 inference, and explicit WAL checkpointing because continuous pollers otherwise
 starve it and `-wal` grows without bound.
 
+That paragraph was written before any of it was measured, and one clause of it was
+false. `internal/chat/contention_test.go` now measures all three claims against two
+`Store` instances on one file — two *processes*, which is the deployment, and the
+case `SetMaxOpenConns(1)` does nothing for:
+
+    reads during a held write transaction        216µs
+    read+status pairs while a scanner writes     8118 in 600ms, worst 1.05ms
+    a post during another process's write        waits 441ms, then succeeds
+
+The third one **failed** on first measurement, with `database is locked (5)`. Cause:
+`BEGIN IMMEDIATE` was documented here and never implemented — `database/sql`'s
+`BeginTx` issues a *deferred* `BEGIN`, so the transaction opened as a reader and
+tried to upgrade on its first write, and `busy_timeout` does not retry that upgrade
+by design (waiting could hand the transaction a stale snapshot). Every post landing
+while the scanner wrote would have been refused with a 503. Fixed with
+`_txlock=immediate` on the write handle only. The one-file decision stands, but it
+stood on a pragma that wasn't there until this test went looking.
+
 ## 2. Automated moderation cannot ban, and the ENFORCER is what guarantees it
 
 The first draft mapped `scam|hack → permanent ban`. The attacker picks the

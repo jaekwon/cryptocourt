@@ -143,7 +143,22 @@ func Open(path string) (*Store, error) {
 		"&_pragma=synchronous(NORMAL)" +
 		"&_pragma=wal_autocheckpoint(256)"
 
-	w, err := sql.Open("sqlite", dsn)
+	// _txlock=immediate on the WRITE handle, and this is not optional.
+	//
+	// database/sql's BeginTx issues a plain BEGIN, which is DEFERRED: the
+	// transaction starts as a reader and tries to upgrade on its first write. When
+	// another connection holds the write lock, that upgrade returns SQLITE_BUSY —
+	// and busy_timeout does NOT retry it, deliberately, because waiting could hand
+	// the transaction an inconsistent snapshot. The only correct recovery is to roll
+	// back and re-run the whole transaction.
+	//
+	// Measured before the fix, in TestAWriteWaitsForTheLockRatherThanFailing: a post
+	// from a second process while the first held a write transaction failed outright
+	// with "database is locked (5)". In production that is a user's message refused
+	// with a 503 every time the scanner happens to be writing. BEGIN IMMEDIATE takes
+	// the write lock up front, where busy_timeout DOES apply, so the post waits and
+	// then succeeds.
+	w, err := sql.Open("sqlite", dsn+"&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
