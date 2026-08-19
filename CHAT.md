@@ -1246,8 +1246,9 @@ the country code.
 `chat_live.js` is the other half, and it is a gate rather than a fixture: it BUILDS
 both binaries, starts a `kourtchat` on a free port with a throwaway database, and
 drives the page against it — no model and no chain, because enforcement comes from
-`kourtchatctl`. Thirty-four checks, and what they cover is the set of things that are
-only true in a browser: CORS and the CSRF rule (header behaviour, and a browser's
+`kourtchatctl`. Forty-six checks — the runner's own count, not a hand tally, because the
+number this sentence used to give was thirty-four and had been overtaken. What they cover is
+the set of things that are only true in a browser: CORS and the CSRF rule (header behaviour, and a browser's
 headers are not curl's), the poller converging on another client's message without a
 reload, a manual kick appearing in the UI with no category named, a kicked reader still
 able to read while their own messages are hidden, the server refusing that reader
@@ -1321,3 +1322,20 @@ What would make this worth revisiting is a way to tell the four failures apart �
 the realm answers at all, once, at startup, so "the realm is reachable and this court is
 not in it" becomes a distinct and reportable state. Until then `freeze` covers the
 compliance half, and an operator who wants a closed namespace has the chain allowlist.
+
+**BOTH KINDS OF EVIDENCE ARE GATED OFF BY DEFAULT, and that is worth knowing before trusting a
+green run.** Nine `TestLive*` fixtures in `internal/scan` need `OLLAMA_LIVE=1`, and nothing in the
+Makefile, the scripts or CI sets it — so `go test ./internal/scan/` prints `ok` while every one of
+them skips, and `go test` shows a skip only under `-v`. The browser harnesses were worse: they were
+not in the runner's `CHECKS` at all, so `make web-visual` reported a clean pass over one file out
+of five, and `chat_render.js` was asserting something false for two commits before anybody ran it.
+
+The gating itself is right — a 3GB model and a headless Chrome do not belong in every `make check`
+— so the answer is not to ungate them but to run them deliberately and say when:
+
+    OLLAMA_LIVE=1 go test ./internal/scan/ -run TestLive -timeout 1800s
+    node web/tests/browser/chat_all.js          # add OLLAMA_LIVE=1 for chat_moderation.js
+
+Measured together on one machine: all nine live fixtures pass in 225s, and the four browser
+harnesses in 149 checks plus the model-backed one. **A suite that cannot fail is not evidence**, and
+the only way to know which of these two states a gated fixture is in is to run it.
