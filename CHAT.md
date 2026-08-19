@@ -924,6 +924,36 @@ What holds the line instead is that the ASK is in the body: "message me privatel
 are acted on at 0.85. The third is the 0.25 above — which, per the previous point, is the one
 that disappears.
 
+**Moderation is not English-only, and nobody had checked.** §4 went to real trouble so a voweled
+Arabic name, pointed Hebrew, Devanagari matras and CJK all fit the moniker limit — the
+letter-counting rule exists because a rune limit refused an eighteen-letter Arabic name while
+accepting a twenty-four-letter English one. So this product invites people who do not type in
+English, and every scanner fixture here was written in English. The deterministic layer is English
+by construction: `reSecretMention` and `reOffWord` are English words and match none of the messages
+below, so what follows is the model alone.
+
+    lure, translated        english scam 0.95   spanish scam 0.85   portuguese scam 0.95
+                            russian scam 0.95   chinese scam 0.95   arabic     scam 0.90
+    ordinary court talk     spanish clean 0.85  russian clean 0.85  chinese clean 0.85
+                            arabic  clean 0.85
+    formal phishing         0.85, 0.95, 0.95 — "For security purposes, please verify your
+                            recovery phrase", and two more like it
+
+The last row matters on its own: every other lure fixture in this repository is written the way a
+crude scammer writes — "send me your seed phrase", "dm me now" — and real phishing is polite,
+institutional and gives a reason. That register had never been measured either.
+
+What is asserted differs by direction, for the reason it always does here. Ordinary speech is
+asserted hard in every language, because punishing somebody for asking a question in their own
+language is the failure this design treats as unacceptable, and clean 0.85 across four scripts is a
+wide margin. The lures are asserted only as a MAJORITY: one 4B verdict wobbling is not a regression,
+but "it only works in English" would be, and six of six leaves room for that bar without pinning a
+judgement call. Misses are logged loudly instead.
+
+The fixture also asserts its own precondition — that the prefilter floors none of these — because if
+a floor ever fires there it stops measuring the model at all. Verified by re-promoting a mention to
+a floor, which is the regression that would cause it.
+
 ## 7. Display moderation
 
 A ban stops new posts; the scam link stays pinned in the court forever. For a
