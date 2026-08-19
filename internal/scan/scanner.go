@@ -155,9 +155,22 @@ func (s *Scanner) one(ctx context.Context, p chat.Pending) error {
 	// former means kicking somebody for protecting the room and hiding what they
 	// wrote. See scan.Reporting for the measurements and for what this costs.
 	if hint.Reporting {
+		// A DISCLOSED SECRET STILL GOES OUT OF SIGHT. The carve-out withholds the timeout,
+		// which is its whole purpose — but it used to withhold the hide as well, and measured,
+		// "fyi here are my words: <a real BIP-39 phrase>" stayed on screen indefinitely.
+		// Nobody is punished here; the phrase simply stops being readable.
+		if hint.Secret && s.Enforce {
+			if err := s.Store.HideMessage(ctx, p.ID); err != nil && s.Log != nil {
+				s.Log.Printf("hiding disclosed secret in message %d: %v", p.ID, err)
+			}
+		}
 		if s.Log != nil {
+			extra := ""
+			if hint.Secret {
+				extra = "; a disclosed secret was hidden, nobody was punished"
+			}
 			s.Log.Printf("REVIEW message %d %s/%s: %s (%.2f) reads as a report; "+
-				"no action taken — %s", p.ID, p.Chain, p.Court, label, conf, why)
+				"no action taken%s — %s", p.ID, p.Chain, p.Court, label, conf, extra, why)
 		}
 		return nil
 	}

@@ -684,6 +684,24 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 // Freeze marks a court unservable, for a purge on chain. Latched in a store we
 // own rather than re-derived from the chain on every request, because the chain
 // read cannot distinguish "purged" from "node unreachable".
+// HideMessage takes one message out of view and punishes nobody.
+//
+// The two halves of moderation are separable and this is the seam. §7's `hidden` normally
+// arrives with a consequence, but a message can need to be out of sight while its author needs
+// nothing done to them at all — a recovery phrase quoted by somebody warning the room is the
+// case that forced this. Scoped to a single id, so it cannot become a sweep.
+func (s *Store) HideMessage(ctx context.Context, id int64) error {
+	res, err := s.w.ExecContext(ctx,
+		`UPDATE messages SET hidden=1 WHERE id=? AND hidden=0`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no visible message %d", id)
+	}
+	return nil
+}
+
 // IsFrozen reports whether a court has been withdrawn from service.
 //
 // Read through the read handle so it costs nothing on the serving path, and consulted by

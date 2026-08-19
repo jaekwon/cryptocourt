@@ -538,3 +538,171 @@ func TestReportingCarveOutIsGameable(t *testing.T) {
 	// What it does NOT escape: the message stays visible, so a reader sees the
 	// warning framing around it, and the verdict is recorded for an operator.
 }
+
+// A DISCLOSED SECRET GOES OUT OF SIGHT EVEN WHEN NOBODY IS PUNISHED.
+//
+// §7's reporting carve-out withholds the consequence, and that is its purpose: gemma3:4b flags
+// warnings as scam at 0.95, so punishing on its word means kicking people for protecting the
+// room. But withholding the consequence withheld the HIDE too, and the two are different
+// decisions. Measured: "fyi here are my words: <a real BIP-39 phrase>" was recorded as scam and
+// left on screen indefinitely, because the message opened with three letters.
+//
+// A recovery phrase quoted by a well-meaning reporter is still a recovery phrase in a public
+// room. The harm is the disclosure, not the intent.
+func TestADisclosedSecretIsHiddenWithoutPunishingAnybody(t *testing.T) {
+	s, err := chat.Open(t.TempDir() + "/chat.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	clock := time.Unix(1_700_000_000, 0)
+	s.Now = func() time.Time { return clock }
+	ctx := context.Background()
+
+	const seed = "legal winner thank year wave sausage worth useful legal winner thank yellow"
+	// Reporting-shaped, and carrying a real phrase.
+	reported, err := s.Post(ctx, chat.PostInput{
+		Chain: "dev", Court: "orem", Moniker: "helper",
+		Body:   "fyi someone sent me this, here are the words: " + seed,
+		IPHash: "ip-helper", NetHash: "net-helper",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock = clock.Add(chat.MinInterval)
+	// An ordinary message from the same person, which must be untouched: the hide is scoped to
+	// the one message, not to them.
+	other, err := s.Post(ctx, chat.PostInput{
+		Chain: "dev", Court: "orem", Moniker: "helper",
+		Body:   "and the settle window closes tonight I think",
+		IPHash: "ip-helper", NetHash: "net-helper",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The model says clean, so nothing here comes from its opinion — the deterministic floor
+	// is doing the work, which is the only reason hiding is safe on a reporting-shaped message.
+	sc := &Scanner{Store: s, Enforce: true, Batch: 8,
+		Cls: &fakeCls{bare: Verdict{Label: Clean, Confidence: 0.9}}}
+	if _, err := sc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// NOBODY IS PUNISHED.
+	st, err := s.Status(ctx, "ip-helper", "net-helper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "ok" {
+		t.Errorf("a possible reporter must not be punished, got %q", st.State)
+	}
+	if n, err := s.CountInfractions(ctx, true); err != nil {
+		t.Fatal(err)
+	} else if n != 0 {
+		t.Errorf("no consequence should exist at all, got %d", n)
+	}
+
+	// AND THE PHRASE IS GONE.
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var visible []int64
+	for _, m := range msgs {
+		visible = append(visible, m.ID)
+		if strings.Contains(m.Body, "legal winner thank") {
+			t.Error("a disclosed recovery phrase must not stay readable, whoever posted it")
+		}
+	}
+	// PAIRED: their OTHER message survives. The hide is one message, not a person.
+	if len(visible) != 1 || visible[0] != other {
+		t.Errorf("only the message carrying the secret should be hidden; visible=%v, "+
+			"reported=%d other=%d", visible, reported, other)
+	}
+}
+
+// DRY RUN CHANGES NOTHING, including this. --enforce is off by default so an operator can watch
+// the false-positive rate before arming, and Health.Enforcing is published so the panel cannot
+// claim moderation that is not happening — a dry run that silently hid messages would make that
+// claim wrong in the other direction. Asserted because the Enforce gate was not load-bearing
+// without it: removing it changed no test.
+func TestADryRunHidesNothingEither(t *testing.T) {
+	s, err := chat.Open(t.TempDir() + "/chat.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.Now = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	ctx := context.Background()
+
+	const seed = "legal winner thank year wave sausage worth useful legal winner thank yellow"
+	if _, err := s.Post(ctx, chat.PostInput{
+		Chain: "dev", Court: "orem", Moniker: "helper",
+		Body:   "fyi someone sent me this: " + seed,
+		IPHash: "ip-helper", NetHash: "net-helper",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Enforce false: the same message, the same deterministic finding, no action.
+	sc := &Scanner{Store: s, Enforce: false, Batch: 8,
+		Cls: &fakeCls{bare: Verdict{Label: Clean, Confidence: 0.9}}}
+	if _, err := sc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("a dry run must not hide anything, got %d visible", len(msgs))
+	}
+	// And the verdict IS recorded, which is what a dry run is for.
+	v, _, err := s.MessageVerdict(ctx, msgs[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v == "" {
+		t.Error("a dry run records the verdict even though it acts on nothing")
+	}
+}
+
+// The complement, and it is what keeps the rule narrow: a warning that QUOTES A LINK is not a
+// disclosed secret and must stay readable. The panel never renders a URL as an anchor, so
+// quoting one is not itself the harm, and hiding the warning would remove the useful part.
+func TestAWarningThatQuotesALinkStaysVisible(t *testing.T) {
+	s, err := chat.Open(t.TempDir() + "/chat.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	s.Now = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	ctx := context.Background()
+
+	if _, err := s.Post(ctx, chat.PostInput{
+		Chain: "dev", Court: "orem", Moniker: "helper",
+		Body:   "careful everyone, that t.me/kourtsupport account is fake",
+		IPHash: "ip-helper", NetHash: "net-helper",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sc := &Scanner{Store: s, Enforce: true, Batch: 8,
+		Cls: &fakeCls{bare: Verdict{Label: Scam, Confidence: 0.95}}}
+	if _, err := sc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("a warning that quotes a link must stay readable, got %d messages", len(msgs))
+	}
+	st, err := s.Status(ctx, "ip-helper", "net-helper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "ok" {
+		t.Errorf("and its author must not be punished, got %q", st.State)
+	}
+}

@@ -38,6 +38,26 @@ type Hint struct {
 	// Reporting means the message looks like somebody WARNING about abuse rather
 	// than committing it. See Reporting.
 	Reporting bool
+
+	// Secret means the message CONTAINS a disclosed secret, not a request for one — today,
+	// a BIP-39 phrase whose checksum validates.
+	//
+	// It exists because the reporting carve-out withholds the whole consequence, and that
+	// conflates two decisions. Withholding the TIMEOUT from a possible reporter is the point:
+	// kicking somebody for warning the room is the perverse outcome §7 describes. Withholding
+	// the HIDE is different, and measured: "fyi here are my words: <a real phrase>" was
+	// recorded as scam and left on screen indefinitely, because the message opened with three
+	// letters.
+	//
+	// A recovery phrase quoted by a well-meaning reporter is still a recovery phrase in a
+	// public room. The harm is the disclosure, not the intent, so the message goes out of
+	// sight whoever posted it — and nobody is punished for it.
+	//
+	// Deliberately NOT set for the off-platform floor. A warning that quotes a scam link
+	// ("careful, that t.me/x is fake") is useful, and the panel never renders a URL as an
+	// anchor, so quoting one is not itself the harm. A secret is different in kind: quoting it
+	// IS the harm.
+	Secret bool
 }
 
 // reReporting matches the shapes a person uses when they are raising an alarm
@@ -140,6 +160,7 @@ func Prefilter(body string) Hint {
 	// up — which is correct, because an invented sequence cannot restore anybody's wallet.
 	if SeedPhrase(body) {
 		h.Floor = Scam
+		h.Secret = true
 		h.Notes = append(h.Notes, "contains a valid BIP-39 recovery phrase")
 	} else if n := WordlistRun(body); n >= 12 {
 		// A near miss gets a note and NO floor. It may be a mistyped real phrase, which is a
