@@ -97,39 +97,32 @@ func Prefilter(body string) Hint {
 		h.Reporting = true
 		h.Notes = append(h.Notes, "reads as a report or warning, not an act")
 	}
-	if n := WordlistRun(body); n >= 8 {
-		// EIGHT, not four. BIP-39 is 2048 ordinary English words: at four, real
-		// sentences match ("would allow any actor above…"), and a rule that fires
-		// on prose is a rule somebody switches off.
+	// A VALID CHECKSUM, not a run of words. The floor here sets `scam`, which costs somebody
+	// 24 hours, so it has to mean what it says.
+	//
+	// The rule was "eight consecutive wordlist words", against a 136-word subset. Measured, it
+	// caught one published test vector — the all-`abandon` one, the only phrase built from
+	// words starting with A — and a realistic phrase scored a run of 1. With the full 2048-word
+	// list the runs are right but the rule is not: BIP-39 is drawn from short common English
+	// nouns, so "list apple orange lemon cherry olive garlic onion potato tomato pepper salt
+	// sugar" runs 13 and a list of materials runs 12. The shortest real phrase is 12 words, so
+	// no threshold separates them and raising the bar only stops catching phrases.
+	//
+	// SeedPhrase checks the checksum instead, which is the thing that makes a phrase a phrase.
+	// A 12-word noun list passes by luck one time in 16, and must also be exactly a phrase
+	// length. Measured: six published vectors caught, including comma-separated and buried in a
+	// plea; five noun lists rejected, including twelve genuine BIP-39 words in an order I made
+	// up — which is correct, because an invented sequence cannot restore anybody's wallet.
+	if SeedPhrase(body) {
 		h.Floor = Scam
-		h.Notes = append(h.Notes, "contains a long run of wordlist words")
+		h.Notes = append(h.Notes, "contains a valid BIP-39 recovery phrase")
+	} else if n := WordlistRun(body); n >= 12 {
+		// A near miss gets a note and NO floor. It may be a mistyped real phrase, which is a
+		// disclosure worth a person's eyes, and it may equally be somebody listing fruit — and
+		// the one thing this must not do is hand a timeout to the second.
+		h.Notes = append(h.Notes, "a long run of wordlist words, but no valid checksum")
 	}
 	return h
-}
-
-// bip39Run returns the longest run of consecutive wordlist words.
-//
-// A short embedded list rather than the full 2048: the point is to catch someone
-// pasting or soliciting a recovery phrase, and a run of eight from this subset is
-// already vanishingly unlikely in prose. Kept short deliberately — a partial list
-// under-fires, which is the safe direction, where a full list plus a low threshold
-// over-fires on ordinary English.
-var bip39Subset = map[string]bool{}
-
-func init() {
-	for _, w := range strings.Fields(`abandon ability able about above absent absorb abstract
-		absurd abuse access accident account accuse achieve acid acoustic acquire across act
-		action actor actress actual adapt add addict address adjust admit adult advance advice
-		aerobic affair afford afraid again age agent agree ahead aim air airport aisle alarm
-		album alcohol alert alien all alley allow almost alone alpha already also alter always
-		amateur amazing among amount amused analyst anchor ancient anger angle angry animal
-		ankle announce annual another answer antenna antique anxiety any apart apology appear
-		apple approve april arch arctic area arena argue arm armed armor army around arrange
-		arrest arrive arrow art artefact artist artwork ask aspect assault asset assist assume
-		asthma athlete atom attack attend attitude attract auction audit august aunt author
-		auto autumn average avocado avoid awake aware away awesome awful awkward axis`) {
-		bip39Subset[w] = true
-	}
 }
 
 // WordlistRun counts the longest run of consecutive wordlist words.
@@ -143,7 +136,7 @@ func WordlistRun(body string) int {
 	best, run := 0, 0
 	for _, w := range strings.Fields(strings.ToLower(body)) {
 		w = strings.Trim(w, ".,;:!?\"'()[]")
-		if bip39Subset[w] {
+		if _, ok := bip39Index[w]; ok {
 			if run++; run > best {
 				best = run
 			}
