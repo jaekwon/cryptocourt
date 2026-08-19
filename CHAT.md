@@ -1179,6 +1179,24 @@ consistent snapshot:
     sqlite3 chat.db ".backup '/backups/chat-$(date +%F).db'"
     sqlite3 chat.db "VACUUM INTO '/backups/chat.db'"      # same guarantee, compacted
 
+`TestTheDocumentedBackupProcedureCopiesALiveDatabase` pins the second one against a database
+that is still open and being written to, because a backup that is quietly short is discovered
+during a restore and nowhere else. It runs the naive copy beside it as a control: if the main
+file alone ever starts coming back complete, the assertion above stops proving anything about
+the WAL and both halves need re-measuring rather than the test deleting. `VACUUM INTO` is used
+rather than `.backup` because it is one SQL statement the driver already speaks, so it needs no
+`sqlite3` binary on a host that otherwise has no reason to have one.
+
+**The three-file copy was measured too, and it came out better than expected — which is not the
+same as safe.** The worry is obvious: `rsync` walks `chat.db` before `chat.db-wal`, writes land
+in between, and the pair is from two different instants. Constructed deterministically — main
+file copied, three more messages posted, then the WAL copied — the result was
+`integrity_check ok` with every row present, including the ones written mid-copy. That follows
+from what the numbers above already show: the main file is mostly header, so a WAL copied second
+is a superset. But that is ONE interleaving, not a proof over all of them, and the reverse order
+under an autocheckpoint is the case nobody has measured. So it is recorded as a reassurance and
+not as a procedure: take the snapshot, which does not depend on which ordering you happen to get.
+
 **A wrong `--db` used to report itself as "out of memory".** Three different filesystem problems
 — a missing parent directory, a path that is a directory, a read-only parent — all produced the
 same driver message, `unable to open database file: out of memory (14)`. Code 14 is
