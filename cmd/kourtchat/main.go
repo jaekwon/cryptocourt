@@ -29,7 +29,37 @@ import (
 
 	"github.com/jaekwon/kourt/internal/chat"
 	"github.com/jaekwon/kourt/internal/geo"
+	"path/filepath"
 )
+
+// keyWarning reports what is wrong with where the IP hashing key lives, or "" when nothing is.
+//
+// Two cases, and the first is the default:
+//
+//	no --secret-file        the key is a row IN the database, so one file carries the hashes
+//	                        and the key that reverses them
+//	same directory as it     a backup or rsync of that directory carries both, which is the
+//	                        threat the hashing exists for
+//
+// A warning rather than a refusal: refusing would break every deployment that is running this
+// way today, and the operator may have a reason. Being unable to see it is the problem.
+func keyWarning(secretFile, db string) string {
+	if secretFile == "" {
+		return "no --secret-file: the IP hashing key is stored inside " + db +
+			", so one copy of that file carries both the address hashes and the key that " +
+			"reverses them. See CHAT.md \u00a79."
+	}
+	keyDir, err1 := filepath.Abs(filepath.Dir(secretFile))
+	dbDir, err2 := filepath.Abs(filepath.Dir(db))
+	if err1 != nil || err2 != nil {
+		return "" // cannot compare; not worth a scary message over a path we failed to resolve
+	}
+	if keyDir == dbDir {
+		return "--secret-file " + secretFile + " sits in the same directory as the database; " +
+			"a backup of that directory carries both the hashes and the key. See CHAT.md \u00a79."
+	}
+	return ""
+}
 
 func main() {
 	var (
@@ -71,6 +101,19 @@ func main() {
 	key, err := chat.LoadKey(store, *secretFile, true)
 	if err != nil {
 		lg.Fatal(err)
+	}
+	// SAY WHEN THE HASHING KEY IS NOT PROTECTING ANYTHING.
+	//
+	// §3 of CHAT.md claimed the key was "required to live outside the data directory". Nothing
+	// required it, and the DEFAULT is the case that fails: with no --secret-file the key goes
+	// into a row of the database itself, so one copy of that file carries both the hashes and
+	// the means to reverse them. IPv4 is 2^32; that is every address recovered in seconds.
+	//
+	// Silence was the wrong answer for the same reason the line below it is not silent — this
+	// process already announces an unmoderated chat at startup rather than leaving somebody to
+	// infer it. A defence that is not operating should say so where an operator is looking.
+	if w := keyWarning(*secretFile, *db); w != "" {
+		lg.Print(w)
 	}
 	hasher, err := chat.NewHasher(key)
 	if err != nil {
