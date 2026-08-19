@@ -35,6 +35,25 @@ type IPPolicy struct {
 var (
 	ErrNoTrustedProxy = errors.New("--behind-proxy needs at least one --trusted-proxy CIDR")
 	ErrUntrustedPeer  = errors.New("connection did not come from a trusted proxy")
+
+	// ErrNoClientHop is the case the peer fallback used to swallow.
+	//
+	// Walking right to left, the first hop that is not a trusted proxy is the client. If EVERY hop
+	// is one of ours, the client's address was never recorded — and returning the peer then gives
+	// every such request one identity, which is the "127.0.0.1 for everybody" failure §3 opens
+	// with: the throttle goes global and the first kick kicks the internet.
+	//
+	// Measured: twenty thousand hops of 127.0.0.1 came back as 127.0.0.1 with no error. The walk
+	// itself is cheap — 644µs at that size, so no denial of service — but the ANSWER was wrong.
+	//
+	// Reached by a trusted range that is too wide rather than by an attacker: a proxy that appends
+	// puts the real client rightmost, where it wins at once. List a whole VPC as trusted and the
+	// clients arriving from inside it are all "ours", so nobody in the chain is a client.
+	//
+	// Refused rather than merged, for the same reason the untrusted peer above is refused rather
+	// than treated as ordinary traffic. A 403 tells an operator their trusted range is wrong;
+	// silently bucketing everyone together tells them nothing until the first kick.
+	ErrNoClientHop = errors.New("every X-Forwarded-For hop is a trusted proxy, so no client was recorded")
 )
 
 // Validate refuses the configuration that looks safe and is not: proxy mode with
@@ -77,18 +96,25 @@ func (p IPPolicy) ClientIP(remoteAddr, xff string) (netip.Addr, error) {
 		return netip.Addr{}, fmt.Errorf("%w: %s", ErrUntrustedPeer, peer)
 	}
 	parts := strings.Split(xff, ",")
+	usable := false
 	for i := len(parts) - 1; i >= 0; i-- {
 		a, err := netip.ParseAddr(strings.TrimSpace(parts[i]))
 		if err != nil {
 			continue // a malformed hop is not evidence of anything
 		}
+		usable = true
 		a = a.Unmap()
 		if !p.trusts(a) {
 			return a, nil
 		}
 	}
-	// Every hop was a proxy we trust, so the peer itself is the closest thing to
-	// a client we have.
+	if usable {
+		// There WAS a chain and every hop in it was ours, so the client was never recorded. See
+		// ErrNoClientHop: returning the peer here merged every such request into one identity.
+		return netip.Addr{}, fmt.Errorf("%w", ErrNoClientHop)
+	}
+	// No usable header at all — a request from the proxy itself, a health check, an operator's own
+	// curl. The peer IS the client in that case, and this is the branch that must keep working.
 	return peer, nil
 }
 

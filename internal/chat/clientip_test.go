@@ -79,9 +79,44 @@ func TestClientIP(t *testing.T) {
 			err: ErrUntrustedPeer,
 		},
 		{
-			name:        "all hops trusted falls back to the peer",
+			// THIS USED TO FALL BACK TO THE PEER, and that merged every such request into one
+			// identity — the "127.0.0.1 for everybody" failure §3 opens with, where the throttle
+			// goes global and the first kick kicks the internet.
+			//
+			// A chain existed and every hop in it was ours, so the client was never recorded.
+			// Returning the peer names a proxy as the client. Refused instead, for the same
+			// reason the case above refuses an untrusted peer rather than treating it as ordinary
+			// traffic: a 403 tells an operator their trusted range is too wide, and silently
+			// bucketing everyone together tells them nothing until somebody is kicked.
+			//
+			// Reached by configuration rather than by attack — a proxy that appends puts the real
+			// client rightmost, where it wins at once — but listing a whole VPC as trusted makes
+			// every client "ours".
+			name:        "a chain of nothing but trusted hops identifies no client",
 			behindProxy: true, remote: "10.0.0.7:443", xff: "10.0.0.3",
+			err: ErrNoClientHop,
+		},
+		{
+			// Several hops, same conclusion: length is not what makes a client.
+			name:        "...however many of them there are",
+			behindProxy: true, remote: "10.0.0.7:443", xff: "10.0.0.1, 10.0.0.2, 10.0.0.3",
+			err: ErrNoClientHop,
+		},
+		{
+			// A header of nothing but junk is not a chain, so this is the no-header branch: a
+			// malformed hop "is not evidence of anything", and with no usable hop at all the peer
+			// is the client.
+			name:        "a header of only malformed hops is treated as no header",
+			behindProxy: true, remote: "10.0.0.7:443", xff: "not-an-ip, also-not",
 			want: "10.0.0.7",
+		},
+		{
+			// And one real client behind the trusted hops still wins, which is the whole point of
+			// walking right to left. Without this the change above could have been "refuse
+			// everything with a chain".
+			name:        "a real client behind trusted hops is found",
+			behindProxy: true, remote: "10.0.0.7:443", xff: "10.0.0.1, 203.0.113.7",
+			want: "203.0.113.7",
 		},
 		{
 			name:        "no header at all falls back to the peer",
