@@ -248,7 +248,8 @@ Three binaries, `make chat`:
 
     bin/kourtchat      the HTTP server: serves, accepts, throttles, enforces
     bin/kourtmod       the scanner: reads unscanned rows, asks Ollama, records
-    bin/kourtchatctl   the operator: list / why / unban / ban / freeze / status
+    bin/kourtchatctl   the operator: list / why / unban / kick / ban / hash /
+                       freeze / status
 
 A minimal local run, with the page served from a file:// URL or a static server:
 
@@ -279,6 +280,31 @@ run against real traffic, read `verdict` out of the messages table, and turn it 
 when the false-positive rate is something you have measured rather than assumed. A 4B
 model at q4 will be wrong sometimes; the design bounds what being wrong costs
 (a timeout, never a ban) but it cannot make it not happen.
+
+**Acting on an address you can see but the classifier never flagged.** The CLI takes
+hashes, so `hash` is the way in — added after an end-to-end test found there wasn't one:
+
+    bin/kourtchatctl -db chat.db hash 203.0.113.7
+    address  42177eeb…   (203.0.113.7/32)
+    network  b40f05f8…   (203.0.113.0/24)
+
+    bin/kourtchatctl -db chat.db kick 42177eeb… -for 1h     bounded, reversible
+    bin/kourtchatctl -db chat.db ban -net b40f05f8… -why …  a whole /24, by hand
+
+`hash` refuses to create a key, so a mistyped `--secret-file` fails loudly instead of
+producing a plausible hash under a fresh key that matches nothing. A manual `kick` is
+not clamped by the automated ceiling of §2 — that clamp exists to stop a MODEL reaching
+for something permanent, not to overrule a person who decided an hour was right — which
+is why `-for` is required rather than defaulted.
+
+**Posting needs the page and the service to be same-site.** Measured, in a browser:
+
+    page on file://                   POST 403,  Sec-Fetch-Site: cross-site
+    page served on 127.0.0.1:8080     POST 200,  Sec-Fetch-Site: same-site
+
+Both are §5 working as written: the cross-site refusal is the CSRF defence, and same
+host on a different port is same-site, which is the real deployment. Opening the demo
+page off disk gives a working read-only panel; serve the directory to post from it.
 
 **Watch the backlog.** `kourtchatctl status` reports the scanner's heartbeat and how
 many messages are unscanned. Fail-open is deliberate — chat works with no scanner —
@@ -388,6 +414,23 @@ The browser half also measures what no source review can see: that a 400-charact
 message from a 24-character name does not push the page sideways at 1200, 760 or 380
 pixels, and that the flag is a regional-indicator pair rather than the two letters of
 the country code.
+
+`chat_live.js` is the other half, and it is a gate rather than a fixture: it BUILDS
+both binaries, starts a `kourtchat` on a free port with a throwaway database, and
+drives the page against it — no model and no chain, because enforcement comes from
+`kourtchatctl`. Thirty-four checks, and what they cover is the set of things that are
+only true in a browser: CORS and the CSRF rule (header behaviour, and a browser's
+headers are not curl's), the poller converging on another client's message without a
+reload, a manual kick appearing in the UI with no category named, a kicked reader still
+able to read while their own messages are hidden, the server refusing that reader
+regardless of the disabled box, and `unban` restoring both posting and the hidden
+messages visibly.
+
+It has already paid for itself three times. It found that an operator had no way to
+obtain a hash for an address (§9), that `hash` labelled its network hash with the wrong
+prefix, and — on its first run — that it was testing a binary one `make chat` behind
+the source. It now builds what it tests, because a suite whose subject is whatever was
+compiled last reports on the past.
 
 Two mutations survived the browser suite and were left surviving on purpose, because
 both are facts about the markup rather than gaps in the tests. Escaping `<` alone
