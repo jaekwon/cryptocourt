@@ -279,6 +279,20 @@ feature whose stated threat is scam, that inverts the priority. So `hidden` on
 messages, filtered at read, recomputed on revocation — and URLs render as plain
 text, never anchors, which is free and removes the click.
 
+**The cited message is hidden whatever its age; the author's other messages only for ten
+minutes.** Those are two different rules and they were one for a while — the hide was a
+ten-minute window and nothing else, so a consequence acting on an older message left it on
+screen. Measured: with the scanner one minute behind the scam was hidden, at eleven minutes it
+was not, and a backlog is expected rather than exceptional, since `Claim` scans newest-first
+precisely because after an outage the harmful messages are reached last. The failure landed in
+the condition that motivated the feature.
+
+The narrow window for everything else is deliberate and the reason is collateral: on a shared
+address a wider sweep retroactively removes strangers' messages, and every routine timeout would
+carry that. It also means a timeout removes a burst rather than a history — an author's older
+messages survive their own kick, which is asserted, because widening the window passed every
+other test in the file.
+
 `evidence` copies the body into the infraction at punish time, because the pruner
 would otherwise delete the evidence for exactly the longest-lived consequences.
 The pruner was cut from v1 as "worse half-done than absent". It is built now, because the
