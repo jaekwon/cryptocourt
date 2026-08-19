@@ -501,7 +501,28 @@ it, so a new key means every kick and ban in the table matches nobody, and every
 suffix in the room changes at once. The key is as much the state as the database is;
 back it up with the same care and, per above, not in the same file.
 
-**One predicate, one place.** Two bugs of the same shape were found in consecutive passes
+**One predicate, one place — and an audit rather than a hunch.** After the third bug of this
+shape, the remaining ones were found by tabulating every query in `internal/chat/store.go`
+against each guard clause and looking for the asymmetries, instead of guessing where to look
+next. Five bugs in total, all the same failure:
+
+    freeze          checked in Post, not in Recent        a withdrawn court kept serving
+    freeze          then not in Claim or the queue        it was still scanned and triaged
+    hidden          not in the backlog count              counted work Claim would never take
+    hidden          not in the review queue               a human asked about punished messages
+    in force        expiry ignored by count and list      an operator count that only grew
+    revoked_at      ignored by the context window         an upheld appeal still truncated it
+
+Four shared predicates now have exactly one definition each — `sqlAwaitingReview`,
+`sqlNotFrozen`, `sqlInForce` — and the one deliberate exception is documented where the audit
+flags it: the throttle ignores `hidden` and `frozen` on purpose, because it asks what an
+address SENT and hiding a message afterwards does not un-send it.
+
+The lesson is cheap to state and was expensive to learn six times: a predicate that lives in
+more than one place eventually disagrees with itself, and the disagreement surfaces as a
+control quietly covering less than its own documentation claims.
+
+Two bugs of the same shape were found in consecutive passes
 and they had the same cause. `freeze` was checked in `Post` and not in `Recent`, so a
 withdrawn court kept serving. `hidden` was honoured by `Claim`, `Recent` and the prior-context
 window but not by the backlog count or the review queue, so the backlog counted rows that
