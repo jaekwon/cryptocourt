@@ -315,6 +315,27 @@ about a person and never reaches a public surface — plus `you: {state, until, 
 so the composer can be disabled before someone types into a box that will 403.
 `since`/`limit` clamped; GET has its own budget.
 
+**`now` is the server's clock, and every rendered time is corrected against it.** The same
+arithmetic as `seconds` below, on a much wider surface: every message carries an absolute
+`created_at` and the panel turns it into "5m" by subtracting. Measured through the shipped
+`chatWhen`:
+
+    clock correct      1s=just now   5min=5m         2h=2h
+    ten minutes FAST   1s=10m        5min=15m        2h=2h
+    two hours SLOW     1s=just now   5min=just now   2h=just now
+
+The two-hour row is the one that matters here: a statement made two hours ago presented as "just
+now" misrepresents the order things were said in, which is exactly what a court is for. The panel
+learns the offset from every reply and corrects every timestamp through one value, which also fixes
+the status line's fallback path for free.
+
+**The first attempt at this looked right and did nothing**, and the reason is worth keeping.
+`chatFetch` returns an explicit allowlist — `{messages, you, next}` — and dropped `now` on the
+floor, so the panel had nothing to learn from. It was "verified" by simulating the arithmetic by
+hand, which never went through `chatFetch`; a browser mount reading "10m" for a message posted a
+second ago is what found it. The test drives the whole path now, with a discriminating case: strip
+`now` from the reply and the same panel falls back to "10m".
+
 **`seconds` exists because a countdown differenced against the reader's clock shows them their own
 skew.** `until` is absolute, and the panel used to subtract `Date.now()` from it. Measured on a
 five-minute kick through the shipped status line:
