@@ -210,6 +210,21 @@ Ladder: 1h → 24h → 7d on repeats within 30 days, counting only unrevoked
 infractions. `--dry-run` is the default, and the panel's label derives from
 `health.enforcing` so it cannot claim moderation that isn't happening.
 
+**Why the ladder forgets.** Thirty days is a real decision and it cuts both ways. An
+address that carried a scam forever eventually punishes a stranger: addresses are
+reassigned constantly — DHCP, carrier NAT, a café's router — so a permanent record
+attaches to whoever inherits the address, not to whoever earned it. A short window means a
+repeat offender is never more than an hour from posting again. Thirty days is the
+compromise, and both sides of it are asserted rather than assumed.
+
+Two asymmetries follow, both deliberate and both easy to mistake for oversights. A revoked
+consequence does not count, or an upheld appeal would unmute somebody and leave them
+silently one rung higher — reversible-looking rather than reversible. And a MANUAL
+consequence does not count either: the ladder is the scanner's own record with an address,
+and letting an operator's action raise it would mean one human intervention quietly made
+every later automated verdict harsher, in a design whose whole safety argument is that
+automation cannot reach for the severe end.
+
 ## 7. Display moderation
 
 A ban stops new posts; the scam link stays pinned in the court forever. For a
