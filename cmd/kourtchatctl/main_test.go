@@ -538,3 +538,53 @@ func TestStalenessIsJudgedAgainstThePromisedCadence(t *testing.T) {
 		t.Errorf("three seconds of silence must not warn on a one-second cadence: %q", got)
 	}
 }
+
+// AN UNATTRIBUTED REVERSAL MUST LOOK UNATTRIBUTED.
+//
+// -by used to default to the literal string "operator", so omitting it wrote a value that READS
+// like an attribution and answers nothing. A second operator retrying was told "already reversed
+// by operator ... and it was not your decision to claim" — incoherent when the recorded decider
+// is a placeholder. The schema's own default for revoked_by is the empty string; the CLI was
+// overriding that honest empty with a fake name.
+//
+// This is the same class as the reports this tool has already had to fix: unban claiming success
+// on a row it did not touch, a replayed kick reporting a fresh one, a duration that said "about 1
+// months". A record that says something it does not know is worse than one that says nothing, and
+// the audit trail is the thing that makes "appealable" mean anything.
+func TestAnUnattributedReversalLooksUnattributed(t *testing.T) {
+	for _, c := range []struct {
+		name, by, want string
+	}{
+		{"a name is passed through untouched", "jae", "jae"},
+		{"an empty -by is marked, not dressed up", "", "(unattributed)"},
+		{"whitespace is not a name either", "   ", "(unattributed)"},
+		{"a tab is not a name", "\t", "(unattributed)"},
+		// THE PAIRED ARM that stops this from being a function that rewrites everything: a name
+		// that merely CONTAINS spaces is a name.
+		{"a name with a space in it survives", "jae kwon", "jae kwon"},
+		{"and one that looks like the old placeholder is still passed through", "operator", "operator"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := attribution(c.by); got != c.want {
+				t.Errorf("attribution(%q) = %q, want %q", c.by, got, c.want)
+			}
+		})
+	}
+}
+
+// And the flag's own default, because the honesty above is only reached when the default is
+// empty. A default of "operator" would make every arm above pass while the CLI still wrote a
+// placeholder — the assertion has to read the declaration, not the helper.
+func TestTheByFlagDefaultsToNoNameRatherThanAPlaceholder(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), `fs.String("by", "", "who reversed it`) {
+		t.Error(`unban's -by must default to "" so an omitted attribution is recorded as absent; ` +
+			`a placeholder default writes a value that reads like a name and answers nothing`)
+	}
+	if strings.Contains(string(src), `fs.String("by", "operator"`) {
+		t.Error(`the "operator" placeholder default is back`)
+	}
+}

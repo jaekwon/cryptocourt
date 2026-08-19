@@ -257,7 +257,7 @@ func cmdWhy(ctx context.Context, s *chat.Store, argv []string) {
 		}
 		if r.RevokedAt != 0 {
 			fmt.Printf("  REVERSED  %s by %s\n",
-				time.Unix(r.RevokedAt, 0).Format(time.RFC3339), r.RevokedBy)
+				time.Unix(r.RevokedAt, 0).Format(time.RFC3339), attribution(r.RevokedBy))
 		}
 		// The evidence is a COPY taken when the consequence was recorded, so it
 		// survives the message being deleted later. A ban whose evidence has been
@@ -283,7 +283,7 @@ func cmdWhy(ctx context.Context, s *chat.Store, argv []string) {
 
 func cmdUnban(ctx context.Context, s *chat.Store, argv []string) {
 	fs := flag.NewFlagSet("unban", flag.ExitOnError)
-	by := fs.String("by", "operator", "who reversed it, for the record")
+	by := fs.String("by", "", "who reversed it, for the record")
 	flags, pos := split(argv)
 	_ = fs.Parse(flags)
 	if len(pos) != 1 {
@@ -303,7 +303,7 @@ func cmdUnban(ctx context.Context, s *chat.Store, argv []string) {
 		switch {
 		case errors.As(err, &already):
 			die("consequence %d was already reversed by %s on %s — nothing to do, and it was "+
-				"not your decision to claim", already.ID, already.By,
+				"not your decision to claim", already.ID, attribution(already.By),
 				time.Unix(already.At, 0).Format(time.RFC3339))
 		case errors.Is(err, chat.ErrNoConsequence):
 			die("no consequence %d — read the id from `list` or `why`", id)
@@ -315,7 +315,31 @@ func cmdUnban(ctx context.Context, s *chat.Store, argv []string) {
 	// the thing that makes "appealable" mean anything. It also un-hides the
 	// messages, because restoring the right to post while leaving someone's words
 	// hidden is half an apology.
-	fmt.Printf("consequence %d reversed by %s; its messages are visible again\n", id, *by)
+	fmt.Printf("consequence %d reversed by %s; its messages are visible again\n",
+		id, attribution(*by))
+	if attribution(*by) != *by {
+		fmt.Printf("no -by was given, so consequence %d's reversal carries no name. The row "+
+			"is already marked and cannot be amended, and this is the record an appeal is "+
+			"read from — pass -by next time.\n", id)
+	}
+}
+
+// attribution renders revoked_by for a human, and refuses to dress an absence as a name.
+//
+// The -by flag used to default to the literal string "operator", so omitting it wrote a value
+// that READS like an attribution and answers nothing. A second operator retrying a reversal was
+// told "already reversed by operator ... and it was not your decision to claim", which is
+// incoherent when the recorded decider is a placeholder — and the schema's own default for the
+// column is the honest empty string, which the CLI was overriding with a fake.
+//
+// The audit trail is the thing that makes "appealable" mean anything, so an unattributed
+// reversal has to look unattributed. Not refused, though: refusing -by would break every script
+// that reverses in bulk, and the reversal itself is the part somebody is waiting for.
+func attribution(by string) string {
+	if strings.TrimSpace(by) == "" {
+		return "(unattributed)"
+	}
+	return by
 }
 
 func cmdBan(ctx context.Context, s *chat.Store, argv []string) {

@@ -895,6 +895,33 @@ reversed by X on <date>" from "no consequence N".
 
 `dismiss` and `freeze` were already honest, which is why only two changed.
 
+**And then the same audit found a third, in the field those messages quote.** `-by` defaulted to
+the literal string `"operator"`, so omitting it wrote a value that reads like an attribution and
+answers nothing. The column's own schema default is the empty string; the CLI was overriding an
+honest empty with a fake name. The consequence showed up in the message directly above: a second
+operator retrying was told "already reversed by operator … and it was not your decision to claim",
+which is incoherent when the recorded decider is a placeholder.
+
+`-by` now defaults to empty, an absent name renders as `(unattributed)` everywhere the record is
+read back, and the reversal says so once at the point where somebody can still care:
+
+    unban 1              consequence 1 reversed by (unattributed); its messages are visible again
+                         no -by was given, so consequence 1's reversal carries no name. The row is
+                         already marked and cannot be amended … pass -by next time.
+    why 1                REVERSED  2026-08-19T10:16:23-07:00 by (unattributed)
+    unban 1 (again)      already reversed by (unattributed) on 2026-08-19T10:16:23-07:00
+    unban 1 -by jae      consequence 1 reversed by jae        — and no note
+
+Not refused, for the reason the other warnings in §9 are not refusals: rejecting a missing `-by`
+would break every script that reverses in bulk, and the reversal is the part somebody is waiting
+for. Whitespace does not count as a name either, and the paired arms are what keep that from
+becoming a function that rewrites everything — a name containing a space survives, and so does
+somebody who genuinely types `-by operator`.
+
+The flag's DEFAULT is asserted separately from the helper, by reading the declaration. Every arm
+of the helper's table would pass with a placeholder default still in place, because the helper
+would never see an empty string.
+
 **The reversibility audit, and where it stopped.** Asking which operations cannot be undone turned
 up four:
 
