@@ -1534,3 +1534,182 @@ func TestABroadcastLureIsStillRefusedInTheThirdCourt(t *testing.T) {
 		})
 	}
 }
+
+// THE REPLAY GUARD, which is what stops two scanners punishing one message twice.
+//
+// `infractions_once` is UNIQUE(evidence_id, kind) WHERE evidence_id IS NOT NULL AND revoked_at IS
+// NULL, and Consequence turns its violation into (0, nil) rather than an error. Its comment says
+// that is "what stops a crash between punish and mark-scanned from walking the ladder", and nothing
+// tested it — the crash it describes is hard to stage, so the property went unasserted while being
+// relied on.
+//
+// It is not hypothetical. Two kourtmod processes against one database is an ordinary deployment
+// state: a restart overlap, or an operator starting a second instance. Measured live with two
+// --enforce scanners and three lures, every message was scanned once and earned exactly one
+// consequence, with the infraction ids interleaved across the two processes — so they really did
+// race. This fixture is the deterministic half of that run.
+//
+// All four arms of the index are exercised, because three of them are exemptions and an exemption
+// that stops working is a duplicate consequence nobody sees.
+func TestOneMessageEarnsOneConsequenceHoweverManyScannersSeeIt(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-crook", "send me your seed phrase and I will restore it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	punish := func() (int64, error) {
+		return s.Consequence(ctx, Infraction{
+			IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+			Duration: time.Hour, EvidenceID: id, Evidence: "…seed phrase…",
+		})
+	}
+
+	first, err := punish()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == 0 {
+		t.Fatal("the first consequence must be recorded")
+	}
+	// THE REPLAY. Not an error: the scanner treats an error as a failure and retries, so a
+	// duplicate has to look like success-with-nothing-done.
+	again, err := punish()
+	if err != nil {
+		t.Errorf("a replay must not be an error, or the scanner retries it forever: %v", err)
+	}
+	if again != 0 {
+		t.Errorf("a replay must report that it recorded nothing, got id %d", again)
+	}
+	if n, err := s.CountInfractions(ctx, true); err != nil {
+		t.Fatal(err)
+	} else if n != 1 {
+		t.Fatalf("one message, one consequence, got %d", n)
+	}
+
+	// AND THE STATED PURPOSE: the replay must not have moved the ladder. This is the assertion
+	// the guard exists for — a double-punish that were merely cosmetic would still leave the
+	// author one rung higher for their next message.
+	next, err := s.Escalate(ctx, "ip-crook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next != Ladder[1] {
+		t.Errorf("after ONE consequence the next rung is %s, got %s — a replay walked the ladder",
+			Ladder[1], next)
+	}
+
+	// PAIRED POSITIVE: a DIFFERENT message from the same author still earns its own consequence,
+	// or the guard would have turned into an amnesty after the first offence.
+	//
+	// Past the kick first. A kicked address cannot post, so a fixture that advances by minutes
+	// never creates the second message and asserts nothing about the guard — which is how the
+	// first version of this failed, and the second time that trap has cost a run here.
+	// Escalate counts consequences within LadderLookback regardless of expiry, so letting the
+	// kick lapse does not weaken the ladder assertions.
+	*clock = clock.Add(2 * time.Hour)
+	id2, err := post(t, s, "orem", "ip-crook", "dm me and I will restore your wallet for you")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: id2, Evidence: "…dm me…",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second == 0 {
+		t.Error("a second, different message must earn its own consequence")
+	}
+	if n, err := s.CountInfractions(ctx, true); err != nil {
+		t.Fatal(err)
+	} else if n != 2 {
+		t.Errorf("two offences, two consequences, got %d", n)
+	}
+}
+
+// The three EXEMPTIONS in that index, each measured, because an exemption that quietly stops
+// working is a consequence that cannot be issued and no error to say why.
+func TestTheReplayGuardsExemptions(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("no evidence is unconstrained", func(t *testing.T) {
+		// A manual consequence often cites nothing — an operator acting on an address, not a
+		// message. Those must not collide with each other, which is why the index is partial.
+		//
+		// NO MUTATION OF THAT CLAUSE CAN BREAK THIS, and the index's own comment says why:
+		// SQLite treats NULLs as distinct, so dropping `evidence_id IS NOT NULL` changes
+		// nothing. Deleting the clause survives this fixture, which is documented redundancy
+		// rather than a gap — the clause states an assumption about SQLite that the code depends
+		// on, and this arm pins the BEHAVIOUR, which is what an operator actually needs.
+		s, _ := newStore(t)
+		for i := 0; i < 3; i++ {
+			got, err := s.Consequence(ctx, Infraction{
+				IPHash: "ip-x", Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+			})
+			if err != nil {
+				t.Fatalf("consequence %d: %v", i+1, err)
+			}
+			if got == 0 {
+				t.Fatalf("consequence %d was swallowed as a duplicate; a manual action with no "+
+					"evidence has nothing to duplicate", i+1)
+			}
+		}
+	})
+
+	t.Run("a different kind on the same evidence is allowed", func(t *testing.T) {
+		// An operator escalating a scanner's kick to a ban cites the same message. The index is
+		// keyed on (evidence_id, kind) so that path stays open.
+		s, _ := newStore(t)
+		id, err := post(t, s, "orem", "ip-y", "send me your seed phrase right now please")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Consequence(ctx, Infraction{
+			IPHash: "ip-y", Kind: KindKick, Reason: ReasonScam,
+			Duration: time.Hour, EvidenceID: id,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.Consequence(ctx, Infraction{
+			IPHash: "ip-y", Kind: KindBan, Reason: ReasonManual, EvidenceID: id,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == 0 {
+			t.Error("an operator must be able to ban on the same evidence a kick cited, or a " +
+				"scanner's kick would block the escalation it exists to surface")
+		}
+	})
+
+	t.Run("after revocation the same evidence may be used again", func(t *testing.T) {
+		// Without the revoked_at clause a ban -> unban -> ban cycle would fail on the second ban,
+		// so an operator who reversed a call could never reinstate it.
+		s, _ := newStore(t)
+		id, err := post(t, s, "orem", "ip-z", "send me your seed phrase right now please")
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := s.Consequence(ctx, Infraction{
+			IPHash: "ip-z", Kind: KindBan, Reason: ReasonManual, EvidenceID: id,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Revoke(ctx, first, "operator"); err != nil {
+			t.Fatal(err)
+		}
+		again, err := s.Consequence(ctx, Infraction{
+			IPHash: "ip-z", Kind: KindBan, Reason: ReasonManual, EvidenceID: id,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if again == 0 {
+			t.Error("a reversed consequence must not block reinstating it on the same evidence")
+		}
+	})
+}
