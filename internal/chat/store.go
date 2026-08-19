@@ -98,6 +98,12 @@ CREATE TABLE IF NOT EXISTS messages (
   country    TEXT    NOT NULL DEFAULT '',
   suffix     TEXT    NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
+  -- hidden: 0 visible, 1 hidden by a consequence, 2 hidden as a disclosed secret.
+  --
+  -- Every read tests hidden=0, so any non-zero value hides. The distinction matters to Revoke
+  -- alone: it RECOMPUTES 1 from the consequences still standing, and must leave 2 exactly where
+  -- it is. A secret was never a punishment, so an appeal about something else cannot be a reason
+  -- to republish it -- measured, reversing an unrelated kick did.
   hidden     INTEGER NOT NULL DEFAULT 0,
   scan_state INTEGER NOT NULL DEFAULT 0,
   attempts   INTEGER NOT NULL DEFAULT 0,
@@ -672,10 +678,41 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 		s.Now().Unix(), by, id); err != nil {
 		return err
 	}
-	// An appeal that restored posting and left the messages hidden would be half
-	// an apology.
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE messages SET hidden=0 WHERE ip_hash=?`, ipHash); err != nil {
+	// RECOMPUTED, not un-hidden. §7 says `hidden` is "filtered at read, recomputed on
+	// revocation" and the code did a blanket `hidden=0` for the whole address, which is a
+	// different thing whenever an address has more than one consequence.
+	//
+	// Measured: an address with a manual kick and a scam kick, both live. Reversing the manual
+	// one — the operator doing exactly the right thing about a wrong call — put "send me your
+	// seed phrase now" back in the room, because it belonged to the same address. The author
+	// stayed kicked by the scam consequence, and their scam was readable again. That is §7's
+	// own failure mode ("a ban stops new posts; the scam link stays pinned") reached from the
+	// one direction nobody would look: an operator granting an appeal.
+	//
+	// So a message is hidden if ANY unrevoked consequence would hide it — the one that cites
+	// it, or one whose recent-window covers it.
+	//
+	// THE WINDOW IS BOUNDED AT BOTH ENDS, and it took a live run to see why. Consequence writes
+	// `created_at > now - HideWindow` with no upper bound, which is exact at the instant it
+	// runs because nothing can be newer than now. A recompute evaluated later has no such
+	// luxury: without `<= i.created_at` an old unrevoked consequence hides everything posted
+	// after it, forever. Measured — an expired kick from the previous day kept a fresh message
+	// hidden after the operator reversed the only consequence that concerned it. Revocation is the only thing that says a
+	// decision was wrong; expiry says it is served, which is why an expired kick keeps its
+	// evidence out of sight and only `unban` brings it back.
+	if _, err := tx.ExecContext(ctx, `
+	  UPDATE messages SET hidden = CASE WHEN hidden = 2 THEN 2 WHEN EXISTS (
+	      SELECT 1 FROM infractions i
+	       WHERE i.revoked_at IS NULL
+	         AND i.ip_hash = messages.ip_hash
+	         AND ((messages.created_at > i.created_at - ?
+	               AND messages.created_at <= i.created_at)
+	              OR i.evidence_id = messages.id)
+	    ) THEN 1 ELSE 0 END
+	   WHERE ip_hash = ?`, // scoped as an optimisation, not for correctness: the CASE is a
+		//                     function of each row's own consequences, so widening it computes
+		//                     the same answer everywhere. Verified by mutation.
+		int64(HideWindow.Seconds()), ipHash); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -684,7 +721,19 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 // Freeze marks a court unservable, for a purge on chain. Latched in a store we
 // own rather than re-derived from the chain on every request, because the chain
 // read cannot distinguish "purged" from "node unreachable".
-// HideMessage takes one message out of view and punishes nobody.
+// HideMessage takes one message out of view and punishes nobody, durably.
+//
+// Marked 2 rather than 1 so Revoke's recompute leaves it alone. Reversing an unrelated
+// consequence used to republish it: the recompute derives `hidden` from the consequences that
+// still stand, and a hide that never had a consequence behind it looked like one that should be
+// undone. A disclosed secret is not a punishment, so no appeal about anything else is a reason
+// to put it back.
+//
+// KNOWN LIMITATION, stated rather than left to be discovered: nothing un-hides a 2. If the
+// deterministic detector were ever wrong — a noun list of exactly phrase length whose checksum
+// passes by luck, one chance in sixteen at twelve words — the message stays out of sight and
+// `dismiss` will not bring it back, because dismiss records that a person looked and does not
+// touch visibility. Restoring one is a deliberate act nobody has needed yet.
 //
 // The two halves of moderation are separable and this is the seam. §7's `hidden` normally
 // arrives with a consequence, but a message can need to be out of sight while its author needs
@@ -692,7 +741,7 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 // case that forced this. Scoped to a single id, so it cannot become a sweep.
 func (s *Store) HideMessage(ctx context.Context, id int64) error {
 	res, err := s.w.ExecContext(ctx,
-		`UPDATE messages SET hidden=1 WHERE id=? AND hidden=0`, id)
+		`UPDATE messages SET hidden=2 WHERE id=? AND hidden=0`, id)
 	if err != nil {
 		return err
 	}

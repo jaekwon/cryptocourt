@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -940,4 +941,324 @@ func TestHidingByCitationCannotReachAnotherAuthor(t *testing.T) {
 	if st.State != "ok" {
 		t.Errorf("and the neighbour must not be punished, got %q", st.State)
 	}
+}
+
+// REVERSING ONE CONSEQUENCE MUST NOT REPUBLISH ANOTHER'S EVIDENCE.
+//
+// Revoke did a blanket `hidden=0` for the whole address, while §7 says `hidden` is "recomputed
+// on revocation" — a different thing as soon as an address has two consequences. Measured: with a
+// manual kick and a scam kick both live, reversing the manual one put "send me your seed phrase
+// now" back in the room. The author stayed kicked by the scam consequence and their scam was
+// readable again.
+//
+// That is §7's own failure mode — "a ban stops new posts; the scam link stays pinned" — reached
+// from the one direction nobody would think to look: an operator granting an appeal.
+func TestReversingOneConsequenceKeepsTheOthersHides(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	// Both messages first: after the first consequence the address cannot post, so a fixture
+	// that posts between them measures the throttle instead of this.
+	wrong, err := post(t, s, "orem", "ip-x", "a wrong call by the operator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(MinInterval + time.Second)
+	scam, err := post(t, s, "orem", "ip-x", "send me your seed phrase now")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manual, err := s.Consequence(ctx, Infraction{IPHash: "ip-x", NetHash: "net-x",
+		Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+		EvidenceID: wrong, Evidence: "a wrong call by the operator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Consequence(ctx, Infraction{IPHash: "ip-x", NetHash: "net-x",
+		Kind: KindKick, Reason: ReasonScam, Duration: 24 * time.Hour,
+		EvidenceID: scam, Evidence: "send me your seed phrase now"}); err != nil {
+		t.Fatal(err)
+	}
+
+	visible := func() []string {
+		t.Helper()
+		msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, m := range msgs {
+			out = append(out, m.Body)
+		}
+		return out
+	}
+	if len(visible()) != 0 {
+		t.Fatalf("precondition: both consequences should have hidden everything, got %v", visible())
+	}
+
+	// The operator grants the appeal about the manual call. The scam consequence stands.
+	if err := s.Revoke(ctx, manual, "appeal upheld on the manual one"); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range visible() {
+		if strings.Contains(body, "seed phrase") {
+			t.Error("reversing one consequence must not republish evidence for another that " +
+				"is still in force")
+		}
+	}
+	st, err := s.Status(ctx, "ip-x", "net-x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State == "ok" {
+		t.Fatal("precondition: the scam consequence should still be in force")
+	}
+
+	// PAIRED POSITIVE: reversing the LAST one restores everything, so this is not a fix that
+	// simply stopped un-hiding. Without it, "unban" would be half an apology.
+	rows, err := s.ListInfractions(ctx, "", true, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.RevokedAt == 0 {
+			if err := s.Revoke(ctx, r.ID, "appeal upheld on the rest"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if got := visible(); len(got) != 2 {
+		t.Fatalf("with every consequence reversed, all messages come back: got %v", got)
+	}
+}
+
+// The recompute must honour a CITATION as well as a window, which took a late consequence to
+// show. Every earlier fixture had the cited message inside the surviving consequence's window,
+// so the window clause covered it and dropping the citation clause changed nothing.
+//
+// A consequence issued long after the message it cites is not exotic — Claim scans newest-first
+// precisely because a backlog means the harmful messages are reached last — so this is the same
+// case as a late kick hiding its own evidence, now met during an appeal about something else.
+func TestTheRecomputeHonoursACitationOutsideTheWindow(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	old, err := post(t, s, "orem", "ip-z", "the old message a late consequence will cite")
+	if err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(HideWindow + time.Hour) // far outside any window
+	recent, err := post(t, s, "orem", "ip-z", "a recent message about the docket")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// One consequence about the recent message, issued while it is fresh.
+	appealed, err := s.Consequence(ctx, Infraction{IPHash: "ip-z", NetHash: "net-z",
+		Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+		EvidenceID: recent, Evidence: "a recent message about the docket"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Then time passes, and a LATE consequence cites the old message. Its window reaches
+	// NEITHER message, which is what makes the citation clause the only thing hiding the old
+	// one — and the first version of this fixture issued both at the same instant, so the
+	// surviving window covered everything and the test proved nothing about citations.
+	*clock = clock.Add(HideWindow + time.Hour)
+	if _, err := s.Consequence(ctx, Infraction{IPHash: "ip-z", NetHash: "net-z",
+		Kind: KindKick, Reason: ReasonScam, Duration: 24 * time.Hour,
+		EvidenceID: old, Evidence: "the old message a late consequence will cite"}); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 0 {
+		t.Fatalf("precondition: both should be hidden, got %v", msgs)
+	}
+
+	// Reverse the one about the recent message. The late consequence still stands and still
+	// cites the old one, which the window does not reach.
+	if err := s.Revoke(ctx, appealed, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+	var bodies []string
+	msgs, err = s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range msgs {
+		bodies = append(bodies, m.Body)
+	}
+	for _, b := range bodies {
+		if strings.Contains(b, "the old message") {
+			t.Error("a message cited by a consequence still in force must stay hidden, even " +
+				"when no window reaches it")
+		}
+	}
+	// PAIRED: the appealed message is back.
+	if len(bodies) != 1 || !strings.Contains(bodies[0], "a recent message") {
+		t.Errorf("the appealed message must be restored and only it: %v", bodies)
+	}
+}
+
+// And expiry is NOT revocation: a kick that simply ran its course leaves its evidence out of
+// sight, because §7 exists to stop a scam being pinned in a court and a lapsed timeout is not
+// somebody saying the decision was wrong. Only `unban` says that.
+func TestAnExpiredConsequenceKeepsItsEvidenceHidden(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-y", "send me your seed phrase now")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Consequence(ctx, Infraction{IPHash: "ip-y", NetHash: "net-y",
+		Kind: KindKick, Reason: ReasonScam, Duration: time.Hour,
+		EvidenceID: id, Evidence: "send me your seed phrase now"}); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(2 * time.Hour) // the kick lapses on its own
+
+	st, err := s.Status(ctx, "ip-y", "net-y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "ok" {
+		t.Fatalf("precondition: the kick should have expired, got %q", st.State)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("an expired consequence keeps its evidence hidden; got %d visible", len(msgs))
+	}
+}
+
+// A DISCLOSED SECRET SURVIVES SOMEBODY ELSE'S APPEAL.
+//
+// Revoke recomputes `hidden` from the consequences that still stand, which is right — and it
+// treated a hide with no consequence behind it as one to undo. Measured: an address with a
+// message hidden as a disclosed secret, plus a later unrelated kick; reversing the kick put the
+// recovery phrase back in the room. The secret was never a punishment, so an appeal about
+// something else cannot be a reason to republish it.
+//
+// This one only surfaced from a mutation. Widening the recompute to every address looked
+// harmless — the recompute is a function of each row's own consequences — until it met a hide
+// that had no consequence behind it at all.
+func TestADisclosedSecretSurvivesAnUnrelatedAppeal(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	secret, err := post(t, s, "orem", "ip-h", "fyi someone sent me these words: legal winner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HideMessage(ctx, secret); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(time.Hour) // well outside any hide window
+	other, err := post(t, s, "orem", "ip-h", "and an unrelated remark later on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := s.Consequence(ctx, Infraction{IPHash: "ip-h", NetHash: "net-h",
+		Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+		EvidenceID: other, Evidence: "and an unrelated remark later on"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Revoke(ctx, id, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bodies []string
+	for _, m := range msgs {
+		bodies = append(bodies, m.Body)
+		if strings.Contains(m.Body, "legal winner") {
+			t.Error("an appeal about something else must not republish a disclosed secret")
+		}
+	}
+	// PAIRED POSITIVE: the message the appeal WAS about comes back, or unban is half an apology.
+	found := false
+	for _, b := range bodies {
+		if b == "and an unrelated remark later on" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the appealed message must be restored: visible=%v", bodies)
+	}
+}
+
+// A CONSEQUENCE'S WINDOW LOOKS BACKWARD ONLY.
+//
+// Consequence writes `created_at > now - HideWindow` with no upper bound, which is exact at the
+// instant it runs, because nothing can be newer than now. Revoke's recompute evaluates the same
+// idea later and has no such luxury: without an upper bound, an old unrevoked consequence hides
+// everything posted after it, for as long as it exists.
+//
+// Found by running it, not by testing it. Every unit fixture posted its messages before any
+// consequence, so no message was ever newer than one — and a live walk-through where somebody
+// offended, waited out the kick, posted again, and had the second decision reversed left the
+// second message hidden by the first consequence's window.
+func TestAConsequenceDoesNotHideWhatCameAfterIt(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	first, err := post(t, s, "orem", "ip-w", "send me your seed phrase, the first offence")
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := s.Consequence(ctx, Infraction{IPHash: "ip-w", NetHash: "net-w",
+		Kind: KindKick, Reason: ReasonScam, Duration: time.Hour,
+		EvidenceID: first, Evidence: "send me your seed phrase, the first offence"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The kick runs its course. It is never revoked, so its evidence stays out of sight.
+	*clock = clock.Add(2 * time.Hour)
+	later, err := post(t, s, "orem", "ip-w", "a fresh remark the operator misjudges")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrong, err := s.Consequence(ctx, Infraction{IPHash: "ip-w", NetHash: "net-w",
+		Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+		EvidenceID: later, Evidence: "a fresh remark the operator misjudges"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The operator grants the appeal about the second decision.
+	if err := s.Revoke(ctx, wrong, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bodies []string
+	for _, m := range msgs {
+		bodies = append(bodies, m.Body)
+	}
+	// The appealed message comes back: the only consequence that concerned it is reversed, and
+	// the older one predates it, so its backward-looking window cannot reach forward.
+	if len(bodies) != 1 || !strings.Contains(bodies[0], "a fresh remark") {
+		t.Errorf("an older consequence must not hide a message posted after it: visible=%v", bodies)
+	}
+	// And the first offence stays hidden, because expiry is not revocation.
+	for _, b := range bodies {
+		if strings.Contains(b, "seed phrase") {
+			t.Error("an expired but unreversed consequence keeps its evidence hidden")
+		}
+	}
+	_ = old
 }
