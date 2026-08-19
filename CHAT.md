@@ -667,6 +667,24 @@ carve-out; only the operator verb was missing, so somebody who revealed a messag
 it was a real key had no way back. Guidance the code cannot support is the defect this document keeps
 catching elsewhere, committed here in its own.
 
+**Every action must say whether it actually did anything**, which is a different audit from the
+reversibility one and turned up two more lies. Both were in the tool, both measured live:
+
+    unban 1 -by bob      "reversed by bob" while the row said alice — the second attempt
+                         affected zero rows, returned nil, and credited the caller with
+                         somebody else's decision, in the record that makes "appealable" mean
+                         something
+    unban 999            "sql: no rows in result set", the driver's words for a typo
+    kick -msg 1 twice    "kicked … [consequence 0]" then "unban 0" — a punishment that never
+                         happened and an id that cannot exist
+
+The store's `(0, nil)` on a replay is right and load-bearing: it is what stops a crash between
+"punish" and "mark scanned" from walking the ladder. Presenting it as success was the defect. Both
+verbs now name the row that already covers the evidence, and `unban` distinguishes "already
+reversed by X on <date>" from "no consequence N".
+
+`dismiss` and `freeze` were already honest, which is why only two changed.
+
 **The reversibility audit, and where it stopped.** Asking which operations cannot be undone turned
 up four:
 
