@@ -474,8 +474,26 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		return
 	}
 
+	// THE HEADER IS ONLY BELIEVED FROM A TRUSTED PROXY, and it used not to be checked at all.
+	//
+	// CountryHeader's own description calls it "a trusted proxy header", and nothing established
+	// that it came from one: r.Header.Get was read on every request. In proxy mode that was
+	// harmless by accident — an untrusted peer is already refused a few lines above, at s.client
+	// — but with --country-header set and --behind-proxy off, every client chose the flag shown
+	// beside their own name.
+	//
+	// The flag is decoration and §8 says nothing may be built on it, so this is not a hole in a
+	// boundary. It is still worth closing: a flag is a credibility affordance to a human reader,
+	// and §6 measured what one of those is worth to a scammer — gemma3:4b rates the same lure
+	// from "kourt-moderator" as legitimate and from "dave" as a scam. A flag an impersonator
+	// picks is that same discount, aimed at people rather than at the model. A wrong decoration
+	// somebody chose is worse than no decoration.
+	//
+	// Ignored rather than refused at startup, unlike the IP policy's own unsafe combination:
+	// flags going quiet is a smaller change to impose on a running deployment than not starting,
+	// and cmd/kourtchat warns about the configuration where it now has no effect.
 	country := ""
-	if s.CountryHeader != "" {
+	if s.CountryHeader != "" && s.Policy.TrustsPeer(r.RemoteAddr) {
 		if cc := strings.ToUpper(strings.TrimSpace(r.Header.Get(s.CountryHeader))); ccRe.MatchString(cc) {
 			country = cc
 		}

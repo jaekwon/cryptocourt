@@ -65,6 +65,24 @@ func (p IPPolicy) Validate() error {
 	return nil
 }
 
+// TrustsPeer reports whether a request's own headers may speak for somebody else — which is the
+// same question ClientIP asks before believing X-Forwarded-For, asked separately because the
+// country header needs it too and used not to ask.
+//
+// BehindProxy false answers no without looking at anything. That is the same treatment the
+// documented default gives X-Forwarded-For: on a direct-listening server a client-supplied header
+// is a client-supplied header, whatever it is called.
+func (p IPPolicy) TrustsPeer(remoteAddr string) bool {
+	if !p.BehindProxy {
+		return false
+	}
+	peer, err := parseHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+	return p.trusts(peer)
+}
+
 func (p IPPolicy) trusts(a netip.Addr) bool {
 	for _, pre := range p.Trusted {
 		if pre.Contains(a) {

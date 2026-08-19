@@ -206,3 +206,43 @@ func TestTheFileModeWarningAndWhatItMustNotWarnAbout(t *testing.T) {
 		}
 	})
 }
+
+// THE COUNTRY HEADER'S WARNING, and the three configurations it must stay quiet about.
+//
+// The header is only believed from a trusted proxy now. Without --behind-proxy there is no
+// trusted proxy, so honouring it would let every client choose the flag beside its own name —
+// which is what happened before it was gated. Flags going quiet is the safe outcome and a
+// visible one, since an operator who set the flag deliberately would otherwise be left
+// wondering where the flags went.
+func TestTheCountryHeaderWarningFiresOnlyWhereTheHeaderIsIgnored(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		header  string
+		proxy   bool
+		wantMsg bool
+	}{
+		{"set without --behind-proxy: ignored, so say so", "CF-IPCountry", false, true},
+		{"set with --behind-proxy: honoured, nothing to report", "CF-IPCountry", true, false},
+		{"not set at all: no flags either way, and no warning", "", false, false},
+		{"not set, behind a proxy: still nothing to report", "", true, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := countryWarning(c.header, c.proxy)
+			if c.wantMsg && w == "" {
+				t.Fatal("a header that will be ignored must be reported at startup")
+			}
+			if !c.wantMsg && w != "" {
+				t.Fatalf("nothing is wrong with this configuration; got: %s", w)
+			}
+			if !c.wantMsg {
+				return
+			}
+			// Actionable: name the flag, say flags are off, and give the way out.
+			for _, want := range []string{c.header, "--behind-proxy", "No flags"} {
+				if !strings.Contains(w, want) {
+					t.Errorf("the warning must mention %q; got: %s", want, w)
+				}
+			}
+		})
+	}
+}

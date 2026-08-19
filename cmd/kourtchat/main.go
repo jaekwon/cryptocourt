@@ -62,6 +62,24 @@ func keyWarning(secretFile, db string) string {
 	return ""
 }
 
+// countryWarning reports a --country-header that now has no effect.
+//
+// The header is only believed from a trusted proxy. Without --behind-proxy there is no trusted
+// proxy, so it is only something the client typed — and before it was gated, that let every
+// client choose the flag shown beside its own name. Flags go quiet in that configuration rather
+// than being spoofable, and quiet is exactly the kind of change an operator should be told about
+// instead of discovering when somebody asks why the flags disappeared.
+func countryWarning(countryHeader string, behindProxy bool) string {
+	if countryHeader == "" || behindProxy {
+		return ""
+	}
+	return "--country-header " + countryHeader + " has no effect without --behind-proxy: on a " +
+		"server that is not behind a proxy, that header is only something the client typed, so " +
+		"honouring it would let every client pick the flag beside its own name. No flags will " +
+		"be shown from it. Add --behind-proxy with --trusted-proxy, or resolve countries from a " +
+		"local table instead. See CHAT.md \u00a73."
+}
+
 // modeWarning reports a database other users on this host can read.
 //
 // Open creates a NEW database 0600, and SQLite copies that onto -wal and -shm, so a fresh
@@ -169,6 +187,9 @@ func main() {
 	// After Open, so the files exist to be statted, and so a database this process just
 	// created reports the mode it was actually given rather than nothing at all.
 	if w := modeWarning(*db, *secretFile); w != "" {
+		lg.Print(w)
+	}
+	if w := countryWarning(*countryHdr, *behindProxy); w != "" {
 		lg.Print(w)
 	}
 	hasher, err := chat.NewHasher(key)

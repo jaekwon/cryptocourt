@@ -233,10 +233,25 @@ func TestThrottleReturns429WithRetryAfter(t *testing.T) {
 
 // The country code comes from a trusted proxy header or not at all, and anything
 // that is not two letters is dropped rather than rendered.
+// trustHeaders puts a server into the ONLY configuration where a country header means anything:
+// proxy mode, with the address these fixtures connect from listed as a trusted proxy.
+//
+// Both country tests below used to pass without it, which is exactly what the gate exists to
+// stop — with --country-header set and --behind-proxy off, the header is just something the
+// client typed, and every client picked the flag shown beside their own name.
+func trustHeaders(srv *Server) {
+	srv.Policy = IPPolicy{
+		BehindProxy: true,
+		Trusted:     []netip.Prefix{netip.MustParsePrefix("198.51.100.0/24")},
+	}
+}
+
 func TestCountryHeaderIsValidated(t *testing.T) {
 	srv, st, _ := newServer(t)
+	trustHeaders(srv)
 	r := postReq(t, "/api/chat/dev/orem", "alice", "where am i from")
 	r.Header.Set("X-Country", "<script>x</script>")
+	r.RemoteAddr = "198.51.100.6:2222"
 	if rec := do(t, srv, r); rec.Code != 200 {
 		t.Fatal(rec.Body)
 	}
@@ -350,6 +365,7 @@ func TestCountryPrecedenceAndValidation(t *testing.T) {
 	for i, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			srv, st, _ := newServer(t)
+			trustHeaders(srv)
 			if c.geo != "" {
 				srv.Geo = stubGeo{cc: c.geo}
 			}
@@ -1298,4 +1314,89 @@ func TestARefusedClientIsLoggedOncePerCause(t *testing.T) {
 			t.Errorf("an accepted request must log nothing, got %q", out.String())
 		}
 	})
+}
+
+// A CLIENT MUST NOT CHOOSE THE FLAG SHOWN BESIDE ITS OWN NAME.
+//
+// CountryHeader is described as "a trusted proxy header" and nothing established that it came
+// from one: r.Header.Get was read on every request. In proxy mode that was harmless by accident,
+// because s.client refuses an untrusted peer with a 403 before this code runs. With
+// --country-header set and --behind-proxy off there is no such refusal, and the header was
+// believed from anybody.
+//
+// §8 says the flag is decoration and nothing may be built on it, so this is not a hole in a
+// boundary. It is worth closing because a flag is a credibility affordance aimed at readers, and
+// §6 measured what one of those is worth: gemma3:4b reads the same lure from "kourt-moderator" as
+// legitimate and from "dave" as a scam. A flag an impersonator picks is that discount pointed at
+// people instead of at the model.
+func TestADirectClientCannotChooseItsOwnFlag(t *testing.T) {
+	srv, st, _ := newServer(t)
+	// No proxy configuration: the documented default, and the one where X-Forwarded-For is
+	// already "not consulted at all". The country header now gets the same treatment.
+	r := postReq(t, "/api/chat/dev/orem", "alice", "i would like a flag please")
+	r.Header.Set("X-Country", "DE")
+	r.RemoteAddr = "203.0.113.9:5555"
+	if rec := do(t, srv, r); rec.Code != 200 {
+		t.Fatalf("the post itself must still succeed — only the flag is refused: %d %s",
+			rec.Code, rec.Body)
+	}
+	msgs, err := st.Recent(context.Background(), "dev", "orem", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("want the message stored, got %d", len(msgs))
+	}
+	if msgs[0].Country != "" {
+		t.Errorf("a client set X-Country: DE on a direct connection and got %q. On a server "+
+			"that is not behind a proxy the header is only something the client typed",
+			msgs[0].Country)
+	}
+
+	// THE BYSTANDER: the local table is a different source and must be unaffected. Gating the
+	// header on proxy mode must not turn flags off for a deployment that resolves them itself.
+	srv2, st2, _ := newServer(t)
+	srv2.Geo = stubGeo{cc: "FR"}
+	r2 := postReq(t, "/api/chat/dev/orem", "bob", "and i get mine from the table")
+	r2.Header.Set("X-Country", "DE") // ignored; the table answers
+	r2.RemoteAddr = "203.0.113.10:5555"
+	if rec := do(t, srv2, r2); rec.Code != 200 {
+		t.Fatalf("post: %d %s", rec.Code, rec.Body)
+	}
+	msgs2, err := st2.Recent(context.Background(), "dev", "orem", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msgs2[0].Country != "FR" {
+		t.Errorf("a locally-resolved flag must still work without a proxy, and must not be "+
+			"overridden by the client's own header: got %q, want FR", msgs2[0].Country)
+	}
+}
+
+// TrustsPeer is the predicate both header paths now share, so its own table is worth having —
+// including the two cases that answer no for different reasons.
+func TestTrustsPeer(t *testing.T) {
+	proxied := IPPolicy{
+		BehindProxy: true,
+		Trusted:     []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+	}
+	for _, c := range []struct {
+		name   string
+		policy IPPolicy
+		remote string
+		want   bool
+	}{
+		{"a trusted proxy in proxy mode", proxied, "10.1.2.3:4444", true},
+		{"a direct client reaching the origin", proxied, "203.0.113.9:4444", false},
+		{"proxy mode off, even from the listed range", IPPolicy{
+			Trusted: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")},
+		}, "10.1.2.3:4444", false},
+		{"an unparseable peer", proxied, "not-an-address", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := c.policy.TrustsPeer(c.remote); got != c.want {
+				t.Errorf("TrustsPeer(%q) = %v, want %v", c.remote, got, c.want)
+			}
+		})
+	}
 }

@@ -11,7 +11,11 @@
 //
 //	Null    no flags at all, and everything else works. The honest default.
 //	Header  the country a trusted CDN already computed (CF-IPCountry and friends).
-//	        Costs nothing, needs no data file, and is what the server uses.
+//	        Costs nothing and needs no data file. NOT a type in this package, which is
+//	        worth saying because this list used to imply it was: the header is read by
+//	        internal/chat's Server, the only place that holds the request — and so the
+//	        only place that can check the peer is a trusted proxy before believing a
+//	        header the client could have written itself.
 //	Table   a local MaxMind GeoLite2-Country database.
 //
 // What is deliberately absent is a call to a third-party geolocation API. That

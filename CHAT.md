@@ -167,6 +167,39 @@ target likes. So two IPv6 addresses in one /64 SHARE a hash, by design — banni
 bans its /64. Both are asserted, including the sharing, so neither can be mistaken for the collapse
 bug above.
 
+**The COUNTRY header was believed from anybody, which is the same mistake one field over.**
+Everything above is about not trusting `X-Forwarded-For` unless a trusted proxy sent it. The
+country header — `CF-IPCountry` and friends, named by `--country-header` — was read with
+`r.Header.Get` on every request and no check at all, while its own description in the code called
+it "a trusted proxy header".
+
+In proxy mode that was harmless by accident: `s.client` refuses an untrusted peer with a 403 a few
+lines earlier, so a direct connection never reached the header. The exposed combination was
+`--country-header` set with `--behind-proxy` OFF, where there is no refusal — and there every
+client chose the flag displayed beside its own name. Note the asymmetry that made it easy to miss:
+`IPPolicy.Validate` already refuses to start in the one IP configuration that cannot be made safe,
+so the sibling field had a guard and this one had a comment.
+
+The flag is decoration and §8 says nothing may be built on it, so this is not a hole in a
+boundary. It is worth closing because a flag is a credibility affordance aimed at a human reader,
+and §6 measured what one of those is worth: gemma3:4b reads the same lure from "kourt-moderator"
+as legitimate and from "dave" as a scam. A flag an impersonator picks is that discount pointed at
+people instead of at the model, and a wrong decoration somebody chose is worse than no decoration.
+
+`TrustsPeer` is now the one predicate both header paths ask, and `--behind-proxy` off answers no
+without looking at anything — the same treatment the documented default already gave
+`X-Forwarded-For`. Verified live, both directions: a direct server with `--country-header` set
+stored `country=""` for a client sending `CF-IPCountry: DE` while the post itself still succeeded,
+and a proxy-mode server trusting the peer stored `DE` and printed no warning. The local MaxMind
+table is untouched by any of it, asserted as the bystander, so a deployment that resolves
+countries itself keeps its flags with no proxy at all.
+
+Ignored rather than refused at startup, unlike the IP policy's unsafe combination: flags going
+quiet is a smaller thing to impose on a running deployment than a process that will not start. But
+quiet is exactly what an operator should not have to discover, so `kourtchat` says the header has
+no effect, why, and how to make it work — and stays silent in the three configurations where
+nothing is wrong.
+
 ## 4. Sanitise for display; skeletonise for comparison
 
 The first implementation did both in one function and did both badly. Measured
