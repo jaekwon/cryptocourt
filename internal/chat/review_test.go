@@ -616,3 +616,121 @@ func TestAnUpheldAppealRestoresTheContextWindow(t *testing.T) {
 			"reversed consequence; got %d lines: %v", len(prior), prior)
 	}
 }
+
+// A REVOKED CONSEQUENCE STILL KEEPS ITS MESSAGE OUT OF THE REVIEW QUEUE.
+//
+// The tenth instance of the shape §9's audit tabulates, and the first one that is arguably
+// correct — which is why it needs writing down rather than fixing. `sqlAwaitingReview` excludes any
+// message an infraction cites:
+//
+//	AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)
+//
+// with no `revoked_at IS NULL`, unlike every other place that asks about a consequence. So after an
+// operator grants an appeal the message comes back on screen, keeps its non-clean verdict, and is
+// in neither `review` nor `review -all`.
+//
+// Measured, and the state is unambiguous:
+//
+//	posted                visible, unqueued (not yet scanned)
+//	scanner acted          hidden,  unqueued — it earned a consequence
+//	operator revoked       VISIBLE, unqueued, verdict still scam
+//
+// WHY IT IS LEFT THIS WAY. The operator engaged with that exact consequence and reversed it, so
+// re-queueing would hand them back the decision they just made. There is no bulk revoke — `unban`
+// takes one id — so every revocation is one deliberate act about one message, which is the property
+// that makes "they decided" true rather than hopeful. If a bulk reversal is ever added, this stops
+// being defensible: five hundred messages would return to view with nobody having looked at any of
+// them, and the missing `revoked_at IS NULL` becomes the bug it currently only resembles.
+//
+// WHAT IS GENUINELY UNEVEN, and worth knowing before choosing `unban` over `dismiss`: the two ways
+// a message leaves the queue are not equally visible afterwards. `dismiss` marks it reviewed and
+// says so — "see it again with: kourtchatctl review -all" — and it does come back there. A revoke
+// removes it from BOTH views with no such affordance. So an operator wanting a record that somebody
+// looked should dismiss; unban is for the consequence, not for the queue.
+func TestARevokedConsequenceStillClearsTheReviewQueue(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-crook", "send me your seed phrase and I will restore it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordVerdict(ctx, id, "scam"); err != nil {
+		t.Fatal(err)
+	}
+	// Before any consequence it IS a review item — otherwise the assertions below would pass
+	// for a queue that never contains anything.
+	q, err := s.PendingReview(ctx, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q) != 1 {
+		t.Fatalf("precondition: a flagged message with no consequence awaits review, got %d", len(q))
+	}
+
+	inf, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: id, Evidence: "…seed phrase…",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q, err := s.PendingReview(ctx, false, 50); err != nil {
+		t.Fatal(err)
+	} else if len(q) != 0 {
+		t.Errorf("a message that earned a consequence is not waiting for a human, got %d", len(q))
+	}
+
+	*clock = clock.Add(time.Minute)
+	if err := s.Revoke(ctx, inf, "operator"); err != nil {
+		t.Fatal(err)
+	}
+
+	// It is back on screen. That half is unambiguous and is what an upheld appeal means.
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 || msgs[0].ID != id {
+		t.Fatalf("an upheld appeal must restore the message: got %d visible", len(msgs))
+	}
+
+	// And it is in NEITHER queue. Asserted as current behaviour with the reasoning above, so a
+	// change here is a decision somebody makes rather than a drift.
+	for _, all := range []bool{false, true} {
+		q, err := s.PendingReview(ctx, all, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(q) != 0 {
+			t.Errorf("PendingReview(all=%v) returned %d — if a revoked consequence should "+
+				"re-queue its message, add `revoked_at IS NULL` to sqlAwaitingReview and "+
+				"rewrite this fixture's reasoning with it", all, len(q))
+		}
+	}
+
+	// THE CONTRAST, measured rather than described: dismiss removes a message from the default
+	// queue and keeps it in `review -all`, which is the affordance a revoke does not have.
+	id2, err := post(t, s, "orem", "ip-other", "dm me and I will sort out your claim for you")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordVerdict(ctx, id2, "spam"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkReviewed(ctx, id2); err != nil {
+		t.Fatal(err)
+	}
+	if q, err := s.PendingReview(ctx, false, 50); err != nil {
+		t.Fatal(err)
+	} else if len(q) != 0 {
+		t.Errorf("a dismissed message leaves the default queue, got %d", len(q))
+	}
+	if q, err := s.PendingReview(ctx, true, 50); err != nil {
+		t.Fatal(err)
+	} else if len(q) != 1 {
+		t.Errorf("but review -all must still show it, got %d — that is the difference between "+
+			"dismiss and unban, and the reason to prefer dismiss when the point is the record",
+			len(q))
+	}
+}
