@@ -40,9 +40,28 @@ s.expect("CoinSupply", ["orem"], r"int64")
 
 s.note("two claims and stake on both sides")
 s.claim("alice", "orem", "The county certified 12,412 mail ballots on Nov 6, 2025.")
-s.claim("bob", "orem", "The Center St. bridge inspection was completed in 2025.")
+# The apostrophe is deliberate and load-bearing. testscript quotes rc-style
+# ('' is a literal quote), sh quotes its own way, and the emitter used to
+# wrap a token in single quotes whenever it held a space — which turned any
+# possessive into broken tokens. Eight of the demo's own titles have one, so
+# this claim keeps the -args and stdout paths honest on every run.
+#
+# It does NOT cover the third path, a qeval ARGUMENT carrying free text: this
+# assertion passes an integer id. An audit found that path was the one still
+# unquoted, and it now shares the same _q_txtar as the other two; no read in the
+# realm takes free text, so there is nothing here to assert it with.
+s.claim("bob", "orem", "The mayor's office said the Center St. bridge inspection was 'complete'.")
 # ClaimCount returns nextID, which is pre-incremented (claim.gno:276-277), so
 # it equals the highest id issued: 2 after two claims, not 3.
+# The title must survive BOTH quoting layers — the tx that wrote it and the
+# assertion that reads it back. Asserting the tx merely succeeded would not
+# catch a title that arrived mangled.
+# Matched WITHOUT the sentence's periods on purpose. ClaimTitle serves through
+# sanitize.InlineText (modrender.gno:123), so a stored "St. bridge" comes back
+# markdown-escaped as "St\\. bridge" — the web overlay undoes it with unesc()
+# at every ClaimTitle site. The apostrophes are what this assertion is for, and
+# they pass through untouched.
+s.expect("ClaimTitle", ["orem", 2], "The mayor's office said the Center St")
 s.expect("ClaimCount", ["orem"], r"\(2 uint64\)")
 s.stake("alice", "orem", 1, YES, 40_000_000)
 s.stake("bob", "orem", 1, NO, 12_000_000)

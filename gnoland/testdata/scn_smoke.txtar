@@ -29,112 +29,114 @@ gnoland start
 
 
 # --- arm the clock — deployer only, and only while the realm is pristine 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.TestClockActive()"'
 stdout 'false'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClockAt -args 1780000000 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClockAt -args '1780000000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.TestClockActive()"'
 stdout 'true'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockSkew()"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.TestClockSkew()"'
 stdout '\(0 int64\)'
 
 
 # --- a stranger may not drive it, and the chain says so in a block -----
 # not merely refused by the simulator: -simulate skip proves the chain refuses
-! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 3600 -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '3600' -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
 stderr 'only the deployer may drive'
 
 
 # --- a court, and real GNOT burned into its coin -----------------------
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args 'orem' -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.TestClockActive()"'
 stdout 'true'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args 'orem' -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args orem -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args 'orem' -send 50000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinSupply(\"orem\")"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.CoinSupply(\"orem\")"'
 stdout 'int64'
 
 
 # --- two claims and stake on both sides --------------------------------
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args orem -args 'The county certified 12,412 mail ballots on Nov 6, 2025.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args 'orem' -args 'The county certified 12,412 mail ballots on Nov 6, 2025.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args orem -args 'The Center St. bridge inspection was completed in 2025.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args 'orem' -args 'The mayor''s office said the Center St. bridge inspection was ''complete''.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimCount(\"orem\")"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.ClaimTitle(\"orem\",2)"'
+stdout 'The mayor''s office said the Center St'
+
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.ClaimCount(\"orem\")"'
 stdout '\(2 uint64\)'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args orem -args 1 -args 0 -args 40000000 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args 'orem' -args '1' -args '0' -args '40000000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args orem -args 1 -args 1 -args 12000000 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args 'orem' -args '1' -args '1' -args '12000000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args orem -args 2 -args 0 -args 9000000 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args 'orem' -args '2' -args '0' -args '9000000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test bob
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.StakePools(\"orem\",1)"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.StakePools(\"orem\",1)"'
 stdout '40000000'
 
 
 # --- moderation is listing-level: hidden from lists, reachable by id ---
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func HideItem -args orem -args 2 -args 'off-topic pending review' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func HideItem -args 'orem' -args '2' -args 'off-topic pending review' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.HiddenFromListing(\"orem\",2)"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.HiddenFromListing(\"orem\",2)"'
 stdout 'true'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimCount(\"orem\")"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.ClaimCount(\"orem\")"'
 stdout '\(2 uint64\)'
 
 
 # --- folders are real chain state (flat; nesting lives in the overlay) -
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CreateFolder -args orem -args 'Municipal record' -args 'Filings, audits, inspections.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CreateFolder -args 'orem' -args 'Municipal record' -args 'Filings, audits, inspections.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AddToFolder -args orem -args 1 -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AddToFolder -args 'orem' -args '1' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.FolderItems(\"orem\",1)"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.FolderItems(\"orem\",1)"'
 stdout '1'
 
 
 # --- the whole point: cross a deadline by moving the date, not by waiting 
-! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args orem -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
 stderr 'dead-claim timeout has not passed'
 
 # one second short of the 12-week timeout
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 7257599 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '7257599' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
 # the boundary is the assertion: a frozen clock can sit exactly here
-! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args orem -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
 stderr 'dead-claim timeout has not passed'
 
 # over the line
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args 2 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '2' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args orem -args 1 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func CloseDeadClaim -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
 stdout 'OK!'
 
-gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimClosed(\"orem\",1)"
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.ClaimClosed(\"orem\",1)"'
 stdout 'true'
 
 
 # --- a handful of blocks, to prove height moves independently of the date 
-# cheap: the ring maturity a real answer needs is 2,160
 # 5 blocks — cheap: the ring maturity a real answer needs is 2,160
 gnoland wait-for-new-block
 gnoland wait-for-new-block

@@ -148,12 +148,27 @@ KEYDIR="$KEYDIR" REMOTE="$REMOTE" CHAINID="$CHAINID" PASS="$PASS" sh "$WORK/seed
 
 cat <<EOF
 
-  Seeded. The clock is sealed, so the dates are now fixed history.
+  Seeded. The scenario reported its clock state above.
 
     RPC      $REMOTE
     gnoweb   http://127.0.0.1:$WEB_PORT/r/kourt/kourtv2
-    overlay  open web/index.html, set mode=live, RPC=$REMOTE, chain=$CHAINID
-             (the settings panel has a "gnodev" preset that fills all three)
+    overlay  set mode=live, RPC=$REMOTE, chain=$CHAINID
+             (the settings panel's "gnodev" preset fills all three)
+
+  READING the chain works straight from disk — open web/index.html as a
+  file:// URL and it will query this node; gnodev answers with
+  Access-Control-Allow-Origin: *, so the browser allows it (verified).
+
+  SIGNING does not. Browser extensions are not injected into file:// pages,
+  so a wallet is invisible there and the page reports "no wallet found".
+  To connect one, serve the folder over http first:
+
+      (cd web && python3 -m http.server 8777) &
+      open http://127.0.0.1:8777/index.html
+
+  Conformance-check the overlay's live reads against this node:
+
+      python3 scripts/check-live-reads.py --remote $REMOTE
 
   Ctrl-C stops the node and discards the chain and the keys.
 EOF
