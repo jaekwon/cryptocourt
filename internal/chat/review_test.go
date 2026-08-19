@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -316,4 +317,156 @@ func TestOnAManualKickTheNetworkHashIsTheTriggerNotANote(t *testing.T) {
 			t.Fatalf("a range ban must stop at its range, got %q", out.State)
 		}
 	})
+}
+
+// THE BACKLOG MUST COUNT ONLY WHAT THE SCANNER CAN ACTUALLY TAKE.
+//
+// Claim skips hidden rows, because punished content must stop driving verdicts. Health.Backlog
+// did not, so the two disagreed: measured on four messages with a consequence hiding all of
+// them and two still unscanned, Backlog said 2 and Claim offered 0, and the difference never
+// drained. §9 tells an operator to watch that number, and after any consequence at all it
+// stopped returning to zero — the same shape of bug as freeze being checked in Post and not in
+// Recent.
+func TestTheBacklogCountsOnlyWhatCanBeClaimed(t *testing.T) {
+	s, ctx, tick := reviewStore(t)
+
+	var ids []int64
+	for i := 0; i < 4; i++ {
+		id := say(t, s, ctx, "crook", fmt.Sprintf("message number %d from this author", i))
+		ids = append(ids, id)
+		tick(MinInterval)
+	}
+	// The scanner reaches the last one, flags it, and a consequence follows — which hides
+	// the author's whole recent window, including the two nobody has scanned yet.
+	if err := s.RecordVerdict(ctx, ids[3], "scam"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: ids[3], Evidence: "message number 3 from this author",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The precondition that makes this test meaningful: there ARE hidden unscanned rows.
+	var hiddenUnscanned int
+	if err := s.r.QueryRow(
+		`SELECT count(*) FROM messages WHERE hidden=1 AND scan_state IN (?,?)`,
+		ScanNew, ScanFailed).Scan(&hiddenUnscanned); err != nil {
+		t.Fatal(err)
+	}
+	if hiddenUnscanned == 0 {
+		t.Fatal("precondition: the consequence should have hidden some unscanned rows")
+	}
+
+	h, err := s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claimable, err := s.Claim(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Backlog != len(claimable) {
+		t.Fatalf("the backlog must equal what Claim offers, or it never drains: "+
+			"Backlog=%d, Claim=%d, %d hidden-and-unscanned",
+			h.Backlog, len(claimable), hiddenUnscanned)
+	}
+
+	// PAIRED POSITIVE, and the direction that proves the fix is not just "count nothing":
+	// revoking the consequence un-hides them, and they become pending work again.
+	rows, err := s.ListInfractions(ctx, "", true, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Revoke(ctx, rows[0].ID, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+	h2, err := s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h2.Backlog < hiddenUnscanned {
+		t.Fatalf("after revocation the un-hidden rows must be pending again: backlog %d, "+
+			"want at least %d", h2.Backlog, hiddenUnscanned)
+	}
+	claimable2, err := s.Claim(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h2.Backlog != len(claimable2) {
+		t.Fatalf("and it must still agree with Claim: Backlog=%d, Claim=%d",
+			h2.Backlog, len(claimable2))
+	}
+}
+
+// A HIDDEN MESSAGE IS NOT AWAITING REVIEW.
+//
+// Consequence hides the author's whole recent window, not only the message it names, so the
+// neighbours end up hidden with no infraction citing them by id. The queue's predicate was
+// "flagged and uncited", which matched them — so it asked a human to judge messages already
+// removed from the room, whose author was already kicked. §7's carve-out is about messages
+// deliberately left alone; this queue must hold only those.
+func TestHiddenMessagesAreNotInTheReviewQueue(t *testing.T) {
+	s, ctx, tick := reviewStore(t)
+
+	first := say(t, s, ctx, "crook", "an early message that will end up hidden")
+	tick(MinInterval)
+	last := say(t, s, ctx, "crook", "the one the scanner actually flagged")
+	tick(MinInterval)
+	// A genuine deferral from somebody else, which must survive.
+	reporter := say(t, s, ctx, "helper", "careful, someone asked me for my seed phrase")
+
+	for _, id := range []int64{first, last, reporter} {
+		if err := s.RecordVerdict(ctx, id, "scam"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: last, Evidence: "the one the scanner actually flagged",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Precondition: `first` is hidden and NOT cited, which is the case that leaked.
+	var hidden int
+	if err := s.r.QueryRow(`SELECT hidden FROM messages WHERE id=?`, first).Scan(&hidden); err != nil {
+		t.Fatal(err)
+	}
+	if hidden != 1 {
+		t.Fatal("precondition: the earlier message should have been hidden by the consequence")
+	}
+
+	rows, err := s.PendingReview(ctx, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.ID == first {
+			t.Errorf("a hidden message must not be queued for review: id=%d %q", r.ID, r.Body)
+		}
+		if r.Hidden {
+			t.Errorf("nothing in the queue may be hidden: id=%d", r.ID)
+		}
+	}
+	// PAIRED POSITIVE: the genuine deferral is still there, so the fix did not empty the
+	// queue wholesale.
+	found := false
+	for _, r := range rows {
+		if r.ID == reporter {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the genuine deferral must still be waiting for a person")
+	}
+	// The grouped view shares the predicate and must agree.
+	groups, err := s.ReviewGroups(ctx, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 || groups[0].IPHash != "ip-helper" {
+		t.Fatalf("the grouped view must show only the reporter, got %+v", groups)
+	}
 }

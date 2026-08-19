@@ -715,8 +715,19 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	default:
 		fmt.Sscanf(v, "%d,%t", &h.ScannerSeen, &h.Enforcing)
 	}
+	// hidden=0 to match Claim EXACTLY. Claim skips hidden rows — punished content must
+	// stop driving verdicts — so counting them as backlog reports work that will never be
+	// done. Measured before the fix: four messages, a consequence hiding all of them, two
+	// still unscanned; Backlog said 2 and Claim offered 0, and the difference never
+	// drained. An operator is told to watch this number, and after any consequence at all
+	// it stopped returning to zero.
+	//
+	// Distinct from Unscannable below, which is the opposite failure: rows that WERE tried
+	// and gave up. A hidden row was never tried and does not need to be. If its consequence
+	// is later revoked, Revoke clears hidden and it becomes claimable and counted again,
+	// which is the correct direction.
 	if err := s.r.QueryRowContext(ctx,
-		`SELECT count(*) FROM messages WHERE scan_state IN (?,?)`,
+		`SELECT count(*) FROM messages WHERE scan_state IN (?,?) AND hidden=0`,
 		ScanNew, ScanFailed).Scan(&h.Backlog); err != nil {
 		return h, err
 	}
@@ -897,6 +908,33 @@ type InfractionRow struct {
 	RevokedBy  string
 }
 
+// sqlAwaitingReview is THE definition of §7's deferred queue, and it is one string because
+// it was seven.
+//
+// The same idea was written out in four different indentations across Prune, PruneDryRun,
+// PendingReview, ReviewGroups and MarkReviewedFrom, and they had already drifted: three of
+// the seven copies were missing `hidden = 0`, so the queue asked a human to judge messages
+// that had already been hidden and whose author was already kicked. That is the same failure
+// as freeze being consulted in Post and not in Recent — a predicate that exists in more than
+// one place eventually disagrees with itself.
+//
+// The three clauses, and why each is part of "awaiting review":
+//
+//	hidden = 0        a hidden message HAS been acted on. Consequence hides the author's
+//	                  whole recent window, not only the message it names, so the neighbours
+//	                  are hidden-but-uncited and would otherwise look unactioned.
+//	verdict flagged   clean and unknown are not accusations; '' was never scanned.
+//	no citing row     an infraction naming this message means a consequence already followed.
+//
+// `reviewed_at = 0` is deliberately NOT here: whether to include already-dismissed rows is
+// the caller's question, and `review -all` exists to answer it either way.
+//
+// The subquery correlates on `messages.id`, so every use must have `messages` as its outer
+// table.
+const sqlAwaitingReview = `hidden = 0
+	     AND verdict NOT IN ('', 'clean', 'unknown')
+	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`
+
 // PruneResult reports what a prune did AND what it refused to do.
 //
 // The refusals are the interesting half. A pruner that silently declines to delete looks
@@ -959,9 +997,7 @@ func (s *Store) Prune(ctx context.Context, olderThan time.Duration, limit int) (
 		return out, err
 	}
 	if out.KeptQueued, err = countOld(
-		`scan_state = ? AND verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
-		 AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`,
-		ScanDone); err != nil {
+		`scan_state = ? AND reviewed_at = 0 AND `+sqlAwaitingReview, ScanDone); err != nil {
 		return out, err
 	}
 	if out.KeptCited, err = countOld(
@@ -976,9 +1012,7 @@ func (s *Store) Prune(ctx context.Context, olderThan time.Duration, limit int) (
 	    SELECT id FROM messages
 	     WHERE created_at < ?
 	       AND scan_state = ?
-	       AND NOT (verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
-	                AND NOT EXISTS (SELECT 1 FROM infractions
-	                                 WHERE evidence_id = messages.id))
+	       AND NOT (reviewed_at = 0 AND `+sqlAwaitingReview+`)
 	       AND NOT EXISTS (SELECT 1 FROM infractions i
 	                        WHERE i.evidence_id = messages.id
 	                          AND i.revoked_at IS NULL
@@ -1021,9 +1055,7 @@ func (s *Store) PruneDryRun(ctx context.Context, olderThan time.Duration, limit 
 	  SELECT count(*) FROM messages
 	   WHERE created_at < ?
 	     AND scan_state = ?
-	     AND NOT (verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
-	              AND NOT EXISTS (SELECT 1 FROM infractions
-	                               WHERE evidence_id = messages.id))
+	     AND NOT (reviewed_at = 0 AND `+sqlAwaitingReview+`)
 	     AND NOT EXISTS (SELECT 1 FROM infractions i
 	                      WHERE i.evidence_id = messages.id
 	                        AND i.revoked_at IS NULL
@@ -1043,9 +1075,8 @@ func (s *Store) PruneDryRun(ctx context.Context, olderThan time.Duration, limit 
 	}
 	if err := s.r.QueryRowContext(ctx, `
 	  SELECT count(*) FROM messages
-	   WHERE created_at < ? AND scan_state = ?
-	     AND verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
-	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`,
+	   WHERE created_at < ? AND scan_state = ? AND reviewed_at = 0
+	     AND `+sqlAwaitingReview+``,
 		cutoff, ScanDone).Scan(&out.KeptQueued); err != nil {
 		return out, err
 	}
@@ -1102,11 +1133,16 @@ func (s *Store) PendingReview(ctx context.Context, includeDone bool, limit int) 
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}
+	// hidden=0: a hidden message HAS been acted on, even when no infraction cites it by id.
+	// Consequence hides the author's whole recent window, not just the message it names, so
+	// the neighbours end up hidden-but-uncited — and the queue was surfacing those, asking a
+	// human to judge something already removed from the room whose author was already
+	// kicked. §7's carve-out is about messages deliberately left ALONE; this queue must hold
+	// only those.
 	q := `
 	  SELECT id, chain, court, moniker, body, verdict, ip_hash, net_hash, hidden, created_at
 	    FROM messages
-	   WHERE verdict NOT IN ('', 'clean', 'unknown')
-	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`
+	   WHERE ` + sqlAwaitingReview
 	if !includeDone {
 		q += ` AND reviewed_at = 0`
 	}
@@ -1169,8 +1205,7 @@ func (s *Store) ReviewGroups(ctx context.Context, includeDone bool, limit int) (
 	if limit <= 0 || limit > 500 {
 		limit = 50
 	}
-	where := `verdict NOT IN ('', 'clean', 'unknown')
-	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`
+	where := sqlAwaitingReview
 	if !includeDone {
 		where += ` AND reviewed_at = 0`
 	}
@@ -1237,8 +1272,7 @@ func (s *Store) MarkReviewedFrom(ctx context.Context, ipHash string) (int64, err
 	res, err := s.w.ExecContext(ctx, `
 	  UPDATE messages SET reviewed_at=?
 	   WHERE ip_hash=? AND reviewed_at=0
-	     AND verdict NOT IN ('', 'clean', 'unknown')
-	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`,
+	     AND `+sqlAwaitingReview+``,
 		s.Now().Unix(), ipHash)
 	if err != nil {
 		return 0, err
