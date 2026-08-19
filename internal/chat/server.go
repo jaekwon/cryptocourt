@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Server is the HTTP surface. It enforces; it never scans.
@@ -343,9 +342,4 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		}
 		writeErr(w, http.StatusServiceUnavailable, "cannot accept messages right now")
 	}
-}
-
-// Suffix is exposed for the operator CLI and tests.
-func (s *Server) Suffix(addr netip.Addr, court string) string {
-	return s.Hasher.PublicSuffix(addr, court, time.Now().Unix())
 }

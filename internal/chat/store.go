@@ -33,6 +33,12 @@ const (
 	// permanent ban out of a very long kick.
 	MaxAutoKick = 7 * 24 * time.Hour
 
+	// HideWindow is how far back a consequence reaches when hiding the offender's OTHER
+	// messages. Narrow on purpose: on a shared address a wider sweep would retroactively
+	// remove strangers' messages, and every routine timeout would carry that collateral.
+	// The message a consequence CITES is hidden regardless of its age — see Consequence.
+	HideWindow = 10 * time.Minute
+
 	// The escalation ladder, and the lookback over which repeats count.
 	LadderLookback = 30 * 24 * time.Hour
 )
@@ -549,10 +555,27 @@ func (s *Store) Recent(ctx context.Context, chain, court string, since int64, li
 
 // Consequence records a kick or ban and hides the offender's recent messages.
 //
-// hidden is scoped to the SAME MESSAGE plus that address's last few minutes,
-// rather than everything it ever posted: on a shared address a wider sweep would
-// retroactively delete strangers' messages, and every routine timeout would carry
-// that collateral.
+// hidden is scoped to the SAME MESSAGE plus that address's last few minutes, rather than
+// everything it ever posted: on a shared address a wider sweep would retroactively delete
+// strangers' messages, and every routine timeout would carry that collateral.
+//
+// "THE SAME MESSAGE" was in this comment before it was in the query. The UPDATE had only the
+// ten-minute window, so the cited message was hidden when it happened to fall inside it and
+// not otherwise. Measured:
+//
+//	scanner 1 minute behind    author kicked, the scam HIDDEN
+//	scanner 11 minutes behind  author kicked, the scam STILL VISIBLE
+//	scanner 2 hours behind     author kicked, the scam STILL VISIBLE
+//
+// A backlog is not an edge case here — Claim scans newest-first precisely because "after an
+// outage the currently-harmful messages are scanned last" — so the fix failed in exactly the
+// condition that motivated it. §7 exists because "a ban stops new posts; the scam link stays
+// pinned in the court forever", and that is what a slow scanner was still producing.
+//
+// The id clause is scoped to the same author as well, so a mis-set evidence_id can never hide
+// a stranger's message. That is not a live risk today — the scanner cites the message it just
+// judged, and `kick -msg` derives the hash FROM the message — but the whole reason the window
+// is narrow is collateral, and a second way in deserves the same guard.
 func (s *Store) Consequence(ctx context.Context, c Infraction) (int64, error) {
 	now := s.Now()
 	if c.Kind == KindBan && c.Reason != ReasonManual {
@@ -594,9 +617,10 @@ func (s *Store) Consequence(ctx context.Context, c Infraction) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE messages SET hidden=1 WHERE ip_hash=? AND created_at > ?`,
-		c.IPHash, now.Add(-10*time.Minute).Unix()); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE messages SET hidden=1
+	   WHERE (ip_hash = ? AND created_at > ?)
+	      OR (id = ? AND ip_hash = ?)`,
+		c.IPHash, now.Add(-HideWindow).Unix(), evID, c.IPHash); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit()

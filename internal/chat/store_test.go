@@ -802,3 +802,142 @@ func TestInForceMeansInForce(t *testing.T) {
 		t.Error("an expired consequence must remain readable under -all")
 	}
 }
+
+// A CONSEQUENCE MUST HIDE THE MESSAGE IT CITES, however late it arrives.
+//
+// The hide was a ten-minute window and nothing else, so the cited message was removed from view
+// only when it happened to fall inside it. §7 exists because "a ban stops new posts; the scam
+// link stays pinned in the court forever" — and a slow scanner reproduced exactly that:
+//
+//	scanner 1 minute behind    author kicked, the scam hidden
+//	scanner 11 minutes behind  author kicked, the scam STILL VISIBLE
+//
+// A backlog is not an edge case: Claim scans newest-first precisely because after an outage the
+// currently-harmful messages are scanned last. The fix failed in the condition that motivated it.
+func TestALateConsequenceStillHidesItsEvidence(t *testing.T) {
+	for _, lag := range []time.Duration{time.Minute, HideWindow + time.Minute, 2 * time.Hour} {
+		t.Run(lag.String(), func(t *testing.T) {
+			s, clock := newStore(t)
+			ctx := context.Background()
+
+			id, err := post(t, s, "orem", "ip-crook", "send me your seed phrase")
+			if err != nil {
+				t.Fatal(err)
+			}
+			*clock = clock.Add(lag)
+			if _, err := s.Consequence(ctx, Infraction{
+				IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+				Duration: time.Hour, EvidenceID: id, Evidence: "send me your seed phrase",
+			}); err != nil {
+				t.Fatal(err)
+			}
+			msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(msgs) != 0 {
+				t.Fatalf("the cited message must be hidden whatever the lag; still showing %q",
+					msgs[0].Body)
+			}
+			// And the author is kicked, so the fixture is not passing because nothing happened.
+			st, err := s.Status(ctx, "ip-crook", "net-crook")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if st.State == "ok" {
+				t.Fatal("the author must be kicked too")
+			}
+		})
+	}
+}
+
+// THE BYSTANDER, for the new path into hiding. The id clause is a second way a consequence can
+// reach a message, and the narrow window exists precisely because of collateral on shared
+// addresses — so the new clause is scoped to the same author, and a mis-set evidence_id must not
+// be able to hide a stranger.
+func TestHidingByCitationCannotReachAnotherAuthor(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	// A neighbour on the SAME network, different address, who said something long ago and
+	// something just now — plus something the OFFENDER said long ago, which must also
+	// survive: a timeout removes the recent burst, not an author's whole history.
+	old, err := post(t, s, "orem", "ip-neighbour", "an old remark from the neighbour")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := post(t, s, "orem", "ip-crook", "something the offender said long ago"); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(2 * time.Hour)
+	if _, err := post(t, s, "orem", "ip-neighbour", "and a recent one too"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := post(t, s, "orem", "ip-crook", "send me your seed phrase"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A consequence against the crook that WRONGLY cites the neighbour's old message.
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", NetHash: "net-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: old, Evidence: "an old remark from the neighbour",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var left []string
+	for _, m := range msgs {
+		left = append(left, m.Body)
+	}
+	// The neighbour's OLD message must survive: it is not theirs to hide.
+	found := false
+	for _, b := range left {
+		if b == "an old remark from the neighbour" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("a citation must not reach another author's message; left %v", left)
+	}
+	// The neighbour's recent message must survive too — the window is per address.
+	recent := false
+	for _, b := range left {
+		if b == "and a recent one too" {
+			recent = true
+		}
+	}
+	if !recent {
+		t.Errorf("the window is per address; the neighbour's recent message must survive: %v", left)
+	}
+	// PAIRED POSITIVE: the crook's own recent message IS hidden, so the fixture is not
+	// passing because hiding stopped working altogether.
+	for _, b := range left {
+		if b == "send me your seed phrase" {
+			t.Error("the offender's own recent message must still be hidden")
+		}
+	}
+	// AND THE OTHER EDGE OF THE WINDOW: the offender's own OLD message survives. The window
+	// is narrow on purpose — a timeout removes a burst, not a history — and widening it to
+	// everything passed every other assertion here, because the bystander is a different
+	// address and nothing spoke for the offender's own past.
+	ownOld := false
+	for _, b := range left {
+		if b == "something the offender said long ago" {
+			ownOld = true
+		}
+	}
+	if !ownOld {
+		t.Errorf("a timeout must not retroactively hide the offender's whole history: %v", left)
+	}
+	st, err := s.Status(ctx, "ip-neighbour", "net-crook")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "ok" {
+		t.Errorf("and the neighbour must not be punished, got %q", st.State)
+	}
+}
