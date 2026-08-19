@@ -374,3 +374,80 @@ func TestCountryPrecedenceAndValidation(t *testing.T) {
 		})
 	}
 }
+
+// A FROZEN COURT IS NOT SERVED, which is what the word means and what the tool says.
+//
+// Freeze gated only Post. So a purged court refused new messages with "this court is no
+// longer served" while handing its entire transcript to anybody who asked, and
+// `kourtchatctl freeze` printed "its history is no longer served" — a control announcing a
+// property it did not have. Found by reading the read path and then measuring it: POST 410,
+// GET 200 with every message still there.
+//
+// Both verbs, both directions, and the neighbouring courts that must be untouched: freeze is
+// per chain AND court, so it is exactly the kind of predicate that quietly matches too much.
+func TestAFrozenCourtIsNeitherReadNorWritten(t *testing.T) {
+	srv, store, clk := newServer(t)
+	srv.Chains["test"] = true
+	ctx := context.Background()
+
+	// Three partitions: the one to be frozen, another court on the same chain, and the
+	// same court name on another chain.
+	for _, c := range []struct{ path, body string }{
+		{"/api/chat/dev/orem", "something that must stop being served"},
+		{"/api/chat/dev/ledger", "an unrelated court on the same chain"},
+		{"/api/chat/test/orem", "the same court name on another chain"},
+	} {
+		*clk = clk.Add(MinInterval + time.Second)
+		if rec := do(t, srv, postReq(t, c.path, "alice", c.body)); rec.Code != 200 {
+			t.Fatalf("setup %s: %d %s", c.path, rec.Code, rec.Body)
+		}
+	}
+	// Precondition, asserted: it IS served before the freeze, or the test proves nothing.
+	if rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil)); rec.Code != 200 {
+		t.Fatalf("precondition: the court must be served before freezing, got %d", rec.Code)
+	}
+
+	if err := store.Freeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	}
+
+	// THE FIX: reading is refused, with the same 410 the write path already gave.
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil))
+	if rec.Code != http.StatusGone {
+		t.Fatalf("a frozen court must not be read: got %d %s", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "must stop being served") {
+		t.Fatal("the refusal must not carry the transcript it is refusing")
+	}
+	// Not an empty list dressed up as a normal answer — that would render as "nobody has
+	// said anything here yet" about a court that was withdrawn.
+	if strings.Contains(rec.Body.String(), `"messages"`) {
+		t.Errorf("a frozen court must not answer with a messages list at all: %s", rec.Body)
+	}
+	*clk = clk.Add(MinInterval + time.Second)
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "and posting is refused")); rec.Code != http.StatusGone {
+		t.Fatalf("a frozen court must not be written: got %d", rec.Code)
+	}
+
+	// THE BYSTANDERS. Same chain different court, and same court name different chain.
+	for _, p := range []string{"/api/chat/dev/ledger", "/api/chat/test/orem"} {
+		if rec := do(t, srv, httptest.NewRequest(http.MethodGet, p, nil)); rec.Code != 200 {
+			t.Errorf("%s must still be served: got %d %s", p, rec.Code, rec.Body)
+		}
+		*clk = clk.Add(MinInterval + time.Second)
+		if rec := do(t, srv, postReq(t, p, "bob", "still able to talk over here")); rec.Code != 200 {
+			t.Errorf("%s must still accept messages: got %d %s", p, rec.Code, rec.Body)
+		}
+	}
+
+	// Freeze stops serving; it does not erase. The rows are still there for an operator
+	// who needs them, and the pruner is the separate, irreversible step.
+	var n int
+	if err := store.r.QueryRow(
+		`SELECT count(*) FROM messages WHERE chain='dev' AND court='orem'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n == 0 {
+		t.Error("freeze must not delete: erasure is the pruner's job and a separate decision")
+	}
+}

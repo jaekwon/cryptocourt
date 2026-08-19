@@ -495,12 +495,30 @@ func statusTx(ctx context.Context, q querier, ipHash, netHash string, now time.T
 
 // Recent reads a court's visible history. hidden rows are filtered here, so a
 // consequence removes a scam from view rather than only stopping the next one.
+//
+// A FROZEN COURT IS NOT READ EITHER, and it took measuring to notice that it was. Freeze
+// gated only Post, so a purged court refused new messages with "this court is no longer
+// served" while serving its entire transcript to anybody who asked — and
+// `kourtchatctl freeze` printed "its history is no longer served", which was simply untrue.
+// A compliance control that stops accepting and keeps publishing has not stopped serving.
+//
+// The rows are still in the table: freeze stops serving, it does not erase. An operator who
+// needs the content gone runs the pruner afterwards, and §9 says so — the two are separate
+// acts on purpose, because "stop showing this" and "destroy the evidence" are different
+// decisions and one of them is irreversible.
 func (s *Store) Recent(ctx context.Context, chain, court string, since int64, limit int) ([]Message, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	if since < 0 {
 		since = 0
+	}
+	frozen, err := s.IsFrozen(ctx, chain, court)
+	if err != nil {
+		return nil, err
+	}
+	if frozen {
+		return nil, ErrPurged
 	}
 	rows, err := s.r.QueryContext(ctx, `SELECT id, moniker, body, country, suffix, created_at
 	  FROM messages WHERE chain=? AND court=? AND id > ? AND hidden=0
@@ -633,6 +651,19 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 // Freeze marks a court unservable, for a purge on chain. Latched in a store we
 // own rather than re-derived from the chain on every request, because the chain
 // read cannot distinguish "purged" from "node unreachable".
+// IsFrozen reports whether a court has been withdrawn from service.
+//
+// Read through the read handle so it costs nothing on the serving path, and consulted by
+// BOTH verbs — Post has always checked it inside its transaction; Recent had not.
+func (s *Store) IsFrozen(ctx context.Context, chain, court string) (bool, error) {
+	var n int
+	if err := s.r.QueryRowContext(ctx,
+		`SELECT count(*) FROM frozen WHERE chain=? AND court=?`, chain, court).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 func (s *Store) Freeze(ctx context.Context, chain, court string) error {
 	_, err := s.w.ExecContext(ctx,
 		`INSERT OR IGNORE INTO frozen(chain,court,at) VALUES (?,?,?)`,

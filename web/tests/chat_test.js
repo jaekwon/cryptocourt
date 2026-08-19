@@ -365,6 +365,44 @@ function mkDoc() {
     stop();
   }
 
+  // A CLOSED COURT IS NOT A BROKEN ONE. 410 means an operator withdrew the court from
+  // service, and reporting that as "unreachable" sends a reader to reload and an operator
+  // to check the network for something working exactly as intended. It must also stop
+  // polling — asking again is a request nobody will ever answer.
+  {
+    const now = Math.floor(Date.now() / 1000);
+    let calls = 0;
+    FETCH = async () => {
+      calls++;
+      return {ok: true, json: async () => ({
+        messages: [{id: 1, moniker: "tosh", body: "said before the freeze", country: "JP",
+                    suffix: "40de71", created_at: now}], you: {state: "ok"}, next: 1})};
+    };
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                interval: 5});
+    await tickMicro(); await tickMicro();
+    ok("the transcript is on screen before the freeze",
+       /said before the freeze/.test(el.k[".chatlog"].innerHTML));
+
+    FETCH = async () => ({ok: false, status: 410, json: async () => ({
+      error: "this court is no longer served"})});
+    await new Promise(r => setTimeout(r, 40));
+
+    ok("a closed court says closed, not unreachable",
+       /closed/i.test(el.k[".chatnote"].textContent));
+    ok("...and does NOT say unreachable",
+       !/unreachable/i.test(el.k[".chatnote"].textContent));
+    ok("...the state line explains it without blaming the reader",
+       /closed/i.test(el.k[".chatstate"].textContent) &&
+       !/paused|blocked/i.test(el.k[".chatstate"].textContent));
+    ok("...the composer is disabled", el.k[".chatinput"].disabled === true);
+    const after = calls;
+    await new Promise(r => setTimeout(r, 60));
+    ok("...and it stops polling a court that will never answer", calls === after);
+    stop();
+  }
+
   // stop() must actually stop, or every re-render leaves another poller behind.
   //
   // The obvious version of this test counted fetches after stop() and passed even with

@@ -361,6 +361,51 @@ function freePort() {
       }
     }
 
+    // ------------------------------------------------------- A CLOSED COURT
+    //
+    // Last, because freezing is terminal for this court. Freeze gated only Post until this
+    // was measured: a purged court refused new messages with "this court is no longer
+    // served" while serving its whole transcript, and `kourtchatctl freeze` announced that
+    // "its history is no longer served", which was false. Now both verbs answer 410 — and
+    // the panel has to say WITHDRAWN rather than BROKEN, or a reader reloads and an operator
+    // checks the network over something working exactly as intended.
+    {
+      const before = await page.evaluate(() =>
+        document.querySelector("#livechat .chatlog").textContent);
+      if (!/settle window|posting works again|seeded/.test(before)) {
+        ok("precondition: something is on screen to be withdrawn", false);
+      }
+      const fz = ctl("freeze", "dev/orem");
+      ok("the operator froze the court: " + (fz.stdout || fz.stderr || "").trim().slice(0, 60),
+         fz.status === 0);
+
+      // Reading and writing both refused, at the HTTP layer.
+      const rd = await fetch(base + "/api/chat/dev/orem");
+      ok("a frozen court is not read (410)", rd.status === 410);
+      const body = await rd.text();
+      ok("...and the refusal carries no transcript", !/settle window/.test(body));
+      const wr = await fetch(base + "/api/chat/dev/orem", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({moniker: "x", body: "after the purge"}),
+      });
+      ok("...nor written (410)", wr.status === 410);
+
+      // And the panel, which is the half only a browser can show.
+      await page.waitForFunction(
+        () => /closed/i.test(document.querySelector("#livechat .chatnote").textContent),
+        {timeout: 30000});
+      const r = await page.evaluate(() => ({
+        note: document.querySelector("#livechat .chatnote").textContent,
+        state: document.querySelector("#livechat .chatstate").textContent,
+        blocked: document.querySelector("#livechat .chatinput").disabled,
+      }));
+      ok("the panel says the court is closed", /closed/i.test(r.note));
+      ok("...not that chat is unreachable", !/unreachable/i.test(r.note + r.state));
+      ok("...and does not read as a punishment of the reader",
+         !/paused|blocked/i.test(r.state));
+      ok("...with the composer disabled", r.blocked === true);
+    }
+
     ok("the page threw nothing and opened no dialog: " + (errors[0] || "none"),
        errors.length === 0);
 

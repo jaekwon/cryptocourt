@@ -80,6 +80,9 @@ function chatWhen(nowSec, thenSec) {
 function chatStatusLine(you, nowSec) {
   const st = you && you.state ? String(you.state) : "ok";
   if (st === "ok") return "";
+  // Not a punishment and must not read like one: the court was withdrawn, which says
+  // nothing about the person reading it.
+  if (st === "closed") return "This court's chat has been closed.";
   const until = you && you.until ? Number(you.until) : 0;
   const ref = you && you.ref ? Number(you.ref) : 0;
   let when = "";
@@ -216,6 +219,14 @@ async function chatFetch(base, chain, court, limit) {
   const url = base + "/api/chat/" + encodeURIComponent(chain) + "/"
     + encodeURIComponent(court) + "?limit=" + (limit || 50);
   const r = await fetch(url, {method: "GET", cache: "no-store"});
+  // 410 is a decision, not a fault. A court withdrawn from service must not be reported
+  // as "unreachable" — that sends a reader to reload, and an operator to check the
+  // network, for something that is working exactly as intended.
+  if (r.status === 410) {
+    const gone = new Error("chat for this court is closed");
+    gone.closed = true;
+    throw gone;
+  }
   if (!r.ok) throw new Error("chat unavailable (" + r.status + ")");
   const d = await r.json();
   return {
@@ -378,6 +389,13 @@ function mountChat(el, opts) {
       if (!live()) return;
       // The service being down must not blank a transcript already on screen, and
       // must not look like an empty room.
+      if (e && e.closed) {
+        // Withdrawn, not broken. Say so, stop asking, and leave the composer disabled —
+        // polling a court that has been closed is a request nobody will ever answer.
+        note("Chat for this court is closed.");
+        paintState({state: "closed"});
+        return;
+      }
       note("Chat is unreachable right now.");
     }
     if (!live()) return;

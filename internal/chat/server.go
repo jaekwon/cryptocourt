@@ -199,7 +199,14 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 		limit = 50
 	}
 	msgs, err := s.Store.Recent(r.Context(), chain, court, since, limit)
-	if err != nil {
+	switch {
+	case errors.Is(err, ErrPurged):
+		// The same 410 a POST gets, because the court is in the same state either way.
+		// Answering 200 with an empty list would be a lie of a different shape: the panel
+		// would render "nobody has said anything here yet" about a court that was withdrawn.
+		writeErr(w, http.StatusGone, "this court is no longer served")
+		return
+	case err != nil:
 		writeErr(w, http.StatusInternalServerError, "cannot read messages")
 		return
 	}
