@@ -298,7 +298,15 @@ html.embed #tcbanner{grid-column:1; padding:0}
   font-weight:600; margin:0; display:-webkit-box; -webkit-line-clamp:4;
   -webkit-box-orient:vertical; overflow:hidden}
 .emb .estat{font-size:12.5px; color:var(--ink-2)}
-.emb .espark{width:100%; height:52px; display:block; overflow:visible}
+.emb .esparkwrap{display:flex; flex-direction:column; gap:3px}
+.emb .espark{width:100%; height:56px; display:block; overflow:visible}
+.emb .espan{display:flex; justify-content:space-between; gap:6px; font-family:var(--mono);
+  font-size:9.5px; letter-spacing:.02em; color:var(--muted); white-space:nowrap; overflow:hidden}
+.emb .espan .efrozelab{overflow:hidden; text-overflow:ellipsis; min-width:0}
+.emb .espark .e25{stroke:var(--line-2); stroke-width:1; stroke-dasharray:2 5; opacity:.7;
+  vector-effect:non-scaling-stroke}
+.emb .espark .efroze{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3;
+  vector-effect:non-scaling-stroke}
 .emb .espark .e50{stroke:var(--line-2); stroke-width:1; stroke-dasharray:3 3;
   vector-effect:non-scaling-stroke}
 .emb .espark .eline{fill:none; stroke:var(--good); stroke-width:2;
@@ -1533,11 +1541,12 @@ async function buildClip(){
   const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
                                            id == null ? Promise.resolve(null) : claimDetail(slug, id),
                                            sourceNote()]);
-  const ser = (id == null) ? null : await claimSeries(slug, id, d).catch(()=>null);
+  const [ser, tl] = (id == null) ? [null, null] : await Promise.all([
+    claimSeries(slug, id, d).catch(()=>null), claimTimeline(slug, id, d).catch(()=>null)]);
   const bg = getComputedStyle(document.body).backgroundColor.match(/^rgb\((\d+)/);
   const isDark = bg && parseInt(bg[1], 10) < 128;
   const url = shareIsPublic() ? shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id) : null;
-  return {cv: drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser),
+  return {cv: drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser, tl),
           name: "kourt-" + slug + (id == null ? "" : "-" + id) + ".png"};
 }
 async function paintClipPreview(){
@@ -3393,6 +3402,22 @@ function mergeStakeSeries(hp,dp,nowHeight){
    The claim route builds this inline from pieces it already has; the clip and
    the embed need the same thing without those pieces, and must not each grow
    their own version of the live/demo split. */
+/* HEIGHTS ARE WHAT THE CHAIN RECORDS; DATES ARE WHAT A READER CAN CHECK.
+   The chart was drawn entirely in block heights, so it showed a shape with no
+   when — a reader could not tell whether the line covered a day or a season.
+   ClaimTimeline carries both for the same instant ("now:<unix>:<height>"), so
+   one anchor plus the block interval dates every sample without another read.
+   Returns null rather than guessing when there is no anchor: an undated axis is
+   better than a wrong one. */
+function heightDater(tl){
+  if(!tl || !tl.now) return null;
+  const aT = tl.now.t, aH = tl.now.h;
+  return h => aT + (h - aH) * BLOCK_SECS;
+}
+async function claimTimeline(slug,id,d){
+  if(!isLive()) return parseTimeline(d && d.timeline);
+  return parseTimeline(await one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null));
+}
 async function claimSeries(slug,id,d){
   if(!isLive()) return mergeStakeSeries(parseStakeSeries(d&&d.seriesH), parseStakeSeries(d&&d.seriesD), NOW);
   const nowH = await chainHeight();
@@ -4345,15 +4370,15 @@ function embedSnippet(slug, id, opts){
   // so they were 40px short of every card a reader would actually see. Now:
   // every card in the sample, at 320px wide (the narrowest column an article
   // gives a max-width:100% iframe), carrying .esrc, the recorded-path spark AND
-  // the two stake actions — tallest claim 431px, tallest court 197px. The title
-  // is line-clamped, the spark is a fixed 52px and the actions are one row that
-  // never wraps, so every growing term is bounded;
+  // the two stake actions — tallest claim 453px, tallest court 197px. The title
+  // is line-clamped, the chart is a fixed 56px plus one line of dates, and the
+  // actions are one row that never wraps, so every growing term is bounded;
   // ../tests/browser/embed_layout.js pins both worst cases.
   //
   // A live chain with an honest clock has nothing to disclose and so runs ~40px
   // short of these. That is the price of a fixed box: size for the card that
   // says the most, not the least.
-  const w = o.w || 400, h = o.h || (id == null ? 210 : 450);
+  const w = o.w || 400, h = o.h || (id == null ? 210 : 480);
   return `<iframe src="${src}" width="${w}" height="${h}" frameborder="0" `
        + `title="Kourt — ${id == null ? slug : slug + " #" + id}" `
        + `style="border:1px solid #ddd;border-radius:6px;max-width:100%"></iframe>`;
@@ -4362,7 +4387,7 @@ function embedSnippet(slug, id, opts){
 /* The clip. 1200x630 is the size every link unfurler crops to, so a reader who
    drops the PNG into a post gets the same framing they would have got from a
    generated preview — the one thing a serverless page cannot mint for itself. */
-function drawClip(slug, id, d, courtName, theme, note, url, ser){
+function drawClip(slug, id, d, courtName, theme, note, url, ser, tl){
   const W = 1200, H = 630, cv = document.createElement("canvas");
   cv.width = W; cv.height = H;
   const x = cv.getContext("2d");
@@ -4467,23 +4492,47 @@ function drawClip(slug, id, d, courtName, theme, note, url, ser){
      value holds until the next recorded change, including out to the right edge
      — which is what "nothing has changed since" looks like. */
   if(hasSer){
-    const cap = titleBottom + 40, top = cap + 16, bot = BAR_Y - 30;
+    /* Room is taken from the top, not the bottom: the dates need a line of
+       their own and a three-line title can leave only ~54px of plot, so every
+       anchor below is derived rather than guessed at. */
+    const cap = titleBottom + 38, top = cap + 14;
+    const dateY = BAR_Y - 26, bot = dateY - 22;
     const pts = ser.pts.filter(q => q[1] != null);
-    if(bot - top >= 56){
-      const L = 56, R = W - 56;
-      const x0 = pts[0][0], x1 = Math.max(pts[pts.length-1][0], x0 + 1);
-      const px = h => L + (R - L) * ((h - x0) / (x1 - x0));
+    if(bot - top >= 44){
+      // PR, not R: the scale labels live in the last 52px, and mapping the
+      // domain to the full width drew the line and its end dot straight through
+      // them.
+      const L = 56, R = W - 56, PR = R - 62;
+      const nowH = tl && tl.now ? tl.now.h : null;
+      const at = tl && tl.answered ? tl.answered.h : null;
+      // THE DOMAIN RUNS TO NOW, not to the last change. Change-only samples mean
+      // the last row can be days old while the value still holds; ending the
+      // axis there labelled the right edge with the last CHANGE and drew the
+      // line to it anyway, so the flat "nothing since" stretch was invisible and
+      // the date under it was wrong.
+      const x0 = pts[0][0];
+      let x1 = pts[pts.length - 1][0];
+      if(nowH != null && nowH > x1) x1 = nowH;
+      if(at != null && at > x1) x1 = at;
+      x1 = Math.max(x1, x0 + 1);
+      const px = h => L + (PR - L) * ((h - x0) / (x1 - x0));
       const py = p => bot - (bot - top) * (p / 100);
-      // 50% is the only reference worth drawing: it is where the two sides are
-      // level, and every claim's line means something different against it.
-      x.strokeStyle = dark ? "#2a303a" : "#e6e8ec"; x.lineWidth = 2;
-      x.setLineDash([6, 6]);
-      x.beginPath(); x.moveTo(L, py(50)); x.lineTo(R, py(50)); x.stroke();
-      x.setLineDash([]);
+      // A SCALE, not just a shape. One dashed line at 50 said "which side is
+      // ahead" and nothing about by how much; 25 and 75 make the distance
+      // readable, and the numbers say what the gridlines are.
+      x.lineWidth = 2; x.font = "500 19px ui-sans-serif,system-ui,sans-serif";
+      for(const g of [25, 50, 75]){
+        x.strokeStyle = dark ? "#242a34" : "#eceef2";
+        if(g === 50) x.strokeStyle = dark ? "#2f3641" : "#e0e3e9";
+        x.setLineDash(g === 50 ? [6, 6] : [3, 7]);
+        x.beginPath(); x.moveTo(L, py(g)); x.lineTo(PR, py(g)); x.stroke();
+        x.setLineDash([]);
+        x.fillStyle = mut; x.fillText(g + "%", PR + 12, py(g) + 6);
+      }
       const step = [];
       for(let i = 0; i < pts.length; i++){
         step.push([px(pts[i][0]), py(pts[i][1])]);
-        const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : R;
+        const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : PR;
         step.push([nx, py(pts[i][1])]);
       }
       x.fillStyle = dark ? "rgba(111,192,165,.16)" : "rgba(28,101,81,.10)";
@@ -4494,14 +4543,49 @@ function drawClip(slug, id, d, courtName, theme, note, url, ser){
       x.beginPath(); x.moveTo(step[0][0], step[0][1]);
       for(const [sx, sy] of step) x.lineTo(sx, sy);
       x.stroke();
-      // The last recorded value, named. A line with no number on it is a mood.
-      const last = pts[pts.length-1][1];
+      // WHERE THE RECORD STOPS. Staking freezes when an answer posts, so a flat
+      // tail after that height is the realm refusing writes, not a market gone
+      // quiet. Unmarked, the two look identical.
+      if(at != null && at > x0 && at <= x1){
+        x.strokeStyle = mut; x.lineWidth = 2; x.setLineDash([4, 5]);
+        x.beginPath(); x.moveTo(px(at), top); x.lineTo(px(at), bot); x.stroke();
+        x.setLineDash([]);
+        // Along the floor, not at the top: the line lives up near its own value
+        // and the label was drawn straight through it.
+        x.font = "500 18px ui-sans-serif,system-ui,sans-serif"; x.fillStyle = mut;
+        const lab = "answered — staking frozen";
+        const lx = Math.min(px(at) + 8, PR - x.measureText(lab).width);
+        x.fillText(lab, Math.max(L, lx), bot - 8);
+      }
+      const last = pts[pts.length - 1][1];
       x.fillStyle = yes;
-      x.beginPath(); x.arc(R, py(last), 7, 0, Math.PI*2); x.fill();
+      x.beginPath(); x.arc(step[step.length-1][0], py(last), 7, 0, Math.PI*2); x.fill();
+      // the caption carries the units so the axis does not have to
       x.font = "500 21px ui-sans-serif,system-ui,sans-serif";
       x.fillStyle = mut;
       x.fillText("share of stake on YES, as the chain recorded it", L, cap);
+      // THE DATES. Without them the shape had no when: a reader could not tell a
+      // week from a season. Drawn from the timeline's own now:<unix>:<height>.
+      const dt = heightDater(tl);
+      x.font = "400 19px ui-monospace,Menlo,monospace"; x.fillStyle = mut;
+      if(dt){
+        const a = stampDate(dt(x0)), b2 = stampDate(dt(x1));
+        x.fillText(a, L, dateY);
+        x.fillText(b2, PR - x.measureText(b2).width, dateY);
+      } else {
+        // no anchor: say what the axis IS rather than dating it wrongly
+        const a = "block " + fmtN(x0), b2 = "block " + fmtN(x1);
+        x.fillText(a, L, dateY);
+        x.fillText(b2, PR - x.measureText(b2).width, dateY);
+      }
     }
+  }
+  if(!hasSer && d){
+    // Not every claim has one: an older deployment has no ClaimSeries at all,
+    // and a claim nobody has staked twice has nothing to plot. Saying so beats
+    // a silent gap where a chart obviously belongs.
+    x.font = "400 21px ui-sans-serif,system-ui,sans-serif"; x.fillStyle = mut;
+    x.fillText("no recorded path for this claim yet", 56, titleBottom + 44);
   }
   if(d && (d.yesStake || d.noStake)){
     const tot = Math.max(1, (d.yesStake || 0) + (d.noStake || 0));
@@ -4626,11 +4710,20 @@ function embedActions(d, slug, id){
   return `<div class="eacts">${one("yes", "Stake YES", py, "y")}`
        + `${one("no", "Stake NO", py == null ? null : 100 - py, "n")}</div>`;
 }
-function embedSpark(ser){
+function embedSpark(ser, tl){
   if(!ser || !ser.pts) return "";
   const pts = ser.pts.filter(q => q[1] != null);
   if(pts.length < 2) return "";
-  const W = 300, H = 52, x0 = pts[0][0], x1 = Math.max(pts[pts.length-1][0], x0 + 1);
+  const W = 300, H = 56;
+  const nowH = tl && tl.now ? tl.now.h : null;
+  const at = tl && tl.answered ? tl.answered.h : null;
+  // Same domain rule as the clip: to NOW, not to the last change, or the flat
+  // "nothing since" stretch is invisible and the date under it is wrong.
+  const x0 = pts[0][0];
+  let x1 = pts[pts.length - 1][0];
+  if(nowH != null && nowH > x1) x1 = nowH;
+  if(at != null && at > x1) x1 = at;
+  x1 = Math.max(x1, x0 + 1);
   const px = h => +(((h - x0) / (x1 - x0)) * W).toFixed(1);
   const py = p => +(H - (p / 100) * H).toFixed(1);
   let dd = "";
@@ -4640,14 +4733,29 @@ function embedSpark(ser){
     const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : W;
     dd += `L${nx} ${Y}`;
   }
-  const last = py(pts[pts.length-1][1]);
-  return `<svg class="espark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
-      aria-label="share of stake on YES over time, as the chain recorded it">
-      <line x1="0" y1="${py(50)}" x2="${W}" y2="${py(50)}" class="e50"/>
-      <path d="${dd}L${W} ${H}L0 ${H}Z" class="efill"/>
-      <path d="${dd}" class="eline"/>
-      <circle cx="${W}" cy="${last}" r="3.2" class="edot"/>
-    </svg>`;
+  const last = pts[pts.length - 1][1];
+  // A scale, not just a shape: 25 and 75 make the distance from level readable.
+  const grid = [25, 50, 75].map(g =>
+    `<line x1="0" y1="${py(g)}" x2="${W}" y2="${py(g)}" class="${g === 50 ? "e50" : "e25"}"/>`).join("");
+  const froze = (at != null && at > x0 && at <= x1)
+    ? `<line x1="${px(at)}" y1="0" x2="${px(at)}" y2="${H}" class="efroze"/>` : "";
+  const dt = heightDater(tl);
+  // THE DATES. Without them the shape had no when — a reader could not tell a
+  // week from a season. From the timeline's own now:<unix>:<height>, or the
+  // block numbers when there is no anchor, which is honest rather than wrong.
+  const lo = dt ? stampDate(dt(x0)) : "block " + fmtN(x0);
+  const hi = dt ? stampDate(dt(x1)) : "block " + fmtN(x1);
+  return `<div class="esparkwrap">
+      <svg class="espark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+        aria-label="share of stake on YES from ${esc(lo)} to ${esc(hi)}, ${last.toFixed(1)}% now, as the chain recorded it">
+        ${grid}
+        <path d="${dd}L${W} ${H}L0 ${H}Z" class="efill"/>
+        <path d="${dd}" class="eline"/>
+        ${froze}
+        <circle cx="${W}" cy="${py(last)}" r="3.2" class="edot"/>
+      </svg>
+      <div class="espan"><span>${esc(lo)}</span>${froze ? `<span class="efrozelab">answered — staking frozen</span>` : ""}<span>${esc(hi)}</span></div>
+    </div>`;
 }
 
 async function embedClaimView(slug, idS){
@@ -4655,20 +4763,24 @@ async function embedClaimView(slug, idS){
   const id = parseInt(idS, 10);
   const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
                                            claimDetail(slug, id), sourceNote()]);
-  const ser = d ? await claimSeries(slug, id, d).catch(()=>null) : null;
+  // claimDetail carries the timeline only in demo mode, so this used to be
+  // parseTimeline(d.timeline) — which meant a LIVE embed had no dates at all,
+  // neither on the chart nor on "filed". One helper, both modes.
+  const [ser, tl] = d ? await Promise.all([claimSeries(slug, id, d).catch(()=>null),
+                                           claimTimeline(slug, id, d).catch(()=>null)])
+                      : [null, null];
   if(!d){
     main.innerHTML = `<div class="emb"><p class="estat">No claim ${esc(slug)}/${esc(idS)} on this source.</p>
       ${esrc(note)}
       <div class="efoot"><span></span><a href="${embedBackHref("/")}" target="_blank" rel="noopener">Kourt →</a></div></div>`;
     return;
   }
-  const tl = parseTimeline(d.timeline);
   const when = tl && tl.opened ? stampDate(tl.opened.t) : null;
   main.innerHTML = `<div class="emb">
       <div class="ehead">${embedLink("/c/" + slug, esc(ccSym(slug)))}<span>·</span>
         ${embedLink("/c/" + slug, esc(cs ? cs.name : slug), "elink ename")}<span>·</span><span>#${id}</span></div>
       <h3 class="etitle">${embedLink("/c/" + slug + "/" + id, safeInline(d.title))}</h3>
-      ${embedSpark(ser)}
+      ${embedSpark(ser, tl)}
       ${stakeBar(d, slug)}
       <div class="estat">${esc(d.statusText || "")}</div>
       ${esrc(note)}

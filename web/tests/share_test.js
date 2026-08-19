@@ -28,14 +28,24 @@ function slice(from, to){
 // A canvas that records instead of painting, so the clip's geometry is
 // checkable without a browser. measureText is proportional to the text so the
 // title wrap is exercised rather than short-circuited.
-let RECT = [], TEXT = [];
+let RECT = [], TEXT = [], STROKES = [], DOTS = [], FILLS = [];
 function fakeCanvas(){
   return {width:0, height:0, getContext: ()=>({
     set fillStyle(v){ this._f = v; }, get fillStyle(){ return this._f; },
     set font(v){ this._n = v; }, get font(){ return this._n; },
+    set strokeStyle(v){ this._s = v; }, get strokeStyle(){ return this._s; },
+    set lineWidth(v){ this._w = v; }, get lineWidth(){ return this._w; },
+    set lineJoin(v){ this._j = v; }, get lineJoin(){ return this._j; },
     fillRect:(x,y,w,h)=>RECT.push({x,y,w,h}),
-    fillText:(t,x,y)=>TEXT.push({t,x,y}),
+    fillText(t,x,y){ TEXT.push({t,x,y,f:this._n}); },
     measureText:t=>({width: t.length * 22}),
+    // the chart's stroke path — recorded, not drawn
+    setLineDash(d){ this._d = d; }, beginPath(){ this._p = []; },
+    moveTo(x,y){ (this._p = this._p || []).push([x,y]); },
+    lineTo(x,y){ (this._p = this._p || []).push([x,y]); },
+    closePath(){}, arc(x,y,r){ DOTS.push({x,y,r}); },
+    stroke(){ STROKES.push({pts:(this._p||[]).slice(), dash:this._d, w:this._w, s:this._s}); },
+    fill(){ FILLS.push({pts:(this._p||[]).slice(), s:this._f}); },
   })};
 }
 global.document = { createElement: t => t === "canvas" ? fakeCanvas() : {} };
@@ -47,6 +57,9 @@ code += slice('function fmtN(', 'function ugnot(');
 code += slice('function ccSym(', 'function ugnot(');
 code += slice('function esc(', 'function unesc(');
 code += 'function safeInline(s){ return esc(s); }\n';
+code += slice('const MON=', 'function sinceWords(');
+code += slice('function heightDater(', 'async function claimTimeline(');
+code += 'const BLOCK_SECS = 5;\n';
 code += slice('function shareDialog(', '/* ================================ embeds');
 code += slice('function embedTheme(', 'async function embedClaimView(');
 eval(code);
@@ -62,7 +75,7 @@ ok("iframe declares a title for screen readers", /title="Kourt — orem #1"/.tes
 // NOT Polymarket's 400x400 — that is square because their card holds a chart.
 // Ours holds a sentence and a bar, and the height is what measuring every card
 // in the sample at 320px wide produced. See tests/browser/embed_layout.js.
-ok("a claim card is sized to the card, 400x450", /width="400" height="450"/.test(snip));
+ok("a claim card is sized to the card, 400x480", /width="400" height="480"/.test(snip));
 ok("iframe cannot outgrow its column", /max-width:100%/.test(snip));
 
 const court = embedSnippet("orem", null, {});
@@ -137,7 +150,7 @@ ok("the sweep is armed", BANNED.test("live odds, updating in place")
    && BANNED.test("cash out") && !BANNED.test("the stake split stays current"));
 
 // --- the clip -------------------------------------------------------------
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 1, {title:"The county certified 12,412 mail ballots on Nov 6, 2025.",
                      yesStake: 300, noStake: 100, statusText: "open — stake YES or NO"},
          "Orem Truth Court", "light");
@@ -150,7 +163,10 @@ ok("clip names the court and the id", joined.includes("Orem Truth Court") && joi
 // y>330 and the tail is only drawn if it still fits. Assert the lines REJOIN
 // to the original title, not merely that there is more than one of them.
 const TITLE = "The county certified 12,412 mail ballots on Nov 6, 2025.";
-const tlines = TEXT.filter(t=>t.y >= 150 && t.y <= 360).map(t=>t.t);
+// ui-serif, not serif: "ui-sans-serif" contains "serif" and swept up
+// the caption lines with the title.
+const TITLEF = /ui-serif/;
+const tlines = TEXT.filter(t=>TITLEF.test(t.f||"")).map(t=>t.t);
 ok("clip wraps the title over more than one line", tlines.length >= 2);
 ok("wrapping drops no words", tlines.join(" ") === TITLE);
 ok("clip states the split", joined.includes("YES 75.0%") && joined.includes("NO 25.0%"));
@@ -164,12 +180,12 @@ ok("the segments span the same width as the text", Math.abs(bars[0].w + bars[1].
 // A title too long for the card must be MARKED as cut. Silent truncation of a
 // verbatim claim is the one failure here that changes what the claim says:
 // drop a trailing qualifier and a hedged statement reads as a flat assertion.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 const LONG = ("The county certified twelve thousand four hundred and twelve mail ballots on the "
   + "sixth of November two thousand twenty five, according to a preliminary count that the "
   + "clerk has not yet reconciled against the poll books.");
 drawClip("orem", 9, {title: LONG, yesStake:1, noStake:1, statusText:"open"}, "Orem Truth Court", "light");
-const long_lines = TEXT.filter(t=>t.y >= 150 && t.y <= 360).map(t=>t.t);
+const long_lines = TEXT.filter(t=>TITLEF.test(t.f||"")).map(t=>t.t);
 ok("a long title fills the space it has", long_lines.length === 3);
 ok("a cut title says it was cut", long_lines[2].endsWith("…"));
 ok("the cut line still fits the card", long_lines[2].length * 22 <= 1200 - 112);
@@ -177,7 +193,7 @@ ok("the shown part is a real prefix of the title",
    LONG.startsWith(long_lines.join(" ").replace(/…$/, "")));
 
 // The clip's own disclosure and address.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 1, {title:"T", yesStake:3, noStake:1, statusText:"open"}, "Orem Truth Court",
          "light", "sample data — these courts exist on no chain",
          "https://kourt.example/app/index.html");
@@ -196,7 +212,7 @@ ok("the disclosure starts at the text margin",
 // The band ends at 144. A title drawn at the no-note baseline would sit 8px off
 // it; with a note the title drops clear.
 ok("the title clears the disclosure band",
-   TEXT.filter(t=>/^T$/.test(t.t)).every(t=>t.y >= 200));
+   TEXT.filter(t=>/^T$/.test(t.t) && /ui-serif/.test(t.f||"")).every(t=>t.y >= 196));
 ok("the clip carries an address to check it",
    clipT.some(t=>t === "kourt.example/app/index.html"));
 ok("the address drops the protocol", !clipT.some(t=>/^https?:\/\//.test(t)));
@@ -208,7 +224,7 @@ ok("the status sits on its declared baseline", TEXT.some(t=>t.t === "open" && t.
 // file://, where shareURLBase() is a path inside the sharer's home directory —
 // and a PNG, once posted, cannot be recalled. drawClip refuses it even when the
 // caller passes it, because the call site is one edit away from forgetting.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 1, {title:"T", yesStake:1, noStake:1, statusText:"open"}, "C", "light", null,
          "file:///Users/someone/projects/kourt/web/index.html");
 ok("a file:// address is refused by drawClip itself",
@@ -219,7 +235,7 @@ ok("the call site refuses it too", src.includes("shareIsPublic() ? shareURLBase(
 ok("and says so, instead of handing over a dead local link",
    src.includes("only work on this machine"));
 // Nothing to disclose on an honest live chain: no note drawn, status stays put.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 1, {title:"T", yesStake:3, noStake:1, statusText:"open"}, "C", "light", null, null);
 ok("an honest chain draws no note", !TEXT.some(t=>/chain|sample/.test(t.t)));
 ok("and no band is painted for it", !RECT.some(r=>r.y === 96));
@@ -227,11 +243,11 @@ ok("and no address line", TEXT.filter(t=>t.y > 630-60).length === 1);
 
 // A single long token on the last line used to empty on the word-shave pass,
 // fall back to the un-shortened line, and overflow with the ellipsis attached.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 1, {title: "one two three four five six seven eight nine ten eleven twelve "
   + "thirteen fourteen fifteen sixteen " + "z".repeat(120), yesStake:1, noStake:1, statusText:"open"},
   "C", "light", null, null);
-const tl2 = TEXT.filter(t=>t.y >= 150 && t.y <= 360);
+const tl2 = TEXT.filter(t=>TITLEF.test(t.f||""));
 const lastLine = tl2.pop();
 // This case is NOT the cut path — the title is exactly three lines, so `cut` is
 // false and nothing in the truncation branch ever runs. The token still has to
@@ -241,12 +257,61 @@ ok("and every drawn line fits the card",
    tl2.concat([lastLine]).every(t=>t.t.length * 22 <= 1200 - 112),
    `widest=${Math.max(...tl2.concat([lastLine]).map(t=>t.t.length))}`);
 
+// THE CHART'S DETAIL. It was a line, a dashed 50% and a dot — a shape with no
+// WHEN and no scale, so a reader could not tell a week from a season nor read
+// how far from level the stake sat.
+// SELF-CONSISTENT, as a real timeline is: every t/h pair here sits on the same
+// 5s-per-block line through now. The first version of this fixture did not, and
+// the failure it produced looked like a charting bug rather than a bad fixture.
+//   now      4,800,000 @ 1787054400
+//   answered 4,790,000 = now - 10,000 blocks = now -    50,000s
+//   opened   4,700,000 = now - 100,000 blocks = now -   500,000s
+const TL = {opened:{t:1786554400,h:4700000}, answered:{t:1787004400,h:4790000},
+            now:{t:1787054400,h:4800000}};
+const SER = {pts:[[4700000,60,6,4],[4740000,72,9,4],[4780000,77,10,3]], firstH:4700000};
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
+drawClip("orem", 1, {title:"T", yesStake:10, noStake:3, statusText:"answered"}, "Orem Truth Court",
+         "light", null, null, SER, TL);
+const chartT = TEXT.map(t=>t.t);
+ok("the chart is dated at both ends",
+   chartT.includes(stampDate(TL.now.t)) && chartT.some(t=>/2026|2025/.test(t)),
+   JSON.stringify(chartT.filter(t=>/\d{4}$/.test(t))));
+// The domain runs to NOW, not to the last change: change-only samples mean the
+// last row can be days old while the value still holds.
+ok("the right edge is dated NOW, not the last change",
+   chartT.includes(stampDate(TL.now.t)), JSON.stringify(chartT));
+ok("the left edge is the first recorded sample",
+   chartT.includes(stampDate(1786554400)), JSON.stringify(chartT));
+ok("there is a readable scale, not just a midline",
+   ["25%","50%","75%"].every(g=>chartT.includes(g)));
+// Staking freezes when an answer posts, so a flat tail after that height is the
+// realm refusing writes — not a market gone quiet. Unmarked they look identical.
+ok("the chart marks where the record froze",
+   chartT.some(t=>/answered — staking frozen/.test(t)));
+ok("and the marker sits on the floor, clear of the line",
+   TEXT.some(t=>/staking frozen/.test(t.t) && t.y > 380), 
+   JSON.stringify(TEXT.filter(t=>/staking frozen/.test(t.t)).map(t=>t.y)));
+// No anchor: say what the axis IS rather than dating it wrongly.
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
+drawClip("orem", 1, {title:"T", yesStake:10, noStake:3, statusText:"open"}, "C",
+         "light", null, null, SER, null);
+ok("with no timeline it labels blocks rather than inventing dates",
+   TEXT.some(t=>/^block /.test(t.t)) && !TEXT.some(t=>/20\d\d$/.test(t.t)),
+   JSON.stringify(TEXT.map(t=>t.t).filter(t=>/block|20\d\d/.test(t))));
+// A claim with no series must say so rather than leaving a hole where a chart
+// obviously belongs.
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
+drawClip("orem", 1, {title:"T", yesStake:10, noStake:3, statusText:"open"}, "C", "light");
+ok("no series says so", TEXT.some(t=>/no recorded path/.test(t.t)));
+ok("and draws no axis for a chart that is not there",
+   !TEXT.some(t=>/^(25|50|75)%$/.test(t.t)));
+
 // A COURT NAME IS AS UNBOUNDED AS A CLAIM TITLE — whoever creates the court
 // types it. The first version of drawClip clamped the title and left the name
 // alone, and a 68-character name drew the identity line to 1606px on a 1200px
 // canvas: 400px off the edge, silently. The name gives way; the coin symbol and
 // the claim number are what a reader needs to find the claim again, so they stay.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 const LONGNAME = "Salt Lake County Consolidated Election Canvass Review Board of Record";
 drawClip("orem", 12345, {title:"T", yesStake:1, noStake:1, statusText:"open"}, LONGNAME,
          "light", null, null);
@@ -261,7 +326,7 @@ ok("nothing at all lands off the canvas",
    JSON.stringify(TEXT.map(t=>Math.round(t.x + t.t.length*22)).filter(w=>w>1160)));
 // A pathological SLUG can outgrow the line without the name being long at all,
 // so the composed string gets a last-resort pass of its own.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("a".repeat(90), 1, {title:"T", yesStake:1, noStake:1, statusText:"open"}, "C", "light", null, null);
 const idline2 = TEXT.find(t=>/^KOURT:A/.test(t.t));
 ok("a pathological slug is cut too", idline2 && idline2.t.length * 22 <= 1200 - 112,
@@ -269,13 +334,13 @@ ok("a pathological slug is cut too", idline2 && idline2.t.length * 22 <= 1200 - 
 
 // A claim nobody has staked must still produce a card, not a divide-by-zero
 // stripe or a crash.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 2, {title:"Unstaked.", yesStake:0, noStake:0, statusText:"open"}, "Orem Truth Court", "dark");
 ok("an unstaked claim draws no bar", RECT.filter(r=>r.y === 430).length === 0);
 ok("an unstaked claim still draws its title", TEXT.some(t=>t.t === "Unstaked."));
 
 // A court card has no claim and no stake at all.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", null, null, "Orem Truth Court", "light");
 ok("a court clip omits the claim id", !TEXT.map(t=>t.t).join(" ").includes("#"));
 ok("a court clip falls back to a truthful status",
@@ -283,7 +348,7 @@ ok("a court clip falls back to a truthful status",
 
 // A long status must be cut with an ellipsis rather than run off the canvas —
 // there is no layout engine here to catch it.
-RECT = []; TEXT = [];
+RECT = []; TEXT = []; STROKES = []; DOTS = []; FILLS = [];
 drawClip("orem", 3, {title:"T", yesStake:1, noStake:1, statusText:"x".repeat(200)}, "C", "light");
 ok("a long status is truncated", TEXT.some(t=>t.t.length === 78 && t.t.endsWith("…")));
 
@@ -403,8 +468,8 @@ ok("an honest live chain discloses nothing", /if\(st\) return "test chain[^"]*";
 ok("the page banner is suppressed inside an embed",
    /html\.embed #tcbanner\{display:none ?!important\}/.test(src));
 ok("all four embed paths carry it", (src.match(/\$\{esrc\(note\)\}/g) || []).length === 4);
-ok("the clip is handed the note, the address and the series",
-   src.includes('drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser)'));
+ok("the clip is handed the note, the address, the series and the timeline",
+   src.includes('drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser, tl)'));
 
 // --- link previews, and the promise not to fake one ------------------------
 ok("site-level og tags exist", src.includes('property="og:title"') && src.includes('property="og:description"'));
