@@ -10,10 +10,11 @@
 // that what the snippet points at is the right shape.
 //
 // The sizes are not arbitrary: they are exactly what embedSnippet() emits
-// (400x380 for a claim, 400x210 for a court) plus 320 wide, which is what a
+// (400x400 for a claim, 400x210 for a court) plus 320 wide, which is what a
 // phone gives a max-width:100% iframe in a narrow column. Those two defaults
-// were MEASURED WITH THE DISCLOSURE LINE SHOWING — every card in the sample at
-// 320px wide, tallest claim 369px and tallest court 197px — so `ledger/2 @320`
+// were MEASURED WITH THE DISCLOSURE LINE AND THE RECORDED-PATH SPARK SHOWING —
+// every card in the sample at 320px wide, tallest claim 383px and tallest court
+// 197px — so `ledger/2 @320`
 // below is not a spot check, it is the worst case that set the number.
 //
 // THE FIRST VERSION OF THIS FILE PASSED VACUOUSLY, and that is why the banner
@@ -26,17 +27,17 @@ const puppeteer = require('puppeteer');
 const PAGE = 'file://' + require('path').join(__dirname, '..', '..', 'index.html');
 
 const CASES = [
-  {name: "claim",  route: "#/embed/orem/1", w: 400, h: 380},
+  {name: "claim",  route: "#/embed/orem/1", w: 400, h: 400},
   {name: "court",  route: "#/embed/orem",   w: 400, h: 210},
-  {name: "claim@320", route: "#/embed/orem/1", w: 320, h: 380},
+  {name: "claim@320", route: "#/embed/orem/1", w: 320, h: 400},
   {name: "court@320", route: "#/embed/orem",  w: 320, h: 210},
   // the tallest card in the sample, in the narrowest column
-  {name: "tallest@320", route: "#/embed/ledger/2", w: 320, h: 380},
+  {name: "tallest@320", route: "#/embed/ledger/2", w: 320, h: 400},
   // and a claim whose title is long enough to hit the 4-line clamp
-  {name: "clamped@320", route: "#/embed/orem/7", w: 320, h: 380},
+  {name: "clamped@320", route: "#/embed/orem/7", w: 320, h: 400},
   // a card for something that is not there — the case where knowing WHICH
   // source was asked matters most
-  {name: "missing@320", route: "#/embed/orem/9999", w: 320, h: 380, missing: true},
+  {name: "missing@320", route: "#/embed/orem/9999", w: 320, h: 400, missing: true},
 ];
 
 (async () => {
@@ -154,11 +155,44 @@ const CASES = [
   ok("no theme leaves the reader's own in place", none.attr === null || none.attr === "",
      `attr=${none.attr}`);
 
+  // --- the recorded path, in the card ---------------------------------------
+  // A card showing only the final ratio throws away the thing worth quoting:
+  // that the stake moved. The spark is a fixed 52px so it cannot become a third
+  // unbounded term next to the title and the court name.
+  await page.setViewport({width: 400, height: 400});
+  await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
+  await page.reload({waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 600));
+  const spark = await page.evaluate(() => {
+    const sv = document.querySelector('.espark');
+    if(!sv) return {has:false};
+    const r = sv.getBoundingClientRect();
+    const line = sv.querySelector('.eline');
+    const dd = line ? line.getAttribute('d') : "";
+    // Step-after: the chain stores change-only samples, so every segment must be
+    // horizontal or vertical. A sloped segment would be interpolation — motion
+    // the chain never recorded.
+    const nums = (dd.match(/-?[\d.]+/g) || []).map(Number);
+    let sloped = 0;
+    for(let i = 2; i + 1 < nums.length; i += 2)
+      if(nums[i] !== nums[i-2] && nums[i+1] !== nums[i-1]) sloped++;
+    return {has:true, w:r.width, h:r.height, segs:(dd.match(/L/g)||[]).length, sloped,
+            labelled: !!sv.getAttribute('aria-label'),
+            fill: !!sv.querySelector('.efill'), ref: !!sv.querySelector('.e50')};
+  });
+  ok("the card draws the recorded path", spark.has);
+  ok("it spans the card", spark.w >= 300, `w=${Math.round(spark.w||0)}`);
+  ok("its height is fixed at 52px", Math.round(spark.h) === 52, `h=${spark.h}`);
+  ok("it has more than one segment", spark.segs > 2, `segs=${spark.segs}`);
+  ok("every segment is a step, never a slope", spark.sloped === 0, `sloped=${spark.sloped}`);
+  ok("it carries the 50% reference", spark.ref);
+  ok("and a label for a screen reader", spark.labelled);
+
   // --- a court name is whatever its creator typed ---------------------------
   // .ehead was flex-wrap:wrap, so a long name turned a one-line head into three
   // and pushed the card 9px past the iframe it was sized for. Measured, not
   // reasoned about: this injects the name and re-renders.
-  await page.setViewport({width: 320, height: 380});
+  await page.setViewport({width: 320, height: 400});  // the snippet's own claim height
   await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 500));
   const longName = await page.evaluate(async () => {
@@ -182,11 +216,11 @@ const CASES = [
 
   // --- the page banner must not be able to reach an embed -------------------
   // On a seeded chain paintTestClockBanner() paints a paragraph on every route.
-  // Inside a 400x380 card that paragraph was 108px and pushed "Open on Kourt"
+  // Inside a 400x400 card that paragraph was 108px and pushed "Open on Kourt"
   // out of sight. The card now carries the short form and the banner is
   // suppressed; this forces the banner's markup in to prove the suppression is
   // real rather than a demo-mode accident.
-  await page.setViewport({width: 400, height: 380});
+  await page.setViewport({width: 400, height: 400});  // the snippet's own claim height
   await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
   await page.reload({waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 500));

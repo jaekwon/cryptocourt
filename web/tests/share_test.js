@@ -62,7 +62,7 @@ ok("iframe declares a title for screen readers", /title="Kourt — orem #1"/.tes
 // NOT Polymarket's 400x400 — that is square because their card holds a chart.
 // Ours holds a sentence and a bar, and the height is what measuring every card
 // in the sample at 320px wide produced. See tests/browser/embed_layout.js.
-ok("a claim card is sized to the card, 400x380", /width="400" height="380"/.test(snip));
+ok("a claim card is sized to the card, 400x400", /width="400" height="400"/.test(snip));
 ok("iframe cannot outgrow its column", /max-width:100%/.test(snip));
 
 const court = embedSnippet("orem", null, {});
@@ -101,7 +101,20 @@ ok("clip status is announced", dlg.includes('id="clip-say"') && dlg.includes('ar
 // by the very page rendering the dialog.
 ok("the snippet is escaped, not live markup", dlg.includes("&lt;iframe") && !/<iframe/.test(dlg));
 ok("dialog says why the theme buttons exist", /an iframe cannot see it/.test(dlg));
-ok("dialog is honest that the PNG is drawn locally", /no server to generate one/.test(dlg));
+// The old wording — "drawn here in your browser — this page has no server to
+// generate one" — read as self-contradictory, because the page plainly DOES
+// generate one. What it cannot do is have a server hand one to a crawler.
+ok("dialog says the browser draws it", /Your browser draws it/.test(dlg));
+ok("dialog separates that from the automatic preview it cannot make",
+   /<em>automatic<\/em> preview would have to be\s+built by a server/.test(dlg));
+ok("dialog no longer claims it cannot generate one", !/no server to generate one/.test(dlg));
+// And you can SEE it before you send it: it used to download unseen.
+ok("the dialog shows a preview", dlg.includes('id="clip-prev"'));
+ok("the preview is painted when the panel opens",
+   src.includes(`ev.target.closest('[data-help="share-dlg"]')`) && src.includes("paintClipPreview()"));
+ok("the preview and the buttons share one build path",
+   src.includes("async function buildClip()")
+   && (src.match(/await buildClip\(\)/g) || []).length === 2);
 // §7.4, and the reason this list is longer than it was. The first version of
 // this sweep checked bet/wager/cash-out and MISSED the word actually in the
 // copy: "Live odds, updating in place" — imported from Polymarket along with
@@ -187,8 +200,10 @@ ok("the title clears the disclosure band",
 ok("the clip carries an address to check it",
    clipT.some(t=>t === "kourt.example/app/index.html"));
 ok("the address drops the protocol", !clipT.some(t=>/^https?:\/\//.test(t)));
-ok("the status moves up to make room",
-   TEXT.some(t=>t.t === "open" && t.y < 630 - 60));
+// The card now has one declared vertical rhythm, so the status sits at a fixed
+// baseline whether or not a chart pushed the bar down. The first version keyed
+// it off H and left the YES/NO labels sitting ON the bar once the chart moved it.
+ok("the status sits on its declared baseline", TEXT.some(t=>t.t === "open" && t.y === 584));
 // A LOCAL PATH MUST NEVER REACH THE CANVAS. web/README.md invites running from
 // file://, where shareURLBase() is a path inside the sharer's home directory —
 // and a PNG, once posted, cannot be recalled. drawClip refuses it even when the
@@ -198,8 +213,8 @@ drawClip("orem", 1, {title:"T", yesStake:1, noStake:1, statusText:"open"}, "C", 
          "file:///Users/someone/projects/kourt/web/index.html");
 ok("a file:// address is refused by drawClip itself",
    !TEXT.some(t=>/Users|file:|\.html/.test(t.t)), JSON.stringify(TEXT.map(t=>t.t)));
-ok("and the status moves back down when there is no address",
-   TEXT.some(t=>t.t === "open" && t.y === 630 - 52));
+ok("the status baseline does not move with the address",
+   TEXT.some(t=>t.t === "open" && t.y === 584));
 ok("the call site refuses it too", src.includes("shareIsPublic() ? shareURLBase()"));
 ok("and says so, instead of handing over a dead local link",
    src.includes("only work on this machine"));
@@ -349,8 +364,8 @@ ok("an honest live chain discloses nothing", /if\(st\) return "test chain[^"]*";
 ok("the page banner is suppressed inside an embed",
    /html\.embed #tcbanner\{display:none ?!important\}/.test(src));
 ok("all four embed paths carry it", (src.match(/\$\{esrc\(note\)\}/g) || []).length === 4);
-ok("the clip is handed the note and the address",
-   src.includes("drawClip(slug, id, d, cs ? cs.name : slug, isDark ? \"dark\" : \"light\", note, url)"));
+ok("the clip is handed the note, the address and the series",
+   src.includes('drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser)'));
 
 // --- link previews, and the promise not to fake one ------------------------
 ok("site-level og tags exist", src.includes('property="og:title"') && src.includes('property="og:description"'));

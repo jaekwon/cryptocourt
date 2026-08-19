@@ -281,6 +281,13 @@ html.embed #tcbanner{grid-column:1; padding:0}
   font-weight:600; margin:0; display:-webkit-box; -webkit-line-clamp:4;
   -webkit-box-orient:vertical; overflow:hidden}
 .emb .estat{font-size:12.5px; color:var(--ink-2)}
+.emb .espark{width:100%; height:52px; display:block; overflow:visible}
+.emb .espark .e50{stroke:var(--line-2); stroke-width:1; stroke-dasharray:3 3;
+  vector-effect:non-scaling-stroke}
+.emb .espark .eline{fill:none; stroke:var(--good); stroke-width:2;
+  vector-effect:non-scaling-stroke; stroke-linejoin:round}
+.emb .espark .efill{fill:var(--good); opacity:.10; stroke:none}
+.emb .espark .edot{fill:var(--good); vector-effect:non-scaling-stroke}
 .emb .efoot{margin-top:auto; display:flex; justify-content:space-between; align-items:baseline;
   gap:10px; font-size:11.5px}
 .emb .efoot a{color:var(--accent-2); text-decoration:none; font-weight:600}
@@ -536,6 +543,10 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .cliblock.copied{outline:2px solid var(--good)}
 #share-dlg .cliblock{white-space:pre-wrap; word-break:break-all; max-width:100%}
 #share-dlg h4{margin:14px 0 2px}
+/* You could not see the thing you were about to send. It downloaded unseen. */
+.clipprev{margin:0 0 10px; border:1px solid var(--line-2); border-radius:var(--r-sm);
+  overflow:hidden; background:var(--inset); min-height:40px}
+.clipprev img{display:block; width:100%; height:auto}
 #share-dlg h4 .hint{font-weight:400; font-size:10.5px; letter-spacing:.06em;
   font-family:var(--mono); color:var(--muted); margin-left:8px; text-transform:none}
 .signbtn{font-size:11.5px; color:var(--accent-2); border:1px solid var(--accent);
@@ -1495,6 +1506,30 @@ document.addEventListener("click", ev=>{
   if(close){ close.closest("dialog").close(); return; }
   if(ev.target.matches("dialog.helper")) ev.target.close(); // the backdrop is the dialog itself
 });
+/* ONE path from the route to the picture, used by the preview and by both
+   buttons. Built separately they could drift, and the whole point of showing a
+   preview is that it is the file you are about to send. */
+async function buildClip(){
+  const m = location.hash.match(/^#\/c\/([a-z0-9-]+)(?:\/(\d+))?/);
+  if(!m) return null;
+  const slug = m[1], id = m[2] ? parseInt(m[2], 10) : null;
+  const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
+                                           id == null ? Promise.resolve(null) : claimDetail(slug, id),
+                                           sourceNote()]);
+  const ser = (id == null) ? null : await claimSeries(slug, id, d).catch(()=>null);
+  const bg = getComputedStyle(document.body).backgroundColor.match(/^rgb\((\d+)/);
+  const isDark = bg && parseInt(bg[1], 10) < 128;
+  const url = shareIsPublic() ? shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id) : null;
+  return {cv: drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser),
+          name: "kourt-" + slug + (id == null ? "" : "-" + id) + ".png"};
+}
+async function paintClipPreview(){
+  const img = document.getElementById("clip-prev");
+  if(!img) return;
+  try{ const b = await buildClip(); if(b) img.src = b.cv.toDataURL("image/png"); }
+  catch(e){ /* the buttons report their own failures; a blank slot is enough here */ }
+}
+
 /* Share panel: theme switch, copy, and the clip. Delegated like every other
    handler here, because the dialog is re-rendered with each claim. */
 /* Copy the way the CLI blocks above already do it. The Clipboard API needs a
@@ -1519,6 +1554,10 @@ function copyBlock(pre, btn){
 }
 
 document.addEventListener("click", async ev=>{
+  // The generic [data-help] handler opens the dialog; this fills the one thing
+  // it cannot know how to draw. Not an early return: the other branches below
+  // simply will not match this target.
+  if(ev.target.closest('[data-help="share-dlg"]')) paintClipPreview();
   const th = ev.target.closest("[data-embtheme]");
   if(th){
     const m = location.hash.match(/^#\/c\/([a-z0-9-]+)(?:\/(\d+))?/);
@@ -1550,18 +1589,10 @@ document.addEventListener("click", async ev=>{
   const clip = ev.target.closest("[data-clip]");
   if(!clip) return;
   const say = document.getElementById("clip-say");
-  const m = location.hash.match(/^#\/c\/([a-z0-9-]+)(?:\/(\d+))?/);
-  if(!m) return;
-  const slug = m[1], id = m[2] ? parseInt(m[2],10) : null;
   try{
-    const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
-                                             id == null ? Promise.resolve(null) : claimDetail(slug, id),
-                                             sourceNote()]);
-    const dark = getComputedStyle(document.body).backgroundColor.match(/^rgb\((\d+)/);
-    const isDark = dark && parseInt(dark[1],10) < 128;
-    const url = shareIsPublic() ? shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id) : null;
-    const cv = drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url);
-    const name = "kourt-" + slug + (id == null ? "" : "-" + id) + ".png";
+    const built = await buildClip();
+    if(!built){ if(say) say.textContent = "could not build the image"; return; }
+    const {cv, name} = built;
     if(clip.getAttribute("data-clip") === "download"){
       const a = document.createElement("a");
       a.download = name; a.href = cv.toDataURL("image/png"); a.click();
@@ -3339,6 +3370,15 @@ function mergeStakeSeries(hp,dp,nowHeight){
   const out=[]; for(const q of pts){ if(out.length&&out[out.length-1][0]===q[0]) out[out.length-1]=q; else out.push(q); }
   return {pts:out, firstH:out[0][0], capped};
 }
+/* The recorded path, for the two surfaces that are not the claim page.
+   The claim route builds this inline from pieces it already has; the clip and
+   the embed need the same thing without those pieces, and must not each grow
+   their own version of the live/demo split. */
+async function claimSeries(slug,id,d){
+  if(!isLive()) return mergeStakeSeries(parseStakeSeries(d&&d.seriesH), parseStakeSeries(d&&d.seriesD), NOW);
+  const nowH = await chainHeight();
+  return nowH==null? null : fetchStakeSeries(slug,id,nowH);
+}
 async function fetchStakeSeries(slug,id,nowHeight){
   const [hh,dd] = await Promise.all([
     one(`ClaimSeries(${gstr(slug)},${id},${gstr("hourly")})`).catch(()=>null),
@@ -4238,8 +4278,10 @@ function shareDialog(slug, id, d, courtName){
       <pre class="cliblock mono" id="emb-snip" data-copytext>${esc(embedSnippet(slug, id, {}))}</pre>
       <button type="button" class="copybtn" data-copyfor="emb-snip" aria-live="polite">Copy</button>
       <h4>Image</h4>
-      <p class="small muted" style="margin:0 0 6px">A 1200×630 PNG, drawn here in your browser — this page
-        has no server to generate one.</p>
+      <p class="small muted" style="margin:0 0 8px">A 1200×630 PNG — the size link previews are cropped to.
+        Your browser draws it, so you attach it yourself: an <em>automatic</em> preview would have to be
+        built by a server when a crawler asks, and this page has no server.</p>
+      <div class="clipprev"><img id="clip-prev" alt="the image this claim will share as"></div>
       <div class="actions">
         <button type="button" class="copybtn" data-clip="download">Download PNG</button>
         <button type="button" class="copybtn" data-clip="copy">Copy image</button>
@@ -4269,14 +4311,15 @@ function embedSnippet(slug, id, opts){
   // and no test-clock banner — which is exactly the state that cannot overflow,
   // so they were 40px short of every card a reader would actually see. Now:
   // every card in the sample, at 320px wide (the narrowest column an article
-  // gives a max-width:100% iframe), carrying .esrc — tallest claim 369px,
-  // tallest court 197px. The title is line-clamped so the dominant term is
-  // bounded; ../tests/browser/embed_layout.js pins both worst cases.
+  // gives a max-width:100% iframe), carrying .esrc AND the recorded-path spark
+  // — tallest claim 383px, tallest court 197px. The title is line-clamped and
+  // the spark is a fixed 52px, so both growing terms are bounded;
+  // ../tests/browser/embed_layout.js pins both worst cases.
   //
   // A live chain with an honest clock has nothing to disclose and so runs ~40px
   // short of these. That is the price of a fixed box: size for the card that
   // says the most, not the least.
-  const w = o.w || 400, h = o.h || (id == null ? 210 : 380);
+  const w = o.w || 400, h = o.h || (id == null ? 210 : 400);
   return `<iframe src="${src}" width="${w}" height="${h}" frameborder="0" `
        + `title="Kourt — ${id == null ? slug : slug + " #" + id}" `
        + `style="border:1px solid #ddd;border-radius:6px;max-width:100%"></iframe>`;
@@ -4285,7 +4328,7 @@ function embedSnippet(slug, id, opts){
 /* The clip. 1200x630 is the size every link unfurler crops to, so a reader who
    drops the PNG into a post gets the same framing they would have got from a
    generated preview — the one thing a serverless page cannot mint for itself. */
-function drawClip(slug, id, d, courtName, theme, note, url){
+function drawClip(slug, id, d, courtName, theme, note, url, ser){
   const W = 1200, H = 630, cv = document.createElement("canvas");
   cv.width = W; cv.height = H;
   const x = cv.getContext("2d");
@@ -4368,25 +4411,78 @@ function drawClip(slug, id, d, courtName, theme, note, url){
     while(/\s/.test(l) && !fits(l + "…")) l = l.replace(/\s*\S+$/, "");
     shown[MAXL-1] = fits(l + "…") ? l + "…" : shave(l);
   }
-  // The disclosure band ends at 144, so a title baseline of 190 puts the caps
-  // 8px off it and reads as crowded. There is dead space below to spend.
-  const titleY = note ? 214 : 190;
-  shown.forEach((l, i)=> x.fillText(l, 56, titleY + i * 64));
+  /* One vertical rhythm for the whole card, declared once. Everything below is
+     positioned from these rather than from H, because the chart moves the bar
+     and the first version left the YES/NO labels sitting ON the bar and the
+     caption on the title's descenders. */
+  const titleY = note ? 200 : 176, LINE = 62;
+  shown.forEach((l, i)=> x.fillText(l, 56, titleY + i * LINE));
+  const titleBottom = titleY + (shown.length - 1) * LINE + 16;
+  const hasSer = !!(ser && ser.pts && ser.pts.length > 1
+                    && ser.pts.filter(q => q[1] != null).length > 1);
+  const BAR_Y = hasSer ? 496 : 430;
+  const LABEL_Y = BAR_Y + 52;   // clear of the bar's 26px, not on it
+  const STATUS_Y = 584, URL_Y = 616;
 
+  /* THE RECORDED PATH. A bar says where the stake stands; the whole argument of
+     this court is that it MOVED, and a card that shows only the final ratio
+     throws away the part a reader would argue with. This is the same series the
+     claim page draws, drawn the same way:
+     STEP-AFTER, NOT INTERPOLATED. The chain stores change-only samples, so a
+     straight line between two points would draw motion that never happened. A
+     value holds until the next recorded change, including out to the right edge
+     — which is what "nothing has changed since" looks like. */
+  if(hasSer){
+    const cap = titleBottom + 40, top = cap + 16, bot = BAR_Y - 30;
+    const pts = ser.pts.filter(q => q[1] != null);
+    if(bot - top >= 56){
+      const L = 56, R = W - 56;
+      const x0 = pts[0][0], x1 = Math.max(pts[pts.length-1][0], x0 + 1);
+      const px = h => L + (R - L) * ((h - x0) / (x1 - x0));
+      const py = p => bot - (bot - top) * (p / 100);
+      // 50% is the only reference worth drawing: it is where the two sides are
+      // level, and every claim's line means something different against it.
+      x.strokeStyle = dark ? "#2a303a" : "#e6e8ec"; x.lineWidth = 2;
+      x.setLineDash([6, 6]);
+      x.beginPath(); x.moveTo(L, py(50)); x.lineTo(R, py(50)); x.stroke();
+      x.setLineDash([]);
+      const step = [];
+      for(let i = 0; i < pts.length; i++){
+        step.push([px(pts[i][0]), py(pts[i][1])]);
+        const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : R;
+        step.push([nx, py(pts[i][1])]);
+      }
+      x.fillStyle = dark ? "rgba(111,192,165,.16)" : "rgba(28,101,81,.10)";
+      x.beginPath(); x.moveTo(step[0][0], bot);
+      for(const [sx, sy] of step) x.lineTo(sx, sy);
+      x.lineTo(step[step.length-1][0], bot); x.closePath(); x.fill();
+      x.strokeStyle = yes; x.lineWidth = 4; x.lineJoin = "round";
+      x.beginPath(); x.moveTo(step[0][0], step[0][1]);
+      for(const [sx, sy] of step) x.lineTo(sx, sy);
+      x.stroke();
+      // The last recorded value, named. A line with no number on it is a mood.
+      const last = pts[pts.length-1][1];
+      x.fillStyle = yes;
+      x.beginPath(); x.arc(R, py(last), 7, 0, Math.PI*2); x.fill();
+      x.font = "500 21px ui-sans-serif,system-ui,sans-serif";
+      x.fillStyle = mut;
+      x.fillText("share of stake on YES, as the chain recorded it", L, cap);
+    }
+  }
   if(d && (d.yesStake || d.noStake)){
     const tot = Math.max(1, (d.yesStake || 0) + (d.noStake || 0));
-    const py = (d.yesStake || 0) / tot, barY = 430, barH = 26;
-    x.fillStyle = yes; x.fillRect(56, barY, (W - 112) * py, barH);
-    x.fillStyle = no;  x.fillRect(56 + (W - 112) * py, barY, (W - 112) * (1 - py), barH);
+    const py = (d.yesStake || 0) / tot, barH = 26;
+    x.fillStyle = yes; x.fillRect(56, BAR_Y, (W - 112) * py, barH);
+    x.fillStyle = no;  x.fillRect(56 + (W - 112) * py, BAR_Y, (W - 112) * (1 - py), barH);
     x.font = "600 30px ui-sans-serif,system-ui,sans-serif";
-    x.fillStyle = yes; x.fillText("YES " + (py * 100).toFixed(1) + "%", 56, barY + 70);
+    x.fillStyle = yes; x.fillText("YES " + (py * 100).toFixed(1) + "%", 56, LABEL_Y);
     const nt = "NO " + ((1 - py) * 100).toFixed(1) + "%";
-    x.fillStyle = no;  x.fillText(nt, W - 56 - x.measureText(nt).width, barY + 70);
+    x.fillStyle = no;  x.fillText(nt, W - 56 - x.measureText(nt).width, LABEL_Y);
   }
   x.fillStyle = mut; x.font = "400 24px ui-sans-serif,system-ui,sans-serif";
   const status = (d && d.statusText) ? d.statusText : "a court of claims of fact";
   const hasURL = url && /^https?:\/\//.test(String(url));
-  x.fillText(status.length > 78 ? status.slice(0, 77) + "…" : status, 56, H - (hasURL ? 92 : 52));
+  x.fillText(status.length > 78 ? status.slice(0, 77) + "…" : status, 56, STATUS_Y);
   // Where to check it. A card with no address is an assertion; a card with one
   // is a citation, and it is the only thing on the PNG a reader can follow.
   // Guarded here as well as at the call site. The leak is one-way: once the card
@@ -4396,7 +4492,7 @@ function drawClip(slug, id, d, courtName, theme, note, url){
     let u = String(url).replace(/^https?:\/\//, "");
     while(u.length > 12 && x.measureText(u).width > W - 112) u = u.slice(0, -2);
     x.fillStyle = mut;
-    x.fillText(u, 56, H - 46);
+    x.fillText(u, 56, URL_Y);
   }
   return cv;
 }
@@ -4445,11 +4541,42 @@ function embedBackHref(path){ return "#" + path + "?from=embed"; }
 
 const esrc = note => note ? `<div class="esrc">${esc(note)}</div>` : "";
 
+/* The recorded path, small. An embed that shows only the final ratio throws
+   away the thing worth quoting — that the stake MOVED — and it is the reason
+   Polymarket's card is square: theirs holds a chart. Same series and the same
+   step-after rendering as the claim page: the chain stores change-only samples,
+   so a sloped line between two of them would draw motion that never happened.
+   Its own viewBox scales to whatever column the iframe was given. */
+function embedSpark(ser){
+  if(!ser || !ser.pts) return "";
+  const pts = ser.pts.filter(q => q[1] != null);
+  if(pts.length < 2) return "";
+  const W = 300, H = 52, x0 = pts[0][0], x1 = Math.max(pts[pts.length-1][0], x0 + 1);
+  const px = h => +(((h - x0) / (x1 - x0)) * W).toFixed(1);
+  const py = p => +(H - (p / 100) * H).toFixed(1);
+  let dd = "";
+  for(let i = 0; i < pts.length; i++){
+    const X = px(pts[i][0]), Y = py(pts[i][1]);
+    dd += (i ? `L${X} ${Y}` : `M${X} ${Y}`);
+    const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : W;
+    dd += `L${nx} ${Y}`;
+  }
+  const last = py(pts[pts.length-1][1]);
+  return `<svg class="espark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+      aria-label="share of stake on YES over time, as the chain recorded it">
+      <line x1="0" y1="${py(50)}" x2="${W}" y2="${py(50)}" class="e50"/>
+      <path d="${dd}L${W} ${H}L0 ${H}Z" class="efill"/>
+      <path d="${dd}" class="eline"/>
+      <circle cx="${W}" cy="${last}" r="3.2" class="edot"/>
+    </svg>`;
+}
+
 async function embedClaimView(slug, idS){
   embedOpen();
   const id = parseInt(idS, 10);
   const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
                                            claimDetail(slug, id), sourceNote()]);
+  const ser = d ? await claimSeries(slug, id, d).catch(()=>null) : null;
   if(!d){
     main.innerHTML = `<div class="emb"><p class="estat">No claim ${esc(slug)}/${esc(idS)} on this source.</p>
       ${esrc(note)}
@@ -4462,6 +4589,7 @@ async function embedClaimView(slug, idS){
       <div class="ehead"><span>${esc(ccSym(slug))}</span><span>·</span>
         <span class="ename">${esc(cs ? cs.name : slug)}</span><span>·</span><span>#${id}</span></div>
       <h3 class="etitle">${safeInline(d.title)}</h3>
+      ${embedSpark(ser)}
       ${stakeBar(d, slug)}
       <div class="estat">${esc(d.statusText || "")}</div>
       ${esrc(note)}
