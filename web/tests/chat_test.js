@@ -693,6 +693,43 @@ function mkDoc() {
        bare.error.length > 0);
   }
 
+
+  /* ---- how the page decides there is a chat service at all -----------------
+     This file evaluates chat.js whole and does not otherwise read index.html;
+     it reads it here because the decision that the panel exists is made there.
+
+     Chat used to be off until CFG.chat named a service, under a deliberate
+     rule: a page opened out of somebody's Downloads folder must never start
+     posting to a host nobody named. Right for file://, and fatal once the page
+     is DEPLOYED — kourt.xyz served a court page with no chat box, because every
+     visitor would first have had to paste a URL into a settings panel. Nobody
+     does that. A SERVED origin is not a guess: the operator named it by
+     deploying there. */
+  {
+    const page = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "index.html"), "utf8");
+    ok("a served page defaults to its own origin",
+      page.includes('return /^https?:$/.test(location.protocol) ? location.origin : "";'));
+    ok("file:// still gets nothing, which is the case the rule was written for",
+      /defaultChatBase[\s\S]{0,200}location\.origin : ""/.test(page));
+    // THREE states, not two. Without the empty string surviving cleanCfg,
+    // clearing the field would hand the default straight back on reload.
+    ok("an explicit blank survives cleanCfg", page.includes('else if(c.chat==="") out.chat="";'));
+    ok("chatBase prefers an explicit value over the default",
+      page.includes("return (CFG.chat === undefined) ? defaultChatBase() : CFG.chat;"));
+    ok("clearing the field records the decision rather than deleting the key",
+      page.includes('CFG.chat = v || "";') && !page.includes("delete CFG.chat"));
+    // Resolved at mount, never stored: persisting it would pin the page to
+    // whichever host it was first opened from.
+    ok("the origin is never persisted", page.includes("{cfg: {...CFG, chat: chatBase()}"));
+    ok("the settings field says what it will use",
+      page.includes('chatin.placeholder = dflt ? dflt + "  (this site)"'));
+    // index.html loads exactly one local file, and the deploy must ship it.
+    const loads = [...page.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
+    ok("index.html loads only chat.js", loads.length === 1 && loads[0] === "chat.js",
+      JSON.stringify(loads));
+  }
+
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);
 })();

@@ -733,12 +733,33 @@ function cleanCfg(c){
     if(typeof c.chainid==="string" && /^[A-Za-z0-9._-]{1,32}$/.test(c.chainid)) out.chainid=c.chainid;
     if(typeof c.addr==="string" && /^g1[0-9a-z]{10,80}$/.test(c.addr)) out.addr=c.addr;
     if(c.theme==="light"||c.theme==="dark") out.theme=c.theme;
-    // The optional chat service (see CHAT.md). Absent is the default and means
-    // no chat at all rather than a guessed origin — the page must never start
-    // posting to a host nobody named.
+    // The optional chat service (see CHAT.md). THREE states, not two:
+    //   a URL   — that service
+    //   ""      — explicitly off; the reader cleared the field and it stays clear
+    //   absent  — never configured, so chatBase() decides (see below)
+    // The empty string has to survive cleanCfg or "off" would not persist and
+    // the default would come back on every reload.
     const ch=url(c.chat); if(ch) out.chat=ch;
+    else if(c.chat==="") out.chat="";
   }
   return out;
+}
+/* THE ONE ORIGIN THAT IS NOT A GUESS.
+   The rule above stands and is why this is not simply a default: a page opened
+   out of somebody's Downloads folder must never start posting to a host nobody
+   named. But when the page is SERVED over http(s) the host WAS named — by
+   whoever deployed it — and deploy/nginx.conf proxies /api/chat/ on that same
+   origin. Requiring every visitor to paste a URL into a settings panel does not
+   make that safer, it only makes chat dead for all of them, which is what the
+   owner found on kourt.xyz.
+   file:// has no origin and gets nothing, which is the case the rule was
+   written for. An explicit "" still wins: clearing the field turns chat off and
+   it stays off. */
+function defaultChatBase(){
+  return /^https?:$/.test(location.protocol) ? location.origin : "";
+}
+function chatBase(){
+  return (CFG.chat === undefined) ? defaultChatBase() : CFG.chat;
 }
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } },
@@ -2119,8 +2140,10 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   // through a paint, which would take the docket with it.
   if(typeof mountChat === "function"){
     if(CHATSTOP) CHATSTOP();
+    // Resolved here rather than written into CFG: persisting the origin would
+    // freeze the page to whichever host it was first opened from.
     CHATSTOP = mountChat(document.getElementById("courtchat"),
-      {cfg: CFG, chain: CFG.chainid || "dev", court: slug});
+      {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug});
   }
   QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
     total:totalClaims, slug, totalClaims, orderTail:" · newest first"};
@@ -5077,10 +5100,18 @@ function initControls(){
   // Blank clears it, which is how chat is turned off. re-render so the panel
   // appears or disappears without a reload.
   const chatin=document.getElementById("chat");
-  if(chatin){ chatin.value=CFG.chat||"";
+  if(chatin){
+    // Leave it empty and unsaved and the served origin is used; the placeholder
+    // says so, so the field is not a blank nobody knows how to fill.
+    const dflt = defaultChatBase();
+    chatin.placeholder = dflt ? dflt + "  (this site)" : "http://127.0.0.1:8791";
+    chatin.value = (CFG.chat === undefined) ? "" : CFG.chat;
     chatin.onchange=()=>{ const v=chatin.value.trim();
-      if(v) CFG.chat=v; else delete CFG.chat;
-      saveCfg(); chatin.value=CFG.chat||""; render(); }; }
+      // Blank is a DECISION now, not an absence: it turns chat off and stays
+      // off. Deleting the key would have handed it straight back to the
+      // default on the next render.
+      CFG.chat = v || "";
+      saveCfg(); chatin.value=CFG.chat; render(); }; }
   preset.onchange=()=>{ const pz=PRESETS[preset.value]; if(!pz) return;
     CFG.rpc=pz.rpc; CFG.gnoweb=pz.gnoweb; CFG.chainid=pz.chainid;
     rpc.value=pz.rpc; gnoweb.value=pz.gnoweb; chainid.value=pz.chainid;
