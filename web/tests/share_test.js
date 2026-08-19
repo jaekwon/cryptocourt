@@ -75,7 +75,7 @@ ok("iframe declares a title for screen readers", /title="Kourt — orem #1"/.tes
 // NOT Polymarket's 400x400 — that is square because their card holds a chart.
 // Ours holds a sentence and a bar, and the height is what measuring every card
 // in the sample at 320px wide produced. See tests/browser/embed_layout.js.
-ok("a claim card is sized to the card, 400x480", /width="400" height="480"/.test(snip));
+ok("a claim card is sized to the card, 400x500", /width="400" height="500"/.test(snip));
 ok("iframe cannot outgrow its column", /max-width:100%/.test(snip));
 
 const court = embedSnippet("orem", null, {});
@@ -219,7 +219,7 @@ ok("the address drops the protocol", !clipT.some(t=>/^https?:\/\//.test(t)));
 // The card now has one declared vertical rhythm, so the status sits at a fixed
 // baseline whether or not a chart pushed the bar down. The first version keyed
 // it off H and left the YES/NO labels sitting ON the bar once the chart moved it.
-ok("the status sits on its declared baseline", TEXT.some(t=>t.t === "open" && t.y === 584));
+ok("the status sits on its declared baseline", TEXT.some(t=>t.t === "open" && t.y === 586));
 // A LOCAL PATH MUST NEVER REACH THE CANVAS. web/README.md invites running from
 // file://, where shareURLBase() is a path inside the sharer's home directory —
 // and a PNG, once posted, cannot be recalled. drawClip refuses it even when the
@@ -230,7 +230,7 @@ drawClip("orem", 1, {title:"T", yesStake:1, noStake:1, statusText:"open"}, "C", 
 ok("a file:// address is refused by drawClip itself",
    !TEXT.some(t=>/Users|file:|\.html/.test(t.t)), JSON.stringify(TEXT.map(t=>t.t)));
 ok("the status baseline does not move with the address",
-   TEXT.some(t=>t.t === "open" && t.y === 584));
+   TEXT.some(t=>t.t === "open" && t.y === 586));
 ok("the call site refuses it too", src.includes("shareIsPublic() ? shareURLBase()"));
 ok("and says so, instead of handing over a dead local link",
    src.includes("only work on this machine"));
@@ -286,6 +286,13 @@ ok("there is a readable scale, not just a midline",
    ["25%","50%","75%"].every(g=>chartT.includes(g)));
 // Staking freezes when an answer posts, so a flat tail after that height is the
 // realm refusing writes — not a market gone quiet. Unmarked they look identical.
+// WHAT HAPPENED TO THE CLAIM, dated — the lane the claim page gives a whole
+// section to. Free: ClaimTimeline is already read for the chart's dates.
+ok("the clip carries the claim's events",
+   chartT.some(t=>/^opened \d+ \w+ {3}·/.test(t)), JSON.stringify(chartT.filter(t=>/opened/.test(t))));
+ok("past events and the pending deadline are both named",
+   chartT.some(t=>/opened /.test(t) && /answered /.test(t)), JSON.stringify(chartT.filter(t=>/opened/.test(t))));
+ok("the trail sits above the status", TEXT.some(t=>/^opened /.test(t.t) && t.y < 586));
 ok("the chart marks where the record froze",
    chartT.some(t=>/answered — staking frozen/.test(t)));
 ok("and the marker sits on the floor, clear of the line",

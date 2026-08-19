@@ -298,6 +298,15 @@ html.embed #tcbanner{grid-column:1; padding:0}
   font-weight:600; margin:0; display:-webkit-box; -webkit-line-clamp:4;
   -webkit-box-orient:vertical; overflow:hidden}
 .emb .estat{font-size:12.5px; color:var(--ink-2)}
+/* The claim's own events, dated. Wraps rather than truncating: a claim that has
+   been answered AND disputed AND reopened has more history than one line, and
+   the history is the point. */
+.emb .enopath{font-size:11px; color:var(--muted); font-style:italic}
+.emb .etrail{display:flex; flex-wrap:wrap; gap:2px 10px; font-size:11px; color:var(--ink-2)}
+.emb .etrail span{white-space:nowrap}
+.emb .etrail b{font-weight:600; color:var(--muted); font-weight:500}
+.emb .etrail .fut{color:var(--muted)}
+.emb .etrail .fut b{font-style:italic}
 .emb .esparkwrap{display:flex; flex-direction:column; gap:3px}
 .emb .espark{width:100%; height:56px; display:block; overflow:visible}
 .emb .espan{display:flex; justify-content:space-between; gap:6px; font-family:var(--mono);
@@ -3414,6 +3423,32 @@ function heightDater(tl){
   const aT = tl.now.t, aH = tl.now.h;
   return h => aT + (h - aH) * BLOCK_SECS;
 }
+/* WHAT HAS HAPPENED TO THIS CLAIM, dated — the lane the claim page devotes a
+   whole section to, compressed to one line.
+   It costs NOTHING extra: ClaimTimeline is already read for the chart's dates,
+   and it is the realm's own record of the claim's clock rather than anything
+   this page derives. Past events carry the block's own timestamp; `settle` and
+   `reopen` are the deadlines the realm will actually gate on, so they are
+   labelled as pending rather than as things that happened.
+   A zero stamp means the claim predates the timestamps and only its height is
+   knowable — those are dropped rather than dated to 1970. */
+function eventTrail(tl){
+  if(!tl) return [];
+  const out = [];
+  for(const [k, label] of [["opened","opened"], ["answered","answered"], ["verdict","verdict"]])
+    if(tl[k] && tl[k].t) out.push({label, t: tl[k].t, future: false});
+  if(tl.settle && tl.settle.t) out.push({label: "settles", t: tl.settle.t, future: true});
+  if(tl.reopen && tl.reopen.t) out.push({label: "reopenable to", t: tl.reopen.t, future: true});
+  return out;
+}
+/* Day and month; the year only when it is not this claim's "now" year, so a
+   trail that crosses a new year cannot be read a year out. */
+function stampShort(unix, nowT){
+  const dt = new Date(unix * 1000);
+  const day = `${dt.getUTCDate()} ${MON[dt.getUTCMonth()]}`;
+  const ny = nowT ? new Date(nowT * 1000).getUTCFullYear() : dt.getUTCFullYear();
+  return dt.getUTCFullYear() === ny ? day : `${day} ${dt.getUTCFullYear()}`;
+}
 async function claimTimeline(slug,id,d){
   if(!isLive()) return parseTimeline(d && d.timeline);
   return parseTimeline(await one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null));
@@ -4370,7 +4405,8 @@ function embedSnippet(slug, id, opts){
   // so they were 40px short of every card a reader would actually see. Now:
   // every card in the sample, at 320px wide (the narrowest column an article
   // gives a max-width:100% iframe), carrying .esrc, the recorded-path spark AND
-  // the two stake actions — tallest claim 453px, tallest court 197px. The title
+  // the two stake actions and the dated event trail — tallest claim 479px,
+  // tallest court 197px. The title
   // is line-clamped, the chart is a fixed 56px plus one line of dates, and the
   // actions are one row that never wraps, so every growing term is bounded;
   // ../tests/browser/embed_layout.js pins both worst cases.
@@ -4378,7 +4414,7 @@ function embedSnippet(slug, id, opts){
   // A live chain with an honest clock has nothing to disclose and so runs ~40px
   // short of these. That is the price of a fixed box: size for the card that
   // says the most, not the least.
-  const w = o.w || 400, h = o.h || (id == null ? 210 : 480);
+  const w = o.w || 400, h = o.h || (id == null ? 210 : 500);
   return `<iframe src="${src}" width="${w}" height="${h}" frameborder="0" `
        + `title="Kourt — ${id == null ? slug : slug + " #" + id}" `
        + `style="border:1px solid #ddd;border-radius:6px;max-width:100%"></iframe>`;
@@ -4480,8 +4516,8 @@ function drawClip(slug, id, d, courtName, theme, note, url, ser, tl){
   const hasSer = !!(ser && ser.pts && ser.pts.length > 1
                     && ser.pts.filter(q => q[1] != null).length > 1);
   const BAR_Y = hasSer ? 496 : 430;
-  const LABEL_Y = BAR_Y + 52;   // clear of the bar's 26px, not on it
-  const STATUS_Y = 584, URL_Y = 616;
+  const LABEL_Y = BAR_Y + 46;   // clear of the bar's 26px, and of the trail below
+  const TRAIL_Y = 556, STATUS_Y = 586, URL_Y = 616;
 
   /* THE RECORDED PATH. A bar says where the stake stands; the whole argument of
      this court is that it MOVED, and a card that shows only the final ratio
@@ -4598,8 +4634,22 @@ function drawClip(slug, id, d, courtName, theme, note, url, ser, tl){
     x.fillStyle = no;  x.fillText(nt, W - 56 - x.measureText(nt).width, LABEL_Y);
   }
   x.fillStyle = mut; x.font = "400 24px ui-sans-serif,system-ui,sans-serif";
+  // The claim's own events, dated — the same trail the card carries, on the one
+  // line there is room for. ABOVE the status, because the status is the
+  // conclusion and this is how it got there.
+  const trail = eventTrail(tl);
+  if(trail.length){
+    const nowT = tl && tl.now ? tl.now.t : null;
+    x.font = "400 21px ui-sans-serif,system-ui,sans-serif"; x.fillStyle = mut;
+    let line = trail.map(e => e.label + " " + stampShort(e.t, nowT)).join("   ·   ");
+    // drop whole events off the end rather than cutting a date in half
+    while(/·/.test(line) && x.measureText(line).width > W - 112)
+      line = line.replace(/\s*·\s*[^·]*$/, " …");
+    x.fillText(line, 56, TRAIL_Y);
+  }
   const status = (d && d.statusText) ? d.statusText : "a court of claims of fact";
   const hasURL = url && /^https?:\/\//.test(String(url));
+  x.fillStyle = mut; x.font = "400 24px ui-sans-serif,system-ui,sans-serif";
   x.fillText(status.length > 78 ? status.slice(0, 77) + "…" : status, 56, STATUS_Y);
   // Where to check it. A card with no address is an assertion; a card with one
   // is a citation, and it is the only thing on the PNG a reader can follow.
@@ -4710,10 +4760,22 @@ function embedActions(d, slug, id){
   return `<div class="eacts">${one("yes", "Stake YES", py, "y")}`
        + `${one("no", "Stake NO", py == null ? null : 100 - py, "n")}</div>`;
 }
+function embedTrail(tl){
+  const ev = eventTrail(tl);
+  if(!ev.length) return "";
+  const nowT = tl && tl.now ? tl.now.t : null;
+  return `<div class="etrail">` + ev.map(e =>
+    `<span class="${e.future ? "fut" : ""}"><b>${esc(e.label)}</b> ${esc(stampShort(e.t, nowT))}</span>`
+  ).join("") + `</div>`;
+}
 function embedSpark(ser, tl){
-  if(!ser || !ser.pts) return "";
+  // Say so, the way the clip does. An older deployment has no ClaimSeries at
+  // all and a claim staked once has nothing to plot; silently dropping the
+  // chart left the two cases looking like a rendering fault.
+  const none = `<div class="enopath">no recorded path for this claim yet</div>`;
+  if(!ser || !ser.pts) return none;
   const pts = ser.pts.filter(q => q[1] != null);
-  if(pts.length < 2) return "";
+  if(pts.length < 2) return none;
   const W = 300, H = 56;
   const nowH = tl && tl.now ? tl.now.h : null;
   const at = tl && tl.answered ? tl.answered.h : null;
@@ -4783,10 +4845,11 @@ async function embedClaimView(slug, idS){
       ${embedSpark(ser, tl)}
       ${stakeBar(d, slug)}
       <div class="estat">${esc(d.statusText || "")}</div>
+      ${embedTrail(tl)}
       ${esrc(note)}
       ${embedActions(d, slug, id)}
       <div class="efoot">
-        <span class="ewhen">${when ? "filed " + esc(when) : ""}</span>
+        <span class="ewhen">${when && !eventTrail(tl).length ? "filed " + esc(when) : ""}</span>
         <a href="${embedBackHref("/c/" + slug + "/" + id)}" target="_blank" rel="noopener">Open on Kourt →</a>
       </div>
     </div>`;

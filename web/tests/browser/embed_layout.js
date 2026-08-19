@@ -10,10 +10,10 @@
 // that what the snippet points at is the right shape.
 //
 // The sizes are not arbitrary: they are exactly what embedSnippet() emits
-// (400x480 for a claim, 400x210 for a court) plus 320 wide, which is what a
+// (400x500 for a claim, 400x210 for a court) plus 320 wide, which is what a
 // phone gives a max-width:100% iframe in a narrow column. Those two defaults
 // were MEASURED WITH THE DISCLOSURE LINE AND THE RECORDED-PATH SPARK SHOWING —
-// every card in the sample at 320px wide, tallest claim 453px and tallest court
+// every card in the sample at 320px wide, tallest claim 479px and tallest court
 // 197px — so `ledger/2 @320`
 // below is not a spot check, it is the worst case that set the number.
 //
@@ -27,17 +27,17 @@ const puppeteer = require('puppeteer');
 const PAGE = 'file://' + require('path').join(__dirname, '..', '..', 'index.html');
 
 const CASES = [
-  {name: "claim",  route: "#/embed/orem/1", w: 400, h: 480},
+  {name: "claim",  route: "#/embed/orem/1", w: 400, h: 500},
   {name: "court",  route: "#/embed/orem",   w: 400, h: 210},
-  {name: "claim@320", route: "#/embed/orem/1", w: 320, h: 480},
+  {name: "claim@320", route: "#/embed/orem/1", w: 320, h: 500},
   {name: "court@320", route: "#/embed/orem",  w: 320, h: 210},
   // the tallest card in the sample, in the narrowest column
-  {name: "tallest@320", route: "#/embed/ledger/2", w: 320, h: 480},
+  {name: "tallest@320", route: "#/embed/ledger/2", w: 320, h: 500},
   // and a claim whose title is long enough to hit the 4-line clamp
-  {name: "clamped@320", route: "#/embed/orem/7", w: 320, h: 480},
+  {name: "clamped@320", route: "#/embed/orem/7", w: 320, h: 500},
   // a card for something that is not there — the case where knowing WHICH
   // source was asked matters most
-  {name: "missing@320", route: "#/embed/orem/9999", w: 320, h: 480, missing: true},
+  {name: "missing@320", route: "#/embed/orem/9999", w: 320, h: 500, missing: true},
 ];
 
 (async () => {
@@ -142,7 +142,7 @@ const CASES = [
   // honoured when in fact the attribute was left over. An iframe's src never
   // changes in the field, so a real embed always gets the fresh load this forces.
   const bg = async (q) => {
-    await page.setViewport({width: 480, height: 400});
+    await page.setViewport({width: 500, height: 400});
     await page.goto(PAGE + "#/embed/orem/1" + q, {waitUntil: 'domcontentloaded'});
     await page.reload({waitUntil: 'domcontentloaded'});
     await new Promise(r => setTimeout(r, 400));
@@ -178,7 +178,7 @@ const CASES = [
   // on someone else's page is the last place for a wallet interaction — and
   // (c) appear ONLY while the claim is open, since staking freezes the moment
   // an answer posts and the realm would refuse the transaction.
-  await page.setViewport({width: 400, height: 480});
+  await page.setViewport({width: 400, height: 500});
   for(const [route, phase, want] of [["#/embed/orem/1", "open", true],
                                      ["#/embed/orem/2", "answered", false],
                                      ["#/embed/orem/4", "settled", false],
@@ -237,11 +237,55 @@ const CASES = [
   ok("a side link to a frozen claim is harmless", errs.length === errsBefore,
      errs.slice(errsBefore).join(" | "));
 
+  // --- the claim's own events, dated -----------------------------------------
+  // The claim page gives this a whole section; a card that shows only where the
+  // stake ended up says nothing about how the claim got there. It costs no
+  // extra read — ClaimTimeline is already fetched for the chart's dates.
+  await page.setViewport({width: 400, height: 500});
+  for(const [route, phase, want] of [["#/embed/orem/1", "open", ["opened"]],
+                                     ["#/embed/orem/2", "answered", ["opened","answered"]],
+                                     ["#/embed/orem/7", "provisional", ["opened","answered"]]]){
+    await page.goto(PAGE + route, {waitUntil: 'domcontentloaded'});
+    await page.reload({waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 450));
+    const tr = await page.evaluate(() => {
+      const t = document.querySelector('.etrail');
+      if(!t) return {has:false};
+      return {has:true, text:t.textContent.replace(/\s+/g," ").trim(),
+              items:[...t.querySelectorAll('span')].map(s=>s.textContent.replace(/\s+/g," ").trim()),
+              future:[...t.querySelectorAll('span.fut')].map(s=>s.textContent.replace(/\s+/g," ").trim()),
+              w:t.getBoundingClientRect().width,
+              over:document.documentElement.scrollHeight - innerHeight};
+    });
+    ok(`${phase}: the card carries an event trail`, tr.has, JSON.stringify(tr));
+    if(!tr.has) continue;
+    ok(`${phase}: naming the events that happened`,
+       want.every(w => tr.items.some(i => i.startsWith(w))), JSON.stringify(tr.items));
+    // Every event carries a date, or the trail is just a list of words.
+    ok(`${phase}: each one is dated`,
+       tr.items.every(i => /\d+ (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/.test(i)),
+       JSON.stringify(tr.items));
+    // A deadline the realm WILL gate on is not a thing that happened.
+    ok(`${phase}: pending deadlines are marked apart from history`,
+       tr.future.every(f => /settles|reopenable/.test(f)), JSON.stringify(tr.future));
+    ok(`${phase}: it stays inside the card`, tr.w <= 400, `w=${Math.round(tr.w)}`);
+    ok(`${phase}: and the card still fits`, tr.over <= 0, `over=${tr.over}px`);
+  }
+  // The footer's "filed" would repeat the trail's own "opened".
+  await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
+  await page.reload({waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 450));
+  const dup = await page.evaluate(() => ({
+    trail: !!document.querySelector('.etrail'),
+    filed: (document.querySelector('.ewhen') || {textContent:""}).textContent.trim()}));
+  ok("the footer does not repeat the opening date", dup.trail && dup.filed === "",
+     JSON.stringify(dup));
+
   // --- the recorded path, in the card ---------------------------------------
   // A card showing only the final ratio throws away the thing worth quoting:
   // that the stake moved. The spark is a fixed 52px so it cannot become a third
   // unbounded term next to the title and the court name.
-  await page.setViewport({width: 480, height: 400});
+  await page.setViewport({width: 500, height: 400});
   await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
   await page.reload({waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 600));
@@ -263,6 +307,20 @@ const CASES = [
             fill: !!sv.querySelector('.efill'), ref: !!sv.querySelector('.e50')};
   });
   ok("the card draws the recorded path", spark.has);
+  // ...and when there is none, says so rather than dropping the chart silently,
+  // which made a missing series look like a rendering fault. Same words as the clip.
+  const nopath = await (async () => {
+    await page.goto(PAGE + "#/embed/orem/7", {waitUntil: 'domcontentloaded'});
+    await page.reload({waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 450));
+    return page.evaluate(() => ({
+      spark: !!document.querySelector('.espark'),
+      said: (document.querySelector('.enopath') || {textContent:""}).textContent.trim(),
+      over: document.documentElement.scrollHeight - innerHeight}));
+  })();
+  ok("a claim with no series says so", !nopath.spark && /no recorded path/.test(nopath.said),
+     JSON.stringify(nopath));
+  ok("and that card still fits", nopath.over <= 0, `over=${nopath.over}px`);
   ok("it spans the card", spark.w >= 300, `w=${Math.round(spark.w||0)}`);
   ok("the plot height is fixed", Math.round(spark.h) === 56, `h=${spark.h}`);
   ok("it has more than one segment", spark.segs > 2, `segs=${spark.segs}`);
@@ -274,7 +332,7 @@ const CASES = [
   // .ehead was flex-wrap:wrap, so a long name turned a one-line head into three
   // and pushed the card 9px past the iframe it was sized for. Measured, not
   // reasoned about: this injects the name and re-renders.
-  await page.setViewport({width: 320, height: 480});  // the snippet's own claim height
+  await page.setViewport({width: 320, height: 500});  // the snippet's own claim height
   await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 500));
   const longName = await page.evaluate(async () => {
@@ -302,7 +360,7 @@ const CASES = [
   // out of sight. The card now carries the short form and the banner is
   // suppressed; this forces the banner's markup in to prove the suppression is
   // real rather than a demo-mode accident.
-  await page.setViewport({width: 480, height: 480});  // the snippet's own claim height
+  await page.setViewport({width: 500, height: 500});  // the snippet's own claim height
   await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
   await page.reload({waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 500));
@@ -326,7 +384,7 @@ const CASES = [
   ok("the exit link stays on screen", withBanner.linkVisible);
 
   // --- a missing claim is a card, not a blank iframe ------------------------
-  await page.setViewport({width: 480, height: 400});
+  await page.setViewport({width: 500, height: 400});
   await page.goto(PAGE + "#/embed/nosuch/9999", {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 400));
   const miss = await page.evaluate(() => {
