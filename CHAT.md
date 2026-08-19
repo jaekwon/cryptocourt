@@ -612,8 +612,32 @@ depends on, the suite pins the REASON it does not: a sentinel is placed in every
 of a message and every attribute of every rendered element is searched for it. Write
 `title="${moniker}"` one day and that check fails, escaped or not.
 
-Still deferred, and now the only substantive gap: validating a court against the chain —
-existence positive-and-sticky, purge negative-and-sticky, because the chain read cannot
-distinguish "no such court" from "node unreachable", and a compliance control whose
-fail-open trigger is an RPC hiccup is not a control. `freeze` covers the compliance half
-today. (Pruning was the other item here and is built — §7.)
+Still deferred: validating a court against the chain. It was the last item on this list
+and it stays deferred, now for a measured reason rather than a predicted one.
+
+The original argument was that a chain read cannot distinguish "no such court" from "node
+unreachable", so a fail-open gate is not a control and a fail-closed one breaks chat on an
+RPC hiccup. Attempting it produced a sharper version of the same problem. Asked for a court
+that exists and a court that does not, a live node answered IDENTICALLY:
+
+    CoinPrice("orem")                 vm.InvalidPkgPathError
+    CoinPrice("definitelynotacourt")  vm.InvalidPkgPathError
+
+— because the realm was not deployed on that node at all. Existence, a wrong realm path, a
+node on the wrong chain and a node still syncing all arrive as one error class. So a
+fail-closed gate has a failure mode worse than the one it prevents: a single
+misconfiguration refuses chat for EVERY court while reporting "no such court", which points
+whoever is debugging it at precisely the wrong thing.
+
+**And the harm it would have prevented is smaller than it looks**, which is the other half
+of the decision. One address can invent rooms freely — 110 distinct rooms in ten minutes of
+clock — but scattering buys it nothing: 20 attempts in one room and 20 across 20 rooms both
+land exactly `PerIPMax`, because the per-address window ignores which room a message went
+to. The namespace is untidy; the volume is not. Both properties are pinned in
+`internal/chat/abuse_test.go` so the second one stays true, and the pruner (§7) bounds what
+the untidiness costs over time.
+
+What would make this worth revisiting is a way to tell the four failures apart — verifying
+the realm answers at all, once, at startup, so "the realm is reachable and this court is
+not in it" becomes a distinct and reportable state. Until then `freeze` covers the
+compliance half, and an operator who wants a closed namespace has the chain allowlist.
