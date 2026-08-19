@@ -192,3 +192,44 @@ func TestThePanelCountsMonikerLettersTheSameWayTheServerDoes(t *testing.T) {
 			`letters, so a panel skipping them would refuse Devanagari names the server accepts`)
 	}
 }
+
+// THE COUNTDOWN FIELD IS A THIRD THING THE TWO SIDES MUST AGREE ABOUT, and its failure mode is
+// silent: the panel falls back to `until - Date.now()`, which is the skew bug it was added to fix,
+// and nothing breaks loudly. A renamed JSON tag would look like a working panel with a wrong number
+// on it — the state would still be right, so only the duration would lie.
+//
+// Read from both sides: the struct tag the server emits, and the property the panel reads.
+func TestThePanelReadsTheCountdownFieldTheServerEmits(t *testing.T) {
+	// The name the server puts on the wire.
+	store, err := os.ReadFile("store.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`Seconds\s+int64\s+` + "`" + `json:"([a-z_]+)`).FindSubmatch(store)
+	if m == nil {
+		t.Fatal("Status.Seconds no longer carries a json tag; if the countdown moved, move this " +
+			"check with it rather than deleting it")
+	}
+	field := string(m[1])
+
+	// The name the panel looks for.
+	panel, err := os.ReadFile(filepath.Join("..", "..", "web", "chat.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := regexp.MustCompile(`(?s)function chatStatusLine\(.*?\n\}`).Find(panel)
+	if fn == nil {
+		t.Fatal("chatStatusLine not found in web/chat.js")
+	}
+	if !regexp.MustCompile(`you\.` + regexp.QuoteMeta(field) + `\b`).Match(fn) {
+		t.Errorf("the server sends you.%s and chatStatusLine does not read it; the panel would "+
+			"fall back to subtracting from the local clock, which is the skew bug this field "+
+			"exists to fix, and it would fail silently because only the DURATION would be wrong",
+			field)
+	}
+	// And it must still prefer that field over the subtraction, not merely mention it.
+	if !regexp.MustCompile(`fromServer > 0 \? fromServer :`).Match(fn) {
+		t.Error("chatStatusLine must PREFER the server's countdown; mentioning the field while " +
+			"computing from the local clock anyway is the same bug with a decoration on it")
+	}
+}

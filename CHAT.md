@@ -311,9 +311,29 @@ API.
 
 `ACAO: *` on GET, because the demo runs from `file://` and gnodev already does
 this. GET returns an explicit field allowlist — `verdict` is a model's opinion
-about a person and never reaches a public surface — plus `you: {state, until, ref}`
+about a person and never reaches a public surface — plus `you: {state, until, seconds, ref}`
 so the composer can be disabled before someone types into a box that will 403.
 `since`/`limit` clamped; GET has its own budget.
+
+**`seconds` exists because a countdown differenced against the reader's clock shows them their own
+skew.** `until` is absolute, and the panel used to subtract `Date.now()` from it. Measured on a
+five-minute kick through the shipped status line:
+
+    clock correct       "paused for another 5 minutes"
+    ten minutes SLOW    "paused for another 15 minutes"     wrong by three times over
+    ten minutes FAST    "paused"                            no duration at all
+
+The state was never affected — nobody is wrongly let through and the composer stays disabled — so
+what was wrong is the one number a punished person actually needs, and in the fast case they were
+told they are paused with nothing to say when to come back. Browsers take their time from the OS.
+
+`seconds` is computed where the deadline was, so it needs no clock at the other end, and a panel
+that re-polls gets a fresh value every few seconds. `until` stays for an appeal to quote and as the
+fallback for a client that predates the field. A permanent ban carries neither, because there is
+nothing to count to.
+
+The drift guard covers it, and this one fails SILENTLY without help: a renamed tag leaves the panel
+subtracting from the local clock again, with the state still correct, so only the duration lies.
 
 **A REFUSAL HAS TO NAME THE RIGHT FIELD AND SAY WHAT WOULD BE ACCEPTED,** and for a while it did
 neither. The server wrote `"moniker: " + err.Error()`, and the sanitiser's messages are phrased for
