@@ -319,6 +319,22 @@ feature whose stated threat is scam, that inverts the priority. So `hidden` on
 messages, filtered at read, recomputed on revocation — and URLs render as plain
 text, never anchors, which is free and removes the click.
 
+**Revocation RECOMPUTES `hidden`; it does not clear it.** Revoke used to set `hidden=0` for the
+whole address, which is the same thing only while an address has one consequence. Measured with
+two: reversing a wrong manual call put "send me your seed phrase now" back in the room while its
+author stayed kicked by the other decision — §7's own failure mode reached by an operator
+granting an appeal. A message is hidden now if any UNREVOKED consequence would hide it. Expiry is
+not revocation: a kick that ran its course keeps its evidence out of sight, because a lapsed
+timeout is not somebody saying the decision was wrong.
+
+Two consequences of that, both found by running it rather than reading it. The window looks
+**backward only** — `Consequence` writes "newer than now minus ten minutes" with no upper bound,
+which is exact at the instant it runs and wrong when recomputed later, so an old consequence hid
+everything posted after it. And a hide with no consequence behind it, which is what the §7
+carve-out produces for a disclosed secret, looked like one to undo: `hidden` distinguishes 1 (a
+consequence) from 2 (a secret), and only 1 is recomputed. Nothing un-hides a 2, which is stated
+at the code rather than left to be discovered.
+
 **The cited message is hidden whatever its age; the author's other messages only for ten
 minutes.** Those are two different rules and they were one for a while — the hide was a
 ten-minute window and nothing else, so a consequence acting on an older message left it on
