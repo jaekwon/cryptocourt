@@ -19,10 +19,15 @@ import (
 // What these do earn on their own is the off-platform lure, which has no innocent
 // reading in a court's chat.
 var (
-	reOffPlatform = regexp.MustCompile(`(?i)\b(t\.me/|wa\.me/|telegram|whatsapp|discord\.gg/)`)
-	reSecretAsk   = regexp.MustCompile(`(?i)(seed\s*phrase|secret\s*phrase|recovery\s*phrase|private\s*key|mnemonic)`)
-	reEVMAddr     = regexp.MustCompile(`0x[0-9a-fA-F]{40}\b`)
-	reGnoAddr     = regexp.MustCompile(`\bg1[0-9a-z]{38}\b`)
+	// Split in two, because the two halves need different normalisation and sharing one
+	// pattern across both produced a false positive on ordinary English — see foldDots.
+	reOffURL  = regexp.MustCompile(`(?i)\b(t\.me/|wa\.me/|discord\.gg/)`)
+	reOffWord = regexp.MustCompile(`(?i)(telegram|whatsapp|discordgg)`)
+	// "words" and "seed" alongside "phrase": "send me your recovery words" is the same request
+	// and was not matched, measured.
+	reSecretAsk = regexp.MustCompile(`(?i)((seed|secret|recovery)\s*(phrase|words|seed)|private\s*key|mnemonic)`)
+	reEVMAddr   = regexp.MustCompile(`0x[0-9a-fA-F]{40}\b`)
+	reGnoAddr   = regexp.MustCompile(`\bg1[0-9a-z]{38}\b`)
 )
 
 // Hint is what the prefilter concluded: a floor on the verdict, plus notes for the
@@ -68,20 +73,40 @@ func Reporting(body string) bool {
 	return reReporting.MatchString(body)
 }
 
+// foldDots maps the characters people substitute for a dot back to a dot.
+//
+// URL evasion is separator substitution — "t·me/x", "t(dot)me/x" — so that is what gets folded,
+// and only that. The previous approach searched the SKELETON for "tme", and a skeleton has no
+// spaces or punctuation, so it matched ordinary English: measured, "the planning department
+// rejected it" earned a floor of spam, as did "apartment", "compartment" and "postmen". In a
+// court that adjudicates property filings those are words people use, and a floor of spam is an
+// hour of silence for saying one.
+//
+// Folding a targeted set cannot do that: "department" contains no dot substitute, and the
+// pattern it is matched against still requires "t.me/" with its slash.
+func foldDots(s string) string {
+	r := strings.NewReplacer(
+		"·", ".", "․", ".", "‧", ".", "•", ".",
+		"(dot)", ".", "[dot]", ".", "{dot}", ".", " dot ", ".", "-dot-", ".",
+	)
+	return r.Replace(s)
+}
+
 // Prefilter inspects a message. It runs on the SKELETON as well as the raw text,
-// so "t·me/" and "5eed phrase" are caught along with the plain spellings — that is
-// what chat.Skeleton is for.
+// so "te1egram" and "5eed phrase" are caught along with the plain spellings — that is
+// what chat.Skeleton is for. URL forms are matched on dot-folded raw text instead, because
+// a skeleton is one long word and "tme" lives inside "department".
 func Prefilter(body string) Hint {
 	h := Hint{Floor: Clean}
 	sk := chat.Skeleton(body)
-	// Skeleton drops punctuation, so the URL forms are checked against the raw
-	// text and the word forms against both.
+	// The URL forms are checked against dot-folded raw text, the word forms against raw and
+	// skeleton. Which normalisation belongs to which is the whole lesson of foldDots.
 	switch {
 	case reSecretAsk.MatchString(body), reSecretAsk.MatchString(sk):
 		// Asking a stranger for their recovery words has one meaning.
 		h.Floor = Scam
 		h.Notes = append(h.Notes, "asks for a secret phrase or key")
-	case reOffPlatform.MatchString(body), strings.Contains(sk, "tme"), strings.Contains(sk, "wame"):
+	case reOffURL.MatchString(foldDots(body)), reOffWord.MatchString(body), reOffWord.MatchString(sk):
 		// Not a finding on its own — plenty of people mention Telegram — but a
 		// floor of spam is fair for an unsolicited off-platform pull.
 		h.Floor = Spam

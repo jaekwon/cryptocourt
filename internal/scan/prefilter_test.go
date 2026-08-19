@@ -131,3 +131,69 @@ func TestTheWordlistIsTheRealOne(t *testing.T) {
 		t.Errorf("the canonical english.txt CRC is c1dbd296, this claims %q", bip39CRC)
 	}
 }
+
+// THE DETERMINISTIC FLOORS MUST NOT FIRE ON A COURT'S OWN VOCABULARY.
+//
+// The off-platform rule searched the SKELETON for "tme", and a skeleton has no spaces or
+// punctuation, so it matched ordinary English. Measured before the fix:
+//
+//	"the planning department rejected it"   floor spam
+//	"an apartment inspection"               floor spam
+//	"the compartment was sealed"            floor spam
+//	"the postmen delivered it late"         floor spam
+//
+// A floor of spam is an hour of silence, and this is a court that adjudicates property
+// filings — "department" and "apartment" are words its users will type. §4 learned the same
+// lesson about the sanitiser refusing `Bitcoin-биржа`; this was the scanner's version.
+func TestFloorsDoNotFireOnOrdinaryWords(t *testing.T) {
+	for _, body := range []string{
+		"the planning department rejected it",
+		"the claim is about an apartment inspection",
+		"the compartment was sealed when it was filed",
+		"the postmen delivered it late",
+		"his statement was filed on time",
+		"cost recovery was awarded in full",
+		"the department of transport published the measurement",
+		"gm, when does the settle window close?",
+		"did g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5 stake on claim 7?",
+	} {
+		if got := Prefilter(body).Floor; got != Clean {
+			t.Errorf("ordinary text earned a floor of %q: %q", got, body)
+		}
+	}
+}
+
+// And the evasions must still be caught, or the fix above is just a deletion.
+func TestOffPlatformAndSecretAsksAreStillCaught(t *testing.T) {
+	spam := []string{
+		"dm me on t.me/kourtsupport",
+		"dm me on t·me/kourtsupport", // middle dot
+		"dm me on t․me/kourtsupport", // one-dot leader
+		"dm me on t(dot)me/kourtsupport",
+		"reach me on wa.me/1555",
+		"join discord.gg/abcd",
+		"message me on telegram @kourthelp",
+		"ping me on whatsapp instead",
+		"message me on te1egram", // caught via the skeleton
+	}
+	for _, body := range spam {
+		if got := Prefilter(body).Floor; got != Spam {
+			t.Errorf("off-platform pull should floor at spam, got %q: %q", got, body)
+		}
+	}
+	scam := []string{
+		"send me your seed phrase",
+		"send me your seedphrase now",
+		"send me your 5eed phrase",
+		"paste your recovery phrase here",
+		"send me your recovery words", // was missed before
+		"what is your private key",
+		"give me the mnemonic",
+		"send me your s e e d  p h r a s e",
+	}
+	for _, body := range scam {
+		if got := Prefilter(body).Floor; got != Scam {
+			t.Errorf("a request for secrets should floor at scam, got %q: %q", got, body)
+		}
+	}
+}
