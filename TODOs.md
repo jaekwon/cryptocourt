@@ -6,6 +6,74 @@ the two rot at different rates.
 
 ---
 
+## 0. LIVE BUG, HIGHEST SEVERITY — one dispute round can permanently starve a court's junior draw
+
+**This is the actual mechanism by which a disputed claim's draw is destroyed today.** No
+attacker required, no proposal involved, and it invalidates the reassuring measurement in
+item 2 on any claim that is large relative to its court.
+
+### The defect
+
+`reservedTail` and `juniorReserved` are **strictly monotone**. Verified exhaustively — each
+has exactly **one write site in the entire non-test realm, and both are additions**:
+
+```go
+// emission.gno:172 — the only write to reservedTail, anywhere
+c.reservedTail = mustAdd(c.reservedTail, amount)
+// emission.gno:197 — the only write to juniorReserved, anywhere
+c.juniorReserved = mustAdd(c.juniorReserved, want)
+```
+
+The junior pool is `reservoirR() = cumAccrual − reservedTail − juniorReserved`, floored at
+zero (emission.gno:140-150). `comp` is enqueued as a **senior** entitlement
+(`enqueueSenior`, emission.gno:157-183), so **every comp ever paid permanently and
+irreversibly shrinks the reservoir for every later claim in that court.**
+
+And `comp` is unbounded relative to the court's emission budget.
+`compAmount = min(2×ownBond, 80%×burned)` (dispute.gno:370-381) — with a 50% answer bond
+both arms land at **40%·X̄**. Measured, 300,000 CC court with `curPeriodBudget` = 1,132
+CC/week:
+
+```
+reservedTail   0 → 12,001,200,000     (ONE overturn round)
+reservoir      13,481,280 → 0
+weeks of the WHOLE court's emission consumed by that single comp:  10
+```
+
+Then `reserveJunior` **silently clamps** the draw to the empty reservoir — its own comment
+says why: *"Clamps to R — never aborts a shared settlement path (F4)"* (emission.gno:186-199).
+So the honest winners' draw comes out **0**, and because `cs.crystallized` is a one-way
+latch and `Crystallize` is **permissionless** after the grace week, **an attacker chooses the
+moment** at which that zero is made permanent.
+
+### Why this corrects item 2's headline
+
+Item 2 records that an ordinary overturn pays honest winners in full — measured 4.955068 CC,
+bit-identical to the answer standing. **That measurement is correct but does not generalize.**
+It was taken on a claim tiny relative to its court (~51× reservoir headroom). A second
+independent audit measured `drawWinners = 0` after an overturn on a claim at ~10% of supply —
+same tier (mid, correctly restored), zero payout, because comp had eaten the reservoir.
+
+**So the honest statement is: the tier path is fine; the funding path is not.** Whether an
+overturn actually pays depends on the claim's size relative to its court, and the dependence
+is a cliff, not a slope.
+
+### Fix direction
+
+Cap comp against the court's own budget — `min(comp, k·curPeriodBudget)` — and decide
+whether `reservedTail` should be reclaimable at all once an entitlement is fully pulled.
+The monotonicity looks deliberate (it is what keeps seniors and juniors tiling a disjoint
+number line, per the long comment at emission.gno:162-170), so the cap is the safer lever;
+touching monotonicity risks the M3-CRITICAL-1 overlap that comment exists to prevent.
+
+**Note the interaction with item 1c, which is the strongest argument in this file:** comp
+scales with the answer bond. At 450 bps the same comp is ~0.95 weeks of budget instead of
+10 — an **11.1× improvement** — so cutting the oversized bond fixes most of this for free.
+This is the fourth independent argument against 50%, and the only one that needs no attacker
+at all.
+
+---
+
 ## 1. LIVE BUG — `provClose` is unreachable on default params, so a false answer finalizes by apathy
 
 **Severity: high.** This is the anti-apathy backstop, and on a default court it never
@@ -299,13 +367,43 @@ prize loser-funded and bilateral, which is the one thing escape (b) cannot survi
 existing disputer comp is fine as-is: conduct-contingent, paid to whoever proved the
 misconduct, burn-anchored and capped at 80% of the burn.
 
-**Ruled out:** re-answerability. It cannot re-freeze the conviction pin without arming
-three dormant clamps (answer.gno:130-147 names them), cannot reopen staking without making
-one claim a ~51× risk-free emission faucet (measured: 297.982184 CC period budget vs
-5.760267 CC honest draw), cannot get the calendar it needs (the 12-week clock never
-pauses, and extending it panics at deploy per court.gno:224-229), and a second answer would
-inherit answer #1's `slotConsumed`/`slashLevied` latches — making it **structurally
-unflaggable and unslashable**.
+**Ruled out: re-answerability.** Three independent audits, and the third reason is decisive.
+
+It cannot re-freeze the conviction pin without arming three dormant clamps
+(answer.gno:130-147 names them); measured, a re-freeze would let the incumbent frozen pool
+farm conviction **1009× over six weeks on a pool nobody can enter to dilute or exit to
+escape**, re-pinning `xBarFrozen` off a ring `staleBy = 2016` buckets that still reports
+`mature = true` (**+50% from staleness alone**). It cannot reopen staking without making one
+claim a ~51× risk-free emission faucet. It cannot get the calendar it needs (the 12-week
+clock never pauses, and extending it panics at deploy per court.gno:224-229). A second
+answer inherits answer #1's `slotConsumed`/`slashLevied` latches, making every answer after
+the first **structurally unflaggable and unslashable** — the exact immunity purchase v0.47
+and v0.50 closed.
+
+**And the trichotomy is exhaustive — there is no correct implementation.** Either the
+re-answer resets `provisional`, in which case the claim is **permanently bricked 72 hours
+after any undisputed re-answer, with no adversary at all**: measured 7 of 7 exits refuse
+(`OpenDispute`, `SettleUndisputed`, `Finalize`, `CloseDeadClaim`, `Crystallize`,
+`WithdrawStake`, `Unstake`), 30,000 CC of honest principal locked in `c.locked` forever, no
+admin and no upgrade path (court.gno:266-267) — and "nobody disputes" is the **modal**
+outcome, which dispute.gno:519-521 names as the lane's known failure mode. Or it keeps the
+old `provisional`, in which case it is a no-op that only burns the new answerer's record. Or
+it resets `provisional`/`round`/`failedRounds`/`escrowUntil` together, in which case it
+works — and hands a sniper **unlimited retries**: 11 rounds fit inside a 12-week life, so
+per-claim destruction probability goes from 19% to **89.3%**.
+
+There is no fourth option, and none of the three is shippable.
+
+### Sequencing constraint — do not reorder these
+
+**`court.gno:194` must not be deleted before the collateralization floor is re-keyed to both
+sides.** Measured: as written, deleting it drops the snipe's break-even claim age from **31
+weeks** (unreachable inside a 12-week life, so harmless) to **2.80 weeks** (reachable on most
+claims). The invariant is mislabelled — its comment says it covers "maximum undisputed
+extraction", but PLAN.md:718-725 already retracted that derivation; what it actually buys is
+**anti-snipe** cover, and via dispute.gno:131 it is also what makes the dispute bond
+independent of the answerer. Re-key the floor first (item 1c), then rescope `:194` and `:227`
+in the same commit.
 
 ---
 
