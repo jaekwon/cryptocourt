@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -127,8 +128,12 @@ func TestTheWordlistIsTheRealOne(t *testing.T) {
 				"detector went silent before", w)
 		}
 	}
-	if bip39CRC != "c1dbd296" {
-		t.Errorf("the canonical english.txt CRC is c1dbd296, this claims %q", bip39CRC)
+	// The canonical value, spelled as text so a reader can compare it with tm2's. This used to
+	// compare bip39CRC against a hardcoded copy of itself, which could only fail if somebody
+	// edited the constant — and said nothing about the list, because init enforced a separate
+	// literal. It reads the enforced constant now.
+	if got := fmt.Sprintf("%08x", bip39CRC); got != "c1dbd296" {
+		t.Errorf("the canonical english.txt CRC is c1dbd296, this enforces %s", got)
 	}
 }
 

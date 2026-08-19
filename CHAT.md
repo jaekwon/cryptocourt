@@ -556,7 +556,16 @@ SHA-256, which is the thing that makes a phrase a phrase: a noun list passes by 
 
 Two details that only testing the real thing would produce. The wordlist carries its canonical
 CRC (`c1dbd296`) asserted at startup, because one mistyped word weakens the detector with no
-symptom. And numbering does not break a run — wallets display recovery words numbered, so it is
+symptom — and that assertion was worth less than it read. The value existed twice: a string
+constant that a test compared against a hardcoded copy of itself, and `init`'s own separate
+`0xc1dbd296` literal doing the actual work. The copy that was TESTED was not the copy that was
+ENFORCED, so editing the constant moved the documentation and the test together and left the
+guarantee where it stood. One typed constant now, read by both. The check also moved out of `init`
+into `verifyWordlist`, because a guarantee that only runs at process start is one no test can
+observe — init either panics or it does not — and this one carries the whole seed-phrase detector,
+which has already spent a period silently broken. It is driven with a mistyped word, with the
+exact 136-word subset that broke it before, and with a list whose checksum is right and whose word
+count is wrong. And numbering does not break a run — wallets display recovery words numbered, so it is
 the likeliest way a phrase is ever pasted, and it was the one format the detector missed.
 
 Cross-court duplicate posting is a **rate limiter, not a punishment**: it rejects

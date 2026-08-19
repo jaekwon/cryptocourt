@@ -2,6 +2,7 @@ package scan
 
 import (
 	"crypto/sha256"
+	"fmt"
 	"hash/crc32"
 	"strings"
 )
@@ -19,20 +20,52 @@ import (
 // wordlist is a constant. The CRC is checked at init because a mistyped word would weaken the
 // detector silently, and c1dbd296 is the value the canonical english.txt has always had — the
 // same constant tm2/pkg/crypto/bip39 asserts.
-const bip39CRC = "c1dbd296"
+// bip39CRC IS THE VALUE THE CHECK READS, which it did not used to be.
+//
+// This was a string constant that only a test looked at, comparing it to a hardcoded copy of
+// itself, while init compared the wordlist against its own separate `0xc1dbd296` literal. So the
+// value existed twice and the copy that was TESTED was not the copy that was ENFORCED: editing
+// this constant moved the documentation and the test together and left the actual guarantee
+// where it was. Same shape as the predicate copies §7 consolidated into `sqlInForce`, which had
+// already disagreed by the time anybody looked.
+const (
+	bip39CRC  uint32 = 0xc1dbd296
+	bip39Size        = 2048
+)
 
 var bip39Index = map[string]int{}
 
 func init() {
-	if got := crc32.ChecksumIEEE([]byte(bip39Words)); got != 0xc1dbd296 {
-		panic("scan: the BIP-39 wordlist is not the canonical one")
+	if err := verifyWordlist(bip39Words, bip39CRC); err != nil {
+		panic("scan: the BIP-39 wordlist is not the canonical one: " + err.Error())
 	}
 	for i, w := range strings.Fields(bip39Words) {
 		bip39Index[w] = i
 	}
-	if len(bip39Index) != 2048 {
-		panic("scan: the BIP-39 wordlist must hold exactly 2048 distinct words")
+}
+
+// verifyWordlist is init's guarantee, extracted so that a WRONG list can be put through it.
+//
+// A check that only runs at process start is a check nothing tests: init either panics or it does
+// not, and no test can tell the difference without spawning a subprocess. The file's comment says
+// the CRC is verified "because a mistyped word would weaken the detector silently" — that claim
+// is now something a test can drive rather than something a reader has to take on trust.
+//
+// wantCRC is a parameter rather than a direct read of bip39CRC for the same reason: it lets a
+// test reach the word-count branch, which is otherwise guarded by a CRC that would have to
+// collide first. init passes the constant, so there is still exactly one enforced value.
+func verifyWordlist(words string, wantCRC uint32) error {
+	if got := crc32.ChecksumIEEE([]byte(words)); got != wantCRC {
+		return fmt.Errorf("crc32 %08x, want %08x", got, wantCRC)
 	}
+	distinct := make(map[string]bool, bip39Size)
+	for _, w := range strings.Fields(words) {
+		distinct[w] = true
+	}
+	if len(distinct) != bip39Size {
+		return fmt.Errorf("%d distinct words, want %d", len(distinct), bip39Size)
+	}
+	return nil
 }
 
 const bip39Words = `abandon
