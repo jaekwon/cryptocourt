@@ -451,3 +451,160 @@ func TestAFrozenCourtIsNeitherReadNorWritten(t *testing.T) {
 		t.Error("freeze must not delete: erasure is the pruner's job and a separate decision")
 	}
 }
+
+// A WITHDRAWN COURT IS NOT MODERATED EITHER.
+//
+// Third instance of the same shape in as many passes: `frozen` was honoured by Post, then by
+// Recent, and by nothing else. So a court withdrawn for an on-chain purge was still being
+// handed to the scanner — inference and consequences over content nobody can read — and still
+// filling a moderator's review queue with messages that have no available action, since they
+// are already unserved.
+//
+// The reasoning is Claim's own, applied consistently: it skips `hidden` because punished
+// content must stop driving verdicts, and withdrawn content is in the same position.
+func TestAFrozenCourtIsNotScannedOrQueued(t *testing.T) {
+	srv, store, clk := newServer(t)
+	srv.Chains["test"] = true
+	ctx := context.Background()
+
+	// Two courts, so the bystander is explicit. One message each, flagged and uncited so
+	// both are queue candidates, plus one left unscanned in each for the backlog.
+	type seed struct{ path, court, body string }
+	for _, c := range []seed{
+		{"/api/chat/dev/orem", "orem", "flagged in the court that will be frozen"},
+		{"/api/chat/dev/orem", "orem", "unscanned in the court that will be frozen"},
+		{"/api/chat/dev/ledger", "ledger", "flagged in the court that stays live"},
+		{"/api/chat/dev/ledger", "ledger", "unscanned in the court that stays live"},
+		// The SAME court name on another chain. frozen is keyed on both, so this is the
+		// row that catches a predicate matching on court alone — which it did not, until
+		// this line existed.
+		{"/api/chat/test/orem", "orem", "flagged in the same name on another chain"},
+	} {
+		*clk = clk.Add(MinInterval + time.Second)
+		if rec := do(t, srv, postReq(t, c.path, "someone", c.body)); rec.Code != 200 {
+			t.Fatalf("setup %s: %d %s", c.body, rec.Code, rec.Body)
+		}
+	}
+	for _, id := range []int64{1, 3, 5} { // the "flagged" ones
+		if err := store.RecordVerdict(ctx, id, "scam"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Preconditions, asserted: before the freeze BOTH courts are scanned and queued.
+	before, err := store.Claim(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before) != 2 {
+		t.Fatalf("precondition: both unscanned messages should be claimable, got %d", len(before))
+	}
+	// Claim marks them; put them back so the post-freeze comparison is fair.
+	if _, err := store.w.ExecContext(ctx,
+		`UPDATE messages SET scan_state=?, claimed_at=0 WHERE id IN (2,4)`, ScanNew); err != nil {
+		t.Fatal(err)
+	}
+	q, err := store.PendingReview(ctx, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q) != 3 {
+		t.Fatalf("precondition: all three flagged messages should be queued, got %d", len(q))
+	}
+
+	if err := store.Freeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	}
+
+	// The scanner must not be offered withdrawn content.
+	claimed, err := store.Claim(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range claimed {
+		if p.Chain == "dev" && p.Court == "orem" {
+			t.Errorf("a frozen court must not be scanned: offered id=%d %q", p.ID, p.Body)
+		}
+	}
+	// PAIRED POSITIVE: the live court is still scanned, so this is not "scan nothing".
+	live := 0
+	for _, p := range claimed {
+		if p.Court == "ledger" {
+			live++
+		}
+	}
+	if live != 1 {
+		t.Errorf("the live court must still be scanned, got %d of its messages", live)
+	}
+
+	// And no moderator is asked about a court nobody can read.
+	q, err = store.PendingReview(ctx, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range q {
+		// chain AND court: `test/orem` shares the name and is NOT frozen, so matching on
+		// the court alone would fail this test on a row that belongs there.
+		if r.Chain == "dev" && r.Court == "orem" {
+			t.Errorf("a frozen court must not fill the review queue: id=%d %q", r.ID, r.Body)
+		}
+	}
+	// Both survivors: the live court on this chain, and the same court NAME on another
+	// chain, which must be untouched because frozen is keyed on chain AND court.
+	if len(q) != 2 {
+		t.Errorf("the two unfrozen deferrals must remain, got %d rows", len(q))
+	}
+	sawOtherChain := false
+	for _, r := range q {
+		if r.Chain == "test" && r.Court == "orem" {
+			sawOtherChain = true
+		}
+	}
+	if !sawOtherChain {
+		t.Error("freezing dev/orem must not freeze test/orem: frozen is keyed on both")
+	}
+	// The grouped view collapses by AUTHOR, and every message here comes from httptest's
+	// single address, so one group is the right answer — its COUNT is what shows the frozen
+	// row was excluded. Asserting two groups was my error, not the code's.
+	groups, err := store.ReviewGroups(ctx, false, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) != 1 {
+		t.Fatalf("one author, one group: %+v", groups)
+	}
+	if groups[0].Count != 2 {
+		t.Errorf("the group must count the two unfrozen deferrals and not the frozen one, "+
+			"got %d", groups[0].Count)
+	}
+
+	// THE INVARIANT THIS FIX COULD HAVE BROKEN. Excluding frozen rows from Claim without
+	// excluding them from the backlog would recreate the phantom backlog in a new place:
+	// counted forever, never claimable.
+	//
+	// Compared as a straight equality against a FRESH claim. The first version wrote
+	// `Backlog != a && Backlog != b`, which passes whenever either happens to match, and
+	// a mutation that broke the invariant survived it.
+	if _, err := store.w.ExecContext(ctx,
+		`UPDATE messages SET scan_state=?, claimed_at=0 WHERE scan_state=?`,
+		ScanNew, ScanClaimed); err != nil {
+		t.Fatal(err)
+	}
+	h, err := store.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := store.Claim(ctx, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Backlog != len(fresh) {
+		t.Errorf("the backlog must equal what Claim offers, or it never drains: "+
+			"Backlog=%d, Claim=%d", h.Backlog, len(fresh))
+	}
+	for _, p := range fresh {
+		if p.Chain == "dev" && p.Court == "orem" {
+			t.Errorf("still offering the frozen court after a reclaim: id=%d", p.ID)
+		}
+	}
+}

@@ -727,8 +727,8 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	// is later revoked, Revoke clears hidden and it becomes claimable and counted again,
 	// which is the correct direction.
 	if err := s.r.QueryRowContext(ctx,
-		`SELECT count(*) FROM messages WHERE scan_state IN (?,?) AND hidden=0`,
-		ScanNew, ScanFailed).Scan(&h.Backlog); err != nil {
+		`SELECT count(*) FROM messages WHERE scan_state IN (?,?) AND hidden=0
+		   AND `+sqlNotFrozen, ScanNew, ScanFailed).Scan(&h.Backlog); err != nil {
 		return h, err
 	}
 	// Terminal AND never classified. scan_state alone is not enough: ScanDone is also
@@ -776,6 +776,7 @@ func (s *Store) Claim(ctx context.Context, n int) ([]Pending, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT id, chain, court, body, ip_hash, net_hash
 	  FROM messages
 	  WHERE scan_state IN (?,?) AND next_try <= ? AND hidden=0
+	    AND `+sqlNotFrozen+`
 	  ORDER BY (created_at > ?) DESC, id DESC LIMIT ?`,
 		ScanNew, ScanFailed, now, now-600, n)
 	if err != nil {
@@ -908,6 +909,26 @@ type InfractionRow struct {
 	RevokedBy  string
 }
 
+// sqlNotFrozen excludes messages in a court that has been withdrawn from service.
+//
+// Written once for the same reason as sqlAwaitingReview below: the last two bugs in this file
+// were both a predicate honoured on some paths and not others, and the second was seven copies
+// of one idea that had already drifted.
+//
+// WHY THE SCANNER SKIPS A FROZEN COURT. Claim already skips `hidden` because punished content
+// must stop driving verdicts. Withdrawn content is in the same position and the reasoning
+// carries over unchanged: nobody can read it, so there is no harm left to prevent, and
+// spending an inference on it — or asking a person to judge it — is work with no beneficiary.
+// A court that is still being scanned and still filling a moderator's queue has not been
+// withdrawn in any sense an operator would recognise; it has only been hidden from readers.
+//
+// The counter-argument, which is real: a scam is a scam, and its author should be stopped
+// elsewhere too. That is what the live courts are for — they are where the author is still
+// able to do harm, and where the scanner is still looking. Freezing is a deliberate act taken
+// after the fact, so a court's history has almost always been scanned already.
+const sqlNotFrozen = `NOT EXISTS (SELECT 1 FROM frozen f
+	                    WHERE f.chain = messages.chain AND f.court = messages.court)`
+
 // sqlAwaitingReview is THE definition of §7's deferred queue, and it is one string because
 // it was seven.
 //
@@ -933,7 +954,8 @@ type InfractionRow struct {
 // table.
 const sqlAwaitingReview = `hidden = 0
 	     AND verdict NOT IN ('', 'clean', 'unknown')
-	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`
+	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)
+	     AND ` + sqlNotFrozen
 
 // PruneResult reports what a prune did AND what it refused to do.
 //
