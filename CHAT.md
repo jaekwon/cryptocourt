@@ -652,12 +652,24 @@ good, with `dismiss` unable to help because dismiss records that a person looked
 visibility. The carve-out exists to protect people who report abuse; permanently hiding the report
 was the wrong other half of it.
 
-    bin/kourtchatctl -db chat.db reveal 41
+    bin/kourtchatctl -db chat.db hide 41       # out of sight, nobody punished
+    bin/kourtchatctl -db chat.db reveal 41     # and back again
 
 The hiding itself stays right: a detector cannot tell a published test vector from somebody's actual
 key without a list of every vector ever published — both canonical BIP-39 vectors come back
 `secret=true` — and the harm is wildly asymmetric. What was wrong is that a KICK for the same
 message is reversible with `unban` while this was not.
+
+**`hide` is the other half, and it shipped a commit late.** `reveal`'s own output ends "if that
+phrase is real rather than a published test vector, hide it again and tell its owner" — advice for
+an action the tool did not offer. The store has had `HideMessage` since the scanner needed it for the
+carve-out; only the operator verb was missing, so somebody who revealed a message and then realised
+it was a real key had no way back. Guidance the code cannot support is the defect this document keeps
+catching elsewhere, committed here in its own.
+
+Both verbs report three outcomes rather than one refusal — hidden now, already out of sight (naming
+which kind, and which verb undoes it), or no such message — because `HideMessage` requires
+`hidden=0` and cannot tell the first two apart on its own.
 
 `reveal` is restricted to `hidden=2` and refuses anything else, because clearing `hidden` directly
 on a punished row would bypass the recompute above. It prints an eighteen-rune PREVIEW rather than
