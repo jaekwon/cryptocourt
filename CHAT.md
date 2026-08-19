@@ -191,7 +191,16 @@ denies**, since a flat global 429 is one attacker muting the whole product.
 Deterministic detectors run first, in `kourtchat`, and their outputs are stated
 because this is a crypto court: `g1…` and `0x…` are the application's
 *vocabulary*, so a bare address is **never a consequence on its own**. `t.me/`,
-`wa.me/` and explicit "seed phrase" are hits.
+`wa.me/` and explicit "seed phrase" are hits — **and which normalisation each pattern gets is
+load-bearing, not incidental.** The off-platform rule searched the skeleton for "tme", and a
+skeleton is one long word with no spaces or punctuation, so ordinary English matched it:
+measured, "the planning department rejected it" earned a floor of spam, as did "apartment",
+"compartment" and "postmen". An hour of silence for a word this court's users type constantly.
+
+The evasion the skeleton was there for is separator substitution — "t·me/", "t(dot)me/" — so
+that is folded now, and nothing else. Word forms like "telegram" stay on raw and skeleton, where
+letters-only matching cannot collide, so "te1egram" is still caught. The rule is: fold what the
+attacker substitutes, not everything.
 
 **A recovery phrase is matched by its CHECKSUM, not by a run of words**, and both halves of
 that sentence were learned the hard way. The rule used to be "≥8 consecutive words" against a
