@@ -601,9 +601,19 @@ function mkDoc() {
     global.setTimeout = (f, d) => { const id = realSet(f, d); pending.add(id); return id; };
     global.clearTimeout = id => { pending.delete(id); return realClear(id); };
     try {
+      // A LONG INTERVAL FOR THE COUNTING HALF, and this is not a detail.
+      // It used to be 5ms, so the poller's own timer could fire in the gap
+      // between mounting and counting — two microtask ticks take no time at all
+      // on an idle machine and comfortably more than 5ms on a busy one. The
+      // result was a gate that passed alone and failed about one run in twenty
+      // inside `make check`, which is the worst kind: it blocked a good commit
+      // and taught whoever hit it to re-run rather than to look.
+      // Nothing here waits for the timer to FIRE — it asserts that exactly one
+      // exists and that one fetch happened — so a 30s interval measures the
+      // same thing and cannot race.
       const el = mkRoot();
       const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
-                                  interval: 5});
+                                  interval: 30000});
       // Only setImmediate is used to yield here, so nothing but the poller can be
       // holding a setTimeout at the point it is counted.
       await tickMicro(); await tickMicro();
@@ -611,8 +621,18 @@ function mkDoc() {
       ok("...having actually fetched", calls === 1);
       stop();
       ok("stop() clears the pending timer", pending.size === 0);
+      // The other half, on its own mount and deliberately still short: HERE the
+      // timer firing is the whole point. If stop() failed to clear it, a 5ms
+      // poller fires many times inside 60ms — and a slow machine only makes
+      // this stricter, never flakier.
+      calls = 0;
+      const el2 = mkRoot();
+      const stop2 = mountChat(el2, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                    interval: 5});
+      await tickMicro(); await tickMicro();
+      stop2();
       const after = calls;
-      await new Promise(r => realSet(r, 40));
+      await new Promise(r => realSet(r, 60));
       ok("stop() ends the poller", calls === after);
     } finally {
       global.setTimeout = realSet;
