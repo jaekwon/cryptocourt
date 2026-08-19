@@ -243,8 +243,22 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 	}
 	var in postBody
 	r.Body = http.MaxBytesReader(w, r.Body, MaxInputBytes*2)
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, "expected {\"moniker\":…,\"body\":…}")
+		return
+	}
+	// Anything after the first JSON value is refused. Decode stops at the end of one
+	// value and ignores the rest, so `{"moniker":"a","body":"b"} <anything at all>` was
+	// accepted — measured, not theorised. On its own that is only laxness; the reason to
+	// close it is that it lets two readers of the same request disagree. A proxy, WAF or
+	// audit log that parses the whole body sees content the server never stored, and
+	// "what was actually posted" stops having one answer.
+	//
+	// Unknown FIELDS are still allowed, deliberately: rejecting those would make every
+	// future client that sends a new key a 400 against an older server.
+	if dec.More() {
+		writeErr(w, http.StatusBadRequest, "unexpected content after the JSON object")
 		return
 	}
 	moniker, err := SanitizeMoniker(in.Moniker)
