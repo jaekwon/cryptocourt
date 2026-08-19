@@ -1047,6 +1047,24 @@ made them two definitions in two languages that no build could compare. `web/cha
 them once and a Go test reads that file and checks it against the constants, from the side that
 enforces them — prevention rather than a bug found, which is the first time this class has
 
+**And the operator tool holds THREE copies of its own flags** — the `FlagSet` that defines them,
+`takesValue` (which `split` needs before parsing, so it cannot ask the FlagSet), and the help text.
+The third had drifted furthest, measured by comparing each verb's usage entry against its FlagSet:
+
+    kick     showed only -for, omitting -msg, -net AND -why
+    ban      omitted -msg
+    unban    omitted -by
+    list, review, prune   each omitted -n
+    revoke   an accepted alias for unban, mentioned nowhere
+
+`kick` is the one that mattered. `-msg` is the path `review`'s own output tells an operator to
+take, and `-net` widens a consequence to a whole /24 or /48 — the only consequence that reaches
+more than one address, and the help did not say the verb could do it. **A flag nobody can discover
+is a flag nobody uses**, and here that means reaching for a broader instrument than the situation
+needed. Both copies now have a guard that reads the FlagSets out of the source; the help one also
+refuses a flag shown but not accepted, which is worse than an omission because somebody will type
+it.
+
 The lesson is cheap to state and was expensive to learn nine times over: a predicate that lives in
 more than one place eventually disagrees with itself, and the disagreement surfaces as a
 control quietly covering less than its own documentation claims.
