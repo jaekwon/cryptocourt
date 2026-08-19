@@ -127,6 +127,19 @@ faithfully displayable and aggressively comparable.
               Folds confusables, drops marks and punctuation and case, so
               "ᏚᏟᎪᎷ", "s͡c͡a͡m", "S.C.A.M" and "5c4m" all reduce to "scam".
 
+**The joiner cap was the same mistake, one constant later.** It was a whole-message total of
+16 — and measured, ordinary Persian prose of 20 ZWNJ words (177 runes) was refused, as were six
+family emoji. ZWNJ is orthographically required in Persian, which this section already said two
+paragraphs above the cap that broke it, so a total punished the language and not the abuse: a
+long legitimate message simply holds more joiners than a short one.
+
+The abuse is density. It is now a run cap of 4 (❤️‍🔥 stacks VS16 and ZWJ inside a single glyph)
+plus a rule that joiners may not outnumber visible characters — Persian runs about 0.13, family
+emoji about 0.6, and "hi" with a hundred bare ZWJ runs 10. That is safe to be permissive about
+because the cap never carried the evasion argument in the first place: `Skeleton` reduces
+"s‍c‍a‍m" to "scam" on its own, which is asserted beside the permissive cases so the reasoning
+cannot quietly lapse.
+
 Evasion resistance had to move out of the display path because mutating displayed
 text to fight homoglyphs corrupts the text of everyone whose alphabet is not
 English. The confusables table is hand-built, incomplete, and documented as such —
