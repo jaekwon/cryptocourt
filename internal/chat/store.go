@@ -926,6 +926,21 @@ func (s *Store) HideMessage(ctx context.Context, id int64) error {
 	return nil
 }
 
+// Preview is how much of a message body may be shown to an operator confirming an id.
+//
+// A PREVIEW, not the body. A message on this path may be somebody's actual recovery phrase, and an
+// operator's terminal and shell history are not where that belongs — enough to recognise which
+// message it is, no more. `why` has the full text for the cases that need it.
+//
+// One definition because both verbs that move a message in or out of sight print one, and an
+// eighteen written twice is an eighteen that eventually disagrees with itself.
+func Preview(body string) string {
+	if r := []rune(body); len(r) > 18 {
+		return string(r[:18]) + "…"
+	}
+	return body
+}
+
 // Revealed describes what Reveal put back, so an operator can see they had the right id.
 type Revealed struct {
 	OK      bool
@@ -969,13 +984,7 @@ func (s *Store) Reveal(ctx context.Context, id int64) (Revealed, error) {
 	if err != nil {
 		return out, err
 	}
-	// A PREVIEW, not the body. This may be somebody's actual recovery phrase, and an operator's
-	// terminal and shell history are not where it belongs — enough to confirm the id, no more.
-	if r := []rune(body); len(r) > 18 {
-		out.Preview = string(r[:18]) + "…"
-	} else {
-		out.Preview = body
-	}
+	out.Preview = Preview(body)
 	// `AND hidden=2` again, and it is redundant: the SELECT above already returned early for
 	// anything else, so removing it survives every fixture. Kept as defence in depth on the write
 	// itself, and noted so the surviving mutation is not mistaken for a gap.

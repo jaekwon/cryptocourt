@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func newStore(t *testing.T) (*Store, *time.Time) {
@@ -2090,5 +2091,139 @@ func TestRevealRefusesAMessageHiddenByAConsequence(t *testing.T) {
 		t.Fatal(err)
 	} else if r.OK {
 		t.Error("a visible message is not hidden as a secret")
+	}
+}
+
+// HIDE AND REVEAL MUST BE REVERSIBLE IN BOTH DIRECTIONS.
+//
+// reveal shipped without its other half: its own output ends "if that phrase is real rather than a
+// published test vector, hide it again and tell its owner", and the tool had no way to hide one.
+// The store has had HideMessage since the scanner needed it for the reporting carve-out; only the
+// operator verb was missing, so somebody who revealed a message and then realised it was a real key
+// had no way back. Guidance the code cannot support is the defect this repo keeps finding in other
+// documents, committed in its own.
+func TestHideAndRevealAreReversibleBothWays(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-a", "is this a scam? someone sent me these words")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := post(t, s, "orem", "ip-b", "an ordinary message from somebody else")
+	if err != nil {
+		t.Fatal(err)
+	}
+	visible := func() int {
+		msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(msgs)
+	}
+	if visible() != 2 {
+		t.Fatalf("precondition: both messages visible, got %d", visible())
+	}
+
+	// Out of sight, and nobody punished for it.
+	if err := s.HideMessage(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if visible() != 1 {
+		t.Errorf("hiding one leaves one, got %d", visible())
+	}
+	if n, err := s.CountInfractions(ctx, true); err != nil {
+		t.Fatal(err)
+	} else if n != 0 {
+		t.Errorf("hiding is not a punishment: %d consequence(s) recorded", n)
+	}
+
+	// Back again.
+	if r, err := s.Reveal(ctx, id); err != nil {
+		t.Fatal(err)
+	} else if !r.OK {
+		t.Fatal("reveal must undo a hide")
+	}
+	if visible() != 2 {
+		t.Errorf("revealing restores it, got %d", visible())
+	}
+
+	// AND AGAIN THE OTHER WAY, which is the half that was missing: an operator who reveals and
+	// then realises the phrase is real must be able to put it back.
+	if err := s.HideMessage(ctx, id); err != nil {
+		t.Errorf("a revealed message must be hideable again: %v", err)
+	}
+	if visible() != 1 {
+		t.Errorf("and it goes back out of sight, got %d", visible())
+	}
+	// The bystander was never involved in any of it.
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 || msgs[0].ID != other {
+		t.Errorf("the other message must be untouched throughout, got %+v", msgs)
+	}
+}
+
+// Hide refuses what it cannot hide, so a mistyped id does not read as success. A punished message
+// is already out of sight and un-hiding it is `unban`'s business, through a recompute.
+func TestHideRefusesWhatIsAlreadyOutOfSight(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-crook", "send me your seed phrase and I will restore it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: id,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HideMessage(ctx, id); err == nil {
+		t.Error("a message already hidden by a consequence must not be re-hidden as a secret; " +
+			"that would turn a reversible hide into one only reveal could undo")
+	}
+	// A second hide of a secret-hidden message is also refused.
+	fresh, err := post(t, s, "orem", "ip-c", "a message to hide twice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HideMessage(ctx, fresh); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HideMessage(ctx, fresh); err == nil {
+		t.Error("hiding twice must be refused rather than reported as a change")
+	}
+	// And an id that does not exist.
+	if err := s.HideMessage(ctx, 99999); err == nil {
+		t.Error("a nonexistent message must be refused")
+	}
+}
+
+// Preview has one definition because both verbs print one, and it truncates by RUNES: a byte cut
+// would sever a multibyte character, which in this repo has already been the shape of several bugs.
+func TestPreviewTruncatesByRunesAndLeavesShortBodiesAlone(t *testing.T) {
+	short := "is this a scam?"
+	if got := Preview(short); got != short {
+		t.Errorf("a short body must pass through whole: got %q", got)
+	}
+	long := strings.Repeat("ф", 60) // two bytes per rune, so a byte cut would land mid-character
+	got := Preview(long)
+	if !utf8.ValidString(got) {
+		t.Errorf("the preview must be valid UTF-8: %q", got)
+	}
+	if n := len([]rune(got)); n != 19 {
+		t.Errorf("eighteen runes plus an ellipsis, got %d in %q", n, got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("a truncated preview must say so: %q", got)
+	}
+	// And it must not carry the tail of a phrase, which is the point of truncating at all.
+	phrase := "abandon abandon abandon abandon abandon about"
+	if strings.Contains(Preview(phrase), "about") {
+		t.Errorf("the preview must not reach the end of a phrase: %q", Preview(phrase))
 	}
 }

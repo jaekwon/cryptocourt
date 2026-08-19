@@ -91,6 +91,8 @@ func main() {
 		cmdDismiss(ctx, store, args[1:])
 	case "prune":
 		cmdPrune(ctx, store, args[1:])
+	case "hide":
+		cmdHide(ctx, store, args[1:])
 	case "reveal":
 		cmdReveal(ctx, store, args[1:])
 	case "unfreeze":
@@ -159,6 +161,7 @@ func usage() {
                            delete old messages; DRY RUN unless -apply
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   unfreeze CHAIN/COURT     put it back; the freeze is recorded as lifted, not erased
+  hide ID                  take a message out of sight, punishing nobody
   reveal ID                put back a message hidden as a disclosed secret
   status                   backlog, scanner heartbeat, counts
 
@@ -698,6 +701,40 @@ func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
 // It refuses when the court was not frozen, rather than reporting success. A typo here is as
 // likely as a typo in `freeze`, and "dev/oren is back in service" over a court that never left it
 // is the same lie one verb along.
+// cmdHide takes a message out of sight without punishing anybody, which is the other half of
+// reveal and was missing.
+//
+// reveal's own output ends "if that phrase is real rather than a published test vector, hide it
+// again and tell its owner" — advice for an action the tool did not offer. The store has had
+// HideMessage since the scanner needed it for the reporting carve-out; only the CLI verb was
+// absent, so an operator who revealed a message and then realised it was a real key had no way
+// back. Guidance the code cannot support is the defect this repo keeps finding in other people's
+// documents, committed here in my own.
+//
+// Three outcomes, told apart rather than collapsed: no such message, already out of sight, or
+// hidden now. HideMessage alone cannot distinguish the first two — it requires hidden=0 and says
+// only "no visible message" — so existence is checked first.
+func cmdHide(ctx context.Context, s *chat.Store, argv []string) {
+	_, pos := split(argv)
+	if len(pos) != 1 {
+		die("hide needs one message id — read it from `review`")
+	}
+	id, err := strconv.ParseInt(pos[0], 10, 64)
+	if err != nil {
+		die("%v", err)
+	}
+	_, _, body, err := s.MessageAuthor(ctx, id)
+	if err != nil {
+		die("%v", err)
+	}
+	if err := s.HideMessage(ctx, id); err != nil {
+		die("message %d exists but is already out of sight — a consequence hides one (see `list`) "+
+			"and so does the scanner for a disclosed secret (`reveal` puts that back)", id)
+	}
+	fmt.Printf("message %d is hidden in place: %q\n", id, chat.Preview(body))
+	fmt.Printf("nobody was punished for it and its author was told nothing; `reveal %d` undoes this.\n", id)
+}
+
 // cmdReveal puts back a message the scanner hid as a disclosed secret.
 //
 // The scanner hides a valid BIP-39 phrase on sight and does not punish for it, which is right: a
