@@ -747,3 +747,90 @@ func TestAnArabicPriceKeepsItsCurrencyMark(t *testing.T) {
 			"a different figure")
 	}
 }
+
+// WHAT LICENSES erase() BEING CONSERVATIVE: whatever slips past it, Skeleton folds away.
+//
+// erase() does not catch every invisible, and an audit against Unicode's default-ignorable set
+// found real survivors — U+17B4 and U+17B5 (Khmer inherent vowels, assigned and invisible), plus
+// reserved default-ignorables at U+2065, U+FFF0..U+FFF8 and U+E0080 upward. The obvious reading is
+// that "s<U+17B4>cam" now displays as "scam" while storing as something else.
+//
+// Measured, it buys an attacker nothing. The prefilter matches on the skeleton, and the skeleton of
+// every variant is identical to the plain word, so an obscured "send me your seed phrase" still
+// earns a deterministic scam floor. That is the whole point of the two-function split at the top of
+// this file, and it is the reason erase() is allowed to be incomplete.
+//
+// THE MECHANISM MATTERS, because it is why this holds for 3,740 codepoints and not just the ones
+// somebody thought of: Skeleton is an ALLOWLIST. It keeps letters and digits and drops everything
+// else, so an invisible does not need to be enumerated to be folded — including the unassigned
+// reserved ones, which no hand-written list could have covered in advance.
+//
+// THIS FIXTURE IS THE LICENCE. If Skeleton ever stops being an allowlist, erase()'s incompleteness
+// turns into an evasion channel and the audit has to be redone rather than re-read. Verified: making
+// Skeleton pass non-letters through is caught here, naming the codepoint.
+//
+// AND IT IS WHY THE AUDIT DID NOT END IN A CHANGE. The tempting fix — erase everything Unicode
+// calls default-ignorable, by property, as the Prepended_Concatenation_Mark bug was fixed — would
+// erase U+E0100..U+E01EF, the ideographic variation selectors, which are Variation_Selector members
+// and are how Japanese selects a kanji variant. That is the same defect as the four fixed above,
+// introduced in the course of fixing them. A property is the right source only when the design
+// wants the whole property; this one deliberately keeps VS16 for emoji and IVS for CJK.
+func TestSkeletonFoldsAwayWhateverEraseLetsThrough(t *testing.T) {
+	pcm, hasPCM := unicode.Properties["Prepended_Concatenation_Mark"]
+	odi, hasODI := unicode.Properties["Other_Default_Ignorable_Code_Point"]
+	if !hasODI {
+		t.Skip("Other_Default_Ignorable_Code_Point not exposed by this toolchain")
+	}
+	const want = "scam"
+	checked, leaked := 0, 0
+	for r := rune(0); r <= 0x10FFFF; r++ {
+		invisible := unicode.Is(odi, r) || unicode.Is(unicode.Cf, r)
+		if !invisible || joiner(r) {
+			continue
+		}
+		// Prepended concatenation marks are TEXT, not decoration: they precede digits and are
+		// meant to survive both functions. Excluded deliberately, not overlooked.
+		if hasPCM && unicode.Is(pcm, r) {
+			continue
+		}
+		if erase(r) {
+			continue // never reaches a reader, so Skeleton has nothing to do
+		}
+		checked++
+		if got := Skeleton("s" + string(r) + want[1:]); got != want {
+			leaked++
+			if leaked <= 5 {
+				t.Errorf("U+%04X survives erase() AND changes the skeleton (%q != %q): "+
+					"erase() is allowed to be incomplete only because Skeleton is not",
+					r, got, want)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("the audit examined nothing; erase() cannot be catching every invisible")
+	}
+	t.Logf("%d invisibles survive erase(); all fold to %q", checked, want)
+}
+
+// The IVS trap, asserted so the comment above is not the only thing protecting it: Japanese kanji
+// variant selectors must reach the reader. They are default-ignorable AND Variation_Selector, so
+// any property-based sweep of either would take them.
+func TestIdeographicVariationSelectorsReachTheReader(t *testing.T) {
+	// U+845B with VS17 (U+E0100) selects a specific glyph of the kanji.
+	const kanji = "葛\U000E0100 城市"
+	out, err := SanitizeBody(kanji)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if !strings.ContainsRune(out, 0xE0100) {
+		t.Errorf("U+E0100 was erased: %q -> %q — an ideographic variation selector chooses "+
+			"which kanji a reader sees, and dropping it shows them a different character",
+			kanji, out)
+	}
+	// VS16, which the design keeps for emoji, for the same reason.
+	if out, err := SanitizeBody("❤️ agreed"); err != nil {
+		t.Errorf("emoji with VS16 refused: %v", err)
+	} else if !strings.ContainsRune(out, 0xFE0F) {
+		t.Error("VS16 must survive; without it the emoji renders as a text glyph")
+	}
+}
