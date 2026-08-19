@@ -29,7 +29,43 @@ var (
 // model.
 type Hint struct {
 	Floor string   // Clean unless something has no innocent reading
-	Notes []string // passed to nothing yet; logged, and available to a future prompt
+	Notes []string // logged, and available to a future prompt
+	// Reporting means the message looks like somebody WARNING about abuse rather
+	// than committing it. See Reporting.
+	Reporting bool
+}
+
+// reReporting matches the shapes a person uses when they are raising an alarm
+// rather than sounding one.
+var reReporting = regexp.MustCompile(`(?i)(is (this|it) (a )?(scam|legit|real|phishing)|` +
+	`do ?n[o']?t click|don't fall for|be ?ware|beware|warning|heads up|` +
+	`careful|scam alert|i (just )?(got|received|was sent)|someone (just )?(sent|messaged|dm)|` +
+	`mods,? (please )?(look|check|see)|reporting this|fyi)`)
+
+// Reporting reports whether a message reads as a warning about abuse rather than an
+// instance of it.
+//
+// WHY THIS EXISTS, measured rather than assumed: gemma3:4b cannot tell the two apart.
+// Asked about "someone just messaged me this, is it a scam? <lure>" it answers scam
+// 0.98; asked about "heads up, there is a fake GNOT airdrop going around in DMs" —
+// which contains no lure at all — it answers scam 0.95. It is classifying the SUBJECT
+// of the message, not the ACT. Every reporting variant tested came back flagged.
+//
+// Left alone, the consequence is perverse: a user warning the court gets a 24h
+// timeout AND their warning hidden, which is the exact opposite of what a scam
+// detector is for.
+//
+// So a message that looks like a report is not punished automatically. It is
+// classified, recorded, and left for a person — the same treatment `unknown` gets,
+// for the same reason: the model has been shown not to be able to answer.
+//
+// THE COST, stated plainly: a scammer who appends "is this a scam?" to their lure
+// buys immunity from the automated timeout, and their message stays visible. That is
+// a real weakening. The alternative is kicking people for warning each other, and
+// between an attacker who has to add six words and a bystander who gets punished for
+// helping, this is the better failure.
+func Reporting(body string) bool {
+	return reReporting.MatchString(body)
 }
 
 // Prefilter inspects a message. It runs on the SKELETON as well as the raw text,
@@ -56,6 +92,10 @@ func Prefilter(body string) Hint {
 	}
 	if reGnoAddr.MatchString(body) {
 		h.Notes = append(h.Notes, "contains a gno address")
+	}
+	if Reporting(body) {
+		h.Reporting = true
+		h.Notes = append(h.Notes, "reads as a report or warning, not an act")
 	}
 	if n := WordlistRun(body); n >= 8 {
 		// EIGHT, not four. BIP-39 is 2048 ordinary English words: at four, real

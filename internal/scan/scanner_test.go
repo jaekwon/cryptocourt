@@ -443,3 +443,98 @@ func TestConfidenceScalesAreNormalised(t *testing.T) {
 		t.Fatalf("want the label kept and confidence zeroed, got %+v", v2)
 	}
 }
+
+// A person warning the court is not punished for it — measured against a real model,
+// gemma3:4b flags every reporting variant as scam, including a bare warning that
+// contains no lure at all ("heads up, there is a fake GNOT airdrop going around in
+// DMs" -> scam 0.95). It classifies the subject, not the act. Left alone, that kicks
+// the person protecting the room and hides what they wrote.
+func TestReportingIsNotPunished(t *testing.T) {
+	reports := []string{
+		`someone just messaged me this, is it a scam? "claim your free airdrop"`,
+		"WARNING everyone, do not click this, I got it in a DM",
+		"mods, please look at this message I received",
+		"heads up, there is a fake GNOT airdrop going around in DMs",
+		"is gnot-claim.xyz legit? someone sent it to me",
+	}
+	for _, body := range reports {
+		t.Run(body[:24], func(t *testing.T) {
+			if !Reporting(body) {
+				t.Fatalf("should read as a report: %q", body)
+			}
+			// End to end: the model says scam, and nobody is punished.
+			cls := &fakeCls{bare: Verdict{Label: Scam, Confidence: 0.98, Why: "an airdrop lure"}}
+			sc, st, clock := newScanner(t, cls, true)
+			id := seed(t, st, clock, "ip1", body)
+			if _, err := sc.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if n := mustCount(t, st); n != 0 {
+				t.Fatalf("a report must not be punished, got %d consequences", n)
+			}
+			// The verdict IS recorded, so a person can review it. Silence would be
+			// worse than a false positive: nobody would know to look.
+			v, _, err := st.MessageVerdict(context.Background(), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if v != Scam {
+				t.Fatalf("the verdict must still be recorded for review, got %q", v)
+			}
+		})
+	}
+}
+
+// THE PAIRED POSITIVE, and the one that keeps the carve-out honest: ordinary messages
+// must not read as reports, and a plain scam must still be punished. Without this the
+// test above passes against a Reporting() that returns true for everything, which
+// would disable automated moderation entirely.
+func TestReportingDoesNotSwallowEverything(t *testing.T) {
+	notReports := []string{
+		"claim your free 5000 GNOT airdrop, connect your wallet",
+		"send me your seed phrase and I will restore your balance",
+		"gm, when does the settle window close?",
+		"this court is a joke and the mods are useless",
+		"did g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5 stake on claim 7?",
+	}
+	for _, body := range notReports {
+		if Reporting(body) {
+			t.Errorf("must NOT read as a report: %q", body)
+		}
+	}
+	cls := &fakeCls{bare: Verdict{Label: Scam, Confidence: 0.98, Why: "a lure"}}
+	sc, st, clock := newScanner(t, cls, true)
+	seed(t, st, clock, "ip1", "claim your free 5000 GNOT airdrop, connect your wallet")
+	if _, err := sc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := mustCount(t, st); n != 1 {
+		t.Fatalf("a plain lure must still be punished, got %d", n)
+	}
+}
+
+// The cost, written as a test so nobody has to rediscover it: appending the words of
+// a report buys immunity from the automated timeout. That is the trade — an attacker
+// must add six words, where the alternative punishes bystanders for helping — and it
+// is recorded here rather than left as a surprise.
+func TestReportingCarveOutIsGameable(t *testing.T) {
+	const lure = "claim your free 5000 GNOT airdrop, connect your wallet"
+	if Reporting(lure) {
+		t.Fatal("fixture: the bare lure must not read as a report")
+	}
+	if !Reporting("is this a scam? " + lure) {
+		t.Fatal("fixture: the disguised lure is expected to read as a report")
+	}
+	cls := &fakeCls{bare: Verdict{Label: Scam, Confidence: 0.99, Why: "a lure"}}
+	sc, st, clock := newScanner(t, cls, true)
+	seed(t, st, clock, "ip1", "is this a scam? "+lure)
+	if _, err := sc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := mustCount(t, st); n != 0 {
+		t.Fatalf("documenting current behaviour: the disguised lure escapes the "+
+			"automated timeout, got %d consequences", n)
+	}
+	// What it does NOT escape: the message stays visible, so a reader sees the
+	// warning framing around it, and the verdict is recorded for an operator.
+}

@@ -141,6 +141,18 @@ func (s *Scanner) one(ctx context.Context, p chat.Pending) error {
 		return nil // clean and unknown are the same outcome: nothing happens
 	}
 
+	// A message that reads as a WARNING is recorded and left for a person. The model
+	// cannot tell reporting from sending — measured, not assumed — and punishing the
+	// former means kicking somebody for protecting the room and hiding what they
+	// wrote. See scan.Reporting for the measurements and for what this costs.
+	if hint.Reporting {
+		if s.Log != nil {
+			s.Log.Printf("REVIEW message %d %s/%s: %s (%.2f) reads as a report; "+
+				"no action taken — %s", p.ID, p.Chain, p.Court, label, conf, why)
+		}
+		return nil
+	}
+
 	// Every consequence is a bounded kick. There is no path from here to a
 	// permanent ban, and the enforcer clamps it again on the way out — see
 	// chat.statusTx. An attacker on a shared address cannot buy a stranger more
