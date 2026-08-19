@@ -55,6 +55,10 @@ not resolve a claim").
 
 ### Measured
 
+Confirmed **twice, independently**, by two separate staged copies that did not share
+fixtures: one reported the round-count boundary below, the other hit it from the other
+direction while measuring self-defence (`escrowUntil 727324` vs `now 727325`).
+
 From the staged-copy run (`zz_measure_test.gno`, shadow root — full kourtv2 suite green):
 
 | `escrowMinBlocks` | rounds that fit | `provClose` |
@@ -98,6 +102,122 @@ would trust instead of re-deriving this:
 
 Whichever lands, the test must assert the bystander: an ordinary claim with a *decided*
 first round must still finalize on its old schedule.
+
+---
+
+## 1b. `quorumFloor`'s supply arm makes the robbed pool unable to defend itself
+
+**Severity: high.** Same family as item 1 — this is *why* a bad verdict stands, and it is
+the root cause behind the answer-snipe being profitable at all.
+
+`quorumFloor` (dispute.gno:569-616) maxes the X̄ arm against `5% of court supply`
+(dispute.gno:580-582). But the prize at stake is denominated in **claim stake**, while the
+bar is denominated in **court supply**. Below `X̄ = 5%·supply` the robbed pool **cannot
+reach the bar even voting unanimously, at any concentration**. Measured sweep (supply
+40,000 CC):
+
+| honest pool | % of supply | X̄ | quorumFloor | pool weight | clears alone? |
+|---|---|---|---|---|---|
+| 400 CC | 1% | 303 | 2,000 | 400 | **no — 6.6× short** |
+| 1,200 | 3% | 1,103 | 2,000 | 1,200 | **no** |
+| 2,000 | 5% | 1,903 | 2,000 | 2,000 | yes |
+| 4,000 | 10% | 3,903 | 3,903 | 4,000 | yes |
+
+**The threshold is exactly 5% of court supply, and it is entirely independent of the answer
+bond** — which is the proof that the 50% bond buys nothing on this axis. dispute.gno:600-609
+already states the consequence in its own words: *"an unreachable quorum does NOT mean 'no
+verdict' … the bar hands the decision to the party it exists to police."* Combined with
+item 1, that is the whole failure: the pool can't clear the bar, the round fails quorum,
+`provisional = cs.answer`, and the defender forfeits half their bond for trying.
+
+**Measured one-clause fix, zero test churn** (dispute.gno:580-582) — gate the supply arm on
+the claim actually being that big:
+
+```go
+if fivePct := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps); fivePct > floor && xbar >= fivePct {
+```
+
+Floor becomes exactly X̄ at every claim size; the robbed pool clears it alone in all five
+sweep rows; **the entire existing suite passes unmodified (ok . 7.53s)**.
+
+The trade, stated honestly: it lowers the weight needed for a *malicious* overturn of a
+small claim from 5%·S to ~X̄/2 (~10× on a claim at 1% of supply). Not free — the attacker's
+bond burns on an uphold and the answerer is comped 2× — and a whale at 5%·S can already do
+it today, so the relaxation extends the capability to small honest *and* small malicious
+coalitions symmetrically. Since the snipe is currently **free** while a false overturn costs
+a bond, the trade favours relaxing it. But verify `qualityBars` (quality.gno:231-275) and
+`mustElectionInvariants` first — they carry the same shape and were **not** tested against
+this patch.
+
+Knife edge: even patched, `floor = X̄` and a fully-staked pool's weight is `X̄ − ε`, so it
+falls short by exactly the sniper's dust. One abstain from anyone fixes it (`cast = yes+no+
+abstain`, dispute.gno:222). Useful corollary: **the coordination task is turnout, not
+agreement** — a rescue needs one *yes* plus enough *abstains*, so an indifferent whale can
+enable it without forming an opinion.
+
+### Two adjacent measured facts worth not re-deriving
+
+- **There is no free-rider problem in the verdict lane.** A volunteer's surplus is
+  `b·(2q_o − q_u − q_f/2)`, and the 2:1 comp (`compAmount`, dispute.gno:372-381) is a
+  private premium a free-rider does not get. Verified the `2b` arm binds at every bond level
+  and every X̄ (12/12 cases). So the sign is independent of both `b` and the holder's stake
+  share: **any holder of any size prefers to dispute** once overturn is >20% likely (>33% if
+  the failure mode is uphold). The dilemma is already dissolved — the blocker is capital and
+  turnout, not incentive.
+- **A one-person rescue already works today.** `OpenDispute` bars only the answerer,
+  `VoteDispute` only participants — so a disinterested holder can post the bond *and* vote
+  in the round they opened. Measured end-to-end: one non-participant whale (13.9% of supply)
+  opened, voted, resolved, overturned the snipe, recovered the bond and took 761.2 CC of
+  comp — 2:1 on one transaction pair, permissionless, live. The snipe is *already* priced as
+  a bounty; what fails is turnout, not the reward.
+
+---
+
+## 1c. The 50% answer bond is 2.59× oversized, and it makes self-defence 11× harder
+
+**Severity: medium.** Not a bug — a calibration the repo has already partly retracted — but
+it actively worsens items 1 and 1b, so it belongs with them.
+
+**The flat bond that closes the snipe at every age is `maxMidGrossBps` = 1928 bps**, a
+quantity `court.gno:224-226` **already computes**. Destruction leverage at the hot 12-week
+maximum: 0.386 at 5000 bps, 1.000 at 1928. So `answerBondBps = 5000` exceeds the anti-snipe
+requirement by **2.59×**, and `court.gno:194`'s bound carries the same slack because it is
+sized against `capBonus`'s *cap* (tier/2 × stake = 50%·X̄) rather than the *realizable* draw
+(19.278%·X̄) — measured, the cap never binds on the honest path. PLAN.md:718-725 already
+concedes this in the repo's own words ("upper-bounds it with ~5× slack").
+
+**And it is anti-correlated with self-defence.** The defender's price is
+`min(20%·X̄, 40%×answerBond)` (dispute.gno:130-136) — 40% of the *answerer's* bond. So a 50%
+answer bond makes disputing **11.1× more expensive** (380.60 CC vs 34.25 CC at 450 bps).
+Measured: a victim holding **100% of the robbed pool** had 100 CC spendable against a
+380.60 CC requirement and `OpenDispute` was **refused** by lock.gno:73 — because the bond
+comes from *spendable* CC while the victim's capital is locked in the stake being defended.
+Headroom rule: the largest honest staker must have committed ≤83.3% of their CC at 5000
+bps, vs ≤98.2% at 450.
+
+**The floor is also keyed to the wrong side.** `answer.gno:148` reads `cs.sideConv(verdict)`
+— the *answered* side — so at an 11-week claim the sniper (dust declared) pays the 45 CC
+flat arm while the honest majority answerer pays 101 CC. Today's keying taxes the person
+declaring the well-funded side and exempts the one declaring dust. Keying it to
+`max(yesConv, noConv)` is **bit-identical for majority and even-split answers** (measured)
+and **~5× cheaper than today for an honest contrarian** (101 CC vs 500 CC), with an analytic
+ceiling of 30.845%·X̄ — the exact quantity `court.gno:227` already evaluates.
+
+**State plainly, because no formula fixes it:** an honest contrarian answer is
+*indistinguishable in shape* from a snipe (dust on the declared side, large opposing pool).
+No bond sizing can separate them. Max-keying is strictly cheaper than the status quo
+everywhere, but it prices contrarian truth in proportion to how wrong the crowd is.
+
+Costs if pursued: rescope `court.gno:194` and `:227` (both assert the floor is inert — that
+stops being true by design), plus 5 shallow fixture edits. Use **600 bps**, not 450 — at
+450 `court.gno:232` holds with *zero* margin and the settle-time reserve (session.gno:74-86)
+equals the entire bond, so nothing returns at settle.
+
+**Counterweight, and the reason not to just cut it:** measured cold-start snipe tolerance is
+**8.82%** — roughly 1 snipe in 11 claims makes staking worse than the external rate on a
+young court. And a young court is precisely the one with no 5%-of-supply holder watching.
+The regimes are anti-correlated, which is the strongest argument against accepting snipe
+risk at a low bond *without* fixing 1 and 1b first.
 
 ---
 
@@ -158,6 +278,26 @@ a 300 CC / 12-week position. `CloseDeadClaim` also burns the fee unconditionally
 (claim.gno:368-378), which contradicts PLAN.md:989 (fee should burn only on
 dead-with-no-stake) — though that predicate is farmable with a 1-unit self-stake, so the
 spec may be the thing that is wrong.
+
+**Reconciling two audits that look contradictory.** One found re-answerability unbuildable;
+another recommended "make destruction recoverable" as the top fix. They agree, because an
+**ordinary overturn already pays honest winners in full** (measured bit-identical, item 2) —
+so most of the recoverability already exists. What is missing is not a second answer, it is
+(1) the failed-quorum default that confirms the answer, (1b) the quorum bar the victims
+cannot clear, and (2)/(3) the two paths that zero a draw nobody was found at fault for. Fix
+those four and recoverability arrives without a new mechanism.
+
+**Regulatory note, and it raises the priority of 1/1b/2/3 above any bond change.**
+REGULATIONS.md:188-201 rests on Humphrey factor 2 — prizes "amounts certain and guaranteed",
+with a fixed published rate scoring better than variable shares. **A snipe makes the
+published rate a lie**: the prize goes to zero for reasons unrelated to the fact being
+adjudicated. That is a defect in the regulatory posture, not only in the economics, and only
+recoverability cures it — every bond-sizing fix leaves the prize destroyable and merely makes
+destruction expensive. Constraint on any fix: the claim must *eventually mint the prize it
+should have minted*. Never redistribute the sniper's bond to the stakers — that makes the
+prize loser-funded and bilateral, which is the one thing escape (b) cannot survive. The
+existing disputer comp is fine as-is: conduct-contingent, paid to whoever proved the
+misconduct, burn-anchored and capped at 80% of the burn.
 
 **Ruled out:** re-answerability. It cannot re-freeze the conviction pin without arming
 three dormant clamps (answer.gno:130-147 names them), cannot reopen staking without making
