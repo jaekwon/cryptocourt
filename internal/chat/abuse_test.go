@@ -2,7 +2,9 @@ package chat
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -287,5 +289,131 @@ func TestGarbageQueryParameters(t *testing.T) {
 				t.Fatalf("the limit clamp did not hold: %d messages", len(got.Messages))
 			}
 		})
+	}
+}
+
+// SPREADING TRAFFIC ACROSS ROOMS MUST NOT BUY MORE OF IT.
+//
+// The court in a path is client-chosen and only shape-checked, so one address can invent
+// as many rooms as it likes — measured, 110 distinct rooms in ten minutes of clock, bounded
+// only by the per-address rate. The worry that follows is obvious: §5's per-court soft cap
+// and fair share are per COURT, so does scattering messages across invented rooms evade
+// them and multiply what one address can post?
+//
+// It does not, and that is worth pinning rather than reasoning about, because it is the
+// difference between "the namespace is untidy" and "the throttle has a hole in it".
+// PerIPMax is per ADDRESS per window and does not care which room a message went to, so it
+// binds either way. This test is what keeps that true if the per-court rules are ever
+// tightened into the address's budget.
+func TestScatteringAcrossRoomsDoesNotRaiseTheCeiling(t *testing.T) {
+	attempts := 20
+
+	// All in one room.
+	one, oneClock := newStore(t)
+	oneCount := 0
+	for i := 0; i < attempts; i++ {
+		*oneClock = oneClock.Add(MinInterval + 100*time.Millisecond)
+		if _, err := one.Post(context.Background(), PostInput{
+			Chain: "dev", Court: "orem", Moniker: "a",
+			Body:   fmt.Sprintf("message %d in a single room", i),
+			IPHash: "ip-a", NetHash: "net-a",
+		}); err == nil {
+			oneCount++
+		}
+	}
+
+	// The same address, the same clock, one message per invented room.
+	many, manyClock := newStore(t)
+	manyCount := 0
+	for i := 0; i < attempts; i++ {
+		*manyClock = manyClock.Add(MinInterval + 100*time.Millisecond)
+		if _, err := many.Post(context.Background(), PostInput{
+			Chain: "dev", Court: fmt.Sprintf("invented-%02d", i), Moniker: "a",
+			Body:   fmt.Sprintf("message %d scattered around", i),
+			IPHash: "ip-a", NetHash: "net-a",
+		}); err == nil {
+			manyCount++
+		}
+	}
+
+	if oneCount != manyCount {
+		t.Fatalf("scattering changed what one address could post: %d in one room vs %d "+
+			"across %d rooms — the per-address ceiling must not depend on the court",
+			oneCount, manyCount, attempts)
+	}
+	// And the ceiling must actually have bitten, or the equality above is two unlimited
+	// numbers agreeing with each other.
+	if oneCount >= attempts {
+		t.Fatalf("the fixture never reached a limit (%d of %d accepted); it proves nothing",
+			oneCount, attempts)
+	}
+	if oneCount != PerIPMax {
+		t.Errorf("the binding constraint should be PerIPMax=%d, got %d — if this changed "+
+			"deliberately, the comment above needs revisiting", PerIPMax, oneCount)
+	}
+	t.Logf("one address: %d accepted in one room, %d across %d invented rooms (PerIPMax=%d)",
+		oneCount, manyCount, attempts, PerIPMax)
+}
+
+// AND THE BURST FLOOR IS PER ADDRESS TOO, not per room.
+//
+// Separate from the ceiling above, and it took its own fixture to see: that test advances
+// the clock past MinInterval before every post, so the interval never binds in either arm
+// and scoping it per court survived unnoticed. The properties are different — one bounds
+// how MUCH an address can post in a window, this one bounds how FAST. If the two-second
+// floor were per room, an address could post to room A and room B back to back and burst
+// at whatever rate it could invent names.
+func TestTheBurstFloorIsPerAddressNotPerRoom(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	if _, err := s.Post(ctx, PostInput{
+		Chain: "dev", Court: "orem", Moniker: "a", Body: "the first message",
+		IPHash: "ip-a", NetHash: "net-a",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// A DIFFERENT room AND a different name, immediately, from the same address. No clock
+	// movement at all.
+	//
+	// Both changes at once on purpose. Scoping the floor by court is one hole and scoping
+	// it by MONIKER is a worse one — a moniker is free and unowned, so an attacker types a
+	// new name per message and the floor evaporates entirely. An earlier version of this
+	// reused the name "a" and the moniker-scoped mutation survived it.
+	_, err := s.Post(ctx, PostInput{
+		Chain: "dev", Court: "another-room", Moniker: "a-different-name",
+		Body: "and one right after", IPHash: "ip-a", NetHash: "net-a",
+	})
+	if err == nil {
+		t.Fatal("neither a different room nor a different name may reset the per-address " +
+			"interval; an address could otherwise burst as fast as it can type new ones")
+	}
+	if !errors.Is(err, ErrThrottled) {
+		t.Fatalf("want a throttle refusal, got %v", err)
+	}
+
+	// PAIRED POSITIVE: once the interval has passed, the other room works. Otherwise the
+	// assertion above is satisfied by a service that refuses second messages outright.
+	*clock = clock.Add(MinInterval + time.Second)
+	if _, err := s.Post(ctx, PostInput{
+		Chain: "dev", Court: "another-room", Moniker: "a", Body: "and now it is allowed",
+		IPHash: "ip-a", NetHash: "net-a",
+	}); err != nil {
+		t.Fatalf("after the interval the other room must accept it: %v", err)
+	}
+	// THE BYSTANDER, and deliberately on the SAME NETWORK as the throttled address.
+	//
+	// This is the /24 collateral class showing up in the throttle rather than in
+	// enforcement. If the floor were scoped to net_hash, two unrelated people behind one
+	// NAT — a campus, an office, carrier CGNAT — would silently throttle each other, and
+	// one person talking would impose a two-second wait on their neighbour. A stranger on
+	// a DIFFERENT network does not test this: net-scoping lets them through too, which is
+	// why the earlier version of this line missed it.
+	if _, err := s.Post(ctx, PostInput{
+		Chain: "dev", Court: "orem", Moniker: "b", Body: "an unrelated person talking",
+		IPHash: "ip-b", NetHash: "net-a", // same /24, different address
+	}); err != nil {
+		t.Fatalf("a neighbour behind the same NAT must not inherit somebody else's "+
+			"interval: %v", err)
 	}
 }
