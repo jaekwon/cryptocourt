@@ -1306,6 +1306,26 @@ is now a single `sqlAwaitingReview` constant. A predicate that lives in more tha
 eventually disagrees with itself, and the disagreement shows up as a control that quietly
 covers less than its documentation claims.
 
+**A long `--interval` used to make a healthy scanner look permanently dead.** The scanner writes a
+heartbeat once per interval; `status` called it stale past a fixed five minutes. Those two constants
+never had to agree, and `--interval 10m` — sensible for a quiet court sharing a GPU — makes them
+disagree for ever:
+
+    scanner        last seen 6m1s ago  (stale — is kourtmod running?)
+
+That heartbeat is healthy on that cadence. The heartbeat records the cadence now, so a reader judges
+the age against what the scanner PROMISED rather than a constant it cannot see — the same shape as
+`seconds` in §5 and the GET reply's `now`, where the side that knows the fact states it.
+
+Three cadences of silence is the bound: one is ordinary, since a read can land just before the next
+write; two is a missed cycle a slow batch explains; three is a pattern. Floored at a minute so the 5s
+default does not warn on fifteen seconds of quiet. A 10m cadence quiet for forty minutes is still
+stale, so this did not become "never warn".
+
+A row from the previous binary has two fields and parses with a zero cadence, which readers treat as
+"it did not say" and fall back to the old five minutes — so the fallback survives rather than being
+deleted.
+
 **Watch the backlog — and the UNSCANNED line, which is the one that hides.**
 `kourtchatctl status` reports the heartbeat, the unscanned count, and how many messages
 gave up. Fail-open is deliberate — chat works with no scanner — but silent fail-open
