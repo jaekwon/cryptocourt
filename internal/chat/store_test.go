@@ -1262,3 +1262,210 @@ func TestAConsequenceDoesNotHideWhatCameAfterIt(t *testing.T) {
 	}
 	_ = old
 }
+
+// THE FAIR SHARE MUST NOT THROTTLE A CONVERSATION.
+//
+// `courtTotal >= CourtSoftCap && courtMine >= FairShare` is the most conditional rule in this
+// file, its comment claims it "binds ONLY under contention", and nothing tested that ordinary
+// talking survives it. A rate limiter that quietly taxes real conversation is the failure nobody
+// reports — they just stop typing.
+//
+// Measured: 2, 5 and 12 people talking at a human pace, twelve rounds each, zero refusals. The
+// reason is worth writing down because it does not follow from the constants. Twelve people at
+// one message per twenty seconds is 36 messages a minute, well past CourtSoftCap — but the
+// window holds only three rounds and an author's own pending message is not counted yet, so
+// courtMine peaks at 2 and the second clause never fires however many people are present.
+//
+// Which means the rule keys on how fast ONE address talks, not on how many people are in the
+// room. That is the property to pin, and it is not what the constants look like they say.
+func TestOrdinaryConversationIsNeverThrottled(t *testing.T) {
+	for _, people := range []int{2, 5, 12} {
+		t.Run(fmt.Sprintf("%d people", people), func(t *testing.T) {
+			s, clock := newStore(t)
+			ctx := context.Background()
+			sent := 0
+			for round := 0; round < 12; round++ {
+				for p := 0; p < people; p++ {
+					if _, err := s.Post(ctx, PostInput{
+						Chain: "dev", Court: "orem", Moniker: fmt.Sprintf("p%d", p),
+						Body:   fmt.Sprintf("person %d at round %d, about the docket", p, round),
+						IPHash: fmt.Sprintf("ip%d", p), NetHash: "net-shared",
+					}); err != nil {
+						t.Errorf("round %d, person %d refused: %v", round, p, err)
+					} else {
+						sent++
+					}
+				}
+				*clock = clock.Add(20 * time.Second)
+			}
+			if sent != people*12 {
+				t.Fatalf("only %d of %d messages were accepted in an ordinary conversation",
+					sent, people*12)
+			}
+		})
+	}
+}
+
+// AND IT IS A SHARE, NOT A MUTE BUTTON. Under real contention a fast talker is capped — that is
+// the point — but somebody who has said nothing can still get a word in. Without that second
+// half, whoever types fastest would silence the room, which is what a court-wide cap alone does
+// and the reason it is not used alone.
+//
+// Filling the court needs 15 addresses rather than 10: at 10 the fill itself reaches FairShare on
+// its fourth round and gets throttled, which is the rule working correctly and would have made
+// this fixture measure its own setup.
+func TestUnderContentionAFairShareStillLetsANewcomerSpeak(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	say := func(ip, body string) error {
+		_, err := s.Post(ctx, PostInput{Chain: "dev", Court: "orem", Moniker: ip,
+			Body: body, IPHash: ip, NetHash: "net-" + ip})
+		return err
+	}
+
+	// Fill the court to its soft cap, spread widely enough that no single address is near its
+	// own share: 15 addresses, two messages each.
+	for round := 0; round < 2; round++ {
+		for p := 0; p < 15; p++ {
+			if err := say(fmt.Sprintf("bg%02d", p),
+				fmt.Sprintf("background talk %d from %d", round, p)); err != nil {
+				t.Fatalf("the fill must not be throttled or this measures its own setup: %v", err)
+			}
+		}
+		*clock = clock.Add(5 * time.Second)
+	}
+	var inWindow int
+	if err := s.r.QueryRow(`SELECT count(*) FROM messages WHERE created_at > ?`,
+		clock.Add(-CourtWindow).Unix()).Scan(&inWindow); err != nil {
+		t.Fatal(err)
+	}
+	if inWindow < CourtSoftCap {
+		t.Fatalf("precondition: the court must be contended, %d < %d", inWindow, CourtSoftCap)
+	}
+
+	// A fast talker gets exactly their share and is then told why.
+	accepted := 0
+	var lastErr error
+	for i := 0; i < 6; i++ {
+		if err := say("fasttalker", fmt.Sprintf("replying quickly, point %d", i)); err != nil {
+			lastErr = err
+		} else {
+			accepted++
+		}
+		*clock = clock.Add(MinInterval + time.Second)
+	}
+	if accepted != FairShare {
+		t.Errorf("a contended court should allow exactly FairShare=%d, got %d", FairShare, accepted)
+	}
+	if !errors.Is(lastErr, ErrThrottled) {
+		t.Errorf("the refusal must be a throttle, got %v", lastErr)
+	}
+	if lastErr != nil && !strings.Contains(lastErr.Error(), "had its share") {
+		t.Errorf("and it must say why, got %q", lastErr)
+	}
+
+	// THE HALF THAT MAKES IT FAIR: somebody who has said nothing is not shut out.
+	if err := say("newcomer", "hello, I have a question about claim 7"); err != nil {
+		t.Errorf("a newcomer must still be able to speak in a busy court: %v", err)
+	}
+}
+
+// The global budget SHEDS rather than denies: past GlobalMax an address already talking keeps
+// going and a brand-new one waits. `mine` there is the per-address count across ALL courts, so
+// "new" means has said nothing anywhere in the window — not nothing in this court.
+//
+// Saturating the window takes 300 messages inside sixty seconds, which only works if the clock
+// advances between ROUNDS rather than between posts: MinInterval is per address, so sixty
+// addresses can speak at the same instant. Advancing per post spreads 300 messages over fifteen
+// minutes and the window never holds more than twenty — which is how the first version of this
+// fixture skipped itself.
+func TestTheGlobalBudgetShedsNewAddressesNotEstablishedOnes(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	say := func(ip, court, body string) error {
+		_, err := s.Post(ctx, PostInput{Chain: "dev", Court: court, Moniker: ip,
+			Body: body, IPHash: ip, NetHash: "net-" + ip})
+		return err
+	}
+
+	// 60 addresses over 20 courts, five rounds: 300 in the window, 15 per court (under the soft
+	// cap) and 5 per address (under PerIPMax), so the GLOBAL rule is what this measures.
+	const addrs, rounds, courts = 60, 5, 20
+	for round := 0; round < rounds; round++ {
+		for p := 0; p < addrs; p++ {
+			if err := say(fmt.Sprintf("ip%02d", p), fmt.Sprintf("court%d", p%courts),
+				fmt.Sprintf("filler %d from %d in the global window", round, p)); err != nil {
+				t.Fatalf("round %d, address %d: the fill must be accepted, or the other limits "+
+					"are what this fixture is measuring: %v", round, p, err)
+			}
+		}
+		*clock = clock.Add(MinInterval + time.Second)
+	}
+	var inWindow int
+	if err := s.r.QueryRow(`SELECT count(*) FROM messages WHERE created_at > ?`,
+		clock.Add(-GlobalWindow).Unix()).Scan(&inWindow); err != nil {
+		t.Fatal(err)
+	}
+	if inWindow < GlobalMax {
+		t.Fatalf("precondition: the global window must be saturated, %d < %d", inWindow, GlobalMax)
+	}
+
+	// Established — has posted inside the window. Must keep going.
+	if err := say("ip39", "court3", "still talking, already established here"); err != nil {
+		t.Errorf("an established address must not be shed: %v", err)
+	}
+	// New — has said nothing anywhere. Waits, and is told it is the service rather than blamed.
+	err := say("stranger", "court3", "hello, first time posting here")
+	if !errors.Is(err, ErrThrottled) {
+		t.Errorf("a new address must be shed while the service is saturated, got %v", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "saturated") {
+		t.Errorf("and told it is the service, not them: %q", err)
+	}
+}
+
+// The other half of "binds ONLY under contention": in a QUIET court a single address is not held
+// to FairShare at all — it gets the full per-address allowance, because the court's budget is
+// sitting idle and there is nobody to be fair to.
+//
+// This arm exists because of a mutation: deleting `courtTotal >= CourtSoftCap` turns the rule
+// into a flat three-per-minute quota and survives every other fixture in this file, since none of
+// them has a fast talker in an empty room. It is also the case the rule's own comment names first
+// — "a flat per-address quota would throttle two people talking while most of the court's budget
+// sat idle".
+func TestAQuietCourtHoldsNobodyToTheFairShare(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	say := func(ip, body string) error {
+		_, err := s.Post(ctx, PostInput{Chain: "dev", Court: "orem", Moniker: ip,
+			Body: body, IPHash: ip, NetHash: "net-" + ip})
+		return err
+	}
+
+	// One person, well past FairShare, alone. PerIPMax is the only thing that should stop them.
+	for i := 0; i < PerIPMax; i++ {
+		if err := say("alone", fmt.Sprintf("thinking out loud, part %d of the argument", i)); err != nil {
+			t.Fatalf("message %d of %d in an empty court was refused: %v", i+1, PerIPMax, err)
+		}
+		*clock = clock.Add(MinInterval + time.Second)
+	}
+	// And that IS where it stops, so the paragraph above is a measurement rather than a claim
+	// that this address is unlimited.
+	if err := say("alone", "one more thought before I stop"); !errors.Is(err, ErrThrottled) {
+		t.Errorf("the per-address limit must still apply, got %v", err)
+	} else if !strings.Contains(err.Error(), "per 1m0s") {
+		t.Errorf("and it must be the per-address one, not the fair share: %q", err)
+	}
+
+	// Two people going back and forth quickly in a quiet court: the case the comment names.
+	*clock = clock.Add(PerIPWindow)
+	for i := 0; i < 5; i++ {
+		for _, who := range []string{"ann", "bob"} {
+			if err := say(who, fmt.Sprintf("%s, turn %d of the back and forth", who, i)); err != nil {
+				t.Errorf("a two-person exchange must not be throttled (%s, turn %d): %v",
+					who, i, err)
+			}
+		}
+		*clock = clock.Add(MinInterval + time.Second)
+	}
+}
