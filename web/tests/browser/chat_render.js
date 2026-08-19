@@ -215,7 +215,36 @@ const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console
     });
     ok("there is a composer", r.form);
     ok("the body length matches the server's limit", r.maxBody === "400");
-    ok("the moniker length matches the server's limit", r.maxName === "24");
+
+    // THE MONIKER'S maxlength IS DELIBERATELY LOOSER THAN ITS LIMIT, and this assertion used
+    // to demand they were equal.
+    //
+    // The limit counts LETTERS, because in Hebrew, Arabic and Thai a letter costs two or three
+    // code points: an eighteen-letter voweled Arabic name is 34 of them. `maxlength` counts
+    // UTF-16 units and stops the keystroke with no message at all, so setting it to 24 meant
+    // such a name could not be TYPED — a dead key rather than an explanation. It is a crude
+    // paste bound now, and chatValidate is what enforces the real limit.
+    //
+    // Kept as an assertion rather than deleted because "looser" must still mean bounded and
+    // derived: an arbitrary large number here would let a paste through to a 400 reply.
+    ok("the moniker's maxlength is looser than its letter limit, so a marked name can be typed",
+       Number(r.maxName) > 24);
+    ok("...and still a bounded multiple of it, not an arbitrary number",
+       Number(r.maxName) % 24 === 0 && Number(r.maxName) <= 24 * 8);
+
+    // The half that actually enforces it, called in the page rather than inferred from markup.
+    const lim = await page.evaluate(() => {
+      const marked = "\u05d1\u05bc\u05b6".repeat(24);   // 24 Hebrew letters, 72 code points
+      const plain = "a".repeat(25);                       // 25 Latin letters
+      return {
+        marked: typeof chatValidate === "function" ? chatValidate(marked, "hello there") : "no fn",
+        plain: typeof chatValidate === "function" ? chatValidate(plain, "hello there") : "no fn",
+      };
+    });
+    ok("24 letters of pointed Hebrew is accepted however many code points that is",
+       lim.marked === null || lim.marked === undefined || lim.marked === "");
+    ok("25 letters is refused, and the message says letters",
+       typeof lim.plain === "string" && /too long/.test(lim.plain) && /letter/.test(lim.plain));
     ok("an unpunished reader can type", r.enabled);
   }
 
