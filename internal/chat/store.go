@@ -448,7 +448,7 @@ func statusTx(ctx context.Context, q querier, ipHash, netHash string, now time.T
 	)
 	err := q.QueryRowContext(ctx, `SELECT id, kind, reason, created_at, expires_at
 	  FROM infractions
-	  WHERE revoked_at IS NULL
+	  WHERE `+sqlInForce+`
 	    -- The network only matches for a MANUAL consequence. An automated kick
 	    -- applies to one address and nothing else.
 	    --
@@ -459,9 +459,8 @@ func statusTx(ctx context.Context, q querier, ipHash, netHash string, now time.T
 	    -- human makes, never a side effect of a model's opinion.
 	    AND (ip_hash = ?
 	         OR (reason = 'manual' AND net_hash <> '' AND net_hash = ?))
-	    AND (expires_at IS NULL OR expires_at > ?)
 	  ORDER BY (expires_at IS NULL) DESC, expires_at DESC LIMIT 1`,
-		ipHash, netHash, now.Unix()).Scan(&id, &kind, &reason, &createdAt, &expiresAt)
+		now.Unix(), ipHash, netHash).Scan(&id, &kind, &reason, &createdAt, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Status{State: "ok"}, nil
 	}
@@ -909,6 +908,23 @@ type InfractionRow struct {
 	RevokedBy  string
 }
 
+// sqlInForce is what "in force" MEANS for a consequence: not reversed, and not expired.
+//
+// Takes one placeholder, the current time. Written once because it was the fourth predicate in
+// this file to exist in several copies, and the copies had already disagreed: statusTx and the
+// pruner checked both halves, while CountInfractions and ListInfractions checked only
+// `revoked_at IS NULL` — so both answered "what is in force" with "what was never reversed".
+//
+// Measured before the fix, with one hour-long kick, one permanent ban and one revoked kick:
+//
+//	fresh              status said 2 in force, enforcer blocked 2   agreed
+//	two hours later    status said 2 in force, enforcer blocked 1   diverged
+//	two months later   status said 2 in force, enforcer blocked 1   never recovered
+//
+// An operator-facing count that only ever grows, in a design whose whole claim about automated
+// moderation is that its consequences expire.
+const sqlInForce = `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`
+
 // sqlNotFrozen excludes messages in a court that has been withdrawn from service.
 //
 // Written once for the same reason as sqlAwaitingReview below: the last two bugs in this file
@@ -1348,10 +1364,13 @@ func (s *Store) MessageAuthor(ctx context.Context, id int64) (ipHash, netHash, b
 	return ipHash, netHash, body, err
 }
 
-// ListInfractions reads consequences, newest first. An empty ipHash lists all of
-// them; revoked rows are included only on request, because the default question is
-// "what is in force".
-func (s *Store) ListInfractions(ctx context.Context, ipHash string, withRevoked bool, limit int) ([]InfractionRow, error) {
+// ListInfractions reads consequences, newest first. An empty ipHash lists all of them.
+//
+// `all` false means IN FORCE: neither reversed nor expired. It previously excluded only the
+// reversed, so the default listing — under a heading promising "consequences in force" —
+// included hour-long kicks from weeks earlier, each row dutifully labelled "expired". `all`
+// is where history lives, and the CLI's -all flag is exactly that question.
+func (s *Store) ListInfractions(ctx context.Context, ipHash string, all bool, limit int) ([]InfractionRow, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -1364,8 +1383,9 @@ func (s *Store) ListInfractions(ctx context.Context, ipHash string, withRevoked 
 		q += ` AND (ip_hash = ? OR net_hash = ?)`
 		args = append(args, ipHash, ipHash)
 	}
-	if !withRevoked {
-		q += ` AND revoked_at IS NULL`
+	if !all {
+		q += ` AND ` + sqlInForce
+		args = append(args, s.Now().Unix())
 	}
 	q += ` ORDER BY id DESC LIMIT ?`
 	args = append(args, limit)
@@ -1397,12 +1417,17 @@ func (s *Store) MessageVerdict(ctx context.Context, id int64) (verdict string, b
 }
 
 // CountInfractions is the cheap form of ListInfractions, for health and tests.
-func (s *Store) CountInfractions(ctx context.Context, withRevoked bool) (int, error) {
+//
+// `all` false means IN FORCE — see sqlInForce — not merely "not reversed", which is what it
+// used to mean while `kourtchatctl status` printed the number as "in force".
+func (s *Store) CountInfractions(ctx context.Context, all bool) (int, error) {
 	q := `SELECT count(*) FROM infractions`
-	if !withRevoked {
-		q += ` WHERE revoked_at IS NULL`
+	var args []any
+	if !all {
+		q += ` WHERE ` + sqlInForce
+		args = append(args, s.Now().Unix())
 	}
 	var n int
-	err := s.r.QueryRowContext(ctx, q).Scan(&n)
+	err := s.r.QueryRowContext(ctx, q, args...).Scan(&n)
 	return n, err
 }

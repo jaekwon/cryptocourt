@@ -680,3 +680,125 @@ func TestAManualConsequenceDoesNotRaiseTheAutomatedLadder(t *testing.T) {
 		t.Fatalf("an automated kick must climb the ladder, got %s", d)
 	}
 }
+
+// "IN FORCE" MUST MEAN IN FORCE — not "never reversed".
+//
+// Fourth predicate in this file found living in several copies, and the copies had already
+// disagreed: statusTx and the pruner checked reversal AND expiry, while CountInfractions and
+// ListInfractions checked only reversal. `kourtchatctl status` printed the count as "in force"
+// and `list` listed under a heading promising the same, so both answered a different question.
+//
+// Measured before the fix, with one hour-long kick, one permanent ban and one revoked kick:
+// fresh, status said 2 and the enforcer blocked 2; two hours later status still said 2 while
+// the enforcer blocked 1; two months later, unchanged. An operator-facing count that only
+// grows, in a design whose entire claim about automated moderation is that it expires.
+//
+// The enforcer is the authority here, so it is what the count is compared against — not a
+// number this test computes for itself.
+func TestInForceMeansInForce(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	// One that will expire, one permanent, one reversed.
+	if _, err := s.Consequence(ctx, Infraction{IPHash: "ip-a", Kind: KindKick,
+		Reason: ReasonSpam, Duration: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Consequence(ctx, Infraction{IPHash: "ip-b", Kind: KindBan,
+		Reason: ReasonManual, Detail: "by hand"}); err != nil {
+		t.Fatal(err)
+	}
+	revoked, err := s.Consequence(ctx, Infraction{IPHash: "ip-c", Kind: KindKick,
+		Reason: ReasonSpam, Duration: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Revoke(ctx, revoked, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+
+	// blocked asks the ENFORCER, which is the only authority on what is in force.
+	blocked := func() int {
+		n := 0
+		for _, ip := range []string{"ip-a", "ip-b", "ip-c"} {
+			st, err := s.Status(ctx, ip, "net-"+ip)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if st.State != "ok" {
+				n++
+			}
+		}
+		return n
+	}
+	agree := func(when string) {
+		t.Helper()
+		count, err := s.CountInfractions(ctx, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := s.ListInfractions(ctx, "", false, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := blocked()
+		if count != want {
+			t.Errorf("%s: status would say %d in force, the enforcer blocks %d", when, count, want)
+		}
+		if len(rows) != want {
+			t.Errorf("%s: list shows %d in force, the enforcer blocks %d", when, len(rows), want)
+		}
+		for _, r := range rows {
+			if r.RevokedAt != 0 {
+				t.Errorf("%s: a reversed consequence is not in force: id=%d", when, r.ID)
+			}
+			if r.ExpiresAt != 0 && r.ExpiresAt <= clock.Unix() {
+				t.Errorf("%s: an expired consequence is not in force: id=%d", when, r.ID)
+			}
+		}
+	}
+
+	// FRESH: two live, one reversed. This is the arm that was already correct, and it is here
+	// so the fix cannot be "return zero".
+	agree("fresh")
+	if blocked() != 2 {
+		t.Fatalf("precondition: two should be blocking, got %d", blocked())
+	}
+
+	// EXPIRED: the kick lapses, the ban does not.
+	*clock = clock.Add(2 * time.Hour)
+	agree("two hours later")
+	if blocked() != 1 {
+		t.Fatalf("only the permanent ban should remain, got %d", blocked())
+	}
+	*clock = clock.Add(60 * 24 * time.Hour)
+	agree("two months later")
+
+	// AND HISTORY IS STILL THERE, which is what -all is for. A fix that simply stopped
+	// counting things would pass everything above.
+	all, err := s.CountInfractions(ctx, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all != 3 {
+		t.Errorf("every consequence ever must still be countable, got %d", all)
+	}
+	rows, err := s.ListInfractions(ctx, "", true, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Errorf("and listable, got %d", len(rows))
+	}
+	// Including the expired one, which is the row an operator goes looking for after an
+	// appeal about something that has already lapsed.
+	found := false
+	for _, r := range rows {
+		if r.IPHash == "ip-a" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("an expired consequence must remain readable under -all")
+	}
+}
