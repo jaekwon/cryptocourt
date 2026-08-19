@@ -224,13 +224,79 @@ And fail-open plus no alerting means the scanner can be dead for a week with
 nobody noticing. Health reports backlog and heartbeat; an operator who does not
 watch it has an unmoderated chat.
 
-## 9. Status
+## 9. Running it
 
-Implemented and tested (`internal/chat`, 73 subtests):
+Three binaries, `make chat`:
 
-- **sanitiser + skeleton** — the two-function split above
-- **IP policy** — trusted-proxy walk, /64 units, keyed hashing, public tag
+    bin/kourtchat      the HTTP server: serves, accepts, throttles, enforces
+    bin/kourtmod       the scanner: reads unscanned rows, asks Ollama, records
+    bin/kourtchatctl   the operator: list / why / unban / ban / freeze / status
 
-Next, in order: the store (schema, throttle, enforcement with the clamp of §2),
-`cmd/kourtchat`, the operator CLI (an IP-consequence system with no reversal makes
-"appealable" a lie, so this is not a follow-up), the scanner, then the panel.
+A minimal local run, with the page served from a file:// URL or a static server:
+
+    bin/kourtchat --db chat.db --chain dev
+    bin/kourtmod  --db chat.db --model gemma3:4b        # dry run
+    bin/kourtchatctl -db chat.db status
+
+Behind a reverse proxy, which is the only deployment where the throttle means
+anything:
+
+    bin/kourtchat --db chat.db --chain dev \
+      --behind-proxy --trusted-proxy 10.0.0.0/8 \
+      --country-header CF-IPCountry \
+      --secret-file /etc/kourt/ip.key
+
+**Without `--behind-proxy`, `X-Forwarded-For` is ignored entirely.** That is the safe
+default and it is also visible: seed six messages with six different forwarded
+addresses against a direct listener and five come back 429, because they are all one
+client. With `--behind-proxy` and no `--trusted-proxy`, the server refuses to start.
+
+**`--secret-file` should be outside the data directory.** The fallback keeps the key
+in the database, which is convenient and protects nothing: hashing addresses defends
+against a stray copy of the `.db` file, and if the key is in that file, a backup
+carries both. IPv4 is 2^32 — key plus table recovers every address in seconds.
+
+**Arm the scanner only after watching it.** `--enforce` is off by default. Run the dry
+run against real traffic, read `verdict` out of the messages table, and turn it on
+when the false-positive rate is something you have measured rather than assumed. A 4B
+model at q4 will be wrong sometimes; the design bounds what being wrong costs
+(a timeout, never a ban) but it cannot make it not happen.
+
+**Watch the backlog.** `kourtchatctl status` reports the scanner's heartbeat and how
+many messages are unscanned. Fail-open is deliberate — chat works with no scanner —
+but silent fail-open means moderation can be off for a week with nobody noticing.
+
+**Backups**: WAL means `chat.db-wal` and `chat.db-shm` matter. Copy the `.db` alone
+and you may capture a torn state; `VACUUM INTO` or `sqlite3 .backup` gives one
+consistent file.
+
+**Flags** need either a proxy that computes the country (`--country-header`) or a
+local GeoLite2 export (`--geo-locations` plus `--geo-blocks`). With neither, no flag
+renders and everything else works. No data file is committed and none should be:
+GeoLite2 needs an account and is licence-restricted.
+
+## 10. Status
+
+Implemented, 162 subtests across three packages, verified live against a running
+server and a real gemma3:4b:
+
+- **`internal/chat`** — sanitiser and skeleton, client-address policy, the store
+  (schema, throttle, enforcement with the automated ceiling), the HTTP server
+- **`internal/scan`** — the Ollama classifier, the deterministic prefilters, the
+  scanner loop with escalate-only windowing
+- **`internal/geo`** — the country lookup: none, proxy header, or MaxMind table
+- **`cmd/kourtchat`, `cmd/kourtmod`, `cmd/kourtchatctl`**
+
+Not done: **the chat panel in the page**. It is the last piece and the only one that
+touches a file another workstream is actively editing, so it waits for their
+in-flight demo-data refactor to land rather than being tangled with it. The design
+for it is §7; the constraint that decides its shape is that all fourteen harnesses in
+`web/tests/` string-slice `index.html` and evaluate pure functions, so the panel must
+be a pure `chatPanelHtml(...) -> string` with a thin mount, and `esc()` needs `'` and
+a backtick added to it first.
+
+Also deferred: pruning old messages (a documented `DELETE`, not code — getting it
+wrong destroys the evidence an appeal needs), and validating a court against the
+chain (existence positive-and-sticky, purge negative-and-sticky, because the chain
+read cannot distinguish "no such court" from "node unreachable" — `freeze` covers the
+compliance half today).
