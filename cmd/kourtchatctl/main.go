@@ -516,6 +516,28 @@ func cmdStatus(ctx context.Context, s *chat.Store) {
 		die("%v", err)
 	}
 	fmt.Printf("consequences   %d in force, %d ever\n", inForce, all)
+
+	// The review queue, here rather than only under `review`, because a queue nobody is
+	// told about is a queue nobody reads. `status` is what an operator runs; if the
+	// deferred messages are only visible to somebody who already knows to look for them,
+	// §7's carve-out is a deferral to nobody.
+	waiting, err := s.PendingReview(ctx, false, 500)
+	if err != nil {
+		die("%v", err)
+	}
+	if len(waiting) == 0 {
+		fmt.Printf("review queue   empty\n")
+		return
+	}
+	// Capped at the same 500 the query is, and says so instead of implying an exact
+	// count it did not measure.
+	more := ""
+	if len(waiting) == 500 {
+		more = "+"
+	}
+	fmt.Printf("review queue   %d%s message(s) flagged and NOT acted on — a person must look\n",
+		len(waiting), more)
+	fmt.Printf("               kourtchatctl review\n")
 }
 
 func short(h string) string {
