@@ -206,6 +206,34 @@ Prior context is passed as a **structured JSON field**, not delimited prose: any
 delimiter not on a reject list is typeable, and "delimited" is a word rather than
 a mechanism.
 
+**Dilution, and the trade-off that closes it.** The window is attacker-writable — it is
+that author's own last five messages — so the obvious attack is to bury a lure in enough
+harmless text that the model stops seeing it. It works:
+
+    bare lure, 66 runes                     scam  0.90
+    padded lure, 397 runes                  scam  0.95
+    lure + 2,000 runes of prior             scam  0.95
+    padded lure + same prior (2,407)        CLEAN 0.95
+
+Two plausible explanations are both wrong. It is **not the context window**: the same
+payload came back clean 0.95 at `num_ctx` 2048, 4096 and 8192, so the model is reading the
+text and diluting, and a bigger window fixes nothing. And it is **not the bare pass saving
+it**, which is the tidy story — the bare pass reads no prior and so cannot be diluted, but
+deleting it entirely, and separately letting the window's verdict win outright, both left
+the scanner still catching the lure. Those were mutations that SURVIVED; the bare pass is a
+backstop here, not the defence.
+
+What closes it is that the attacker cannot have both halves. The filler that dilutes is
+repetitive, and repetitive filler is flagged as spam on its own — an early probe produced a
+consequence for every padding message as well as the lure. Filler that is *not* punished
+does not dilute: five varied natural messages at the rune cap, 1,916 runes of free text,
+left the windowed verdict at `spam 0.95` on three runs of three. Padding can be free or it
+can be diluting.
+
+That is a property of one 4B model at one moment, not a theorem, so it is pinned as four
+live fixtures rather than asserted here — including one that logs loudly if free padding
+ever starts diluting, which would make this paragraph wrong.
+
 Ladder: 1h → 24h → 7d on repeats within 30 days, counting only unrevoked
 infractions. `--dry-run` is the default, and the panel's label derives from
 `health.enforcing` so it cannot claim moderation that isn't happening.
