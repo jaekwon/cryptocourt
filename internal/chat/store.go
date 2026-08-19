@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS messages (
   attempts   INTEGER NOT NULL DEFAULT 0,
   next_try   INTEGER NOT NULL DEFAULT 0,
   claimed_at INTEGER NOT NULL DEFAULT 0,
-  verdict    TEXT    NOT NULL DEFAULT ''
+  verdict    TEXT    NOT NULL DEFAULT '',
+  reviewed_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS messages_read  ON messages(chain, court, id);
 CREATE INDEX IF NOT EXISTS messages_queue ON messages(scan_state, next_try, id);
@@ -167,6 +168,10 @@ func Open(path string) (*Store, error) {
 		w.Close()
 		return nil, fmt.Errorf("schema: %w", err)
 	}
+	if err := migrate(w); err != nil {
+		w.Close()
+		return nil, fmt.Errorf("migrating: %w", err)
+	}
 	r, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		w.Close()
@@ -174,6 +179,42 @@ func Open(path string) (*Store, error) {
 	}
 	r.SetMaxOpenConns(4)
 	return &Store{r: r, w: w, Now: time.Now}, nil
+}
+
+// migrate brings an EXISTING database up to the current schema.
+//
+// Everything above is CREATE TABLE IF NOT EXISTS, which is exactly the right thing for
+// a database that does not exist yet and does nothing whatsoever for one that does. A
+// column added to `schema` therefore appears on fresh installs and silently never
+// appears on the machine that has been running for a month — and the failure does not
+// arrive at startup where it would be noticed, but later, as "no such column" from
+// whatever query needed it first. That is a deployment trap rather than a bug in any one
+// change, so it is closed once here.
+//
+// Column additions only, because that is the alteration SQLite makes cheap and safe.
+// Anything else — renaming, retyping, dropping, backfilling — needs a real versioned
+// path with PRAGMA user_version, and should not be smuggled in through this function.
+func migrate(w *sql.DB) error {
+	// Idempotent by inspection rather than by version counter, so it does not matter
+	// whether this database was created before or after the column existed. A fresh
+	// install already has it from `schema` and this is a no-op; a month-old one gets it.
+	return ensureColumn(w, "messages", "reviewed_at", "INTEGER NOT NULL DEFAULT 0")
+}
+
+func ensureColumn(w *sql.DB, table, col, decl string) error {
+	var n int
+	if err := w.QueryRow(
+		`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?`, table, col).
+		Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	// Not parameterised, and it cannot be: SQLite takes no placeholders in DDL. Every
+	// caller is a literal in this file, which is the only reason that is acceptable.
+	_, err := w.Exec("ALTER TABLE " + table + " ADD COLUMN " + col + " " + decl)
+	return err
 }
 
 func (s *Store) Close() error {
@@ -791,6 +832,109 @@ type InfractionRow struct {
 	ExpiresAt  int64 // 0 = never
 	RevokedAt  int64 // 0 = in force
 	RevokedBy  string
+}
+
+// Review is one message the scanner flagged and did not punish.
+type Review struct {
+	ID        int64  `json:"id"`
+	Chain     string `json:"chain"`
+	Court     string `json:"court"`
+	Moniker   string `json:"moniker"`
+	Body      string `json:"body"`
+	Verdict   string `json:"verdict"`
+	IPHash    string `json:"ip_hash"`
+	NetHash   string `json:"net_hash"`
+	Hidden    bool   `json:"hidden"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// PendingReview returns the messages a person is supposed to look at.
+//
+// THE HOLE THIS FILLS. §7's reporting carve-out is a deliberate decision to record a
+// verdict and take no action, because gemma3:4b cannot tell reporting a scam from
+// sending one — measured, not assumed — and punishing the difference means kicking
+// somebody for warning the room. The scanner therefore logs "no action taken" and moves
+// on, which left the most interesting messages in the system visible only as a line on a
+// daemon's stdout: not queryable, not durable, and gone with the next log rotation.
+//
+// Verified before this existed: a message reading "careful everyone, someone just DMed
+// me asking for my seed phrase" was stored with verdict='scam' and no consequence, and
+// `kourtchatctl list` did not mention it at all. A design that defers its hardest cases
+// to a human owes the human a way to see them.
+//
+// The query is "flagged, and nothing came of it": a non-clean verdict, no infraction
+// citing this message as evidence, and not already dismissed. Messages whose consequence
+// was later REVOKED stay out — that decision has been made, and `list -all` is where
+// reversals are read.
+func (s *Store) PendingReview(ctx context.Context, includeDone bool, limit int) ([]Review, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	q := `
+	  SELECT id, chain, court, moniker, body, verdict, ip_hash, net_hash, hidden, created_at
+	    FROM messages
+	   WHERE verdict NOT IN ('', 'clean', 'unknown')
+	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`
+	if !includeDone {
+		q += ` AND reviewed_at = 0`
+	}
+	q += ` ORDER BY id DESC LIMIT ?`
+	rows, err := s.r.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Review{}
+	for rows.Next() {
+		var r Review
+		var hidden int
+		if err := rows.Scan(&r.ID, &r.Chain, &r.Court, &r.Moniker, &r.Body, &r.Verdict,
+			&r.IPHash, &r.NetHash, &hidden, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		r.Hidden = hidden != 0
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// MarkReviewed records that a person looked and chose to do nothing.
+//
+// Separate from doing nothing at all, which is what an unreviewed row already means. The
+// distinction is the only thing that lets the queue empty: without it every deferred
+// message is permanently new, and a queue that never shrinks stops being read.
+func (s *Store) MarkReviewed(ctx context.Context, id int64) error {
+	res, err := s.w.ExecContext(ctx,
+		`UPDATE messages SET reviewed_at=? WHERE id=? AND reviewed_at=0`, s.Now().Unix(), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no unreviewed message %d", id)
+	}
+	return nil
+}
+
+// MessageAuthor is who to hold responsible for a message, and what they said.
+//
+// So that an operator acting on something they just read in `review` does not have to
+// copy a hash by hand out of one command into another. Transcription is where an
+// operator bans the wrong person.
+//
+// The body comes back too, and that is not a convenience. A consequence carries a COPY
+// of its evidence so an appeal survives the message being pruned, and the first version
+// of the -msg path recorded neither the id nor the text: `why` on a manual kick showed
+// the operator's own note and no trace of what was actually said. The automated half got
+// this right and the human half did not, which is backwards — a person's decision is the
+// one that can be permanent.
+func (s *Store) MessageAuthor(ctx context.Context, id int64) (ipHash, netHash, body string, err error) {
+	err = s.r.QueryRowContext(ctx,
+		`SELECT ip_hash, net_hash, body FROM messages WHERE id=?`, id).
+		Scan(&ipHash, &netHash, &body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", "", fmt.Errorf("no message %d", id)
+	}
+	return ipHash, netHash, body, err
 }
 
 // ListInfractions reads consequences, newest first. An empty ipHash lists all of

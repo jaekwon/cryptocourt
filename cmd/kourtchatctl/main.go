@@ -12,6 +12,8 @@
 //	kourtchatctl -db chat.db ban <ip-hash>        a permanent ban, by hand
 //	kourtchatctl -db chat.db ban -net <net-hash>  the same for a network
 //	kourtchatctl -db chat.db hash 203.0.113.7     the hashes for one address
+//	kourtchatctl -db chat.db review               what the scanner left for a human
+//	kourtchatctl -db chat.db kick -msg 41 -for 1h act on a message you just read
 //	kourtchatctl -db chat.db freeze dev/orem      stop serving a purged court
 //	kourtchatctl -db chat.db status               backlog, scanner heartbeat, counts
 //
@@ -82,6 +84,10 @@ func main() {
 		cmdKick(ctx, store, args[1:])
 	case "hash":
 		cmdHash(store, *secretFile, args[1:])
+	case "review":
+		cmdReview(ctx, store, args[1:])
+	case "dismiss":
+		cmdDismiss(ctx, store, args[1:])
 	case "freeze":
 		cmdFreeze(ctx, store, args[1:])
 	case "status":
@@ -119,7 +125,7 @@ func split(argv []string) (flags, positional []string) {
 // done before parsing.
 func takesValue(f string) bool {
 	switch strings.TrimLeft(f, "-") {
-	case "by", "why", "ip", "n", "db", "for", "secret-file":
+	case "by", "why", "ip", "n", "db", "for", "secret-file", "msg":
 		return true
 	}
 	return false // -all, -net are booleans
@@ -134,6 +140,8 @@ func usage() {
   kick HASH -for 1h        a bounded manual timeout, short of a ban
   ban HASH [-net] [-why S] a permanent ban, which only a human can issue
   hash ADDR                the address and network hashes for one IP
+  review [-all] [-n N]     messages the scanner flagged and did NOT act on
+  dismiss ID               record that you read one and chose to do nothing
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   status                   backlog, scanner heartbeat, counts
 
@@ -259,15 +267,18 @@ func cmdBan(ctx context.Context, s *chat.Store, argv []string) {
 	fs := flag.NewFlagSet("ban", flag.ExitOnError)
 	isNet := fs.Bool("net", false, "the hash is a network, not a single address")
 	why := fs.String("why", "", "note for the record")
+	msg := fs.Int64("msg", 0, "act on the author of this message id, instead of a hash")
 	flags, pos := split(argv)
 	_ = fs.Parse(flags)
+	pos, evID, evText := withAuthor(ctx, s, *msg, pos, *isNet, "ban")
 	if len(pos) != 1 || pos[0] == "" {
-		die("ban needs one hash — read it from `list` or `why`")
+		die("ban needs one hash — read it from `list`, `why`, `hash <addr>`, or use -msg")
 	}
 	hash := pos[0]
 
 	in := chat.Infraction{
 		Kind: chat.KindBan, Reason: chat.ReasonManual, Detail: *why,
+		EvidenceID: evID, Evidence: evText,
 	}
 	if *isNet {
 		// A range ban is the one consequence that reaches a whole network, and it
@@ -303,16 +314,19 @@ func cmdKick(ctx context.Context, s *chat.Store, argv []string) {
 	for_ := fs.Duration("for", 0, "how long, e.g. 1h or 24h (required)")
 	why := fs.String("why", "", "note for the record")
 	isNet := fs.Bool("net", false, "the hash is a network, not a single address")
+	msg := fs.Int64("msg", 0, "act on the author of this message id, instead of a hash")
 	flags, pos := split(argv)
 	_ = fs.Parse(flags)
+	pos, evID, evText := withAuthor(ctx, s, *msg, pos, *isNet, "kick")
 	if len(pos) != 1 || pos[0] == "" {
-		die("kick needs one hash — read it from `list`, `why` or `hash <addr>`")
+		die("kick needs one hash — read it from `list`, `why`, `hash <addr>`, or use -msg")
 	}
 	if *for_ <= 0 {
 		die("kick needs -for, e.g. -for 1h; a timeout with no end is a ban")
 	}
 	in := chat.Infraction{
 		Kind: chat.KindKick, Reason: chat.ReasonManual, Detail: *why, Duration: *for_,
+		EvidenceID: evID, Evidence: evText,
 	}
 	if *isNet {
 		in.NetHash = pos[0]
@@ -362,6 +376,100 @@ func cmdHash(s *chat.Store, secretFile string, argv []string) {
 	fmt.Printf("network  %s   (%s)\n", h.HashNet(addr), chat.NetPrefix(addr))
 	fmt.Printf("\nkick one address for an hour:  kourtchatctl kick %s -for 1h\n", h.Hash(addr))
 	fmt.Printf("ban the network permanently:   kourtchatctl ban -net %s\n", h.HashNet(addr))
+}
+
+// withAuthor turns -msg into the hash the caller would otherwise have typed, and into
+// the evidence the consequence should carry.
+//
+// Copying a 32-character hash from one command into another by hand is where an operator
+// bans the wrong person, and `review` prints message ids, so acting on what you just read
+// should not require the transcription step at all.
+//
+// It returns the evidence as well because the first version did not, and that broke two
+// things at once: `why` on a manual kick showed the operator's note with no record of
+// what was said, and the message stayed in the review queue forever, because the queue is
+// "flagged with no infraction citing it" and nothing cited it.
+func withAuthor(ctx context.Context, s *chat.Store, msg int64, pos []string, isNet bool,
+	verb string) (out []string, evidenceID int64, evidence string) {
+	if msg == 0 {
+		return pos, 0, ""
+	}
+	if len(pos) > 0 {
+		die("%s takes either a hash or -msg, not both", verb)
+	}
+	ipHash, netHash, body, err := s.MessageAuthor(ctx, msg)
+	if err != nil {
+		die("%v", err)
+	}
+	if isNet {
+		if netHash == "" {
+			die("message %d has no network hash recorded", msg)
+		}
+		return []string{netHash}, msg, body
+	}
+	return []string{ipHash}, msg, body
+}
+
+// cmdReview prints what the scanner decided not to decide.
+//
+// The queue exists because §7's reporting carve-out records a verdict and takes no
+// action: gemma3:4b cannot separate reporting a scam from sending one, so a message that
+// reads as a warning is left for a person. Before this command those messages appeared
+// only in the daemon's log, which is not somewhere anyone looks after the fact.
+//
+// Bodies are printed in FULL, deliberately, unlike `list`, which truncates to keep a
+// table readable. The whole purpose here is judging a message, and a judgement made on
+// the first forty characters of a scam is not a judgement.
+func cmdReview(ctx context.Context, s *chat.Store, argv []string) {
+	fs := flag.NewFlagSet("review", flag.ExitOnError)
+	all := fs.Bool("all", false, "include ones already dismissed")
+	limit := fs.Int("n", 50, "how many")
+	flags, _ := split(argv)
+	_ = fs.Parse(flags)
+
+	rows, err := s.PendingReview(ctx, *all, *limit)
+	if err != nil {
+		die("%v", err)
+	}
+	if len(rows) == 0 {
+		fmt.Println("nothing waiting for review")
+		return
+	}
+	now := time.Now().Unix()
+	fmt.Printf("%d message(s) the scanner flagged and did not act on:\n", len(rows))
+	for _, r := range rows {
+		age := (time.Duration(now-r.CreatedAt) * time.Second).Truncate(time.Minute)
+		vis := "visible in the court"
+		if r.Hidden {
+			vis = "hidden"
+		}
+		fmt.Printf("\n  message %d  %s/%s  %s ago  verdict %s, %s\n",
+			r.ID, r.Chain, r.Court, age, r.Verdict, vis)
+		fmt.Printf("  author    %s\n", short(r.IPHash))
+		fmt.Printf("  moniker   %s\n", r.Moniker)
+		fmt.Printf("  said      %s\n", r.Body)
+	}
+	// The two things to do next, spelled out, because an operator reading this is
+	// deciding between them and should not have to reconstruct the syntax.
+	fmt.Printf("\nact on one:  kourtchatctl kick -msg <id> -for 1h -why \"...\"\n")
+	fmt.Printf("leave it:    kourtchatctl dismiss <id>\n")
+}
+
+func cmdDismiss(ctx context.Context, s *chat.Store, argv []string) {
+	_, pos := split(argv)
+	if len(pos) != 1 {
+		die("dismiss needs one message id — read them from `review`")
+	}
+	id, err := strconv.ParseInt(pos[0], 10, 64)
+	if err != nil {
+		die("%v", err)
+	}
+	if err := s.MarkReviewed(ctx, id); err != nil {
+		die("%v", err)
+	}
+	// Says what it did NOT do, because "dismiss" could plausibly mean either.
+	fmt.Printf("message %d marked reviewed — nothing was hidden and nobody was kicked\n", id)
+	fmt.Printf("see it again with: kourtchatctl review -all\n")
 }
 
 func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
