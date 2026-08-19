@@ -418,3 +418,64 @@ func TestKickAndBanCheckForAReplayBeforeClaimingSuccess(t *testing.T) {
 		}
 	}
 }
+
+// A DURATION MUST READ THE WAY A PERSON READS ONE, because "876000h0m0s" does not read as a hundred
+// years and that is exactly the typo it hides.
+//
+// Measured: `kick -for 876000h` is accepted and `list` shows "876000h0m0s left". A hundred-year
+// timeout is a ban wearing a kick's label — the tool refuses a MISSING -for with "a timeout with no
+// end is a ban" and then accepts one with no end in practice. A policy ceiling would be arbitrary
+// wherever it landed and would refuse a legitimate long timeout, so the fix is to make the extra
+// zero visible instead.
+func TestADurationReadsTheWayAPersonReadsOne(t *testing.T) {
+	for _, c := range []struct {
+		in   time.Duration
+		want string
+	}{
+		{876000 * time.Hour, "about 100 years"},
+		{876 * time.Hour, "about 1 month"}, // the typo's intent, and SINGULAR
+		{24 * time.Hour, "about 1 day"},
+		{48 * time.Hour, "about 2 days"},
+		{time.Hour, "about 1 hour"},
+		{90 * time.Minute, "about 2 hours"}, // coarse on purpose: 90 minutes is not 90 of anything
+		{45 * time.Minute, "about 45 minutes"},
+		{time.Minute, "about 1 minute"},
+		{30 * time.Second, "about 30 seconds"},
+		{time.Second, "about 1 second"},
+	} {
+		if got := humanDuration(c.in); got != c.want {
+			t.Errorf("humanDuration(%s) = %q, want %q", c.in, got, c.want)
+		}
+	}
+
+	// The pluralisation is asserted above and here as a rule, because this repo had already caught
+	// "paused for another 1 hours" in the panel and I reintroduced it in this file.
+	for _, d := range []time.Duration{time.Second, time.Minute, time.Hour, 24 * time.Hour,
+		30 * 24 * time.Hour, 365 * 24 * time.Hour} {
+		if got := humanDuration(d); strings.Contains(got, "1 ") && strings.HasSuffix(got, "s") {
+			t.Errorf("humanDuration(%s) = %q — a singular with a plural unit", d, got)
+		}
+	}
+
+	// And the case that says nobody is affected, which is the other end of the same problem: a
+	// nanosecond kick leaves state=ok while still hiding the author's last ten minutes.
+	if got := humanDuration(time.Nanosecond); !strings.Contains(got, "nobody is kept out") {
+		t.Errorf("a sub-second timeout must say it keeps nobody out, got %q", got)
+	}
+}
+
+// And the hide note must state the half the duration does not govern.
+func TestTheHideNoteNamesTheWindowAndTheReversal(t *testing.T) {
+	got := hideNote(42)
+	for _, want := range []string{"hidden", "unban 42", chat.HideWindow.String(),
+		"does not govern"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the note must contain %q, got %q", want, got)
+		}
+	}
+	// It must take the window from the constant, not a literal, so raising HideWindow updates the
+	// sentence rather than leaving it wrong.
+	if strings.Contains(got, "10m0s") && chat.HideWindow.String() != "10m0s" {
+		t.Errorf("the window looks hardcoded: %q", got)
+	}
+}

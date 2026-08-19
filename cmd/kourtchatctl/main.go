@@ -51,6 +51,7 @@ import (
 	"time"
 
 	"github.com/jaekwon/kourt/internal/chat"
+	"math"
 )
 
 func main() {
@@ -357,6 +358,7 @@ func cmdBan(ctx context.Context, s *chat.Store, argv []string) {
 		return
 	}
 	fmt.Printf("banned %s %s permanently [consequence %d]\n", scope, short(hash), id)
+	fmt.Println(hideNote(id))
 	echoEvidence(evID, evText)
 	fmt.Printf("reverse it with: kourtchatctl unban %d\n", id)
 }
@@ -405,7 +407,10 @@ func cmdKick(ctx context.Context, s *chat.Store, argv []string) {
 		fmt.Print(replayReport(ctx, s, pos[0], evID, chat.KindKick, "kick"))
 		return
 	}
-	fmt.Printf("kicked %s %s for %s [consequence %d]\n", scope, short(pos[0]), *for_, id)
+	fmt.Printf("kicked %s %s for %s — %s [consequence %d]\n",
+		scope, short(pos[0]), *for_, humanDuration(*for_), id)
+	fmt.Printf("until %s\n", time.Now().Add(*for_).Format(time.RFC3339))
+	fmt.Println(hideNote(id))
 	echoEvidence(evID, evText)
 	fmt.Printf("reverse it early with: kourtchatctl unban %d\n", id)
 }
@@ -736,6 +741,52 @@ func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
 // A kick that never happened, an id that cannot exist, and an instruction pointing at it. So a zero
 // is reported as what it is, and the row that already covers this evidence is looked up so the
 // operator has something real to act on.
+// humanDuration renders a machine duration the way a person reads one, because "876000h0m0s" does
+// not read as a hundred years and that is exactly the typo it hides.
+//
+// Measured: `kick -for 876000h` is accepted, and `list` shows "876000h0m0s left". A timeout of a
+// hundred years is a ban wearing a kick's label — the tool refuses a MISSING -for with "a timeout
+// with no end is a ban", and then accepts one that has no end in practice. Rather than invent a
+// policy ceiling, which would be arbitrary wherever it landed and would refuse a legitimate long
+// timeout, say what the duration is so the operator sees the extra zero.
+func humanDuration(d time.Duration) string {
+	// Pluralised, because "about 1 months" is what an operator reads while deciding whether this
+	// tool is careless — and this repo had already caught the same blemish once, in the panel's
+	// "paused for another 1 hours". Reintroducing it two files later is why it is a helper now.
+	say := func(n float64, unit string) string {
+		if n == 1 {
+			return "about 1 " + unit
+		}
+		return fmt.Sprintf("about %.0f %ss", n, unit)
+	}
+	switch {
+	case d >= 365*24*time.Hour:
+		return say(math.Round(d.Hours()/(365*24)), "year")
+	case d >= 30*24*time.Hour:
+		return say(math.Round(d.Hours()/(30*24)), "month")
+	case d >= 24*time.Hour:
+		return say(math.Round(d.Hours()/24), "day")
+	case d >= time.Hour:
+		return say(math.Round(d.Hours()), "hour")
+	case d >= time.Minute:
+		return say(math.Round(d.Minutes()), "minute")
+	case d >= time.Second:
+		return say(math.Round(d.Seconds()), "second")
+	}
+	return "less than a second, so nobody is kept out at all"
+}
+
+// hideNote states the half of a consequence that the duration does not govern.
+//
+// Measured: a kick of one nanosecond leaves state=ok — nobody is blocked for any measurable time —
+// and still hides the author's last ten minutes, indefinitely, until somebody runs unban. The
+// duration is presented to the operator as the scope of the action and controls only the posting
+// block; the hiding outlasts it and is undone by the same reversal.
+func hideNote(id int64) string {
+	return fmt.Sprintf("their messages from the last %s are hidden too, and stay hidden until "+
+		"`unban %d` — the duration does not govern that half.", chat.HideWindow, id)
+}
+
 func replayReport(ctx context.Context, s *chat.Store, hash string, evID int64, kind, verb string) string {
 	out := fmt.Sprintf("no new consequence was recorded: message %d already has a %s that has not "+
 		"been\nreversed, so this %s would have been a duplicate.\n", evID, kind, verb)
