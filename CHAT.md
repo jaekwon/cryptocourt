@@ -225,7 +225,21 @@ a figure losing its unit rather than a message being turned away. `erase()` read
 and the fixture iterates it instead of listing members, so a fifth mark added by a future Unicode
 is covered when the toolchain learns of it rather than when somebody notices Arabic text is wrong.
 The general form of this one is different from the thresholds: **a copy of an external table is a
-threshold that moves on its own.**
+threshold that moves on its own.** But **a property is the right source only when the
+design wants the whole property**, and the same audit run one step further shows why. `erase()` does
+not catch every invisible — 3,740 default-ignorable codepoints reach a reader, including the
+assigned Khmer inherent vowels U+17B4/U+17B5 — and the tempting fix is to sweep the whole
+default-ignorable set the way the concatenation marks were fixed. That would erase
+U+E0100..U+E01EF, the ideographic variation selectors, which are how Japanese picks which kanji a
+reader sees: the same defect, introduced while fixing it. §4 keeps VS16 for emoji and IVS for CJK
+deliberately, and both are asserted.
+
+The incompleteness is safe for a measurable reason rather than a hopeful one: **`Skeleton` is an
+allowlist.** It keeps letters and digits and drops everything else, so an invisible does not have to
+be enumerated to be folded — an obscured "send me your s​еed phrase" still earns a deterministic
+scam floor, and a lure with an invisible wedged into it still collides with its plain form for the
+duplicate rule. That property is what licenses `erase()` being conservative, so it is pinned as a
+fixture over all 3,740 rather than left as an argument here.
 
 **Where this file chooses against the writer, once, on purpose.** LRM (U+200E), RLM (U+200F) and
 ALM (U+061C) are erased. They are bidi MARKS, not overrides — they cannot reorder text arbitrarily,
