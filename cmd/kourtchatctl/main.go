@@ -91,6 +91,8 @@ func main() {
 		cmdDismiss(ctx, store, args[1:])
 	case "prune":
 		cmdPrune(ctx, store, args[1:])
+	case "unfreeze":
+		cmdUnfreeze(ctx, store, args[1:])
 	case "freeze":
 		cmdFreeze(ctx, store, args[1:])
 	case "status":
@@ -148,6 +150,7 @@ func usage() {
   dismiss ID | -from HASH  record that you read them and chose to do nothing
   prune -older-than 720h   delete old messages; DRY RUN unless -apply
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
+  unfreeze CHAIN/COURT     put it back; the freeze is recorded as lifted, not erased
   status                   backlog, scanner heartbeat, counts
 
 Hashes come from list, why, or hash <addr>. With -secret-file, pass the same path
@@ -674,6 +677,33 @@ func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
 	// unreachable" — both arrive as a query error. A compliance control whose
 	// fail-open trigger is an RPC hiccup is not a control.
 	fmt.Printf("%s is frozen: its history is no longer served and posts are refused\n", argv[0])
+}
+
+// cmdUnfreeze is the other half of freeze, and its absence was the gap: a mistyped court name
+// withdrew a live room with no way back through the tool.
+//
+// It refuses when the court was not frozen, rather than reporting success. A typo here is as
+// likely as a typo in `freeze`, and "dev/oren is back in service" over a court that never left it
+// is the same lie one verb along.
+func cmdUnfreeze(ctx context.Context, s *chat.Store, argv []string) {
+	if len(argv) != 1 {
+		die("unfreeze needs CHAIN/COURT, e.g. dev/orem")
+	}
+	parts := strings.SplitN(argv[0], "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		die("unfreeze needs CHAIN/COURT, e.g. dev/orem")
+	}
+	lifted, err := s.Unfreeze(ctx, parts[0], parts[1])
+	if err != nil {
+		die("%v", err)
+	}
+	if !lifted {
+		die("%s is not frozen — nothing to lift (check the spelling against `status`)", argv[0])
+	}
+	fmt.Printf("%s is back in service: its history is served again and posts are accepted\n", argv[0])
+	// Said plainly, because the reason a court was withdrawn may not have gone away.
+	fmt.Printf("the freeze is recorded as lifted rather than erased; if it was withheld for a\n")
+	fmt.Printf("purge, check that the content should be public again before telling anyone\n")
 }
 
 func cmdStatus(ctx context.Context, s *chat.Store) {

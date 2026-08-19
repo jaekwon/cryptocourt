@@ -868,3 +868,152 @@ func TestAStaleCursorRecoversInsteadOfShowingAnEmptyRoom(t *testing.T) {
 		t.Errorf("after re-syncing, an idle poll must be quiet again, got %d", len(m))
 	}
 }
+
+// UNFREEZE MUST GIVE BACK EVERYTHING FREEZE TOOK, which is three things and not one.
+//
+// §9 draws the line this rests on — "'Stop showing this' and 'destroy the evidence' are different
+// decisions and only one of them cannot be undone" — and then nothing could undo the first. There
+// was no Unfreeze in the store and no command in the tool, so `freeze dev/oren` for `dev/orem`
+// withdrew a live court for good: 410 to every reader, posts refused, moderation stopped, recovery
+// only by hand-editing SQLite.
+//
+// Freeze reaches three places and took two passes to get there, which is recorded in §9:
+//
+//	Post      refuses the write
+//	Recent    410 on the read           (missed in the first pass — the transcript kept serving)
+//	Claim     stops moderating it       (missed in the second — inference was still spent, and a
+//	                                     moderator's queue still filled with its messages)
+//
+// So this asserts all three coming back. A fix that restored reads and writes while leaving the
+// court unmoderated would pass any test that only checked the obvious two, and it is exactly the
+// shape §9's audit table is full of.
+func TestUnfreezeRestoresReadsWritesAndModeration(t *testing.T) {
+	srv, s, clock := newServer(t)
+	ctx := context.Background()
+
+	// A live court with something in it.
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "before the freeze")); rec.Code != 200 {
+		t.Fatal(rec.Body)
+	}
+	*clock = clock.Add(MinInterval + time.Second)
+	if err := s.Freeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Frozen: all three off. Asserted so the restoration below is not vacuous.
+	if rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil)); rec.Code != http.StatusGone {
+		t.Fatalf("precondition: a frozen court reads 410, got %d", rec.Code)
+	}
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "during the freeze")); rec.Code == 200 {
+		t.Fatal("precondition: a frozen court must refuse writes")
+	}
+	if pend, err := s.Claim(ctx, 10); err != nil {
+		t.Fatal(err)
+	} else if len(pend) != 0 {
+		t.Fatalf("precondition: a frozen court is not scanned, got %d claimable", len(pend))
+	}
+
+	lifted, err := s.Unfreeze(ctx, "dev", "orem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lifted {
+		t.Fatal("unfreezing a frozen court must report that it changed something")
+	}
+
+	// 1. The read.
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil))
+	if rec.Code != 200 {
+		t.Errorf("the history must be served again, got %d %s", rec.Code, rec.Body)
+	}
+	// 2. The write.
+	*clock = clock.Add(MinInterval + time.Second)
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "after the thaw")); rec.Code != 200 {
+		t.Errorf("posts must be accepted again, got %d %s", rec.Code, rec.Body)
+	}
+	// 3. MODERATION, the one a partial fix leaves behind.
+	pend, err := s.Claim(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pend) == 0 {
+		t.Error("a court back in service must be scanned again; leaving it unmoderated is the " +
+			"same half-applied control §9 records freeze itself having twice")
+	}
+
+	// The row stays, stamped, so a later operator can see it was frozen at all.
+	var at, liftedAt int64
+	if err := s.r.QueryRow(`SELECT at, coalesce(lifted_at,0) FROM frozen
+	   WHERE chain='dev' AND court='orem'`).Scan(&at, &liftedAt); err != nil {
+		t.Fatalf("the freeze must be recorded as lifted rather than deleted: %v", err)
+	}
+	if at == 0 || liftedAt == 0 {
+		t.Errorf("both stamps must survive: at=%d lifted_at=%d", at, liftedAt)
+	}
+}
+
+// The typo guard, and the paired positive that keeps it honest.
+func TestUnfreezeReportsWhenThereWasNothingToLift(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	// Never frozen: nothing to lift, and the caller must be able to tell.
+	if lifted, err := s.Unfreeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	} else if lifted {
+		t.Error("a court that was never frozen must not report a lift; the CLI turns this into " +
+			"a refusal, because \"dev/oren is back in service\" over a live court is the same " +
+			"lie one verb along")
+	}
+
+	// Two courts, one frozen. Lifting the other must not touch it.
+	if err := s.Freeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	}
+	if lifted, err := s.Unfreeze(ctx, "dev", "other"); err != nil {
+		t.Fatal(err)
+	} else if lifted {
+		t.Error("lifting a different court must not report a change")
+	}
+	if frozen, err := s.IsFrozen(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	} else if !frozen {
+		t.Error("and must not thaw the court that IS frozen")
+	}
+	// A second lift of an already-lifted court is also nothing.
+	if _, err := s.Unfreeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	}
+	if lifted, err := s.Unfreeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	} else if lifted {
+		t.Error("lifting twice must report nothing the second time")
+	}
+}
+
+// AND IT MUST BE RE-FREEZABLE. The old INSERT OR IGNORE would hit the surviving row and do
+// nothing, leaving the tool printing "its history is no longer served" over a live court — a
+// control that announces a property it does not have, which is the failure §9 names.
+func TestACourtCanBeFrozenAgainAfterBeingLifted(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	for round := 0; round < 2; round++ {
+		if err := s.Freeze(ctx, "dev", "orem"); err != nil {
+			t.Fatal(err)
+		}
+		if frozen, err := s.IsFrozen(ctx, "dev", "orem"); err != nil {
+			t.Fatal(err)
+		} else if !frozen {
+			t.Fatalf("round %d: freeze must take effect", round)
+		}
+		if _, err := s.Unfreeze(ctx, "dev", "orem"); err != nil {
+			t.Fatal(err)
+		}
+		if frozen, err := s.IsFrozen(ctx, "dev", "orem"); err != nil {
+			t.Fatal(err)
+		} else if frozen {
+			t.Fatalf("round %d: the lift must take effect", round)
+		}
+	}
+}

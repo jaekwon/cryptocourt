@@ -180,7 +180,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS infractions_once
   WHERE evidence_id IS NOT NULL AND revoked_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+-- lifted_at records that a freeze was REVERSED rather than deleting the row, for the same
+-- reason Revoke keeps an infraction: an operator who lifts a court by mistake, or a later
+-- one asking what happened here, needs to see that it was frozen at all.
 CREATE TABLE IF NOT EXISTS frozen (chain TEXT, court TEXT, at INTEGER NOT NULL,
+  lifted_at INTEGER,
   PRIMARY KEY (chain, court));
 `
 
@@ -248,7 +252,12 @@ func migrate(w *sql.DB) error {
 	// Idempotent by inspection rather than by version counter, so it does not matter
 	// whether this database was created before or after the column existed. A fresh
 	// install already has it from `schema` and this is a no-op; a month-old one gets it.
-	return ensureColumn(w, "messages", "reviewed_at", "INTEGER NOT NULL DEFAULT 0")
+	if err := ensureColumn(w, "messages", "reviewed_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// Nullable with no default, because NULL is the meaningful value: a freeze that has not
+	// been lifted. A NOT NULL DEFAULT 0 would have worked too and reads worse at every query.
+	return ensureColumn(w, "frozen", "lifted_at", "INTEGER")
 }
 
 func ensureColumn(w *sql.DB, table, col, decl string) error {
@@ -348,7 +357,8 @@ func (s *Store) Post(ctx context.Context, in PostInput) (int64, error) {
 
 	var frozen int
 	if err := tx.QueryRowContext(ctx,
-		`SELECT count(*) FROM frozen WHERE chain=? AND court=?`, in.Chain, in.Court).
+		`SELECT count(*) FROM frozen WHERE chain=? AND court=? AND lifted_at IS NULL`,
+		in.Chain, in.Court).
 		Scan(&frozen); err != nil {
 		return 0, err
 	}
@@ -842,7 +852,8 @@ func (s *Store) HideMessage(ctx context.Context, id int64) error {
 func (s *Store) IsFrozen(ctx context.Context, chain, court string) (bool, error) {
 	var n int
 	if err := s.r.QueryRowContext(ctx,
-		`SELECT count(*) FROM frozen WHERE chain=? AND court=?`, chain, court).Scan(&n); err != nil {
+		`SELECT count(*) FROM frozen WHERE chain=? AND court=? AND lifted_at IS NULL`,
+		chain, court).Scan(&n); err != nil {
 		return false, err
 	}
 	return n > 0, nil
@@ -850,9 +861,40 @@ func (s *Store) IsFrozen(ctx context.Context, chain, court string) (bool, error)
 
 func (s *Store) Freeze(ctx context.Context, chain, court string) error {
 	_, err := s.w.ExecContext(ctx,
-		`INSERT OR IGNORE INTO frozen(chain,court,at) VALUES (?,?,?)`,
+		// ON CONFLICT rather than OR IGNORE: a court that was frozen, lifted, and needs
+		// freezing again would otherwise hit the existing row and be silently ignored,
+		// leaving the tool printing "its history is no longer served" over a live court.
+		`INSERT INTO frozen(chain,court,at) VALUES (?,?,?)
+		 ON CONFLICT(chain,court) DO UPDATE SET at=excluded.at, lifted_at=NULL`,
 		chain, court, s.Now().Unix())
 	return err
+}
+
+// Unfreeze puts a court back into service, and it exists because §9 claims it does.
+//
+// The document draws the line that matters — "'Stop showing this' and 'destroy the evidence' are
+// different decisions and only one of them cannot be undone" — and then there was no way to undo
+// the first. `freeze dev/oren` for `dev/orem` withdrew a live court permanently: 410 to every
+// reader, posts refused, moderation stopped, and nothing in the tool to reverse it. A compliance
+// control a typo can aim at an innocent room, with recovery only by hand-editing SQLite, is not
+// the reversible half of that sentence.
+//
+// The ROW STAYS, stamped rather than deleted, for the same reason Revoke keeps an infraction: a
+// later operator asking what happened to this court needs to see that it was frozen at all, and
+// when, and that somebody lifted it.
+//
+// Reports whether it changed anything, so the caller can tell "lifted" from "was not frozen" —
+// otherwise a typo in the UNFREEZE argument reads as success too, which is the same defect one
+// verb along.
+func (s *Store) Unfreeze(ctx context.Context, chain, court string) (bool, error) {
+	res, err := s.w.ExecContext(ctx,
+		`UPDATE frozen SET lifted_at=? WHERE chain=? AND court=? AND lifted_at IS NULL`,
+		s.Now().Unix(), chain, court)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 // Heartbeat records that the scanner is alive, and whether it is enforcing.
@@ -1152,7 +1194,8 @@ const sqlInForce = `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?
 // able to do harm, and where the scanner is still looking. Freezing is a deliberate act taken
 // after the fact, so a court's history has almost always been scanned already.
 const sqlNotFrozen = `NOT EXISTS (SELECT 1 FROM frozen f
-	                    WHERE f.chain = messages.chain AND f.court = messages.court)`
+	                    WHERE f.chain = messages.chain AND f.court = messages.court
+	                      AND f.lifted_at IS NULL)`
 
 // sqlAwaitingReview is THE definition of §7's deferred queue, and it is one string because
 // it was seven.
