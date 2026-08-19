@@ -1468,6 +1468,24 @@ half runs with `node web/tests/browser/chat_all.js`, and `chat_moderation.js` is
 bystander rule is checked end to end in a browser — not punished, shown no notice, still sees
 their own message, still able to post.
 
+**One walk that checks the rules compose.** Every other fixture here tests one rule. Roughly fifteen
+behavioural changes landed over recent weeks — a reversible freeze, `reveal` and `hide`, the countdown
+in `Status`, an honest replay report, a heartbeat carrying its cadence — each verified alone, and
+interactions are what per-change checks miss.
+
+It was run by hand first, against the real binaries and a real gemma3:4b: the scam punished and
+hidden, the report hidden with **zero** consequences, the bystander clean and posting, a 10m cadence
+reading "last seen 15s ago", the punished author's view carrying `seconds`, reveal then hide then
+unban, a refused second unban naming who did it, a replayed kick refusing to claim success, freeze to
+410 and unfreeze to 200. Everything held. `TestTheWholeLifecycleWithABystanderWatching` is the
+durable form — the same sequence with a fake classifier, so it runs in every `go test` rather than
+when somebody remembers, which is a distinction §11 records this repo having already paid for.
+
+The bystander is asserted at EVERY stage rather than at the end, and that earned its place on the
+first run: the shared fake classifier labels every body the same, so it condemned the bystander along
+with the lure and the walk caught it. A classifier that answers identically for every input cannot
+tell a walk like this anything.
+
 ## 12. Two kinds of evidence for one property
 
 `web/chat-demo.html` is the panel with nothing else around it — openable straight off
