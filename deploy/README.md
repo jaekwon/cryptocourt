@@ -22,7 +22,7 @@ file, and why its unit orders itself against nothing.
 ## Every deploy
 
 ```sh
-make deploy HOST=root@kourt.example
+make deploy HOST=root@kourt.xyz
 ```
 
 You are asked for the SSH password **once**. The script makes about nine
@@ -60,44 +60,52 @@ address hashes inside it, which is why they are not even in the same directory
 (`kourtchat` warns about both arrangements). The script creates the paths, sets
 the modes, and keeps its hands off the contents.
 
-It also never touches nginx, TLS or the firewall. A deploy script that rewrites
-the web server's config can take the site down without shipping anything.
+It also never touches nginx, TLS or the firewall — that is `setup.sh`'s job,
+run once. A deploy script that rewrites the web server's config can take the
+site down without shipping anything.
 
 ## First time on a box
 
-The deploy is idempotent and creates the user, the directories and the unit by
-itself. Two things remain manual, once:
-
-**1. The IP-hashing key.**
-
 ```sh
-install -d -m 0700 -o kourt -g kourt /var/lib/kourt/secret
-head -c 32 /dev/urandom | base64 > /var/lib/kourt/secret/iphash.key
-chown kourt:kourt /var/lib/kourt/secret/iphash.key
-chmod 0600 /var/lib/kourt/secret/iphash.key
+make setup HOST=root@kourt.xyz DOMAIN=kourt.xyz
 ```
 
-Without `--secret-file` the key is stored as a row *inside* the database, so one
-file would carry both the address hashes and the key that reverses them. The
-unit passes `--secret-file` for that reason; put the file there before the first
-start or the service writes one for you in the place you were avoiding.
+Idempotent, so re-running it is cheap and is the right response to a failure.
+It installs nginx and certbot, creates the `kourt` user and the directories,
+generates the IP-hashing key, opens 22/80/443 if `ufw` is present, and then
+gets a certificate.
 
-**2. nginx and TLS.**
+**TLS runs last, and that ordering is the whole trick.** certbot needs this
+server block already answering on port 80 and DNS already pointing here, and it
+is the one step that legitimately fails on a fresh domain — so everything that
+can succeed has succeeded before it is attempted. If it fails, the message says
+what to check and you re-run.
 
-```sh
-cp deploy/nginx.conf /etc/nginx/sites-available/kourt
-# edit server_name
-ln -s /etc/nginx/sites-available/kourt /etc/nginx/sites-enabled/kourt
-certbot --nginx -d kourt.example
-nginx -t && systemctl reload nginx
-```
+**`deploy/nginx.conf` is HTTP-only on purpose.** `certbot --nginx --redirect`
+writes the `:443` server, the certificate paths and the 80→443 redirect into it.
+A hand-written `listen 443 ssl` with the cert lines commented out does not
+merely fail to help: `nginx -t` refuses a listener declared `ssl` with no
+certificate, so nginx would not start at all and certbot could never reach port
+80 to prove the domain.
+
+Renewal is certbot's own `certbot.timer`, installed by the package; setup
+reports whether it is enabled rather than leaving you to find out in ninety
+days.
+
+**The IP-hashing key is generated once and never regenerated.** Without
+`--secret-file` the key lives as a row *inside* the database, so one file would
+carry both the address hashes and the key that reverses them — and it gets its
+own `0700` directory because `kourtchat` also warns when the two merely share
+one. Re-running setup leaves an existing key alone: rotating it silently would
+orphan every hash already stored, so the throttle would stop recognising anyone
+it already knows.
 
 **HTTPS is not optional for the overlay**, and not only for the usual reasons:
 the Clipboard API requires a secure context, so on plain `http://` the share
 panel cannot copy at all. It degrades honestly — it selects the text and says
 "press Ctrl/⌘-C" — but that is a downgrade nobody should be running.
 
-Two deliberate choices in that config, both easy to "fix" wrongly:
+Two choices in `nginx.conf` that are easy to "fix" wrongly:
 
 - **`frame-ancestors *`, and no `X-Frame-Options`.** `#/embed/<court>/<id>`
   exists to be embedded in somebody else's article. `SAMEORIGIN` would break the
@@ -110,9 +118,9 @@ Two deliberate choices in that config, both easy to "fix" wrongly:
 ## Checking on it
 
 ```sh
-ssh root@kourt.example systemctl status kourtchat
-ssh root@kourt.example journalctl -u kourtchat -f
-curl -s https://kourt.example/api/chat/health
+ssh root@kourt.xyz systemctl status kourtchat
+ssh root@kourt.xyz journalctl -u kourtchat -f
+curl -s https://kourt.xyz/api/chat/health
 ```
 
 If the health endpoint says no scanner has ever run, that is the service telling

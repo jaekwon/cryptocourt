@@ -2,7 +2,7 @@
 #
 # Ship both halves of Kourt to one box.
 #
-#   ./deploy/deploy.sh root@kourt.example
+#   ./deploy/deploy.sh root@kourt.xyz
 #
 # There are two things to deploy and they are unrelated to each other:
 #

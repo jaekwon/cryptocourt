@@ -1,5 +1,5 @@
 .PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
-	scenarios scenarios-check demo-physics height-shim dump-demo seed-demo web-test web-visual deploy
+	scenarios scenarios-check demo-physics height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # Everything that can run without a node.
 #
@@ -70,7 +70,16 @@ web-test:
 # see deploy/README.md. The realm is NOT deployed from here; it goes to a gno
 # chain with gnokey, and the overlay reads whichever chain you point it at.
 #
-#   make deploy HOST=root@kourt.example
+#   make deploy HOST=root@kourt.xyz
+# One-time server setup: nginx, TLS via certbot, firewall, the service account
+# and the IP-hashing key. Idempotent. Run this once per box, then `make deploy`
+# every time after.
+#
+#   make setup HOST=root@kourt.xyz DOMAIN=kourt.xyz
+setup:
+	@test -n "$(HOST)" || { echo 'usage: make setup HOST=user@host [DOMAIN=kourt.xyz]'; exit 2; }
+	./deploy/setup.sh $(HOST) $(or $(DOMAIN),kourt.xyz)
+
 # `deploy` is also the name of a DIRECTORY in this repo, so without the .PHONY
 # on line 1 make finds it up to date and does nothing — silently, exit 0.
 deploy:
