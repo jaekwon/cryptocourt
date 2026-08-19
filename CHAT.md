@@ -667,6 +667,20 @@ carve-out; only the operator verb was missing, so somebody who revealed a messag
 it was a real key had no way back. Guidance the code cannot support is the defect this document keeps
 catching elsewhere, committed here in its own.
 
+**The reversibility audit, and where it stopped.** Asking which operations cannot be undone turned
+up four:
+
+    prune       deletion, and the one that stays irreversible on purpose — dry run by default
+    freeze      a court unreachable to everybody; `unfreeze` now
+    hidden=2    a report invisible to everybody; `reveal` now, and `hide` to put it back
+    dismiss     a queue entry gone from the default view — left alone, on purpose
+
+`dismiss` is the one that got a fixture instead of a verb, because it forecloses nothing:
+`review -all` still lists the rows, a dismissed message can still be kicked, banned or hidden, and
+the author was never told anything. What would change that is written into the fixture — if `-all`
+grew unusable on a busy court, or if dismissal ever gated an ACTION rather than only a default view,
+the lost worklist would stop being recoverable and it would need an undo like the others.
+
 Both verbs report three outcomes rather than one refusal — hidden now, already out of sight (naming
 which kind, and which verb undoes it), or no such message — because `HideMessage` requires
 `hidden=0` and cannot tell the first two apart on its own.
