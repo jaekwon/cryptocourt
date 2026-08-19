@@ -439,12 +439,23 @@ Latched rather than re-derived from the chain on every request, because a chain 
 tell "this court was purged" from "the node is unreachable", and a compliance control whose
 fail-open trigger is an RPC hiccup is not a control.
 
-It stops BOTH verbs — 410 on the read as well as the write. That is worth stating because it
-was not true until it was measured: `frozen` was consulted in `Post` and nowhere else, so a
-withdrawn court refused new messages with "this court is no longer served" while handing its
-whole transcript to anyone who asked, and the tool printed "its history is no longer served"
-the entire time. A control that announces a property it does not have is worse than no
-control, because somebody relies on it.
+It stops BOTH verbs — 410 on the read as well as the write — and it stops MODERATION too.
+Neither was true until it was measured, in two passes:
+
+    frozen consulted in Post only    the transcript was still served to anyone who asked
+    then in Post and Recent only     the scanner still spent inference on it, and a
+                                     moderator's queue still filled with its messages
+
+A control that announces a property it does not have is worse than no control, because
+somebody relies on it — and the tool printed "its history is no longer served" throughout.
+
+The scanner skipping a withdrawn court is `Claim`'s own reasoning applied consistently: it
+already skips `hidden`, because punished content must stop driving verdicts, and withdrawn
+content is in the same position — unreadable, so no harm is left to prevent, and judging it
+is work with no beneficiary. The counter-argument is real and was weighed: a scam is a scam
+and its author should be stopped elsewhere. That is what the live courts are for, which is
+where the author can still do harm and where the scanner is still looking. Freezing happens
+after the fact, so the history has usually been scanned already.
 
 **Freeze does not erase, deliberately.** The rows stay for an operator who needs them, and
 the pruner is the separate step. "Stop showing this" and "destroy the evidence" are different
