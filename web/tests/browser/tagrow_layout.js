@@ -210,7 +210,13 @@ const ROUTES = [
       const fl = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).filter : null; };
       return {glow: tok("--glow-a"), edge: tok("--edge"),
               bar: sh(".sbar .sbY"), line: fl(".bigchart .ln"),
-              nav: sh(".nav a.on"), title: sh(".page-h")};
+              nav: sh(".nav a.on"), title: sh(".page-h"),
+              panel: sh(".panel"),
+              // the grid is a background-IMAGE on body, and the `background:`
+              // shorthand in the same rule resets it — declared earlier in the
+              // sheet it silently never paints, which is what happened first.
+              bg: getComputedStyle(document.body).backgroundImage,
+              bgSize: getComputedStyle(document.body).backgroundSize};
     });
     if(theme === "light"){
       ok("light: every glow token is off", n.glow === "none", n.glow);
@@ -218,12 +224,23 @@ const ROUTES = [
          n.bar === null || !/rgba?\([^)]*\) 0px 0px \d/.test(n.bar), n.bar);
       ok("light: the chart line has no filter", n.line === null || n.line === "none", n.line);
       ok("light: the lit edge is invisible", /transparent|rgba\(0, 0, 0, 0\)/.test(n.edge), n.edge);
+      // The gradients are still DECLARED in light — they just resolve to
+      // transparent, which is how one token switches the whole thing off.
+      ok("light: the grid paints nothing",
+         !/rgba\((?!0, 0, 0, 0)/.test(n.bg || ""), (n.bg || "").slice(0, 60));
+      ok("light: panels have no lit lip", n.panel === "none" || n.panel === null, n.panel);
     } else {
       ok("dark: the glow token carries a value", n.glow !== "none" && n.glow.length > 4, n.glow);
       ok("dark: the recorded path emits", /drop-shadow/.test(n.line || ""), n.line);
       ok("dark: the stake bar emits in its own colour",
          /rgba\(111, 192, 165/.test(n.bar || ""), n.bar);
       ok("dark: the active nav item has a lit leading edge", /inset/.test(n.nav || ""), n.nav);
+      // A grid declared before the `background:` shorthand is silently discarded;
+      // this asserts it actually reaches the computed style, and at the right cell.
+      ok("dark: the grid actually paints", /linear-gradient\(rgba\(154, 168, 238/.test(n.bg || ""),
+         (n.bg || "").slice(0, 60));
+      ok("dark: on a 44px cell", /44px 44px/.test(n.bgSize || ""), n.bgSize);
+      ok("dark: panels have a lit top lip", /inset/.test(n.panel || ""), n.panel);
     }
     // THE ONE THAT ACTUALLY SHIPPED BROKEN — and it has to be FOCUSED to test,
     // which the first version of this check forgot. The page moves focus to the
