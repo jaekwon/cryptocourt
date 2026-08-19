@@ -234,7 +234,38 @@ text, never anchors, which is free and removes the click.
 
 `evidence` copies the body into the infraction at punish time, because the pruner
 would otherwise delete the evidence for exactly the longest-lived consequences.
-The pruner is cut from v1: worse half-done than absent.
+The pruner was cut from v1 as "worse half-done than absent". It is built now, because the
+things that made it dangerous are all in place: `evidence` means a deleted message cannot
+take the record with it, `reviewed_at` distinguishes a queue somebody has worked from one
+nobody has seen, and `Health.Unscannable` separates "not yet classified" from "gave up".
+
+It refuses three kinds outright, whatever the cutoff says. **Unscanned** messages, because
+deleting one is not retention policy but silently skipping moderation — which is what
+makes an outage safe: if the model has been unreachable for a month, a thirty-day prune
+must not erase the backlog instead of anyone classifying it. Messages **awaiting review**,
+because the carve-out above defers exactly those to a person and deleting them empties that
+queue with nobody deciding anything. And messages **cited by a consequence still in force**,
+because `unban` restores a punished author's hidden messages and cannot restore rows that
+are gone. Rows that gave up ARE prunable: a decision was made about them, a bad one, and
+that is what the unscannable count is for.
+
+Dry run by default, and it reports the refusals even when they are zero — on the screen
+where somebody is about to delete a month of history, "nothing is waiting for review" is
+worth reading. Bounded per call, because §1's argument for one database file rests on
+nothing holding the write lock for long: 20,000 rows went in batches of 2,000 in 193ms
+while 2,096 read+status pairs completed alongside, worst 552µs.
+
+**Deleting reclaims no disk, and can temporarily use more.** Measured on 40k messages:
+
+    before pruning      main 7876K   wal 7994K
+    after pruning all   main 7876K   wal 7994K    byte-identical
+    after a checkpoint  main 7876K   wal    0K    the WAL, not the file
+    VACUUM INTO           56K
+
+The deletions are journaled first, so an operator pruning *because* they are low on disk
+can make it worse. `PRAGMA wal_checkpoint(TRUNCATE)` frees the `-wal` with no downtime;
+only a vacuum returns the main file's free pages, and swapping the compacted file in needs
+a stop and start.
 
 ### The reporting carve-out, and what it costs
 
@@ -581,8 +612,8 @@ depends on, the suite pins the REASON it does not: a sentinel is placed in every
 of a message and every attribute of every rendered element is searched for it. Write
 `title="${moniker}"` one day and that check fails, escaped or not.
 
-Also deferred: pruning old messages (a documented `DELETE`, not code — getting it
-wrong destroys the evidence an appeal needs), and validating a court against the
-chain (existence positive-and-sticky, purge negative-and-sticky, because the chain
-read cannot distinguish "no such court" from "node unreachable" — `freeze` covers the
-compliance half today).
+Still deferred, and now the only substantive gap: validating a court against the chain —
+existence positive-and-sticky, purge negative-and-sticky, because the chain read cannot
+distinguish "no such court" from "node unreachable", and a compliance control whose
+fail-open trigger is an RPC hiccup is not a control. `freeze` covers the compliance half
+today. (Pruning was the other item here and is built — §7.)
