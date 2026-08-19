@@ -114,6 +114,24 @@ rightmost, where it wins at once; but list a whole VPC as `--trusted-proxy` and 
 from inside it is "ours". Refused now — a 403 tells an operator their range is too wide, and silently
 bucketing everyone together tells them nothing until somebody is kicked.
 
+**And a refusal the operator cannot see is a service that silently stopped.** The 403 goes to the
+client, so when the cause is a range too wide the symptom is "nobody can post" and the log said
+nothing. One line, once per cause:
+
+    refusing requests: every X-Forwarded-For hop is inside --trusted-proxy, so no client can be
+    identified. Narrow the range. peer="127.0.0.1:61938" header="203.0.113.7". Logged once.
+
+Once, not per request, because both causes are persistent conditions rather than events — a
+misconfiguration fires on every request and would fill the disk, and somebody probing the origin
+directly chooses the rate. Verified live: four refused requests, one line. An ACCEPTED request logs
+nothing, which matters more than usual here — a logger that narrates every request buries the one
+line that means something.
+
+The header is printed with `%q`. It is attacker-controlled and passes through no sanitiser, unlike a
+court name (bounded by `courtRe`) or a body (`SanitizeBody`), so a raw print puts escape sequences
+into an operator's terminal — and ANSI can rewrite the lines above it, which is a way to hide the
+refusal being reported. `%q` renders them as `\x1b`, still visible as an attempt.
+
 **Two situations that looked identical are now separate**, and the second had to keep working: a
 header of only malformed hops, or no header at all, is not a chain. That is a request from the proxy
 itself — a health check, an operator's curl — and there the peer IS the client. Both branches are
