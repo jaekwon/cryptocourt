@@ -231,6 +231,8 @@ a.card:hover{border-color:var(--line-2)}
 .btn.primary:hover{background:var(--accent-2)}
 .btn.yes{border-color:var(--yes); color:var(--yes)} .btn.yes:hover{background:var(--yes-wash)}
 .btn.no{border-color:var(--no); color:var(--no)} .btn.no:hover{background:var(--no-wash)}
+/* the side an embed's button asked for — a ring, not a pre-filled form */
+.btn.picked{box-shadow:0 0 0 3px var(--accent-wash); outline:2px solid var(--accent-2)}
 .btn .g{font-size:13px; opacity:.85}
 .btn small{font-weight:500; color:var(--muted); font-size:11.5px}
 
@@ -273,6 +275,15 @@ html.embed #tcbanner{grid-column:1; padding:0}
 /* Inherit, like Polymarket's: the card should read as a card, not as a page of
    blue links. The affordance arrives on hover, and the footer link stays the
    one explicit call to action. */
+.emb .eacts{display:flex; gap:8px; margin-top:2px}
+.emb .eact{flex:1 1 0; min-width:0; display:flex; align-items:baseline; justify-content:center; gap:7px;
+  padding:8px 6px; border-radius:var(--r-sm); text-decoration:none; font-size:12.5px;
+  border:1px solid transparent; white-space:nowrap; overflow:hidden}
+.emb .eact b{font-weight:600}
+.emb .eact .epc{font-variant-numeric:tabular-nums; opacity:.85}
+.emb .eact.y{color:var(--yes); background:var(--yes-wash); border-color:var(--yes)}
+.emb .eact.n{color:var(--no);  background:var(--no-wash);  border-color:var(--no)}
+.emb .eact:hover{filter:brightness(1.06); text-decoration:underline; text-underline-offset:2px}
 .emb .elink{color:inherit; text-decoration:none}
 .emb .elink:hover{text-decoration:underline; text-underline-offset:2px}
 .emb .etitle .elink:hover{color:var(--accent-2)}
@@ -3304,6 +3315,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + qualitySection(slug,id,d)
     + argumentSection(slug,id,argLookup);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
+  // arrived from an embed's side button
+  if(QP.side) focusStakeSide(QP.side);
 });
 
 /* Three ratio series (§3.9): instantaneous stake, trailing week, and the
@@ -3568,7 +3581,7 @@ function stakeTicket(slug,id,d){
       <div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>
       <div class="line"><span class="l">Losing side</span><span class="r">1×, loses nothing</span></div></div>`;
   }
-  return `<div class="ticket"><h3>Stake the claim</h3>
+  return `<div class="ticket" id="stake-ticket"><h3>Stake the claim</h3>
     <div class="hint">Take the side you believe. Free to unstake until an answer posts — then it locks and your <b>conviction</b> (stake × time held) becomes your reward weight.</div>
     <div class="line"><span class="l">Your principal</span><span class="r">returns 1×, either way</span></div>
     <div class="line"><span class="l">If your side wins</span><span class="r">1× + accuracy reward</span></div>
@@ -3582,6 +3595,20 @@ function stakeTicket(slug,id,d){
     </div></div>`;
 }
 
+/* An embed's side button lands here. Without this the button would be a fake
+   affordance: it would say "Stake YES" and drop the reader at the top of a long
+   page with no idea what it wanted them to do. Polymarket's tid=0/tid=1 does the
+   same job on their market page.
+   It does NOT stake anything, and it must not: it scrolls to the panel and marks
+   the side, leaving every signature to the reader's own deliberate click. */
+function focusStakeSide(side){
+  if(side !== "yes" && side !== "no") return;
+  const t = document.getElementById("stake-ticket");
+  if(!t) return;   // the claim moved on — staking is frozen, so there is nothing to point at
+  const b = t.querySelector(".act .btn." + side);
+  if(b) b.classList.add("picked");
+  t.scrollIntoView({block: "center", behavior: "smooth"});
+}
 function verdictBanner(d){
   if(d.phase==="provClose") return `<span class="pill void">closed · no decision</span>`;
   if(d.phase==="settled"){ const v=(d.verdict!=null?d.verdict:d.answer); return `<span class="pill good">✓ settled ${sideName(v)}${d.route?" · "+esc(d.route):""}</span>`; }
@@ -4317,15 +4344,16 @@ function embedSnippet(slug, id, opts){
   // and no test-clock banner — which is exactly the state that cannot overflow,
   // so they were 40px short of every card a reader would actually see. Now:
   // every card in the sample, at 320px wide (the narrowest column an article
-  // gives a max-width:100% iframe), carrying .esrc AND the recorded-path spark
-  // — tallest claim 383px, tallest court 197px. The title is line-clamped and
-  // the spark is a fixed 52px, so both growing terms are bounded;
+  // gives a max-width:100% iframe), carrying .esrc, the recorded-path spark AND
+  // the two stake actions — tallest claim 431px, tallest court 197px. The title
+  // is line-clamped, the spark is a fixed 52px and the actions are one row that
+  // never wraps, so every growing term is bounded;
   // ../tests/browser/embed_layout.js pins both worst cases.
   //
   // A live chain with an honest clock has nothing to disclose and so runs ~40px
   // short of these. That is the price of a fixed box: size for the card that
   // says the most, not the least.
-  const w = o.w || 400, h = o.h || (id == null ? 210 : 400);
+  const w = o.w || 400, h = o.h || (id == null ? 210 : 450);
   return `<iframe src="${src}" width="${w}" height="${h}" frameborder="0" `
        + `title="Kourt — ${id == null ? slug : slug + " #" + id}" `
        + `style="border:1px solid #ddd;border-radius:6px;max-width:100%"></iframe>`;
@@ -4568,6 +4596,36 @@ const esrc = note => note ? `<div class="esrc">${esc(note)}</div>` : "";
    step-after rendering as the claim page: the chain stores change-only samples,
    so a sloped line between two of them would draw motion that never happened.
    Its own viewBox scales to whatever column the iframe was given. */
+/* THE ACTION. Polymarket's card ends in two outcome buttons and ours ended in
+   nothing — a reader could look at the claim and had nowhere to go but the small
+   print in the corner.
+
+   NOT THEIR LANGUAGE, THOUGH. Theirs are priced outcomes you buy; a claim here
+   is not bought and not sold, principal always returns 1x, and the number under
+   each side is the SHARE OF STAKE on it, not a price and not odds. So: "Stake
+   YES" and "Stake NO", the two verbs this realm actually has.
+
+   THEY NAVIGATE, THEY DO NOT SIGN. Polymarket's outcome buttons deep-link to
+   the market with tid=0/tid=1 rather than trading inside the frame, and that is
+   the right shape for a different reason here: a signing link is a wallet
+   interaction, and an iframe on somebody else's page is the last place to put
+   one. These carry ?side= to the claim, which lands on the stake panel with
+   that side marked.
+
+   ONLY WHILE THE CLAIM IS OPEN. Staking freezes the moment an answer posts, so
+   on any later phase these would send a reader to a transaction the realm would
+   refuse. A card for a settled claim offers reading it, which is what its
+   footer link already does. */
+function embedActions(d, slug, id){
+  if(!d || d.phase !== "open") return "";
+  const py = pctYes(d.yesStake || 0, d.noStake || 0);
+  const pc = v => (v == null) ? "" : `<span class="epc">${v.toFixed(1)}%</span>`;
+  const one = (side, label, v, cls) =>
+    `<a class="eact ${cls}" href="${embedBackHref("/c/" + slug + "/" + id)}&side=${side}"
+        target="_blank" rel="noopener"><b>${label}</b>${pc(v)}</a>`;
+  return `<div class="eacts">${one("yes", "Stake YES", py, "y")}`
+       + `${one("no", "Stake NO", py == null ? null : 100 - py, "n")}</div>`;
+}
 function embedSpark(ser){
   if(!ser || !ser.pts) return "";
   const pts = ser.pts.filter(q => q[1] != null);
@@ -4614,6 +4672,7 @@ async function embedClaimView(slug, idS){
       ${stakeBar(d, slug)}
       <div class="estat">${esc(d.statusText || "")}</div>
       ${esrc(note)}
+      ${embedActions(d, slug, id)}
       <div class="efoot">
         <span class="ewhen">${when ? "filed " + esc(when) : ""}</span>
         <a href="${embedBackHref("/c/" + slug + "/" + id)}" target="_blank" rel="noopener">Open on Kourt →</a>

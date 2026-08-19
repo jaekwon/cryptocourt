@@ -62,7 +62,7 @@ ok("iframe declares a title for screen readers", /title="Kourt — orem #1"/.tes
 // NOT Polymarket's 400x400 — that is square because their card holds a chart.
 // Ours holds a sentence and a bar, and the height is what measuring every card
 // in the sample at 320px wide produced. See tests/browser/embed_layout.js.
-ok("a claim card is sized to the card, 400x400", /width="400" height="400"/.test(snip));
+ok("a claim card is sized to the card, 400x450", /width="400" height="450"/.test(snip));
 ok("iframe cannot outgrow its column", /max-width:100%/.test(snip));
 
 const court = embedSnippet("orem", null, {});
@@ -371,6 +371,26 @@ ok("copy-image is wired", src.includes("new ClipboardItem({\"image/png\": blob})
 ok("a browser without ClipboardItem is told so", src.includes("this browser cannot copy images"));
 ok("a refused clipboard permission is reported", src.includes("the browser refused the clipboard"));
 ok("the share trigger is on the claim page", src.includes('data-help="share-dlg"'));
+
+// --- the action, in this realm's words -------------------------------------
+// Polymarket's card ends in two priced outcome buttons. A claim here is not
+// bought, not sold and not priced — principal always returns 1x — so the number
+// under each side is the SHARE OF STAKE on it, and the verb is the one the
+// realm actually has.
+ok("the card offers the two sides", src.includes("function embedActions(d, slug, id)"));
+ok("with this realm's verb", src.includes('one("yes", "Stake YES"') && src.includes('one("no", "Stake NO"'));
+ok("only while the claim is open", src.includes('if(!d || d.phase !== "open") return "";'));
+ok("carrying the side, like tid=0/tid=1", src.includes('&side=${side}'));
+const ACT = slice('function embedActions(', 'function embedSpark(');
+ok("§7.4 clean — the action", !BANNED.test(ACT), (ACT.match(BANNED) || [""])[0]);
+ok("no price, no cents, no buying", !/\bbuy\b|\bsell\b|¢|price/i.test(ACT));
+// The side must land somewhere or the button is a fake affordance.
+ok("the claim page honours ?side=", src.includes("function focusStakeSide(side)")
+   && src.includes("if(QP.side) focusStakeSide(QP.side);"));
+ok("landing marks, it does not stake", src.includes('b.classList.add("picked")')
+   && !/focusStakeSide[\s\S]{0,400}(submit|broadcast|signTx)/.test(src));
+ok("and a frozen claim has nothing to point at", src.includes(
+   'if(!t) return;   // the claim moved on'));
 
 // --- the disclosure that has to travel with the card ----------------------
 // A PNG leaves with no banner, no rail and no URL bar; an embed hides the rail
