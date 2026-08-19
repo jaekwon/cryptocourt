@@ -1,0 +1,405 @@
+// Harness for web/chat.js — the court chat panel.
+//
+// Unlike its neighbours this one does not slice index.html. chat.js is a whole file
+// of its own, so it is evaluated whole, which means these tests exercise the shipped
+// code rather than a fragment of it and they keep working while the page is being
+// edited by somebody else.
+//
+// WHAT THIS FILE IS FOR. The panel renders text written by anonymous strangers, and
+// the server deliberately does not strip markup from it (SanitizeBody preserves what
+// a reader sees so that the classifier reads the same thing). Escaping here is
+// therefore the only thing between a message body and script execution. Most of what
+// follows is that one property, approached from several directions, plus the two
+// regressions found while writing it: a status repaint that erased the transcript,
+// and a poller that outlived the DOM it was writing to.
+const fs = require("fs");
+const path = require("path");
+const SRC = path.join(__dirname, "..", "chat.js");
+
+// Stubs, before the eval: chat.js touches document.hidden, localStorage and fetch.
+let FETCHES = [];
+let FETCH = async () => { throw new Error("no fetch stub installed"); };
+global.fetch = (...a) => { FETCHES.push(a); return FETCH(...a); };
+global.document = {hidden: false};
+const STORE = {};
+global.window = {localStorage: {
+  getItem: k => (k in STORE ? STORE[k] : null),
+  setItem: (k, v) => { STORE[k] = String(v); },
+}};
+
+eval(fs.readFileSync(SRC, "utf8"));
+
+let fail = 0;
+const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console.log("ok:", n); };
+
+// ---------------------------------------------------------------- escaping
+// The single property everything else rests on. Both directions every time: the
+// dangerous form must be ABSENT and the escaped form PRESENT, because a function that
+// returned "" would pass an absence check on its own.
+const XSS = '<img src=x onerror=alert(1)>';
+{
+  const h = chatLineHtml({moniker: "alice", body: XSS, country: "DE",
+                          suffix: "a1b2c3", created_at: 1000}, 1000);
+  ok("a script payload in a body is not emitted as a tag", !/<img/.test(h));
+  ok("...and it is still shown to the reader, escaped",
+     h.includes("&lt;img src=x onerror=alert(1)&gt;"));
+
+  // A moniker lands inside an attribute in some renderings and inside text in
+  // others, so it is checked against both kinds of breakout.
+  const q = chatLineHtml({moniker: '" onmouseover="alert(1)', body: "hi",
+                          country: "DE", suffix: "a1b2c3", created_at: 1000}, 1000);
+  ok("a quote in a moniker cannot close an attribute", !/onmouseover="/.test(q));
+  ok("...and the quote is escaped", q.includes("&quot;"));
+
+  ok("single quotes are escaped", chatEsc("it's") === "it&#39;s");
+  ok("backticks are escaped", chatEsc("a`b") === "a&#96;b");
+  ok("ampersand first, so escapes are not double-decoded",
+     chatEsc("&lt;") === "&amp;lt;");
+  ok("null and undefined render as empty, not as the word null",
+     chatEsc(null) === "" && chatEsc(undefined) === "");
+}
+
+// A scam is only dangerous when its link is clickable. This is a design rule, not an
+// oversight, so it is pinned: nothing in a rendered line may be an anchor.
+{
+  const h = chatLineHtml({moniker: "crook", country: "", suffix: "",
+    body: "claim your airdrop at http://gnot-claim.xyz now", created_at: 1000}, 1000);
+  ok("a URL in a body is never linkified", !/<a\b/i.test(h) && !/href/i.test(h));
+  ok("...and is still legible as text", h.includes("http://gnot-claim.xyz"));
+}
+
+// ---------------------------------------------------------------- flags
+{
+  ok("DE is the German flag", chatFlag("DE") === "\u{1F1E9}\u{1F1EA}");
+  ok("lowercase is accepted", chatFlag("de") === chatFlag("DE"));
+  // Every rejection separately, because each is a different way for a bad value to
+  // arrive: short, long, non-letter, empty, absent, and markup.
+  for (const bad of ["D", "DEU", "d3", "", null, undefined, "<>", "  ", "ZZZ"]) {
+    ok("no flag for " + JSON.stringify(bad), chatFlag(bad) === "");
+  }
+  // ZZ is not a country but IS two letters; it yields an unassigned pair rather than
+  // markup, which is the acceptable failure. Recorded so nobody "fixes" it with a
+  // list of 249 codes that goes stale.
+  ok("an unassigned two-letter code is inert", !/[<>&]/.test(chatFlag("ZZ")));
+}
+
+// ---------------------------------------------------------------- the suffix
+// The anti-impersonation property. Nobody owns a moniker, so the suffix is the only
+// thing that distinguishes two people using the same name. It must be rendered.
+{
+  const a = chatLineHtml({moniker: "alice", suffix: "a1b2c3", country: "GB",
+                          body: "hello", created_at: 1000}, 1000);
+  const b = chatLineHtml({moniker: "alice", suffix: "ff0099", country: "GB",
+                          body: "I am the real alice", created_at: 1000}, 1000);
+  ok("the suffix is rendered", a.includes("a1b2c3"));
+  ok("two people using one name are distinguishable", a !== b && b.includes("ff0099"));
+  // A suffix is 6 hex from the server. Anything else did not come from HashPair and
+  // is dropped rather than displayed as though it had.
+  const junk = chatLineHtml({moniker: "alice", suffix: "<b>staff</b>", country: "",
+                             body: "hi", created_at: 1000}, 1000);
+  ok("a non-hex suffix is dropped", !junk.includes("staff") && !/<b>/.test(junk));
+  const none = chatLineHtml({moniker: "alice", body: "hi", created_at: 1000}, 1000);
+  ok("a message with no suffix or country still renders",
+     none.includes("alice") && !/undefined/.test(none));
+}
+
+// ---------------------------------------------------------------- ages
+{
+  ok("fresh reads as just now", chatWhen(1000, 1000) === "just now");
+  ok("under 45s reads as just now", chatWhen(1044, 1000) === "just now");
+  ok("a minute reads in minutes", chatWhen(1000 + 60, 1000) === "1m");
+  ok("an hour reads in minutes below 90m", chatWhen(1000 + 3600, 1000) === "60m");
+  ok("two hours reads in hours", chatWhen(1000 + 7200, 1000) === "2h");
+  ok("three days reads in days", chatWhen(1000 + 3 * 86400, 1000) === "3d");
+  // A viewer whose clock is behind the server's is common; "in 4 minutes" is not a
+  // useful thing to show them.
+  ok("a clock behind the server does not read as the future",
+     chatWhen(1000, 1240) === "just now");
+}
+
+// ---------------------------------------------------------------- your own status
+{
+  ok("ok says nothing at all", chatStatusLine({state: "ok"}, 1000) === "");
+  ok("a missing status says nothing", chatStatusLine(null, 1000) === "");
+
+  const k = chatStatusLine({state: "kick", until: 1000 + 1800, ref: 42}, 1000);
+  ok("a kick says paused", /paused/i.test(k));
+  ok("...says how long", /30 minutes/.test(k));
+  ok("...and points at an appeal with a reference", /appeal/i.test(k) && /42/.test(k));
+
+  ok("a long kick reads in hours", /3 hours/.test(
+     chatStatusLine({state: "kick", until: 1000 + 3 * 3600}, 1000)));
+  ok("a week reads in days", /7 days/.test(
+     chatStatusLine({state: "kick", until: 1000 + 7 * 86400}, 1000)));
+  ok("a ban says blocked", /blocked/i.test(chatStatusLine({state: "ban"}, 1000)));
+
+  // THE ORACLE PROPERTY. The server withholds the category and the model's reasoning
+  // so the endpoint cannot be used to tune an evasion. The panel must not undo that
+  // by naming a reason it does not have.
+  for (const st of ["kick", "ban"]) {
+    const line = chatStatusLine({state: st, until: 9999, ref: 7}, 1000);
+    ok("a " + st + " never names a category",
+       !/spam|scam|hack|phish/i.test(line));
+  }
+  // An expiry already in the past must not render as a negative duration.
+  ok("a stale expiry does not read as negative time",
+     !/-/.test(chatStatusLine({state: "kick", until: 500}, 1000)));
+}
+
+// ---------------------------------------------------------------- input limits
+{
+  ok("no name is refused", chatValidate("", "hi") === "pick a name first");
+  ok("no body is refused", chatValidate("al", "") === "type something");
+  ok("whitespace only is refused", chatValidate("al", "   ") === "type something");
+  ok("an ordinary message passes", chatValidate("al", "hello there") === "");
+  ok("400 characters passes", chatValidate("al", "a".repeat(400)) === "");
+  ok("401 is refused", chatValidate("al", "a".repeat(401)) !== "");
+  ok("24 characters of name passes", chatValidate("a".repeat(24), "hi") === "");
+  ok("25 is refused", chatValidate("a".repeat(25), "hi") !== "");
+  // Runes, not UTF-16 units. 24 astral characters is .length 48, and counting units
+  // would refuse a name the server accepts.
+  ok("astral characters count as one each",
+     chatValidate("\u{1D552}".repeat(24), "hi") === "");
+  ok("...and 25 of them is still refused",
+     chatValidate("\u{1D552}".repeat(25), "hi") !== "");
+}
+
+// ---------------------------------------------------------------- config
+{
+  ok("no config means no network", chatBase(null) === "");
+  ok("demo mode means no network", chatBase({mode: "demo", chat: "http://x"}) === "");
+  ok("an unset endpoint means no network", chatBase({mode: "live"}) === "");
+  ok("a trailing slash is trimmed",
+     chatBase({mode: "live", chat: "http://x:8791/"}) === "http://x:8791");
+}
+
+// ---------------------------------------------------------------- empty room
+{
+  const h = chatLogHtml([], 1000);
+  ok("an empty room says so rather than rendering nothing", /Nobody has said/.test(h));
+  ok("a null transcript does not throw", typeof chatLogHtml(null, 1000) === "string");
+}
+
+// ---------------------------------------------------------------- mounted panel
+// A DOM stub, because the interesting failures are in the wiring rather than in the
+// pure functions: which element gets written, and whether a stale poller writes at all.
+function mkEl() {
+  return {innerHTML: "", textContent: "", hidden: false, disabled: false, value: "",
+    scrollHeight: 100, scrollTop: 100, clientHeight: 100, isConnected: true,
+    handlers: {},
+    // A classList, because without one mountChat's tagging line is simply unreachable
+    // from a test and a mutation deleting it survives.
+    classList: {names: new Set(), add(n) { this.names.add(n); },
+                contains(n) { return this.names.has(n); }},
+    addEventListener(t, f) { (this.handlers[t] = this.handlers[t] || []).push(f); },
+    fire(t, ev) { for (const f of (this.handlers[t] || [])) f(ev || {preventDefault(){}}); }};
+}
+function mkRoot() {
+  const kids = {};
+  for (const c of [".chatlog", ".chatstate", ".chatnote", ".chatform",
+                   ".chatmoniker", ".chatinput", ".chatsend"]) kids[c] = mkEl();
+  const root = mkEl();
+  root.querySelector = s => kids[s] || null;
+  root.k = kids;
+  return root;
+}
+const tickMicro = () => new Promise(r => setImmediate(r));
+
+// A document stub for the stylesheet injection. chat.js ships its own CSS so that
+// installing the panel does not mean another edit to a page three workstreams share.
+//
+// The stylesheet is read back off the injected node rather than from the CHATCSS
+// binding: a `const` at the top level of a direct eval does not leak into this scope,
+// and reading what was actually appended is the more honest check anyway.
+function mkDoc() {
+  const byId = {};
+  return {
+    head: {children: [], appendChild(n) { this.children.push(n); byId[n.id] = n; }},
+    getElementById: id => byId[id] || null,
+    createElement: () => ({id: "", textContent: ""}),
+  };
+}
+{
+  const doc = mkDoc();
+  chatStyles(doc);
+  ok("the stylesheet is injected", doc.head.children.length === 1);
+  const css = doc.head.children[0].textContent;
+  ok("...carrying the classes the panel actually uses",
+     /\.chatmsg/.test(css) && /\.chatlog/.test(css) && /\.chatsuf/.test(css));
+  ok("...under an id, so it can be found again", doc.head.children[0].id === "chatcss");
+  chatStyles(doc);
+  chatStyles(doc);
+  ok("...exactly once, however many panels mount", doc.head.children.length === 1);
+  // A stylesheet is as good a place to smuggle markup as any, so it must stay static.
+  ok("nothing is interpolated into the stylesheet",
+     !/[$]\{/.test(css) && !/</.test(css) && !/>/.test(css));
+  ok("chatStyles without a document does not throw",
+     (() => { try { chatStyles(null); return true; } catch (e) { return false; } })());
+}
+
+(async () => {
+  // DEMO MODE MAKES NO NETWORK CALLS. web/README.md promises this of the whole page,
+  // and a chat panel is the easiest way to break it by accident.
+  {
+    FETCHES = [];
+    const el = mkRoot();
+    const doc = mkDoc();
+    const stop = mountChat(el, {cfg: {mode: "demo"}, court: "orem", doc: doc});
+    await tickMicro();
+    ok("demo mode calls nothing over the network", FETCHES.length === 0);
+    // Mounting must install the stylesheet and tag the container, or the panel ships
+    // unstyled unless whoever integrates it also remembers to do both by hand.
+    ok("mounting installs the stylesheet", doc.head.children.length === 1);
+    ok("mounting tags the container", el.classList.contains("chatpanel"));
+    ok("demo mode still shows a sample thread", /ellery/.test(el.k[".chatlog"].innerHTML));
+    ok("the demo sample is escaped like anything else",
+       !/<b>|<script/i.test(el.k[".chatlog"].innerHTML));
+    el.k[".chatform"].fire("submit");
+    ok("submitting in demo mode says so instead of posting",
+       /demo/i.test(el.k[".chatnote"].textContent) && FETCHES.length === 0);
+    stop();
+  }
+
+  // THE REGRESSION: a refused post carries a status and no messages, and the first
+  // version of paint() took both at once — so telling somebody they were paused also
+  // erased the transcript they were reading.
+  {
+    FETCHES = [];
+    FETCH = async () => ({ok: true, json: async () => ({
+      messages: [{id: 1, moniker: "ellery", body: "still here", country: "GB",
+                  suffix: "a1b2c3", created_at: Math.floor(Date.now() / 1000)}],
+      you: {state: "ok"}, next: 1})});
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"},
+                                court: "orem", chain: "dev"});
+    await tickMicro(); await tickMicro();
+    ok("a live mount paints the transcript", /still here/.test(el.k[".chatlog"].innerHTML));
+    const before = el.k[".chatlog"].innerHTML;
+
+    // Now a refused POST.
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: false, status: 403, json: async () => ({
+          error: "posting is blocked for this address",
+          you: {state: "kick", until: Math.floor(Date.now() / 1000) + 1800, ref: 9}})}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    el.k[".chatmoniker"].value = "alice";
+    el.k[".chatinput"].value = "let me back in";
+    el.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro(); await tickMicro();
+
+    ok("a refusal is shown to the sender", /blocked/i.test(el.k[".chatnote"].textContent));
+    ok("a refusal explains the pause", /paused/i.test(el.k[".chatstate"].textContent));
+    ok("a refusal does NOT erase the transcript", el.k[".chatlog"].innerHTML === before);
+    ok("a paused sender's composer is disabled", el.k[".chatinput"].disabled === true);
+    stop();
+  }
+
+  // A POST must send application/json. text/plain is CORS-safelisted, so a form-style
+  // post would skip the preflight the server relies on; see chat.csrfOK.
+  {
+    FETCHES = [];
+    let sent = null;
+    FETCH = async (url, init) => {
+      if (init && init.method === "POST") { sent = init; return {ok: true, json: async () => ({id: 5})}; }
+      return {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    };
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem"});
+    await tickMicro(); await tickMicro();
+    el.k[".chatmoniker"].value = "alice";
+    el.k[".chatinput"].value = "hello";
+    el.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro();
+    ok("a post declares application/json",
+       sent && sent.headers["Content-Type"] === "application/json");
+    ok("a successful post clears the box", el.k[".chatinput"].value === "");
+    ok("the moniker is remembered", STORE["kourt.chat.moniker"] === "alice");
+    stop();
+  }
+
+  // A STALE POLLER MUST NOT WRITE. render() is async and re-entrant, so a tick from a
+  // previous mount can resolve after its DOM has been replaced. Without the
+  // generation check this writes a transcript into a discarded panel — or, worse,
+  // paints one court's messages into another court's page.
+  {
+    let release;
+    FETCH = () => new Promise(r => { release = () => r({ok: true, json: async () => ({
+      messages: [{id: 1, moniker: "stale", body: "from the old mount", country: "",
+                  suffix: "", created_at: 1000}], you: {state: "ok"}, next: 1})}); });
+    const oldEl = mkRoot();
+    mountChat(oldEl, {cfg: {mode: "live", chat: "http://x"}, court: "orem"});
+    await tickMicro();               // the first tick is now waiting on fetch
+
+    const newEl = mkRoot();          // a re-render replaces the panel
+    FETCH = async () => ({ok: true, json: async () => ({
+      messages: [], you: {state: "ok"}, next: 0})});
+    const stop = mountChat(newEl, {cfg: {mode: "live", chat: "http://x"}, court: "logan"});
+    await tickMicro();
+
+    release();                       // the OLD fetch finally answers
+    await tickMicro(); await tickMicro(); await tickMicro();
+    ok("a stale poller does not paint into its discarded panel",
+       !/from the old mount/.test(oldEl.k[".chatlog"].innerHTML));
+    ok("...and does not paint into the live one either",
+       !/from the old mount/.test(newEl.k[".chatlog"].innerHTML));
+    stop();
+  }
+
+  // The service being down must not blank a transcript that is already on screen, and
+  // must not be mistaken for an empty room.
+  {
+    const now = Math.floor(Date.now() / 1000);
+    FETCH = async () => ({ok: true, json: async () => ({
+      messages: [{id: 1, moniker: "tosh", body: "readable", country: "JP",
+                  suffix: "40de71", created_at: now}], you: {state: "ok"}, next: 1})});
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                interval: 5});
+    await tickMicro(); await tickMicro();
+    ok("the transcript is on screen", /readable/.test(el.k[".chatlog"].innerHTML));
+    FETCH = async () => { throw new Error("connection refused"); };
+    await new Promise(r => setTimeout(r, 40));
+    ok("an outage says so", /unreachable/i.test(el.k[".chatnote"].textContent));
+    ok("an outage does not blank what is already readable",
+       /readable/.test(el.k[".chatlog"].innerHTML));
+    stop();
+  }
+
+  // stop() must actually stop, or every re-render leaves another poller behind.
+  //
+  // The obvious version of this test counted fetches after stop() and passed even with
+  // clearTimeout deleted — the generation check alone makes a stale tick do nothing, so
+  // counting work measures the guard and never the cleanup. The timer itself is what
+  // clearTimeout is for, so the timer is what is counted: a pending callback holds its
+  // closure, and through it the whole detached panel, until it fires.
+  {
+    let calls = 0;
+    FETCH = async () => { calls++; return {ok: true, json: async () => ({
+      messages: [], you: {state: "ok"}, next: 0})}; };
+    const pending = new Set();
+    const realSet = global.setTimeout, realClear = global.clearTimeout;
+    global.setTimeout = (f, d) => { const id = realSet(f, d); pending.add(id); return id; };
+    global.clearTimeout = id => { pending.delete(id); return realClear(id); };
+    try {
+      const el = mkRoot();
+      const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem",
+                                  interval: 5});
+      // Only setImmediate is used to yield here, so nothing but the poller can be
+      // holding a setTimeout at the point it is counted.
+      await tickMicro(); await tickMicro();
+      ok("the poller reschedules itself after a tick", pending.size === 1);
+      ok("...having actually fetched", calls === 1);
+      stop();
+      ok("stop() clears the pending timer", pending.size === 0);
+      const after = calls;
+      await new Promise(r => realSet(r, 40));
+      ok("stop() ends the poller", calls === after);
+    } finally {
+      global.setTimeout = realSet;
+      global.clearTimeout = realClear;
+    }
+  }
+
+  console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
+  process.exit(fail ? 1 : 0);
+})();
