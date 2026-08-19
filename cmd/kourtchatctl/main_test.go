@@ -2,12 +2,17 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"github.com/jaekwon/kourt/internal/chat"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -302,4 +307,114 @@ func keysOf(m map[string]bool) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// A CONSEQUENCE THAT WAS NOT RECORDED MUST NOT BE REPORTED AS ONE.
+//
+// Consequence returns (0, nil) when the partial unique index on (evidence_id, kind) rejects a
+// replay. That is deliberate and load-bearing — it stops a crash between "punish" and "mark
+// scanned" from walking the ladder — but the tool printed it as a success. Measured live:
+//
+//	kicked address daa27c05ac6b for 1h0m0s [consequence 0]
+//	reverse it early with: kourtchatctl unban 0
+//
+// A kick that never happened, an id that cannot exist, and an instruction pointing at it. The
+// instruction now fails honestly too, since Revoke learned to say "no consequence 0" this commit —
+// but being told the kick landed was the lie that mattered.
+func TestAReplayedConsequenceIsReportedAsOne(t *testing.T) {
+	s, err := chat.Open(filepath.Join(t.TempDir(), "c.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	now := time.Unix(1_700_000_000, 0)
+	s.Now = func() time.Time { return now }
+	ctx := context.Background()
+
+	id, err := s.Post(ctx, chat.PostInput{
+		Chain: "dev", Court: "orem", Moniker: "troll", Body: "a message to act on twice",
+		IPHash: "ip-a", NetHash: "net-a",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inf, err := s.Consequence(ctx, chat.Infraction{
+		IPHash: "ip-a", Kind: chat.KindKick, Reason: chat.ReasonManual,
+		Duration: time.Hour, EvidenceID: id,
+	})
+	if err != nil || inf == 0 {
+		t.Fatalf("precondition: the first consequence must record: id=%d err=%v", inf, err)
+	}
+
+	got := replayReport(ctx, s, "ip-a", id, chat.KindKick, "kick")
+	for _, want := range []string{"no new consequence was recorded", "duplicate",
+		fmt.Sprintf("message %d", id), fmt.Sprintf("consequence %d", inf), "unban"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the report must contain %q, got:\n%s", want, got)
+		}
+	}
+	// It must not read as success, and must never print the zero it was handed.
+	for _, mustNot := range []string{"kicked ", "[consequence 0]", "unban 0"} {
+		if strings.Contains(got, mustNot) {
+			t.Errorf("the report must not contain %q, got:\n%s", mustNot, got)
+		}
+	}
+
+	// THE PAIRED CASE: when no matching row can be found the report still refuses to claim a
+	// consequence, rather than falling through to something that reads like success.
+	orphan := replayReport(ctx, s, "ip-nobody", id, chat.KindKick, "kick")
+	if !strings.Contains(orphan, "no new consequence was recorded") {
+		t.Errorf("with no row to name it must still say nothing was recorded, got:\n%s", orphan)
+	}
+	if strings.Contains(orphan, "unban") {
+		t.Errorf("and must not point at an id it did not find, got:\n%s", orphan)
+	}
+}
+
+// AND BOTH VERBS MUST ACTUALLY CHECK FOR THE ZERO, which the test above cannot see: it calls
+// replayReport directly, so deleting the `if id == 0` guard in cmdKick would leave that test green
+// while the tool went back to printing "[consequence 0]".
+//
+// Read from the source, like the takesValue and help-text guards in this file. The property is
+// narrow and mechanical — a success line must not be reachable with a zero id — and the failure it
+// prevents is a punishment reported that never happened.
+func TestKickAndBanCheckForAReplayBeforeClaimingSuccess(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ fn, verb string }{
+		{"cmdKick", "kicked"},
+		{"cmdBan", "banned"},
+	} {
+		body := regexp.MustCompile(`(?s)func ` + c.fn + `\(.*?\n\}`).Find(src)
+		if body == nil {
+			t.Errorf("%s not found; if it was reshaped, reshape this guard with it", c.fn)
+			continue
+		}
+		// The guard, and it must come BEFORE the line that claims the action happened.
+		guard := bytes.Index(body, []byte("if id == 0 {"))
+		claim := bytes.Index(body, []byte(`fmt.Printf("`+c.verb))
+		switch {
+		case guard < 0:
+			t.Errorf("%s does not check for a replayed consequence; Consequence returns (0, nil) "+
+				"when the unique index rejects one, and printing the success line then reports a "+
+				"%s that never happened", c.fn, c.verb)
+		case claim < 0:
+			t.Errorf("%s no longer prints a %q line; re-derive this check", c.fn, c.verb)
+		case guard > claim:
+			t.Errorf("%s checks for the replay AFTER claiming success, which is no check at all",
+				c.fn)
+		}
+		// And the replay branch must return rather than fall through into the success line.
+		if guard >= 0 {
+			after := body[guard:]
+			if end := bytes.Index(after, []byte("\n\t}")); end > 0 {
+				if !bytes.Contains(after[:end], []byte("return")) {
+					t.Errorf("%s's replay branch must return; without it the success line still "+
+						"prints", c.fn)
+				}
+			}
+		}
+	}
 }

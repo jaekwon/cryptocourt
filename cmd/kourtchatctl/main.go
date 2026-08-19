@@ -352,6 +352,10 @@ func cmdBan(ctx context.Context, s *chat.Store, argv []string) {
 	if *isNet {
 		scope = "network"
 	}
+	if id == 0 {
+		fmt.Print(replayReport(ctx, s, hash, evID, chat.KindBan, "ban"))
+		return
+	}
 	fmt.Printf("banned %s %s permanently [consequence %d]\n", scope, short(hash), id)
 	echoEvidence(evID, evText)
 	fmt.Printf("reverse it with: kourtchatctl unban %d\n", id)
@@ -396,6 +400,10 @@ func cmdKick(ctx context.Context, s *chat.Store, argv []string) {
 	scope := "address"
 	if *isNet {
 		scope = "network"
+	}
+	if id == 0 {
+		fmt.Print(replayReport(ctx, s, pos[0], evID, chat.KindKick, "kick"))
+		return
 	}
 	fmt.Printf("kicked %s %s for %s [consequence %d]\n", scope, short(pos[0]), *for_, id)
 	echoEvidence(evID, evText)
@@ -716,6 +724,36 @@ func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
 // It refuses when the court was not frozen, rather than reporting success. A typo here is as
 // likely as a typo in `freeze`, and "dev/oren is back in service" over a court that never left it
 // is the same lie one verb along.
+// reportReplay explains a consequence that was not recorded, and finds the one that already was.
+//
+// Consequence returns (0, nil) when the partial unique index on (evidence_id, kind) rejects a
+// replay. That is deliberate and load-bearing — it is what stops a crash between "punish" and
+// "mark scanned" from walking the ladder — but the tool printed it as a success:
+//
+//	kicked address daa27c05ac6b for 1h0m0s [consequence 0]
+//	reverse it early with: kourtchatctl unban 0
+//
+// A kick that never happened, an id that cannot exist, and an instruction pointing at it. So a zero
+// is reported as what it is, and the row that already covers this evidence is looked up so the
+// operator has something real to act on.
+func replayReport(ctx context.Context, s *chat.Store, hash string, evID int64, kind, verb string) string {
+	out := fmt.Sprintf("no new consequence was recorded: message %d already has a %s that has not "+
+		"been\nreversed, so this %s would have been a duplicate.\n", evID, kind, verb)
+	rows, err := s.ListInfractions(ctx, hash, false, 200)
+	if err != nil {
+		return out
+	}
+	for _, r := range rows {
+		if r.EvidenceID == evID && r.Kind == kind {
+			out += fmt.Sprintf("it is consequence %d, issued %s — `why %d` for the detail, "+
+				"`unban %d` to reverse it.\n",
+				r.ID, time.Unix(r.CreatedAt, 0).Format(time.RFC3339), r.ID, r.ID)
+			break
+		}
+	}
+	return out
+}
+
 // cmdHide takes a message out of sight without punishing anybody, which is the other half of
 // reveal and was missing.
 //
