@@ -207,6 +207,36 @@ TYPED — a dead keystroke with no message, which is the worst way for a limit t
 must mirror Go's exactly, and `\p{M}` includes `\p{Mc}`: a panel using it would refuse Devanagari
 names the server accepts. So the drift test grew to police the RULE and not only the number.
 
+**A FIFTH, and this one was silent.** The four above all refused a message, which at least tells
+somebody something. `erase()` instead *removes* characters, and its exemption list was nine
+hand-written codepoints described as "Arabic and Syriac format characters ... part of well-formed
+text in those scripts". That description names an actual Unicode property —
+`Prepended_Concatenation_Mark`, the format characters that precede digits and belong to the text —
+and the list was that property as of an older Unicode. It had since gained four members, which
+fell through to the `remaining Cf` catch-all:
+
+    U+0890   ARABIC POUND MARK ABOVE
+    U+0891   ARABIC PIASTRE MARK ABOVE
+    U+110BD  KAITHI NUMBER SIGN
+    U+110CD  KAITHI NUMBER SIGN ABOVE
+
+Two Arabic CURRENCY marks, dropped without a diagnostic, in an application about money and claims:
+a figure losing its unit rather than a message being turned away. `erase()` reads the property now,
+and the fixture iterates it instead of listing members, so a fifth mark added by a future Unicode
+is covered when the toolchain learns of it rather than when somebody notices Arabic text is wrong.
+The general form of this one is different from the thresholds: **a copy of an external table is a
+threshold that moves on its own.**
+
+**Where this file chooses against the writer, once, on purpose.** LRM (U+200E), RLM (U+200F) and
+ALM (U+061C) are erased. They are bidi MARKS, not overrides — they cannot reorder text arbitrarily,
+and they are the standard way to make mixed-direction text render correctly, which a court
+discussing "claim 7" in Arabic produces constantly. The old comment filed them under "bidi
+overrides", which is wrong about what they are. They stay erased because the neutrals whose
+direction they resolve are, here, claim numbers and amounts, and a mark that can move a digit
+across a figure is worth more to an attacker than to a writer. The cost is real and bounded: no
+character of anybody's message is lost, and some mixed-direction sentences render with a trailing
+number or punctuation on the wrong side.
+
 Evasion resistance had to move out of the display path because mutating displayed
 text to fight homoglyphs corrupts the text of everyone whose alphabet is not
 English. The confusables table is hand-built, incomplete, and documented as such —
