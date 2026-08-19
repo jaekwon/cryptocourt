@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Server is the HTTP surface. It enforces; it never scans.
@@ -70,6 +71,12 @@ type Server struct {
 	HealthDetail bool
 
 	Log *log.Logger
+
+	// One line per cause, not per request. A refusal for an unidentifiable client is either a
+	// misconfiguration — in which case it fires for EVERY request and would fill the disk — or
+	// somebody probing the origin directly, in which case they choose the rate. See
+	// logClientRefusal.
+	loggedNoClient, loggedUntrustedPeer sync.Once
 }
 
 var (
@@ -215,6 +222,46 @@ func (s *Server) path(r *http.Request) (chain, court string, err error) {
 	return chain, court, nil
 }
 
+// logClientRefusal tells the operator why requests are being refused, because the 403 goes to the
+// client and the person who can fix it never sees it.
+//
+// The all-trusted-chain refusal added in b64c86d is the case that forced this. A `--trusted-proxy`
+// range wide enough to contain the real clients refuses EVERY request, and the log said nothing at
+// all — so the symptom is "nobody can post" and the cause is invisible. That is the shape this
+// service keeps finding: a control that will not say why.
+//
+// ONE LINE PER CAUSE. A misconfiguration fires on every request and would fill the disk; somebody
+// probing the origin directly chooses the rate. Neither is worth more than one line, because both
+// are persistent conditions rather than events.
+//
+// The header is printed with %q ON PURPOSE. It is attacker-controlled and does not pass through the
+// sanitiser — nothing else here does either, since a court name is bounded by courtRe and a body by
+// SanitizeBody — so a raw Printf would put escape sequences straight into an operator's terminal.
+// %q renders them as \x1b. Truncated as well, because the header can be hundreds of kilobytes.
+func (s *Server) logClientRefusal(r *http.Request, err error) {
+	if s.Log == nil {
+		return
+	}
+	xff := r.Header.Get("X-Forwarded-For")
+	if len(xff) > 120 {
+		xff = xff[:120] + "…"
+	}
+	switch {
+	case errors.Is(err, ErrNoClientHop):
+		s.loggedNoClient.Do(func() {
+			s.Log.Printf("refusing requests: every X-Forwarded-For hop is inside "+
+				"--trusted-proxy, so no client can be identified. Narrow the range. "+
+				"peer=%q header=%q. Logged once.", r.RemoteAddr, xff)
+		})
+	case errors.Is(err, ErrUntrustedPeer):
+		s.loggedUntrustedPeer.Do(func() {
+			s.Log.Printf("refusing requests from a peer that is not a trusted proxy: "+
+				"peer=%q. If this is your proxy, add it to --trusted-proxy; if not, somebody "+
+				"is reaching the origin directly. Logged once.", r.RemoteAddr)
+		})
+	}
+}
+
 func (s *Server) client(r *http.Request) (netip.Addr, error) {
 	return s.Policy.ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"))
 }
@@ -232,6 +279,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// A request that bypassed the proxy is refused rather than treated as
 		// ordinary traffic, or the header rules could simply be sidestepped.
+		s.logClientRefusal(r, err)
 		writeErr(w, http.StatusForbidden, "cannot determine client address")
 		return
 	}

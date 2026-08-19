@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -1193,4 +1194,108 @@ func TestAnOversizeRequestSaysSoRatherThanBlamingTheJSON(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("an ordinary post must succeed, got %d %s", rec.Code, rec.Body)
 	}
+}
+
+// A REFUSAL THE OPERATOR CANNOT SEE IS A SERVICE THAT SILENTLY STOPPED.
+//
+// The 403 goes to the client. When the cause is a `--trusted-proxy` range wide enough to contain the
+// real clients, EVERY request is refused and the person who can fix it never sees the message — the
+// symptom is "nobody can post" and the log said nothing at all.
+//
+// Once per cause, because both causes are persistent conditions rather than events: a
+// misconfiguration fires on every request and would fill the disk, and somebody probing the origin
+// directly chooses the rate.
+func TestARefusedClientIsLoggedOncePerCause(t *testing.T) {
+	logs := func(srv *Server) *bytes.Buffer {
+		var b bytes.Buffer
+		srv.Log = log.New(&b, "", 0)
+		return &b
+	}
+	post := func(srv *Server, remote, xff string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/chat/dev/orem",
+			strings.NewReader(`{"moniker":"alice","body":"hello there"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.RemoteAddr = remote
+		if xff != "" {
+			r.Header.Set("X-Forwarded-For", xff)
+		}
+		return do(t, srv, r)
+	}
+
+	t.Run("an all-trusted chain says which knob is wrong", func(t *testing.T) {
+		srv, _, _ := newServer(t)
+		srv.Policy = IPPolicy{BehindProxy: true, Trusted: prefixes(t, "10.0.0.0/8")}
+		out := logs(srv)
+		if rec := post(srv, "10.0.0.7:443", "10.0.0.3"); rec.Code != http.StatusForbidden {
+			t.Fatalf("precondition: this must be refused, got %d", rec.Code)
+		}
+		got := out.String()
+		for _, want := range []string{"--trusted-proxy", "10.0.0.7", "Narrow the range"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("the line must contain %q, got %q", want, got)
+			}
+		}
+
+		// ONCE. Ten more refusals must add nothing, or a misconfiguration fills the disk.
+		before := out.Len()
+		for i := 0; i < 10; i++ {
+			post(srv, "10.0.0.7:443", "10.0.0.3")
+		}
+		if out.Len() != before {
+			t.Errorf("ten more refusals added %d bytes; this must be once per cause",
+				out.Len()-before)
+		}
+	})
+
+	t.Run("an untrusted peer gets its own line", func(t *testing.T) {
+		srv, _, _ := newServer(t)
+		srv.Policy = IPPolicy{BehindProxy: true, Trusted: prefixes(t, "10.0.0.0/8")}
+		out := logs(srv)
+		if rec := post(srv, "203.0.113.9:5555", "1.2.3.4"); rec.Code != http.StatusForbidden {
+			t.Fatalf("precondition: this must be refused, got %d", rec.Code)
+		}
+		got := out.String()
+		if !strings.Contains(got, "203.0.113.9") {
+			t.Errorf("the line must name the peer, got %q", got)
+		}
+		if strings.Contains(got, "Narrow the range") {
+			t.Errorf("and must not be the other cause's advice, got %q", got)
+		}
+	})
+
+	// THE ONE WITH TEETH: the header is attacker-controlled and does not pass through the
+	// sanitiser, so a raw Printf would put escape sequences into an operator's terminal. ANSI can
+	// rewrite the lines above it, which is a way to hide the very refusal being reported.
+	t.Run("escape sequences in the header cannot reach a terminal raw", func(t *testing.T) {
+		srv, _, _ := newServer(t)
+		srv.Policy = IPPolicy{BehindProxy: true, Trusted: prefixes(t, "10.0.0.0/8")}
+		out := logs(srv)
+		// A VALID trusted hop plus junk as a separate entry. Appending the escapes to the IP
+		// instead makes that hop malformed, which takes the no-header branch — the peer becomes
+		// the client, the request SUCCEEDS, and nothing is logged. That is the correct behaviour
+		// and it is how the first version of this case measured nothing.
+		post(srv, "10.0.0.7:443", "10.0.0.3, \x1b[2K\x1b[Anothing to see")
+		got := out.String()
+		if strings.ContainsRune(got, 0x1b) {
+			t.Errorf("a raw ESC reached the log: %q", got)
+		}
+		if !strings.Contains(got, `\x1b`) {
+			t.Errorf("and it must still be visible as an escape, so the operator sees the "+
+				"attempt: %q", got)
+		}
+	})
+
+	// THE PAIRED POSITIVE: an ordinary request logs nothing. Without this the assertions above
+	// pass for a logger that narrates every request.
+	t.Run("an accepted request says nothing", func(t *testing.T) {
+		srv, _, _ := newServer(t)
+		srv.Policy = IPPolicy{BehindProxy: true, Trusted: prefixes(t, "127.0.0.0/8")}
+		out := logs(srv)
+		if rec := post(srv, "127.0.0.1:5555", "203.0.113.7"); rec.Code != http.StatusOK {
+			t.Fatalf("precondition: this must be accepted, got %d %s", rec.Code, rec.Body)
+		}
+		if out.Len() != 0 {
+			t.Errorf("an accepted request must log nothing, got %q", out.String())
+		}
+	})
 }
