@@ -315,6 +315,30 @@ about a person and never reaches a public surface — plus `you: {state, until, 
 so the composer can be disabled before someone types into a box that will 403.
 `since`/`limit` clamped; GET has its own budget.
 
+**A REFUSAL HAS TO NAME THE RIGHT FIELD AND SAY WHAT WOULD BE ACCEPTED,** and for a while it did
+neither. The server wrote `"moniker: " + err.Error()`, and the sanitiser's messages are phrased for
+a message BODY, so a rejected name came back as `moniker: message is too long` — the wrong field,
+named twice, with no limit. The throttle two cases along says "one message every 2s" and "10 per
+1m0s"; a caller told only "too long" can do nothing but guess, and the moniker's rule is not
+guessable, because it counts LETTERS and 24 is therefore not a character count.
+
+    your name is too long (24 letters maximum)
+    your message is too long (400 characters maximum)
+    pick a name first  /  type something
+    your message stacks too many accents on one character
+
+The sentinels stay as identities and the sentence is composed at the boundary, where presentation
+belongs — callers want `errors.Is`, not prose. The numbers come from the constants, and a fixture
+checks each refusal quotes the limit that is enforced AND no other, since a name refusal quoting
+400 would send somebody trimming to the wrong length. The wording follows `chatValidate` so the
+panel and the API do not contradict each other about one rule.
+
+**No refusal names the category behind a consequence.** `posting is blocked for this address`, and
+`you: {state, until, ref}` carries no reason — so the evasion oracle stays shut, which
+`chat_moderation.js` checks in the DOM rather than trusting. The same audit renamed `ErrPurged` to
+`ErrWithdrawn`: a frozen court is withdrawn and a pruned one is purged, and since §7 rests on those
+being different decisions, the vocabulary should not blur them.
+
 **A CURSOR IS ONLY MEANINGFUL WITHIN A RETENTION EPOCH,** and the endpoint used to pretend
 otherwise. `next` comes back in every response, which invites incremental polling, and
 `messages.id` is a rowid that restarts at 1 once prune empties a court (§7). So a saved cursor
