@@ -306,6 +306,44 @@ Both are §5 working as written: the cross-site refusal is the CSRF defence, and
 host on a different port is same-site, which is the real deployment. Opening the demo
 page off disk gives a working read-only panel; serve the directory to post from it.
 
+**A message the scanner flagged and did NOT act on is waiting for a person.** That is
+§7's carve-out working as intended, and `review` is where those live:
+
+    bin/kourtchatctl -db chat.db review
+    bin/kourtchatctl -db chat.db kick -msg 41 -for 1h -why "judged a lure"
+    bin/kourtchatctl -db chat.db dismiss 41      # looked, doing nothing
+
+`-msg` takes the author and the evidence from the message, so acting on something you
+just read needs no hash copied by hand — transcription is where an operator punishes the
+wrong person. A dismissed message stays readable under `review -all`, because a decision
+to do nothing is a decision.
+
+**BACK UP ALL THREE FILES, OR USE `.backup`.** This is the one that will cost somebody
+their database. In WAL mode the `.db` file is not the database — measured on a server
+that had taken three messages:
+
+    chat.db          4,096 bytes      just the header
+    chat.db-wal    168,952 bytes      the schema AND every row
+    chat.db-shm     32,768 bytes
+
+`cp chat.db backup.db`, or an rsync of that path, produced a file that opens cleanly and
+answers `no such table: messages`. Not "a few messages short" — no tables at all, because
+even the schema was still in the WAL. It looks like a database and it is empty, and the
+discovery happens during a restore. Either copy all three files together, or take a
+consistent snapshot:
+
+    sqlite3 chat.db ".backup '/backups/chat-$(date +%F).db'"
+
+**Upgrades.** `kourtchat` migrates the database when it opens it, and migrations are
+column additions with defaults only, so an older binary reading a newer database is fine
+— every query names its columns. Back up first anyway, and start one binary before the
+others so a migration failure is one log line rather than three.
+
+**Losing the hashing key is losing every consequence.** Every `ip_hash` is an HMAC under
+it, so a new key means every kick and ban in the table matches nobody, and every public
+suffix in the room changes at once. The key is as much the state as the database is;
+back it up with the same care and, per above, not in the same file.
+
 **Watch the backlog.** `kourtchatctl status` reports the scanner's heartbeat and how
 many messages are unscanned. Fail-open is deliberate — chat works with no scanner —
 but silent fail-open means moderation can be off for a week with nobody noticing.
