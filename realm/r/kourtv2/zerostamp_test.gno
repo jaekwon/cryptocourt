@@ -158,4 +158,81 @@ func TestAZeroStampFallsBackToTheHeightGate(cur realm, t *testing.T) {
 	if !ClaimClosed("zs5", idClose) {
 		t.Fatal("a zero-stamp claim would not close on its height gate")
 	}
+
+	// ---- 6. THE OTHER ENCODING: escrowUntilAt's zero SENTINEL ---------------
+	// dispute.gno's Finalize does not use pastDeadline. It spells the same idea
+	// with a sentinel — `escrowUntilAt != 0` means "the stamp exists" — so nothing
+	// written against the pastDeadline shape reaches it. TWO GATES MAY ENCODE ONE
+	// CONCEPT DIFFERENTLY, AND A TEST WRITTEN FOR ONE SHAPE MISSES THE OTHER.
+	//
+	// Which half was unexercised was MEASURED, not guessed, and the measurement
+	// contradicted me. I expected the suite to run with escrowUntilAt == 0 and
+	// therefore to exercise only the height arm. Splitting the condition into one
+	// mutation row per arm showed the reverse: deleting the TIME arm is caught
+	// (TestDisputeUpholdPath), while deleting this HEIGHT arm survived — the suite
+	// resolves disputes properly, so escrowUntilAt is always set, and the
+	// pre-upgrade path was the dead one.
+	//
+	// Built by hand rather than by resolving a dispute: Finalize's guards ahead of
+	// the escrow gate are only verdictAt, disputeOpen and provisional, all of them
+	// plain fields. An answer, a bond and a resolution would buy nothing here and
+	// would cost every kourtv2 mutation row a slower suite.
+	erin := testutils.TestAddress("zs-erin")
+	stranger := testutils.TestAddress("zs-stranger")
+	c6 := testCourt(cur, "zs6", erin, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(erin))
+	id6 := OpenClaim(cross(cur), "zs6", "Does the escrow window fall back to height?")
+	cs6 := mustClaim(c6, id6)
+	cs6.provisional = sideYES // enough to reach the escrow gate
+	cs6.escrowUntilAt = 0     // the pre-upgrade shape: no stamp, only a height
+	cs6.escrowUntil = heightNow() + 10
+
+	// One block short, and the caller is a stranger so nothing later can pass.
+	skipTo(cs6.escrowUntil - 1)
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "escrow window has not passed", func() {
+		Finalize(cross(cur), "zs6", id6)
+	})
+	// At the block the escrow gate is satisfied, so the NEXT guard speaks instead.
+	// A DIFFERENT refusal is the discriminating assertion: "already final" or a
+	// silent success would both mean the height arm never governed, and asserting
+	// "no panic" here would pass on the participant grace refusing for its own
+	// reason. The message is what separates passing the gate from never reaching it.
+	skipTo(cs6.escrowUntil)
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "participant-only", func() {
+		Finalize(cross(cur), "zs6", id6)
+	})
+
+	// ---- 7. THE SAME SENTINEL IN OpenDispute'S REOPEN BRANCH ----------------
+	// §6 pinned Finalize and nothing else: the arm-split probe kept surviving here
+	// afterwards, which is how I know these are two gates and not one. Each arm of
+	// each gate needs its own killer.
+	//
+	// The reopen branch (dispute.gno:100) is the `else` of `provisional < 0`, so it
+	// is reached only on a claim that already has a provisional verdict — and its
+	// preceding guards are frozenAt, answerer, disputeOpen and verdictAt, all plain
+	// fields again.
+	frank := testutils.TestAddress("zs-frank")
+	c7 := testCourt(cur, "zs7", frank, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(frank))
+	id7 := OpenClaim(cross(cur), "zs7", "Can a reopen still read the height?")
+	cs7 := mustClaim(c7, id7)
+	cs7.frozenAt = heightNow() // there must be an answer to dispute
+	cs7.provisional = sideYES  // ...and a provisional verdict, for the reopen branch
+	cs7.escrowUntilAt = 0      // the pre-upgrade shape again
+	cs7.escrowUntil = heightNow() + 10
+
+	// AT the escrow height the reopen window has closed, on the height arm.
+	skipTo(cs7.escrowUntil)
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "escrow window has passed", func() {
+		OpenDispute(cross(cur), "zs7", id7)
+	})
+	// The inverse is NOT asserted here. One block short this branch falls through
+	// to the bond and credEligible bars, which refuse a stranger for their own
+	// reasons — so "it refuses either way" would prove nothing about which gate
+	// spoke, and a passing reopen would need a funded, weight-bearing disputer.
+	// The refusal above is anchored on its own message, which is the part that
+	// distinguishes this gate from the ones after it.
 }

@@ -6096,5 +6096,19 @@
     "label": "zero-stamp: PostAnswer's dead-claim gate loses its height fallback",
     "find": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && passed) ||\n\t\t(!known && now >= cs.openedAt+deadClaimTimeout) {",
     "replace": "\tif passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); known && passed {\n\t\t_ = known"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "escrow: Finalize loses its pre-stamp HEIGHT fallback (escrowUntilAt==0 arm)",
+    "find": "\tif (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {",
+    "replace": "\tif cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "escrow: a reopen loses its pre-stamp HEIGHT fallback (escrowUntilAt==0 arm)",
+    "find": "\t} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {",
+    "replace": "\t} else if cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt {"
   }
 ]
