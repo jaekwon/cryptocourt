@@ -154,23 +154,47 @@ func (s *Scanner) one(ctx context.Context, p chat.Pending) error {
 	// cannot tell reporting from sending — measured, not assumed — and punishing the
 	// former means kicking somebody for protecting the room and hiding what they
 	// wrote. See scan.Reporting for the measurements and for what this costs.
-	if hint.Reporting {
-		// A DISCLOSED SECRET STILL GOES OUT OF SIGHT. The carve-out withholds the timeout,
-		// which is its whole purpose — but it used to withhold the hide as well, and measured,
-		// "fyi here are my words: <a real BIP-39 phrase>" stayed on screen indefinitely.
-		// Nobody is punished here; the phrase simply stops being readable.
-		if hint.Secret && s.Enforce {
+	// A DISCLOSED SECRET IS HIDDEN AND NOT PUNISHED, whoever posted it and however they framed
+	// it. §7 already said exactly that — "goes out of sight whoever posted it, and nobody is
+	// punished for it" — and the hide used to live inside the reporting branch below, so both
+	// halves only held for somebody who happened to write "fyi" or "beware". Measured, with a
+	// clean model verdict so only this layer could act:
+	//
+	//	"<a valid BIP-39 phrase>"                            1 consequence
+	//	"help, is this phrase still valid: <phrase>"          1 consequence
+	//	"fyi here are my words: <phrase>"                     0
+	//
+	// The middle one is the case that decides it: a confused person pasting their own recovery
+	// phrase to ask whether it still works earned a 24-hour timeout, and a second attempt would
+	// walk the ladder. §7's own reason for hiding is that "the harm is the disclosure rather than
+	// the intent" — intent-blind means the remedy is the hide, not a punishment aimed at whoever
+	// is most likely the phrase's owner.
+	//
+	// Narrow by construction: hint.Secret is set only by a VALID checksum, never by a run of
+	// wordlist words, so a fruit list cannot reach this. The near-miss case already gets a note
+	// and no floor for the same reason.
+	//
+	// It is a shield an attacker can hold — "send me your seed phrase, here is mine: <valid
+	// phrase>" earns no timeout — and a weaker one than the reporting framing §7 already
+	// concedes: it costs a working checksum, and the message is hidden either way, so the lure
+	// reaches nobody. That the hide happens is what makes this acceptable, and it is pinned.
+	if hint.Secret {
+		if s.Enforce {
 			if err := s.Store.HideMessage(ctx, p.ID); err != nil && s.Log != nil {
 				s.Log.Printf("hiding disclosed secret in message %d: %v", p.ID, err)
 			}
 		}
 		if s.Log != nil {
-			extra := ""
-			if hint.Secret {
-				extra = "; a disclosed secret was hidden, nobody was punished"
-			}
+			s.Log.Printf("SECRET message %d %s/%s: %s (%.2f) discloses a recovery phrase; "+
+				"hidden, nobody punished — %s", p.ID, p.Chain, p.Court, label, conf, why)
+		}
+		return nil
+	}
+
+	if hint.Reporting {
+		if s.Log != nil {
 			s.Log.Printf("REVIEW message %d %s/%s: %s (%.2f) reads as a report; "+
-				"no action taken%s — %s", p.ID, p.Chain, p.Court, label, conf, extra, why)
+				"no action taken — %s", p.ID, p.Chain, p.Court, label, conf, why)
 		}
 		return nil
 	}

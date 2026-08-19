@@ -1153,7 +1153,34 @@ reporter is still a recovery phrase in a public room, and the harm is the disclo
 the intent.
 
 So a message the DETERMINISTIC layer finds a disclosed secret in goes out of sight whoever posted
-it, and nobody is punished for it. Narrow on purpose: never on the model's opinion, since that is
+it, and nobody is punished for it — **which this document claimed for a while before it was true.**
+The hide lived inside the reporting branch, so both halves held only for somebody who happened to
+write "fyi" or "beware". Measured with a clean model verdict, so only the deterministic layer could
+act:
+
+    <a valid BIP-39 phrase>                        1 consequence
+    help, is this phrase still valid: <phrase>     1 consequence
+    fyi here are my words: <phrase>                0
+
+The middle row is the one that decides it. A confused person pasting their own recovery phrase to
+ask whether it still works earned a 24-hour timeout, and a second attempt would walk the ladder to
+seven days. The stated reason for hiding is that "the harm is the disclosure rather than the
+intent" — and intent-blind means the remedy is the hide, not a punishment aimed at whoever is most
+likely the phrase's owner. The check is hoisted above the reporting branch now, so framing has
+nothing to do with it.
+
+Narrow by construction: `hint.Secret` comes only from a VALID checksum, never from a run of
+wordlist words, so the twelve-fruit list cannot reach it — the near miss already gets a note and no
+floor for the same reason. Nothing had pinned the old behaviour, which is why the change broke no
+test.
+
+It is a shield an attacker can hold: "send me your seed phrase, here is mine: <valid phrase>" earns
+no timeout. A weaker shield than the reporting framing this section already concedes — it costs a
+working checksum — and the message is hidden either way, so the lure reaches nobody. That the hide
+happens is what makes it acceptable, so the hide is asserted in the same test rather than assumed.
+Verified live against the real model, which does call a pasted phrase a scam: both disclosers went
+unpunished and could post again, their phrases were gone from the room, and a lure carrying no
+phrase in the same run still earned its consequence. Narrow on purpose: never on the model's opinion, since that is
 the unreliable part, and never on the off-platform floor — a warning that quotes a scam link is
 useful, and the panel renders no URL as an anchor, so quoting one is not the harm. Quoting a
 secret is. Both arms are pinned, and a dry run still changes nothing, because `--enforce` off has

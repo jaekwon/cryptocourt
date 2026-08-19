@@ -794,3 +794,111 @@ func TestUnknownCarriesNoMoreWeightThanClean(t *testing.T) {
 			Severity(Clean), Severity(Spam), Severity(Scam))
 	}
 }
+
+// A DISCLOSED RECOVERY PHRASE IS HIDDEN AND NOT PUNISHED, HOWEVER IT WAS FRAMED.
+//
+// §7 already claimed this — "goes out of sight whoever posted it, and nobody is punished for it" —
+// and the hide used to live inside the reporting branch, so both halves only held for somebody who
+// happened to write "fyi" or "beware". Measured before the fix, with a clean model verdict so only
+// the deterministic layer could act: a bare phrase earned 1 consequence, and so did
+// "help, is this phrase still valid: <phrase>".
+//
+// That second one decides it. A confused person pasting their own recovery phrase to ask whether it
+// still works got a 24-hour timeout, and a second attempt would walk the ladder. §7's stated reason
+// for hiding is that "the harm is the disclosure rather than the intent" — intent-blind means the
+// remedy is the hide, not a punishment aimed at whoever is most likely the phrase's owner.
+//
+// Nothing pinned the old behaviour, which is why the change broke no test.
+func TestADisclosedPhraseIsHiddenAndNotPunished(t *testing.T) {
+	phrase := validPhrases["zero12"]
+	for _, c := range []struct{ name, body string }{
+		{"bare, with no framing at all", phrase},
+		{"a confused person asking whether it still works",
+			"help, is this phrase still valid: " + phrase},
+		{"framed as a report, which already worked", "fyi here are my words: " + phrase},
+		// THE SHIELD, pinned rather than hidden from the reader: an attacker can pair a lure
+		// with a real phrase and escape the timeout. It costs them a working checksum and the
+		// message is hidden either way, so the lure reaches nobody — that is what makes it
+		// acceptable, and it is asserted below rather than asserted away.
+		{"a lure carrying a real phrase as a shield",
+			"send me your seed phrase, here is mine: " + phrase},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// A CLEAN model verdict, so only the deterministic layer can act and the result is
+			// about this branch rather than about gemma3:4b's opinion.
+			sc, st, clock := newScanner(t, &fakeCls{
+				bare: Verdict{Label: Clean, Confidence: 0.99}}, true)
+			seed(t, st, clock, "ip-victim", c.body)
+			if _, err := sc.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if n := mustCount(t, st); n != 0 {
+				t.Errorf("a disclosure must not be punished, got %d consequence(s)", n)
+			}
+			// And it must be gone from the room, which is the half that makes the above safe.
+			msgs, err := st.Recent(context.Background(), "dev", "orem", 0, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(msgs) != 0 {
+				t.Errorf("the phrase must stop being readable, %d message(s) still visible",
+					len(msgs))
+			}
+		})
+	}
+}
+
+// THE PAIRED ARM, and it is what stops the rule above from meaning "nothing is ever punished".
+// hint.Secret comes only from a VALID checksum, so a run of ordinary words cannot reach it — and
+// a lure carrying no phrase at all is still acted on.
+func TestNotEveryWordRunIsADisclosure(t *testing.T) {
+	for _, c := range []struct {
+		name, body string
+		wantPunish bool
+	}{
+		{"twelve wordlist words with no valid checksum",
+			"list apple orange lemon cherry olive garlic onion potato tomato pepper salt", true},
+		{"a lure with no phrase in it",
+			"send me your seed phrase and i will restore your wallet", true},
+		{"a real phrase, for contrast", validPhrases["zero12"], false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// A SCAM verdict this time: the question is whether the disclosure branch swallows a
+			// consequence the model asked for, not whether the floor creates one.
+			sc, st, clock := newScanner(t, &fakeCls{
+				bare: Verdict{Label: Scam, Confidence: 0.99, Why: "a lure"}}, true)
+			seed(t, st, clock, "ip-x", c.body)
+			if _, err := sc.Tick(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			n := mustCount(t, st)
+			if c.wantPunish && n == 0 {
+				t.Errorf("this is not a disclosure and the model called it scam; it must still "+
+					"earn a consequence: %q", c.body)
+			}
+			if !c.wantPunish && n != 0 {
+				t.Errorf("a disclosure must not be punished even on a scam verdict, got %d", n)
+			}
+		})
+	}
+}
+
+// AND A DRY RUN STILL CHANGES NOTHING, because --enforce off has to mean an operator can watch
+// without the service acting. The hide is an action like any other.
+func TestADryRunDoesNotHideADisclosedPhrase(t *testing.T) {
+	sc, st, clock := newScanner(t, &fakeCls{bare: Verdict{Label: Clean, Confidence: 0.99}}, false)
+	seed(t, st, clock, "ip-victim", validPhrases["zero12"])
+	if _, err := sc.Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := mustCount(t, st); n != 0 {
+		t.Errorf("a dry run punishes nobody, got %d", n)
+	}
+	msgs, err := st.Recent(context.Background(), "dev", "orem", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 1 {
+		t.Errorf("a dry run must not hide anything either: %d visible, want 1", len(msgs))
+	}
+}

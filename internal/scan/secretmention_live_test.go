@@ -2,6 +2,7 @@ package scan
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -266,5 +267,94 @@ func TestLiveSubmittingEvidenceIsNotPunished(t *testing.T) {
 	if !punished[ids["kai"]] {
 		t.Errorf("a lure with no reporting phrase must still earn one, or widening the " +
 			"carve-out has cost more than the phrases it added")
+	}
+}
+
+// AND THE DISCLOSURE BRANCH AGAINST THE REAL MODEL, which will call a pasted recovery phrase a
+// scam. The unit arms use a fake clean verdict to isolate the deterministic layer; this confirms
+// the branch still wins when gemma3:4b asks for a consequence.
+//
+// §7 said a disclosed secret "goes out of sight whoever posted it, and nobody is punished for it".
+// The hide used to sit inside the reporting branch, so an unframed disclosure — including
+// "help, is this phrase still valid: <phrase>" — earned a 24-hour timeout instead.
+func TestLiveADisclosedPhraseIsNotPunishedEvenWhenTheModelSaysScam(t *testing.T) {
+	o := liveClassifier(t)
+	ctx := context.Background()
+	st, err := chat.Open(t.TempDir() + "/chat.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	clock := time.Unix(1_700_000_000, 0)
+	st.Now = func() time.Time { return clock }
+
+	phrase := validPhrases["zero12"]
+	speakers := []struct {
+		who, body string
+		lure      bool
+	}{
+		{"lena", "help, is this phrase still valid: " + phrase, false},
+		{"milo", phrase, false},
+		{"nadia", "send me your seed phrase and i will restore your wallet", true},
+	}
+	ids := map[string]int64{}
+	for _, s := range speakers {
+		id, err := st.Post(ctx, chat.PostInput{
+			Chain: "dev", Court: "orem", Moniker: s.who, Body: s.body,
+			IPHash: "ip-" + s.who, NetHash: "net-" + s.who,
+		})
+		if err != nil {
+			t.Fatalf("seeding %s: %v", s.who, err)
+		}
+		ids[s.who] = id
+		clock = clock.Add(chat.MinInterval)
+	}
+
+	sc := &Scanner{Store: st, Cls: o, Enforce: true, Batch: 10}
+	if _, err := sc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.ListInfractions(ctx, "", true, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	punished := map[int64]bool{}
+	for _, r := range rows {
+		punished[r.EvidenceID] = true
+	}
+	for _, s := range speakers {
+		t.Logf("  %-6s punished=%-5v  %.50q", s.who, punished[ids[s.who]], s.body)
+	}
+
+	// Both directions asserted: neither depends on the verdict. The disclosure branch suppresses
+	// whatever the model said, and the lure has no phrase to shelter behind.
+	for _, s := range speakers {
+		if !s.lure && punished[ids[s.who]] {
+			t.Errorf("a disclosure must not be punished even when the model calls it scam: %q",
+				s.body)
+		}
+	}
+	if !punished[ids["nadia"]] {
+		t.Error("a lure carrying no phrase must still earn a consequence")
+	}
+	// The phrases must be gone from the room, which is what makes not punishing safe.
+	msgs, err := st.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range msgs {
+		if strings.Contains(m.Body, "abandon") {
+			t.Errorf("a disclosed phrase is still readable in the room: %q", m.Body)
+		}
+	}
+	// And the disclosers, not being punished, must still be able to post.
+	for _, who := range []string{"lena", "milo"} {
+		if _, err := st.Post(ctx, chat.PostInput{
+			Chain: "dev", Court: "orem", Moniker: who, Body: "a second, ordinary message",
+			IPHash: "ip-" + who, NetHash: "net-" + who,
+		}); err != nil {
+			t.Errorf("%s was not punished and must still be able to post: %v", who, err)
+		}
+		clock = clock.Add(chat.MinInterval)
 	}
 }
