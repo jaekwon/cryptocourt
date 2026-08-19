@@ -1469,3 +1469,68 @@ func TestAQuietCourtHoldsNobodyToTheFairShare(t *testing.T) {
 		*clock = clock.Add(MinInterval + time.Second)
 	}
 }
+
+// THE CROSS-COURT RULE MUST NOT REFUSE ORDINARY SPEECH, which is what DupMinSkeleton = 12 did.
+//
+// The rule exists to stop one sentence being broadcast into three rooms. Its threshold was a bare
+// 12 with no stated reason, and 12 is shorter than the things people genuinely repeat between
+// rooms: measured over 29 such phrases, 13 were refused — "thanks everyone", "good morning all",
+// "still waiting", "same question here" among them. A rate limit that refuses somebody for saying
+// thanks in a third court is the failure the "pair every refusal with the ordinary input it must
+// NOT refuse" rule exists to catch, and this table is that pairing.
+//
+// These are asserted at the RULE's threshold rather than at 16 directly, so raising the constant
+// again cannot silently start refusing them.
+func TestOrdinaryPhrasesRepeatedBetweenRoomsAreAccepted(t *testing.T) {
+	ordinary := []string{
+		"thanks everyone", "good morning all", "same question here", "still waiting",
+		"I agree with that", "that worked, thanks", "following this one", "welcome aboard",
+		"makes sense to me", "see you tomorrow", "fixed it, thanks",
+	}
+	for _, body := range ordinary {
+		t.Run(body, func(t *testing.T) {
+			s, clock := newStore(t)
+			// Three courts, the same phrase, well inside DupWindow.
+			for _, court := range []string{"a", "b", "c"} {
+				if _, err := post(t, s, court, "ip1", body); err != nil {
+					t.Fatalf("court %s refused %q: %v — ordinary repeated speech must pass; "+
+						"its skeleton is %d runes against DupMinSkeleton=%d",
+						court, body, err, len([]rune(Skeleton(body))), DupMinSkeleton)
+				}
+				*clock = clock.Add(MinInterval)
+			}
+		})
+	}
+}
+
+// AND IT MUST STILL REFUSE A BROADCAST. The paired negative, starting at the threshold itself, so
+// this fixture fails if the constant is raised further rather than passing quietly on a rule that
+// no longer does anything.
+//
+// "send me your seed phrase" was in this list and is NOT any more: at 20 skeleton runes it sits
+// below DupMinSkeleton, and it never needed a rate limit — the prefilter gives it a deterministic
+// SCAM floor, which is a consequence rather than a refused message. Written down because a lure
+// dropped from a table with no reason beside it is how coverage disappears quietly.
+func TestABroadcastLureIsStillRefusedInTheThirdCourt(t *testing.T) {
+	for _, body := range []string{
+		"check my profile for the link",              // 24 skeleton runes: the threshold itself
+		"urgent: verify your wallet now",             // 25
+		"contact support at t dot me slash help",     // 31
+		"claim your free airdrop at example dot com", // 35
+	} {
+		t.Run(body, func(t *testing.T) {
+			s, clock := newStore(t)
+			for _, court := range []string{"a", "b"} {
+				if _, err := post(t, s, court, "ip1", body); err != nil {
+					t.Fatalf("court %s: %v", court, err)
+				}
+				*clock = clock.Add(MinInterval)
+			}
+			if _, err := post(t, s, "c", "ip1", body); !errors.Is(err, ErrDuplicate) {
+				t.Fatalf("the third court must refuse a broadcast %q (skeleton %d, "+
+					"DupMinSkeleton %d), got %v",
+					body, len([]rune(Skeleton(body))), DupMinSkeleton, err)
+			}
+		})
+	}
+}

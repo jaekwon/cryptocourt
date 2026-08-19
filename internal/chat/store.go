@@ -28,6 +28,44 @@ const (
 	GlobalWindow = time.Minute
 	GlobalMax    = 300 // shed new addresses past this, never established ones
 
+	// The cross-court duplicate rule. DupWindow is how long a copy is remembered
+	// and DupCourts is how many OTHER courts must already hold it.
+	//
+	// DupMinSkeleton WAS 12, and 12 refuses ordinary speech. Measured over 29
+	// phrases people genuinely repeat between rooms and 13 lures a broadcaster
+	// would send:
+	//
+	//	  >=12   ordinary refused 13/29    lures exempt from THIS rule  3/13
+	//	  >=16   ordinary refused  4/29    lures exempt  4/13
+	//	  >=17   ordinary refused  1/29    lures exempt  6/13
+	//	  >=23   ordinary refused  1/29    lures exempt  7/13
+	//	  >=24   ordinary refused  0/29    lures exempt  7/13
+	//	  >=26   ordinary refused  0/29    lures exempt 10/13
+	//
+	// LENGTH DOES NOT SEPARATE THE TWO CLASSES. Ordinary phrases run up to 23
+	// skeleton runes ("congratulations everyone") and lures start at 7 ("dm me
+	// now"), so the bands overlap and no threshold avoids both errors. 16 was
+	// tried first and still refused "same question here", "that worked, thanks"
+	// and "following this one".
+	//
+	// So the threshold is placed ABOVE the ordinary band rather than inside it,
+	// because the two errors are not symmetric. A false positive refuses an
+	// innocent person for saying thanks in a third room, with no other line of
+	// defence and nothing to tell them but this rule's own message. A false
+	// negative lets one broadcast past a COARSE RATE LIMIT while the scanner
+	// still reads every copy — and a bare DM-ask is the shape it was measured
+	// catching at 0.85. Of the seven lures exempt at 24, TWO never needed this
+	// rule at all — "send me your seed phrase" earns a deterministic SCAM floor
+	// and "t.me/support" a spam one, both of which are consequences rather than
+	// refusals — and the other five are short DM-asks with no destination, which
+	// is the scanner's shape.
+	//
+	// 24 is the first threshold with no ordinary refusals, and 26 gives up three
+	// more lures to buy nothing, so it is a knee rather than a preference.
+	DupMinSkeleton = 24
+	DupCourts      = 2
+	DupWindow      = 10 * time.Minute
+
 	// The enforcer's clamp. An automated consequence cannot outlive this however
 	// it was written, so a scanner bug or a future edit cannot manufacture a
 	// permanent ban out of a very long kick.
@@ -69,7 +107,7 @@ const (
 var (
 	ErrThrottled = errors.New("too many messages")
 	ErrKicked    = errors.New("posting is blocked for this address")
-	ErrDuplicate = errors.New("the same message was just posted in several courts")
+	ErrDuplicate = errors.New("the same message was just posted in several courts; post something different, or wait")
 	ErrPurged    = errors.New("this court has been purged")
 )
 
@@ -417,7 +455,7 @@ func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) er
 	// this message and writes no infraction. As a punishment it was a mass-harm
 	// primitive — on a shared address an attacker types one sentence in three
 	// courts and a stranger is kicked — and it fires on the honest announcement.
-	if sk := Skeleton(in.Body); len(sk) >= 12 {
+	if sk := Skeleton(in.Body); len(sk) >= DupMinSkeleton {
 		// OTHER courts, excluding this one: two already plus this one is the
 		// third, which is where the rule was described as biting. Repeating
 		// yourself in a court you have already used is the per-address
@@ -426,10 +464,10 @@ func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) er
 		if err := tx.QueryRowContext(ctx,
 			`SELECT count(DISTINCT court) FROM messages
 			 WHERE ip_hash=? AND skeleton=? AND court <> ? AND created_at > ?`,
-			in.IPHash, sk, in.Court, now.Add(-10*time.Minute).Unix()).Scan(&others); err != nil {
+			in.IPHash, sk, in.Court, now.Add(-DupWindow).Unix()).Scan(&others); err != nil {
 			return err
 		}
-		if others >= 2 {
+		if others >= DupCourts {
 			return ErrDuplicate
 		}
 	}

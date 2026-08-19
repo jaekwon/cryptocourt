@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -729,5 +730,57 @@ func TestTheAppealContactIsPublishedOnlyWhenSet(t *testing.T) {
 		if !strings.Contains(body, "appeal_to") {
 			t.Errorf("%q is a reasonable contact and must be published: %s", good, body)
 		}
+	}
+}
+
+// A DUPLICATE'S Retry-After WAS WRONG BY SIXTY TIMES.
+//
+// Both refusals are 429, which is right, and they shared one `Retry-After: 10`, which was not: a
+// duplicate is remembered for DupWindow — ten minutes — so a client honouring that header retried
+// in ten seconds and was refused again, and again, until the window ran out. The two cases are
+// separate now and the duplicate's value is derived from the constant.
+//
+// Both arms are asserted, because the bug was not "the header is absent" but "the header is
+// confidently wrong", and only comparing them catches that.
+func TestRetryAfterMatchesTheRefusalItDescribes(t *testing.T) {
+	srv, _, clock := newServer(t)
+	const body = "claim your free airdrop at example dot com now"
+
+	// Two courts hold the message; both are accepted.
+	for _, court := range []string{"a", "b"} {
+		if rec := do(t, srv, postReq(t, "/api/chat/dev/"+court, "alice", body)); rec.Code != 200 {
+			t.Fatalf("court %s: %d %s", court, rec.Code, rec.Body)
+		}
+		*clock = clock.Add(MinInterval + time.Second)
+	}
+	// The third is a duplicate, not a throttle.
+	rec := do(t, srv, postReq(t, "/api/chat/dev/c", "alice", body))
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("want 429 for a duplicate, got %d %s", rec.Code, rec.Body)
+	}
+	want := strconv.Itoa(int(DupWindow.Seconds()))
+	if got := rec.Header().Get("Retry-After"); got != want {
+		t.Errorf("a duplicate is remembered for %s, so Retry-After must be %s, got %q — "+
+			"a client honouring a shorter value retries into the same refusal",
+			DupWindow, want, got)
+	}
+	// And it tells the person the remedy, since waiting is not the only one.
+	if !strings.Contains(rec.Body.String(), "post something different") {
+		t.Errorf("the message must say what to do, got %s", rec.Body)
+	}
+
+	// THE OTHER ARM: an ordinary throttle keeps the short value. Same status, different wait,
+	// which is the whole point of separating them.
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/d", "alice", "a different sentence")); rec.Code != 200 {
+		t.Fatalf("setup: %d %s", rec.Code, rec.Body)
+	}
+	rec = do(t, srv, postReq(t, "/api/chat/dev/d", "alice", "immediately again, different too"))
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("want 429 for the interval, got %d %s", rec.Code, rec.Body)
+	}
+	if got := rec.Header().Get("Retry-After"); got == want {
+		t.Errorf("a 2s interval must not quote the duplicate window (%s); got %q", DupWindow, got)
+	} else if got == "" {
+		t.Error("a throttle still has to say when to come back")
 	}
 }

@@ -371,8 +371,19 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		writeJSON(w, http.StatusForbidden, map[string]any{
 			"error": "posting is blocked for this address", "you": you,
 		})
-	case errors.Is(err, ErrThrottled), errors.Is(err, ErrDuplicate):
+	case errors.Is(err, ErrThrottled):
+		// Ten seconds is short for the per-minute windows and long for the 2s
+		// interval. Being early costs one more refused attempt, which is the
+		// harmless direction, and every throttle window here is under a minute.
 		w.Header().Set("Retry-After", "10")
+		writeErr(w, http.StatusTooManyRequests, err.Error())
+	case errors.Is(err, ErrDuplicate):
+		// SEPARATE FROM THE THROTTLE, because the same header was wrong by 60x.
+		// A duplicate is remembered for DupWindow — ten minutes — so a client
+		// honouring `Retry-After: 10` retries in ten seconds and is refused
+		// again, and again, for the rest of the window. Derived from the
+		// constant so the two cannot drift apart.
+		w.Header().Set("Retry-After", strconv.Itoa(int(DupWindow.Seconds())))
 		writeErr(w, http.StatusTooManyRequests, err.Error())
 	case errors.Is(err, ErrPurged):
 		writeErr(w, http.StatusGone, "this court is no longer served")
