@@ -431,6 +431,38 @@ just read needs no hash copied by hand — transcription is where an operator pu
 wrong person. A dismissed message stays readable under `review -all`, because a decision
 to do nothing is a decision.
 
+**Withdrawing a court, for an on-chain purge.** `freeze` latches a court out of service:
+
+    bin/kourtchatctl -db chat.db freeze dev/orem
+
+Latched rather than re-derived from the chain on every request, because a chain read cannot
+tell "this court was purged" from "the node is unreachable", and a compliance control whose
+fail-open trigger is an RPC hiccup is not a control.
+
+It stops BOTH verbs — 410 on the read as well as the write. That is worth stating because it
+was not true until it was measured: `frozen` was consulted in `Post` and nowhere else, so a
+withdrawn court refused new messages with "this court is no longer served" while handing its
+whole transcript to anyone who asked, and the tool printed "its history is no longer served"
+the entire time. A control that announces a property it does not have is worse than no
+control, because somebody relies on it.
+
+**Freeze does not erase, deliberately.** The rows stay for an operator who needs them, and
+the pruner is the separate step. "Stop showing this" and "destroy the evidence" are different
+decisions and only one of them cannot be undone, so an operator who needs the content gone
+freezes and then prunes. That order matters: pruning first leaves the court still serving
+whatever arrives next.
+
+The panel reports a frozen court as closed rather than unreachable. Same reason in miniature:
+"unreachable" sends a reader to reload and an operator to check the network, over something
+working exactly as intended.
+
+**Why `dismiss -from` has no batch limit when `prune` does.** A fair question, since both are
+bulk writes. Measured: 50,000 queued messages dismissed in 91ms, with 937 read+status pairs
+completing alongside and a worst case of 467µs. The difference is the population, not the
+statement — `dismiss -from` is scoped to ONE address, whose output the throttle already
+bounds, while a prune sweeps every author and all of history and is bounded by nothing else.
+If a future `dismiss` ever grows a wider scope, it needs prune's limit.
+
 **BACK UP ALL THREE FILES, OR USE `.backup`.** This is the one that will cost somebody
 their database. In WAL mode the `.db` file is not the database — measured on a server
 that had taken three messages:
