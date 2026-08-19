@@ -1,7 +1,7 @@
 # GAMETHEORY.md — the answer-bond redesign, stated for audit
 
-**Status: AUDIT ROUND 1 RETURNED. §C3's load-bearing claim was FALSIFIED and is corrected
-below.** Written before the audit deliberately, so the audit had a fixed target and cannot be
+**Status: NOT CONVERGED. C3 does not work as drafted — see §12.1, the most important finding
+in this document. C0's fix was also wrong (§11.8).** Written before the audit deliberately, so the audit had a fixed target and cannot be
 accused of grading a moving one. Every number is either measured (marked **M**) or read out of
 the source (marked **S**). Nothing here is implemented.
 
@@ -22,6 +22,24 @@ The document exists to be attacked. §9 lists what must be proven, §10 what is 
 >
 > Also: C3 makes the deterrent **worse than today** on its own axis — required overturn
 > probability rises from **29.2% to 40.1%** — which the original draft did not state.
+>
+> ### Round-1 headline, part 2: C0's fix is wrong and C2's framing is wrong
+>
+> 4. **"Every comp permanently shrinks the reservoir" is FALSE.** `cumAccrual` is monotone and
+>    *unbounded*; `reservedTail` is a high-water **cursor**, not a balance. A comp is a
+>    **drought**, not a permanent tax — **M:** a bystander crystallizing after the drought is
+>    paid bit-identically to the control. The bug is **timing**, and `Crystallize` being
+>    permissionless is now the whole of it.
+> 5. **C0's proposed cap is the wrong lever and must not ship.** **M:** it strands **73% of the
+>    challenger's compensation** and moves their break-even overturn probability from 20% to
+>    46.7% — destroying §4.1, the argument that there is no free-rider problem. The two
+>    constraints on the constant are **mutually exclusive** above X̄/S ≈ 2.85%, and my own
+>    headline example (10% of supply) is well past it.
+> 6. **"The robbed pool clears the quorum alone" is unreachable by construction.**
+>    `VoteDispute` refuses every participant, and a staker record persists across withdrawal —
+>    **M:** a victim holding **100% of the robbed pool** is refused. The quorum can *only* be
+>    met by **non-participant** weight. Victims can **fund** a defence (C4b); they can never
+>    **vote** one.
 
 ---
 
@@ -79,14 +97,36 @@ whole court's emission, consumed by one comp.** `reserveJunior` then clamps the 
 `emission.gno:186-199`), and `Crystallize` is permissionless after the grace week, so **an
 attacker picks the moment** the zero becomes permanent.
 
-**Change:** `comp = min(compAmount(ownBond, burned), compBudgetX · curPeriodBudget)` with
-`compBudgetX` a new calibrated constant. Do **not** make `reservedTail` decrementable —
-monotonicity is what keeps seniors and juniors tiling a disjoint number line, per the
-M3-CRITICAL-1 comment at `emission.gno:162-170`.
+**Change — REVISED by audit; the original cap proposal must NOT ship.** See §11.8 for the
+measurements. In short: capping comp strands 73% of a challenger's compensation and moves
+their break-even from 20% to 46.7%, destroying §4.1. **The senior lane already pays in full,
+time-delayed, never scaled** (**M:** a 12,000 CC comp pays out to 12,000.000000 over 11 weeks).
+Capping is the *only* thing that would strand a challenger.
 
-**Interaction that matters:** comp scales with the answer bond, so C3 alone improves this
-**11.1×** (40%·X̄ → 3.6%·X̄). C0 is still required, because a cap is the only thing that makes
-the property hold *independently* of the bond constant.
+**The defect is on the JUNIOR side, not the senior side.** Seniors are *whole but late*;
+juniors are *scaled once at crystallize and final*. So:
+
+> **Make the junior draw delayed rather than scaled.** `reserveJunior` reserves the full `want`
+> on the accrual line, and the pulls become partially payable as coverage arrives — exactly as
+> `PullSenior` already works.
+
+This satisfies **both** §6 ("the claim must eventually mint the prize it should have minted")
+and §4.1 (the challenger keeps the 2:1 premium), which the cap could not do simultaneously. It
+also **removes the timing attack entirely**, because no crystallize moment is worse than
+another. Honest cost: `bonusPaid` becomes an amount rather than a flag, and the F9 `capBonus`
+interaction needs re-derivation.
+
+**Do not make `reservedTail` decrementable.** My original reason (M3-CRITICAL-1) was right but
+weak; the real one is sharper. **M:** the accrual line is *exactly tiled* —
+`cumAccrual − emittedTotal − R = 0.000000` — so reclaiming a fully-paid tail hands the junior
+lane coin **already minted to the senior**, a 75.7% overshoot of the emission ceiling. That is
+a straight double-spend. And there is nothing to reclaim anyway: once `cumAccrual` passes
+`reservedTail` the offset costs the reservoir nothing forever.
+
+**Interaction, corrected:** §C3 does *not* improve this 11.1×. That figure was computed at 450
+bps with the floor inert. **With the floor binding — the regime with the largest draws, i.e.
+the one that matters — the improvement is 1.78×** (**M:** comp 22.4%·X̄). So C3 barely helps
+here and C0 is *more* necessary than the original draft implied, not less.
 
 ### C1 — Make `provClose` reachable
 
@@ -139,20 +179,76 @@ hands the decision to the party it exists to police."*
 if fivePct := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps); fivePct > floor && xbar >= fivePct {
 ```
 
-**M:** floor becomes exactly X̄ at every claim size; the robbed pool clears it alone in all
-five rows; **the entire existing suite passes unmodified (ok . 7.53s), zero fixture edits.**
+**M, confirmed twice:** floor becomes exactly X̄ at every claim size; **the entire existing
+suite passes unmodified (`ok . 7.55s`), zero fixture edits**, and so do `govern`, `offerer`,
+`kourtv1` and all seven `p/kourt/*`. **Bystander verified:** an ordinary undisputed claim at 1%
+and 10% of supply settles with every schedule stamp and every payout **bit-identical** across
+both trees; the fixture asserts its own precondition (`SettleUndisputed` refused at
+`settleDelay − 1`), so it is not vacuous.
 
-**The trade, stated rather than buried:** it lowers the weight for a *malicious* overturn of a
-small claim from 5%·S to ~X̄/2 (~10× on a claim at 1% of supply). Not free — the attacker's
-bond burns on an uphold and the answerer is comped 2× — and a whale at 5%·S can do it today
-anyway. Since the snipe is currently **free** while a false overturn costs a bond, the trade
-favours relaxing. But it is a trade.
+**Three corrections from the audit — the change is right, my description of it was not:**
 
-**Knife edge:** even patched, `floor = X̄` while a fully-staked pool weighs `X̄ − ε`, so it
-falls short by exactly the sniper's dust. One abstain from anyone fixes it
-(`cast = yes+no+abstain`, S — `dispute.gno:222`). **Corollary: the coordination task is
-turnout, not agreement** — a rescue needs one *yes* plus enough *abstains*, so an indifferent
-whale can enable it without forming an opinion.
+1. **It DELETES the supply arm, it does not gate it.** **M:** across 88 rows the patched
+   `quorumFloor` equals `max(1, min(X̄frozen, votable/3))` with **zero divergences**, and it
+   holds analytically too. So **both `:580-582` and `:607-609` become provably dead code**.
+   **Delete them and rewrite the comment** rather than adding a gate that leaves two dead
+   blocks and a page of prose describing behaviour that no longer runs.
+2. **"The robbed pool clears it alone" is unreachable by construction, and that column of the
+   table above is wrong.** `VoteDispute` refuses every participant (S — `dispute.gno:188`) and
+   `isParticipant` is true for anyone with a staker record on *either* side — records persist
+   across withdrawal. **M:** a victim holding **100% of the robbed pool** is refused with *"a
+   participant may not vote on their own claim's verdict"*. **The quorum can only ever be met
+   by non-participant weight, whose size is unrelated to X̄.** So C2 lowers the bar *for
+   outsiders*, which is still the fix — but victims **fund** a defence (C4b) and never **vote**
+   one. §4.2's one-person rescue was already a *non-participant* whale; that is not an accident.
+3. **The relaxation is 5.01×, not ~10×, and the landing point is X̄, not X̄/2.** **M:** at 1% of
+   supply the floor goes 2000.000000 → 399.000000 CC. An attacker voting `yes` unopposed needs
+   `cast ≥ floor = X̄`, full stop. I overstated my own trade by 2× — conservative direction, but
+   wrong.
+
+**The trade is WORSE than I stated.** **M:** an attacker holding **1.25% of supply** — a
+*quarter* of the old 5% bar — flips a true answer at 1% of supply from failed-quorum to
+**overturn**, unopposed: cash swing **−39.90 → +159.60 CC**, own bond returned whole, comp
+minted, the honest answerer's 199.50 CC bond burned and their record reset. **And it is not a
+gamble:** with `yes > 0, no = 0` the threshold is trivially met, so my "the attacker's bond
+burns on an uphold" mis-priced it — an uphold requires an opponent to turn out, and *turnout
+failing is this section's own premise*. Profit per unit of required weight is a flat 0.4 at
+every claim size, and voting consumes no weight, so it repeats on every claim with X̄ ≤ the
+attacker's holdings. Nobody is made whole: the answerer loses the bond, the true side's stakers
+lose the draw, every holder pays the comp dilution. **The trade still favours relaxing — the
+snipe it fixes is currently free — but it is bigger than the original draft admitted.**
+
+**A hazard the original draft missed entirely: the patch silently re-keys the credential bar.**
+`dispute.gno:321` is `yes >= floor/4`, documented as costing *"~1.25% of court supply"*.
+Patched it becomes **X̄/4**. **M, end to end:** two socks totalling 450 CC of a 40,000 CC supply
+(1.125%), with only 100 CC on the adversarial side, flip the branch from failed-quorum to
+uphold and `credEligible` from false to **true**, minting an `AnswerRecord` of 1. Three such
+points buy the 24h answer-priority window. **Fix, tested:** re-anchor the credential bar to
+supply — `yes >= credWeightFloor(c)/4` with `credWeightFloor = mulDiv128(PastTotal(Epoch()-1),
+quorumSupplyBps, Bps)` — keeping the documented 1.25% price while retaining the quorum
+relaxation. Suite green, zero fixture edits.
+
+**§8's claim that `qualityBars` and `mustElectionInvariants` share this shape is wrong for the
+election lane.** `electionFloor` is 5% of *votable* with **no X̄ arm**, and
+`mustElectionInvariants` compares only package constants and never reads a claim — the C2
+clause cannot reach either. **M:** `qFullBar`, `qDemotionBar`, `electionFloor` and
+`electionBond` are identical across trees; all ten `TestElection*` fixtures pass. But the two
+lanes now **genuinely disagree in the band C2 exists to fix**: at X̄ = 1% of supply the verdict
+quorum is 399 CC while the quality `fullBar` stays 2000 CC. That is defensible — the slash
+deterrent *keeps* its 5%-of-supply anchor, which is good — but it makes
+`court.gno:250-254`'s comment ("prices filing above winning the vote") stop being true of the
+verdict lane.
+
+**Knife edge: real, and the act it depends on is UNPAID.** **M:** X̄ = 399.000000, patched floor
+= 399.000000, a rescuer at 398.999999 — one base unit short, the sniper's dust — plus **one
+abstain of 0.000001 CC** lifts `cast` to exactly 399.000000 and the overturn lands
+(`shortBy = 0.000001`; on baseline `shortBy = 1600.950001`, hopeless). **But `PullCarrot` pays
+only voters whose choice equals `cs.carrotChoice`**, so the abstainer whose dust made the
+quorum reachable is **REFUSED** — *"the carrot pays with-verdict voters of the deciding
+round"*. The single action the knife edge depends on is the one action the incentive system
+explicitly does not pay for, and it must come from a *second, non-participant* address. The
+same fixture reproduces §4.3's misallocation at its extreme: **0.002117 CC to the voter against
+159.60 CC of comp to the disputer — 75,400×.**
 
 ### C3 — Re-key the collateralization floor to BOTH sides, and drop the flat base to 600 bps
 
@@ -305,6 +401,14 @@ is uphold rather than apathy — which is exactly `court.gno:75-77`'s stated "q 
 **The volunteer's dilemma is already dissolved.** The blockers are capital (C4) and turnout
 (C2), not incentive.
 
+**Scope correction from the audit — this argument covers OPENING a dispute, not carrying it.**
+`OpenDispute` bars only the answerer (S — `dispute.gno:79-83`), so a victim may post the bond.
+But `VoteDispute` bars every *participant* (S — `:188`), and `isParticipant` is true for anyone
+with a staker record on either side, which **persists across withdrawal**. **M:** a victim
+holding 100% of the robbed pool is refused. So the quorum that decides the round can only be
+met by **non-participant** weight. A victim can **fund** their own defence and never **vote**
+it — which is why C4b matters and why §4.2's working rescue was a non-participant whale.
+
 ### 4.2 A one-person rescue already works today
 
 `OpenDispute` bars only the answerer, `VoteDispute` only participants — so a disinterested
@@ -406,10 +510,18 @@ the design, so the check becomes a sanity bound.
 
 ## 8. Build order
 
-1. **C0** — standalone, no bond dependency, largest bug, needs no attacker.
-2. **C2** — one clause, measured zero fixture churn. Verify `qualityBars`
-   (`quality.gno:231-275`) and `mustElectionInvariants` first: they carry the same shape and
-   were **not** tested against the patch.
+1. **C2 — promoted to first.** ← *reordered by audit.* Two measured patches, both green with
+   zero fixture edits, and it no longer depends on anything. Ship as: **delete** `:580-582` and
+   `:607-609` (provably dead under the patch, 88/88 rows) and rewrite the comment; **plus**
+   re-anchor the credential bar to supply, or the patch silently cuts its documented
+   1.25%-of-supply price by 5.01×. `qualityBars` needs no change and the election lane cannot
+   be reached by the clause — both verified, all ten `TestElection*` green.
+2. **C0 — demoted, and rescoped.** The cap must **not** ship (§11.8: it strands 73% of the
+   challenger's comp and destroys §4.1). The real fix is *make the junior draw delayed rather
+   than scaled*, which is a larger rework than the draft assumed. The **cheap interim** is to
+   refuse `Crystallize` while the reservoir cannot cover `want` and senior mass is unpaid.
+   Whichever ships, also cap or delay the **flag bounty** — it has the same defect at 1/5 the
+   magnitude and C0-as-drafted missed it.
 3. **C1 + C6 together** — C1 makes C6's path reachable, so they must not be split.
 4. **C5** — independent.
 5. **C3** — re-key first, then rescope `court.gno:194` and `:227` in the same commit. 5
@@ -651,3 +763,427 @@ I had to catch by hand.
   (5 s ÷ actual block time). The audit could not demonstrate divergence — gno's `SkipHeights`
   advances at exactly 5.0 s/block — so this is a **deployment premise that should be pinned**,
   not a live defect.
+
+### 11.8 C0 — the diagnosis was half wrong and the fix was wrong
+
+**The permanence claim is FALSE.** `reservoirR() = cumAccrual − reservedTail − juniorReserved`,
+and `cumAccrual` is monotone and **unbounded**. `reservedTail` is a high-water **cursor**, not a
+balance. A comp of size K is therefore a **drought of K/budget periods**, not a permanent tax.
+
+**M**, 300,000 CC court, one real overturn at X̄ = 10% of supply (comp = 11,999.60 CC = 4000 bps
+of X̄). Three structurally identical bystander claims, opened and settled together:
+
+| bystander | winners / author / answerer |
+|---|---|
+| crystallized **before** the comp | `0.065186 / 0.006518 / 0.004074` |
+| crystallized **inside** the drought | **`0 / 0 / 0`** |
+| crystallized **after** the drought (8 wk) | `0.065186 / 0.006518 / 0.004074` — **bit-identical to control** |
+
+So the destruction is real and *total*, but it is a **timing** bug — and `Crystallize` being
+permissionless is now the entire attack, not an aggravating detail. Drought length at
+1/5/10/30% of supply: **2/6/11/36 weeks** from an empty reservoir, 0/2/8/33 from a full one.
+
+**The proposed cap works mechanically and is the wrong lever.** **M** with `compBudgetX = 3`:
+the drought goes 8 weeks → 0 and the bystander is restored bit-identically. But:
+
+| | uncapped | capped X=3 |
+|---|---|---|
+| comp queued to the disputer | 11,999.60 | 3,242.43 |
+| ever paid | 11,999.60 | 3,242.43 |
+| **LOST** | **0.000000** | **8,757.17 CC (73.0%)** |
+| comp/bond | **2.000** | **0.540** |
+
+**The remainder vanishes.** There is exactly one `enqueueSenior` per disposition and the round's
+bonds are zeroed on the same tally — no residual state exists, nothing queues, nothing expires.
+And the senior lane otherwise **pays in full, time-delayed, never scaled** (**M:** the 12,000 CC
+comp pays out to 12,000.000000 over 11 weeks, `payableLeft = 0`). **Capping is the only thing
+that strands a challenger.**
+
+Challenger break-even under the cap, using §4.1's own algebra:
+
+| X̄/S | comp/bond | q* (apathy) | q* (uphold) |
+|---|---|---|---|
+| no cap | 2.000 | **20.0%** | **33.3%** |
+| 5% | 1.140 | 30.5% | 46.7% |
+| 10% | 0.570 | **46.7%** | **63.7%** |
+| 30% | 0.190 | **72.5%** | **84.0%** |
+
+**Disputing stops being rational the moment the cap binds**, because the design's operating
+point *is* `comp/bond = 2`. And **the two constraints on the constant are mutually exclusive**:
+it must be ≤ `rMaxPeriods − 1 = 3` to protect a following claim, and ≥ `105.3·(X̄/S)/δ` to
+preserve the 2:1 comp. Both hold only for X̄/S ≤ **2.85%** on a new court, **1.43%** at two
+years, **0.71%** at four. No value does both for a larger claim.
+
+**Court age moves the cliff, which the draft did not consider at all.** The budget halves every
+104 weeks while comp stays 0.4·X̄, so total starvation arrives at **3.77%** of supply at week 1,
+**2.68%** at 52, **1.90%** at 104, **0.95%** at 208 — so any fixed `compBudgetX` drives comp → 0
+asymptotically.
+
+**The existing suite cannot detect any of this**: every shipped dispute fixture runs at
+X̄/S ≈ 0.68%, below the 2.85% cliff. The cap variant passes unmodified — which is exactly why it
+looked safe.
+
+**Two other senior consumers share the defect**, and C0-as-drafted fixed only one of three: the
+**flag bounty** (up to 8%·X̄, uncapped, and it can co-occur with a comp on the same claim) has
+the same shape at 1/5 the magnitude — **6 weeks of drought at 30% of supply**; the **carrot** is
+~30× smaller than comp and negligible.
+
+**Cheap interim if the junior-delay rework is deferred:** refuse `Crystallize` while
+`reservoirR() < want` and the senior queue still has unpaid mass. F4's "never aborts a shared
+settlement path" does **not** apply — `Crystallize` is its own entrypoint and already panics on
+five preconditions, and **principal is not gated on it** (S — `session.gno:107` needs only
+`verdictAt != 0`). Costs: it withholds the author's deposit and fee during the wait, and it
+needs a deadline so a griefer cannot block forever.
+
+**Operational note:** the C0 patch shifts every `dispute.gno:NNN` citation past line 397 — there
+are **11 live ones** in this document (420, 440, 462, 519, 548, 550, 558, 569, 580, 600, 630).
+Put new helpers at end-of-file or in `emission.gno`.
+
+---
+
+## 12. AUDIT ROUND 2 — the composition, and C4
+
+Two independent shadow copies, both verified leaving the tree untouched. **The audit has NOT
+converged: C3 does not work as drafted, and C4a should not be built at all.**
+
+### 12.1 C3 does not close the snipe — it MOVES it to the dispute lane, and makes it worse
+
+**The most important finding in this document.** Round 1 corrected the *answer* lane's bound to
+`(tier + splitCarrot/100)/(slashDrawBps/10⁴)`. Round 2 applied that same corrected formula to
+the lane nobody had examined. A disputer risks `min(20%·X̄, 40%·answerBond)`, and under C3 the
+answer arm binds, so:
+
+```
+L_dispute = (tier + 0.07)·mg / (0.4 · 1.6 · mg_max) = (tier + 0.07)/0.64
+          = 1.672  (MID)      3.234  (HIGH)
+```
+
+**No X̄, no age, no rate, no `answerBondBps`** — and **exactly 2.5× the answer lane's**, because
+`disputeBondOfAnswerBps = 4000`. It holds in the flat-arm regime too (`< 1.5625`). Uniform.
+
+**M**, on this document's own 11-week cold row (X̄ = 1000 CC, 900 YES / 100 NO, supply 70,000):
+
+| | quorumFloor | answerBond | disputeBond | comp | `mg/disputeBond` | with carrot |
+|---|---|---|---|---|---|---|
+| today | 3,500 CC | 500 CC | 200 CC | 400 CC = 40%·X̄ | 0.31 | **0.338** |
+| C2+C3 | **1,000 CC** | 101.03 | **40.41** | 80.83 | **1.56** | **1.672** |
+
+**It crosses 1.** Today destruction leverage in the dispute lane is age-dependent and mostly
+small; under C3 it is **constant and above 1 at every age and rate** — 5× worse on a young
+claim. §11.1's tier-freeze fix does nothing here, because the disputer's bond is 40% of a bond
+sized for *someone else's* exposure.
+
+**So C3 as drafted defeats the set's headline goal.** It relocates the cheapest destruction
+path, and C2 makes that lane 3.5× cheaper to enter.
+
+**The honest fix, flagged rather than prescribed: stop keying the dispute bond on the answer
+bond at all, and key it on the destroyable draw directly** — cheap on a young or small claim
+where the robbed pool is poor and there is little to destroy, expensive on an old or large one.
+That needs its own design pass. Note it collides with C4b: the same constant that makes
+self-defence affordable is the one that makes griefing cheap.
+
+**And §11.3's `0 or ∞` claim is wrong on one path.** **M:** a malicious overturn of a *true*
+answer returned the attacker's bond **in full** (`bondDelta = 0`) and minted **400 CC of comp**
+against 48.28 CC of destroyed draw. So `destroyed = 0 — draw restored` holds only when the
+overturn is **correct**. On a malicious one, forfeited = 0 *and* destroyed > 0. **The malicious
+overturn's payoff is the comp, not the destruction.**
+
+### 12.2 C4a must not be built — syndication makes self-dealing profitable
+
+**M:** `compAmount`'s two arms are not "the 2b arm binds" — they are **exactly equal by
+construction**, since `2 × disputeBondOfAnswerBps = compOfBurnBps` (2×4000 = 8000). So
+`comp = 0.8·A` on an overturn and `0.32·A` on an uphold, identically, at **every** bond level.
+
+With α = the attacker's share of the answer pool, δ = their share of the dispute pool:
+
+- overturn: net = `A(0.8δ − α)` → profitable iff **δ/α > 1.25**
+- uphold: net = `A(0.32α − 0.4δ)` → profitable iff **α/δ > 1.25**
+
+Today α, δ ∈ {0, 1}: at 1 both branches lose (**M:** −0.2A, −0.08A), and at 0 it is the intended
+bounty. **Syndication opens the continuum, and every ratio outside [0.8, 1.25] is profitable
+self-dealing paid for by the co-funders.** Concretely: fund half your own false answer, dupe
+co-funders for the rest, overturn it yourself → **+0.3A**, with the co-funders' contributions
+burning in full. The attacker picks the direction.
+
+**There is no sybil-proof fix** — netting same-claim cross-side contributions is address-keyed,
+and this repo's root principle is that address-keyed defences fall to sybils. This is enabled
+specifically by **C4a**, whose benefit C3 already delivers (§12.3). **Recommendation: do not
+build C4a.**
+
+### 12.3 C3 alone fixes self-defence — §C4b's closing claim is FALSE
+
+§C4b said the measured refusal is "fixed by C4b and by nothing else in this document." **Wrong.**
+**M**, the same fixture, reproduced to the digit and then run against a real C3 prototype:
+
+```
+today:   xBar 1903.03  disputeBond 380.61  spendable 100.00  CAN SELF-DEFEND = false
+C3:      answerBond0 212.36 (the FLOOR binds, not the 600)
+         disputeBond  84.94                CAN SELF-DEFEND = true
+```
+
+The assertion that `OpenDispute` aborts now **fails because it succeeds**. C4b is a **tail
+feature**: it is still needed at the analytic ceiling (dispute bond 234.68 CC > 100 spendable),
+and nowhere else. Per-address ask at 600 bps re-keyed — median claim **0.06%–0.31% of supply** —
+is a single-holder number on any real distribution.
+
+**Also measured, against §C3's claim of universality: the re-keying is completely inert below
+~4.4 weeks of claim age** (identical to the answered-side floor on a 2-hour claim, 2.48× on an
+11-week one).
+
+### 12.4 C4b has a squat attack that inverts its own purpose
+
+**M**, against a prototype built exactly as §C4b specifies (per-claim, pull-settled, **capped at
+the quoted bond**):
+
+```
+answerBond 250.00   dispute target 100.00 (4000 bps)
+sniper's sybil fills the pool: total = 100.00
+victim's contribution:            REFUSED (pool full)
+OpenDisputeFromPool after 72h:    REFUSED
+answer bond returned to sniper:   227.50
+```
+
+The answerer's second wallet fills the capped pool, never declares, and the 72h clock does the
+rest. `disputeOpen` is one bool so there is no second slot; the deadline is hard;
+`SettleUndisputed` is permissionless. **The trade is fixed at 4000 bps by
+`disputeBondOfAnswerBps`, so C3 does not improve it at any bond level.** No such attack exists
+today, because there is no pool to squat.
+
+**Fix: the pool must be UNCAPPED**, with a bonded snapshot at commit, excess refundable at 1×,
+and free pre-commit withdrawal. That converts the squat into paying for the dispute you are
+trying to prevent.
+
+### 12.5 C4b's "sharpest arithmetic hazard" — REFUTED
+
+`Σ floor(K·cᵢ/B) ≤ K` is a theorem and `mulDiv128` floors. **M:** exhaustive over every
+partition (B ≤ 30, N ≤ 4) plus **171,395** (B, ratio, partition) cases at five keep-ratios —
+**zero over-recoveries** under either the per-member floor or the pool-total-then-apportion
+rule. Every other partial disposition checked the same way: all safe. Error runs the *other*
+way (under-payment), and the worst-case strand is N base units — a 1000-member syndicate
+strands 0.000999 CC.
+
+The only extraction is writing the refund as `cᵢ − cᵢ/2` (ceil), which lets N members each
+contributing 1 unit recover 100%. **That is a one-character code-review item, not an arithmetic
+subtlety**, and the existing code already has the safe form.
+
+**But a different hazard is real:** the reserve retentions split the bond into refund + reserve
+*now* and dispose the reserve *later*, so a funder's claim settles in **two tranches**. **M:** a
+boolean pull latch locked funders out of the second. The latch must key on a **monotone
+disposition counter**, not a bool and not the round.
+
+### 12.6 C4b cross-round double count — the escrow asserts a bond it does not hold
+
+**M:** round 1's already-half-burned 100 CC still counted as collateral for round 2's 200 CC
+bond. `cs.disputeBond` claims 200.00, escrow backs 100.00, **short by 100.00** — and the second
+funder's pull then dies on the token ledger's own floor at the exact predicted site
+(`panic: grc20votes: insufficient balance`). A co-funder also **voted on the verdict it funded:
+ACCEPTED.**
+
+**Contributions must be round-scoped in the dispute lane.** This is the invariant with no
+current expression anywhere in the realm:
+
+> **I4 (escrow solvency)** `escrowBalance ≥ answerBond + pendingSlash + deposit + fee +
+> Σ_open poolTotal + Σ_undisposed (refundPool + excess)`
+
+### 12.7 `isParticipant` must be SPLIT, not extended — 5 sites, two meanings
+
+**M:** `isParticipant(DISPUTER) = false` today — the address posting the *entire* dispute bond is
+not a participant. Grepped, exactly **5** call sites, and they do not want the same predicate:
+
+| site | function | with co-funders added |
+|---|---|---|
+| `dispute.gno:188` | `VoteDispute` | **must add** (exclusion) |
+| `quality.gno:194` | `VoteQuality` | **must add** (exclusion) |
+| `crystallize.gno:302` | `PullCarrot` | **must add** (exclusion) |
+| `crystallize.gno:42` | `Crystallize` grace week | **grants** the A13 privilege |
+| `dispute.gno:444` | `Finalize` grace week | **grants** the A13 privilege |
+
+So: `isExcludedVoter` (add co-funders) and `isGraceInsider` (decide explicitly) — exactly the
+split the `slotConsumed` comment warns about for its own seven readers. The election and meta
+lanes have no `isParticipant` use and need nothing.
+
+On "HYGIENE, NOT A SECURITY GUARD": that makes this **more** urgent, not less. Today the bar is
+porous to a sybil who never staked — free but *weightless*. C4 makes it porous to addresses
+holding real, at-risk capital pointed at one outcome. Different class.
+
+### 12.8 §C4a's credential asymmetry is a court-wide DoS, and "pro-rata" is undefined for it
+
+**M:** `priorityGateActive` requires `qualifiedCount >= 3`. After three members reach score 3 the
+gate is on; **one reset turns it off for the entire court** (`qualifiedCount = 2`). So §C4a's
+"`resetOverturned` every member" makes one overturn of a 3-qualified syndicate a **court-wide
+DoS** — and per §12.2 the attacker can run it at a profit. Re-arming costs nine
+contested-and-upheld wins.
+
+And `score` is an `int` with a hard threshold at 3, so **"pro-rata" is not defined for it**. The
+naive +1-to-everyone mints N qualified addresses off one uphold, and `mayAnswerInPriority`'s
+one-active-claim rule is **per address**, so N members hold N simultaneous priority claims —
+precisely the "no flywheel blanketing" `records.gno:8-9` exists to prevent.
+
+**Revised recommendation, replacing §C4a's asymmetry: credential credit and reset both apply to
+the DECLARANT ONLY; co-funding is credential-neutral in both directions.** That removes the DoS
+and the inflation, and blocks rent-a-lead laundering *more* strongly than resetting does —
+capital simply buys no credential.
+
+### 12.9 Pro-rata comp must be one entitlement, not N — real gas measured
+
+`enqueueSenior` does a bptree `Set` + a `chain.Emit` per beneficiary. Resolve-time fanout is the
+forbidden shape. **M** (filetest-metered; the Test-function GAS sum was bit-identical at N=1 and
+N=50000, so it cannot price this):
+
+| N | gas | storage | marginal gas/member |
+|---|---|---|---|
+| 64 | 9,092,801 | 107,344 b | 150,849 |
+| 1024 | 177,657,803 | 1,601,216 b | 179,282 |
+| 2048 | 381,835,613 | 3,206,380 b | 199,392 |
+
+Block `MaxGas` is 3,000,000,000, so N=2048 is **12.7% of an entire block**, and the repo's own
+150M-gas discipline is exceeded at **N ≈ 900**. Storage is ~1,560 bytes/member **permanently** —
+queue rows are never removed. Worse, pull-time `enqueueSenior` sets `start` **at pull time**, so
+a slow funder queues behind every comp enqueued in the interim, and §11.8 measured one comp
+consuming ten weeks of a court's emission. **A guaranteed senior entitlement becomes a
+first-come queue race.**
+
+**Fix: enqueue ONE entitlement per claim at resolve, owned by the pool, drawn down pro-rata at
+pull.** O(1) resolve, O(1) pull, one queue row, resolve-time seniority preserved.
+
+**Comp split:** strictly pro-rata to all funders, declarant included, **no premium**.
+`Δᵢ = δᵢ·b·(2q_o − q_u − q_f/2)`, whose sign is independent of δᵢ — so §4.1 survives verbatim.
+Declarant-only comp gives every non-declarant `Δᵢ < 0` **unconditionally**, so no rational
+stranger ever co-funds and C4b delivers nothing. If a premium is ever wanted, take it from the
+flooring dust, never from comp.
+
+### 12.10 C1 — the boundary, the invariant, and the bystander were all wrong
+
+1. **The boundary is `votingBlocks + 1`, not `+2`.** **M** with the window pinned: 120_960 → 2
+   rounds; **120_961 → 3**; 120_962 → 3. My `+2` was a **fixture artifact** — both my fixture and
+   the shipped idiom resolve at `votingBlocks + 1`, but the *earliest* legal resolution is
+   `+votingBlocks`. The requirement is `W > votingBlocks·(maxFailedRounds − 2)`.
+2. **So §9.4's proposed invariant is over-strong by one full `votingBlocks`** — it demands
+   241,921 blocks (14 days) where 120,961 (~7 days) suffices.
+3. **BYSTANDER FAILURE — and it is the objection §5 uses to reject a longer settle window.**
+   **M**, ordinary claim, one *decided* round, earliest legal Finalize:
+
+   | W | answer → finalizable | drawWinners |
+   |---|---|---|
+   | 120_960 (today) | 241,920 = **14 d** | 19,584 |
+   | 241,921 (**my invariant**) | 362,881 = **21 d (+50%)** | 19,584 |
+
+   The draw is bit-identical, so the tax is pure latency — and it lands on the **winning side's
+   principal**, since `WithdrawStake` gates winners on `verdictAt`. C1 as drafted reintroduces
+   exactly what §5 rejects. Undisputed claims are unaffected.
+4. **Better lever: a defaulted-verdict-only window.** Keep "set once, never recomputed", but pick
+   the value from the branch that just ran — if `failedRounds > 0` (a quorum-less default), use
+   `ladderWindow = (maxFailedRounds−2)·votingBlocks + (maxFailedRounds−1)·graceBlocks + 1` =
+   **155,521 blocks (9 days)**. **M: the default court now reaches `provClose`; a decided first
+   round keeps 120,960 bit-identical; whole shipped suite green, zero fixture edits.**
+5. **"Extend `escrowUntil` per failed round" is NOT safe as I stated it** — `failedRounds` resets
+   to 0 on every *decided* round, so extensions bound per-decided-round, not per-claim: an
+   unbounded chain.
+6. **The invariant belongs in `Params.mustSane`, not `mustInvariants`** — all three terms are
+   per-court params, which is exactly why `mustInvariants` never saw the coupling.
+7. **My global lever doubles the reopen grind chain.** `failedRounds` resetting on decided rounds
+   makes the doubling ladder **inert** on a decided chain, so cost is linear in rounds and the
+   only bound is the window. **M:** decided rounds go 2 → **4** at 241,921; with C3 each round is
+   8.3× cheaper, so the full chain falls 200 CC → **48 CC — 4.2× cheaper with double the slots.**
+   The targeted lever leaves it at 2.
+8. **Three shipped fixtures already work around this bug**, one with the comment *"small claims
+   cap at failedRounds=2 and finalize the defaulted verdict"*. The bug was documented in the
+   suite.
+
+### 12.11 C6 — C1 without it is strictly WORSE than today, and it does not rescue the robbed pool
+
+**M**, default court:
+
+| shape | outcome | winners | author | answerer |
+|---|---|---|---|---|
+| 2 failed rounds → Finalize (**today's ceiling**) | tier 1 | **19,584** | 1,958 | 1,224 |
+| 3 failed rounds → provClose (**C1, no C6**) | tier 0, final | **0** | 0 | 0 |
+
+So "C6 is not optional if C1 ships" **understates it**: C1 alone converts a claim that today
+finalizes at MID and pays in full into one that pays nothing. **Ship them in one commit; if ever
+split, ship C6 FIRST.**
+
+**A hole C6 opens that the draft missed:** `quality.gno:82` must drop its `provClose` arm too.
+Once provClose pays, shutting the flag lane hands every claim that outlasted the ladder an
+**undemotable MID** — because the failed-quorum branch deliberately does not call
+`resolveQualityRide`, so the ladder's own rides cannot demote it either.
+
+**And state plainly what C6 does not do:** on a provClose the standing provisional is **always
+`cs.answer`** (set by the first failed round). So C6 pays the **answer side**. On an
+honest-answer-plus-apathy claim that is right; on a **sniped** claim it pays the sniper's dust
+pool, and **the robbed majority pool still gets nothing.** C6 does not rescue the robbed pool.
+C1's own diagnosis — apathy resolves in the liar's favour — is untouched by it.
+
+**The correct tier** is the plain default MID against the standing provisional, using the same
+guarded predicate the other terminal paths use (`if !cs.tierFinal && !cs.slotConsumed`), so a
+genuinely adjudicated low is never clobbered. **M** after the patch: bit-identical to the
+2-failed-round Finalize path, which is the right target.
+
+### 12.12 C5 is downstream of C0, and its demotion is cheap
+
+**§8 lists C5 as "independent". It is not.** An overturn round enqueues a **senior** comp and
+restores the junior draw *in the same call*, and `reservedTail` is monotone — so the comp is
+reserved **ahead of** the draw C5 exists to restore. **M** immediately after an overturn:
+`comp = 280 CC`, `cumAccrual = 3.6 CC`, **`reservoir = 0`**.
+
+| X̄ as share of supply | comp in weeks of budget | reservoir at crystallize | winners |
+|---|---|---|---|
+| 0.87% | 0.94 | 25.5 CC | **19,584** |
+| 3.56% | 3.80 | **0** | **0** |
+| 15.05% | 16.06 | **0** | **0** |
+
+Crossover ≈ **1.9% of court supply**. Above it, C5 restores an entitlement `reserveJunior` then
+clamps to zero *silently, by design*. **Shipping C5 before C0 restores nothing where it
+matters.** (C6 *is* genuinely independent of C0 — failed rounds mint no comp.)
+
+**And the demotion C5 blocks is cheap.** **M:** `demotionBar = arm/4` has **no supply floor**, so
+a low bloc of 400 CC — **49 bps of court supply** — zeroed the entire draw of the pool the same
+tally had just vindicated, for the price of one `VoteQuality`. The priced bystander (20,000 CC,
+⅔ low, above `fullBar`) correctly still demotes.
+
+**Gate: require the demotion's own mandate, not a blanket exemption.** Skipping the demotion on
+an overturn would forfeit `burnConclusiveLowDust` (the junk author keeps deposit and fee) and
+would latch `slotConsumed` on a tier it declined to set, permanently closing the flag lane.
+Re-classifying the tally as **inconclusive** does neither. `cs.provisional >= 0` is load-bearing,
+not defensive — `-1` also satisfies `!= answer`, and an existing test drives that state. **It
+failed on the first predicate and was NOT asserting the bug** — it caught a real over-reach.
+
+### 12.13 §4.1 fails at nonzero fixed cost, and C3 multiplies the failure
+
+`Δ = b·(2q_o − q_u − q_f/2)` is scale-free **only at zero fixed cost**. With gas and attention
+`g`: `Δ = b·(…) − g`, so there is a **minimum claim size below which nobody disputes**, and it
+scales as `1/b`. **C3 cuts `b` by 8.3×, so it multiplies that floor 8.3×.** §10 lists gas as
+unresolved but never connects it to C3, and §4.1 states its headline unconditionally. At 600 bps
+a 100 CC claim's entire comp is 4.8 CC.
+
+### 12.14 Corrected build order
+
+**C0 → C6 → C1 → C5 → C2 → C3 → C4b** — with C1+C6 in one commit, C6 first if ever split, and
+**C3 blocked pending the dispute-bond rework of §12.1.** C4a is cancelled.
+
+### 12.15 Further corrections
+
+- **`maxMidGrossBps` is 1927, not 1928** (the code floors), so the analytic ceiling is
+  **30.83%·X̄**, not 30.845%. Confirmed independently by two agents.
+- **`dispute.gno:313` is the ANSWERER's comp (uphold branch), not the disputer's** — the
+  disputer's is `:291`. §C4b cites `:313` wrongly, and it matters: `:313` is an unlisted **C4a**
+  site and the **largest answer-side entitlement of all** — `0.32·A` = 16%·X̄ at 5000 bps, against
+  an answerer slice of ≈1.04%·X̄. **~15× larger than the item §C4a does name.**
+- **A second §C4a omission:** `quality.gno:736` — only `cs.answerer` may `CounterFlag`. With a
+  syndicate, a declarant gone dark leaves the pool's reserve undefendable, and `counterUsed` is a
+  one-shot latch, so any funder allowed in can burn the syndicate's single challenge.
+- **`cs.answerer` has 23 address reads, 17 behaviour-bearing** (12 money, 5+ authority) and 6
+  display that must move in step. `cs.disputer` has **4**, all behaviour-bearing, **zero
+  display** — so a syndicated dispute pool has no render surface today.
+- **`court.gno:199` is an identity in `answerBondBps`** — it holds with zero margin at 450, 600,
+  1928 and 5000 alike, so it constrains only `2·disputeBondOfAnswerBps ≤ compOfBurnBps`. §C3's
+  zero-margin argument for 600-over-450 rests on `court.gno:232`, which is correct.
+- **`court.gno:227` panics at BOTH 600 and 450**, so §7's "must be inverted, not deleted" is
+  exact. Break-even claim age: 5000 → **31.14 weeks** (unreachable in a 12-week life); 600 →
+  **3.74 weeks**; 450 → **2.80**. Both low values are reachable, so §7's conclusion holds at
+  either — but note 2.80 is the *450* number while C3 ships 600.
+- **Two C4b fixtures pin the direct transfer to `cs.disputer`** and must be re-derived:
+  `TestDisputeOverturnPath`, `TestDisputeFailedRoundsToProvClose`.
+- **Not run, and required before landing:** the Python guards in `realm-test`
+  (`check-citations.py`, `check-docnumbers.py`, `check-stale-guards.py`) need the owner's working
+  tree, not a shadow.
