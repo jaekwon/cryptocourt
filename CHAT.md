@@ -221,6 +221,45 @@ text, never anchors, which is free and removes the click.
 would otherwise delete the evidence for exactly the longest-lived consequences.
 The pruner is cut from v1: worse half-done than absent.
 
+### The reporting carve-out, and what it costs
+
+A message that reads as a WARNING is recorded and left for a person. This was not a
+preference; it was forced. gemma3:4b cannot separate reporting a scam from sending one —
+every variant was flagged, including a warning containing no lure at all (`scam` 0.95) —
+and no prompt wording moved it. Punishing the difference means kicking somebody for
+protecting the room and hiding what they wrote, so `scan.Reporting` matches the shape and
+the scanner records the verdict, applies nothing, and logs it.
+
+It is gameable and known to be: reporting-shaped framing is a reliable way to keep flagged
+content on screen, which is asserted as a test rather than hidden. The carve-out's whole
+defence is that a PERSON looks.
+
+**So the queue of deferred messages is a target, and it was open.** Until `review` existed
+the deferred messages were visible only as a line on a daemon's stdout — not queryable,
+not durable, gone with the next rotation. Verified: a real gemma3:4b run on "careful
+everyone, someone just DMed me asking for my seed phrase" stored `verdict='scam'` with no
+consequence, and `kourtchatctl list` did not mention it.
+
+And once it existed, filling it turned out to be cheaper than evading the classifier.
+Measured against the flat queue, one address staying inside the throttle:
+
+    attempted 200, accepted 70, queue 71 rows
+    the first 20 rows an operator reads:  20 of 20 the attacker's
+    the single genuine report:            position 71 of 71
+
+No evasion was needed. Reporting-shaped text is what gets carved out, so the attacker
+writes exactly that and varies a number so the skeleton dedup never fires.
+
+The answer is NOT a new punishment. Flooding is indistinguishable from diligent reporting
+to the same classifier that already failed to separate reporting from sending, so acting
+on the pattern automatically just relocates the false positive somewhere less visible.
+Instead the view is flood-resistant: `review` groups by author, so seventy messages are one
+row saying seventy, and `dismiss -from` clears an author in one command — grouping the view
+without grouping the action would have lost at the dismissal step instead of the reading
+step. The count is also a better signal than any single message, and one the tool does not
+have to interpret: nobody files seventy incidents in twenty minutes. Different names and
+different courts from one address are reported for the same reason.
+
 ## 8. What this costs
 
 `MODERATION.md`'s standing anchor is that address-keyed defences fall to sybils;
