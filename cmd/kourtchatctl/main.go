@@ -855,9 +855,17 @@ func cmdHide(ctx context.Context, s *chat.Store, argv []string) {
 	if err != nil {
 		die("%v", err)
 	}
+	// The specific sentence for the case we recognise, and the real error otherwise — which is
+	// what `reveal` below has always done. Discarding err here meant a hide against a closed or
+	// unwritable database reported "already out of sight", sending an operator to `list` to look
+	// for a consequence that was never the problem.
 	if err := s.HideMessage(ctx, id); err != nil {
-		die("message %d exists but is already out of sight — a consequence hides one (see `list`) "+
-			"and so does the scanner for a disclosed secret (`reveal` puts that back)", id)
+		if errors.Is(err, chat.ErrNotVisible) {
+			die("message %d exists but is already out of sight — a consequence hides one "+
+				"(see `list`) and so does the scanner for a disclosed secret (`reveal` puts "+
+				"that back)", id)
+		}
+		die("%v", err)
 	}
 	fmt.Printf("message %d is hidden in place: %q\n", id, chat.Preview(body))
 	fmt.Printf("nobody was punished for it and its author was told nothing; `reveal %d` undoes this.\n", id)

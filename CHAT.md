@@ -1007,6 +1007,22 @@ reversed by X on <date>" from "no consequence N".
 
 `dismiss` and `freeze` were already honest, which is why only two changed.
 
+**And a fourth, found by comparing two adjacent verbs.** `hide` discarded HideMessage's error and
+printed one sentence for every failure — "message N exists but is already out of sight — a
+consequence hides one (see `list`)…". `reveal`, immediately below it in the same file, had always
+done the opposite: pass an unexpected error through with `die("%v", err)` and reserve its own
+sentence for the case it actually recognises.
+
+Measured on a read-only database file, the same command before and after:
+
+    before   message 1 exists but is already out of sight — a consequence hides one (see `list`)…
+    after    attempt to write a readonly database (8)
+
+The first sends an operator to hunt a consequence that was never the problem. `ErrNotVisible` is a
+sentinel now, for the reason `ErrNoConsequence` is one, and `hide` recognises it with `errors.Is`
+and passes everything else through. The paired arm is the one that matters: a closed database must
+NOT satisfy that sentinel, or the fix has only moved the confusion.
+
 **And then the same audit found a third, in the field those messages quote.** `-by` defaulted to
 the literal string `"operator"`, so omitting it wrote a value that reads like an attribution and
 answers nothing. The column's own schema default is the empty string; the CLI was overriding an

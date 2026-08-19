@@ -126,6 +126,18 @@ var (
 	// reversed by bob" while the row said alice. In the one place this design keeps an audit trail
 	// on purpose, the tool credited the wrong person for somebody else's decision.
 	ErrNoConsequence = errors.New("no such consequence")
+
+	// ErrNotVisible is HideMessage's "there was nothing to hide", and it is a sentinel for the
+	// reason ErrNoConsequence is one: without it the caller cannot tell that case from a real
+	// failure. `kourtchatctl hide` discarded the error entirely and printed "message N exists but
+	// is already out of sight" for anything HideMessage returned — measured, a hide against a
+	// closed database returns "sql: database is closed" and the operator was told the message was
+	// already hidden.
+	//
+	// Reveal, the verb next door, had it right: it passes an unexpected error through with
+	// die("%v", err) and reserves its own sentence for the case it actually recognises. This is
+	// the same shape, made checkable.
+	ErrNotVisible = errors.New("no visible message")
 )
 
 // Store owns the database. Two handles on purpose.
@@ -997,7 +1009,7 @@ func (s *Store) HideMessage(ctx context.Context, id int64) error {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return fmt.Errorf("no visible message %d", id)
+		return fmt.Errorf("%w %d", ErrNotVisible, id)
 	}
 	return nil
 }

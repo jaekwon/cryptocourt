@@ -2428,3 +2428,57 @@ func TestTheThrottleBlamesTheAddressRatherThanTheReader(t *testing.T) {
 		t.Errorf("the cap refusal must quote both the count and the window: %q", capErr.Error())
 	}
 }
+
+// HIDE'S "NOTHING TO HIDE" MUST BE TELLABLE FROM A REAL FAILURE.
+//
+// kourtchatctl's hide verb discarded the error and printed "message N exists but is already out of
+// sight" for anything HideMessage returned. Measured: a hide against a closed database returns
+// "sql: database is closed", and the operator was told the message was already hidden — sent to
+// `list` to look for a consequence that was never the problem. Same class as `unban 999` reporting
+// the driver's "sql: no rows in result set", and as a wrong --db reporting "out of memory".
+//
+// Reveal, the verb next door, had it right all along: it passes an unexpected error through and
+// reserves its own sentence for the case it recognises. This makes hide's case checkable.
+func TestHideDistinguishesNothingToHideFromARealFailure(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	id, err := s.Post(ctx, PostInput{
+		Chain: "dev", Court: "orem", Moniker: "alice", Body: "a message worth hiding once",
+		IPHash: "ip-a", NetHash: "net-a",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = clock
+
+	// THE PAIRED ARM FIRST: hiding a visible message works, without which every assertion below
+	// would be satisfied by a HideMessage that always failed.
+	if err := s.HideMessage(ctx, id); err != nil {
+		t.Fatalf("hiding a visible message must work: %v", err)
+	}
+
+	// The recognised case, as a sentinel rather than a string.
+	err = s.HideMessage(ctx, id)
+	if err == nil {
+		t.Fatal("hiding an already-hidden message must not report success")
+	}
+	if !errors.Is(err, ErrNotVisible) {
+		t.Errorf("want ErrNotVisible so the caller can recognise it without matching prose, "+
+			"got %#v", err)
+	}
+	// The id stays in the text, because an operator acting on several ids needs to know which.
+	if !strings.Contains(err.Error(), fmt.Sprint(id)) {
+		t.Errorf("the error must name the message: %q", err.Error())
+	}
+
+	// And a real failure must NOT wear that sentinel, or the fix has only moved the confusion.
+	s.Close()
+	err = s.HideMessage(ctx, id)
+	if err == nil {
+		t.Fatal("a hide against a closed database must fail")
+	}
+	if errors.Is(err, ErrNotVisible) {
+		t.Errorf("a closed database is not \"nothing to hide\"; the caller would print the wrong "+
+			"diagnosis: %v", err)
+	}
+}
