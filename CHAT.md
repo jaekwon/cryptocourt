@@ -105,6 +105,29 @@ keyed HMAC whose privacy claim is stated exactly: it defends against a stray cop
 of the database file, **not** a host compromise or a whole-data-directory backup,
 because IPv4 is 2^32 and anyone holding both recovers every address in seconds.
 
+**One address, one hash, however it is spelled** — and this was broken in the direction that reports
+success. `Prefix` keyed on `Is4()`, and an IPv4-MAPPED address is not `Is4()`: "::ffff:203.0.113.7",
+which is how a dual-stack access log and some proxies write an IPv4 client, took the IPv6 /64 branch.
+
+    hash of ::ffff:203.0.113.7    1689b677c286   prefix ::/64
+    hash of 203.0.113.7           3cb5bdc7c74a   prefix 203.0.113.7/32
+
+`ClientIP` unmapped before hashing, so the server stored the second. An operator pasting the mapped
+form into `kourtchatctl hash` got the first, banned it, was told the consequence was recorded, and
+the person kept posting. **A ban that reports success and does nothing is the worst failure this
+tool has**, because every surface an operator can check agrees the matter was handled. The same line
+also meant the /64 of any mapped address is `::/64`, so every IPv4 client collapsed onto one hash.
+
+`Prefix` and `NetPrefix` unmap themselves now, rather than the CLI doing it, because there were
+already four call sites and a caller that forgets gets a confident wrong answer instead of an error.
+
+**The two granularities differ on purpose, and an operator has to know which one they are using.**
+IPv4 is hashed per address (/32) so a routine kick does not take the neighbours; IPv6 is hashed per
+/64 because a host is normally delegated the whole thing and a /128 consequence expires whenever its
+target likes. So two IPv6 addresses in one /64 SHARE a hash, by design — banning an IPv6 "address"
+bans its /64. Both are asserted, including the sharing, so neither can be mistaken for the collapse
+bug above.
+
 ## 4. Sanitise for display; skeletonise for comparison
 
 The first implementation did both in one function and did both badly. Measured
