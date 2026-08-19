@@ -336,6 +336,38 @@ and letting an operator's action raise it would mean one human intervention quie
 every later automated verdict harsher, in a design whose whole safety argument is that
 automation cannot reach for the severe end.
 
+**A HEDGED VERDICT REACHES NOBODY, AND THAT IS TWO RULES MEETING.** `MinConfidence` is 0.6:
+a label the model is less sure of than that is rewritten to `unknown`, because a punishment
+path must not be a dice roll. Separately, `sqlAwaitingReview` excludes `unknown`, because a
+message nobody suspects is not a review item. Each is right alone. Together they mean a
+suspicion the model half-believes earns no consequence AND no human look — it is recorded,
+the message stays on screen, and nothing surfaces it. Same composition shape as the outage in
+§9: two defensible rules whose product is a silence.
+
+It is left as it stands, deliberately. Routing every 0.25 hunch about a stranger into the
+queue defeats what §7's queue is for, and where that line belongs is an operator's judgement
+rather than a default worth guessing at. It is pinned as current behaviour in
+`TestAHedgedVerdictReachesNeitherAConsequenceNorAReviewer`, so moving it is a decision
+somebody makes rather than a thing that drifts.
+
+**THE MONIKER IS NEVER CLASSIFIED**, and that is on evidence, not just the §8 design note.
+`Claim` selects the body; "Kourt Support" and "admin" are invisible to moderation, so a scam's
+credibility half is structurally outside the input. Closing that looked obviously right and
+measurement says the opposite:
+
+    "[dave] I can restore your account access…"             scam 0.25 -> 0.85
+    "[kourt-moderator] I can restore your account access…"  scam 0.25 -> 0.25
+
+gemma3:4b reads a claimed moderator restoring accounts as legitimate, and the same sentence
+from "dave" as a scam that crosses the confidence bar. The name is not uninformative to the
+model — it is a DISCOUNT on precisely the message an impersonator sends, and feeding it in
+would hand that discount over.
+
+What holds the line instead is that the ASK is in the body: "message me privately", "DM me",
+"contact me directly" cannot be smuggled into a 24-rune name. Two of the three asks measured
+are acted on at 0.85. The third is the 0.25 above — which, per the previous point, is the one
+that disappears.
+
 ## 7. Display moderation
 
 A ban stops new posts; the scam link stays pinned in the court forever. For a
