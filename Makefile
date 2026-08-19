@@ -1,12 +1,11 @@
-.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat \
-	guards staleguards anchors paths \
-	scenarios scenarios-check demo-physics
+.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
+	scenarios scenarios-check demo-physics height-shim dump-demo seed-demo web-test web-visual
 
 # Everything that can run without a node.
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors paths guards staleguards demo-physics scenarios-check realm-test
+check: fmt vet gotest anchors paths guards staleguards demo-physics scenarios-check web-test height-shim realm-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -38,9 +37,45 @@ staleguards:
 demo-physics:
 	python3 scripts/check-demo-physics.py
 
+# Every height read in the realm must go through heightNow(), or a seeded
+# chain sees two different heights in one transaction. 65 call sites; nobody
+# re-checks those by eye.
+height-shim:
+	python3 scripts/check-height-shim.py
+
+# The overlay's own regression suite. It lived in a scratch directory until r31,
+# where it could not be enumerated: two harnesses had been broken for fourteen
+# rounds by a rename, and ten more by one commit that was reported green because
+# only four were run by hand. Skips cleanly with no node, like realm-test does
+# with no gno; REQUIRE_NODE=1 makes a missing node a failure instead.
+# The browser half: real layout measurement, needs puppeteer. NOT in `check` —
+# it wants a headless Chrome, and the gate must not. It caught a grid rule that
+# put the whole page body below the sidebar, which reading the CSS did not.
+web-visual:
+	@if ! command -v node >/dev/null 2>&1; then \
+		echo "node not installed - skipping browser checks"; exit 0; \
+	fi; \
+	node web/tests/browser/run.js
+
+web-test:
+	@if ! command -v node >/dev/null 2>&1; then \
+		if [ -n "$$REQUIRE_NODE" ]; then echo "node not installed"; exit 1; fi; \
+		echo "node not installed - skipping web tests"; exit 0; \
+	fi; \
+	node web/tests/run.js
+
+# Regenerate the chain-true half of the demo dataset from a seeded node. NOT part
+# of `check`: it needs a running chain, and `check` must not. Seed one first with
+# scripts/seed-node.sh, then point this at it via REMOTE=.
+dump-demo:
+	python3 scripts/dump-demo.py --remote "$${REMOTE:-http://127.0.0.1:26657}"
+
+seed-demo:
+	sh scripts/seed-node.sh scenarios/deep.py
+
 # `gofmt -l` PRINTS the offenders and exits 0, so this target was permanently
 # green: it listed unformatted files and passed anyway. Harmless while every Go
-# file in the tree sat behind a build tag and gofmt found nothing; a real gate now
+# file in the tree was behind a build tag and gofmt found nothing; a real gate now
 # that internal/ and cmd/ exist.
 fmt:
 	@out=$$(gofmt -l .); \
@@ -52,8 +87,8 @@ vet:
 
 # The Go tests. `go test ./...` matched NO packages until the chat service arrived —
 # every file in the tree was behind a gnochain or txtar tag — so `check` had no Go
-# test step at all, and 173 tests and subtests would have sat in the tree unrun.
-# That is exactly the position web/tests/ was in before it got a runner.
+# test step at all and 162 subtests would have sat in the tree unrun. That is
+# exactly the position web/tests/ was in before it got a runner.
 gotest:
 	go test ./internal/... ./cmd/...
 
@@ -139,16 +174,14 @@ chain-test:
 # runs it with --check so a stale generated file fails the build instead of
 # quietly disagreeing with its source.
 scenarios:
-	@for f in scenarios/*.py; do \
-		[ -e "$$f" ] || continue; \
+	@for f in $$(python3 scripts/scenario.py --list-ci); do \
 		out="gnoland/testdata/scn_$$(basename $$f .py).txtar"; \
 		python3 scripts/scenario.py "$$f" --out "$$out" || exit 1; \
 	done
 
 scenarios-check:
 	@rc=0; tmp="$$(mktemp -d)"; trap 'rm -rf "$$tmp"' EXIT; \
-	for f in scenarios/*.py; do \
-		[ -e "$$f" ] || continue; \
+	for f in $$(python3 scripts/scenario.py --list-ci); do \
 		n="$$(basename $$f .py)"; out="gnoland/testdata/scn_$$n.txtar"; \
 		python3 scripts/scenario.py "$$f" --out "$$tmp/$$n.txtar" >/dev/null || exit 1; \
 		if ! cmp -s "$$out" "$$tmp/$$n.txtar"; then \
@@ -158,7 +191,9 @@ scenarios-check:
 	for t in gnoland/testdata/scn_*.txtar; do \
 		[ -e "$$t" ] || continue; \
 		src="scenarios/$$(basename $$t .txtar | sed 's/^scn_//').py"; \
-		[ -e "$$src" ] || { echo "$$t has no scenario ($$src) — it runs in txtar-test with no source"; rc=1; }; \
+		[ -e "$$src" ] || { echo "$$t has no scenario ($$src) — it runs in txtar-test with no source"; rc=1; continue; }; \
+		python3 scripts/scenario.py --list-ci | grep -q "/$$(basename $$src)$$" || \
+			{ echo "$$t was generated from $$src, which is now CI = False — delete the txtar"; rc=1; }; \
 	done; \
 	[ $$rc -eq 0 ] && echo "scenarios-check: every generated txtar matches its scenario."; \
 	exit $$rc

@@ -52,9 +52,25 @@ def realm_const(name, *files):
 
 
 def demo_region(src):
-    a = src.index("const DEMO = {")
-    b = src.index("const DEMO_ME")
-    return src[a:b]
+    """The CHAIN-TRUE half of the dataset.
+
+    Round 28 split DEMO into a generated half (`DEMO_CHAIN`) and a hand-written
+    overlay (`DEMO_OVERLAY`: desc, nested folders, relations, voteEndsAt — none
+    of which a node can answer). Every invariant here is about chain-derived
+    quantities, so this reads the generated half. `const DEMO = {` is still
+    accepted so the checker works on a tree from before the split.
+    """
+    for marker in ("const DEMO_CHAIN = {", "const DEMO = {"):
+        a = src.find(marker)
+        if a >= 0:
+            break
+    else:
+        die("web/index.html defines neither DEMO_CHAIN nor DEMO")
+    for tail in ("/* ===== END GENERATED DEMO DATA", "const DEMO_ME"):
+        b = src.find(tail, a)
+        if b >= 0:
+            return src[a:b]
+    die("could not find the end of the dataset region")
 
 
 def _brace_block(text, start):
