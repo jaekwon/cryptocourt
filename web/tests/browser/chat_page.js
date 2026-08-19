@@ -196,6 +196,24 @@ async function courtPage(browser, opts) {
     await page.close();
   }
 
+  // The dry-run notice's element must be hidden by the MARKUP, not merely empty.
+  //
+  // The node harness models this with a stub default, which is exactly the kind of thing a
+  // stub can get wrong — so the real attribute is checked here, in a real parser, on the real
+  // shell. Demo mode never fetches health, so the notice must stay hidden throughout.
+  {
+    const {page, errors} = await courtPage(browser);
+    const r = await page.evaluate(() => {
+      const d = document.querySelector("#courtchat .chatdry");
+      return {present: !!d, hidden: d ? d.hidden : null, text: d ? d.textContent : null};
+    });
+    ok("the panel has somewhere to put a dry-run notice", r.present);
+    ok("...hidden by the markup, not just empty", r.hidden === true);
+    ok("...and empty in demo mode, which never asks", r.text === "");
+    ok("no errors: " + (errors[0] || "none"), errors.length === 0);
+    await page.close();
+  }
+
   // ---------------------------------------------------------------- esc(), hardened
   // The page's own escaper, checked here because it lives in index.html and the change
   // to it was made for chat's sake. Sliced the way the sibling harnesses do.

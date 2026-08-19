@@ -608,3 +608,62 @@ func TestAFrozenCourtIsNotScannedOrQueued(t *testing.T) {
 		}
 	}
 }
+
+// THE PUBLIC HEALTH ENDPOINT MUST NOT HELP SOMEBODY CHOOSE A MOMENT.
+//
+// It is unauthenticated, and it was returning the operator's whole telemetry: `enforcing`,
+// `backlog`, `scanner_seen_at` and `unscannable`. Those are the four things an attacker wants
+// — nobody is being punished right now, the scanner is N messages behind, it last ran at this
+// timestamp, it fails this often — and measured on a running server an anonymous GET returned
+// all of them. No client in this repo read any of them; `kourtchatctl status` reads the
+// database directly.
+//
+// `enforcing` stays, because §6 requires the panel to disclose dry-run mode and that asymmetry
+// favours the honest side: an attacker learns it in one post, a reader cannot learn it at all.
+func TestPublicHealthWithholdsOperatorTelemetry(t *testing.T) {
+	srv, store, _ := newServer(t)
+	ctx := context.Background()
+
+	// Give it something to leak: a backlog, a heartbeat, and an unscannable row.
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "an unscanned message")); rec.Code != 200 {
+		t.Fatal("setup post failed")
+	}
+	if err := store.Heartbeat(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	h, err := store.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Backlog == 0 || h.ScannerSeen == 0 || !h.Enforcing {
+		t.Fatalf("precondition: there must be telemetry to withhold, got %+v", h)
+	}
+
+	body := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+	for _, field := range []string{"backlog", "scanner_seen_at", "unscannable"} {
+		if strings.Contains(body, field) {
+			t.Errorf("the public health endpoint must not carry %q: %s", field, body)
+		}
+	}
+	// PAIRED POSITIVE: it still answers the two things it is for, or it is not a health
+	// endpoint at all.
+	var pub struct {
+		OK        bool `json:"ok"`
+		Enforcing bool `json:"enforcing"`
+	}
+	if err := json.Unmarshal([]byte(body), &pub); err != nil {
+		t.Fatal(err)
+	}
+	if !pub.OK || !pub.Enforcing {
+		t.Errorf("it must still report ok and enforcing: %s", body)
+	}
+
+	// AND THE OPT-IN, so an operator whose monitoring wants the numbers can have them.
+	srv.HealthDetail = true
+	body = do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/health", nil)).Body.String()
+	for _, field := range []string{"backlog", "scanner_seen_at", "unscannable", "enforcing"} {
+		if !strings.Contains(body, field) {
+			t.Errorf("with -health-detail the response must carry %q: %s", field, body)
+		}
+	}
+}

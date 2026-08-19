@@ -361,6 +361,30 @@ function freePort() {
       }
     }
 
+    // ------------------------------------------------------- THE DRY-RUN DISCLOSURE
+    //
+    // §6 required the panel to say when moderation is not applying timeouts, and nothing
+    // implemented it — no client fetched /api/chat/health at all while CHAT.md said the panel
+    // derived its label from it. The server here runs with no scanner, so enforcing is false.
+    {
+      const h = await (await fetch(base + "/api/chat/health")).json();
+      ok("the public health endpoint reports enforcing", h.enforcing === false);
+      ok("...and withholds the operator's timing telemetry",
+         h.backlog === undefined && h.scanner_seen_at === undefined &&
+           h.unscannable === undefined);
+
+      // The page mounted at the start of this run, against this same server, so its notice
+      // has already been fetched — the health request happens once per mount.
+      await page.waitForFunction(
+        () => !document.querySelector("#livechat .chatdry").hidden, {timeout: 20000});
+      const dry = await page.evaluate(() =>
+        document.querySelector("#livechat .chatdry").textContent);
+      ok("the panel discloses that timeouts are not being applied",
+         /not applying timeouts/.test(dry));
+      ok("...without telling anybody they are safe to try",
+         !/safe|will not|won't|free/i.test(dry));
+    }
+
     // ------------------------------------------------------- A CLOSED COURT
     //
     // Last, because freezing is terminal for this court. Freeze gated only Post until this

@@ -196,8 +196,12 @@ function mkEl() {
 }
 function mkRoot() {
   const kids = {};
-  for (const c of [".chatlog", ".chatstate", ".chatnote", ".chatform",
+  for (const c of [".chatlog", ".chatstate", ".chatnote", ".chatdry", ".chatform",
                    ".chatmoniker", ".chatinput", ".chatsend"]) kids[c] = mkEl();
+  // Modelling the shell's own markup: chatPanelHtml emits `<div class="chatdry" hidden>`, so
+  // the stub must start hidden or a test of "says nothing" passes on a stub default instead of
+  // on the code. The real attribute is checked in web/tests/browser/chat_page.js.
+  kids[".chatdry"].hidden = true;
   const root = mkEl();
   root.querySelector = s => kids[s] || null;
   root.k = kids;
@@ -365,6 +369,61 @@ function mkDoc() {
     stop();
   }
 
+  // THE PANEL MUST NOT CLAIM MODERATION THAT IS NOT HAPPENING.
+  //
+  // §6 said the panel's label derived from health.enforcing. Nothing in the repo fetched that
+  // endpoint at all — the property was documented and unimplemented, which is the worst of
+  // the three possible states. Now it is fetched once per mount.
+  {
+    ok("wording is factual, not an invitation",
+       chatDryRunNotice({enforcing: false}) ===
+         "Automatic moderation is not applying timeouts on this server right now.");
+    ok("...and says nothing when moderation IS enforcing",
+       chatDryRunNotice({enforcing: true}) === "");
+    // Not knowing is not the same as knowing it is off. A failed or absent health read must
+    // stay silent, because a wrong warning is worse than none.
+    ok("silent when health is unavailable", chatDryRunNotice(null) === "");
+    ok("silent when the field is missing", chatDryRunNotice({}) === "");
+    ok("silent on a non-boolean", chatDryRunNotice({enforcing: "no"}) === "");
+
+    const now = Math.floor(Date.now() / 1000);
+    const mount = async enforcing => {
+      FETCH = async url => {
+        if (String(url).includes("/health")) {
+          return enforcing === null
+            ? {ok: false, status: 500, json: async () => ({})}
+            : {ok: true, json: async () => ({ok: true, enforcing})};
+        }
+        return {ok: true, json: async () => ({
+          messages: [{id: 1, moniker: "a", body: "a message", country: "", suffix: "",
+                      created_at: now}], you: {state: "ok"}, next: 1})};
+      };
+      const el = mkRoot();
+      const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem"});
+      await tickMicro(); await tickMicro(); await tickMicro();
+      const r = {text: el.k[".chatdry"].textContent, hidden: el.k[".chatdry"].hidden};
+      stop();
+      return r;
+    };
+    let r = await mount(false);
+    ok("a dry-run server is disclosed in the panel", /not applying timeouts/.test(r.text));
+    ok("...and the notice is visible", r.hidden === false);
+    r = await mount(true);
+    ok("an enforcing server says nothing", r.text === "" && r.hidden === true);
+    r = await mount(null);
+    ok("an unreachable health endpoint says nothing", r.text === "" && r.hidden === true);
+  }
+
+  // Demo mode must not reach the network for this either.
+  {
+    FETCHES = [];
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "demo"}, court: "orem", doc: mkDoc()});
+    await tickMicro(); await tickMicro();
+    ok("the health check does not fire in demo mode", FETCHES.length === 0);
+    stop();
+  }
+
   // A CLOSED COURT IS NOT A BROKEN ONE. 410 means an operator withdrew the court from
   // service, and reporting that as "unreachable" sends a reader to reload and an operator
   // to check the network for something working exactly as intended. It must also stop
@@ -411,9 +470,17 @@ function mkDoc() {
   // clearTimeout is for, so the timer is what is counted: a pending callback holds its
   // closure, and through it the whole detached panel, until it fires.
   {
+    // Counts TRANSCRIPT fetches only. A mount also asks /api/chat/health once, for the
+    // dry-run notice, and counting every request made this assertion fail for a reason that
+    // had nothing to do with the poller.
     let calls = 0;
-    FETCH = async () => { calls++; return {ok: true, json: async () => ({
-      messages: [], you: {state: "ok"}, next: 0})}; };
+    FETCH = async url => {
+      if (String(url).includes("/health")) {
+        return {ok: true, json: async () => ({ok: true, enforcing: true})};
+      }
+      calls++;
+      return {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    };
     const pending = new Set();
     const realSet = global.setTimeout, realClear = global.clearTimeout;
     global.setTimeout = (f, d) => { const id = realSet(f, d); pending.add(id); return id; };

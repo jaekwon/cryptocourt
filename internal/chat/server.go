@@ -40,6 +40,21 @@ type Server struct {
 		Country(netip.Addr) string
 	}
 
+	// HealthDetail serves the operator's numbers — backlog, heartbeat, unscannable — on the
+	// public /api/chat/health. OFF by default, and that default is the finding.
+	//
+	// Those numbers are exactly what an attacker needs to time an attack: `enforcing:false`
+	// says nobody is being punished at this moment, a large `backlog` says the scanner is
+	// behind so post now, and `scanner_seen_at` says whether it is alive and how long ago it
+	// ran, which is not otherwise observable. Measured on a running server: an anonymous
+	// GET returned all four, and no client in this repo reads any of them —
+	// `kourtchatctl status` gets them from the database directly.
+	//
+	// `enforcing` stays public because it has a legitimate consumer: the panel says so when
+	// moderation is in dry run, per §6, and that asymmetry favours the honest side. An
+	// attacker can discover dry-run mode in one post; a reader cannot discover it at all.
+	HealthDetail bool
+
 	Log *log.Logger
 }
 
@@ -121,6 +136,13 @@ func writeErr(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
 }
 
+// publicHealth is what an anonymous caller gets: enough to keep the page honest, and
+// nothing that helps somebody choose a moment.
+type publicHealth struct {
+	OK        bool `json:"ok"`
+	Enforcing bool `json:"enforcing"`
+}
+
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if s.cors(w, r) {
 		return
@@ -130,7 +152,11 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "health unavailable")
 		return
 	}
-	writeJSON(w, http.StatusOK, h)
+	if s.HealthDetail {
+		writeJSON(w, http.StatusOK, h)
+		return
+	}
+	writeJSON(w, http.StatusOK, publicHealth{OK: h.OK, Enforcing: h.Enforcing})
 }
 
 // path splits /api/chat/{chain}/{court}.

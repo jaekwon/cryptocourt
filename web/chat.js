@@ -159,6 +159,7 @@ function chatPanelHtml(slug, moniker, note) {
     +     " and nobody can move funds for you</span>"
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
+    + '<div class="chatdry" hidden></div>'
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
     +   '<input class="chatmoniker" maxlength="24" placeholder="name"'
@@ -236,6 +237,33 @@ async function chatFetch(base, chain, court, limit) {
   };
 }
 
+// chatHealth asks whether moderation is actually applying timeouts.
+//
+// §6 says the panel must not claim moderation that is not happening, and until now nothing
+// implemented that — no client in the repo fetched this endpoint at all, while CHAT.md said
+// the panel derived its label from it. One request per mount, and a failure is silent: not
+// knowing is not the same as knowing it is off, and a wrong warning is worse than none.
+async function chatHealth(base) {
+  try {
+    const r = await fetch(base + "/api/chat/health", {cache: "no-store"});
+    if (!r.ok) return null;
+    const d = await r.json();
+    return typeof d.enforcing === "boolean" ? d : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// chatDryRunNotice is the wording, kept apart from the fetch so it can be tested directly.
+//
+// Deliberately factual rather than either reassuring or inviting. It does not say "you will
+// not be punished", which reads as an invitation, and it does not stay silent, which would
+// let the panel imply a protection nobody is providing.
+function chatDryRunNotice(health) {
+  if (!health || health.enforcing !== false) return "";
+  return "Automatic moderation is not applying timeouts on this server right now.";
+}
+
 // chatPost sends one message.
 //
 // Content-Type: application/json is REQUIRED by the server and is not decoration —
@@ -288,6 +316,7 @@ const CHATCSS = `
 .chatempty{opacity:.55;padding:.3rem 0}
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
+.chatdry{margin:.4rem 0;font-size:.9em;opacity:.75}
 .chatform{display:flex;gap:.4rem;margin-top:.5rem}
 .chatmoniker{flex:0 0 8rem;min-width:0}
 .chatinput{flex:1 1 auto;min-width:0}
@@ -377,6 +406,18 @@ function mountChat(el, opts) {
     return () => { if (gen === CHATGEN) CHATGEN++; };
   }
 
+  // One health request per mount, in live mode only — demo mode makes no network calls.
+  chatHealth(base).then(h => {
+    if (!live()) return;
+    const notice = chatDryRunNotice(h);
+    if (!notice) return;
+    const el2 = el.querySelector(".chatdry");
+    if (el2) {
+      el2.textContent = notice;
+      el2.hidden = false;
+    }
+  });
+
   let timer = null;
   async function tick() {
     if (!live()) return;
@@ -436,5 +477,5 @@ function mountChat(el, opts) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {chatEsc, chatFlag, chatWhen, chatStatusLine, chatValidate,
     chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatBase,
-    chatFetch, chatPost, chatStyles, mountChat, CHATCSS};
+    chatFetch, chatPost, chatStyles, chatHealth, chatDryRunNotice, mountChat, CHATCSS};
 }
