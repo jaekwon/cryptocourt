@@ -482,6 +482,22 @@ when the false-positive rate is something you have measured rather than assumed.
 model at q4 will be wrong sometimes; the design bounds what being wrong costs
 (a timeout, never a ban) but it cannot make it not happen.
 
+**Give people somewhere to appeal, or the panel will not offer them one.**
+
+    bin/kourtchat --db chat.db --chain dev --appeal-to "mods@example.org"
+
+The panel told anyone it paused "You can appeal — quote reference 9" while no channel existed
+anywhere: not in the panel, not in this file, not in `kourtchatctl`. Everything on the operator
+side — `why`, `unban`, the evidence copy that outlives pruning — exists to service appeals, and
+the person invited to make one had nowhere to send it. The brief for that surface said a system
+with no reversal makes "appealable" a lie; a reversal nobody can reach is the same lie a step
+later.
+
+Unset, the panel gives the reference and promises nothing, because inventing a route is worse
+than admitting there is none. A contact with a newline, a control character, or more than 200
+characters is withheld rather than served — the panel escapes what it writes, so that is not the
+last line of defence, but it is somebody's misconfiguration and it should not reach a page.
+
 **Acting on an address you can see but the classifier never flagged.** The CLI takes
 hashes, so `hash` is the way in — added after an end-to-end test found there wasn't one:
 
