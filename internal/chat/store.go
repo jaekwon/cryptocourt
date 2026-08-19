@@ -579,6 +579,52 @@ func (s *Store) Recent(ctx context.Context, chain, court string, since int64, li
 	if frozen {
 		return nil, ErrPurged
 	}
+	out, err := s.recentFrom(ctx, chain, court, since, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// A CURSOR PAST EVERY ROW THAT EXISTS CANNOT BE VALID, so serve the room instead of
+	// nothing.
+	//
+	// `messages.id` is a rowid and prune can empty a court, at which point ids restart at 1 —
+	// see §7. A client that saved the `next` this endpoint hands back then asks for `id > 40000`
+	// in a court whose newest message is 12, and gets an empty room for as long as it takes to
+	// accumulate 40,000 messages again. Measured: cursor 3, room holding 3, client shown 0.
+	//
+	// An idle client's cursor EQUALS the newest visible id, so `since > max(id)` is false and it
+	// still correctly receives nothing. Only a cursor beyond every row — which the server cannot
+	// have issued for the rows now present — takes the fallback, and one fallback re-syncs the
+	// client, since the read it gets back carries current ids. A client inventing a large `since`
+	// gets a full read, which is what `since=0` would have given it.
+	//
+	// WHAT THIS DOES NOT FIX, because it cannot: if new ids have climbed back to EXACTLY the old
+	// cursor, `since == max(id)` is indistinguishable from idle using ids alone, and the client
+	// keeps a permanent gap below its cursor rather than a frozen room. Measured — a probe that
+	// pruned three messages and posted three saw nothing, which is how this limit was found
+	// rather than assumed. The unbounded case is the one that mattered: a court pruned of
+	// thousands leaves a cursor far past the handful of new rows, and that is now recovered on
+	// the next poll instead of after a whole retention window.
+	//
+	// The extra query runs only when the answer was empty AND a cursor was supplied, so a room
+	// with anything new in it pays nothing. That gate is a cost guard with no behavioural effect —
+	// dropping it survives every fixture, deliberately, because what it protects is the hot path's
+	// query count rather than any answer.
+	if len(out) == 0 && since > 0 {
+		var maxID int64
+		if err := s.r.QueryRowContext(ctx,
+			`SELECT coalesce(max(id),0) FROM messages WHERE chain=? AND court=?`,
+			chain, court).Scan(&maxID); err != nil {
+			return nil, err
+		}
+		if since > maxID {
+			return s.recentFrom(ctx, chain, court, 0, limit)
+		}
+	}
+	return out, nil
+}
+
+func (s *Store) recentFrom(ctx context.Context, chain, court string, since int64, limit int) ([]Message, error) {
 	rows, err := s.r.QueryContext(ctx, `SELECT id, moniker, body, country, suffix, created_at
 	  FROM messages WHERE chain=? AND court=? AND id > ? AND hidden=0
 	  ORDER BY id LIMIT ?`, chain, court, since, limit)

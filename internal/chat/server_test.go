@@ -784,3 +784,87 @@ func TestRetryAfterMatchesTheRefusalItDescribes(t *testing.T) {
 		t.Error("a throttle still has to say when to come back")
 	}
 }
+
+// A CURSOR PAST EVERY ROW THAT EXISTS MUST NOT FREEZE THE ROOM.
+//
+// The endpoint hands back `next` in every response, so a client is invited to poll incrementally.
+// `messages.id` is a rowid and prune can empty a court, at which point ids restart at 1 (§7) — so a
+// saved cursor asks for `id > 40000` in a court whose newest row is 12 and receives an empty room
+// until 40,000 more messages accumulate. Measured before the fix: cursor 8, room holding 2, client
+// shown 0.
+//
+// This panel does not use `since` — chat.js re-reads the last 50 rows every poll so that HIDING
+// becomes visible, which appending by id cannot do — so the fix is for every other client, and the
+// contract the endpoint advertises.
+func TestAStaleCursorRecoversInsteadOfShowingAnEmptyRoom(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	var ids []int64
+	for i := 0; i < 8; i++ {
+		id, err := post(t, s, "orem", "ip-a", "message "+string(rune('a'+i))+" about the docket")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+		*clock = clock.Add(MinInterval)
+	}
+	first, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor := first[len(first)-1].ID
+
+	// THE PAIRED POSITIVE, and it is the one that keeps this from being a full fetch every poll:
+	// an idle client's cursor equals the newest visible id, and must still receive nothing.
+	if m, err := s.Recent(ctx, "dev", "orem", cursor, 50); err != nil {
+		t.Fatal(err)
+	} else if len(m) != 0 {
+		t.Fatalf("an idle poll must return nothing, got %d — the fallback is firing on the "+
+			"common case and every poll is now a full read", len(m))
+	}
+
+	// Retention empties the court; ids restart well below the saved cursor.
+	for _, id := range ids {
+		if err := s.RecordVerdict(ctx, id, "clean"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	*clock = clock.Add(48 * time.Hour)
+	if res, err := s.Prune(ctx, 24*time.Hour, 1000); err != nil {
+		t.Fatal(err)
+	} else if res.Deleted != len(ids) {
+		t.Fatalf("precondition: the court must empty, deleted %d of %d", res.Deleted, len(ids))
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := post(t, s, "orem", "ip-b", "fresh message "+string(rune('a'+i))); err != nil {
+			t.Fatal(err)
+		}
+		*clock = clock.Add(MinInterval)
+	}
+
+	room, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(room) != 2 {
+		t.Fatalf("precondition: the room holds two new messages, got %d", len(room))
+	}
+	got, err := s.Recent(ctx, "dev", "orem", cursor, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(room) {
+		t.Errorf("a client polling with cursor %d sees %d of %d messages; a cursor past every "+
+			"row that exists cannot be valid and must fall back to a full read",
+			cursor, len(got), len(room))
+	}
+
+	// And an idle poll on the NEW ids is still quiet, so the fallback did not become permanent.
+	newCursor := room[len(room)-1].ID
+	if m, err := s.Recent(ctx, "dev", "orem", newCursor, 50); err != nil {
+		t.Fatal(err)
+	} else if len(m) != 0 {
+		t.Errorf("after re-syncing, an idle poll must be quiet again, got %d", len(m))
+	}
+}
