@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -211,9 +212,8 @@ func TestAZeroStampFallsBackToTheHeightGate(cur realm, t *testing.T) {
 	//
 	// The reopen branch (dispute.gno, OpenDispute's escrow arm) is the `else` of
 	// `provisional < 0`, so it is reached only on a claim that already has a
-	// provisional verdict — and its
-	// preceding guards are frozenAt, answerer, disputeOpen and verdictAt, all plain
-	// fields again.
+	// provisional verdict — and its preceding guards are frozenAt, answerer,
+	// disputeOpen and verdictAt, all plain fields again.
 	frank := testutils.TestAddress("zs-frank")
 	c7 := testCourt(cur, "zs7", frank, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(frank))
@@ -236,4 +236,70 @@ func TestAZeroStampFallsBackToTheHeightGate(cur realm, t *testing.T) {
 	// spoke, and a passing reopen would need a funded, weight-bearing disputer.
 	// The refusal above is anchored on its own message, which is the part that
 	// distinguishes this gate from the ones after it.
+
+	// ---- 8. THE RENDER SIDE OF THE SAME SENTINEL ---------------------------
+	// deadlineTime is pastDeadline's twin: the gates ask "has it passed?", this
+	// one asks "when?", and both must answer "unknowable" for a claim that
+	// predates the stamps. Deleting its `stamp == 0` return SURVIVED the whole
+	// corpus, because nothing exercised the one surface that shows it —
+	// ClaimTimeline's settle row.
+	//
+	// Without the guard, a claim whose answer carries no stamp publishes
+	// `settle:259200:<height>`: not a crash, not a wrong gate, just a
+	// real-looking deadline in January 1970 handed to whoever renders it. (The
+	// web client does special-case a zero stamp for the LABEL — it prints
+	// "≈block N" rather than a date — but it also sorts the ladder by that
+	// number, so a zero row climbs above `opened`. The producer owes the
+	// sentinel either way; the consumer only half-handles it.)
+	//
+	// THE ASYMMETRY IS THE POINT: openedAtTime stays real and only the ANSWER's
+	// stamp is missing. A fixture that zeroed both could not tell the settle row
+	// reading the wrong field from it reading the right one — measured, that
+	// mutation is caught here and nowhere else.
+	grace := testutils.TestAddress("zs-grace")
+	c8 := testCourt(cur, "zs8", grace, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(grace))
+	id8 := OpenClaim(cross(cur), "zs8", "What does a pre-stamp claim publish?")
+	cs8 := mustClaim(c8, id8)
+	if cs8.openedAtTime == 0 {
+		t.Fatal("fixture: openClaim must stamp openedAtTime, or the asymmetry " +
+			"this section turns on is gone and it proves nothing")
+	}
+	// A BLOCK APART, so answerHeight and openedAt are different numbers. Opened
+	// and answered in the same block they are equal, and the height half of the
+	// assertion below then passes against either field — measured: the emit site
+	// reading cs.openedAt survived the whole suite until this line existed.
+	testing.SkipHeights(1)
+	cs8.answerHeight = heightNow()
+	// answeredAtTime is left at zero, which is where PostAnswer would have
+	// written a stamp. Assigning 0 here was the first draft and it was a NO-OP —
+	// nothing but PostAnswer ever writes that field, so the fixture was zeroing
+	// something already zero and its comment claimed a shape it did not build.
+	if cs8.answeredAtTime != 0 {
+		t.Fatal("fixture: a claim that was never answered must carry no answer stamp")
+	}
+
+	// The settle row renders only while verdictAt is 0 and the claim is open,
+	// which is the state a fresh claim is already in. The trailing ";" anchors
+	// the height: ClaimTimeline always appends ";now:", so without it a want of
+	// ":1503603" would also match ":15036031".
+	tl := ClaimTimeline("zs8", id8)
+	want := ";settle:0:" + itoa(cs8.answerHeight+settleDelay) + ";"
+	if !strings.Contains(tl, want) {
+		t.Errorf("a pre-stamp claim must publish an unknowable settle stamp beside "+
+			"its real height: want %q in %q", want, tl)
+	}
+	// THE COMPLEMENT, on the same claim. Without it, ";settle:0:" is satisfied
+	// just as well by a row that is zero for EVERYBODY — measured: hardcoding the
+	// emit site to itoa(0) survived the suite while the assertion above passed.
+	// The absence-check that stood here instead was dead: ClaimTimeline emits at
+	// most one settle row, so it could only ever fire when the assertion above
+	// had already failed.
+	cs8.answeredAtTime = nowTime()
+	if got := ClaimTimeline("zs8", id8); !strings.Contains(got,
+		";settle:"+itoa(cs8.answeredAtTime+settleSecs)+":") {
+		t.Errorf("a stamped answer must publish its real settle date, not the "+
+			"sentinel: %q", got)
+	}
 }
+

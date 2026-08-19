@@ -6147,5 +6147,33 @@
     "label": "clock: the base cap widened 1000x, so a MILLISECOND base arms without complaint",
     "find": "\tmaxBase = int64(4102444800) // 2100-01-01T00:00:00Z",
     "replace": "\tmaxBase = int64(4102444800000) // 2100-01-01T00:00:00Z"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "clock.gno",
+    "label": "zero-stamp: deadlineTime invents a 1970 deadline for a pre-stamp claim",
+    "find": "\tif stamp == 0 {\n\t\treturn 0\n\t}\n\treturn stamp + secs",
+    "replace": "\treturn stamp + secs"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "clock.gno",
+    "label": "zero-stamp: the settle row is hardcoded to the sentinel for every claim",
+    "find": "itoa(deadlineTime(cs.answeredAtTime, settleSecs))",
+    "replace": "itoa(0)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "clock.gno",
+    "label": "zero-stamp: the settle row dates itself from the OPENING, not the answer",
+    "find": "deadlineTime(cs.answeredAtTime, settleSecs)",
+    "replace": "deadlineTime(cs.openedAtTime, settleSecs)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "clock.gno",
+    "label": "zero-stamp: the settle row's HEIGHT half is taken from the opening too",
+    "find": "\":\" + itoa(cs.answerHeight+settleDelay)",
+    "replace": "\":\" + itoa(cs.openedAt+settleDelay)"
   }
 ]
