@@ -1017,3 +1017,112 @@ func TestACourtCanBeFrozenAgainAfterBeingLifted(t *testing.T) {
 		}
 	}
 }
+
+// A REFUSAL MUST NAME THE RIGHT FIELD AND SAY WHAT WOULD BE ACCEPTED.
+//
+// The server used to write `"moniker: " + err.Error()`, and the sanitiser's messages are phrased
+// for a message BODY, so a rejected name came back as:
+//
+//	{"error":"moniker: message is too long"}                  the wrong field, named twice over
+//	{"error":"message: message is too long"}                  a stutter on the other path
+//	{"error":"moniker: message contains control characters"}
+//
+// Three problems in one line: it names the wrong thing, it stutters, and it gives no LIMIT — while
+// the throttle two cases below says "one message every 2s" and "10 per 1m0s". A caller told only
+// "too long" can do nothing but guess, and the moniker's rule is not guessable, because it counts
+// LETTERS: marks do not consume the budget, so 24 is not a character count.
+func TestARefusalNamesTheFieldAndItsLimit(t *testing.T) {
+	for _, c := range []struct {
+		err         error
+		field       refusalField
+		wants       []string
+		mustNotHave []string
+	}{
+		{ErrTooLong, fieldMoniker,
+			[]string{"your name", "too long", strconv.Itoa(MaxMonikerRunes), "letters"},
+			[]string{"message", "characters"}},
+		{ErrTooLong, fieldBody,
+			[]string{"your message", "too long", strconv.Itoa(MaxBodyRunes), "characters"},
+			[]string{"name", "letters"}},
+		{ErrEmpty, fieldMoniker, []string{"name"}, []string{"message"}},
+		{ErrEmpty, fieldBody, []string{"something"}, []string{"name"}},
+		{ErrControl, fieldMoniker, []string{"your name", "cannot be displayed"}, []string{"message"}},
+		{ErrControl, fieldBody, []string{"your message", "cannot be displayed"}, []string{"name"}},
+		{ErrJoiners, fieldBody, []string{"your message", "joining"}, []string{"name"}},
+		{ErrMarks, fieldBody, []string{"your message", "accents"}, []string{"name"}},
+		{ErrOversize, fieldBody,
+			[]string{"your message", strconv.Itoa(MaxInputBytes), "bytes"}, []string{"name"}},
+	} {
+		got := refusalText(c.field, c.err)
+		label := "body"
+		if c.field == fieldMoniker {
+			label = "moniker"
+		}
+		t.Run(label+"/"+c.err.Error(), func(t *testing.T) {
+			for _, w := range c.wants {
+				if !strings.Contains(got, w) {
+					t.Errorf("must contain %q, got %q", w, got)
+				}
+			}
+			for _, n := range c.mustNotHave {
+				if strings.Contains(got, n) {
+					t.Errorf("must NOT contain %q — that is the other field's word, got %q", n, got)
+				}
+			}
+			// The stutter, asserted directly: it was the visible symptom.
+			if strings.Count(got, "message") > 1 {
+				t.Errorf("says \"message\" more than once, got %q", got)
+			}
+			if strings.Contains(got, ": message is") {
+				t.Errorf("the old stutter is back, got %q", got)
+			}
+		})
+	}
+}
+
+// The numbers must come from the constants, not from a literal that agrees with them today. Written
+// as a comparison rather than a fixed string so raising a limit updates the message for free.
+func TestARefusalQuotesTheLimitThatIsActuallyEnforced(t *testing.T) {
+	for _, c := range []struct {
+		field refusalField
+		limit int
+	}{{fieldMoniker, MaxMonikerRunes}, {fieldBody, MaxBodyRunes}} {
+		got := refusalText(c.field, ErrTooLong)
+		if !strings.Contains(got, strconv.Itoa(c.limit)) {
+			t.Errorf("refusal %q does not quote the enforced limit %d", got, c.limit)
+		}
+		// And no OTHER limit, which is how a copied line goes wrong: a name refusal quoting 400
+		// would send somebody trimming to the wrong length.
+		for _, other := range []int{MaxMonikerRunes, MaxBodyRunes, MaxInputBytes} {
+			if other == c.limit {
+				continue
+			}
+			if strings.Contains(got, strconv.Itoa(other)) {
+				t.Errorf("refusal %q quotes %d, which is a different limit", got, other)
+			}
+		}
+	}
+}
+
+// End to end, because the sentence is only useful if it reaches the caller: a refused name comes
+// back over HTTP as the composed text and not as the sanitiser's own words.
+func TestTheComposedRefusalIsWhatTheCallerReceives(t *testing.T) {
+	srv, _, _ := newServer(t)
+	long := strings.Repeat("ab", MaxMonikerRunes) // well over the letter limit, no identical run
+	rec := do(t, srv, postReq(t, "/api/chat/dev/orem", long, "hello there"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d %s", rec.Code, rec.Body)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "your name is too long") {
+		t.Errorf("the caller must get the composed sentence, got %s", body)
+	}
+	if strings.Contains(body, "moniker: message") {
+		t.Errorf("the old text is back, got %s", body)
+	}
+	// The paired positive: an acceptable name and body are not refused, so none of the above is
+	// passing for a server that rejects everything.
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "an ordinary message")); rec.Code != 200 {
+		t.Errorf("an ordinary post must succeed, got %d %s", rec.Code, rec.Body)
+	}
+}

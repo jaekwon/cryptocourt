@@ -298,6 +298,60 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 	writeJSON(w, http.StatusOK, getReply{Messages: msgs, Next: next, You: you})
 }
 
+// Which field a refusal is about, so the sentence can name it correctly.
+type refusalField int
+
+const (
+	fieldMoniker refusalField = iota
+	fieldBody
+)
+
+// refusalText turns a sanitiser error into something the person who typed it can act on.
+//
+// It used to be `"moniker: " + err.Error()`, and the sanitiser's messages are written for a
+// message BODY, so a rejected name read:
+//
+//	{"error":"moniker: message is too long"}                  the wrong field, named twice over
+//	{"error":"message: message is too long"}                  and a stutter on the other path
+//	{"error":"moniker: message contains control characters"}
+//
+// Three problems in one line. It names the wrong field, it stutters, and it gives no LIMIT — while
+// the throttle two cases below says "one message every 2s" and "10 per 1m0s". A caller told only
+// "too long" can do nothing but guess, and the moniker's rule is not guessable: it counts LETTERS,
+// so marks do not consume the budget and 24 is not a character count.
+//
+// The sentinels stay as identities and the sentence is composed here, at the boundary, which is
+// where presentation belongs — the store's callers want `errors.Is`, not prose. The numbers come
+// from the constants, so they cannot drift from what is enforced, and the wording follows
+// chatValidate in web/chat.js so the two surfaces do not contradict each other about one rule.
+func refusalText(f refusalField, err error) string {
+	name, thing := "your message", "characters"
+	limit := MaxBodyRunes
+	if f == fieldMoniker {
+		name, thing = "your name", "letters"
+		limit = MaxMonikerRunes
+	}
+	switch {
+	case errors.Is(err, ErrEmpty):
+		if f == fieldMoniker {
+			return "pick a name first"
+		}
+		return "type something"
+	case errors.Is(err, ErrTooLong):
+		return fmt.Sprintf("%s is too long (%d %s maximum)", name, limit, thing)
+	case errors.Is(err, ErrOversize):
+		return fmt.Sprintf("%s is far too long to process (%d bytes maximum)", name, MaxInputBytes)
+	case errors.Is(err, ErrControl):
+		return name + " contains characters that cannot be displayed"
+	case errors.Is(err, ErrJoiners):
+		return name + " contains too many invisible joining characters"
+	case errors.Is(err, ErrMarks):
+		return name + " stacks too many accents on one character"
+	}
+	// An unrecognised sanitiser error still has to say which field, and must not stutter.
+	return name + ": " + err.Error()
+}
+
 type postBody struct {
 	Moniker string `json:"moniker"`
 	Body    string `json:"body"`
@@ -335,12 +389,12 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 	}
 	moniker, err := SanitizeMoniker(in.Moniker)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "moniker: "+err.Error())
+		writeErr(w, http.StatusBadRequest, refusalText(fieldMoniker, err))
 		return
 	}
 	body, err := SanitizeBody(in.Body)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "message: "+err.Error())
+		writeErr(w, http.StatusBadRequest, refusalText(fieldBody, err))
 		return
 	}
 
