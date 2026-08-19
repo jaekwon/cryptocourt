@@ -140,6 +140,39 @@ because the cap never carried the evasion argument in the first place: `Skeleton
 "s‍c‍a‍m" to "scam" on its own, which is asserted beside the permissive cases so the reasoning
 cannot quietly lapse.
 
+**And the mark cap was the same mistake a THIRD time.** `maxMarks` was 3 — labelled "Zalgo
+defence", which reads as though lowering it were a security measure. Pointed Hebrew puts four
+marks on one consonant as a matter of course, dagesh and sin-dot and vowel and meteg, and five
+with a cantillation accent:
+
+    consonant + vowel                    1   accepted
+    + dagesh                             2   accepted
+    shin + dagesh + sin-dot + vowel      3   accepted
+    + meteg                              4   REFUSED
+    + cantillation accent as well        5   REFUSED
+
+Fully-voweled Arabic and Hebrew niqqud with cantillation both landed exactly ON the cap, so the
+scripts that need marks most had none of its headroom, and what the sender was told is that their
+message "stacks too many marks on one character".
+
+The paragraph above had already written the answer down twice and this constant still had the
+bug: `Skeleton` folds every mark away on its own — "s͡c͡a͡m", "s̈c̈äm̈" and a 14-mark monster all
+reduce to exactly "scam", and an obscured "s̈ëëd̈ p̈ḧräs̈ë" to "sendmeyourseedphrase", which the
+deterministic prefilter matches without help. So raising the cap costs zero evasion resistance,
+and that is asserted in a fixture beside the permissive cases rather than argued here.
+
+What survives is the LAYOUT argument, which is real but only at volume: a stack sits above its
+character until roughly a dozen marks and only then smears up through the line above. So the cap
+now sits above real text's ceiling rather than on top of it — 8, three clear of the measured
+maximum of five, still far below where a stack damages a page. The lesson these three share is
+that a small bare number guarding a display path is nearly always sitting inside the ordinary
+band, and that the two errors either side of it are not symmetric: refusing does not inconvenience
+somebody, it tells them their writing system is unacceptable.
+
+Note that the RUN cap (8 identical consecutive runes) behaves differently on purpose — it
+truncates rather than refusing, so "============" is stored as eight of them and "what!!!!!!!!!!!"
+keeps eight marks of emphasis. Silent, but it alters nobody's alphabet.
+
 Evasion resistance had to move out of the display path because mutating displayed
 text to fight homoglyphs corrupts the text of everyone whose alphabet is not
 English. The confusables table is hand-built, incomplete, and documented as such —
