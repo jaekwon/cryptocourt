@@ -640,8 +640,31 @@ Two consequences of that, both found by running it rather than reading it. The w
 which is exact at the instant it runs and wrong when recomputed later, so an old consequence hid
 everything posted after it. And a hide with no consequence behind it, which is what the §7
 carve-out produces for a disclosed secret, looked like one to undo: `hidden` distinguishes 1 (a
-consequence) from 2 (a secret), and only 1 is recomputed. Nothing un-hides a 2, which is stated
-at the code rather than left to be discovered.
+consequence) from 2 (a secret), and only 1 is recomputed.
+
+**Nothing un-hid a 2, and the limitation had been weighed against the wrong probability.** The
+comment at the code reasoned about "a noun list of exactly phrase length whose checksum passes by
+luck, one chance in sixteen at twelve words" — and luck is not the case that happens. A message
+reaches that path only when it is Reporting AND Secret: somebody asking **"is this a scam?"** and
+quoting the phrase they were sent. Measured live, their message goes out of sight with **zero
+consequences**, which is the carve-out working exactly as intended — and it was then invisible for
+good, with `dismiss` unable to help because dismiss records that a person looked and does not touch
+visibility. The carve-out exists to protect people who report abuse; permanently hiding the report
+was the wrong other half of it.
+
+    bin/kourtchatctl -db chat.db reveal 41
+
+The hiding itself stays right: a detector cannot tell a published test vector from somebody's actual
+key without a list of every vector ever published — both canonical BIP-39 vectors come back
+`secret=true` — and the harm is wildly asymmetric. What was wrong is that a KICK for the same
+message is reversible with `unban` while this was not.
+
+`reveal` is restricted to `hidden=2` and refuses anything else, because clearing `hidden` directly
+on a punished row would bypass the recompute above. It prints an eighteen-rune PREVIEW rather than
+the body: that body may be a real recovery phrase, and an operator's terminal and shell history are
+not where it belongs. A message that merely CONTAINS a phrase without reporting it is punished as
+scam and hidden=1 instead, where `unban` is the right verb — measured, because the first live run
+assumed otherwise.
 
 **The cited message is hidden whatever its age; the author's other messages only for ten
 minutes.** Those are two different rules and they were one for a while — the hide was a
