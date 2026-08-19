@@ -356,6 +356,26 @@ nothing to count to.
 The drift guard covers it, and this one fails SILENTLY without help: a renamed tag leaves the panel
 subtracting from the local clock again, with the state still correct, so only the duration lies.
 
+**The body is bounded before it is read, and too big is not malformed.** `http.MaxBytesReader` caps
+a POST at twice `MaxInputBytes` before `Decode` touches it — the sanitiser's per-field limit is
+checked afterwards and cannot bound memory. That part was already right. What the client was told
+was not:
+
+    100 kB of valid JSON   400  expected {"moniker":…,"body":…}     the JSON was fine
+    5 kB body              400  your message is far too long to process (4096 bytes maximum)
+    malformed JSON         400  expected {"moniker":…,"body":…}
+    ordinary post          200
+
+One condition — too much data — reported two ways depending on which check caught it, and the larger
+case blamed the JSON, sending a client to their serialiser when the fix is to send less. It is 413
+now, with the same number both regimes quote: the per-field limit that is the client's to work with,
+not the internal cap. Malformed JSON keeps its own message, asserted, because otherwise the fix
+could have been "call everything too large".
+
+413 was a status the panel had never seen. `chatPost` maps 429 and 410 by hand and falls back to
+"could not send (N)", so the server's sentence surviving that fallback is asserted rather than read
+off the code.
+
 **A REFUSAL HAS TO NAME THE RIGHT FIELD AND SAY WHAT WOULD BE ACCEPTED,** and for a while it did
 neither. The server wrote `"moniker: " + err.Error()`, and the sanitiser's messages are phrased for
 a message BODY, so a rejected name came back as `moniker: message is too long` — the wrong field,
