@@ -378,7 +378,22 @@ protecting the room and hiding what they wrote, so `scan.Reporting` matches the 
 the scanner records the verdict, applies nothing, and logs it.
 
 It is gameable and known to be: reporting-shaped framing is a reliable way to keep flagged
-content on screen, which is asserted as a test rather than hidden. The carve-out's whole
+content on screen, which is asserted as a test rather than hidden.
+
+**But it withheld the HIDE as well as the timeout, and those are different decisions.** Measured:
+"fyi here are my words: <a real BIP-39 phrase>" was recorded as scam and left readable
+indefinitely, because the message opened with three letters. Withholding the timeout is the
+point — the model flags warnings at 0.95, so punishing on its word means kicking people for
+protecting the room. Withholding the hide is not: a recovery phrase quoted by a well-meaning
+reporter is still a recovery phrase in a public room, and the harm is the disclosure rather than
+the intent.
+
+So a message the DETERMINISTIC layer finds a disclosed secret in goes out of sight whoever posted
+it, and nobody is punished for it. Narrow on purpose: never on the model's opinion, since that is
+the unreliable part, and never on the off-platform floor — a warning that quotes a scam link is
+useful, and the panel renders no URL as an anchor, so quoting one is not the harm. Quoting a
+secret is. Both arms are pinned, and a dry run still changes nothing, because `--enforce` off has
+to mean an operator can watch without the service acting. The carve-out's whole
 defence is that a PERSON looks.
 
 **So the queue of deferred messages is a target, and it was open.** Until `review` existed
