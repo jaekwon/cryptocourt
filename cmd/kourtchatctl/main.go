@@ -606,6 +606,17 @@ func cmdStatus(ctx context.Context, s *chat.Store) {
 	}
 	fmt.Printf("consequences   %d in force, %d ever\n", inForce, all)
 
+	// Loud, and phrased as what it means rather than as a number. An exhausted row leaves
+	// the backlog, never gets a verdict, and so never reaches the review queue either —
+	// so with every other line on this screen green, this is the only place an outage
+	// shows up at all. See chat.Health.Unscannable.
+	if h.Unscannable > 0 {
+		fmt.Printf("UNSCANNED      %d message(s) gave up after 5 failed attempts and were\n",
+			h.Unscannable)
+		fmt.Printf("               NEVER classified — nobody looked at them, automatically\n")
+		fmt.Printf("               or otherwise. Usually means the model was unreachable.\n")
+	}
+
 	// The review queue, here rather than only under `review`, because a queue nobody is
 	// told about is a queue nobody reads. `status` is what an operator runs; if the
 	// deferred messages are only visible to somebody who already knows to look for them,

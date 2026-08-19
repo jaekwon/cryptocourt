@@ -78,8 +78,17 @@ func (s *Scanner) Tick(ctx context.Context) (int, error) {
 			if s.Log != nil {
 				s.Log.Printf("message %d: %v", p.ID, err)
 			}
-			if err := s.Store.RecordFailure(ctx, p.ID); err != nil && s.Log != nil {
+			gaveUp, err := s.Store.RecordFailure(ctx, p.ID)
+			if err != nil && s.Log != nil {
 				s.Log.Printf("recording failure for %d: %v", p.ID, err)
+			}
+			// The one log line that says moderation has stopped for this message. Without
+			// it, the fifth failure reads exactly like the first four, and afterwards the
+			// row is invisible: out of the backlog, no verdict, not in the review queue.
+			if gaveUp && s.Log != nil {
+				s.Log.Printf("GAVE UP on message %d %s/%s after 5 attempts — it will NEVER "+
+					"be classified, by this daemon or a human; see kourtchatctl status",
+					p.ID, p.Chain, p.Court)
 			}
 		}
 	}

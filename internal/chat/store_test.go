@@ -505,8 +505,14 @@ func TestRecordFailureBacksOffAndGivesUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 5; i++ {
-		if err := s.RecordFailure(ctx, id); err != nil {
+		gaveUp, err := s.RecordFailure(ctx, id)
+		if err != nil {
 			t.Fatal(err)
+		}
+		// Both directions: only the LAST attempt reports giving up. The caller logs on
+		// that signal, and a signal that fires every time is a signal nobody reads.
+		if want := i == 4; gaveUp != want {
+			t.Fatalf("attempt %d: gaveUp=%v, want %v", i+1, gaveUp, want)
 		}
 		*clock = clock.Add(time.Hour)
 	}

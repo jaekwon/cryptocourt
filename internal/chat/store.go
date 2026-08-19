@@ -656,6 +656,21 @@ type Health struct {
 	ScannerSeen int64 `json:"scanner_seen_at,omitempty"`
 	Enforcing   bool  `json:"enforcing"`
 	Backlog     int   `json:"backlog"`
+
+	// Unscannable counts messages that gave up: five failed attempts, terminal, and
+	// never classified.
+	//
+	// It exists because without it an outage reads as perfect health. §1 predicts the
+	// outage — "a 7B model against an 8GB budget will OOM" — and the isolation works,
+	// chat keeps serving. But RecordFailure marks an exhausted row ScanDone, Backlog
+	// counts only ScanNew and ScanFailed, PendingReview needs a non-clean verdict, and
+	// Run heartbeats every cycle whether it classified anything or not. Each of those is
+	// right on its own and together they say "all well" while nothing is being read.
+	//
+	// Measured, in internal/scan's outage fixture: after ollama went away, backlog 0,
+	// heartbeat fresh, enforcing true, review queue empty, and a seed-phrase lure sitting
+	// in the court unclassified.
+	Unscannable int `json:"unscannable"`
 }
 
 func (s *Store) Health(ctx context.Context) (Health, error) {
@@ -672,6 +687,14 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	if err := s.r.QueryRowContext(ctx,
 		`SELECT count(*) FROM messages WHERE scan_state IN (?,?)`,
 		ScanNew, ScanFailed).Scan(&h.Backlog); err != nil {
+		return h, err
+	}
+	// Terminal AND never classified. scan_state alone is not enough: ScanDone is also
+	// where every successfully scanned message ends up, so the empty verdict is what
+	// distinguishes "read and found clean" from "never read at all".
+	if err := s.r.QueryRowContext(ctx,
+		`SELECT count(*) FROM messages WHERE scan_state=? AND verdict=''`,
+		ScanDone).Scan(&h.Unscannable); err != nil {
 		return h, err
 	}
 	return h, nil
@@ -791,23 +814,32 @@ func (s *Store) RecordVerdict(ctx context.Context, id int64, verdict string) err
 
 // RecordFailure schedules a retry with backoff, and gives up after enough tries
 // so a permanently malformed row cannot be retried forever.
-func (s *Store) RecordFailure(ctx context.Context, id int64) error {
+//
+// Returns whether this was the LAST attempt, because giving up is the interesting event
+// and it used to look identical to the four failures before it. That moment is when
+// moderation silently stops for a message: the row goes terminal, leaves the backlog,
+// never gets a verdict, and so never reaches the review queue either. Health.Unscannable
+// counts them after the fact; the caller logs the moment.
+func (s *Store) RecordFailure(ctx context.Context, id int64) (gaveUp bool, err error) {
 	const maxAttempts = 5
 	var attempts int
 	if err := s.r.QueryRowContext(ctx,
 		`SELECT attempts FROM messages WHERE id=?`, id).Scan(&attempts); err != nil {
-		return err
+		return false, err
 	}
 	attempts++
 	state := ScanFailed
 	if attempts >= maxAttempts {
 		state = ScanDone // terminal: unscannable, and never punished
+		gaveUp = true
 	}
 	backoff := time.Duration(1<<uint(attempts)) * time.Second
-	_, err := s.w.ExecContext(ctx,
+	if _, err := s.w.ExecContext(ctx,
 		`UPDATE messages SET scan_state=?, attempts=?, next_try=?, claimed_at=0 WHERE id=?`,
-		state, attempts, s.Now().Add(backoff).Unix(), id)
-	return err
+		state, attempts, s.Now().Add(backoff).Unix(), id); err != nil {
+		return false, err
+	}
+	return gaveUp, nil
 }
 
 // HashPair is the two keys a consequence can apply to: the address, and the
