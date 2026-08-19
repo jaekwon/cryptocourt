@@ -186,19 +186,68 @@ func TestOffPlatformAndSecretAsksAreStillCaught(t *testing.T) {
 			t.Errorf("off-platform pull should floor at spam, got %q: %q", got, body)
 		}
 	}
-	scam := []string{
+	// A SECRET MENTION IS A NOTE NOW, NOT A FLOOR, and these are the requests that used to earn
+	// one. They still get the note — an operator reading the row sees what was matched, and the
+	// model is what decides. Measured against gemma3:4b, six of these seven are acted on with no
+	// help from the prefilter at 0.95; "give me the mnemonic" comes back clean 0.85 and is the
+	// one this trade gives up. See reSecretMention.
+	asks := []string{
 		"send me your seed phrase",
 		"send me your seedphrase now",
 		"send me your 5eed phrase",
 		"paste your recovery phrase here",
-		"send me your recovery words", // was missed before
+		"send me your recovery words",
 		"what is your private key",
 		"give me the mnemonic",
-		"send me your s e e d  p h r a s e",
+		"send me your s e e d  p h r a s e", // still matched, via the skeleton
 	}
-	for _, body := range scam {
-		if got := Prefilter(body).Floor; got != Scam {
-			t.Errorf("a request for secrets should floor at scam, got %q: %q", got, body)
+	for _, body := range asks {
+		h := Prefilter(body)
+		if h.Floor != Clean {
+			t.Errorf("a bare mention must not set a floor, got %q: %q", h.Floor, body)
+		}
+		if !hasNote(h, "mentions a secret") {
+			t.Errorf("the mention must still be noted for the operator and the model: %q\n"+
+				"notes: %v", body, h.Notes)
 		}
 	}
+
+	// AND THE ORDINARY SENTENCES THAT USED TO BE PUNISHED FOR SAYING THE SAME WORDS. Every one
+	// of these earned a floor of scam — a 24-hour first offence, deterministic, no model in the
+	// loop. The last two are the ones that make the point: an explicit warning NOT to share a
+	// phrase, and a sentence about a court dispute, in an application about court disputes.
+	ordinary := []string{
+		"the docs explain how to back up your recovery phrase safely",
+		"i lost my private key and cannot recover the account",
+		"does the wallet keep the mnemonic locally or on a server somewhere",
+		"a seed phrase is twelve or twenty four words, for anyone wondering",
+		"my recovery words are written on paper in a safe, which felt sensible",
+		"reminder: nobody here will ever ask for your seed phrase",
+		"never share your seed phrase with anyone, not even a moderator",
+		"the claim about the private key dispute in court seven is still open",
+	}
+	for _, body := range ordinary {
+		if got := Prefilter(body).Floor; got != Clean {
+			t.Errorf("ordinary speech must not be floored, got %q: %q", got, body)
+		}
+	}
+
+	// The floors that REMAIN, so this test does not read as "nothing floors anything". A message
+	// doing both now collects both notes, which the old switch made impossible.
+	both := Prefilter("dm me on telegram and send me your seed phrase")
+	if both.Floor != Spam {
+		t.Errorf("an off-platform pull still floors at spam, got %q", both.Floor)
+	}
+	if !hasNote(both, "mentions a secret") || !hasNote(both, "points off-platform") {
+		t.Errorf("a message doing both must collect both notes, got %v", both.Notes)
+	}
+}
+
+func hasNote(h Hint, substr string) bool {
+	for _, n := range h.Notes {
+		if strings.Contains(n, substr) {
+			return true
+		}
+	}
+	return false
 }

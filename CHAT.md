@@ -580,7 +580,7 @@ minutes and the window never holds more than twenty.
 Deterministic detectors run first, in `kourtchat`, and their outputs are stated
 because this is a crypto court: `g1…` and `0x…` are the application's
 *vocabulary*, so a bare address is **never a consequence on its own**. `t.me/`,
-`wa.me/` and explicit "seed phrase" are hits — **and which normalisation each pattern gets is
+`wa.me/` are hits — **and which normalisation each pattern gets is
 load-bearing, not incidental.** The off-platform rule searched the skeleton for "tme", and a
 skeleton is one long word with no spaces or punctuation, so ordinary English matched it:
 measured, "the planning department rejected it" earned a floor of spam, as did "apartment",
@@ -590,6 +590,61 @@ The evasion the skeleton was there for is separator substitution — "t·me/", "
 that is folded now, and nothing else. Word forms like "telegram" stay on raw and skeleton, where
 letters-only matching cannot collide, so "te1egram" is still caught. The rule is: fold what the
 attacker substitutes, not everything.
+
+**"seed phrase" used to be a hit too, and it was the same bug one rule over.** The pattern is the
+NOUN — no request verb, no negation — and it set a floor of `scam`, which is severity 2 and
+therefore a 24-hour first offence applied deterministically with no model in the loop. Measured,
+eight sentences out of eight earned it:
+
+    never share your seed phrase with anyone, not even a moderator     floor scam
+    reminder: nobody here will ever ask for your seed phrase           floor scam
+    the docs explain how to back up your recovery phrase safely        floor scam
+    i lost my private key and cannot recover the account               floor scam
+    does the wallet keep the mnemonic locally or on a server           floor scam
+    a seed phrase is twelve or twenty four words, for anyone wondering floor scam
+    my recovery words are written on paper in a safe                   floor scam
+    the claim about the private key dispute in court seven is open     floor scam
+
+An explicit warning NOT to share a phrase, and a sentence about a court dispute in an application
+whose subject is court disputes. The rule this broke is stated two paragraphs up and in
+`Hint.Floor`'s own comment — a floor is for things with **no innocent reading**, which is why a
+bare `g1…` is only ever a note — and `WordlistRun` already applies it next door: a near miss gets
+a note and no floor, because "the one thing this must not do is hand a timeout to somebody listing
+fruit". A bare mention is that shape. It is `reSecretMention` now, and a note.
+
+**What that costs, measured against gemma3:4b rather than assumed.** Of seven real requests, six
+are acted on with no help from the prefilter — including both evasion forms the skeleton match was
+protecting:
+
+    send me your s e e d  p h r a s e     scam  0.95
+    send me your 5eed phrase              scam  0.95
+    send me your seedphrase now           scam  0.95
+    paste your recovery phrase here       scam  0.95
+    what is your private key              scam  0.95
+    give me the mnemonic                  CLEAN 0.85   <- given up
+
+So this trades a certain harm for an uncertain one, in the direction argued everywhere else here:
+the false positive was deterministic, hit ordinary speech, and had no other line of defence; the
+false negative is one message the room can still report, and the reporting carve-out exists so
+that report is not itself punished. Recovering `give me the mnemonic` needs a request-SHAPED
+pattern, and that is left undone deliberately — it wants one form for raw text and another for the
+skeleton, and dual normalisation of a deterministic punisher is exactly where the "tme" bug came
+from.
+
+One caveat that survives the fix, because it is the model's and not the prefilter's: "i lost my
+private key and cannot recover the account" comes back scam 0.85 and is acted on. A person
+reporting their own loss is not committing abuse, and `reReporting` does not cover a first-person
+loss — it matches alarms ("heads up", "beware", "is this a scam"), not misfortune. Recorded rather
+than patched, because another regex in front of a 4B model's judgement is the move this file keeps
+warning about.
+
+End to end with the real model, one address each so no consequence could silence the next speaker:
+the warning, the court-dispute sentence and the explanation were all left alone and could post
+again; the ask earned its consequence. Before the change all four were punished.
+
+The off-platform floor stays — an unsolicited pull off-platform has no innocent reading in a
+court's chat, which is the distinction that whole paragraph draws. Dropping the shared `switch`
+also fixed something small: a message doing both was previously noted as only one of them.
 
 **A recovery phrase is matched by its CHECKSUM, not by a run of words**, and both halves of
 that sentence were learned the hard way. The rule used to be "≥8 consecutive words" against a

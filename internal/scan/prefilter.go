@@ -23,11 +23,35 @@ var (
 	// pattern across both produced a false positive on ordinary English — see foldDots.
 	reOffURL  = regexp.MustCompile(`(?i)\b(t\.me/|wa\.me/|discord\.gg/)`)
 	reOffWord = regexp.MustCompile(`(?i)(telegram|whatsapp|discordgg)`)
-	// "words" and "seed" alongside "phrase": "send me your recovery words" is the same request
-	// and was not matched, measured.
-	reSecretAsk = regexp.MustCompile(`(?i)((seed|secret|recovery)\s*(phrase|words|seed)|private\s*key|mnemonic)`)
-	reEVMAddr   = regexp.MustCompile(`0x[0-9a-fA-F]{40}\b`)
-	reGnoAddr   = regexp.MustCompile(`\bg1[0-9a-z]{38}\b`)
+	// A MENTION, NOT AN ASK — and the name used to claim otherwise.
+	//
+	// This is reSecretMention because that is all it can tell: the pattern is the NOUN, with no
+	// request verb and no negation. It used to set a floor of scam, which is a 24-hour kick
+	// applied deterministically with no model in the loop. Measured, every one of these earned
+	// it:
+	//
+	//	"never share your seed phrase with anyone, not even a moderator"
+	//	"reminder: nobody here will ever ask for your seed phrase"
+	//	"the docs explain how to back up your recovery phrase safely"
+	//	"i lost my private key and cannot recover the account"
+	//	"does the wallet keep the mnemonic locally or on a server somewhere"
+	//	"a seed phrase is twelve or twenty four words, for anyone wondering"
+	//	"my recovery words are written on paper in a safe"
+	//	"the claim about the private key dispute in court seven is still open"
+	//
+	// Eight for eight, including a warning NOT to share one and an ordinary sentence about a
+	// court dispute — in an application whose subject is disputes. That is the same bug §6
+	// records for the off-platform rule, where "the planning department rejected it" earned a
+	// floor of spam, and it is worse: scam is severity 2, so the first offence is 24 hours
+	// rather than one.
+	//
+	// The header above states the rule this broke: a floor is for things with no innocent
+	// reading, which is why a bare address is only ever a note. WordlistRun below already
+	// applies it — "a near miss gets a note and NO floor ... the one thing this must not do is
+	// hand a timeout to somebody listing fruit". A bare mention is the same shape.
+	reSecretMention = regexp.MustCompile(`(?i)((seed|secret|recovery)\s*(phrase|words|seed)|private\s*key|mnemonic)`)
+	reEVMAddr       = regexp.MustCompile(`0x[0-9a-fA-F]{40}\b`)
+	reGnoAddr       = regexp.MustCompile(`\bg1[0-9a-z]{38}\b`)
 )
 
 // Hint is what the prefilter concluded: a floor on the verdict, plus notes for the
@@ -121,14 +145,37 @@ func Prefilter(body string) Hint {
 	sk := chat.Skeleton(body)
 	// The URL forms are checked against dot-folded raw text, the word forms against raw and
 	// skeleton. Which normalisation belongs to which is the whole lesson of foldDots.
-	switch {
-	case reSecretAsk.MatchString(body), reSecretAsk.MatchString(sk):
-		// Asking a stranger for their recovery words has one meaning.
-		h.Floor = Scam
-		h.Notes = append(h.Notes, "asks for a secret phrase or key")
-	case reOffURL.MatchString(foldDots(body)), reOffWord.MatchString(body), reOffWord.MatchString(sk):
-		// Not a finding on its own — plenty of people mention Telegram — but a
-		// floor of spam is fair for an unsolicited off-platform pull.
+	// A NOTE, NOT A FLOOR. See reSecretMention for the eight ordinary sentences this used to
+	// punish, and for why the model carries this now instead.
+	//
+	// What that costs, measured against gemma3:4b rather than assumed. Of seven real requests,
+	// six are acted on without any help from here — including both evasion forms the skeleton
+	// was protecting:
+	//
+	//	"send me your s e e d  p h r a s e"     scam 0.95
+	//	"send me your 5eed phrase"              scam 0.95
+	//	"paste your recovery phrase here"       scam 0.95
+	//	"what is your private key"              scam 0.95
+	//	"send me your seedphrase now"           scam 0.95
+	//	"give me the mnemonic"                  CLEAN 0.85  <- missed
+	//
+	// So this trades one certain harm for one uncertain one, in the direction §6 argues for
+	// everywhere else: the false positive was deterministic and hit ordinary speech with no
+	// other line of defence, while the false negative is a single message the room can still
+	// report — and the reporting carve-out exists so that report is not itself punished.
+	//
+	// Recovering "give me the mnemonic" would mean a request-shaped pattern, and it is left
+	// undone deliberately: it needs one form for raw text and another for the skeleton, and
+	// dual normalisation of a deterministic punisher is exactly where the "tme" bug came from.
+	// The note is recorded so an operator reading the row can see what was matched.
+	if reSecretMention.MatchString(body) || reSecretMention.MatchString(sk) {
+		h.Notes = append(h.Notes, "mentions a secret phrase or key")
+	}
+	// Still a floor: an unsolicited off-platform pull has no innocent reading in a court's chat,
+	// which is the distinction the header draws. No longer in a switch with the rule above —
+	// sharing one meant a message doing both was only ever noted as one.
+	if reOffURL.MatchString(foldDots(body)) || reOffWord.MatchString(body) ||
+		reOffWord.MatchString(sk) {
 		h.Floor = Spam
 		h.Notes = append(h.Notes, "points off-platform")
 	}

@@ -244,15 +244,21 @@ func TestConsequencesAreAlwaysBoundedKicks(t *testing.T) {
 
 // The deterministic floor can raise a verdict the model was too generous about,
 // and cannot lower one.
+//
+// The fixture is an OFF-PLATFORM PULL rather than a secret-phrase request, and the change is
+// the point rather than a convenience: a bare mention of a seed phrase no longer sets a floor,
+// because it punished eight ordinary sentences out of eight — see reSecretMention. The property
+// under test here is unchanged and still live, so it is re-pointed at a rule that still has a
+// floor rather than deleted.
 func TestPrefilterIsAFloorNotAnOverride(t *testing.T) {
 	cls := &fakeCls{bare: Verdict{Label: Clean, Confidence: 0.99}}
 	sc, st, clock := newScanner(t, cls, true)
-	seed(t, st, clock, "ip1", "hi, please send me your seed phrase to restore it")
+	seed(t, st, clock, "ip1", "join discord.gg/abcd for the real airdrop")
 	if _, err := sc.Tick(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if n := mustCount(t, st); n != 1 {
-		t.Fatalf("a secret-phrase request must be caught even if the model says clean, got %d", n)
+		t.Fatalf("an off-platform pull must be caught even if the model says clean, got %d", n)
 	}
 	// The other direction: a clean prefilter must not soften a scam verdict.
 	cls2 := &fakeCls{bare: Verdict{Label: Scam, Confidence: 0.99, Why: "a lure"}}
