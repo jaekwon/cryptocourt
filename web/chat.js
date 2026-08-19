@@ -220,6 +220,7 @@ function chatPanelHtml(slug, moniker, note) {
     +   "<b>Chat</b> <span class=\"chatslug\">" + chatEsc(slug) + "</span>"
     +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
     +     " and nobody can move funds for you</span>"
+    +   '<span class="chatdemo" hidden></span>'
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatdry" hidden></div>'
@@ -386,6 +387,7 @@ const CHATCSS = `
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
 .chatdry{margin:.4rem 0;font-size:.9em;opacity:.75}
+.chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
 .chatform{display:flex;gap:.4rem;margin-top:.5rem}
 .chatmoniker{flex:0 0 8rem;min-width:0}
 .chatinput{flex:1 1 auto;min-width:0}
@@ -492,6 +494,33 @@ function mountChat(el, opts) {
     // "9 months ago".
     const shift = nowSec() - demo.now;
     paint(demo.messages.map(m => ({...m, created_at: m.created_at + shift})), demo.you);
+
+    // SAY THAT THE THREAD IS INVENTED — not merely that chat is unconfigured.
+    //
+    // This branch is reached when no API base is configured, which is at least as likely to
+    // be a deployment that lost its base URL as a deliberate demo. It was never silent: the
+    // panel already mounts with "Chat is not configured for this page." in .chatnote. But
+    // that names the CAUSE and not the consequence, and the difference matters — a reader
+    // who sees four plausible messages with names, flags and ages, plus a line saying chat
+    // is not configured, can reasonably conclude they cannot POST, rather than that
+    // everything above them is fabricated.
+    //
+    // Three things were wrong with relying on it, none of them the absence of any text:
+    // .chatnote is the least prominent slot in the panel, it sits BELOW the composer and so
+    // after the fiction rather than before it, and it is transient — the submit handler
+    // below overwrites it, as does every validation message.
+    //
+    // chat-demo.html does say so in its own prose, which is part of why this went unnoticed.
+    // The PANEL is the part that gets embedded in a court page, so it has to carry the
+    // notice itself: in the head, beside the standing "names are unverified" warning, above
+    // the log rather than below it, and never overwritten.
+    const fiction = el.querySelector(".chatdemo");
+    if (fiction) {
+      fiction.textContent = "Sample conversation \u2014 this panel is not connected to a"
+        + " server, and every message below is invented.";
+      fiction.hidden = false;
+    }
+
     formEl.addEventListener("submit", ev => {
       ev.preventDefault();
       note("This is a demo — nothing is sent anywhere.");

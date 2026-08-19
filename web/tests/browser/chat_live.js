@@ -105,6 +105,25 @@ function freePort() {
       {timeout: 15000});
     ok("an empty court reads as empty rather than as an error", true);
 
+    // THE PAIRED NEGATIVE for the demo notice. A panel talking to a real server must never
+    // say its messages are invented — and this is the arm that matters, because a warning
+    // that appears on every deployment is one operators learn to ignore, and it would call a
+    // genuine transcript fiction. Checked against a real kourtchat with a real database, not
+    // against a mock, since the branch is chosen by whether a base URL was configured.
+    {
+      const r = await page.evaluate(() => {
+        const n = document.querySelector("#livechat .chatdemo");
+        return {
+          exists: !!n,
+          shown: n ? (!n.hidden && getComputedStyle(n).display !== "none") : false,
+          text: n ? n.textContent : "",
+        };
+      });
+      ok("the live panel has the same notice element", r.exists);
+      ok("...and never shows it", r.shown === false);
+      ok("...and it carries no text to leak into the transcript", r.text === "");
+    }
+
     // ------------------------------------------------------- writing
     //
     // THE HEADER QUESTION. csrfOK refuses Sec-Fetch-Site: cross-site, and a file://

@@ -54,6 +54,52 @@ const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console
     ok("the transcript is scrollable rather than unbounded", r.scrolls === "auto");
   }
 
+  // THE READER HAS TO BE TOLD THE THREAD IS INVENTED BEFORE THEY READ IT.
+  //
+  // There is already a check further down that submitting in demo mode says so, and it has
+  // always passed — which is part of why this gap survived: it tests the disclosure a user
+  // gets AFTER acting, and somebody who only reads never submits.
+  //
+  // What they got instead was "Chat is not configured for this page." in .chatnote, which is
+  // true and insufficient: it names the cause, sits below the composer and therefore after
+  // the four invented messages, and is overwritten by the first validation message or
+  // submit. So this asserts the notice is in the head, rendered, above the log, and says the
+  // content is invented — and, below, that the mount-time note is still the configuration
+  // text rather than the submit-time one, which is what shows nothing has been interacted
+  // with yet.
+  //
+  // Checked with getComputedStyle rather than by reading textContent, because a notice that
+  // is present in the DOM and not rendered is the same as no notice at all.
+  {
+    const r = await page.evaluate(() => {
+      const n = document.querySelector("#demochat .chatdemo");
+      const log = document.querySelector("#demochat .chatlog");
+      if (!n || !log) return {found: false};
+      const cs = getComputedStyle(n);
+      return {
+        found: true,
+        text: n.textContent,
+        shown: !n.hidden && cs.display !== "none" && cs.visibility !== "hidden",
+        // Above the messages, not below them: a warning after the fiction is worth little.
+        beforeTheLog: !!(n.compareDocumentPosition(log)
+          & Node.DOCUMENT_POSITION_FOLLOWING),
+        // Nothing has been typed or submitted, so .chatnote must still hold the mount-time
+        // configuration text and not the submit handler's message.
+        note: document.querySelector("#demochat .chatnote").textContent,
+      };
+    });
+    ok("the panel carries a demo notice of its own", r.found);
+    ok("it is actually rendered, not just present", r.shown === true);
+    ok("it says the messages are invented",
+      /invented/i.test(r.text) && /not connected/i.test(r.text));
+    ok("it sits above the transcript it is warning about", r.beforeTheLog === true);
+    ok("it is there before anything is typed or sent",
+      /not configured/i.test(r.note) && !/nothing is sent/i.test(r.note));
+    // And it does NOT replace the older notice, which is still the accurate thing to say
+    // about why the panel is offline.
+    ok("the configuration notice survives alongside it", /not configured/i.test(r.note));
+  }
+
   // A flag must actually be a flag: two regional indicators, which is four UTF-16
   // units, not the two letters of the country code.
   {

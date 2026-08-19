@@ -1467,6 +1467,32 @@ reachable without seeding a chain, and it is not faked: the wiring on the real p
 covered by `chat_page.js`, and live chat in a browser by `chat_live.js` and
 `chat_moderation.js` against `chat-demo.html`, which has no chain to satisfy.
 
+**An unconfigured panel now says its thread is invented, not just that it is unconfigured.**
+The no-base branch paints a fixed sample of four messages with names, country flags and ages,
+and it is entered whenever `chatBase` returns "" — which is `CFG.mode === "demo"`, but equally a
+deployment whose base URL is missing or misspelled. It was never silent: the panel mounted with
+"Chat is not configured for this page." in `.chatnote`. That names the cause and not the
+consequence, and the gap between those is the whole finding — a reader looking at four plausible
+messages and a line saying chat is not configured can reasonably take it to mean they cannot
+POST, not that everything above them is fiction. `.chatnote` is also the weakest place to say it:
+smallest type, lowest opacity, below the composer and therefore *after* the invented thread, and
+transient, since the submit handler and every validation message overwrite it.
+
+So the panel now carries a standing notice in `.chathead`, beside the "names are unverified"
+warning that was already there, above the log and never overwritten. `chat-demo.html` says as
+much in its own prose, which is part of why this went unnoticed for so long — but the panel is
+the part that gets embedded in a court page, and the prose does not travel with it.
+
+The existing coverage is the reason it survived: `chat_render.js` had always asserted that
+SUBMITTING in demo mode says so, and that passed. It tests the disclosure a reader gets after
+acting, and somebody who only reads never acts. The new arms check `getComputedStyle` rather than
+`textContent`, because a notice in the DOM that does not render is not a notice, and
+`compareDocumentPosition` for the ordering, because a warning underneath the fiction is worth
+little. The paired negative runs in `chat_live.js` against a real `kourtchat` and a real
+database: the element exists, is never shown, and carries no text. That arm is the important
+one — a notice that appeared on every deployment would be one operators learn to ignore, and it
+would be calling a genuine transcript fiction.
+
 **THE BROWSER HALF WAS NOT BEING RUN, which is how a wrong assertion survived two commits.**
 `web/tests/browser/run.js` lists `CHECKS = ["banner_layout.js"]`, so the four chat harnesses beside
 it — 149 assertions — executed only when somebody typed their names. `make web-visual` reported a
