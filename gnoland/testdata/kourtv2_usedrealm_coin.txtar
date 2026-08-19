@@ -1,0 +1,75 @@
+# A realm with MONEY in it is not a virgin realm.
+#
+# The companion to kourtv2_usedrealm_seeded.txtar, which explains the gate and
+# why each of its two arms needs a file of its own. That file isolates the
+# claims arm (nextID > 1 with the supply still zero); this one isolates the coin
+# arm, which needs the mirror image — real coin minted while the claim counter
+# is still at zero:
+#
+#     if m.nextID > 1 || m.coin.TotalSupply() > 0 { ... has been used ... }
+#
+# This is the realistic shape of the audited bug. Buy is the realm's only
+# GNOT-side mint and it accepts the meta slug (buy.gno, and see the note in
+# kourtv2_testclock.txtar), so the very first thing a real user can do to this
+# realm — pay money into the meta court — is enough to end its virginity, with
+# no claim, no court and no other activity of any kind.
+
+loadpkg gno.land/p/kourt/checkpoint/v0
+loadpkg gno.land/p/kourt/grc20votes/v0
+loadpkg gno.land/p/kourt/governor/v0
+loadpkg gno.land/p/kourt/twap/v0
+loadpkg gno.land/p/kourt/curve/v0
+loadpkg gno.land/r/kourt/kourtv2
+
+adduser buyer 100000000ugnot
+
+gnoland start
+
+# --- On arrival: nothing has happened -----------------------------------------
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinSupply(\"meta\")"
+stdout '\(0 int64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimCount(\"meta\")"
+stdout '\(0 uint64\)'
+
+# --- A STRANGER pays money into the meta court --------------------------------
+# Not the deployer: the point is that ending the realm's virginity is not a
+# privileged act. Anybody who can send GNOT can do it, and on a public chain
+# anybody watching the deploy can do it in the next block. That is why arming
+# has to check, and why the check is not merely tidiness.
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Buy -args meta -send 20000000ugnot -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test buyer
+stdout 'OK!'
+
+# Coin exists. No claim was opened, so the claims arm is NOT what refuses below —
+# that is what makes this file a measurement of the coin arm and not of the pair.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimCount(\"meta\")"
+stdout '\(0 uint64\)'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtCount()"
+stdout '\(1 int\)'
+# The query must succeed and must NOT read zero. The exact figure is the curve's
+# and is not asserted — a curve parameter may legitimately change what 20 GNOT
+# buys, and a test that fails on that gets deleted rather than read. Zero versus
+# non-zero is the only thing the gate itself looks at.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CoinSupply(\"meta\")"
+! stdout '\(0 int64\)'
+
+# --- The deployer is refused, on a realm they still own alone ------------------
+# Delete `m.coin.TotalSupply() > 0` from testclock.gno and this line is what
+# fails: the deployer arms a clock over a court that already holds a stranger's
+# money, and every date this chain publishes afterwards is invented.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'this realm has been used'
+
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClockAt -args 1750000000 -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'this realm has been used'
+
+# --- Nor is the buyer any more able to arm it ---------------------------------
+# The deployer gate is ordered first on purpose (testclock.gno, mustDeployer), so
+# a stranger learns nothing about the latch from the refusal they get.
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test buyer
+stderr 'only the deployer may drive'
+
+# --- Nothing armed, nothing fabricated ----------------------------------------
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
+stdout 'false'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockFabricated()"
+stdout 'false'

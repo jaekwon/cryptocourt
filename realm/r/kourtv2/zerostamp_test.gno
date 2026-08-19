@@ -209,8 +209,9 @@ func TestAZeroStampFallsBackToTheHeightGate(cur realm, t *testing.T) {
 	// afterwards, which is how I know these are two gates and not one. Each arm of
 	// each gate needs its own killer.
 	//
-	// The reopen branch (dispute.gno:100) is the `else` of `provisional < 0`, so it
-	// is reached only on a claim that already has a provisional verdict — and its
+	// The reopen branch (dispute.gno, OpenDispute's escrow arm) is the `else` of
+	// `provisional < 0`, so it is reached only on a claim that already has a
+	// provisional verdict — and its
 	// preceding guards are frozenAt, answerer, disputeOpen and verdictAt, all plain
 	// fields again.
 	frank := testutils.TestAddress("zs-frank")

@@ -6110,5 +6110,42 @@
     "label": "escrow: a reopen loses its pre-stamp HEIGHT fallback (escrowUntilAt==0 arm)",
     "find": "\t} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {",
     "replace": "\t} else if cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "testclock.gno",
+    "label": "arming: the usage gate ignores meta's CLAIMS (nextID arm)",
+    "find": "\tif m.nextID > 1 || m.coin.TotalSupply() > 0 {",
+    "replace": "\tif m.coin.TotalSupply() > 0 {",
+    "elsewhere": "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "testclock.gno",
+    "label": "arming: the usage gate ignores meta's COIN (TotalSupply arm)",
+    "find": "\tif m.nextID > 1 || m.coin.TotalSupply() > 0 {",
+    "replace": "\tif m.nextID > 1 {",
+    "elsewhere": "gnoland/testdata/kourtv2_usedrealm_coin.txtar"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "testclock.gno",
+    "label": "clock: EnableTestClockAt loses its maxBase ceiling (the int64 wrap that bricks every read)",
+    "find": "\tif base > maxBase {\n\t\tpanic(\"kourtv2: the test clock's base is too far out to advance from\")\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "testclock.gno",
+    "label": "clock: tcNow's non-positive assertion dropped (zero is the pre-stamp sentinel)",
+    "find": "\tif n <= 0 {\n\t\tpanic(\"kourtv2: the clock read a non-positive instant\")\n\t}\n",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "testclock.gno",
+    "label": "clock: maxBase leaves room for one STEP instead of the whole budget, so a legal advance wraps",
+    "find": "\tmaxBase = int64(9223372036854775807) - maxAdvanceTotal",
+    "replace": "\tmaxBase = int64(9223372036854775807) - maxAdvanceStep"
   }
 ]

@@ -39,7 +39,9 @@ package kourtv2
 //
 // What it deliberately cannot do: rewind (advance is forward-only, capped, and
 // the total is capped so int64 cannot wrap into a negative — an audit proved
-// two maximal "forward" steps otherwise walked the clock backwards); touch
+// two maximal "forward" steps otherwise walked the clock backwards; capping the
+// total is only half of it, because a BASE near the ceiling wraps the same sum
+// on a legal step, hence maxBase); touch
 // heights (conviction, emission and voting epochs are denominated in blocks and
 // must stay honest); or hide (TestClockActive is public AND read by Render and
 // ClaimTimeline, so a reader is never shown a fabricated date without being
@@ -58,6 +60,21 @@ const (
 	// two "forward" steps move the clock backwards.
 	maxAdvanceStep  = int64(10 * 365 * 86400)
 	maxAdvanceTotal = int64(100 * 365 * 86400)
+	// maxBase is the latest instant a scenario may DECLARE. Not a plausibility
+	// limit — an arithmetic one, and it is exactly the arithmetic above: tcNow
+	// reads tcBase+tcSkew, so a base within maxAdvanceTotal of int64's ceiling
+	// makes that sum WRAP NEGATIVE on an advance that was individually legal.
+	//
+	// tcNow's own non-positive assertion does catch the result. What it cannot do
+	// is catch it usefully: it fires on EVERY read for ever after, so the realm
+	// stops answering — every deadline, every Render, every State — instead of
+	// the mistake being refused in the transaction that made it. Measured, not
+	// reasoned: EnableTestClockAt(1<<63-1) followed by one AdvanceTestClock(1)
+	// bricked every date-reading surface in the realm.
+	//
+	// The cap is exactly wide enough for the advance budget to still fit, which
+	// TestABaseTooFarOutIsRefusedRatherThanBricking arms at and spends in full.
+	maxBase = int64(9223372036854775807) - maxAdvanceTotal
 )
 
 var (
@@ -124,6 +141,9 @@ func EnableTestClock(cur realm) {
 func EnableTestClockAt(cur realm, base int64) {
 	if base <= 0 {
 		panic("kourtv2: the test clock's base must be a positive instant")
+	}
+	if base > maxBase {
+		panic("kourtv2: the test clock's base is too far out to advance from")
 	}
 	EnableTestClock(cur)
 	tcBase = base
@@ -201,6 +221,12 @@ func tcNow() int64 {
 			n = tcFloor // a sealed test chain never falls back below what it showed
 		}
 	}
+	// An assertion of last resort, and deliberately kept after maxBase made the
+	// wrap that reached it unreachable through the entrypoints. Zero is
+	// clock.gno's "this claim predates the stamps" sentinel, so a clock quietly
+	// handing it out does not fail — it silently reclassifies every live claim as
+	// pre-stamp. Refusing to answer is the correct behaviour for a clock that
+	// cannot say what time it is.
 	if n <= 0 {
 		panic("kourtv2: the clock read a non-positive instant")
 	}
