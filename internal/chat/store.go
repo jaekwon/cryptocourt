@@ -866,6 +866,175 @@ type InfractionRow struct {
 	RevokedBy  string
 }
 
+// PruneResult reports what a prune did AND what it refused to do.
+//
+// The refusals are the interesting half. A pruner that silently declines to delete looks
+// broken from the outside — "I asked it to prune and the file did not shrink" — and the
+// reasons it declines are exactly the ones an operator needs to see, because each of them
+// means a message is still doing a job.
+type PruneResult struct {
+	Deleted       int   `json:"deleted"`
+	KeptUnscanned int   `json:"kept_unscanned"`
+	KeptQueued    int   `json:"kept_queued"`
+	KeptCited     int   `json:"kept_cited"`
+	Oldest        int64 `json:"oldest_remaining"`
+	Remaining     int   `json:"remaining"`
+}
+
+// Prune deletes messages older than a cutoff, and refuses three kinds outright.
+//
+// §7 cut the pruner from v1 — "worse half-done than absent" — and it was right to: the
+// groundwork was not there. `evidence` now copies a body into its infraction at punish
+// time precisely so deleting the message cannot destroy what an appeal reads, and the
+// review queue has since added a constraint that did not exist when this was deferred.
+//
+// WHAT IT WILL NOT DELETE, whatever the cutoff says:
+//
+//   - UNSCANNED messages. The scanner has not looked yet, and deleting one is not
+//     retention policy, it is silently skipping moderation. This covers the outage case:
+//     if the model has been unreachable for a month, a 30-day prune must not quietly
+//     erase the backlog instead of classifying it.
+//   - Messages AWAITING REVIEW — flagged, no consequence citing them, not dismissed.
+//     §7's carve-out defers exactly these to a person; deleting them empties that
+//     person's queue without anyone deciding anything.
+//   - Messages cited by a consequence still IN FORCE. The appeal text survives in
+//     `evidence`, so the record is safe either way, but `Revoke` restores a punished
+//     author's hidden messages, and it cannot restore rows that are gone. Once the
+//     consequence has expired or been reversed there is nothing left to restore.
+//
+// Bounded by `limit` in one statement, because a single unbounded DELETE over a year of
+// history holds the write lock for as long as it takes, and §1's whole argument for one
+// database file is that nothing holds that lock for long. Call it repeatedly.
+func (s *Store) Prune(ctx context.Context, olderThan time.Duration, limit int) (PruneResult, error) {
+	var out PruneResult
+	if olderThan <= 0 {
+		return out, errors.New("prune needs a positive age; refusing to delete everything")
+	}
+	if limit <= 0 || limit > 100_000 {
+		limit = 5_000
+	}
+	cutoff := s.Now().Add(-olderThan).Unix()
+
+	// The three refusals, counted before the delete so the numbers describe the same
+	// population the delete considered.
+	countOld := func(extra string, args ...any) (int, error) {
+		var n int
+		q := `SELECT count(*) FROM messages WHERE created_at < ? AND ` + extra
+		err := s.r.QueryRowContext(ctx, q, append([]any{cutoff}, args...)...).Scan(&n)
+		return n, err
+	}
+	var err error
+	if out.KeptUnscanned, err = countOld(`scan_state <> ?`, ScanDone); err != nil {
+		return out, err
+	}
+	if out.KeptQueued, err = countOld(
+		`scan_state = ? AND verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
+		 AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`,
+		ScanDone); err != nil {
+		return out, err
+	}
+	if out.KeptCited, err = countOld(
+		`EXISTS (SELECT 1 FROM infractions i WHERE i.evidence_id = messages.id
+		         AND i.revoked_at IS NULL
+		         AND (i.expires_at IS NULL OR i.expires_at > ?))`, s.Now().Unix()); err != nil {
+		return out, err
+	}
+
+	res, err := s.w.ExecContext(ctx, `
+	  DELETE FROM messages WHERE id IN (
+	    SELECT id FROM messages
+	     WHERE created_at < ?
+	       AND scan_state = ?
+	       AND NOT (verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
+	                AND NOT EXISTS (SELECT 1 FROM infractions
+	                                 WHERE evidence_id = messages.id))
+	       AND NOT EXISTS (SELECT 1 FROM infractions i
+	                        WHERE i.evidence_id = messages.id
+	                          AND i.revoked_at IS NULL
+	                          AND (i.expires_at IS NULL OR i.expires_at > ?))
+	     ORDER BY id LIMIT ?)`,
+		cutoff, ScanDone, s.Now().Unix(), limit)
+	if err != nil {
+		return out, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return out, err
+	}
+	out.Deleted = int(n)
+
+	// What is left, so an operator can tell "nothing to do" from "nothing happened".
+	if err := s.r.QueryRowContext(ctx,
+		`SELECT count(*), COALESCE(MIN(created_at), 0) FROM messages`).
+		Scan(&out.Remaining, &out.Oldest); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
+// PruneDryRun reports what a prune WOULD do, changing nothing.
+func (s *Store) PruneDryRun(ctx context.Context, olderThan time.Duration, limit int) (PruneResult, error) {
+	var out PruneResult
+	if olderThan <= 0 {
+		return out, errors.New("prune needs a positive age; refusing to delete everything")
+	}
+	if limit <= 0 || limit > 100_000 {
+		limit = 5_000
+	}
+	cutoff := s.Now().Add(-olderThan).Unix()
+	// Same predicate as Prune's DELETE, as a count. Duplicated deliberately rather than
+	// shared through a string constant: a dry run whose query has drifted from the real
+	// one is worse than no dry run, so the two are side by side where a reader can
+	// compare them, and a test posts the same fixture through both.
+	if err := s.r.QueryRowContext(ctx, `
+	  SELECT count(*) FROM messages
+	   WHERE created_at < ?
+	     AND scan_state = ?
+	     AND NOT (verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
+	              AND NOT EXISTS (SELECT 1 FROM infractions
+	                               WHERE evidence_id = messages.id))
+	     AND NOT EXISTS (SELECT 1 FROM infractions i
+	                      WHERE i.evidence_id = messages.id
+	                        AND i.revoked_at IS NULL
+	                        AND (i.expires_at IS NULL OR i.expires_at > ?))
+	   LIMIT ?`, cutoff, ScanDone, s.Now().Unix(), limit).Scan(&out.Deleted); err != nil {
+		return out, err
+	}
+	var err error
+	if out.KeptUnscanned, err = func() (int, error) {
+		var n int
+		e := s.r.QueryRowContext(ctx,
+			`SELECT count(*) FROM messages WHERE created_at < ? AND scan_state <> ?`,
+			cutoff, ScanDone).Scan(&n)
+		return n, e
+	}(); err != nil {
+		return out, err
+	}
+	if err := s.r.QueryRowContext(ctx, `
+	  SELECT count(*) FROM messages
+	   WHERE created_at < ? AND scan_state = ?
+	     AND verdict NOT IN ('', 'clean', 'unknown') AND reviewed_at = 0
+	     AND NOT EXISTS (SELECT 1 FROM infractions WHERE evidence_id = messages.id)`,
+		cutoff, ScanDone).Scan(&out.KeptQueued); err != nil {
+		return out, err
+	}
+	if err := s.r.QueryRowContext(ctx, `
+	  SELECT count(*) FROM messages
+	   WHERE created_at < ?
+	     AND EXISTS (SELECT 1 FROM infractions i WHERE i.evidence_id = messages.id
+	                  AND i.revoked_at IS NULL
+	                  AND (i.expires_at IS NULL OR i.expires_at > ?))`,
+		cutoff, s.Now().Unix()).Scan(&out.KeptCited); err != nil {
+		return out, err
+	}
+	if err := s.r.QueryRowContext(ctx,
+		`SELECT count(*), COALESCE(MIN(created_at), 0) FROM messages`).
+		Scan(&out.Remaining, &out.Oldest); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+
 // Review is one message the scanner flagged and did not punish.
 type Review struct {
 	ID        int64  `json:"id"`

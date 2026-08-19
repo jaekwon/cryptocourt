@@ -14,6 +14,7 @@
 //	kourtchatctl -db chat.db hash 203.0.113.7     the hashes for one address
 //	kourtchatctl -db chat.db review               what the scanner left for a human
 //	kourtchatctl -db chat.db kick -msg 41 -for 1h act on a message you just read
+//	kourtchatctl -db chat.db prune -older-than 720h   what 30-day retention would drop
 //	kourtchatctl -db chat.db freeze dev/orem      stop serving a purged court
 //	kourtchatctl -db chat.db status               backlog, scanner heartbeat, counts
 //
@@ -88,6 +89,8 @@ func main() {
 		cmdReview(ctx, store, args[1:])
 	case "dismiss":
 		cmdDismiss(ctx, store, args[1:])
+	case "prune":
+		cmdPrune(ctx, store, args[1:])
 	case "freeze":
 		cmdFreeze(ctx, store, args[1:])
 	case "status":
@@ -125,7 +128,7 @@ func split(argv []string) (flags, positional []string) {
 // done before parsing.
 func takesValue(f string) bool {
 	switch strings.TrimLeft(f, "-") {
-	case "by", "why", "ip", "n", "db", "for", "secret-file", "msg", "from":
+	case "by", "why", "ip", "n", "db", "for", "secret-file", "msg", "from", "older-than":
 		return true
 	}
 	return false // -all, -net are booleans
@@ -143,6 +146,7 @@ func usage() {
   review [-all] [-expand]  messages the scanner flagged and did NOT act on,
                            grouped by author unless -expand
   dismiss ID | -from HASH  record that you read them and chose to do nothing
+  prune -older-than 720h   delete old messages; DRY RUN unless -apply
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   status                   backlog, scanner heartbeat, counts
 
@@ -559,6 +563,69 @@ func cmdDismiss(ctx context.Context, s *chat.Store, argv []string) {
 	// Says what it did NOT do, because "dismiss" could plausibly mean either.
 	fmt.Printf("message %d marked reviewed — nothing was hidden and nobody was kicked\n", id)
 	fmt.Printf("see it again with: kourtchatctl review -all\n")
+}
+
+// cmdPrune applies a retention window, and reports what it refused to touch.
+//
+// DRY RUN by default, like the scanner's --enforce. Deleting history is the one operation
+// here with no undo — `unban` reverses a consequence, nothing reverses a DELETE — so the
+// default has to be the one that cannot lose anything.
+//
+// The refusal counts are printed even when they are zero, because their absence is
+// information too: "nothing is waiting for review" is worth reading on the screen where
+// somebody is about to delete a month of history.
+func cmdPrune(ctx context.Context, s *chat.Store, argv []string) {
+	fs := flag.NewFlagSet("prune", flag.ExitOnError)
+	age := fs.Duration("older-than", 0, "delete messages older than this, e.g. 720h (required)")
+	limit := fs.Int("n", 5000, "how many at most in one pass")
+	apply := fs.Bool("apply", false, "actually delete (default: dry run)")
+	flags, _ := split(argv)
+	_ = fs.Parse(flags)
+	if *age <= 0 {
+		die("prune needs -older-than, e.g. -older-than 720h for 30 days")
+	}
+
+	run := s.PruneDryRun
+	if *apply {
+		run = s.Prune
+	}
+	r, err := run(ctx, *age, *limit)
+	if err != nil {
+		die("%v", err)
+	}
+
+	what := "would delete"
+	if *apply {
+		what = "deleted"
+	}
+	fmt.Printf("%s        %d message(s) older than %s\n", what, r.Deleted, *age)
+	fmt.Printf("kept                 %d unscanned — the scanner has not looked yet\n",
+		r.KeptUnscanned)
+	fmt.Printf("                     %d waiting for review — see kourtchatctl review\n",
+		r.KeptQueued)
+	fmt.Printf("                     %d cited by a consequence still in force\n", r.KeptCited)
+	fmt.Printf("remaining            %d message(s)", r.Remaining)
+	if r.Oldest > 0 {
+		fmt.Printf(", oldest %s", time.Unix(r.Oldest, 0).Format("2006-01-02"))
+	}
+	fmt.Println()
+
+	if !*apply {
+		fmt.Printf("\nthis was a DRY RUN. to do it:  kourtchatctl prune -older-than %s -apply\n", *age)
+		return
+	}
+	if r.Deleted == *limit {
+		fmt.Printf("\nthe batch limit was reached — run it again to continue\n")
+	}
+	// Deleting rows reclaims NOTHING on its own, and an operator who pruned to free disk
+	// needs to hear that before they go looking for the space. Measured on 40k messages:
+	// 7876K main + 7994K WAL before, byte-identical after pruning every row; a checkpoint
+	// then freed the WAL and none of the main file; VACUUM INTO returned 56K. Pruning can
+	// even make the total temporarily LARGER, because the deletions are journaled first.
+	fmt.Printf("\ndisk is NOT reclaimed by deleting. two steps, in order:\n")
+	fmt.Printf("  sqlite3 <db> \"PRAGMA wal_checkpoint(TRUNCATE)\"     frees the -wal, no downtime\n")
+	fmt.Printf("  sqlite3 <db> \"VACUUM INTO '/tmp/compact.db'\"       frees the main file, then\n")
+	fmt.Printf("                                                     stop, swap it in, restart\n")
 }
 
 func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
