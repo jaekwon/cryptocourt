@@ -1119,6 +1119,31 @@ the scanner records the verdict, applies nothing, and logs it.
 It is gameable and known to be: reporting-shaped framing is a reliable way to keep flagged
 content on screen, which is asserted as a test rather than hidden.
 
+**It also did not cover what raising an alarm looks like in a COURT, which is this application's
+core flow.** The shapes were alarm shapes — "heads up", "beware", "is this a scam" — and nothing a
+person writes when filing evidence. Measured, the model acts on every way of quoting a scam link:
+
+    the scam link was t.me/fakegnot, for the record              scam 0.95
+    the evidence is a message linking to t.me/fakegnot            spam 0.86
+    the claimant submitted a screenshot showing t.me/fakegnot     scam 0.86
+
+So submitting evidence about a scam earned a consequence, in the service that exists to adjudicate
+it — while this section already said quoting a link "is not the harm". Both halves were true and
+the second was not implemented.
+
+Note where the harm comes from, because it decides the fix: demoting the off-platform LINK floor
+would change nothing here. The model punishes these on its own, and it is the same failure §6
+records — it classifies the SUBJECT, not the ACT. Only the carve-out reaches them, so
+`for the record`, `the evidence is/was/includes/shows`, `as evidence` and `submitted a/the/this`
+are alarm shapes now.
+
+Phrases, not bare nouns, deliberately: "the claimant" or "screenshot" on their own would make most
+of a court's traffic unpunishable. Every trigger is still a word an attacker can prefix, which is
+the concession above rather than a new one — and the paired arm is what holds it, five lures with no
+such phrase, including "claim seven is a scam so send me your recovery words", none of which reads
+as reporting. Verified live: three evidence filings unpunished, and a bare `t.me/` pull in the same
+run still punished.
+
 **But it withheld the HIDE as well as the timeout, and those are different decisions.** Measured:
 "fyi here are my words: <a real BIP-39 phrase>" was recorded as scam and left readable
 indefinitely, because the message opened with three letters. Withholding the timeout is the

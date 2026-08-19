@@ -89,7 +89,27 @@ type Hint struct {
 var reReporting = regexp.MustCompile(`(?i)(is (this|it) (a )?(scam|legit|real|phishing)|` +
 	`do ?n[o']?t click|don't fall for|be ?ware|beware|warning|heads up|` +
 	`careful|scam alert|i (just )?(got|received|was sent)|someone (just )?(sent|messaged|dm)|` +
-	`mods,? (please )?(look|check|see)|reporting this|fyi)`)
+	`mods,? (please )?(look|check|see)|reporting this|fyi|` +
+	// EVIDENCE-SUBMISSION SHAPES, which is what raising an alarm looks like in a COURT.
+	//
+	// §7 says the carve-out exists because gemma3:4b "cannot separate reporting a scam from
+	// sending one", and §7 also says quoting a scam link "is not the harm". Both were true and
+	// the second was not implemented: measured, the model acts on every way of quoting one.
+	//
+	//	"the scam link was t.me/fakegnot, for the record"            scam 0.95
+	//	"the evidence is a message linking to t.me/fakegnot"          spam 0.86
+	//	"the claimant submitted a screenshot showing t.me/fakegnot"   scam 0.86
+	//
+	// The alarm shapes above did not cover any of them, so submitting evidence about a scam —
+	// the thing this application exists to adjudicate — reliably earned a consequence. Note
+	// where the harm comes from: demoting the link floor would fix nothing, because the model
+	// punishes these on its own. Only the carve-out reaches it.
+	//
+	// Kept to phrases rather than bare nouns. "the claimant" or "screenshot" alone would make
+	// most of a court's traffic unpunishable, and every trigger is a word an attacker can
+	// prefix — §7 records that the carve-out is gameable and known to be, so this widens
+	// something already conceded rather than opening it.
+	`for the record|the evidence (is|was|includes|shows)|as evidence|submitted (a|the|this))`)
 
 // Reporting reports whether a message reads as a warning about abuse rather than an
 // instance of it.

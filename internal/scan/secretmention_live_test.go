@@ -196,3 +196,75 @@ func TestLiveNamingAPlatformIsNotPullingToIt(t *testing.T) {
 		clock = clock.Add(chat.MinInterval)
 	}
 }
+
+// AND THE COURT'S OWN CORE FLOW: submitting evidence about a scam must not be punished.
+//
+// §7 says quoting a scam link "is not the harm", and that was not implemented — the alarm shapes
+// covered "heads up" and "beware" but nothing a person writes when filing evidence. Measured, the
+// model acts on every way of quoting a link (scam 0.95, spam 0.86, scam 0.86), so this could not
+// be fixed by demoting the link floor; only the carve-out reaches it.
+//
+// The lure is in the same run on purpose. The carve-out suppresses ALL consequences, so widening
+// it is only safe if a lure without those phrases still earns one.
+func TestLiveSubmittingEvidenceIsNotPunished(t *testing.T) {
+	o := liveClassifier(t)
+	ctx := context.Background()
+	st, err := chat.Open(t.TempDir() + "/chat.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	clock := time.Unix(1_700_000_000, 0)
+	st.Now = func() time.Time { return clock }
+
+	speakers := []struct {
+		who, body string
+		lure      bool
+	}{
+		{"hana", "the scam link was t.me/fakegnot, for the record", false},
+		{"ivan", "the evidence is a message linking to t.me/fakegnot", false},
+		{"jo", "the evidence shows they asked for a recovery phrase", false},
+		{"kai", "dm me on t.me/kourtsupport", true},
+	}
+	ids := map[string]int64{}
+	for _, s := range speakers {
+		id, err := st.Post(ctx, chat.PostInput{
+			Chain: "dev", Court: "orem", Moniker: s.who, Body: s.body,
+			IPHash: "ip-" + s.who, NetHash: "net-" + s.who,
+		})
+		if err != nil {
+			t.Fatalf("seeding %s: %v", s.who, err)
+		}
+		ids[s.who] = id
+		clock = clock.Add(chat.MinInterval)
+	}
+
+	sc := &Scanner{Store: st, Cls: o, Enforce: true, Batch: 10}
+	if _, err := sc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.ListInfractions(ctx, "", true, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	punished := map[int64]bool{}
+	for _, r := range rows {
+		punished[r.EvidenceID] = true
+	}
+	for _, s := range speakers {
+		t.Logf("  %-5s punished=%-5v  %.56q", s.who, punished[ids[s.who]], s.body)
+	}
+
+	// Both directions are asserted here rather than logged, because neither depends on the
+	// model's judgement: the carve-out suppresses regardless of the verdict, and the lure has no
+	// carve-out phrase to hide behind.
+	for _, s := range speakers {
+		if !s.lure && punished[ids[s.who]] {
+			t.Errorf("filing evidence must not earn a consequence: %q", s.body)
+		}
+	}
+	if !punished[ids["kai"]] {
+		t.Errorf("a lure with no reporting phrase must still earn one, or widening the " +
+			"carve-out has cost more than the phrases it added")
+	}
+}

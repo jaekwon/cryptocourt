@@ -290,3 +290,48 @@ func hasNote(h Hint, substr string) bool {
 	}
 	return false
 }
+
+// EVIDENCE SUBMISSION IS AN ALARM, IN A COURT.
+//
+// §7's carve-out exists because gemma3:4b cannot separate reporting a scam from sending one, and
+// §7 also says quoting a scam link "is not the harm". The second was not implemented: the alarm
+// shapes covered "heads up" and "beware" but nothing a person writes when submitting evidence, and
+// measured, the model acts on every way of quoting a link — scam 0.95, spam 0.86, scam 0.86. So
+// the core flow of a court earned a consequence.
+//
+// Note what this could NOT have fixed: demoting the off-platform link floor. The model punishes
+// these on its own, so only the carve-out reaches them.
+func TestSubmittingEvidenceReadsAsReporting(t *testing.T) {
+	evidence := []string{
+		"the scam link was t.me/fakegnot, for the record",
+		"the evidence is a message linking to t.me/fakegnot",
+		"the evidence includes a whatsapp screenshot from the claimant",
+		"the evidence shows they asked for a recovery phrase",
+		"the claimant submitted a screenshot showing t.me/fakegnot",
+		"i am posting this as evidence, not as an offer",
+	}
+	for _, body := range evidence {
+		if !Prefilter(body).Reporting {
+			t.Errorf("submitting evidence must read as reporting, or the court's own core flow "+
+				"earns a consequence: %q", body)
+		}
+	}
+
+	// THE PAIRED ARM, and it carries the weight here: every trigger is a phrase an attacker can
+	// prefix, so the pattern must not fire on a lure that merely mentions a court. §7 records
+	// that the carve-out is gameable and known to be — this must not make it more so than the
+	// phrases above already do.
+	lures := []string{
+		"send me your seed phrase and i will restore your wallet",
+		"dm me on t.me/kourtsupport",
+		"the court is slow, message me on telegram instead",
+		"i can settle your claim faster, dm me your private key",
+		"claim seven is a scam so send me your recovery words",
+	}
+	for _, body := range lures {
+		if Prefilter(body).Reporting {
+			t.Errorf("a lure must not read as reporting just because it mentions a court: %q",
+				body)
+		}
+	}
+}
