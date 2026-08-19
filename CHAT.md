@@ -755,6 +755,22 @@ default and it is also visible: seed six messages with six different forwarded
 addresses against a direct listener and five come back 429, because they are all one
 client. With `--behind-proxy` and no `--trusted-proxy`, the server refuses to start.
 
+**`--secret-file` should be outside the data directory — and `kourtchat` now says so when it is
+not.** Two configurations warn at startup, beside the UNMODERATED line and for the same reason: a
+defence that is not operating should say so where an operator is looking, not only in a document.
+
+    no --secret-file        the key is a row IN the database; one copy of that file carries the
+                            address hashes and the key that reverses them
+    key beside the database  a backup or rsync of one directory carries both
+
+A key in another directory prints nothing, which is the half worth testing — a warning that fires
+on a correct setup is one an operator learns to skip. It warns rather than refuses, because
+refusing would break every deployment running this way today.
+
+`internal/chat/clientip.go` used to say the key was "required" to live outside the data directory.
+Nothing required it and nothing checked it; the verb is "belongs" now, and the startup warning is
+what lets a recommendation be one.
+
 **`--secret-file` should be outside the data directory.** The fallback keeps the key
 in the database, which is convenient and protects nothing: hashing addresses defends
 against a stray copy of the `.db` file, and if the key is in that file, a backup

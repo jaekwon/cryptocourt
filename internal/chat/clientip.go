@@ -151,8 +151,12 @@ func Prefix(a netip.Addr) netip.Prefix {
 // comment overclaimed: a stray copy of the database file alone. It does NOT
 // protect against a host compromise or a whole-data-directory backup, because
 // IPv4 is 2^32 — anyone holding both the key and the table recovers every
-// address in seconds. That is why the key is required to live outside the data
-// directory.
+// address in seconds. That is why the key BELONGS outside the data directory — and
+// "belongs" is the honest verb, because nothing here enforces it. The default is
+// worse than the case this warns about: with no --secret-file the key is a row in
+// the database itself, so one file carries the hashes and the means to reverse them.
+// kourtchat now says so at startup rather than leaving it to whoever reads §9, which
+// is the only reason this comment can afford to be a recommendation.
 type Hasher struct{ key []byte }
 
 func NewHasher(key []byte) (*Hasher, error) {

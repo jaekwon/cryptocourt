@@ -8,7 +8,8 @@ import (
 
 // THE HASHING KEY'S WARNING, and the case it must NOT fire on.
 //
-// §3 of CHAT.md said the key was "required to live outside the data directory". Nothing required
+// internal/chat/clientip.go said the key was "required to live outside the data directory" — a
+// code comment, not CHAT.md, which only ever said "should". Nothing required
 // it, nothing checked it, and the DEFAULT is the case that fails: with no --secret-file the key
 // becomes a row in the database, so one copy of that file carries both the address hashes and the
 // means to reverse them. The process said nothing about it at startup, while announcing an

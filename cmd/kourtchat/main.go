@@ -104,7 +104,8 @@ func main() {
 	}
 	// SAY WHEN THE HASHING KEY IS NOT PROTECTING ANYTHING.
 	//
-	// §3 of CHAT.md claimed the key was "required to live outside the data directory". Nothing
+	// internal/chat/clientip.go claimed the key was "required to live outside the data
+	// directory" — a code comment, not CHAT.md, which only ever said "should". Nothing
 	// required it, and the DEFAULT is the case that fails: with no --secret-file the key goes
 	// into a row of the database itself, so one copy of that file carries both the hashes and
 	// the means to reverse them. IPv4 is 2^32; that is every address recovered in seconds.
