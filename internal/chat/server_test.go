@@ -1126,3 +1126,71 @@ func TestTheComposedRefusalIsWhatTheCallerReceives(t *testing.T) {
 		t.Errorf("an ordinary post must succeed, got %d %s", rec.Code, rec.Body)
 	}
 }
+
+// TOO BIG IS NOT MALFORMED, and both used to report the second.
+//
+// The body is bounded by http.MaxBytesReader before Decode reads any of it, which is right — the
+// per-field limit in the sanitiser is checked after, and cannot bound memory. But when that cap
+// tripped, Decode returned an error and the handler blamed the JSON. Measured live: a 100 kB body of
+// perfectly valid JSON came back 400 with `expected {"moniker":…,"body":…}`, which sends a client to
+// their serialiser when the fix is to send less. A 5 kB body — over the sanitiser's limit, under the
+// cap — already said "far too long to process", so ONE condition was reported two ways depending on
+// which check happened to catch it.
+//
+// The four regimes are asserted together because the point is that they are distinguishable, not
+// that any one of them has a particular string.
+func TestAnOversizeRequestSaysSoRatherThanBlamingTheJSON(t *testing.T) {
+	srv, _, _ := newServer(t)
+
+	post := func(raw string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/chat/dev/orem", strings.NewReader(raw))
+		r.Header.Set("Content-Type", "application/json")
+		return do(t, srv, r)
+	}
+	jsonOf := func(n int) string {
+		b, err := json.Marshal(postBody{Moniker: "alice", Body: strings.Repeat("x", n)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+
+	// 1. Past the request cap: valid JSON, too much of it.
+	rec := post(jsonOf(100_000))
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("an oversize request must be 413, got %d %s", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "expected {") {
+		t.Errorf("and must not blame the JSON, which was valid: %s", rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), strconv.Itoa(MaxInputBytes)) {
+		t.Errorf("and must name the limit that is the client's to work with: %s", rec.Body)
+	}
+
+	// 2. Over the sanitiser's per-field limit but under the cap: the other size regime, which must
+	// name the SAME actionable number.
+	rec = post(jsonOf(MaxInputBytes + 1000))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("a field over its limit is a 400, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), strconv.Itoa(MaxInputBytes)) {
+		t.Errorf("and names the same limit: %s", rec.Body)
+	}
+
+	// 3. Genuinely malformed JSON keeps the message that describes it. Without this the fix could
+	// have been "call everything too large".
+	rec = post(`{"moniker":`)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("malformed JSON is a 400, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "expected {") {
+		t.Errorf("and must still say the shape it wanted: %s", rec.Body)
+	}
+
+	// 4. THE PAIRED POSITIVE: an ordinary post still works, so none of the above is passing for a
+	// handler that refuses everything.
+	rec = post(`{"moniker":"alice","body":"an ordinary message"}`)
+	if rec.Code != http.StatusOK {
+		t.Errorf("an ordinary post must succeed, got %d %s", rec.Code, rec.Body)
+	}
+}

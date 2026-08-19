@@ -597,6 +597,35 @@ function mkDoc() {
     stop2();
   }
 
+  // A 413 IS A STATUS THE PANEL HAD NEVER SEEN, and the server started sending one this commit:
+  // an oversize request used to be reported as malformed JSON, and now says "the request is too
+  // large; a message may be up to 4096 bytes" with 413 instead of 400.
+  //
+  // chatPost maps 429 and 410 by hand and falls back to "could not send (N)" for anything else, so
+  // the question is whether the server's own sentence survives a status the panel does not know. It
+  // does, because d.error wins — but that is worth an assertion rather than a reading of the code,
+  // since the fallback would show a bare number to somebody who only needs to send less.
+  {
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: false, status: 413, json: async () => ({
+          error: "the request is too large; a message may be up to 4096 bytes"})}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    const r = await chatPost("http://x", "dev", "orem", "alice", "x".repeat(50));
+    ok("a 413 shows the server's sentence", /request is too large/.test(r.error));
+    ok("...and names the limit rather than a status code", /4096/.test(r.error));
+    ok("...and does not fall back to \"could not send\"", !/could not send/.test(r.error));
+    ok("...and reports failure", r.ok === false);
+
+    // The paired case: with no error field the fallback is used, so the assertions above are about
+    // d.error winning and not about 413 being special-cased.
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: false, status: 413, json: async () => ({})}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    const bare = await chatPost("http://x", "dev", "orem", "alice", "x");
+    ok("without a server sentence it still says something", typeof bare.error === "string" &&
+       bare.error.length > 0);
+  }
+
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);
 })();

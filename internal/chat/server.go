@@ -378,9 +378,27 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		return
 	}
 	var in postBody
-	r.Body = http.MaxBytesReader(w, r.Body, MaxInputBytes*2)
+	// Twice MaxInputBytes, because the JSON around the two fields costs something and the cap has
+	// to bound MEMORY before Decode reads any of it. The sanitiser's own limit is per field and is
+	// checked after.
+	const requestCap = MaxInputBytes * 2
+	r.Body = http.MaxBytesReader(w, r.Body, requestCap)
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&in); err != nil {
+		// TOO BIG IS NOT MALFORMED, and both used to report the second. Measured: a 100 kB body of
+		// perfectly valid JSON came back 400 with "expected {"moniker":…,"body":…}", which sends a
+		// client to their serialiser when the fix is to send less. A 5 kB body — over the
+		// sanitiser's per-field limit but under this cap — already said "far too long to process",
+		// so the same condition was reported two different ways depending on which check caught it.
+		//
+		// 413 rather than 400, because a client can act on the difference, and the message names
+		// the limit that is actually theirs to work with rather than this internal cap.
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf(
+				"the request is too large; a message may be up to %d bytes", MaxInputBytes))
+			return
+		}
 		writeErr(w, http.StatusBadRequest, "expected {\"moniker\":…,\"body\":…}")
 		return
 	}
