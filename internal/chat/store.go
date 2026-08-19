@@ -10,6 +10,8 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+	"os"
+	"path/filepath"
 )
 
 // EVERY TIMESTAMP IN THIS PACKAGE IS UNIX SECONDS. Stated once, here, because the
@@ -220,6 +222,11 @@ func Open(path string) (*Store, error) {
 	w.SetMaxOpenConns(1)
 	if _, err := w.Exec(schema); err != nil {
 		w.Close()
+		// The diagnosis FIRST. The driver's own text for this class is "out of memory", which
+		// is wrong and is what an operator reads if it leads.
+		if diag := diagnosePath(path); diag != "" {
+			return nil, fmt.Errorf("schema: %s (driver said: %w)", diag, err)
+		}
 		return nil, fmt.Errorf("schema: %w", err)
 	}
 	if err := migrate(w); err != nil {
@@ -274,6 +281,51 @@ func ensureColumn(w *sql.DB, table, col, decl string) error {
 	// caller is a literal in this file, which is the only reason that is acceptable.
 	_, err := w.Exec("ALTER TABLE " + table + " ADD COLUMN " + col + " " + decl)
 	return err
+}
+
+// diagnosePath explains a failure to open the database, because the driver does not.
+//
+// Measured: a missing parent directory, a path that IS a directory, and a read-only parent all
+// produce exactly the same message —
+//
+//	schema: unable to open database file: out of memory (14)
+//
+// "out of memory" is SQLITE_NOMEM's text and 14 is SQLITE_CANTOPEN, so the driver has paired the
+// wrong string with the code. An operator reads that and goes looking at RAM. It cost me two
+// wrong diagnoses in this repo before I checked what the message actually meant.
+//
+// So the cause is established from the FILESYSTEM rather than by parsing the driver's string,
+// which cannot drift with a driver version and says something an operator can act on. Returns ""
+// when nothing is obviously wrong, so a genuine SQLite error is not buried under a guess.
+//
+// Only ever called on the error path.
+func diagnosePath(path string) string {
+	if path == "" || strings.HasPrefix(path, ":memory:") {
+		return ""
+	}
+	if fi, err := os.Stat(path); err == nil && fi.IsDir() {
+		return fmt.Sprintf("%s is a directory, not a database file", path)
+	}
+	dir := filepath.Dir(path)
+	fi, err := os.Stat(dir)
+	switch {
+	case os.IsNotExist(err):
+		return fmt.Sprintf("the directory %s does not exist; create it or correct --db", dir)
+	case err != nil:
+		return fmt.Sprintf("cannot stat %s: %v", dir, err)
+	case !fi.IsDir():
+		return fmt.Sprintf("%s is not a directory, so %s cannot be created", dir, path)
+	}
+	// A writable check that does not depend on interpreting mode bits, which say nothing
+	// useful about ACLs or a read-only mount.
+	probe, err := os.CreateTemp(dir, ".kourtchat-probe-*")
+	if err != nil {
+		return fmt.Sprintf("%s is not writable: %v — a read-only mount, or the wrong owner "+
+			"after a restore", dir, err)
+	}
+	probe.Close()
+	os.Remove(probe.Name())
+	return ""
 }
 
 func (s *Store) Close() error {

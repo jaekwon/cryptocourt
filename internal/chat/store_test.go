@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1710,6 +1711,100 @@ func TestTheReplayGuardsExemptions(t *testing.T) {
 		}
 		if again == 0 {
 			t.Error("a reversed consequence must not block reinstating it on the same evidence")
+		}
+	})
+}
+
+// A FAILURE TO OPEN THE DATABASE MUST SAY WHAT IS ACTUALLY WRONG.
+//
+// Measured: a missing parent directory, a path that IS a directory, and a read-only parent all
+// produced exactly the same message from the driver —
+//
+//	schema: unable to open database file: out of memory (14)
+//
+// "out of memory" is SQLITE_NOMEM's text and 14 is SQLITE_CANTOPEN, so the wrong string is paired
+// with the code. An operator reads "out of memory" and goes looking at RAM. This is not a
+// hypothetical audience: that message sent ME to the wrong conclusion twice in this repo, once
+// when a /tmp path had been taken by a directory and once while testing permissions.
+//
+// The cause is established from the filesystem rather than by matching the driver's string, so it
+// cannot drift with a driver version, and it names something to do.
+func TestOpeningAnImpossibleDatabaseSaysWhy(t *testing.T) {
+	base := t.TempDir()
+
+	t.Run("missing directory", func(t *testing.T) {
+		_, err := Open(filepath.Join(base, "nope", "c.db"))
+		if err == nil {
+			t.Fatal("a database under a missing directory cannot be opened")
+		}
+		if !strings.Contains(err.Error(), "does not exist") {
+			t.Errorf("must name the missing directory, got %q", err)
+		}
+		if !strings.Contains(err.Error(), filepath.Join(base, "nope")) {
+			t.Errorf("and say WHICH directory, got %q", err)
+		}
+	})
+
+	t.Run("path is a directory", func(t *testing.T) {
+		_, err := Open(base)
+		if err == nil {
+			t.Fatal("a directory is not a database")
+		}
+		if !strings.Contains(err.Error(), "is a directory") {
+			t.Errorf("must say the path is a directory, got %q", err)
+		}
+	})
+
+	t.Run("read-only directory", func(t *testing.T) {
+		ro := filepath.Join(base, "ro")
+		if err := os.Mkdir(ro, 0o555); err != nil {
+			t.Fatal(err)
+		}
+		s, err := Open(filepath.Join(ro, "c.db"))
+		if err == nil {
+			s.Close()
+			t.Skip("this process can write to a 0555 directory (running as root?), so there is " +
+				"no failure to diagnose")
+		}
+		if !strings.Contains(err.Error(), "not writable") {
+			t.Errorf("must say the directory is not writable, got %q", err)
+		}
+		// The two causes an operator would actually have, named so they know where to look.
+		if !strings.Contains(err.Error(), "read-only mount") &&
+			!strings.Contains(err.Error(), "owner") {
+			t.Errorf("and suggest why, got %q", err)
+		}
+	})
+
+	// THE PAIRED POSITIVE, and it is the reason this is a diagnosis rather than a guess: a path
+	// with nothing wrong with it must add NOTHING, so a genuine SQLite error is never buried
+	// under a filesystem theory that does not apply.
+	t.Run("a good path is diagnosed as fine", func(t *testing.T) {
+		if got := diagnosePath(filepath.Join(base, "fine.db")); got != "" {
+			t.Errorf("a writable directory must produce no hint, got %q", got)
+		}
+		// And the real Open on it works, so the case above is not passing for some other reason.
+		s, err := Open(filepath.Join(base, "fine.db"))
+		if err != nil {
+			t.Fatalf("precondition: this path must be openable: %v", err)
+		}
+		s.Close()
+	})
+
+	// It must also leave no litter: the writability check creates a probe file.
+	t.Run("the writability probe cleans up after itself", func(t *testing.T) {
+		dir := t.TempDir()
+		diagnosePath(filepath.Join(dir, "x.db"))
+		ents, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(ents) != 0 {
+			names := make([]string, 0, len(ents))
+			for _, e := range ents {
+				names = append(names, e.Name())
+			}
+			t.Errorf("the probe file was left behind: %v", names)
 		}
 	})
 }
