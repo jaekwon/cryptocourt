@@ -1,0 +1,56 @@
+[Unit]
+Description=Kourt chat service
+Documentation=https://github.com/jaekwon/cryptocourt-mod/blob/main/CHAT.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kourt
+Group=kourt
+
+# THE SERVICE NEVER TALKS TO THE MODEL. The scanner is a separate process on a
+# separate machine (it wants a GPU; this does not), and CHAT.md is explicit that
+# accepting, storing, throttling and enforcing must keep working whether or not
+# the scanner is running. So this unit orders itself against nothing: an OOM in
+# a 7B model on another box cannot take the chat down with it.
+#
+# --behind-proxy is on because nginx terminates TLS in front of this. WITHOUT
+# it the client address is the peer and X-Forwarded-For is ignored entirely,
+# which is the safe default for a direct listener but wrong here — every client
+# would look like the proxy and the throttle would be one global bucket.
+# --trusted-proxy must therefore name the proxy, or the header is still ignored.
+ExecStart=/opt/kourt/kourtchat \
+    --addr 127.0.0.1:8788 \
+    --db /var/lib/kourt/chat.db \
+    --secret-file /var/lib/kourt/secret/iphash.key \
+    --behind-proxy \
+    --trusted-proxy 127.0.0.1/32,::1/128
+
+Restart=on-failure
+RestartSec=2
+
+# The database and the key that reverses its address hashes must not sit in one
+# file, and must not sit in one directory either — kourtchat warns about both.
+# /var/lib/kourt/secret is a mode-0700 subdirectory for exactly that reason.
+StateDirectory=kourt
+StateDirectoryMode=0750
+
+# Nothing here needs to write outside its state directory, own a terminal, or
+# see the rest of the filesystem.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadWritePaths=/var/lib/kourt
+
+[Install]
+WantedBy=multi-user.target

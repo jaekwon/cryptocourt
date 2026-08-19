@@ -1,5 +1,5 @@
 .PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
-	scenarios scenarios-check demo-physics height-shim dump-demo seed-demo web-test web-visual
+	scenarios scenarios-check demo-physics height-shim dump-demo seed-demo web-test web-visual deploy
 
 # Everything that can run without a node.
 #
@@ -64,6 +64,18 @@ web-test:
 		echo "node not installed - skipping web tests"; exit 0; \
 	fi; \
 	node web/tests/run.js
+
+# Ship both halves of Kourt to one box: the self-contained overlay into a
+# webroot, and the chat service under systemd. One SSH password, not nine —
+# see deploy/README.md. The realm is NOT deployed from here; it goes to a gno
+# chain with gnokey, and the overlay reads whichever chain you point it at.
+#
+#   make deploy HOST=root@kourt.example
+# `deploy` is also the name of a DIRECTORY in this repo, so without the .PHONY
+# on line 1 make finds it up to date and does nothing — silently, exit 0.
+deploy:
+	@test -n "$(HOST)" || { echo 'usage: make deploy HOST=user@host'; exit 2; }
+	./deploy/deploy.sh $(HOST)
 
 # Regenerate the chain-true half of the demo dataset from a seeded node. NOT part
 # of `check`: it needs a running chain, and `check` must not. Seed one first with
