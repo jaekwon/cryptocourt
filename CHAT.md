@@ -142,7 +142,9 @@ identical bytes and can never disagree about what a message says.
     OPTIONS /api/chat/*                        preflight
     GET     /api/chat/{chain}/{court}?since&limit
     POST    /api/chat/{chain}/{court}
-    GET     /api/chat/health                   {enforcing, backlog, heartbeat}
+    GET     /api/chat/health                   {ok, enforcing}
+                                               + backlog/heartbeat/unscannable
+                                               ONLY with --health-detail
 
 **CSRF, because CORS does not protect a write.** A cross-origin `fetch` with
 `mode:'no-cors'`, or a form with `enctype="text/plain"`, is CORS-safelisted: it
@@ -236,7 +238,24 @@ ever starts diluting, which would make this paragraph wrong.
 
 Ladder: 1h → 24h → 7d on repeats within 30 days, counting only unrevoked
 infractions. `--dry-run` is the default, and the panel's label derives from
-`health.enforcing` so it cannot claim moderation that isn't happening.
+`health.enforcing` so it cannot claim moderation that isn't happening — which was a claim
+this document made for some time before anything implemented it. No client fetched that
+endpoint at all. The panel now asks once per mount and, when timeouts are not being applied,
+says so.
+
+**What that endpoint may disclose is a decision, not an oversight.** Unauthenticated, it was
+returning the operator's whole telemetry, and an anonymous GET on a running server gave back
+`enforcing`, `backlog`, `scanner_seen_at` and `unscannable` — four of the things somebody
+choosing a moment would want, of which the heartbeat is the worst, because whether the scanner
+is alive and how long ago it ran is not otherwise observable. The numbers now require
+`--health-detail`; `kourtchatctl status` reads them from the database and never needed the
+endpoint.
+
+`enforcing` stays public on an asymmetry rather than on comfort: an attacker learns dry-run
+mode from a single post, while a reader cannot learn it at all, so disclosing it helps the
+honest side more than the other. The wording is factual for the same reason — "not applying
+timeouts on this server right now", never "you will not be punished" — and a failed health
+read stays silent, because not knowing is not the same as knowing it is off.
 
 **Why the ladder forgets.** Thirty days is a real decision and it cuts both ways. An
 address that carried a scam forever eventually punishes a stranger: addresses are
