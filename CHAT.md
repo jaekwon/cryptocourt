@@ -372,6 +372,7 @@ discovery happens during a restore. Either copy all three files together, or tak
 consistent snapshot:
 
     sqlite3 chat.db ".backup '/backups/chat-$(date +%F).db'"
+    sqlite3 chat.db "VACUUM INTO '/backups/chat.db'"      # same guarantee, compacted
 
 **Upgrades.** `kourtchat` migrates the database when it opens it, and migrations are
 column additions with defaults only, so an older binary reading a newer database is fine
@@ -383,13 +384,30 @@ it, so a new key means every kick and ban in the table matches nobody, and every
 suffix in the room changes at once. The key is as much the state as the database is;
 back it up with the same care and, per above, not in the same file.
 
-**Watch the backlog.** `kourtchatctl status` reports the scanner's heartbeat and how
-many messages are unscanned. Fail-open is deliberate — chat works with no scanner —
-but silent fail-open means moderation can be off for a week with nobody noticing.
+**Watch the backlog — and the UNSCANNED line, which is the one that hides.**
+`kourtchatctl status` reports the heartbeat, the unscanned count, and how many messages
+gave up. Fail-open is deliberate — chat works with no scanner — but silent fail-open
+means moderation can be off for a week with nobody noticing, and the backlog alone does
+not catch it.
 
-**Backups**: WAL means `chat.db-wal` and `chat.db-shm` matter. Copy the `.db` alone
-and you may capture a torn state; `VACUUM INTO` or `sqlite3 .backup` gives one
-consistent file.
+Measured, with a proxy that answers `/api/tags` so the daemon starts and 503s every
+classify — the OOM-after-startup case §1 predicts, not a misconfiguration:
+
+    during the backoff   backlog 2 unscanned, scanner 1s ago, enforcing    honest
+    after five attempts  backlog 0, scanner 1s ago, enforcing, queue empty  all green
+
+Every mechanism behaved correctly and together they hid the outage. `RecordFailure` gives
+up after five attempts so a malformed row is not retried forever; the row goes `ScanDone`
+with an EMPTY verdict, which drops it out of the backlog; `PendingReview` needs a
+non-clean verdict, so it never reaches the review queue; and `Run` heartbeats whether or
+not it classified anything. A seed-phrase lure sat in the court unclassified while every
+number said fine.
+
+So `Health.Unscannable` counts terminal rows with no verdict — `scan_state` alone cannot,
+because `ScanDone` is also where every successfully scanned message ends up — and the
+scanner logs `GAVE UP` once per message, since the fifth failure otherwise reads exactly
+like the first four. If that line or that count is non-zero, moderation did not merely lag;
+it skipped those messages permanently, and no human was told either.
 
 **Flags** need either a proxy that computes the country (`--country-header`) or a
 local GeoLite2 export (`--geo-locations` plus `--geo-blocks`). With neither, no flag
