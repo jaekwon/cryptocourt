@@ -2,3 +2,6 @@
 # so running any of them now leaves bytecode beside the sources. Never source.
 __pycache__/
 *.selftest-backup
+
+# built by `make chat`: the off-chain chat service binaries
+bin/
