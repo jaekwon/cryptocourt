@@ -2227,3 +2227,84 @@ func TestPreviewTruncatesByRunesAndLeavesShortBodiesAlone(t *testing.T) {
 		t.Errorf("the preview must not reach the end of a phrase: %q", Preview(phrase))
 	}
 }
+
+// A REVERSAL MUST NOT CREDIT THE CALLER WITH SOMEBODY ELSE'S DECISION.
+//
+// Revoke returned nil when it changed nothing, so `unban 1` on an already-reversed consequence
+// printed "consequence 1 reversed by bob" while the row said alice — measured live. In the one
+// record this design keeps deliberately, because "appealable" depends on it, the tool credited the
+// wrong person. And a nonexistent id surfaced the driver's own words, "sql: no rows in result set",
+// which tells an operator nothing about what they typed.
+func TestRevokeTellsYouWhenItChangedNothing(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-a", "a message to act on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inf, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-a", Kind: KindKick, Reason: ReasonManual, Duration: time.Hour, EvidenceID: id,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// THE PAIRED POSITIVE: a first reversal still succeeds, so none of the below is passing for a
+	// Revoke that refuses everything.
+	if err := s.Revoke(ctx, inf, "alice"); err != nil {
+		t.Fatalf("the first reversal must succeed: %v", err)
+	}
+	at := clock.Unix()
+
+	// A second attempt says who actually did it, and when.
+	*clock = clock.Add(time.Hour)
+	err = s.Revoke(ctx, inf, "bob")
+	var already *AlreadyRevokedError
+	if !errors.As(err, &already) {
+		t.Fatalf("a second reversal must report that it changed nothing, got %v", err)
+	}
+	if already.By != "alice" {
+		t.Errorf("it must name who reversed it, got %q", already.By)
+	}
+	if already.At != at {
+		t.Errorf("and when: got %d, want %d", already.At, at)
+	}
+	if already.ID != inf {
+		t.Errorf("and which consequence: got %d, want %d", already.ID, inf)
+	}
+
+	// The record is unchanged by the second attempt — bob's name must not appear anywhere.
+	var by string
+	var when int64
+	if err := s.r.QueryRow(`SELECT revoked_by, revoked_at FROM infractions WHERE id=?`, inf).
+		Scan(&by, &when); err != nil {
+		t.Fatal(err)
+	}
+	if by != "alice" || when != at {
+		t.Errorf("the audit trail must be untouched: by=%q at=%d", by, when)
+	}
+}
+
+// And a consequence that does not exist says so, in words rather than in the driver's.
+func TestRevokingAConsequenceThatDoesNotExistSaysSo(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	err := s.Revoke(ctx, 99999, "alice")
+	if !errors.Is(err, ErrNoConsequence) {
+		t.Errorf("must be ErrNoConsequence, got %v", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "sql:") {
+		t.Errorf("and must not surface the driver's own words: %q", err)
+	}
+	if err != nil && !strings.Contains(err.Error(), "99999") {
+		t.Errorf("and must name the id the operator typed: %q", err)
+	}
+	// Zero and negative ids take the same path rather than doing something surprising.
+	for _, bad := range []int64{0, -1} {
+		if err := s.Revoke(ctx, bad, "alice"); !errors.Is(err, ErrNoConsequence) {
+			t.Errorf("id %d: got %v", bad, err)
+		}
+	}
+}

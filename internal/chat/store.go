@@ -117,6 +117,15 @@ var (
 	// is simply false. The server always replaced the text on its way out, so nobody had been
 	// told the wrong thing yet; the wrong word was in the vocabulary rather than on a screen.
 	ErrWithdrawn = errors.New("this court has been withdrawn from service")
+
+	// ErrNoConsequence and AlreadyRevokedError exist because `unban` used to lie in two ways.
+	//
+	// Measured: `unban 999` printed "sql: no rows in result set" — a driver string for "no such
+	// consequence", the same class as a wrong --db reporting "out of memory". And `unban 1` on an
+	// already-reversed row affected zero rows, returned nil, and the tool printed "consequence 1
+	// reversed by bob" while the row said alice. In the one place this design keeps an audit trail
+	// on purpose, the tool credited the wrong person for somebody else's decision.
+	ErrNoConsequence = errors.New("no such consequence")
 )
 
 // Store owns the database. Two handles on purpose.
@@ -831,16 +840,40 @@ func (s *Store) Escalate(ctx context.Context, ipHash string) (time.Duration, err
 
 // Revoke reverses a consequence and un-hides what it hid. The row is kept, not
 // deleted: deleting it would erase the audit trail the appeal path depends on.
+// AlreadyRevokedError says who reversed a consequence and when, so a second attempt is told the
+// truth instead of being credited with somebody else's decision.
+type AlreadyRevokedError struct {
+	ID int64
+	By string
+	At int64
+}
+
+func (e *AlreadyRevokedError) Error() string {
+	return fmt.Sprintf("consequence %d was already reversed", e.ID)
+}
+
 func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 	tx, err := s.w.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	var ipHash string
+	var ipHash, wasBy string
+	var wasAt sql.NullInt64
 	if err := tx.QueryRowContext(ctx,
-		`SELECT ip_hash FROM infractions WHERE id=?`, id).Scan(&ipHash); err != nil {
+		`SELECT ip_hash, revoked_by, revoked_at FROM infractions WHERE id=?`, id).
+		Scan(&ipHash, &wasBy, &wasAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Not the driver's words. An operator reading "sql: no rows in result set" learns
+			// nothing about what they typed.
+			return fmt.Errorf("%w %d", ErrNoConsequence, id)
+		}
 		return err
+	}
+	if wasAt.Valid {
+		// Already reversed, and by whom matters: reporting success here credited the caller with
+		// a decision somebody else made, while the row kept the original name.
+		return &AlreadyRevokedError{ID: id, By: wasBy, At: wasAt.Int64}
 	}
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE infractions SET revoked_at=?, revoked_by=? WHERE id=? AND revoked_at IS NULL`,

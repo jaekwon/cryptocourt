@@ -293,7 +293,22 @@ func cmdUnban(ctx context.Context, s *chat.Store, argv []string) {
 		die("%v", err)
 	}
 	if err := s.Revoke(ctx, id, *by); err != nil {
-		die("%v", err)
+		// Both failures used to be indistinguishable from success or from a driver string.
+		// `unban 999` printed "sql: no rows in result set", and `unban 1` on an
+		// already-reversed row printed "reversed by bob" while the row said alice — crediting
+		// the caller with somebody else's decision, in the one record this design keeps on
+		// purpose.
+		var already *chat.AlreadyRevokedError
+		switch {
+		case errors.As(err, &already):
+			die("consequence %d was already reversed by %s on %s — nothing to do, and it was "+
+				"not your decision to claim", already.ID, already.By,
+				time.Unix(already.At, 0).Format(time.RFC3339))
+		case errors.Is(err, chat.ErrNoConsequence):
+			die("no consequence %d — read the id from `list` or `why`", id)
+		default:
+			die("%v", err)
+		}
 	}
 	// Revoke keeps the row and marks it, rather than deleting: the audit trail is
 	// the thing that makes "appealable" mean anything. It also un-hides the
