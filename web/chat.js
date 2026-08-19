@@ -119,9 +119,21 @@ function chatStatusLine(you, nowSec, appealTo) {
   if (st === "closed") return "This court's chat has been closed.";
   const until = you && you.until ? Number(you.until) : 0;
   const ref = you && you.ref ? Number(you.ref) : 0;
+
+  // PREFER THE SERVER'S OWN COUNTDOWN. `until` is an absolute time and this clock is not the
+  // one that set it, so differencing them shows the reader their own skew.
+  //
+  // Measured against a five-minute kick: a client ten minutes SLOW read "paused for another 15
+  // minutes", wrong by three times over, and one ten minutes FAST lost the duration entirely and
+  // was told only "paused", with nothing to say when to come back. Browsers take their time from
+  // the OS and a machine minutes out is ordinary.
+  //
+  // `seconds` is computed where `until` was, so it needs no clock here at all. `until` is kept as
+  // the fallback for a server that does not send it, and because an appeal can quote a time.
+  const fromServer = you && you.seconds ? Number(you.seconds) : 0;
   let when = "";
-  if (until > nowSec) {
-    const left = until - nowSec;
+  if (fromServer > 0 || until > nowSec) {
+    const left = fromServer > 0 ? fromServer : until - nowSec;
     // Pluralised, because "paused for another 1 hours" is what a punished person reads while
     // deciding whether this service is careless. Noticed in a live walk-through, not a test.
     const unit = (n, word) => n + " " + word + (n === 1 ? "" : "s");

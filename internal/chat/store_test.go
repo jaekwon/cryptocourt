@@ -2,8 +2,12 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1807,4 +1811,131 @@ func TestOpeningAnImpossibleDatabaseSaysWhy(t *testing.T) {
 			t.Errorf("the probe file was left behind: %v", names)
 		}
 	})
+}
+
+// THE COUNTDOWN IS COMPUTED WHERE THE DEADLINE WAS, not differenced by the caller.
+//
+// Status.Until is an absolute time and a caller's clock is not this one. Measured on the panel's
+// own status line with a five-minute kick: a client ten minutes SLOW read "paused for another 15
+// minutes", wrong by three times over, and one ten minutes FAST lost the duration entirely and was
+// told only "paused", with nothing to say when to come back. Browsers take their time from the OS
+// and a machine minutes out is ordinary.
+//
+// The state was never affected — nobody is wrongly let through — so this is about the one number a
+// punished reader actually needs.
+func TestStatusCarriesTheTimeLeftAndNotOnlyTheDeadline(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-a", NetHash: "net-a", Kind: KindKick, Reason: ReasonManual,
+		Duration: 30 * time.Minute,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := s.Status(ctx, "ip-a", "net-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "kick" {
+		t.Fatalf("precondition: expected a kick, got %q", st.State)
+	}
+	if st.Seconds != int64((30 * time.Minute).Seconds()) {
+		t.Errorf("Seconds must be the time left: got %d, want %d",
+			st.Seconds, int64((30 * time.Minute).Seconds()))
+	}
+	if st.Until != clock.Add(30*time.Minute).Unix() {
+		t.Errorf("Until is still the absolute deadline: got %d", st.Until)
+	}
+
+	// It shrinks with the clock, which is what makes a re-polling client self-correcting.
+	*clock = clock.Add(20 * time.Minute)
+	st, err = s.Status(ctx, "ip-a", "net-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Seconds != int64((10 * time.Minute).Seconds()) {
+		t.Errorf("after twenty minutes, ten should be left: got %d", st.Seconds)
+	}
+
+	// AND IT IS NEVER NEGATIVE. Past the deadline the state returns to ok, so a caller never sees
+	// a countdown at all rather than one running backwards.
+	*clock = clock.Add(20 * time.Minute)
+	st, err = s.Status(ctx, "ip-a", "net-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "ok" {
+		t.Errorf("an expired kick is over: got %q", st.State)
+	}
+	if st.Seconds != 0 || st.Until != 0 {
+		t.Errorf("and carries no countdown: seconds=%d until=%d", st.Seconds, st.Until)
+	}
+}
+
+// A permanent ban has no countdown, and must not invent one. The panel's line reads differently
+// for a ban precisely because there is no "for another …" to give.
+func TestAPermanentBanHasNoCountdown(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-b", Kind: KindBan, Reason: ReasonManual,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.Status(ctx, "ip-b", "net-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != "ban" {
+		t.Fatalf("precondition: expected a ban, got %q", st.State)
+	}
+	if st.Until != 0 || st.Seconds != 0 {
+		t.Errorf("a ban has no deadline and no countdown: until=%d seconds=%d",
+			st.Until, st.Seconds)
+	}
+	// The paired positive: an unaffected address gets neither a state nor a countdown, so the
+	// zeros above are about a ban and not about a Status that never fills anything in.
+	if st, err := s.Status(ctx, "ip-nobody", "net-nobody"); err != nil {
+		t.Fatal(err)
+	} else if st.State != "ok" || st.Seconds != 0 {
+		t.Errorf("an unaffected address: state=%q seconds=%d", st.State, st.Seconds)
+	}
+}
+
+// And it reaches the caller: `seconds` is in the JSON the panel reads.
+func TestTheCountdownIsInTheHTTPResponse(t *testing.T) {
+	srv, s, _ := newServer(t)
+	ctx := context.Background()
+	ipHash := srv.Hasher.Hash(netip.MustParseAddr("192.0.2.1"))
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: ipHash, Kind: KindKick, Reason: ReasonManual, Duration: 30 * time.Minute,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil))
+	if rec.Code != 200 {
+		t.Fatalf("want 200, got %d %s", rec.Code, rec.Body)
+	}
+	var reply struct {
+		You struct {
+			State   string `json:"state"`
+			Until   int64  `json:"until"`
+			Seconds int64  `json:"seconds"`
+		} `json:"you"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &reply); err != nil {
+		t.Fatal(err)
+	}
+	if reply.You.State != "kick" {
+		t.Fatalf("precondition: the requester must be kicked, got %q — if the test address "+
+			"stopped matching, hash the one httptest actually sends", reply.You.State)
+	}
+	if reply.You.Seconds != 1800 {
+		t.Errorf("the response must carry the countdown: seconds=%d", reply.You.Seconds)
+	}
+	if reply.You.Until == 0 {
+		t.Error("and keep the absolute deadline, which an appeal can quote")
+	}
 }

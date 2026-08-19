@@ -124,6 +124,37 @@ const XSS = '<img src=x onerror=alert(1)>';
 
   const k = chatStatusLine({state: "kick", until: 1000 + 1800, ref: 42}, 1000);
   ok("a kick says paused", /paused/i.test(k));
+
+  // THE COUNTDOWN MUST NOT COME FROM THIS CLOCK, because this clock did not set it.
+  //
+  // Measured on a five-minute kick before `seconds` existed: a client ten minutes SLOW read
+  // "paused for another 15 minutes", wrong by three times over, and one ten minutes FAST lost the
+  // duration entirely and was told only "paused" — nothing to say when to come back. Browsers take
+  // their time from the OS and a machine minutes out is ordinary.
+  //
+  // The state was never affected, so nobody was wrongly let through; it was the one number the
+  // reader needs that was wrong.
+  {
+    const now = 1700000000;
+    const you = {state: "kick", until: now + 300, seconds: 300, ref: 7};
+    const at = skew => chatStatusLine(you, now + skew, "mods@example.org");
+    ok("a correct clock reads the server's five minutes", /another 5 minutes/.test(at(0)));
+    ok("...and so does a clock ten minutes fast", /another 5 minutes/.test(at(600)));
+    ok("...and one ten minutes slow", /another 5 minutes/.test(at(-600)));
+    ok("...and one two hours out", /another 5 minutes/.test(at(7200)));
+
+    // The fallback is kept deliberately: a server that does not send `seconds` must still produce
+    // a line, and `until` remains for an appeal to quote.
+    const older = {state: "kick", until: now + 300, ref: 7};
+    ok("without seconds it still says how long", /another 5 minutes/.test(chatStatusLine(older, now)));
+
+    // And the paired case that keeps this from passing for a line that always says five minutes:
+    // a different remaining time reads differently.
+    const longer = {state: "kick", until: now + 7200, seconds: 7200, ref: 7};
+    ok("a two-hour kick reads as hours", /another 2 hours/.test(chatStatusLine(longer, now)));
+    ok("...regardless of the local clock",
+       /another 2 hours/.test(chatStatusLine(longer, now - 99999)));
+  }
   ok("...says how long", /30 minutes/.test(k));
   // With NO contact configured it gives the reference and promises nothing. The line used to
   // say "You can appeal" unconditionally, while no channel existed anywhere in the service.

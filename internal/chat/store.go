@@ -548,6 +548,20 @@ type Status struct {
 	State string `json:"state"` // ok | kick | ban
 	Until int64  `json:"until,omitempty"`
 	Ref   int64  `json:"ref,omitempty"` // opaque, so an appeal can quote something
+
+	// Seconds is how long is left, computed HERE rather than differenced from Until by the
+	// caller, because the caller's clock is not this one.
+	//
+	// Measured on the panel's own status line with a five-minute kick: a client ten minutes
+	// SLOW reads "paused for another 15 minutes", wrong by three times over, and a client ten
+	// minutes FAST loses the duration altogether and is told only "paused" — with no way to
+	// know when to come back. Browsers take their time from the OS, and a machine minutes out
+	// is ordinary.
+	//
+	// The state itself is authoritative and unaffected, so nobody is wrongly let through; it is
+	// the one number the reader actually needs that was wrong. A panel that re-polls gets a
+	// fresh value every few seconds, which is self-correcting in a way a subtraction is not.
+	Seconds int64 `json:"seconds,omitempty"`
 }
 
 func (s Status) Blocked() bool { return s.State != "" && s.State != "ok" }
@@ -616,6 +630,9 @@ func statusTx(ctx context.Context, q querier, ipHash, netHash string, now time.T
 	st := Status{State: kind, Ref: id}
 	if expiresAt.Valid {
 		st.Until = expiresAt.Int64
+		if left := expiresAt.Int64 - now.Unix(); left > 0 {
+			st.Seconds = left
+		}
 	}
 	return st, nil
 }
