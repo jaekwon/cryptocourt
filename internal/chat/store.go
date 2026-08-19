@@ -898,11 +898,17 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 // undone. A disclosed secret is not a punishment, so no appeal about anything else is a reason
 // to put it back.
 //
-// KNOWN LIMITATION, stated rather than left to be discovered: nothing un-hides a 2. If the
-// deterministic detector were ever wrong — a noun list of exactly phrase length whose checksum
-// passes by luck, one chance in sixteen at twelve words — the message stays out of sight and
-// `dismiss` will not bring it back, because dismiss records that a person looked and does not
-// touch visibility. Restoring one is a deliberate act nobody has needed yet.
+// THIS USED TO BE PERMANENT, and the limitation was weighed against the wrong probability. The
+// paragraph here reasoned about "a noun list of exactly phrase length whose checksum passes by
+// luck, one chance in sixteen at twelve words" — and luck is not the case that happens. The
+// message that reaches this function is a REPORT: Reporting plus Secret, somebody asking "is this
+// a scam?" and quoting what they were sent. Measured live: their message goes to hidden=2 with no
+// consequence at all, which is the carve-out working — and it was then invisible for good, with
+// `dismiss` unable to help because dismiss records that a person looked and does not touch
+// visibility. The carve-out exists to protect people who report abuse; silently and permanently
+// hiding the report was the wrong other half of it.
+//
+// Reveal is that act now. See its comment for why the hiding itself stays right.
 //
 // The two halves of moderation are separable and this is the seam. §7's `hidden` normally
 // arrives with a consequence, but a message can need to be out of sight while its author needs
@@ -918,6 +924,67 @@ func (s *Store) HideMessage(ctx context.Context, id int64) error {
 		return fmt.Errorf("no visible message %d", id)
 	}
 	return nil
+}
+
+// Revealed describes what Reveal put back, so an operator can see they had the right id.
+type Revealed struct {
+	OK      bool
+	Court   string
+	Moniker string
+	Preview string // the first few characters only; the full text is in `why`
+}
+
+// Reveal undoes HideMessage, and it exists because the alternative was permanence.
+//
+// HideMessage's own comment called this a known limitation and weighed it against the wrong
+// probability: "a noun list of exactly phrase length whose checksum passes by luck, one chance in
+// sixteen at twelve words". Luck is not the case that will happen. A PUBLISHED TEST VECTOR is a
+// valid phrase, deliberately typed, by exactly the audience this application has — measured, the
+// canonical all-abandon vector and "legal winner thank year …" both come back secret=true, and
+// somebody explaining what a seed phrase looks like in a crypto court is quoting one of them.
+//
+// The hiding is still right: a detector cannot tell a test vector from somebody's actual key
+// without a list of every vector ever published, and the harm is wildly asymmetric. What was wrong
+// is that the KICK for that message is reversible with `unban` while the hiding was not, so half of
+// one mistake could be undone and half could not.
+//
+// Restricted to hidden=2. A punished message is `unban`'s business, and clearing its `hidden`
+// directly would bypass the recompute that decides whether some OTHER live consequence still covers
+// it — see Revoke. Reports whether it changed anything so a typo cannot read as success.
+func (s *Store) Reveal(ctx context.Context, id int64) (Revealed, error) {
+	var out Revealed
+	tx, err := s.w.BeginTx(ctx, nil)
+	if err != nil {
+		return out, err
+	}
+	defer tx.Rollback()
+
+	var body string
+	err = tx.QueryRowContext(ctx,
+		`SELECT court, moniker, body FROM messages WHERE id=? AND hidden=2`, id).
+		Scan(&out.Court, &out.Moniker, &body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, nil // not hidden as a secret; the caller says so rather than claiming a change
+	}
+	if err != nil {
+		return out, err
+	}
+	// A PREVIEW, not the body. This may be somebody's actual recovery phrase, and an operator's
+	// terminal and shell history are not where it belongs — enough to confirm the id, no more.
+	if r := []rune(body); len(r) > 18 {
+		out.Preview = string(r[:18]) + "…"
+	} else {
+		out.Preview = body
+	}
+	// `AND hidden=2` again, and it is redundant: the SELECT above already returned early for
+	// anything else, so removing it survives every fixture. Kept as defence in depth on the write
+	// itself, and noted so the surviving mutation is not mistaken for a gap.
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE messages SET hidden=0 WHERE id=? AND hidden=2`, id); err != nil {
+		return out, err
+	}
+	out.OK = true
+	return out, tx.Commit()
 }
 
 // IsFrozen reports whether a court has been withdrawn from service.

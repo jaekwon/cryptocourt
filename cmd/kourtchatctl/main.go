@@ -91,6 +91,8 @@ func main() {
 		cmdDismiss(ctx, store, args[1:])
 	case "prune":
 		cmdPrune(ctx, store, args[1:])
+	case "reveal":
+		cmdReveal(ctx, store, args[1:])
 	case "unfreeze":
 		cmdUnfreeze(ctx, store, args[1:])
 	case "freeze":
@@ -157,6 +159,7 @@ func usage() {
                            delete old messages; DRY RUN unless -apply
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   unfreeze CHAIN/COURT     put it back; the freeze is recorded as lifted, not erased
+  reveal ID                put back a message hidden as a disclosed secret
   status                   backlog, scanner heartbeat, counts
 
 -msg ID acts on the AUTHOR of that message and cites it, so the consequence carries
@@ -695,6 +698,41 @@ func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
 // It refuses when the court was not frozen, rather than reporting success. A typo here is as
 // likely as a typo in `freeze`, and "dev/oren is back in service" over a court that never left it
 // is the same lie one verb along.
+// cmdReveal puts back a message the scanner hid as a disclosed secret.
+//
+// The scanner hides a valid BIP-39 phrase on sight and does not punish for it, which is right: a
+// recovery phrase must leave the room whether it was posted by a victim, a warning or a thief. But
+// nothing could undo it, and the case that will actually happen is not the one HideMessage's comment
+// weighed — it reasoned about a checksum passing "by luck, one chance in sixteen". A PUBLISHED TEST
+// VECTOR is not luck: it is a valid phrase, deliberately typed, by exactly this audience. Somebody
+// explaining seed phrases in a crypto court quotes "abandon abandon … about", and both published
+// vectors come back secret=true.
+//
+// So this exists, and it is deliberately awkward in one respect: it prints only a short PREVIEW of
+// what it restored. The body may be somebody's actual key, and an operator's terminal and shell
+// history are not where that belongs — enough to confirm the id, and `why` for the rest.
+func cmdReveal(ctx context.Context, s *chat.Store, argv []string) {
+	_, pos := split(argv)
+	if len(pos) != 1 {
+		die("reveal needs one message id — read it from `review`")
+	}
+	id, err := strconv.ParseInt(pos[0], 10, 64)
+	if err != nil {
+		die("%v", err)
+	}
+	r, err := s.Reveal(ctx, id)
+	if err != nil {
+		die("%v", err)
+	}
+	if !r.OK {
+		die("message %d is not hidden as a disclosed secret — `unban` restores messages hidden "+
+			"by a consequence, and nothing else hides one", id)
+	}
+	fmt.Printf("message %d is visible again in %s (%s): %q\n", id, r.Court, r.Moniker, r.Preview)
+	fmt.Printf("it was hidden because it contains a valid recovery phrase. If that phrase is\n")
+	fmt.Printf("real rather than a published test vector, hide it again and tell its owner.\n")
+}
+
 func cmdUnfreeze(ctx context.Context, s *chat.Store, argv []string) {
 	if len(argv) != 1 {
 		die("unfreeze needs CHAIN/COURT, e.g. dev/orem")

@@ -1956,3 +1956,139 @@ func TestTheCountdownIsInTheHTTPResponse(t *testing.T) {
 			reply.Now, s.Now().Unix())
 	}
 }
+
+// A MESSAGE HIDDEN AS A DISCLOSED SECRET CAN BE PUT BACK.
+//
+// It could not, and HideMessage's comment weighed that against the wrong probability: "a noun list
+// of exactly phrase length whose checksum passes by luck, one chance in sixteen at twelve words".
+// Luck is not the case that happens. A PUBLISHED TEST VECTOR is a valid phrase, deliberately typed,
+// by exactly the audience this application has — measured in internal/scan, both the canonical
+// all-abandon vector and "legal winner thank year …" come back secret=true. Somebody explaining what
+// a seed phrase looks like in a crypto court is quoting one of them.
+//
+// The hiding stays: a detector cannot tell a test vector from somebody's actual key without a list
+// of every vector ever published, and the harm is wildly asymmetric. What was wrong is that the KICK
+// for that message was reversible with `unban` while the hiding was not — half of one mistake could
+// be undone and half could not.
+func TestAMessageHiddenAsASecretCanBePutBack(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-teacher",
+		"a seed phrase looks like: abandon abandon abandon abandon about")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := post(t, s, "orem", "ip-other", "thanks, that is clearer now")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.HideMessage(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if msgs, err := s.Recent(ctx, "dev", "orem", 0, 50); err != nil {
+		t.Fatal(err)
+	} else if len(msgs) != 1 {
+		t.Fatalf("precondition: the secret is out of sight, %d visible", len(msgs))
+	}
+
+	r, err := s.Reveal(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.OK {
+		t.Fatal("revealing a secret-hidden message must report that it changed something")
+	}
+	// Against the stored row rather than against the helper's arguments: post()'s third parameter
+	// is the ip_hash and the moniker is its own fixed value, which this fixture had confused.
+	var wantMoniker string
+	if err := s.r.QueryRow(`SELECT moniker FROM messages WHERE id=?`, id).Scan(&wantMoniker); err != nil {
+		t.Fatal(err)
+	}
+	if r.Court != "orem" || r.Moniker != wantMoniker {
+		t.Errorf("it must say which message, for an operator checking the id: got %+v, "+
+			"want court=orem moniker=%q", r, wantMoniker)
+	}
+	// A PREVIEW, NOT THE BODY. This may be somebody's actual key, and a terminal and a shell
+	// history are not where that belongs.
+	if len([]rune(r.Preview)) > 20 {
+		t.Errorf("the preview must be short, got %d runes: %q", len([]rune(r.Preview)), r.Preview)
+	}
+	if strings.Contains(r.Preview, "about") {
+		t.Errorf("and must not carry the end of the phrase: %q", r.Preview)
+	}
+
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Errorf("both messages are visible again, got %d", len(msgs))
+	}
+	// And revealing one did not disturb the other, which was never hidden.
+	var found bool
+	for _, m := range msgs {
+		if m.ID == other {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the bystander's message must be untouched")
+	}
+
+	// Twice is nothing the second time, so a repeat cannot read as a fresh change.
+	if again, err := s.Reveal(ctx, id); err != nil {
+		t.Fatal(err)
+	} else if again.OK {
+		t.Error("revealing an already-visible message must report no change")
+	}
+}
+
+// AND IT MUST NOT REACH A PUNISHED MESSAGE. That is `unban`'s business: clearing `hidden` directly
+// would bypass the recompute that decides whether some OTHER live consequence still covers the row,
+// which is the bug Revoke was rewritten to fix. So reveal is restricted to hidden=2 and says so.
+func TestRevealRefusesAMessageHiddenByAConsequence(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	id, err := post(t, s, "orem", "ip-crook", "send me your seed phrase and I will restore it")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip-crook", Kind: KindKick, Reason: ReasonScam,
+		Duration: time.Hour, EvidenceID: id,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if msgs, err := s.Recent(ctx, "dev", "orem", 0, 50); err != nil {
+		t.Fatal(err)
+	} else if len(msgs) != 0 {
+		t.Fatalf("precondition: a punished message is hidden, %d visible", len(msgs))
+	}
+
+	r, err := s.Reveal(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.OK {
+		t.Error("reveal must not un-hide a punished message; unban does that, through a recompute " +
+			"that reveal would bypass")
+	}
+	if msgs, err := s.Recent(ctx, "dev", "orem", 0, 50); err != nil {
+		t.Fatal(err)
+	} else if len(msgs) != 0 {
+		t.Errorf("and it must still be hidden, got %d visible", len(msgs))
+	}
+
+	// A never-hidden message is also not its business, and must not report a change.
+	visible, err := post(t, s, "orem", "ip-ok", "an ordinary message nobody hid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.Reveal(ctx, visible); err != nil {
+		t.Fatal(err)
+	} else if r.OK {
+		t.Error("a visible message is not hidden as a secret")
+	}
+}
