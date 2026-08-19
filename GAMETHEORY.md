@@ -1187,3 +1187,214 @@ a 100 CC claim's entire comp is 4.8 CC.
 - **Not run, and required before landing:** the Python guards in `realm-test`
   (`check-citations.py`, `check-docnumbers.py`, `check-stale-guards.py`) need the owner's working
   tree, not a shadow.
+
+---
+
+## 13. AUDIT ROUND 2b — §11.2 WITHDRAWN, and the first shippable change
+
+### 13.1 §11.2 is withdrawn — the number was right, the finding was wrong
+
+I reported that re-keying the floor without the sizer "leaks the collateral," refunding 83.83%
+of the bond at settle. **The number reproduces (83.78%). The finding does not survive**, three
+independent ways:
+
+```
+c3    (floor re-keyed, sizer not): bond0 249.735907  refund 209.235907 = 83.78%  reserve 40.500000
+today (5000 bps, unmodified):      bond0 450.000000  refund 409.500000 = 91.00%  reserve 40.500000
+c3fix (sizer re-keyed too):        bond0 249.735907  refund   0.000000 =  0.00%  reserve 249.735907
+```
+
+1. **Today refunds a LARGER fraction (91.0%) and the IDENTICAL absolute amount** (40.500000 CC =
+   4.5%·X̄). C3-as-drafted retains strictly *more* of the bond than the status quo, not less.
+2. **The retained reserve exactly covers everything still forfeitable.** Driven end to end:
+   `retained at settle 40.500000 | slash levied by ResolveFlag 40.500000 | answerBond left
+   0.000000`. The only post-settle forfeiture is the flag-lane slash, and it shares the sizer.
+   **Nothing leaks.**
+3. **The prescribed fix costs more than the bug.** Re-keying `quality.gno:531` withholds **100%
+   of the bond from settle until crystallize** on the *modal* path (undisputed, no flag, ≥1 week),
+   and it breaks a shipped test asserting the slash's **definition, not a bug** —
+   `TestSlashSizeForDrawProportional`: *"a NO answer must read the NO pool, not the (large) YES
+   pool."* `quality.gno:510-517` defines the slash as 1.6× the **answered** side's forgone draw.
+
+**The correct reading, which I had inverted.** The answered-keyed sizer is **slash collateral**,
+whose risk window runs to crystallize — retain it. The max-keyed excess is an **anti-snipe
+premium**, whose risk window is the 72h dispute window, where the *whole* bond burns on an
+overturn (including the slash reserve via `unslash`). **Releasing the premium at settle is
+correct disposition, not a leak.**
+
+> **§11.2's "re-key both in one commit" instruction must NOT ship.** Re-key the floor only.
+
+Preconditions were asserted rather than assumed: the bond was genuinely floor-raised
+(`bond0 == max-keyed floor`, base arm 54.000000); `SettleUndisputed` **refused** before the delay;
+`votingBlocks 120960 > settleDelay 51840`, so no flag could have resolved.
+
+**Fixture count re-confirmed:** C3-as-drafted fails **exactly three**, matching §11.7. Re-keying
+the sizer adds a **fourth**, which §11.2 did not state.
+
+### 13.2 The spine — one budget, and you cannot spend it twice
+
+At the extremal (12 wk, hot ceiling, X̄ = 1000 CC), measured with the realm's own arithmetic:
+
+```
+mg 192.78   max-keyed bond 308.448
+prize@MID 206.2746   prize@HIGH 399.0546
+surplus at MID (the discount budget)  102.1734 = 33.12% of the bond
+deficit at HIGH (the §11.1 break)      90.6066 = 29.37% of the bond
+```
+
+`L = (tier + splitCarrot/100)/k`, so **L ≤ 1 ⟺ the effective draw multiplier T ≤ k − 0.07 = 1.53.**
+Both `Destroyed` and `bond` are proportional to the same `mg`, so there is no third lever: either
+raise *k* (bond cost) or cap *T* (the HIGH premium). **The conviction discount and the HIGH-tier
+fix draw on the same 33.12%. You can have one, not both.**
+
+**And today HIGH is safe** — **M:** an adjudicated-HIGH honest claim measures **L = 0.7179**
+(grid worst 0.7980). **The HIGH break is CREATED by C3, not exposed by it.**
+
+### 13.3 CHOSEN FIX for §11.1 — cap the draw, not the tier. And it ships alone, today.
+
+The tier freeze is **strictly dominated** at every point of a 2,304-point grid. Because
+`bond0 ≥ 1.6·mg` always, `bond0 − carrot ≥ 1.53·mg`, so **the cap never pays less than 1.53·mg
+while the freeze always pays 1·mg** — the freeze is the cap evaluated at the extremal and then
+applied everywhere.
+
+| tree | prize | bond0 | L | HIGH premium kept |
+|---|---|---|---|---|
+| no fix | 323.0956 | 249.7357 | **1.2937** | 100% |
+| **draw cap** | 249.7357 | 249.7357 | **0.9999** | **53.0%** |
+| tier freeze | 167.0108 | 249.7357 | 0.6687 | **0%** |
+| cap alone, today's 5000 bps | 323.0956 | 450.0000 | 0.7179 | 100% — **inert** |
+
+| bps | worst L: no fix | tier freeze | **draw cap** |
+|---|---|---|---|
+| 450 | 1.2937 | 0.6687 | **1.0000** |
+| 600 | 1.2937 | 0.6687 | **1.0000** |
+| 5000 (today) | 0.7980 | 0.4125 | 0.7980 (inert) |
+
+**One clause at `crystallize.gno:83`:**
+
+```go
+if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
+    want = capd            // subtract 1 more for strict L < 1
+    if want < 0 { want = 0 }
+}
+```
+
+**No new constant, no new state, one reader changed — and on today's constants it passes the
+entire suite unmodified (`ok . 24.44s`, zero fixture edits).** So **it can ship BEFORE C3 and
+does nothing until C3 lands.** That makes it the first change out of this whole exercise that is
+verified, standalone and safe.
+
+**Why a stored "frozen tier" field would be dead state:** `slashSizeAt` has **no tier factor** —
+it keys on the MID-weight gross. So "the tier the bond was sized against" is `tierMidX` on *every*
+claim, and the freeze is arithmetically just `min(cs.tier, tierMidX)`.
+
+**Every reader of `cs.tier`, by grep — money readers are exactly three, all in `crystallize.gno`:**
+`:83` (the draw — **the only site the fix touches**), `:265` (the `AnswererBonus` cap) and `:276`
+(`capBonus`, the F9 per-position cap). The latter two must **not** be lowered independently or
+coin strands. One authority reader: `quality.gno:613`, the v0.54 promotion ratchet, must keep
+reading the **live adjudicated** tier. Three display readers: `quality.gno:695`, `render.gno:279`,
+`render.gno:409-411`. **Off-chain:** `web/index.html:1168` reads `QualityTier` beside `DrawSlices`,
+so decoupling adjudicated from paid tier makes that page self-contradictory unless a second read
+exposes the effective multiplier. **Naming trap:** `c.tier` (directory listing state) is a
+*different field* — a grep for `.tier` conflates them.
+
+**Cost, stated:** the winning stakers of genuinely-HIGH claims lose 47% of the premium, in the
+draw-arm regime only (mg/X̄ > 2.899%). **But it is not the C0 problem** — C0 destroys the prize by
+*availability* (unpredictable, and permissionlessly timed by an attacker), whereas the cap is
+*definitional* and fully determined at answer time (`cs.answerBond0` has exactly one write site).
+It therefore satisfies Humphrey factor 2 — "amounts certain and guaranteed" — **better than the
+clamp it replaces.** Charging the promoter instead was priced and fails: the flag opener's bond is
+2%·X̄, only 24.5% of the deficit, and the dispute-ride route to HIGH is free anyway.
+
+### 13.4 §11.1's band is ~3× wider, and only a bug was closing it
+
+Round 1 evaluated **only** the 12wk-hot corner and so reported the *narrowest* band:
+
+```
+12wk hot  -> L>1 for X̄/S in [0.1000%, 1.2800%]   (round 1's figure)
+12wk cold -> L>1 for X̄/S in [0.1000%, 3.2400%]
+4wk  hot  -> L>1 for X̄/S in [0.1000%, 3.8600%]   <- the TRUE worst case
+4wk  cold, and 1wk at any rate -> nowhere
+```
+
+**And what closes it is the `curPeriodBudget` clamp**, isolated: at X̄/S = 1.29% it pulls L from
+1.2937 to 0.9987. So the protection **is §6's own defect** — a destroyed draw making the published
+rate a lie — and it "improves" over time only by making more claims' draws untrue. **Under the
+draw cap, L ≤ 1 holds with no reliance on the clamp at any X̄/S, age or rate.**
+
+### 13.5 The conviction lever works and is worth 8.3% of C3 — spec it, don't build it yet
+
+The signal separates decisively (**M: 1,446,756×**) and **the straddle is defeated**, at a
+derived threshold: `u* ≥ 1 − L0/k` = **25%**; take 1/3 for margin. **M**, monotone — the straddle
+costs more at every size, and pool inflation alone suffices, with carry a second independent
+margin:
+
+| own stake per side | u | C3 bond | C3+discount | vs dust-snipe baseline |
+|---|---|---|---|---|
+| 0 (dust snipe) | 0 | 249.7359 | 249.7359 | — |
+| 300 CC | 25.00% | 332.9810 | 270.5470 | **+37.31** |
+| 900 CC | 50.00% | 499.4714 | 374.6036 | **+174.37** |
+
+Threshold verified load-bearing: at u\* = 20% the cheapest straddle **wins** (234.360 vs 249.984);
+at 25% it is exactly indifferent; at 1/3 it is defeated with margin.
+
+**A counter-intuitive detail that must not be "corrected": do NOT net the answerer's own
+opposing-side position out of `mg_max`.** Netting looks more principled and is fatal — carry alone
+is 6.4× too cheap, and with the self-tax removed *no* `u* ≤ 1` works.
+
+**Denominator: own conviction / `mg_max`.** Two candidates refuted by measurement — the
+declared-side pool scores a lone late-staker at **100%** (the sniper *is* the declared pool), and
+own-stake (average hold *time*) is scale-free, so 1 base unit held for the claim's life scores
+maximal. Time alone is free; the signal must be capital×time.
+
+**Conviction cannot be bought.** `cs.stakers.Set` has exactly **one** write site and there is **no
+`Remove`**; CC is soulbound, with `scripts/check-nontransferable.py` existing to trip if that
+changes — its own words: *"a coin that cannot change hands cannot have its accrued conviction
+sold."* Selling the key transfers **non-exclusively** (the seller can still burn the bond), so it
+is a lemons market, not a market.
+
+**No cold-start problem:** `u` is a ratio of two convictions over the same window, so it is
+age-invariant — **M:** 11.1100% at the 3h maturity minimum, *bit-identical* to 11.1100% at 11
+weeks. At dust scale both premium and discount go inert together, so there is no brick.
+
+**But the give-back is small.** **M**, contrarian holding 100 CC from open (u = 11.11%):
+
+```
+today            500.0000 = 50.00% of X̄
+C3 max-keyed     249.7357 = 24.97% of X̄     <- C3's give-back: 250.26
+C3 + conviction  228.9265 = 22.89% of X̄     <- the LEVER's give-back:  20.81
+```
+
+**The lever is worth 8.3% of what C3 alone delivers**, and it cannot be made larger: the bond may
+never fall below `L0·mg_max`, so **75% of the price is non-discountable by construction**. Reaching
+the full 25% needs u ≥ 1/3 — holding a third of the majority pool's conviction on the minority
+side, which is not a contrarian.
+
+**And C4a dominates it for the same beneficiary.** **M:** the contrarian's capital is locked, so
+spendable is 0.000000 and `PostAnswer` refuses. F9 rescues them — unstaking first keeps conviction
+bit-identically (17.342758 → 17.342758) and frees the principal — but they are still **129 CC
+short** of the discounted 229 CC bond.
+
+**Verdict: sound, straddle-proof, small. Spec it; do not build it before C1/C2/C4.**
+
+### 13.6 A correction to §11.3 that cuts the other way
+
+§11.3 said C3 is a "regression on the deterrent axis," 29.2% → 40.1%. Two corrections:
+
+- **My table omitted today/HIGH: L = 0.7980, q\* = 44.38%.** So C3 is a regression at *both* tiers
+  (44.38% → 56.40%), and HIGH is where it is largest.
+- **But `q*` holds `q` fixed, and C3 moves `q`.** The dispute bond is `min(20%·X̄, 40%·answerBond)`,
+  so **M** on the same claim: **180.000000 today vs 99.894362 under C3** — mounting the overturn
+  gets **1.80× cheaper** at the extremal, and up to **8.3× cheaper** on a sniped claim in the
+  base-arm regime. **The direction of the net effect is not established either way.** §11.3's
+  regression claim is true only holding turnout exogenous, and the dispute bond is precisely what
+  turnout responds to.
+
+### 13.7 Build-order consequence
+
+**The draw cap (§13.3) is promoted to FIRST** — ahead of C0, C2 and everything else. It is one
+clause, no new state, suite-green standalone on today's constants, and inert until C3 lands. It is
+the only change so far that is verified shippable in isolation.
+
+Revised: **draw cap → C0 → C6 → C1 → C5 → C2 → C3 → C4b**, with the conviction lever specced and
+deferred, C4a cancelled, and C3 still blocked pending §12.1's dispute-bond rework.
