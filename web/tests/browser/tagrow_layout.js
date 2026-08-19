@@ -189,6 +189,69 @@ const ROUTES = [
     ok("without being visible", addr.hidden);
   }
 
+  // --- the neon, and the two ways it goes wrong ------------------------------
+  // Every glow in the file is a TOKEN so the light theme can switch all of them
+  // off in one place. Two failure modes worth pinning: a rule that hardcodes a
+  // shadow instead of using the token (glow on white paper is smudge), and the
+  // glow leaking onto the programmatic scroll targets — which it did, putting a
+  // neon box round the claim title for no reason a reader could explain.
+  for(const theme of ["light", "dark"]){
+    await page.evaluateOnNewDocument(t => {
+      localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo", theme: t}));
+      localStorage.setItem("cc.intro", "1");
+    }, theme);
+    await page.setViewport({width: 1280, height: 900});
+    await page.goto(PAGE + "#/c/orem/1", {waitUntil: 'domcontentloaded'});
+    await page.reload({waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 900));
+    const n = await page.evaluate(() => {
+      const tok = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+      const sh = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).boxShadow : null; };
+      const fl = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).filter : null; };
+      return {glow: tok("--glow-a"), edge: tok("--edge"),
+              bar: sh(".sbar .sbY"), line: fl(".bigchart .ln"),
+              nav: sh(".nav a.on"), title: sh(".page-h")};
+    });
+    if(theme === "light"){
+      ok("light: every glow token is off", n.glow === "none", n.glow);
+      ok("light: the stake bar has no halo",
+         n.bar === null || !/rgba?\([^)]*\) 0px 0px \d/.test(n.bar), n.bar);
+      ok("light: the chart line has no filter", n.line === null || n.line === "none", n.line);
+      ok("light: the lit edge is invisible", /transparent|rgba\(0, 0, 0, 0\)/.test(n.edge), n.edge);
+    } else {
+      ok("dark: the glow token carries a value", n.glow !== "none" && n.glow.length > 4, n.glow);
+      ok("dark: the recorded path emits", /drop-shadow/.test(n.line || ""), n.line);
+      ok("dark: the stake bar emits in its own colour",
+         /rgba\(111, 192, 165/.test(n.bar || ""), n.bar);
+      ok("dark: the active nav item has a lit leading edge", /inset/.test(n.nav || ""), n.nav);
+    }
+    // THE ONE THAT ACTUALLY SHIPPED BROKEN — and it has to be FOCUSED to test,
+    // which the first version of this check forgot. The page moves focus to the
+    // title on a route change (index.html: h.setAttribute("tabindex","-1");
+    // h.focus()) so a screen reader lands in the right place, and it suppresses
+    // the ring for that reason. Unfocused, this assertion passed no matter what,
+    // which is exactly the vacuous pass it was written to prevent.
+    const titleFocused = await page.evaluate(() => {
+      const h = document.querySelector(".page-h");
+      if(!h) return null;
+      h.setAttribute("tabindex", "-1"); h.focus();
+      const c = getComputedStyle(h);
+      return {shadow: c.boxShadow, outline: c.outlineStyle,
+              isFocused: document.activeElement === h};
+    });
+    ok(`${theme}: the title really is focusable, so this is not vacuous`,
+       titleFocused && titleFocused.isFocused);
+    ok(`${theme}: a focused claim title does not glow`,
+       titleFocused && (titleFocused.shadow === "none"), titleFocused && titleFocused.shadow);
+    ok(`${theme}: and shows no ring either`,
+       titleFocused && titleFocused.outline === "none", titleFocused && titleFocused.outline);
+  }
+  // Back to the default seed for anything after this.
+  await page.evaluateOnNewDocument(() => {
+    localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo"}));
+    localStorage.setItem("cc.intro", "1");
+  });
+
   ok("no page errors on any route with this row", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");

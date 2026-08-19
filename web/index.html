@@ -51,6 +51,11 @@ img,svg{display:block;max-width:100%}
   --good:#1c6551;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05);
   --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
+  /* NEON, OFF. Every glow in this file is a token, so the light theme turns
+     them all off in one place rather than each rule needing a theme guard.
+     Glow on white paper is smudge, not light. */
+  --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
+  --trace:none; --edge:transparent;
   --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
   --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
@@ -67,6 +72,16 @@ img,svg{display:block;max-width:100%}
     --good:#6fc0a5;
     --shadow-sm:0 1px 2px rgba(0,0,0,.3);
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
+    /* NEON, ON — and kept to the things that carry information: the traces on
+       the chart, the stake bar, the state pills, the focused control. Nothing
+       animates and nothing decorative glows, because a UI that pulses is a toy
+       and this one is a record. Each is one shadow, no stacked blurs.
+       0 0 Npx: a halo with no offset reads as emitted light rather than as a
+       drop shadow, which is the whole difference between Tron and a bevel. */
+    --glow-a:0 0 10px rgba(154,168,238,.34); --glow-y:0 0 10px rgba(111,192,165,.34);
+    --glow-n:0 0 10px rgba(224,139,124,.30); --glow-e:0 0 10px rgba(215,178,100,.28);
+    --trace:drop-shadow(0 0 4px rgba(154,168,238,.55));
+    --edge:rgba(154,168,238,.55);
   }
 }
 :root[data-theme=light]{
@@ -76,6 +91,8 @@ img,svg{display:block;max-width:100%}
   --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec; --good:#1c6551;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
+  --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
+  --trace:none; --edge:transparent;
 }
 :root[data-theme=dark]{
   --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
@@ -84,6 +101,10 @@ img,svg{display:block;max-width:100%}
   --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
   --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b; --good:#6fc0a5;
   --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
+  --glow-a:0 0 10px rgba(154,168,238,.34); --glow-y:0 0 10px rgba(111,192,165,.34);
+  --glow-n:0 0 10px rgba(224,139,124,.30); --glow-e:0 0 10px rgba(215,178,100,.28);
+  --trace:drop-shadow(0 0 4px rgba(154,168,238,.55));
+  --edge:rgba(154,168,238,.55);
 }
 
 body{
@@ -112,7 +133,10 @@ code,.mono{font-family:var(--mono)}
 }
 .nav a .g{width:18px; text-align:center; opacity:.8}
 .nav a:hover{background:var(--surface-2); color:var(--ink)}
-.nav a.on{background:var(--accent-wash); color:var(--accent-2); font-weight:600}
+/* The lit edge. A filled block says "selected"; a bright rule down its leading
+   edge says it, and looks like a circuit. inset so it costs no layout. */
+.nav a.on{background:var(--accent-wash); color:var(--accent-2); font-weight:600;
+  box-shadow:inset 2px 0 0 var(--edge), var(--glow-a)}
 .nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
 .rail .foot{margin-top:auto; padding:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:10px}
 
@@ -137,14 +161,23 @@ code,.mono{font-family:var(--mono)}
 .crumbs a{text-decoration:none; color:var(--ink-2)} .crumbs a:hover{color:var(--accent-2)}
 .crumbs .sep{opacity:.5}
 
-.page-h:focus{outline:none}
-#resolution:focus{outline:none}
+/* These two are PROGRAMMATIC SCROLL TARGETS, not tab stops — the page moves
+   focus to them so a screen reader lands in the right place, and they suppress
+   the ring for that reason. The glow added to :focus-visible leaked straight
+   onto them: a claim title wearing a neon box for no reason the reader can
+   explain. Whatever :focus-visible grows, these must cancel all of it. */
+.page-h:focus,.page-h:focus-visible{outline:none; box-shadow:none}
+#resolution:focus,#resolution:focus-visible{outline:none; box-shadow:none}
 .page-h{font-family:var(--serif); font-size:clamp(26px,3.4vw,36px); font-weight:600; letter-spacing:-.015em; line-height:1.08; text-wrap:balance; overflow-wrap:anywhere}
 .page-sub{color:var(--ink-2); margin-top:8px; max-width:66ch}
 .lead-row{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap}
 
 section{margin-top:34px}
-.sec-h{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line-2); padding-bottom:6px; margin-bottom:10px; display:flex; align-items:baseline; gap:10px}
+/* The section rule starts lit at the left and fades to nothing, so a page of
+   them reads as etched rather than ruled. border-image, so the border box and
+   every existing measurement stay exactly as they were. */
+.sec-h{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line-2); padding-bottom:6px; margin-bottom:10px; display:flex; align-items:baseline; gap:10px;
+  border-image:linear-gradient(90deg, var(--edge), var(--line-2) 22%, transparent) 1}
 .sec-h .count{font-family:var(--mono); font-size:11px; color:var(--ink-2); font-weight:500; letter-spacing:0; text-transform:none}
 
 /* cards + grids */
@@ -180,6 +213,11 @@ a.card:hover{border-color:var(--line-2)}
 .pill .g{font-size:10px}
 .pill.yes{background:var(--yes-wash); color:var(--yes); border-color:var(--yes)}
 .pill.no{background:var(--no-wash); color:var(--no); border-color:var(--no)}
+/* A pill is a state, so it emits in that state's colour. --glow-* is `none` in
+   the light theme, which is why these need no theme guard. */
+.pill.open,.pill.good{box-shadow:var(--glow-y)}
+.pill.no,.pill.contra{box-shadow:var(--glow-n)}
+.pill.escrow{box-shadow:var(--glow-e)}
 .pill.escrow{background:var(--escrow-wash); color:var(--escrow); border-color:var(--escrow)}
 .pill.void{background:transparent; color:var(--muted); border-color:var(--line-2)}
 .pill.contra{background:var(--contra-wash); color:var(--contra); border-color:var(--contra)}
@@ -231,6 +269,8 @@ a.card:hover{border-color:var(--line-2)}
 .btn.primary:hover{background:var(--accent-2)}
 .btn.yes{border-color:var(--yes); color:var(--yes)} .btn.yes:hover{background:var(--yes-wash)}
 .btn.no{border-color:var(--no); color:var(--no)} .btn.no:hover{background:var(--no-wash)}
+/* On hover only: a page of permanently glowing buttons is a slot machine. */
+.btn.yes:hover{box-shadow:var(--glow-y)} .btn.no:hover{box-shadow:var(--glow-n)}
 /* the side an embed's button asked for — a ring, not a pre-filled form */
 .btn.picked{box-shadow:0 0 0 3px var(--accent-wash); outline:2px solid var(--accent-2)}
 .btn .g{font-size:13px; opacity:.85}
@@ -337,7 +377,12 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .sbar{display:flex; width:100%; height:14px; margin:12px 0 0; border-radius:var(--r);
   overflow:hidden; border:1px solid var(--line)}
 .sbar>div{min-width:0}
-.sbar .sbY{background:var(--yes)} .sbar .sbN{background:var(--no)}
+/* Each side lights in its own colour, and inset:0 0 0 1px puts a bright hairline
+   INSIDE the segment so the two meet at a lit seam rather than a butt joint.
+   The glow is the side's own hue, so which side is ahead is legible from the
+   light alone before any number is read. */
+.sbar .sbY{background:var(--yes); box-shadow:var(--glow-y), inset 0 1px 0 rgba(255,255,255,.14)}
+.sbar .sbN{background:var(--no);  box-shadow:var(--glow-n), inset 0 1px 0 rgba(255,255,255,.14)}
 .sbar.empty{height:auto; padding:7px 10px; justify-content:center; background:var(--surface);
   color:var(--muted); font-size:12px}
 .sbout{display:flex; justify-content:space-between; gap:14px; margin-top:6px; font-size:12.5px; flex-wrap:wrap}
@@ -350,7 +395,11 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .bigchart .grid{stroke:var(--line); stroke-width:1}
 .bigchart .axis{stroke:var(--line-2); stroke-width:1}
 .bigchart .mid{stroke:var(--line-2); stroke-width:1; stroke-dasharray:2 3}
-.bigchart .ln{fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round}
+/* The recorded path reads as a light trace rather than a drawn line. filter on
+   the PATH only, not the <svg>: on the svg it would halo the axes, the labels
+   and the gridlines too, and a glowing axis is decoration. */
+.bigchart .ln{fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round;
+  filter:var(--trace)}
 .bigchart .ar{fill:var(--accent); opacity:.1}
 .bigchart .seam{stroke:var(--line-2); stroke-width:1; stroke-dasharray:1 3}
 .bigchart .ref{stroke:var(--accent); stroke-width:1.5; stroke-dasharray:5 4; opacity:.75}
@@ -365,7 +414,9 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .bigchart .hit{fill:transparent}
 .bigchart .hit:hover + .evtDot, .bigchart .hit:focus + .evtDot{r:5}
 .bigchart .note{font:10.5px var(--sans); fill:var(--muted)}
-.bigchart .end{fill:var(--accent); stroke:var(--surface); stroke-width:2}
+/* The "now" dot is where the trace terminates — the one point a reader looks
+   for, so it is the one that emits. */
+.bigchart .end{fill:var(--accent); stroke:var(--surface); stroke-width:2; filter:var(--trace)}
 .bigchart .endL{font:600 12px var(--mono); fill:var(--accent)}
 .bigchart .endS{font:9.5px var(--sans); fill:var(--muted)}
 .srcnote{font-size:10.5px; color:var(--muted); margin:6px 0 0}
@@ -621,7 +672,8 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .main{padding:24px 18px 80px}
   .stakewrap{grid-template-columns:1fr}
 }
-:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;
+  box-shadow:var(--glow-a)}
 .act{display:inline-flex; align-items:flex-start; gap:6px; flex-wrap:wrap; position:relative; max-width:100%; min-width:0}
 .clitog,.copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
   border:1px solid var(--line-2); border-radius:var(--r); padding:3px 7px; align-self:center}
