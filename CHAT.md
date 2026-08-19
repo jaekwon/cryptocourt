@@ -900,6 +900,31 @@ decisions and only one of them cannot be undone, so an operator who needs the co
 freezes and then prunes. That order matters: pruning first leaves the court still serving
 whatever arrives next.
 
+**And for a while only one of them COULD be undone in principle.** That sentence was true about
+the data and false about the tool: there was no `Unfreeze` in the store and no command, so
+`freeze dev/oren` for `dev/orem` withdrew a live court for good — 410 to every reader, posts
+refused, moderation stopped, recovery only by hand-editing SQLite. "Latches", above, means sticky
+rather than re-derived from the chain; it was never a claim that a person could not reverse it.
+
+    bin/kourtchatctl -db chat.db unfreeze dev/orem
+
+Freeze reaches three places and took two passes to get there, so the lift had to give back all
+three — the read, the write, and MODERATION. A fix restoring the obvious two leaves a court
+serving traffic that nothing is scanning, which is another row for the table above rather than a
+repair, and dropping the new clause from `sqlNotFrozen` alone is caught by name.
+
+The row is **stamped, not deleted**, for the same reason `Revoke` keeps an infraction: somebody
+arriving later and asking what happened to this court needs to see that it was frozen at all, and
+when, and that a person lifted it. `freeze` also had to stop being `INSERT OR IGNORE` — a court
+frozen, lifted, then frozen again would have hit the surviving row and been ignored while the tool
+printed "its history is no longer served" over a live court, which is precisely the failure named
+two paragraphs up, reintroduced by the fix.
+
+`unfreeze` refuses when nothing was frozen, because a typo in this argument is as likely as one in
+`freeze` and a cheerful "back in service" over a court that never left it is the same lie one verb
+along. It also says what it cannot know: if the content was withheld for a purge, check that it
+should be public again before telling anyone.
+
 The panel reports a frozen court as closed rather than unreachable. Same reason in miniature:
 "unreachable" sends a reader to reload and an operator to check the network, over something
 working exactly as intended.
