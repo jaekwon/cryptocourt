@@ -614,27 +614,45 @@ const gstr = s => JSON.stringify(String(s));   // gno string literal
 /* A faithful sample so every screen and state renders offline, in the realm's
    own units (CC base units, 6 decimals) — stakes and conviction, not shares. */
 const NOW = 4_800_000; // pretend current block height
-const DEMO = {
+/* ---- the hand-written half: what NO node can answer ----------------------
+   desc (the chain stores only a name), nested folders (chain folders are
+   flat), relations (the chain stores none), and voteEndsAt (no read
+   publishes a dispute vote's close height — live mode already says so).
+   These are curation and stay hand-written whatever happens to the rest. */
+const DEMO_OVERLAY = {
+  courts:{
+    orem:{desc:"Claims of fact from Orem's public record — certifications, inspections, filings. The court decides only what it is asked to decide.", folders:[
+        {name:"Municipal record", claims:[4,5,10], folders:[{name:"Elections", claims:[1]}]},
+        {name:"Infrastructure",   claims:[3,7,11]},
+        {name:"Filings & audits", claims:[6,8,9]},
+      ]},
+    annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court."},
+    ledger:{desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it."},
+  },
+  relations:{ orem:[
+    {from:3,  to:9, type:"part"},
+    {from:4,  to:9, type:"part"},
+    {from:7,  to:9, type:"part"},
+    {from:6,  to:9, type:"bears", stance:"supports"},
+    {from:11, to:3, type:"bears", stance:"contradicts"},
+    {from:10, to:5, type:"supersedes"},
+  ]},
+  voteEndsAt:{"orem/3":NOW+86_400, "ledger/3":NOW+70_000},
+};
+/* ===== BEGIN GENERATED DEMO DATA — scripts/dump-demo.py; do not hand-edit ===== */
+const DEMO_CHAIN = {
   courts:{
     orem:{ name:"Orem Truth Court", tier:2,
       // desc is overlay-level (the chain stores only a name — the page labels it);
       // burned is the exact curve cost of minted: ceil(minted²/2e9) µGNOT
-      desc:"Claims of fact from Orem's public record — certifications, inspections, filings. The court decides only what it is asked to decide.",
       burned:7_020_070_389_605,
       price:118, supply:118_500_000_000, emitted:8_900_000, reservoir:2_100_000, seniorOwed:640_000,
-      claims:[1,2,3,4,5,6,7,8,9,10,11],
-      folders:[
-        {name:"Municipal record", claims:[4,5,10], folders:[{name:"Elections", claims:[1]}]},
-        {name:"Infrastructure",   claims:[3,7,11]},
-        {name:"Filings & audits", claims:[6,8,9]},
-      ] },
+      claims:[1,2,3,4,5,6,7,8,9,10,11], },
     annex:{ name:"The Annex", tier:0,
-      desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court.",
       burned:17_999_760_001,
       price:6, supply:6_000_000_000, emitted:40_000, reservoir:9_000, seniorOwed:0,
       claims:[1,2,3,4,5] },
     ledger:{ name:"The Ledger of Denver", tier:1,
-      desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it.",
       burned:2_760_140_980_980,
       price:74, supply:74_300_000_000, emitted:1_400_000, reservoir:410_000, seniorOwed:0,
       claims:[1,2,3] },
@@ -687,8 +705,7 @@ const DEMO = {
     "orem/3":{ timeline:"opened:1786054400:4600000;answered:1786495200:4688160;now:1787054400:4800000", settleAt:NOW-110_000, title:"The bridge inspection rated the north span 'serviceable'.",
       yesStake:60_000_000, noStake:55_000_000, convYes:278780, convNo:255548, trailYes:52,
       author:"g1oremfiler0000000000000000000000000000", phase:"disputed", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:80_000_000, round:1, disputeBondNext:64_000_000,
-      voteEndsAt:NOW+86_400, quorumFloor:5_925_000_000 },
+      answerBond:80_000_000, round:1, disputeBondNext:64_000_000, quorumFloor:5_925_000_000 },
     // settled by vote — the NO answer was overturned; an overturned answerer
     // draws NO answerer slice (crystallize.gno: bond burned, record reset)
     "orem/4":{ timeline:"opened:1785554400:4500000;answered:1786454400:4680000;verdict:1786754400:4740000;now:1787054400:4800000", title:"Q3 city revenue exceeded the June forecast.",
@@ -753,17 +770,25 @@ const DEMO = {
   // type "bears": from, if true, makes to more (supports) or less
   // (contradicts) credible. type "supersedes": from re-files to after a
   // no-decision. Relations move nothing mechanical — each claim is decided alone.
-  relations:{ orem:[
-    {from:3,  to:9, type:"part"},
-    {from:4,  to:9, type:"part"},
-    {from:7,  to:9, type:"part"},
-    {from:6,  to:9, type:"bears", stance:"supports"},
-    {from:11, to:3, type:"bears", stance:"contradicts"},
-    {from:10, to:5, type:"supersedes"},
-  ]},
   positions:{ "orem/2":{yes:12_000_000,no:0,cy:6_400_000,cn:0}, "orem/3":{yes:8_000_000,no:4_000_000,cy:4_100_000,cn:1_900_000}, "orem/4":{yes:20_000_000,no:0,cy:10_800_000,cn:0}, "orem/6":{yes:0,no:5_000_000,cy:0,cn:2_100_000}, "orem/7":{yes:0,no:0,cy:2_000_000,cn:0}, "ledger/2":{yes:3_000_000,no:0,cy:900_000,cn:0} },
   balances:{ orem:38_400_000, ledger:4_200_000 },
 };
+/* ===== END GENERATED DEMO DATA ===== */
+
+/* DEMO is the two halves joined. Kept as one object so every consumer below is
+   untouched by the split — the page never learns which half a field came from,
+   only this function does. */
+function mergeDemo(chain, overlay){
+  const out = {...chain, courts:{}, relations: overlay.relations, claims:{}};
+  for(const [slug,c] of Object.entries(chain.courts))
+    out.courts[slug] = {...c, ...(overlay.courts[slug]||{})};
+  for(const [key,d] of Object.entries(chain.claims))
+    out.claims[key] = (overlay.voteEndsAt[key]!=null)
+      ? {...d, voteEndsAt: overlay.voteEndsAt[key]} : d;
+  return out;
+}
+const DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);
+
 const DEMO_ME = "g1youdemoholder0000000000000000000000000";
 
 /* ======================= data access (demo | live) ====================== */
@@ -979,6 +1004,25 @@ function fmtN(n){ return (n==null?0:Math.round(n)).toLocaleString("en-US"); }
    so the unit is KOURT:SLUG, not a generic "CC". Pass the slug wherever one
    is in scope; the bare fallback exists only for the few cross-court
    surfaces (the needs feed) where no single court owns the number. */
+/* The curve's marginal price is minted/1e9 µGNOT per unit and the chain serves
+   it as an INTEGER (curve.gno: `Price(s) = s / c.d`), so every court under
+   1,000 CC minted reports 0 — which the page then printed as a headline "0
+   µGNOT/unit", reading as free, while the buy panel beside it quoted a real
+   fractional price computed from the same curve. A freshly seeded node is
+   always in that range, so this is what an operator sees first.
+
+   Below 1 we show the true sub-unit price rather than the floor. `minted` is
+   already read for the buy quote; when it is absent we say "under 1" instead of
+   inventing a number. */
+function priceText(price, minted){
+  if(price>0) return fmtN(price);
+  if(minted===0) return "0";   // nothing minted yet: the marginal price really is zero
+  if(minted!=null && minted>0){
+    const p = minted/1e9;
+    return p>=0.001? p.toFixed(4).replace(/0+$/,"").replace(/\.$/,"") : "<0.001";
+  }
+  return price===0? "under 1" : fmtN(price);
+}
 function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court coin"; }
 function cc(n, slug){ const v=(n||0)/1e6;
   return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" "+ccSym(slug); }
@@ -1234,10 +1278,17 @@ async function testClockState(){
   try{
     const fab = await one("TestClockFabricated()");
     if(fab!==true) return TCFAB=null;
-    let secs = null, live = false;
+    let secs = null, blocks = null, live = false;
     try{ secs = await one("TestClockPeakSkew()"); }catch(_){}
+    // The override moves HEIGHT as well as the calendar, and a chain advanced
+    // only in height would otherwise read "moved forward 0 days" — which says
+    // nothing was moved, on a page whose conviction, emission and trailing
+    // averages all came from a block count the scenario supplied. An older
+    // realm has no such read; absent is not zero, so it stays null.
+    try{ blocks = await one("TestHeightPeakSkew()"); }catch(_){}
     try{ live = (await one("TestClockActive()"))===true; }catch(_){}
-    return TCFAB = {secs: (typeof secs==="number" && isFinite(secs))? secs : null, live};
+    const num = v => (typeof v==="number" && isFinite(v))? v : null;
+    return TCFAB = {secs: num(secs), blocks: num(blocks), live};
   }catch(e){
     // An older realm has no such function. That is not a warning-worthy state:
     // a node without the entrypoint never had a test clock to arm.
@@ -1250,12 +1301,15 @@ async function paintTestClockBanner(){
   const st = await testClockState();
   if(!st){ el.hidden = true; el.innerHTML = ""; return; }
   const days = st.secs!=null? Math.round(st.secs/86400) : null;
-  const moved = days!=null? ` — its dates were moved forward ${fmtN(days)} day${days===1?"":"s"}` : "";
+  const parts = [];
+  if(days) parts.push(`${fmtN(days)} day${days===1?"":"s"}`);
+  if(st.blocks) parts.push(`${fmtN(st.blocks)} block${st.blocks===1?"":"s"}`);
+  const moved = parts.length? ` — moved forward ${parts.join(" and ")}` : "";
   const tail = st.live
     ? "The clock is still open, so they can move again."
     : "The clock is sealed, so they are now fixed.";
   el.innerHTML = `<div class="tcbar"><span class="g">⏱</span><div><b>Test chain — the dates here are fabricated.</b>
-    This node's clock was set by hand${moved}. ${tail} Heights, balances and stakes are real.</div></div>`;
+    This node's clock was set by hand${moved}. ${tail} Balances and stakes are real.</div></div>`;
   el.hidden = false;
 }
 
@@ -1622,7 +1676,7 @@ on(/^\/$/, async ()=>{
     try{
       const s = await courtStats(c.slug);
       const el = document.getElementById("cp-"+c.slug);
-      if(el&&s) el.innerHTML = `<b>${fmtN(s.price)}</b><small>µGNOT/unit · ${cc(s.supply,c.slug)}</small>`;
+      if(el&&s) el.innerHTML = `<b>${priceText(s.price, s.minted)}</b><small>µGNOT/unit · ${cc(s.supply,c.slug)}</small>`;
       if(s && c.claims==null){
         // a featured court occupying a deep-window slot: the render skips it
         // in the listed section without backfilling — hide the row likewise
@@ -1687,7 +1741,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
        </div>
        </div>`
     + `<section><div class="grid stats">
-        <div class="stat"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
+        <div class="stat"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
         <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply,slug)}</div><div class="sub">${cc(s.emitted,slug)} of it earned as rewards</div></div>
         <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims crystallizing — settling and paying out</div></div>
         <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
@@ -2367,7 +2421,7 @@ function joinPanel(slug, s){
   let body;
   if(minted==null){
     BUYCTX = {slug, noquote:true};
-    body = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)} <small>µGNOT/unit</small></div></div>
+    body = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)} <small>µGNOT/unit</small></div></div>
         <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply,slug)}</div></div>
         <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when you buy.</p>
         <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
