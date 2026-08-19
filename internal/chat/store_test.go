@@ -597,3 +597,86 @@ func TestAutomatedConsequenceDoesNotReachTheNetwork(t *testing.T) {
 		t.Fatalf("a manual range ban must reach the network, got %+v", st)
 	}
 }
+
+// THE LADDER DECAYS, and a patient offender starts again at an hour.
+//
+// LadderLookback is thirty days and nothing tested it, which left the whole escalation
+// story resting on an untested constant. Both directions matter and they pull opposite
+// ways: without a decay an address carries a scam forever, and addresses are reassigned
+// constantly — DHCP, CGNAT, a café's NAT — so "forever" eventually punishes a stranger who
+// inherited the address rather than the person who earned it. With too short a decay a
+// repeat offender is never more than an hour from posting again.
+func TestTheLadderForgetsAfterTheLookback(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	// Two automated kicks put this address on the third rung.
+	for i := 0; i < 2; i++ {
+		if _, err := s.Consequence(ctx, Infraction{
+			IPHash: "ip1", Kind: KindKick, Reason: ReasonSpam, Duration: time.Hour,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d, _ := s.Escalate(ctx, "ip1"); d != Ladder[2] {
+		t.Fatalf("two prior kicks must reach the third rung, got %s", d)
+	}
+
+	// Just INSIDE the window: still remembered. Checked before the decay, or a passing
+	// decay test could be passing because the count was broken all along.
+	*clock = clock.Add(LadderLookback - time.Hour)
+	if d, _ := s.Escalate(ctx, "ip1"); d != Ladder[2] {
+		t.Fatalf("inside the lookback the history must still count, got %s", d)
+	}
+
+	// Just OUTSIDE: forgotten, back to an hour.
+	*clock = clock.Add(2 * time.Hour)
+	if d, _ := s.Escalate(ctx, "ip1"); d != Ladder[0] {
+		t.Fatalf("past the lookback the ladder must reset to the first rung, got %s", d)
+	}
+
+	// And a fresh offence starts the climb again rather than resuming at the top.
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip1", Kind: KindKick, Reason: ReasonSpam, Duration: time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := s.Escalate(ctx, "ip1"); d != Ladder[1] {
+		t.Fatalf("one offence after the reset is the second rung, got %s", d)
+	}
+}
+
+// A HUMAN'S DECISION DOES NOT INFLATE THE MACHINE'S LADDER.
+//
+// Escalate counts only `reason <> manual`, so an operator's kick — however justified —
+// leaves the next automated timeout at whatever rung the SCANNER had reached on its own.
+// Pinned because it is a deliberate asymmetry and reads like an oversight: the ladder is
+// the scanner's own record with an address, and letting a manual action raise it would
+// mean a human intervening once quietly made every later automated verdict harsher, in a
+// system whose entire safety argument is that automation cannot reach for the severe end.
+func TestAManualConsequenceDoesNotRaiseTheAutomatedLadder(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		if _, err := s.Consequence(ctx, Infraction{
+			IPHash: "ip1", Kind: KindKick, Reason: ReasonManual, Duration: time.Hour,
+			Detail: "an operator's judgement",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if d, _ := s.Escalate(ctx, "ip1"); d != Ladder[0] {
+		t.Fatalf("three manual kicks must leave the automated ladder at the first rung, got %s", d)
+	}
+	// PAIRED POSITIVE: the same three, automated, do climb it — otherwise the assertion
+	// above would pass on a ladder that never moved at all.
+	if _, err := s.Consequence(ctx, Infraction{
+		IPHash: "ip2", Kind: KindKick, Reason: ReasonSpam, Duration: time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := s.Escalate(ctx, "ip2"); d != Ladder[1] {
+		t.Fatalf("an automated kick must climb the ladder, got %s", d)
+	}
+}
