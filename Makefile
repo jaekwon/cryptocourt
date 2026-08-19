@@ -1,4 +1,5 @@
-.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet anchors paths
+.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet anchors paths \
+	scenarios scenarios-check
 
 # Everything that can run without a node.
 #
@@ -47,6 +48,8 @@ realm-test:
 	python3 scripts/check-nontransferable.py || exit 1; \
 	python3 scripts/check-membership-clears.py || exit 1; \
 	python3 scripts/check-read-purity.py || exit 1; \
+	python3 scripts/check-demo-physics.py || exit 1; \
+	$(MAKE) -s scenarios-check || exit 1; \
 	root=$$(python3 scripts/gnoroot.py build --label realm-test --pid $$$$) || exit 1; \
 	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
 	export GNOROOT="$$root"; \
@@ -88,6 +91,29 @@ chain-test:
 # GNOROOT from the environment, so the same shadow works here — and it matters
 # as much as anywhere: this staged the widest set of packages of any runner and
 # removed all of p/kourt and r/kourt when it finished.
+# Recompile every scenario. The generated txtars name this target in their own
+# header ("Regenerate with: make scenarios"), so it has to exist — and `check`
+# runs it with --check so a stale generated file fails the build instead of
+# quietly disagreeing with its source.
+scenarios:
+	@for f in scenarios/*.py; do \
+		[ -e "$$f" ] || continue; \
+		out="gnoland/testdata/scn_$$(basename $$f .py).txtar"; \
+		python3 scripts/scenario.py "$$f" --out "$$out" || exit 1; \
+	done
+
+scenarios-check:
+	@for f in scenarios/*.py; do \
+		[ -e "$$f" ] || continue; \
+		out="gnoland/testdata/scn_$$(basename $$f .py).txtar"; \
+		python3 scripts/scenario.py "$$f" --out "$$out.new" >/dev/null || exit 1; \
+		if ! cmp -s "$$out" "$$out.new"; then \
+			echo "$$out is stale — run 'make scenarios'"; rm -f "$$out.new"; exit 1; \
+		fi; \
+		rm -f "$$out.new"; \
+	done; \
+	echo "scenarios-check: every generated txtar matches its scenario."
+
 txtar-test:
 	@root=$$(python3 scripts/gnoroot.py build --label txtar --pid $$$$) || exit 1; \
 	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
@@ -99,20 +125,48 @@ txtar-test:
 isolation-test:
 	python3 scripts/check-isolation.py
 
-# Break the MONEY PATH on purpose and check the suite objects: 56 named mutations over
-# kourtv2 and the packages it imports, each applied and reverted in turn. Run this before
-# any money-path change — a green suite proves nothing on its own, since it passes
-# against correct code and against code whose guard you deleted.
+# Break the MONEY PATH on purpose and check the suite objects: every row in
+# scripts/mutations-kourtv2.json applied and reverted in turn, over kourtv2 and the
+# packages it imports. Run this before any money-path change — a green suite proves
+# nothing on its own, since it passes against correct code and against code whose
+# guard you deleted.
 #
-# Sharded across concurrent runners (scripts/mutate-parallel.py), which is safe now
-# that each builds its own GNOROOT and mutates only its staged copy. Where the time
-# goes was measured, not guessed: staging a shard is 0.03s and one courtv2 suite run
-# is 3.67s, so staging is 1% and the cost is irreducibly one suite per mutation.
-# The output is still every row plus ONE verdict; shard boundaries are not shown.
+# Sharded across concurrent runners (scripts/mutate-parallel.py), which is safe
+# because each builds its own GNOROOT and mutates only its staged copy.
+#
+# THE COST, stated structurally rather than as a number, because the number was
+# wrong within months of being written (this comment said "56 named mutations" and
+# "~2.5 minutes" when the corpus had reached 865 rows):
+#
+#     wall time ~= rows / shards * runtime of the mutated package's suite
+#
+# Staging is noise beside it — 0.03s against seconds for a suite — so the cost is
+# irreducibly ONE SUITE RUN PER ROW.
+#
+# To get the dominant term, TIME THE SUITE rather than trusting a figure in here:
+#
+#     root=$(python3 scripts/gnoroot.py build --label t --pid $$)
+#     ...stage as realm-test does, then: GNOROOT=$root gno test .   # in r/kourtv2
+#
+# That number has moved by an order of magnitude inside one project (an earlier
+# version of this comment recorded 3.67s; the same suite measured ~34s), which is
+# why the recipe is here and the digit is not. Two consequences before you either
+# wait on this target or lengthen a test:
+#
+#   * Most rows target kourtv2, so each one pays the WHOLE kourtv2 suite.
+#     Lengthening one shared test there multiplies across all of them.
+#   * A wall time measured while anything else heavy is running (another session's
+#     `make isolation-test`, say) measures the contention, not this target. Check
+#     `pgrep -f 'gno test|check-isolation|mutate'` before believing a duration.
+#
+# The output is every row plus ONE verdict; shard boundaries are not shown. Nothing
+# is printed until every shard has finished, because the parent collects each
+# shard's stdout with subprocess.run — so a quiet log is not a stalled run. To see
+# whether it is alive, watch the `gno test` children cycle.
 #
 # Exists as a target because the batch is otherwise invisible: mutate.py was in this repo
 # for the whole of the v0.51-v0.62 work and went unused because nothing pointed at it,
-# so every guard was mutated by hand instead. ~2.5 minutes.
+# so every guard was mutated by hand instead.
 #
 # An interrupted run needs nothing from you. Mutations are applied to the STAGED COPY in
 # the run's own shadow GNOROOT, never to the repo, so a killed run cannot leave one in the

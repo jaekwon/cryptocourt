@@ -126,6 +126,8 @@ READPURE = "scripts/check-read-purity.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
 MUTS = "scripts/mutations-kourtv2.json"
+PHYSICS = "scripts/check-demo-physics.py"
+WEBPAGE = "web/index.html"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
@@ -338,6 +340,32 @@ control("a pkg map this guard can no longer find", ANCHORS,
 control("a verdict the guard no longer produces", ANCHORS,
         '"UNKNOWN PKG"),', '"UNKNOWN PKG THAT IS NEVER PRINTED"),',
         "SELFTEST no row verdict contains", argv=["python3", ANCHORS])
+
+print("\ncheck-demo-physics")
+# Arms written for the E2E workstream's guard, which arrived without any. The
+# coverage ledger at the bottom of this file would have failed the whole selftest
+# on it, and a guard nobody can break is a guard nobody has tested — this one
+# exists precisely because "the demo is data and data has no tests".
+#
+# The headline arm reproduces the defect it was written for: DEMO's conviction
+# values were 6x-29x above the realm's own ceiling for their stated stake and
+# lifetime, and no test noticed.
+control("a demo conviction above the realm's ceiling", WEBPAGE,
+        "convYes:439774", "convYes:439774000",
+        "orem/1", argv=["python3", PHYSICS])
+# Fail CLOSED when the realm moves under it. The guard's whole design claim is
+# that it READS the constants rather than copying them ("a check that hardcodes
+# the number it is checking only pins the moment it was written"), and the cost of
+# that is a guard which measures nothing if a name goes away. It must say so.
+control("a realm constant this guard can no longer find", PHYSICS,
+        'realm_const("r0WeeklyBps", "stake.gno")',
+        'realm_const("r0WeeklyBpsMOVED", "stake.gno")',
+        "has the realm moved?", argv=["python3", PHYSICS])
+# And the same for its other input: the demo lives in a page this repo does not
+# own the shape of, so losing the anchor must be loud rather than a clean scan.
+control("a demo page that no longer defines NOW", WEBPAGE,
+        "const NOW = ", "const NOW_RENAMED = ",
+        "no longer defines NOW", argv=["python3", PHYSICS])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")

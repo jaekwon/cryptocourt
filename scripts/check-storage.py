@@ -36,6 +36,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gnoroot
+import repolock
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -109,6 +110,9 @@ def stage(root, target):
 
 
 def main():
+    # Stages the realms out of the working tree, so a selftest rewriting them
+    # would be measured as this guard's own storage finding.
+    repolock.refuse_if_held("check-storage")
     if not gnoroot.real_root():
         if os.environ.get("REQUIRE_GNO"):
             print("check-storage: gno not installed", file=sys.stderr)

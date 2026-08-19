@@ -57,6 +57,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import repolock  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # The retired spellings, each with what to write instead. Anchored on a path
@@ -163,6 +166,10 @@ def tracked_files():
 
 
 def main():
+    # This guard reads every tracked file, and a selftest run rewrites some of
+    # them on purpose. Reading mid-mutation would report ITS control as a stale
+    # path in a file nobody touched.
+    repolock.refuse_if_held("check-paths")
     bad = 0
     for msg in selftest():
         print(msg, file=sys.stderr)

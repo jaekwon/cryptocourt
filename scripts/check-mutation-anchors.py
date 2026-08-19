@@ -77,6 +77,11 @@ sanctioned way to record that a row's coverage lives outside the mutated package
 — names a file that is really there. An excuse pointing at a deleted file is
 worse than no excuse.
 
+That last one is deliberately STRICTER than `mutate.py`, which only prints the
+value and would accept prose like "the txtar suite". Prose cannot rot detectably;
+a path can. The corpus's one `elsewhere` is a path, so the tightening costs
+nothing today and stops the annotation from decaying into a shrug.
+
     python3 scripts/check-mutation-anchors.py
 """
 
