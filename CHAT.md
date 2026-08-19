@@ -915,10 +915,29 @@ next. Nine asymmetries in total, all the same failure:
     revoked_at    ignored by the context window        an upheld appeal still truncated it
     same message  named in Consequence's comment only   a late kick left its scam on screen
 
-Four shared predicates now have exactly one definition each — `sqlAwaitingReview`,
-`sqlNotFrozen`, `sqlInForce` — and the one deliberate exception is documented where the audit
-flags it: the throttle ignores `hidden` and `frozen` on purpose, because it asks what an
-address SENT and hiding a message afterwards does not un-send it.
+Re-running the method later turned up a TENTH of the same shape that is **not** a failure, which
+is worth separating from the nine above rather than filed with them:
+
+    revoked_at    ignored by the review queue too      an upheld appeal is never re-reviewed
+
+Three shared predicates now have exactly one definition each — `sqlAwaitingReview`,
+`sqlNotFrozen` and `sqlInForce` — and two exceptions are deliberate rather than missed. The
+throttle ignores `hidden` and `frozen` on purpose, because it asks what an address SENT and
+hiding a message afterwards does not un-send it.
+
+The other is the tenth row above, which is the first of these that is arguably RIGHT.
+`sqlAwaitingReview` excludes any message an infraction cites and does not ask whether that
+infraction survives, so an upheld appeal puts the message back on screen and into neither
+`review` nor `review -all`. Measured, and left alone: the operator engaged with that exact
+consequence and reversed it, and there is no bulk revoke — `unban` takes one id — so every
+revocation is one deliberate act about one message. **Adding a bulk reversal would end that
+argument**, because five hundred messages would return to view with nobody having read any of
+them, and the missing clause would become the bug it currently resembles.
+
+What is genuinely uneven is what the two exits leave behind. `dismiss` marks a message reviewed
+and says "see it again with: `kourtchatctl review -all`", and it does come back there. A revoke
+removes it from both views with no such affordance. **`unban` is for the consequence; `dismiss`
+is for the record** — reach for the second when the point is that somebody looked.
 
 One more of the same shape crossed a language boundary rather than a function: the panel
 repeats the server's length limits so a user hears "too long" before a round trip, which
