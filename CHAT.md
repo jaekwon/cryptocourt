@@ -191,9 +191,27 @@ denies**, since a flat global 429 is one attacker muting the whole product.
 Deterministic detectors run first, in `kourtchat`, and their outputs are stated
 because this is a crypto court: `g1…` and `0x…` are the application's
 *vocabulary*, so a bare address is **never a consequence on its own**. `t.me/`,
-`wa.me/` and explicit "seed phrase" are hits; BIP-39 requires ≥8 consecutive
-words, because BIP-39 is 2048 ordinary English words and a shorter run matches
-real sentences.
+`wa.me/` and explicit "seed phrase" are hits.
+
+**A recovery phrase is matched by its CHECKSUM, not by a run of words**, and both halves of
+that sentence were learned the hard way. The rule used to be "≥8 consecutive words" against a
+136-word list, which was the alphabetical first 136 of BIP-39 — so of the published test vectors
+it caught the all-`abandon` phrase and nothing else, a realistic phrase scoring a run of 1. The
+comment beside it warned about detectors that stay "permanently silent while looking
+implemented", and there was no test for it, which is how it managed to be one.
+
+The full 2048-word list fixes the runs and not the rule. BIP-39 is drawn from short common
+English nouns, so "list apple orange lemon cherry olive garlic onion potato tomato pepper salt
+sugar" runs 13 and a list of materials runs 12, while the shortest real phrase is 12 — no
+threshold separates them, and this floor sets `scam`, which is a 24-hour timeout that must not
+land on somebody listing fruit. So the concatenated 11-bit indices are checked against their own
+SHA-256, which is the thing that makes a phrase a phrase: a noun list passes by luck one time in
+16 at twelve words, and must also be exactly a phrase length.
+
+Two details that only testing the real thing would produce. The wordlist carries its canonical
+CRC (`c1dbd296`) asserted at startup, because one mistyped word weakens the detector with no
+symptom. And numbering does not break a run — wallets display recovery words numbered, so it is
+the likeliest way a phrase is ever pasted, and it was the one format the detector missed.
 
 Cross-court duplicate posting is a **rate limiter, not a punishment**: it rejects
 that POST with 429 and writes no infraction. As a punishment it was a
