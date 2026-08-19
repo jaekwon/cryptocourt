@@ -357,6 +357,49 @@ gno RPC node, and with chat configured it also talks to `kourtchat`. That is not
 private API — it is this repo's own service, documented in §9 — but the README should
 say so rather than leave a reader to discover it.
 
+Neither test runner is wired either, for the same reason and with the same fix — one
+line each, once `web/tests/` is committed:
+
+    web/tests/run.js                CHECKS is a directory scan; chat_test.js is
+                                    picked up automatically, nothing to do
+    web/tests/browser/run.js        add "chat_render.js" to CHECKS
+
+Until then both run standalone, which is how they were developed:
+
+    node web/tests/chat_test.js             89 assertions, no dependencies
+    node web/tests/browser/chat_render.js   65 measurements, needs puppeteer
+
+## 12. Two kinds of evidence for one property
+
+`web/chat-demo.html` is the panel with nothing else around it — openable straight off
+disk, no node and no service — and it exists for a reason beyond convenience.
+
+The escaping rule is the only thing between a message body and script execution, and
+the node harness can only assert things about the STRING `chat.js` produces:
+`!/<img/.test(html)` is a regex, and passing it is evidence about a regex. What matters
+is that a browser's parser builds no element and no handler runs. So the same property
+is checked twice, differently: `chat_render.js` drives that page in headless Chrome,
+renders twelve payloads through the shipped function into a real document, and asserts
+that no element was constructed, that a sentinel global was never set, that no dialog
+opened, and that the payload is nevertheless still READABLE — an escaper that silently
+dropped hostile text would satisfy every absence check while censoring the room.
+
+The browser half also measures what no source review can see: that a 400-character
+message from a 24-character name does not push the page sideways at 1200, 760 or 380
+pixels, and that the flag is a regional-indicator pair rather than the two letters of
+the country code.
+
+Two mutations survived the browser suite and were left surviving on purpose, because
+both are facts about the markup rather than gaps in the tests. Escaping `<` alone
+already prevents tag construction, so removing the `>` escape changes nothing a browser
+can see (the node harness catches it). And removing the `"`, `'` and backtick escapes
+changes nothing either — every message value lands in TEXT position, and the one
+attribute built from message data is the flag's `title`, which only renders when the
+country has already matched `^[A-Z]{2}$`. Rather than pin a mechanism nothing currently
+depends on, the suite pins the REASON it does not: a sentinel is placed in every field
+of a message and every attribute of every rendered element is searched for it. Write
+`title="${moniker}"` one day and that check fails, escaped or not.
+
 Also deferred: pruning old messages (a documented `DELETE`, not code — getting it
 wrong destroys the evidence an appeal needs), and validating a court against the
 chain (existence positive-and-sticky, purge negative-and-sticky, because the chain

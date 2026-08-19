@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Court chat — panel</title>
+<!--
+  A home for web/chat.js on its own.
+
+  Two jobs. It lets anybody look at the panel without running a node, a chain or the
+  chat service — open this file, no server needed. And the hostile-input box at the
+  bottom makes the escaping rule demonstrable by hand rather than only by test: paste
+  a script tag in, watch it appear as text.
+
+  It is also what web/tests/browser/chat_render.js drives. That distinction matters:
+  the node harness checks that the rendered STRING contains no live tag, which is a
+  regex over source. Only a real browser can show that the parser did not build an
+  element and that no handler fired. Same property, two different kinds of evidence.
+
+  Nothing here is part of the overlay. index.html gets three lines instead — CHAT.md §11.
+-->
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 0 auto;
+         padding: 2rem 1rem 6rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 .2rem; }
+  h2 { font-size: 1rem; margin: 2rem 0 .4rem; }
+  p.lede { opacity: .7; margin: 0 0 1.5rem; }
+  .card { border: 1px solid rgba(128,128,128,.3); border-radius: 6px; padding: .9rem 1rem;
+          margin: .6rem 0; }
+  label { display: block; font-size: .85em; opacity: .7; margin-bottom: .15rem; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-end; }
+  .row > div { flex: 1 1 8rem; min-width: 0; }
+  input, textarea, button { font: inherit; padding: .3rem .4rem; max-width: 100%;
+                            box-sizing: border-box; }
+  input, textarea { width: 100%; }
+  textarea { min-height: 4.5rem; }
+  small.note { display: block; opacity: .65; margin-top: .4rem; }
+  code { background: rgba(128,128,128,.15); padding: 0 .25em; border-radius: 3px; }
+  ol.bare { list-style: none; margin: 0; padding: 0; }
+</style>
+</head>
+<body>
+
+<h1>Court chat</h1>
+<p class="lede">The panel from <code>web/chat.js</code>, on its own. Demo mode below makes
+no network calls at all; point it at a running <code>kourtchat</code> to use it for real.</p>
+
+<h2>Demo mode</h2>
+<div id="demochat"></div>
+<small class="note">A fixed sample thread. This is what a court page shows when chat is
+not configured, or when the overlay is in demo mode — an empty panel would misrepresent
+the feature, and calling out to a guessed origin would be worse.</small>
+
+<h2>Against a live service</h2>
+<div class="card">
+  <div class="row">
+    <div><label for="ep">endpoint</label><input id="ep" placeholder="http://127.0.0.1:8791"></div>
+    <div><label for="ch">chain</label><input id="ch" placeholder="dev" style="max-width:7rem"></div>
+    <div><label for="ct">court</label><input id="ct" placeholder="orem" style="max-width:9rem"></div>
+    <div style="flex:0 0 auto"><button id="go">connect</button></div>
+  </div>
+  <small class="note">Kept in <code>localStorage</code> so a reload keeps it. The service
+  needs to allow this origin; it sends <code>Access-Control-Allow-Origin: *</code>, which
+  is why opening this file straight off disk works.</small>
+</div>
+<div id="livechat"></div>
+
+<h2>Hostile input</h2>
+<div class="card">
+  <p style="margin-top:0">Paste anything — a script tag, an <code>onerror</code> handler,
+  a URL, a right-to-left override. It is rendered through the same
+  <code>chatLogHtml</code> the panel uses, locally, and sent nowhere.</p>
+  <label for="eviln">moniker</label>
+  <input id="eviln" value="&lt;b&gt;staff&lt;/b&gt;">
+  <label for="evil">message body</label>
+  <textarea id="evil">&lt;img src=x onerror="window.__pwned=1"&gt; and &lt;script&gt;window.__pwned=1&lt;/script&gt; — plus a lure at http://gnot-claim.xyz</textarea>
+  <div class="row" style="margin-top:.5rem">
+    <div style="flex:0 0 auto"><button id="render">render it</button></div>
+    <div><small class="note" id="verdict" style="margin:0"></small></div>
+  </div>
+  <ol class="bare chatpanel" id="evilout" style="margin-top:.6rem"></ol>
+</div>
+<small class="note">The escaping is the only thing between a message body and script
+execution: the server preserves markup on purpose, so that what the classifier reads is
+what a reader sees. See the header of <code>web/chat.js</code>.</small>
+
+<script src="chat.js"></script>
+<script>
+  chatStyles(document);
+
+  // Demo mode: cfg with no `chat` endpoint means no network, by design.
+  window.__stopDemo = mountChat(document.getElementById("demochat"),
+    {cfg: {mode: "demo"}, court: "orem"});
+
+  const $ = id => document.getElementById(id);
+  const KEY = "kourt.chat.demo";
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || "{}");
+    $("ep").value = saved.ep || "";
+    $("ch").value = saved.ch || "dev";
+    $("ct").value = saved.ct || "orem";
+  } catch (e) {}
+
+  let stopLive = null;
+  function connect() {
+    const ep = $("ep").value.trim(), ch = $("ch").value.trim() || "dev",
+          ct = $("ct").value.trim() || "orem";
+    try { localStorage.setItem(KEY, JSON.stringify({ep, ch, ct})); } catch (e) {}
+    // The stop function MUST be called before the container is replaced, or the old
+    // poller keeps painting into a panel nobody is looking at. Same rule the overlay
+    // has to follow — CHAT.md §11.
+    if (stopLive) stopLive();
+    stopLive = mountChat($("livechat"),
+      {cfg: {mode: "live", chat: ep}, chain: ch, court: ct});
+    window.__stopLive = stopLive;
+  }
+  $("go").addEventListener("click", connect);
+  if ($("ep").value) connect();
+
+  // The hostile-input box renders locally through the real function. No fetch, no
+  // store: this exists to be looked at.
+  function renderEvil() {
+    const msg = {id: 1, moniker: $("eviln").value, body: $("evil").value,
+                 country: "DE", suffix: "a1b2c3",
+                 created_at: Math.floor(Date.now() / 1000) - 120};
+    $("evilout").innerHTML = chatLogHtml([msg], Math.floor(Date.now() / 1000));
+    const out = $("evilout");
+    const live = out.querySelectorAll("script,img,iframe,a,svg,object,embed").length;
+    $("verdict").textContent = live === 0
+      ? "rendered as text: no element was built from it, and window.__pwned is "
+        + (window.__pwned === undefined ? "still undefined." : "SET — that is a bug.")
+      : live + " live element(s) were built from that input — that is a bug.";
+  }
+  $("render").addEventListener("click", renderEvil);
+  renderEvil();
+</script>
+</body>
+</html>
