@@ -41,8 +41,40 @@ import (
 const (
 	MaxBodyRunes    = 400
 	MaxMonikerRunes = 24
-	maxRunRunes     = 8 // identical consecutive runes
-	maxMarks        = 3 // combining marks per base character: Zalgo defence
+	maxRunRunes     = 8 // identical consecutive runes, TRUNCATED rather than refused
+
+	// maxMarks caps combining marks on ONE base character, and it was 3, which
+	// refuses scripture.
+	//
+	// Measured. `שֶּֽׁ` — shin with dagesh, sin-dot, segol and meteg — is ordinary
+	// pointed Hebrew and carries four marks; add a cantillation accent, as a
+	// pointed bible does, and it carries five. At 3 both were REFUSED OUTRIGHT,
+	// and the message a Hebrew speaker got was that their message "stacks too
+	// many marks on one character". Fully-voweled Arabic (`اللَّٰهُمَّ`) and
+	// Hebrew niqqud with cantillation both land exactly ON 3, so the cap had no
+	// headroom at all for the scripts that need it most:
+	//
+	//	consonant + vowel                      1   accepted
+	//	+ dagesh                               2   accepted
+	//	shin + dagesh + sin-dot + vowel        3   accepted
+	//	+ meteg                                4   REFUSED
+	//	+ cantillation accent as well          5   REFUSED
+	//
+	// AND IT WAS DEFENDING NOTHING. This cap was labelled "Zalgo defence", but
+	// evasion resistance lives in Skeleton by explicit design — see the top of
+	// this file — and Skeleton already folds every mark away: "s͡c͡a͡m", "s̈c̈äm̈" and a
+	// 14-mark monster all reduce to exactly "scam", and "send me your s̈ëëd̈
+	// p̈ḧräs̈ë" reduces to "sendmeyourseedphrase", which the prefilter matches on
+	// its own. Raising this cap costs zero evasion resistance, and that is
+	// measured rather than argued: see TestSkeletonFoldsAnyMarkStackToThePlainWord.
+	//
+	// What remains is the LAYOUT argument, which is real but only at volume: a
+	// stack sits above its character until roughly a dozen marks and only then
+	// smears up through the line above. So the cap goes above real text's ceiling
+	// rather than on top of it — 8, three clear of the measured maximum of five,
+	// with room for scripts not sampled here, and still far below where a stack
+	// damages a page.
+	maxMarks = 8
 
 	// maxJoinerRun caps CONSECUTIVE ZWJ/ZWNJ/VS16, and the ratio below caps their density.
 	// Both replaced a single whole-message total of 16, which was measured refusing ordinary

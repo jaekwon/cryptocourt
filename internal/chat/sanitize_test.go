@@ -332,3 +332,92 @@ func TestJoinersDoNotRefuseOrdinaryText(t *testing.T) {
 		}
 	}
 }
+
+// REAL WRITING SYSTEMS MUST NOT BE REFUSED, and one was.
+//
+// maxMarks was 3. Pointed Hebrew puts four marks on a single consonant as a matter of course —
+// dagesh, sin-dot, vowel, meteg — and five with a cantillation accent, so a Hebrew speaker quoting
+// a pointed text was told their message "stacks too many marks on one character". Fully-voweled
+// Arabic and Hebrew niqqud with cantillation both landed exactly ON the old cap, which means the
+// scripts that need marks most had no headroom whatsoever.
+//
+// This table is the paired positive the cap never had. It is written in terms of maxMarks so
+// lowering the constant fails here rather than silently starting to refuse these again.
+func TestPointedScriptsAreAccepted(t *testing.T) {
+	for _, c := range []struct {
+		label, s string
+		marks    int
+	}{
+		{"Hebrew, Genesis 1:1 with niqqud", "בְּרֵאשִׁית בָּרָא אֱלֹהִים", 2},
+		{"Hebrew, niqqud and cantillation", "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים", 3},
+		{"Hebrew, shin with dagesh sin-dot vowel", "שֶּׁ", 3},
+		{"Hebrew, and a meteg as well", "שֶּֽׁ", 4},
+		{"Hebrew, and a cantillation accent", "שֶּֽׁ֖", 5},
+		{"Arabic, the Basmala with full harakat", "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ", 2},
+		{"Arabic, shadda fatha and madda", "اللَّٰهُمَّ", 3},
+		{"Thai, vowel above with tone", "เก้าโมงเช้าแล้วครับ", 1},
+		{"Devanagari", "क्षत्रिय नमस्ते दुनिया", 1},
+		{"Yoruba, underdot with tone", "Ẹ̀kọ́ àti ìmọ̀ràn", 1},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			if c.marks > maxMarks {
+				t.Fatalf("this fixture assumes maxMarks >= %d, it is %d — real pointed text "+
+					"reaches %d marks on one base and refusing it tells somebody their "+
+					"alphabet is unacceptable", c.marks, maxMarks, c.marks)
+			}
+			out, err := SanitizeBody(c.s)
+			if err != nil {
+				t.Fatalf("%q was refused: %v", c.s, err)
+			}
+			// And it comes back INTACT. Accepting a message while quietly stripping the marks
+			// off it would pass an error check and still corrupt the text.
+			if out != c.s {
+				t.Errorf("accepted but altered:\n  in  %q\n  out %q", c.s, out)
+			}
+		})
+	}
+}
+
+// THE PAIRED NEGATIVE: a mark stack that damages the page is still refused. Without this the
+// table above would pass just as well for a sanitiser with no cap at all.
+func TestAMarkStackThatSmearsIsStillRefused(t *testing.T) {
+	for _, n := range []int{maxMarks + 1, 15, 40} {
+		s := "s"
+		for i := 0; i < n; i++ {
+			s += string(rune(0x0300 + i%25))
+		}
+		s += "cam"
+		if _, err := SanitizeBody(s); !errors.Is(err, ErrMarks) {
+			t.Errorf("%d marks on one base must be refused, got %v", n, err)
+		}
+	}
+}
+
+// AND THE REASON RAISING THE CAP COSTS NOTHING: evasion resistance was never in this cap.
+//
+// The top of sanitize.go says it plainly — Sanitize preserves meaning, Skeleton resists evasion —
+// but maxMarks was labelled "Zalgo defence", which reads as though lowering it were a security
+// measure. It is not, and this measures it rather than asserting the doc: every mark-obscured form
+// of a word folds to the SAME skeleton as the plain word, so the duplicate rule and the prefilter
+// see through all of them whatever maxMarks is set to.
+func TestSkeletonFoldsAnyMarkStackToThePlainWord(t *testing.T) {
+	plain := Skeleton("scam")
+	if plain != "scam" {
+		t.Fatalf("precondition: Skeleton(%q) = %q", "scam", plain)
+	}
+	for _, s := range []string{
+		"s͡c͡a͡m",
+		"s̈c̈äm̈",
+		"s̸̢̛̪̭̜̮͙̈́͐̈́̚c̷̡̛̭̼̈́̚ä̸̢̛̪̭́m̷̡̛̭̼̈́",
+	} {
+		if got := Skeleton(s); got != plain {
+			t.Errorf("Skeleton(%q) = %q, want %q — if this stops holding, maxMarks becomes "+
+				"load-bearing for evasion and its value has to be reconsidered", s, got, plain)
+		}
+	}
+	// The case that matters in practice: an obscured secret-phrase ask must still reduce to
+	// something the deterministic prefilter can match.
+	if got := Skeleton("send me your s̈ëëd̈ p̈ḧräs̈ë"); got != "sendmeyourseedphrase" {
+		t.Errorf("an obscured lure must fold to the plain words, got %q", got)
+	}
+}
