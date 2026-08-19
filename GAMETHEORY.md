@@ -1398,3 +1398,123 @@ the only change so far that is verified shippable in isolation.
 
 Revised: **draw cap → C0 → C6 → C1 → C5 → C2 → C3 → C4b**, with the conviction lever specced and
 deferred, C4a cancelled, and C3 still blocked pending §12.1's dispute-bond rework.
+
+---
+
+## 14. AUDIT ROUND 3 — §12.1's block is LIFTED. C3 ships. The bond becomes 600 bps.
+
+**§12.1 was a denominator artifact.** The dispute bond must NOT be reworked, and C3's
+answer-bond cut ships unchanged.
+
+### 14.1 The decisive measurement: the destroyed prize contains no bond term
+
+`D = (tier + splitCarrot/100)·mg_win` (`crystallize.gno:83,113`). Swept **1,728 grid points**
+(6 ages × 2 rates × 4 splits × 3 X̄ × 3 bond levels × 2 keyings × 2 tiers) comparing `D` across
+every bond level and both keyings: **0 divergences.**
+
+> **No dispute-bond sizing can reduce the harm. It can only move the ratio's denominator.**
+
+So §12.1 measured a real number and drew the wrong conclusion — mine, since I set the brief.
+Sizing the bond against destruction prices the wrong term. **What the bond level actually moves
+is the attacker's payoff**, measured end to end on identical twin claims (same X̄ = 500 CC, same
+control draw 24,359, same latency):
+
+| malicious overturn of a TRUE answer | today (5000 bps) | **C3 (600 bps, max-keyed)** |
+|---|---|---|
+| attacker's net bond outlay | 0 (returned whole) | 0 |
+| **comp MINTED to the attacker — the payoff** | **200 CC** | **24 CC (÷8.33)** |
+| destroyed draw + carrot | 24,359 | **24,359 — identical** |
+| **payoff / destroyed** | **8,210×** | **985×** |
+| comp/disputeBond, q\* | 2.0000, 1/3 | 2.0000, 1/3 — **unchanged** |
+| honest disputer's cost (bystander) | 100 CC | **12 CC (÷8.33)** |
+| bystander draw / latency | 19,584 / 241,922 | **bit-identical** |
+
+**The payoff exceeds the destruction by three to four orders of magnitude.** §12.1 reported the
+collateralization ratio worsening (0.338 → 1.672) and failed to report that on the *same row* the
+attacker's payoff falls **4.95×**. On the metric that actually governs behaviour, **C3 is 8.3×
+better than today.**
+
+### 14.2 Buying `L < 1` in the dispute lane costs more than the 50% bond
+
+`L ≤ (tier + c)/0.64` = **1.672 MID / 3.234 HIGH**, exactly attained. To force `L < 1` through the
+coupling needs `slashDrawBps > 26,750` (MID) or `51,750` (HIGH) — a worst-case **answer** bond of
+**51.5%·X̄ / 99.7%·X̄**. §11.1 already rejected 20,700 for "undoing most of C3's access gain."
+
+> **Chasing `L < 1` in the dispute lane reinstates the 50% bond, and then some.**
+
+**New:** today's dispute lane **already exceeds L = 1 at MID** (1.0312 at the top corner). §12.1's
+"it crosses 1" is not new to C3 — C3 makes it cross everywhere rather than only in that corner.
+
+### 14.3 The rework was built, and properties 1–3 cannot hold together
+
+Prototype at the cheapest admissible coefficient:
+
+| | C3 | REWORK |
+|---|---|---|
+| worst L | 1.672 | **1.0000** ✓ |
+| max bond | 1,233 bps·X̄ | **2,062 bps·X̄** (3,990 at HIGH) |
+| q\* | 1/3 flat | **1/3 → 45.5%** (61.8% at HIGH) |
+| §12.3's victim (100 CC spendable) | 84.94 — **can defend** | **142.02 — REFUSED** |
+| 3-round grind, young claim | 42 CC | **7.16 CC** (5.9× cheaper — griefing) |
+| shipped fixtures failing | 4 | 6 |
+
+The analytic prediction `q* = 1.07/2.35 = 45.53%` matched the live measurement to four decimals —
+**the same place §11.8 rejected C0's cap for ("disputing stops being rational")**. Property 1
+needs `b_d ≥ 20.6–39.9%·X̄`; property 2 needs `b_d ≤ 4.46%·X̄` in the victim's fixture. Both hold
+only where `M ≤ 4.17%·X̄` — **young or drained claims only; mutually exclusive past ~4.4 weeks.**
+
+**The tension is an identity, not a coincidence:** the honest disputer and the griefer post the
+same bond through the same entrypoint, and are indistinguishable at `OpenDispute` — the vote that
+separates them has not happened yet. One constant, two opposite roles.
+
+**But there IS a separating signal, unlisted anywhere until now.** Conviction freezes at
+`PostAnswer` and staking panics afterwards, so at `OpenDispute` the disputer's frozen conviction
+*on the side they are moving the verdict toward* is **unbuyable**: a victim has it by
+construction, while a griefer must have bought it before the answer, at capital×time cost, on a
+claim whose answer they could not predict. That is §13.5's signal one lane over and **strictly
+stronger there.** Own design pass; not a bond change.
+
+### 14.4 Two paths destroy the same prize for FREE, so the dispute lane is third-cheapest
+
+1. **Nobody answers → `CloseDeadClaim`**: the whole draw, at zero cost. Closed by C1+C6.
+2. **A conclusive LOW below `fullBar`**: **M:** a bloc holding **5 bps of court supply** (130 CC
+   of 240,130) zeroed `drawWinners` 19,584 → 0, author 1,958 → 0, answerer 1,224 → 0, carrot
+   1,593 → 0 — with the **flag bond returned whole** (net spent 0) **plus a 0.88 CC senior
+   bounty**. `demotionBar = arm/4` has no supply floor. **L = ∞ and net profitable.** The realm's
+   own comment names it: *"its one free destructive action (a refunded demotion…)"*. Closed by C5
+   plus §12.12's mandate gate.
+
+**So the non-bond fixes bound destruction and the bond never can.** That is the whole answer.
+
+### 14.5 Question 7: the single draw-keyed sizer already exists
+
+Under C3, `b_d = max(0.4β·X̄, 0.64·mg_max)` — a flat anti-dust floor plus a term strictly
+proportional to the destroyable draw. **M:** draw-keyed on **75/144** grid points under C3, and
+**0/144** today, where the arms tie at a flat 20%·X̄, blind to the draw entirely.
+
+> **§12.1 asked for a shape C3 already produces. The coupling is the delivery mechanism, not the
+> obstacle** — and decoupling it is what breaks `comp = 2·b_d`.
+
+### 14.6 Changes, and one silent-failure trap
+
+**Nothing in the dispute lane changes.** `disputeBondXBps`/`disputeBondOfAnswerBps` stay
+2000/4000. Recommended anyway:
+
+1. **`court.gno:199`** — drop the shared `answerBondBps` factor so it states what it constrains
+   (`2*disputeBondOfAnswerBps > compOfBurnBps`). As written it is an identity that certifies
+   nothing while looking like it certifies something.
+2. **If the coupling is ever broken, `:199` must be REPLACED, not amended.** **M** on the rework:
+   `:199` still **passes at deploy** while the runtime form **FAILS** (2·b_d = 294,897,252 vs 80%·A
+   = 176,387,142) — silent, exactly as §9.4 feared.
+3. **`OpenDispute` duplicates `disputeBond0()` inline** (`dispute.gno:130-141` vs `:356-367`) while
+   its comment claims it is factored. Two parallel arithmetic paths — the exact hazard
+   `slashSizeAt` exists to remove. Consolidate regardless.
+4. **Correction to §11.7/§13.1:** the fourth failing fixture,
+   `TestSlashSizeForDrawProportional`, **asserts the answered-side keying C3 exists to remove**.
+   Re-derive it; do not delete it.
+
+### 14.7 Where this leaves the answer bond
+
+**600 bps, re-keyed to both sides, with the §13.3 draw cap. C3 is unblocked.** Revised order:
+**draw cap → C0 → C6 → C1 → C5 → C2 → C3**, C4b a tail feature, C4a cancelled, the two conviction
+levers (§13.5 answer lane, §14.3 dispute lane) specced and deferred.
