@@ -1071,9 +1071,29 @@ which kind, and which verb undoes it), or no such message — because `HideMessa
 `reveal` is restricted to `hidden=2` and refuses anything else, because clearing `hidden` directly
 on a punished row would bypass the recompute above. It prints an eighteen-rune PREVIEW rather than
 the body: that body may be a real recovery phrase, and an operator's terminal and shell history are
-not where it belongs. A message that merely CONTAINS a phrase without reporting it is punished as
-scam and hidden=1 instead, where `unban` is the right verb — measured, because the first live run
-assumed otherwise.
+not where it belongs.
+
+**"No more" was not a number, so it is one now.** A revealed BIP-39 word divides a twelve-word
+search space by 2048, so what matters is how many WHOLE words a preview can show — and the worst
+case is a phrase of short words, not the canonical all-`abandon` vector:
+
+    18 runes    2 words of the abandon vector, 4 of a short-word phrase
+    24 runes    3 / 6
+    40 runes    5 / 10
+    60 runes    7 / 11        <- eleven of twelve leaves about 128 after the checksum
+    100 runes   11 / 11
+
+Four words leaves 2048^8 candidates and is not an attack; eleven is brute-forceable in seconds. And
+sixty runes is an entirely plausible thing to raise a preview to for readability, which is the whole
+reason this is written down. `PreviewRunes` is named so the test reads the value instead of repeating
+it, and `TestPreviewExposesTooFewWordsToRebuildAPhrase` pins the distance from that cliff in BOTH
+directions — a preview too short to recognise a message by would satisfy a safety bound on its own,
+and a four-rune one does.
+
+A message that merely CONTAINS a phrase is hidden and its author is not punished, whatever framing
+they used — see the disclosure branch above. This paragraph said the opposite until that changed:
+"punished as scam and `hidden=1` instead, where `unban` is the right verb". That was true, and
+measured, before the hide was hoisted out of the reporting branch.
 
 **The cited message is hidden whatever its age; the author's other messages only for ten
 minutes.** Those are two different rules and they were one for a while — the hide was a

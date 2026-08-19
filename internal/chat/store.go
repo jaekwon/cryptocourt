@@ -1021,10 +1021,29 @@ func (s *Store) HideMessage(ctx context.Context, id int64) error {
 // message it is, no more. `why` has the full text for the cases that need it.
 //
 // One definition because both verbs that move a message in or out of sight print one, and an
-// eighteen written twice is an eighteen that eventually disagrees with itself.
+// eighteen written twice is an eighteen that eventually disagrees with itself. Named, so the test
+// that checks what it exposes reads the value rather than repeating it.
+//
+// WHY THIS NUMBER IS SAFE, quantified, because "no more" is not a number and somebody will
+// eventually raise it for readability. A revealed BIP-39 word divides the search space by 2048, so
+// what matters is how many WHOLE words a preview can show. The worst case is a phrase of short
+// words, not the canonical all-`abandon` vector:
+//
+//	18 runes    2 words of the abandon vector, 4 of a short-word phrase
+//	24 runes    3 / 6
+//	40 runes    5 / 10
+//	60 runes    7 / 11        <- 11 of 12 leaves ~128 after the checksum
+//	100 runes   11 / 11
+//
+// Four words leaves 2048^8 candidates, which is not an attack. Eleven is brute-forceable in
+// seconds, and sixty runes is an entirely plausible thing to raise this to. PreviewExposure pins
+// the distance from that cliff, in both directions — a preview too SHORT to recognise a message by
+// would satisfy a safety bound on its own.
+const PreviewRunes = 18
+
 func Preview(body string) string {
-	if r := []rune(body); len(r) > 18 {
-		return string(r[:18]) + "…"
+	if r := []rune(body); len(r) > PreviewRunes {
+		return string(r[:PreviewRunes]) + "…"
 	}
 	return body
 }

@@ -2482,3 +2482,57 @@ func TestHideDistinguishesNothingToHideFromARealFailure(t *testing.T) {
 			"diagnosis: %v", err)
 	}
 }
+
+// WHAT A PREVIEW EXPOSES OF A RECOVERY PHRASE, AND THAT IT IS STILL USEFUL.
+//
+// Preview's contract is "enough to recognise which message it is, no more", and "no more" was not a
+// number. A revealed BIP-39 word divides the search space by 2048, so what matters is how many
+// WHOLE words a preview can show — and the worst case is a phrase of short words rather than the
+// canonical all-abandon vector. Measured across candidate lengths:
+//
+//	18 runes    2 words of the abandon vector, 4 of a short-word phrase
+//	60 runes    7 / 11        <- 11 of 12 leaves ~128 after the checksum
+//	100 runes   11 / 11
+//
+// Sixty is an entirely plausible thing to raise a preview to for readability, which is why this
+// exists. Both directions are asserted: a preview that exposed too much would be dangerous, and one
+// too short to recognise a message by would be useless — and would satisfy a safety bound alone.
+func TestPreviewExposesTooFewWordsToRebuildAPhrase(t *testing.T) {
+	// The shortest BIP-39 words are three letters, so this is the worst case for exposure.
+	shortWords := strings.Repeat("act ", 11) + "acid"
+
+	// Whole words only: a trailing fragment gives an attacker a prefix, not a word, and 2048
+	// candidates narrow to a handful — but it is not a word, so count conservatively by INCLUDING
+	// a fragment as if it were whole.
+	wholeWords := func(preview string) int {
+		p := strings.TrimSuffix(preview, "…")
+		return len(strings.Fields(p))
+	}
+
+	got := wholeWords(Preview(shortWords))
+	// Four is the measured value at PreviewRunes = 18. The bound is five, which leaves 2048^7
+	// candidates — headroom for a small change without hiding a large one.
+	const maxWords = 5
+	if got > maxWords {
+		t.Errorf("a preview of a short-word phrase exposes %d words at PreviewRunes = %d. Each "+
+			"revealed word divides a 12-word search space by 2048, and eleven of twelve leaves "+
+			"about 128 candidates after the checksum. If this length is deliberate, work out "+
+			"what it costs before raising the bound", got, PreviewRunes)
+	}
+
+	// THE PAIRED ARM: it must still identify a message. A preview of one word satisfies the
+	// bound above and is useless to the operator the function exists for.
+	if got < 2 {
+		t.Errorf("a preview showing %d word(s) cannot be used to recognise which message an id "+
+			"refers to, which is the whole purpose", got)
+	}
+	// And a short body must come through whole, not truncated with an ellipsis for no reason.
+	if p := Preview("hello"); p != "hello" {
+		t.Errorf("a body under the limit must be returned unchanged, got %q", p)
+	}
+	// The ellipsis is what tells an operator there is more; without it a truncated phrase reads
+	// as the entire message.
+	if p := Preview(shortWords); !strings.HasSuffix(p, "…") {
+		t.Errorf("a truncated preview must say it was truncated, got %q", p)
+	}
+}
