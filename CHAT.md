@@ -872,6 +872,29 @@ column additions with defaults only, so an older binary reading a newer database
 — every query names its columns. Back up first anyway, and start one binary before the
 others so a migration failure is one log line rather than three.
 
+That last sentence is about LEGIBILITY, not safety, and it is worth saying which: starting
+both binaries in the same second against a database that does not exist yet was measured
+and is fine — both come up, the schema is complete and `PRAGMA integrity_check` returns
+`ok`. Ordering two systemd units takes extra configuration, and it buys a clearer log
+rather than a correct database.
+
+**TWO SCANNERS ARE SAFE, and you will have two eventually** — a restart overlap, or an
+operator starting a second instance to work through a backlog. Measured with two
+`--enforce` daemons and three lures against one database: every message scanned once,
+exactly one consequence each, the clean message untouched, a bystander still posting, and
+no busy or lock errors in either log. The infraction ids came out interleaved across the
+two processes, which is what shows they genuinely raced rather than one doing the work.
+
+What makes it safe is `infractions_once` — UNIQUE(evidence_id, kind) on unrevoked rows —
+plus `Consequence` turning that violation into a no-op rather than an error. A scanner
+treats an error as a failure and retries, so a duplicate has to look like
+success-with-nothing-done or the retry loop never ends. `Claim` marks rows and reclaims
+anything a dead daemon left held after five minutes, so the second daemon picks up work
+rather than colliding over it.
+
+It is still not something to run on purpose: two daemons do the same Ollama work twice for
+no extra throughput, since the model is the bottleneck and both queue against the same one.
+
 **Losing the hashing key is losing every consequence.** Every `ip_hash` is an HMAC under
 it, so a new key means every kick and ban in the table matches nobody, and every public
 suffix in the room changes at once. The key is as much the state as the database is;
