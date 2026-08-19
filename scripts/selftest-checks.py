@@ -127,11 +127,17 @@ PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
 MUTS = "scripts/mutations-kourtv2.json"
 PHYSICS = "scripts/check-demo-physics.py"
+HSHIM = "scripts/check-height-shim.py"
+LIVER = "scripts/check-live-reads.py"
 WEBPAGE = "web/index.html"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
 STALEG = "scripts/check-stale-guards.py"
 BUY = "realm/r/kourtv2/buy.gno"
+STAKE = "realm/r/kourtv2/stake.gno"
+COURT = "realm/r/kourtv2/court.gno"
+CLOCKF = "realm/r/kourtv2/clock.gno"
+TWAP = "realm/p/twap/twap.gno"
 TCLOCK = "realm/r/kourtv2/testclock.gno"
 SEEDED = "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
 GOVERN = "realm/r/govern"
@@ -381,6 +387,49 @@ control("a realm constant this guard can no longer find", PHYSICS,
 control("a demo page that no longer defines NOW", WEBPAGE,
         "const NOW = ", "const NOW_RENAMED = ",
         "no longer defines NOW", argv=["python3", PHYSICS])
+
+print("\ncheck-height-shim")
+# The guard exists because 65 call sites went through a mechanical rename and
+# nobody re-checks those by eye. A single missed one means ONE TRANSACTION
+# SEEING TWO HEIGHTS — a claim opened at fabricated height 20,000 while the twap
+# ring observes at real height 30 — so it must fail on a reintroduced raw read.
+control("a height read that bypasses the shim", STAKE,
+        "func rawHeight(cs *claimState) int64 {\n\th := heightNow()",
+        "func rawHeight(cs *claimState) int64 {\n\th := runtime.ChainHeight()",
+        "bypass heightNow", argv=["python3", HSHIM])
+# An audit found the first version scanned only the realm, and so could not see
+# the one live raw read outside it. A pure package that starts reading the chain
+# directly must be caught.
+control("a pure package reading the chain directly", TWAP,
+        "func (r Ring) Head() int     { return r.head }",
+        "func (r Ring) Head() int     { _ = runtime.ChainHeight(); return r.head }",
+        "raw height read", argv=["python3", HSHIM])
+# A literal scan is defeated by an import alias; the audit pointed that out.
+control("chain/runtime imported under an alias", BUY,
+        '\t"chain/runtime/unsafe"', '\trt "chain/runtime"',
+        "aliases chain/runtime", argv=["python3", HSHIM])
+# kourtv2 must never build a ledger without a clock: that ledger would read REAL
+# height while the claims and rings around it read fabricated height.
+control("a court built on a clockless ledger", COURT,
+        "grc20votes.NewLedgerWithClock(name, courtSymbol(slug), coinDecimals, epochBlocks, realmClock{})",
+        "grc20votes.NewLedger(name, courtSymbol(slug), coinDecimals, epochBlocks)",
+        "use NewLedgerWithClock", argv=["python3", HSHIM])
+# And it must fail CLOSED if its own anchor goes away, rather than scanning
+# clean because heightNow() no longer reads anything.
+control("a shim that no longer reads the chain", CLOCKF,
+        "h = runtime.ChainHeight()", "h = int64(0)",
+        "lost its anchor", argv=["python3", HSHIM])
+
+print("\ncheck-live-reads")
+# This one needs a running node, so its arms are the two refusals it makes
+# WITHOUT one — which are the paths an operator actually hits, and the paths
+# that must not report a clean scan.
+# Needs no node, deliberately: the arm is the tripwire that fires BEFORE the
+# network, because a guard whose probe table has been gutted would otherwise
+# report a clean scan having asked nothing.
+control("a gutted probe table", LIVER,
+        "PROBES = [\n    # court-level", "PROBES = []\nUNUSED_PROBES = [\n    # court-level",
+        "has been gutted", argv=["python3", LIVER, "--remote", "http://127.0.0.1:1"])
 
 if not have_gno():
     print("\ncheck-storage: gno not installed - NOT CHECKED")

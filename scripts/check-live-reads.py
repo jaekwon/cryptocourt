@@ -112,6 +112,16 @@ def main():
     claim = int(flag("--claim", "1"))
     addr = flag("--addr", "g1qpymzmpsf6hjfjfyx4qcs5x9c6cj4kvv98yn9m")
 
+    # BEFORE touching the network: an empty or shrunken probe table would report
+    # a clean scan having asked nothing, which is the vacuous pass this whole
+    # family of checks keeps rediscovering. Checked first so the tripwire works
+    # with no node at all, which is also what makes it testable in selftest.
+    if len(PROBES) < 40:
+        print(f"check-live-reads: only {len(PROBES)} probe(s) — the overlay issues "
+              f"58 distinct reads, so this table has been gutted and a clean scan "
+              f"would mean nothing.", file=sys.stderr)
+        return 1
+
     try:
         head, err = qeval(remote, "CourtCount()")
     except Exception as e:

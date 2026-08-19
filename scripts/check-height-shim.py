@@ -46,6 +46,7 @@ def main():
         return 2
 
     offenders, scanned, shim_sites = [], 0, 0
+    shim_per_file = {}
     for f in sorted(REALM.glob("*.gno")):
         if f.name.endswith("_test.gno") or f.name.endswith("_filetest.gno"):
             continue
@@ -57,15 +58,21 @@ def main():
         hits = list(RAW.finditer(code))
         if f.name in SHIM_FILES:
             shim_sites += len(hits)
+            shim_per_file[f.name] = len(hits)
             continue
         for m in hits:
             line = code[:m.start()].count("\n") + 1
             offenders.append((f"realm/r/kourtv2/{f.name}", f"line {line}"))
 
-    if not shim_sites:
-        print("check-height-shim: the shim files contain NO raw height read — "
-              "heightNow() must be reading something, so this check has lost its "
-              "anchor and would pass vacuously.", file=sys.stderr)
+    # Per-file, not a total. clock.gno DEFINES heightNow(); if it stops reading
+    # the chain then the shim is reading nothing and every "clean" scan below is
+    # vacuous. A total let testclock.gno's own read cover for it — which a
+    # selftest arm caught by replacing clock.gno's read and seeing this stay
+    # quiet.
+    if shim_per_file.get("clock.gno", 0) < 1:
+        print("check-height-shim: clock.gno holds NO raw height read — heightNow() "
+              "must be reading something, so this check has lost its anchor and "
+              "would pass vacuously.", file=sys.stderr)
         return 1
 
     # --- the pure packages -------------------------------------------------
