@@ -470,3 +470,149 @@ func TestHiddenMessagesAreNotInTheReviewQueue(t *testing.T) {
 		t.Fatalf("the grouped view must show only the reporter, got %+v", groups)
 	}
 }
+
+// The last two of the guard-clause audit, and the deliberate exception beside them.
+//
+// Tabulating every query in store.go against `hidden`, `frozen` and `revoked_at` found four
+// real bugs across as many passes. These are the remainder.
+
+// An UNSCANNABLE warning must not survive the court being withdrawn: it exists to tell an
+// operator that something needs attention, and after a freeze there is none to give.
+func TestUnscannableDoesNotWarnAboutWithdrawnCourts(t *testing.T) {
+	s, ctx, tick := reviewStore(t)
+
+	// Two courts, one message each, both driven to terminal-unscanned.
+	for _, court := range []string{"orem", "ledger"} {
+		if _, err := s.Post(ctx, PostInput{Chain: "dev", Court: court, Moniker: "a",
+			Body:   "a message the model never managed to read in " + court,
+			IPHash: "ip-" + court, NetHash: "net-" + court}); err != nil {
+			t.Fatal(err)
+		}
+		tick(MinInterval)
+	}
+	for _, id := range []int64{1, 2} {
+		for i := 0; i < 5; i++ {
+			if _, err := s.RecordFailure(ctx, id); err != nil {
+				t.Fatal(err)
+			}
+			tick(time.Hour)
+		}
+	}
+	h, err := s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Unscannable != 2 {
+		t.Fatalf("precondition: both should be unscannable, got %d", h.Unscannable)
+	}
+
+	if err := s.Freeze(ctx, "dev", "orem"); err != nil {
+		t.Fatal(err)
+	}
+	h, err = s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// PAIRED: the live court's row must still warn, or the fix is "stop warning".
+	if h.Unscannable != 1 {
+		t.Fatalf("a withdrawn court must stop warning while the live one keeps warning: got %d",
+			h.Unscannable)
+	}
+
+	// And hiding has the same effect, for the same reason: it was punished, so nobody needs
+	// to look at it.
+	//
+	// Set directly rather than by issuing a consequence. Going through Consequence would
+	// have tested its recent-window arithmetic instead of this: five RecordFailure rounds
+	// advance the clock past the backoff, so by the time a row is terminal it is older than
+	// the window Consequence hides, and the first version of this assertion failed for that
+	// reason rather than for the one it names.
+	if _, err := s.w.ExecContext(ctx, `UPDATE messages SET hidden=1 WHERE id=2`); err != nil {
+		t.Fatal(err)
+	}
+	h, err = s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Unscannable != 0 {
+		t.Errorf("a hidden unscannable row needs no attention either, got %d", h.Unscannable)
+	}
+}
+
+// A REVERSED consequence must stop truncating the prior-context window.
+//
+// Escalate already excludes revoked rows, with the reason written beside it: an upheld appeal
+// that left somebody one rung higher would be reversible-looking rather than reversible. The
+// context window was still being cut off by the reversed consequence — measured at ZERO lines
+// of prior context for the next message — and less context is not the safe direction, because
+// the window exists so a scam split across innocent lines is visible.
+func TestAnUpheldAppealRestoresTheContextWindow(t *testing.T) {
+	s, ctx, tick := reviewStore(t)
+
+	for i := 0; i < 3; i++ {
+		say(t, s, ctx, "b", fmt.Sprintf("context line number %d", i))
+		tick(MinInterval)
+	}
+	id, err := s.Consequence(ctx, Infraction{IPHash: "ip-b", NetHash: "net-b",
+		Kind: KindKick, Reason: ReasonSpam, Duration: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tick(2 * time.Minute) // the kick lapses on its own
+
+	// While it stands, the window is deliberately cut at the consequence.
+	say(t, s, ctx, "b", "posted while the kick stands")
+	pend, err := s.Claim(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	standing := -1
+	for _, p := range pend {
+		if p.Body == "posted while the kick stands" {
+			standing = len(p.Prior)
+		}
+	}
+	if standing != 0 {
+		t.Fatalf("precondition: a standing consequence should cut the window, got %d lines",
+			standing)
+	}
+
+	// Now the appeal is upheld.
+	if err := s.Revoke(ctx, id, "appeal upheld"); err != nil {
+		t.Fatal(err)
+	}
+	tick(MinInterval)
+	say(t, s, ctx, "b", "posted after the appeal was upheld")
+	// Reset the claims so the new message is offered.
+	if _, err := s.w.ExecContext(ctx,
+		`UPDATE messages SET scan_state=?, claimed_at=0`, ScanNew); err != nil {
+		t.Fatal(err)
+	}
+	pend, err = s.Claim(ctx, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prior []string
+	for _, p := range pend {
+		if p.Body == "posted after the appeal was upheld" {
+			prior = p.Prior
+		}
+	}
+	if prior == nil {
+		t.Fatal("the new message was not offered to the scanner at all")
+	}
+	// The property is that the window reaches back PAST the reversed consequence — not
+	// merely that it is non-empty. `len(prior) > 0` was the first assertion here and it
+	// survived reverting the fix, because the message posted while the kick stood is itself
+	// after the consequence and satisfied it on its own.
+	reachedBack := false
+	for _, line := range prior {
+		if line == "context line number 0" {
+			reachedBack = true
+		}
+	}
+	if !reachedBack {
+		t.Fatalf("after an upheld appeal the window must include the lines from before the "+
+			"reversed consequence; got %d lines: %v", len(prior), prior)
+	}
+}

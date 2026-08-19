@@ -341,6 +341,16 @@ type PostInput struct {
 	Country, Suffix string
 }
 
+// throttleTx deliberately ignores `hidden` and `frozen`, unlike almost everything else here.
+//
+// Every other read excludes them because they mean "nobody can see this, so it should not drive
+// a decision". The throttle is not that kind of decision: it asks what this address SENT, and
+// hiding a message afterwards does not un-send it. Counting only visible messages would let an
+// author whose messages were hidden — or whose court was withdrawn — burst freely, and would
+// let a kick that was later revoked hand back a fresh quota.
+//
+// Stated because an audit of this file's guard clauses flags these five queries as the ones
+// missing the filters, and the answer is that they are missing them on purpose.
 func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) error {
 	var last sql.NullInt64
 	if err := tx.QueryRowContext(ctx,
@@ -733,9 +743,14 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	// Terminal AND never classified. scan_state alone is not enough: ScanDone is also
 	// where every successfully scanned message ends up, so the empty verdict is what
 	// distinguishes "read and found clean" from "never read at all".
+	// Same exclusions as the backlog above, for the same reason: this line tells an operator
+	// that something needs attention, so it must not count rows where no attention is
+	// possible. A hidden message was punished; a withdrawn court's messages are unreadable.
+	// Measured before the fix: freezing a court left its unscannable rows warning forever,
+	// with no available action.
 	if err := s.r.QueryRowContext(ctx,
-		`SELECT count(*) FROM messages WHERE scan_state=? AND verdict=''`,
-		ScanDone).Scan(&h.Unscannable); err != nil {
+		`SELECT count(*) FROM messages WHERE scan_state=? AND verdict='' AND hidden=0
+		   AND `+sqlNotFrozen, ScanDone).Scan(&h.Unscannable); err != nil {
 		return h, err
 	}
 	return h, nil
@@ -817,9 +832,28 @@ func (s *Store) Claim(ctx context.Context, n int) ([]Pending, error) {
 // "hello" three times walks the ladder. Within THIRTY MINUTES, so context does not
 // accumulate forever. And hidden=0, so punished content stops driving verdicts.
 func priorTx(ctx context.Context, tx *sql.Tx, p Pending, now int64) ([]string, error) {
+	// UNREVOKED consequences only. Escalate already filters these out, with the reason
+	// written next to it — "an upheld appeal would unmute somebody and leave them one rung
+	// higher, reversible-looking rather than reversible" — and the same reasoning applies
+	// here: a reversed consequence is deemed not to have happened, so it must not keep
+	// cutting off the author's context either.
+	//
+	// Measured before the fix: after an upheld appeal, the message posted next arrived at
+	// the scanner with ZERO lines of prior context, still truncated by the consequence that
+	// had just been reversed. Less context is not the safe direction — the window exists so
+	// a scam split across individually-innocent lines is visible.
+	//
+	// The `revoked_at` half is what showed a measurable difference. The consequence bound
+	// ITSELF turns out to be largely subsumed by `hidden = 0` below: Consequence hides the
+	// author's recent window, so the messages the bound would exclude are usually already
+	// excluded for being hidden, and deleting the bound entirely changed no test. It is kept
+	// because the two cover different ground at the edges — hiding reaches only the recent
+	// slice, while an author with a longer history has unhidden messages before it — but that
+	// is reasoning, not a measurement, and it is recorded as such rather than dressed up.
 	var since int64
 	if err := tx.QueryRowContext(ctx,
-		`SELECT coalesce(max(created_at),0) FROM infractions WHERE ip_hash=?`,
+		`SELECT coalesce(max(created_at),0) FROM infractions
+		  WHERE ip_hash=? AND revoked_at IS NULL`,
 		p.IPHash).Scan(&since); err != nil {
 		return nil, err
 	}
