@@ -168,3 +168,20 @@ Two limits found while building it, both measured rather than assumed:
   `CreateEmptyBlocks=false`. A scenario file that wants a settled claim needs a
   HEIGHT skew, which is a separate decision with consequences for the accounting
   clock. Worth settling before P4 hard-codes an assumption about it.
+
+### Two landmines when running a local node (found 2026-08-18)
+
+`$GNOROOT/examples/gno.land/{r,p}/kourt` holds a STALE COPY of this project —
+a leftover from when `realm-test` staged into a shared GNOROOT (it now builds a
+private one via `scripts/gnoroot.py` and cleans up). It matters because
+`gnodev -extra-root "$GNOROOT/examples"` eager-loads that copy and it SHADOWS
+the working tree: the node comes up serving an old realm, missing whichever
+files you just wrote, and every query answers plausibly and wrongly. Observed
+directly — the node had no `clock.gno`, no `stakeseries.gno`, no
+`testclock.gno`. `scripts/seed-node.sh` therefore names the handful of
+`p/nt/*` packages it needs instead of eager-loading the tree. The copy is
+outside this worktree, so nothing here deletes it.
+
+Also: a `gnodev` has been running on 26657 since before this work started, and
+it is not ours. `seed-node.sh` refuses any occupied port rather than seeding a
+node it did not start; pass `RPC_PORT=`/`WEB_PORT=` for a free pair.

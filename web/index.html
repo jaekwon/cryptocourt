@@ -70,14 +70,15 @@ img,svg{display:block;max-width:100%}
 body{
   background:var(--paper); color:var(--ink); font-family:var(--sans);
   font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
-  display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr; min-height:100vh;
+  display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr;
+  grid-template-rows:auto 1fr; min-height:100vh;
 }
 .tnum{font-variant-numeric:tabular-nums}
 code,.mono{font-family:var(--mono)}
 
 /* ---- left rail ---------------------------------------------------------- */
 .rail{
-  grid-row:1; border-right:1px solid var(--line); background:var(--surface);
+  grid-row:1/-1; border-right:1px solid var(--line); background:var(--surface);
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:auto;
 }
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
@@ -111,7 +112,7 @@ code,.mono{font-family:var(--mono)}
 .themebtn:hover{color:var(--ink)}
 
 /* ---- main --------------------------------------------------------------- */
-.main{grid-row:1; min-width:0; padding:34px clamp(20px,4vw,56px) 90px; max-width:1080px}
+.main{grid-column:2; grid-row:2; min-width:0; padding:34px clamp(20px,4vw,56px) 90px; max-width:1080px}
 .crumbs{font-family:var(--mono); font-size:12.5px; color:var(--muted); margin-bottom:18px; display:flex; gap:7px; flex-wrap:wrap; align-items:center}
 .seal{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--accent); color:var(--accent); border-radius:var(--r); padding:4px 8px; white-space:nowrap; vertical-align:middle}
 .crumbs a{text-decoration:none; color:var(--ink-2)} .crumbs a:hover{color:var(--accent-2)}
@@ -222,6 +223,15 @@ a.card:hover{border-color:var(--line-2)}
 
 /* stake panel + ratio series */
 .stakewrap{display:grid; grid-template-columns:1.3fr 1fr; gap:16px}
+/* The stake split — full chart width, so the proportion is read rather than computed. */
+.sbar{display:flex; width:100%; height:14px; margin:12px 0 0; border-radius:var(--r);
+  overflow:hidden; border:1px solid var(--line)}
+.sbar>div{min-width:0}
+.sbar .sbY{background:var(--yes)} .sbar .sbN{background:var(--no)}
+.sbar.empty{height:auto; padding:7px 10px; justify-content:center; background:var(--surface);
+  color:var(--muted); font-size:12px}
+.sbout{display:flex; justify-content:space-between; gap:14px; margin-top:6px; font-size:12.5px; flex-wrap:wrap}
+.sbout .y{color:var(--yes)} .sbout .n{color:var(--no); text-align:right}
 .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
 .bigchart{margin:2px 0 6px}
 .bigchart figcaption{display:flex; justify-content:space-between; gap:12px; font-size:12px; color:var(--muted); margin-bottom:6px; align-items:baseline}
@@ -305,7 +315,14 @@ button.helplink:hover{color:var(--accent)}
 .ticket .never b{color:var(--ink)}
 /* buy receipt — reuses the ticket's row token inside the join panel */
 .buyrcpt{padding:12px 14px; margin:0 0 4px; background:var(--inset)}
-.buyrcpt .line{font-size:13px}
+.buyrcpt .line{font-size:13px; grid-template-columns:minmax(0,1fr); row-gap:3px; column-gap:0}
+/* The receipt lives in the 288px join rail, where the ticket's 20ch label track
+   leaves the value ~100px and "185.2 KOURT:OREM / 185,241,936 units" wraps into
+   a ragged stack. Label above value instead — the rail is too narrow for two
+   columns, and the token name got longer when CC became KOURT:SLUG. */
+.buyrcpt .line>*:first-child{font-size:12px; color:var(--muted); font-weight:600;
+  letter-spacing:.02em; text-transform:uppercase}
+.buyrcpt .line .r{font-size:14px; color:var(--ink)}
 .buyrcpt .line .r small{display:block; font-weight:400; color:var(--muted)}
 .buyrcpt input{width:9ch; min-width:0; background:var(--surface); border:1px solid var(--line-2); border-radius:2px;
   color:var(--ink); font:inherit; font-weight:600; font-variant-numeric:tabular-nums; padding:3px 7px; text-align:right}
@@ -389,9 +406,13 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 
 /* The seeded-chain warning. Full-bleed above the page rather than inside it,
    because it describes the NODE and not whatever route you happen to be on. */
-#tcbanner{grid-column:1/-1}
+/* Column 2, row 1 — NOT 1/-1. Spanning every column put it under the rail,
+   which is sticky and opaque, so the first third of the sentence was invisible.
+   Padding matches .main's so the banner lines up with the page beneath it. */
+#tcbanner{grid-column:2; grid-row:1; min-width:0; max-width:1080px;
+  padding:20px clamp(20px,4vw,56px) 0}
 .tcbar{background:var(--contra-wash); color:var(--ink); border:1px solid var(--contra);
-  border-left-width:4px; border-radius:var(--r); padding:11px 16px; margin:0 0 14px;
+  border-left-width:4px; border-radius:var(--r); padding:11px 16px;
   font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice{border-radius:var(--r); padding:13px 16px; font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice.warn{background:var(--escrow-wash); color:var(--ink); border:1px solid var(--escrow); border-left-width:4px}
@@ -415,7 +436,9 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .bigchart .tickL,.bigchart .zone,.bigchart .evtL,.bigchart .note{font-size:20px}
   .bigchart .endS{font-size:18px}
   .bigchart .endL{font-size:26px}
-  .rail,.main{grid-row:auto}
+  body{grid-template-rows:none}
+  .rail,.main,#tcbanner{grid-row:auto; grid-column:auto}
+  #tcbanner{padding:16px 20px 0}
   .docket a.crow{grid-template-columns:44px minmax(0,1fr) auto}
   .docket a.crow > span:nth-child(2){grid-column:2/4}
   .docket a.crow .id{grid-row:1/3; align-self:start}
@@ -607,7 +630,7 @@ const DEMO = {
       ] },
     annex:{ name:"The Annex", tier:0,
       desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court.",
-      burned:18_000_000_000,
+      burned:17_999_760_001,
       price:6, supply:6_000_000_000, emitted:40_000, reservoir:9_000, seniorOwed:0,
       claims:[1,2,3,4,5] },
     ledger:{ name:"The Ledger of Denver", tier:1,
@@ -638,7 +661,7 @@ const DEMO = {
       settleAt:NOW+4_000, author:"g1annexfiler000000000000000000000000000", phase:"answered", hidden:true },
     // open — staking live, no answer yet
     "orem/1":{ timeline:"opened:1786036800:4596480;now:1787054400:4800000", title:"The county certified 12,412 mail ballots on Nov 6, 2025.",
-      yesStake:41_000_000, noStake:12_000_000, convYes:9_400_000, convNo:2_600_000, trailYes:74,
+      yesStake:41_000_000, noStake:12_000_000, convYes:439774, convNo:128714, trailYes:74,
       author:"g1oremfiler0000000000000000000000000000", phase:"open",
       // seriesH/seriesD: raw ClaimSeries samples in the chain's own grammar —
       // parseStakeSeries() input, NOT the docket row's 3-ratio triple. The
@@ -647,14 +670,14 @@ const DEMO = {
       seriesD:"daily,17280,278,0;266:3000000:2500000,267:8000000:3000000,268:8000000:5500000,269:14000000:6000000,270:16000000:6000000,271:19000000:7000000,272:22000000:9500000,274:26000000:9500000,276:33000000:10000000,277:41000000:12000000" },
     // answered — bond posted, freeze, 72h settle window running
     "orem/2":{ timeline:"opened:1786604400:4710000;answered:1786840200:4757160;settle:1787099400:4809000;now:1787054400:4800000", title:"SpaceX Starship Flight 12 reached orbital velocity.",
-      yesStake:130_000_000, noStake:9_000_000, convYes:24_000_000, convNo:1_500_000, trailYes:93,
+      yesStake:130_000_000, noStake:9_000_000, convYes:323114, convNo:22369, trailYes:93,
       author:"g1oremfiler0000000000000000000000000000", phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
       seriesH:"hourly,720,6667,0;6546:20000000:6000000,6560:45000000:7000000,6572:60000000:8000000,6584:80000000:8000000,6595:99000000:9000000,6603:118000000:9000000,6607:130000000:9000000",
       seriesD:"daily,17280,278,0;272:20000000:6000000,274:99000000:9000000,276:130000000:9000000",
       answerBond:70_000_000, record:2, settleAt:NOW+9_000, disputeBondNext:28_000_000 },
     // provisional — a dispute round failed; the verdict stands in escrow, reopenable
     "orem/7":{ timeline:"opened:1785454400:4480000;answered:1786054400:4600000;reopen:1787079400:4805000;now:1787054400:4800000", settleAt:NOW-250_000, title:"The reservoir release logs match the stated schedule.",
-      yesStake:48_000_000, noStake:44_000_000, convYes:9_500_000, convNo:7_500_000, trailYes:55,
+      yesStake:48_000_000, noStake:44_000_000, convYes:303571, convNo:278274, trailYes:55,
       author:"g1oremfiler0000000000000000000000000000", phase:"provisional", answer:1, answerer:"g1answerkeeper00000000000000000000000000",
       answerBond:64_000_000, record:1, provisional:1, round:2, disputeBondNext:102_400_000, escrowUntil:NOW+5_000,
       counterOpen:true },
@@ -662,7 +685,7 @@ const DEMO = {
     // on this court's numbers: max(5%·supply, min(x̄frozen, votable/3)) → the
     // 5% arm, 5,925 CC. voteEndsAt is the demo round's scheduled close.
     "orem/3":{ timeline:"opened:1786054400:4600000;answered:1786495200:4688160;now:1787054400:4800000", settleAt:NOW-110_000, title:"The bridge inspection rated the north span 'serviceable'.",
-      yesStake:60_000_000, noStake:55_000_000, convYes:12_000_000, convNo:10_000_000, trailYes:52,
+      yesStake:60_000_000, noStake:55_000_000, convYes:278780, convNo:255548, trailYes:52,
       author:"g1oremfiler0000000000000000000000000000", phase:"disputed", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
       answerBond:80_000_000, round:1, disputeBondNext:64_000_000,
       voteEndsAt:NOW+86_400, quorumFloor:5_925_000_000 },
@@ -670,23 +693,23 @@ const DEMO = {
     // draws NO answerer slice (crystallize.gno: bond burned, record reset)
     "orem/4":{ timeline:"opened:1785554400:4500000;answered:1786454400:4680000;verdict:1786754400:4740000;now:1787054400:4800000", title:"Q3 city revenue exceeded the June forecast.",
       author:"g1youdemoholder0000000000000000000000000",
-      yesStake:180_000_000, noStake:20_000_000, convYes:96_000_000, convNo:11_000_000, trailYes:90,
+      yesStake:180_000_000, noStake:20_000_000, convYes:1707589, convNo:189732, trailYes:90,
       phase:"settled", verdict:0, answer:1, route:"vote", tier:2, tierFinal:true, record:3,
       crystallized:true, draw:{w:1_644_800, a:164_480, ans:0, carrot:12_320},
       pulls:{winnerPaid:false, authorPaid:false, answererPaid:false} },
     // provClose — three failed rounds, everyone 1×
     "orem/5":{ timeline:"opened:1785054400:4400000;answered:1786054400:4600000;verdict:1786554400:4700000;now:1787054400:4800000", title:"The mayor privately opposed the rezoning before the vote.",
-      yesStake:26_000_000, noStake:24_000_000, convYes:12_000_000, convNo:11_000_000, trailYes:52,
+      yesStake:26_000_000, noStake:24_000_000, convYes:274058, convNo:252976, trailYes:52,
       author:"g1oremfiler0000000000000000000000000000", phase:"provClose", failedRounds:3 },
     // flagged — a quality flag vote is open (tally sealed)
     "orem/6":{ timeline:"opened:1786304400:4650000;answered:1786784200:4745960;settle:1787043400:4797800;now:1787054400:4800000", title:"The vendor's audit found zero critical findings.",
-      yesStake:110_000_000, noStake:8_000_000, convYes:20_000_000, convNo:2_500_000, trailYes:92,
+      yesStake:110_000_000, noStake:8_000_000, convYes:556316, convNo:40459, trailYes:92,
       author:"g1oremfiler0000000000000000000000000000", phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:59_000_000, record:0, settleAt:NOW-2_000, disputeBondNext:23_600_000, flagOpen:true, flagBondNext:2_360_000 },
+      answerBond:59_000_000, record:0, settleAt:NOW-2_200, disputeBondNext:23_600_000, flagOpen:true, flagBondNext:2_360_000 },
     // closed — the dead-claim timeout passed unanswered
     "orem/8":{ timeline:"opened:1784554400:4300000;now:1787054400:4800000", title:"The archived forum post predates the patent filing.",
       author:"g1author4x9q2demo0000000000000000000000",
-      yesStake:2_000_000, noStake:1_500_000, convYes:900_000, convNo:600_000, trailYes:57,
+      yesStake:2_000_000, noStake:1_500_000, convYes:52703, convNo:39528, trailYes:57,
       phase:"closed" },
     // the argument set: #9 is a composite whose parts are #3/#4/#7 — a case
     // half-won; #10 re-files the unfalsifiable #5 as a documentary claim;
@@ -701,7 +724,7 @@ const DEMO = {
       yesStake:15_000_000, noStake:13_000_000, convYes:2_900_000, convNo:2_400_000, trailYes:52,
       author:"g1oremfiler0000000000000000000000000000", phase:"open" },
     "ledger/1":{ timeline:"opened:1785345600:4458240;now:1787054400:4800000", title:"Denver's 2025 snowfall passed the 60-inch seasonal normal.",
-      yesStake:9_800_000, noStake:1_200_000, convYes:3_100_000, convNo:400_000, trailYes:73,
+      yesStake:9_800_000, noStake:1_200_000, convYes:176517, convNo:21614, trailYes:73,
       author:"g1ledgerfiler00000000000000000000000000", phase:"open",
       // a sparse 20-day record: the daily tail exceeds a week, so the chart's
       // knee engages and the whole hourly zone is one honest flat hold
@@ -714,7 +737,7 @@ const DEMO = {
       answerer:"g1answerkeeper00000000000000000000000000", answerBond:12_000_000, round:0,
       disputeBondNext:4_800_000, voteEndsAt:NOW+70_000, quorumFloor:3_715_000_000 },
     "ledger/2":{ timeline:"opened:1785154400:4420000;answered:1786404400:4670000;reopen:1786729400:4735000;now:1787054400:4800000", settleAt:NOW-130_000, title:"The 2025 audit letter was filed before the March 31 statutory deadline.",
-      yesStake:6_000_000, noStake:5_000_000, convYes:1_800_000, convNo:1_400_000, trailYes:55,
+      yesStake:6_000_000, noStake:5_000_000, convYes:79055, convNo:65879, trailYes:55,
       author:"g1ledgerfiler00000000000000000000000000", phase:"provisional", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
       answerBond:12_000_000, record:1, provisional:0, round:1, disputeBondNext:19_200_000,
       escrowUntil:NOW-800 },
@@ -952,7 +975,13 @@ function statusText(d){
 /* ============================ formatting ================================ */
 const sideName = o => o===0?"YES":o===1?"NO":"—";
 function fmtN(n){ return (n==null?0:Math.round(n)).toLocaleString("en-US"); }
-function cc(n){ const v=(n||0)/1e6; return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" CC"; }
+/* Amounts are denominated in a COURT's coin, and each court has its own —
+   so the unit is KOURT:SLUG, not a generic "CC". Pass the slug wherever one
+   is in scope; the bare fallback exists only for the few cross-court
+   surfaces (the needs feed) where no single court owns the number. */
+function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court coin"; }
+function cc(n, slug){ const v=(n||0)/1e6;
+  return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" "+ccSym(slug); }
 function ugnot(n){ return fmtN(n)+" µGNOT"; }
 function shortAddr(a){ a=String(a||""); return esc(a.length>12? a.slice(0,7)+"…"+a.slice(-4): a); }
 function wall(nowH, targetH){
@@ -1593,7 +1622,7 @@ on(/^\/$/, async ()=>{
     try{
       const s = await courtStats(c.slug);
       const el = document.getElementById("cp-"+c.slug);
-      if(el&&s) el.innerHTML = `<b>${fmtN(s.price)}</b><small>µGNOT/unit · ${cc(s.supply)}</small>`;
+      if(el&&s) el.innerHTML = `<b>${fmtN(s.price)}</b><small>µGNOT/unit · ${cc(s.supply,c.slug)}</small>`;
       if(s && c.claims==null){
         // a featured court occupying a deep-window slot: the render skips it
         // in the listed section without backfilling — hide the row likewise
@@ -1658,10 +1687,10 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
        </div>
        </div>`
     + `<section><div class="grid stats">
-        <div class="stat"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 CC = 1,000,000 units</div></div>
-        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply)}</div><div class="sub">${cc(s.emitted)} of it earned as rewards</div></div>
-        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir)}</div><div class="sub">available to claims crystallizing — settling and paying out</div></div>
-        <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
+        <div class="stat"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
+        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply,slug)}</div><div class="sub">${cc(s.emitted,slug)} of it earned as rewards</div></div>
+        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims crystallizing — settling and paying out</div></div>
+        <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
        </div></section>`
     + courtBody(slug, s, claims, docketPager, chainF, allRows, docketPagerBot,
         {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0});
@@ -1766,11 +1795,11 @@ function parseGnot(v){
   const x = BigInt(m[1])*1000000n + BigInt((m[2]||"0").padEnd(6,"0"));
   return x > 9223372036854775807n? null : x;
 }
-function buyRowsHtml(q, price){
+function buyRowsHtml(q, price, slug){
   if(!q) return `<div class="line"><span class="l">You receive</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
   if(q.units<=0n) return `<div class="line"><span class="l">You receive</span><span class="r">0 <small>too small to mint — the realm refuses it and your GNOT never leaves</small></span></div>`;
   const pct = q.share*100;
-  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units))} <small>${fmtN(Number(q.units))} units</small></span></div>`
+  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`
     + `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
     + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>`:"")
     + `<div class="line"><span class="l">Price after your buy</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
@@ -1785,7 +1814,7 @@ function buyActionsHtml(slug, q){
   // no quote ⇒ buying stays possible (the chain computes the true amount),
   // but the acknowledgement still gates the one-click paths
   const gate = isLive()? (noquote? !acked : (!ok || !acked)) : false;
-  return btn(ok? "Buy "+cc(Number(q.units)) : "Buy the coin", "Buy", {slug}, "primary", "GNOT in, one-way", send, gate);
+  return btn(ok? "Buy "+cc(Number(q.units),slug) : "Buy the coin", "Buy", {slug}, "primary", "GNOT in, one-way", send, gate);
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
@@ -1904,7 +1933,7 @@ function voteHelpModal(slug, d){
     </div></dialog>`;
 }
 function disputeTicket(slug, id, d, nowH){
-  const posted = d.disputeBondNext? cc(d.disputeBondNext) : null;
+  const posted = d.disputeBondNext? cc(d.disputeBondNext,slug) : null;
   const k = d.round||0;
   let ladder="";
   for(let i=1;i<=k;i++) ladder+=`<div class="line spent"><span><s>round ${i}</s></span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div>`;
@@ -1921,10 +1950,10 @@ function disputeTicket(slug, id, d, nowH){
   const closes = d.voteEndsAt
     ? `<div class="line"><span>vote closes</span><span class="r">${closeWhen}</span></div>`
     : `<div class="line"><span>vote closes</span><span class="r">about 7 days from the round's opening — the chain exposes no close height to read; Resolve simply refuses until it has passed</span></div>`;
-  const quorum = d.quorumFloor? `<div class="line"><span>required quorum</span><span class="r">the minimum total weight that must be cast for this round to decide anything — miss it and the round fails no matter which way the votes leaned. A new dispute today would face ${cc(d.quorumFloor)}; this round's own bar was fixed when it opened and is not republished.</span></div>`:"";
+  const quorum = d.quorumFloor? `<div class="line"><span>required quorum</span><span class="r">the minimum total weight that must be cast for this round to decide anything — miss it and the round fails no matter which way the votes leaned. A new dispute today would face ${cc(d.quorumFloor,slug)}; this round's own bar was fixed when it opened and is not republished.</span></div>`:"";
   const demoExcluded = CFG.mode==="demo" && (()=>{ const p=DEMO.positions[slug+"/"+id]; return !!(p && (p.yes||p.no||p.cy||p.cn)); })();
   return `<div class="ticket" style="margin-top:12px"><h3>The ballot — overturn the answer?</h3>
-      <div class="hint">One question, one vote per address, no changes: overturn the ${sideName(d.answer)} answer posted by ${shortAddr(d.answerer)}${d.answerBond? `, whose ${cc(d.answerBond)} bond rides on it?` : ` — its bond already burned in an earlier overturned round.`}</div>
+      <div class="hint">One question, one vote per address, no changes: overturn the ${sideName(d.answer)} answer posted by ${shortAddr(d.answerer)}${d.answerBond? `, whose ${cc(d.answerBond,slug)} bond rides on it?` : ` — its bond already burned in an earlier overturned round.`}</div>
       <div class="line"><span>uphold</span><span class="r">the ${sideName(d.answer)} answer stands provisionally; the disputer's bond burns</span></div>
       <div class="line"><span>overturn</span><span class="r">the verdict flips to ${sideName(1-d.answer)}${d.answerBond? `; the answer bond burns whole` : ` — no bond is left to burn`}</span></div>
       ${ladder}${closes}${quorum}
@@ -2339,7 +2368,7 @@ function joinPanel(slug, s){
   if(minted==null){
     BUYCTX = {slug, noquote:true};
     body = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${fmtN(s.price)} <small>µGNOT/unit</small></div></div>
-        <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply)}</div></div>
+        <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply,slug)}</div></div>
         <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when you buy.</p>
         <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,null)}</div>`;
@@ -2350,7 +2379,7 @@ function joinPanel(slug, s){
           <div class="line"><span class="l"><label for="buyamt">You send</label></span>
             <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="100" autocomplete="off" aria-describedby="buynote"> GNOT
               <small id="buyugnot">= ${fmtN(1e8)} µGNOT</small></span></div>
-          <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price)}</div>
+          <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price, slug)}</div>
         </div>
         <p id="buynote" class="small muted" style="margin:8px 0 0">${isLive()
           ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
@@ -2371,7 +2400,7 @@ function recomputeBuy(){
   const echo=document.getElementById("buyugnot");
   if(echo) echo.textContent = x==null? "= not a GNOT amount" : "= "+x.toLocaleString("en-US")+" µGNOT";
   const rows=document.getElementById("buyrows");
-  if(rows) rows.innerHTML = buyRowsHtml(BUYQ, BUYCTX.price);
+  if(rows) rows.innerHTML = buyRowsHtml(BUYQ, BUYCTX.price, BUYCTX.slug);
   refreshBuyActions();
 }
 function refreshBuyActions(){
@@ -2946,7 +2975,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">
-          <div class="panel">${signalChart(slug,id,d,nowH,ser)}${chartChips(d)}</div>
+          <div class="panel">${signalChart(slug,id,d,nowH,ser)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
           ${stakeTicket(slug,id,d)}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
@@ -3154,12 +3183,29 @@ function signalChart(slug,id,d,nowH,ser){
 <svg viewBox="0 0 640 150" role="img" aria-label="${esc(aria)}">${g}</svg>
 ${srcnote? `<div class="srcnote">${srcnote}</div>`:""}</figure>`;
 }
-function chartChips(d){
+/* The stake split, as one bar the width of the chart above it. Two numbers side
+   by side made the reader do the division; the bar IS the division, and it is
+   the same quantity the chart plots, so it belongs on the same axis. Labels sit
+   inside their own side while there is room and swing outside when there is
+   not, so a 3% side is still legible. */
+function stakeBar(d, slug){
+  const y = Math.max(0, d.yesStake||0), n = Math.max(0, d.noStake||0), t = y+n;
+  if(t<=0) return `<div class="sbar empty"><span class="sbnone">no stake yet — the first stake sets the line</span></div>`;
+  const py = y*100/t, pn = 100-py;
+  // Labels sit BELOW the bar, never inside it. Inside, a label has only its own
+  // side's width, and "NO 12.0 KOURT:OREM · 23.1%" does not fit a 23% block at
+  // any viewport — the first attempt clipped it to "JRT:OREM · 23.1%".
+  return `<div class="sbar" role="img" aria-label="staked YES ${cc(y,slug)} ${py.toFixed(1)}%, NO ${cc(n,slug)} ${pn.toFixed(1)}%">
+      <div class="sbY" style="width:${py.toFixed(3)}%"></div>
+      <div class="sbN" style="width:${pn.toFixed(3)}%"></div>
+    </div>
+    <div class="sbout"><span class="y"><b>YES ${py.toFixed(1)}%</b> · ${cc(y,slug)}</span><span class="n"><b>NO ${pn.toFixed(1)}%</b> · ${cc(n,slug)}</span></div>`;
+}
+function chartChips(d, slug){
   const chips=[
-    `staked YES ${cc(d.yesStake)}`, `NO ${cc(d.noStake)}`,
-    `conviction ${cc(d.convYes).replace(" CC","")} / ${cc(d.convNo)}`,
+    `conviction ${cc(d.convYes,slug).replace(/ [A-Z:]+$/,"")} / ${cc(d.convNo,slug)}`,
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
-    d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext)}`:null,
+    d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
     d.crystallized? "crystallized":null,
   ].filter(Boolean).map(t=>`<span>${t}</span>`).join("");
@@ -3171,7 +3217,8 @@ function chartChips(d){
 function stakeTicket(slug,id,d){
   if(d.phase==="closed"){
     return `<div class="ticket"><h3>Closed — never answered</h3>
-      <div class="hint">Nobody answered within the window, so the claim died. Stakes were never frozen: unstake freely, 1×. New staking is closed.</div>
+      <div class="hint">Nobody answered before the dead-claim timeout, so the claim died. Stakes were never frozen: unstake freely, 1×. New staking is closed.
+        The author's deposit is refunded and the filing fee is burned — the price of filing something nobody would answer.</div>
       <div class="actions" style="margin-top:14px">
         ${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000})}
         ${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000})}
@@ -3197,8 +3244,8 @@ function stakeTicket(slug,id,d){
     <div class="line"><span class="l">If your side loses</span><span class="r">1×, nothing lost</span></div>
     <div class="never"><b>Reward = conviction, not stake.</b> Staking early and holding earns more than a last-second flood; the number that pays is stake × time, and it survives an honest unstake. Principal is not a wager — it always comes home.</div>
     <div class="actions" style="margin-top:14px">
-      ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","1 CC")}
-      ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","1 CC")}
+      ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","1 "+ccSym(slug))}
+      ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","1 "+ccSym(slug))}
       ${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000})}
       ${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000})}
     </div></div>`;
@@ -3313,8 +3360,12 @@ function resolutionSection(slug,id,d,nowH,tl){
   let inner="";
   const ladder = resolutionLadder(d, nowH, tl);
   if(d.phase==="closed"){
-    return `<section id="resolution" tabindex="-1"><div class="sec-h">Resolution</div>${ladder}<div class="notice void"><span class="g">◌</span><div><b>Closed — never answered.</b>
-      The dead-claim timeout passed with no answer. The author's deposit refunded; the filing fee burned (the spam price). Stakes were never frozen — unstake freely.</div></div></section>`;
+    // No notice here. It used to repeat the stake ticket almost verbatim —
+    // both opened "Closed — never answered" and both ended "stakes were never
+    // frozen, unstake freely". The two facts it alone carried (deposit
+    // refunded, fee burned) now live in the ticket, next to the buttons they
+    // describe; the ladder already carries the dates.
+    return `<section id="resolution" tabindex="-1"><div class="sec-h">Resolution</div>${ladder}</section>`;
   }
   if(d.phase==="provClose"){
     inner = `<div class="notice void"><span class="g">◌</span><div><b>Closed without a decision.</b>
@@ -3338,7 +3389,7 @@ function resolutionSection(slug,id,d,nowH,tl){
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.</div></div>`
       + disputeTicket(slug, id, d, nowH);
   } else if(d.phase==="provisional"){
-    const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext)+" (it doubles each failed round).":"";
+    const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext,slug)+" (it doubles each failed round).":"";
     const when = d.escrowUntil? (nowH==null? " Reopenable until block "+fmtN(d.escrowUntil)+"."
       : (d.escrowUntil>nowH? " Reopenable until block "+fmtN(d.escrowUntil)+" (in "+wall(nowH,d.escrowUntil)+")."
         : " The reopen window has closed — participants may finalize now; anyone may after a week.")):"";
@@ -3349,12 +3400,12 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${(nowH!=null && d.escrowUntil && d.escrowUntil>nowH)? "" : btn("Finalize","Finalize",{courtSlug:slug,claimID:id},"","participants first week")}
         ${btn("Withdraw (losing side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1-d.provisional})}</div></div></div>`;
   } else if(d.phase==="answered"){
-    const bondt = d.answerBond!=null? " backed by a bond of "+cc(d.answerBond)+" that burns if the answer is overturned":"";
+    const bondt = d.answerBond!=null? " backed by a bond of "+cc(d.answerBond,slug)+" that burns if the answer is overturned":"";
     const rec = d.record? " The answerer's contested-and-upheld record here is "+d.record+".":"";
     const when = d.settleAt? (nowH==null? ""
       : (d.settleAt>nowH? " It settles undisputed in "+wall(nowH,d.settleAt)+" if nobody disputes it."
         : " Its 72-hour window has passed — the next touch settles it.")):"";
-    const cost = d.disputeBondNext? " Disputing now costs "+cc(d.disputeBondNext)+".":"";
+    const cost = d.disputeBondNext? " Disputing now costs "+cc(d.disputeBondNext,slug)+".":"";
     inner = `<div class="notice warn"><span class="g">◷</span><div><b>Answered ${sideName(d.answer)}</b> by ${shortAddr(d.answerer)}${bondt}.${when}${cost}${rec}
       <div class="actions" style="margin-top:10px">
         ${(nowH!=null && d.settleAt && d.settleAt<=nowH)? "" : btn("Dispute this answer","OpenDispute",{courtSlug:slug,claimID:id},"no")}
@@ -3389,9 +3440,9 @@ function qualitySection(slug,id,d){
   else {
     const tn = d.tier!=null? tierName(d.tier):"mid";
     line = `Quality tier: <b>${tn}</b>${d.tierFinal?" (final)":" (default — the flag lane may re-vote it)"}. A flag questions whether a claim carries information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half.`;
-    if(!d.tierFinal && !d.crystallized) act = btn("Flag as low-information","OpenFlag",{courtSlug:slug,claimID:id}, "", d.flagBondNext?cc(d.flagBondNext)+" bond":"");
+    if(!d.tierFinal && !d.crystallized) act = btn("Flag as low-information","OpenFlag",{courtSlug:slug,claimID:id}, "", d.flagBondNext?cc(d.flagBondNext,slug)+" bond":"");
   }
-  const draw = d.crystallized&&d.draw? `<div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w)} · author ${cc(d.draw.a)} · answerer ${cc(d.draw.ans)} · voters ${cc(d.draw.carrot)}</span></div>`:"";
+  const draw = d.crystallized&&d.draw? `<div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w,slug)} · author ${cc(d.draw.a,slug)} · answerer ${cc(d.draw.ans,slug)} · voters ${cc(d.draw.carrot,slug)}</span></div>`:"";
   return `<section><div class="sec-h">Quality &amp; rewards</div>
     <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div style="margin-top:8px">${draw}</div>`:""}
     ${act?`<div class="actions" style="margin-top:12px">${act}</div>`:""}</div></section>`;
@@ -3442,7 +3493,7 @@ function introStrip(){
   return `<section class="intro" id="intro">
     <b>New here?</b> Four things before the jargon.
     A <b>court</b> is a small venue for one topic, and it runs its own coin
-    (shown as CC, for court coin).
+    (shown as KOURT:SLUG — each court has its own).
     The <b>coin is voice</b>: minting it burns GNOT (the chain\u2019s native coin) — spent, held by no one — and
     gives you staking and voting weight in that court only.
     A <b>claim</b> is one fixed sentence; stake YES or NO on it. Your principal
@@ -3653,12 +3704,12 @@ async function meHoldings(addr,courts){
       if(sen.rows.length || (isLive() && sen.total>sen.scanned)){
         seniorBlocks.push(`<section style="margin-top:14px"><div class="sec-h">Senior queue — ${safeInline(cname)} <span class="count">${isLive()? `checked newest ${sen.scanned} of ${fmtN(sen.total)} tickets`:`${sen.rows.length} of ${sen.total} tickets are yours`}</span></div>`
           + (sen.rows.length? `<div class="ticket">${sen.rows.map(e=>
-              `<div class="line"><span class="l tnum">ticket #${e.seq}</span><span class="r tnum">${cc(e.payable)} payable now <small>of ${cc(e.amount-e.paid)} still owed to you — paid as budget accrues, the court's pace, not a promise</small></span></div>`).join("")}
+              `<div class="line"><span class="l tnum">ticket #${e.seq}</span><span class="r tnum">${cc(e.payable,slug)} payable now <small>of ${cc(e.amount-e.paid,slug)} still owed to you — paid as budget accrues, the court's pace, not a promise</small></span></div>`).join("")}
               <div class="actions" style="margin-top:8px">${sen.rows.map(e=>btn("Pull senior ticket #"+e.seq,"PullSenior",{courtSlug:slug,seq:e.seq},"","owed, not earned")).join("")}</div></div>`
             : `<p class="small muted">none of the checked tickets are yours</p>`)
           + `</section>`);
       }
-      blocks.push(`<section style="margin-top:14px"><div class="sec-h">${safeInline(cname)} <span class="count">${cc(bal)} coin balance${rows.length?` · ${cc(rows.reduce((t,{p})=>t+(p.yes||0)+(p.no||0),0))} in positions`:""}${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}</span></div>`
+      blocks.push(`<section style="margin-top:14px"><div class="sec-h">${safeInline(cname)} <span class="count">${cc(bal,slug)} balance${rows.length?` · ${cc(rows.reduce((t,{p})=>t+(p.yes||0)+(p.no||0),0),slug)} in positions`:""}${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}</span></div>`
         + (rows.length? `<div class="scroll-x"><table class="data"><thead><tr><th>Claim</th><th>state</th><th>YES stake</th><th>NO stake</th><th>conviction</th></tr></thead><tbody>`
             + rows.map(({cl,p,d})=>{
                 const yourSide = (p.yes||0)>0? 0 : (p.no||0)>0? 1 : ((p.cy||0)>=(p.cn||0)?0:1);
@@ -3670,7 +3721,7 @@ async function meHoldings(addr,courts){
                 }
                 return `<tr><td><a href="#/c/${esc(slug)}/${cl.id}" style="color:var(--accent-2);text-decoration:none">${safeInline(cl.title)}</a>${personal?`<span class="m" style="display:block">${esc(personal)}</span>`:""}</td>
                 <td>${d? statusPill(d.statusText):""}</td>
-                <td class="num">${cc(p.yes)}</td><td class="num">${cc(p.no)}</td><td class="num">${cc((p.cy||0)+(p.cn||0))}</td></tr>`;
+                <td class="num">${cc(p.yes,slug)}</td><td class="num">${cc(p.no,slug)}</td><td class="num">${cc((p.cy||0)+(p.cn||0),slug)}</td></tr>`;
               }).join("")
             + `</tbody></table></div>`
           : `<p class="small muted">Coin only — no open positions in this court.</p>`)
@@ -3822,7 +3873,7 @@ async function needsList(addr,courts){
   const against = items.filter(i=>i.against).sort((a,b)=>a.clk.h-b.clk.h);
   const withYou = items.filter(i=>!i.against).sort((a,b)=>a.clk.h-b.clk.h);
   const urgent = against.find(i=>isFinite(i.clk.h) && (nowH==null || i.clk.h>nowH));
-  const urgentBox = urgent? `<div class="notice warn"><span class="g">⚑</span><div><b>Closing soonest:</b> <a href="#/c/${esc(urgent.c.slug)}/${urgent.cl.id}?at=resolution" style="color:inherit;text-decoration:underline">${safeInline(urgent.cl.title)}</a> — ${esc(urgent.clk.txt)}.${urgent.d.disputeBondNext?` A new dispute posts ${cc(urgent.d.disputeBondNext)}.`:""}</div></div>` : "";
+  const urgentBox = urgent? `<div class="notice warn"><span class="g">⚑</span><div><b>Closing soonest:</b> <a href="#/c/${esc(urgent.c.slug)}/${urgent.cl.id}?at=resolution" style="color:inherit;text-decoration:underline">${safeInline(urgent.cl.title)}</a> — ${esc(urgent.clk.txt)}.${urgent.d.disputeBondNext?` A new dispute posts ${cc(urgent.d.disputeBondNext,urgent.c.slug)}.`:""}</div></div>` : "";
   const row = ({c,cl,d,against,clk}) => {
     const canDispute = d.phase==="answered" && (nowH==null || !d.settleAt || d.settleAt>nowH);
     const canSettle = d.phase==="answered" && nowH!=null && d.settleAt && d.settleAt<=nowH;
@@ -3831,7 +3882,7 @@ async function needsList(addr,courts){
       <span class="id">#${cl.id}</span>
       <span><a class="t" href="#/c/${esc(c.slug)}/${cl.id}?at=resolution" style="color:inherit">${safeInline(cl.title)}</a>
         <span class="m" style="display:block">${safeInline(c.name)} · ${d.provisional>=0? "provisional "+sideName(d.provisional) : "answered "+sideName(d.answer)}${clk.txt?` · ${esc(clk.txt)}`:""}</span>
-        ${against? `<span class="m" style="display:block">their bond ${cc(d.answerBond)}${d.disputeBondNext?` · a new dispute posts ${cc(d.disputeBondNext)}`:""}</span>
+        ${against? `<span class="m" style="display:block">their bond ${cc(d.answerBond,c.slug)}${d.disputeBondNext?` · a new dispute posts ${cc(d.disputeBondNext,c.slug)}`:""}</span>
         <span class="actions" style="margin-top:6px; display:flex">${canDispute||canReopen? btn(d.phase==="provisional"?"Reopen (dispute again)":"Dispute this answer","OpenDispute",{courtSlug:c.slug,claimID:cl.id},"no") : ""}${canSettle? btn("Settle (aged & undisputed)","SettleUndisputed",{courtSlug:c.slug,claimID:cl.id}) : ""}</span>`:""}</span>
       <span class="rt">${against?`<span class="pill no">⚑ against your side</span>`:`<span class="pill good">matches you</span>`}</span></div>`;
   };
@@ -3881,7 +3932,7 @@ function demoRender(path){
   }
   const c=demoCourt(parts[0]); if(!c) return "## Not found\nNo court by that slug.";
   if(parts.length===1){
-    let o=`# ${c.name}\n\n- coin: ${parts[0].toUpperCase()} — this court's own coin, not interchangeable with any other court's\n- coin price: ${c.price} ugnot per CC unit (one-way; the GNOT is burned)\n- supply: ${c.supply} · emitted: ${c.emitted}\n- reward reservoir: ${c.reservoir} · senior queue owed: ${c.seniorOwed}\n\n## Claims\n\n`;
+    let o=`# ${c.name}\n\n- coin: ${parts[0].toUpperCase()} — this court's own coin, not interchangeable with any other court's\n- coin price: ${c.price} ugnot per unit (one-way; the GNOT is burned)\n- supply: ${c.supply} · emitted: ${c.emitted}\n- reward reservoir: ${c.reservoir} · senior queue owed: ${c.seniorOwed}\n\n## Claims\n\n`;
     // mirror the realm's render: newest 50 by descending id, then the footer
     const ids=[...c.claims].sort((a,b)=>b-a).filter(id=>!(DEMO.claims[parts[0]+"/"+id]||{}).hidden);
     for(const id of ids.slice(0,50)){ const d=DEMO.claims[parts[0]+"/"+id]; o+=`- [${d.title}](/r/kourt/kourtv2:${parts[0]}/${id}) — ${statusText(d)}\n`; }
