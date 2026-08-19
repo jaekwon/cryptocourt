@@ -1199,6 +1199,30 @@ reachable without seeding a chain, and it is not faked: the wiring on the real p
 covered by `chat_page.js`, and live chat in a browser by `chat_live.js` and
 `chat_moderation.js` against `chat-demo.html`, which has no chain to satisfy.
 
+**THE BROWSER HALF WAS NOT BEING RUN, which is how a wrong assertion survived two commits.**
+`web/tests/browser/run.js` lists `CHECKS = ["banner_layout.js"]`, so the four chat harnesses beside
+it — 149 assertions — executed only when somebody typed their names. `make web-visual` reported a
+clean pass the whole time.
+
+    chat_page.js        the panel ON the real court page: esc(), cleanCfg, the optional load
+    chat_render.js      the panel in isolation, at 380px and 760px, and the composer's limits
+    chat_live.js        against a running kourtchat: post, poll, refusal, a closed court
+    chat_moderation.js  against a real gemma3:4b, with OLLAMA_LIVE=1
+
+The cost was already banked when this was noticed. `chat_render.js` asserted that the moniker
+input's `maxlength` equalled the server's limit, and that stopped being true when the limit moved
+to counting LETTERS and the attribute became a looser paste bound — `maxlength` counts UTF-16
+units, so 24 stopped an eighteen-letter voweled Arabic name from being typed at all. The Go-side
+drift test was updated for that change; this one was not, and could not fail. It now checks that
+the attribute is looser AND bounded, and calls `chatValidate` in the page for the half that
+actually enforces the limit.
+
+`run.js` is uncommitted and belongs to the other session, so `chat_all.js` wraps the four rather
+than editing it: one entry in `CHECKS` later picks all of them up. Until that lands, the browser
+half runs with `node web/tests/browser/chat_all.js`, and `chat_moderation.js` is where the
+bystander rule is checked end to end in a browser — not punished, shown no notice, still sees
+their own message, still able to post.
+
 ## 12. Two kinds of evidence for one property
 
 `web/chat-demo.html` is the panel with nothing else around it — openable straight off
