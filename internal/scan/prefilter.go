@@ -171,13 +171,42 @@ func Prefilter(body string) Hint {
 	if reSecretMention.MatchString(body) || reSecretMention.MatchString(sk) {
 		h.Notes = append(h.Notes, "mentions a secret phrase or key")
 	}
-	// Still a floor: an unsolicited off-platform pull has no innocent reading in a court's chat,
-	// which is the distinction the header draws. No longer in a switch with the rule above —
-	// sharing one meant a message doing both was only ever noted as one.
-	if reOffURL.MatchString(foldDots(body)) || reOffWord.MatchString(body) ||
-		reOffWord.MatchString(sk) {
+	// A LINK IS A PULL AND KEEPS ITS FLOOR. `t.me/`, `wa.me/`, `discord.gg/` in a court's chat
+	// have no innocent reading — that is the distinction the header draws, and it is the only
+	// thing here that survives it. No longer in a switch with the rule above, because sharing one
+	// meant a message doing both was only ever noted as one.
+	if reOffURL.MatchString(foldDots(body)) {
 		h.Floor = Spam
 		h.Notes = append(h.Notes, "points off-platform")
+	}
+	// A BARE WORD IS A MENTION, AND THE OLD COMMENT HERE SAID SO WHILE FLOORING IT ANYWAY: "not
+	// a finding on its own — plenty of people mention Telegram — but a floor of spam is fair for
+	// an unsolicited off-platform pull". It distinguished a mention from a pull and then treated
+	// them identically. Measured, seven ordinary sentences out of seven earned a floor of spam:
+	//
+	//	"the evidence includes a whatsapp screenshot submitted by the claimant"
+	//	"the dispute is about a whatsapp conversation, which is why it is disputed"
+	//	"their telegram group has the same claim number listed"
+	//	"i do not use whatsapp, is there another way to reach the answerer"
+	//	"does anyone know whether the telegram bot is official or not"
+	//	"the announcement was also posted on telegram, for what it is worth"
+	//	"i saw this on telegram first and then here, so the timeline matters"
+	//
+	// The first two are the point: adjudicating a dispute about a messenger conversation is this
+	// application's JOB, and describing the evidence earned an hour of silence.
+	//
+	// Unlike reSecretMention, this one costs nothing to demote. Measured against gemma3:4b, every
+	// word-only pull is acted on with no help from here, including the skeleton evasion:
+	//
+	//	"dm me on telegram @kourthelp"           spam  0.85
+	//	"ping me on whatsapp instead"            spam  0.86
+	//	"message me on te1egram"                 spam  0.86
+	//	"lets continue this on telegram, dm me"  spam  0.85
+	//
+	// and every ordinary mention above comes back clean 0.85-0.86. No trade, just the floor
+	// moving off the half that had an innocent reading.
+	if reOffWord.MatchString(body) || reOffWord.MatchString(sk) {
+		h.Notes = append(h.Notes, "mentions an off-platform messenger")
 	}
 	if reEVMAddr.MatchString(body) {
 		h.Notes = append(h.Notes, "contains an EVM address")

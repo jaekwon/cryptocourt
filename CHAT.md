@@ -588,8 +588,39 @@ measured, "the planning department rejected it" earned a floor of spam, as did "
 
 The evasion the skeleton was there for is separator substitution — "t·me/", "t(dot)me/" — so
 that is folded now, and nothing else. Word forms like "telegram" stay on raw and skeleton, where
-letters-only matching cannot collide, so "te1egram" is still caught. The rule is: fold what the
+letters-only matching cannot collide, so "te1egram" is still matched. The rule is: fold what the
 attacker substitutes, not everything.
+
+**But the word forms no longer FLOOR, and the comment beside them had already said why.** It read
+"not a finding on its own — plenty of people mention Telegram — but a floor of spam is fair for an
+unsolicited off-platform pull": it drew the distinction between a mention and a pull, and then
+treated them identically. Seven ordinary sentences out of seven earned an hour of silence:
+
+    the evidence includes a whatsapp screenshot submitted by the claimant   floor spam
+    the dispute is about a whatsapp conversation, which is why it is        floor spam
+    their telegram group has the same claim number listed                   floor spam
+    i do not use whatsapp, is there another way to reach the answerer       floor spam
+    does anyone know whether the telegram bot is official or not            floor spam
+    the announcement was also posted on telegram, for what it is worth      floor spam
+    i saw this on telegram first and then here, so the timeline matters     floor spam
+
+The first two are the ones that matter: adjudicating a dispute about a messenger conversation is
+what this application is FOR, and describing the evidence was punished for naming it.
+
+Unlike the seed-phrase mention above, this one cost nothing. Measured against gemma3:4b, every
+word-only pull is acted on with no help from the prefilter — `"dm me on telegram @kourthelp"` spam
+0.85, `"ping me on whatsapp instead"` 0.86, `"message me on te1egram"` 0.86, `"lets continue this
+on telegram, dm me"` 0.85 — and every ordinary mention above comes back clean 0.85-0.86. So the
+floor moved off the half with an innocent reading and nothing was given up.
+
+**The LINK forms keep their deterministic floor**, separator folding included, because `t.me/` in a
+court's chat is the thing the header says has no innocent reading. Splitting the two also means a
+message doing several things at once now records a note for each; the shared `switch` reported only
+the first.
+
+End to end with the real model, one address each: the evidence sentence, the group-listing sentence
+and the "I don't use whatsapp" question were all left alone and could post again, while the pull
+earned its consequence.
 
 **"seed phrase" used to be a hit too, and it was the same bug one rule over.** The pattern is the
 NOUN — no request verb, no negation — and it set a floor of `scam`, which is severity 2 and

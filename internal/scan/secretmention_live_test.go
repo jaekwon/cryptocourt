@@ -105,3 +105,94 @@ func TestLiveSayingTheWordsIsNotAskingForThem(t *testing.T) {
 		clock = clock.Add(chat.MinInterval)
 	}
 }
+
+// THE SAME WALK FOR PLATFORM NAMES: naming one is not pulling anybody to it.
+//
+// reOffWord matched "telegram" or "whatsapp" anywhere and set a floor of spam — an hour of
+// silence, deterministic. Its own comment said "not a finding on its own — plenty of people
+// mention Telegram" and then floored it anyway. Seven ordinary sentences out of seven earned it,
+// including "the evidence includes a whatsapp screenshot submitted by the claimant": describing
+// the evidence in a dispute about a messenger conversation, which is this application's job.
+//
+// Unlike the secret-phrase case this cost nothing to fix. The model acts on every word-only pull
+// at 0.85-0.86, including the skeleton evasion, and comes back clean on every ordinary mention.
+// The LINK forms keep their deterministic floor, so `t.me/` is unaffected either way.
+func TestLiveNamingAPlatformIsNotPullingToIt(t *testing.T) {
+	o := liveClassifier(t)
+	ctx := context.Background()
+	st, err := chat.Open(t.TempDir() + "/chat.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	clock := time.Unix(1_700_000_000, 0)
+	st.Now = func() time.Time { return clock }
+
+	speakers := []struct {
+		who, body string
+		pull      bool
+	}{
+		{"dana", "the evidence includes a whatsapp screenshot submitted by the claimant", false},
+		{"eli", "their telegram group has the same claim number listed", false},
+		{"fern", "i do not use whatsapp, is there another way to reach the answerer", false},
+		{"gus", "dm me on telegram @kourthelp", true},
+	}
+	ids := map[string]int64{}
+	for _, s := range speakers {
+		// One address each: a consequence must not be able to silence the next speaker and make
+		// a later assertion pass for the wrong reason.
+		id, err := st.Post(ctx, chat.PostInput{
+			Chain: "dev", Court: "orem", Moniker: s.who, Body: s.body,
+			IPHash: "ip-" + s.who, NetHash: "net-" + s.who,
+		})
+		if err != nil {
+			t.Fatalf("seeding %s: %v", s.who, err)
+		}
+		ids[s.who] = id
+		clock = clock.Add(chat.MinInterval)
+	}
+
+	sc := &Scanner{Store: st, Cls: o, Enforce: true, Batch: 10}
+	if _, err := sc.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.ListInfractions(ctx, "", true, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	punished := map[int64]bool{}
+	for _, r := range rows {
+		punished[r.EvidenceID] = true
+	}
+	for _, s := range speakers {
+		t.Logf("  %-5s punished=%-5v  %.58q", s.who, punished[ids[s.who]], s.body)
+	}
+
+	// ASSERTED: the pull is acted on with no floor behind it. Measured at spam 0.85-0.86 across
+	// every word-only form, so a capability rather than a judgement call.
+	if !punished[ids["gus"]] {
+		t.Errorf("a word-only off-platform pull must still earn a consequence — if this fails, " +
+			"demoting reOffWord gave up more than the measurements said")
+	}
+	// LOGGED, not failed: the model's read of one sentence is not a contract.
+	for _, s := range speakers {
+		if !s.pull && punished[ids[s.who]] {
+			t.Logf("NOTE: %q was punished for NAMING a platform. The prefilter no longer floors "+
+				"a bare word, so this came from the model — re-measure before trusting "+
+				"reOffWord's header.", s.body)
+		}
+	}
+	// And an untouched speaker must still be able to post.
+	for _, s := range speakers {
+		if s.pull || punished[ids[s.who]] {
+			continue
+		}
+		if _, err := st.Post(ctx, chat.PostInput{
+			Chain: "dev", Court: "orem", Moniker: s.who, Body: "a second, ordinary message",
+			IPHash: "ip-" + s.who, NetHash: "net-" + s.who,
+		}); err != nil {
+			t.Errorf("%s was not punished and must still be able to post: %v", s.who, err)
+		}
+		clock = clock.Add(chat.MinInterval)
+	}
+}

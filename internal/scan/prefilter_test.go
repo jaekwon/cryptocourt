@@ -170,20 +170,55 @@ func TestFloorsDoNotFireOnOrdinaryWords(t *testing.T) {
 
 // And the evasions must still be caught, or the fix above is just a deletion.
 func TestOffPlatformAndSecretAsksAreStillCaught(t *testing.T) {
-	spam := []string{
+	// A LINK KEEPS ITS FLOOR: t.me/, wa.me/, discord.gg/ in a court's chat have no innocent
+	// reading, and the separator evasions fold into the same pattern.
+	links := []string{
 		"dm me on t.me/kourtsupport",
 		"dm me on t·me/kourtsupport", // middle dot
 		"dm me on t․me/kourtsupport", // one-dot leader
 		"dm me on t(dot)me/kourtsupport",
 		"reach me on wa.me/1555",
 		"join discord.gg/abcd",
+	}
+	for _, body := range links {
+		if got := Prefilter(body).Floor; got != Spam {
+			t.Errorf("an off-platform LINK should floor at spam, got %q: %q", got, body)
+		}
+	}
+
+	// A BARE WORD IS A NOTE NOW. These are real pulls and they still get the note, but the model
+	// is what acts on them — measured at spam 0.85-0.86 for every one, including the skeleton
+	// evasion, so this cost nothing. See reOffWord.
+	words := []string{
 		"message me on telegram @kourthelp",
 		"ping me on whatsapp instead",
-		"message me on te1egram", // caught via the skeleton
+		"message me on te1egram", // still noted, via the skeleton
 	}
-	for _, body := range spam {
-		if got := Prefilter(body).Floor; got != Spam {
-			t.Errorf("off-platform pull should floor at spam, got %q: %q", got, body)
+	for _, body := range words {
+		h := Prefilter(body)
+		if h.Floor != Clean {
+			t.Errorf("a bare platform word must not set a floor, got %q: %q", h.Floor, body)
+		}
+		if !hasNote(h, "off-platform messenger") {
+			t.Errorf("the mention must still be noted: %q\nnotes: %v", body, h.Notes)
+		}
+	}
+
+	// AND THE ORDINARY SENTENCES THAT USED TO EARN AN HOUR OF SILENCE FOR SAYING A PLATFORM'S
+	// NAME. The first two are why this matters: adjudicating a dispute about a messenger
+	// conversation is this application's job, and describing the evidence was punished.
+	ordinaryPlatform := []string{
+		"the evidence includes a whatsapp screenshot submitted by the claimant",
+		"the dispute is about a whatsapp conversation, which is why it is disputed",
+		"their telegram group has the same claim number listed",
+		"i do not use whatsapp, is there another way to reach the answerer",
+		"does anyone know whether the telegram bot is official or not",
+		"the announcement was also posted on telegram, for what it is worth",
+		"i saw this on telegram first and then here, so the timeline matters",
+	}
+	for _, body := range ordinaryPlatform {
+		if got := Prefilter(body).Floor; got != Clean {
+			t.Errorf("naming a platform is not a pull, got floor %q: %q", got, body)
 		}
 	}
 	// A SECRET MENTION IS A NOTE NOW, NOT A FLOOR, and these are the requests that used to earn
@@ -232,14 +267,18 @@ func TestOffPlatformAndSecretAsksAreStillCaught(t *testing.T) {
 		}
 	}
 
-	// The floors that REMAIN, so this test does not read as "nothing floors anything". A message
-	// doing both now collects both notes, which the old switch made impossible.
-	both := Prefilter("dm me on telegram and send me your seed phrase")
+	// THE FLOOR THAT REMAINS, so this test does not read as "nothing floors anything" — and the
+	// note collection the old shared switch made impossible: a message doing several things at
+	// once now records all of them.
+	both := Prefilter("dm me on t.me/x about telegram and send me your seed phrase")
 	if both.Floor != Spam {
-		t.Errorf("an off-platform pull still floors at spam, got %q", both.Floor)
+		t.Errorf("a link still floors at spam, got %q", both.Floor)
 	}
-	if !hasNote(both, "mentions a secret") || !hasNote(both, "points off-platform") {
-		t.Errorf("a message doing both must collect both notes, got %v", both.Notes)
+	for _, want := range []string{"mentions a secret", "points off-platform",
+		"off-platform messenger"} {
+		if !hasNote(both, want) {
+			t.Errorf("a message doing several things must record %q, got %v", want, both.Notes)
+		}
 	}
 }
 
