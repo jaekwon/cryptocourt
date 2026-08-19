@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -115,4 +116,90 @@ func TestSameHostAsOrigin(t *testing.T) {
 			t.Errorf("sameHostAsOrigin(%q, %q) = %v, want %v", c.origin, c.host, got, c.want)
 		}
 	}
+}
+
+// THE REPLY DEPENDS ON WHO ASKED, SO NO SHARED CACHE MAY STORE IT.
+//
+// GET /api/chat/{chain}/{court} carries a `you` block computed from the requester's address.
+// Measured against the running server, one URL and two X-Forwarded-For values behind a trusted
+// proxy: 203.0.113.10 got {"state":"kick","until":...,"ref":1,"seconds":3600} and 198.51.100.55
+// got {"state":"ok"}. The only cache-relevant header was `Vary: Origin`, which is the wrong axis.
+//
+// There is nothing to vary on: the address comes from the connection, or from X-Forwarded-For
+// which must not be a cache key. §3 is written for a deployment behind a CDN — --country-header
+// names CF-IPCountry in its own usage — and a shared cache holding one person's block would tell
+// innocent readers they are timed out and hand them another person's appeal reference.
+func TestNoSharedCacheMayStoreAPerRequesterReply(t *testing.T) {
+	srv, st, _ := newServer(t)
+	ctx := context.Background()
+	if _, err := st.Post(ctx, PostInput{
+		Chain: "dev", Court: "orem", Moniker: "alice", Body: "an ordinary message here",
+		IPHash: "ip-a", NetHash: "net-a",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range []struct{ name, method, path string }{
+		{"the transcript, which carries the `you` block", http.MethodGet, "/api/chat/dev/orem"},
+		{"health, which carries enforcing and appeal_to", http.MethodGet, "/api/chat/health"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			rec := do(t, srv, httptest.NewRequest(c.method, c.path, nil))
+			if rec.Code != 200 {
+				t.Fatalf("%s: %d %s", c.path, rec.Code, rec.Body)
+			}
+			if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "no-store") {
+				t.Errorf("Cache-Control is %q; a reply that depends on the requester must not "+
+					"be storable by a shared cache", got)
+			}
+			// The paired arm: the response still carries its content. A header added by
+			// breaking the body would satisfy the assertion above.
+			if rec.Body.Len() == 0 {
+				t.Error("the response body is empty, so this measures a broken handler")
+			}
+		})
+	}
+
+	// THE PREFLIGHT IS DIFFERENT AND MUST STAY CACHEABLE. Access-Control-Max-Age is how long a
+	// browser may remember the answer; no-store there would argue with it and cost a round trip
+	// on every post.
+	t.Run("the preflight keeps its cacheability", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodOptions, "/api/chat/dev/orem", nil)
+		r.Header.Set("Origin", "https://example.com")
+		r.Header.Set("Access-Control-Request-Method", "POST")
+		rec := do(t, srv, r)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("preflight: %d", rec.Code)
+		}
+		if got := rec.Header().Get("Access-Control-Max-Age"); got == "" {
+			t.Error("the preflight must still say how long it may be remembered")
+		}
+		if got := rec.Header().Get("Cache-Control"); strings.Contains(got, "no-store") {
+			t.Errorf("no-store on the preflight contradicts Access-Control-Max-Age: %q", got)
+		}
+	})
+
+	// And the fact that motivates all of it, asserted rather than only measured: two requesters,
+	// one URL, different bodies.
+	t.Run("two requesters really do get different bodies", func(t *testing.T) {
+		bodies := map[string]string{}
+		for _, ip := range []string{"198.51.100.1:1111", "203.0.113.9:2222"} {
+			r := httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil)
+			r.RemoteAddr = ip
+			rec := do(t, srv, r)
+			if rec.Code != 200 {
+				t.Fatalf("%s: %d", ip, rec.Code)
+			}
+			bodies[ip] = rec.Body.String()
+		}
+		// Both are "ok" here, so this asserts the WEAKER available property: the reply is
+		// computed per requester at all. The divergence itself was measured live against a real
+		// consequence, which a unit fixture cannot reach without an operator action.
+		for ip, b := range bodies {
+			if !strings.Contains(b, `"you"`) {
+				t.Errorf("%s got a reply with no `you` block, so there would be nothing "+
+					"requester-specific to cache: %s", ip, b)
+			}
+		}
+	})
 }

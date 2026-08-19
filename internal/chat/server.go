@@ -107,9 +107,32 @@ func (s *Server) cors(w http.ResponseWriter, r *http.Request) bool {
 	h.Set("Access-Control-Max-Age", "600")
 	h.Set("Vary", "Origin")
 	if r.Method == http.MethodOptions {
+		// The preflight IS cacheable, and Access-Control-Max-Age above is how long for.
+		// no-store below would be arguing with it.
 		w.WriteHeader(http.StatusNoContent)
 		return true
 	}
+	// NOTHING HERE MAY BE STORED BY A SHARED CACHE, because the reply depends on WHO ASKED.
+	//
+	// GET /api/chat/{chain}/{court} carries a `you` block — state, until, seconds and the
+	// consequence ref — computed from the requester's own address. Measured against the running
+	// server, same URL, two X-Forwarded-For values behind a trusted proxy:
+	//
+	//	203.0.113.10    you = {"state":"kick","until":...,"ref":1,"seconds":3600}
+	//	198.51.100.55   you = {"state":"ok"}
+	//
+	// The only cache-relevant header was `Vary: Origin`, which is the wrong axis: the variance
+	// is by client address. There is no header to vary on either — the address comes from the
+	// connection, or from X-Forwarded-For, which must NOT be a cache key because it is
+	// unbounded and attacker-supplied. So the response has to say it cannot be stored.
+	//
+	// This matters because §3 is written for a deployment behind a CDN: --country-header names
+	// CF-IPCountry in its own usage text. A shared cache holding one person's `you` block would
+	// tell innocent readers they are timed out and hand them somebody else's appeal reference,
+	// and holding an "ok" would leave a kicked person with no explanation for a refused post.
+	// Most CDNs do not cache application/json by default; that is a configuration nobody here
+	// controls, and it is not what this should rest on.
+	h.Set("Cache-Control", "no-store")
 	return false
 }
 

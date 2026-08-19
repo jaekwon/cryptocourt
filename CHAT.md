@@ -415,6 +415,30 @@ about a person and never reaches a public surface — plus `you: {state, until, 
 so the composer can be disabled before someone types into a box that will 403.
 `since`/`limit` clamped; GET has its own budget.
 
+**That `you` block is why nothing here may be stored by a shared cache, and nothing said so.**
+The reply to one URL depends on the address that asked for it. Measured against the running
+server, same path, two `X-Forwarded-For` values behind a trusted proxy:
+
+    203.0.113.10    you = {"state":"kick","until":…,"ref":1,"seconds":3600}
+    198.51.100.55   you = {"state":"ok"}
+
+The only cache-relevant header was `Vary: Origin`, which is the wrong axis — the variance is by
+client address. There is nothing to vary on, either: the address comes from the connection, or from
+`X-Forwarded-For`, which must never be a cache key because it is unbounded and attacker-supplied.
+So the response has to declare itself unstorable, and it now sends `Cache-Control: no-store`.
+
+This is not hypothetical tidiness. §3 is written for a CDN deployment — `--country-header` names
+`CF-IPCountry` in its own usage text — and a shared cache holding one person's block would tell
+innocent readers they are timed out and hand them **somebody else's appeal reference**, while a
+cached `ok` would leave a kicked person with no explanation for a refused post. Most CDNs do not
+cache `application/json` by default. That is a configuration nobody in this repository controls,
+and it is not what the property should rest on.
+
+The preflight is deliberately exempt: `Access-Control-Max-Age` is how long a browser may remember
+it, and `no-store` there would argue with that and buy a round trip on every post. Both directions
+are pinned — removing the header fails the two GET arms, adding it to the preflight fails the
+preflight arm.
+
 **`now` is the server's clock, and every rendered time is corrected against it.** The same
 arithmetic as `seconds` below, on a much wider surface: every message carries an absolute
 `created_at` and the panel turns it into "5m" by subtracting. Measured through the shipped
