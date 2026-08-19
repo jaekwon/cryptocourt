@@ -173,7 +173,7 @@ func erase(r rune) bool {
 //
 // The result is stored once and read by both the renderer and the scanner, so the
 // two can never disagree about what a message says.
-func clean(s string, maxRunes int) (string, error) {
+func clean(s string, maxRunes int, mode countMode) (string, error) {
 	if len(s) > MaxInputBytes {
 		return "", ErrOversize
 	}
@@ -249,10 +249,56 @@ func clean(s string, maxRunes int) (string, error) {
 	if out == "" {
 		return "", ErrEmpty
 	}
-	if n := len([]rune(out)); n > maxRunes {
+	if n := countAgainstLimit(out, mode); n > maxRunes {
 		return "", ErrTooLong
 	}
 	return out, nil
+}
+
+// How a limit counts. `runes` is every code point; `letters` skips combining marks
+// and joiners, so a limit means the same thing in every script.
+//
+// The distinction exists because a RUNE limit is fair across scripts only while
+// every letter costs one rune, and in Hebrew, Arabic, Thai and Devanagari it does
+// not. Measured against MaxMonikerRunes = 24:
+//
+//	Bartholomew Smythe-Jones            24 runes  24 letters   accepted
+//	عَبْدُ الرَّحْمَٰنِ بْنُ مُحَمَّدٍ                34 runes  18 letters   REFUSED
+//
+// An eighteen-letter name refused where a twenty-four-letter one passes is the
+// same defect this file's header describes one level up — "a byte limit is a
+// length limit for English and a censor for everything else" — with runes in the
+// place of bytes. A display name is short or long by how many letters a reader
+// sees, so the moniker counts letters.
+//
+// MaxBodyRunes deliberately still counts RUNES, and the reason is a trade rather
+// than an oversight. The inequality is real and measured — pointed Hebrew runs
+// about 1.9 runes per letter and voweled Arabic 1.7, so those writers get roughly
+// 212 and 231 letters against an English writer's 400 — but 212 letters is still
+// a long chat message, whereas 18 letters is somebody's name. Counting letters in
+// a body would also move the binding constraint to MaxInputBytes and raise the
+// worst-case stored message from about 1.6 kB to 4 kB, which is a storage
+// decision (§8) rather than a fairness one. Stated here so the asymmetry is a
+// choice on the record.
+type countMode int
+
+const (
+	countRunes countMode = iota
+	countMarks           // marks and joiners do not consume the budget
+)
+
+func countAgainstLimit(s string, mode countMode) int {
+	if mode == countRunes {
+		return len([]rune(s))
+	}
+	n := 0
+	for _, r := range s {
+		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || joiner(r) {
+			continue
+		}
+		n++
+	}
+	return n
 }
 
 // SanitizeBody normalises a chat message for storage and display.
@@ -263,12 +309,14 @@ func clean(s string, maxRunes int) (string, error) {
 // prompt boundary is the right place for that problem, and the scanner solves it
 // by passing the message as a structured JSON field rather than as prose a model
 // might read as a frame.
-func SanitizeBody(s string) (string, error) { return clean(s, MaxBodyRunes) }
+func SanitizeBody(s string) (string, error) {
+	return clean(s, MaxBodyRunes, countRunes)
+}
 
 // SanitizeMoniker normalises a display name: same rules, shorter, and with no
 // spaces, because a name is one token and a padded one impersonates.
 func SanitizeMoniker(s string) (string, error) {
-	out, err := clean(s, MaxMonikerRunes)
+	out, err := clean(s, MaxMonikerRunes, countMarks)
 	if err != nil {
 		return "", err
 	}

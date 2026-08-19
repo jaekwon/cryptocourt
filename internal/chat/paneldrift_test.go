@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -75,9 +76,16 @@ func TestThePanelsLimitsMatchTheServers(t *testing.T) {
 				"drift from the server", lit)
 		}
 	}
-	if !regexp.MustCompile(`maxlength="' \+ CHATLIMITS\.moniker`).Match(src) ||
+	if !regexp.MustCompile(`maxlength="' \+ CHATMONIKERUNITS`).Match(src) ||
 		!regexp.MustCompile(`maxlength="' \+ CHATLIMITS\.body`).Match(src) {
-		t.Error("both composer inputs must take maxlength from CHATLIMITS")
+		t.Error("both composer inputs must take maxlength from a CHATLIMITS-derived value")
+	}
+	// The moniker's attribute is deliberately LOOSER than its limit, and derived from it.
+	// `maxlength` counts UTF-16 units, so an attribute equal to a LETTER limit stops a voweled
+	// Arabic or pointed Hebrew name from being typed at all — no message, just a dead keystroke,
+	// which is the worst way for a limit to be wrong.
+	if !regexp.MustCompile(`CHATMONIKERUNITS = CHATLIMITS\.moniker \* \d`).Match(src) {
+		t.Error("CHATMONIKERUNITS must be derived from CHATLIMITS.moniker so it cannot drift")
 	}
 
 	// And the validate path must COMPARE against the declaration, not against a literal that
@@ -134,5 +142,53 @@ func TestThePanelDoesNotAskForMoreThanTheServerWillGive(t *testing.T) {
 	if want <= 0 {
 		t.Errorf("the panel's default limit is %d, which the server would replace with its "+
 			"own default rather than honour", want)
+	}
+}
+
+// THE MONIKER LIMIT COUNTS LETTERS, AND BOTH SIDES MUST COUNT THEM THE SAME WAY.
+//
+// A number matching is not enough once the two sides can disagree about what they are counting.
+// The moniker's limit counts letters rather than code points — in Hebrew, Arabic, Thai and
+// Devanagari a letter costs two or three, so an eighteen-letter voweled Arabic name is 34 code
+// points and a rune limit refused it while a twenty-four-letter English name passed.
+//
+// Go decides with `unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || joiner(r)`. The
+// panel has to make the identical decision, and the trap is \p{M}: it includes \p{Mc}, the
+// SPACING combining marks, which Devanagari matras are and which Go counts as letters. A panel
+// using \p{M} would refuse Devanagari names the server accepts.
+func TestThePanelCountsMonikerLettersTheSameWayTheServerDoes(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "web", "chat.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := regexp.MustCompile(`(?s)function chatValidate\(.*?\n\}`).Find(src)
+	if fn == nil {
+		t.Fatal("chatValidate not found")
+	}
+	if !regexp.MustCompile(`chatLetters\(m\)`).Match(fn) {
+		t.Error("the moniker check must count letters via chatLetters, not code points; " +
+			"[...m].length refuses an 18-letter Arabic name and accepts a 24-letter English one")
+	}
+	// The body still counts code points, matching MaxBodyRunes. Asserted so the two limits do
+	// not quietly converge on one rule when they intentionally use different ones.
+	if !regexp.MustCompile(`\[\.\.\.b\]\.length`).Match(fn) {
+		t.Error("the body limit counts code points, like MaxBodyRunes; if that changed on the " +
+			"server too, change both and say so at internal/chat/sanitize.go's countMode")
+	}
+
+	skip := regexp.MustCompile(`const CHATSKIP = /\[([^\]]*)\]/u;`).FindSubmatch(src)
+	if skip == nil {
+		t.Fatal("web/chat.js must declare CHATSKIP as the set of runes that are not letters")
+	}
+	set := string(skip[1])
+	for _, want := range []string{`\p{Mn}`, `\p{Me}`, `\u200C`, `\u200D`, `\uFE0F`} {
+		if !strings.Contains(set, want) {
+			t.Errorf("CHATSKIP is missing %s; Go skips Mn, Me and the three joiners", want)
+		}
+	}
+	// The trap, asserted directly.
+	if strings.Contains(set, `\p{Mc}`) || regexp.MustCompile(`\\p\{M\}`).MatchString(set) {
+		t.Error(`CHATSKIP must not use \p{M} or \p{Mc}: Go counts SPACING combining marks as ` +
+			`letters, so a panel skipping them would refuse Devanagari names the server accepts`)
 	}
 }

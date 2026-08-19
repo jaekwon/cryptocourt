@@ -44,6 +44,26 @@
 // capability quietly removed rather than a message shown.
 const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};
 
+// CHATMONIKERUNITS is the `maxlength` attribute's crude keystroke stop, in UTF-16
+// units, and it is deliberately LOOSER than the real check below. The moniker's
+// limit counts LETTERS, not code points, because in Hebrew, Arabic, Thai and
+// Devanagari a letter costs two or three code points: an eighteen-letter voweled
+// Arabic name is 34 of them, and a maxlength of 24 would stop it being TYPED with
+// no message at all. chatValidate gives the reason; this only bounds a paste.
+const CHATMONIKERUNITS = CHATLIMITS.moniker * 4;
+
+// chatLetters counts what a reader sees, mirroring countAgainstLimit(_, countMarks)
+// in internal/chat/sanitize.go. The predicate must match the server's EXACTLY —
+// \p{Mn} and \p{Me} but NOT \p{Mc}, which is what Go's unicode.Mn/Me tests, plus
+// the three joiners — or the panel and the server disagree about one name and the
+// composer either refuses text the server takes or accepts text it will reject.
+const CHATSKIP = /[\p{Mn}\p{Me}\u200C\u200D\uFE0F]/u;
+function chatLetters(s) {
+  let n = 0;
+  for (const ch of String(s)) if (!CHATSKIP.test(ch)) n++;
+  return n;
+}
+
 // chatEsc escapes into HTML text or a double-quoted attribute.
 //
 // Single quote and backtick are in here beyond the usual four on purpose: the page's
@@ -137,8 +157,8 @@ function chatValidate(moniker, body) {
   const m = String(moniker == null ? "" : moniker).trim();
   const b = String(body == null ? "" : body).trim();
   if (!m) return "pick a name first";
-  if ([...m].length > CHATLIMITS.moniker) {
-    return "that name is too long (" + CHATLIMITS.moniker + " characters)";
+  if (chatLetters(m) > CHATLIMITS.moniker) {
+    return "that name is too long (" + CHATLIMITS.moniker + " letters)";
   }
   if (!b) return "type something";
   if ([...b].length > CHATLIMITS.body) {
@@ -193,7 +213,7 @@ function chatPanelHtml(slug, moniker, note) {
     + '<div class="chatdry" hidden></div>'
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
-    +   '<input class="chatmoniker" maxlength="' + CHATLIMITS.moniker + '" placeholder="name"'
+    +   '<input class="chatmoniker" maxlength="' + CHATMONIKERUNITS + '" placeholder="name"'
     +     ' aria-label="your name" value="' + chatEsc(moniker) + '">'
     +   '<input class="chatinput" maxlength="' + CHATLIMITS.body + '" placeholder="say something"'
     +     ' aria-label="message">'

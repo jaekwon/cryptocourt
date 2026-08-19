@@ -421,3 +421,223 @@ func TestSkeletonFoldsAnyMarkStackToThePlainWord(t *testing.T) {
 		t.Errorf("an obscured lure must fold to the plain words, got %q", got)
 	}
 }
+
+// A NAME LIMIT MUST MEAN THE SAME THING IN EVERY SCRIPT.
+//
+// MaxMonikerRunes counted code points, and in Hebrew, Arabic, Thai and Devanagari a letter costs
+// two or three of them. Measured at the old rune count of 24:
+//
+//	Bartholomew Smythe-Jones               24 runes  24 letters   accepted
+//	عَبْدُ الرَّحْمَٰنِ بْنُ مُحَمَّدٍ                   34 runes  18 letters   REFUSED
+//
+// An eighteen-letter name refused where a twenty-four-letter one passes. That is the defect
+// sanitize.go's header describes one level up — "a byte limit is a length limit for English and a
+// censor for everything else" — with runes standing in for bytes, and it survived precisely
+// because runes ARE the fix for the byte version.
+func TestARealNameIsNotRefusedForItsAlphabet(t *testing.T) {
+	for _, c := range []struct {
+		label, s string
+		letters  int
+	}{
+		{"English, at the limit", "Bartholomew Smythe-Jones", 24},
+		{"Hebrew, pointed", "יְהוֹשֻׁעַ בֶּן נוּן", 12},
+		{"Arabic, voweled", "عَبْدُ الرَّحْمَٰنِ", 10},
+		{"Arabic, voweled full name", "عَبْدُ الرَّحْمَٰنِ بْنُ مُحَمَّدٍ", 18},
+		{"Thai", "ประเสริฐ วงศ์สุวรรณ", 16},
+		{"Devanagari, with matras", "श्रीमती राधिका शर्मा", 18},
+		{"Vietnamese", "Nguyễn Thị Hương", 16},
+		{"Japanese", "山田太郎", 4},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			out, err := SanitizeMoniker(c.s)
+			if err != nil {
+				t.Fatalf("%q (%d letters, limit %d) was refused: %v",
+					c.s, c.letters, MaxMonikerRunes, err)
+			}
+			// A moniker loses its spaces by design — "a name is one token and a padded one
+			// impersonates" — and that rule is script-neutral: "Mary Jane" becomes "MaryJane"
+			// too. So the anti-corruption check is that every LETTER AND MARK survives, which
+			// still fails if the marks are stripped. Asserting equality with the input caught
+			// the space rule, which is how it got written down here.
+			if want := strings.Join(strings.Fields(c.s), ""); out != want {
+				t.Errorf("accepted but altered beyond its spaces:\n  in   %q\n  out  %q\n  want %q",
+					c.s, out, want)
+			}
+			// The count itself, so a change to the predicate shows up here as a number rather
+			// than as a mysteriously passing table.
+			if got := countAgainstLimit(c.s, countMarks); got != c.letters {
+				t.Errorf("counted %d letters, expected %d — the fixture or the predicate moved",
+					got, c.letters)
+			}
+		})
+	}
+}
+
+// AND THE LIMIT MUST STILL BE A LIMIT. Marks not consuming the budget is not marks being free:
+// the letters are counted, and a genuinely long name is refused whatever alphabet it is in.
+//
+// The bases are VARIED, not repeated. strings.Repeat of one marked letter trips maxRunRunes, which
+// truncates the identical run and drops the letter count back under the limit — so the naive
+// version of this fixture measured the run cap and passed while asserting nothing. It cost two
+// runs to notice.
+func TestATooLongNameIsStillRefusedInEveryScript(t *testing.T) {
+	for _, c := range []struct {
+		label string
+		bases []string
+		mark  string
+	}{
+		{"English", []string{"a", "b", "c", "d", "e"}, ""},
+		{"Hebrew, pointed", []string{"ב", "ג", "ד", "כ", "פ"}, "\u05bc\u05b6"},
+		{"Arabic, voweled", []string{"ب", "ت", "ج", "د", "ر"}, "\u0651\u064e"},
+		{"Thai, with tone", []string{"ก", "ข", "ค", "ง", "จ"}, "\u0e49"},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			var b strings.Builder
+			for i := 0; i < MaxMonikerRunes+1; i++ {
+				b.WriteString(c.bases[i%len(c.bases)])
+				b.WriteString(c.mark)
+			}
+			s := b.String()
+			if n := countAgainstLimit(s, countMarks); n != MaxMonikerRunes+1 {
+				t.Fatalf("fixture built %d letters, wanted %d", n, MaxMonikerRunes+1)
+			}
+			if _, err := SanitizeMoniker(s); !errors.Is(err, ErrTooLong) {
+				t.Errorf("%d letters must be refused, got %v", MaxMonikerRunes+1, err)
+			}
+		})
+	}
+}
+
+// THE EQUIVALENCE, and its LIMIT, both stated because the second is the honest half.
+//
+// Exactly MaxMonikerRunes letters is acceptable, and one more is not, in every script whose marks
+// are non-spacing (Mn) — Hebrew, Arabic, Thai. That is the class the change fixes.
+//
+// IT DOES NOT FIX EVERYTHING, and the boundary is worth naming rather than discovering later. Go
+// skips unicode.Mn and unicode.Me, not Mc — the SPACING combining marks — and a Devanagari matra
+// is Mc. So "शि" counts as two letters, not one, and Devanagari still pays roughly half its
+// budget to its own orthography. The genuinely correct measure is grapheme clusters, which needs
+// a segmentation dependency in Go and Intl.Segmenter in the panel; skipping Mn/Me is an
+// approximation that is exact for Mn scripts and partial for Mc ones. The names measured in
+// TestARealNameIsNotRefusedForItsAlphabet all fit at 24 either way, which is why the
+// approximation was taken rather than the dependency.
+//
+// Built from VARIED base characters on purpose: repeating one identical letter trips the run cap
+// (maxRunRunes truncates identical sequences), so a naive strings.Repeat measures that instead and
+// silently passes. The first version of this fixture did exactly that.
+func TestTheNameLimitIsTheSameNumberOfLettersInMnScripts(t *testing.T) {
+	// Consonants cycled so no identical run forms, each carrying real marks.
+	scripts := []struct {
+		label string
+		bases []string
+		mark  string
+	}{
+		{"Latin", []string{"a", "b", "c", "d", "e"}, ""},
+		{"Hebrew with vowel and dagesh", []string{"ב", "ג", "ד", "כ", "פ"}, "\u05bc\u05b6"},
+		{"Arabic with shadda and fatha", []string{"ب", "ت", "ج", "د", "ر"}, "\u0651\u064e"},
+		{"Thai with tone mark", []string{"ก", "ข", "ค", "ง", "จ"}, "\u0e49"},
+	}
+	build := func(s struct {
+		label string
+		bases []string
+		mark  string
+	}, letters int) string {
+		var b strings.Builder
+		for i := 0; i < letters; i++ {
+			b.WriteString(s.bases[i%len(s.bases)])
+			b.WriteString(s.mark)
+		}
+		return b.String()
+	}
+	for _, s := range scripts {
+		t.Run(s.label, func(t *testing.T) {
+			at := build(s, MaxMonikerRunes)
+			if n := countAgainstLimit(at, countMarks); n != MaxMonikerRunes {
+				t.Fatalf("fixture built %d letters, wanted %d", n, MaxMonikerRunes)
+			}
+			if _, err := SanitizeMoniker(at); err != nil {
+				t.Errorf("exactly %d letters must be accepted in every Mn script: %v",
+					MaxMonikerRunes, err)
+			}
+			over := build(s, MaxMonikerRunes+1)
+			if _, err := SanitizeMoniker(over); !errors.Is(err, ErrTooLong) {
+				t.Errorf("and %d must not be, got %v", MaxMonikerRunes+1, err)
+			}
+		})
+	}
+}
+
+// The Mc boundary, asserted rather than left as prose: a Devanagari matra counts as a letter, so
+// twelve syllables cost twenty-four. Pinned so that if somebody later adopts grapheme clusters,
+// this fixture is what tells them the behaviour changed on purpose.
+func TestSpacingMarksStillCountAsLetters(t *testing.T) {
+	syllable := "शि" // consonant + a spacing matra (Mc)
+	if n := countAgainstLimit(syllable, countMarks); n != 2 {
+		t.Fatalf("a Devanagari matra is Mc and Go counts it as a letter: got %d, want 2 — "+
+			"if this is 1 now, the counting rule moved to graphemes and the comment above "+
+			"TestTheNameLimitIsTheSameNumberOfLettersInMnScripts needs rewriting", n)
+	}
+	// Which means the budget buys half as many syllables. Real names still fit; this records
+	// the cost rather than claiming it is absent.
+	bases := []string{"श", "क", "ग", "म", "र"}
+	var b strings.Builder
+	for i := 0; i < MaxMonikerRunes/2; i++ {
+		b.WriteString(bases[i%len(bases)])
+		b.WriteString("ि")
+	}
+	if _, err := SanitizeMoniker(b.String()); err != nil {
+		t.Errorf("%d syllables is %d letters and must be accepted: %v",
+			MaxMonikerRunes/2, MaxMonikerRunes, err)
+	}
+}
+
+// THE BODY STILL COUNTS RUNES, and that asymmetry with the moniker is a decision, so it gets an
+// assertion rather than only a comment. A mutation switching the body to letter-counting survived
+// every other fixture here.
+//
+// The reason for the asymmetry is in sanitize.go at countMode: the inequality is real — pointed
+// Hebrew runs about 1.9 runes per letter, so those writers get roughly 212 letters against an
+// English writer's 400 — but 212 letters is still a long chat message, whereas 18 letters is
+// somebody's name. Counting letters in a body would also move the binding constraint to
+// MaxInputBytes and roughly double the worst-case stored message, which is a storage decision.
+//
+// This fixture discriminates the two rules: the text below is over the rune limit while being
+// well under any letter limit, so it passes only if the body counts letters.
+func TestTheBodyLimitCountsRunesNotLetters(t *testing.T) {
+	bases := []string{"a", "b", "c", "d", "e", "f", "g"}
+	build := func(letters int) string {
+		var b strings.Builder
+		for i := 0; i < letters; i++ {
+			b.WriteString(bases[i%len(bases)])
+			// U+0361 has no precomposed form, so NFKC leaves it as a separate rune. A
+			// combining ACUTE would be composed away — "a" + U+0301 becomes "á", one rune —
+			// which is how the first version of this fixture accidentally measured nothing.
+			// That composition is also why the letters-vs-runes gap barely exists for Latin
+			// and fully exists for Hebrew, Arabic, Thai and Devanagari, which do not
+			// precompose: the scripts that pay the cost are exactly the ones NFKC cannot help.
+			b.WriteString("\u0361")
+		}
+		return b.String()
+	}
+	// Half as many letters as runes, and two runes over the limit.
+	over := build(MaxBodyRunes/2 + 1)
+	runes, letters := len([]rune(over)), countAgainstLimit(over, countMarks)
+	if runes <= MaxBodyRunes || letters >= MaxBodyRunes {
+		t.Fatalf("fixture must be over the RUNE limit and under the LETTER one: "+
+			"%d runes, %d letters, limit %d", runes, letters, MaxBodyRunes)
+	}
+	if _, err := SanitizeBody(over); !errors.Is(err, ErrTooLong) {
+		t.Errorf("the body limit counts runes, so %d runes (%d letters) must be refused, got %v — "+
+			"if this changed on purpose, MaxInputBytes becomes the binding constraint and §8's "+
+			"storage numbers need revisiting", runes, letters, err)
+	}
+	// The paired positive: exactly at the limit is accepted, so the refusal above is the limit
+	// and not something else in the pipeline objecting to the text.
+	at := build(MaxBodyRunes / 2)
+	if n := len([]rune(at)); n != MaxBodyRunes {
+		t.Fatalf("fixture built %d runes, wanted %d", n, MaxBodyRunes)
+	}
+	if _, err := SanitizeBody(at); err != nil {
+		t.Errorf("exactly %d runes must be accepted: %v", MaxBodyRunes, err)
+	}
+}
