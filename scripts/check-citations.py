@@ -62,7 +62,16 @@ import repolock
 SRC = ["realm/r/govern", "realm/p/checkpoint", "realm/p/grc20votes",
        "realm/p/governor", "realm/r/offerer", "docs/DESIGN.md",
        "realm/r/kourtv1", "realm/r/kourtv2", "realm/p/twap",
-       "realm/p/cshares", "realm/p/tickbook", "realm/p/curve"]
+       "realm/p/cshares", "realm/p/tickbook", "realm/p/curve",
+       # The .txtar integration tests. Added late, and the case for them is that
+       # their prose is both the most load-bearing in the repo — a txtar's header
+       # is the only place the reason for an integration test is written down —
+       # and the least re-read, since nobody opens one unless it fails. So a
+       # citation rots there for longer than anywhere else. Free when added:
+       # measured zero line-number citations and zero backticked gno-tree
+       # filenames across all ten files, so checks 3 and 4 gained nothing to
+       # fire on and check 2 can only ever turn a failure into a pass.
+       "gnoland/testdata"]
 
 # (path under GNOROOT, anchor regex, the literal the prose quotes, the claim)
 #
@@ -211,7 +220,7 @@ def sources():
             continue
         for d, _, fs in os.walk(root):
             out += [os.path.join(d, f) for f in fs
-                    if f.endswith((".gno", ".md"))]
+                    if f.endswith((".gno", ".md", ".txtar"))]
     return out
 
 

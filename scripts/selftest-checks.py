@@ -128,6 +128,12 @@ ANCHORS = "scripts/check-mutation-anchors.py"
 MUTS = "scripts/mutations-kourtv2.json"
 PHYSICS = "scripts/check-demo-physics.py"
 WEBPAGE = "web/index.html"
+SELF = "scripts/selftest-checks.py"
+ARMED = "scripts/check-guards-armed.py"
+STALEG = "scripts/check-stale-guards.py"
+BUY = "realm/r/kourtv2/buy.gno"
+TCLOCK = "realm/r/kourtv2/testclock.gno"
+SEEDED = "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 VOTES = "realm/p/grc20votes"
@@ -150,6 +156,15 @@ control("a gno-tree file nobody cited", f"{GOVERN}/errors.gno",
 control("a newly written file:line citation", f"{GOVERN}/errors.gno",
         "package govern\n",
         "package govern\n\n// see governor.gno:275\n", "line-number citation")
+# The .txtar scope, which the guard did not have until the two usedrealm files
+# were written with three line-number citations in them. This arm is what keeps
+# that scope: drop ".txtar" from sources() again and it goes silent while every
+# other citation arm keeps passing.
+control("a file:line citation inside a txtar", SEEDED,
+        "# A realm used WITHOUT MONEY is not a virgin realm either.",
+        "# A realm used WITHOUT MONEY is not a virgin realm either.\n"
+        "# see testclock.gno:110 for the gate",
+        "line-number citation")
 
 print("\ncheck-nontransferable")
 # The guard is a tripwire on an ABSENCE — no exported entrypoint moves a court
@@ -669,15 +684,101 @@ else:
 # alternative — every scripts/*.py — demands a control for this file itself,
 # and a self-test that must break itself to prove it works is a worse trade.
 RUNNERS = {"mutate.py", "gnoroot.py", "mutate-parallel.py"}
+print("\ncheck-guards-armed")
+# The cheap half of this very file, so an unarmed guard fails at commit time
+# instead of waiting for the next selftest. It is itself a scripts/check-*.py and
+# therefore subject to its own rule, which is deliberate: a registration check
+# that forgot to register itself would be the exact failure it exists to catch.
+#
+# Editing THIS file while it runs is safe — Python has already read it — and the
+# first arm does exactly that, because "a guard dropped from selftest-checks.py"
+# cannot be staged any other way.
+# THE LITERAL IS ASSEMBLED, NOT WRITTEN, and the reason is the only interesting
+# thing about this arm. check-guards-armed reads THIS FILE as text, so a `find`
+# argument spelling the guard's name out would keep that name present after the
+# edit — the arm would rename the const, the name would still be here in the
+# arm's own source, and UNARMED would never fire. Written plainly it was a
+# BROKEN CONTROL that passed a by-hand probe before it was registered and stopped
+# working the moment it landed. Do not "tidy" the concatenation away.
+_reg = 'PATHS = "scripts/check-pa' + 'ths.py"'
+control("a committed guard dropped from selftest-checks.py", SELF,
+        _reg, _reg.replace('pa' + 'ths.py', 'paths-renamed.py'),
+        "UNARMED",
+        argv=["python3", ARMED])
+# Fail CLOSED, the same rule the other guards carry: an empty scan reported as a
+# clean one is how check-isolation swept 39% of the suite while printing success.
+control("the guard glob matching nothing", ARMED,
+        'glob.glob(os.path.join(REPO, "scripts", "check-*.py"))',
+        'glob.glob(os.path.join(REPO, "scripts", "check-nothing-*.py"))',
+        "measured nothing",
+        argv=["python3", ARMED])
+
+
+print("\ncheck-stale-guards")
+# The substitute for a test that cannot exist: govern/token_test.gno established
+# that no harness can hand an entrypoint a returned frame, so the ~105 crossing
+# entrypoints are held by being "checkable by reading" — and this reads them.
+# Written after a mutation deleting the check from mustDeployer survived the whole
+# corpus, which is the right verdict from a harness that cannot reach the line and
+# no comfort about the other sites.
+#
+# Every anchor carries its function SIGNATURE. `if !cur.IsCurrent() {` occurs up
+# to sixteen times in one file, so the bare line would be an ambiguous edit and
+# control() would refuse it.
+control("an entrypoint that loses the frame check", BUY,
+        "func Buy(cur realm, slug string) int64 {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n",
+        "func Buy(cur realm, slug string) int64 {\n",
+        "UNGUARDED",
+        argv=["python3", STALEG])
+# THE DELEGATE, not the call site. Four entrypoints defer to mustDeployer; a guard
+# that accepted the call without verifying the delegate would bless a helper that
+# had quietly stopped checking.
+control("a mustX(cur) helper that stops checking", TCLOCK,
+        "func mustDeployer(cur realm) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n",
+        "func mustDeployer(cur realm) {\n",
+        "DELEGATED",
+        argv=["python3", STALEG])
+control("the entrypoint scan matching nothing", STALEG,
+        'glob.glob(os.path.join(REPO, "realm/r/*/*.gno"))',
+        'glob.glob(os.path.join(REPO, "realm/r/*/*.nope"))',
+        "nothing was checked",
+        argv=["python3", STALEG])
+# An exemption list that rots silently is how a guard comes to watch nothing.
+control("an exemption naming a function that is gone", STALEG,
+        '    "govern/govern.gno:dispatch":',
+        '    "govern/govern.gno:dispatchRenamed":',
+        "STALE",
+        argv=["python3", STALEG])
+
 print("\ncoverage")
-guards = {os.path.basename(p) for p in glob.glob(os.path.join(REPO, "scripts/check-*.py"))}
-guards |= RUNNERS
+# COMMITTED guards only, which is the same line scripts/check-guards-armed.py
+# draws and for the same reason: a guard somebody is still writing is not yet an
+# obligation on anybody, and failing this shared gate because of an untracked
+# work-in-progress file makes the run useless to whoever is writing it. The moment
+# a guard is committed it owes the tree a control arm, and check-guards-armed says
+# so at commit time rather than days later here.
+#
+# The skipped ones are PRINTED, never passed over in silence: without that line
+# this ledger would read "all guards have a control" while the newest one was
+# simply not counted.
+found = {os.path.basename(p) for p in glob.glob(os.path.join(REPO, "scripts/check-*.py"))}
+r = subprocess.run(["git", "ls-files", "--", "scripts/"], cwd=REPO,
+                   capture_output=True, text=True)
+if r.returncode != 0:
+    print(f"  git ls-files failed, so coverage was not checked:\n{r.stderr.strip()}")
+    failures.append("coverage could not determine which guards are committed")
+    tracked_guards = set()
+else:
+    tracked_guards = {os.path.basename(x) for x in r.stdout.split()} & found
+for g in sorted(found - tracked_guards):
+    print(f"  {g:<44} untracked, not yet an obligation")
+guards = tracked_guards | RUNNERS
 unguarded = sorted(guards - exercised)
 for g in unguarded:
     print(f"  {g:<44} NO CONTROL — nothing here can prove it fires")
     failures.append(f"{g} has no control")
 if not unguarded:
-    print(f"  all {len(guards)} guards in scripts/ have a control")
+    print(f"  all {len(guards)} committed guards in scripts/ have a control")
 
 if failures:
     print(f"\n{len(failures)} control(s) did not fire. A guard that cannot fail "
