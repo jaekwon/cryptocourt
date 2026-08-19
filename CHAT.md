@@ -173,6 +173,40 @@ Note that the RUN cap (8 identical consecutive runes) behaves differently on pur
 truncates rather than refusing, so "============" is stored as eight of them and "what!!!!!!!!!!!"
 keeps eight marks of emphasis. Silent, but it alters nobody's alphabet.
 
+**And a FOURTH: the limits themselves were counting the wrong thing.** `MaxMonikerRunes` counted
+code points, which is the fix for the byte version of this bug and not the end of it, because in
+Hebrew, Arabic and Thai a letter costs two or three code points:
+
+    Bartholomew Smythe-Jones        24 runes  24 letters   accepted
+    عَبْدُ الرَّحْمَٰنِ بْنُ مُحَمَّدٍ            34 runes  18 letters   REFUSED
+
+An eighteen-letter name refused where a twenty-four-letter one passes. A display name is long or
+short by how many letters a reader sees, so the moniker counts letters now.
+
+**The body deliberately still counts runes,** and that asymmetry is a decision rather than an
+oversight. The inequality is real and measured — pointed Hebrew runs about 1.9 runes per letter
+and voweled Arabic 1.7, so those writers get roughly 212 and 231 letters against an English
+writer's 400 — but 212 letters is still a long chat message, whereas 18 letters is somebody's
+name. Counting letters in a body would also move the binding constraint to `MaxInputBytes` and
+roughly double the worst-case stored message, which is a §8 storage decision and not a fairness
+one. Both rules carry fixtures; a mutation flipping the body survived until the second was written.
+
+Two things worth knowing about the shape of this bug. **NFKC hides it from English**: "a" plus a
+combining acute is composed into "á", one rune, so Latin text rarely pays the penalty at all —
+the scripts that pay are exactly the ones with no precomposed forms, which is to say the ones
+normalisation cannot help. And **skipping `Mn`/`Me` is an approximation of grapheme clusters**,
+exact for Hebrew, Arabic and Thai and partial for Devanagari, where a matra is a SPACING mark
+(`Mc`) and still costs a letter. Grapheme clusters would need a segmentation dependency in Go and
+`Intl.Segmenter` in the panel; every name measured fits at 24 either way, so the approximation was
+taken and its boundary pinned rather than left to be rediscovered.
+
+**The panel had to learn the identical rule, and `\p{M}` is a trap.** `chatValidate` counted code
+points too, and worse, a `maxlength` of 24 UTF-16 units stopped a voweled Arabic name from being
+TYPED — a dead keystroke with no message, which is the worst way for a limit to be wrong.
+`maxlength` is a looser derived stop now and the real check counts letters. The panel's predicate
+must mirror Go's exactly, and `\p{M}` includes `\p{Mc}`: a panel using it would refuse Devanagari
+names the server accepts. So the drift test grew to police the RULE and not only the number.
+
 Evasion resistance had to move out of the display path because mutating displayed
 text to fight homoglyphs corrupts the text of everyone whose alphabet is not
 English. The confusables table is hand-built, incomplete, and documented as such —
