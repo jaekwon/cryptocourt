@@ -537,7 +537,7 @@ back it up with the same care and, per above, not in the same file.
 **One predicate, one place — and an audit rather than a hunch.** After the third bug of this
 shape, the remaining ones were found by tabulating every query in `internal/chat/store.go`
 against each guard clause and looking for the asymmetries, instead of guessing where to look
-next. Eight asymmetries in total, all the same failure:
+next. Nine asymmetries in total, all the same failure:
 
     freeze        checked in Post, not in Recent       a withdrawn court kept serving
     freeze        then not in Claim                    it was still scanned, at a cost
@@ -547,13 +547,20 @@ next. Eight asymmetries in total, all the same failure:
     hidden/frozen not in the UNSCANNED warning         warned about work nobody could do
     in force      expiry ignored by count and list     an operator count that only grew
     revoked_at    ignored by the context window        an upheld appeal still truncated it
+    same message  named in Consequence's comment only   a late kick left its scam on screen
 
 Four shared predicates now have exactly one definition each — `sqlAwaitingReview`,
 `sqlNotFrozen`, `sqlInForce` — and the one deliberate exception is documented where the audit
 flags it: the throttle ignores `hidden` and `frozen` on purpose, because it asks what an
 address SENT and hiding a message afterwards does not un-send it.
 
-The lesson is cheap to state and was expensive to learn eight times over: a predicate that lives in
+One more of the same shape crossed a language boundary rather than a function: the panel
+repeats the server's length limits so a user hears "too long" before a round trip, which
+made them two definitions in two languages that no build could compare. `web/chat.js` declares
+them once and a Go test reads that file and checks it against the constants, from the side that
+enforces them — prevention rather than a bug found, which is the first time this class has
+
+The lesson is cheap to state and was expensive to learn nine times over: a predicate that lives in
 more than one place eventually disagrees with itself, and the disagreement surfaces as a
 control quietly covering less than its own documentation claims.
 
