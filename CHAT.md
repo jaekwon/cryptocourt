@@ -969,6 +969,22 @@ consistent snapshot:
     sqlite3 chat.db ".backup '/backups/chat-$(date +%F).db'"
     sqlite3 chat.db "VACUUM INTO '/backups/chat.db'"      # same guarantee, compacted
 
+**A wrong `--db` used to report itself as "out of memory".** Three different filesystem problems
+— a missing parent directory, a path that is a directory, a read-only parent — all produced the
+same driver message, `unable to open database file: out of memory (14)`. Code 14 is
+SQLITE_CANTOPEN and "out of memory" is code 7's text, so the wrong string was paired with the
+code, and it sends a reader to look at RAM. It cost two wrong diagnoses in this repo before
+anybody checked what the message meant.
+
+The cause is established from the filesystem now rather than by matching the driver's string, so
+it cannot drift with a driver version, and the actionable half leads:
+
+    schema: the directory /var/lib/kourt does not exist; create it or correct --db
+            (driver said: unable to open database file: out of memory (14))
+
+A path with nothing wrong with it adds nothing, so a real SQLite error is never buried under a
+filesystem theory that does not apply.
+
 **Upgrades.** `kourtchat` migrates the database when it opens it, and migrations are
 column additions with defaults only, so an older binary reading a newer database is fine
 — every query names its columns. Back up first anyway, and start one binary before the
