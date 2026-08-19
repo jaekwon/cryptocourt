@@ -1551,7 +1551,7 @@ async function buildClip(){
                                            id == null ? Promise.resolve(null) : claimDetail(slug, id),
                                            sourceNote()]);
   const [ser, tl] = (id == null) ? [null, null] : await Promise.all([
-    claimSeries(slug, id, d).catch(()=>null), claimTimeline(slug, id, d).catch(()=>null)]);
+    claimStakeSeries(slug, id, d).catch(()=>null), claimTimeline(slug, id, d).catch(()=>null)]);
   const bg = getComputedStyle(document.body).backgroundColor.match(/^rgb\((\d+)/);
   const isDark = bg && parseInt(bg[1], 10) < 128;
   const url = shareIsPublic() ? shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id) : null;
@@ -3453,7 +3453,13 @@ async function claimTimeline(slug,id,d){
   if(!isLive()) return parseTimeline(d && d.timeline);
   return parseTimeline(await one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null));
 }
-async function claimSeries(slug,id,d){
+/* NOT claimSeries(). That name was already taken, 2,200 lines up, by the
+   function that feeds the docket's sparkline — and a second `function
+   claimSeries` simply replaced it, so every docket row called this instead and
+   handed sparkSvg() a Promise. "pts.map is not a function", on the court page,
+   in both modes. Two declarations of one name in a 5,000-line single file is
+   invisible to the eye; check-web-dupes.py now fails on it. */
+async function claimStakeSeries(slug,id,d){
   if(!isLive()) return mergeStakeSeries(parseStakeSeries(d&&d.seriesH), parseStakeSeries(d&&d.seriesD), NOW);
   const nowH = await chainHeight();
   return nowH==null? null : fetchStakeSeries(slug,id,nowH);
@@ -4828,7 +4834,7 @@ async function embedClaimView(slug, idS){
   // claimDetail carries the timeline only in demo mode, so this used to be
   // parseTimeline(d.timeline) — which meant a LIVE embed had no dates at all,
   // neither on the chart nor on "filed". One helper, both modes.
-  const [ser, tl] = d ? await Promise.all([claimSeries(slug, id, d).catch(()=>null),
+  const [ser, tl] = d ? await Promise.all([claimStakeSeries(slug, id, d).catch(()=>null),
                                            claimTimeline(slug, id, d).catch(()=>null)])
                       : [null, null];
   if(!d){

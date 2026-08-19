@@ -399,6 +399,48 @@ const CASES = [
 
   ok("no page errors on any embed route", errs.length === 0, errs.slice(0, 2).join(" | "));
 
+  // --- THE ROUTES THIS FILE IS NOT ABOUT, LOADED ANYWAY ----------------------
+  // A duplicate `function claimSeries` shipped and broke the COURT DOCKET in
+  // both modes — "pts.map is not a function" — and every gate stayed green
+  // because nothing ever loaded that page. check-web-dupes.py now catches that
+  // specific class at commit time; this catches the general one, which is a
+  // route nobody exercises. It is three page loads and an error listener.
+  const routeErrs = [];
+  const rp = await browser.newPage();
+  rp.on('pageerror', e => routeErrs.push(String(e).slice(0, 140)));
+  await rp.evaluateOnNewDocument(() => {
+    localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo"}));
+    localStorage.setItem("cc.intro", "1");
+  });
+  await rp.setViewport({width: 1280, height: 1000});
+  for(const [route, want] of [["#/", ".card, .courtrow, .grid"],
+                              ["#/c/orem", ".docket a.crow"],
+                              ["#/c/orem/1", ".stakewrap"],
+                              ["#/me", "h1"],
+                              ["#/needs", "h1"],
+                              ["#/about", "h1"]]){
+    const before = routeErrs.length;
+    await rp.goto(PAGE + route, {waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 900));
+    const painted = await rp.evaluate(sel => !!document.querySelector(sel), want);
+    ok(`${route} throws nothing`, routeErrs.length === before,
+       routeErrs.slice(before).join(" | "));
+    ok(`${route} painted something`, painted, `no ${want}`);
+  }
+  // The specific thing that broke: a sparkline is fed an array, not a Promise.
+  await rp.goto(PAGE + "#/c/orem", {waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 1000));
+  const dock = await rp.evaluate(() => ({
+    rows: document.querySelectorAll('.docket a.crow').length,
+    sparks: document.querySelectorAll('svg.spark polyline').length,
+    pts: [...document.querySelectorAll('svg.spark polyline')].slice(0, 3)
+      .map(e => (e.getAttribute('points') || "").split(" ").length)}));
+  ok("the docket draws rows", dock.rows > 0, `rows=${dock.rows}`);
+  ok("with sparklines", dock.sparks > 0, `sparks=${dock.sparks}`);
+  ok("and each sparkline has real points, not a stringified Promise",
+     dock.pts.length > 0 && dock.pts.every(n => n >= 2), JSON.stringify(dock.pts));
+  await rp.close();
+
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
   process.exit(fail ? 1 : 0);

@@ -129,6 +129,7 @@ MUTS = "scripts/mutations-kourtv2.json"
 PHYSICS = "scripts/check-demo-physics.py"
 HSHIM = "scripts/check-height-shim.py"
 LIVER = "scripts/check-live-reads.py"
+DUPES = "scripts/check-web-dupes.py"
 WEBPAGE = "web/index.html"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
@@ -419,6 +420,24 @@ control("a court built on a clockless ledger", COURT,
 control("a shim that no longer reads the chain", CLOCKF,
         "h = runtime.ChainHeight()", "h = int64(0)",
         "lost its anchor", argv=["python3", HSHIM])
+
+print("\ncheck-web-dupes")
+# The defect this exists for, reintroduced: a second declaration of a name that
+# is already taken. It cost the owner a broken court page in both modes —
+# "pts.map is not a function" — because the LAST declaration silently wins in
+# the overlay's one flat scope.
+control("a second declaration of an existing name", WEBPAGE,
+        "async function claimStakeSeries(slug,id,d){",
+        "async function claimSeries(slug,id,d){",
+        "declared more than",
+        argv=["python3", DUPES])
+# And the tripwire, which is the half that matters if the scan ever stops
+# finding anything: a guard that counted zero declarations would report every
+# name unique having asked nothing.
+control("a script block the scan cannot find", WEBPAGE,
+        "<script>", "<scriptX>",
+        "no <script> block to scan",
+        argv=["python3", DUPES])
 
 print("\ncheck-live-reads")
 # This one needs a running node, so its arms are the two refusals it makes
