@@ -667,6 +667,24 @@ carve-out; only the operator verb was missing, so somebody who revealed a messag
 it was a real key had no way back. Guidance the code cannot support is the defect this document keeps
 catching elsewhere, committed here in its own.
 
+**And it must say what it did in terms a person reads.** `kick` refuses a MISSING `-for` with "a
+timeout with no end is a ban" and then accepted one with no end in practice:
+
+    kick -for 876000h   accepted; `list` showed "876000h0m0s left"
+    kick -for 1ns       accepted; state=ok, and both the author's messages hidden
+    kick -for -1h       correctly refused
+
+No policy ceiling was added. Wherever it landed it would be arbitrary, and it would refuse a
+legitimate long timeout while doing nothing about the likelier problem: 876000h is a plausible typo
+for 876h and neither reads as a length anybody recognises. So the confirmation names it — "about 100
+years", and the date it runs to — which catches the extra zero at every magnitude.
+
+**The nanosecond case exposed a real asymmetry.** state=ok, so nobody is kept out for any measurable
+time, and both the author's messages hidden — indefinitely, until somebody runs `unban`. The
+duration is presented as the scope of the action and governs only the posting block; `HideWindow`
+governs the other half and outlasts it. Both verbs now say so, and take the window from the constant
+rather than a literal.
+
 **Every action must say whether it actually did anything**, which is a different audit from the
 reversibility one and turned up two more lies. Both were in the tool, both measured live:
 
