@@ -513,6 +513,8 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
         <input id="gnoweb" class="mono" placeholder="https://gno.land" spellcheck="false">
         <label for="chainid">chain id (for CLI commands)</label>
         <input id="chainid" class="mono" placeholder="dev" spellcheck="false">
+        <label for="chat">court chat (optional)</label>
+        <input id="chat" class="mono" placeholder="http://127.0.0.1:8791" spellcheck="false">
       </div>
     </div>
     <button class="themebtn" id="walletbtn"><span class="g">◇</span> <span id="walletlab">Connect Adena</span></button>
@@ -525,6 +527,12 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 
 <main class="main" id="main"></main>
 
+<!-- The court chat panel. OPTIONAL, and the only file index.html ever loads.
+     web/README.md promises this page is self-contained and runs from file://
+     with no dependencies, and that stays true: chat.js missing means no chat
+     panel and nothing else changes, because every call into it is guarded on
+     typeof. Chat is also off until CFG.chat names a service. See CHAT.md. -->
+<script src="chat.js"></script>
 <script>
 "use strict";
 /* ============================ configuration ============================== */
@@ -543,6 +551,10 @@ function cleanCfg(c){
     if(typeof c.chainid==="string" && /^[A-Za-z0-9._-]{1,32}$/.test(c.chainid)) out.chainid=c.chainid;
     if(typeof c.addr==="string" && /^g1[0-9a-z]{10,80}$/.test(c.addr)) out.addr=c.addr;
     if(c.theme==="light"||c.theme==="dark") out.theme=c.theme;
+    // The optional chat service (see CHAT.md). Absent is the default and means
+    // no chat at all rather than a guessed origin — the page must never start
+    // posting to a host nobody named.
+    const ch=url(c.chat); if(ch) out.chat=ch;
   }
   return out;
 }
@@ -1079,7 +1091,7 @@ function claimSeries(d){
     : (d.trailYesMature&&d.trailOImature&&d.trailOI>0? Math.round(1000*d.trailYesAvg/d.trailOI)/10 : null);
   return ([inst,life,week].every(Number.isFinite))? [life,week,inst] : null;
 }
-function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }
 /* undo the realm's markdown inline-escaping (\[ \] \( …) when we lift a title
    out of a Render link back into our own escaped DOM text. */
 function unesc(s){ return String(s).replace(/\\([\\`*_\[\]()~>\-+.!#<&])/g, "$1"); }
@@ -1258,6 +1270,18 @@ const main = document.getElementById("main");
 const routes = [];
 function on(re, fn){ routes.push([re,fn]); }
 let renderSeq = 0, paintedSeq = 0;
+/* The live chat panel's stop function. render() is async AND re-entrant, so a
+   poller can outlive the DOM it was writing to; mountChat guards that with its
+   own generation counter, and this is the other half — the timer is released
+   promptly rather than at its next tick.
+
+   Deleting the CHATSTOP() call below passes every browser check, and that is a
+   fact about reachability rather than a gap: the checks run in demo mode, where
+   there is no poller and so no timer to release, and mountChat's generation
+   counter already makes a stale tick inert. The property this line actually
+   carries — that the pending timer is gone rather than merely harmless — is
+   pinned in web/tests/chat_test.js, which counts outstanding timers directly. */
+let CHATSTOP = null;
 /* Query params ride the hash (#/c/orem?p=2) so pages, back/forward, and
    shared links all land on the same window. Routes match the path part. */
 let QP = {};
@@ -1747,7 +1771,16 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
        </div></section>`
     + courtBody(slug, s, claims, docketPager, chainF, allRows, docketPagerBot,
-        {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0});
+        {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0})
+    + `<div id="courtchat"></div>`;
+  // Chat sits at the foot of the court, below the docket. Guarded on typeof so a
+  // missing chat.js leaves the court page whole instead of throwing halfway
+  // through a paint, which would take the docket with it.
+  if(typeof mountChat === "function"){
+    if(CHATSTOP) CHATSTOP();
+    CHATSTOP = mountChat(document.getElementById("courtchat"),
+      {cfg: CFG, chain: CFG.chainid || "dev", court: slug});
+  }
   QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
     total:totalClaims, slug, totalClaims, orderTail:" · newest first"};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
@@ -4058,6 +4091,13 @@ function initControls(){
   const chainid=document.getElementById("chainid");
   chainid.value=CFG.chainid;
   chainid.onchange=()=>{ CFG.chainid=chainid.value.trim()||"dev"; saveCfg(); chainid.value=CFG.chainid; };
+  // Blank clears it, which is how chat is turned off. re-render so the panel
+  // appears or disappears without a reload.
+  const chatin=document.getElementById("chat");
+  if(chatin){ chatin.value=CFG.chat||"";
+    chatin.onchange=()=>{ const v=chatin.value.trim();
+      if(v) CFG.chat=v; else delete CFG.chat;
+      saveCfg(); chatin.value=CFG.chat||""; render(); }; }
   preset.onchange=()=>{ const pz=PRESETS[preset.value]; if(!pz) return;
     CFG.rpc=pz.rpc; CFG.gnoweb=pz.gnoweb; CFG.chainid=pz.chainid;
     rpc.value=pz.rpc; gnoweb.value=pz.gnoweb; chainid.value=pz.chainid;

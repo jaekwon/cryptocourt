@@ -22,6 +22,34 @@ Open `index.html` in any browser — no build, no dependencies, no server needed
 Your choices persist in `localStorage`; nothing leaves the page except the ABCI queries
 to the node you name and the transaction links you click.
 
+## Court chat (optional)
+
+Each court page can carry a chat panel at its foot. It is **off unless you turn it on**,
+and it is the only part of this page that talks to anything other than a gno node — so
+it is worth being exact about what it changes:
+
+- **`chat.js` is a second file, and the only one `index.html` ever loads.** Everything
+  above stays true: the page opened on its own, with no `chat.js` beside it, renders
+  every court and claim exactly as before. Every call into the panel is guarded, and a
+  browser check renders a court with the file blocked at the network layer to prove it.
+- **Demo mode still makes no network calls.** With no endpoint configured, the panel
+  shows a short sample thread rather than hiding, because an empty box would
+  misrepresent the feature and guessing an origin would be worse.
+- **It is not the chain, and it is not a private API of the chain.** Chat cannot live in
+  a realm: it needs a client address, a wall clock and a mutable moderation record, and a
+  deterministic VM has none of those — on-chain chat would also be permanent and
+  unmoderatable, which is the opposite of what a timeout system is for. So it is an
+  off-chain service in this repo (`cmd/kourtchat`), and turning chat on means naming its
+  address under **court chat (optional)** in the left rail. Nothing about a court's
+  claims, stakes or verdicts passes through it, and the overlay stays optional and not
+  load-bearing with or without it.
+- **Names are unverified and nobody owns one.** The six characters after each name are
+  derived from the sender's connection and rotate daily, so two people typing "alice"
+  are visibly different people. It is recognition inside one conversation, never an
+  identity to trust across days.
+
+The design, the moderation rules and how to run it are in [CHAT.md](../CHAT.md).
+
 ## The wallet (optional)
 
 With the [Adena](https://adena.app) extension installed, **Connect Adena** in the
