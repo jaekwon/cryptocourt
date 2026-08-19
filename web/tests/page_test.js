@@ -17,6 +17,9 @@ let code = 'var QP={};\n';
 code += slice('function esc(', '\n');
 code += 'function unesc(x){ return String(x); }\n';
 code += slice('function fmtN(', 'function ugnot(');
+// listClaims now carries the instantaneous ratio on each row, so the docket
+// cell can show a number when the three-point spark cannot be drawn.
+code += slice('function pctYes(', '/* A per-claim sparkline');
 code += 'var NOW='+global.NOW+';\n';
 // Round 28 split the literal: DEMO_CHAIN (generated) + DEMO_OVERLAY
 // (hand-written: desc, nested folders, relations, voteEndsAt), joined by

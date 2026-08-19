@@ -171,6 +171,23 @@ const ROUTES = [
   const typed = await page.evaluate(() =>
     [...document.querySelectorAll('dialog [data-close]')].every(b => b.getAttribute("type") === "button"));
   ok("dialog close buttons declare type=button", typed);
+  // shortAddr() elides the middle for the eye; the full address appears nowhere
+  // else on this route, so reading the page aloud gave one that cannot be used.
+  const addr = await page.evaluate(() => {
+    const f = [...document.querySelectorAll('.tagrow .tfact')].find(e => /opened by/.test(e.textContent));
+    if (!f) return null;
+    const shown = f.querySelector('[aria-hidden="true"]'), full = f.querySelector('.sr-only');
+    const cs = full ? getComputedStyle(full) : null;
+    return {shown: shown ? shown.textContent.trim() : null,
+            full: full ? full.textContent.trim() : null,
+            hidden: cs ? (cs.clipPath !== "none" || cs.width === "1px") : false};
+  });
+  if (addr) {
+    ok("the elided address is hidden from the accessible name", /…/.test(addr.shown), addr.shown);
+    ok("and the whole address is in it", !!addr.full && !/…/.test(addr.full) && addr.full.length > 12,
+       JSON.stringify(addr.full));
+    ok("without being visible", addr.hidden);
+  }
 
   ok("no page errors on any route with this row", errs.length === 0, errs.slice(0, 2).join(" | "));
 

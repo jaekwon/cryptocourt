@@ -536,6 +536,9 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .addrbar{display:flex; gap:9px; margin:8px 0 20px; flex-wrap:wrap}
 .addrbar input{font-family:var(--mono); font-size:13px; background:var(--surface); border:1px solid var(--line-2); border-radius:var(--r-sm); padding:9px 12px; color:var(--ink); min-width:min(360px,80vw)}
 .muted{color:var(--muted)} .small{font-size:12.5px}
+/* Visually gone, still in the accessible name. */
+.sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0}
 .hr{height:1px; background:var(--line); margin:26px 0}
 /* ============================ the utility row ============================
    The line under a page title: what this thing IS, then what you can do about
@@ -1051,7 +1054,8 @@ async function listClaims(slug){
     const outD = [...c.claims].sort((a,b)=>b-a)
       .filter(id=>!(DEMO.claims[slug+"/"+id]||{}).hidden) // the render omits hidden claims
       .map(id=>{ const d=DEMO.claims[slug+"/"+id];
-      return {id, title:d.title, statusText:statusText(d), series:claimSeries(d), settleAt:d.settleAt, escrowUntil:d.escrowUntil}; });
+      return {id, title:d.title, statusText:statusText(d), series:claimSeries(d),
+              inst:pctYes(d.yesStake,d.noStake), settleAt:d.settleAt, escrowUntil:d.escrowUntil}; });
     const dsp = demoStrips(slug);
     outD.strip = dsp.strip; outD.pending = dsp.pending;
     return outD; }
@@ -1269,6 +1273,25 @@ function claimSeries(d){
   const week=(d.trailYes!=null)? d.trailYes
     : (d.trailYesMature&&d.trailOImature&&d.trailOI>0? Math.round(1000*d.trailYesAvg/d.trailOI)/10 : null);
   return ([inst,life,week].every(Number.isFinite))? [life,week,inst] : null;
+}
+/* THE DOCKET'S SIGNAL CELL, and why it is not just sparkSvg().
+   The three-point spark needs all THREE series — lifetime conviction, the
+   trailing week, and the instant ratio — so claimSeries() returns null unless
+   every one of them is finite. That is right: "LIVE never invents history", and
+   a line drawn through a series the chain has not matured yet would be a
+   fabrication.
+   But the CELL then rendered empty. The trailing week is not mature until
+   answerWindow blocks have passed, so on a real chain that is every young claim
+   — a blank space beside rows carrying a number, with nothing to say whether the
+   claim has no stake or the page simply could not draw it. Measured on a seeded
+   node: the docket showed nothing at all.
+   So: draw the line when there is a line, show the ratio when only the ratio is
+   known, and say plainly when there is neither. */
+function docketSignal(ser, inst){
+  if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>YES now</small>`;
+  if(Number.isFinite(inst))
+    return `<b>${inst.toFixed(1)}%</b><small>YES now · no trend yet</small>`;
+  return `<small class="muted">not staked yet</small>`;
 }
 function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }
 /* undo the realm's markdown inline-escaping (\[ \] \( …) when we lift a title
@@ -2128,9 +2151,14 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
           trailOI:toi[0],trailOImature:toi[1],trailYesAvg:tyes[0],trailYesMature:tyes[1]});
         if(renderSeq!==seq0) return;
         const el = document.getElementById(`spk-${slug}-${cl.id}`);
-        if(el && ser){
-          el.innerHTML = `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>YES now</small>`;
-          const row = el.closest(".crow"); if(row) row.dataset.yes = ser[2]; // the sort key rides the row
+        if(el){
+          const inst = pctYes(pools[0], pools[1]);
+          el.innerHTML = docketSignal(ser, inst);
+          // The sort key rides the row, and it is the INSTANT ratio either way —
+          // keying it off the spark meant a docket of young claims could not be
+          // sorted at all.
+          const k = ser ? ser[2] : inst;
+          const row = el.closest(".crow"); if(row && Number.isFinite(k)) row.dataset.yes = k;
         }
       }catch(_){}
     }).then(()=>{ if(renderSeq===seq0 && QP.sort) applySort(QP.sort); }); // one settle once every key landed
@@ -3296,10 +3324,13 @@ function statusPill(statusText){
   return `<span class="pill ${p.cls}">${esc(p.short)}</span>`;
 }
 function docketRow(slug,c,meta){
-  const px = c.series
-    ? `<span class="px">${sparkSvg(c.series)}<b>${c.series[2].toFixed(1)}%</b><small>YES now</small></span>`
+  // A claim with no series is not always a claim awaiting a live fill: in demo
+  // mode the row is final, and it used to render an empty cell for good.
+  const px = (c.series || Number.isFinite(c.inst))
+    ? `<span class="px">${docketSignal(c.series, c.inst)}</span>`
     : `<span class="px" id="spk-${esc(slug)}-${c.id}"></span>`;
-  return `<a class="crow${c.offp?" offp":""}" data-id="${c.id}"${c.series?` data-yes="${c.series[2]}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
+  const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
+  return `<a class="crow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
     <span><span class="t">${safeInline(c.title)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span></span>
     ${px}
@@ -3339,7 +3370,10 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // opened-by: a file names who opened it — one read, claim page only
   const author = isLive()? await one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null)
                          : ((DEMO.claims[slug+"/"+id]||{}).author||null);
-  const openedBy = author? `<span class="tfact">opened by <span class="mono">${shortAddr(author)}</span></span>` : "";
+  // shortAddr() elides the middle — g1oremf…0000 — and the full address appears
+  // nowhere else on this route, so reading the page aloud gave an address that
+  // cannot be used. The elision is for the eye; the value is for everyone.
+  const openedBy = author? `<span class="tfact">opened by <span class="mono" aria-hidden="true">${shortAddr(author)}</span><span class="sr-only">${esc(author)}</span></span>` : "";
   // moderation provenance: four booleans, claim route only; a failed read
   // renders nothing — the page makes no completeness certificate to defend
   let mHidden=null, mRedacted=null, mPurged=null, mSeeded=null;

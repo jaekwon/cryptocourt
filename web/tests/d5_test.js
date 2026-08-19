@@ -88,8 +88,14 @@ ok("opened-by reads once, claim route only", (src.match(/ClaimAuthor\(/g)||[]).l
 // "opened by" is prose and sets in the sans; the address is a machine string
 // and is the only mono in the row. The whole span used to be mono, which is
 // why it read as a fourth typeface in a six-item row.
+// The elision is for the eye only: shortAddr() cuts the middle out and the full
+// address appears nowhere else on this route, so a screen reader was handed an
+// address that cannot be used. Both halves are pinned — the short one hidden
+// from the accessible name, the whole one in it.
 ok("opened-by chip via shortAddr",
-   src.includes('opened by <span class="mono">${shortAddr(author)}</span>'));
+   src.includes('<span class="mono" aria-hidden="true">${shortAddr(author)}</span>'));
+ok("and the whole address reaches a screen reader",
+   src.includes('<span class="sr-only">${esc(author)}</span>'));
 ok("answer record nonzero-only", src.includes('${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}'));
 ok("answer record footnote", src.includes("an overturn resets it to zero"));
 ok("rail gnoweb exit is live-only", src.includes('id="gwrealm"') && src.includes('gw.style.display = live? "inline-block":"none"'));

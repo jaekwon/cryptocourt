@@ -436,6 +436,18 @@ const CASES = [
     pts: [...document.querySelectorAll('svg.spark polyline')].slice(0, 3)
       .map(e => (e.getAttribute('points') || "").split(" ").length)}));
   ok("the docket draws rows", dock.rows > 0, `rows=${dock.rows}`);
+  // The three-point spark needs all three series, and the trailing week is not
+  // mature on a young claim — so on a real chain the cell rendered EMPTY beside
+  // rows that had a number. Show what is known; never draw the missing series.
+  const sig = await rp.evaluate(() => {
+    const rows = [...document.querySelectorAll('.docket a.crow')].filter(e => e.dataset.id != null);
+    return {n: rows.length,
+      blank: rows.filter(e => { const px = e.querySelector('.px'); return px && !px.textContent.trim(); }).length,
+      sortable: rows.filter(e => e.dataset.yes != null).length};
+  });
+  ok("no claim's signal cell is blank", sig.blank === 0, `blank=${sig.blank}/${sig.n}`);
+  ok("and every claim row can still be sorted", sig.sortable === sig.n,
+     `${sig.sortable}/${sig.n}`);
   ok("with sparklines", dock.sparks > 0, `sparks=${dock.sparks}`);
   ok("and each sparkline has real points, not a stringified Promise",
      dock.pts.length > 0 && dock.pts.every(n => n >= 2), JSON.stringify(dock.pts));
