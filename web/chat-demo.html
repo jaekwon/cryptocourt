@@ -60,9 +60,15 @@ the feature, and calling out to a guessed origin would be worse.</small>
     <div><label for="ct">court</label><input id="ct" placeholder="orem" style="max-width:9rem"></div>
     <div style="flex:0 0 auto"><button id="go">connect</button></div>
   </div>
-  <small class="note">Kept in <code>localStorage</code> so a reload keeps it. The service
-  needs to allow this origin; it sends <code>Access-Control-Allow-Origin: *</code>, which
-  is why opening this file straight off disk works.</small>
+  <small class="note">Kept in <code>localStorage</code> so a reload keeps it.
+  <b>Reading works with this file opened straight off disk; posting does not.</b> Measured:
+  a <code>file://</code> page is <code>Sec-Fetch-Site: cross-site</code>, and the service
+  refuses cross-site POSTs — that is the CSRF defence working, not a bug, because a
+  safelisted content type would otherwise let any web page make its visitors post. Serve
+  this directory and posting works, because same host on a different port is
+  <i>same-site</i>:
+  <br><code>cd web &amp;&amp; python3 -m http.server 8080</code> &rarr;
+  <code>http://127.0.0.1:8080/chat-demo.html</code></small>
 </div>
 <div id="livechat"></div>
 

@@ -203,3 +203,52 @@ func TestPublicSuffix(t *testing.T) {
 		t.Fatal("the public tag must not be a prefix of the stored hash")
 	}
 }
+
+// A NETWORK HASH AND ITS LABEL MUST NOT DISAGREE.
+//
+// HashNet computes its own prefix; NetPrefix exists so an operator tool can say which
+// range a hash covers. If those two ever diverge, `kourtchatctl hash` prints a range
+// that is not the range it hashed, and somebody bans the wrong scope — which is the
+// bug this pins, because the first version of that command labelled the network hash
+// with Prefix (a /32) instead.
+func TestNetPrefixIsTheRangeHashNetActuallyHashes(t *testing.T) {
+	h, err := NewHasher(make([]byte, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ addr, wantNet, wantHost string }{
+		{"203.0.113.7", "203.0.113.0/24", "203.0.113.7/32"},
+		{"203.0.113.255", "203.0.113.0/24", "203.0.113.255/32"},
+		{"2001:db8:1:2:3:4:5:6", "2001:db8:1::/48", "2001:db8:1:2::/64"},
+	} {
+		t.Run(c.addr, func(t *testing.T) {
+			a := netip.MustParseAddr(c.addr)
+			if got := NetPrefix(a).String(); got != c.wantNet {
+				t.Fatalf("NetPrefix: want %s, got %s", c.wantNet, got)
+			}
+			if got := Prefix(a).String(); got != c.wantHost {
+				t.Fatalf("Prefix: want %s, got %s", c.wantHost, got)
+			}
+			// The label and the hash must describe the same range: hashing the
+			// network's own base address must give the identical network hash.
+			base := NetPrefix(a).Addr()
+			if h.HashNet(a) != h.HashNet(base) {
+				t.Fatal("HashNet is not constant across the range NetPrefix names")
+			}
+			// And the two scopes must be different values, or a range ban would be
+			// indistinguishable from a single-address one.
+			if h.HashNet(a) == h.Hash(a) {
+				t.Fatal("the address and network hashes must not collide")
+			}
+		})
+	}
+	// Two addresses in one /24 share a network hash; two in different /24s do not.
+	same := []string{"203.0.113.7", "203.0.113.200"}
+	if h.HashNet(netip.MustParseAddr(same[0])) != h.HashNet(netip.MustParseAddr(same[1])) {
+		t.Fatal("addresses in one /24 must share a network hash")
+	}
+	if h.HashNet(netip.MustParseAddr("203.0.113.7")) ==
+		h.HashNet(netip.MustParseAddr("203.0.114.7")) {
+		t.Fatal("addresses in different /24s must not share a network hash")
+	}
+}

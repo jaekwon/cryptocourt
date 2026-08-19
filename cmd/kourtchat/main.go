@@ -20,9 +20,7 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -66,7 +64,7 @@ func main() {
 	}
 	defer store.Close()
 
-	key, err := loadSecret(store, *secretFile)
+	key, err := chat.LoadKey(store, *secretFile, true)
 	if err != nil {
 		lg.Fatal(err)
 	}
@@ -115,50 +113,6 @@ func main() {
 		WriteTimeout:      30 * time.Second,
 	}
 	lg.Fatal(server.ListenAndServe())
-}
-
-// loadSecret prefers a file OUTSIDE the data directory.
-//
-// The database row is the fallback so a single-machine run needs no setup, but it
-// is worth being clear about what that costs: hashing addresses protects against a
-// stray copy of the .db file, and if the key sits in that same file it protects
-// against nothing. A backup, an rsync or a container snapshot carries both, and
-// IPv4 is only 2^32 — recovering every address from key plus table is seconds.
-func loadSecret(store *chat.Store, path string) ([]byte, error) {
-	if path != "" {
-		b, err := os.ReadFile(path)
-		if err == nil {
-			if len(b) < 32 {
-				return nil, fmt.Errorf("%s holds %d bytes; the key must be at least 32", path, len(b))
-			}
-			return b, nil
-		}
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-		k := make([]byte, 32)
-		if _, err := rand.Read(k); err != nil {
-			return nil, err
-		}
-		// O_EXCL, so two processes starting together cannot both create it — a lost
-		// race would silently lift every consequence and change every public tag.
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			return nil, fmt.Errorf("creating %s: %w", path, err)
-		}
-		defer f.Close()
-		if _, err := f.Write(k); err != nil {
-			return nil, err
-		}
-		return k, nil
-	}
-	return store.Secret(func() []byte {
-		k := make([]byte, 32)
-		if _, err := rand.Read(k); err != nil {
-			panic(err) // a keyless start would make every hash predictable
-		}
-		return k
-	})
 }
 
 func keys(m map[string]bool) []string {

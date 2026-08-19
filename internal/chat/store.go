@@ -194,19 +194,41 @@ func (s *Store) Secret(gen func() []byte) ([]byte, error) {
 		fmt.Sprintf("%x", gen())); err != nil {
 		return nil, err
 	}
-	var hexKey string
-	if err := s.r.QueryRow(`SELECT v FROM meta WHERE k='ip_secret'`).Scan(&hexKey); err != nil {
+	key, ok, err := s.SecretIfSet()
+	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		// INSERT OR IGNORE then no row back is not a state that should be reachable;
+		// saying so beats returning a nil key that hashes everything identically.
+		return nil, errors.New("ip_secret vanished between write and read")
+	}
+	return key, nil
+}
+
+// SecretIfSet reads the key WITHOUT creating one, and reports whether there was one.
+//
+// The read-only half of Secret, for callers that must not mint. An operator tool that
+// silently generated a key would produce hashes matching nothing the server wrote — a
+// ban that appears to succeed and blocks nobody.
+func (s *Store) SecretIfSet() ([]byte, bool, error) {
+	var hexKey string
+	err := s.r.QueryRow(`SELECT v FROM meta WHERE k='ip_secret'`).Scan(&hexKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
 	}
 	key := make([]byte, len(hexKey)/2)
 	for i := range key {
 		var b int
 		if _, err := fmt.Sscanf(hexKey[i*2:i*2+2], "%02x", &b); err != nil {
-			return nil, fmt.Errorf("ip_secret is not hex: %w", err)
+			return nil, false, fmt.Errorf("ip_secret is not hex: %w", err)
 		}
 		key[i] = byte(b)
 	}
-	return key, nil
+	return key, true, nil
 }
 
 // Message is a row as the world sees it. There is deliberately no verdict field:

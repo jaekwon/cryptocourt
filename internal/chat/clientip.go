@@ -159,13 +159,30 @@ func (h *Hasher) Hash(a netip.Addr) string {
 //
 // No new privacy is lost: a /24 is LESS identifying than a full address, and §2 of
 // CHAT.md already concedes both are recoverable by anyone holding the key.
-func (h *Hasher) HashNet(a netip.Addr) string {
+// NetPrefix is the NETWORK an address sits in for range consequences: /24 for IPv4,
+// /48 for IPv6. Exported so that an operator tool can LABEL a network hash with the
+// range it covers — the definition used to be inline in HashNet, and the first version
+// of `kourtchatctl hash` labelled its network hash with Prefix instead, printing
+// "203.0.113.7/32" beside a hash that actually covers 203.0.113.0/24. One definition,
+// so a label cannot disagree with the hash it describes.
+//
+// Distinct from Prefix, which is the SINGLE HOST (/32, or /64 for v6 because the host
+// half is free to change).
+func NetPrefix(a netip.Addr) netip.Prefix {
 	bits := 48
 	if a.Is4() {
 		bits = 24
 	}
 	p, err := a.Prefix(bits)
 	if err != nil {
+		return netip.Prefix{}
+	}
+	return p
+}
+
+func (h *Hasher) HashNet(a netip.Addr) string {
+	p := NetPrefix(a)
+	if !p.IsValid() {
 		return ""
 	}
 	mac := hmac.New(sha256.New, h.key)

@@ -8,8 +8,10 @@
 //	kourtchatctl -db chat.db list -all            including reversed decisions
 //	kourtchatctl -db chat.db why 42               the evidence behind one decision
 //	kourtchatctl -db chat.db unban 42             reverse it, and un-hide the messages
+//	kourtchatctl -db chat.db kick <ip-hash> -for 1h   a bounded, manual timeout
 //	kourtchatctl -db chat.db ban <ip-hash>        a permanent ban, by hand
 //	kourtchatctl -db chat.db ban -net <net-hash>  the same for a network
+//	kourtchatctl -db chat.db hash 203.0.113.7     the hashes for one address
 //	kourtchatctl -db chat.db freeze dev/orem      stop serving a purged court
 //	kourtchatctl -db chat.db status               backlog, scanner heartbeat, counts
 //
@@ -17,12 +19,29 @@
 // an oversight: the addresses are not stored, so neither this tool nor anybody
 // holding the database can turn a row back into a person. Read a hash off a `list`
 // or `why`, or out of the 403 a caller reports.
+//
+// `hash` exists because that left a gap with no way out. Every hash had to be read
+// off an EXISTING infraction, so an operator holding a fresh database and an address
+// they can see in their own proxy logs — a reported harassment case, an address the
+// classifier never flagged — had nothing to act on. It hashes FORWARD, which discloses
+// nothing new: anyone who can run it already holds the key and the database, and
+// CHAT.md §3 concedes that recovering every IPv4 address from those two is seconds of
+// work. It refuses to MINT a key, because a mistyped --secret-file would otherwise
+// yield a plausible hash under a brand-new key and a ban that matched nobody.
+//
+// `kick` exists for the same reason in the other direction. The automated half tops out
+// at a bounded timeout precisely because proportionate and reversible is the design;
+// leaving a human no manual option BUT a permanent ban made the most severe tool the
+// only one. A manual kick is capped by nothing — clamping is for automated reasons —
+// so `-for` is required rather than defaulted.
 package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -33,6 +52,8 @@ import (
 
 func main() {
 	db := flag.String("db", "chat.db", "path to the SQLite database")
+	secretFile := flag.String("secret-file", "",
+		"the server's IP hashing key; must match kourtchat's, or every hash is wrong")
 	flag.Usage = usage
 	flag.Parse()
 	args := flag.Args()
@@ -57,6 +78,10 @@ func main() {
 		cmdUnban(ctx, store, args[1:])
 	case "ban":
 		cmdBan(ctx, store, args[1:])
+	case "kick":
+		cmdKick(ctx, store, args[1:])
+	case "hash":
+		cmdHash(store, *secretFile, args[1:])
 	case "freeze":
 		cmdFreeze(ctx, store, args[1:])
 	case "status":
@@ -94,7 +119,7 @@ func split(argv []string) (flags, positional []string) {
 // done before parsing.
 func takesValue(f string) bool {
 	switch strings.TrimLeft(f, "-") {
-	case "by", "why", "ip", "n", "db":
+	case "by", "why", "ip", "n", "db", "for", "secret-file":
 		return true
 	}
 	return false // -all, -net are booleans
@@ -106,9 +131,14 @@ func usage() {
   list [-all] [-ip HASH]   consequences in force (or every one, with -all)
   why ID                   the evidence and reasoning behind one consequence
   unban ID                 reverse a consequence and restore its hidden messages
+  kick HASH -for 1h        a bounded manual timeout, short of a ban
   ban HASH [-net] [-why S] a permanent ban, which only a human can issue
+  hash ADDR                the address and network hashes for one IP
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   status                   backlog, scanner heartbeat, counts
+
+Hashes come from list, why, or hash <addr>. With -secret-file, pass the same path
+kourtchat runs with: a different key means every hash here matches nothing.
 `)
 }
 
@@ -259,6 +289,79 @@ func cmdBan(ctx context.Context, s *chat.Store, argv []string) {
 	}
 	fmt.Printf("banned %s %s permanently [consequence %d]\n", scope, short(hash), id)
 	fmt.Printf("reverse it with: kourtchatctl unban %d\n", id)
+}
+
+// cmdKick applies a bounded manual timeout.
+//
+// Reason is `manual`, like a ban, which means the enforcer's automated ceiling does not
+// clamp it — see chat.statusTx. That is correct and worth stating plainly: the clamp
+// exists to stop a MODEL escalating to something permanent, not to overrule a person
+// who has decided an hour is the right answer. The duration is therefore required, so
+// that "how long" is always a decision somebody made.
+func cmdKick(ctx context.Context, s *chat.Store, argv []string) {
+	fs := flag.NewFlagSet("kick", flag.ExitOnError)
+	for_ := fs.Duration("for", 0, "how long, e.g. 1h or 24h (required)")
+	why := fs.String("why", "", "note for the record")
+	isNet := fs.Bool("net", false, "the hash is a network, not a single address")
+	flags, pos := split(argv)
+	_ = fs.Parse(flags)
+	if len(pos) != 1 || pos[0] == "" {
+		die("kick needs one hash — read it from `list`, `why` or `hash <addr>`")
+	}
+	if *for_ <= 0 {
+		die("kick needs -for, e.g. -for 1h; a timeout with no end is a ban")
+	}
+	in := chat.Infraction{
+		Kind: chat.KindKick, Reason: chat.ReasonManual, Detail: *why, Duration: *for_,
+	}
+	if *isNet {
+		in.NetHash = pos[0]
+		in.IPHash = "net:" + pos[0]
+	} else {
+		in.IPHash = pos[0]
+	}
+	id, err := s.Consequence(ctx, in)
+	if err != nil {
+		die("%v", err)
+	}
+	scope := "address"
+	if *isNet {
+		scope = "network"
+	}
+	fmt.Printf("kicked %s %s for %s [consequence %d]\n", scope, short(pos[0]), *for_, id)
+	fmt.Printf("reverse it early with: kourtchatctl unban %d\n", id)
+}
+
+// cmdHash prints the hashes for an address, so the other commands have something to
+// take. See the package comment for why this is not a privacy regression.
+func cmdHash(s *chat.Store, secretFile string, argv []string) {
+	_, pos := split(argv)
+	if len(pos) != 1 {
+		die("hash needs one address, e.g. 203.0.113.7 or 2001:db8::1")
+	}
+	addr, err := netip.ParseAddr(pos[0])
+	if err != nil {
+		die("%q is not an IP address: %v", pos[0], err)
+	}
+	// create=false: minting a key here would produce a confident, useless answer.
+	key, err := chat.LoadKey(s, secretFile, false)
+	if err != nil {
+		if errors.Is(err, chat.ErrNoKey) {
+			die("no hashing key yet — start kourtchat once, or point -secret-file at its key")
+		}
+		die("%v", err)
+	}
+	h, err := chat.NewHasher(key)
+	if err != nil {
+		die("%v", err)
+	}
+	// Each hash labelled with the range it actually covers. The first version of this
+	// printed Prefix beside the NETWORK hash — "203.0.113.7/32" next to a hash over
+	// 203.0.113.0/24 — which is how an operator bans the wrong scope confidently.
+	fmt.Printf("address  %s   (%s)\n", h.Hash(addr), chat.Prefix(addr))
+	fmt.Printf("network  %s   (%s)\n", h.HashNet(addr), chat.NetPrefix(addr))
+	fmt.Printf("\nkick one address for an hour:  kourtchatctl kick %s -for 1h\n", h.Hash(addr))
+	fmt.Printf("ban the network permanently:   kourtchatctl ban -net %s\n", h.HashNet(addr))
 }
 
 func cmdFreeze(ctx context.Context, s *chat.Store, argv []string) {
