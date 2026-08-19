@@ -504,7 +504,7 @@ back it up with the same care and, per above, not in the same file.
 **One predicate, one place — and an audit rather than a hunch.** After the third bug of this
 shape, the remaining ones were found by tabulating every query in `internal/chat/store.go`
 against each guard clause and looking for the asymmetries, instead of guessing where to look
-next. Seven asymmetries in total, all the same failure:
+next. Eight asymmetries in total, all the same failure:
 
     freeze        checked in Post, not in Recent       a withdrawn court kept serving
     freeze        then not in Claim                    it was still scanned, at a cost
