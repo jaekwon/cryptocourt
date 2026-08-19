@@ -48,7 +48,7 @@ func (s *Scanner) interval() time.Duration {
 // nothing" must not look the same to an operator.
 func (s *Scanner) Run(ctx context.Context) error {
 	for {
-		if err := s.Store.Heartbeat(ctx, s.Enforce); err != nil && s.Log != nil {
+		if err := s.Store.Heartbeat(ctx, s.Enforce, s.interval()); err != nil && s.Log != nil {
 			s.Log.Printf("heartbeat: %v", err)
 		}
 		n, err := s.Tick(ctx)

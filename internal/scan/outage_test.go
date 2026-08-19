@@ -71,7 +71,7 @@ func TestAnOutageLeavesEveryIndicatorGreenAndNothingScanned(t *testing.T) {
 	// The backoff doubles, so the clock has to move for the retries to be eligible. Six
 	// rounds is enough to exhaust five attempts on both rows.
 	for i := 0; i < 6; i++ {
-		if err := s.Heartbeat(ctx, true); err != nil {
+		if err := s.Heartbeat(ctx, true, 5*time.Second); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := sc.Tick(ctx); err != nil {

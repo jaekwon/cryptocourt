@@ -183,7 +183,7 @@ func TestDryRunRecordsButDoesNotPunish(t *testing.T) {
 		t.Fatalf("dry run must still record the verdict, got %q", verdict)
 	}
 	// And health says plainly that nothing is being enforced.
-	if err := st.Heartbeat(context.Background(), sc.Enforce); err != nil {
+	if err := st.Heartbeat(context.Background(), sc.Enforce, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	h, err := st.Health(context.Background())

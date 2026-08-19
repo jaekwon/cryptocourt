@@ -479,3 +479,62 @@ func TestTheHideNoteNamesTheWindowAndTheReversal(t *testing.T) {
 		t.Errorf("the window looks hardcoded: %q", got)
 	}
 }
+
+// A HEARTBEAT IS JUDGED AGAINST THE CADENCE THE SCANNER PROMISED, not a constant of our own.
+//
+// `status` warned past a fixed five minutes. A scanner polling on `--interval 10m` — sensible for a
+// quiet court sharing a GPU — is then permanently "stale — is kourtmod running?" while running
+// perfectly, and an operator chases a phantom. Measured: a six-minute-old heartbeat, healthy for that
+// configuration, warned.
+//
+// The table is the point. A rule that only ever warns, or only ever stays quiet, would satisfy half
+// of it.
+func TestStalenessIsJudgedAgainstThePromisedCadence(t *testing.T) {
+	for _, c := range []struct {
+		name       string
+		age, every time.Duration
+		wantWarn   bool
+	}{
+		{"a long cadence, quiet for less than three of them",
+			6 * time.Minute, 10 * time.Minute, false},
+		{"...and quiet for far longer than three, which is a real outage",
+			40 * time.Minute, 10 * time.Minute, true},
+		{"the default cadence, quiet for six minutes",
+			6 * time.Minute, 5 * time.Second, true},
+		{"the default cadence, quiet for fifteen seconds — three cycles, but ordinary",
+			15 * time.Second, 5 * time.Second, false},
+		{"the default cadence, quiet for two minutes",
+			2 * time.Minute, 5 * time.Second, true},
+		{"exactly at the bound is not yet stale",
+			30 * time.Minute, 10 * time.Minute, false},
+		{"no cadence recorded, quiet for six minutes: the old fixed bound",
+			6 * time.Minute, 0, true},
+		{"no cadence recorded, quiet for one minute",
+			time.Minute, 0, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := staleNote(c.age, c.every)
+			if c.wantWarn && got == "" {
+				t.Errorf("staleNote(%s, %s) said nothing; %s of silence on that cadence is a "+
+					"pattern, not a slow cycle", c.age, c.every, c.age)
+			}
+			if !c.wantWarn && got != "" {
+				t.Errorf("staleNote(%s, %s) = %q; warning here is how an operator learns to "+
+					"ignore the line", c.age, c.every, got)
+			}
+			// When it does warn with a known cadence it must say what bound it applied, or the
+			// operator cannot tell a misconfiguration from an outage.
+			if c.wantWarn && c.every > 0 {
+				if !strings.Contains(got, c.every.String()) {
+					t.Errorf("the warning must name the cadence it judged against: %q", got)
+				}
+			}
+		})
+	}
+
+	// The floor: three cycles of a 5s cadence is 15s, which is ordinary jitter. Without it every
+	// quiet quarter-minute would warn.
+	if got := staleNote(20*time.Second, time.Second); got != "" {
+		t.Errorf("three seconds of silence must not warn on a one-second cadence: %q", got)
+	}
+}

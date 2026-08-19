@@ -72,7 +72,7 @@ func main() {
 	lg.Printf("model %s at %s, %s", *model, *ollama, mode)
 
 	if *once {
-		if err := store.Heartbeat(ctx, sc.Enforce); err != nil {
+		if err := store.Heartbeat(ctx, sc.Enforce, *interval); err != nil {
 			lg.Printf("heartbeat: %v", err)
 		}
 		n, err := sc.Tick(ctx)

@@ -1083,11 +1083,24 @@ func (s *Store) Unfreeze(ctx context.Context, chain, court string) (bool, error)
 
 // Heartbeat records that the scanner is alive, and whether it is enforcing.
 // Reported as-is so the panel cannot claim moderation that is not happening.
-func (s *Store) Heartbeat(ctx context.Context, enforcing bool) error {
+// Heartbeat records that the scanner was alive, and HOW OFTEN it means to say so again.
+//
+// The cadence is written down because a reader cannot otherwise judge the age. `status` called a
+// heartbeat stale after a fixed five minutes, so a scanner polling on `--interval 10m` — a sensible
+// choice for a quiet court sharing a GPU — reported "stale — is kourtmod running?" permanently while
+// running perfectly. Measured: a six-minute-old heartbeat, healthy for that configuration, warned.
+//
+// Same shape as Status.Seconds and the GET reply's `now`: the side that knows the fact states it,
+// rather than the far side guessing from a constant it cannot see.
+//
+// A row written before this field existed parses to a zero cadence, which readers must treat as
+// "unknown" and fall back to their own bound — asserted, not assumed, because Sscanf's behaviour on
+// a short input is the kind of thing that is easier to test than to reason about.
+func (s *Store) Heartbeat(ctx context.Context, enforcing bool, every time.Duration) error {
 	_, err := s.w.ExecContext(ctx,
 		`INSERT INTO meta(k,v) VALUES('scanner_seen', ?)
 		 ON CONFLICT(k) DO UPDATE SET v=excluded.v`,
-		fmt.Sprintf("%d,%t", s.Now().Unix(), enforcing))
+		fmt.Sprintf("%d,%t,%d", s.Now().Unix(), enforcing, int64(every.Seconds())))
 	return err
 }
 
@@ -1095,8 +1108,13 @@ func (s *Store) Heartbeat(ctx context.Context, enforcing bool) error {
 type Health struct {
 	OK          bool  `json:"ok"`
 	ScannerSeen int64 `json:"scanner_seen_at,omitempty"`
-	Enforcing   bool  `json:"enforcing"`
-	Backlog     int   `json:"backlog"`
+
+	// SeenEvery is the cadence the scanner promised, in seconds, or 0 when it did not say —
+	// either an older row or a caller that has none. A reader judging the age of ScannerSeen has
+	// to use this rather than a constant of its own: see Heartbeat.
+	SeenEvery int64 `json:"scanner_seen_every,omitempty"`
+	Enforcing bool  `json:"enforcing"`
+	Backlog   int   `json:"backlog"`
 
 	// Unscannable counts messages that gave up: five failed attempts, terminal, and
 	// never classified.
@@ -1123,7 +1141,10 @@ func (s *Store) Health(ctx context.Context) (Health, error) {
 	case err != nil:
 		return h, err
 	default:
-		fmt.Sscanf(v, "%d,%t", &h.ScannerSeen, &h.Enforcing)
+		// The error is ignored on purpose: a row written before the cadence field has only two
+		// values, and Sscanf fills what it can before failing, leaving SeenEvery zero — which is
+		// exactly "it did not say".
+		fmt.Sscanf(v, "%d,%t,%d", &h.ScannerSeen, &h.Enforcing, &h.SeenEvery)
 	}
 	// hidden=0 to match Claim EXACTLY. Claim skips hidden rows — punished content must
 	// stop driving verdicts — so counting them as backlog reports work that will never be

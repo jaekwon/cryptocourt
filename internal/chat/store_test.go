@@ -407,7 +407,7 @@ func TestChatWorksWithNoScanner(t *testing.T) {
 	}
 	// And once it runs in dry-run, enforcing stays false: the label derives from
 	// this, so it cannot imply moderation that is not happening.
-	if err := s.Heartbeat(ctx, false); err != nil {
+	if err := s.Heartbeat(ctx, false, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if h, _ = s.Health(ctx); h.Enforcing || h.ScannerSeen == 0 {
@@ -2306,5 +2306,53 @@ func TestRevokingAConsequenceThatDoesNotExistSaysSo(t *testing.T) {
 		if err := s.Revoke(ctx, bad, "alice"); !errors.Is(err, ErrNoConsequence) {
 			t.Errorf("id %d: got %v", bad, err)
 		}
+	}
+}
+
+// A HEARTBEAT WRITTEN BEFORE THE CADENCE FIELD EXISTED MUST STILL PARSE.
+//
+// The meta row is a comma-joined string and gained a third value. Sscanf fills what it can before
+// failing, so an older two-field row leaves SeenEvery at zero — which readers treat as "the scanner
+// did not say" and fall back to their own bound. That behaviour is easier to test than to reason
+// about, so it is tested: the fallback is what keeps `status` sensible on a database written by the
+// previous binary.
+func TestAnOlderHeartbeatRowParsesWithNoCadence(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+
+	// Exactly what the previous version wrote.
+	if _, err := s.w.ExecContext(ctx,
+		`INSERT INTO meta(k,v) VALUES('scanner_seen', ?)`,
+		fmt.Sprintf("%d,true", clock.Unix())); err != nil {
+		t.Fatal(err)
+	}
+	h, err := s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.ScannerSeen != clock.Unix() {
+		t.Errorf("the timestamp must still parse: got %d, want %d", h.ScannerSeen, clock.Unix())
+	}
+	if !h.Enforcing {
+		t.Error("and the enforcing flag: got false")
+	}
+	if h.SeenEvery != 0 {
+		t.Errorf("with no cadence recorded it must read as zero, got %d", h.SeenEvery)
+	}
+
+	// And a row written by the current binary carries all three.
+	if err := s.Heartbeat(ctx, true, 10*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	h, err = s.Health(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.SeenEvery != 600 {
+		t.Errorf("the cadence must round-trip in seconds: got %d, want 600", h.SeenEvery)
+	}
+	if h.ScannerSeen != clock.Unix() || !h.Enforcing {
+		t.Errorf("without disturbing the other two: seen=%d enforcing=%v",
+			h.ScannerSeen, h.Enforcing)
 	}
 }

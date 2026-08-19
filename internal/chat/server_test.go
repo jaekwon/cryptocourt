@@ -630,7 +630,7 @@ func TestPublicHealthWithholdsOperatorTelemetry(t *testing.T) {
 	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "an unscanned message")); rec.Code != 200 {
 		t.Fatal("setup post failed")
 	}
-	if err := store.Heartbeat(ctx, true); err != nil {
+	if err := store.Heartbeat(ctx, true, 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	h, err := store.Health(ctx)

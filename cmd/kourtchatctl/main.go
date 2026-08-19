@@ -895,6 +895,38 @@ func cmdUnfreeze(ctx context.Context, s *chat.Store, argv []string) {
 	fmt.Printf("purge, check that the content should be public again before telling anyone\n")
 }
 
+// staleNote judges the age of a heartbeat against the cadence the scanner PROMISED, not against a
+// constant of its own.
+//
+// It used to warn past a fixed five minutes. A scanner polling on `--interval 10m` — a sensible
+// choice for a quiet court sharing a GPU with other work — is then permanently "stale — is kourtmod
+// running?" while running perfectly, and an operator chases a phantom. Measured: a six-minute-old
+// heartbeat, healthy for that configuration, warned.
+//
+// Three cadences of silence is the bound. One is ordinary — the read can land just before the next
+// write — and two is a single missed cycle, which a slow batch explains. Three is a pattern. Floored
+// at a minute so the 5s default does not warn on fifteen seconds of nothing.
+//
+// A cadence of zero means the scanner did not say: an older row, or a caller with no interval. Then
+// there is nothing to derive a bound from and the old five minutes is as good an answer as any,
+// which is why it survives as the fallback rather than being deleted.
+func staleNote(age, every time.Duration) string {
+	bound := 5 * time.Minute
+	if every > 0 {
+		if bound = 3 * every; bound < time.Minute {
+			bound = time.Minute
+		}
+	}
+	if age <= bound {
+		return ""
+	}
+	if every > 0 {
+		return fmt.Sprintf("  (stale — over %s of silence on a %s cadence; is kourtmod running?)",
+			bound, every)
+	}
+	return "  (stale — is kourtmod running?)"
+}
+
 func cmdStatus(ctx context.Context, s *chat.Store) {
 	h, err := s.Health(ctx)
 	if err != nil {
@@ -905,10 +937,7 @@ func cmdStatus(ctx context.Context, s *chat.Store) {
 		fmt.Printf("scanner        never seen — chat is UNMODERATED\n")
 	} else {
 		age := time.Since(time.Unix(h.ScannerSeen, 0)).Truncate(time.Second)
-		warn := ""
-		if age > 5*time.Minute {
-			warn = "  (stale — is kourtmod running?)"
-		}
+		warn := staleNote(age, time.Duration(h.SeenEvery)*time.Second)
 		fmt.Printf("scanner        last seen %s ago%s\n", age, warn)
 		fmt.Printf("enforcing      %t\n", h.Enforcing)
 		if !h.Enforcing {
