@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/jaekwon/kourt/internal/chat"
+	"github.com/jaekwon/kourt/internal/geo"
 )
 
 func main() {
@@ -41,6 +42,8 @@ func main() {
 		trusted     = flag.String("trusted-proxy", "", "comma-separated CIDRs allowed to set X-Forwarded-For")
 		countryHdr  = flag.String("country-header", "", "trusted header carrying an ISO country code, e.g. CF-IPCountry")
 		secretFile  = flag.String("secret-file", "", "path to the IP hashing key; defaults to a row in the database")
+		geoLoc      = flag.String("geo-locations", "", "MaxMind GeoLite2-Country-Locations-en.csv")
+		geoBlocks   = flag.String("geo-blocks", "", "comma-separated GeoLite2-Country-Blocks-IPv{4,6}.csv")
 	)
 	flag.Parse()
 	lg := log.New(os.Stderr, "kourtchat: ", log.LstdFlags)
@@ -85,6 +88,17 @@ func main() {
 	srv := &chat.Server{
 		Store: store, Hasher: hasher, Policy: policy,
 		Chains: names, CountryHeader: *countryHdr, Log: lg,
+	}
+	// Flags are decoration, so a missing or broken geo database must never stop the
+	// server: it logs and carries on with no flags at all.
+	if *geoLoc != "" && *geoBlocks != "" {
+		tab, err := geo.LoadMaxMind(*geoLoc, strings.Split(*geoBlocks, ",")...)
+		if err != nil {
+			lg.Printf("no flags: %v", err)
+		} else {
+			srv.Geo = tab
+			lg.Printf("geo: %d prefixes loaded", tab.Len())
+		}
 	}
 
 	h, err := store.Health(context.Background())

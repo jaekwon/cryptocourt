@@ -30,6 +30,16 @@ type Server struct {
 	// third-party geolocation API for a decoration.
 	CountryHeader string
 
+	// Geo resolves a country from the address when no proxy header does. Optional:
+	// a nil Geo means no flags, which is a working configuration rather than a
+	// degraded one.
+	//
+	// The header wins when both are present, because a CDN sitting in front of us
+	// has better information than a database we downloaded last month.
+	Geo interface {
+		Country(netip.Addr) string
+	}
+
 	Log *log.Logger
 }
 
@@ -251,6 +261,13 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 	country := ""
 	if s.CountryHeader != "" {
 		if cc := strings.ToUpper(strings.TrimSpace(r.Header.Get(s.CountryHeader))); ccRe.MatchString(cc) {
+			country = cc
+		}
+	}
+	if country == "" && s.Geo != nil {
+		// Validated on the way in as well, not only on the way out: a lookup table
+		// is a file somebody edited, and two letters is the whole contract.
+		if cc := strings.ToUpper(s.Geo.Country(addr)); ccRe.MatchString(cc) {
 			country = cc
 		}
 	}

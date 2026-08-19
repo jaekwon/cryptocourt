@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -321,5 +322,55 @@ func TestEmptyRoomIsAnEmptyList(t *testing.T) {
 	}
 	if len(reply.Messages) != 0 {
 		t.Fatalf("want an empty list, got %d", len(reply.Messages))
+	}
+}
+
+// stubGeo is a fake lookup table for the precedence test.
+type stubGeo struct{ cc string }
+
+func (s stubGeo) Country(netip.Addr) string { return s.cc }
+
+// The proxy header wins over the table, because a CDN in front of us has better
+// information than a database downloaded last month — and a bad value from either
+// is dropped rather than rendered.
+func TestCountryPrecedenceAndValidation(t *testing.T) {
+	cases := []struct {
+		name, header, geo, want string
+	}{
+		{"header only", "DE", "", "DE"},
+		{"table only", "", "FR", "FR"},
+		{"header beats the table", "DE", "FR", "DE"},
+		{"a bad header falls back to the table", "not-a-code", "FR", "FR"},
+		{"a bad table value is dropped", "", "<script>", ""},
+		{"neither", "", "", ""},
+		{"lowercase is normalised", "de", "", "DE"},
+	}
+	for i, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv, st, _ := newServer(t)
+			if c.geo != "" {
+				srv.Geo = stubGeo{cc: c.geo}
+			}
+			r := postReq(t, "/api/chat/dev/orem", "alice", "where am i from")
+			if c.header != "" {
+				r.Header.Set("X-Country", c.header)
+			}
+			// A distinct address per case, so the per-address interval does not
+			// refuse the post and quietly make every assertion vacuous.
+			r.RemoteAddr = fmt.Sprintf("198.51.100.%d:1111", i+10)
+			if rec := do(t, srv, r); rec.Code != 200 {
+				t.Fatalf("post: %d %s", rec.Code, rec.Body)
+			}
+			msgs, err := st.Recent(context.Background(), "dev", "orem", 0, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("want one message, got %d", len(msgs))
+			}
+			if msgs[0].Country != c.want {
+				t.Fatalf("want %q, got %q", c.want, msgs[0].Country)
+			}
+		})
 	}
 }
