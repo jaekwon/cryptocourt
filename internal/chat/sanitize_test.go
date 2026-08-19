@@ -2,6 +2,7 @@ package chat
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -51,7 +52,10 @@ func TestSanitizeBody(t *testing.T) {
 		{"oversize input", rep("a", MaxInputBytes+1), "", ErrOversize},
 		{"control char", "a\x00b", "", ErrControl},
 		{"stacked marks", "s" + rep("\u0361", 10) + "cam", "", ErrMarks},
-		{"joiner flood", rep("\u200d", maxJoiners+1) + "x", "", ErrJoiners},
+		{"joiner run", rep("\u200d", maxJoinerRun+1) + "x", "", ErrJoiners},
+		// Density, not quantity: joiners must not outnumber what a reader can see. This is
+		// the abuse the old whole-message total was aimed at, and it is still refused.
+		{"joiners outnumber the text", "hi" + rep("\u200d", 100) + "there", "", ErrJoiners},
 
 		// --- THE FIRST DRAFT BROKE ALL OF THESE. They are ordinary text and
 		// --- must survive byte for byte; the regression is locked out here.
@@ -244,4 +248,87 @@ func containsRune(s string, r rune) bool {
 		}
 	}
 	return false
+}
+
+// THE JOINER CAP MUST NOT REFUSE A LANGUAGE.
+//
+// It was a whole-message total of 16, and measured against ordinary text it refused:
+//
+//	Persian prose, 20 ZWNJ words, 177 runes   REFUSED
+//	six family emoji, 48 runes                REFUSED
+//
+// §4 exists because the first sanitiser refused `Bitcoin-биржа` and `alice@почта.рф` as
+// homoglyph attacks. This was the same failure surviving in a different constant: ZWNJ is
+// orthographically required in Persian, so a total cap punishes the language and not the abuse.
+// A long legitimate message legitimately contains more joiners than a short one.
+//
+// The replacement bounds density instead — consecutive runs, and joiners against visible
+// characters — and it is safe to be this permissive because the cap was never what stopped
+// joiner-interleaved evasion. Skeleton reduces "s‍c‍a‍m" to "scam" on its own, which is
+// asserted below so the reasoning cannot quietly stop being true.
+func TestJoinersDoNotRefuseOrdinaryText(t *testing.T) {
+	// Persian words that each carry a ZWNJ, as ordinary as "don't" in English.
+	fa := []string{"می‌روم", "نمی‌دانم", "کتاب‌ها", "بچه‌ها", "خانه‌اش",
+		"می‌توانم", "نمی‌شود", "دانش‌جویان", "روزنامه‌نگار", "بی‌نهایت"}
+	var words []string
+	for i := 0; i < 3; i++ {
+		words = append(words, fa...)
+	}
+	for _, n := range []int{10, 16, 20, 30} {
+		text := strings.Join(words[:n], " ")
+		if _, err := SanitizeBody(text); err != nil {
+			t.Errorf("%d Persian ZWNJ words (%d runes) must be accepted: %v",
+				n, len([]rune(text)), err)
+		}
+	}
+
+	// Emoji families: four people joined by three ZWJ each.
+	fam := "\U0001F468‍\U0001F469‍\U0001F467‍\U0001F466"
+	for _, n := range []int{1, 2, 4, 6, 8} {
+		text := strings.TrimSpace(strings.Repeat(fam+" ", n))
+		if _, err := SanitizeBody(text); err != nil {
+			t.Errorf("%d family emoji (%d runes) must be accepted: %v",
+				n, len([]rune(text)), err)
+		}
+	}
+	// The one that stacks joiners inside a single glyph: heart, VS16, ZWJ, fire.
+	if _, err := SanitizeBody("❤️‍\U0001F525 nice"); err != nil {
+		t.Errorf("heart-on-fire stacks two joiners in one glyph and must survive: %v", err)
+	}
+
+	// PAIRED REFUSALS, so this is not a test that everything is accepted.
+	//
+	// The third one is what makes the RUN cap earn its place, and it took a surviving mutation
+	// to notice: every other refusal here also violates the density rule, so deleting the run
+	// cap changed nothing. A long message can hide a burst of invisible joiners while staying
+	// comfortably under the ratio, and that burst is exactly the layout abuse the run cap is
+	// for — 6 consecutive joiners against 100 visible characters is a density of 0.06.
+	long := strings.Repeat("ordinary words about the docket ", 4) // ~128 visible runes
+	for _, c := range []struct{ name, in string }{
+		{"joiners outnumbering the text", "hi" + strings.Repeat("‍ ", 60)},
+		{"nothing but joiners", strings.Repeat("‍", 3)},
+		{"a burst hidden in a long message", long + strings.Repeat("‍", 6) + long},
+	} {
+		if _, err := SanitizeBody(c.in); err == nil {
+			t.Errorf("%s must still be refused", c.name)
+		}
+	}
+	// And the same message with a LEGAL burst is accepted, so the boundary is pinned in both
+	// directions rather than only the refusing one.
+	if _, err := SanitizeBody(long + strings.Repeat("‍", maxJoinerRun) + long); err != nil {
+		t.Errorf("a burst of exactly maxJoinerRun must be accepted: %v", err)
+	}
+
+	// AND THE REASON THE ABOVE IS SAFE: interleaving joiners does not defeat comparison, so
+	// the display path does not have to fight it. If this stops holding, the permissiveness
+	// above needs revisiting rather than the test deleting.
+	for _, in := range []string{"s‍c‍a‍m", "s‌c‌a‌m"} {
+		clean, err := SanitizeBody(in)
+		if err != nil {
+			t.Fatalf("%q should be storable: %v", in, err)
+		}
+		if got := Skeleton(clean); got != "scam" {
+			t.Errorf("Skeleton must see through joiners: %q -> %q, want \"scam\"", in, got)
+		}
+	}
 }

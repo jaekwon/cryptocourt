@@ -41,9 +41,29 @@ import (
 const (
 	MaxBodyRunes    = 400
 	MaxMonikerRunes = 24
-	maxRunRunes     = 8  // identical consecutive runes
-	maxJoiners      = 16 // ZWJ/ZWNJ/VS16: enough for emoji, not for abuse
-	maxMarks        = 3  // combining marks per base character: Zalgo defence
+	maxRunRunes     = 8 // identical consecutive runes
+	maxMarks        = 3 // combining marks per base character: Zalgo defence
+
+	// maxJoinerRun caps CONSECUTIVE ZWJ/ZWNJ/VS16, and the ratio below caps their density.
+	// Both replaced a single whole-message total of 16, which was measured refusing ordinary
+	// text:
+	//
+	//	Persian prose, 20 ZWNJ words, 177 runes    REFUSED
+	//	six family emoji, 48 runes                 REFUSED
+	//
+	// §4 exists because the first sanitiser refused `Bitcoin-биржа` and `alice@почта.рф`, and
+	// this was the same failure surviving in a different constant: ZWNJ is orthographically
+	// required in Persian, so a total cap punishes the language rather than the abuse.
+	//
+	// The abuse is DENSITY, not quantity. A run of bare joiners is invisible padding; joiners
+	// outnumbering the visible characters is a message that is mostly nothing. Both are
+	// bounded here, and neither bound is what stops joiner-interleaved evasion — `Skeleton`
+	// already reduces "s‍c‍a‍m" to "scam", measured, so the comparison path never depended on
+	// this cap at all.
+	//
+	// 4 rather than 2 because legitimate sequences do stack them: ❤️‍🔥 is heart, VS16, ZWJ,
+	// fire — two consecutive joiners in one glyph — and complex emoji use more.
+	maxJoinerRun = 4
 
 	// MaxInputBytes is a cruder ceiling on what we will even look at, and it
 	// exists because the rules below fight each other: collapsing runs turns ten
@@ -130,7 +150,8 @@ func clean(s string, maxRunes int) (string, error) {
 	var b strings.Builder
 	b.Grow(len(s))
 	var last rune = -1
-	run, joiners, marks := 0, 0, 0
+	run, marks := 0, 0
+	joiners, joinerRun, bases := 0, 0, 0
 	for _, r := range s {
 		// Ranging a string yields U+FFFD for invalid UTF-8, so this catches
 		// malformed input and a literal replacement character alike.
@@ -141,12 +162,14 @@ func clean(s string, maxRunes int) (string, error) {
 			continue
 		}
 		if joiner(r) {
-			if joiners++; joiners > maxJoiners {
+			joiners++
+			if joinerRun++; joinerRun > maxJoinerRun {
 				return "", ErrJoiners
 			}
 			b.WriteRune(r)
 			continue // not a base character, and it breaks no run
 		}
+		joinerRun = 0
 		if unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) {
 			// Stacked marks smear over neighbouring text and tokenise as noise:
 			// both an evasion and a way to wreck a page's layout. A handful is
@@ -178,7 +201,16 @@ func clean(s string, maxRunes int) (string, error) {
 			run = 0
 		}
 		b.WriteRune(r)
+		bases++
 		last = r
+	}
+
+	// Density, checked once at the end because a ratio is meaningless part-way through a
+	// string. Joiners must not outnumber the characters a reader can see: Persian prose runs
+	// about 0.13, a message of family emoji about 0.6, and "hello" with a hundred bare ZWJ
+	// wedged in runs 10.
+	if joiners > bases {
+		return "", ErrJoiners
 	}
 
 	out := strings.TrimSpace(b.String())
