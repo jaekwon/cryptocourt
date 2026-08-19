@@ -139,19 +139,29 @@ func takesValue(f string) bool {
 func usage() {
 	fmt.Fprint(os.Stderr, `kourtchatctl -db <path> <command>
 
-  list [-all] [-ip HASH]   consequences in force (or every one, with -all)
+  list [-all] [-ip HASH] [-n N]
+                           consequences in force (or every one, with -all)
   why ID                   the evidence and reasoning behind one consequence
-  unban ID                 reverse a consequence and restore its hidden messages
-  kick HASH -for 1h        a bounded manual timeout, short of a ban
-  ban HASH [-net] [-why S] a permanent ban, which only a human can issue
+  unban ID [-by WHO]       reverse a consequence and restore its hidden messages
+                           (also spelled: revoke)
+  kick HASH|-msg ID -for 1h [-net] [-why S]
+                           a bounded manual timeout, short of a ban
+  ban HASH|-msg ID [-net] [-why S]
+                           a permanent ban, which only a human can issue
   hash ADDR                the address and network hashes for one IP
-  review [-all] [-expand]  messages the scanner flagged and did NOT act on,
+  review [-all] [-expand] [-n N]
+                           messages the scanner flagged and did NOT act on,
                            grouped by author unless -expand
   dismiss ID | -from HASH  record that you read them and chose to do nothing
-  prune -older-than 720h   delete old messages; DRY RUN unless -apply
+  prune -older-than 720h [-apply] [-n N]
+                           delete old messages; DRY RUN unless -apply
   freeze CHAIN/COURT       stop serving a court, for an on-chain purge
   unfreeze CHAIN/COURT     put it back; the freeze is recorded as lifted, not erased
   status                   backlog, scanner heartbeat, counts
+
+-msg ID acts on the AUTHOR of that message and cites it, so the consequence carries
+the evidence and the command echoes what it acted on. -net widens it to the /24 or
+/48, which no automated verdict can ever do.
 
 Hashes come from list, why, or hash <addr>. With -secret-file, pass the same path
 kourtchat runs with: a different key means every hash here matches nothing.

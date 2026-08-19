@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"reflect"
 	"regexp"
@@ -194,4 +195,111 @@ func TestEvidenceLineShowsTheMessageAndTruncatesByRunes(t *testing.T) {
 	if got := evidenceLine(9, short); !strings.Contains(got, short) || strings.Contains(got, "…") {
 		t.Errorf("a short body must appear whole and unmarked, got %q", got)
 	}
+}
+
+// THE HELP TEXT IS A THIRD COPY OF THE FLAGS, so it drifts like the other two.
+//
+// takesValue is one copy and has its own guard above. The usage text is another, and it had
+// drifted furthest — measured before this test existed:
+//
+//	kick     showed only -for, omitting -msg, -net AND -why
+//	ban      omitted -msg
+//	unban    omitted -by
+//	list     omitted -n
+//	review   omitted -n
+//	prune    omitted -n
+//	revoke   an accepted alias for unban, mentioned nowhere
+//
+// The kick line was the one that mattered. -msg is the path `review`'s own output tells an
+// operator to use, and -net widens a consequence to a whole /24 or /48 — the only consequence
+// that reaches more than one address, and the help did not say the verb could do it. An operator
+// reading --help would have concluded kick takes a hash and a duration and nothing else.
+//
+// A flag nobody can discover is a flag nobody uses, and here that means reaching for a broader
+// tool than the situation needed.
+func TestEveryVerbsHelpListsTheFlagsItActuallyTakes(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	usage := regexp.MustCompile(`(?s)func usage\(\) \{.*?\n\}`).Find(src)
+	if usage == nil {
+		t.Fatal("usage() not found; if it was reshaped, reshape this guard with it")
+	}
+
+	// A verb's entry runs from its own line to the next verb's line. Continuation lines are
+	// indented far enough not to be mistaken for one.
+	entryOf := func(verb string) string {
+		re := regexp.MustCompile(`(?m)^  ` + verb + `\b.*(?:\n {10,}.*)*`)
+		return string(re.Find(usage))
+	}
+
+	// 1. Every verb the dispatcher accepts is documented, including aliases.
+	verbs := regexp.MustCompile(`case "([a-z]+)"(?:, "([a-z]+)")?:\n\t\tcmd`).FindAllSubmatch(src, -1)
+	if len(verbs) < 8 {
+		t.Fatalf("only %d dispatched verbs found; the pattern has stopped matching", len(verbs))
+	}
+	for _, m := range verbs {
+		primary := string(m[1])
+		if entryOf(primary) == "" {
+			t.Errorf("verb %q is dispatched but absent from the help", primary)
+		}
+		if alias := string(m[2]); alias != "" && !bytes.Contains(usage, []byte(alias)) {
+			t.Errorf("verb %q is an accepted alias for %q and is mentioned nowhere in the help",
+				alias, primary)
+		}
+	}
+
+	// 2. Every flag a verb defines appears in its entry, and nothing is shown that does not exist.
+	sets := regexp.MustCompile(`flag\.NewFlagSet\("([a-z]+)"`).FindAllSubmatchIndex(src, -1)
+	checked := 0
+	for _, loc := range sets {
+		verb := string(src[loc[2]:loc[3]])
+		// The body of that command, up to its closing brace at column 0.
+		rest := src[loc[1]:]
+		if end := bytes.Index(rest, []byte("\n}\n")); end >= 0 {
+			rest = rest[:end]
+		}
+		flags := map[string]bool{}
+		for _, f := range regexp.MustCompile(`fs\.[A-Za-z0-9]+\("([a-z-]+)"`).FindAllSubmatch(rest, -1) {
+			flags[string(f[1])] = true
+		}
+		if len(flags) == 0 {
+			continue
+		}
+		entry := entryOf(verb)
+		if entry == "" {
+			t.Errorf("verb %q has flags %v and no help entry", verb, keysOf(flags))
+			continue
+		}
+		checked++
+		shown := map[string]bool{}
+		for _, s := range regexp.MustCompile(`-([a-z-]+)`).FindAllStringSubmatch(entry, -1) {
+			shown[s[1]] = true
+		}
+		for f := range flags {
+			if !shown[f] {
+				t.Errorf("%s takes -%s and the help does not mention it; a flag nobody can "+
+					"discover is a flag nobody uses", verb, f)
+			}
+		}
+		for s := range shown {
+			if !flags[s] {
+				t.Errorf("the help for %s shows -%s, which it does not accept — worse than "+
+					"omitting one, because somebody will type it", verb, s)
+			}
+		}
+	}
+	if checked < 5 {
+		t.Fatalf("only %d verbs with flags were checked; the guard is not reaching the file", checked)
+	}
+}
+
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
