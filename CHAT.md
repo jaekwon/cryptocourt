@@ -385,12 +385,21 @@ targets are another workstream's uncommitted work:
     Makefile                    web-test / web-visual are theirs; the Go half
                                 (gotest, chat, the fmt fix) is committed
 
-All four run standalone:
+All five run standalone:
 
     node web/tests/chat_test.js              89 assertions, no dependencies
     node web/tests/browser/chat_page.js      31 checks, the real court page
     node web/tests/browser/chat_render.js    65 measurements, the panel alone
     node web/tests/browser/chat_live.js      34 checks, against a live server
+    OLLAMA_LIVE=1 node .../chat_moderation.js  19, the loop with a real model
+
+**Chat is off in demo mode, deliberately, and that leaves one combination untested.**
+`chatBase` returns "" whenever `CFG.mode === "demo"`, which is what keeps the README's
+promise that the demo makes no network calls — so live chat requires live mode, and live
+mode requires a node. The real court page against a live chat service is therefore not
+reachable without seeding a chain, and it is not faked: the wiring on the real page is
+covered by `chat_page.js`, and live chat in a browser by `chat_live.js` and
+`chat_moderation.js` against `chat-demo.html`, which has no chain to satisfy.
 
 ## 12. Two kinds of evidence for one property
 
@@ -423,7 +432,28 @@ able to read while their own messages are hidden, the server refusing that reade
 regardless of the disabled box, and `unban` restoring both posting and the hidden
 messages visibly.
 
-It has already paid for itself three times. It found that an operator had no way to
+`chat_moderation.js` closes the last gap, and it is the one test that exercises the
+feature as described rather than as built: two people in one court, one posts a
+seed-phrase lure, gemma3:4b reads it, and what each of them SEES is checked in the DOM.
+Everything else stops short — `chat_live.js` applies a consequence with `kourtchatctl`,
+so it never asks the model anything, and §6's live fixtures ask the model but have no
+browser.
+
+It is built around the rule that has earned its place harder than any other here: test
+the BYSTANDER. Both of the worst bugs in this service were invisible to unit tests — the
+/24 collateral and the discarded 0-100 confidence — so the bystander is a real second
+identity, and the load-bearing assertions are the ones about them: not punished, shown
+no notice, still posting, own message still on screen. Making that non-vacuous took
+work: everything on one machine is 127.0.0.1, and in proxy mode an absent
+`X-Forwarded-For` falls through to the peer, so both browser pages would have been ONE
+client and every bystander assertion would have passed while proving nothing. So
+`kourtchat` runs behind two one-line proxies that each inject a different forwarded
+address — the deployment shape anyway — with a separate browser context each.
+
+Observed: gemma3:4b returned `scam`, the author was kicked, the message was hidden from
+both panels, the notice named no category, and the bystander was untouched.
+
+The live half has already paid for itself three times. It found that an operator had no way to
 obtain a hash for an address (§9), that `hash` labelled its network hash with the wrong
 prefix, and — on its first run — that it was testing a binary one `make chat` behind
 the source. It now builds what it tests, because a suite whose subject is whatever was
