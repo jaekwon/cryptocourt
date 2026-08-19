@@ -252,6 +252,37 @@ deterministic mass-harm primitive — on a shared address an attacker types one
 sentence in three courts and a stranger is kicked, with no model in the loop and
 therefore none of the safeties — and it fires on the honest announcement.
 
+**Its threshold refused ordinary speech and had to move.** `DupMinSkeleton` was a
+bare 12, and 12 is shorter than the things people repeat between rooms. Measured
+over 29 such phrases and 13 lures a broadcaster would send:
+
+    >=12   ordinary refused 13/29    lures exempt from this rule  3/13
+    >=16   ordinary refused  4/29    lures exempt  4/13
+    >=24   ordinary refused  0/29    lures exempt  7/13
+    >=26   ordinary refused  0/29    lures exempt 10/13
+
+At 12 it refused "thanks everyone", "still waiting" and eleven more. **Length does
+not separate the two classes** — ordinary phrases reach 23 skeleton runes and lures
+start at 7 ("dm me now") — so no threshold avoids both errors and the only real
+question is which error to prefer. A false positive refuses an innocent person for
+saying thanks in a third room, with nothing to tell them but this rule's own
+message. A false negative lets one broadcast past a coarse rate limit while the
+scanner still reads every copy. So the threshold sits ABOVE the ordinary band at
+24 — the first value with no ordinary refusals, where 26 gives up three more lures
+to buy nothing. 16 was tried first and still refused four.
+
+Of the seven lures exempt at 24, two never needed this rule: "send me your seed
+phrase" earns a deterministic SCAM floor and "t.me/support" a spam one, and a floor
+is a consequence rather than a refused message. The other five are short DM-asks,
+which is the scanner's shape.
+
+**And 429 is not one wait.** A throttle clears in seconds; a duplicate is
+remembered for ten minutes. Both shared one `Retry-After: 10`, so a client
+honouring it retried into the same refusal for the rest of the window — wrong by
+sixty times, and invisible because the status code was right. The duplicate's
+value is derived from `DupWindow` now, and its message names the remedy, since
+waiting is not the only one: post something different.
+
 The LLM classifies through Ollama with `format` set to a full JSON schema, so the
 enum is enforced by the sampler: `{"verdict":"ban"}` is unemittable rather than
 merely rejected. `temperature: 0`, capped `num_ctx`, `keep_alive` set, and the
