@@ -490,6 +490,18 @@ it, so a new key means every kick and ban in the table matches nobody, and every
 suffix in the room changes at once. The key is as much the state as the database is;
 back it up with the same care and, per above, not in the same file.
 
+**One predicate, one place.** Two bugs of the same shape were found in consecutive passes
+and they had the same cause. `freeze` was checked in `Post` and not in `Recent`, so a
+withdrawn court kept serving. `hidden` was honoured by `Claim`, `Recent` and the prior-context
+window but not by the backlog count or the review queue, so the backlog counted rows that
+could never be claimed and the queue asked a person to judge messages already hidden.
+
+The second one existed because the queue's definition was written out **seven times**, in four
+indentations, across five functions — and three copies had already lost their `hidden = 0`. It
+is now a single `sqlAwaitingReview` constant. A predicate that lives in more than one place
+eventually disagrees with itself, and the disagreement shows up as a control that quietly
+covers less than its documentation claims.
+
 **Watch the backlog — and the UNSCANNED line, which is the one that hides.**
 `kourtchatctl status` reports the heartbeat, the unscanned count, and how many messages
 gave up. Fail-open is deliberate — chat works with no scanner — but silent fail-open
@@ -514,6 +526,11 @@ because `ScanDone` is also where every successfully scanned message ends up — 
 scanner logs `GAVE UP` once per message, since the fifth failure otherwise reads exactly
 like the first four. If that line or that count is non-zero, moderation did not merely lag;
 it skipped those messages permanently, and no human was told either.
+
+The backlog can mislead in the other direction too, and did. It counted hidden rows, which
+`Claim` skips by design, so after any consequence it stopped returning to zero — measured at
+2 counted against 0 claimable. It now matches `Claim` exactly. A revoked consequence un-hides
+those rows and they become pending again, which is the right direction and is asserted.
 
 **Flags** need either a proxy that computes the country (`--country-header`) or a
 local GeoLite2 export (`--geo-locations` plus `--geo-blocks`). With neither, no flag
