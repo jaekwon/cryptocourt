@@ -821,6 +821,20 @@ cannot post, so they cannot appeal through the chat, which is what `--appeal-to`
 is the per-address view, and it takes a `net_hash` as readily as an `ip_hash`
 (`ip_hash = ? OR net_hash = ?`), which is how you find everyone a manual ban caught.
 
+**`ban` and `kick` with `-msg` echo the message they acted on**, which is how you notice you typed
+the wrong id:
+
+    kicked address c21475603635 for 1h0m0s [consequence 2]
+    for message 2: "is the settle window still open on claim 7"
+    reverse it early with: kourtchatctl unban 2
+
+That is a bystander, not a lure, and the line above the reversal instruction is the whole point.
+It cannot stop the wrong action — the tool is non-interactive so it stays scriptable — but a wrong
+action you can see is a wrong action you undo in the next command. A hash-based ban prints no such
+line, because it cited nothing. Message ids are also rowids that restart after a prune (§7), so an
+id read from `review` a while ago can resolve to a different message; the echo covers that too,
+though a typo is the likelier way in.
+
 Three things to expect, all measured in `TestTheOperatorsViewOfABadBan`:
 
 **The ban probably took somebody else with it.** A manual consequence matches `net_hash`
