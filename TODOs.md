@@ -13,6 +13,41 @@ the two rot at different rates.
 
 ---
 
+## 0b. OWED — fixtures for the four structural fixes
+
+**The bond work (draw cap, 6% + re-keying) shipped WITH its fixtures and mutation
+verification. The four structural fixes are being landed WITHOUT, deliberately and at the
+owner's direction, and this item is the debt.**
+
+That is a real departure from how this repo works, so state the exposure plainly rather than
+letting it look routine. The guards these fixes need, and what each would catch:
+
+| fix | fixture owed | the mutation it must catch |
+|---|---|---|
+| **S1** quorum floor | a fixture that reads `quorumFloor` **at all** — prior work found **zero** hits across every `*_test.gno`, so the verdict lane's turnout bar has no shipped assertion of its value | restoring the supply arm; and separately, dropping the credential re-anchor (which silently cuts a documented 1.25%-of-supply price by 5.01×) |
+| **S2** reachable provClose | a default court reaching `provClose`, PLUS the bystander: one decided round finalizes on today's schedule bit-identically | removing the `failedRounds > 0` gate (which would apply the long window to decided chains too, doubling the grind); and the `Params.mustSane` invariant firing on a config one block short |
+| **S3** provClose pays | a provClosed claim paying **bit-identically** to the 2-failed-round Finalize path, with non-clamping asserted as a precondition — otherwise it passes against the wrong zero | reinstating `tierFinal = true`; reinstating `tierLowX`; restoring `Crystallize`'s `provClose` refusal; restoring `OpenFlag`'s arm |
+| **S4** demotion mandate | the cheap demotion NOT landing on an overturn round, paired with the priced one that still MUST land | dropping `cs.provisional >= 0` (an existing fixture already catches this — verify it still does); widening to "any decided round", which an existing uphold fixture should catch |
+
+**Three traps for whoever writes these**, each already paid for once:
+
+1. **`cs.tier == 0` is ambiguous** — it is 0 both *before* any terminal path runs and *after* a
+   demotion. A fixture built on the tier field proves nothing; assert on **money**.
+2. **Assert non-clamping as a precondition.** The comp drought can pay a restored draw
+   **zero**, so a fixture that only checks "not the capped figure" passes against the wrong
+   zero. Wait until the reservoir covers the whole draw, and loop rather than guessing a
+   constant — the comp scales with X̄, so a fixed wait silently stops sufficing when anyone
+   re-scales the fixture.
+3. **The slices floor independently**, so their sum sits up to two units under the reserved
+   pool. Compare one slice exactly, never the sum.
+
+**Until these exist, the four fixes rest on:** a suite that stays green, four independent
+vets that each implemented and measured them in shadow copies, and the existing fixtures that
+already pin two of S4's edges. That is weaker than the bond work, which was mutation-verified
+in its final registered form.
+
+---
+
 ## 0a. LIVE BUG — straddling a claim is RISK-FREE YIELD today, no credential needed
 
 **Shipped behaviour, exploitable now, and it was found while pricing an unrelated design.** Not
