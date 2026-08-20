@@ -137,236 +137,267 @@ def goto(iso, why):
 # themselves out of being able to file. A minority into coin, the rest kept for
 # deposits.
 ACTORS = [
-    ("virology", 1_680_000_000, "coronavirus researcher; doubts a laboratory origin"),
-    ("biosafety", 1_600_000_000, "containment engineer; thinks a leak likely"),
-    ("epi", 1_520_000_000, "field epidemiology; the market-origin case"),
-    ("genomics", 1_440_000_000, "sequence analysis; reads the phylogenies"),
-    ("foia", 1_200_000_000, "reads the released documents, takes no side beyond them"),
-    ("oversight", 1_360_000_000, "follows the congressional record"),
-    ("journo", 1_120_000_000, "reporting the funding trail"),
-    ("clinician", 1_280_000_000, "hospital medicine; the treatment claims"),
-    ("modeller", 1_200_000_000, "built forecasts and grades his own"),
-    ("statistician", 1_360_000_000, "excess mortality; distrusts every case count"),
-    ("teacher", 880_000_000, "school closures, from inside one"),
-    ("vaxsafety", 1_200_000_000, "pharmacovigilance; reads the safety signals"),
-    ("skeptic", 1_040_000_000, "sceptical of every side, his own included"),
-    ("trader", 1_680_000_000, "no view; takes the other side of crowds"),
-    ("arbiter", 1_120_000_000, "answers claims; holds no position"),
-    ("arbiter2", 1_040_000_000, "the second answerer, so one account is not the court"),
+    ("virology", 3_024_000_000, "coronavirus researcher; doubts a laboratory origin"),
+    ("biosafety", 2_880_000_000, "containment engineer; thinks a leak likely"),
+    ("epi", 2_736_000_000, "field epidemiology; the market-origin case"),
+    ("genomics", 2_592_000_000, "sequence analysis; reads the phylogenies"),
+    ("foia", 2_160_000_000, "reads the released documents, takes no side beyond them"),
+    ("oversight", 2_448_000_000, "follows the congressional record"),
+    ("journo", 2_016_000_000, "reporting the funding trail"),
+    ("clinician", 2_304_000_000, "hospital medicine; the treatment claims"),
+    ("modeller", 2_160_000_000, "built forecasts and grades his own"),
+    ("statistician", 2_448_000_000, "excess mortality; distrusts every case count"),
+    ("teacher", 1_584_000_000, "school closures, from inside one"),
+    ("vaxsafety", 2_160_000_000, "pharmacovigilance; reads the safety signals"),
+    ("skeptic", 1_872_000_000, "sceptical of every side, his own included"),
+    ("trader", 3_024_000_000, "no view; takes the other side of crowds"),
+    ("arbiter", 2_016_000_000, "answers claims; holds no position"),
+    ("arbiter2", 1_872_000_000, "the second answerer, so one account is not the court"),
 ]
+
+# --------------------------------------------------------------- the shapes
+#
+# WHY THIS EXISTS AT ALL: the first version of this fixture gave every claim four
+# or five stakes, all in the filing week and all one way, and the charts were
+# flat. ClaimSeries is CHANGE-ONLY and bucketed per 720-block epoch, and `goto`
+# moves exactly one epoch a step, so a claim's chart has as many points as it has
+# DATES with movement. Five dates, five points, no shape.
+#
+# So a claim carries a position HISTORY: eight to eighteen moves over its life,
+# both sides, with unstakes. Unstakes are not decoration — they free committed
+# coin, which is what keeps sixteen accounts inside their budgets while trading
+# this much, and a book where nobody ever leaves is not a book.
+#
+# Each shape returns (day-offset, actor-slot, side, delta) with delta<0 meaning
+# unstake. Slots are filled per claim from its own cast, so the same shape reads
+# differently in different hands.
+def tug(a, b, c, d):
+    """Both sides keep answering each other. Swings, no resolution."""
+    return [(0, b, NO, 6), (0, a, YES, 8), (2, b, NO, 7), (5, a, YES, 6), (8, b, NO, 9),
+            (12, c, YES, 5), (16, b, NO, 6), (20, a, YES, -4), (24, d, NO, 4),
+            (29, c, YES, 9), (34, b, NO, -5), (40, a, YES, 5), (46, d, NO, 7),
+            (53, c, YES, -3), (60, b, NO, 4), (68, a, YES, 6), (76, d, NO, -4)]
+
+
+def drift(a, b, c, d):
+    """One side accumulates. The interesting part is that it never reverses."""
+    return [(0, b, NO, 6), (0, a, YES, 5), (3, b, NO, 8), (7, a, YES, 6), (11, a, YES, 4),
+            (15, b, NO, -3), (19, c, YES, 5), (25, a, YES, 7), (31, b, NO, 3),
+            (38, c, YES, 6), (45, d, YES, 5), (52, b, NO, -4), (60, a, YES, 4),
+            (70, c, YES, 5)]
+
+
+def reversal(a, b, c, d):
+    """A lead built early and given back. The shape a market is for."""
+    return [(0, b, NO, 5), (0, a, YES, 12), (2, a, YES, 6), (4, b, NO, 3), (9, c, YES, 4),
+            (14, b, NO, 8), (18, a, YES, -8), (23, d, NO, 7), (28, b, NO, 6),
+            (33, a, YES, -6), (39, d, NO, 5), (47, c, YES, -3), (56, b, NO, 4),
+            (65, d, NO, 3), (74, a, YES, 3)]
+
+
+def capitulate(a, b, c, d):
+    """Heavy conviction, then the holder leaves in stages."""
+    return [(0, b, NO, 6), (0, a, YES, 16), (3, b, NO, 4), (6, c, YES, 3), (10, b, NO, 6),
+            (15, a, YES, -5), (21, b, NO, 5), (27, a, YES, -6), (34, d, NO, 4),
+            (42, c, YES, -2), (50, b, NO, 3), (59, a, YES, -4), (69, d, NO, 3)]
+
+
+def late(a, b, c, d):
+    """Quiet, then it becomes the question of the week."""
+    return [(0, b, NO, 3), (0, a, YES, 4), (6, b, NO, 3), (14, a, YES, 2), (28, b, NO, 2),
+            (44, c, YES, 3), (56, a, YES, 9), (60, b, NO, 11), (64, c, YES, 8),
+            (68, d, NO, 7), (71, a, YES, 6), (74, b, NO, -5), (77, c, YES, 5),
+            (80, d, NO, 6)]
+
+
+def short(a, b, c, d):
+    """For a claim that will be ANSWERED, so its whole life is three weeks."""
+    return [(0, a, YES, 7), (0, b, NO, 5), (3, a, YES, 4), (5, c, YES, 3),
+            (7, b, NO, 8), (9, a, YES, -3), (11, d, NO, 4), (13, c, YES, 6),
+            (15, b, NO, -4), (17, a, YES, 5), (19, d, NO, 3), (21, b, NO, 4)]
+
+
+def short_lopsided(a, b, c, d):
+    """Answered because it was never really in doubt — but somebody tried."""
+    return [(0, a, YES, 9), (0, b, NO, 4), (2, a, YES, 5), (4, b, NO, 6),
+            (6, b, NO, 5), (8, a, YES, 7), (10, b, NO, -6), (12, c, YES, 6),
+            (14, d, NO, 3), (16, a, YES, 6), (18, c, YES, 4), (20, b, NO, -3)]
+
+
+def short_flip(a, b, c, d):
+    """Led one way for a fortnight, then the evidence landed."""
+    return [(0, b, NO, 8), (0, a, YES, 5), (3, b, NO, 5), (6, a, YES, 3),
+            (8, b, NO, 4), (11, a, YES, 9), (13, a, YES, 7), (15, b, NO, -7),
+            (17, c, YES, 6), (19, b, NO, 3), (21, d, YES, 5)]
+
+
+def sparse(a, b, c, d):
+    """A claim somebody filed and few traded. Three moves, and that is the point:
+    a docket where every record is a battle is not a docket, and the height budget
+    below does not stretch to thirteen battles."""
+    return [(0, a, YES, 5), (0, b, NO, 4), (9, a, YES, 3), (18, b, NO, 5)]
+
+
+def short_grind(a, b, c, d):
+    """Nobody moves much, and that is itself the story."""
+    return [(0, a, YES, 6), (0, b, NO, 5), (4, a, YES, 2), (6, b, NO, 3),
+            (9, c, YES, 2), (12, b, NO, 2), (14, a, YES, 3), (16, d, NO, 2),
+            (18, c, YES, 2), (20, b, NO, 3), (22, a, YES, 2)]
+
+
+# THE BUDGET THAT DECIDES HOW BIG THIS CAN BE, and it is not the one I expected.
+#
+# ClaimSeries keeps HOURLY points for `hourlyKeep` = 168 epochs of 720 blocks and
+# trims them past that; below the horizon it answers from a DAILY grain of 17,280
+# blocks — 24 hourly epochs. `goto` moves 720 blocks a step, one hourly epoch.
+#
+# So a claim whose twelve moves fall on twelve calendar steps spans 8,640 blocks:
+# twelve distinct HOURLY epochs, but a single DAILY one. Drawn from the chain, its
+# chart was ONE point. Measured, not assumed — the first dense version of this
+# docket produced charts with 1 to 3 points against the 11 to 17 its own move
+# table promised, because the points had been trimmed and the daily grain could
+# not tell them apart.
+#
+# The whole docket therefore has to fit inside the hourly window: at most 168
+# dates with movement, across every claim. 27 claims x ~12 moves is 331, so the
+# docket is FIFTEEN claims — which is also the "too many items" complaint, and the
+# two constraints happen to want the same thing. The tree keeps its depth.
+KEEP = {"lab20", "lab23", "lab25", "market",
+        "gof", "drafts", "foiagap",
+        "masks", "schools",
+        "vaxsevere", "myo",
+        "testimony", "excess"}
 
 # ----------------------------------------------------------------- the docket
 #
-# One table, two artifacts. `path` is the curation TREE this claim is filed
-# under; `case` is the flat on-chain folder, which is all the chain can hold.
-# `arc` is what happens to it:
+# Three levels deep. The first version
+# had 38 claims in 24 folders two deep, which read as a long list with some
+# headings — the opposite of a filing system. Fewer records, more places to put
+# them, so browsing is done by walking the tree.
 #
-#   open      opened and staked, still live at the end of the calendar. Must be
-#             opened inside the last twelve weeks — deadClaimSecs is twelve weeks
-#             and a court cannot hold an older open question.
-#   yes / no  answered and settled undisputed.
-#   dispute   answered, disputed, voted.
-#   dead      never answered; closed by anyone once twelve weeks have passed.
-#
-# `on` is the week the claim is opened, and it is the week the argument was
-# actually being had.
+# `path` is the curation tree, up to three levels (the schema allows four).
+# `case` is the flat on-chain folder, which is all the chain can hold.
+# `cast` is (yes-lead, no-lead, yes-second, no-second) — the shape's four slots.
+# `arc`: open | yes | no | dispute | dead, as before.
 D = [
   # ---------------------------------------------------------------- origins
-  dict(key="lab20", on="2020-02-05", arc="dead", case=None,
-       path=("Origins", "Laboratory hypothesis"),
-       title="SARS-CoV-2 entered the human population through a laboratory-associated incident.",
-       stakes=[("biosafety", YES, 8), ("virology", NO, 11), ("epi", NO, 6),
-               ("skeptic", YES, 2), ("trader", NO, 4)]),
-  dict(key="gof", on="2020-04-20", arc="yes", case="Document trail",
-       path=("Origins", "Laboratory hypothesis"),
-       title="US federal grants funded coronavirus research at the Wuhan Institute of Virology before 2020.",
-       stakes=[("foia", YES, 9), ("journo", YES, 6), ("oversight", YES, 5),
-               ("skeptic", NO, 2), ("trader", NO, 2)]),
-  dict(key="furin", on="2020-06-10", arc="dead", case=None,
-       path=("Origins", "Laboratory hypothesis"),
-       title="The furin cleavage site in SARS-CoV-2 has no close analogue in the sampled sarbecovirus record.",
-       stakes=[("genomics", YES, 6), ("virology", NO, 6), ("biosafety", YES, 4)]),
-  dict(key="host", on="2021-03-15", arc="dead", case=None,
-       path=("Origins", "Natural spillover"),
-       title="An intermediate host animal for SARS-CoV-2 has been identified in the published record.",
-       stakes=[("epi", NO, 7), ("virology", NO, 5), ("genomics", NO, 6),
-               ("trader", YES, 3)]),
-  dict(key="market", on="2021-06-07", arc="dead", case=None,
-       path=("Origins", "The market"),
-       title="The earliest known cluster of COVID-19 cases centred on the Huanan Seafood Market.",
-       stakes=[("epi", YES, 8), ("genomics", YES, 4), ("biosafety", NO, 5),
-               ("skeptic", NO, 2)]),
-  dict(key="raccoon", on="2023-03-20", arc="no", case=None,
-       path=("Origins", "The market"),
-       title="Market environmental samples establish that an infected animal was the source of the outbreak.",
-       stakes=[("epi", YES, 6), ("genomics", NO, 8), ("virology", NO, 4),
-               ("biosafety", NO, 5), ("trader", YES, 3)]),
-  dict(key="lab23", on="2023-04-10", arc="dead", case=None,
-       path=("Origins", "Laboratory hypothesis"),
-       title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2023.",
-       stakes=[("biosafety", YES, 9), ("virology", NO, 8), ("oversight", YES, 4),
-               ("epi", NO, 6), ("skeptic", YES, 2), ("trader", NO, 4)]),
-  dict(key="lab25", on="2025-03-20", arc="open", case=None,
-       path=("Origins", "Laboratory hypothesis"),
-       title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2025.",
-       stakes=[("biosafety", YES, 10), ("virology", NO, 8), ("genomics", YES, 5),
-               ("epi", NO, 6), ("oversight", YES, 4), ("trader", NO, 4)]),
+  dict(key="lab20", on="2020-02-05", arc="dead", case=None, shape=reversal,
+       path=("Origins", "Laboratory hypothesis", "The 2020 question"),
+       cast=("biosafety", "virology", "skeptic", "epi"),
+       title="SARS-CoV-2 entered the human population through a laboratory-associated incident."),
+  dict(key="furin", on="2020-06-10", arc="dead", case=None, shape=tug,
+       path=("Origins", "Laboratory hypothesis", "Sequence features"),
+       cast=("genomics", "virology", "biosafety", "epi"),
+       title="The furin cleavage site in SARS-CoV-2 has no close analogue in the sampled sarbecovirus record."),
+  dict(key="lab23", on="2023-04-10", arc="dead", case=None, shape=tug,
+       path=("Origins", "Laboratory hypothesis", "After the agency assessments"),
+       cast=("biosafety", "virology", "oversight", "epi"),
+       title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2023."),
+  dict(key="lab25", on="2025-03-20", arc="open", case=None, shape=sparse,
+       path=("Origins", "Laboratory hypothesis", "After the agency assessments"),
+       cast=("biosafety", "virology", "genomics", "epi"),
+       title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2025."),
+  dict(key="host", on="2021-03-15", arc="dead", case=None, shape=capitulate,
+       path=("Origins", "Natural spillover", "Intermediate host"),
+       cast=("epi", "genomics", "virology", "biosafety"),
+       title="An intermediate host animal for SARS-CoV-2 has been identified in the published record."),
+  dict(key="market", on="2021-06-07", arc="dead", case=None, shape=drift,
+       path=("Origins", "Natural spillover", "The market cluster"),
+       cast=("epi", "biosafety", "genomics", "skeptic"),
+       title="The earliest known cluster of COVID-19 cases centred on the Huanan Seafood Market."),
+  dict(key="raccoon", on="2023-03-20", arc="no", case=None, shape=short_flip,
+       path=("Origins", "Natural spillover", "The market cluster"),
+       cast=("epi", "genomics", "trader", "virology"),
+       title="Market environmental samples establish that an infected animal was the source of the outbreak."),
   # --------------------------------------------------------- document trail
-  dict(key="drafts", on="2022-01-25", arc="yes", case="Document trail",
-       path=("The document trail", "Correspondence"),
-       title="Drafting correspondence for the 2020 Proximal Origin paper was released under subpoena.",
-       stakes=[("foia", YES, 8), ("journo", YES, 5), ("oversight", YES, 4),
-               ("trader", NO, 2)]),
-  dict(key="proximal", on="2020-03-25", arc="yes", case="Document trail",
-       path=("The document trail", "Correspondence"),
-       title="\"The Proximal Origin of SARS-CoV-2\" was published in Nature Medicine in March 2020.",
-       stakes=[("virology", YES, 6), ("foia", YES, 4), ("journo", YES, 3)]),
-  dict(key="ehasusp", on="2024-05-20", arc="yes", case="Document trail",
-       path=("The document trail", "Grants and funding"),
-       title="HHS suspended EcoHealth Alliance's federal funding in May 2024.",
-       stakes=[("oversight", YES, 6), ("journo", YES, 5), ("foia", YES, 4),
-               ("skeptic", NO, 2)]),
-  dict(key="reports", on="2021-09-10", arc="yes", case="Document trail",
-       path=("The document trail", "Grants and funding"),
-       title="Required progress reports for at least one federal coronavirus grant were filed late.",
-       stakes=[("foia", YES, 6), ("oversight", YES, 4), ("journo", YES, 3),
-               ("trader", NO, 2)]),
-  dict(key="foiagap", on="2022-06-15", arc="dispute", case="Document trail",
-       path=("The document trail", "FOIA and subpoena"),
-       title="Records released under FOIA were withheld in part on grounds later found improper.",
-       stakes=[("foia", YES, 7), ("journo", YES, 4), ("skeptic", NO, 4),
-               ("trader", NO, 5), ("oversight", YES, 3)]),
-  # ------------------------------------------------------ public health
-  dict(key="masks", on="2020-08-12", arc="dispute", case=None,
-       path=("Public health measures", "Non-pharmaceutical"),
-       title="Community masking reduced SARS-CoV-2 transmission in the settings studied before 2021.",
-       stakes=[("epi", YES, 8), ("clinician", YES, 6), ("skeptic", NO, 6),
-               ("statistician", NO, 4), ("trader", NO, 4)]),
-  dict(key="distance", on="2020-09-20", arc="dead", case=None,
-       path=("Public health measures", "Non-pharmaceutical"),
-       title="The two-metre distancing rule was set from evidence specific to SARS-CoV-2.",
-       stakes=[("epi", NO, 5), ("clinician", NO, 4), ("skeptic", NO, 4)]),
-  dict(key="schools", on="2021-02-10", arc="dispute", case=None,
-       path=("Public health measures", "Schools"),
-       title="Extended school closures produced measurable learning loss in the cohorts studied.",
-       stakes=[("teacher", YES, 8), ("statistician", YES, 6), ("epi", NO, 4),
-               ("clinician", YES, 3), ("trader", NO, 4)]),
-  dict(key="schoolspread", on="2021-04-14", arc="dead", case=None,
-       path=("Public health measures", "Schools"),
-       title="Open schools were a principal driver of community transmission in early 2021.",
-       stakes=[("teacher", NO, 6), ("epi", YES, 4), ("clinician", NO, 4)]),
-  dict(key="borders", on="2020-05-18", arc="no", case=None,
-       path=("Public health measures", "Borders and travel"),
-       title="Border closures announced in early 2020 prevented sustained local transmission where applied.",
-       stakes=[("epi", NO, 6), ("modeller", NO, 5), ("skeptic", NO, 3),
-               ("trader", YES, 4)]),
-  dict(key="quarantine", on="2021-11-08", arc="dead", case=None,
-       path=("Public health measures", "Borders and travel"),
-       title="Hotel quarantine programmes leaked infections at a rate above their stated design.",
-       stakes=[("biosafety", YES, 5), ("epi", YES, 4), ("skeptic", YES, 2)]),
-  # --------------------------------------------------- vaccines and therapeutics
-  dict(key="vaxtrans", on="2021-08-16", arc="no", case=None,
-       path=("Vaccines and therapeutics", "Efficacy and waning"),
-       title="The initial vaccine rollout prevented onward transmission as durably as it prevented severe disease.",
-       stakes=[("clinician", NO, 8), ("epi", NO, 6), ("vaxsafety", NO, 5),
-               ("trader", YES, 4), ("skeptic", NO, 3)]),
-  dict(key="vaxsevere", on="2021-10-04", arc="yes", case=None,
-       path=("Vaccines and therapeutics", "Efficacy and waning"),
-       title="Vaccination substantially reduced hospitalisation risk in the trial and early observational data.",
-       stakes=[("clinician", YES, 8), ("epi", YES, 6), ("vaxsafety", YES, 4),
-               ("skeptic", NO, 2), ("trader", NO, 3)]),
-  dict(key="myo", on="2021-12-06", arc="yes", case=None,
-       path=("Vaccines and therapeutics", "Safety signals"),
-       title="A myocarditis signal in young males was identified in post-authorisation surveillance.",
-       stakes=[("vaxsafety", YES, 7), ("clinician", YES, 5), ("epi", YES, 4),
-               ("trader", NO, 2)]),
-  dict(key="vaers", on="2022-03-14", arc="dispute", case=None,
-       path=("Vaccines and therapeutics", "Safety signals"),
-       title="Passive surveillance systems under-reported adverse events by more than an order of magnitude.",
-       stakes=[("vaxsafety", YES, 6), ("skeptic", YES, 5), ("clinician", NO, 6),
-               ("statistician", NO, 4), ("trader", NO, 3)]),
-  dict(key="mandate", on="2022-09-19", arc="dead", case=None,
-       path=("Vaccines and therapeutics", "Mandates"),
-       title="Employment vaccine mandates raised uptake beyond what voluntary campaigns achieved.",
-       stakes=[("statistician", YES, 5), ("skeptic", NO, 4), ("clinician", YES, 4),
-               ("teacher", NO, 3)]),
-  dict(key="ivermectin", on="2021-07-12", arc="no", case=None,
-       path=("Vaccines and therapeutics", "Efficacy and waning"),
-       title="Ivermectin reduced COVID-19 mortality in the randomised trials completed by 2021.",
-       stakes=[("clinician", NO, 8), ("skeptic", NO, 4), ("statistician", NO, 5),
-               ("trader", YES, 4)]),
+  dict(key="gof", on="2020-04-20", arc="yes", case="Document trail", shape=sparse,
+       path=("The document trail", "Grants and funding", "The WIV subawards"),
+       cast=("foia", "skeptic", "journo", "trader"),
+       title="US federal grants funded coronavirus research at the Wuhan Institute of Virology before 2020."),
+  dict(key="reports", on="2021-09-10", arc="yes", case="Document trail", shape=short_grind,
+       path=("The document trail", "Grants and funding", "Reporting compliance"),
+       cast=("foia", "trader", "oversight", "skeptic"),
+       title="Required progress reports for at least one federal coronavirus grant were filed late."),
+  dict(key="ehasusp", on="2024-05-20", arc="yes", case="Document trail", shape=short,
+       path=("The document trail", "Grants and funding", "Reporting compliance"),
+       cast=("oversight", "skeptic", "journo", "trader"),
+       title="HHS suspended EcoHealth Alliance's federal funding in May 2024."),
+  dict(key="drafts", on="2022-01-25", arc="yes", case="Document trail", shape=sparse,
+       path=("The document trail", "Correspondence", "Released under subpoena"),
+       cast=("foia", "trader", "journo", "skeptic"),
+       title="Drafting correspondence for the 2020 Proximal Origin paper was released under subpoena."),
+  dict(key="foiagap", on="2022-06-15", arc="dispute", case="Document trail", shape=sparse,
+       path=("The document trail", "FOIA and subpoena", "Withholdings"),
+       cast=("foia", "skeptic", "journo", "trader"),
+       title="Records released under FOIA were withheld in part on grounds later found improper."),
+  # ------------------------------------------------------------ public health
+  dict(key="masks", on="2020-08-12", arc="dead", case=None, shape=tug,
+       path=("Public health measures", "Non-pharmaceutical", "Masking"),
+       cast=("epi", "skeptic", "clinician", "statistician"),
+       title="Community masking reduced SARS-CoV-2 transmission in the settings studied before 2021."),
+  dict(key="distance", on="2020-09-20", arc="dead", case=None, shape=capitulate,
+       path=("Public health measures", "Non-pharmaceutical", "Distancing rules"),
+       cast=("clinician", "epi", "skeptic", "statistician"),
+       title="The two-metre distancing rule was set from evidence specific to SARS-CoV-2."),
+  dict(key="schools", on="2021-02-10", arc="dead", case=None, shape=late,
+       path=("Public health measures", "Schools", "Learning loss"),
+       cast=("teacher", "epi", "statistician", "clinician"),
+       title="Extended school closures produced measurable learning loss in the cohorts studied."),
+  dict(key="borders", on="2020-05-18", arc="no", case=None, shape=short_grind,
+       path=("Public health measures", "Borders and travel", "Closures"),
+       cast=("trader", "epi", "skeptic", "modeller"),
+       title="Border closures announced in early 2020 prevented sustained local transmission where applied."),
+  # ---------------------------------------------------- vaccines and therapeutics
+  dict(key="vaxsevere", on="2021-10-04", arc="yes", case=None, shape=sparse,
+       path=("Vaccines and therapeutics", "Efficacy and waning", "Severe outcomes"),
+       cast=("clinician", "skeptic", "epi", "trader"),
+       title="Vaccination substantially reduced hospitalisation risk in the trial and early observational data."),
+  dict(key="vaxtrans", on="2021-08-16", arc="no", case=None, shape=short_flip,
+       path=("Vaccines and therapeutics", "Efficacy and waning", "Transmission"),
+       cast=("trader", "clinician", "skeptic", "epi"),
+       title="The initial vaccine rollout prevented onward transmission as durably as it prevented severe disease."),
+  dict(key="myo", on="2021-12-06", arc="yes", case=None, shape=sparse,
+       path=("Vaccines and therapeutics", "Safety signals", "Myocarditis"),
+       cast=("vaxsafety", "trader", "clinician", "skeptic"),
+       title="A myocarditis signal in young males was identified in post-authorisation surveillance."),
+  dict(key="vaers", on="2022-03-14", arc="dispute", case=None, shape=short_grind,
+       path=("Vaccines and therapeutics", "Safety signals", "Surveillance quality"),
+       cast=("vaxsafety", "clinician", "skeptic", "statistician"),
+       title="Passive surveillance systems under-reported adverse events by more than an order of magnitude."),
+  dict(key="ivermectin", on="2021-07-12", arc="dead", case=None, shape=reversal,
+       path=("Vaccines and therapeutics", "Repurposed drugs", "Ivermectin"),
+       cast=("skeptic", "clinician", "trader", "statistician"),
+       title="Ivermectin reduced COVID-19 mortality in the randomised trials completed by 2021."),
   # ------------------------------------------- institutions and accountability
-  dict(key="testimony", on="2024-06-10", arc="open", case=None,
-       path=("Institutions and accountability", "Testimony"),
-       title="A tribunal applying the ordinary standard would find that congressional testimony on gain-of-function funding was materially false.",
-       stakes=[("oversight", YES, 8), ("journo", YES, 5), ("virology", NO, 6),
-               ("skeptic", YES, 3), ("trader", NO, 4), ("foia", YES, 3)]),
-  dict(key="referral", on="2023-07-17", arc="yes", case="Document trail",
-       path=("Institutions and accountability", "Referrals and sanctions"),
-       title="A criminal referral concerning pandemic-origins testimony was sent to the Department of Justice in 2023.",
-       stakes=[("oversight", YES, 6), ("journo", YES, 4), ("foia", YES, 3),
-               ("trader", NO, 2)]),
-  dict(key="charge", on="2025-04-15", arc="open", case=None,
-       path=("Institutions and accountability", "Referrals and sanctions"),
-       title="A charge will be brought on the 2023 origins-testimony referral before 2027.",
-       stakes=[("oversight", YES, 5), ("skeptic", NO, 6), ("journo", YES, 3),
-               ("trader", NO, 5)]),
-  dict(key="advisory", on="2022-11-14", arc="dead", case=None,
-       path=("Institutions and accountability", "Advisory bodies"),
-       title="At least one advisory committee recommendation in 2021 departed from its own stated evidence threshold.",
-       stakes=[("vaxsafety", YES, 5), ("skeptic", YES, 4), ("clinician", NO, 4)]),
-  dict(key="conflict", on="2023-01-23", arc="dispute", case="Document trail",
-       path=("Institutions and accountability", "Advisory bodies"),
-       title="A declarable conflict of interest went undeclared by at least one adviser on pandemic-origins questions.",
-       stakes=[("foia", YES, 6), ("oversight", YES, 4), ("virology", NO, 5),
-               ("skeptic", YES, 3), ("trader", NO, 4)]),
-  # ------------------------------------------------------- data and modelling
-  dict(key="excess", on="2022-04-11", arc="yes", case=None,
-       path=("Data and modelling", "Excess mortality"),
-       title="Global excess deaths for 2020–2021 exceeded the reported COVID-19 death count.",
-       stakes=[("statistician", YES, 8), ("epi", YES, 5), ("modeller", YES, 4),
-               ("skeptic", NO, 2)]),
-  dict(key="excessattr", on="2022-08-08", arc="dead", case=None,
-       path=("Data and modelling", "Excess mortality"),
-       title="The excess-death gap for 2020–2021 is attributable mainly to undercounted infection deaths.",
-       stakes=[("statistician", YES, 6), ("epi", YES, 4), ("skeptic", NO, 5)]),
-  dict(key="ifr", on="2020-10-19", arc="dead", case=None,
-       path=("Data and modelling", "Case and test data"),
-       title="The infection fatality rate assumed in spring 2020 planning was within a factor of two of the later estimate.",
-       stakes=[("modeller", YES, 5), ("statistician", NO, 6), ("epi", YES, 3)]),
-  dict(key="models", on="2021-01-18", arc="no", case=None,
-       path=("Data and modelling", "Model performance"),
-       title="Published epidemic forecasts for 2020 stayed within their own stated prediction intervals.",
-       stakes=[("modeller", NO, 6), ("statistician", NO, 6), ("skeptic", NO, 4),
-               ("trader", YES, 4)]),
-  dict(key="modelrev", on="2023-09-11", arc="dead", case=None,
-       path=("Data and modelling", "Model performance"),
-       title="Forecast accuracy improved measurably after the 2020 methodological revisions.",
-       stakes=[("modeller", YES, 5), ("statistician", NO, 4), ("epi", YES, 3)]),
-  dict(key="testpos", on="2022-02-07", arc="dispute", case=None,
-       path=("Data and modelling", "Case and test data"),
-       title="Reported case counts in 2021 tracked infection prevalence closely enough to guide policy.",
-       stakes=[("statistician", NO, 7), ("modeller", NO, 5), ("epi", YES, 4),
-               ("skeptic", NO, 4), ("trader", YES, 3)]),
-  dict(key="cyclethresh", on="2021-05-24", arc="dead", case=None,
-       path=("Data and modelling", "Case and test data"),
-       title="PCR cycle-threshold reporting practice varied enough between laboratories to affect case comparability.",
-       stakes=[("statistician", YES, 4), ("clinician", YES, 3), ("skeptic", YES, 2)]),
-  dict(key="seroprev", on="2025-04-02", arc="open", case=None,
-       path=("Data and modelling", "Case and test data"),
-       title="Retrospective serology will place first-wave infection prevalence above the contemporaneous estimate.",
-       stakes=[("statistician", YES, 6), ("epi", YES, 4), ("modeller", NO, 4),
-               ("trader", NO, 3)]),
+  dict(key="testimony", on="2024-06-10", arc="open", case=None, shape=sparse,
+       path=("Institutions and accountability", "Testimony", "Gain-of-function funding"),
+       cast=("oversight", "virology", "journo", "trader"),
+       title="A tribunal applying the ordinary standard would find that congressional testimony on gain-of-function funding was materially false."),
+  dict(key="referral", on="2023-07-17", arc="yes", case="Document trail", shape=short_flip,
+       path=("Institutions and accountability", "Referrals and sanctions", "The 2023 referral"),
+       cast=("oversight", "trader", "journo", "skeptic"),
+       title="A criminal referral concerning pandemic-origins testimony was sent to the Department of Justice in 2023."),
+  # ---------------------------------------------------------- data and modelling
+  dict(key="excess", on="2022-04-11", arc="dead", case=None, shape=drift,
+       path=("Data and modelling", "Excess mortality", "The 2020-21 gap"),
+       cast=("statistician", "skeptic", "epi", "modeller"),
+       title="Global excess deaths for 2020–2021 exceeded the reported COVID-19 death count."),
+  dict(key="models", on="2021-01-18", arc="dead", case=None, shape=reversal,
+       path=("Data and modelling", "Model performance", "Interval coverage"),
+       cast=("modeller", "statistician", "epi", "skeptic"),
+       title="Published epidemic forecasts for 2020 stayed within their own stated prediction intervals."),
+  dict(key="testpos", on="2022-02-07", arc="dispute", case=None, shape=short_lopsided,
+       path=("Data and modelling", "Case and test data", "Prevalence tracking"),
+       cast=("epi", "statistician", "trader", "modeller"),
+       title="Reported case counts in 2021 tracked infection prevalence closely enough to guide policy."),
+  dict(key="seroprev", on="2025-04-02", arc="open", case=None, shape=short_grind,
+       path=("Data and modelling", "Case and test data", "Retrospective serology"),
+       cast=("statistician", "modeller", "epi", "trader"),
+       title="Retrospective serology will place first-wave infection prevalence above the contemporaneous estimate."),
 ]
 
 # ------------------------------------------------------------------ relations
-#
-# The argument, as edges. `part` is containment — a tree, at most one parent, and
-# the overlay files it beside "Rests on"; `bears` is the argument graph with a
-# stance; `supersedes` is a re-filing after a claim died unanswered, which is the
-# shape this docket keeps producing because the question outlived the contract.
 REL = [
-  # the laboratory question rests on its evidence
   ("gof", "lab20", "part", None),
   ("furin", "lab23", "part", None),
   ("host", "lab23", "bears", "supports"),
@@ -377,65 +408,126 @@ REL = [
   ("gof", "lab25", "bears", "supports"),
   ("furin", "lab25", "bears", "supports"),
   ("market", "lab25", "bears", "contradicts"),
-  # the question was asked three times, each after new evidence
   ("lab23", "lab20", "supersedes", None),
   ("lab25", "lab23", "supersedes", None),
-  # the document trail bears on the testimony claim
   ("gof", "testimony", "bears", "supports"),
   ("drafts", "testimony", "bears", "supports"),
   ("reports", "testimony", "bears", "supports"),
-  ("proximal", "drafts", "part", None),
   ("ehasusp", "reports", "bears", "supports"),
   ("foiagap", "drafts", "bears", "supports"),
-  ("conflict", "testimony", "bears", "supports"),
   ("referral", "testimony", "part", None),
-  ("charge", "referral", "bears", "supports"),
-  # public health: the parts of the closure question
-  ("schoolspread", "schools", "bears", "contradicts"),
   ("distance", "masks", "bears", "contradicts"),
-  ("quarantine", "borders", "bears", "contradicts"),
-  # vaccines
+  ("schools", "masks", "bears", "supports"),
   ("myo", "vaxsevere", "bears", "contradicts"),
   ("vaers", "myo", "bears", "supports"),
-  ("vaxtrans", "mandate", "bears", "contradicts"),
-  ("vaxsevere", "mandate", "bears", "supports"),
-  ("advisory", "myo", "bears", "supports"),
+  ("vaxtrans", "vaxsevere", "bears", "contradicts"),
   ("ivermectin", "vaxsevere", "bears", "contradicts"),
-  # data
-  ("excessattr", "excess", "part", None),
-  ("ifr", "models", "bears", "contradicts"),
-  ("modelrev", "models", "bears", "contradicts"),
   ("testpos", "models", "bears", "contradicts"),
-  ("cyclethresh", "testpos", "bears", "supports"),
+  ("excess", "testpos", "bears", "contradicts"),
   ("seroprev", "excess", "bears", "supports"),
-  ("excess", "ifr", "bears", "contradicts"),
-  # and the cross-folder edges that make it an argument rather than six lists
   ("excess", "masks", "bears", "supports"),
-  ("testpos", "masks", "bears", "contradicts"),
-  ("excessattr", "testpos", "bears", "supports"),
-  ("conflict", "proximal", "bears", "supports"),
-  ("foiagap", "conflict", "bears", "supports"),
+  ("models", "borders", "bears", "contradicts"),
+  ("testpos", "excess", "part", None),
 ]
 
-# A stake is committed coin. Every actor's total commitment has to fit inside what
-# it actually bought, and the curve gives the sixteenth buyer less per ugnot than
-# the first, so the budget is checked here rather than discovered mid-run.
-_spend = {n: int(f * 0.35) for n, f, _ in ACTORS}
-_staked = {}
+D = [c for c in D if c["key"] in KEEP]
+REL = [r for r in REL if r[0] in KEEP and r[1] in KEEP]
+
+# ------------------------------------------------------- is the shape any good?
+#
+# "Interesting" is measurable, so it is measured rather than hoped for. Every
+# claim's YES-share path is walked here from its own moves, and a claim whose
+# share barely moves or barely changes is a defect in the fixture — that was the
+# whole complaint about the first version.
+MOVES = {}
 for _c in D:
-    for _who, _side, _amt in _c["stakes"]:
-        _staked[_who] = _staked.get(_who, 0) + _amt * 1_000_000
-    if _c["arc"] in ("yes", "no", "dispute"):
-        for _i in (0, -1):
-            _w, _, _a = _c["stakes"][_i]
-            _staked[_w] = _staked.get(_w, 0) + max(2, _a // 3) * 1_000_000
-for _who, _units in sorted(_staked.items(), key=lambda kv: -kv[1] / _spend[kv[0]]):
+    _cast = _c["cast"]
+    MOVES[_c["key"]] = [(_d, _cast[_slot] if isinstance(_slot, int) else _slot, _side, _amt)
+                        for _d, _slot, _side, _amt in
+                        _c["shape"](0, 1, 2, 3)]
+
+_report = []
+for _c in D:
+    _y = _n = 0
+    _path = []
+    for _d, _who, _side, _amt in MOVES[_c["key"]]:
+        if _side == YES:
+            _y = max(0, _y + _amt)
+        else:
+            _n = max(0, _n + _amt)
+        if _y + _n:
+            _path.append(round(_y * 100 / (_y + _n)))
+    _spread = max(_path) - min(_path)
+    _turns = sum(1 for i in range(2, len(_path))
+                 if (_path[i] - _path[i-1] > 0) != (_path[i-1] - _path[i-2] > 0))
+    _report.append((_c["key"], len(_path), min(_path), max(_path), _spread, _turns))
+    _thin = _c["shape"] is sparse
+    if not _thin and len(_path) < 8:
+        raise ValueError(f"{_c['key']}: only {len(_path)} points, and it is not a "
+                         f"`sparse` claim — a flat chart where a busy one was meant")
+    if not _thin and _spread < 18:
+        raise ValueError(f"{_c['key']}: share moves only {_spread} points — flat")
+    # AND THE UNSTAKES HAVE TO BE COVERED. A shape asking an actor to withdraw
+    # more than it holds on that side is not a flat chart, it is a transaction
+    # the chain refuses — 300 calls into a seed run, with the node already up.
+    # Per (actor, side), the running total may never go negative.
+    _held = {}
+    for _d, _who, _side, _amt in MOVES[_c["key"]]:
+        _k = (_who, _side)
+        _held[_k] = _held.get(_k, 0) + _amt
+        if _held[_k] < 0:
+            raise ValueError(f"{_c['key']}: {_who} unstakes {_side} below zero on day "
+                             f"{_d} — the chain refuses that, mid-run")
+
+def _dt(iso, n):
+    return (datetime.datetime.strptime(iso, "%Y-%m-%d")
+            + datetime.timedelta(days=n)).strftime("%Y-%m-%d")
+
+
+# A STAKE IS COMMITTED COIN, and the budget is PEAK concurrent commitment rather
+# than the sum — an unstake hands the coin back, which is what lets sixteen
+# accounts trade a thousand transactions inside their holdings.
+#
+# BY ABSOLUTE DATE. An earlier version of this guard walked moves in
+# (claim's opening, day-offset) order, which is not the order they happen in: a
+# move is dated open + offset, so claims opened months apart interleave and every
+# actor's real concurrent commitment is higher than that ordering shows. It passed,
+# and the chain refused a stake 700 calls into the run — "not enough unstaked CC".
+_spend = {n: int(f * 0.35) for n, f, _ in ACTORS}
+_live, _peak = {}, {}
+for _when, _who, _amt in sorted(
+        ((_dt(c["on"], off), who, amt)
+         for c in D for off, who, _sd, amt in MOVES[c["key"]]), key=lambda x: x[0]):
+    _live[_who] = max(0, _live.get(_who, 0) + _amt * 1_000_000)
+    _peak[_who] = max(_peak.get(_who, 0), _live[_who])
+for _who, _units in sorted(_peak.items(), key=lambda kv: -kv[1] / _spend[kv[0]]):
     _ratio = _units / _spend[_who]
     if _ratio > 0.35:
         raise ValueError(
-            f"{_who} commits {_units:,} units against {_spend[_who]:,} ugnot bought "
-            f"(ratio {_ratio:.2f}). Over ~0.35 the chain refuses the stake for want "
-            f"of unstaked coin — lower the numbers in D or raise the funding.")
+            f"{_who} holds {_units:,} units committed at its peak against "
+            f"{_spend[_who]:,} ugnot bought (ratio {_ratio:.2f}). Over ~0.35 the "
+            f"chain refuses the stake for want of unstaked coin — lower the shape "
+            f"amounts, spread the cast wider, or raise the funding.")
+
+# THE HOURLY WINDOW IS THE HARD CAP. Every dated move is one 720-block epoch, and
+# points older than 168 of them are trimmed — after which the daily grain, 24
+# epochs wide, cannot separate moves that were days apart on the wall clock. A
+# docket wider than the window silently loses its own charts.
+_dates = {_dt(c["on"], off) for c in D for off, _w, _s2, _a in MOVES[c["key"]]}
+if len(_dates) > 168:
+    raise ValueError(f"{len(_dates)} dates with movement, against a 168-epoch hourly "
+                     f"window — the oldest charts will be trimmed to the daily grain "
+                     f"and flatten. Drop claims or moves.")
+
+# Anything ANSWERED still needs its positions in three distinct 720-block
+# buckets, and one calendar step is one bucket — so a claim with an answer arc
+# must move on at least three separate dates before the answer.
+for _c in D:
+    if _c["arc"] in ("yes", "no", "dispute"):
+        _dates = {_off for _off, _w, _s2, _a in MOVES[_c["key"]] if _off <= 22}
+        if len(_dates) < 3:
+            raise ValueError(f"{_c['key']}: moves on {len(_dates)} date(s) before its "
+                             f"answer; the answerability gate wants three buckets")
 
 # ================================================================== the run
 s.note("arm clock and height together, before any court exists — the overlay reads "
@@ -499,17 +591,17 @@ events = []
 for c in D:
     cid, on, arc = ids[c["key"]], c["on"], c["arc"]
     events.append((on, 0, "open", cid, c))
+    # every move on its own date: that is what makes the chart a chart, since
+    # ClaimSeries is change-only and one calendar step is one 720-block epoch
+    for k, (off, who, side, amt) in enumerate(MOVES[c["key"]]):
+        if off:
+            events.append((days(on, off), 0, ("move", k), cid, c))
     if arc in ("yes", "no", "dispute"):
-        # Positions arrive over three weeks rather than all in the filing block.
-        # Required — three buckets or the claim cannot be answered — and it is
-        # also how a real book fills: somebody adds after the first week.
-        events.append((days(on, 7), 0, "topup", cid, c))
-        events.append((days(on, 14), 0, "topup2", cid, c))
-        events.append((days(on, 21), 1, "answer", cid, c))
+        events.append((days(on, 22), 1, "answer", cid, c))
     if arc in ("yes", "no"):
-        events.append((days(on, 25), 2, "settle", cid, c))
+        events.append((days(on, 26), 2, "settle", cid, c))
     if arc == "dispute":
-        events.append((days(on, 22), 2, "dispute", cid, c))
+        events.append((days(on, 23), 2, "dispute", cid, c))
     if arc == "dead":
         events.append((days(on, 91), 3, "dead", cid, c))
 
@@ -517,19 +609,24 @@ for iso, _, kind, cid, c in sorted(events, key=lambda e: (e[0], e[1], e[3])):
     if iso > END:
         raise ValueError(f"#{cid} {c['key']}: {kind} falls at {iso}, past {END}")
     if iso != _at["iso"]:
-        goto(iso, {"open": "filed", "answer": "answered", "settle": "settles",
-                   "dispute": "disputed", "dead": "expires unanswered",
-                   "topup": "positions added", "topup2": "and again"}[kind])
+        goto(iso, "positions move" if isinstance(kind, tuple) else
+             {"open": "filed", "answer": "answered", "settle": "settles",
+              "dispute": "disputed", "dead": "expires unanswered"}[kind])
     if kind == "open":
-        s.note(f"#{cid} {c['key']} — {c['arc']}")
-        s.claim(accounts[c["stakes"][0][0]], SLUG, c["title"])
+        s.note(f"#{cid} {c['key']} — {c['arc']}, {len(MOVES[c['key']])} moves")
+        s.claim(accounts[MOVES[c["key"]][0][1]], SLUG, c["title"])
         if c["case"]:
             s.folder_add(DEPLOYER, SLUG, CASE_FOLDER, cid)
-        for who, side, amount in c["stakes"]:
-            s.stake(accounts[who], SLUG, cid, side, unit(amount))
-    elif kind in ("topup", "topup2"):
-        who, side, amount = c["stakes"][0 if kind == "topup" else -1]
-        s.stake(accounts[who], SLUG, cid, side, unit(max(2, amount // 3)))
+        for off, who, side, amt in MOVES[c["key"]]:
+            if off == 0:
+                s.stake(accounts[who], SLUG, cid, side, unit(amt))
+    elif isinstance(kind, tuple):
+        _, k = kind
+        off, who, side, amt = MOVES[c["key"]][k]
+        if amt >= 0:
+            s.stake(accounts[who], SLUG, cid, side, unit(amt))
+        else:
+            s.unstake(accounts[who], SLUG, cid, side, unit(-amt))
     elif kind == "answer":
         who = "arbiter" if c["arc"] != "dispute" else "arbiter2"
         s.answer(accounts[who], SLUG, cid, YES if c["arc"] in ("yes", "dispute") else NO)
@@ -550,21 +647,20 @@ s.expect("ClaimCount", [SLUG], r"int64")
 # The half the chain cannot hold. Written from the SAME table, with the ids the
 # scenario just counted, so it can never reference a claim that is not there.
 def tree():
-    out, index = [], {}
+    """Any depth the schema allows, from the `path` tuples. Was two levels
+    hard-coded; the ask was more structure, and cleanFolder permits four."""
+    roots, index = [], {}
     for c in D:
-        top, sub = c["path"]
-        t = index.get(top)
-        if t is None:
-            t = index[top] = {"name": top, "claims": [], "folders": [], "_sub": {}}
-            out.append(t)
-        u = t["_sub"].get(sub)
-        if u is None:
-            u = t["_sub"][sub] = {"name": sub, "claims": [], "folders": []}
-            t["folders"].append(u)
-        u["claims"].append(ids[c["key"]])
-    for t in out:
-        t.pop("_sub")
-    return out
+        node, key = None, ()
+        for name in c["path"]:
+            key = key + (name,)
+            nxt = index.get(key)
+            if nxt is None:
+                nxt = index[key] = {"name": name, "claims": [], "folders": [], }
+                (roots if node is None else node["folders"]).append(nxt)
+            node = nxt
+        node["claims"].append(ids[c["key"]])
+    return roots
 
 
 relations = []

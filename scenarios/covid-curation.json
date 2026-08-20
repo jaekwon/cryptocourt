@@ -11,29 +11,37 @@
    "folders": [
     {
      "name": "Laboratory hypothesis",
-     "claims": [
-      1,
-      3,
-      5,
-      31,
-      36
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "The 2020 question",
+       "claims": [
+        1
+       ],
+       "folders": []
+      },
+      {
+       "name": "After the agency assessments",
+       "claims": [
+        11,
+        13
+       ],
+       "folders": []
+      }
+     ]
     },
     {
      "name": "Natural spillover",
-     "claims": [
-      11
-     ],
-     "folders": []
-    },
-    {
-     "name": "The market",
-     "claims": [
-      14,
-      30
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "The market cluster",
+       "claims": [
+        5
+       ],
+       "folders": []
+      }
+     ]
     }
    ]
   },
@@ -42,27 +50,43 @@
    "claims": [],
    "folders": [
     {
-     "name": "Correspondence",
-     "claims": [
-      21,
-      2
-     ],
-     "folders": []
+     "name": "Grants and funding",
+     "claims": [],
+     "folders": [
+      {
+       "name": "The WIV subawards",
+       "claims": [
+        2
+       ],
+       "folders": []
+      }
+     ]
     },
     {
-     "name": "Grants and funding",
-     "claims": [
-      34,
-      17
-     ],
-     "folders": []
+     "name": "Correspondence",
+     "claims": [],
+     "folders": [
+      {
+       "name": "Released under subpoena",
+       "claims": [
+        8
+       ],
+       "folders": []
+      }
+     ]
     },
     {
      "name": "FOIA and subpoena",
-     "claims": [
-      25
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "Withholdings",
+       "claims": [
+        10
+       ],
+       "folders": []
+      }
+     ]
     }
    ]
   },
@@ -72,27 +96,29 @@
    "folders": [
     {
      "name": "Non-pharmaceutical",
-     "claims": [
-      6,
-      7
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "Masking",
+       "claims": [
+        3
+       ],
+       "folders": []
+      }
+     ]
     },
     {
      "name": "Schools",
-     "claims": [
-      10,
-      12
-     ],
-     "folders": []
-    },
-    {
-     "name": "Borders and travel",
-     "claims": [
-      4,
-      19
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "Learning loss",
+       "claims": [
+        4
+       ],
+       "folders": []
+      }
+     ]
     }
    ]
   },
@@ -102,27 +128,29 @@
    "folders": [
     {
      "name": "Efficacy and waning",
-     "claims": [
-      16,
-      18,
-      15
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "Severe outcomes",
+       "claims": [
+        6
+       ],
+       "folders": []
+      }
+     ]
     },
     {
      "name": "Safety signals",
-     "claims": [
-      20,
-      23
-     ],
-     "folders": []
-    },
-    {
-     "name": "Mandates",
-     "claims": [
-      27
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "Myocarditis",
+       "claims": [
+        7
+       ],
+       "folders": []
+      }
+     ]
     }
    ]
   },
@@ -132,26 +160,16 @@
    "folders": [
     {
      "name": "Testimony",
-     "claims": [
-      35
-     ],
-     "folders": []
-    },
-    {
-     "name": "Referrals and sanctions",
-     "claims": [
-      32,
-      38
-     ],
-     "folders": []
-    },
-    {
-     "name": "Advisory bodies",
-     "claims": [
-      28,
-      29
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "Gain-of-function funding",
+       "claims": [
+        12
+       ],
+       "folders": []
+      }
+     ]
     }
    ]
   },
@@ -161,159 +179,89 @@
    "folders": [
     {
      "name": "Excess mortality",
-     "claims": [
-      24,
-      26
-     ],
-     "folders": []
-    },
-    {
-     "name": "Case and test data",
-     "claims": [
-      8,
-      22,
-      13,
-      37
-     ],
-     "folders": []
-    },
-    {
-     "name": "Model performance",
-     "claims": [
-      9,
-      33
-     ],
-     "folders": []
+     "claims": [],
+     "folders": [
+      {
+       "name": "The 2020-21 gap",
+       "claims": [
+        9
+       ],
+       "folders": []
+      }
+     ]
     }
    ]
   }
  ],
  "relations": [
   {
-   "from": 3,
+   "from": 2,
    "to": 1,
    "type": "part"
   },
   {
    "from": 5,
-   "to": 31,
-   "type": "part"
-  },
-  {
-   "from": 11,
-   "to": 31,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 14,
-   "to": 31,
+   "to": 11,
    "type": "bears",
    "stance": "contradicts"
   },
   {
-   "from": 30,
-   "to": 36,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 21,
-   "to": 31,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 3,
-   "to": 31,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 3,
-   "to": 36,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 5,
-   "to": 36,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 14,
-   "to": 36,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 31,
-   "to": 1,
-   "type": "supersedes"
-  },
-  {
-   "from": 36,
-   "to": 31,
-   "type": "supersedes"
-  },
-  {
-   "from": 3,
-   "to": 35,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 21,
-   "to": 35,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 17,
-   "to": 35,
+   "from": 8,
+   "to": 11,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 2,
-   "to": 21,
-   "type": "part"
-  },
-  {
-   "from": 34,
-   "to": 17,
+   "to": 11,
    "type": "bears",
    "stance": "supports"
   },
   {
-   "from": 25,
-   "to": 21,
+   "from": 2,
+   "to": 13,
    "type": "bears",
    "stance": "supports"
   },
   {
-   "from": 29,
-   "to": 35,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 32,
-   "to": 35,
-   "type": "part"
-  },
-  {
-   "from": 38,
-   "to": 32,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 12,
-   "to": 10,
+   "from": 5,
+   "to": 13,
    "type": "bears",
    "stance": "contradicts"
+  },
+  {
+   "from": 11,
+   "to": 1,
+   "type": "supersedes"
+  },
+  {
+   "from": 13,
+   "to": 11,
+   "type": "supersedes"
+  },
+  {
+   "from": 2,
+   "to": 12,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 8,
+   "to": 12,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 10,
+   "to": 8,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 4,
+   "to": 3,
+   "type": "bears",
+   "stance": "supports"
   },
   {
    "from": 7,
@@ -322,115 +270,8 @@
    "stance": "contradicts"
   },
   {
-   "from": 19,
-   "to": 4,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 20,
-   "to": 18,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 23,
-   "to": 20,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 16,
-   "to": 27,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 18,
-   "to": 27,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 28,
-   "to": 20,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 15,
-   "to": 18,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 26,
-   "to": 24,
-   "type": "part"
-  },
-  {
-   "from": 8,
-   "to": 9,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 33,
-   "to": 9,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 22,
-   "to": 9,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 13,
-   "to": 22,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 37,
-   "to": 24,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 24,
-   "to": 8,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 24,
-   "to": 6,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 22,
-   "to": 6,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 26,
-   "to": 22,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 29,
-   "to": 2,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 25,
-   "to": 29,
+   "from": 9,
+   "to": 3,
    "type": "bears",
    "stance": "supports"
   }
