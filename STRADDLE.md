@@ -264,3 +264,153 @@ capped in tier by the draw cap and in size by the period budget, and loss-making
 **A method note for `AGENTS.md`:** `scripts/gnoroot.py` resolves the real GNOROOT by shelling
 `gno env GNOROOT`, which returns a *sandbox-relative* path when cwd is outside the checkout, so
 `build` fails with "no GNOROOT" unless `--root` is passed. Every shadow-staged vet hits this.
+
+---
+
+## 8. VET 2 — an impossibility result, and the actual root cause
+
+Independent of vet 1, same conclusion, deeper reason.
+
+### 8.1 The straddle is not a mechanism. It is an algebraic identity.
+
+`D = tier × midGross` split pro-rata over `midGross` means **`midGross` cancels**: a staker is paid
+`tier × (80/93) × own conviction`, **independent of pool size.** **M, bit-exact:** the same
+straddler, with and without a 21× larger honest pool on its winning side, was paid `603878647`
+**both times — delta 0.** The honest bystander moved by **one base unit** (double-floor dust).
+
+So a straddler's payoff is exactly `½·winner + ½·loser`:
+
+> **The straddle IS the p = ½ point on the honest staker's own payoff line** — at every tier, rate
+> and claim length. **M:** honest break-even `p* = 0.4731`; the straddle sits at **0.5000** exactly.
+
+**Which gives an impossibility result: any cost linear in staked capital-time prices the straddler
+and the p = ½ honest staker identically, because they are the same portfolio.** So every candidate
+either fails to separate them, or leaves the linear class and hits a closed door.
+
+### 8.2 The whole candidate list, priced
+
+| candidate | verdict |
+|---|---|
+| **entry fee on capital-time** | Sizes exactly at **ψ = 2.42 bps/wk**, and is **the only lever the F9 drain cannot escape** (charge and reward scale with exit time together). Costs an honest staker *half* what the rate cut does. But it moves the honest break-even to 0.500 too — same theorem. Humphrey factor 1 (fees paid win-or-lose), and `REGULATIONS.md` says the load-bearing prong is "risked **upon the outcome**", not "no consideration" — **counsel flag, not a bar.** The only survivor. |
+| payout excludes own contribution | Sole honest staker earns **0**. Sybil factor `(1 − 1/N)`, and `buy.gno` mints to the caller so N wallets are free. **Dead.** |
+| cap one address's share | Same sybil escape; on a thin court the only staker is the whale it caps. **Dead.** |
+| **draw keyed on the LEAN** | **Measured, and worse than the bug.** A pure griefer staking the losing side destroyed **2.196 units of honest reward per unit of its own carry** — principal 1×, no bond, no answer, no vote, no information; 4.4× at HIGH. It re-opens the pool-annihilation attack the draw cap was built to bound, **uncollateralized**. It does not even kill the straddle (1.046), a genuinely 50/50 claim pays its winners **0**, and it flunks Humphrey factor 2. **Four independent refutations.** Note `WHITEPAPER.md` §2 already claims "the lean measures net stake" — the *draw* does not key on the lean, and this is why it must not. |
+| tighten `capBonus` | At the binding point it **is** the rate cut, exactly. |
+| slash the loser | Closed regulatorily — **and it would not have worked anyway**, because F9 empties the position before settlement so there is nothing to slash. |
+
+**The closest thing to a fix "not on the table" is one the design gave away.** The whitepaper's own
+stated reason — escrowed stake carries no vote, so a hedger pays twice — is the *correct shape*:
+capital-keyed, outcome-independent, sybil-proof, and it charges two legs against one. `lock.gno`
+deleted custody deliberately ("bought exactly one thing: disenfranchisement"). That reasoning is
+sound on its own terms and wrong about the consequence: **custody's value was never the principal,
+it was the vote, and the vote is what prices a hedge.** Restoring it would need the forgone vote
+worth ≥1.27%/yr of staked principal; the carrot flow is ~0.5%/yr and per-voter clamped, so **it does
+not reach.** Recorded, not re-litigated.
+
+### 8.3 THE ROOT CAUSE — an unbilled lock premium
+
+`rateBpsFP`'s **2.55 = 0.85 × 2 × 1.5**, and that 1.5 is `ECONOMICS.md`'s `T_L/T_c` — *"lock time:
+stake → withdraw (≈ 1.5 × T_c: adds 72h + escrow)"*. **The "+ escrow" term was never built**:
+`WithdrawStake` is explicitly unpausable, so principal is never held past the verdict.
+
+**M: `T_L/T_c` = 1.0389, against 1.5 assumed.** The anti-farming margin is
+`1.09677/(T_L/T_c) − 1`: at the assumed 1.5 it is **−26.9%** (safe); at the delivered 1.039 it is
+**+5.6%**.
+
+> **The straddle IS the gap between the lock time the rate was priced for and the lock time the code
+> delivers.** And `ECONOMICS.md` propagated the 80/93 correction to the honest break-even
+> (0.59 → 0.68) but **not** to the farming threshold.
+
+### 8.4 Three more corrections to my §3.1 — all overstatements
+
+- **Carry omits the 72h settle both legs already serve.** True ratio against `T_L` carry is
+  **1.0557**, not 1.0968, so **every lock row is overstated by 6 days** — the MID/cold case needs
+  1.47 weeks on a 12-week claim, not 2.3.
+- **The bonus rows ignore `aeba536`.** The draw cap **binds at HIGH and is inert at MID** (`want
+  42120534 > capd 34525782`), so HIGH/cold is **1.800**, not 2.194 — independently matching vet 1 —
+  and my worst row is ~6.4×T rather than 9.055×T.
+- **I modelled only the winners' slice.** A straddler who is *also author and answerer* takes 93/93
+  of D: **M, ratio 1.2764 — +27.6% above carry, 2.8× the headline**, needing a 0.55×T lock.
+
+### 8.5 It is not risk-free in aggregate — and one open item would remove the margin
+
+LOW pays the straddler **0**; a dead claim pays **0** and never crystallizes. So `E > 0` requires
+**P(claim reaches a ≥MID crystallize) > 91.1%** (78.3% for the self-dealt variant).
+
+> **Any court where more than 1 in 11 claims dies unanswered, is voted conclusive-LOW, or fails to
+> crystallize prices the ordinary straddle out with no code change at all.**
+
+**⚠️ Sequencing conflict:** `TODOs.md` §4 proposes making dead-claim conviction recoverable. **That
+removes this 8.8% margin**, which is currently doing most of the work at the ordinary tier. Two open
+items point in opposite directions and must be sequenced deliberately.
+
+### 8.6 Crowding out, and why priority follows the court's success
+
+Self-minting means the payout channel has **zero** interaction between stakers, so the *only*
+dilution channel is the budget clamp — and there the transfer is exact: **M**, the honest whale lost
+`164594773` while the straddler took `164594772`, **1:1**. Clamping needs ~55% of supply on the
+winning side at MID/cold (unreachable — and straddling actually *relieves* the pressure) versus
+**~22% at the hot ceiling**. With 30% honest at p = 0.7, the tipping straddle fraction is **~68% of
+supply cold, ~1.5% hot.**
+
+**And the two regimes coincide.** `d_eff = min(budget, EMA(minted)/supply)`, so **a hot court is by
+definition a clamped court.** Cold: +5.6%, the harm falls on emission and nobody is robbed. Hot: up
+to +176%, the clamp binds, and the harm falls on honest stakers **1:1**. Compounding it, the reward
+scales with `r + d` while the *differential* carry of staking-versus-holding is only `r` — dilution
+hits staked and unstaked CC alike — so `ECONOMICS.md`'s `ρ = r + d` is right for the *buy* decision
+and wrong for the *stake* decision, and **the anti-farm margin degrades linearly in `d_eff`. The
+hazard grows with the court's success.**
+
+### 8.7 Self-minting is the DESIGN, and load-bearing
+
+`tier × (80/93) × own conviction`, pool-invariant, **is** the "published rate is a promise, not a
+contested pool" property — the single strongest de-gambling fact in `REGULATIONS.md` (Humphrey
+factor 2; *White v. Cuomo*, prizes unchanged by entrant numbers). `court.gno`'s `slashDrawBps >=
+10700` check exists to certify exactly that. **Every dilution-based fix converts it back into a
+contested pool.** It is also why the straddle harms no honest staker off the clamp — the leak is
+dilution of CC holders, not theft.
+
+### 8.8 The bonus tier cannot be targeted, and that is provable
+
+The straddle returns `tier × 1.0968` and breaks even only at `tier ≤ 0.911`, so **any tier
+multiplier worth having is straddle-profitable.** A cost-side lever cannot be tier-scaled because
+the tier is decided *after* the cost is incurred, and tightening the payout below 0.911×mg abolishes
+the premium. Two mitigants to bank instead: the tier is **not straddler-selectable** (HIGH needs a
+conclusive full-bar tally and `isParticipant` bars stakers from their own claim's quality lane), and
+at HIGH the clamp threshold halves, so a HIGH-heavy court clamps sooner.
+
+### 8.9 And the delayed release fails on thin courts in a new way
+
+Vet 1's F9 leak reproduced independently (`locked = 0`, `stake = 0` at settlement, full 1.0968
+margin, one extra transaction). But the participation harm is worse than discouragement: the
+proposal creates a systematic incentive to **drain both legs immediately before the answer**, and on
+a thin court the trailing `minAnswerX` floor then makes the claim **unanswerable — it dies at 12
+weeks with no payout to anyone.** That is the exact drain pattern `answer.gno`'s `lifeAvgStake`
+max-keying was built to defend against on the *pricing* side; this would make it the norm on the
+*participation* side.
+
+---
+
+## 9. CONVERGED — the answer
+
+**Do not build it.** Two independent vets, same verdict, different routes.
+
+**Accept the spread and fix the documents**, because the cure is worse than the disease in a precise
+sense: closing the straddle means making the p = ½ staker unprofitable, which moves the honest
+break-even from **0.473 to exactly 0.500** — and `ECONOMICS.md` is already on record rejecting a
+0.75 factor because it *"amputated the 0.59–0.67 accuracy band — real calibration signal"*. **The
+cure is the disease that memo rejected 0.75 for.**
+
+What to do instead:
+
+1. **`WHITEPAPER.md` §2** — three false sentences (§8.2, §6.5).
+2. **`ECONOMICS.md`** — record `T_L/T_c = 1.039` measured against 1.5 assumed, that the −15% margin
+   is gone once 80/93 is propagated, and that `ρ = r + d` overstates the differential carry of
+   staking.
+3. **This file's §3.1** — corrected in §8.4.
+4. **Sequence `TODOs.md` §4 against §8.5**, since dead-claim recovery removes the margin currently
+   doing most of the work.
+5. **If a fix is ever wanted:** the only survivor is a **time-proportional charge on `∫stake·dt` at
+   ψ = 2.42 bps/wk, burned** — `stakePos.rawHi/rawLo` already holds the integral, so it is nearly
+   free to build, and it is the one lever F9 cannot escape. It still moves the honest break-even to
+   0.500. **Price that band before building it.**
