@@ -56,6 +56,16 @@ img,svg{display:block;max-width:100%}
      Glow on white paper is smudge, not light. */
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
   --trace:none; --edge:transparent; --lip:none; --gridline:transparent;
+  /* THE REGISTER. Surfaces lose their fills and become hairline frames with
+     registration marks; the chain's own data is the only thing that glows; and
+     gold marks PROVENANCE — which record you are looking at — never state.
+     Three colours, and only two of them are new: --mark reuses the values
+     already proven as --escrow rather than adding a third gold to the palette.
+     --scan and --ring are none/transparent here for the same reason every glow
+     is: a scanline is a CRT artifact and ink does not emit light. */
+  --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a;
+  --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
+  --scan:transparent; --ring:none;
   --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
   --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
@@ -88,10 +98,20 @@ img,svg{display:block;max-width:100%}
     --glow-y:0 0 8px rgba(111,192,165,.60), 0 0 22px rgba(111,192,165,.26);
     --glow-n:0 0 8px rgba(224,139,124,.55), 0 0 22px rgba(224,139,124,.22);
     --glow-e:0 0 8px rgba(215,178,100,.50), 0 0 20px rgba(215,178,100,.20);
-    --trace:drop-shadow(0 0 3px rgba(179,190,243,.95)) drop-shadow(0 0 10px rgba(154,168,238,.55));
+    /* CYAN, not indigo. Two hues doing two jobs: gold annotates, cyan is what
+       the chain recorded. The accent is the interface's colour and it was also
+       the data's, so the one line on the page that is a measurement looked like
+       another piece of furniture. */
+    --trace:drop-shadow(0 0 3px rgba(95,211,230,.85)) drop-shadow(0 0 11px rgba(95,211,230,.4));
     --edge:rgba(179,190,243,.9);
     /* A lit top edge on a panel, so a card reads as a slab with light on it. */
     --lip:inset 0 1px 0 rgba(179,190,243,.16);
+    --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0;
+    --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
+    /* 1px of black in every 3, multiplied. Imperceptible on near-black; the
+       same value on near-white is a huge visible step, which is why the light
+       theme has none. */
+    --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
     /* The faintest grid. Tron's floor, at an opacity where it is texture rather
        than pattern — it must never compete with a number. */
     --gridline:rgba(154,168,238,.055);
@@ -106,6 +126,9 @@ img,svg{display:block;max-width:100%}
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
   --trace:none; --edge:transparent; --lip:none; --gridline:transparent;
+  --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a;
+  --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
+  --scan:transparent; --ring:none;
 }
 :root[data-theme=dark]{
   --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
@@ -118,10 +141,13 @@ img,svg{display:block;max-width:100%}
   --glow-y:0 0 8px rgba(111,192,165,.60), 0 0 22px rgba(111,192,165,.26);
   --glow-n:0 0 8px rgba(224,139,124,.55), 0 0 22px rgba(224,139,124,.22);
   --glow-e:0 0 8px rgba(215,178,100,.50), 0 0 20px rgba(215,178,100,.20);
-  --trace:drop-shadow(0 0 3px rgba(179,190,243,.95)) drop-shadow(0 0 10px rgba(154,168,238,.55));
+  --trace:drop-shadow(0 0 3px rgba(95,211,230,.85)) drop-shadow(0 0 11px rgba(95,211,230,.4));
   --edge:rgba(179,190,243,.9);
   --lip:inset 0 1px 0 rgba(179,190,243,.16);
   --gridline:rgba(154,168,238,.055);
+  --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0;
+  --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
+  --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
 }
 
 body{
@@ -142,12 +168,23 @@ body{
   display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr;
   grid-template-rows:auto 1fr; min-height:100vh;
 }
+/* THE RULING. 1px of black in every 3, multiplied, fixed to the viewport so it
+   belongs to the screen and not to the document. It is the one effect here that
+   taxes EVERY contrast ratio on the page — a multiply layer scales text and
+   background together, which pushes their ratio toward 1 — so it is deliberately
+   the weakest thing in the file, and --scan is transparent in the light theme:
+   a scanline is a CRT artifact, and the same value on near-white paper is a huge
+   visible step that reads as a fax rather than as a screen.
+   pointer-events:none, or it would eat every click on the page. */
+body::after{content:""; position:fixed; inset:0; pointer-events:none; z-index:60;
+  background:repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+  mix-blend-mode:multiply}
 .tnum{font-variant-numeric:tabular-nums}
 code,.mono{font-family:var(--mono)}
 
 /* ---- left rail ---------------------------------------------------------- */
 .rail{
-  grid-row:1/-1; border-right:1px solid var(--line); background:var(--surface);
+  grid-row:1/-1; border-right:1px solid var(--rule); background:transparent;
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:auto;
 }
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
@@ -164,8 +201,12 @@ code,.mono{font-family:var(--mono)}
 .nav a:hover{background:var(--surface-2); color:var(--ink)}
 /* The lit edge. A filled block says "selected"; a bright rule down its leading
    edge says it, and looks like a circuit. inset so it costs no layout. */
-.nav a.on{background:var(--accent-wash); color:var(--accent-2); font-weight:600;
-  box-shadow:inset 2px 0 0 var(--edge), var(--glow-a)}
+/* THE LIT RULE ALONE. --glow-a came off with the fill and had to: an outer glow
+   on a FILLED block reads as light coming off a slab, and on an unfilled one it
+   reads as a glowing rectangle hanging in space around nothing. The inset rule
+   still says "selected", and it is the only thing that needs to. */
+.nav a.on{background:transparent; color:var(--accent-2); font-weight:600;
+  box-shadow:inset 2px 0 0 var(--edge)}
 .nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
 .rail .foot{margin-top:auto; padding:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:10px}
 
@@ -185,8 +226,16 @@ code,.mono{font-family:var(--mono)}
 
 /* ---- main --------------------------------------------------------------- */
 .main{grid-column:2; grid-row:2; min-width:0; padding:34px clamp(20px,4vw,56px) 90px; max-width:1080px}
-.crumbs{font-family:var(--mono); font-size:12.5px; color:var(--muted); margin-bottom:18px; display:flex; gap:7px; flex-wrap:wrap; align-items:center}
-.seal{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--accent); color:var(--accent); border-radius:var(--r); padding:4px 8px; white-space:nowrap; vertical-align:middle}
+/* THE BREADCRUMB AS A DOCKET REFERENCE. Note what is NOT here: `.crumbs a`
+   sets its own colour, so the links stay link-grey and only the separators and
+   the page you are ON go gold. Gold = where you are, grey = where you can go.
+   That fell out of specificity rather than design, and it is better than what
+   was designed, so it is kept deliberately. */
+.crumbs{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--mark); opacity:.85; margin-bottom:18px; display:flex; gap:7px; flex-wrap:wrap; align-items:center}
+.seal{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+  border:1px solid var(--mark); color:var(--mark); border-radius:0; padding:3px 7px;
+  white-space:nowrap; vertical-align:middle}
 .crumbs a{text-decoration:none; color:var(--ink-2)} .crumbs a:hover{color:var(--accent-2)}
 .crumbs .sep{opacity:.5}
 
@@ -212,7 +261,13 @@ section{margin-top:34px}
 /* cards + grids */
 .grid{display:grid; gap:14px}
 .grid.courts{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
-.grid.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; padding:1px; background:transparent; border:none}
+/* ONE RULED TABLE, not four cards. Four separate cells each with its own edge
+   is four objects; a strip divided by rules is one instrument with four
+   readings, which is what it is. */
+.grid.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:0; padding:0;
+  background:transparent; border:1px solid var(--rule)}
+.grid.stats>div{border-left:1px solid var(--rule); border-radius:0}
+.grid.stats>div:first-child{border-left:0}
 .card{
   background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
   padding:18px; box-shadow:var(--shadow-sm); text-decoration:none; color:inherit; display:block;
@@ -226,7 +281,7 @@ a.card:hover{border-color:var(--line-2)}
 .kv .v{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px}
 .kv .v small{font-weight:500; color:var(--ink-2); font-size:12px}
 
-.stat{background:var(--surface); border:none; border-radius:0; padding:12px 14px; box-shadow:0 0 0 1px var(--line-2)}
+.stat{background:transparent; border:none; border-radius:0; padding:12px 14px; box-shadow:none}
 .stat .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
 .stat .v{font-family:var(--mono); font-size:18px; font-weight:500; font-variant-numeric:tabular-nums; margin-top:6px}
 .stat .v small,.stat .sub{font-size:12px; color:var(--ink-2); font-weight:500}
@@ -254,8 +309,8 @@ a.card:hover{border-color:var(--line-2)}
 .pill.good{background:var(--yes-wash); color:var(--good); border-color:var(--good)}
 
 /* docket list */
-.docket{border:1px solid var(--line); border-radius:var(--r); overflow:hidden; background:var(--surface)}
-.docket a{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center; padding:14px 18px; text-decoration:none; border-top:1px solid var(--line)}
+.docket{border:1px solid var(--rule); border-radius:0; overflow:hidden; background:transparent}
+.docket a{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center; padding:14px 18px; text-decoration:none; border-top:1px solid var(--rule-2)}
 .docket a:first-child{border-top:none}
 .docket a:hover{background:var(--surface-2)}
 .docket .t{font-weight:560; color:var(--ink); line-height:1.35}
@@ -273,8 +328,13 @@ a.card:hover{border-color:var(--line-2)}
 .courtrow .icn{color:var(--escrow)}
 .cols{display:grid; grid-template-columns:minmax(0,1fr) 288px; gap:22px; margin-top:20px; align-items:start}
 .panel h4{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
-.docket a.folderrow{background:var(--accent-wash)}
-.docket a.folderrow:hover{background:var(--accent-wash); filter:brightness(.985)}
+/* A FOLDER IS MARKED BY ITS TYPE, NOT BY A WASH. It carried --accent-wash to
+   separate folders from claims, which was fine when every row sat on a filled
+   docket; with the fills gone it became the loudest block on the court page —
+   and it is marking structure, which is exactly what this register does with
+   rules and marks rather than colour. The folder icon and the accent title
+   below already say "folder", twice. */
+.docket a.folderrow:hover{background:var(--surface-2)}
 .docket a.folderrow .id .icn{color:var(--accent)}
 .docket a.folderrow .t{color:var(--accent-2)}
 .px{display:flex; flex-direction:column; align-items:flex-end; min-width:64px}
@@ -331,15 +391,21 @@ html.embed .rail, html.embed #nav{display:none !important}
 html.embed #tcbanner{display:none !important}
 html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0}
 html.embed #tcbanner{grid-column:1; padding:0}
+/* The card is a surface like any other: hairline frame, registration marks at
+   the corners, and the head in the same gold as the docket reference it is. */
 .emb{display:flex; flex-direction:column; gap:9px; padding:14px 15px;
-  border:1px solid var(--line); border-radius:var(--r); background:var(--surface);
-  min-height:calc(100vh - 2px); box-sizing:border-box}
+  border:1px solid var(--rule); border-radius:0; background:transparent;
+  min-height:calc(100vh - 2px); box-sizing:border-box; position:relative}
+.emb::before, .emb::after{content:""; position:absolute; width:10px; height:10px;
+  pointer-events:none; border:1px solid var(--mark); opacity:.55}
+.emb::before{top:0; left:0; border-right:0; border-bottom:0}
+.emb::after{bottom:0; right:0; border-left:0; border-top:0}
 /* NOWRAP, not wrap. A court name is whatever its creator typed; wrapping turned
    a one-line head into three and pushed the card 9px past the iframe it was
    sized for — a scrollbar in somebody else's article. One line, and the name is
    the part that gives way. */
 .emb .ehead{display:flex; align-items:baseline; gap:8px; flex-wrap:nowrap; overflow:hidden;
-  font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted)}
+  font-family:var(--mono); font-size:11px; letter-spacing:.1em; color:var(--mark); opacity:.9}
 .emb .ehead .ename{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
 /* Inherit, like Polymarket's: the card should read as a card, not as a page of
    blue links. The affordance arrives on hover, and the footer link stays the
@@ -377,20 +443,35 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .emb .etrail .fut{color:var(--muted)}
 .emb .etrail .fut b{font-style:italic}
 .emb .esparkwrap{display:flex; flex-direction:column; gap:3px}
-.emb .espark{width:100%; height:56px; display:block; overflow:visible}
+/* THE CARD'S GRAPH IS THE CLAIM PAGE'S INSTRUMENT. It was not: the trace was
+   --good (green) while the page it links to drew the same series in the accent,
+   so the most widely distributed surface on the site plotted the chain's record
+   in a colour that appears nowhere on the record's own page.
+   AND THE GEOMETRY WAS WRONG. The svg carries preserveAspectRatio="none", so
+   pinning the height stretched a 300x56 viewBox to the card's width: every
+   slope in the trace was flattened by ~13% and the endpoint circle was drawn as
+   an ellipse. Giving the box the viewBox's own ratio makes the scaling uniform,
+   so the shape a reader shares is the shape the chain recorded. Costs 8px of
+   card height; the card still fits the 500px the snippet asks for.
+   NOT carried over: the tick labels, the lifetime reference line and the event
+   marks. Those are in-SVG annotations sized for a 640px chart and there is no
+   room; the dashed rules at 25/50/75 carry the scale. Same instrument, fewer
+   readings, which is the honest version of "the same". */
+.emb .espark{width:100%; aspect-ratio:300/56; height:auto; display:block; overflow:visible}
 .emb .espan{display:flex; justify-content:space-between; gap:6px; font-family:var(--mono);
   font-size:9.5px; letter-spacing:.02em; color:var(--muted); white-space:nowrap; overflow:hidden}
 .emb .espan .efrozelab{overflow:hidden; text-overflow:ellipsis; min-width:0}
-.emb .espark .e25{stroke:var(--line-2); stroke-width:1; stroke-dasharray:2 5; opacity:.7;
+.emb .espark .e25{stroke:var(--rule-2); stroke-width:1; stroke-dasharray:2 5; opacity:.7;
   vector-effect:non-scaling-stroke}
 .emb .espark .efroze{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 3;
   vector-effect:non-scaling-stroke}
-.emb .espark .e50{stroke:var(--line-2); stroke-width:1; stroke-dasharray:3 3;
+.emb .espark .e50{stroke:var(--rule-2); stroke-width:1; stroke-dasharray:3 3;
   vector-effect:non-scaling-stroke}
-.emb .espark .eline{fill:none; stroke:var(--good); stroke-width:2;
+.emb .espark .eline{fill:none; stroke:var(--data); stroke-width:2; filter:var(--trace);
   vector-effect:non-scaling-stroke; stroke-linejoin:round}
-.emb .espark .efill{fill:var(--good); opacity:.10; stroke:none}
-.emb .espark .edot{fill:var(--good); vector-effect:non-scaling-stroke}
+.emb .espark .efill{fill:var(--data); opacity:.10; stroke:none}
+.emb .espark .edot{fill:none; stroke:var(--mark); stroke-width:1.75px; r:4.5px;
+  filter:var(--ring); vector-effect:non-scaling-stroke}
 .emb .efoot{margin-top:auto; display:flex; justify-content:space-between; align-items:baseline;
   gap:10px; font-size:11.5px}
 .emb .efoot a{color:var(--accent-2); text-decoration:none; font-weight:600}
@@ -416,8 +497,38 @@ html.embed #tcbanner{grid-column:1; padding:0}
   color:var(--muted); font-size:12px}
 .sbout{display:flex; justify-content:space-between; gap:14px; margin-top:6px; font-size:12.5px; flex-wrap:wrap}
 .sbout .y{color:var(--yes)} .sbout .n{color:var(--no); text-align:right}
-.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px;
-  box-shadow:var(--lip)}
+/* NO FILL, A HAIRLINE, AND REGISTRATION MARKS AT THE CORNERS. A court of record
+   is rules and type; a filled card is a slab floating over a page. Taking the
+   fill away is what makes the one glowing line on the page mean something.
+   The marks are a REINFORCEMENT of the frame, not a replacement for it. That was
+   tried the other way — ticks and no border, which is the more interesting idea
+   — and it failed on this exact element: .panel and .ticket are equal-height
+   grid items, so the chart's panel is stretched to the taller ticket and four
+   10px marks ended up ~960px apart around a 500px void, reading as stray marks
+   outlining nothing. Hence align-self below, and the hairline stays. */
+.panel{background:transparent; border:1px solid var(--rule); border-radius:0; padding:18px;
+  position:relative}
+/* The chart's panel stops at its content instead of stretching to the ticket.
+   Only visible once the fill is gone: an empty stretched surface reads as a
+   surface, an empty stretched FRAME reads as a box around nothing. */
+.stakewrap>.panel{align-self:start}
+.panel::before, .ticket::before, .panel::after, .ticket::after{
+  content:""; position:absolute; width:10px; height:10px; pointer-events:none;
+  border:1px solid var(--mark); opacity:.55}
+.panel::before, .ticket::before{top:-1px; left:-1px; border-right:0; border-bottom:0}
+.panel::after,  .ticket::after{bottom:-1px; right:-1px; border-left:0; border-top:0}
+/* The reticle arrives on HOVER and in a third hue. An interface that is always
+   reticulating is a toy; this one is a record. */
+.panel:hover::before, .ticket:hover::before, .panel:hover::after, .ticket:hover::after{
+  width:14px; height:14px; border-color:var(--retic); opacity:.85}
+.panel:hover::before, .ticket:hover::before{top:-2px; left:-2px}
+.panel:hover::after,  .ticket:hover::after{bottom:-2px; right:-2px}
+/* ONE FRAME GETS THE MARKS. The court page nests a buy ticket inside its "join
+   this court" panel, and both took marks — two gold corners 170px apart, which
+   reads as clutter. A registration mark marks the sheet, not every box on it. */
+.panel .panel::before, .panel .panel::after, .panel .ticket::before, .panel .ticket::after,
+.ticket .ticket::before, .ticket .ticket::after, .ticket .panel::before, .ticket .panel::after{
+  display:none}
 .bigchart{margin:2px 0 6px}
 .bigchart figcaption{display:flex; justify-content:space-between; gap:12px; font-size:12px; color:var(--muted); margin-bottom:6px; align-items:baseline}
 .bigchart figcaption b{font-family:var(--mono); font-weight:500; color:var(--ink)}
@@ -428,15 +539,15 @@ html.embed #tcbanner{grid-column:1; padding:0}
 /* The recorded path reads as a light trace rather than a drawn line. filter on
    the PATH only, not the <svg>: on the svg it would halo the axes, the labels
    and the gridlines too, and a glowing axis is decoration. */
-.bigchart .ln{fill:none; stroke:var(--accent-2); stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round;
+.bigchart .ln{fill:none; stroke:var(--data); stroke-width:2.25; stroke-linejoin:round; stroke-linecap:round;
   filter:var(--trace)}
-.bigchart .ar{fill:var(--accent); opacity:.1}
+.bigchart .ar{fill:var(--data); opacity:.1}
 .bigchart .seam{stroke:var(--line-2); stroke-width:1; stroke-dasharray:1 3}
 .bigchart .ref{stroke:var(--accent); stroke-width:1.5; stroke-dasharray:5 4; opacity:.75}
 .bigchart .band{stroke:var(--accent); stroke-width:4; opacity:.45; stroke-linecap:round}
 .bigchart .wash{fill:var(--escrow-wash); opacity:.55}
 .bigchart .washf{fill:var(--void-wash); opacity:.5}
-.bigchart .tickL{font:10px var(--mono); fill:var(--muted)}
+.bigchart .tickL{font:10px var(--mono); fill:var(--mark); opacity:.7}
 .bigchart .zone{font:9.5px var(--sans); fill:var(--muted); letter-spacing:.08em; text-transform:uppercase}
 .bigchart .evt{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:2 2}
 .bigchart .evtDot{fill:var(--ink-2)}
@@ -446,7 +557,10 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .bigchart .note{font:10.5px var(--sans); fill:var(--muted)}
 /* The "now" dot is where the trace terminates — the one point a reader looks
    for, so it is the one that emits. */
-.bigchart .end{fill:var(--accent); stroke:var(--surface); stroke-width:2; filter:var(--trace)}
+/* A RING, not a disc. A hollow mark reads as a measurement taken; a filled one
+   reads as a decoration. It also had a --surface stroke to punch it out of the
+   panel's fill, which stops meaning anything once the panel has none. */
+.bigchart .end{fill:none; stroke:var(--mark); stroke-width:1.75px; r:5px; filter:var(--ring)}
 .bigchart .endL{font:600 12px var(--mono); fill:var(--accent)}
 .bigchart .endS{font:9.5px var(--sans); fill:var(--muted)}
 .srcnote{font-size:10.5px; color:var(--muted); margin:6px 0 0}
@@ -454,7 +568,8 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .chartchips span{border:1px solid var(--line-2); border-radius:2px; padding:3px 7px; background:var(--surface)}
 
 /* stake ticket */
-.ticket{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:18px}
+.ticket{background:transparent; border:1px solid var(--rule); border-radius:0; padding:18px;
+  position:relative}
 .ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
 .ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
 /* A ticket row is a label and what it says. The label is the bold thing on the
@@ -502,7 +617,14 @@ dialog.helper .bd b{color:var(--ink)}
 button.helplink{color:var(--accent-2); cursor:pointer; text-decoration:underline; background:none;
   border:0; padding:0; font:inherit; font-size:inherit}
 button.helplink:hover{color:var(--accent)}
-.ticket .never{margin-top:12px; background:var(--inset); border-radius:var(--r-sm); padding:11px 13px; font-size:12.5px; color:var(--ink-2)}
+/* AN ASIDE IS MARKED BY A RULE IN THE MARGIN, not by a panel. This paragraph —
+   the one that corrects what readers get wrong about conviction — was separated
+   from the ticket's body copy by NOTHING but its fill, so taking fills away
+   turned it into a fourth row of the payoff table above it. The notices came
+   through the same change intact because they carry a 4px left border instead,
+   which is where this borrows from. */
+.ticket .never{margin-top:12px; border-left:2px solid var(--rule); padding:2px 0 2px 11px;
+  font-size:12.5px; color:var(--ink-2)}
 .ticket .never b{color:var(--ink)}
 /* buy receipt — reuses the ticket's row token inside the join panel */
 .buyrcpt{padding:12px 14px; margin:0 0 4px; background:var(--inset)}
