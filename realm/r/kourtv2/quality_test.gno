@@ -847,7 +847,12 @@ func TestDustRideCannotLiftTheSlash(cur realm, t *testing.T) {
 	c := testCourt(cur, "qfd", alice, 50_000_000_000)
 	c.coin.Mint(bob, 10_000_000_000)
 	c.coin.Mint(carol, 20_000_000_000)
-	c.coin.Mint(dust, 1_000_000_000) // >= demotionBar, << fullBar (5% of supply)
+	// "Dust" here means strictly between the two bars, and it must be DERIVED, not
+	// picked. The demotion bar now takes a supply floor of its own (a quarter of the
+	// full bar's 5%), so a hardcoded 1e9 fell just BELOW it once that landed and the
+	// scenario became unconstructible — caught by the precondition below rather than
+	// silently measuring nothing. 2% of supply sits above 1.25% and well under 5%.
+	c.coin.Mint(dust, 1_600_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := OpenClaim(cross(cur), "qfd", "Dust ride cannot rescue")
@@ -874,8 +879,10 @@ func TestDustRideCannotLiftTheSlash(cur realm, t *testing.T) {
 		t.Fatal("setup: the slash must reserve at the full bar")
 	}
 	demotionBar, fullBar := qualityBars(c, cs)
-	if 1_000_000_000 < demotionBar || 1_000_000_000 >= fullBar {
-		t.Fatalf("setup: dust must be conclusive but sub-full-bar (bars %d/%d)", demotionBar, fullBar)
+	dustW := c.coin.BalanceOf(dust)
+	if dustW < demotionBar || dustW >= fullBar {
+		t.Fatalf("setup: dust must be conclusive but sub-full-bar: weight=%d bars=%d/%d",
+			dustW, demotionBar, fullBar)
 	}
 
 	// Reopen; only dust rides quality, at MID. Conclusive — but nowhere near the
@@ -2525,8 +2532,20 @@ func TestQualityBarsWhenTheSupplyFloorBinds(cur realm, t *testing.T) {
 	}
 
 	d, f := qualityBars(c, cs)
-	if d != cs.xBarFrozen/4 {
-		t.Fatalf("the demotion bar is X-bar/4 = %d here, got %d", cs.xBarFrozen/4, d)
+	// RE-DERIVED: the demotion bar now takes a SUPPLY floor too, a quarter of the
+	// full bar's 5%, so where that floor binds it is 1.25% of supply rather than
+	// X̄/4. This fixture's whole premise is a court where the supply arm binds, so
+	// it is the case that moved. The claim-keyed arm is still asserted below, on a
+	// court where it is the larger of the two — otherwise this would only pin one
+	// side of a max().
+	if want := fivePct / 4; d != want {
+		t.Fatalf("where the supply floor binds, the demotion bar is a quarter of the "+
+			"full bar's 5%% = %d, got %d (X-bar/4 would be %d)",
+			want, d, cs.xBarFrozen/4)
+	}
+	if d*4 != f {
+		t.Fatalf("the two bars must keep their 4:1 ratio when both take the supply "+
+			"arm: demotion=%d full=%d", d, f)
 	}
 	if f != fivePct {
 		t.Fatalf("the full bar is 5%% of SUPPLY = %d, got %d (5%% of votable would be "+

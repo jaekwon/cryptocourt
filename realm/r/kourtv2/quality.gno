@@ -246,6 +246,39 @@ func qualityBars(c *Court, cs *claimState) (demotionBar, fullBar int64) {
 		arm = third
 	}
 	demotionBar = arm / 4
+	// THE SUPPLY FLOOR THE COMMENT BELOW ASKED FOR (owner decision).
+	//
+	// Keyed to the claim alone, this bar bottomed out at ~2.5 bps of court supply
+	// (ordAnswerXFloorBps/4 at the answerability floor), and a demotion there is
+	// NET PROFITABLE: below the full bar ResolveFlag returns the flag bond WHOLE
+	// and mints a bounty against the author's burned deposit, so zeroing an entire
+	// claim's draw cost nothing and paid. Voting consumes no weight, so one holder
+	// did it to several claims at once. Measured: 49 bps of supply zeroed a draw
+	// the same tally had just vindicated, and the structural floor was 20x lower
+	// still. After the answer bond was re-keyed and cut 8.3x, THIS became the
+	// cheapest attack on the system — cheaper than anything the bond prices.
+	//
+	// A QUARTER of the full bar's 5%, which is not an arbitrary pick: it preserves
+	// the 4:1 ratio the two bars have always had (demotion is arm/4), and 1.25% of
+	// supply is already this realm's established price for "real adversarial
+	// weight" — it is what credEligible demands.
+	//
+	// THE COST, stated because it is real and it is the reason this was an owner
+	// call rather than an obvious fix: flagging genuine junk now needs 1.25% of a
+	// court behind it. On a small or young court there may be nobody who clears
+	// that, so junk claims will draw. The trade is accepted because an unpriced
+	// destructive action is worse than an unexercised protective one — the lane
+	// keeps its PRICED action (the full-bar two-thirds low, which slashes) and
+	// loses only the free one.
+	if quarterPct := mulDiv128(supply, quorumSupplyBps, 10000) / 4; quarterPct > demotionBar {
+		demotionBar = quarterPct
+	}
+	// Reachability, the same rule the full bar takes: a bar above a third of the
+	// votable float cannot be cleared by any set of votes, and raising an
+	// unreachable bar makes the lane MORE dead, not safer.
+	if third := votable / 3; demotionBar > third {
+		demotionBar = third
+	}
 	if demotionBar < 1 {
 		demotionBar = 1
 	}
@@ -261,11 +294,15 @@ func qualityBars(c *Court, cs *claimState) (demotionBar, fullBar int64) {
 	// gates the SLASH and cs.qualityEpoch is pinned at PostAnswer — nobody can
 	// buy fresh weight in afterwards. So a mill's own answered claims fill the
 	// escrow that makes the mill permanently unslashable, per claim, for that
-	// claim's whole life. Meanwhile demotionBar has no supply arm and gets EASIER
-	// as escrow grows, so at high escrow the lane kept its one free destructive
-	// action (a refunded demotion that burns the author's deposit) and lost the
-	// priced one. That is not a conservative failure; it is positive feedback on
-	// the single deterrent the draw-proportional slash exists to provide.
+	// claim's whole life.
+	//
+	// The second half of this paragraph used to read: "Meanwhile demotionBar has no
+	// supply arm and gets EASIER as escrow grows, so at high escrow the lane kept
+	// its one free destructive action and lost the priced one." That was the
+	// diagnosis and it is now FIXED above — the demotion bar takes a quarter of the
+	// same 5% arm, so both bars now shrink together with the float instead of
+	// diverging. What remains true is the first half: the slash's own bar still
+	// tightens as a mill escrows its way out of reach, and that is unaddressed.
 	if third := votable / 3; fullBar > third {
 		fullBar = third
 	}
