@@ -986,7 +986,7 @@ product; every number on it must be reproducible from public reads.
 | flag-vote carrot bound | carrot per flag-vote < b₀/2 | v0.24 deploy invariant (micro-vet-2: sybil mid-voters must net negative; margin ~2.2×) |
 | conviction | rate-weighted: ∫rate(t)·stake·dt; amortized table ×2^(−1/104)/period | v0.20 (V2-8 + 2A-T3; rateAtFreeze deleted) |
 | answer priority | difficulty-weighted record (contested-and-upheld only), ≥3 → 24h window; gate off until N addresses qualify; 1 active priority claim/address | v0.12 (A18) |
-| claim fee | 10% of deposit; burned only on dead-with-no-stake or CONCLUSIVE low; refunded otherwise (incl. default-mid-no-vote) | v0.20 (V2-9: the old condition was undefined at the most common outcome) |
+| claim fee | 10% of deposit; burned on ANY dead close and on a CONCLUSIVE low; refunded whenever the claim reached a resolution (incl. default-mid-no-vote) | v0.20 (V2-9), **corrected to the code 2026-08-20**: the spec said "dead-with-no-stake", which is FARMABLE — `Stake` has no author bar, so the author self-stakes 1 unit, the claim is dead-with-stake, and the anti-spam charge on filing refunds. `CloseDeadClaim` burns unconditionally (claim.gno) and is right; the predicate was the error. The shipped rule is coherent on its own terms: the fee comes back whenever the claim RESOLVED, and is kept when it died. |
 | dispute bond | `B_d1 = min(20%·X̄, 0.4 × the actual answer bond)`, doubling per round | v0.25 (R3-1a): keeps round-1 at q > 1/3 on every claim incl. capped courts; subsumes the v0.20 zero-case |
 | minAnswerX | 100 CC of trailing total stake | resolved v0.13 (§8.8), provisional pending round-3 |
 | answer bond, escrow windows, 5001 bps, 72h delay | V1 values | unchanged |

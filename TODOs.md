@@ -545,28 +545,47 @@ risk at a low bond *without* fixing 1 and 1b first.
 
 ---
 
-## 2. An overturn's free quality ride can zero the winners it just vindicated
+## 2. DOWNGRADED — the overturn quality ride is gated 50× higher after S4, and its stated fix is refused by the code
 
-**Severity: medium-high.** The one shape where a false answer really does destroy the
-honest payout — and it is not the ordinary overturn.
+**Was: severity medium-high, "free quality ride". Measured after S4, it is neither free nor
+the shape the item described.**
 
-An ordinary overturn pays honest winners **in full**: `Finalize` restores
-`cs.tier = tierMidX` (dispute.gno:462-464), and measured, a 300 CC / 3-week winning
-position draws **4.955068 CC** whether the answer stood or was overturned — bit-identical.
-Only the answerer loses (5-point slice zeroed, bond burned, credential reset).
+### The gate S4 put on it — measured
 
-But `resolveQualityRide` (quality.gno:618) can set `tier = tierLowX = 0` on **the same
-tally that overturned the answer**, and `crystallize.gno:83` (`want := mustMul(cs.tier,
-midGross)`) then zeroes the entire draw. So the vote that proved the answer false
-simultaneously declares the claim junk and pays the honest winners nothing. Measured: same
-fixture, **0**.
+On a 500 B-supply court with a claim at X̄ = 500 M:
 
-quality.gno:24-28 and :639-641 argue at length that "was the answer right" and "is the
-claim worth anything" are *different questions*. This path conflates them.
+| | value | as bps of supply |
+|---|---|---|
+| demotion bar **pre-S4** (`arm/4`) | 125,000,000 | 25 |
+| demotion bar **post-S4** | 6,250,000,000 | **125** |
+| ratio | **50×** | |
+| the draw at risk (`midGross`) | 22,767 | |
+| **bar as a multiple of the draw** | **274,520×** | |
 
-**Fix direction:** gate the *demotion* arm of `resolveQualityRide` on an overturn round, or
-require its own mandate for it. A verdict round should not be able to zero the tier it just
-vindicated.
+So zeroing that draw requires marshalling 6.25 B of voting weight to destroy 22,767 units.
+Voting consumes no weight, so *using* the weight is still free — but you must **hold 1.25% of
+the court**, which after transferability has a market price. The bar is denominated in
+**supply** while the draw is denominated in **claim conviction**, so the attack only becomes
+interesting on a claim whose draw approaches 1.25% of supply — i.e. one carrying a very large
+fraction of the court.
+
+### Why the stated fix must NOT be implemented
+
+Item 2's fix direction was *"gate the demotion arm of `resolveQualityRide` on an overturn
+round"*. **`quality.gno` already considered and refused exactly that**, in writing:
+
+> PROMOTION-only, deliberately: gating demotions would break two honest paths — an ordinary
+> demotion at the supply-floorless `demotionBar`, which §3.4's F3 asymmetry makes cheap on
+> purpose, and `tier = LOW` on an OVERTURN ride, **where skipping it would restore the winning
+> pool's draw on a claim the crowd called junk.**
+
+And the conflation the item alleges is weaker than it reads: the overturn vote and the quality
+ride are **two ballots on one round** (`qLowW`/`qMidW`/`qHighW` buckets are separate from the
+overturn tally), not one question doing two jobs. `quality.gno`'s "different questions"
+argument is what *justifies* the demotion landing, not what forbids it.
+
+**What is left is an owner judgment, not a bug:** is a 1.25%-of-supply capital gate enough for
+a free destructive action? If not, the lever is the bar, not a new gate on the arm.
 
 ---
 
@@ -599,75 +618,63 @@ not fix 1 without deciding 3.)*
 
 ---
 
-## 4. Dead-claim expiry evaporates conviction with no payout
+## 4. RESOLVED AS DESIGNED — dead-claim conviction evaporates because the answerability floor requires it
 
-Not a bug — designed — but recorded because it is the thing the owner cares most about and
-the design work is unresolved.
+**Two hypotheses measured, both refuted, and the third explanation is structural.**
 
-A claim that dies unanswered at 12 weeks (`deadClaimSecs`, clock.gno:37) refunds principal
-via `Unstake` and pays **nothing**: measured, **22.950015 CC of conviction evaporates** on
-a 300 CC / 12-week position. `CloseDeadClaim` also burns the fee unconditionally
-(claim.gno:368-378), which contradicts PLAN.md:989 (fee should burn only on
-dead-with-no-stake) — though that predicate is farmable with a 1-unit self-stake, so the
-spec may be the thing that is wrong.
+### Refuted: the answer bond does NOT price answerability out as a claim ages
 
-**Reconciling two audits that look contradictory.** One found re-answerability unbuildable;
-another recommended "make destruction recoverable" as the top fix. They agree, because an
-**ordinary overturn already pays honest winners in full** (measured bit-identical, item 2) —
-so most of the recoverability already exists. What is missing is not a second answer, it is
-(1) the failed-quorum default that confirms the answer, (1b) the quorum bar the victims
-cannot clear, and (2)/(3) the two paths that zero a draw nobody was found at fault for. Fix
-those four and recoverability arrives without a new mechanism.
+Measured on a constant 600 CC pool at X̄ = 900 M over a full 12-week life, weekly:
 
-**Regulatory note, and it raises the priority of 1/1b/2/3 above any bond change.**
-REGULATIONS.md:188-201 rests on Humphrey factor 2 — prizes "amounts certain and guaranteed",
-with a fixed published rate scoring better than variable shares. **A snipe makes the
-published rate a lie**: the prize goes to zero for reasons unrelated to the fact being
-adjudicated. That is a defect in the regulatory posture, not only in the economics, and only
-recoverability cures it — every bond-sizing fix leaves the prize destroyable and merely makes
-destruction expensive. Constraint on any fix: the claim must *eventually mint the prize it
-should have minted*. Never redistribute the sniper's bond to the stakers — that makes the
-prize loser-funded and bilateral, which is the one thing escape (b) cannot survive. The
-existing disputer comp is fine as-is: conduct-contingent, paid to whoever proved the
-misconduct, burn-anchored and capped at 80% of the burn.
+| week | conviction | base arm (4.5%·X̄) | draw arm (1.6·conv) | **required bond** | bps of X̄ |
+|---|---|---|---|---|---|
+| 1 | 3,847,767 | 40,500,000 | 6,156,427 | 54,000,000 | 600 |
+| 8 | 30,622,767 | 40,500,000 | 48,996,427 | 54,000,000 | 600 |
+| 9 | 34,447,767 | 40,500,000 | 55,116,427 | 55,116,427 | 612 |
+| 12 | 45,922,767 | 40,500,000 | 73,476,427 | 73,476,427 | **816** |
 
-**Ruled out: re-answerability.** Three independent audits, and the third reason is decisive.
+The 6% quote dominates through week 8; the conviction arm takes over at ~week 9. **Total
+escalation over a claim's whole life: 1.36×** (600 → 816 bps of X̄), and 73.5 M against a
+1.8 T supply is 0.004%. **Claims do not die because the bond became unaffordable.** (Note
+`answer.gno`'s own "past ~19.5 weeks the draw arm outgrows the base arm" is about a hot pool;
+on this constant pool the draw arm passes the *base* arm at ~6.6 weeks and the *quote* at
+~8.8.)
 
-It cannot re-freeze the conviction pin without arming three dormant clamps
-(answer.gno:130-147 names them); measured, a re-freeze would let the incumbent frozen pool
-farm conviction **1009× over six weeks on a pool nobody can enter to dilute or exit to
-escape**, re-pinning `xBarFrozen` off a ring `staleBy = 2016` buckets that still reports
-`mature = true` (**+50% from staleness alone**). It cannot reopen staking without making one
-claim a ~51× risk-free emission faucet. It cannot get the calendar it needs (the 12-week
-clock never pauses, and extending it panics at deploy per court.gno:224-229). A second
-answer inherits answer #1's `slotConsumed`/`slashLevied` latches, making every answer after
-the first **structurally unflaggable and unslashable** — the exact immunity purchase v0.47
-and v0.50 closed.
+### The actual mechanism: the answerability floor
 
-**And the trichotomy is exhaustive — there is no correct implementation.** Either the
-re-answer resets `provisional`, in which case the claim is **permanently bricked 72 hours
-after any undisputed re-answer, with no adversary at all**: measured 7 of 7 exits refuse
-(`OpenDispute`, `SettleUndisputed`, `Finalize`, `CloseDeadClaim`, `Crystallize`,
-`WithdrawStake`, `Unstake`), 30,000 CC of honest principal locked in `c.locked` forever, no
-admin and no upgrade path (court.gno:266-267) — and "nobody disputes" is the **modal**
-outcome, which dispute.gno:519-521 names as the lane's known failure mode. Or it keeps the
-old `provisional`, in which case it is a no-op that only burns the new answerer's record. Or
-it resets `provisional`/`round`/`failedRounds`/`escrowUntil` together, in which case it
-works — and hands a sniper **unlimited retries**: 11 rounds fit inside a 12-week life, so
-per-claim destruction probability goes from 19% to **89.3%**.
+`effMinAnswerX` is `ordAnswerXFloorBps = 10` bps of **supply**. Measured: on a 500 B court the
+floor is 500,000,000 of trailing stake, and on the 1.8 T court used above a 900 M-X̄ claim is
+**refused outright** — *"trailing stake is below the minimum to answer"*.
 
-There is no fourth option, and none of the three is shippable.
+**So a claim that never attracts 0.10% of court supply is structurally unanswerable, will die
+at 12 weeks, and its conviction necessarily evaporates.** That is not a defect in the floor —
+it *is* the floor. Paying conviction on a dead claim would reopen exactly the dust-emission
+faucet the floor exists to close: open a claim nobody will answer, stake, wait 12 weeks,
+collect. The re-answerability analysis already named that shape as a ~51× risk-free emission
+faucet.
 
-### Sequencing constraint — do not reorder these
+**The 22.950015 CC that "evaporates" is the price of the floor, not a bug in it.** And the
+draw's premise is unchanged: it pays for *being right*, and on an unanswered claim nobody was
+shown right.
 
-**`court.gno:194` must not be deleted before the collateralization floor is re-keyed to both
-sides.** Measured: as written, deleting it drops the snipe's break-even claim age from **31
-weeks** (unreachable inside a 12-week life, so harmless) to **2.80 weeks** (reachable on most
-claims). The invariant is mislabelled — its comment says it covers "maximum undisputed
-extraction", but PLAN.md:718-725 already retracted that derivation; what it actually buys is
-**anti-snipe** cover, and via dispute.gno:131 it is also what makes the dispute bond
-independent of the answerer. Re-key the floor first (item 1c), then rescope `:194` and `:227`
-in the same commit.
+### What was actually actionable, and is now done
+
+`CloseDeadClaim` burns the fee unconditionally while PLAN.md specified *"burned only on
+dead-with-no-stake"*. **The code is right and the spec was wrong**: `Stake` has no author bar,
+so the author self-stakes 1 unit, the claim becomes dead-with-stake, and the anti-spam charge
+on filing refunds — the predicate defeats the fee entirely. PLAN.md corrected to the shipped
+rule, which is coherent on its own terms: the fee returns whenever the claim RESOLVED and is
+kept when it died.
+
+### What remains genuinely open, and it is items 1/1b/2/3's territory
+
+This item's own analysis said recoverability arrives by fixing items 1, 1b, 2 and 3 rather
+than by a new mechanism. **1, 1b and 3 have SHIPPED**; 2 is downgraded above to an owner
+judgment about a bar. So the recoverability programme this item was the motivation for is
+substantially complete, and what is left of item 4 is not a build task.
+
+**Re-answerability stays ruled out** — three independent audits and an exhaustive trichotomy;
+the derivation is preserved below the fold in git history for this item.
 
 ---
 
