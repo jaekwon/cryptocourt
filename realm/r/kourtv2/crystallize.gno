@@ -81,6 +81,43 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// would inflate every draw 16%. Consequence, accepted: the honest sole-staker
 	// break-even is p ≈ 0.68, not the 0.59 an un-split rate would give.
 	want := mustMul(cs.tier, midGross)
+	// DRAW CAP: the claim may not mint more than the answer bond collateralized.
+	//
+	// WHY. A sniper stakes dust on one side, declares it, and lets 72h of silence
+	// settle: the opposing pool's whole draw is annihilated while the bond returns
+	// whole. What that costs the attacker is bounded by the bond; what it destroys
+	// is bounded by tier × midGross. So the ratio destroyed/posted — the only
+	// well-defined leverage here, since on every realized path either destruction
+	// or forfeiture is zero — is (tier + carrot)/(slashDrawBps/1e4). That is
+	// 1.07/1.6 = 0.669 at MID but 2.07/1.6 = 1.294 at HIGH, i.e. sniping an
+	// exceptional claim PAYS. Measured 1.2937 end to end.
+	//
+	// The alternative was to freeze the tier the floor was sized against. It is
+	// strictly dominated: because answerBond0 >= 1.6·mg always, capd >= 1.53·mg,
+	// so the cap never pays less than 1.53×mg where the freeze always pays 1×mg —
+	// the freeze is this cap evaluated at the extremal and then applied
+	// everywhere, abolishing the HIGH premium (0% kept) where the cap keeps 53%.
+	// A stored frozen-tier field would also be dead state: slashSizeAt has no tier
+	// factor, so the value is tierMidX on every claim.
+	//
+	// INERT ON THE PUBLISHED RATE, and that is provable rather than calibrated.
+	// The floor gives answerBond0 >= 1.6·mg_max >= 1.6·mg_win, so
+	// capd >= (1.60 - 0.07)·mg_win = 1.53·mg_win > 1.00·mg_win = want at MID.
+	// The inequality uses only 1.60 - 0.07 > 1: no X̄, no claim age, no rate, no
+	// bond level. A staker is therefore promised the MID rate unconditionally and
+	// only the discretionary HIGH multiplier is capped — which is also the
+	// Humphrey factor-2 answer, since what is "certain and guaranteed" at stake
+	// time sits provably outside the cap.
+	//
+	// Do NOT lower crystallize.gno's AnswererBonus cap or capBonus to match:
+	// lowering this arm alone can only make those LESS binding, and lowering them
+	// independently strands coin.
+	if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
+		want = capd
+		if want < 0 {
+			want = 0
+		}
+	}
 	if want > c.curPeriodBudget {
 		want = c.curPeriodBudget
 	}
