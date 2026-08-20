@@ -13,6 +13,63 @@ the two rot at different rates.
 
 ---
 
+## 0c. SHIPPED, and what it left open — transferable coin + gnoswap listing
+
+Transferability, the allowance pair, the posterity snapshot and the gnoswap wrapper
+all shipped WITH fixtures and mutation verification (six mutants, all killed, `0
+build errors` each; the sixth survived first and was a real finding). See
+`GNOSWAP.md` for the full listing analysis. What is *open* after it:
+
+**a. Six bars are now cheaper to reach than when they were priced.** The quorum
+floor, both quality bars, the credential bar, the election floor and the
+`supplyFloor` lid are denominated in % of court supply, and were calibrated when
+the only way to acquire supply was a one-way curve burning GNOT at a
+monotonically rising price. A secondary market can clear below that. The owner
+took the trade knowingly and it is recorded in `lock.gno`'s doctrine comment, but
+nobody has re-derived a single constant against a market price. **This is the
+largest un-costed consequence of the change.**
+
+**b. Three pieces of settled reasoning assumed immobility and are live again.**
+Named in `scripts/check-nontransferable.py`'s inverted docstring: the v0.31
+KEEP-NETTING ruling on `electionFloor` (its refutation of park-stake-to-cheapen-a-coup
+turned on an attacker being unable to acquire existing float), `MODERATION.md`'s
+capital-keyed sybil doctrine (one pile of capital can now back several identities
+in sequence), and vote-buying. The narrow consolation, measured: conviction lives
+on `stakePos` keyed `(address, side)`, so selling coin carries no conviction —
+only the future ability to earn it. Pinned by
+`TestConvictionDoesNotTravelWithTheCoin`.
+
+**c. Wrapping shrinks the votable pool without shrinking supply.** Both bars that
+could have been stranded already floor against `votable/3`, from the same v0.31
+fixes — so this is closed *today*. It is listed because **any new bar written
+against `TotalSupply` reopens it**, and nothing enforces that rule.
+
+**d. An 11-character slug cannot be wrapped**, because `grc20.MaxSymbolLen` is 11
+and `kourtv2` spent all 11 on `upper(slug)`. Refused with the reason;
+`WrappableSlug` reports it beforehand. Closes for free if `maxSlugLen` ever drops
+to 10.
+
+**e. No gnoswap contract is staged into the harness**, so nothing here creates a
+real pool or swaps. What is tested is gnoswap's *resolution* path, which is what
+`MustRegistered`/`GetToken` actually perform. A txtar going end to end needs
+`pool`, `position`, `router`, `gns`, `common`, `access`, `halt` and `emission`
+vendored into `scripts/gnoroot.py`.
+
+**f. Universal unbonding is NOT built, and transferability changes its
+specification.** The owner asked for a wait on exit that winners skip. Before
+transferability there was no exit to GNOT at all, so "unbonding" only ever meant
+a delay on returning staked coin to spendable. Now there IS an exit — sell on
+gnoswap — so **a withdrawal delay that leaves the coin spendable is worthless: the
+loser sells instead of waiting.** The lock must therefore be expressed by keeping
+the amount inside `lockedOf`, which `spendable()` already subtracts and which
+`TransferCC`, `TransferFromCC` and therefore `Wrap` are all gated on. That
+composes, and it is the reason `lock.gno`'s "a lock, not custody" doctrine is
+worth keeping. Also still open from the earlier analysis: the binary-exemption
+hole (switch to the winning side late, earn nothing, still skip the wait) and
+re-deriving `L` now that both sides serve time in expectation.
+
+---
+
 ## 0b. OWED — fixtures for the four structural fixes
 
 **The bond work (draw cap, 6% + re-keying) shipped WITH its fixtures and mutation
