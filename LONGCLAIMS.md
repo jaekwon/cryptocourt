@@ -408,3 +408,206 @@ deciding a question yours never reached.* **Sharpest counsel flag in the design.
 5. **Two new counsel flags:** an economically-valuable credential on an unadjudicated position
    weakens the gambling-axis "no prize" leg; and the "designed to evade" carve-out plausibly
    describes this shape.
+
+---
+
+## 9. AUDIT ROUND 2 — linkage is the wrong problem, and the measurement proves it
+
+### 9.1 A perfect linkage mechanism pays ZERO on the owner's own test case
+
+The COVID docket enumerated byte-exactly (11 titles, 123–153 bytes each):
+
+| predicate | classes | covers | expired w/ later sibling | **expired w/ a sibling that reached a VERDICT** |
+|---|---|---|---|---|
+| **(d)** literal byte-identity | 0 | 0/11 | 0/5 | **0/5** |
+| **(e)** identity after stripping one trailing `[…]` | 3 | 8/11 | **5/5** | **0/5** |
+| (a) author-declared parent | — | any | 5/5 | **0/5** |
+| (b) voted link | — | any | 5/5 | **0/5** |
+| (c) argument edges | — | any | 5/5 | **0/5** |
+
+**(e) is the fifth option §4.1 asked for and it works** — the three laboratory claims differ *only*
+by a trailing `[asked Feb 2020]` / `[asked Feb 2023]` / `[asked Jan 2025]`, cores byte-identical at
+123 bytes. Same for the GOF and testimony families. **100% of the linkage need, no vote, no
+moderator, no new trust.**
+
+**But the last column is 0 for every option.** Every same-core successor of an expired claim is one
+of the three still **OPEN**. The three claims that reached verdicts are all **singletons — never
+re-asked**, because they were answerable the first time.
+
+```
+P(verdict | claim is in a re-asked class) = 0 / 8
+P(verdict | claim is a singleton)         = 3 / 3
+claims ever disputed: 1 of 11  (and it is a singleton)
+```
+
+**This is structural, not an artifact.** A claim is re-asked *because* it expired; it expired
+*because* nobody would post a bonded answer; the successor asks the same unanswerable proposition.
+
+> **A perfect, free, unforgeable linkage mechanism pays the owner exactly 0 CC on his own docket —
+> the same as today. Vindication, not linkage, is the binding constraint.**
+
+### 9.2 And self-vindication is FREE — measured at NEGATIVE cost
+
+Every option constrains *which* claim vindicates you. **None constrains who supplies the verdict.**
+Measured end to end (1.02M CC court): re-ask the same canonical core, stake the minimum,
+self-answer, let 72h of silence settle:
+
+```
+bond posted 510.166666   deposit+fee 112.200000   slash reserve 45.914999   (all return)
+attacker CC delta after Crystallize and all pulls:   +0.116651 CC   <-- NET GAIN
+```
+
+**Manufacturing the verdict that "vindicates" a 22,950 CC expired position pays the attacker
+0.117 CC** — author 8/93 + answerer 5/93 + winner 80/93 of a draw he minted himself — against ~1.7
+CC of external carry. **And the policing lanes do not reach it:** a conclusive quality LOW scales
+`cs.tier` and therefore the *money*, but `cs.provisional` — what `Verdict()` returns — is set by
+`SettleUndisputed`. **A LOW zeroes the draw and leaves the vindication standing.**
+
+The only capital-keyed gate that *is* priced is already shipped: `credEligible` requires the
+overturn side to carry **≥ 1.25% of court supply**. Applied to this docket it leaves **1 of 11
+claims eligible ever** — a singleton. **So verdict-keyed credit pays zero twice over.**
+
+### 9.3 Build this instead: credit for conviction that was never REFUTED
+
+Accrues at `CloseDeadClaim`, from the claim's own state. **No parent, no vote, no edge, no text
+match.** Six rules, each measured:
+
+1. **Pin the accrual window at 12 weeks — today it is UNBOUNDED.** **M:** a 300 CC position reads
+   **22.950000** at 12 weeks and **68.850000** at 36 (**×3.000000 exactly**), and it *banks* on
+   `Unstake`. `CloseDeadClaim` never sets `frozenAt` and nothing else caps a closed claim. On this
+   docket: LAB23 lived **35.4 weeks** → **×2.988** inflation.
+   > **Implementation warning: do NOT pin by setting `frozenAt` on close.** `Unstake` refuses when
+   > `frozenAt != 0` and `WithdrawStake` requires `verdictAt != 0`, which a closed claim never has
+   > — **that combination bricks the principal**, which is §5's exact failure mode. Pin instead by
+   > giving `rawHeight` a `closed` arm capping at `openedAt + deadClaimTimeout`. Every consumer of
+   > the raw integral was checked: `lifeAvgStake` is read only by `PostAnswer` (refuses `closed`)
+   > and `capBonus` only via paths that refuse `closed` or require `crystallized`. **Touches no
+   > live money path.**
+2. **Key on the RAW `∫stake·dt`, not rate-weighted conviction** — raw is `d_eff`-invariant, so the
+   straddle-safe exchange rate is a frozen constant instead of one that moves with the emission
+   rate. `d_eff` has no retune path.
+3. **Credit = NET capital-time per (address, claim)**, signed to the larger side. **M:** a symmetric
+   300/300 straddle nets **0.000000**; one block of entry asymmetry on 600 CC nets **0.000015**; a
+   directional 300 CC nets **22.950000**.
+4. **Credit is SPENT, not standing.** `answerRecord`'s shape does not transfer — its `score` is
+   farmable only by winning contested disputes, whereas capital-time is farmable in *size*, so a
+   standing credential means one farm buys an unbounded stream.
+5. **The debit (if wanted) uses (e) plus `decidedRounds > 0 && credEligible`.** Under-inclusive by
+   design: (e) is free to evade by rewording, but an evaded *debit* only under-punishes. Without
+   `credEligible` the debit is as forgeable as §9.2's credit — a ~0-CC DoS on every honest holder.
+6. **Prefer PRIORITY over discount.** The 24h window is not fungible and is rate-limited to one
+   active claim per address, so a hedged position **cannot monetize it**. A discount is money and is
+   therefore straddle-priced.
+
+**§6.4's saturation dissolves by construction** — credit is continuous in capital×time, so five
+expiries are worth five times one, with no integer gate at 3 points.
+
+**The owner's five-year call, measured:**
+
+```
+LAB20  EXPIRED  12 CC from 2020-02-01  ->  0.9180 CC
+LAB23  EXPIRED  40 CC from 2023-02-26  ->  3.0600 CC
+LAB23  EXPIRED  20 CC from 2023-03-01  ->  1.4754 CC
+LAB25  OPEN     24 CC from 2025-01-25  ->  0.8961 CC
+                                 total    6.3495 CC   (today: 0)
+carry paid to earn it  2.4900 CC     credit/carry = 2.5500 exactly
+```
+
+### 9.4 State plainly what this is — it does NOT measure being right
+
+**M**, the five expired claims:
+
+```
+biosafety 6.6774    virology 6.5817    oversight 6.4260    epi 4.3687
+trader    4.1310    foia     1.6830    skeptic   1.1311    journo 0.9180
+```
+
+**`virology`, who held the natural-origin side throughout, earns within 1.5% of `biosafety`, who
+held the lab-leak side.** On an unresolved question there is no right side and both earn. It is a
+measure of **capital committed at time-risk to unresolved propositions**, purchasable by anyone at
+2.55× carry (cold) / 6.43× (hot).
+
+That is capital-keyed, which is this repo's own doctrine, and it *is* literally what was asked for —
+*"rewarded for staking on it the whole time."* **But it is not "rewarded for being right," and that
+is the owner's call to accept or reject.**
+
+**And a deeper limit no credential fixes:** a laboratory claim existed to be staked for only
+**29.9 of the docket's 265 weeks (11.3%)**. You cannot stake on a claim that does not exist.
+*"Rewarded the whole time"* is bounded by how often somebody re-files.
+
+### 9.5 §13.5's threshold does NOT transfer — and transplanting it is ANTI-conservative
+
+§13.5's straddle bites because own stake enters `mg_max`, which **is the bond base**. Here it does
+not. **M:** two twin claims, one whose straddler was loaded on an earlier claim and one not —
+
+```
+bond floor, straddler idle   = 100.980000
+bond floor, straddler LOADED = 100.980000     delta = 0.000000  (bit-identical)
+```
+
+So the cost ratio collapses to `(1 − d·min(1, u/u*)) ≤ 1` for **every** stake and **every** `u*`.
+**There is no threshold.** Worse, with `u = s/(P+s)` the whale saturates at full discount while the
+small honest contrarian gets nearly none: **the threshold is regressive here — it defeats the small
+straddler and licenses the large one**, the exact inverse of §13.5.
+
+**Netting transfers a fortiori** — §13.5's fatal netting removed a self-tax from the bond
+denominator, and here that self-tax is **structurally absent already**, so this design is *born* in
+the post-netting regime. §13.5's "6.4× too cheap" reproduces as a pure constant with no topology
+term: `2.55·(r0+d_eff)/r0` = 2.5500 cold, **6.4260** at the ceiling.
+
+**But a different netting does work, and it is not the one §13.5 refuted:** net the **credit
+numerator** within the credited claim (§9.3 rule 3). `credit ≤ ρ|s| ≤ ρ·gross = (ρ/r)·carry`, with
+equality only for a one-sided position — so **any opposing leg costs carry and cannot raise credit,
+strictly dominated at every size and every N. No threshold needed.**
+
+**Its exact limit, and it is irreducible:** netting is per (address, claim), and CC is purchasable to
+any number of addresses. A 2-address sybil restores the un-netted straddle at 2× carry for 1× credit
+→ credit/carry **1.275 cold / 3.213 hot**. Two addresses on opposite sides are observationally
+identical to two people who disagree. **Netting buys exactly a factor of 2 and no more.**
+
+### 9.6 The safe exchange rate is scale-free — there is no N
+
+```
+profit/claim = X·(v·ρ − 2·r0·T)        — LINEAR in stake and in claim count
+v* = 2·r0·T/ρ = 0.784314 (cold)   0.311236 (hot, at the ceiling)  <-- binding
+```
+
+`d_eff` moves at runtime with no retune path, **so the safe constant is the ceiling value: v ≤
+0.3112; take v = 1/4 for margin.** Equivalently **≤ 0.06 CC of relief per CC held 12 weeks**. Without
+netting, halve it. At `v = 1` the straddle is risk-free **+3.58%/yr cold, +28.8%/yr at the ceiling**,
+at every size and count.
+
+### 9.7 A credential discount is more dangerous than the conviction lever
+
+`bond ≥ 1.2·mg_max` against `k = 1.6` ⇒ **total discount ≤ 25%, ONE budget** — §13.5's conviction
+lever and a credential discount **cannot stack**; whichever applies first exhausts it.
+
+| | δ = 0 | δ = 25% credential discount |
+|---|---|---|
+| MID | 0.66875 | 0.891667 (still < 1) |
+| **HIGH** | **1.29375** | **1.725 (+33.3%)** |
+
+So it coexists with C3 **only** under §13.3's draw cap. **And it carries a hazard the conviction
+lever does not:** a conviction-keyed discount requires holding a third of the majority pool on the
+minority side, which a sniper will not do — but a **credential**-keyed discount is **earned on
+unrelated claims and spent on the snipe.** It decouples the discount from the claim being answered.
+**Another reason to pay in priority, not discount.**
+
+### 9.8 Residuals, stated rather than papered over
+
+1. **§4.3 spam is NOT closed by netting.** The burned fee is a per-*claim* constant against a
+   quantity that scales with *capital*, so it bounds claim count, not credit magnitude. A
+   self-opened claim expiring with net capital-time is **indistinguishable on-chain** from an honest
+   one — the farm and the honest five-year call are the same act at the same price. The only
+   difference is whether anyone else cared, which is not on-chain.
+2. The pre-existing **answered-claim straddle leak** (now `TODOs.md` §0a), which this design
+   inherits and enlarges.
+3. The **sybil-split straddle** — irreducible; netting is worth exactly ×2.
+4. **(e) is free to evade** by rewording or moving the dateline to the front. Acceptable for the
+   debit (it under-punishes); fatal if load-bearing for the credit — which is why §9.3 does not use
+   it there.
+5. **`v = 1/4` delivers modestly.** biosafety's 6.3495 CC of credit → **1.587 CC of relief**, ≈86% of
+   one maximum discount on a claim the size of his own largest position, **over five years**. That
+   is `> 0` and it is the owner's own concession — but it is small, and 75% of every bond is
+   non-discountable by construction, so no calibration makes it large. **If more is wanted the lever
+   is priority, not discount.**
