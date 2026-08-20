@@ -158,15 +158,26 @@ being exact about which layer does what. The court layer, specified above, is
 built: wordlocked claims, stakes, bonds, votes, verdicts, dissents, all
 permanent.
 
-Two things in §2 are **specified and measured but not yet shipped**, and it would
-be dishonest to describe them as running. The bond is priced against the declared
-side alone today, not against the larger of the two — the correction is designed,
-its effects are measured, and it lowers the bond an answerer must post by roughly
-eight times. The bonus cap is likewise designed and verified but not landed. Both
-are recorded, with their measurements and the attacks run against them, in
-`GAMETHEORY.md`. One known gap is open and named there rather than papered over:
-the cheapest way to destroy a claim's reward is not the answer bond at all but a
-low-turnout quality vote, and that has its own decision pending. The structure layer arranges those claims and is specified for the
+The bond pricing described in §2 is now **shipped**: the base fell from half a
+claim's average stake to 6%, and — the part that does the work — it is priced
+against the larger of the two sides rather than the side being declared. So is the
+bonus cap. Both landed with their fixtures and were verified by deliberately
+breaking them, and the reasoning, the measurements and the attacks run against
+them are recorded in `GAMETHEORY.md` and `IMPLEMENTATION.md`.
+
+Three structural fixes shipped alongside: a small claim's verdict is now reachable
+at all (the turnout bar was keyed to the court's size rather than the claim's, so
+below a threshold no proportional turnout could clear it — and an unreachable
+quorum handed the decision to the party the bar exists to police); a claim whose
+rounds all fail now closes at the ordinary rate instead of paying nothing; and a
+vote that overturns an answer can no longer, in the same breath, declare the claim
+worthless.
+
+**Two things are open and named rather than papered over.** The cheapest way to
+destroy a claim's reward is not the answer bond at all but a low-turnout quality
+vote, which is a pending decision about how cheap a legitimate challenge should
+be. And staking *both* sides of a claim is currently profitable — small, but
+risk-free — which is a bug rather than a design choice. The structure layer arranges those claims and is specified for the
 release after: each claim gets one home in a tree of sections, so paths mean
 something and the same sentence cannot be filed twice in the same place, and
 anyone may add argument edges marking that one claim supports or counters
