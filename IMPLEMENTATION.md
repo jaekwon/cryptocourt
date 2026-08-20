@@ -866,3 +866,130 @@ a fresh tally in which every address votes again (**M:** the same dust address r
 S4's code is correct and fully mutation-covered (7/7). If it lands anyway it must land with the
 residual pinned and the rationale corrected, because §8 as written reads "hazard closed" and it
 is not.
+
+---
+
+## 10. VET ROUND 2 (S2 + S3) — both GO, and **the batch is NOT blocked**
+
+Independently implemented on six shadow trees. 16 hand-built mutations → 14 caught, 2 documented
+structural survivors, 0 invalid builds. 894 corpus rows clean, all guards green.
+
+### 10.1 THE HEADLINE — §7.2's gate is over-strong and S3 can land with §0.1 open
+
+> **A dust flag can only return a provClosed claim's payout to ZERO — which is exactly what it is
+> today.** So S3 is a **Pareto improvement with §0.1 wide open**: best case a full MID draw, worst
+> case today's zero. **There is no new value at risk** — the lane destroys a *counterfactual*, not
+> a realized draw.
+
+§7.2's "satisfiable in test and defeated for free in production" is a true statement about the
+*exit criterion*, not about a regression. Two supporting facts: on a provClosed claim the lane is
+**unrewarded** (no bounty, no dust burn) where §0.1's own measurement shows it is **net profitable**
+on ordinary claims — so no attacker prefers it; and the pre-existing lane already covers every
+claim that actually draws.
+
+**Change §7.2 from a GATE to a documented residual.** §0.1 stays exactly as urgent as it was, on
+the claim class where it is actually profitable. The one thing S3 must do differently from §8 is
+state the exposure as **inherited, not created**.
+
+### 10.2 And KEEPING `OpenFlag`'s arm is strictly worse — the decisive argument, unstated until now
+
+**M**, on a purpose-built tree: a sybil of the answerer runs the ladder back to back, and a
+full-bar **30,000 CC** quality bloc is refused a window at *every* height ("a dispute is open" ×3,
+then "closed without a draw"). provClose then shuts the lane for good and the claim crystallizes at
+`tier=1, drawWinners=19,584, slotConsumed=FALSE`.
+
+> **8.4%·X̄ buys total quality-lane immunity plus a full MID draw** — the purchasable-immunity shape
+> v0.47 and v0.50 each closed. Neither §8 nor §16 states this, and it is the real reason the arm
+> must go.
+
+### 10.3 S2 — GO, with my invariant replaced because it was VACUOUS
+
+**§8's `mustSane` check can never fire.** `ladderWindow ≥ votingBlocks + 2·graceBlocks + 1 >
+votingBlocks` for every `p` clearing `graceBlocks ≥ 1`. Implemented verbatim: suite green and
+`TestParamsMustSaneRefusesEachMalformedField` **unchanged** — which also **refutes §16.5's claim
+that that fixture was a real cost of S2.** It breaks on the *corrected* invariant, not on mine.
+
+**Corrected:** `escrowMaxBlocks < ladderWindow(p)` — it has a firing input, and that input is
+exactly the `escrowMax == escrowMin == 120_960` case §16.5 described.
+
+**And "floor the window" is singular where there are TWO arms.** `escrowUntilAt` is what actually
+gates; **flooring only the height arm leaves the bug fully live.** Both single-arm mutations are
+caught by the landed fixture. Unmentioned in §8 and §16.
+
+**Item 3 confirmed, scoping made exact.** The floor is active only when `escrowWindow <
+ladderWindow`, and then W = 155,521 ∈ (V, 2V] ⟹ capacity 3 ⟹ a provClose there is three
+*consecutive* failures ⟹ `decidedRounds == 0` ⟹ **no comp. The comp-drought dependency for the
+S2-enabled population is zero.** But **S3's C0 dependency does not go away**: the
+decided-then-provClose shape was measured on the **baseline** tree at W = 259,200, no S2 involved.
+What is zero is the *increment* S2 adds.
+
+**The grind slack is NOT free.** §16.7 called it conservatism. Measured, the delay-maximising chain:
+
+| tree | rounds | answer → settled | attacker cost |
+|---|---|---|---|
+| baseline | 2 | 414,718 (24.0 d) | 360 bps·X̄ |
+| S2 | 2 | **449,279 (26.0 d)** | **360 bps·X̄ — identical** |
+
+**S2 buys the attacker +2.0 days and no extra round, at the same price**, and those two days *are*
+the grace term. Keep it — the minimal window needs every round opened and resolved in the same
+block, which is unusable — but **price it in the comment rather than calling it necessity.** Note
+also that `graceBlocks` is the governor's post-settle *execution* grace, dimensionally unrelated to
+the ladder.
+
+**Two corrections to my own arithmetic.** `R(W) = 2 + floor((W−1)/V)` is a **capacity** bound;
+realized failed rounds are `min(N(W), maxFailedRounds)`, and §7.4's "reproduces all three
+measurements" mixed failed-round with decided-round counts. And **"`provCloseClaim` is dead code"
+is conditional** — only where `Price(minted) == 0` or `extraDays == 0`. It is **live today on any
+court with a curve price**, which makes S3 a fix for a live state rather than a hypothetical one.
+
+**A budget term neither doc mentions:** the height arm is dead for post-upgrade claims — the gates
+read `escrowUntilAt` whenever the stamp exists, so the real budget is wall-clock **seconds** while
+the vote closes on **height**, with 5 s/block hardcoded. At a 2.5 s cadence the **default** window
+already admits 4 rounds. So the whole "dead code" finding is cadence-conditional.
+
+### 10.4 S3 — GO. Correctness proven in ONE run, not across trees.
+
+Two claims in one court, staked and answered in lockstep so their pools freeze with identical
+conviction:
+
+```
+F (2 failed → Finalize)   pool=22767 w=19584 a=1958 n=1224 carrot=1593
+P (3 failed → provClose)  pool=22767 w=19584 a=1958 n=1224 carrot=1593
+```
+
+**Non-clamping asserted per claim** as a precondition (the fixture fails otherwise): draw cap slack
+1,317×, `SeniorOwed == 0 && decidedRounds == 0` on both.
+
+**The guarded predicate, verified on money in the one state `!tierFinal` alone would miss** — a
+full-bar ⅔-low landing *during* the ladder leaves `slotConsumed = true, tierFinal = false`. Both
+"guard dropped" and "keeps only `!tierFinal`" are caught. **"Keeps only `!slotConsumed`" SURVIVES**:
+`tierFinal == true ⟹ slotConsumed == true` at every writer, so `!tierFinal` is redundant *at this
+site*. Keep it for the three-terminal-path symmetry and **document it as unmutatable** — §16 does
+not report this survivor.
+
+**Readers of `cs.provClose`: 12 grepped.** Needing change beyond `OpenFlag`: **three `render.gno`
+lines, all of which describe MONEY** (the flag-slot line, the accuracy-pull hint, and
+`claimStatus`'s text) — **two were mutation SURVIVORS until assertions were added**, so §16.7's
+"render drift fixed" was true of the text and false of the guarding. Plus **`refundSlash`'s comment
+is now FALSE**: its "Crystallize panics on provClose so the reserve must be paid straight back or
+it strands forever" no longer holds. Unlisted by both §8 and §16.7.
+
+**My price was stale by 8.3×.** Three half-burns are **8.4%·X̄**, not ~70% — the `20%·X̄` dispute
+arm can **never** bind post-`76032ae`, because it needs `A ≥ 50%·X̄` while `A ≤ 30.83%·X̄`. The
+*conclusion* survives structurally rather than by calibration: `cost = 1.4·A ≥ 2.24·mg` against a
+MID prize of `1.07·mg` ⟹ **ratio ≥ 2.09**. But **my comparison was between the wrong parties** —
+the half-burns are paid by the *disputer*, and the demotion benefits *nobody* on a provClosed claim.
+
+**Unlisted consequence of S3:** pre-S3 the robbed majority had one lever — spend `1.4·A` to force
+provClose and at least **deny** the sniper. **S3 removes it.** Neutral-to-good in cash, and
+denial-by-burning is not worth preserving, but it is a change neither doc stated.
+
+**Corpus impact understated.** Three rows broke, and one — `provCloseClaim: a closed claim is left
+at the MID tier` — was **a mutation-tested lock on the very defect S3 fixes**, so it inverts.
+§16.1's "5 corpus rows" is really **4 edits + 12 additions**.
+
+### 10.5 Ordering, confirmed with a better reason
+
+**S3 before S2** — not because S2 creates the population, but because **provClose is live today**
+(§10.3), so S2 does not create it at all. The `mustSane` churn belongs with S2; **S3 alone touches
+no params.**
