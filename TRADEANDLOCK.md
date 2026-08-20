@@ -201,3 +201,74 @@ argument is the answer, not a denial.
 5. **§B — anything the four prior vets missed**, now that transferability is in the same change.
 6. **Ordering:** (A)+(B) together, or (B) then (A)? §0 argues never (A) alone.
 7. **Counsel flags** for §A5, stated not decided.
+
+---
+
+## PART B′ — SUPERSEDES PART B: universal unbonding, winners exempt
+
+**Owner's revision, and it is a better mechanism than Part B.** In their words: *"make the unbonding
+period something everybody has to wait, unless they win. you can switch sides, but you can't just
+withdraw, you need to wait. then, naturally, there is a penalty for losing, because you don't
+benefit from winning."*
+
+### B′1 The rule
+
+- **Unbonding applies to EXIT, for everyone.** That is the baseline.
+- **Winning exempts you** — a winner releases immediately.
+- **Switching sides is free**, at any time, with no wait.
+- **The penalty for losing is emergent**: losers wait, winners don't. Nothing is taken, nothing is
+  slashed, principal is untouched.
+
+### B′2 Why this is better than Part B — three reasons, and the third is the one I missed
+
+1. **It may make the presence scale UNNECESSARY.** Part B needed the scale because the drain attack
+   (unstake both legs before the freeze, collect anyway) made a settlement-time lock void. **But if
+   unbonding applies to unstaking generally, the drain is closed directly** — you cannot exit early
+   without waiting either. If that holds, `stakePos.released`, the scale, and the `capBonus` surgery
+   all disappear, and the change becomes far smaller. **Under review.**
+2. **It fits F9's rationale instead of straining it.** F9 exists so *"honest belief-updating is never
+   punished"*. Here belief-updating — switching sides — is **completely free**; what is constrained
+   is *exit*, a different act. Part B narrowed F9; this may not touch it at all.
+3. **The regulatory shape improves, and this is the strongest argument for the revision.** Part B
+   made the **duration of deprivation** outcome-contingent, which was the sharpest objection in four
+   vets and the one I could not weaken. **B′ makes the baseline uniform and outcome-INDEPENDENT —
+   everyone waits — and makes early release a reward for winning.** So what turns on the outcome is
+   a **benefit**, not a deprivation. Against `REGULATIONS.md`'s operative test — *"staked or risked
+   **upon the outcome**"* — a uniform wait is not something risked on the outcome; it is a condition
+   of participating at all. **Counsel flag, not a conclusion, but the shape is better and that is
+   worth having checked rather than assumed.**
+
+### B′3 The ambiguity I resolved, and the reading I took
+
+*"You can't just withdraw, you need to wait"* could mean **only post-verdict withdrawal**, or
+**exit at any point in the lifecycle**. **I took the latter**, because it is the reading that
+simultaneously closes the drain, makes the loss penalty emergent, and keeps belief-updating free —
+the three things the revision is for. The narrower reading closes none of them and reduces to
+Part B. **Flagged for the review to contradict if it sees something I don't.**
+
+### B′4 THE HOLE I CAN SEE, and it needs pricing before this ships
+
+**The exemption is binary; conviction is not.** Someone can switch to the winning side late —
+earning almost no reward, since conviction is capital×time — and still collect the **immediate
+release** exemption in full. So a straddler could hold both sides, watch the verdict form, and
+consolidate onto the winner to escape the wait entirely.
+
+If that lands, the exemption must be **conviction-weighted**, or keyed to the position **at the
+freeze** rather than at the verdict. Note the second option quietly reintroduces a
+presence-at-freeze notion — so §B′2's hoped-for simplification may not survive this hole. **This is
+the first thing the review must price.**
+
+### B′5 Duration — re-derive, do not assume
+
+Part B's `L = 1 × claim life` rested on the shipped rate constant billing for a 1.5× lock and
+delivering 1.039×. **That arithmetic assumed only the loser serves time.** Under B′ **both sides
+serve time in expectation**, so the delivered lock is longer at the same `k` and the honest
+break-even moves further. **Re-derive.** If it lands past the design's own documented `p_min ≈ 0.684`
+the `k` must come down — the envelope argument was the whole justification for `k = 1` and it does
+not survive being exceeded.
+
+### B′6 Unchanged from Part B
+
+`Transfer` gated on `spendable()` from its first commit (§0); `!cs.provClose` exemption; `claimLife()`
+hoisted and shared; date-gated with a height fallback; `ReleaseAt()` published. And §A is untouched —
+the supply-denominated-bar question is about transferability, not about the lock.
