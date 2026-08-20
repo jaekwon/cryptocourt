@@ -512,3 +512,198 @@ value**; the "88/88 provably dead" result came from an audit harness, not the su
 And **§2.5's heading understates the work**: "3 shipped + 5 corpus rows" reads as the total, but the
 real total is **12 new fixtures + 3 re-derived + 5 corpus rows**. Relabel it so nobody scopes from
 that line.
+
+---
+
+## 8. THE FOUR STRUCTURAL FIXES — concrete solutions, for vetting
+
+Written before the vet so it has a fixed target. **Status: PROPOSED. The bond work
+(steps 1 and 3) has landed; this is what remains of the verified batch.**
+
+Each solution states the sites, the invariant, what it deliberately does NOT do, and the
+residual it leaves. Line references are given as anchors, not numbers — `check-citations`
+forbids `file:line` inside `realm/r/kourtv2`, and step 3 already tripped it once.
+
+---
+
+### S1 — a small claim's verdict must be reachable
+
+**The defect.** `quorumFloor` maxes its X̄ arm against `quorumSupplyBps` of *court supply*,
+but the prize is denominated in *claim stake*. Below X̄ = 5%·supply the robbed pool cannot
+clear the bar **even voting unanimously at any concentration** — measured 6.6× short at 1% of
+supply. `dispute.gno`'s own comment states the consequence: *"an unreachable quorum does NOT
+mean 'no verdict' … the bar hands the decision to the party it exists to police."*
+
+**Solution.** **Delete** the supply arm and the now-dead v0.29 clamp below it — not gate them.
+Measured across 88 rows, the gated form makes both blocks *provably dead* (zero divergence), so
+gating leaves two unreachable blocks and a page of prose describing behaviour that no longer
+runs. The function becomes, in full:
+
+```
+floor = max(1, min(X̄frozen, votable/3))
+```
+
+**And re-anchor the credential bar in the same commit.** `credEligible`'s test is `yes >=
+floor/4`, documented as costing ~1.25% of supply. With the supply arm gone that becomes X̄/4 —
+a **5.01×** cut, measured: two socks totalling 1.125% of supply mint an `AnswerRecord`, and
+three such points buy the 24h answer-priority window. Replace with `yes >= credWeightFloor(c)/4`
+where `credWeightFloor = mulDiv128(PastTotal(Epoch()-1), quorumSupplyBps, Bps)` — keeping the
+documented price while the *verdict* bar relaxes.
+
+**Deliberately NOT done.** `qualityBars` is left alone, and the election lane cannot be reached
+by this clause at all (`electionFloor` is 5% of *votable*, no X̄ arm; `mustElectionInvariants`
+reads only package constants). Both verified; all ten `TestElection*` pass.
+
+**Residual, accepted and stated.** The verdict and quality lanes now disagree in exactly the
+band this fixes — at X̄ = 1% of supply the verdict quorum is 399 CC while the quality full bar
+stays 2000. The slash deterrent **keeps** its supply anchor, which is the right side of that
+trade, but it makes `court.gno`'s "prices filing above winning the vote" comment untrue of the
+verdict lane. **Fix that comment in the same commit.**
+
+**Also stated because it is worse than the original draft admitted.** The relaxation lets an
+attacker holding **1.25% of supply** flip a true answer to an overturn unopposed: cash swing
+−39.90 → **+159.60 CC**, own bond returned whole, comp minted, the honest answerer's bond
+burned. It is **not a gamble** — with `yes > 0, no = 0` the threshold is trivially met, and an
+uphold requires an opponent to turn out, which is this item's own premise. The trade still
+favours relaxing, because the snipe it fixes is currently **free** while a false overturn costs
+a bond. But it is a trade, not a free win.
+
+---
+
+### S2 — a quorum-less verdict must not finalize by apathy
+
+**The defect.** `votingBlocks == escrowMinBlocks == 120_960`, and `escrowWindow` returns
+`escrowMinBlocks` exactly whenever `extraDays` rounds to zero — guaranteed on any court with
+`minted == 0`. `escrowUntil` is set **once** at the first resolution and never recomputed, and
+each round burns a full `votingBlocks`. So round 3 cannot open, `failedRounds` caps at **2**
+against `maxFailedRounds = 3`, and `provCloseClaim` is **dead code**. Meanwhile the *first*
+failed round already set `cs.provisional = cs.answer`. **Apathy resolves the claim in the liar's
+favour** — the outcome that branch's own comment forbids. Three shipped fixtures already widen
+the window in-test to reach provClose, one with a comment naming the bug.
+
+**Solution — a defaulted-verdict-only window.** Keep "set once, never recomputed". At the first
+resolution, if `cs.failedRounds > 0` (i.e. the standing verdict is a quorum-less **default**),
+floor the window at
+
+```
+ladderWindow = (maxFailedRounds-2)*votingBlocks + (maxFailedRounds-1)*graceBlocks + 1
+```
+
+= 155,521 blocks (9 days) on defaults. A **decided** first round keeps today's window,
+bit-identically.
+
+**Do NOT raise `escrowMinBlocks`.** Measured: it taxes an honest *disputed* claim from 14 to 21
+days of frozen winning-side principal — verbatim the objection used to reject a longer settle
+window — and it **doubles the reopen grind chain** (decided rounds 2 → 4), because
+`failedRounds` resets on every decided round so the doubling ladder is inert on a decided chain.
+
+**Invariant, in `Params.mustSane` and NOT `mustInvariants`** — all three terms are per-court
+params, which is exactly why `mustInvariants` never saw the coupling:
+
+```
+defaulted := max(ladderWindow(p), p.escrowMinBlocks)
+if defaulted <= p.votingBlocks*(maxFailedRounds-2) { panic(...) }
+```
+
+**Known slack, kept deliberately.** The measured minimum for round 3 to open is `votingBlocks +
+1` = 120,961, because round 2 opens in the same block round 1 resolves. `ladderWindow` carries
+34,560 blocks more than that. **Keep it and say so in the comment**, or a later reader "fixes"
+the conservatism as a bug.
+
+---
+
+### S3 — a claim that ends undecided must still pay
+
+**The defect.** `provCloseClaim` refunds the deposit **and** fee with the explicit comment
+*"provClose is not a conclusive low"*, then sets `tier = tierLowX` and `tierFinal = true`, and
+`Crystallize` refuses on top. It treats itself as not-a-low for the deposit and as a low for the
+draw. Honest winners get principal at 1× and nothing else, **on a claim where nobody was found
+at fault** — measured, it converts a claim paying 19,584 into one paying 0.
+
+**Solution.** Three edits, one commit:
+
+1. `provCloseClaim` sets the plain default MID **through the same guarded predicate the other
+   terminal paths use** — `if !cs.tierFinal && !cs.slotConsumed { cs.tier = tierMidX }` — so a
+   genuinely adjudicated low is never clobbered.
+2. `Crystallize`'s refusal narrows to `cs.closed` only.
+3. **`OpenFlag`'s `provClose` arm must go too**, or every claim that outlasted the ladder gets an
+   **undemotable MID**: the failed-quorum branch deliberately never calls `resolveQualityRide`,
+   so the ladder's own rides cannot demote it either.
+
+**Correctness target.** A provClosed claim pays **bit-identically** to today's 2-failed-round
+Finalize path, with the reserved pool figure identical across runs — so it is structural
+equality, not two clamps agreeing on zero.
+
+**State plainly what it does NOT do.** On a provClose the standing provisional is **always**
+`cs.answer` (set by the first failed round), so this pays the **answer side**. On an
+honest-answer-plus-apathy claim that is right; on a **sniped** claim it pays the sniper's dust
+pool and **the robbed majority still gets nothing.** S3 does not rescue the robbed pool.
+
+**Two residuals, demonstrated rather than papered over.**
+
+- **It opens a demote-only, economically inert flag lane on provClosed claims.** Every priced
+  disposition on that lane is gated on `answerBond > 0`, and `provCloseClaim` returns the bond
+  whole — so a full-bar ⅔-low flag demotes while levying **no slash**, burning **no dust**,
+  paying **no bounty**, and returning the flagger's bond **whole**. Not an exploit (reaching
+  provClose costs three half-burns, ~70%·X̄, against a draw bounded at 19.27%·X̄) but the lane
+  has no teeth there. Fix if wanted: have `provCloseClaim` retain a `slashSizeFor` reserve as
+  `Finalize` and `SettleUndisputed` do. **Not in this batch.**
+- `provCloseClaim` still calls `stripExit`, so the claim leaves the policing strips while the
+  flag lane is open. Its comment claims "unflaggable" — **correct the comment.**
+
+**And it must ship with the §0.1 decision.** Dropping `OpenFlag`'s arm re-admits the
+supply-floorless demotion, and `ResolveFlag` overwrites `cs.tier` with **no `tierFinal` guard**
+while `OpenFlag` never checks it — so `provCloseClaim`'s `tierFinal = true` does not protect the
+new payout. Measured: a 200 CC dust flag zeroes a provClosed claim's whole payout for free.
+
+---
+
+### S4 — a verdict round must not zero the tier it just vindicated
+
+**The defect.** An ordinary overturn restores `cs.tier = tierMidX` and pays honest winners in
+full. But `resolveQualityRide` can set `tier = tierLowX = 0` on **the same tally that overturned
+the answer**, zeroing the entire draw — while `quality.gno` argues at length that "was the answer
+right" and "is the claim worth anything" are *different questions*. And it is **cheap**:
+`demotionBar = arm/4` has **no supply floor**, so a low bloc of **49 bps of court supply** zeroed
+the whole draw of the pool the same tally had just vindicated, for the price of one `VoteQuality`.
+
+**Solution — require the demotion's own mandate; do NOT exempt the round.** After
+`if !conclusive { return }`, re-classify the tally as **inconclusive** when it would demote on a
+round that overturned:
+
+```
+if tier == qualityLow && cs.provisional >= 0 && cs.provisional != cs.answer {
+    if _, fb := qualityBars(c, cs); turnout < fb || cs.qLowW*3 < turnout*2 {
+        return
+    }
+}
+```
+
+**Why re-classify rather than skip.** Skipping the demotion would forfeit
+`burnConclusiveLowDust` (the junk author keeps deposit and fee) **and** latch `slotConsumed` on
+a tier it declined to set, permanently closing the flag lane. Re-classifying as inconclusive
+does neither: the slot stays open, so a real full-bar ⅔-low can still land later *with a bond*.
+The bar chosen is `ResolveFlag`'s own `slashGrade` test — the lane already demands it before
+destroying anything of comparable size.
+
+**`cs.provisional >= 0` is load-bearing, not defensive.** `-1` also satisfies `!= answer`, and
+`TestRideRatchetAndSlashPredicate` drives exactly that state. **It failed the first version of
+this predicate and was NOT asserting the bug** — it caught a real over-reach.
+
+**The scoping is pinned by shipped code.** `TestUnmandatedDemotionRideStillLands` drives an
+*uphold*, so `provisional == answer` and S4 must **not** fire. Had this been written as "no
+demotion on any decided round" instead of "on an overturn round", that fixture would have
+failed.
+
+**Known, and owner-flagged rather than fixed:** the reverse direction is also live — a
+`reaskQualityTally` wipe lets a later, smaller poll **promote** a tier that a larger electorate
+had adjudicated LOW. `quality.gno` admits this and defers it. Not in this batch.
+
+---
+
+### Ordering for the batch
+
+**One commit for all four, with S3 before S2 if ever split** — S2 alone converts a claim paying
+19,584 into one paying 0. **S1 and S4 are order-free.** And the standing dependency holds: the
+comp drought must be fixed before S3 or S4 pays out on any claim with a *decided* round, since
+that claim's own overturn reserves a senior comp ahead of the draw being restored.
