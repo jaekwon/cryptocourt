@@ -207,6 +207,22 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 	accrue(c, cs, p, side)
 	p.stake -= amount
 	releaseStake(c, who, amount)
+	// An unstake before the answer is an EXIT, and exits cool. Nobody has won
+	// anything yet, so there is nothing to exempt — and taking the broad reading
+	// here is what closes the drain: without it a straddler unstakes both legs
+	// before the freeze, keeps the conviction (F9), collects at settlement and
+	// never serves a block of the wait.
+	//
+	// This is not a tax on changing your mind. Changing your mind is SwitchSide,
+	// which never reaches this file.
+	//
+	// The exception is a claim that decided nothing — see noDecision. Stakers
+	// leave a dead claim through THIS path rather than WithdrawStake, because a
+	// dead close never sets verdictAt, so without the check here the exemption
+	// would exist only in a branch nothing reaches.
+	if !noDecision(cs) {
+		beginCooling(c, who, amount)
+	}
 	if side == sideYES {
 		cs.yesStake -= amount
 	} else {
@@ -357,3 +373,78 @@ func add128(aHi, aLo, bHi, bLo uint64) (hi, lo uint64) {
 }
 
 // runtimeHeight exposes the chain height to in-package tests.
+
+// SwitchSide moves live stake from one side of a claim to the other without it
+// ever becoming spendable, so it does not cool.
+//
+// THIS IS WHAT MAKES THE UNBONDING PERIOD FAIR. Without it the only way to change
+// your mind would be Unstake followed by Stake, and the unstake would cool — so a
+// staker who updated on new evidence would be punished for it, which is precisely
+// the failure F9 exists to prevent ("honest belief-updating is never punished").
+// With it the rule is the one the owner stated: your capital stays in the court
+// until you are right, but your opinion is never locked.
+//
+// CONVICTION IS BANKED, NOT MOVED. Both positions are accrued to the current
+// height first, so the integral each side earned while the capital was actually
+// on it is preserved exactly. The abandoned side keeps what it earned and stops
+// earning; the new side starts earning from now at the size just moved. Moving the
+// integral across would be the actual exploit here: it would let a staker earn
+// conviction cheaply on an uncontested side and then carry it to the side that
+// wins.
+func SwitchSide(cur realm, courtSlug string, claimID uint64, fromSide, toSide int, amount int64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	mustSide(fromSide)
+	mustSide(toSide)
+	if fromSide == toSide {
+		panic("kourtv2: that is the side the stake is already on")
+	}
+	if amount <= 0 {
+		panic("kourtv2: the amount switched must be positive")
+	}
+	if cs.closed {
+		panic("kourtv2: this claim is closed")
+	}
+	// Frozen means the answer is in and the conviction pins are set. Allowing a
+	// switch after it would let a staker read the answer and move to the winning
+	// side, which is not belief-updating, and it would also mean rewriting pools
+	// that the payout arithmetic has already been computed against.
+	if cs.frozenAt != 0 {
+		panic("kourtv2: stakes are frozen — this claim has an answer")
+	}
+	// Same polish window Stake is under: if betting has not opened, there is
+	// nothing to switch and a switch would be a way in early.
+	if heightNow() < cs.openedAt+c.params.stakeOpenDelayBlocks {
+		panic("kourtv2: the polish window is open; staking has not started yet")
+	}
+	touch(c)
+
+	advancePools(c, cs)
+	from := getPos(c, cs, who, fromSide)
+	if from.stake < amount {
+		panic("kourtv2: switching more than is staked on that side")
+	}
+	to := getPos(c, cs, who, toSide)
+	// Both sides accrued BEFORE either stake figure moves, so each integral is
+	// closed at the size it actually carried up to this height.
+	accrue(c, cs, from, fromSide)
+	accrue(c, cs, to, toSide)
+	from.stake -= amount
+	to.stake = mustAdd(to.stake, amount)
+	if fromSide == sideYES {
+		cs.yesStake -= amount
+		cs.noStake = mustAdd(cs.noStake, amount)
+	} else {
+		cs.noStake -= amount
+		cs.yesStake = mustAdd(cs.yesStake, amount)
+	}
+	// The lock ledger is deliberately untouched: the same coins are committed
+	// before and after, to the same claim, for the same holder. That identity is
+	// the reason nothing cools.
+	observePools(cs)
+	recordPools(c, cs)
+}

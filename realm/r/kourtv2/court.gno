@@ -340,6 +340,7 @@ type Params struct {
 	escrowMinBlocks      int64 // 1 week
 	escrowMaxBlocks      int64 // 3 weeks
 	stakeOpenDelayBlocks int64 // polish window: staking closed for this long after OpenClaim (0 = none)
+	unbondBlocks         int64 // released stake cools this long unless the side won (0 = none)
 }
 
 func defaultParams() Params {
@@ -353,6 +354,24 @@ func defaultParams() Params {
 		escrowMinBlocks:      120_960,
 		escrowMaxBlocks:      362_880,
 		stakeOpenDelayBlocks: 0, // default: no polish window (opt in via StartCourtP)
+		// ONE WEEK, the same number as escrowMinBlocks, which is this design's
+		// own unit of "shortest commitment worth having" (120_960 blocks at the
+		// 5s block time the other windows are calibrated against: settleDelay
+		// 51_840 = 72h, deadClaimTimeout 1_451_520 = 12 weeks).
+		//
+		// WHY A WEEK AND NOT LONGER. The rate constant is
+		// 2.55 = 0.85 x 2 x 1.5, where the 1.5 is an assumed ratio of locked
+		// time to claim life. That ratio has been fiction since V1: measured, it
+		// delivers 1.039. Cooling the losing side moves delivery toward the bill
+		// by (1 - p) x L/T_c, so a week can only ever close part of the gap and
+		// cannot overshoot it for any claim life at least a week long. Erring
+		// short is the right direction: overshooting would mean charging honest
+		// stakers for a lock the rate never promised, and the envelope argument
+		// is the whole justification for the number.
+		//
+		// NOT re-derived against a measured T_c, which is the one input nobody
+		// here has. TRADEANDLOCK.md §B'5 records that as owed.
+		unbondBlocks: 120_960,
 	}
 }
 
@@ -372,6 +391,19 @@ func (p Params) mustSane() Params {
 	}
 	if p.escrowMinBlocks < 1 || p.escrowMaxBlocks < p.escrowMinBlocks {
 		panic("kourtv2: the escrow window is malformed")
+	}
+	// Negative would make a release height earlier than the unbond that created
+	// it, which reads as an immediate release and hides the misconfiguration
+	// instead of failing. Zero is legal and means no cooling at all: a court may
+	// opt out, and the meta court's fixtures rely on being able to.
+	if p.unbondBlocks < 0 {
+		panic("kourtv2: the unbonding period cannot be negative")
+	}
+	// A cooling period longer than the dead-claim timeout would outlive the
+	// claim that caused it by more than the claim's own maximum life, which is
+	// not a lock any more but an expropriation with extra steps.
+	if p.unbondBlocks > deadClaimTimeout {
+		panic("kourtv2: the unbonding period cannot exceed the dead-claim timeout")
 	}
 	// A DEFAULTED VERDICT'S LADDER MUST FIT. ResolveDispute floors the reopen window
 	// at ladderWindow when the standing verdict is a quorum-less default, and that
@@ -474,6 +506,14 @@ type Court struct {
 	// every deposit and bond, and a lazily-built tree would give each of those
 	// a second branch that has to agree with the write path.
 	locked         *bptree.BPTree // addr -> int64 (lock.gno)
+	// cooling and coolingTot are the unbonding queue (lock.gno). Released stake
+	// does not become spendable at once: it waits unbondBlocks, so that losing a
+	// claim costs time even though it never costs principal. Two trees rather
+	// than one because spendable() is on the hot path of every bonded entrypoint
+	// and must stay O(1) — coolingTot answers it, and cooling is only walked by
+	// the sweep that the holder themselves pays for.
+	cooling        *bptree.BPTree // addr|paddedHeight -> int64
+	coolingTot     *bptree.BPTree // addr -> int64
 	qualifiedCount int            // addresses at score ≥ priorityNetRecord
 
 	// Moderation state (moderation.gno) — render-layer only; no money path

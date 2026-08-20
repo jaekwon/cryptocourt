@@ -95,12 +95,29 @@ func TestConvictionDoesNotTravelWithTheCoin(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Stake(cross(cur), "tx3", id, sideYES, 5_000_000_000)
 
-	// Let the integral accumulate, then leave the position. Unstake is free and
-	// KEEPS conviction — that is F9, and it is about the integral rather than
-	// about principal — so alice's accrued conviction is real and still hers.
+	// Let the integral accumulate, then leave the position. Unstake KEEPS
+	// conviction — that is F9, and it is about the integral rather than about
+	// principal — so alice's accrued conviction is real and still hers.
 	testing.SkipHeights(1_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Unstake(cross(cur), "tx3", id, sideYES, 5_000_000_000)
+
+	// The unstaked coin is now COOLING and therefore not transferable, which is
+	// the unbonding period doing its job through the one door every exit shares.
+	// This test predates it and its fixture assumed immediate release; the
+	// property under test — that conviction does not follow the coin — is
+	// unaffected, so the fixture waits the period out rather than the assertion
+	// being weakened. It doubles as the proof that the two features compose:
+	// cooling coin cannot be sold, and once released it can.
+	uassert.Equal(t, int64(5_000_000_000), CoolingOf("tx3", alice))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
+		TransferCC(cross(cur), "tx3", bob, 5_000_000_000)
+	})
+	testing.SkipHeights(UnbondBlocks("tx3") + unbondBucket)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.Equal(t, int64(5_000_000_000), ReleaseUnbonded(cross(cur), "tx3", alice))
+	uassert.Equal(t, int64(0), CoolingOf("tx3", alice))
 
 	accrued := ConvictionOf("tx3", id, sideYES, alice)
 	if accrued <= 0 {

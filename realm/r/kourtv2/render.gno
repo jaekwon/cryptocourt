@@ -385,6 +385,27 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	b.WriteString("- held: " + strconv.FormatInt(bal, 10) +
 		" (CC base units) — every unit votes, committed or not\n")
 	b.WriteString("- committed as stake: " + strconv.FormatInt(locked, 10) + "\n")
+	// The unbonding period, shown here rather than only after a loss. A wait
+	// that is discoverable only once it is being served is a trap however fair
+	// the arithmetic behind it, so the period is stated whenever it is nonzero —
+	// before any of it has been incurred — and the countdown appears the moment
+	// there is something to count.
+	if u := c.params.unbondBlocks; u > 0 {
+		b.WriteString("- unbonding period: " + strconv.FormatInt(u, 10) +
+			" blocks — released stake waits this long before it can be spent, " +
+			"unless the side you were on won. Switching sides is free and never " +
+			"waits.\n")
+	}
+	if cool := coolingOf(c, who); cool > 0 {
+		b.WriteString("- unbonding now: " + strconv.FormatInt(cool, 10) +
+			" — in your balance and voting, not spendable yet\n")
+		if at := ReleaseAt(slug, who); at > 0 {
+			b.WriteString("  - next tranche frees at block " +
+				strconv.FormatInt(at, 10) + " (" +
+				strconv.FormatInt(at-heightNow(), 10) + " blocks away); " +
+				"anyone may call ReleaseUnbonded to sweep it\n")
+		}
+	}
 	b.WriteString("- free to commit: " + strconv.FormatInt(spendable(c, who), 10) +
 		" — what a new stake, deposit or bond draws on\n")
 

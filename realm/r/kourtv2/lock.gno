@@ -51,10 +51,24 @@ func lockedOf(c *Court, who address) int64 {
 }
 
 // spendable is what an address may commit in this court: its balance less what
-// it has staked. Locked CC is still in the holder's balance and still votes, so
-// BalanceOf overstates what is available by exactly the staked amount.
+// it has staked and less what is still cooling. Locked and cooling CC are both
+// still in the holder's balance and both still vote, so BalanceOf overstates
+// what is available by exactly the two of them.
+//
+// COOLING IS SUBTRACTED HERE AND NOWHERE ELSE, AND THAT IS THE WHOLE DESIGN OF
+// THE UNBONDING PERIOD. Every door out of the court narrows to this one
+// function: the five bonded entrypoints, the claim deposit, a fresh stake, and —
+// since court coins became transferable — TransferCC, TransferFromCC and
+// therefore any wrapper or pool built on them. Expressing the wait as a
+// subtraction from spendable() is what makes it a wait rather than a suggestion.
+//
+// A withdrawal DELAY would not have worked. Before transferability there was no
+// exit to GNOT at all, so "you get your stake back later" was already a real
+// lock. There is an exit now, so a delay that left the coin spendable would be
+// worth nothing: the loser would sell on a DEX instead of waiting. The coin has
+// to be unspendable, not merely unreturned.
 func spendable(c *Court, who address) int64 {
-	s := c.coin.BalanceOf(who) - lockedOf(c, who)
+	s := c.coin.BalanceOf(who) - lockedOf(c, who) - coolingOf(c, who)
 	if s < 0 {
 		// Only reachable if a burn ever took coins out from under a lock. It
 		// does not today (nothing burns a user's balance), and clamping is the
@@ -254,3 +268,219 @@ func TransferFromCC(cur realm, courtSlug string, from, to address, amount int64)
 func AllowanceCC(courtSlug string, owner, spender address) int64 {
 	return mustCourt(courtSlug).coin.Allowance(owner, spender)
 }
+
+// ------------------------------------------------------- unbonding period --
+//
+// Releasing a stake does not hand the coins straight back. They cool for
+// `unbondBlocks` first, during which they sit in the holder's own balance, keep
+// voting, and cannot be spent, staked, bonded, transferred or wrapped — the same
+// standing staked coin has, for a bounded time and for a different reason.
+//
+// UNIVERSAL, WITH ONE EXEMPTION: WINNING. Everyone waits on exit. A side that
+// won its claim releases immediately, and a claim that ended with no decision at
+// all exempts both sides, because there is nobody to have been wrong. Nothing is
+// slashed and nothing is burned — principal is still returned 1x, which is the
+// constraint REGULATIONS.md will not bend on — so the penalty for losing is
+// purely that your capital is idle while the winner's is working.
+//
+// WHY THAT SHAPE RATHER THAN A SLASH, and it is the reason to prefer it: what
+// turns on the outcome is a BENEFIT (early release), not a deprivation. The
+// baseline is uniform and outcome-independent. Against REGULATIONS.md's operative
+// test — value "staked or risked UPON THE OUTCOME" — a wait everybody serves is a
+// condition of participating, not something risked on the result. A slash of
+// 0-100%, which was the alternative considered, is the opposite shape and puts
+// principal itself on the outcome.
+//
+// SWITCHING SIDES IS FREE, and it has to be, or the mechanism punishes honest
+// belief-updating — which is exactly what F9 exists to prevent. That is why
+// SwitchSide is a primitive of its own rather than an unstake followed by a
+// stake: it moves stake between two positions on one claim without ever touching
+// this file, so nothing cools and no conviction is lost. Your capital stays in
+// the court until you are right; your opinion is never locked.
+//
+// THE BUCKET GRID IS WHY THIS CANNOT BE USED TO BLOAT THE COURT. A release height
+// is rounded UP to a multiple of unbondBucket, so unbonds landing in the same
+// bucket merge into one row and an address can hold at most
+// ceil(unbondBlocks/unbondBucket) rows no matter how many times it unbonds — 84
+// at the default. Without the grid, ten thousand one-unit unstakes would be ten
+// thousand rows of permanent court state paid for by everyone. The cost is that a
+// release can be up to one bucket late, which is a day, and that is cheap
+// compared to counting rows on every write.
+
+// unbondBucket is the release-height grid: one day at two seconds a block.
+// Small enough that the extra wait is not noticed against a period measured in
+// weeks, large enough to bound per-address rows.
+const unbondBucket = int64(43_200)
+
+// coolingOf is what is still unbonding for this address, and the ONLY reader of
+// the total tree — same rule as lockedOf, for the same reason: a second reader is
+// a second place for the nil-tree and missing-key branches to drift apart.
+func coolingOf(c *Court, who address) int64 {
+	if c.coolingTot == nil {
+		return 0
+	}
+	if v := c.coolingTot.Get(string(who)); v != nil {
+		return v.(int64)
+	}
+	return 0
+}
+
+// coolKey orders rows by release height inside an address's range. Fixed width
+// and zero padded because the tree is lexicographic: "9" would otherwise sort
+// after "10" and the sweep would stop at the first row it thinks is in the
+// future. 19 digits is int64's full decimal width, so no legal height overflows
+// the field.
+func coolKey(who address, at int64) string {
+	d := []byte("0000000000000000000")
+	for i := len(d) - 1; i >= 0 && at > 0; i-- {
+		d[i] = byte('0' + at%10)
+		at /= 10
+	}
+	return string(who) + "|" + string(d)
+}
+
+// beginCooling parks released stake until `unbondBlocks` have passed. Called by
+// the release paths ONLY when the holder is not exempt; the exemption itself is
+// decided by the caller, which is the only place that knows the verdict.
+func beginCooling(c *Court, who address, amount int64) {
+	if amount <= 0 || c.params.unbondBlocks <= 0 {
+		return // a court may opt out; then release is immediate, as before
+	}
+	at := heightNow() + c.params.unbondBlocks
+	// Round UP to the grid. Up rather than down so the grid can only ever make a
+	// wait longer, never shorter: rounding down would hand back coins before
+	// unbondBlocks had elapsed, which is the one direction that turns a bounding
+	// trick into a hole.
+	if r := at % unbondBucket; r != 0 {
+		at += unbondBucket - r
+	}
+	if c.cooling == nil {
+		c.cooling = bptree.NewBPTree32()
+		c.coolingTot = bptree.NewBPTree32()
+	}
+	k := coolKey(who, at)
+	prev := int64(0)
+	if v := c.cooling.Get(k); v != nil {
+		prev = v.(int64)
+	}
+	c.cooling.Set(k, mustAdd(prev, amount))
+	c.coolingTot.Set(string(who), mustAdd(coolingOf(c, who), amount))
+}
+
+// noDecision reports a claim that ended without deciding anything: a dead claim
+// that expired unanswered, or provClose after three failed dispute rounds.
+//
+// BOTH SIDES ARE EXEMPT FROM COOLING ON SUCH A CLAIM, and the reason is an attack
+// rather than a kindness. Nobody on an undecided claim was wrong, so cooling them
+// would make an unanswerable claim into a way to freeze other people's capital:
+// post something nobody can adjudicate, attract stake, and every staker's coin is
+// unspendable for a week through no error of their own. The arithmetic says the
+// same thing — waiting out the 12-week dead-claim timeout to dodge a one-week
+// cooling period is never worth doing, so exempting it costs nothing.
+//
+// The two arms are live in different places and each is kept in both. In Unstake
+// only `closed` can be true, because provClose implies an answer and Unstake
+// refuses a frozen claim. In WithdrawStake only `provClose` can be true, because
+// a dead close never sets verdictAt and WithdrawStake refuses without one. Sharing
+// the predicate keeps "an undecided claim exempts everyone" in one place instead
+// of two half-statements, and it stays correct if either function's other guards
+// move.
+func noDecision(cs *claimState) bool { return cs.closed || cs.provClose }
+
+// ReleaseUnbonded makes matured cooling coin spendable again. Anyone may call it
+// for anyone: it can only ever release what the schedule already released, so
+// there is nothing to gain by calling it on a stranger and something to gain for
+// a UI that wants to sweep on a holder's behalf.
+//
+// Returns what it freed, so a caller can tell "nothing was due" from "nothing was
+// cooling" by reading CoolingOf alongside it.
+func ReleaseUnbonded(cur realm, courtSlug string, who address) int64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	touch(c)
+	if c.cooling == nil {
+		return 0
+	}
+	now := heightNow()
+	freed := int64(0)
+	// Walk only this address's range, in release-height order, and stop at the
+	// first row that is not due — the padding above is what makes that ordering
+	// true. Rows are collected before being removed: mutating a tree underneath
+	// its own iteration is how a sweep silently skips half its entries.
+	var due []string
+	c.cooling.Iterate(string(who)+"|", string(who)+"|"+"9999999999999999999", func(k string, v any) bool {
+		at := parseCoolKeyHeight(k)
+		if at > now {
+			return true // ordered, so nothing after this is due either
+		}
+		due = append(due, k)
+		freed = mustAdd(freed, v.(int64))
+		return false
+	})
+	if freed == 0 {
+		return 0
+	}
+	for _, k := range due {
+		c.cooling.Remove(k)
+	}
+	rest := coolingOf(c, who) - freed
+	if rest < 0 {
+		// The total and the rows disagree, which means a write path updated one
+		// without the other. Refusing is the conservation check: continuing would
+		// make coin spendable that no row ever accounted for.
+		panic("kourtv2: cooling total is short of its own rows")
+	}
+	if rest == 0 {
+		c.coolingTot.Remove(string(who))
+	} else {
+		c.coolingTot.Set(string(who), rest)
+	}
+	return freed
+}
+
+// parseCoolKeyHeight reads the release height back out of a key. The width is
+// fixed by coolKey, so the digits are the last 19 bytes.
+func parseCoolKeyHeight(k string) int64 {
+	if len(k) < 19 {
+		panic("kourtv2: malformed cooling key")
+	}
+	d := k[len(k)-19:]
+	at := int64(0)
+	for i := 0; i < len(d); i++ {
+		ch := d[i]
+		if ch < '0' || ch > '9' {
+			panic("kourtv2: malformed cooling key")
+		}
+		at = at*10 + int64(ch-'0')
+	}
+	return at
+}
+
+// CoolingOf is how much of an address's CC is unbonding in this court: in their
+// balance, still voting, not spendable yet.
+func CoolingOf(courtSlug string, who address) int64 {
+	return coolingOf(mustCourt(courtSlug), who)
+}
+
+// ReleaseAt is the height at which the next tranche of an address's cooling CC
+// matures, and 0 if nothing is cooling. Published because the wait has to be
+// legible BEFORE it is incurred: a UI that can only tell a holder about it after
+// the verdict has built a trap, however fair the arithmetic behind it.
+func ReleaseAt(courtSlug string, who address) int64 {
+	c := mustCourt(courtSlug)
+	if c.cooling == nil {
+		return 0
+	}
+	next := int64(0)
+	c.cooling.Iterate(string(who)+"|", string(who)+"|"+"9999999999999999999", func(k string, _ any) bool {
+		next = parseCoolKeyHeight(k)
+		return true // ordered: the first row is the earliest
+	})
+	return next
+}
+
+// UnbondBlocks is the court's cooling period, so a UI can state the commitment
+// at the moment of staking rather than at the moment of losing.
+func UnbondBlocks(courtSlug string) int64 { return mustCourt(courtSlug).params.unbondBlocks }

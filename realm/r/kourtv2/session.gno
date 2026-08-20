@@ -122,6 +122,27 @@ func WithdrawStake(cur realm, courtSlug string, claimID uint64, side int) int64 
 		cs.noStake -= amount
 	}
 	releaseStake(c, who, amount)
+	// WINNERS RELEASE IMMEDIATELY; EVERYONE ELSE COOLS. The exemption is the
+	// entire penalty for being wrong, and it is a benefit withheld rather than
+	// principal taken — 1x back either way.
+	//
+	// Three cases, and the third is the one worth spelling out:
+	//   - a final verdict exists and this side is it: exempt.
+	//   - a final verdict exists and this side is not it: cools.
+	//   - NO DECISION was reached — provClose after three failed dispute rounds,
+	//     or a dead claim that expired unanswered — and then BOTH sides are
+	//     exempt, because there is nobody to have been wrong. Punishing both
+	//     sides for the court's own failure to decide would make an unanswerable
+	//     claim a way to freeze other people's capital, which is an attack rather
+	//     than an incentive.
+	//
+	// The early withdrawal above, for the side a standing provisional is against,
+	// falls into the second case by construction: verdictAt is still 0, so it
+	// cools. That is correct — they are being let out early precisely because
+	// they are losing.
+	if !(noDecision(cs) || (cs.verdictAt != 0 && side == int(cs.provisional))) {
+		beginCooling(c, who, amount)
+	}
 	return amount
 }
 
