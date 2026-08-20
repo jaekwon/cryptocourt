@@ -379,7 +379,12 @@ html.embed #tcbanner{grid-column:1; padding:0}
    the corners, and the head in the same gold as the docket reference it is. */
 .emb{display:flex; flex-direction:column; gap:9px; padding:14px 15px;
   border:1px solid var(--rule); border-radius:0; background:transparent;
-  min-height:calc(100vh - 2px); box-sizing:border-box; position:relative}
+  min-height:calc(100vh - 2px); box-sizing:border-box; position:relative;
+  /* AN EMBED DOES NOT CHOOSE ITS OWN WIDTH — the host page does, and the snippet
+     only suggests 400. Left uncapped, a card in a wide column stretched every row
+     to that width and stopped reading as a card at all. Capped and centred, it is
+     the same object whatever the host gives it. */
+  max-width:520px; margin-inline:auto}
 .emb::before, .emb::after{content:""; position:absolute; width:10px; height:10px;
   pointer-events:none; border:1px solid var(--mark); opacity:.55}
 .emb::before{top:0; left:0; border-right:0; border-bottom:0}
@@ -3644,7 +3649,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">
-          <div class="panel">${signalChart(slug,id,d,nowH,ser)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
+          <div class="panel">${signalChart(slug,id,d,nowH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
           ${stakeTicket(slug,id,d)}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
@@ -3791,7 +3796,7 @@ async function fetchStakeSeries(slug,id,nowHeight){
   if(!hp&&!dp) return null; // an older deployment: the fallback display owns the chart
   return mergeStakeSeries(hp,dp,nowHeight);
 }
-function signalChart(slug,id,d,nowH,ser){
+function signalChart(slug,id,d,nowH,ser,tl){
   const r=ratios(d), demo=!isLive();
   const now = demo? NOW : nowH;
   const PL=8,PR=606,Y0=124,Y100=12;
@@ -3892,9 +3897,16 @@ function signalChart(slug,id,d,nowH,ser){
     g+=`<g><line class="evt" x1="${x}" y1="${above?ly+3:Y100}" x2="${x}" y2="${above?Y0:ly-9}"></line><circle class="hit" cx="${x}" cy="${Y0}" r="10"><title>${esc(e[2])}</title></circle><circle class="evtDot" cx="${x}" cy="${Y0}" r="3"></circle><text class="evtL" x="${Math.min(x+4,560)}" y="${ly}">${esc(e[1])}</text></g>`;
   });
   // zone strip
-  const zl = real? `block ${fmtN(Math.round(x0))} · ${ago(Math.round(x0))}${demo?" · sample":""}`
-    : demo? `sample window ≈${Math.round((ds?ds.span:WEEK)*BLOCK_SECS/86400)}d · synthesized shape` : `block ${fmtN(Math.round(x0))} · ${ago(Math.round(x0))}`;
-  const zr = (demo && !real)? "now" : `block ${fmtN(now)} · now`;
+  // THE STRIP UNDER THE PLOT SAYS WHEN, NOT WHICH BLOCK. It read "block
+  // 4,596,480 · ≈11.8d ago" — most of its width spent on the chain's internal
+  // index, and this strip is the chart's only statement of absolute time. Date
+  // first, distance second; the height is still on every event's own tooltip for
+  // anyone who wants it, and is still the fallback with no anchor to date from.
+  const zdt = heightDater(tl);
+  const stamp = h => zdt? stampDate(zdt(h)) : `block ${fmtN(Math.round(h))}`;
+  const zl = real? `${stamp(Math.round(x0))} · ${ago(Math.round(x0))}${demo?" · sample":""}`
+    : demo? `sample window ≈${Math.round((ds?ds.span:WEEK)*BLOCK_SECS/86400)}d · synthesized shape` : `${stamp(Math.round(x0))} · ${ago(Math.round(x0))}`;
+  const zr = (demo && !real)? "now" : `${stamp(now)} · now`;
   g+=`<text class="zone" x="${PL}" y="140">${esc(zl)}</text><text class="zone" x="${PR}" y="140" text-anchor="end">${esc(zr)}</text>`;
   const capR=[["now",r.inst],["week",r.week],["lifetime",r.life]].map(([k,v])=>`${k} ${Number.isFinite(v)?v+"%":"—"}`).join(" · ");
   const aria = real
@@ -5135,13 +5147,17 @@ function embedSpark(ser, tl, d){
   if(nowH != null && nowH > x1) x1 = nowH;
   if(at != null && at > x1) x1 = at;
   x1 = Math.max(x1, x0 + 1);
-  const px = h => +(PL + ((h - x0) / (x1 - x0)) * (PR - PL)).toFixed(1);
+  // The same 4% breathing room signalChart gives its domain. Without it the
+  // first event mark lands ON the left frame instead of inside the plot, which
+  // is precisely the padding difference between the two charts.
+  const pad = (x1 - x0) * .04 || 1, d0 = x0 - pad, d1 = x1 + pad;
+  const px = h => +(PL + ((h - d0) / (d1 - d0)) * (PR - PL)).toFixed(1);
   // STEP-AFTER, like the page: ClaimSeries records only changes, so a sloped
   // join would draw a drift the chain never recorded.
   let dd = "", ar = "";
   for(let i = 0; i < pts.length; i++){
     const X = px(pts[i][0]), Y = y(pts[i][1]);
-    const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : PR;
+    const nx = (i + 1 < pts.length) ? px(pts[i+1][0]) : px(x1);
     dd += (i ? ` V ${Y}` : `M ${X} ${Y}`) + ` H ${nx}`;
     ar += (i ? ` V ${Y}` : `M ${X} ${Y}`) + ` H ${nx}`;
   }
@@ -5176,8 +5192,15 @@ function embedSpark(ser, tl, d){
   // THE DATES. Without them the shape had no when — a reader could not tell a
   // week from a season. From the timeline's own now:<unix>:<height>, or the
   // block numbers when there is no anchor, which is honest rather than wrong.
-  const lo = dt ? stampDate(dt(x0)) : "block " + fmtN(x0);
-  const hi = dt ? stampDate(dt(x1)) : "block " + fmtN(x1);
+  // A DATE AND A DISTANCE, never a block number where a date is knowable. A
+  // reader can place "6 Aug 2026" in the year but not against now, and "block
+  // 4,596,480" places it nowhere at all — the height is the chain's index, not a
+  // fact about when. Blocks stay as the fallback for a timeline with no anchor,
+  // which is honest rather than wrong.
+  const dayGap = h => Math.round(Math.abs(dt ? (dt(x1) - dt(h)) / 86400
+                                             : (x1 - h) * BLOCK_SECS / 86400) * 10) / 10;
+  const lo = dt ? `${stampDate(dt(x0))} · ${dayGap(x0)}d ago` : "block " + fmtN(x0);
+  const hi = dt ? `${stampDate(dt(x1))} · now` : "block " + fmtN(x1);
   const froze = at != null && at > x0 && at <= x1;
   return `<div class="esparkwrap"><figure class="bigchart espark">
       <svg viewBox="0 0 ${W} ${H}" role="img"
