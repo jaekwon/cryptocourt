@@ -176,3 +176,235 @@ It does not make an expired claim answerable, pay coin for an expired position, 
 five-year holder anything approaching five years of inflation. **It converts being early and
 right into cheaper future participation.** Whether that satisfies "reputation or something and
 be > 0" is the owner's call, and §6.5 is where it gets decided.
+
+---
+
+## 8. AUDIT ROUND 1 — the payout was wrong; the fix is better and needs no linkage
+
+**The bond discount is dead. The credential survives, in a different unit, with a payout that
+sidesteps §4.1 entirely.**
+
+### 8.1 The saturation is worse than §5 admitted — it is a step, not a curve
+
+Enumerated, all **7** non-test sites touching `answerRecord.score` (S). **The only authority
+reader is `records.gno:46`, a boolean:** `score >= 3 && activePriority == 0`. Everything else is
+threshold bookkeeping or display. `creditUpheld` increments by exactly **1** — no magnitude, no
+time — despite the file header calling it "difficulty-weighted."
+
+```
+1-yr call → 1 pt → not qualified → payout 0
+3-yr call → 3 pts → qualified    → payout = the WHOLE thing
+5-yr call → 5 pts → qualified    → payout = the SAME whole thing
+```
+
+**Marginal value of point 3 is everything; points 1, 2, 4 and 5 are worth zero.** Not "saturates
+early" — it is a Heaviside step and **four of the five years land on flat parts.**
+
+**Two hazards §5 did not name:**
+
+1. **A second credit source arms a court-wide lockout.** `creditUpheld` also increments
+   `c.qualifiedCount`, and at 3 qualified addresses `priorityGateActive` turns on and
+   `answer.gno:65-68` **panics for everyone else for 24h**. So a cheaper second source lets **three
+   addresses** lock the whole court out of answering. A reward that inflicts a refusal on
+   non-recipients.
+2. **`resetOverturned` zeroes the WHOLE score** (S). One wrong answer years later would burn the
+   five-year call's entire reward. The comment says the record "prices a CAREER of honesty" —
+   correct for answers, wrong for a durable stake credential.
+
+> **Do not write the new credit into `score`. It needs its own field, and the existing step at 3
+> must not be moved** — raising `priorityNetRecord` only relocates the step and also disturbs
+> `priorityColdStartN`'s cold-start calibration.
+
+### 8.2 §5's "scale credit with hold time within each claim" is NOT AVAILABLE
+
+A derivation, not a preference. §13.5's straddle-proof weight is `u = ownConv / mg_max`, and
+§13.5 **measured it age-invariant** — 11.1100% at the 3h maturity minimum, *bit-identical* to
+11.1100% at 11 weeks. **A ratio of two conviction integrals over the same window cancels time
+exactly**, so the straddle-proof weight is *mathematically incapable* of carrying hold time. And
+the alternative was already refuted there: own-stake (average hold time) is scale-free, so one
+base unit held for the claim's life scores maximal.
+
+**So the two properties must be split across different factors:** a **gate** that costs capital
+(`u ≥ u* = 1/3`) and a **magnitude** that carries time — safe *only because* the gate is
+capital-priced.
+
+### 8.3 The UNIT was wrong, which is why nothing worked
+
+Sharper than saturation. §3.1 made the unit "one expired claim" — but **the number of re-askings
+is exogenous.** The COVID docket asks the laboratory question in 2020, 2023 and 2025: **three
+claims over five years.** Someone right on three rapid re-askings of a three-month controversy
+earns the identical three. **A claim count cannot measure years.**
+
+> **Denominate the credential in wall-clock coverage, UNIONED:**
+> `coverage(addr) = |⋃ᵢ [holdStartᵢ, claimEndᵢ]|` over expired claims where `uᵢ ≥ 1/3`.
+
+**The union is the load-bearing word** — summing overlapping claims lets 15 concurrent claims
+manufacture 180 weeks inside one year. It is O(1) state and O(1) work: store `lastCreditedUntil`
+and credit `max(0, end − max(start, lastCreditedUntil))`.
+
+Three properties follow **by construction**:
+
+1. **Monotone in years** — the measure *is* the requirement.
+2. **Bounded, provably, with no economics needed.** Coverage cannot exceed wall-clock elapsed
+   since the address's first stake — **one second per second, regardless of claims, straddles or
+   sybils.** That is the money-printer proof, and it holds because the quantity is denominated in
+   *time* rather than coin, with the calendar as its ceiling.
+3. **The unscoped variant needs NO LINKAGE AT ALL** — union across all expired claims, no
+   lineage. It rewards *tenure-weighted accuracy* rather than one specific five-year call. **This
+   is the honest reduction if §4.1 turns out unsolvable**, and it dissolves the hardest problem in
+   the design.
+
+### 8.4 The reader must be hyperbolic, not capped-linear
+
+Capped-linear re-saturates: `min(1, cov/156wk)` gives 33% / 100% / 100%, so five years and three
+years **tie again**. Boundedness and strict monotonicity coexist only if the bound is approached
+and never attained:
+
+```
+payout(cov) = P_max · cov / (cov + h),    h = 156 weeks
+```
+
+| call | coverage | share of `P_max` | vs 1-yr |
+|---|---|---|---|
+| 1 year | 52 wk | **25.00%** | 1.00× |
+| 3 years | 156 wk | **50.00%** | 2.00× |
+| **5 years** | 260 wk | **62.50%** | **2.50×** |
+| 10 years | 520 wk | 76.9% | 3.08× |
+| ∞ | — | → 100%, never reached | — |
+
+Every additional week is worth something, forever, and `P_max` is never attained. `h` is the one
+knob (h = 260 gives 16.7 / 37.5 / 50.0%, better top-end separation, thinner reward for one year).
+
+### 8.5 THE PAYOUT: a bond discount fails, three independent ways
+
+**(a) It pays ~0.16 CC.** The bond is **refunded** — §13.1 measured 91% back at settle, and §14.1
+records the attacker's net bond outlay as **0, returned whole**. So a discount *frees capital*; it
+does not pay coin. Its value is carry over the 72h lock at `r0WeeklyBps = 25`:
+
+| discount | freed | carry over 72h |
+|---|---|---|
+| 30% of a 500 CC bond (today) | 150.00 CC | **0.1607 CC** |
+| 8.125% of a 308.45 CC bond (post-C3 share) | 25.06 CC | **0.0269 CC** |
+
+**0.016%–0.003% of X̄ per claim answered.**
+
+**(b) It pays NEGATIVE 48 CC on the credential's own qualifying path.** `answerBond0` is the base
+for the answerer's **uphold comp** (`dispute.gno:312`), and at today's constants the dispute
+arms **tie exactly** (`min(20%·X̄, 40%·A)` = `min(200, 200)`), so a discount bites from the first
+basis point:
+
+| d | bond | answerer's comp **if upheld** | burned **if overturned** |
+|---|---|---|---|
+| 0% | 500.00 | **160.00** | 500.00 |
+| 30% | 350.00 | **112.00** | 350.00 |
+
+> **A bond is a punishment instrument, so discounting it rewards the punished state.** The
+> discount is worth **3.125× more to a liar (who forfeits) than it costs an honest answerer (who
+> is comped)** — and `creditUpheld` fires *only* on contested-and-upheld, so the cost lands on
+> exactly the outcome the credential exists to certify. Net: **−48 CC of comp to buy +0.16 CC of
+> carry.**
+
+The obvious dodge — discount the escrow but keep `answerBond0` at full magnitude — is precisely
+§12.6's bug: *"the escrow asserts a bond it does not hold"*, which invariant I4 exists to forbid.
+
+**(c) Its one real component already FAILED for the archetypal recipient.** §13.5 measured the
+contrarian's spendable at **0.000000** with `PostAnswer` refusing, and **129 CC short** of the
+discounted bond even after F9 frees their principal. **The five-year holder is capital-poor and
+stake-locked by construction — that is what a five-year conviction *is*.** The payout was
+denominated in the one resource they have least of.
+
+### 8.6 Q3 answered: it does not foreclose the draw cap. C3 pre-empts it instead.
+
+**The draw cap self-adjusts.** It keys on `cs.answerBond0`, which has exactly one write site, so
+`L ≤ 1` survives at every discount level. **No foreclosure in either direction.**
+
+**But the 33.125% surplus is an IDENTITY, not a measurement:** `1 − (tierMid + splitCarrot/100)/k
+= 1 − 1.07/1.6`. It reproduces §13.2's `102.1734` / `90.6066` and §13.3's `53.0%` to four
+decimals. And the two *discounts* conflict with each other **additively**:
+
+> **`d_conviction + d_credential ≤ 33.125%`.** The conviction lever is specced at 25%, so the
+> credential's honest share is **8.125 pp**. Past 33.125% the cap starts cutting **MID** draws —
+> §13.4's "the published rate is a lie" defect, arriving through the door the cap was built to
+> close.
+
+**Correction to §13.5:** its "75% non-discountable / 25% ceiling" is a **straddle** bound, not a
+structural one. The structural bound is **66.875% / 33.125%**, and the two budgets compose by
+**sum**, not max. §13.5 does not say this.
+
+**And a dependency, not merely compatibility:** without the draw cap, a credential discount is a
+*destruction amplifier* — at d = 25% and HIGH, `L = 2.07/1.2 = 1.725`. **The discount requires the
+draw cap as a hard precondition.**
+
+**There is a free discount lane, and C3 destroys it.** The bond is computed base arm → court cap →
+floor, with the floor applied last and dominating. A discount inserted *before* the floor can
+never breach it, so it never touches collateralization, never touches `L`, and never draws the
+budget. Free headroom at the 12-week corner: **38.3% today at 5000 bps → 0.000% under C3 at 600.**
+The ceiling even falls out of `court.gno:227`, a check the realm already runs at deploy.
+
+> **So C3 pre-empts the credential's entire payout, because C3 spends the same currency on
+> everyone.** §13.5's own table: 500.0000 → 249.7357 is a **250.26 CC** give-back, unconditional,
+> to *every* answerer; the conviction lever adds 20.81; a credential lever is the same order,
+> ~25 CC. **The credential would be worth 8–10% of what C3 gives away for free.** If a bond
+> discount ships at all it must ship **before** C3 — which inverts the natural ordering — and §8.5
+> argues it should not ship at all.
+
+### 8.7 What CAN be paid — one recommendation, four rejections on evidence
+
+| candidate | verdict |
+|---|---|
+| **Published standing / docket visibility** | **RECOMMENDED.** `render.gno:378` already renders the record when `> 0`, so the surface exists. Mints nothing. Non-transferable by construction. **Accrues and displays with no further participation — the only candidate that clears that bar**, and the only thing a stake-locked five-year holder can actually receive. Coin value 0, but "reputation" is the owner's own named acceptable payout. |
+| Claim-filing discount | **REJECT — circular.** Tempting, because the fee **burns unconditionally** on expiry, making it *real* coin (~2.4 CC, ~15× the bond discount's carry). But that same unconditional burn **is** the anti-spam floor §4.3 relies on. Discounting it funds the farm it exists to deter. |
+| Voting weight | **REJECT + counsel flag.** REGULATIONS.md is direct: DAO Report "voting doesn't help"; governance + utility + yield "all three pull back toward Howey"; and **Ooki** reaches "members = token-holders who **VOTED**", so it *expands the personal-liability cohort*. |
+| Waiver of `mustSpendable` | **REJECT on source.** `lock.gno:79-81`: only Stake, Unstake and the settlement withdrawal may touch that tree and **"no other path may touch this tree."** And it would not help — the contrarian is 129 CC short *after* F9. |
+| Graded answer priority | **REJECT.** Participation-contingent (same failure), and it gates only ~10.4 CC — the answerer's real prize is the 160 CC uphold comp, which a discount *reduces*. |
+
+### 8.8 Regulatory — §3.2's argument partly INVERTS
+
+- **Howey prong 2 (common enterprise): clean.** A per-address, non-fungible, non-poolable
+  credential adds no horizontal commonality.
+- **Prong 3 (profit expectation): the strongest defence is precisely §8.5's weakness.** *Forman* —
+  consumption defeats profit expectation. A credential redeemable **only by consuming the
+  protocol's service** is a consumption right, not a return. **The participation-contingency that
+  makes a discount fail the owner's "> 0" test is exactly what makes it regulatorily clean, and
+  every fix that repairs "> 0" removes that defence.** That trade-off is the real §3.2 finding and
+  it was not in the document. Counterweight: *Edwards* — fixed returns count, and a formulaic
+  discount is fixed.
+- **State gambling is the sharpest hazard and §3.2 never reaches it.** Elements are consideration
+  + chance + **prize**. A credential with measurable cash value — the whole point of §3.2's reason
+  #3, "worth real money" — is *something of value received upon the outcome of a future contingent
+  event not under the actor's control*. **It weakens the "no prize" leg specifically, on the one
+  axis REGULATIONS.md says relabeling has never survived on the merits.** §3.2's reasons #1 and #3
+  are in **direct tension** and the document presented them as mutually supporting.
+- **The "designed to evade" carve-out** plausibly describes a non-monetary credential structured
+  *specifically so it is not a payment*. **Counsel flag, prominently** — §3.2 currently asserts the
+  opposite.
+- **Humphrey factor 2: split.** The discount is formulaic and fixed at answer time (scores well),
+  but the credit-*earning* event depends on a linkage rule and a later vote (fails).
+
+**Non-transferable by construction, verified:** `c.records` has exactly **three** access sites and
+**no code path assigns one address's record to another.** **But the tripwire does not cover it** —
+`check-nontransferable.py` matches coin-transfer verb names, so an entrypoint called
+`AssignRecord`, `MigrateCredential` or `SetStanding` would **not trip it**, while violating the
+principle its own docstring states. **Extend that guard before any credential field lands.**
+
+**And crediting an unadjudicated position is a NEW CATEGORY.** `creditUpheld` is reachable from
+exactly one site, gated on a **decided** vote. Nothing in the realm today credits anything on a
+claim the court never ruled on. REGULATIONS.md already concedes kourt is "further from ministerial
+validation than PoS" because it rewards **adjudicated** correctness — crediting an *unadjudicated*
+position moves further in the direction already flagged as the weak fit, and makes the reward
+"profit from the efforts of others" in the most literal sense: *other voters, on another claim,
+deciding a question yours never reached.* **Sharpest counsel flag in the design.**
+
+### 8.9 Revised recommendation
+
+1. **Do not build a bond discount.** §8.5.
+2. **Build the credential as published standing, denominated in unioned coverage-weeks, in a new
+   field** — never in `score` — read through `P_max · cov/(cov + 156wk)`. Bounded by the calendar,
+   mints nothing, monotone in years at 25% / 50% / 62.5% for 1 / 3 / 5 years, and **collectable by
+   someone who never answers again.**
+3. **Prefer the unscoped variant** (§8.3, property 3) unless §4.1's linkage question resolves
+   cleanly — it needs **no linkage at all**.
+4. **Extend `check-nontransferable.py`** before any credential field lands.
+5. **Two new counsel flags:** an economically-valuable credential on an unadjudicated position
+   weakens the gambling-axis "no prize" leg; and the "designed to evade" carve-out plausibly
+   describes this shape.
