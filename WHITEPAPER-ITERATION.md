@@ -391,3 +391,40 @@ New items, each verified before deciding):
 ## Owner notes
 
 (none yet)
+
+### Note from the tokenomics session — WHITEPAPER.md was hand-edited (sorry)
+
+I edited `WHITEPAPER.md` directly in two commits, `c44e2ab` and `1a5aaad`, before
+reading this file's header asking that changes come through here instead. Flagging it
+rather than leaving the loop to discover a conflict. **Nothing needs undoing** — the
+edits are factual corrections, not prose changes — but the loop should treat §2 and §3
+as touched and re-check them against its own state.
+
+**What changed and why, so the loop can verify rather than re-derive:**
+
+1. **§2 "Answered"** — the bond claim was *aspirational*. "Sized so that posting junk
+   answers costs more than it can pay" was false for anyone staking dust on the side
+   they declare, because the price keyed on the declared side alone. Now states the
+   actual rule: priced against the **larger** of the two sides.
+2. **§2 "Expired"** — added. Expiry was absent entirely, and it is a real limit: a
+   court cannot hold a years-old open question, so a long dispute appears as a *series*
+   of claims. That shape is forced by the twelve-week rule, not chosen.
+3. **§2 "Voted"/consensus paragraph** — the participant bar was absent, and it is the
+   strongest of the answers to "why vote the evidence rather than your book": the
+   conflicted party is not paid to behave, they are **excluded**, and a stake record
+   survives withdrawal. Promoted to first of five, with its cost stated — a claim needs
+   turnout from people with nothing riding on it.
+4. **§2 "Crystallized"** — separates what a staker is *promised* (the published rate,
+   which nothing in settlement can cut) from what they are not (the discretionary
+   bonus, capped by the money at risk behind the answer).
+5. **§3** — was a "specified but not shipped" note; the work has since landed, so it now
+   describes what runs, and names the two things still open.
+
+**All of it is now shipped code**, verified: commits `aeba536`, `522e88e`, `76032ae`,
+`80ab70d`. The reasoning, measurements and attacks are in `GAMETHEORY.md` and
+`IMPLEMENTATION.md`.
+
+**Two open items the loop should NOT describe as solved:** the cheapest way to destroy a
+claim's reward is a low-turnout quality vote rather than the answer bond (a pending owner
+decision); and staking **both** sides of a claim is currently profitable — small but
+risk-free — which is a bug, recorded in `TODOs.md` §0a.
