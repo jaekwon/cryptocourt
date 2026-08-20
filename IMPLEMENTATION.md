@@ -707,3 +707,162 @@ had adjudicated LOW. `quality.gno` admits this and defers it. Not in this batch.
 19,584 into one paying 0. **S1 and S4 are order-free.** And the standing dependency holds: the
 comp drought must be fixed before S3 or S4 pays out on any claim with a *decided* round, since
 that claim's own overturn reserves a senior comp ahead of the draw being restored.
+
+---
+
+## 9. VET ROUND 1 (S4 + S1) — S1 GO with an amendment; **S4 NO-GO as justified**
+
+Independently implemented and measured against HEAD on shadow copies. 17/17 mutations caught,
+0 survivors, 0 invalid builds.
+
+### 9.1 §8's S1 JUSTIFICATION IS FALSE — the robbed pool cannot vote at all
+
+§8 says *"the robbed pool cannot clear the bar even voting unanimously at any concentration."*
+**That sentence presumes they can vote.** They cannot. `VoteDispute` refuses the author, the
+answerer, and **any address with a staker row on either side** — and there is **no
+`stakers.Remove` anywhere in the realm**, so the row that disqualifies them is permanent.
+
+**M:** the robbed pool held **10,000 CC against a 2,000 CC bar — 5× the quorum floor — and was
+refused at the door.** Staked CC is not escrowed (the coins never leave the staker), so the
+weight genuinely exists and is genuinely rejected. On an answered claim `Unstake` is refused
+outright, so the victim cannot even exit the role; and a staker who withdraws **100% before**
+the answer is *still* a participant and still refused. An outsider who never staked is accepted.
+
+> **So S1 lowers a bar only third parties can clear.** The robbed pool's problem was never the
+> bar's HEIGHT — it was the FRANCHISE. The real benefit is that a verdict becomes **reachable at
+> all**, so third-party jurors decide the claim instead of the failed-quorum branch defaulting to
+> `cs.provisional = cs.answer`. That is genuine, but it is **entirely intermediated by
+> outsiders**, and it is **symmetric**: the same relaxation is what makes §9.3's malicious
+> overturn reachable, by the same outsiders.
+
+Also worth stating: `OpenDispute` refuses only the answerer, so **a robbed staker can pay the
+bond and then not vote in the round they paid for.**
+
+### 9.2 S1's two other corrections
+
+**Churn is one corpus row, not zero** — `M2-1: credEligible needs no adversarial weight` anchors
+on the exact line being changed. One-line re-derive. Every other guard green, **including
+`check-paths` and `check-guards-armed`**, which §16.6 had left unverified: both clean.
+
+**The no-fixture gap is worse than stated.** Zero readers of `quorumFloor`/`QuorumFloorOf` across
+all 64 `*_test.gno` — confirmed. **And the same is true of the credential bar:** its only shipped
+fixture drives `yes == 0`, so **any positive bar passes it.** Both of §8's S1 numbers were
+audit-harness results with nothing in the suite behind them.
+
+**The 5.01× is not a constant.** It is `5% ÷ (X̄ as a share of supply)`: **10× at X̄ = 50 bps**,
+5.01× at ~1%, and **50× at the ordinary answerability floor** — the smallest legal claim. §8
+quoted the mid-band case as if it were the number.
+
+### 9.3 REQUIRED AMENDMENT — the credential bar must read the TALLY'S OWN epoch
+
+§8's `credWeightFloor(c)` is a **regression**, measured. `yes` is weighed at the *proposal's*
+snapshot epoch; `credWeightFloor(c)` reads `Epoch()-1` at *resolve*, ~168 epochs later. **The bar
+therefore moves under a frozen tally, and anyone may mint inside the 7-day window** to strip an
+honest contested uphold of its difficulty credit. It cuts both ways — burns during the window
+*lower* the bar, and `ResolveDispute` is permissionless, so a farmer picks the block.
+
+| tree | sock 700 CC vs bars 125 / 1250 | supply doubled mid-window |
+|---|---|---|
+| baseline | refused | credential earned |
+| S1, no re-anchor | **MINTED** — the silent cut | earned |
+| S1 + §8's `credWeightFloor` | refused — price restored | **REFUSED — regression** |
+| S1 + `credWeightFloorAt(proposal epoch)` | refused | earned — baseline-identical |
+
+**Fix is one argument:** `credWeightFloorAt(c, c.gov.EpochOf(cs.proposalID))`.
+
+### 9.4 The malicious overturn, repriced — §8 is stale by 8.33×
+
+**§8's "+159.60 CC" is 50%-answer-bond arithmetic.** `76032ae` cut the bond to 600 bps, so the
+dispute bond is 2.4%·X̄ and comp is 4.8%·X̄ (both `compAmount` arms exactly equal at 6%). The swing
+is **−1.2%·X̄ → +4.8%·X̄**.
+
+**And the minimum weight is not 1.25% of supply** — §8 conflated the quorum floor with the
+credential bar. It is `min(X̄, votable/3)`, i.e. **the claim's own X̄**: 0.5% of supply measured,
+**0.1% at the answerability floor**.
+
+**It parallelises, which is the sharp part.** Voting consumes no weight. **M: one 600 CC bloc
+overturned TWO claims in the same vote window** — both bonds returned whole, 48 CC of comp minted,
+two honest answer bonds burned. The weight is a *stock* and the profit a *flow*, and S1
+re-denominates the stock from supply to claim size — so claims-attackable-per-CC-held rises and
+small claims become individually attackable. Wallet separation is free: `isParticipant` is
+per-claim and per-address, so stake with A, dispute with B, vote with C.
+
+**One consequence §8 missed:** `mustInvariants`' "prices filing above winning the vote" check is
+not merely untrue-in-comment for the verdict lane, it is **inverted** — filing a floor-sized claim
+costs `1.3083 × X̄floor` while the verdict bar is `1.0000 × X̄floor` of unspent, reusable weight.
+It still passes numerically and still means something for `qualityBars`' full bar and the election
+floor. **Retarget the comment at those two lanes and state the inversion deliberately.**
+
+### 9.5 S4 — NO-GO AS JUSTIFIED. The mechanism works; both halves of its rationale are wrong.
+
+**It is NOT `slashGrade`.** `slashGrade` has a third conjunct — `cs.answerBond > 0` — and that is
+**identically false everywhere S4 applies**, because the overturn branch burns the bond to 0
+*before* calling the ride (**M:** `answerBond == 0` on every overturn ride). So `slashGrade` is
+**unsatisfiable** on an overturn round: the lane cannot "already demand it", because here the lane
+can demand nothing.
+
+**And the two prizes are not comparable** — the slash keys on the **answered** side, this draw on
+the **winning** one, so neither bounds the other:
+
+| regime | slash | draw S4 protects | ratio |
+|---|---|---|---|
+| 4 wk | 450 bps·X̄ | 145 bps·X̄ | **3.08×** |
+| 11 wk | 481 | 400 | 1.20× |
+| 11 wk, dust-answered | 450 | **694** | **0.64× — the draw is the LARGER prize** |
+
+The slash has a hard 4.5%·X̄ floor; the draw has none. **Wrong bar** — over-tight by 3× on young
+claims, and guarding *less* than the draw on the dust-answered ones that matter most.
+
+**The price §8 does not state.** `fullBar = max(5%·supply, min(X̄, votable/3))`, so the mandate
+demands 5% of court supply of quality turnout **plus a ⅔ supermajority**, where an ordinary
+demotion needs `demotionBar/4` and no supply floor at all:
+
+| X̄ as share of supply | 10 bps | 100 bps | 200 bps | ≥500 bps |
+|---|---|---|---|---|
+| fullBar ÷ demotionBar | **200×** | 20× | 10× | 4× |
+
+It is also **two** upgrades, not one — `applyQualityTally` demotes on a weighted **median**, S4
+demands **⅔**. **M:** a 60%-low bloc *above* the full bar is refused, restoring a draw from 0 to
+17,548,387. Instrumented over the shipped suite: **67 quality tallies, 43 conclusive-LOW, 12
+(28%) lack S4's mandate** — and fixtures over-represent 5%-sized whales, so 28% is a floor.
+**S4 also does not bind a ≥5%-of-supply holder at all**: one whale wallet carries both the
+overturn and a mandated ⅔ low.
+
+**S1 × S4 is "order-free" in ordering and NOT in effect.** On the combined tree the mandate bar
+becomes a *multiple* of the verdict bar exactly in the band S1 exists to fix — **5000% at X̄ = 10
+bps**, 1000% at 50, 500% at 100, converging to 100% only above 5% of supply (on baseline
+`fullBar == quorumFloor` identically). **S1 makes overturning a junk claim cheaper while S4 makes
+demoting it on that round dearer.**
+
+### 9.6 The finding that decides S4: it re-routes the hazard and PAYS the attacker
+
+`ResolveFlag`'s conclusive-LOW threshold is **the same supply-floorless `demotionBar`**. So the
+identical dust wallet re-lands the identical destruction one transaction later:
+
+| | baseline (ride latches) | S4 (slot open, then one flag) |
+|---|---|---|
+| final tier / winners | LOW / **0** | LOW / **0 — bit-identical** |
+| attacker weight | 500 CC (50 bps, 14× under fullBar) | **the same 500 CC** |
+| attacker cash | 0 | **0** — flag bond **refunded whole** (`answerBond == 0` kills both the half-burn and slashGrade) |
+| attacker revenue | none | **+0.88 CC bounty MINTED** |
+| cost of the workaround | — | one tx, 7 days, 28 CC locked |
+
+> **S4 converts a FREE destruction into a PAID one, delayed by a week.** §8's "the slot stays
+> open, so a real full-bar ⅔-low can still land later *with a bond*" is half the story: a **dust**
+> low also lands later, with a **refunded** bond and a **bounty**.
+
+And with `slotConsumed` never latched, `reaskQualityTally` stays in its "nothing adjudicated yet"
+branch forever, so the one-shot `qualityReasked` budget is **never spent** — every reopen round is
+a fresh tally in which every address votes again (**M:** the same dust address re-voted).
+**Defenders must win every round; the attacker needs one.**
+
+### 9.7 The recommendation, and it changes the batch
+
+> **Land S1 now, with the epoch amendment. HOLD S4 pending the owner's ruling on giving
+> `demotionBar` a supply floor — because with that floor S4 becomes UNNECESSARY:** the cheap
+> demotion disappears from the ride lane and the flag lane at once. Without it, S4 buys a
+> seven-day delay and hands the attacker a bounty.
+
+S4's code is correct and fully mutation-covered (7/7). If it lands anyway it must land with the
+residual pinned and the rationale corrected, because §8 as written reads "hazard closed" and it
+is not.
