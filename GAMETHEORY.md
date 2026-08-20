@@ -1518,3 +1518,146 @@ proportional to the destroyable draw. **M:** draw-keyed on **75/144** grid point
 **600 bps, re-keyed to both sides, with the §13.3 draw cap. C3 is unblocked.** Revised order:
 **draw cap → C0 → C6 → C1 → C5 → C2 → C3**, C4b a tail feature, C4a cancelled, the two conviction
 levers (§13.5 answer lane, §14.3 dispute lane) specced and deferred.
+
+---
+
+## 15. CONVERGENCE TEST — failed, on §14.4's closing claim
+
+The brief said "found nothing" was a valid result. It found something, and it lands on the
+sentence this document ended with. **Eight other attacks found nothing** (§15.4), so the null is
+legible and the surviving gap is narrow and nameable — but it is real.
+
+### 15.1 §14.4's "closed by" column is WRONG on BOTH entries
+
+**Path 2 (conclusive LOW below `fullBar`) is NOT closed by C5.** C5 is scoped to
+`resolveQualityRide` (`quality.gno:565`), which has exactly **two** call sites — `dispute.gno:297`
+(overturn) and `:334` (uphold). The path §14.4 actually measured — *flag bond returned whole plus
+a senior bounty* — is `ResolveFlag`'s sub-`fullBar` branch (`quality.gno:389-421`) on an
+**undisputed** claim, **which never calls `resolveQualityRide` at all.**
+
+**M**, twin claims in one court, preconditions asserted (both default MID, identical `xBarFrozen`
+and `answerBond0`, turnout inside `[demotionBar, fullBar)`, no slash levied):
+
+| tree | winners | author | answerer | carrot | attacker outlay | bounty MINTED |
+|---|---|---|---|---|---|---|
+| control twin (no flag) | 19,584 | 1,958 | 1,224 | 1,593 | — | — |
+| baseline | **0** | **0** | **0** | **0** | **0** | 880,000 |
+| draw cap + C5 | **0** | **0** | **0** | **0** | **0** | 880,000 |
+| draw cap + C5 + **C3** | **0** | **0** | **0** | **0** | **0** | 880,000 |
+
+**Bit-identical before and after the entire settled set** — and these are §14.4's own figures
+(19,584 / 1,958 / 1,224 / 1,593, bond whole, 0.88 CC bounty) reproduced to the digit, so it is the
+same path and not a lookalike.
+
+**Anti-vacuity, which is what makes the null trustworthy:** the *identical* dust weight delivered
+on an **overturn ride** does differ across the trees, so C5 is live and moves coin —
+`slotConsumed true→false`, `tierFinal true→false`, winners **0 → 44,001,535**. C5 works; it just
+does not reach this path.
+
+**The bar is 8 bps of court supply**, and it is repeatable: `demotionBar = min(X̄, votable/3)/4` =
+100 CC on a 120,097.8 CC supply. **Voting consumes no weight**, so one 100 CC bloc zeroed **two**
+claims concurrently — gross outlay **0** (both flag bonds refunded), **1.76 CC minted**. The bond
+wallet and the voting wallet can be different addresses. The only rate limit is spendable
+flag-bond capital, which is refunded.
+
+**And the profit is anchored on the AUTHOR's deposit+fee burn, not on the draw:**
+`bountyFor = min(flagBond, 80%·(deposit+fee))`. On the measured claim that is 0.88 CC of profit
+against 0.0244 CC of destroyed draw — **36× the draw harm**. So on small or young claims this is a
+**deposit farm against authors**; on large ones the draw destruction dominates. Net-positive
+either way.
+
+**Path 1 (`CloseDeadClaim`) is NOT closed by C1+C6, and cannot be.** `CloseDeadClaim`
+(`claim.gno:347`) panics at `cs.frozenAt != 0` — unanswered claims only. `provCloseClaim` has one
+call site, `dispute.gno:268`, reachable only through `OpenDispute`, which panics at
+`cs.frozenAt == 0`. **The gates are mutually exclusive.** Neither C1 nor C6 can execute on a dead
+claim.
+
+> **So §14.4's closing line — "the non-bond fixes bound destruction and the bond never can; that
+> is the whole answer" — is UNSUPPORTED.** Neither named free path is closed by the settled set.
+> Both entries belong in §10 (known unresolved), not in a "closed" column.
+
+**The fix is not free, and the code already says whose call it is.** `qualityBars`'
+comment (`quality.gno:249-261`) calls the supply-floorless `demotionBar` a deliberate F3 asymmetry
+and warns that at high escrow the lane "kept its one free destructive action and lost the priced
+one." Giving `demotionBar` a supply floor, or half-burning the sub-bar bond and paying no bounty,
+is the same owner decision that comment defers — but it has to be **named as open**.
+
+### 15.2 C6 WIDENS the un-closed path — new, and unpriced
+
+§12.11 requires C6 to drop `quality.gno:82`'s `provClose` arm so the new MID is demotable. **The
+demotion it re-admits is the same supply-floorless one.** **M**, three failed rounds → provClose:
+
+| provClosed claim under C6 | winners | author | answerer | carrot | attacker outlay |
+|---|---|---|---|---|---|
+| control | 19,584 | 1,958 | 1,224 | 1,593 | — |
+| + one 200 CC dust flag (bar 100, `fullBar` 6,010) | **0** | **0** | **0** | **0** | **0** |
+
+**Mechanism worth recording: `ResolveFlag` overwrites `cs.tier` with NO `tierFinal` guard**
+(`quality.gno:352-355`), and `OpenFlag` never checks `tierFinal` either — so `provCloseClaim`'s
+`tierFinal = true` **does not protect C6's payout.** Bounty is 0 here (provClose already refunded
+the deposit and fee), so in this lane the attack is *free* rather than profitable.
+
+### 15.3 A positive result — the regulatory case is STRONGER than §13.3 claimed
+
+Derived then checked. Because the C3 floor is `max`-keyed, `answerBond0 ≥ 1.6·mg_max ≥ 1.6·mg_win`,
+so `capd ≥ 1.53·mg_win > 1.00·mg_win = want@MID`. **The inequality uses only `1.60 − 0.07 > 1`** —
+no X̄, no age, no rate, no bond level.
+
+**M:** 500 grid points with the realm's own arithmetic (X̄ from 1 base unit to 100k CC; mg/X̄ from 1
+bps to **500%**, five times past `maxMidGrossBps`): **0 MID bindings, 194 HIGH bindings**
+(non-vacuous).
+
+> **The draw cap can never reduce the published MID rate.** It can only cap the *discretionary,
+> adjudicated* HIGH multiplier — with no dependence on the 12-week / 5-s-block premise §11.7 flags
+> as unpinned.
+
+That is a materially better Humphrey-factor-2 answer than §13.3 gave itself: what is "certain and
+guaranteed" at stake time is the MID rate, and the cap is **provably outside it**. It answers the
+brief's question — *is a prize that depends on the answerer's bond still certain to a staker who
+cannot see that bond?* — with **yes, at MID, provably.**
+
+### 15.4 Eight attacks that found nothing (so the null is legible)
+
+1. **`answerBond0` manipulation** — one write site (`answer.gno:166`), grep-verified.
+   `bond = max(min(bps·X̄, cap), max(flat·X̄, k·mg))` is monotone in the answerer's own stake, so
+   §11.4's "every play raises the bond" holds under the cap too. **No path lowers it.**
+2. **`answerBondCapCC` as a lever to make the cap bind today** — a court with
+   `answerBondCapCC < 2.07·mg` would have genuinely-HIGH prizes cut up to 26% even at 5000 bps,
+   but it is **structurally unreachable**: `StartCourt`/`StartCourtP` expose only
+   `stakeOpenDelay`, `defaultParams()` sets 0, `court.gno:267` states no retune entrypoint exists,
+   and `court_test.gno:336` pins the 0. §13.3's "inert today" survives. **Flag for whoever wires
+   that knob.**
+3. **`capBonus` / `AnswererBonus` stranding** — lowering `:83` alone can only make `:265`/`:276`
+   *less* binding; in aggregate `drawWinners / Σ capBonus bounds = 1.316·(mg/X̄) ≤ 0.254`. §13.3's
+   claim verified in the safe direction.
+4. **Draw cap × C0** — disjoint. The free demotion sets `cs.tier = 0`, so `want = 0` and
+   `reserveJunior` is never asked for anything; the control twin paid in full from the same
+   reservoir at the same block, ruling out a reservoir explanation. **C0 cannot restore a prize
+   never computed.**
+5. **C2 × C5** — disjoint by grep. C2 edits `quorumFloor` and the credential bar; the demotion
+   reads `qualityBars`. §C2's "qualityBars needs no change" verified.
+6. **Sybil sweep of the settled design** — `demotionBar` turnout is a **sum**, so splitting across
+   N addresses is neutral; CC is soulbound; `isParticipant` has exactly the 5 sites §12.7
+   tabulates; the re-anchored credential bar keys on supply and `ladderWindow` on `failedRounds`.
+   **Nothing address-keyed that a sybil moves.**
+7. **`ladderWindow`'s set-once lock** — the liar prefers the short window, but a *decided* first
+   round already wins the claim outright, so foreclosing the ladder buys nothing extra. **No
+   lever.**
+8. **(S)-citation spot check, 8/8 verified** — including the `c.tier` naming trap being real.
+   **One loose citation:** §13.3's `render.gno:409-411` is `tierName`'s switch on an `int64`
+   parameter, not a `cs.tier` read.
+
+### 15.5 Corroborations
+
+- **Draw cap + C5 alone: full suite green, zero fixture edits** (`ok . 24.72s`). §13.3's
+  shippability claim holds, **and C5 can ride with it.**
+- **Draw cap + C5 + C3 fails exactly three** — matching §11.7/§13.1, not §8's five.
+- `maxMidGrossBps = 1927` and the 30.83%·X̄ ceiling reconfirmed.
+
+### 15.6 Status
+
+**Not converged.** The breaks are getting smaller — rounds 1–3 broke mechanisms, this one broke a
+*claim about what is closed* — but the honest state is: the settled set is shippable and good, and
+it does **not** bound destruction, because the cheapest destruction path is a supply-floorless
+quality demotion that no change in the set touches. That path needs its own decision, and
+`quality.gno:249-261` says it is the owner's.
