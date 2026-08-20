@@ -95,6 +95,19 @@ type claimState struct {
 	frozenAt        int64 // 0 = live
 	rateAccAtFreeze int64
 	xBarFrozen      int64 // P6: the trailing-X̄ snapshot at the answer
+	// THE RECORD, per side, as it stood when the claim was answered.
+	//
+	// These exist because nothing else preserves it. The conviction integrals are
+	// add-only and survive forever, but yesStake/noStake are DECREMENTED on every
+	// withdrawal, so once the participants take their principal home a settled
+	// claim reads YES 0 / NO 0 — and the docket was rendering that live figure. The
+	// whitepaper's introduction promises "every claim, every stake, every verdict,
+	// every dissent" stays; the weight did stay, the amounts did not.
+	//
+	// xBarFrozen cannot substitute: it is the time-averaged TOTAL, so "how much was
+	// on YES when it was answered" was recoverable from nowhere. Written once,
+	// beside frozenAt, never touched again.
+	yesStakeAtFreeze, noStakeAtFreeze int64
 	// Q1: the quality electorate's epoch — the last SEALED epoch at the
 	// answer, set before any flag can exist; every quality vote reads it.
 	qualityEpoch uint32

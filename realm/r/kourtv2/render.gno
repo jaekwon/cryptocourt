@@ -229,11 +229,28 @@ func renderClaim(slug string, id uint64) string {
 	}
 
 	b.WriteString("## Signal\n\n")
-	total := cs.yesStake + cs.noStake
-	b.WriteString("- staked now: " + strconv.FormatInt(total, 10) +
-		" (YES " + strconv.FormatInt(cs.yesStake, 10) + " / NO " + strconv.FormatInt(cs.noStake, 10) + ")\n")
-	if total > 0 {
-		b.WriteString("- instantaneous: " + pct(cs.yesStake, total) + " YES\n")
+	// ANSWERED CLAIMS SHOW THE RECORD, NOT THE REMAINDER. The live counters are
+	// decremented as principal is withdrawn, so a settled claim's page used to
+	// converge on "YES 0 / NO 0" — the drained value, displayed as though it were
+	// the history. The frozen pair is what the claim was actually answered on.
+	if cs.frozenAt != 0 {
+		fTotal := cs.yesStakeAtFreeze + cs.noStakeAtFreeze
+		b.WriteString("- staked when answered: " + strconv.FormatInt(fTotal, 10) +
+			" (YES " + strconv.FormatInt(cs.yesStakeAtFreeze, 10) +
+			" / NO " + strconv.FormatInt(cs.noStakeAtFreeze, 10) + ")\n")
+		if fTotal > 0 {
+			b.WriteString("- lean when answered: " + pct(cs.yesStakeAtFreeze, fTotal) + " YES\n")
+		}
+		if live := cs.yesStake + cs.noStake; live > 0 {
+			b.WriteString("- still unwithdrawn: " + strconv.FormatInt(live, 10) + "\n")
+		}
+	} else {
+		total := cs.yesStake + cs.noStake
+		b.WriteString("- staked now: " + strconv.FormatInt(total, 10) +
+			" (YES " + strconv.FormatInt(cs.yesStake, 10) + " / NO " + strconv.FormatInt(cs.noStake, 10) + ")\n")
+		if total > 0 {
+			b.WriteString("- instantaneous: " + pct(cs.yesStake, total) + " YES\n")
+		}
 	}
 	h := heightNow()
 	if yAvg, ym := cs.yes.Average(h, periodBlocks); ym {

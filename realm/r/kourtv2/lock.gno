@@ -119,3 +119,62 @@ func LockedOf(courtSlug string, who address) int64 {
 func SpendableOf(courtSlug string, who address) int64 {
 	return spendable(mustCourt(courtSlug), who)
 }
+
+// TransferCC moves court coin between two holders of the same court.
+//
+// COURT COINS ARE TRANSFERABLE (owner decision, 2026-08-20). They were soulbound
+// in V1 and V2 from the start — mint-only, escrow-only, burn-only, with a one-way
+// curve and no exit — and MODERATION.md had recorded transferability as an open
+// owner call the whole time. This closes it in favour of transferable.
+//
+// GATED ON spendable(), WHICH IS THE WHOLE SAFETY ARGUMENT. spendable() is
+// BalanceOf minus lockedOf, so committed capital cannot be sold out from under
+// the thing it is committed to: a live stake, an answer bond, a dispute bond, a
+// flag bond, a claim deposit or an election bond. Without this gate a staker
+// could sell the coins backing a position and keep both the proceeds and the
+// position — the same double-commit hazard mustSpendable exists to prevent, from
+// the other direction.
+//
+// WHAT THIS DOES NOT MAKE TRANSFERABLE:
+//
+//   - REPUTATION. answerRecord is keyed by address, has no Remove, and no path
+//     assigns one address's record to another. That property stands on its own
+//     and is not a side effect of the coin having been soulbound. It is now
+//     enforced by check-nontransferable.py, which was inverted in the same commit
+//     to forbid reputation-moving entrypoints instead of coin-moving ones.
+//   - A CLAIM POSITION. stakePos is keyed (address, side) and only Stake, Unstake
+//     and the settlement withdrawal move `stake`. Selling coin does not carry
+//     conviction, which accrues to whoever held the position over time.
+//   - GNOT. The curve stays one-way and its payment stays burned. This adds a
+//     SECONDARY market between holders, not a redemption; no treasury appears and
+//     no real money exits.
+//
+// Known and accepted, recorded rather than hidden: several safety bars in this
+// realm are denominated in % of court supply (the quorum floor, both quality
+// bars, the credential bar, the election floor, the supplyFloor lid). Their
+// prices were set when the only way to acquire supply was the curve, which burns
+// GNOT at a monotonically rising price. A secondary market can clear below that,
+// so those bars may be cheaper to reach than when they were calibrated. The
+// owner has taken that trade deliberately.
+func TransferCC(cur realm, courtSlug string, to address, amount int64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	if amount <= 0 {
+		panic("kourtv2: transfer amount must be positive")
+	}
+	from := cur.Previous().Address()
+	if from == to {
+		panic("kourtv2: cannot transfer to yourself")
+	}
+	c := mustCourt(courtSlug)
+	// The escrow is the realm's own account: bonds and deposits live there and
+	// are disposed only by the lanes that own them. It must never be a transfer
+	// endpoint in either direction.
+	if to == c.escrow || from == c.escrow {
+		panic("kourtv2: the court escrow is not a transfer endpoint")
+	}
+	touch(c)
+	mustSpendable(c, from, amount)
+	c.coin.Transfer(from, to, amount)
+}

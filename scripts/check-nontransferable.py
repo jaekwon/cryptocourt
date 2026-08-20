@@ -1,45 +1,50 @@
 #!/usr/bin/env python3
-"""Trip if a court coin ever becomes transferable between two user addresses.
+"""Trip if REPUTATION ever becomes transferable.
 
-CC is currently mint-only, escrow-only, burn-only: every `coin.Transfer` call
-site in the realm has the escrow account as its source or its destination, the
-exported write surface has no Transfer/Approve/TransferFrom/Delegate, and the
-bonding curve is one-way so there is no burn-for-GNOT exit. A court coin is
-effectively soulbound, and it has been in both V1 and V2 from the start.
+INVERTED 2026-08-20. This script used to forbid the opposite: a court coin
+becoming transferable between users. That was an owner call held open since v0.32,
+and it has been decided the other way — `TransferCC` now exists, gated on
+`spendable()` so committed capital cannot be sold out from under a live stake,
+bond or deposit. Coin transfer is DELIBERATE and no longer a defect.
 
-That is NOT what MODERATION.md says. The document records "meta-CC stays
-transferable" as an owner call, and the capture analysis reasons explicitly that
-transferable coins let an attacker resell the franchise and that transferability
-is what enables the cheap-float capture route. So the spec and the code disagree,
-the disagreement is recorded in the v0.32 changelog entry, and the resolution is
-the owner's to make.
+What must stay soulbound is the thing that was never really protected by the
+coin's immobility: an address's earned standing. `answerRecord` is keyed by
+address, has no `Remove`, and no path assigns one address's record to another —
+and that property stands on its own, which is why it survives the coin becoming
+tradeable. This guard now protects it directly instead of relying on a side
+effect.
 
-This script exists because of which DIRECTION that gap is dangerous in. Today it
-errs safe: the constants were chosen against a resale threat the code does not
-expose, so they are conservative. The hazard is the reverse — the day somebody
-adds a transfer entrypoint, a pile of already-settled reasoning silently becomes
-load-bearing again, and nothing in the test suite would notice, because adding a
-feature does not break tests that never imagined it.
+WHY THE OLD PATTERN WOULD NOT HAVE CAUGHT THIS. It matched coin-transfer verbs —
+Transfer/Approve/TransferFrom/Delegate/Sell/Send/Gift. An entrypoint called
+`AssignRecord`, `MigrateCredential`, `SetStanding`, `Bequeath` or `MoveScore`
+would have sailed straight through while doing the one thing that must never be
+possible. So the verb list is now about records, not coins.
 
-What specifically has to be re-opened, and why each one needs transferability to
-be false:
+WHAT THE INVERSION COST, recorded because it was real and is now load-bearing
+again. The old docstring named three pieces of settled reasoning that assumed
+transferability was false, and each is now live:
 
-  - The v0.31 KEEP-NETTING ruling on electionFloor. The refutation of the
-    park-stake-to-cheapen-a-coup vector turns on an attacker being unable to
-    acquire existing float: with no secondary market they can only park their own
-    CC, which is monotonically self-defeating. A transferable coin restores the
-    secondary market and reopens the question.
-  - The sybil doctrine at the top of MODERATION.md. "Only capital-keyed defences
-    hold" is stronger than it reads while the capital itself cannot move between
-    addresses; transferability is what lets one pile of capital back several
-    identities in sequence.
-  - Vote-buying generally. Conviction accrues to a holder over time, and a coin
-    that cannot change hands cannot have its accrued conviction sold.
+  - The v0.31 KEEP-NETTING ruling on electionFloor. Its refutation of the
+    park-stake-to-cheapen-a-coup vector turned on an attacker being unable to
+    acquire existing float. A secondary market restores that ability.
+  - MODERATION.md's sybil doctrine. "Only capital-keyed defences hold" was
+    stronger than it read while capital itself could not move between addresses;
+    transferability lets one pile of capital back several identities in sequence.
+  - Vote-buying. Conviction accrues to a holder over time, and while a coin could
+    not change hands its accrued conviction could not be sold. Note the narrow
+    consolation: conviction lives on `stakePos`, keyed (address, side), so selling
+    coin does NOT carry conviction with it — only the future ability to earn it.
 
-So: a tripwire, not a rule. It is not asserting that soulbound is correct — it is
-asserting that the choice is currently soulbound and that flipping it must be
-deliberate. If the owner decides to ship transfer, the fix is to work through the
-list above and then delete this file, which is the point.
+And the pricing consequence the owner accepted knowingly: the quorum floor, both
+quality bars, the credential bar, the election floor and the supplyFloor lid are
+all denominated in % of court supply, and were calibrated when the only way to
+acquire supply was a one-way curve burning GNOT at a rising price. A secondary
+market can clear below that, so those bars may now be cheaper to reach than when
+their constants were chosen.
+
+So: still a tripwire, not a rule. It no longer asserts that soulbound coin is
+correct — it asserts that soulbound REPUTATION is, and that flipping THAT must be
+a decision rather than an accident.
 """
 
 import re
@@ -57,7 +62,8 @@ REALMS = ["kourtv1", "kourtv2"]
 # on the exported surface only: unexported helpers are this realm's own business,
 # and the escrow-to-user refunds are exactly what the realm is supposed to do.
 SUSPECT = re.compile(
-    r"^func (Transfer|Approve|TransferFrom|Delegate|Sell|Send|Gift)"
+    r"^func (Assign|Migrate|Move|Set|Bequeath|Gift|Sell|Grant|Delegate|Transfer)"
+    r"[A-Za-z0-9_]*(Record|Credential|Standing|Score|Reputation|Priority)"
     r"[A-Za-z0-9_]*\(cur realm",
     re.M,
 )
@@ -93,21 +99,22 @@ def main() -> int:
                 hits.append((realm, p.name, line, name))
 
     if hits:
-        print("check-nontransferable: a court coin appears to have become "
+        print("check-nontransferable: REPUTATION appears to have become "
               "transferable.\n", file=sys.stderr)
         for realm, fname, line, name in hits:
             print(f"  {realm}/{fname}:{line}  {name}", file=sys.stderr)
-        print("\nCC has been mint-only/escrow-only/burn-only since V1, and a "
-              "pile of settled reasoning rests on that — the v0.31 KEEP-NETTING "
-              "ruling on electionFloor, the capital-keyed sybil doctrine, and "
-              "the un-sellability of accrued conviction. Read the v0.32 entry "
-              "in MODERATION.md, work through that list, then delete this "
-              "check.", file=sys.stderr)
+        print("\nAn address's earned standing must not be movable. The coin is "
+              "transferable by decision (TransferCC), but answerRecord is keyed "
+              "by address with no Remove precisely so a credential cannot be "
+              "sold — the answer-priority window and the difficulty record both "
+              "price a CAREER, and a sellable one prices nothing. If this is "
+              "intended, it is an owner decision: say so here and in "
+              "MODERATION.md, and price rent-a-lead first.", file=sys.stderr)
         return 1
 
-    print(f"check-nontransferable: {scanned} realm files, no user-to-user coin "
-          f"transfer entrypoint. The v0.31 electionFloor ruling and the "
-          f"capital-keyed sybil doctrine still hold.")
+    print(f"check-nontransferable: {scanned} realm files, no entrypoint moves "
+          f"an address's record. Coin is transferable by decision; standing is "
+          f"not.")
     return 0
 
 
