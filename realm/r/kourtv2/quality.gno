@@ -201,6 +201,10 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if isParticipant(cs, who) {
 		panic("kourtv2: the claim's participants cannot vote its quality (Q2)")
 	}
+	// Weighed at the claim's quality epoch (Q1), pinned at PostAnswer. Rentable
+	// in principle — see RENTEDWEIGHT.md — but the hardest of the three lanes to
+	// rent into, since the anchor is set by the ANSWERER and using it means
+	// answering the claim yourself and voting from a second address.
 	w := c.coin.PastVotes(who, cs.qualityEpoch)
 	if w <= 0 {
 		panic("kourtv2: no checkpointed weight at the claim's quality epoch")
@@ -221,7 +225,10 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if cs.qVoted.Has(k) {
 		panic("kourtv2: already voted this quality tally")
 	}
-	cs.qVoted.Set(k, true)
+	// The WEIGHT, not a presence marker: PullCarrot pays this figure back rather
+	// than re-deriving it, which is what keeps the payout numerator equal to this
+	// voter's contribution to conclusiveTurnout now that the tally is capped.
+	cs.qVoted.Set(k, w)
 	switch bucket {
 	case qualityLow:
 		cs.qLowW = mustAdd(cs.qLowW, w)

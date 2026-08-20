@@ -690,9 +690,19 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
 		panic("govern: " + err.Error())
 	}
 
-	// The electorate is the checkpointed supply at the last sealed epoch. Not
-	// a hand-kept roll: the token already remembers who held what, and asking
-	// it is what makes the weight both historical and impossible to rent.
+	// The electorate is the checkpointed supply at the last sealed epoch. Not a
+	// hand-kept roll: the token already remembers who held what, and asking it is
+	// what makes the weight historical.
+	//
+	// THIS ALONE DOES NOT MAKE WEIGHT UNRENTABLE, and an earlier version of this
+	// comment claimed it did. The anchor is derived HERE, at propose time, by
+	// whoever proposes — so a renter buys float, waits ONE epoch for the
+	// checkpoint to seal, proposes (pinning the anchor to a window in which they
+	// hold), sells, and votes with weight they no longer own. Measured end to end:
+	// 300 B of pinned weight cast at 600x a quorum floor with a live balance of
+	// zero and one epoch of capital at risk. What this line buys on its own is
+	// only that weight cannot be acquired AFTER the question exists. The rental is
+	// unpriced; RENTEDWEIGHT.md records the measurement and the open decision.
 	at := g.voters.Epoch() - 1
 	if at == 0 {
 		panic("govern: no sealed epoch yet — the chain is too young to vote")
@@ -859,8 +869,46 @@ func (g *Governor) castVote(who address, id int64, choice, reason string) {
 	if p.voted.Has(string(who)) {
 		panic("govern: already voted")
 	}
-	// Weighed as of the snapshot, so buying in after the question was asked
-	// buys nothing, and selling out afterwards costs nothing.
+	// Weighed as of the snapshot AND CAPPED AT WHAT IS STILL HELD. Buying in
+	// after the question was asked buys nothing (the snapshot caps it); selling
+	// out afterwards now costs exactly what was sold (the live balance caps it).
+	//
+	// THE SECOND HALF IS NEW, AND IT IS A FIX FOR A MEASURED HOLE, not a
+	// tightening for its own sake. The snapshot alone was documented in propose()
+	// as making weight "impossible to rent". It did not: the anchor is
+	// `g.voters.Epoch() - 1` AT PROPOSE TIME, and the proposer is whoever asks —
+	// so an attacker acquires float, waits ONE epoch for the checkpoint to seal,
+	// opens the proposal themselves (pinning the anchor to a window in which they
+	// hold), SELLS EVERYTHING BACK, and then votes with the full weight they no
+	// longer own. Measured end to end on a court coin: 300 B of pinned weight
+	// voted at 600x the quorum floor with a live balance of zero and one epoch of
+	// capital at risk.
+	//
+	// The old comment's "selling out afterwards costs nothing" was true and is
+	// the standard snapshot-governance tradeoff — but it is only safe when the
+	// anchor PRECEDES the acquisition. Here the actor chooses the anchor, which
+	// is what turns an accepted property into a rental market.
+	//
+	// min() rather than live-only: live-only weighting is what snapshot voting
+	// exists to prevent, since it lets weight borrowed inside the voting window
+	// decide the vote. Capping keeps both guarantees — you must have held it THEN
+	// and hold it NOW — and it strictly narrows what any voter can do.
+	//
+	// CONSISTENT WITH EXISTING DOCTRINE, not a new rule: coin sitting in an
+	// escrow does not vote (that is precisely what votableAt nets out), so a
+	// voter who has since committed coin as a bond or deposit losing that much
+	// weight is the same rule everyone else is already under.
+	// Weighed as of the snapshot, so buying in after the question was asked buys
+	// nothing, and selling out afterwards costs nothing.
+	//
+	// THE SECOND HALF IS A KNOWN, MEASURED EXPOSURE, not an oversight, and it is
+	// NOT closed here. See propose() for the mechanism and RENTEDWEIGHT.md for the
+	// two candidate fixes and why neither shipped: capping at the voter's live
+	// weight charges whoever PAYS to initiate a proceeding (measured, it pushed a
+	// holder of exactly the election floor under it by the fee they paid to
+	// nominate), and requiring the weight to have existed a week earlier
+	// disenfranchises every recent acquirer (measured, it refused an ordinary vote
+	// in this realm's own tests). Both were implemented and reverted.
 	w := g.voters.PastVotes(who, p.epoch)
 	if w <= 0 {
 		panic("govern: no voting power at that epoch")

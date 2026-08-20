@@ -386,6 +386,10 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	if now >= e.voteEnd {
 		panic("kourtv2: voting has closed")
 	}
+	// Weighed at the epoch OpenElection pinned. This is the lane most exposed to
+	// rented weight — the opener chooses the anchor and a coup is court-wide
+	// rather than one claim — measured at 12x this floor on a 500 B court from a
+	// one-epoch rental. NOT closed here; see RENTEDWEIGHT.md.
 	w := c.coin.PastVotes(who, e.epoch)
 	if w <= 0 {
 		panic("kourtv2: no voting weight at the pinned epoch")

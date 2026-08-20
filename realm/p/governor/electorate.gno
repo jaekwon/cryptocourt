@@ -12,9 +12,16 @@ import (
 // It also makes the governor testable without a ledger. Reaching exactly a
 // quorum with real balances means solving for the supply, and a test that does
 // arithmetic to test arithmetic proves nothing.
+//
+// EVERY QUESTION HERE IS ABOUT A SEALED PAST EPOCH, which is what keeps the
+// Token/Electorate split below honest — Electorate about then, Token about now.
+// A live per-address read (VotesOf) was added here while fixing rented weight and
+// removed again when the fix was reverted; RENTEDWEIGHT.md records why. Anything
+// re-adding it is re-opening that decision, not making a small change.
 type Electorate interface {
 	// PastVotes is what an address could vote at a sealed epoch.
 	PastVotes(who address, at uint32) int64
+
 
 	// PastTotal is everything that existed then, which quorum is a fraction
 	// of. Taken at the same epoch as the votes it is compared against, or a

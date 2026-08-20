@@ -370,6 +370,17 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 	if cs.qVoted == nil {
 		panic("kourtv2: nobody voted on this claim")
 	}
+	// THE CARROT PAYS THE WEIGHT THAT WAS TALLIED, read back from where the vote
+	// recorded it — never re-derived from PastVotes at payout time.
+	//
+	// It used to re-derive, and that was exactly equivalent while the tally itself
+	// was an uncapped PastVotes read: the same immutable checkpoint, so numerator
+	// and denominator could not disagree. Capping vote weight at what the voter
+	// STILL holds (v0.56, the rented-weight fix) breaks that identity, and
+	// re-deriving would then over-pay anyone who voted while sold down and bought
+	// back before pulling — numerator uncapped, their contribution to `denom`
+	// capped. Reading the recorded figure is exact on every path and cannot drift
+	// again.
 	var w, denom int64
 	switch {
 	case cs.decidedPID != 0:
@@ -377,13 +388,19 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 		if v == nil || v.(string) != cs.carrotChoice {
 			panic("kourtv2: the carrot pays with-verdict voters of the deciding round")
 		}
-		w = c.coin.PastVotes(who, c.gov.EpochOf(cs.decidedPID))
+		// The governor already stores each ballot's weight; VoteOf hands it back.
+		_, gw, ok := c.gov.VoteOf(cs.decidedPID, who)
+		if !ok {
+			panic("kourtv2: no ballot recorded for that voter on the deciding round")
+		}
+		w = gw
 		denom = cs.carrotDenom
 	case cs.conclusiveSeq != 0:
-		if !cs.qVoted.Has(beClaimKey(cs.conclusiveSeq) + string(who)) {
+		v := cs.qVoted.Get(beClaimKey(cs.conclusiveSeq) + string(who))
+		if v == nil {
 			panic("kourtv2: the carrot pays the conclusive quality tally's voters")
 		}
-		w = c.coin.PastVotes(who, cs.qualityEpoch)
+		w = v.(int64)
 		denom = cs.conclusiveTurnout
 	default:
 		panic("kourtv2: no vote resolved this claim; there is no carrot")
