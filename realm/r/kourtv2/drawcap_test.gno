@@ -10,19 +10,31 @@ import (
 // THE DRAW CAP BOUNDS WHAT A SNIPED CLAIM CAN DESTROY, AND IT MUST NOT TOUCH THE
 // PUBLISHED MID RATE.
 //
-// Those are two assertions, not one, and they need opposite fixtures. The cap is
-// INERT at today's constants — provably, not by luck: the collateralization floor
-// gives answerBond0 >= 1.6·mg_max >= 1.6·mg_win, so capd >= 1.53·mg_win while the
-// MID draw wants 1.00·mg_win. The inequality uses only 1.60 - 0.07 > 1, so it
-// carries no X̄, no claim age, no rate and no bond level. Measured the other way
-// round: at 5000 bps the cap could only bind above mg = 2415.5 bps·X̄, against a
-// maxMidGrossBps of 1927 — 25% of margin.
+// Those are two assertions, not one, and they need opposite fixtures.
+//
+// WHY THE CAP IS INERT TODAY, stated carefully because an earlier version of this
+// comment got it wrong in a way that would have shipped a 22% cut. There are two
+// regimes and only the second is live on this tree:
+//
+//   floor binds:    answerBond0 >= 1.6·mg_max >= 1.6·mg_win, so capd >= 1.53·mg_win
+//                   against a MID want of 1.00·mg_win. Uses only 1.60-0.07 > 1, so
+//                   it carries no X̄, no age, no rate, no bond level. This is the
+//                   POST-re-keying guarantee — the floor keys on the ANSWERED side
+//                   today, so it does NOT deliver mg_max yet.
+//   base arm binds: the 5000 bps arm against maxMidGrossBps = 1927. The cap could
+//                   only bind above mg = 2415.5 bps·X̄ — 25% of margin. THIS is what
+//                   carries the shipped tree, and it is a calibration rather than a
+//                   proof, exactly as court.gno's "CALIBRATION, NOT A SAFETY
+//                   PROOF" note says of its own neighbour.
 //
 // So a fixture that DRIVES the draw up cannot reach the cap; it would test the
 // emission budget instead, since P8 clamps first. The cap has to be squeezed down
 // onto a natural draw, which is `crystallize_test.gno`'s own idiom for the
-// AnswererBonus bound. Both fixtures below assert the natural state first, so
-// neither can pass vacuously if the arithmetic later moves.
+// AnswererBonus bound. Every fixture below asserts the natural state FIRST, so none
+// can pass vacuously if the arithmetic later moves — and the bystander asserts the
+// 1.53× MARGIN, not merely `capd > mg`, because at this fixture's scale the bare
+// inequality is slack by four orders of magnitude and would not have caught the
+// regression the cap's own comment promised it would.
 
 // The bystander, and it is the more important of the two: an ordinary MID claim
 // must be paid EXACTLY what it was paid before the cap existed. If this fails,
@@ -54,16 +66,21 @@ func TestDrawCapIsInertOnAnOrdinaryMidClaim(cur realm, t *testing.T) {
 		t.Fatalf("precondition: the winning pool must have conviction, got %d", mg)
 	}
 
-	// THE PRECONDITION THAT MAKES THE ASSERTION MEAN SOMETHING: the cap must be
-	// slack here by the margin the comment claims. Asserting the payout alone
-	// would pass just as well if the cap had silently become a no-op for some
-	// other reason.
+	// THE PRECONDITION THAT MAKES THE ASSERTION MEAN SOMETHING, and it asserts the
+	// MARGIN rather than the mere inequality. An earlier version of this fixture
+	// checked only `capd > mg`, which on this fixture's scale is slack by four
+	// orders of magnitude — so it would have passed on a 600-bps tree that was
+	// cutting overturn winners by 22%, while its own comment claimed such a change
+	// "fails loudly". Demanding the full 1.53× is what makes it discriminate.
 	carrot := mulDiv128(mg, splitCarrot, 100)
-	if capd := cs.answerBond0 - carrot; capd <= mg {
-		t.Fatalf("precondition FAILED — the cap is not slack on an ordinary MID claim: "+
-			"capd %d, mid want %d, bond0 %d, carrot %d. The floor is supposed to "+
-			"guarantee capd >= 1.53·mg; if that no longer holds, the cap is cutting "+
-			"the published rate and this is the alarm.", capd, mg, cs.answerBond0, carrot)
+	capd := cs.answerBond0 - carrot
+	if capd < mustMul(mg, 153)/100 {
+		t.Fatalf("precondition FAILED — the cap is not slack by the 1.53x the proof "+
+			"claims: capd %d, mid want %d, 1.53x want %d, bond0 %d, carrot %d. Either "+
+			"the collateralization floor stopped guaranteeing 1.6*mg_win, or the base "+
+			"arm shrank below it. Both mean the cap is now able to cut the published "+
+			"rate, which is the alarm this line exists to raise.",
+			capd, mg, mustMul(mg, 153)/100, cs.answerBond0, carrot)
 	}
 
 	// And the draw is the uncapped tier×mg. Compare the WINNERS' slice, not the
@@ -148,6 +165,115 @@ func TestDrawCapBindsWhenTheBondDidNotCoverTheDraw(cur realm, t *testing.T) {
 	if wantCapped > c.curPeriodBudget {
 		t.Fatalf("this fixture measures the cap, but the period budget is tighter "+
 			"(cap %d, budget %d) — re-scale it", wantCapped, c.curPeriodBudget)
+	}
+}
+
+// AN OVERTURN MUST NOT BE CAPPED, and this is the regime the cap's first version
+// had no fixture for — which is how it shipped with a proof that did not hold here.
+//
+// On an overturn the floor keys on the ANSWERED side, which is the LOSING side, so
+// `answerBond0` carries no information about the winning pool: a dust-answered
+// overturn was measured giving 40% of the 1.6·mg_win the cap's proof assumes. The
+// gate exists because the bond has already burned in full on this path, so the
+// collateral was consumed and there is nothing left to bound. Without the gate this
+// fixture fails on a 600-bps tree; with it, it passes at any bond level.
+func TestDrawCapDoesNotTouchAnOverturnedClaim(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dc4-alice")
+	bob := testutils.TestAddress("dc4-bob")
+	whale := testutils.TestAddress("dc4-whale")
+	c := testCourt(cur, "dc4", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(whale, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "dc4", "An overturn pays the vindicated pool in full")
+	// ORDER MATTERS. Conviction is capital x TIME, so the pool that must end up
+	// vindicated has to be staked BEFORE the clock moves. matureOI stakes YES and
+	// advances two epochs, so bob's NO goes in first and accrues across that same
+	// window; alice's YES is the dust the answerer then declares. Staking NO after
+	// matureOI leaves it with zero conviction at the freeze, which the precondition
+	// below catches rather than silently measuring nothing.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "dc4", id, sideNO, 4_000_000_000)
+	matureOI(cur, "dc4", id, alice, 1_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "dc4", id, sideYES)
+
+	cs := mustClaim(mustCourt("dc4"), id)
+	bond0 := cs.answerBond0
+
+	// Overturn it: a non-participant whale opens the dispute and carries the round.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "dc4", id)
+	VoteDispute(cross(cur), "dc4", id, "yes")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "dc4", id)
+
+	if int(cs.provisional) == int(cs.answer) {
+		t.Fatalf("precondition: this fixture needs an OVERTURN, provisional %d answer %d",
+			cs.provisional, cs.answer)
+	}
+	if cs.answerBond != 0 {
+		t.Fatalf("precondition: an overturn burns the answer bond in full, %d left",
+			cs.answerBond)
+	}
+
+	testing.SkipHeights(escrowWindow(c, cs) + 1)
+	// Finalize and Crystallize are both participant-only for their first week
+	// (A13 — a stranger must not pick the reservoir moment), and the DISPUTER is
+	// not a participant. Alice is: she authored and answered it.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "dc4", id)
+
+	mg := convToCC(cs.noConvHi, cs.noConvLo)
+	if mg <= 0 {
+		t.Fatalf("precondition: the vindicated pool must carry conviction, got %d", mg)
+	}
+	uncapped := mustMul(cs.tier, mg)
+	carrot := mulDiv128(mg, splitCarrot, 100)
+
+	// SQUEEZE, exactly as the binding fixture does. On the shipped tree the cap
+	// cannot bind naturally here — the 5000 bps base arm dwarfs mg by 6600x on a
+	// short claim — so driving the pool wider would only measure the period budget.
+	// Squeezing answerBond0 onto the natural draw is what isolates the GATE: with
+	// the gate removed this bond WOULD halve the vindicated pool's payout.
+	if bond0-carrot < uncapped {
+		t.Fatalf("this fixture assumes the cap is naturally slack and squeezes it; it "+
+			"now binds on its own (bond0 %d, carrot %d, want %d)", bond0, carrot, uncapped)
+	}
+	cs.answerBond0 = mg/2 + carrot
+	if would := cs.answerBond0 - carrot; would >= uncapped || would <= 0 {
+		t.Fatalf("the squeeze must make the cap strictly bite: would-cap %d against "+
+			"want %d", would, uncapped)
+	}
+
+	// OUTLAST THE COMP DROUGHT. The overturn that vindicated this pool also
+	// enqueued a SENIOR comp to the disputer, and reservedTail is monotone — so
+	// reserveJunior clamps this claim's draw to an empty reservoir until accrual
+	// catches up (GAMETHEORY.md §11.8, and §16.4 for exactly this shape: a
+	// provClose after a DECIDED round restores an entitlement worth nothing until
+	// C0 lands). Measured here: crystallizing straight after Finalize paid the
+	// winners 0 rather than the capped figure, so without this wait the fixture
+	// would have "passed" against the wrong zero. That is a separate open item,
+	// not this cap — the wait isolates the cap from it.
+	testing.SkipHeights(periodBlocks * 40)
+	touch(c)
+	if c.reservoirR() <= 0 {
+		t.Fatalf("precondition: the comp drought must have passed before this can "+
+			"measure the cap; reservoir is %d", c.reservoirR())
+	}
+	Crystallize(cross(cur), "dc4", id)
+
+	if uncapped > c.curPeriodBudget {
+		t.Fatalf("re-scale: the period budget bound this claim (want %d, budget %d)",
+			uncapped, c.curPeriodBudget)
+	}
+	// THE POINT: paid in full despite a bond that would not have collateralized it,
+	// because that bond already burned.
+	if want := uncapped * splitWinners / 93; cs.drawWinners != want {
+		t.Fatalf("an overturn must pay the vindicated pool in full: winners got %d, "+
+			"want %d. The cap is cutting a draw whose collateral already burned.",
+			cs.drawWinners, want)
 	}
 }
 

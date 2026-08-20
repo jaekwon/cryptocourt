@@ -100,22 +100,48 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// A stored frozen-tier field would also be dead state: slashSizeAt has no tier
 	// factor, so the value is tierMidX on every claim.
 	//
-	// INERT ON THE PUBLISHED RATE, and that is provable rather than calibrated.
-	// The floor gives answerBond0 >= 1.6·mg_max >= 1.6·mg_win, so
-	// capd >= (1.60 - 0.07)·mg_win = 1.53·mg_win > 1.00·mg_win = want at MID.
-	// The inequality uses only 1.60 - 0.07 > 1: no X̄, no claim age, no rate, no
-	// bond level. A staker is therefore promised the MID rate unconditionally and
-	// only the discretionary HIGH multiplier is capped — which is also the
-	// Humphrey factor-2 answer, since what is "certain and guaranteed" at stake
-	// time sits provably outside the cap.
+	// STANDING ANSWERS ONLY, and this gate is load-bearing rather than tidy. The
+	// leverage above compares what a snipe destroys against what the sniper
+	// FORFEITS, and on an overturn the bond has already burned in full
+	// (dispute.gno, A19) — the collateral premise is satisfied by the forfeiture,
+	// so there is nothing left for a cap to bound. Capping there would instead cut
+	// the vindicated majority's draw to pay for an attack that already failed, and
+	// it is the one path where the floor carries no information about the winning
+	// pool: the floor keys on the ANSWERED side, which on an overturn is the losing
+	// side. Measured on a dust-answered overturn, the floor delivered 40% of the
+	// 1.6·mg_win it is casually assumed to give.
+	//
+	// INERT ON THE PUBLISHED RATE. Two regimes, and BOTH are needed — an earlier
+	// version of this comment gave only the first and was therefore wrong about the
+	// shipped tree:
+	//
+	//   floor binds (mg_max >= answerBondBps/slashDrawBps·X̄):
+	//     capd >= (1.60 - 0.07)·mg_win = 1.53·mg_win > want. Carries no X̄, no age,
+	//     no rate, no bond level — this is the post-re-keying guarantee.
+	//   base arm binds (mg_max below that):
+	//     capd >= answerBondBps·X̄ - 0.07·mg_max, and mg_max is small by assumption,
+	//     so the slack is answerBondBps·X̄ minus a fraction of something smaller.
+	//     At 600 bps: 573 bps·X̄ against a want under 375 bps·X̄.
+	//
+	// On the CURRENT tree it is the second regime that carries it — the 5000 bps
+	// base arm against maxMidGrossBps, measured at 2.42× margin. That is a
+	// calibration, not a proof — exactly what court.gno's own "CALIBRATION, NOT A
+	// SAFETY PROOF" note says of the neighbouring draw-arm check. **So the bond constant must not drop to 600 before
+	// the floor is re-keyed to max over both sides. The two deploy
+	// interlocks ("answer bond below the undisputed-extraction bound" and "the draw
+	// arm exceeds the base bond") force that change to be deliberate, but they do
+	// not force the two halves into one commit, and this cap is a third reason they
+	// must be.**
 	//
 	// Do NOT lower crystallize.gno's AnswererBonus cap or capBonus to match:
 	// lowering this arm alone can only make those LESS binding, and lowering them
 	// independently strands coin.
-	if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
-		want = capd
-		if want < 0 {
-			want = 0
+	if int(cs.provisional) == int(cs.answer) {
+		if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
+			want = capd
+			if want < 0 {
+				want = 0
+			}
 		}
 	}
 	if want > c.curPeriodBudget {
