@@ -1661,3 +1661,132 @@ cannot see that bond?* — with **yes, at MID, provably.**
 it does **not** bound destruction, because the cheapest destruction path is a supply-floorless
 quality demotion that no change in the set touches. That path needs its own decision, and
 `quality.gno:249-261` says it is the owner's.
+
+---
+
+## 16. THE FOUR STRUCTURAL FIXES — VERIFIED, GO, patch in hand
+
+All four implemented together on one staged copy, mutation-tested in final registered form, with
+the repo's own Python guards run. **Verdict: ship as one batch; no pair needs splitting.**
+
+### 16.1 Suite and churn
+
+Every package green: `p/checkpoint` `p/grc20votes` `p/governor` `p/twap` `p/cshares` `p/tickbook`
+`p/curve`, `r/govern` `r/offerer` `r/kourtv1`, and **`r/kourtv2` ok . 9.47s**.
+
+**Churn is 3 shipped fixtures + 5 mutation-corpus rows — not zero**, and one of them is a genuine
+cost rather than a bug-assert (§16.5). Production code is **5 files, ~90 non-comment lines**; the
+patch round-trips (`git apply` onto baseline reproduces the tested tree byte-for-byte).
+
+### 16.2 The correctness target — HIT, bit-identically
+
+Four cross-tree runs, each executed alone so the shared clock starts at the same genesis:
+
+| tree | window | rounds | exit | tier | winners / author / answerer |
+|---|---|---|---|---|---|
+| baseline | default | 2 | Finalize | 1 | **19,584 / 1,958 / 1,224** |
+| baseline | widened | 3 | provClose | 0, final | Crystallize **REFUSED** → 0 / 0 / 0 |
+| patched | widened | 3 | provClose | 1 | **19,584 / 1,958 / 1,224** |
+| patched | **default** | 3 | provClose | 1 | **19,584 / 1,958 / 1,224** |
+
+Rows 1–2 reproduce §12.11 digit for digit, **including "C1 without C6 pays 0"**. And `pool = 22767`
+is identical in all four rows, so this is **structural equality, not two clamps agreeing**.
+
+### 16.3 S1 + S2 — the unexamined pair are mutually exclusive
+
+S2's override is gated on `failedRounds > 0` **at the first resolution**. S1 lowers the bar a round
+must clear, making that first round more likely to be *decided* — in which case `failedRounds == 0`
+and the override **cannot fire**. The two levers cannot both apply to the round that sets the
+clock: strictly one-way, **no compounding**.
+
+And S1 makes provClose **rarer**, proven analytically (`old ≥ new`) and swept over 56 cells:
+
+| escrow | failed rounds, old floor | new floor | FAILED→CARRIED | CARRIED→FAILED |
+|---|---|---|---|---|
+| 10% / 50% | 51/56 | 41/56 | 10 | **0** |
+| 85% | 56/56 | 49/56 | 7 | **0** |
+
+### 16.4 S3 + S4 agree — and a REAL correction to §12.12
+
+Verified **on money, not on the tier field** — `cs.tier` is 0 both before any terminal path runs
+*and* after a demotion, so comparing the field alone would prove nothing. S4 fired → `slotConsumed`
+and `tierFinal` stay false → S3 sets MID → entitlement restored. S4 did not fire (full bar, ⅔ low)
+→ `slotConsumed = true` → S3 correctly refuses to clobber → `drawWinners == 0`.
+
+> **§12.12's "C6 is genuinely independent of C0" holds only while no round was DECIDED.** On the
+> S4-fired path the restored entitlement pays **0**, because that claim's own overturn enqueued a
+> senior comp and `reservedTail` is monotone, so `reserveJunior` clamps to an empty reservoir. A
+> failed-rounds-only provClose mints no comp and pays in full; **a provClose after a decided
+> overturn restores an entitlement worth nothing until C0 ships.** Measured and pinned in a
+> fixture rather than asserted away.
+
+### 16.5 Bystander bit-identical, and one fixture that was NOT asserting the bug
+
+```
+undisputed    answerH=1563 verdictAt=53403 tier=1 pool=22767 dW=19584 dA=1958 dN=1224
+one decided   answerH=1563 escrowUntil=244924 verdictAt=244924 decided=1 failed=0 … identical
+```
+
+**Character for character across both trees**, with preconditions asserted so neither can pass
+vacuously (`SettleUndisputed` refused at `settleDelay − 1` then accepted; `Finalize` refused at
+`escrowUntil − 1` then accepted on the boundary; the settle reserve asserted equal to
+`slashSizeFor`). The one-decided-round claim keeps **14 days** answer→finalizable, not the 21 a
+global `escrowMinBlocks` lever would have cost.
+
+Of the three shipped fixtures that changed, two were asserting the defect. **The third is a real
+cost of S2:** `TestParamsMustSaneRefusesEachMalformedField` asserted that a fixed one-week window
+(`escrowMinBlocks == escrowMaxBlocks == 120_960`) passes `mustSane`, and S2's invariant now refuses
+it. Mitigated but not free — **no production path writes those params** (`StartCourt` hardcodes
+`defaultParams()` and exposes only `stakeOpenDelay`), so like the other six `mustSane` guards it is
+dormant today and constrains only a future setter.
+
+### 16.6 S4's scoping is verified by SHIPPED code, not by the new tests
+
+`TestRideRatchetAndSlashPredicate` needed no change and earned its keep again — dropping
+`cs.provisional >= 0` fails it, because its first two cases run at `provisional == -1`. And a
+second shipped fixture guards the other edge: **`TestUnmandatedDemotionRideStillLands`** drives an
+*uphold*, so `provisional == answer` and S4 must **not** fire; flipping `!=` to `==` breaks it.
+
+> **Had S4 been written as "no demotion on any decided round" instead of "on an overturn round",
+> that fixture would have failed.** The scoping is pinned by code that shipped before this work.
+
+**Mutation testing, final registered form:** 12 hand-built mutations → **12 caught, 0 survivors, 0
+invalid builds**. 35 corpus rows (18 new/re-derived + 17 neighbours) → **35 caught**. All 12 new and
+4 re-derived fixtures also pass **in isolation**, so none depends on suite ordering.
+
+**Python guards green:** `check-docnumbers`, `check-stale-guards` (106 entrypoints),
+`check-mutation-anchors` (895 rows), `check-storage`, `check-read-purity`, `check-height-shim`,
+`check-nontransferable`, `check-membership-clears`, `check-web-dupes`, `check-demo-physics`.
+`check-citations` reports 4 MOVED anchors, **byte-identical on baseline and patched** — pre-existing,
+in the gno tree. **Two guards genuinely need the owner's tree** (both shell out to `git ls-files`):
+`check-paths.py` and `check-guards-armed.py`. The patch adds no import paths beyond
+`testing`/`testutils`/`uassert` and no guard script, so both should be clean — **unverified.**
+
+### 16.7 Residuals, demonstrated and pinned rather than papered over
+
+1. **S3 opens a demote-only flag lane on provClosed claims — new, and it did not exist before.**
+   Dropping `OpenFlag`'s provClose arm is what makes the new MID demotable, but `provCloseClaim`
+   returns the answer bond **whole**, and every priced disposition on that lane is gated on
+   `answerBond > 0`. **M:** a full-bar ⅔-low flag demotes while levying **no slash**, burning **no
+   dust**, paying **no bounty**, and returning the flagger's bond **whole**. Not an exploit —
+   reaching provClose costs three half-burns, 70%·X̄, against a draw bounded at 19.27%·X̄ — but the
+   quality lane's economics are entirely **inert** there. Fix if wanted: have `provCloseClaim`
+   retain a `slashSizeFor` reserve exactly as `Finalize` and `SettleUndisputed` do. **Not in this
+   batch.**
+2. `provCloseClaim` still calls `stripExit`, so the claim leaves the policing strips while the flag
+   lane is open. Its comment claimed "unflaggable"; **corrected in place.**
+3. **Render drift fixed** — three one-liners, two of which misdescribed *money*: the flag-slot line
+   was suppressed though the lane is open, the "pull your accuracy reward" hint was suppressed
+   though the pull now works, and `claimStatus`'s provClose text said everyone withdraws 1× with no
+   mention of a draw. `Verdict()` still panics on provClose, **left alone deliberately** — there
+   genuinely was no decision, and `Provisional()` gives clients the winning side.
+4. **`ladderWindow` carries 34,560 blocks of slack.** Measured minimum for round 3 to open is
+   `votingBlocks + 1` = 120,961; §12.10's formula gives 155,521, because round 2 opens in the same
+   block round 1 resolves. **The `(maxFailedRounds−1)·graceBlocks` term is conservatism, not
+   necessity.** Kept as specified and asserted.
+
+### 16.8 Ordering
+
+**None of the four needs splitting.** If ever split: **S3 before S2** — S2 alone converts a claim
+paying 19,584 into one paying 0. S1 and S4 are order-free. And the standing dependency stands:
+**C0 before C5 or C6 for any claim with a decided round** (§16.4).
