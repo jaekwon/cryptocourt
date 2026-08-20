@@ -13,6 +13,50 @@ the two rot at different rates.
 
 ---
 
+## 0a. LIVE BUG — straddling a claim is RISK-FREE YIELD today, no credential needed
+
+**Shipped behaviour, exploitable now, and it was found while pricing an unrelated design.** Not
+recorded anywhere in `GAMETHEORY.md`, which is why it sits above everything else.
+
+Stake **both sides** of one claim and you are paid for it. Measured (`TestP6`, 11-week claim, cold
+rate, MID tier, no proposed change anywhere in the tree):
+
+```
+straddler: 300 YES + 300 NO, 600 CC locked   winning-side draw = 18.096774 CC
+carry (25 bps/wk x 11 wk on 600 CC)                            = 16.500000 CC
+NET                                                            = +1.596774 CC  ->  +1.26%/yr RISK-FREE
+
+honest:    901 CC one side                   draw 54.290322     net +29.512822  ->  +15.5%/yr WITH risk
+```
+
+**Why it pays.** The straddler's winning leg draws from emission **he caused to exist**: his own
+conviction raises `midGross`, and he then collects exactly his pro-rata share of the increment —
+measured `18.0968 / 72.3871 = 0.250000` exactly. The losing leg returns 1× (principal always does),
+so the only cost is carry on the loser. `capBonus` does not bind (the cap is `tier/2 × 300 CC`,
+far above 18.1).
+
+**It gets worse with the parameters the design is moving toward:**
+
+| | multiplier | risk-free yield |
+|---|---|---|
+| MID, cold (measured) | 1× | **+1.26%/yr** |
+| HIGH tier | ×2 | **+15.5%/yr** |
+| hot emission rate | ×2.52 | **+22.9%/yr** |
+
+**Why this matters beyond itself.** `LONGCLAIMS.md` §4.2 worried that a *proposed* credential would
+create a straddle incentive. It would only **enlarge an existing one**. Any design that pays for
+held positions inherits this, so this is upstream of that work and should be fixed first or priced
+into it.
+
+**Fix direction — not chosen, and it needs care.** The obvious move is to make the winning draw net
+of the same holder's losing position, but `GAMETHEORY.md` §13.5 measured netting **fatal** in the
+bond-floor case (it removes a self-tax that was doing real work). Note the shape differs here: this
+nets a *payout numerator*, not a bond denominator. Also note **the sybil floor**: two addresses on
+opposite sides are observationally identical to two people who disagree, so netting buys a factor of
+**2** in the safe rate and no more.
+
+---
+
 ## 0. LIVE BUG, HIGHEST SEVERITY — one dispute round starves a court's junior draw for weeks
 
 > **CORRECTED — see `GAMETHEORY.md` §11.8, which falsified two things below.** The starvation
