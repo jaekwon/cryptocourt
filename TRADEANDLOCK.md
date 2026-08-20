@@ -1,10 +1,19 @@
-# TRADEANDLOCK.md — tradeable court coins + a loser unbonding period
+# TRADEANDLOCK.md — tradeable court coins
 
-**Status: PLAN, NOT REVIEWED, NOT IMPLEMENTED.** Two owner decisions, planned together because
-they interact and one interaction is load-bearing:
+**Status: PLAN, PART A ONLY. PART B AND B′ ARE DROPPED.**
 
-- **(A)** `kourt:XYZ` court coins become **transferable**. Reputation does **not**.
-- **(B)** The losing side waits an **unbonding period** before withdrawing principal.
+**Scope is now one decision: `kourt:XYZ` court coins become transferable; reputation does not.**
+
+> **The unbonding period is DROPPED by owner decision.** Everything below about locks — Part B, Part
+> B′, and §0's ordering argument — is retained as history, not as plan. `LOSERLOCK.md` and
+> `STRADDLE.md` likewise describe designs that are **not being built**. Nothing about them was
+> implemented; `realm/` never changed.
+>
+> **§0 still matters, for a different reason.** Its argument was "gate `Transfer` on `spendable()`
+> or the lock evaporates". With no lock, the gate is still required — because **staked capital must
+> not be sellable out from under the stake.** `spendable()` already nets locked balances, so gating
+> `Transfer` on it is what stops someone selling coins they have committed to a live claim. Same
+> one-line requirement, independent motivation.
 
 Sequence: plan → review tokenomics until convergence → implement → review.
 
