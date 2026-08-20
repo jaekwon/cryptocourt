@@ -3646,8 +3646,22 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   let tline=null;
   if(isLive()) tline = parseTimeline(await one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null));
   else { const dd1=DEMO.claims[slug+"/"+id]||{}; tline = parseTimeline(dd1.timeline); }
+  // ONE HEIGHT SPACE. chainHeight() reads the RPC's latest_block_height, which
+  // knows nothing about the realm's test-height skew — and ClaimSeries records
+  // its epochs against the REALM's height. On a seeded chain those are different
+  // numbers by a wide margin (measured on one: realm 88,560, RPC 836), and
+  // mergeStakeSeries clamps every sample with Math.min(sampleHeight, nowHeight)
+  // before de-duplicating equal heights. So all fourteen of a claim's samples
+  // clamped to 836, collapsed to one, and the chart drew a single point at `now`
+  // — every claim on the chain, identically flat.
+  //
+  // The timeline already carries the realm's own height for the same instant
+  // ("now:<unix>:<height>"), so use that when it is there. On an ordinary chain
+  // it equals the RPC height and nothing changes; on a skewed one it is the only
+  // value the series can be read against.
+  const seriesH = (tline && tline.now && tline.now.h != null)? tline.now.h : nowH;
   let ser=null;
-  if(isLive()){ if(nowH!=null) ser = await fetchStakeSeries(slug, id, nowH); }
+  if(isLive()){ if(seriesH!=null) ser = await fetchStakeSeries(slug, id, seriesH); }
   else { const dh=DEMO.claims[slug+"/"+id]||{};
     ser = mergeStakeSeries(parseStakeSeries(dh.seriesH), parseStakeSeries(dh.seriesD), NOW); }
   // filed-under chip: local/sample curation only — the chain has no reverse
@@ -3666,7 +3680,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">
-          <div class="panel">${signalChart(slug,id,d,nowH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
+          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
           ${stakeTicket(slug,id,d)}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
@@ -3824,7 +3838,16 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const cands=[now, d.settleAt||null, d.escrowUntil||null, d.voteEndsAt||null, ansH].filter(v=>v!=null&&isFinite(v));
   if(now==null || !cands.length) return "";
   const real = ser && ser.pts && ser.pts.length? ser : null;
-  let x0 = real? Math.min(real.firstH, now-WEEK, ...(ansH!=null?[ansH]:[]))
+  // THE DATA SETS THE DOMAIN. This used to take min(firstH, now-WEEK), padding
+  // the axis out to a full week of blocks whether or not anything happened in it.
+  // On a claim whose whole recorded life is shorter than a week — every claim on
+  // a seeded chain, and any young claim anywhere — that spent most of the plot on
+  // empty axis and squeezed the actual staircase into the last fifth of it.
+  // A week is not a promise the chart owes anybody: the zone labels underneath
+  // say what span is shown, so showing the claim's own span is more honest and
+  // uses the width. now-WEEK survives only as the floor when there is no series
+  // to take a span from.
+  let x0 = real? Math.min(real.firstH, ...(ansH!=null?[ansH]:[]))
               : (demo&&ds? ds.x0 : Math.min(now-WEEK, ...(ansH!=null?[ansH]:[])));
   let x1 = Math.max(...cands);
   const pad=(x1-x0)*.04||1; const d0=x0-pad, d1=x1+pad;
