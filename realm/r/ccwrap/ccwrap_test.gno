@@ -1,0 +1,423 @@
+package ccwrap
+
+import (
+	"chain"
+	"testing"
+
+	testutils "gno.land/p/nt/testutils/v0"
+	uassert "gno.land/p/nt/uassert/v0"
+	"gno.land/r/demo/defi/grc20reg"
+	"gno.land/r/kourt/kourtv2"
+)
+
+const (
+	kourtPath  = "gno.land/r/kourt/kourtv2"
+	ccwrapPath = "gno.land/r/kourt/ccwrap"
+)
+
+func vault() address { return chain.PackageAddress(ccwrapPath) }
+
+// fundAndBuy is kourtv2's own test idiom, reproduced here because this package
+// is OUTSIDE kourtv2 and cannot mint from the ledger. Buying through the curve
+// is the more honest fixture anyway: it is the only way coin exists on chain.
+func fundAndBuy(cur realm, slug string, who address, gnot int64) {
+	if !kourtv2.Exists(slug) {
+		testing.SetRealm(testing.NewUserRealm(who))
+		kourtv2.StartCourt(cross(cur), slug, "Wrap Court "+slug)
+	}
+	testing.IssueCoins(chain.PackageAddress(kourtPath), chain.Coins{{Denom: "ugnot", Amount: gnot}})
+	testing.SetOriginSend(chain.Coins{{Denom: "ugnot", Amount: gnot}})
+	testing.SetRealm(testing.NewUserRealm(who))
+	kourtv2.Buy(cross(cur), slug)
+	testing.SetOriginSend(nil)
+}
+
+// A wrapped court coin is exactly what gnoswap resolves, and the assertion is
+// gnoswap's own resolution path rather than a paraphrase of it: CreatePool calls
+// common.MustRegistered on both token paths, and common.MustRegistered is
+// grc20reg.Get(key) != nil. So if MustGet answers here with the right symbol and
+// scale, the pool would be creatable — and if grc20reg ever stopped accepting a
+// slug, or fqname changed its separator, this fails rather than the deploy.
+func TestEnableRegistersATokenGnoswapCanResolve(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice")
+	fundAndBuy(cur, "cw1", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	key := Enable(cross(cur), "cw1")
+
+	// The key is rlmPath + "." + SYMBOL, not the slug: grc20reg derives it from
+	// token.GetSymbol() and ignores its own slug argument for keying.
+	uassert.Equal(t, ccwrapPath+".wCW1", key)
+	uassert.Equal(t, TokenKey("cw1"), key)
+	uassert.True(t, Enabled("cw1"))
+
+	tok := grc20reg.MustGet(key)
+	if tok == nil {
+		t.Fatal("gnoswap could not resolve the token it would be asked to trade")
+	}
+	uassert.Equal(t, "w"+kourtv2.CourtSymbol("cw1"), tok.GetSymbol())
+
+	// The scale must match the coin being claimed, or every quote against it is
+	// off by a factor of a million. Read from kourtv2 rather than restated, so
+	// the day coinDecimals moves there this fails instead of mispricing.
+	uassert.Equal(t, kourtv2.CoinDecimals(), tok.GetDecimals())
+
+	// Nothing exists yet. An Enable nobody has deposited into is inert, which is
+	// what makes leaving it permissionless safe.
+	uassert.Equal(t, int64(0), tok.TotalSupply())
+}
+
+// A second Enable must be refused, because grc20reg.Register is a tree Set: it
+// would REPLACE the token behind the key, orphaning the balances of every pool
+// holding the old one while the new token reported zero against a full escrow.
+// This is the one irrecoverable move the package can make.
+func TestEnableTwiceIsRefused(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice2")
+	fundAndBuy(cur, "cw2", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw2")
+
+	before := grc20reg.MustGet(TokenKey("cw2"))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "ccwrap: already enabled: cw2", func() {
+		Enable(cross(cur), "cw2")
+	})
+
+	// And the ordinary input it must NOT refuse: a DIFFERENT court still
+	// enables. Without this the test above passes just as well against an Enable
+	// that refuses everything.
+	fundAndBuy(cur, "cw2b", alice, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw2b")
+	uassert.True(t, Enabled("cw2b"))
+
+	// The registered pointer is untouched, which is the property that matters —
+	// not merely that the second call panicked. And it would hold with ccwrap's
+	// guard removed, because grc20reg refuses a duplicate key itself; the guard
+	// only buys a clearer message.
+	uassert.True(t, before == grc20reg.MustGet(TokenKey("cw2")))
+}
+
+// An unknown court cannot be enabled, and the message says who may fix it.
+func TestEnableRefusesAnUnknownCourt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice3")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "ccwrap: no such court: nope", func() {
+		Enable(cross(cur), "nope")
+	})
+}
+
+// The round trip, asserted on all three ledgers at once: the holder's court
+// coin, the escrow's, and the wrapped supply. Any one of them alone can be made
+// to look right by a bug that loses coin somewhere else.
+func TestWrapAndUnwrapConserveEverything(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice4")
+	fundAndBuy(cur, "cw3", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw3")
+
+	start := kourtv2.CoinBalanceOf("cw3", alice)
+	uassert.True(t, start > 0)
+	const amt = int64(1_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "cw3", vault(), amt)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "cw3", amt)
+
+	uassert.Equal(t, start-amt, kourtv2.CoinBalanceOf("cw3", alice))
+	uassert.Equal(t, amt, kourtv2.CoinBalanceOf("cw3", vault()))
+	uassert.Equal(t, amt, WrappedSupply("cw3"))
+	uassert.Equal(t, amt, grc20reg.MustGet(TokenKey("cw3")).BalanceOf(alice))
+
+	// The allowance was consumed exactly, so a second wrap of the same size
+	// cannot ride on it. An allowance that survived its spend would let one
+	// approval be drawn against forever.
+	uassert.Equal(t, int64(0), kourtv2.AllowanceCC("cw3", alice, vault()))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unwrap(cross(cur), "cw3", amt)
+
+	uassert.Equal(t, start, kourtv2.CoinBalanceOf("cw3", alice))
+	uassert.Equal(t, int64(0), kourtv2.CoinBalanceOf("cw3", vault()))
+	uassert.Equal(t, int64(0), WrappedSupply("cw3"))
+}
+
+// THE LOAD-BEARING TEST. Committed coin cannot be wrapped, which is the only
+// reason transferability is safe: if it could, a holder would sell the coin
+// backing a live claim deposit, a stake or a bond and keep both the proceeds and
+// the position. The gate is kourtv2's mustSpendable on the OWNER, reached
+// through TransferFromCC — so this also pins that the gate keys on `from` and
+// not on the spender, since ccwrap's own balance is unconstrained.
+//
+// Paired, as it must be, with the amount it must NOT refuse: the spendable
+// remainder wraps fine. Without that half, a Wrap that refused everything would
+// pass.
+func TestCommittedCoinCannotBeWrapped(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice5")
+	fundAndBuy(cur, "cw4", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw4")
+
+	// STAKE is the lock. A claim deposit was the obvious candidate and is the
+	// wrong one: OpenClaim MOVES the deposit and its fee into the court escrow,
+	// so the coin leaves the balance entirely and LockedOf stays 0. Only Stake
+	// locks in place — that is lock.gno's whole doctrine, "a lock, not custody" —
+	// and it is therefore the only fixture that exercises spendable().
+	//
+	// Side 0 is YES. kourtv2's side constants are unexported and its public
+	// Stake takes a plain int, so an external caller passes the number; named
+	// here rather than left bare.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := kourtv2.OpenClaim(cross(cur), "cw4", "Is committed coin unsellable?")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.Stake(cross(cur), "cw4", id, 0, kourtv2.SpendableOf("cw4", alice)/2)
+
+	locked := kourtv2.LockedOf("cw4", alice)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: nothing is locked, so nothing is being " +
+			"refused for the right reason")
+	}
+	spend := kourtv2.SpendableOf("cw4", alice)
+	bal := kourtv2.CoinBalanceOf("cw4", alice)
+	uassert.Equal(t, bal-locked, spend)
+
+	// Approve the FULL balance. The allowance is deliberately larger than
+	// spendable, because that is the case the gate exists for — and it also
+	// records that approving does not reserve and does not lock.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "cw4", vault(), bal)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, notEnoughUnstaked, func() {
+		Wrap(cross(cur), "cw4", spend+1)
+	})
+
+	// Nothing moved on the failed attempt. A partial wrap would have minted an
+	// unbacked claim.
+	uassert.Equal(t, bal, kourtv2.CoinBalanceOf("cw4", alice))
+	uassert.Equal(t, int64(0), WrappedSupply("cw4"))
+
+	// And the half that must succeed.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "cw4", spend)
+	uassert.Equal(t, spend, WrappedSupply("cw4"))
+	uassert.Equal(t, locked, kourtv2.CoinBalanceOf("cw4", alice))
+}
+
+// notEnoughUnstaked is kourtv2's refusal, quoted so this test fails if the
+// refusal it is relying on is ever replaced by a different one — including by a
+// weaker one that no longer mentions being committed.
+const notEnoughUnstaked = "kourtv2: not enough unstaked CC — staked coins stay " +
+	"in your balance and keep voting, but they are committed and cannot also " +
+	"back a deposit, a bond, or another stake"
+
+// Without an allowance there is no wrap. This is what makes the realm
+// unprivileged: it cannot reach anyone's coin unasked.
+func TestWrapNeedsAnAllowance(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice6")
+	fundAndBuy(cur, "cw5", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw5")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "grc20votes: allowance exceeded", func() {
+		Wrap(cross(cur), "cw5", 1_000)
+	})
+	uassert.Equal(t, int64(0), WrappedSupply("cw5"))
+
+	// The ordinary input it must not refuse.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "cw5", vault(), 1_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "cw5", 1_000)
+	uassert.Equal(t, int64(1_000), WrappedSupply("cw5"))
+}
+
+// Unwrapping more than you hold takes nothing out of the escrow. The burn runs
+// first for exactly this reason, and the escrow balance is the assertion that
+// distinguishes "refused" from "refused after paying out".
+func TestUnwrapCannotOverdraw(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice7")
+	bob := testutils.TestAddress("cw-bob7")
+	fundAndBuy(cur, "cw6", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw6")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "cw6", vault(), 5_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "cw6", 5_000)
+
+	// Bob holds no wrapped coin at all and must not be able to drain the escrow
+	// alice filled.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "insufficient balance", func() {
+		Unwrap(cross(cur), "cw6", 1)
+	})
+	uassert.Equal(t, int64(5_000), kourtv2.CoinBalanceOf("cw6", vault()))
+	uassert.Equal(t, int64(5_000), WrappedSupply("cw6"))
+	uassert.Equal(t, int64(0), kourtv2.CoinBalanceOf("cw6", bob))
+}
+// Wrapped coin is a bearer claim that moves by approve + transferFrom — the
+// sequence gnoswap's pool uses to pull tokens on a swap and on a mint. What is
+// pinned here is that the TOKEN supports it and that a stranger who acquires the
+// wrapped coin can redeem it for real court coin, which is what makes it worth a
+// price to someone who has never touched the court.
+//
+// Actor supplied by ImpersonateTeller rather than CallerTeller. Not a shortcut:
+// CallerTeller derives its actor from cur.Previous(), and a gno test with the
+// realm set to a plain user has no previous frame to read — it aborts with
+// "cannot seek beyond origin caller override". Both tellers are the same fnTeller
+// over the same ledger with a different actor function, so the ledger path under
+// test is the one a pool would take; the frame-derived actor is what a live chain
+// supplies, and the registry-resolution test above is what covers the resolution
+// a pool actually performs.
+func TestWrappedCoinMovesTheWayAPoolWouldMoveIt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice8")
+	bob := testutils.TestAddress("cw-bob8")
+	fundAndBuy(cur, "cw7", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw7")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "cw7", vault(), 9_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "cw7", 9_000)
+
+	w := mustWrapped("cw7")
+	// The same object the registry hands a pool — asserted, so this cannot pass
+	// against a ledger nothing else can reach.
+	uassert.True(t, w.tok == grc20reg.MustGet(TokenKey("cw7")))
+
+	if err := w.led.ImpersonateTeller(alice).Approve(0, cur, bob, 4_000); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.led.ImpersonateTeller(bob).TransferFrom(0, cur, alice, bob, 4_000); err != nil {
+		t.Fatal(err)
+	}
+	uassert.Equal(t, int64(5_000), w.tok.BalanceOf(alice))
+	uassert.Equal(t, int64(4_000), w.tok.BalanceOf(bob))
+
+	// Bob never touched the court and can still unwrap into real court coin.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Unwrap(cross(cur), "cw7", 4_000)
+	uassert.Equal(t, int64(4_000), kourtv2.CoinBalanceOf("cw7", bob))
+	uassert.Equal(t, int64(5_000), kourtv2.CoinBalanceOf("cw7", vault()))
+}
+
+// Two courts do not share an escrow. The vault address is one account holding
+// every court's coin, and the ledgers are what keep them apart — so this asserts
+// the separation rather than assuming it, and it is the test that would catch a
+// wrap keyed on the wrong slug.
+func TestTwoCourtsDoNotShareTheEscrow(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice9")
+	fundAndBuy(cur, "cw8a", alice, 300_000_000)
+	fundAndBuy(cur, "cw8b", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw8a")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw8b")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "cw8a", vault(), 3_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "cw8a", 3_000)
+
+	uassert.Equal(t, int64(3_000), WrappedSupply("cw8a"))
+	uassert.Equal(t, int64(0), WrappedSupply("cw8b"))
+	uassert.Equal(t, int64(3_000), kourtv2.CoinBalanceOf("cw8a", vault()))
+	uassert.Equal(t, int64(0), kourtv2.CoinBalanceOf("cw8b", vault()))
+
+	// The two tokens are distinct objects under distinct keys.
+	uassert.True(t, grc20reg.MustGet(TokenKey("cw8a")) != grc20reg.MustGet(TokenKey("cw8b")))
+	uassert.NotEqual(t, TokenKey("cw8a"), TokenKey("cw8b"))
+}
+
+// Wrapping before Enable says who can fix it, rather than failing obscurely on a
+// nil map read.
+func TestWrapBeforeEnableSaysWhatToDo(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice10")
+	fundAndBuy(cur, "cw9", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur,
+		"ccwrap: not enabled for court cw9; anyone can call Enable", func() {
+			Wrap(cross(cur), "cw9", 1)
+		})
+}
+
+// Non-positive amounts are refused at both doors. Cheap, and the kind of thing
+// that turns into a mint-for-free if a signed amount ever reaches the ledger.
+func TestNonPositiveAmountsAreRefused(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice11")
+	fundAndBuy(cur, "cw10", alice, 300_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "cw10")
+
+	for _, n := range []int64{0, -1, -1_000_000} {
+		testing.SetRealm(testing.NewUserRealm(alice))
+		uassert.AbortsContains(t, cur, "ccwrap: wrap amount must be positive", func() {
+			Wrap(cross(cur), "cw10", n)
+		})
+		testing.SetRealm(testing.NewUserRealm(alice))
+		uassert.AbortsContains(t, cur, "ccwrap: unwrap amount must be positive", func() {
+			Unwrap(cross(cur), "cw10", n)
+		})
+	}
+}
+
+// The wrappable-slug bound, from both sides. A court whose slug uses kourtv2's
+// full 11 characters cannot be wrapped, because grc20's symbol bound is also 11
+// and the wrapped symbol spends one on the "w". Asserted against the real
+// constants rather than the numbers 10 and 11, so it tracks either moving —
+// including the good case, where kourtv2 drops to 10 and this whole hole closes.
+func TestTheWrappableSlugBoundIsRealOnBothSides(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice12")
+
+	// Exactly at kourtv2's limit: legal court, unwrappable.
+	long := "abcdefghijk"
+	uassert.Equal(t, 11, len(long))
+	uassert.False(t, WrappableSlug(long))
+	fundAndBuy(cur, long, alice, 300_000_000)
+	uassert.True(t, kourtv2.Exists(long))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "ccwrap: slug too long to wrap", func() {
+		Enable(cross(cur), long)
+	})
+
+	// One shorter, which must work — otherwise the assertion above is satisfied
+	// by an Enable that refuses everything, and the bound is not being tested.
+	short := "abcdefghij"
+	uassert.Equal(t, 10, len(short))
+	uassert.True(t, WrappableSlug(short))
+	fundAndBuy(cur, short, alice, 300_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	key := Enable(cross(cur), short)
+	uassert.Equal(t, ccwrapPath+".wABCDEFGHIJ", key)
+	uassert.Equal(t, 11, len(grc20reg.MustGet(key).GetSymbol()))
+}
+
+// Symbols stay injective across slugs, which matters more than it looks: the
+// registry keys on the symbol, so two slugs mapping to one symbol would mean the
+// second court's Enable is refused forever with a message about a token it never
+// registered. Hyphens are what keep it injective, so that is the pair tested.
+func TestHyphensKeepWrappedSymbolsInjective(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-alice13")
+	fundAndBuy(cur, "ab-c", alice, 300_000_000)
+	fundAndBuy(cur, "abc", alice, 300_000_000)
+
+	uassert.NotEqual(t, TokenKey("ab-c"), TokenKey("abc"))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.Equal(t, ccwrapPath+".wAB-C", Enable(cross(cur), "ab-c"))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.Equal(t, ccwrapPath+".wABC", Enable(cross(cur), "abc"))
+}

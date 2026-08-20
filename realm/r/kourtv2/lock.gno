@@ -178,3 +178,79 @@ func TransferCC(cur realm, courtSlug string, to address, amount int64) {
 	mustSpendable(c, from, amount)
 	c.coin.Transfer(from, to, amount)
 }
+
+// ApproveCC lets a spender move some of the caller's court coin.
+//
+// This exists for one reason: to make the coin integrable by things this realm
+// does not import and must not have to trust. A DEX pool, an escrow, a wrapper —
+// each needs to pull coin from a user who has agreed to it, and approve /
+// transferFrom is the interface every one of them already speaks. Exposing that
+// pair is what lets `r/kourt/ccwrap` exist as a separate, untrusted realm rather
+// than as a privileged hole in this one. Nothing here is granted any authority:
+// an approved spender can do strictly less than the owner could do themselves
+// with TransferCC.
+//
+// DELIBERATELY NOT GATED ON spendable(). An allowance grants nothing until it is
+// spent, and gating here would be both useless and wrong — useless because the
+// balance can change freely between approve and spend, so an approve-time check
+// proves nothing about spend time; wrong because approving future coin is a
+// normal thing to do. The gate belongs at the spend, and TransferFromCC has it.
+//
+// The consequence, stated so nobody reads a granted allowance as available
+// capital: an allowance can exceed spendable(), in which case the spend simply
+// fails. Approving does not reserve, and does not lock.
+func ApproveCC(cur realm, courtSlug string, spender address, amount int64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	if amount < 0 {
+		panic("kourtv2: negative allowance")
+	}
+	c := mustCourt(courtSlug)
+	owner := cur.Previous().Address()
+	// Symmetric with TransferCC: the escrow is not an endpoint, so it must not
+	// be reachable as a spender either. Otherwise an allowance naming it would
+	// sit there looking like a claim on escrowed coin.
+	if spender == c.escrow || owner == c.escrow {
+		panic("kourtv2: the court escrow is not a transfer endpoint")
+	}
+	touch(c)
+	c.coin.Approve(owner, spender, amount)
+}
+
+// TransferFromCC spends an allowance the owner granted the caller.
+//
+// Every guard TransferCC applies applies here, keyed on `from` rather than on
+// the caller — mustSpendable in particular. An allowance is not a lock and never
+// outranks one: if the owner has since committed the coin to a stake, a bond or
+// a deposit, the spend fails, and it fails for the spender exactly as it would
+// have failed for the owner. That is the property that makes the allowance safe
+// to hand out at all, and it is why the check is on `from`: gating on the spender
+// would gate the wrong balance and leave the owner's lock unenforced.
+func TransferFromCC(cur realm, courtSlug string, from, to address, amount int64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	if amount <= 0 {
+		panic("kourtv2: transfer amount must be positive")
+	}
+	if from == to {
+		panic("kourtv2: cannot transfer to yourself")
+	}
+	c := mustCourt(courtSlug)
+	if to == c.escrow || from == c.escrow {
+		panic("kourtv2: the court escrow is not a transfer endpoint")
+	}
+	touch(c)
+	mustSpendable(c, from, amount)
+	c.coin.TransferFrom(cur.Previous().Address(), from, to, amount)
+}
+
+// AllowanceCC reports what `spender` may still move of `owner`'s court coin.
+//
+// Read it as a ceiling, not as a balance: the spend is additionally capped by
+// spendable(owner) at the moment it happens, so the amount actually movable is
+// min(AllowanceCC, SpendableOf).
+func AllowanceCC(courtSlug string, owner, spender address) int64 {
+	return mustCourt(courtSlug).coin.Allowance(owner, spender)
+}

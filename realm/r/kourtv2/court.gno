@@ -620,6 +620,12 @@ func CourtName(slug string) string { return mustCourt(slug).name }
 // CourtSymbol is a court coin's ticker — unique per court, derived from its
 // slug. Display it namespaced (KOURT:<SYMBOL>) anywhere outside its own court.
 func CourtSymbol(slug string) string { return mustCourt(slug).coin.Symbol() }
+
+// CoinDecimals is the scale every court coin uses. Exported because anything
+// quoting a court coin against another asset has to agree on it — a wrapper, a
+// pool, an indexer — and a hardcoded 6 elsewhere is a mispricing waiting for the
+// day this moves.
+func CoinDecimals() int { return coinDecimals }
 func CoinSupply(slug string) int64   { return mustCourt(slug).coin.TotalSupply() }
 
 // CoinPrice is the curve's marginal price for the next coin. There is no

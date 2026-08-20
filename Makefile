@@ -163,7 +163,7 @@ realm-test:
 	for p in checkpoint grc20votes governor twap cshares tickbook curve; do \
 		( cd "$$pbase/$$p/v0" && gno test . ) || exit 1; \
 	done; \
-	for r in govern offerer kourtv1 kourtv2; do \
+	for r in govern offerer kourtv1 kourtv2 ccwrap; do \
 		mkdir -p "$$rbase/$$r" && \
 		cp realm/r/$$r/*.gno realm/r/$$r/gnomod.toml "$$rbase/$$r/" && \
 		( cd "$$rbase/$$r" && gno test . ) || exit 1; \
