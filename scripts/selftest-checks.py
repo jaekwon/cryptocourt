@@ -130,6 +130,7 @@ PHYSICS = "scripts/check-demo-physics.py"
 HSHIM = "scripts/check-height-shim.py"
 LIVER = "scripts/check-live-reads.py"
 DUPES = "scripts/check-web-dupes.py"
+WEBCSS = "scripts/check-web-css.py"
 WEBPAGE = "web/index.html"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
@@ -420,6 +421,29 @@ control("a court built on a clockless ledger", COURT,
 control("a shim that no longer reads the chain", CLOCKF,
         "h = runtime.ChainHeight()", "h = int64(0)",
         "lost its anchor", argv=["python3", HSHIM])
+
+print("\ncheck-web-css")
+# The defect this exists for: a comment edited badly, leaving prose and a second
+# `*/` in front of a declaration. CSS error recovery skipped to the next `;` —
+# which belonged to the declaration AFTER the comment — so `width:100%` was
+# swallowed and the share card sized itself shrink-to-fit, 422px wide inside the
+# 400px frame it exists to fit. make check, all 16 web harnesses and node --check
+# all passed: none of them read CSS.
+control("a stray */ leaving prose where a declaration goes", WEBPAGE,
+        "  width:100%; min-width:0; max-width:520px; margin:auto}",
+        "     and stray prose about widths */\n  width:100%; min-width:0; max-width:520px; margin:auto}",
+        "stray */", argv=["python3", WEBCSS])
+# An unclosed rule, which swallows every rule after it.
+control("a rule left unclosed", WEBPAGE,
+        ".emb::before{top:0; left:0; border-right:0; border-bottom:0}",
+        ".emb::before{top:0; left:0; border-right:0; border-bottom:0",
+        "unclosed rule", argv=["python3", WEBCSS])
+# And the tripwire. A check that reads the wrong thing and reports success is
+# worse than no check, so it refuses a <style> block it cannot find or that is
+# too small to be this file's.
+control("a stylesheet too small to be the real one", WEBPAGE,
+        "<style>", "<style>/* gutted */</style><style>",
+        "refusing to pass vacuously", argv=["python3", WEBCSS])
 
 print("\ncheck-web-dupes")
 # The defect this exists for, reintroduced: a second declaration of a name that

@@ -373,18 +373,32 @@ html.embed .rail, html.embed #nav{display:none !important}
 /* The page banner is a paragraph; an embed is a fixed box. It would overflow,
    so the card carries the short form (.esrc) and this stays out of the way. */
 html.embed #tcbanner{display:none !important}
-html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0}
+/* The frame is the host's; the card is ours. `margin:auto` on the flex child
+   centres it on both axes AND, unlike align-items:center, never clips the top of
+   a card taller than the frame — a long title must push the iframe into a
+   scrollbar, not lose its own first line. */
+html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
+  min-height:100vh; display:flex}
 html.embed #tcbanner{grid-column:1; padding:0}
 /* The card is a surface like any other: hairline frame, registration marks at
    the corners, and the head in the same gold as the docket reference it is. */
 .emb{display:flex; flex-direction:column; gap:9px; padding:14px 15px;
   border:1px solid var(--rule); border-radius:0; background:transparent;
-  min-height:calc(100vh - 2px); box-sizing:border-box; position:relative;
-  /* AN EMBED DOES NOT CHOOSE ITS OWN WIDTH — the host page does, and the snippet
-     only suggests 400. Left uncapped, a card in a wide column stretched every row
-     to that width and stopped reading as a card at all. Capped and centred, it is
-     the same object whatever the host gives it. */
-  max-width:520px; margin-inline:auto}
+  box-sizing:border-box; position:relative;
+  /* AN EMBED DOES NOT CHOOSE ITS OWN SIZE — the host page does, and the snippet
+     only suggests 400x500. Left to the frame it stretched every row to whatever
+     width the host gave it and, with the footer pinned to the bottom, opened a
+     void of whatever height the host gave it between the actions and "Open on
+     Kourt". So: one width up to a cap, a height that is just its content, and
+     centred in whatever it is handed.
+
+     min-width:0 because a flex item defaults to min-width:auto and so REFUSES to
+     shrink below its own min-content width — measured, claim #2's card came out
+     422px wide inside a 400px frame, overflowing the very thing it is sized to
+     fit. margin:auto rather than align-items:center: auto margins centre on both
+     axes and never clip, so a card taller than the frame pushes the iframe into a
+     scrollbar instead of losing its own first line. */
+  width:100%; min-width:0; max-width:520px; margin:auto}
 .emb::before, .emb::after{content:""; position:absolute; width:10px; height:10px;
   pointer-events:none; border:1px solid var(--mark); opacity:.55}
 .emb::before{top:0; left:0; border-right:0; border-bottom:0}
@@ -456,7 +470,10 @@ html.embed #tcbanner{grid-column:1; padding:0}
 .emb .espan{display:flex; justify-content:space-between; gap:6px; font-family:var(--mono);
   font-size:9.5px; letter-spacing:.02em; color:var(--muted); white-space:nowrap; overflow:hidden}
 .emb .espan .efrozelab{overflow:hidden; text-overflow:ellipsis; min-width:0}
-.emb .efoot{margin-top:auto; display:flex; justify-content:space-between; align-items:baseline;
+/* margin-top:auto was pinning this to the bottom of a stretched card. With the
+   card at content height there is nothing to push into, and a small gap reads
+   better than none. */
+.emb .efoot{margin-top:2px; display:flex; justify-content:space-between; align-items:baseline;
   gap:10px; font-size:11.5px}
 .emb .efoot a{color:var(--accent-2); text-decoration:none; font-weight:600}
 .emb .efoot a:hover{text-decoration:underline}
@@ -5136,7 +5153,7 @@ function embedSpark(ser, tl, d){
   if(pts.length < 2) return none;
   // Same anatomy as signalChart, a quarter of the size: plot box, right margin
   // for the scale, and the same 100/50/0 rows.
-  const W = 300, H = 76, PL = 5, PR = 258, Y100 = 7, Y0 = 66;
+  const W = 300, H = 76, PL = 5, PR = 272, Y100 = 7, Y0 = 66;
   const y = p => +(Y0 - (p / 100) * (Y0 - Y100)).toFixed(1);
   const nowH = tl && tl.now ? tl.now.h : null;
   const at = tl && tl.answered ? tl.answered.h : null;
