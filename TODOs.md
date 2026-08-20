@@ -9,7 +9,10 @@ the two rot at different rates.
 > is a drought rather than a permanent tax, its proposed cap must not ship, the dispute-round
 > boundary is one block rather than two, and the quorum relaxation is 5.01× rather than ~10×.
 > Every one is corrected inline in a quoted block, with a pointer to the section that did it.
-> **Nothing here is implemented; `realm/` is untouched.**
+> **STATUS, as of the transferability work: items 1, 1b, 1c and 3 have SHIPPED** and are retitled
+> accordingly, with what actually landed quoted at the top of each and the derivation kept below
+> it. Item 0a is accepted rather than open. **Genuinely open: 0b (the fixture debt), 0c (what
+> transferability left open), 0 (the comp drought), 2, 4, and 5.**
 
 ---
 
@@ -105,7 +108,16 @@ in its final registered form.
 
 ---
 
-## 0a. LIVE BUG — straddling a claim is RISK-FREE YIELD today, no credential needed
+## 0a. ACCEPTED, no cheap fix — straddling a claim is RISK-FREE YIELD today
+
+> **Still live, and now understood rather than open.** Four fix directions were designed and
+> measured dead: re-answerability (blocked three independent ways), answer-bond syndication
+> (profitable self-dealing, no sybil-proof fix), lean-keyed draws (measured WORSE than the bug),
+> and a loser time-lock (built, measured at 0.25% against a ~12× edge, dropped — see
+> `TRADEANDLOCK.md` §B″). **The straddle IS the p = ½ honest position**, which is why nothing
+> cheap separates them. The shipped mitigation is the one already in place: the draw is
+> conviction-weighted on the winning side only, so being wrong earns nothing. Anything proposing
+> to reopen this needs a mechanism that distinguishes p = ½ from p = ½.
 
 **Shipped behaviour, exploitable now, and it was found while pricing an unrelated design.** Not
 recorded anywhere in `GAMETHEORY.md`, which is why it sits above everything else.
@@ -257,7 +269,16 @@ this for free, and this item is *more* necessary than the original text implied,
 
 ---
 
-## 1. LIVE BUG — `provClose` is unreachable on default params, so a false answer finalizes by apathy
+## 1. SHIPPED (S2) — `provClose` was unreachable on default params, so a false answer finalized by apathy
+
+> **FIXED.** `ladderWindow(p)` is computed once and floors BOTH escrow stamps — `escrowUntil`
+> and `escrowUntilAt` — gated on `failedRounds > 0`, so a decided first round keeps today's
+> window bit-identically. `Params.mustSane` now refuses `ladderWindow(p) > escrowMaxBlocks`.
+> **Known and NOT closed, recorded in the code:** an abstain-only round with quorum met is an
+> uphold rather than a failed round, so one free abstain from a non-participant keeps
+> `failedRounds` at zero and denies the floor for the claim's whole life, at no cost to the
+> abstainer. **This defeats apathy, not an active adversary.** Fixture still owed — see 0b.
+> The diagnosis below is kept because it is the derivation.
 
 **Severity: high.** This is the anti-apathy backstop, and on a default court it never
 fires. The consequence is not a stuck claim — it is the wrong verdict becoming final,
@@ -366,7 +387,19 @@ first round must still finalize on its old schedule.
 
 ---
 
-## 1b. `quorumFloor`'s supply arm makes the robbed pool unable to defend itself
+## 1b. SHIPPED (S1) — `quorumFloor`'s supply arm made small claims unarbitrable
+
+> **FIXED**: the supply arm and its v0.29 clamp are deleted; the floor is now
+> `max(1, min(X̄frozen, votable/3))`. Both were provable identities under the gate that kept
+> them honest — verified analytically and over 3.9M rows including an exhaustive sweep of
+> [0,120]³, zero divergences. **My original justification for this was FALSE and the
+> correction is in the code:** "the robbed pool cannot clear the bar even voting unanimously"
+> presumes they can vote at all, and measured, a pool holding 5× the floor was refused at the
+> door by the participant rule. What the fix actually buys is that a verdict becomes reachable
+> by NON-PARTICIPANTS instead of defaulting to the answer. The symmetric cost — a malicious
+> overturn becomes reachable too, measured at −4.80 to +19.20 CC and simultaneous across every
+> open claim since voting consumes no weight — is accepted, because the snipe it fixes is
+> currently FREE while a false overturn costs a bond. Fixture still owed — see 0b.
 
 **Severity: high.** Same family as item 1 — this is *why* a bad verdict stands, and it is
 the root cause behind the answer-snipe being profitable at all.
@@ -454,7 +487,17 @@ enable it without forming an opinion.
 
 ---
 
-## 1c. The 50% answer bond is 2.59× oversized, and it makes self-defence 11× harder
+## 1c. SHIPPED — the 50% answer bond was 2.59× oversized and made self-defence 11× harder
+
+> **FIXED**: `answerBondBps = 600`, hardcoded rather than derived (deriving it makes the
+> `:232` check a tautology), and the floor is re-keyed to `max` over BOTH sides' conviction
+> rather than the answered side alone. Shipped WITH fixtures and mutation verification, plus
+> the draw cap it exposed — `crystallize.gno` caps `want` at `answerBond0 − carrot`, gated on
+> `provisional == answer` because on an overturn the bond has already burned. **Two of my own
+> errors here are worth not repeating:** the leverage ceiling I claimed was FALSE at HIGH tier
+> (measured 1.2937 > 1 — I had conflated the bond ceiling with the leverage ceiling and omitted
+> the carrot), and my first draw cap CONFISCATED honest overturn winners because the floor keys
+> on the ANSWERED side, which on an overturn is the loser.
 
 **Severity: medium.** Not a bug — a calibration the repo has already partly retracted — but
 it actively worsens items 1 and 1b, so it belongs with them.
@@ -527,7 +570,15 @@ vindicated.
 
 ---
 
-## 3. `provClose` zeroes the draw while calling itself "not a conclusive low"
+## 3. SHIPPED (S3) — `provClose` zeroed the draw while calling itself "not a conclusive low"
+
+> **FIXED**: `provCloseClaim` now sets `cs.tier = tierMidX` under
+> `if !cs.tierFinal && !cs.slotConsumed`, and `tierFinal = true` is DELETED. **The delete is
+> load-bearing** — my own first spec kept it, and latching it before the guard makes the guard
+> SELF-BLOCKING, so the claim pays 0 forever. `OpenFlag`'s provClose arm is dropped.
+> Fixture still owed, and it is the most delicate of the four: it must assert a provClosed
+> claim pays BIT-IDENTICALLY to the 2-failed-round Finalize path, with non-clamping asserted as
+> a precondition — otherwise it passes against the wrong zero. See 0b.
 
 **Severity: medium.** Internal contradiction, and it strands honest stakers.
 
