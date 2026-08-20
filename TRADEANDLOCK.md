@@ -1,19 +1,18 @@
 # TRADEANDLOCK.md — tradeable court coins
 
-**Status: PLAN, PART A ONLY. PART B AND B′ ARE DROPPED.**
+**Status: PLAN. BOTH PARTS LIVE — Part A (transferability) and Part B′ (universal unbonding,
+winners exempt).** Part B (loser-only) stays superseded by B′.
 
-**Scope is now one decision: `kourt:XYZ` court coins become transferable; reputation does not.**
+- **(A)** `kourt:XYZ` court coins become **transferable**. Reputation does **not**.
+- **(B′)** **Everyone** waits to exit; **winning exempts you**; switching sides is free. The penalty
+  for losing is emergent — losers wait, winners don't, nothing is taken.
 
-> **The unbonding period is DROPPED by owner decision.** Everything below about locks — Part B, Part
-> B′, and §0's ordering argument — is retained as history, not as plan. `LOSERLOCK.md` and
-> `STRADDLE.md` likewise describe designs that are **not being built**. Nothing about them was
-> implemented; `realm/` never changed.
->
-> **§0 still matters, for a different reason.** Its argument was "gate `Transfer` on `spendable()`
-> or the lock evaporates". With no lock, the gate is still required — because **staked capital must
-> not be sellable out from under the stake.** `spendable()` already nets locked balances, so gating
-> `Transfer` on it is what stops someone selling coins they have committed to a live claim. Same
-> one-line requirement, independent motivation.
+**§0's gate is required under both**, for two independent reasons now: it keeps the unbonding real,
+*and* it stops staked capital being sold out from under a live stake. `spendable()` already nets
+locked balances, so one gate does both.
+
+**UX is a stated owner concern and it is the right one** — see §B′7, which is where the honest cost
+of B′ lives.
 
 Sequence: plan → review tokenomics until convergence → implement → review.
 
@@ -281,3 +280,54 @@ not survive being exceeded.
 `Transfer` gated on `spendable()` from its first commit (§0); `!cs.provClose` exemption; `claimLife()`
 hoisted and shared; date-gated with a height fallback; `ReleaseAt()` published. And §A is untouched —
 the supply-denominated-bar question is about transferability, not about the lock.
+
+---
+
+## §B′7 — UX, and the posterity finding
+
+### The record does NOT keep the yes/no amounts. Checked, and it is a real gap.
+
+**Conviction survives forever; the stake amounts do not.**
+
+- `cs.yesConvHi/Lo` and `cs.noConvHi/Lo` are written by `add128` **only** — monotone, never
+  decremented. The money×time weight each side carried is permanent, and it is frozen at the answer.
+- **But `cs.yesStake` / `cs.noStake` are DECREMENTED on every withdrawal** (`WithdrawStake`). So once
+  the participants have taken their principal home, **both read zero.**
+- And `render.gno` displays the **live** figure, labelled *"instantaneous"* — so a settled claim's
+  page eventually shows **`YES 0 / NO 0`**.
+
+> **That visually breaks a promise the whitepaper makes in its introduction:** *"Win or lose,
+> everything stays: every claim, every stake, every verdict, every dissent."* The *data* that
+> matters — conviction — does stay. The **headline amounts** do not, and the page shows the drained
+> value rather than the historical one.
+
+**Nor is the raw per-side stake at the freeze recoverable.** `xBarFrozen` is the claim's
+*time-averaged total*, not a per-side snapshot, so "how much was on YES when it was answered" is
+**not stored anywhere** once positions drain.
+
+**Fix, and it is small:** snapshot `yesStake`/`noStake` at the freeze into two new fields, and have
+`render` show the frozen pair (plus conviction) for any answered claim rather than the live pair.
+Cheap, no new invariant, and it makes the introduction's claim true rather than nearly-true.
+**Independent of both A and B′ — worth doing regardless.**
+
+### The UX cost of B′, stated rather than buried
+
+**This is the honest downside and the owner named it before I did.**
+
+1. **"I want my money back" now has an answer that is sometimes "not yet".** Today an exit is
+   immediate; under B′ it is immediate only if you won. That is the single biggest change to how the
+   product *feels*, and no amount of correct game theory softens it.
+2. **The wait must be legible before it is incurred, not after.** A user needs to see, at the moment
+   of staking: *what am I committing to, and when could I get it back at the earliest and the
+   latest?* If that is only discoverable after the verdict, the mechanism is a trap regardless of how
+   fair the arithmetic is. `ReleaseAt()` exists for this and must be surfaced in the UI, not just
+   published on-chain.
+3. **"Switching sides is free" is the mitigation and must be presented as one.** The honest framing
+   is *your capital stays in the court until you're right; your opinion is never locked.* That is
+   both true and reassuring, and it is the difference between this reading like a penalty and like a
+   commitment.
+4. **Winners must feel the exemption**, or the asymmetry does no work as an incentive. Being right
+   should visibly buy something immediate.
+
+**None of this is a reason not to build it** — but it is a reason the render work is part of the
+change rather than a follow-up.
