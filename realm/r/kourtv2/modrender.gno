@@ -133,13 +133,21 @@ func claimTitleFor(c *Court, cs *claimState) string {
 	return sanitize.InlineText(cs.title)
 }
 
-// claimBodyFor is the title's gate applied to the bigger surface. A purged claim
-// answers with NOTHING rather than with its tombstone: the title already carries
-// "[removed · <category>]", and repeating it here would be noise where the point
-// is absence. sanitize.Block, not InlineText — a body is multi-line by design and
-// InlineText folds it to one, which would silently destroy the paragraphs the
-// field exists to hold.
-func claimBodyFor(c *Court, cs *claimState) string {
+// claimBodyVisible is the MODERATION gate alone: the body a given reader is
+// allowed to see, unsanitised. A purged claim answers with NOTHING rather than
+// with its tombstone — the title already carries "[removed · <category>]", and
+// repeating it here would be noise where the point is absence.
+//
+// EVERY CALLER MUST SANITISE FOR ITS OWN OUTPUT CONTEXT, and they do not agree on
+// which helper, which is exactly why this returns raw. sanitize/v0's own rule is
+// "sanitise once, at the point of output", and the two outputs are different
+// documents:
+//
+//   the ClaimBody read  -> sanitize.Block. The overlay consumes it and does its
+//                          own escaping; a `> ` on every line would be a
+//                          markdown artefact in a place with no markdown.
+//   Render's markdown   -> sanitize.Blockquote. See below.
+func claimBodyVisible(c *Court, cs *claimState) string {
 	if cs.body == "" {
 		return ""
 	}
@@ -150,7 +158,47 @@ func claimBodyFor(c *Court, cs *claimState) string {
 			}
 		}
 	}
-	return sanitize.Block(cs.body)
+	return cs.body
+}
+
+// claimBodyFor is the body as the ClaimBody read answers it: gated, then
+// sanitize.Block — the STRICT variant, which escapes the doc-spoof markers (ATX
+// headings, blockquote markers, list markers, thematic breaks, setext
+// underlines) that sanitize.BlockRich deliberately preserves. Strict is right
+// here: the body is the only multi-LINE string a stranger writes on a claim page,
+// and every other user string on it is inline and cannot open a block at all.
+//
+// Block, not InlineText, because a body is multi-line by design and InlineText
+// folds it to one — which would silently destroy the paragraphs the field is for.
+func claimBodyFor(c *Court, cs *claimState) string {
+	body := claimBodyVisible(c, cs)
+	if body == "" {
+		return ""
+	}
+	return sanitize.Block(body)
+}
+
+// claimBodyQuoted is the body for the MARKDOWN surface, and it is quoted rather
+// than merely escaped. Block escapes CommonMark §4.6 HTML block types 1-5 —
+// <script>, <pre>, <style>, <textarea> — but by its own documentation it does NOT
+// escape types 6 and 7: <div>, <table>, <form>, arbitrary <foo>. Those it only
+// CONTAINS, with a trailing blank line that closes the block before the realm's
+// own chrome resumes. A test written against this realm's integration proved it:
+// a body of "<div>" reached the page at line start, and the sections below it
+// survived only because the envelope closed the block.
+//
+// Contained is not the same as absent. gnoweb runs no HTML sanitiser after the
+// realm, so a `<form>` in a body would render a form on a page people stake money
+// on, and a `<table>` would forge a data table under a headline. Blockquote is
+// Block plus a `> ` on every line, so whatever HTML still opens does so INSIDE a
+// quotation that closes at its own blank line — and that is also what the body
+// honestly is: the author's statement, quoted, not the court's own words.
+func claimBodyQuoted(c *Court, cs *claimState) string {
+	body := claimBodyVisible(c, cs)
+	if body == "" {
+		return ""
+	}
+	return sanitize.Blockquote(body)
 }
 
 // platformName / platformTicker are the product's identity.

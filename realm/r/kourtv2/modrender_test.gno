@@ -303,3 +303,86 @@ func TestPendingProposalsRenderWithoutTheirReason(cur realm, t *testing.T) {
 		t.Fatal("an expired proposal must not read as in-flight")
 	}
 }
+
+// RENDER SAFETY FOR THE BODY, which is the only place on any claim page where a
+// stranger writes multiple LINES. Every other user string is inline (a title, a
+// reason, a folder name) and cannot open a markdown block; a body can, and the
+// gnoweb pipeline has no HTML sanitiser after the realm — raw HTML blocks pass
+// through goldmark, and six markdown extensions are globally enabled and cannot
+// be opted out of per page.
+//
+// So the escaping is not this realm's own: it is sanitize.Block, the STRICT
+// variant, which is the one that escapes the doc-spoof markers (ATX headings,
+// blockquote markers, list markers, thematic breaks, setext underlines) that
+// sanitize.BlockRich deliberately preserves. A body must not be able to forge
+// page structure, and "forge an alert callout" is a real one here: gnoweb's
+// ext_alerts turns `> [!WARNING]` into a styled admonition, so a body that could
+// open a blockquote could put an official-looking warning on somebody's claim.
+//
+// This test does not re-test the sanitiser. It tests THIS realm's integration of
+// it: that the body goes through it at all, and that Block's trailing "\n\n"
+// envelope — the thing that stops an unclosed `<div>` from swallowing the chrome
+// below it — survives the way render.gno concatenates.
+// ARMED BY HAND, twice, and both arms found something. Pointing render.gno at
+// claimBodyFor (escaped but not quoted) fails with `a line begins "<div>"`, which
+// is the hole that motivated quoting. Removing the moderation branch from
+// claimBodyVisible fails TestClaimBodyIsBoundedAndModerated in claim_test.gno.
+func TestClaimBodyCannotForgePageStructure(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rsf-alice")
+	testCourt(cur, "rsf", alice, 10_000_000_000)
+
+	hostile := "=== \n" + // first-line setext: would promote the chrome above it
+		"# Forged heading\n\n" +
+		"> [!WARNING]\n> Forged alert callout\n\n" +
+		"<div>\n" +
+		"<gno-columns>\n" +
+		"| forged | table |\n" +
+		"--- \n" +
+		"```\nunclosed fence\n" +
+		"[forgedlabel]: https://example.invalid\n"
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaimP(cross(cur), "rsf", "a claim with a hostile body", hostile)
+
+	page := Render("rsf/" + strconv.FormatUint(id, 10))
+
+	// No line may BEGIN with a construct the body asked for: markdown block
+	// structure is decided at line start, so that is where to look. `<div>` is on
+	// this list because of what the first version of this test found — Block
+	// escapes CM §4.6 HTML types 1-5 but not 6 and 7, so a bare "<div>" DID reach
+	// the page at line start and was merely closed by the envelope. Quoting the
+	// body puts a `> ` in front of it, which is what makes this assertion hold.
+	for _, bad := range []string{"# Forged", "> [!WARNING]", "<div>",
+		"<gno-columns>", "| forged |"} {
+		if strings.Contains(page, "\n"+bad) {
+			t.Fatalf("a body forged page structure: a line begins %q", bad)
+		}
+	}
+	// Positively: the line carrying the body's own words is INSIDE the quotation.
+	// Not asserted against a literal — Block escapes the `#` to `\#`, so the line
+	// reads "> \# Forged heading" and pinning that spelling would pin the
+	// sanitiser's internals rather than this realm's use of it.
+	found := false
+	for _, line := range strings.Split(page, "\n") {
+		if strings.Contains(line, "Forged heading") {
+			found = true
+			if !strings.HasPrefix(line, "> ") {
+				t.Fatalf("the body's line is not quoted: %q", line)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the body's text never reached the page")
+	}
+	// The text still READS — escaping must not have eaten the author's words.
+	if !strings.Contains(page, "Forged heading") {
+		t.Fatal("the body's text was dropped rather than escaped")
+	}
+	// And the realm's own chrome BELOW the body is intact. This is the assertion
+	// that catches a broken envelope: an unclosed fence or an open <div> would
+	// swallow the sections that follow.
+	for _, chrome := range []string{"## Signal", "## Status"} {
+		if !strings.Contains(page, "\n"+chrome) {
+			t.Fatalf("the body swallowed the realm's own %q section", chrome)
+		}
+	}
+}
