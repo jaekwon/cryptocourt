@@ -11,9 +11,9 @@
 |---|---|
 | `r` | external opportunity rate (what locked capital could earn elsewhere), per week |
 | `d` | dilution rate = minted / supply, per week |
-| `ρ` | `r + d` — the full carry cost of locked CC |
+| `ρ` | `r + d` — the full carry cost of locked CC. **Right for the BUY decision, wrong for the STAKE decision:** dilution hits staked and unstaked CC alike, so the *differential* carry of staking rather than holding is `r` alone. Since the reward scales with `r + d` while the differential cost scales with `r`, every anti-farming margin here degrades linearly in `d`. |
 | `T_c` | conviction time: stake → answer-freeze |
-| `T_L` | lock time: stake → withdraw (≈ 1.5 × T_c: adds 72h + escrow) |
+| `T_L` | lock time: stake → withdraw. **ASSUMED ≈ 1.5 × T_c here ("adds 72h + escrow"); MEASURED 1.039 × T_c.** The escrow half was never built — `WithdrawStake` is deliberately unpausable, so principal is never held past the verdict. Every result below that divides by `T_L` is optimistic by ~1.44×, and §"Matched farmer" is wrong *because* of it. |
 | `y` | yield per conviction actually paid (the effective rate) |
 | `p` | a staker's true accuracy on the claims they stake |
 
@@ -67,9 +67,17 @@ within every era because 0.85·y*(t) < y*(t) pointwise.
 r₀ = 0.25%/wk (~13%/yr), d₀ ≈ 0.1%/wk, T_L/T_c = 1.5 →
 y*₀ = 2(0.35%)(1.5) = 1.05%/wk → **rate₀ = 0.89%/wk per unit conviction**.
 
+> **The `(1.5)` in that line is the unbuilt escrow assumption.** The shipped constant is
+> `rateBpsFP = 2.55 × (r0 + d_eff)` with `2.55 = 0.85 × 2 × 1.5`, so the 1.5 is baked into every
+> staker's reward — the rate was priced for a lock duration the code does not deliver. That is the
+> root cause of the matched-farmer row being wrong, and it is the single least-examined number in
+> this memo. Note also that `r0WeeklyBps = 25` (13%/yr) is an *assumption about the outside world*
+> hardcoded into the reward: if real alternative yields are lower, every farming margin here is
+> more favourable to the farmer than stated.
+
 | Actor | Position | Net per episode (on stake, T_c = 2wk ref) |
 |---|---|---|
-| Matched farmer | both sides, 2× lock | **negative** (earns 0.85·y* on half the capital vs 2× carry) |
+| Matched farmer | both sides, 2× lock | ~~**negative**~~ → **MEASURED POSITIVE, +5.6% to +9.7% of carry** (and +27.6% if the farmer also authors and answers the claim, taking 93/93 of the draw rather than the stakers' 80/93). This row assumed `T_L = 1.5·T_c`; at the delivered 1.039 the sign flips. It is the one row in this table the code contradicts, and the straddle *is* that gap. Bounded in practice by the draw cap at the high tier, by the per-period budget on thin courts, and by needing a >91% claim-survival rate to profit at all. See `STRADDLE.md`. |
 | Coin-flipper (p = .5) | one side | negative (0.85/2·y*·T_c < ρ·T_L) |
 | Break-even staker | p ≈ 0.59 | ≈ 0 |
 | Good staker (p = 0.7) | one side | ≈ +0.19·ρ·T_L ≈ +0.10%·stake/wk-equivalent |

@@ -72,13 +72,33 @@ claim's stakes until settlement, and at settlement principal is released in full
 whichever way the verdict went. People stake their true position when a wrong one
 cannot ruin them.
 
-Nothing prevents one holder staking both sides of a claim. It buys nothing.
-Staked coins sit in escrow, where they carry no vote, so a hedger gives up
-voting weight on both halves while only the winning half draws accuracy
-rewards: a guesser's reward at a believer's lockup. Verdicts themselves are
-decided by coin votes, not by stakes, so hedged capital buys no verdict power
-at all. And equal stake on both sides moves a claim's lean toward even; it
-cannot manufacture one. The lean measures net stake, not headcount.
+Nothing prevents one holder staking both sides of a claim, and it is worth being
+exact about what that does, because two earlier drafts of this paragraph were
+wrong. **It is mildly profitable.** Only the winning half earns, but both halves
+tie up capital, so a hedger collects about half the reward while bearing the whole
+holding cost — which leaves a thin positive margin rather than nothing. Measured
+on an eleven-week claim, a hedger keeps roughly a twelfth of what someone who
+took a side and was right keeps, and the hedger's edge depends entirely on what
+that capital could have earned elsewhere: it grows if alternatives are poor and
+vanishes if they are good.
+
+This is a spread, not a leak. It is bounded twice over by mechanisms that exist
+for other reasons — the payout cap means the bonus tier pays a hedger less than
+double, and the per-period emission budget makes hedging *lose* money on a thin
+court — and it is not risk-free in aggregate, since a claim voted junk or left
+unanswered pays a hedger nothing at all. Closing it is possible only by charging
+for staked capital-time, which prices a hedger and an honest 50/50 staker
+*identically*, because they are arithmetically the same position. We would rather
+pay the spread than tax genuine uncertainty.
+
+Verdicts themselves are decided by coin votes, not by stakes, so hedged capital
+buys no verdict power at all — but note that staked coins are **not** held in
+custody and do keep their court-wide vote; an earlier draft claimed otherwise, and
+that custody was deliberately removed. And equal stake on both sides moves a
+claim's lean toward even; it cannot manufacture one. The lean measures net stake,
+not headcount — though the lean is a *display* of sentiment and deliberately does
+not drive the payout, because keying rewards to it would let anyone burn a claim's
+whole prize by funding the losing side.
 
 **Answered.** An answerer posts a side, TRUE or FALSE, and bonds it. The bond is
 priced against what a wrong answer could destroy — the conviction standing on
