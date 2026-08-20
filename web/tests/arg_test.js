@@ -54,7 +54,10 @@ ok("one parent max per claim", (()=>{ const p={}; for(const r of DEMO.relations.
 // ---- argument section: #9 the parent ----
 const demoLookup = i => { const dd=DEMO.claims["orem/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
 const h9 = argumentSection("orem", 9, demoLookup);
-ok("#9: section renders", h9.includes("The argument"));
+ok("#9: section renders", h9.includes("Where this claim sits"));
+// The heading must not name ONE of the two axes it renders — COURTS_STRUCTURE
+// §5 keeps containment and argument separate, and the old head merged them.
+ok("#9: heading names neither axis alone", !h9.includes("The argument"));
 ok("#9: sample label", h9.includes("sample curation — the chain stores no relations"));
 ok("#9: rests on 3, 1 settled", h9.includes("1 of 3 parts settled"));
 ok("#9: undecided banner", h9.includes("2 of 3 parts are still undecided — any verdict here is reached without them"));
@@ -65,7 +68,13 @@ ok("#9: no yes% or sparkline in rows", !h9.includes("YES now") && !h9.includes("
 
 // ---- #3: part-of line + contradicts (incoming) ----
 const h3 = argumentSection("orem", 3, demoLookup);
-ok("#3: Part of #9 line", h3.includes("Part of") && h3.includes("#/c/orem/9"));
+// The parent is a ROW like every other relation, on the containment axis with
+// "Rests on" rather than in the argument graph under "Related". It was a bare
+// paragraph: no chip, and no status pill on the whole it is a part of.
+ok("#3: Part of subsection", h3.includes(">Part of<"));
+ok("#3: parent is a row, chipped as the whole", /argrow[^]*?#\/c\/orem\/9/.test(h3) && h3.includes(">the whole<"));
+ok("#3: parent row carries the whole's status", h3.slice(h3.indexOf(">Part of<")).slice(0,700).includes("pill"));
+ok("#3: parent is NOT filed under Related", h3.indexOf(">Part of<") < (h3.includes(">Related<")? h3.indexOf(">Related<") : Infinity));
 ok("#3: #11 contradicts", h3.includes(">contradicts<") && h3.includes("#/c/orem/11"));
 ok("#3: no rests-on subsection", !h3.includes("Rests on"));
 

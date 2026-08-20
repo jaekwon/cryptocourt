@@ -2659,16 +2659,30 @@ function argumentSection(slug, id, lookup){
   });
   const settledN = children.filter(i=>{ const d=dOf(i); return d && phaseClass(d.statusText).short==="settled"; }).length;
   const undecided = children.length - settledN;
-  let g = `<section style="margin-top:22px"><div class="sec-h">The argument <span class="count">${cur.source==="local"? CUR_LABEL+" — the chain stores no relations" : "sample curation — the chain stores no relations"}</span></div>`;
-  if(parent){ const pd=dOf(parent.to);
-    g += `<p class="small" style="margin:0 0 10px">Part of <a href="#/c/${esc(slug)}/${parent.to}">#${parent.to}${pd?` — ${safeInline(pd.title)}`:""}</a></p>`; }
+  // NOT "The argument". COURTS_STRUCTURE.md §5 names two kinds of edge and says
+  // they must not be merged: containment (a tree, at most one parent, no stance)
+  // and argument (a graph on top of it, any number, supports/counters). This
+  // section renders BOTH, so heading it with the name of one axis labelled half
+  // its own contents — and a reader asked what it meant, which is the evidence.
+  let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${cur.source==="local"? CUR_LABEL+" — the chain stores no relations" : "sample curation — the chain stores no relations"}</span></div>`;
+  // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
+  // other way, so it belongs beside it rather than under "Related" — that group
+  // is the argument graph, and filing a containment edge in it is exactly the
+  // merge §5 forbids. It also used to be the only relation in the section
+  // rendered as a bare line of prose: no relation chip, and no status pill, so
+  // the one thing you most want to know about the whole you are a part of —
+  // whether it is already settled — was the one thing not shown.
+  if(parent){
+    g += `<div class="sec-h" style="margin-top:6px">Part of</div>`
+      + `<div class="docket">${argRow(slug, parent.to, "the whole", lookup)}</div>`;
+  }
   if(children.length){
-    g += `<div class="sec-h" style="margin-top:6px">Rests on <span class="count">${settledN} of ${children.length} part${children.length===1?"":"s"} settled</span></div>`
+    g += `<div class="sec-h" style="margin-top:${parent?14:6}px">Rests on <span class="count">${settledN} of ${children.length} part${children.length===1?"":"s"} settled</span></div>`
       + (undecided? `<p class="small muted" style="margin:0 0 8px">${undecided} of ${children.length} parts are still undecided — any verdict here is reached without them.</p>`:"")
       + `<div class="docket">${children.map(i=>argRow(slug,i,"one part",lookup)).join("")}</div>`;
   }
   if(rel.length){
-    g += `<div class="sec-h" style="margin-top:${children.length?14:6}px">Related</div>`
+    g += `<div class="sec-h" style="margin-top:${children.length||parent?14:6}px">Related</div>`
       + `<div class="docket">${rel.map(([i,c])=>argRow(slug,i,c,lookup)).join("")}</div>`;
   }
   g += `<p class="small muted" style="margin:10px 0 0">Curation, not mechanics: relations move no stake, no bond, no bar, no verdict — each claim is decided alone. They are here so you need not leave the page you vote on to find the argument.</p></section>`;
