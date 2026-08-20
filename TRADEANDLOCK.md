@@ -110,6 +110,89 @@ this plan asserts nothing.**
 
 ---
 
+## PART B″ — SUPERSEDES B AND B′: BUILT, MEASURED, DROPPED
+
+**Everything below about unbonding — Part B, Part B′, the duration derivation, the
+hole in B′4, the UX section in B′7 — was implemented in full, passed its own tests
+and the whole gate, and was then removed.** Preserved on branch
+`unbonding-measured-and-dropped` (`49c31b7`). Part A (tradeable coins) shipped and stands.
+
+### The number that decided it
+
+**One week of idle capital costs a loser 0.25% of principal.** `r0WeeklyBps = 25`
+is the base rate — 25 bps a week, 13%/yr — so a one-week cooling period is a
+25 bps time-value tax. Under 1% even counting the 2.55 draw multiplier.
+
+**The straddle edge it was built to deter measures ~2× gross and ~12× net.**
+
+That is three orders of magnitude short. And **it cannot be fixed by turning the
+dial**: `mustSane` caps the period at `deadClaimTimeout`, twelve weeks, which is
+~3%. *No duration the design permits closes the gap.* The mechanism was not
+undersized — it was the wrong instrument. **A 13%/yr carry cannot be used to
+punish a 12× edge.** Any future proposal to lock losers' funds has to answer this
+paragraph first.
+
+### And it never touched the straddle anyway
+
+A straddler holds both sides, so at the verdict half releases immediately and half
+cools: **expected wait 50%**. An honest staker at p = ½ also waits 50% in
+expectation. The mechanism separates *informed* from *uninformed* — and the
+straddler is p = ½ **by construction**, so it taxes them at exactly the
+uninformed rate. B′4 worried the winner exemption was too easy to capture; the
+real finding is that the exemption was worth less than it looked like to anyone.
+
+### Two costs that made it negative rather than merely useless
+
+1. **The sweep is a second transaction.** Cooling coin does not auto-release —
+   someone must call `ReleaseUnbonded`. Anyone who forgets is locked
+   indefinitely. A permanent stuck-funds trap, and worse UX than the wait it
+   implements. This is not in B′7's UX list because B′7 was written before the
+   mechanism existed; it only appears once you build it.
+2. **It was the only thing in the design that made the timing of delivery of your
+   own principal depend on the verdict.** The CEA's swap definition reaches any
+   *"purchase, sale, payment, **or delivery** ... dependent on the occurrence ...
+   of an event"*, and a winner-only early release is exactly that shape.
+   Everything else here had been kept clear of it: principal is 1× regardless,
+   the prize is minted rather than counterparty-funded, and the published rate is
+   a promise rather than a contested pool. **Counsel flag, not a conclusion** —
+   but spending the cleanest sentence in `REGULATIONS.md` to buy 25 bps is a bad
+   trade at any confidence level.
+
+### What was RIGHT about it, if a wait ever returns
+
+- **Express the wait as a subtraction inside `spendable()`, never as a delayed
+  return.** Since court coins became transferable there is a real exit to GNOT, so
+  a delay that left the coin spendable would be worth nothing — the loser sells on
+  a DEX instead of waiting. `spendable()` is the one function every door narrows
+  to: the five bonded entrypoints, the claim deposit, a fresh stake, `TransferCC`,
+  `TransferFromCC`, and therefore any wrapper or pool. **B′1's whole premise, that
+  a lock is a lock, is only true if it is written there.**
+- **An undecided claim must exempt both sides** (`noDecision`: dead claim or
+  `provClose`). Otherwise an unanswerable claim becomes a way to freeze other
+  people's capital. Found by testing, not by reasoning: a dead close never sets
+  `verdictAt`, so `WithdrawStake` refuses with *"no verdict yet"* and stakers leave
+  a dead claim through `Unstake` — **put the exemption only in `WithdrawStake` and
+  it sits in a branch nothing reaches.**
+- **Round release heights UP to a bucket grid.** Same-bucket unbonds merge, which
+  is what bounds per-address rows without counting them. Rounding *down* hands
+  coins back early, the one direction that turns a state-bounding trick into a
+  hole. And **zero-pad the keys**: the tree is lexicographic, so unpadded, `"9"`
+  sorts after `"10"` and the ordered walk stops at the first row it mistakes for
+  the future.
+- **Publish the period before it is incurred, not after.** B′7 §2 was right and is
+  the one piece worth salvaging on its own.
+
+### What is now settled about the straddle
+
+Nothing cheap fixes it. Re-answerability was blocked three ways, syndication was
+profitable self-dealing with no sybil-proof fix, lean-keyed draws measured *worse*
+than the bug, and a time lock is off by 1000×. **The straddle IS the p = ½ honest
+position**, and the remaining honest lever is the one already shipped: the draw is
+conviction-weighted on the winning side only, so being wrong earns nothing. That
+is the penalty for losing, and it does not need a companion.
+
+---
+
 ## PART B — LOSER UNBONDING PERIOD
 
 Converged over four vets in `LOSERLOCK.md` §7–8. Restated here as the build spec.

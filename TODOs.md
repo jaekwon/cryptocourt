@@ -55,18 +55,18 @@ real pool or swaps. What is tested is gnoswap's *resolution* path, which is what
 `pool`, `position`, `router`, `gns`, `common`, `access`, `halt` and `emission`
 vendored into `scripts/gnoroot.py`.
 
-**f. Universal unbonding is NOT built, and transferability changes its
-specification.** The owner asked for a wait on exit that winners skip. Before
-transferability there was no exit to GNOT at all, so "unbonding" only ever meant
-a delay on returning staked coin to spendable. Now there IS an exit — sell on
-gnoswap — so **a withdrawal delay that leaves the coin spendable is worthless: the
-loser sells instead of waiting.** The lock must therefore be expressed by keeping
-the amount inside `lockedOf`, which `spendable()` already subtracts and which
-`TransferCC`, `TransferFromCC` and therefore `Wrap` are all gated on. That
-composes, and it is the reason `lock.gno`'s "a lock, not custody" doctrine is
-worth keeping. Also still open from the earlier analysis: the binary-exemption
-hole (switch to the winning side late, earn nothing, still skip the wait) and
-re-deriving `L` now that both sides serve time in expectation.
+**f. Universal unbonding was BUILT, MEASURED, AND DROPPED.** Not open any more,
+and the reason is a number rather than a preference: one week of idle capital
+costs a loser 0.25% of principal (`r0WeeklyBps = 25`), against a straddle edge of
+~2× gross and ~12× net — three orders of magnitude short, and `mustSane`'s own
+twelve-week ceiling caps it at ~3%, so no permitted duration closes the gap. It
+also never touched the straddle (a straddler waits 50% in expectation, the same
+as an honest p = ½ staker), its sweep was a second transaction and therefore a
+permanent stuck-funds trap, and it was the only thing in the design making the
+timing of delivery of your own principal depend on the verdict. Full record and
+the four things that were RIGHT about it in `TRADEANDLOCK.md` §B″; code preserved
+on branch `unbonding-measured-and-dropped`. **Anything proposing to lock losers'
+funds again has to answer §B″'s first paragraph.**
 
 ---
 
