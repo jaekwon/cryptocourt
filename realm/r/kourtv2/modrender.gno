@@ -133,6 +133,26 @@ func claimTitleFor(c *Court, cs *claimState) string {
 	return sanitize.InlineText(cs.title)
 }
 
+// claimBodyFor is the title's gate applied to the bigger surface. A purged claim
+// answers with NOTHING rather than with its tombstone: the title already carries
+// "[removed · <category>]", and repeating it here would be noise where the point
+// is absence. sanitize.Block, not InlineText — a body is multi-line by design and
+// InlineText folds it to one, which would silently destroy the paragraphs the
+// field exists to hold.
+func claimBodyFor(c *Court, cs *claimState) string {
+	if cs.body == "" {
+		return ""
+	}
+	if c.mod != nil {
+		if clm := lookupClaimMod(c.mod, cs.id); clm != nil {
+			if clm.purged || clm.global {
+				return ""
+			}
+		}
+	}
+	return sanitize.Block(cs.body)
+}
+
 // platformName / platformTicker are the product's identity.
 const (
 	platformName   = "Kourt"

@@ -86,6 +86,14 @@ characters — it goes into shared list items, and a newline in one forges a row
 **The body is markdown**: context, sources, what would count as evidence. It is
 what a reader reads and it is *not* what gets adjudicated.
 
+Markdown *on the chain's own renderer* — the realm passes it through
+`sanitize.Block` and prints it, so gnoweb shows the author's formatting. The web
+overlay deliberately does NOT: it escapes the text and splits it into paragraphs
+on blank lines. Re-implementing a markdown parser there would add a second,
+differently-shaped injection surface for a field any stranger can fill, and buy
+emphasis. Paragraphs are the structure a question of fact needs. The two
+renderings differ, and this is the reason.
+
 That separation prevents the obvious attack. If the body could change what the
 claim means, an author could take a position, watch the market, then rewrite the
 framing so their side becomes the true one. So:

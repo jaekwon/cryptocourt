@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -273,4 +274,48 @@ func TestCourtDepositLedgerAcrossDrawAndBurn(cur realm, t *testing.T) {
 	if c.deposit != 0 {
 		t.Fatalf("both claims disposed: the ledger must be empty, got %d", c.deposit)
 	}
+}
+
+// THE BODY. COURTS_STRUCTURE.md §4 gives it two properties and both are load
+// bearing, so both are pinned here: it is bounded, and it goes through the same
+// moderation gate as the title.
+//
+// The gate is the one that matters. The body is the bigger text surface of the
+// two by a factor of ten, so a ClaimBody read that returned the field directly
+// would let a purged claim answer with exactly the text the purge exists to
+// remove — and the title tombstone above it would make the page look moderated
+// while it leaked.
+func TestClaimBodyIsBoundedAndModerated(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bdy-alice")
+	testCourt(cur, "bdy", alice, 50_000_000_000)
+
+	long := ""
+	for i := 0; i < maxClaimBodyLen+1; i++ {
+		long += "x"
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "claim body is at most", func() {
+		OpenClaimP(cross(cur), "bdy", "bounded?", long)
+	})
+	// The boundary itself is accepted, so the guard is not refusing everything.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	OpenClaimP(cross(cur), "bdy", "at the boundary", long[:maxClaimBodyLen])
+
+	// A body survives the round trip, and OpenClaim still works with none.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	withBody := OpenClaimP(cross(cur), "bdy", "has a body",
+		"What would settle this: the published inspection report.")
+	uassert.True(t, strings.Contains(ClaimBody("bdy", withBody), "inspection report"))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	noBody := OpenClaim(cross(cur), "bdy", "has no body")
+	uassert.Equal(t, "", ClaimBody("bdy", noBody))
+
+	// PURGED: the body reads empty, and the title still carries the tombstone.
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeClaim(cross(cur), "bdy", withBody, "CSAM")
+	uassert.Equal(t, "", ClaimBody("bdy", withBody))
+	uassert.True(t, strings.Contains(ClaimTitle("bdy", withBody), "removed"))
 }

@@ -215,6 +215,12 @@ code,.mono{font-family:var(--mono)}
    the page you are ON go gold. Gold = where you are, grey = where you can go.
    That fell out of specificity rather than design, and it is better than what
    was designed, so it is kept deliberately. */
+/* The author's statement, in the serif the titles use — it is the same voice.
+   Bounded to a reading measure rather than the panel width: 90 characters of
+   prose is a wall, and this sits directly under a headline. */
+.claimbody{margin:-4px 0 16px; max-width:74ch}
+.claimbody p{font-family:var(--serif); font-size:15.5px; line-height:1.6; color:var(--ink-2); margin:0 0 9px}
+.claimbody p:last-child{margin-bottom:0}
 .crumbs{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--mark); opacity:.85; margin-bottom:18px; display:flex; gap:7px; flex-wrap:wrap; align-items:center}
 .seal{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
@@ -1358,12 +1364,16 @@ async function claimDetail(slug,id){
       provisional: ph==="provisional"? (d.provisional!=null? d.provisional:0) : -1,
       closed: ph==="closed"}; }
   const s=gstr(slug), i=id;
-  const [title,status,pools,pconv,toi,tyes,answered,disputeOpen,settled,provClose,provisional,closed] = await Promise.all([
+  const [title,status,pools,pconv,toi,tyes,answered,disputeOpen,settled,provClose,provisional,closed,body] = await Promise.all([
     one(`ClaimTitle(${s},${i})`).then(unesc), one(`ClaimStatus(${s},${i})`), tup(`StakePools(${s},${i})`),
     tup(`PoolConviction(${s},${i})`), tup(`TrailingOI(${s},${i},${WEEK})`), tup(`TrailingYes(${s},${i},${WEEK})`),
     one(`HasAnswer(${s},${i})`), one(`DisputeOpen(${s},${i})`), one(`Settled(${s},${i})`),
-    one(`ProvClose(${s},${i})`), one(`Provisional(${s},${i})`), one(`ClaimClosed(${s},${i})`).catch(()=>false)]);
-  const d = {id, title, statusText:status, yesStake:pools[0], noStake:pools[1],
+    one(`ProvClose(${s},${i})`), one(`Provisional(${s},${i})`), one(`ClaimClosed(${s},${i})`).catch(()=>false),
+    // A realm deployed before bodies existed has no ClaimBody, and a claim page
+    // that fails whole because of a missing optional field would be the worse
+    // bug. Empty is the same answer as "this claim has no body".
+    one(`ClaimBody(${s},${i})`).then(unesc).catch(()=>"")]);
+  const d = {id, title, body, statusText:status, yesStake:pools[0], noStake:pools[1],
     convYes:pconv[0], convNo:pconv[1], trailOImature:toi[1], trailOI:toi[0], trailYesMature:tyes[1], trailYesAvg:tyes[0],
     answered, disputeOpen, settled, provClose, provisional, closed};
   if(answered){
@@ -1527,6 +1537,24 @@ function unesc(s){ return String(s).replace(/\\([\\`*_\[\]()~>\-+.!#<&])/g, "$1"
 /* Untrusted text (claim titles, court names by strangers): HTML-escaped.
    The realm sanitizes for its markdown; the overlay must not re-introduce a hole. */
 function safeInline(s){ return esc(s); }
+/* THE CLAIM'S OWN STATEMENT OF WHAT IT MEANS — what would settle it, what is in
+   view, what it is not asking. COURTS_STRUCTURE.md §4: fixed at creation, because
+   a revisable body would let an author take a position, watch the market, then
+   rewrite the framing until their side is the true one.
+
+   Escaped, then split on blank lines into paragraphs. NOT markdown: the realm
+   sanitises the body for ITS renderer's markdown, and re-interpreting the same
+   text as markup here would be a second, differently-shaped attack surface on a
+   field any stranger can fill. Paragraphs are all the structure a question of
+   fact needs. Blank-line splitting matches the realm's own sanitize.Block, which
+   is what normalised the breaks in the first place. */
+function claimBody(d){
+  const raw = d && typeof d.body === "string"? d.body.trim() : "";
+  if(!raw) return "";
+  const paras = raw.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  if(!paras.length) return "";
+  return `<div class="claimbody">${paras.map(p=>`<p>${esc(p)}</p>`).join("")}</div>`;
+}
 
 /* ============================ tx links ================================== */
 /* Every action is a gnoweb $help link with arguments pre-filled — the overlay is
@@ -3672,6 +3700,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">on the map<span aria-hidden="true">→</span></a>` : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
+    + claimBody(d)
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
         <span class="tacts">${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>

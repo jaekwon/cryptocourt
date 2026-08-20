@@ -21,9 +21,23 @@ const twapBuckets = 168 // a week of hourly buckets, as V1
 
 // claimState is one claim. Fields group by lifecycle; answer/dispute/quality
 // fields are added by their modules as they land (fresh code, no live state).
+// A body is optional and bounded. 2,000 characters is a couple of paragraphs —
+// enough to say what would settle the question and what it is not asking, and
+// short of the essay that would make every claim page a wall.
+const maxClaimBodyLen = 2000
+
 type claimState struct {
 	id     uint64
 	title  string
+	// The claim's own statement of what it means: what would settle it, what
+	// evidence is in view, what it is NOT asking. COURTS_STRUCTURE.md §4 gives
+	// the rule and the reason — "the body is append-only, fixed at creation" —
+	// and the reason is the attack it prevents: if the body could be revised, an
+	// author could take a position, watch the market, and rewrite the framing
+	// until their side is the true one. So there is no editor for it, not even
+	// inside the polish window where the TITLE can still be corrected. A claim
+	// filed with a bad body is a claim to close and re-file.
+	body   string
 	author address
 
 	deposit  int64 // refundable anti-spam deposit (escrowed)
@@ -228,7 +242,28 @@ func OpenClaim(cur realm, courtSlug, title string) uint64 {
 	if courtIsPurged(c) {
 		panic("kourtv2: this court is purged; no new claims may be opened")
 	}
-	return openClaim(c, cur.Previous().Address(), title, false)
+	return openClaim(c, cur.Previous().Address(), title, "", false)
+}
+
+// OpenClaimP posts a claim WITH A BODY. Additive rather than a third parameter on
+// OpenClaim: that one is called by every committed filetest, txtar and scenario in
+// the tree, and widening it would break all of them for a field the caller may
+// legitimately not want. The `P` suffix follows StartCourtP — same entrypoint,
+// one more thing said about it.
+//
+// There is deliberately no OpenClaimSeededP. A seeded claim is a moderator
+// bootstrapping a young court's docket with somebody else's question; writing a
+// body on another author's behalf is a different act from filing one, and it
+// should not be a quiet parameter on an existing waiver path.
+func OpenClaimP(cur realm, courtSlug, title, body string) uint64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	if courtIsPurged(c) {
+		panic("kourtv2: this court is purged; no new claims may be opened")
+	}
+	return openClaim(c, cur.Previous().Address(), title, body, false)
 }
 
 // OpenClaimSeeded posts a claim with the CC deposit and fee WAIVED, for a
@@ -256,13 +291,19 @@ func OpenClaimSeeded(cur realm, courtSlug, title string) uint64 {
 	if cm.installedByMeta {
 		panic("kourtv2: a meta-installed moderator set may not seed claims; seed after a local election")
 	}
-	return openClaim(c, who, title, true)
+	return openClaim(c, who, title, "", true)
 }
 
 // openClaim is the shared creation core. A seeded claim waives deposit+fee.
-func openClaim(c *Court, who address, title string, seeded bool) uint64 {
+func openClaim(c *Court, who address, title, body string, seeded bool) uint64 {
 	if len(title) == 0 || len(title) > 200 {
 		panic("kourtv2: a claim title is 1..200 characters")
+	}
+	// Optional: a claim is a title first and the body earns its bytes. The cap is
+	// not arbitrary — every byte is storage the author pays a deposit on, and a
+	// court of record wants the question stated, not an essay attached to it.
+	if len(body) > maxClaimBodyLen {
+		panic("kourtv2: a claim body is at most " + strconv.Itoa(maxClaimBodyLen) + " characters")
 	}
 	var dep, fee int64
 	if !seeded {
@@ -277,6 +318,7 @@ func openClaim(c *Court, who address, title string, seeded bool) uint64 {
 	cs := &claimState{
 		id:           id,
 		title:        title,
+		body:         body,
 		author:       who,
 		deposit:      dep,
 		fee:          fee,
@@ -388,6 +430,14 @@ func ClaimCount(courtSlug string) uint64 { return mustCourt(courtSlug).nextID }
 func ClaimTitle(courtSlug string, claimID uint64) string {
 	c := mustCourt(courtSlug)
 	return claimTitleFor(c, mustClaim(c, claimID))
+}
+// ClaimBody goes through the same moderation gate as the title. A purged or
+// globally-redacted claim must not answer with the text the purge exists to
+// remove — and the body is the bigger surface of the two, so a read that
+// returned cs.body directly would make the whole moderation layer decorative.
+func ClaimBody(courtSlug string, claimID uint64) string {
+	c := mustCourt(courtSlug)
+	return claimBodyFor(c, mustClaim(c, claimID))
 }
 func ClaimAuthor(courtSlug string, claimID uint64) address {
 	return mustClaim(mustCourt(courtSlug), claimID).author

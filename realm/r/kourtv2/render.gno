@@ -215,6 +215,13 @@ func renderClaim(slug string, id uint64) string {
 	// only by the global (legal-hold) bit or a purge, and even then IDs, state,
 	// deadlines and balances still render so a participant can always act.
 	b.WriteString("# " + claimTitleFor(c, cs) + "\n\n")
+	// The author's own statement of what the claim means, above the money. It is
+	// gated by claimBodyFor, so a purged or globally-redacted claim prints nothing
+	// here — and it goes ABOVE the banner because a reader deciding whether to
+	// stake should read the question before the state of the market on it.
+	if body := claimBodyFor(c, cs); body != "" {
+		b.WriteString(body + "\n\n")
+	}
 	b.WriteString(hideBanner(c, cs))
 	writeAppeal(&b, c, cs)
 	if cs.seeded {

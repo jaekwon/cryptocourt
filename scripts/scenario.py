@@ -263,8 +263,17 @@ class Scenario:
     def buy(self, who, slug, ugnot):
         self._call(who, "Buy", [slug], send=f"{ugnot}ugnot")
 
-    def claim(self, who, slug, title):
-        self._call(who, "OpenClaim", [slug, title])
+    def claim(self, who, slug, title, body=None):
+        """OpenClaim, or OpenClaimP when a body is given.
+
+        Two entrypoints rather than one with an empty argument: OpenClaim is what
+        every committed txtar in the tree calls, and passing it a third argument
+        would rewrite all of them for a field most scenarios do not want.
+        """
+        if body:
+            self._call(who, "OpenClaimP", [slug, title, body])
+        else:
+            self._call(who, "OpenClaim", [slug, title])
 
     def stake(self, who, slug, cid, side, amount):
         self._call(who, "Stake", [slug, str(cid), side, str(amount)])
