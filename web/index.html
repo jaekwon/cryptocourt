@@ -55,7 +55,7 @@ img,svg{display:block;max-width:100%}
      them all off in one place rather than each rule needing a theme guard.
      Glow on white paper is smudge, not light. */
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
-  --trace:none; --edge:transparent; --lip:none; --gridline:transparent;
+  --trace:none; --edge:transparent; --lip:none;
   /* THE REGISTER. Surfaces lose their fills and become hairline frames with
      registration marks; the chain's own data is the only thing that glows; and
      gold marks PROVENANCE — which record you are looking at — never state.
@@ -112,9 +112,6 @@ img,svg{display:block;max-width:100%}
        same value on near-white is a huge visible step, which is why the light
        theme has none. */
     --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
-    /* The faintest grid. Tron's floor, at an opacity where it is texture rather
-       than pattern — it must never compete with a number. */
-    --gridline:rgba(154,168,238,.055);
   }
 }
 :root[data-theme=light]{
@@ -125,7 +122,7 @@ img,svg{display:block;max-width:100%}
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec; --good:#1c6551;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
-  --trace:none; --edge:transparent; --lip:none; --gridline:transparent;
+  --trace:none; --edge:transparent; --lip:none;
   --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a;
   --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
   --scan:transparent; --ring:none;
@@ -144,26 +141,13 @@ img,svg{display:block;max-width:100%}
   --trace:drop-shadow(0 0 3px rgba(95,211,230,.85)) drop-shadow(0 0 11px rgba(95,211,230,.4));
   --edge:rgba(179,190,243,.9);
   --lip:inset 0 1px 0 rgba(179,190,243,.16);
-  --gridline:rgba(154,168,238,.055);
   --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0;
   --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
   --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
 }
 
 body{
-  /* THE FLOOR. Two 1px lines on a 44px cell, at an opacity where it is texture
-     and not pattern — a grid you can read a number through. It has to come
-     AFTER the `background:` shorthand and inside the same rule: declared
-     earlier in the sheet, the shorthand below resets background-image and the
-     grid silently never paints, which is exactly what happened the first time.
-     background-attachment:fixed so it does not scroll with the content and beat
-     against the docket rows. --gridline is transparent in the light theme, so
-     this costs nothing there. */
   background:var(--paper); color:var(--ink); font-family:var(--sans);
-  background-image:
-    linear-gradient(var(--gridline) 1px, transparent 1px),
-    linear-gradient(90deg, var(--gridline) 1px, transparent 1px);
-  background-size:44px 44px; background-attachment:fixed;
   font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
   display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr;
   grid-template-rows:auto 1fr; min-height:100vh;
