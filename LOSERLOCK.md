@@ -276,3 +276,157 @@ interest on a withdrawable deposit.
 **For:** voting weight is measurably **intact** (§7.5 B12), principal returns 1×. And the
 **reversal-priced variant is outcome-independent**, which removes the hook rather than arguing it —
 the fallback if counsel comes back hot.
+
+---
+
+## 8. VET 1 — the companion must be a SCALE, and it found the reason for the duration
+
+Built the whole thing. **273 tests green, all six guards, 16 mutations with 15 caught.**
+
+### 8.1 My boolean companion is VOID — it must be a scale
+
+"Condition the reward on the position still being staked" **as a condition is theatre of the same
+kind §5 already records as rejected**: keep **one base unit** of a hundred staked, the test passes,
+and the whole conviction-weighted reward pays while the lock holds one base unit. Registered as a
+mutation and caught.
+
+```
+pay ≤ conviction-gross × min(1, stakeAtFreeze / timeAveragedStake)
+```
+
+Three properties, all **proofs rather than measurements**:
+
+- **Never-unstaked ⟹ factor is exactly 1.** The mean of a non-decreasing function is at most its
+  final value, so the ratio clamps and the payment is **bit-identical to today's**. Top-ups are
+  never penalised. **The bystander guarantee is structural, not measured.**
+- **Non-increasing ⟹ it computes `∫min(stake(t), stake_freeze)·dt` exactly** — "only capital that
+  stayed earns, and it earns for the whole time it was there."
+- **Full drain ⟹ zero**, with no special case.
+
+So the partial-unstake answer is *derived, not picked*: the ratio-scale **is** pro-rata on what
+remains. **M**, three positions with identical conviction: never-unstaked paid 701,786,475
+(bit-identical), half-unstaked 351,272,992 (factor 0.5005), drained **0**.
+
+### 8.2 My F9 attribution was wrong, and wrong in my own favour
+
+`PLAN.md` §3.2 states F9 as being about **the integral** — *"capital conservation makes the integral
+game-proof… honest belief-updating is never punished."* **§1's claim that "F9 exists so principal is
+never hostage" is false.** That property is P4/V2-6 split settlement plus `WithdrawStake`'s doc
+contract — a different mechanism, in a different file, under a different name.
+
+> **So the two are not "may be separable" — they are already separate.** The presence scale touches
+> a reward and never touches principal, so it cannot reach the property `REGULATIONS.md` rests on.
+
+Of F9's two jobs: game-proofness is **untouched** (no accumulator changes; the 1:2:4 linearity was
+re-measured on the patched tree). The real cost is the second — and it is narrow: the only punished
+shape is **"withdraw the forecast, then be right anyway."** A genuine narrowing of F9, not a free
+lunch, but a small one.
+
+**And the per-position conviction record has exactly ONE money consumer** (`WithdrawBonus`), plus
+`AuthorBonus`'s cap base. Everything that prices a bond, slash, bar, quorum floor or carrot clamp
+reads **side-level** integrals, which are indifferent to whether any individual position exists.
+That is why this is surgical. **And the winners' denominator is the pool integral, so a forfeit does
+NOT redistribute to other winners** — §8.7's "published rate is a promise, not a contested pool"
+property survives intact.
+
+### 8.3 My "second benefit" was real but much smaller than billed — and authorises NO simplification
+
+`lifeAvgStake`'s max() defends **eight** consumers against an attacker who *never wanted the
+reward*: the payoff is destroying a **third party's** draw with cheap weight, achievable with zero
+stake of one's own. **Conditioning my own reward on my own presence does nothing to them.**
+Orthogonal defences against the same act. `answer.gno`'s "if this is ever relaxed, mutate those
+three first" warning stands undisturbed.
+
+### 8.4 THE DURATION — `L = 1× claim life`, and the reason is in the shipped constant
+
+`rateBpsFP`'s `2.55 = 0.85 × 2 × 1.5`, and **that 1.5 is `ECONOMICS.md`'s `T_L/T_c`** — annotated in
+that file (by the correction committed earlier today) as *"ASSUMED ≈ 1.5; MEASURED 1.039. The escrow
+half was never built."*
+
+> **Every staker has been PAID for a lock of 1.5·T_c and served one of 1.039·T_c.** A one-claim-life
+> loser lock delivers, in expectation at a coin flip, `1.039 + 0.5 = 1.539 ≈ 1.5`.
+>
+> **`L = 1×T_c` is the length at which the code finally delivers the lock its own published rate has
+> been billing for.** No external rate appears — ρ cancels — and no new constant, because `T_c` is
+> already computed and already capped at twelve weeks.
+
+The defensible range, from the memo's own formulas:
+
+| λ = L/T_c | honest break-even | straddle (MID/cold) |
+|---|---|---|
+| 0 (today) | 0.4737 | 1.0556 |
+| **0.115** | **0.5000** | **1.0000** ← the impossibility theorem, as an identity |
+| **1.0** | **0.6385** | **0.7126 — dead** |
+| 1.459 | **0.6838** = the design's **own** documented `p_min` | 0.6199 |
+
+**λ = 1 sits inside that range with 0.045 p-points of headroom against the design's own target.**
+
+**What it closes:** MID/cold (1.056 → 0.713) **and the self-dealt variant** (1.227 → 0.828), which
+`STRADDLE.md` §8.4 measured as the worst cell anywhere at 2.8× the headline. **What it does not:**
+HIGH/cold needs λ ≈ 1.67 and MID/hot needs 3.45, both past the design's own envelope. **So §8.8's
+"the bonus tier cannot be targeted, and that is provable" survives the lock intact.**
+
+### 8.5 THE REFRAMING THAT RESOLVES THE TWO VETS' DISAGREEMENT
+
+Vet 2 recommends `λ = 1/8` on the grounds that `λ = 1` amputates **2.6× what `ECONOMICS.md` already
+rejected**. That objection rests on **line 39** — the 0.85-vs-0.75 argument about the 0.59–0.67
+band. **Line 39 predates the 80/93 correction recorded nine lines EARLIER, at line 30:** *"the true
+honest break-even is `p_min ≈ 0.68`"*, repeated verbatim in `crystallize.gno`.
+
+> **The 0.68 target already excludes the entire 0.59–0.67 band by itself.** Both sentences cannot be
+> the design's position, and the later one is the corrected one.
+>
+> **So `λ = 1` moves the honest break-even 0.474 → 0.639 — back TOWARD the design's own documented
+> 0.684, not past it. It restores an envelope the code was supposed to have and never delivered,
+> rather than amputating one the design chose.**
+
+**DECISION: `L = 1 × claim life`.** Vet 1's reason is positive (it delivers the billed lock) where
+vet 2's is merely minimal (the least that deters), and vet 2's objection is built on a superseded
+line. Recorded so the disagreement is visible rather than buried.
+
+### 8.6 The early exit must GO — it cannot be kept
+
+Two independent reasons: it keys on the **standing** provisional, which a dispute chain flips, so a
+lock keyed to the final verdict would have nothing to hold on **either** side (vet 1 reproduced vet
+1's own Leak 2 here); and **the side it releases is exactly the side the lock holds** — the same
+coins, no margin to split. A third route, re-locking at settlement, is wrong because freed capital
+can be committed elsewhere meanwhile, making `lockedOf > BalanceOf` and falsifying `spendable()`'s
+stated invariant.
+
+**A12's grief, priced:** disputed claims **only** (an undisputed claim already releases both sides
+at `verdictAt`, so the modal path is unchanged); the **griefer's own terminal path is exempt** via an
+explicit `!cs.provClose` clause; bounded by `escrowUntil` (≤ 3 weeks) which the winner already
+serves; and conviction pays zero either way, by A12's own text. **Real, but not the amplifier feared
+— the provClose exemption is what removes it.**
+
+### 8.7 Incidence: INHERITED, exactly. And the drain incentive is REMOVED, not moved.
+
+Per unit of committed capital the straddler has half locked with certainty; the honest staker has
+all of it locked with probability `(1−p)`. **Equal at p = 0.50, so across `[0.474, 0.50)` the honest
+contrarian pays more lock than the target.** The impossibility theorem covers this class too. **It
+does re-tax what the bond re-keying made ~6× cheaper. §8.5 is the answer, not a denial.**
+
+**But participation improves.** Today the drainer's payout is **bit-identical to the holder's**,
+which is what made draining systematic. Under the change a drain forfeits everything
+(701,786,475 → **0**), so holding strictly dominates. The residual: a staker leaves only if
+**p < 0.31** — confidently wrong, and their leaving is the mechanism working. **Strictly less drain
+pressure than today.**
+
+**Sybil: genuinely capital-keyed, verified** — positions are `(address, side)` rows that sum, so
+splitting changes nothing, and the lock is a spend restriction rather than a withdrawal delay (the
+locked leg cannot be recycled into the next claim). **Standing dependency, now load-bearing twice:**
+this binds only because a court coin has no transfer entrypoint, and `MODERATION.md` wants meta-CC
+transferable. The lock deepens that tension.
+
+### 8.8 Two loose ends, and one accepted side effect
+
+- **`ConvictionOf` now over-promises** — its doc says clients can preview rewards, and a drained
+  position's conviction is no longer what it will be paid. Suggests a separate `PayablePreview` read
+  rather than changing an existing entrypoint's meaning. **Not built.**
+- **`ECONOMICS.md` line 39 contradicts line 30** on the honest break-even, and line 39 is currently
+  the load-bearing sentence in the strongest argument *against* this change. Needs correcting either
+  way.
+- **A forfeited share stays in `juniorReserved` and is never minted** — the same channel
+  `crystallize.gno`'s header already names for cap-cut, dust, seeded authors and overturned
+  answerers (*"economically a burn, always on the conservative side of the ceiling"*). A delay
+  rather than a loss, but it can transiently tighten the next claim's reservation.
