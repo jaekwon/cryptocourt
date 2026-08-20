@@ -80,12 +80,27 @@ decided by coin votes, not by stakes, so hedged capital buys no verdict power
 at all. And equal stake on both sides moves a claim's lean toward even; it
 cannot manufacture one. The lean measures net stake, not headcount.
 
-**Answered.** An answerer posts a side, TRUE or FALSE, and bonds it. The bond
-is sized so that posting junk answers costs more than it can pay.
+**Answered.** An answerer posts a side, TRUE or FALSE, and bonds it. The bond is
+priced against what a wrong answer could destroy — the conviction standing on
+the claim, measured on **both** sides rather than only the side being declared.
+That distinction is the whole of it. Price it against the declared side alone and
+someone can stake dust on their own side, declare it, and post almost nothing
+against a large opposing pool; price it against the larger of the two and the
+same person pays for the damage they are in a position to do. An answer that
+contradicts a well-funded crowd is therefore expensive, and an early answer on a
+thin claim is cheap, which is the correct way round.
 
-**Disputed.** Anyone except the answerer can dispute the answer, posting a
-bond of their own. The dispute sends the claim to a vote, and the side the
-vote decides against loses its bond.
+**Disputed.** Anyone except the answerer can dispute the answer, posting a bond
+of their own. The dispute sends the claim to a vote, and the side the vote
+decides against loses its bond.
+
+**Expired.** A claim nobody answers within twelve weeks closes rather than
+resolving. Stakes return whole; no prize is paid. This is a real limit and worth
+stating plainly: a court cannot hold a years-old open question. What a market on
+an unresolved question does instead is ask again each time new evidence lands,
+and let the earlier contract lapse — so a long-running dispute appears on the
+docket as a series of claims rather than one, each priced by what was knowable
+that month.
 
 **Voted.** Voting weight is the court's coin as of an epoch: an hourly
 snapshot of holdings, already sealed when the vote opened. By the time a vote
@@ -102,6 +117,15 @@ or disputer), the stakers on the verdict's side, and the voters of the
 deciding round. Forfeited bonds are
 burned. No one in Kourt is paid from anyone else's loss.
 
+Two things about that reward are worth being exact about, because a staker
+commits before either is knowable. The **published rate is never reduced** — a
+claim adjudicated as ordinary pays the rate it advertised, and nothing in the
+settlement can cut it. What *is* discretionary is the bonus multiplier an
+exceptional claim can earn on top, and that bonus is capped by what the answerer's
+bond collateralized. The reason is unglamorous: the bonus is the one component a
+false answer could inflate at someone else's expense, so it is bounded by the
+money at risk behind the answer. A staker is promised the rate, not the bonus.
+
 A verdict is not the truth. It is the recorded conclusion of a particular
 electorate with a particular amount of money at stake at a particular time.
 That is the same authority any human institution's conclusion carries. The
@@ -109,20 +133,40 @@ difference is that this one shows its work, prices its convictions, and keeps
 its dissents on the record.
 
 People will sometimes vote their side rather than the evidence. The design
-accepts this and answers it four ways. Accuracy rewards pay the voters who
-sided with the eventual verdict, a pull toward expected consensus rather than
-an oracle. The sealed epoch keeps a crowd from buying into a dispute it can see.
-Dissent is permanent, so a court that votes tribally signs its own record,
-claim after claim. And founding a rival court is open to anyone, so a court
-that rots does not trap its topic: the record of which court called what, and
-when, tells the next reader which one earned authority.
+accepts this and answers it five ways, and the first is the strongest: **a
+participant cannot vote on their own claim at all.** Anyone holding stake on
+either side of a claim, its author, and its answerer are refused outright — and a
+stake record survives withdrawal, so the position cannot be shed to buy back the
+franchise. A verdict is therefore decided by holders with no position on the
+question, which is a stronger guarantee than any incentive: the conflicted party
+is not paid to behave, they are excluded. It has a real cost, and it is the
+reason the next paragraph matters — a claim needs turnout from people who have
+nothing riding on it.
+
+Beyond that: accuracy rewards pay the voters who sided with the eventual verdict,
+a pull toward expected consensus rather than an oracle. The sealed epoch keeps a
+crowd from buying into a dispute it can see. Dissent is permanent, so a court
+that votes tribally signs its own record, claim after claim. And founding a rival
+court is open to anyone, so a court that rots does not trap its topic: the record
+of which court called what, and when, tells the next reader which one earned
+authority.
 
 ## 3. The record
 
 The version of Kourt described in this paper ships in layers, and it is worth
 being exact about which layer does what. The court layer, specified above, is
 built: wordlocked claims, stakes, bonds, votes, verdicts, dissents, all
-permanent. The structure layer arranges those claims and is specified for the
+permanent.
+
+Two things in §2 are **specified and measured but not yet shipped**, and it would
+be dishonest to describe them as running. The bond is priced against the declared
+side alone today, not against the larger of the two — the correction is designed,
+its effects are measured, and it lowers the bond an answerer must post by roughly
+eight times. The bonus cap is likewise designed and verified but not landed. Both
+are recorded, with their measurements and the attacks run against them, in
+`GAMETHEORY.md`. One known gap is open and named there rather than papered over:
+the cheapest way to destroy a claim's reward is not the answer bond at all but a
+low-turnout quality vote, and that has its own decision pending. The structure layer arranges those claims and is specified for the
 release after: each claim gets one home in a tree of sections, so paths mean
 something and the same sentence cannot be filed twice in the same place, and
 anyone may add argument edges marking that one claim supports or counters
