@@ -68,7 +68,15 @@ const (
 
 // The frozen conduct-economics constants (PLAN §3.4/§3.6, v0.25–v0.31).
 const (
-	answerBondBps = int64(5000) // answer bond = 50%·X̄ (min 1), capped by params
+	// answer bond = 6%·X̄ (min 1), capped by params, and the collateralization
+	// floor in PostAnswer raises it toward 1.6× the destroyable draw — which is
+	// where the real pricing now lives. 600 = slashXBps*4/3, HARDCODED rather
+	// than derived: deriving it turns the slashXBps coupling below into `X > X`,
+	// and TestEconomicConstantsAreTheCalibratedValues is already the alarm that
+	// fires if slashXBps moves. Why not 450: at exactly slashXBps the settle
+	// refund is zero (the whole bond is retained as the slash reserve) and at 449
+	// the realm refuses to deploy; 600 returns 25% at settle and leaves margin.
+	answerBondBps = int64(600)
 	// dispute bond = min(20%·X̄, 40% × the ACTUAL answer bond), doubling per
 	// failed round (round-3 fix: keeps the round-1 honest bar at q > 1/3 on
 	// every claim, including answer-bond-capped courts).
@@ -125,7 +133,7 @@ const (
 	// bound and both floors were fixed in practice. Worse, the panel found the
 	// constant is wrong at BOTH ends. A ~500–1,000 GNOT genesis buy puts launch
 	// meta supply near 1,000 CC, where a 100 CC answerability floor is ~10% of
-	// supply and the full filing cost (stake + the 50%·X̄ bond) is ~15% — so
+	// supply and the full filing cost (stake + the worst-case bond) is ~15% — so
 	// FILING AN APPEAL COST 2–3× MORE THAN DECIDING ONE, the same
 	// incumbency-lock-by-price that mustElectionInvariants already forbids in
 	// the election lane, unguarded here. The fixed arms are therefore demoted
@@ -139,7 +147,7 @@ const (
 	// The ORDINARY pair is a tenth of it, because an ordinary court's claims are
 	// the product and the floors SUM. Stake is custodial (Stake transfers into
 	// escrow), so CC backing claim A cannot back claim B, and each answered
-	// claim locks 1.5×floor — the stake plus the 50%·X̄ bond. Aggregate demand is
+	// claim locks the stake plus the bond, worst case (1+maxBondBps/Bps)×floor. Aggregate demand is
 	// N × 1.5 × bps, a pure number independent of supply, so the fraction is
 	// what decides how many claims a court may run at once:
 	//
@@ -189,14 +197,42 @@ func mustInvariants() {
 	if metaLifetimeEmission := metaWeeklyBudget * 151; curveCap > maxSupply-metaLifetimeEmission {
 		panic("kourtv2: curveCap + meta's lifetime emission exceeds the tally-safe supply ceiling")
 	}
-	// Bond–tier coupling (§3.6): the answer bond must cover the maximum
-	// undisputed extraction, tierMid/2 of the stake, in bps.
-	if answerBondBps < tierMidX*10000/2 {
-		panic("kourtv2: answer bond below the undisputed-extraction bound")
+	// THE DRAW CAP MUST BE INERT AT THE ORDINARY TIER. crystallize.gno caps a
+	// claim's draw at answerBond0 minus the carrot, and PostAnswer's floor gives
+	// answerBond0 >= (slashDrawBps/1e4)·mg_max >= (slashDrawBps/1e4)·mg_win, so
+	// capd >= (slashDrawBps/1e4 − splitCarrot/100)·mg_win. Requiring that to cover
+	// tierMidX·mg_win is exactly slashDrawBps >= 10700 — and it is the only
+	// deploy-time certificate that the published MID rate is a promise rather than
+	// a calibration. Above MID the cap is DESIGNED to bind, which is why the bound
+	// is tierMidX and not tierHighX.
+	//
+	// NOT a leverage bound, and saying so matters. The cap already gives
+	// destroyed <= answerBond0, so L <= 1 holds at every tier without this line;
+	// justifying it as "L <= 1 at MID" would make it certify something already
+	// true, which is precisely the defect the check below had for years. Constants
+	// only, no runtime term — its premises are unconditional facts in answer.gno
+	// and crystallize.gno, not a falsifiable model. Verified by mutation in this
+	// form: it fires on slashDrawBps AND on splitCarrot.
+	//
+	// This replaces a check on answerBondBps, and note it contains no bond term at
+	// all: with the bond keyed to the destroyable draw, the thing worth certifying
+	// is the SLASH multiple, not the base.
+	if slashDrawBps < (tierMidX*100+splitCarrot)*100 {
+		panic("kourtv2: the slash multiple does not cover the mid draw plus the carrot — the draw cap would cut the published MID rate")
 	}
 	// The dispute bond's own-answer arm keeps round 1 at q > 1/3 everywhere:
-	// 2 × disputeBond ≤ 80% × answerBond ⇔ 2×min(20%, 40%×50%) ≤ 80%×50%.
-	if 2*disputeBondOfAnswerBps*answerBondBps/10000 > compOfBurnBps*answerBondBps/10000 {
+	// 2 × min(20%·X̄, 40%·A) ≤ 80%·A.
+	//
+	// THE SHARED answerBondBps FACTOR IS DROPPED, for two reasons. It cancelled,
+	// so the check was a tautology dressed as an invariant; worse, it could
+	// TRUNCATE both sides to zero and pass a real violation (at answerBondBps
+	// <= 1928 an own-answer arm of 4001 breaks the property and the old form did
+	// not fire).
+	//
+	// AND THIS LINE IS NOW LOAD-BEARING. At 5000 bps the two arms of the min TIED
+	// at 20%·X̄, so the X̄ arm shadowed this property; at 600 the ANSWER arm binds
+	// on every claim, and nothing else holds the round-1 bar at q > 1/3.
+	if 2*disputeBondOfAnswerBps > compOfBurnBps {
 		panic("kourtv2: dispute bond arm breaks the round-1 honest-dispute bar")
 	}
 	// 20%/yr ceiling honesty: 52 weeks of the weekly budget may not exceed
@@ -212,8 +248,11 @@ func mustInvariants() {
 	// CALIBRATION, NOT A SAFETY PROOF — read before trusting this (audit round 2).
 	// A check over CONSTANTS can only make a constant-space claim: on a pool
 	// roughly CONSTANT over a ≤12-week life, the draw arm k·midGross lands under
-	// the 50%·X̄ bond, i.e. PostAnswer's collateralization floor stays a NO-OP on
-	// the honest path and the quoted bond stays legible. It does NOT prove the
+	// the base bond, i.e. PostAnswer's collateralization floor would stay a NO-OP on
+	// the honest path. THAT PREMISE IS NOW DELIBERATELY FALSE — the floor binding is
+	// the design, and the check below asserts it can. Kept as history because the
+	// reasoning about what a constant-space check can and cannot claim still holds.
+	// It does NOT prove the
 	// slash is collateralized. Its premise (midGross/X̄ = rateBpsFP·T_c/1e10, with
 	// X̄ standing in for the pool) is falsified AT RUNTIME two ways: by a DRAIN —
 	// Unstake is free and keeps conviction by design (F9), measured at a 224×
@@ -224,13 +263,39 @@ func mustInvariants() {
 	maxRateBpsFP := 255 * (r0WeeklyBps*1_000_000 + budgetBpsFPStart) / 100
 	maxTcWeeks := deadClaimTimeout / periodBlocks
 	maxMidGrossBps := maxRateBpsFP * maxTcWeeks / 1_000_000
-	if slashDrawBps*maxMidGrossBps/10000 > answerBondBps {
-		panic("kourtv2: the draw arm exceeds the base bond at the hot-rate 12-week max — PostAnswer's collateralization floor would bind on HONEST claims, repricing every answer")
+	// INVERTED, deliberately, and the direction is the whole change. The floor
+	// BINDING is now the design — it is what keys the bond to the pool a wrong
+	// answer could destroy, instead of to a flat fraction of X̄. So this asserts
+	// the PREMISE still holds: that the draw arm can outgrow the base arm at all.
+	// It is a premise tripwire rather than a safety bound (it only fires above
+	// 3083 bps, so a revert to 2000 would pass it), and it is deliberately kept as
+	// the one remaining answerBondBps coupling so the constant stays greppable.
+	if slashDrawBps*maxMidGrossBps/10000 <= answerBondBps {
+		panic("kourtv2: the draw arm never reaches the base bond — the collateralization floor is inert and the max-keying prices nothing")
 	}
-	// The flat arm's twin coupling, previously unstated: the base bond covers the
-	// 4.5%·X̄ arm too, so the floor is inert on BOTH arms while the cap is unset.
-	if slashXBps > answerBondBps {
-		panic("kourtv2: the flat slash arm exceeds the base answer bond")
+	// The worst-case bond in bps of X̄. After the floor became the sizer this is
+	// the DRAW arm, not the base, so anything pricing against "the bond" must use
+	// this and not answerBondBps. Without it the supplyFloor lid below admits
+	// filing at 6.17% of supply against the 5% turnout bar — a 23.4% overshoot of
+	// the very incumbency-lock-by-price invariant it exists to hold, reachable on
+	// a small sealed court with a claim aged toward the hot 12-week extremal. At
+	// 5000 bps this was impossible because the floor never exceeded the base.
+	maxBondBps := slashDrawBps * maxMidGrossBps / 10000
+	if maxBondBps < answerBondBps {
+		maxBondBps = answerBondBps
+	}
+	// The flat arm's twin coupling: the base bond must cover the 4.5%·X̄ arm with
+	// MARGIN. The bare `slashXBps > answerBondBps` form passed at exactly 450 —
+	// which is precisely the value that zeroes the settle refund, since the whole
+	// bond is then retained as the slash reserve. The margined form is what makes
+	// 600 the enforced floor rather than a convention.
+	if slashXBps*4/3 > answerBondBps {
+		panic("kourtv2: the flat slash arm leaves the base answer bond no settle-refund margin")
+	}
+	// The deploy check and the runtime lid must price off the SAME worst case, or
+	// one of them is wrong. Pin it here rather than duplicating the arithmetic.
+	if maxAnswerBondBps() != maxBondBps {
+		panic("kourtv2: maxAnswerBondBps drifted from the deploy-time worst-case bond")
 	}
 	// META APPEALS LANE (v0.15). mustElectionInvariants has long carried this
 	// ratio gate for the election lane; the appeals lane never had one, which is
@@ -248,7 +313,7 @@ func mustInvariants() {
 		{"meta", answerXFloorBps, depositFloorBps},
 		{"ordinary", ordAnswerXFloorBps, ordDepositFloorBps},
 	} {
-		filing := l.floor * (grc20votes.Bps + answerBondBps) / grc20votes.Bps
+		filing := l.floor * (grc20votes.Bps + maxBondBps) / grc20votes.Bps
 		if filing >= quorumSupplyBps {
 			panic("kourtv2: the " + l.name + " answerability floor prices filing above winning the vote — incumbency lock by price")
 		}
@@ -603,6 +668,23 @@ func effMinDeposit(c *Court) int64 {
 //     covers the ratio arm, but no constant can see the dust arm: below ~30 CC
 //     of supply the 1 CC dust floor prices filing above the 5% turnout bar and
 //     inverts the guarantee, exactly as flagMinCC did to the election bond.
+// maxAnswerBondBps is the largest bond PostAnswer can demand, in bps of X̄ — the
+// draw arm at the hot-rate 12-week maximum, or the base arm if that is larger.
+//
+// It exists because "the bond" stopped meaning answerBondBps. PostAnswer's floor
+// raises the bond toward 1.6× the destroyable draw, so anything pricing a cost
+// against the bond must use the worst case or it under-prices by up to 5×.
+// mustInvariants pins this against its own copy of the arithmetic so the two
+// cannot drift.
+func maxAnswerBondBps() int64 {
+	maxRateBpsFP := 255 * (r0WeeklyBps*1_000_000 + budgetBpsFPStart) / 100
+	maxMidGrossBps := maxRateBpsFP * (deadClaimTimeout / periodBlocks) / 1_000_000
+	if arm := slashDrawBps * maxMidGrossBps / 10000; arm > answerBondBps {
+		return arm
+	}
+	return answerBondBps
+}
+
 func supplyFloor(c *Court, bps, dust int64) int64 {
 	// Epoch() is 1-based and epoch 0 means "before this token existed", which
 	// PastTotal refuses rather than reporting as zero. Unlike quorumFloor, this
@@ -616,14 +698,20 @@ func supplyFloor(c *Court, bps, dust int64) int64 {
 	if v < dust {
 		v = dust
 	}
-	// Filing costs (Bps+answerBondBps)/Bps × X̄; hold that STRICTLY under the 5%
-	// bar. The obvious lid — 5%·supply × Bps/(Bps+answerBondBps) — makes filing
-	// exactly EQUAL the bar at every supply, so the runtime clamp admitted the
-	// very equality mustInvariants rejects on the constants. One bps of slack
-	// restores the strict inequality, and it matters precisely where the lid
-	// binds: the low-supply case the dust arm reaches.
+	// Filing costs (Bps+bond)/Bps × X̄; hold that STRICTLY under the 5% bar. The
+	// obvious lid — 5%·supply × Bps/(Bps+bond) — makes filing exactly EQUAL the
+	// bar at every supply, so the runtime clamp admitted the very equality
+	// mustInvariants rejects on the constants. One bps of slack restores the
+	// strict inequality, and it matters precisely where the lid binds: the
+	// low-supply case the dust arm reaches.
+	//
+	// PRICED OFF THE WORST-CASE BOND, not the base. PostAnswer's floor can raise
+	// the bond to the draw arm's 3083 bps, so pricing this off answerBondBps alone
+	// admitted filing at 6.17% of supply against the 5% bar — a 23.4% overshoot of
+	// this exact invariant, on a small sealed court with an aged claim. Harmless
+	// at 5000 bps, where the floor never exceeded the base; live at 600.
 	if lid := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps) *
-		(grc20votes.Bps - 1) / (grc20votes.Bps + answerBondBps); lid > 0 && v > lid {
+		(grc20votes.Bps - 1) / (grc20votes.Bps + maxAnswerBondBps()); lid > 0 && v > lid {
 		v = lid
 	}
 	if v < 1 {

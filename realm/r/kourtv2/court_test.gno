@@ -247,7 +247,7 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 		{"splitAuthor", splitAuthor, 8, "the author's share"},
 		{"splitAnswerer", splitAnswerer, 5, "the answerer's share"},
 		{"splitCarrot", splitCarrot, 7, "policing pay's share"},
-		{"answerBondBps", answerBondBps, 5000, "the answer bond is 50% of X-bar"},
+		{"answerBondBps", answerBondBps, 600, "the answer bond BASE is 6% of X-bar = slashXBps*4/3; the collateralization floor in PostAnswer is what actually prices it, at 1.6x the destroyable draw over BOTH sides"},
 		{"disputeBondXBps", disputeBondXBps, 2000, "a dispute bond is 20% of X-bar"},
 		{"disputeBondOfAnswerBps", disputeBondOfAnswerBps, 4000, "or 40% of the answer bond, whichever is less"},
 		{"compOwnX", compOwnX, 2, "comp is capped at twice the disputer's own bond"},

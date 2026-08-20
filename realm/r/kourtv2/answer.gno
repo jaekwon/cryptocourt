@@ -13,7 +13,9 @@ package kourtv2
 const answerWindow = 3 * epochBlocks
 
 // PostAnswer posts THE answer (one per claim, first-come within the rules),
-// escrowing bond = 50%·X̄frozen (min 1, capped by court params if set).
+// escrowing bond = max(6%·X̄frozen, 1.6 × the LARGER side's frozen conviction),
+// min 1, capped by court params if set. The floor is the real sizer; the 6% base
+// is only a dust arm on claims too thin or too young for it to bite.
 func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -35,8 +37,9 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// age — and every X̄-derived bound in the system (court.gno's maxTcWeeks term,
 	// the conviction magnitudes, the escrow window) is derived for a ≤12-week
 	// life. Conviction keeps accruing on an un-closed claim, so past ~19.5 weeks
-	// (hot) the draw arm crosses the 50%·X̄ bond even on a perfectly CONSTANT
-	// pool: the calibration below would be falsified with no drain at all.
+	// (hot) the draw arm outgrows anything the base arm could cover even on a
+	// perfectly CONSTANT pool, so every %-of-X̄ bound derived for a ≤12-week life
+	// would be falsified with no drain at all.
 	if passed, known := pastDeadline(cs.openedAtTime, deadClaimSecs); (known && passed) ||
 		(!known && now >= cs.openedAt+deadClaimTimeout) {
 		panic("kourtv2: this claim is past the dead-claim timeout; it closes, it is not answered")
@@ -105,7 +108,9 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 		xbar = life
 	}
 
-	// Bond = 50%·X̄, never zero; the court's cap applies if set (0 = uncapped).
+	// The BASE arm, 6%·X̄, never zero; the court's cap applies if set (0 = uncapped).
+	// This is a floor on the floor: the collateralization floor below is what prices
+	// an answer on any claim with real conviction behind it.
 	bond := xbar * answerBondBps / 10000
 	if c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {
 		bond = c.params.answerBondCapCC
@@ -118,9 +123,11 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// drain to minAnswerX two hours before answering, and post a bond 224× smaller
 	// than the slash it had earned: caught in full, it paid ~51 CC against a
 	// 11_220 CC exposure. For a roughly constant pool the two arms both scale with
-	// X̄ and this floor is a no-op (the deploy invariant bounds the draw arm at
-	// 30.8%·X̄ < 50%·X̄ over the full 12-week life), so it binds ONLY on a pool
-	// that was drained or is otherwise mispriced by X̄. It is applied after the
+	// X̄, and the floor is now EXPECTED TO BIND on any claim carrying real
+	// conviction — the draw arm reaches 30.8%·X̄ against a 6% base, and the deploy
+	// check asserts it can (it used to assert the opposite). This paragraph
+	// previously said the floor was a no-op off the drain path; that was true at a
+	// 50% base and is now backwards. It is applied after the
 	// court cap deliberately: an uncollateralized slash is worse than an
 	// over-large bond, and the cap must not re-open the hole.
 	// Floors on the WHOLE sizer, not just the draw arm: the flat arm (4.5%·X̄)
@@ -145,8 +152,43 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// So weakening this floor does not merely restore one exploit: it makes three
 	// guards elsewhere live at once, in three files, none of which has a fixture
 	// that can reach them today. If this is ever relaxed, mutate those three first.
+	// MAX OVER BOTH SIDES, and this is the change that makes a 6% base safe.
+	//
+	// Keyed to the ANSWERED side alone, a dust answer was exempt from the floor
+	// exactly where it did the most damage: stake a token amount on one side,
+	// declare it, let 72h of silence settle, and the large opposing pool's whole
+	// draw is annihilated while the bond returns whole — priced at the flat base,
+	// because the answerer's own conviction is ~0. Measured at 11 weeks, the
+	// sniper paid 45 CC where the honest majority answerer on the same claim paid
+	// 101. Today's keying taxed the person declaring the well-funded side and
+	// exempted the one declaring dust.
+	//
+	// max() is the SAME TAX WITH THE EXEMPTION REMOVED, not a new one. For an
+	// answerer on the larger pool it is bit-identical (measured: 11 of 14 rows
+	// unchanged to the unit; the three that move are the dust snipe and the aged
+	// contrarian). An honest contrarian pays ~6× LESS than at the old 50% base.
+	//
+	// It is also what keeps the DISPUTE bond answerer-independent. That bond is
+	// min(20%·X̄, 40%·this), and at 5000 bps the X̄ arm always bound so the
+	// answerer's own sizing never showed through. At 600 the answer arm binds on
+	// every claim — so without max() a defender's price would depend on which side
+	// the attacker chose to declare (measured 1.86× apart), and with it they match.
+	//
+	// The SIZER (slashSizeFor) stays answered-keyed deliberately. It defines what
+	// the slash IS — 1.6× the answered side's forgone draw — and its risk window
+	// runs to crystallize, so the retained reserve must equal it. This max-keyed
+	// excess is an anti-snipe PREMIUM whose window is the 72h dispute, where the
+	// whole bond burns on an overturn; releasing it at settle is correct
+	// disposition, not a leak. Re-keying the sizer too would withhold 100% of the
+	// bond until crystallize on the modal path and contradict the slash's own
+	// definition.
 	convHi, convLo := cs.sideConv(verdict)
-	if floor := slashSizeAt(xbar, convHi, convLo); floor > bond {
+	floor := slashSizeAt(xbar, convHi, convLo)
+	oppHi, oppLo := cs.sideConv(oppositeSide(verdict))
+	if opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {
+		floor = opp
+	}
+	if floor > bond {
 		bond = floor
 	}
 	if bond < 1 {

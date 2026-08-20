@@ -256,11 +256,22 @@ func TestDrawCapDoesNotTouchAnOverturnedClaim(cur realm, t *testing.T) {
 	// winners 0 rather than the capped figure, so without this wait the fixture
 	// would have "passed" against the wrong zero. That is a separate open item,
 	// not this cap — the wait isolates the cap from it.
-	testing.SkipHeights(periodBlocks * 40)
-	touch(c)
-	if c.reservoirR() <= 0 {
-		t.Fatalf("precondition: the comp drought must have passed before this can "+
-			"measure the cap; reservoir is %d", c.reservoirR())
+	// `reservoirR() > 0` is NOT a sufficient precondition and that was a real bug
+	// in the first version of this fixture: reserveJunior CLAMPS want to r, so a
+	// reservoir of 1 passes a `> 0` check and still pays drawWinners = 0, and the
+	// assertion below would then be measuring the drought rather than the gate.
+	// The reservoir must cover the whole uncapped draw. Loop rather than guess a
+	// constant — the comp here is 2x the dispute bond, which scales with X̄, so a
+	// fixed wait that suffices at this court's size silently stops sufficing when
+	// anyone re-scales the fixture. (Measured while finding this: 40 periods was
+	// short at one scale, 80 sufficed.)
+	for i := 0; i < 200 && c.reservoirR() < uncapped; i++ {
+		testing.SkipHeights(periodBlocks)
+		touch(c)
+	}
+	if c.reservoirR() < uncapped {
+		t.Fatalf("precondition: the comp drought must clear the WHOLE draw before this "+
+			"can measure the cap; reservoir %d, need %d", c.reservoirR(), uncapped)
 	}
 	Crystallize(cross(cur), "dc4", id)
 

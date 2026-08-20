@@ -505,9 +505,17 @@ func TestSlashReserveDrawProportionalAtSettle(cur realm, t *testing.T) {
 	bond0 := cs.answerBond0
 	flat := cs.xBarFrozen * slashXBps / 10000
 
-	// Inject a winning-pool midGross of 0.2·X̄ (draw arm 0.32·X̄ — binds over the
-	// 0.045·X̄ floor, stays under the 0.5·X̄ bond, so no clamp).
-	cs.yesConvHi, cs.yesConvLo = convForCC(cs.xBarFrozen / 5)
+	// Inject a winning-pool midGross whose DRAW arm (1.6x) binds over the 0.045·X̄
+	// flat arm while staying under the bond, so the reserve is draw-proportional
+	// and nothing clamps.
+	//
+	// RE-SCALED with the bond base 5000 -> 600 bps. At 0.2·X̄ the draw arm was
+	// 0.32·X̄, which fitted under a 0.5·X̄ bond but now exceeds it — and the
+	// collateralization floor would raise the bond to meet it, which is a DIFFERENT
+	// case (the clamp path) than the one this fixture pins. 1/30 puts midGross at
+	// 0.0333·X̄, draw arm 0.0533·X̄: above the 0.045 flat arm, below the 0.06 base.
+	// The window is (0.028125, 0.0375)·X̄ and the two guards below enforce both ends.
+	cs.yesConvHi, cs.yesConvLo = convForCC(cs.xBarFrozen / 30)
 	want := slashSizeFor(cs)
 	if want <= flat {
 		t.Fatalf("draw arm must bind: want %d flat %d", want, flat)

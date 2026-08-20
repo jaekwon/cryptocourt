@@ -295,9 +295,16 @@ func TestAnswerBondCapBindsWhenTheFloorIsBelowIt(cur realm, t *testing.T) {
 	// replaced the dust arm at the first epoch seal.
 	matureOI(cur, "acap", id, alice, 350_000_000)
 
-	// A cap ABOVE the flat slash floor (4.5%·X̄) and BELOW the uncapped bond (50%·X̄),
-	// so the cap is the binding constraint and the floor is not.
-	c.params.answerBondCapCC = 50_000_000
+	// A cap ABOVE the flat slash floor (4.5%·X̄) and BELOW the uncapped bond, so the
+	// cap is the binding constraint and the floor is not.
+	//
+	// RE-SCALED with the bond base 5000 -> 600 bps. The window was (4.5%, 50%)·X̄ —
+	// 11.1x wide, so 50_000_000 sat comfortably inside it. It is now (4.5%, 6%)·X̄ =
+	// (31.5, 42) CC at this fixture's X̄ of 700 CC, only 1.33x wide. **That narrowness
+	// is the thing to know before touching this fixture's stake sizes:** a tweak to
+	// matureOI's amount that moves X̄ by more than a third silently pushes the cap out
+	// of the window, and the guard below is what will tell you.
+	c.params.answerBondCapCC = 36_000_000
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "acap", id, sideYES)
 
@@ -312,5 +319,80 @@ func TestAnswerBondCapBindsWhenTheFloorIsBelowIt(cur realm, t *testing.T) {
 	if cs.answerBond != c.params.answerBondCapCC {
 		t.Fatalf("the court cap must bind: bond=%d cap=%d (uncapped would be %d)",
 			cs.answerBond, c.params.answerBondCapCC, uncapped)
+	}
+}
+
+// THE FLOOR IS KEYED TO BOTH SIDES, AND THIS IS THE ONLY FIXTURE THAT CAN SEE IT.
+//
+// The snipe this prices leaves no on-chain trace: the sniper's own claim mints
+// almost nothing, so there is no draw to measure and nothing for the draw cap to
+// cut. What a wrong keying destroys is the VICTIM'S COUNTERFACTUAL — the draw the
+// claim would have paid had it been answered honestly — and a counterfactual
+// cannot be asserted. The bond is the only observable proxy, which is why this
+// fixture asserts a bond and not a payout.
+//
+// Concretely it is what stops the bond base dropping to 6% while the floor still
+// keys on the answered side. In that half-landed state a dust answer against a
+// large aged pool posts the flat base and annihilates the pool's whole draw:
+// destruction leverage 3.44 at MID, 5.14 at HIGH, against 0.669/1.000 when keyed
+// to both sides. The whole suite is green in that state — measured, byte-identical
+// to the complete one — so without this fixture the two halves can be split and
+// nothing objects.
+func TestAnswerBondFloorIsKeyedToBothSides(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bk-alice")
+	bob := testutils.TestAddress("bk-bob")
+	c := testCourt(cur, "bk", alice, 50_000_000_000)
+	c.coin.Mint(bob, 20_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "bk", "The floor must price the pool it could destroy")
+	// The aged, well-funded pool goes on NO and accrues first; alice then declares
+	// YES with dust behind it. Order matters — conviction is capital x TIME, so a
+	// pool staked after the clock moves carries none of it.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "bk", id, sideNO, 4_000_000_000)
+	// AGE IT. The floor only outgrows the 6% base once 1.6x the pool's conviction
+	// exceeds it, i.e. once mg/X̄ > 3.75% — and conviction is capital x TIME, so at
+	// this court's cold rate of 63.75 bps/week that takes ~6 weeks. Eight weeks
+	// leaves margin. Measured without the wait: oppFloor 180_090_000 against a base
+	// of 240_120_000, and the precondition below correctly refused to pretend the
+	// keying was observable.
+	testing.SkipHeights(epochBlocks * 24 * 7 * 8)
+	matureOI(cur, "bk", id, alice, 1_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "bk", id, sideYES)
+
+	cs := mustClaim(c, id)
+	base := cs.xBarFrozen * answerBondBps / 10000
+	ownHi, ownLo := cs.sideConv(int(cs.answer))
+	oppHi, oppLo := cs.sideConv(oppositeSide(int(cs.answer)))
+	ownFloor := slashSizeAt(cs.xBarFrozen, ownHi, ownLo)
+	oppFloor := slashSizeAt(cs.xBarFrozen, oppHi, oppLo)
+
+	// PRECONDITIONS. Both are required or the assertion is vacuous: the two keyings
+	// must actually disagree, and the opposing arm must actually be the binding one.
+	// At the old 5000 bps base this fixture FAILS here rather than passing quietly —
+	// the base dwarfs both arms, so no keying is observable and the fixture says so.
+	if oppFloor <= base {
+		t.Fatalf("precondition: the opposing-side floor must BIND for the keying to be "+
+			"observable at all; oppFloor=%d base=%d. At a high bond base neither keying "+
+			"shows through — this fixture only has teeth once the base is small.",
+			oppFloor, base)
+	}
+	if ownFloor >= oppFloor {
+		t.Fatalf("precondition: this fixture needs the answered side to be the SMALLER "+
+			"pool, or both keyings agree; ownFloor=%d oppFloor=%d", ownFloor, oppFloor)
+	}
+
+	// THE ASSERTION. Keyed to both sides the sniper pays for the pool they could
+	// destroy; keyed to the answered side they pay the flat base.
+	if cs.answerBond0 != oppFloor {
+		t.Fatalf("the bond must be keyed to the LARGER side's destroyable draw: "+
+			"bond0=%d, opposing floor=%d, answered-side floor=%d, base=%d.\n"+
+			"If bond0 equals the base or the answered-side floor, the floor is still "+
+			"keyed to cs.sideConv(verdict) alone while the bond base has already been "+
+			"cut — the half-landed state, in which a dust answer destroys this pool's "+
+			"whole draw for the price of the base.",
+			cs.answerBond0, oppFloor, ownFloor, base)
 	}
 }

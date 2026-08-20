@@ -815,22 +815,22 @@
     "pkg": "kourtv2",
     "file": "answer.gno",
     "label": "COLLATERALIZATION FLOOR removed (drained mill posts 224x less)",
-    "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {\n\t\tbond = floor\n\t}",
-    "replace": "\tconvHi, convLo := cs.sideConv(verdict)\n\t_, _ = convHi, convLo"
+    "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tfloor := slashSizeAt(xbar, convHi, convLo)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {\n\t\tfloor = opp\n\t}\n\tif floor > bond {\n\t\tbond = floor\n\t}",
+    "replace": ""
   },
   {
     "pkg": "kourtv2",
     "file": "answer.gno",
-    "label": "FLOOR applied BEFORE the cap (cap re-opens the hole)",
-    "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {\n\t\tbond = floor\n\t}\n\tif bond < 1 {",
-    "replace": "\tconvHi, convLo := cs.sideConv(verdict)\n\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {\n\t\tbond = floor\n\t}\n\tif c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {\n\t\tbond = c.params.answerBondCapCC\n\t}\n\tif bond < 1 {"
+    "label": "COURT CAP moved after the floor (cap re-opens the hole)",
+    "find": "\tif c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {\n\t\tbond = c.params.answerBondCapCC\n\t}",
+    "replace": "\t_ = c.params.answerBondCapCC"
   },
   {
     "pkg": "kourtv2",
     "file": "answer.gno",
     "label": "FLOOR covers only the draw arm, not the flat arm",
-    "find": "\tif floor := slashSizeAt(xbar, convHi, convLo); floor > bond {",
-    "replace": "\tif floor := mulDiv128(convToCC(convHi, convLo), slashDrawBps, 10000); floor > bond {"
+    "find": "\tfloor := slashSizeAt(xbar, convHi, convLo)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {",
+    "replace": "\tfloor := mulDiv128(convToCC(convHi, convLo), slashDrawBps, 10000)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := mulDiv128(convToCC(oppHi, oppLo), slashDrawBps, 10000); opp > floor {"
   },
   {
     "pkg": "kourtv2",
@@ -2985,9 +2985,9 @@
   {
     "pkg": "kourtv2",
     "file": "court.gno",
-    "label": "CONST answerBondBps halved (50%·X-bar -> 25%)",
-    "find": "\tanswerBondBps = int64(5000)",
-    "replace": "\tanswerBondBps = int64(2500)"
+    "label": "CONST answerBondBps halved (6%·X-bar -> 3%)",
+    "find": "\tanswerBondBps = int64(600)",
+    "replace": "\tanswerBondBps = int64(300)"
   },
   {
     "pkg": "kourtv2",
