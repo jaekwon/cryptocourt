@@ -225,3 +225,69 @@ takes (b). [SETTLED as to history]
   adjudicated correctness). MSB/ICO-seller-of-own-CVC characterization of the
   one-way curve: FinCEN 2019 guidance could not be fetched [verify] — counsel
   checkbox added to PLAN §7.5.
+
+### 2026-08-20 — CLARITY Act, web pass. Status, the two definitions that could fit, and the finding that cuts the other way.
+
+**Status [SETTLED as reported, moving fast — re-pull before relying].** Senate Banking advanced
+the Digital Asset Market Clarity Act **15–9 on 2026-05-14**. Cloture motion on the motion to
+proceed filed **2026-08-08**; procedural vote (60 votes needed) scheduled **2026-09-15**. **Not
+law.** Still requires reconciliation with Senate Agriculture's *Digital Commodity Intermediaries
+Act* **and then** with the House's H.R. 3633. So there are three texts in play, not one.
+
+**The two definitions that could plausibly fit a court coin [UNTESTED — this is our reading, not
+anyone's ruling]:**
+
+- **"Network token"** — *a digital commodity intrinsically linked to a distributed ledger system,
+  deriving or reasonably expected to derive its value from the use of that system.* **Network
+  tokens are not securities**, with a *rebuttable presumption* that a network token is an
+  ancillary asset unless the originator certifies otherwise. A court coin's value derives entirely
+  from using that court — staking, voting, answering. That is about as intrinsically-linked as the
+  definition gets.
+- **"Ancillary asset"** — a token that grants **no debt or equity claim, no dividends or interest,
+  and no liquidation rights.** Court coins grant none of the three. Emission is a participation
+  reward, not a dividend, which is the distinction that matters here.
+
+**Two problems with claiming that fit, both ours to resolve:**
+
+1. **"Mature blockchain system" requires that no person or group control the system, explicitly
+   including holding ≥20% of the tokens** (plus: functional, open-source, pre-established
+   transparent rules). **A young court routinely has a founder or first buyer above 20%.** So
+   per-court maturity is not automatic and may never arrive on a small court.
+2. **Is the relevant "system" the court, or gno.land?** Kourt runs *on* a chain it does not own.
+   If the unit of analysis is the chain, maturity is inherited and the 20% test is irrelevant to
+   us; if it is the court, most courts fail it. **Genuinely ambiguous, and it decides whether the
+   network-token route is available at all. Counsel question.**
+
+**THE FINDING THAT CUTS THE OTHER WAY, and it is the important one [CONTESTED — actively
+litigated]:** the CEA-preempts-state-gambling question that escape (a) depends on is **being
+fought right now, and the direction of travel is against event contracts.**
+
+- **Courts are split.** A federal appellate court held the CEA **preempts** state gambling law for
+  sports event contracts on CFTC-licensed DCMs; **E.D. Wis. denied** the CFTC a preliminary
+  injunction against state enforcement. DOJ and CFTC have sued the governors of **Illinois,
+  Connecticut and Arizona** simultaneously.
+- **There is active legislative pressure to close escape (a) for anything resembling an event
+  contract.** The **Prediction Markets Are Gambling Act** (Curtis R-UT / Schiff D-CA,
+  **2026-03-23**) would amend the CEA to reclassify sports and casino-style event contracts as
+  gambling **outside CFTC jurisdiction**. Tribal gaming regulators and senators are separately
+  pushing to amend CLARITY itself to the same end, and Indian Gaming leaders are urging a **No**
+  vote on CLARITY.
+
+> **Consequence for us, and it vindicates the design rather than relaxing it.** §1's escape (a) —
+> CEA preemption via CFTC registration — is the route kourt did **not** take, and it is the one
+> under active attack from a well-organised constituency. Escape **(b)**, remove the wager
+> substance, is therefore *more* valuable than when §1 was written, not less.
+>
+> **So every constraint this project has been honouring gets firmer, not looser: principal returns
+> 1×, the prize is minted, no loser-pays anywhere.** Anything that makes a claim look more like a
+> bilateral event contract now walks toward a fight the CFTC is losing in at least one circuit,
+> and toward a statutory carve-out aimed squarely at it.
+
+**Net:** CLARITY is a securities/commodities market-structure bill. It may help the **token**
+classification (network token / ancillary asset — worth pursuing, with the two problems above). It
+does **nothing** for the gambling axis, and the surrounding fight is making that axis **worse**.
+**No design change is indicated by CLARITY; the case for the existing conservatism is stronger.**
+
+**Re-pull triggers:** the 2026-09-15 cloture vote; whether a prediction-markets carve-out lands in
+any of the three texts; whether "network token" survives reconciliation with Senate Ag; the split
+on CEA preemption reaching the Supreme Court.
