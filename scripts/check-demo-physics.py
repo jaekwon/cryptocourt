@@ -283,11 +283,25 @@ def _rel_to_now(body, now):
 
 
 def check_quorum_floor(region, bad):
-    """quorumFloor is a max() whose 5%-of-supply arm is a hard lower bound.
+    """The demo's quorum floors, checked against what quorumFloor can produce.
 
-    The full formula also takes min(xBarFrozen, votable/3), neither of which the
-    demo states — so only the bound is checkable, and that is the arm the demo's
-    own comment says is binding here.
+    STALE SINCE S1, AND DELIBERATELY LEFT PASSING. quorumFloor used to max()
+    against 5% of supply, and that arm was a hard LOWER bound this function
+    asserted. S1 deleted it: the bar is now max(1, min(xBarFrozen, votable/3)),
+    keyed to the claim rather than to the court, because a supply-keyed bar was
+    unreachable on any claim smaller than 5% of supply and an unreachable quorum
+    hands the verdict to the party it exists to police.
+
+    So the shipped demo literals — both exactly 5% of their courts' supplies — are
+    now values the realm would not produce for those claims. They are still legal
+    (the bar can be anything up to votable/3) so nothing here fails, but the
+    5%-of-supply reasoning below no longer describes the verdict lane. It still
+    describes the two bars that KEPT the anchor: qualityBars' full bar and
+    credWeightFloor.
+
+    Lowering the demo numbers to what the realm now produces would make this
+    function fail, so the demo dataset and this check must move together. web/ is
+    the other session's; recorded in TODOs.md rather than changed here.
     """
     bps = realm_const("quorumSupplyBps", "dispute.gno")
     supply = {slug: num(body, "supply") for slug, body in courts(region)}

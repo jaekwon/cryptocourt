@@ -29,8 +29,10 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	if cs.verdictAt == 0 {
 		panic("kourtv2: no final verdict yet")
 	}
-	if cs.provClose || cs.closed {
-		panic("kourtv2: closed claims have no draw")
+	// S3: provClose now DRAWS. Only a dead claim has no draw — it has no answer, no
+	// provisional and therefore no winning side to pay.
+	if cs.closed {
+		panic("kourtv2: dead claims have no draw")
 	}
 	if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {
 		panic("kourtv2: a quality question is still open")

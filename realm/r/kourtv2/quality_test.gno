@@ -2236,14 +2236,25 @@ func TestOpenFlagRefusesEveryClosedState(cur realm, t *testing.T) {
 	})
 	cs.crystallized = false
 
-	// provClose and closed share ONE message and are SEPARATE fields, so both are
-	// exercised: a message assertion cannot tell which of them spoke.
+	// RE-DERIVED (S3), and INVERTED rather than deleted. provClose used to share this
+	// message with `closed`; it now must NOT refuse, because keeping the lane shut on
+	// a provClosed claim was purchasable immunity — a sybil of the answerer could run
+	// the failed-round ladder for ~8.4%·X̄ and walk away with a full MID draw that no
+	// quality bloc could ever reach. Asserted positively so removing the change is
+	// caught, not just renamed.
 	cs.provClose = true
 	testing.SetRealm(testing.NewUserRealm(bob))
-	uassert.AbortsContains(t, cur, "there is no quality to vote", func() {
-		OpenFlag(cross(cur), "qshut", id)
-	})
+	OpenFlag(cross(cur), "qshut", id)
+	if !cs.flagOpen {
+		t.Fatal("a provClosed claim's quality must still be flaggable: it now DRAWS, " +
+			"so shutting the lane would sell immunity with the draw attached")
+	}
+	// Restore: the arms below read one refusal at a time, and an open flag would
+	// answer for the guard being tested rather than the state being set.
+	voidFlag(c, cs)
 	cs.provClose = false
+	// `closed` keeps the message on its own — a dead claim has no answer, no
+	// provisional and no winning side, so there is genuinely no quality question.
 	cs.closed = true
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "there is no quality to vote", func() {

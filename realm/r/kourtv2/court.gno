@@ -373,6 +373,22 @@ func (p Params) mustSane() Params {
 	if p.escrowMinBlocks < 1 || p.escrowMaxBlocks < p.escrowMinBlocks {
 		panic("kourtv2: the escrow window is malformed")
 	}
+	// A DEFAULTED VERDICT'S LADDER MUST FIT. ResolveDispute floors the reopen window
+	// at ladderWindow when the standing verdict is a quorum-less default, and that
+	// floor is applied with a max() — so it OVERRIDES escrowMaxBlocks, and a ceiling
+	// below it would be silently ignored rather than respected. Checking the ceiling
+	// is what gives this a firing input at all: the obvious form, comparing against
+	// votingBlocks*(maxFailedRounds-2), is UNSATISFIABLE, since ladderWindow exceeds
+	// that by construction for every graceBlocks >= 1 — swept over 1.8M legal param
+	// sets and it fires only at maxFailedRounds = 0.
+	//
+	// mustSane rather than mustInvariants, and for a sharper reason than "these are
+	// all params": maxFailedRounds is a package CONSTANT, so the relation is two
+	// params against a constant. mustInvariants sees only constants and no
+	// params-only gate existed, which is exactly why neither saw this coupling.
+	if ladderWindow(p) > p.escrowMaxBlocks {
+		panic("kourtv2: the escrow ceiling cannot fit the failed-round ladder a defaulted verdict must walk")
+	}
 	if p.answerBondCapCC < 0 {
 		panic("kourtv2: answerBondCapCC must be non-negative")
 	}

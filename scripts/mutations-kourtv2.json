@@ -157,8 +157,8 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "Finalize clobbers a conclusive tier",
-    "find": "\tif !cs.tierFinal && !cs.slotConsumed {",
-    "replace": "\tif !cs.tierFinal {"
+    "find": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal && !cs.slotConsumed {",
+    "replace": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal {"
   },
   {
     "pkg": "kourtv2",
@@ -290,7 +290,7 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "M2-1: credEligible needs no adversarial weight",
-    "find": "\t\tif yes >= floor/4 {",
+    "find": "\t\tif yes >= credWeightFloor(c, cs.proposalID)/4 {",
     "replace": "\t\tif true {"
   },
   {
@@ -2264,8 +2264,8 @@
     "pkg": "kourtv2",
     "file": "session.gno",
     "label": "SettleUndisputed: a consumed slot's low is reset to mid (audit_slash_v040 LOW)",
-    "find": "\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
-    "replace": "\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
+    "find": "\t// emission on a claim the crowd conclusively voted junk (audit_slash_v040 LOW).\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
+    "replace": "\t// emission on a claim the crowd conclusively voted junk (audit_slash_v040 LOW).\n\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
   },
   {
     "pkg": "kourtv2",
@@ -2348,8 +2348,8 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "Finalize: a consumed slot's low is reset to mid",
-    "find": "\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
-    "replace": "\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
+    "find": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
+    "replace": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
   },
   {
     "pkg": "kourtv2",
@@ -2459,16 +2459,16 @@
   {
     "pkg": "kourtv2",
     "file": "dispute.gno",
-    "label": "provCloseClaim: the tier is not finalized",
-    "find": "\tcs.tierFinal = true\n\tif cs.answerBond > 0 {",
-    "replace": "\tif cs.answerBond > 0 {"
+    "label": "provCloseClaim: tierFinal latched before the guard (self-blocking, pays 0 forever)",
+    "find": "\t// recorded as unmutatable rather than papered over.)\n\tif !cs.tierFinal && !cs.slotConsumed {",
+    "replace": "\tcs.tierFinal = true\n\tif !cs.tierFinal && !cs.slotConsumed {"
   },
   {
     "pkg": "kourtv2",
     "file": "dispute.gno",
-    "label": "provCloseClaim: a closed claim is left at the MID tier",
-    "find": "\tcs.tier = tierLowX",
-    "replace": "\tcs.tier = tierMidX"
+    "label": "provCloseClaim: an undecided close is forced back to the LOW tier",
+    "find": "\t// recorded as unmutatable rather than papered over.)\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
+    "replace": "\t// recorded as unmutatable rather than papered over.)\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierLowX\n\t}"
   },
   {
     "pkg": "kourtv2",

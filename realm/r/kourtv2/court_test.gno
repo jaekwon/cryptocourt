@@ -197,9 +197,24 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 	p = defaultParams()
 	p.escrowMaxBlocks = p.escrowMinBlocks - 1
 	mustPanicWith("escrow window is malformed", func() { p.mustSane() })
-	// Equal is allowed: a fixed-length window is legitimate (several fixtures set it).
+	// Equal is still allowed — a fixed-length window is legitimate — but it must be
+	// LONG enough for a defaulted verdict's failed-round ladder, which is what the
+	// S2 invariant adds. At the default 120_960 it is not: that is exactly one
+	// votingBlocks, and the ladder needs ladderWindow. So the fixture now pins both
+	// directions rather than just the equality.
 	p = defaultParams()
-	p.escrowMaxBlocks = p.escrowMinBlocks
+	p.escrowMinBlocks, p.escrowMaxBlocks = ladderWindow(p), ladderWindow(p)
+	_ = p.mustSane()
+	// One block short of the ladder is refused, at the ceiling.
+	p = defaultParams()
+	p.escrowMinBlocks, p.escrowMaxBlocks = ladderWindow(p)-1, ladderWindow(p)-1
+	mustPanicWith("cannot fit the failed-round ladder", func() { p.mustSane() })
+	// And the shipped defaults clear it with room.
+	p = defaultParams()
+	if ladderWindow(p) > p.escrowMaxBlocks {
+		t.Fatalf("the defaults must fit the ladder: ladderWindow=%d escrowMax=%d",
+			ladderWindow(p), p.escrowMaxBlocks)
+	}
 	_ = p.mustSane()
 
 	// A negative cap would read as "uncapped" through the `> 0` test at PostAnswer.

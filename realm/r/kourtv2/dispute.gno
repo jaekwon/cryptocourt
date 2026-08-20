@@ -318,7 +318,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// has no adversarial weight unless the farmer HOLDS and votes ~1.25%
 		// of court supply against their own claim (the v0.28 pricing:
 		// supply-absolute prizes demand supply-absolute weight).
-		if yes >= floor/4 {
+		if yes >= credWeightFloor(c, cs.proposalID)/4 {
 			cs.credEligible = true
 		}
 		cs.provisional = cs.answer
@@ -344,8 +344,40 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 	// The escrow clock is set ONCE, at the first resolution, and never
 	// recomputed — a reopen does not reset it (V1 §3.6).
 	if firstResolution && !cs.provClose {
-		cs.escrowUntil = heightNow() + escrowWindow(c, cs)
-		cs.escrowUntilAt = nowTime() + blocksToSecs(escrowWindow(c, cs))
+		w := escrowWindow(c, cs)
+		// S2 — A QUORUM-LESS VERDICT MUST NOT FINALIZE BY APATHY.
+		//
+		// votingBlocks and escrowMinBlocks are the same number, and escrowWindow
+		// returns the floor whenever extraDays rounds to zero — so round 3 could not
+		// open, failedRounds capped at 2 against a maxFailedRounds of 3, and
+		// provCloseClaim was unreachable on any court without a curve price. Meanwhile
+		// the FIRST failed round has already written provisional = answer. So apathy
+		// resolved the claim in the liar's favour: the outcome the failed-quorum
+		// branch's own comment forbids. Three shipped fixtures widen this window
+		// in-test to reach provClose, one of them naming the bug.
+		//
+		// Floored ONLY when the standing verdict is a quorum-less DEFAULT. A decided
+		// first round keeps today's window bit-identically — raising escrowMinBlocks
+		// globally instead would tax an honest DISPUTED claim from 14 to 21 days of
+		// frozen winning-side principal, which is the objection used to reject a
+		// longer settle window, and it would double the reopen grind chain.
+		//
+		// BOTH ARMS. The gates read escrowUntilAt whenever the stamp exists, so
+		// flooring only the height arm leaves the bug fully live. Computing w once is
+		// also what stops the two stamps drifting apart.
+		//
+		// KNOWN AND NOT CLOSED: an abstain-only round with quorum met is not a FAILED
+		// round — it upholds — so one free abstain from a non-participant keeps
+		// failedRounds at zero and denies this floor for the claim's whole life. That
+		// costs the abstainer nothing. So this defeats APATHY, not an active adversary,
+		// and it is strictly better than today either way.
+		if cs.failedRounds > 0 {
+			if lw := ladderWindow(c.params); lw > w {
+				w = lw
+			}
+		}
+		cs.escrowUntil = heightNow() + w
+		cs.escrowUntilAt = nowTime() + blocksToSecs(w)
 	}
 	cs.disputeOpen = false
 }
@@ -388,8 +420,30 @@ func provCloseClaim(c *Court, cs *claimState) {
 	cs.verdictAt = heightNow()
 	cs.verdictAtTime = nowTime()
 	cs.route = "closed"
-	cs.tier = tierLowX
-	cs.tierFinal = true
+	// S3 — A CLAIM THAT ENDS UNDECIDED STILL PAYS.
+	//
+	// This used to set tierLowX and latch tierFinal, which contradicted the line
+	// immediately below: the deposit and fee are refunded precisely BECAUSE a
+	// provClose is not a conclusive low. Three failed quorums mean the electorate
+	// never ruled on the claim's worth — nobody was found at fault — so treating it
+	// as junk for the draw while treating it as sound for the deposit was incoherent
+	// in the same function. Measured, it turned a claim that pays 19,584 into one
+	// that pays 0.
+	//
+	// tierFinal MUST NOT be latched here, and this is the subtle part: latching it
+	// before the guard makes the guard SELF-BLOCKING, and the claim then pays 0
+	// forever — the very defect this replaces, reintroduced by the replacement.
+	//
+	// The guard is the same one the other two terminal paths use, so an adjudicated
+	// low is never clobbered. Both clauses are needed: a slash-grade low whose
+	// counter window is still open leaves slotConsumed set while tierFinal is not,
+	// and that is the only state where they differ. (Dropping !tierFinal alone
+	// SURVIVES mutation, because tierFinal implies slotConsumed at every
+	// pre-terminal writer — kept for symmetry with the other terminal paths, and
+	// recorded as unmutatable rather than papered over.)
+	if !cs.tierFinal && !cs.slotConsumed {
+		cs.tier = tierMidX
+	}
 	if cs.answerBond > 0 {
 		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
 		cs.answerBond = 0
@@ -577,36 +631,44 @@ func quorumFloor(c *Court, xbar int64) int64 {
 	if third := votable / 3; third < floor {
 		floor = third
 	}
-	if fivePct := mulDiv128(supply, quorumSupplyBps, grc20votes.Bps); fivePct > floor {
-		floor = fivePct
-	}
-	// THE CLAMP THIS FUNCTION ALREADY IMPLIED AND THEN THREW AWAY (v0.29, three
-	// reviewers, 2/3 preferring this over netting and the third naming it as its
-	// own fallback).
+	// THE SUPPLY ARM AND ITS CLAMP ARE GONE (S1). Both were identities under the
+	// only condition worth keeping, and together they handed small claims to the
+	// party the bar exists to police.
 	//
-	// The X̄ arm above is clamped to votable/3 — this function's own statement of
-	// how high a turnout bar may go and still be decidable. The 5% arm then
-	// max()es past that ceiling. And 5%·supply exceeds votable/3 exactly when
-	// escrow passes 85% of supply, so the supply arm breaks the reachability rule
-	// in precisely, and only, the regime where the lane is already dying. Above
-	// 95% the bar exceeds ALL votable weight and no set of votes can clear it.
+	// The bar was max()ed against 5% of court SUPPLY while the prize a claim pays is
+	// denominated in that claim's own STAKE. Below X̄ = 5%·supply no turnout
+	// proportional to the claim could clear it — 6.6x short at 1% of supply — and an
+	// unreachable quorum does not mean "no verdict": the failed-quorum branch leaves
+	// provisional = answer, burns half the disputer's bond, and returns the answer
+	// bond whole. So non-satisfaction was a WIN for the answerer, and raising the bar
+	// could not make that safer.
 	//
-	// Totalling the clamp is BIT-IDENTICAL for every court under 85% escrow, so
-	// it weakens nothing in the normal range; above it, "a third of the float"
-	// replaces "impossible". Netting the 5% arm instead would have divided the bar
-	// by (1−E) at EVERY level — 20× at 95% escrow — buying nothing at 50% where
-	// the bar was already fine.
+	// Deleted rather than gated: under the gate that keeps them honest
+	// (xbar >= fivePct) both blocks are provable identities — the arm can only bite
+	// when 5%·supply exceeds votable/3, and the clamp then restores votable/3, which
+	// min(X̄, votable/3) already equalled. Verified analytically and measured over
+	// 3.9M rows including an exhaustive sweep of [0,120]^3: zero divergences. Gating
+	// them would have left two unreachable blocks and a page of prose describing
+	// behaviour that no longer runs.
 	//
-	// Why this matters more than it looks: an unreachable quorum does NOT mean
-	// "no verdict". The failed-quorum branch leaves cs.provisional = cs.answer,
-	// burns half the disputer's bond, and returns the answer bond whole. So the
-	// bar hands the decision to the party it exists to police, and challenging
-	// costs ~70%·X̄ across three doubling rounds to deny a draw worth ≤31%. A bar
-	// whose non-satisfaction means the policed party wins cannot be made safer by
-	// raising it.
-	if third := votable / 3; floor > third {
-		floor = third
-	}
+	// WHAT THIS DOES NOT DO, because the honest framing matters: it does not let the
+	// robbed pool defend itself. VoteDispute refuses any address with a staker row on
+	// either side, there is no stakers.Remove anywhere in this realm, and a staker who
+	// withdraws in full before the answer still carries the row — measured, a pool
+	// holding 5x the floor was refused at the door. This lowers a bar only
+	// NON-PARTICIPANTS can clear. What it buys is that a verdict becomes reachable at
+	// all, by third parties, instead of defaulting to the answer.
+	//
+	// And it is symmetric: it drops the price of deciding an arbitrary small claim's
+	// verdict from 5% of supply to the answerability floor's 0.10%, so the same
+	// relaxation makes a malicious overturn reachable by those same third parties —
+	// measured at −4.80 CC to +19.20 CC, and SIMULTANEOUS across every concurrently
+	// open claim, since voting consumes no weight. That trade is accepted because the
+	// snipe it fixes is currently FREE while a false overturn costs a bond.
+	//
+	// The 5%-of-supply anchor is KEPT where it is still the right denominator: the
+	// quality lane's full bar, the election floor, and credWeightFloor below. Note
+	// check-demo-physics reads quorumSupplyBps out of this file BY NAME.
 	// LAST, deliberately: governor.ProposeWithQuorum refuses a non-positive
 	// floor, and a fully-escrowed court has votable == 0.
 	if floor < 1 {
@@ -682,4 +744,39 @@ func Reopenable(courtSlug string, claimID uint64) bool {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	return cs.provisional >= 0 && cs.verdictAt == 0 && !cs.disputeOpen &&
 		heightNow() < cs.escrowUntil
+}
+
+// ladderWindow is the window a DEFAULTED verdict needs so the failed-round ladder
+// can actually be walked: one votingBlocks per round after the first, plus a
+// resolution-latency allowance per round, plus one block.
+//
+// THE GRACE TERM IS A LATENCY BUDGET, NOT CONSERVATISM — do not "simplify" it away.
+// ResolveDispute is permissionless and escrowUntil is stamped once, so every block
+// between a vote closing and somebody cranking it is spent out of this window.
+// Measured: a round-2 resolution 34,559 blocks late still reaches provClose, and
+// 34,560 does not. At the bare arithmetic minimum that budget is ZERO — the ladder
+// would require a resolver in the closing block of every single round.
+func ladderWindow(p Params) int64 {
+	return (maxFailedRounds-2)*p.votingBlocks + (maxFailedRounds-1)*p.graceBlocks + 1
+}
+
+// credWeightFloor is the CREDENTIAL bar's own anchor: 5% of the court supply that
+// was actually engaged by this tally.
+//
+// It keeps the 5%-of-supply price the quorum floor is giving up, because the
+// credential prices a CAREER and must not become forgeable just because one claim's
+// bar fell. Without it the bar would follow the claim (X̄/4), a cut of 5% divided by
+// the claim's share of supply — 50x at the answerability floor — and two socks
+// totalling 1.125% of supply would mint a record.
+//
+// THE EPOCH IS THE PROPOSAL'S, and that is the whole point of routing through
+// Snapshot. The numerator `yes` was weighed at the proposal's snapshot epoch; reading
+// supply at resolve instead reads it ~168 epochs later, so the bar would move under a
+// frozen tally and anyone could mint inside the voting window to strip an honest
+// contested uphold of its credit — measured 2.43x skew. It cuts both ways: burns
+// during the window would LOWER the bar, and ResolveDispute is permissionless, so a
+// farmer would pick the block.
+func credWeightFloor(c *Court, pid int64) int64 {
+	engaged, _ := c.gov.Snapshot(pid)
+	return mulDiv128(engaged, quorumSupplyBps, grc20votes.Bps)
 }

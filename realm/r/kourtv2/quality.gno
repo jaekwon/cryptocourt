@@ -79,7 +79,14 @@ func OpenFlag(cur realm, courtSlug string, claimID uint64) {
 	if cs.crystallized {
 		panic("kourtv2: quality is settled; the draw has crystallized")
 	}
-	if cs.provClose || cs.closed {
+	// S3: the provClose arm is GONE, and dropping it is a net gain rather than a
+	// cost. Keeping the lane shut was purchasable immunity: measured, a sybil of the
+	// answerer runs the failed-round ladder back to back for 8.4%·X̄, a full-bar
+	// quality bloc is refused a window at every height, and the claim then
+	// crystallizes at a full MID draw with slotConsumed never set — the shape v0.47
+	// and v0.50 each closed. Open, the lane can only return a provClosed claim's
+	// draw to the zero it already was, so the exposure is inherited, not created.
+	if cs.closed {
 		panic("kourtv2: this claim closed without a draw; there is no quality to vote")
 	}
 	if cs.disputeOpen {
