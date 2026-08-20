@@ -993,3 +993,137 @@ at the MID tier` — was **a mutation-tested lock on the very defect S3 fixes**,
 **S3 before S2** — not because S2 creates the population, but because **provClose is live today**
 (§10.3), so S2 does not create it at all. The `mustSane` churn belongs with S2; **S3 alone touches
 no params.**
+
+---
+
+## 11. VET ROUND 3 (S1 + S2) — converges with round 2 on the invariant, **contradicts it on one number**
+
+3,894,041-row sweep, 19 mutations (S1 8/8, S2 11/11), 0 survivors, 0 invalid builds, all 13
+Python guards green on baseline / S1 / S1+S2.
+
+### 11.1 CONVERGED, independently: my `mustSane` invariant is dead code
+
+Both vets reached this separately and landed on **the same replacement**. Analytically
+`ladderWindow(p) > (M−2)·votingBlocks` for every `p` clearing `graceBlocks ≥ 1`, so §8's panic is
+unsatisfiable — swept **1,845,616 legal param sets** across `maxFailedRounds` 0..7 and it fires only
+at 0. Mutation-tested in final form: **SURVIVOR when deleted, caught only when inverted.** It is
+detectable only in the direction "always panic", never in the direction it claims to protect.
+
+**And it settles a contradiction between two earlier sections.** With §8's literal text
+`TestParamsMustSaneRefusesEachMalformedField` passes **untouched**. So §16.5's "third fixture is a
+real cost of S2" describes an invariant of a **different shape** than the one §8 specifies — one of
+those two sections was wrong about what had been built. **Land:**
+
+```go
+if ladderWindow(p) > p.escrowMaxBlocks {
+    panic("kourtv2: the escrow ceiling cannot fit the failed-round ladder a defaulted verdict must walk")
+}
+```
+
+2.33× margin on defaults, refuses exactly the `escrowMin == escrowMax == 120_960` case, caught
+three ways by mutation.
+
+**And `mustSane` is the right home for a reason other than the one I gave.** `maxFailedRounds` is a
+**package constant**, not a `Params` field — so the relation is two params against a constant, not
+"all three terms are per-court params". That mixture is precisely why neither gate saw it:
+`mustInvariants` sees only constants, and no params-only gate existed.
+
+### 11.2 UNRESOLVED — the minimum window is disputed three ways
+
+| source | claim |
+|---|---|
+| §8 (my original) | `votingBlocks + 2` = 120,962 |
+| §12.10 + vet round 2 | `votingBlocks + 1` = 120,961 → 3 rounds |
+| **vet round 3** | **120,961 → 2 rounds**; the minimum is `+2` |
+
+Round 3 pinned the window directly at the first resolution (tree-independent) and reports
+120,960 → 2, **120,961 → 2**, 120,962 → 3. Its explanation: round 2 does open in the block round 1
+resolves — that part is right — **but its own resolution costs a block, which the derivation
+dropped.** That would make my original `+2` correct and the "+1 correction" wrong.
+
+> **This does not block anything** — `ladderWindow` = 155,521 is far above either candidate, and the
+> replacement invariant keys on `escrowMaxBlocks`. But **nothing should be written down as `+1`
+> until it is re-measured**, and two of my own documents currently assert it.
+
+### 11.3 The 34,560 blocks are the RESOLUTION-LATENCY BUDGET — not slack, and not grind
+
+Better than either previous reading (mine: "conservatism"; round 2: "+2 days of grind").
+`ResolveDispute` is **permissionless** and `escrowUntil` is stamped **once**, so every block between
+a vote closing and someone cranking it comes out of the window. **M:** a round-2 resolution **34,559
+blocks late still reaches provClose; 34,560 does not.** At the "bare minimum" that budget is
+**zero** — the ladder would need a resolver in the closing block of every round.
+
+So §8's advice ("keep it, or a later reader 'fixes' it") is right, and **the reason it gives is the
+opposite of the truth.**
+
+### 11.4 S1 and S2 are NOT mutually exclusive — one free abstain switches S2 off
+
+§16.3 concluded "strictly one-way, **no compounding**." **Demonstrated false.** S2's floor is gated
+on `failedRounds > 0`, but an **abstain-only** round with `cast >= floor` is *not* a failed round —
+it falls to the `default:` branch and **upholds**. So one abstain from a non-participant holding
+exactly `min(X̄, votable/3)` keeps `failedRounds == 0`, the floor never fires, the short window
+latches for the claim's whole life, and provClose is unreachable again. Voting consumes no weight
+and needs no bond: **it costs the abstainer nothing** (balance asserted unchanged).
+
+| S1+S2 tree | provClose | failed/decided | tier | drawWinners | answer side net |
+|---|---|---|---|---|---|
+| control | **true** | 3 / 0 | 0 | **0** | +27.10 CC |
+| **one abstain** | **false** | 1 / 1 | **1 (MID)** | **19,584** | **+35.42 CC** |
+
+On **baseline** the identical abstain does nothing. **So S1 is what makes the attack affordable and
+S2 is what it defeats** — compounding in the adverse direction, through the exact gate §16.3
+examined and cleared.
+
+**Not a blocker:** S2 remains strictly better than today, and this needs an *active* adversary where
+today's bug needs only apathy. But S2's headline — "apathy must not resolve a claim in the liar's
+favour" — is **only true against an apathetic adversary**, and the doc must say so. Landed as a
+hazard fixture that reports "EXPECTED HAZARD CLOSED … that is good news" if anyone later fixes it.
+
+### 11.5 F7 — NOT zero churn, and one edit makes `make check` FAIL today
+
+Zero *fixture* churn confirmed. Zero *repo* churn refuted, and the second item is new:
+
+1. The corpus row anchored on the exact line S1 rewrites (both vets). **No corpus row covers the
+   supply arm or the v0.29 clamp** — the two blocks S1 deletes had **zero mutation coverage.**
+2. **S1 freezes the demo dataset.** `check-demo-physics.py` asserts every demo `quorumFloor >=
+   5%·supply` and reads `quorumSupplyBps` **by name out of `dispute.gno`**. Both shipped demo
+   literals are *exactly* 5% of their courts' supplies — the arm S1 deletes. Post-S1 those are
+   values the realm cannot produce, and **correcting them makes `make check` fail**, demonstrated.
+   **S1 must amend that function and its docstring in the same commit.**
+
+**A method finding worth keeping:** six guards use `pathlib.Path(__file__).resolve()`, which follows
+a symlinked script back to the owner's checkout — so a shadow built with symlinked scripts silently
+validates the *wrong tree*. Round 3's first guard run was invalid for exactly this reason; it
+rebuilt with real script and web copies and arm-checked by planting a bad demo value and a raw
+`runtime.ChainHeight()`. **Anyone re-running these guards in a shadow must copy `scripts/` and
+`web/` for real.**
+
+### 11.6 Confirmations, and three more of my numbers corrected
+
+- **The deletion is exactly the gate — proven analytically, then measured on 3,894,041 rows** (an
+  exhaustive proof over `[0,120]³` plus 3M random rows to 2^62): **zero divergences.** My 88 rows
+  were 44,000× weaker evidence than was cheaply available. Conclusion right.
+- **"5.01×" was a fixture artifact** — it is **5.00×** at X̄ = 1% of supply. And the bound I never
+  gave: cut = `5%·S / max(1 CC, 0.1%·S)`, so **50× at the answerability floor**. Stated properly:
+  **S1 drops the price of deciding an arbitrary small claim's verdict from 5% of supply to 0.10%.**
+- **My cash figures are pre-C3 by 8.33×** (confirming round 1): **−4.80 → +19.20 CC**, and profit
+  per unit of required weight is **0.048**, not 0.4. New: the comp is senior-queued and **not
+  payable on a fresh court** — 1.80 of 19.20 CC immediately, the rest after ~60 periods of accrual.
+- **My caller enumeration was an UNDERCOUNT.** Three behavioural sites in `dispute.gno`, not two —
+  I missed **`ResolveDispute`'s own `case cast < floor` classifier**, which is a separate consumer
+  from the governor's and *the one that actually decides the claim*.
+- **The parallel attack is SIMULTANEOUS, not sequential.** One 500 CC address opened, voted and
+  **overturned 4 of 4 claims in the same court in one voting window** (`seniorOwed = 4 × 19.20`).
+  The take is `4.8% × ΣX̄` over every claim with `X̄ ≤ w`, bounded by claim volume and **not** by the
+  attacker's holding. Not repeatable on a *single* claim, though — comp's 80%-of-burn arm is zero
+  once the bond is gone.
+- **The non-participant requirement is not a constraint.** `isParticipant` does not cover the
+  disputer, so one address disputes *and* votes; what it gives up is the draw, measured at **0.1%
+  of the comp**.
+- **The epoch fix is better than mine:** `c.gov.Snapshot(pid)` returns `PastTotal` at the
+  *proposal's* epoch with no new accessor and no epoch-0 hazard. Measured skew 2.43×.
+
+**One hazard deliberately not written up**, and the restraint is right: the two-address draw
+amplification of the S1 overturn could not be demonstrated as material — the draw is 0.1% of the
+comp and the attacker's own senior comp drains the reservoir the draw is paid from. **Worth
+re-checking after C0 ships**, since C0 is what would fill that reservoir.
