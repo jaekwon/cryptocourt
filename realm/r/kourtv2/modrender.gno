@@ -405,7 +405,20 @@ func renderModLog(slug string) string {
 		if a, ok := v.(*approval); ok {
 			if deadline := a.openedAt + pendingTTLBlocks; now < deadline {
 				pendingRows = append(pendingRows,
-					"- `"+sanitize.InlineText(key)+"` — "+strconv.Itoa(a.approvers.Size())+
+					// InlineCode, not backticks around InlineText. A backslash
+					// escape is INERT inside a CommonMark code span, so
+					// InlineText's `\`` would render the backslash literally and
+					// the backtick would close the span early, spilling the rest
+					// into the page. InlineCode is the helper for this position:
+					// it sizes the fence to the content instead of escaping.
+					//
+					// NOT a live bug — every key here is verb:slug:id and mustSlug
+					// bounds a slug to [a-z0-9-]{1,11}, so no key can hold a
+					// backtick today. The invariant that makes the old code safe
+					// lives in court.gno, three files from the thing it protects,
+					// and a future key that carries a reason or a name would make
+					// it exploitable with no failing test.
+					"- "+sanitize.InlineCode(key)+" — "+strconv.Itoa(a.approvers.Size())+
 						" of "+strconv.Itoa(cm.m)+" approved, expires at height "+
 						strconv.FormatInt(deadline, 10))
 			}
