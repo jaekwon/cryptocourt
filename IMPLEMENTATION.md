@@ -1127,3 +1127,92 @@ rebuilt with real script and web copies and arm-checked by planting a bad demo v
 amplification of the S1 overturn could not be demonstrated as material — the draw is 0.1% of the
 comp and the attacker's own senior comp drains the reservoir the draw is paid from. **Worth
 re-checking after C0 ships**, since C0 is what would fill that reservoir.
+
+---
+
+## 12. VET ROUND 4 (S3 + S4) — and the CONVERGED decision
+
+15 mutations → 14 caught, 1 documented structural survivor; the repo's own corpus rows 14/14
+caught; 892 anchors clean; **`check-paths` and `check-guards-armed` verified** (§16.6 had left them
+open). Both vets on S4 reached NO-GO independently, by the same route.
+
+### 12.1 A silent-zero bug in my own S3 spec
+
+**§8 keeps `tierFinal = true` in scope.** It must be **DELETED**. Latching it *before* the
+predicate makes the predicate **self-blocking**, and the claim then pays **0 forever** — the exact
+defect S3 exists to fix, reintroduced by the fix. Caught by 5 fixtures once removed. This is the
+sharpest implementation detail in the batch and §8 as written gets it wrong.
+
+### 12.2 Three more of my numbers, corrected
+
+- **My "49 bps" is a ratio, not a bound.** The structural floor is `ordAnswerXFloorBps/4` = **2.55
+  bps of court supply** (12.5 bps on meta), against a full bar of 500 bps — a **195× gap**. My
+  figure was **20× too generous**.
+- **I priced only the POST-provClose flag lane.** Post-close it is free-but-*unpaid* (bounty 0,
+  deposit already refunded). The **pre**-close flag, between rounds, is reachable on any claim whose
+  escrow window ≥ 2·`votingBlocks` and is net-**profitable**. Unmentioned in §8.
+- **S4 gates the [1/2, ⅔) median band, not just the bar** — two upgrades, not one. And **S4's bar
+  is strict**: `<` → `<=` survived until a fixture was written for it, matching this package's own
+  ruling elsewhere.
+
+### 12.3 The reverse promotion: reproduced, and DO NOT expand the batch
+
+**M:** a **6,000 CC** poll promoted a LOW that a **50,000 CC** electorate had adjudicated — **8×
+asymmetry, unbounded in the adjudicator's weight**, whole draw restored. **S4 leaves it exactly
+unchanged** (its predicate is `tier == qualityLow`; a promotion is MID/HIGH). Every second-order
+check comes out neutral. The mechanism is `reaskQualityTally`'s wipe, not the demotion gate — the
+same owner decision `quality.gno` already defers.
+
+**But it touches sequencing:** S4 *extends* the wipe-every-round regime (§11.4's re-roll finding),
+which is the same machinery. **If S4 ever lands, bundle the `qualityReasked` decision with it.**
+
+### 12.4 The 6% bond already fixed most of the comp drought — §16.4's headline is STALE
+
+`comp` is 4.8%·X̄ at 600 bps against 40%·X̄ at 5000 — **exactly 8.33×**, both `compAmount` arms
+collapsing to the same value at each level. Dry periods after Finalize, swept at fixed supply:
+
+| X̄ / supply | dry @ 6% | dry @ 50% |
+|---|---|---|
+| 40 bps | **0** | 0 |
+| 318 bps | **0** | 3 |
+| 931 bps | **1** | 9 |
+| 2,205 bps | **2** | 23 |
+
+The decision-relevant threshold is `finalizeGraceBlocks` = **exactly one period**: at ≤1 dry period
+the participants wait it out inside their exclusive window; at ≥2 an adversary crystallizes the
+moment it goes permissionless and locks the clamp. **That threshold moves from ~3% of court supply
+to ~20%.**
+
+> **So §16.4's "on the S4-fired path the restored entitlement pays 0" is stale.** At §12.12's own
+> first-row scale (X̄ = 0.87% of supply) that path now pays **in full, drought 0 periods**. Deferring
+> C0 (§0.2) is a far narrower exposure than measured — the bond cut absorbed most of it.
+
+### 12.5 S3's method was strengthened
+
+Round 4 built **two courts in lockstep** rather than two claims in one court, removing the confound
+that a monotone reservoir, senior tail and period budget can leak between twins. Same digits as
+round 2 and §16.2 (`D=22767, winners=19584, author=1958, answerer=1224, carrot=1593`), with
+`xBarFrozen`, `answerBond0`, `frozenAt`, `openedAt` and `winPoolConvCC` all asserted equal, and
+round 3 asserted *unreachable* on the default window so the comparison is genuinely
+Finalize-vs-provClose.
+
+One addition to the Pareto framing: the *griefing* payoff **rises** (same bounty, 19,584 more units
+destroyed) even though the profit-seeking payoff is unchanged.
+
+---
+
+## 13. CONVERGED — what lands
+
+| fix | verdict | required amendments to §8 |
+|---|---|---|
+| **S1** | **LAND** | credential bar must read the **proposal's** epoch via `Snapshot(pid)`, not `Epoch()-1`; amend `check-demo-physics` and its docstring **in the same commit** or `make check` fails; re-anchor one corpus row |
+| **S2** | **LAND** | replace the vacuous invariant with `ladderWindow(p) > p.escrowMaxBlocks`; floor **both** window arms, not just height; document the 34,560 as a **latency budget** and the abstain hazard |
+| **S3** | **LAND** | **DELETE `tierFinal = true`** (§12.1 — keeping it pays 0 forever); drop `OpenFlag`'s arm; fix three money-describing render lines and `refundSlash`'s now-false comment |
+| **S4** | **HOLD** | pending the owner's ruling on a supply floor for `demotionBar`. With that floor S4 is largely unnecessary; without it, it re-routes the destruction into the flag lane and **pays** the attacker |
+
+**Order: S3 → S2 → S1**, all one commit. S1 and S4 are order-free; the `mustSane` churn belongs
+with S2; S3 alone touches no params.
+
+**Two decisions now sitting with the owner**, both narrowed by this work rather than merely
+restated: (a) a supply floor for `demotionBar` — which would retire S4 and close §0.1 in both lanes
+at once; (b) the `qualityReasked` re-roll, which only becomes urgent if S4 lands.
