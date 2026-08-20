@@ -72,7 +72,10 @@ const h3 = argumentSection("orem", 3, demoLookup);
 // "Rests on" rather than in the argument graph under "Related". It was a bare
 // paragraph: no chip, and no status pill on the whole it is a part of.
 ok("#3: Part of subsection", h3.includes(">Part of<"));
-ok("#3: parent is a row, chipped as the whole", /argrow[^]*?#\/c\/orem\/9/.test(h3) && h3.includes(">the whole<"));
+// "the whole" asserted the parent was the top of the tree. Containment is a
+// tree and the design runs three levels, so a parent is usually a part too.
+ok("#3: parent is a row, chipped by its relation", /argrow[^]*?#\/c\/orem\/9/.test(h3) && h3.includes(">contains this<"));
+ok("#3: chip does not claim to be the top of the tree", !h3.includes(">the whole<"));
 ok("#3: parent row carries the whole's status", h3.slice(h3.indexOf(">Part of<")).slice(0,700).includes("pill"));
 ok("#3: parent is NOT filed under Related", h3.indexOf(">Part of<") < (h3.includes(">Related<")? h3.indexOf(">Related<") : Infinity));
 ok("#3: #11 contradicts", h3.includes(">contradicts<") && h3.includes("#/c/orem/11"));

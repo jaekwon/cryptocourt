@@ -2672,9 +2672,19 @@ function argumentSection(slug, id, lookup){
   // rendered as a bare line of prose: no relation chip, and no status pill, so
   // the one thing you most want to know about the whole you are a part of —
   // whether it is already settled — was the one thing not shown.
+  // The chip reads as a predicate with the ROW as its subject and the claim you
+  // are on as the implied object — "#6 supports [this]", "#3 one part [of this]",
+  // "#5 superseded by this". So the parent's is "contains this".
+  //
+  // It said "the whole", which asserts the row is the top of the tree. Wrong in
+  // general: containment is a tree and §5's own worked example runs three levels,
+  // so a parent routinely has a parent and is a part as much as a whole. The
+  // sample docket has exactly one level — 3, 4 and 7 are parts of 9 and 9 has no
+  // parent — so the only parent it can render genuinely IS the top, and the label
+  // looked right for the one case the fixture is able to show.
   if(parent){
     g += `<div class="sec-h" style="margin-top:6px">Part of</div>`
-      + `<div class="docket">${argRow(slug, parent.to, "the whole", lookup)}</div>`;
+      + `<div class="docket">${argRow(slug, parent.to, "contains this", lookup)}</div>`;
   }
   if(children.length){
     g += `<div class="sec-h" style="margin-top:${parent?14:6}px">Rests on <span class="count">${settledN} of ${children.length} part${children.length===1?"":"s"} settled</span></div>`
