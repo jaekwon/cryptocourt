@@ -226,8 +226,9 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 		panic("kourtv2: already voted this quality tally")
 	}
 	// The WEIGHT, not a presence marker: PullCarrot pays this figure back rather
-	// than re-deriving it, which is what keeps the payout numerator equal to this
-	// voter's contribution to conclusiveTurnout now that the tally is capped.
+	// than re-deriving it from PastVotes, so the payout numerator is this voter's
+	// own contribution to conclusiveTurnout by construction rather than by the two
+	// expressions happening to agree.
 	cs.qVoted.Set(k, w)
 	switch bucket {
 	case qualityLow:

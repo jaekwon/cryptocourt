@@ -145,3 +145,78 @@ func TestBuyingInAfterTheAnchorBuysNothing(cur realm, t *testing.T) {
 	// Capped at the snapshot, unmoved by the later purchase.
 	uassert.True(t, w <= 10_000_000_000)
 }
+
+// THE CARROT SURVIVES THE GOVERNOR'S ROLL BEING RECLAIMED.
+//
+// dispute.gno has said since the choice record was added that the carrot must not
+// depend on the governor's roll, because ReleaseRoll is permissionless and sets
+// p.voted = nil. A first version of PullCarrot's rewrite ignored that and read the
+// weight back with gov.VoteOf, which stops answering once the roll is gone — so a
+// claimant who had not pulled yet would have been refused a carrot they earned.
+//
+// It was LATENT rather than live: kourtv2 exposes no ReleaseRoll entrypoint, so
+// nothing reclaims its rolls today. Which is exactly why no test caught it, and
+// why this one reaches past the entrypoints to call the governor directly.
+func TestTheCarrotSurvivesRollReclamation(cur realm, t *testing.T) {
+	author := testutils.TestAddress("rw-author6")
+	whale := testutils.TestAddress("rw-whale6")
+	voter := testutils.TestAddress("rw-voter6")
+	// Kept small on purpose: effMinAnswerX is 10 bps of SUPPLY, so a big court
+	// makes stakeAnswerDispute's ~900M X-bar unanswerable outright.
+	c := testCourt(cur, "rntw6", author, 40_000_000_000)
+	c.coin.Mint(whale, 10_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+
+	id := stakeAnswerDispute(cur, "rntw6", author, whale)
+	cs := mustClaim(c, id)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "rntw6", id)
+	pid := cs.proposalID
+
+	// A non-participant votes with the verdict, which is who the carrot pays.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "rntw6", id, "no") // uphold
+	recorded := cs.qVoted.Get("dw" + beClaimKey(uint64(pid)) + string(voter))
+	if recorded == nil {
+		t.Fatal("fixture is vacuous: no court-side weight was recorded, so " +
+			"nothing is being shown to survive")
+	}
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	ResolveDispute(cross(cur), "rntw6", id)
+	if d := EscrowUntil("rntw6", id) - heightNow() + 1; d > 0 {
+		testing.SkipHeights(d)
+	}
+	testing.SetRealm(testing.NewUserRealm(author))
+	Finalize(cross(cur), "rntw6", id)
+
+	// RECLAIM THE ROLL. Reached directly, because no entrypoint offers it — and
+	// asserted, so this cannot pass against a governor that quietly refused.
+	c.gov.ReleaseRoll(whale, pid)
+	_, _, ok := c.gov.VoteOf(pid, voter)
+	uassert.False(t, ok) // the governor has genuinely forgotten the ballot
+
+	// The court has not. The carrot still pays.
+	drainForCarrot(cur, "rntw6", cs)
+	testing.SetRealm(testing.NewUserRealm(author))
+	Crystallize(cross(cur), "rntw6", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	paid := PullCarrot(cross(cur), "rntw6", id)
+	uassert.True(t, paid > 0)
+}
+
+// drainForCarrot advances until the reservoir covers the claim's draw, so the
+// carrot is not zero for want of emission rather than for want of a record.
+func drainForCarrot(cur realm, slug string, cs *claimState) {
+	want := mustMul(tierMidX, convToCC(cs.yesConvHi, cs.yesConvLo)) * 3
+	for i := 0; i < 400; i++ {
+		if Reservoir(slug) >= want {
+			return
+		}
+		testing.SkipHeights(20_000)
+		testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("rw-poker")))
+		Poke(cross(cur), slug)
+	}
+	panic("fixture is vacuous: the reservoir never covered the draw")
+}

@@ -189,14 +189,27 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 		panic("kourtv2: a participant may not vote on their own claim's verdict")
 	}
 	c.gov.Vote(who, cs.proposalID, choice)
-	// Court-side choice record: the governor's roll is reclaimable after
-	// resolution (ReleaseRoll is permissionless), so the carrot must not
-	// depend on it. Weight is recomputed later from PastVotes at the
-	// proposal's epoch; only the choice needs remembering.
+	// Court-side record of the choice AND THE WEIGHT: the governor's roll is
+	// reclaimable after resolution (ReleaseRoll is permissionless), so the carrot
+	// must not depend on it.
+	//
+	// The weight used to be recomputed later from PastVotes at the proposal's
+	// epoch, which was exactly equal and needed no storage. It is stored now
+	// because equal-by-coincidence is a bad thing for a payout to rest on: the
+	// moment the tally weighs anything other than a bare snapshot read — and
+	// RENTEDWEIGHT.md's open decision is precisely about doing that — a recomputed
+	// numerator diverges from the voter's own contribution to the denominator and
+	// the carrot over-pays. Read back from the governor here, where the roll is
+	// certainly intact because this line just voted.
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}
 	cs.qVoted.Set("d"+beClaimKey(uint64(cs.proposalID))+string(who), choice)
+	_, dw, ok := c.gov.VoteOf(cs.proposalID, who)
+	if !ok {
+		panic("kourtv2: the governor did not record the vote it just accepted")
+	}
+	cs.qVoted.Set("dw"+beClaimKey(uint64(cs.proposalID))+string(who), dw)
 }
 
 // ResolveDispute reads the FROZEN tally of a closed dispute vote and

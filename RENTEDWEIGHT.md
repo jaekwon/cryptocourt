@@ -158,12 +158,22 @@ the answer was given — which is arguably the correct electorate anyway.
   exposure and points here.
 - `electorate.gno` records that `VotesOf` was added and removed, so re-adding it is
   understood as re-opening this decision rather than a small change.
-- `crystallize.gno`'s carrot now pays the **recorded** ballot weight
-  (`gov.VoteOf`, and the stored quality weight) instead of re-deriving it from
+- `crystallize.gno`'s carrot now pays the **recorded** ballot weight, read from
+  **this realm's own** `qVoted` on both branches, instead of re-deriving it from
   `PastVotes`. A no-op today — recorded and re-derived are equal while the tally is
   an uncapped snapshot read — but it removes a live over-payment hole that Closure
   A silently opened: a voter capped low at vote time could buy back before pulling
   and be paid an uncapped numerator against a capped denominator. Worth keeping on
   its own, and a precondition for any future weighting change.
+
+  **Caught in audit:** the first version of that rewrite read the weight from
+  `gov.VoteOf`, which stops answering once anyone calls the permissionless
+  `ReleaseRoll` (`p.voted = nil`). A claimant who had not pulled yet would have
+  been refused a carrot they had earned. `dispute.gno` had said *"the carrot must
+  not depend on it"* since the choice record was added, and the rewrite ignored it.
+  Latent rather than live — kourtv2 exposes no `ReleaseRoll` entrypoint, which is
+  precisely why nothing caught it — so `TestTheCarrotSurvivesRollReclamation`
+  reaches past the entrypoints and calls the governor directly. Mutation-verified:
+  restoring the `gov.VoteOf` read is caught by that test.
 - `rentedweight_test.gno`, asserting the exploit works, so it cannot be forgotten
   and any fix has a target.

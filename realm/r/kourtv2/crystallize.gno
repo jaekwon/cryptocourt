@@ -370,17 +370,19 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 	if cs.qVoted == nil {
 		panic("kourtv2: nobody voted on this claim")
 	}
-	// THE CARROT PAYS THE WEIGHT THAT WAS TALLIED, read back from where the vote
-	// recorded it — never re-derived from PastVotes at payout time.
+	// THE CARROT PAYS THE WEIGHT THAT WAS TALLIED, read back from THIS REALM's own
+	// record of the vote — never re-derived, and never from the governor.
 	//
-	// It used to re-derive, and that was exactly equivalent while the tally itself
-	// was an uncapped PastVotes read: the same immutable checkpoint, so numerator
-	// and denominator could not disagree. Capping vote weight at what the voter
-	// STILL holds (v0.56, the rented-weight fix) breaks that identity, and
-	// re-deriving would then over-pay anyone who voted while sold down and bought
-	// back before pulling — numerator uncapped, their contribution to `denom`
-	// capped. Reading the recorded figure is exact on every path and cannot drift
-	// again.
+	// Two reasons, and the second is a bug this file briefly had. Re-deriving from
+	// PastVotes is exactly equal only while the tally is a bare snapshot read; the
+	// moment it weighs anything else — RENTEDWEIGHT.md's open decision is about
+	// exactly that — the numerator diverges from the voter's own contribution to
+	// `denom` and the carrot over-pays. And reading it from the governor is worse
+	// than either: ReleaseRoll is permissionless and sets p.voted = nil, so
+	// gov.VoteOf stops answering once anyone reclaims the roll, and a claimant who
+	// had not pulled yet would be refused a carrot they had earned. dispute.gno
+	// has said so since the choice record was added; an earlier version of this
+	// block ignored it and called VoteOf directly.
 	var w, denom int64
 	switch {
 	case cs.decidedPID != 0:
@@ -388,12 +390,11 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 		if v == nil || v.(string) != cs.carrotChoice {
 			panic("kourtv2: the carrot pays with-verdict voters of the deciding round")
 		}
-		// The governor already stores each ballot's weight; VoteOf hands it back.
-		_, gw, ok := c.gov.VoteOf(cs.decidedPID, who)
-		if !ok {
-			panic("kourtv2: no ballot recorded for that voter on the deciding round")
+		vw := cs.qVoted.Get("dw" + beClaimKey(uint64(cs.decidedPID)) + string(who))
+		if vw == nil {
+			panic("kourtv2: no recorded weight for that voter on the deciding round")
 		}
-		w = gw
+		w = vw.(int64)
 		denom = cs.carrotDenom
 	case cs.conclusiveSeq != 0:
 		v := cs.qVoted.Get(beClaimKey(cs.conclusiveSeq) + string(who))
