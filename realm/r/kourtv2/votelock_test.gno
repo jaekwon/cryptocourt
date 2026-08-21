@@ -434,3 +434,100 @@ func TestTwoQuestionsCommitOnePileOnce(cur realm, t *testing.T) {
 		TransferCC(cross(cur), "vlk4", bob, 1)
 	})
 }
+
+// THE LOCK CAN NEVER TRAP ANYONE, and that is a liveness property distinct from
+// everything else here: a voter may commit their ENTIRE balance, which leaves them
+// with nothing to pay a fee with, so if freeing the coin cost anything they would
+// be stranded by their own vote.
+//
+// It does not, because every release trigger is free AND permissionless —
+// ResolveDispute, ResolveElection, ResolveFlag, ResolveCounter, SettleUndisputed
+// and Finalize between them charge the caller nothing (Finalize is
+// participant-gated only for its grace window). So the locked party can always
+// reach the release themselves. That is a claim about six functions not growing a
+// fee, which is exactly the kind of claim that rots silently, so it is asserted
+// here rather than trusted.
+func TestAFullyCommittedVoterCanAlwaysFreeTheirOwnCoin(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vl6-alice")
+	bob := testutils.TestAddress("vl6-bob")
+	voter := testutils.TestAddress("vl6-voter")
+	c := testCourt(cur, "vlk6", alice, 40_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+	id := stakeAnswerDispute(cur, "vlk6", alice, bob)
+	cs := mustClaim(c, id)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlk6", id)
+
+	// Commit EVERYTHING. The voter never paid a bond, so their whole balance is
+	// their weight, and after voting their whole balance is committed.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "vlk6", id, "no")
+	locked := VoteLockedOf("vlk6", voter)
+	if locked != c.coin.BalanceOf(voter) {
+		t.Fatalf("fixture is vacuous: this test is about a voter with NOTHING "+
+			"spare, but %d of %d is committed", locked, c.coin.BalanceOf(voter))
+	}
+
+	// Nothing at all can leave, not even one unit — so nothing could be paid.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "vlk6", bob, 1)
+	})
+
+	// And yet the voter frees themselves, unaided and for free, by resolving the
+	// very question that locked them. Permissionless, no fee, no participant gate.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveDispute(cross(cur), "vlk6", id)
+	uassert.Equal(t, int64(0), VoteLockedOf("vlk6", voter))
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "vlk6", bob, 1)
+	_ = cs
+}
+
+// The same property in the election lane, where the whole ballot is one commitment
+// and ResolveElection is the release.
+func TestAFullyCommittedApproverCanAlwaysFreeTheirOwnCoin(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("vl7-creator")
+	voter := testutils.TestAddress("vl7-voter")
+	other := testutils.TestAddress("vl7-other")
+	mod := testutils.TestAddress("vl7-mod")
+	c := electionCourt(cur, "vlk7", creator, []address{voter, other},
+		[]int64{100_000_000_000, 100_000_000_000})
+	// Bond money POST-seal so the snapshot stays at the full pre-seal balance and
+	// the bond does not leave the voter with convenient spare change.
+	c.coin.Mint(voter, 50_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	cand := RegisterModCandidate(cross(cur), "vlk7", 1, mod)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "vlk7", cand)
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "vlk7", cand)
+
+	locked := VoteLockedOf("vlk7", voter)
+	if locked <= 0 || locked > c.coin.BalanceOf(voter) {
+		t.Fatalf("fixture is vacuous: locked=%d against a balance of %d",
+			locked, c.coin.BalanceOf(voter))
+	}
+	// Spend the spare change down so the commitment really is everything.
+	if spare := c.coin.BalanceOf(voter) - locked; spare > 0 {
+		testing.SetRealm(testing.NewUserRealm(voter))
+		TransferCC(cross(cur), "vlk7", other, spare)
+	}
+	uassert.Equal(t, locked, c.coin.BalanceOf(voter))
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "vlk7", other, 1)
+	})
+
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveElection(cross(cur), "vlk7")
+	uassert.Equal(t, int64(0), VoteLockedOf("vlk7", voter))
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "vlk7", other, 1)
+}

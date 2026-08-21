@@ -276,6 +276,14 @@ control("a second vote-weight definition", f"{KOURTV2}/voteweight.gno",
         "func voteCap2(c *Court, who address) int64 { return voteCap(c, who) }\n\n"
         "func voteCap(c *Court, who address) int64 {",
         "[one-weight]", argv=["python3", EPOCHCOH])
+# ARM 5's control. The quality lock releases on "the claim is terminal", so a NEW
+# way for a claim to end leaves those votes locked forever and in silence — the
+# predicate just keeps answering "still open" about a claim that is over. Nothing
+# else in the tree asks, which is why the writers are counted.
+control("a fourth way for a claim to end", f"{KOURTV2}/session.gno",
+        "\tcs.verdictAt = heightNow()",
+        "\tcs.verdictAt = heightNow()\n\tcs.verdictAt = heightNow()",
+        "[terminal]", argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',

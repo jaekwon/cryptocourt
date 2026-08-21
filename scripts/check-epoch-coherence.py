@@ -174,6 +174,24 @@ CAP_FN = re.compile(r"^func voteCap[A-Za-z0-9_]*\(", re.M)
 # The floor's shape, wherever it appears. Exactly one, inside votingWeight.
 FLOOR_SHAPE = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < ")
 
+# ARM 5 — the quality vote lock releases on "the claim is terminal", and its idea of
+# terminal is `cs.verdictAt != 0 || cs.closed`. That is only correct while those two
+# fields are the COMPLETE set of ways a claim can end.
+#
+# claim.gno says so in prose — "VERDICT_FINAL (P4): set by SettleUndisputed,
+# Finalize, or provClose" — and prose is what this arm replaces. A fourth terminal
+# path that ended a claim some other way would leave every quality vote cast into a
+# frozen tally locked FOREVER, with no error anywhere: the predicate would simply
+# keep answering "still open" about a claim that is over. Nothing else in the tree
+# would notice, because nothing else asks.
+#
+# So the writers are counted. A change here is not necessarily wrong — it just has
+# to be made by someone who has read votelock.gno's voteLockQuality arm.
+TERMINAL_VERDICT = re.compile(r"^\s*cs\.verdictAt = ", re.M)
+TERMINAL_CLOSED = re.compile(r"^\s*cs\.closed = true", re.M)
+TERMINAL_VERDICT_N = 3  # dispute.gno provClose + Finalize, session.gno settle
+TERMINAL_CLOSED_N = 1   # claim.gno dead-claim close
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -201,7 +219,8 @@ def funcs_with_epochs(src):
 def main() -> int:
     repolock.refuse_if_held("check-epoch-coherence")
     hits, scanned, sealed_funcs = [], 0, 0
-    arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0}
+    arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
+            "verdict_w": 0, "closed_w": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -246,6 +265,8 @@ def main() -> int:
                 arm4["weight_fn"] += len(WEIGHT_FN.findall(src))
                 arm4["cap_fn"] += len(CAP_FN.findall(src))
                 arm4["floor"] += len(FLOOR_SHAPE.findall(src))
+                arm4["verdict_w"] += len(TERMINAL_VERDICT.findall(src))
+                arm4["closed_w"] += len(TERMINAL_CLOSED.findall(src))
 
             # Arm 3
             if p.name == "governor.gno":
@@ -300,12 +321,20 @@ def main() -> int:
         ("weight_fn", 1, "votingWeight definition(s)"),
         ("cap_fn", 1, "voteCap definition(s)"),
         ("floor", 1, "min(snapshot, held) floor expression(s)"),
+        ("verdict_w", TERMINAL_VERDICT_N, "cs.verdictAt writer(s)"),
+        ("closed_w", TERMINAL_CLOSED_N, "cs.closed writer(s)"),
     ):
         if arm4[key] != want:
-            hits.append(f"[one-weight] kourtv2 has {arm4[key]} {what}, expected "
-                        f"{want} — vote weight is charged by three lanes and QUOTED "
-                        f"to the elector, so a second copy is a quote that can "
-                        f"drift from the charge")
+            tag = "terminal" if key.endswith("_w") else "one-weight"
+            why = ("the quality vote lock releases on `verdictAt != 0 || closed`, "
+                   "so a new way for a claim to END leaves those votes locked "
+                   "forever and silently — read votelock.gno's voteLockQuality arm"
+                   if key.endswith("_w") else
+                   "vote weight is charged by three lanes and QUOTED to the "
+                   "elector, so a second copy is a quote that can drift from the "
+                   "charge")
+            hits.append(f"[{tag}] kourtv2 has {arm4[key]} {what}, expected "
+                        f"{want} — {why}")
     if hits:
         print("check-epoch-coherence: a tally and its bar may no longer share an "
               "epoch.\n", file=sys.stderr)
@@ -322,7 +351,8 @@ def main() -> int:
 
     print(f"check-epoch-coherence: {scanned} files, {sealed_funcs} sealed-epoch "
           f"function(s) each reading one epoch, no live weight in any tally, one "
-          f"weight source in the engine.")
+          f"weight source in the engine, one vote-weight expression, "
+          f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s).")
     return 0
 
 

@@ -6357,5 +6357,19 @@
     "label": "ElectionVoteWeightOf: re-derives instead of reading the frozen figure",
     "find": "\tif prior := e.voters.Get(who.String()); prior != nil {\n\t\treturn prior.(int64)\n\t}\n",
     "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "ResolveDispute: grows a fee, stranding a fully-committed voter",
+    "find": "func ResolveDispute(cur realm, courtSlug string, claimID uint64) {\n",
+    "replace": "func ResolveDispute(cur realm, courtSlug string, claimID uint64) {\n\tmustSpendable(mustCourt(courtSlug), cur.Previous().Address(), 1)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "ResolveElection: grows a fee, stranding a fully-committed approver",
+    "find": "func ResolveElection(cur realm, courtSlug string) {\n",
+    "replace": "func ResolveElection(cur realm, courtSlug string) {\n\tmustSpendable(mustCourt(courtSlug), cur.Previous().Address(), 1)\n"
   }
 ]
