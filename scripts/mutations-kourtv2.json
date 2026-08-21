@@ -6198,6 +6198,13 @@
   "replace": "\tif cap < 0 {\n\t\tpanic(\"govern: a vote cap must be positive; use Vote for no cap\")\n\t}"
  },
  {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the total is taken at a different epoch than the weights it will judge",
+  "find": "total := g.voters.PastTotal(at)",
+  "replace": "total := g.voters.PastTotal(at - 1)"
+ },
+ {
   "pkg": "kourtv2",
   "file": "modvote.gno",
   "label": "approve: weight is re-derived per approval (line can exceed turnout)",

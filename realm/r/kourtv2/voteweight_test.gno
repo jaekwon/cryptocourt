@@ -301,3 +301,128 @@ func TestTheReadersSeeACounterPollAndQuoteWhatItCharges(cur realm, t *testing.T)
 	VoteQuality(cross(cur), "cqr", id, qualityMid)
 	uassert.Equal(t, quoted, VoteLockedOf("cqr", carol))
 }
+
+// THE COHERENCE CHAIN, END TO END IN A REAL COURT.
+//
+// The whole safety case is
+//
+//	Σ min(PastVotes(·,E), BalanceOf(·))  ≤  Σ PastVotes(·,E)  =  PastTotal(E)
+//
+// so cast can never exceed the proposal's own total and rest = total - cast is never
+// negative. A negative rest is not a rounding curiosity: it let the early-DEFEAT arm
+// fire on a question still open, and that work was reverted.
+//
+// Both halves were pinned in ISOLATION and never together. TestPastVotesSumToPastTotal
+// asserts the ledger identity by summing over addresses directly. The governor's own
+// suite asserts parts-never-exceed-the-whole, including under caps, against synthetic
+// ledgers it builds itself. Nothing asserted the JOIN: a real dispute in a real court,
+// where kourtv2 picks the epoch, kourtv2 supplies the caps, and the governor tallies.
+// That join is where an epoch can be wired to the wrong instant while both halves stay
+// individually correct.
+//
+// Every voter here is capped, which is the condition that makes the chain's first
+// inequality strict rather than decorative, and the fixture asserts that it bit.
+func TestTheCoherenceChainHoldsForARealDisputeWithEveryVoterCapped(cur realm, t *testing.T) {
+	author := testutils.TestAddress("coh-author")
+	staker := testutils.TestAddress("coh-staker")
+	sink := testutils.TestAddress("coh-sink")
+	voters := []address{
+		testutils.TestAddress("coh-v1"), testutils.TestAddress("coh-v2"),
+		testutils.TestAddress("coh-v3"), testutils.TestAddress("coh-v4"),
+	}
+	c := testCourt(cur, "coh", author, 30_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	for i, v := range voters {
+		c.coin.Mint(v, int64(i+3)*2_000_000_000) // 6, 8, 10, 12 e9 — distinct weights
+	}
+
+	id := stakeAnswerDispute(cur, "coh", author, staker)
+
+	// SUPPLY MUST MOVE ACROSS THE EPOCH BOUNDARY, or the epoch-link assertion below
+	// cannot fail. Measured: with a flat supply, PastTotal(at) and PastTotal(at-1) are
+	// the same number, so taking the proposal's total from the WRONG epoch — the
+	// reverted live-denominator defect, in miniature — passed the test. An assertion
+	// that cannot distinguish its two sides is not an assertion. Minted after the
+	// answer so the supply-proportional answer bar was already cleared.
+	testing.SkipHeights(epochBlocks) // seal an epoch WITHOUT the mint
+	touch(c)
+	c.coin.Mint(sink, 9_000_000_000) // lands in the NEXT epoch
+	testing.SkipHeights(epochBlocks) // and seal that one WITH it
+	touch(c)
+
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "coh", id)
+	cs := mustClaim(c, id)
+	at := c.gov.EpochOf(cs.proposalID)
+	if at < 2 || c.coin.PastTotal(at) == c.coin.PastTotal(at-1) {
+		t.Fatalf("fixture cannot tell two epochs apart: PastTotal(%d)=%d, "+
+			"PastTotal(%d)=%d — the epoch-link assertion would pass on a total "+
+			"read at the wrong instant", at, c.coin.PastTotal(at), at-1,
+			c.coin.PastTotal(at-1))
+	}
+
+	// Every voter divests half to a sink that never votes, AFTER the epoch froze. So
+	// each one's live balance is below its own snapshot and the floor binds for all
+	// four — the case the chain is actually about.
+	var snapSum int64
+	for _, v := range voters {
+		snap := c.coin.PastVotes(v, at)
+		if snap <= 0 {
+			t.Fatal("fixture: a voter has no checkpointed weight at the frozen epoch")
+		}
+		snapSum += snap
+		testing.SetRealm(testing.NewUserRealm(v))
+		TransferCC(cross(cur), "coh", sink, c.coin.BalanceOf(v)/2)
+		if c.coin.BalanceOf(v) >= snap {
+			t.Fatalf("fixture is vacuous: %s is not capped, balance %d vs snapshot %d",
+				v, c.coin.BalanceOf(v), snap)
+		}
+	}
+
+	// All four vote, split across the choices so no single arm dominates.
+	for i, v := range voters {
+		testing.SetRealm(testing.NewUserRealm(v))
+		VoteDispute(cross(cur), "coh", id, []string{"yes", "no", "abstain", "yes"}[i])
+	}
+
+	yes, no, abstain, total := c.gov.Tally(cs.proposalID)
+	cast := yes + no + abstain
+	rest := total - cast
+
+	// THE LINK THAT WAS UNPINNED: the proposal's own total is the ledger's sealed
+	// total at the epoch kourtv2 froze. If these ever differ, every bar in the round
+	// is drawn on a different base than the weights it judges.
+	uassert.Equal(t, c.coin.PastTotal(at), total)
+
+	if cast > total {
+		t.Fatalf("cast %d exceeds the proposal total %d: rest is %d and the "+
+			"early-defeat arm can fire on an open question", cast, total, rest)
+	}
+	if rest < 0 {
+		t.Fatalf("rest is %d", rest)
+	}
+	// And strictly below the uncapped sum, which is what proves the floor did the
+	// work rather than the inequality holding for a trivial reason.
+	if cast >= snapSum {
+		t.Fatalf("cast %d is not below the uncapped snapshot sum %d, so the caps "+
+			"never bit and this test would pass without the floor", cast, snapSum)
+	}
+	if cast <= 0 {
+		t.Fatal("fixture is vacuous: nothing was cast")
+	}
+	// The bar is drawn on the same base it judges.
+	if floor := c.gov.QuorumFloor(cs.proposalID); floor > total {
+		t.Fatalf("quorum floor %d exceeds the total %d it is a fraction of",
+			floor, total)
+	}
+	// Per voter, the charge is the capped figure and not the snapshot.
+	for _, v := range voters {
+		_, charged, ok := c.gov.VoteOf(cs.proposalID, v)
+		uassert.True(t, ok)
+		w, snap := votingWeight(c, v, at)
+		uassert.Equal(t, w, charged)
+		if charged >= snap {
+			t.Fatalf("%s was charged %d, its uncapped snapshot %d", v, charged, snap)
+		}
+	}
+}
