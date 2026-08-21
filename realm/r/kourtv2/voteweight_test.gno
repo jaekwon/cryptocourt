@@ -175,6 +175,29 @@ func TestPastVotesSumToPastTotal(cur realm, t *testing.T) {
 	// denominator.
 	uassert.Equal(t, total, sum)
 
+	// AND VOTABLE IS EXACTLY THE CASTABLE WEIGHT, which is the property the netting
+	// exists to provide and which nothing stated as an equality.
+	//
+	// votableAt nets ONE address, c.escrow, and that is complete only while the
+	// escrow is the only holder of CC that cannot vote. Checked by enumeration at the
+	// time of writing — every c.coin.Mint goes to a user (buy.gno's buyer,
+	// mintEmission's entitlement holder, meta's claimant) and every Transfer is
+	// user-to-escrow or escrow-to-user — but an enumeration is a claim about today.
+	// A second keyless holder would make votable OVERSTATE what can be cast, and
+	// every bar denominated in a percentage of votable would rise above the weight
+	// able to clear it: the failure is a court that cannot reach quorum on anything,
+	// which is fail-safe and still a dead court.
+	escrowW := c.coin.PastVotes(c.escrow, at)
+	if escrowW <= 0 {
+		t.Fatal("fixture is vacuous: the escrow holds nothing, so votable and the " +
+			"raw total coincide and the netting is not being tested")
+	}
+	var userSum int64
+	for _, a := range append([]address{alice}, holders...) {
+		userSum = mustAdd(userSum, c.coin.PastVotes(a, at))
+	}
+	uassert.Equal(t, userSum, votableAt(c, at))
+
 	// And the floor can only lower it, which is the step that makes every tally
 	// coherent against a bar drawn at the same epoch.
 	var capped int64

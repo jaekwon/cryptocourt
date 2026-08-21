@@ -6465,6 +6465,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "votableAt: the escrow's holdings count as castable weight (bars rise above what can clear them)",
+  "find": "v := c.coin.PastTotal(at) - c.coin.PastVotes(c.escrow, at)",
+  "replace": "v := c.coin.PastTotal(at)"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "render.gno",
   "label": "positions: free-to-dispose ignores the vote lock (shows spendable)",
   "find": "\tb.WriteString(\"- free to bond, deposit or transfer: \" +\n\t\tstrconv.FormatInt(disposable(c, who), 10) + \"\\n\")",
