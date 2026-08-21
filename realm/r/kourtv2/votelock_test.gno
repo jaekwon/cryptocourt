@@ -982,3 +982,96 @@ func TestADisputeVoterCanFreeItsOwnCoin(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(0), VoteLockedOf("vlsd", carol))
 	uassert.Equal(t, held, disposable(c, carol))
 }
+
+// THE COUNTER LANE, AND WHY `cs.counterOpen` IS IN THE PREDICATE AT ALL.
+//
+// Measured rather than assumed: dropping each of the three live-question flags
+// separately and running the whole suite, flagOpen and disputeOpen each fail tests and
+// counterOpen fails NOTHING. It is redundant today, and by implication rather than by
+// luck — CounterFlag sets counterUsed, qualityReasked and a fresh tally together, and
+// rearmSlashWindow re-opens the window only `if cs.counterUsed`, so wherever counterOpen
+// is true, slotConsumed && qualityReasked is true as well and the carries-forward arm
+// already holds the coin.
+//
+// The term stays, because that implication is spread over three functions in two files
+// with nothing enforcing it, and the failure direction without it is the bad one:
+// ResolveCounter READS the tally, so releasing would free coin while its vote can still
+// decide the slash. Over-locking is the safe error, the same default the mustStakable
+// count is pinned on.
+//
+// What this pins is the IMPLICATION, which is what makes the redundancy safe —
+// unreachable code cannot be pinned by a test, but the reason it is unreachable can. If
+// a later change lets counterOpen be reached without both flags, this fails and says the
+// counterOpen arm has become load-bearing.
+//
+// It also records the shape of the counter lane, which surprised the first draft of this
+// test: the coin is STILL held after ResolveCounter. That is not a leak. slotConsumed
+// and qualityReasked are both set, so reaskQualityTally will not open a fresh tally and
+// a future dispute round votes this same frozen total — carol's counter vote can decide
+// again, so it is still committed. The first draft asserted a release there and was
+// asserting a bug.
+func TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy(cur realm, t *testing.T) {
+	c, id, alice, _, carol, _, _ := slashSetup(cur, t, "vlq3")
+
+	// alice is the slashed answerer and the only address that may counter-flag.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "vlq3", id)
+	cs := mustClaim(c, id)
+	if !cs.counterOpen {
+		t.Fatal("fixture: no counter poll is open, so this test is about nothing")
+	}
+
+	// THE IMPLICATION. Both must hold, or `|| cs.counterOpen` is the only thing
+	// standing between a live counter tally and coin walking out from under it.
+	if !cs.slotConsumed || !cs.qualityReasked {
+		t.Fatalf("counterOpen is reachable with slotConsumed=%t qualityReasked=%t, "+
+			"so the carries-forward arm no longer covers the counter lane and the "+
+			"counterOpen term in voteLockOpen is now LOAD-BEARING — it was measured "+
+			"redundant when it was written and its comment says so",
+			cs.slotConsumed, cs.qualityReasked)
+	}
+	if !cs.counterUsed {
+		t.Fatal("fixture: counterUsed is what rearmSlashWindow keys on; if " +
+			"CounterFlag stopped setting it the re-arm path changes shape")
+	}
+
+	// Held while the counter poll can count it.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlq3", id, qualityMid)
+	locked := VoteLockedOf("vlq3", carol)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: the counter vote committed nothing")
+	}
+	uassert.Equal(t, int64(0), disposable(c, carol))
+
+	// Resolution is refused while the poll is open, and permissionless after — the
+	// voter closes it themselves.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "counter re-vote is still open", func() {
+		ResolveCounter(cross(cur), "vlq3", id)
+	})
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	ResolveCounter(cross(cur), "vlq3", id)
+
+	// STILL HELD, and this is the frozen-tally case rather than a leak: nothing is
+	// open, but a future round votes this same total.
+	uassert.Equal(t, locked, VoteLockedOf("vlq3", carol))
+	uassert.Equal(t, int64(0), disposable(c, carol))
+	if cs.counterOpen || cs.flagOpen || cs.disputeOpen {
+		t.Fatal("fixture: a question is still open, so the hold above is the " +
+			"live-question arm and says nothing about carry-forward")
+	}
+
+	// AND THE RELEASE EXISTS, reached by the voter alone: this claim was never
+	// disputed, so round == 0 and SettleUndisputed is open to anybody once the answer
+	// has aged. Terminal, and the coin comes back.
+	testing.SkipHeights(settleDelay + 1)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	SettleUndisputed(cross(cur), "vlq3", id)
+	if cs.verdictAt == 0 {
+		t.Fatal("fixture: the settle did not make the claim terminal")
+	}
+	uassert.Equal(t, int64(0), VoteLockedOf("vlq3", carol))
+	uassert.Equal(t, c.coin.BalanceOf(carol), disposable(c, carol))
+}

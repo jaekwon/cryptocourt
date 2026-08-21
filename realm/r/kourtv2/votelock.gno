@@ -209,6 +209,23 @@ func voteLockOpen(c *Court, who address, key string) bool {
 			return false
 		}
 		// A LIVE QUESTION HOLDS THE COIN. This is the vote about to be counted.
+		//
+		// Two of these three are load-bearing and one is not, measured by dropping
+		// each separately and running the whole suite: flagOpen and disputeOpen each
+		// fail tests, counterOpen fails nothing. counterOpen is redundant BY
+		// IMPLICATION rather than by luck — CounterFlag sets counterUsed,
+		// qualityReasked and a fresh tally together, and rearmSlashWindow re-opens the
+		// window only `if cs.counterUsed` — so wherever it is true, the
+		// carries-forward arm below is true as well.
+		//
+		// It stays because that implication spans three functions in two files with
+		// nothing enforcing it, and the failure direction without it is the bad one:
+		// ResolveCounter READS the tally, so releasing here would free coin while its
+		// vote can still decide the slash. Unreachable code cannot be pinned by a
+		// test, but the reason it is unreachable can, so the implication is what
+		// TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy asserts, and the
+		// dropped term is a deliberate survivor in mutations-kourtv2-KNOWN-GAPS.json.
+		// If that row ever comes back CAUGHT, this term has become load-bearing.
 		if cs.flagOpen || cs.disputeOpen || cs.counterOpen {
 			return true
 		}
