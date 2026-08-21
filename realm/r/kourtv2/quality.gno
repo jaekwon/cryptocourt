@@ -258,6 +258,10 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	// own contribution to conclusiveTurnout by construction rather than by the two
 	// expressions happening to agree.
 	cs.qVoted.Set(k, w)
+	// And the coin is committed for as long as this vote keeps counting: until the
+	// tally is superseded, or until the claim is over if it never is. See
+	// votelock.gno — the seq in the key is what makes both cases one predicate.
+	lockVote(c, who, voteLockQuality, int64(claimID), int64(cs.qVoteSeq), w)
 	switch bucket {
 	case qualityLow:
 		cs.qLowW = mustAdd(cs.qLowW, w)

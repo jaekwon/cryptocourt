@@ -6287,5 +6287,33 @@
     "label": "Stake: a pending vote blocks staking (over-restrictive)",
     "find": "\tmustStakable(c, who, amount)",
     "replace": "\tmustSpendable(c, who, amount)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "VoteQuality: the ballot's coin is never committed",
+    "find": "\tlockVote(c, who, voteLockQuality, int64(claimID), int64(cs.qVoteSeq), w)",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "voteLockOpen: a superseded quality tally keeps holding coin",
+    "find": "\t\treturn cs.qVoteSeq == sub",
+    "replace": "\t\treturn true"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "voteLockOpen: a quality lock outlives the claim it was cast on",
+    "find": "\t\tif cs.verdictAt != 0 || cs.closed {\n\t\t\treturn false\n\t\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "voteLockedOf: open questions STACK instead of sharing one pile",
+    "find": "\t\tif w := v.(int64); w > most && voteLockOpen(c, who, k) {\n\t\t\tmost = w\n\t\t}",
+    "replace": "\t\tif voteLockOpen(c, who, k) {\n\t\t\tmost = mustAdd(most, v.(int64))\n\t\t}"
   }
 ]

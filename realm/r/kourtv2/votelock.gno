@@ -45,17 +45,43 @@ import "gno.land/p/nt/bptree/v0"
 // Resolved rows are pruned when the same address next votes, bounding the rows per
 // address by the number of questions it has open at once.
 //
-// THE QUALITY LANE IS DELIBERATELY NOT LOCKED. Its tally ACCUMULATES across rounds
-// — reaskQualityTally re-asks exactly once and every later round votes the same
-// running total — so there is no single instant a lock could release at. That was
-// flagged as an owner decision before this was built and it remains one; see
-// VOTEFLOOR.md. It is also the hardest lane to rent into, because the anchor is
-// the ANSWERER's: using it means answering the claim yourself and voting from a
-// second address.
+// THE QUALITY LANE IS LOCKED TOO, and the shape of its lock is the answer to what
+// looked like an unanswerable question.
+//
+// The problem, as it appeared: the quality tally ACCUMULATES. reaskQualityTally
+// bumps the seq on every round while nothing has been adjudicated, then re-asks
+// EXACTLY ONCE after the first adjudication and never again — so from that point
+// the seq is frozen, every later round votes the same running total, and each
+// address is pinned to the one vote it already cast. There is no single "round
+// resolved" instant to release at, which is why this was written off as an owner
+// decision.
+//
+// The answer is to stop looking for an instant and state the actual principle: THE
+// COMMITMENT LASTS EXACTLY AS LONG AS THE INFLUENCE. A quality vote stops
+// influencing anything the moment its tally is superseded — qVoted keys on
+// qVoteSeq|addr, so once openQualityTally bumps the seq, the old vote counts toward
+// nothing. And if the seq never moves again, the vote keeps deciding every
+// remaining round, so the commitment should last until the claim itself is over.
+//
+// One predicate covers both:
+//
+//	open  iff  the claim is not terminal  AND  cs.qVoteSeq == the seq voted in
+//
+// which is cheap, exact, and pleasantly self-tuning. In the common
+// pre-adjudication case each round re-asks, so the seq moves and the lock releases
+// almost immediately — no 12-week freeze for voting on an ordinary flag. In the
+// frozen-accumulating case, which is precisely where a divested address was
+// measured deciding rounds it never held through, the coin stays committed for as
+// long as that vote is still being counted.
+//
+// It is also the hardest lane to rent into regardless, because the anchor is the
+// ANSWERER's: using it means answering the claim yourself and voting from a second
+// address.
 
 const (
 	voteLockDispute  = "d"
 	voteLockElection = "e"
+	voteLockQuality  = "q"
 )
 
 // voteLockKey is addr|kind|id|sub, with both ids fixed-width big-endian so that
@@ -93,25 +119,54 @@ func voteLockOpen(c *Court, who address, key string) bool {
 		}
 		e := c.mod.election
 		return e.seq == id && !e.resolved
+	case voteLockQuality:
+		v := c.claims.Get(beClaimKey(id))
+		if v == nil {
+			return false
+		}
+		cs := v.(*claimState)
+		// Superseded tallies count toward nothing (qVoted keys on qVoteSeq|addr),
+		// so a vote whose seq has moved on holds no coin. A tally whose seq is
+		// still live holds it until the claim itself is over — which is the only
+		// honest release point for an accumulating tally, because that is how long
+		// the vote keeps deciding rounds.
+		if cs.verdictAt != 0 || cs.closed {
+			return false
+		}
+		return cs.qVoteSeq == sub
 	}
 	return false
 }
 
-// voteLockedOf is the CC this address voted with in questions that have not yet
-// resolved, and therefore may not dispose of.
+// voteLockedOf is the CC this address must keep in its balance because it voted
+// with it in a question that has not resolved.
+//
+// THE MAX ACROSS OPEN QUESTIONS, NOT THE SUM, and this was a shipped bug found by
+// probing rather than reading. Each row is a floor — "at least this much of your
+// balance must stay put" — and one pile of size max(rows) satisfies every row at
+// once, because the same coins can honour more than one commitment. Summing
+// double-counts them.
+//
+// It was not a corner case. P11 makes the quality ride its own transaction, so
+// voting a verdict and then its quality question is the ORDINARY thing an engaged
+// holder does — and measured, that holder ended up with 40 B committed against a
+// 20 B balance and could move nothing at all, having committed one pile once. This
+// is the same sum-vs-max error as between the stake lock and the vote lock in
+// lock.gno's disposable(), one level down, and the lesson is that a "total locked"
+// quantity built by addition is worth distrusting on sight.
 func voteLockedOf(c *Court, who address) int64 {
 	if c.voteLocks == nil {
 		return 0
 	}
-	var sum int64
+	var most int64
 	pre := string(who)
 	c.voteLocks.Iterate(pre, pre+"\xff", func(k string, v any) bool {
-		if voteLockOpen(c, who, k) {
-			sum = mustAdd(sum, v.(int64))
+		if w := v.(int64); w > most && voteLockOpen(c, who, k) {
+			most = w
 		}
 		return false
 	})
-	return sum
+	return most
 }
 
 // lockVote records that `amount` of who's balance is committed to a question, and

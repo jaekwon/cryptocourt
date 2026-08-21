@@ -204,3 +204,233 @@ func TestStakeAndVoteLocksOverlapRatherThanStack(cur realm, t *testing.T) {
 		TransferCC(cross(cur), "vlk3", whale, 1)
 	})
 }
+
+// THE QUALITY LANE, CASE 1 — a SUPERSEDED tally releases the coin immediately.
+//
+// Before anything is adjudicated, reaskQualityTally bumps the seq on every round,
+// and qVoted keys on qVoteSeq|addr — so once the seq moves, the earlier vote counts
+// toward nothing at all. Holding coin against a vote that decides nothing would be
+// a pure tax on participation, so the lock has to let go, and this asserts it does.
+func TestASupersededQualityVoteReleasesItsCoin(cur realm, t *testing.T) {
+	c, id, _, bob, carol, _ := qfSetup(cur, t, "qvl1")
+	cs := mustClaim(c, id)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qvl1", id)
+	seq0 := cs.qVoteSeq
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qvl1", id, qualityLow)
+	locked := VoteLockedOf("qvl1", carol)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: the quality vote committed nothing")
+	}
+	// Committed while the tally is live.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "qvl1", bob, locked)
+	})
+
+	// A dispute arrives and re-asks: nothing is adjudicated yet, so the seq moves
+	// and carol's ballot is now attached to a tally nobody counts.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qvl1", id)
+	if cs.qVoteSeq == seq0 {
+		t.Fatal("fixture is vacuous: the seq did not move, so nothing was superseded")
+	}
+	uassert.Equal(t, int64(0), VoteLockedOf("qvl1", carol))
+
+	// Free to move. HALF, not all: the floor would refuse a vote from an address
+	// that had just divested completely, and the next assertion is about the LOCK
+	// letting go, not about the floor.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	TransferCC(cross(cur), "qvl1", bob, locked/2)
+
+	// And free to vote the NEW tally, which is the point of the seq moving.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qvl1", id, qualityMid)
+	// Re-committed against the live tally, at the weight she now holds.
+	if got := VoteLockedOf("qvl1", carol); got <= 0 || got >= locked {
+		t.Fatalf("the new ballot should commit what she still holds: got %d, "+
+			"previous commitment was %d", got, locked)
+	}
+}
+
+// THE QUALITY LANE, CASE 2 — a FROZEN accumulating tally holds the coin until the
+// claim is over, because that is exactly how long the vote keeps deciding rounds.
+//
+// Reaching the frozen state takes three dispute rounds and nothing else, which is
+// worth stating because the obvious route does not exist: a flag vote runs for
+// votingBlocks (a week) while the dispute window is settleDelay (72h), so a flag
+// can never resolve in time to be followed by a dispute. The reachable path is
+// entirely inside the dispute lane, because resolveQualityRide also consumes the
+// slot — and only on a DECIDED round, never on one that failed quorum.
+//
+//	R1 decides, its ride goes conclusive  -> slotConsumed
+//	R2 opens                              -> the ONE re-ask is spent, seq moves
+//	R3 opens                              -> no re-ask left, seq FROZEN
+//
+// A vote cast into R2's tally therefore decides R3 as well, which is the measured
+// hazard: a divested address deciding a round it never held through. So the coin
+// stays committed while that is true, and is released when the claim ends.
+func TestAFrozenQualityTallyHoldsCoinUntilTheClaimEnds(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vl5-alice")
+	bob := testutils.TestAddress("vl5-bob")
+	carol := testutils.TestAddress("vl5-carol")
+	c := testCourt(cur, "vlk5", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "vlk5", "a frozen accumulating tally")
+	matureOI(cur, "vlk5", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "vlk5", id, sideYES)
+	c.params.escrowMinBlocks = 700_000 // room for three rounds inside the escrow
+	c.params.escrowMaxBlocks = 700_000
+	cs := mustClaim(c, id)
+
+	// R1: decided, and its ride conclusive — carol's 20 B clears the full bar
+	// alone, which is what consumes the slot.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlk5", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlk5", id, qualityMid)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	VoteDispute(cross(cur), "vlk5", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "vlk5", id)
+	if !cs.slotConsumed {
+		t.Fatal("fixture is vacuous: R1's ride did not go conclusive, so the " +
+			"re-ask is never spent and the seq keeps moving every round")
+	}
+
+	// R2: spends the one re-ask, so the seq moves and carol votes a fresh tally.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlk5", id)
+	if !cs.qualityReasked {
+		t.Fatal("fixture is vacuous: the one re-ask was not spent")
+	}
+	frozen := cs.qVoteSeq
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlk5", id, qualityHigh)
+	locked := VoteLockedOf("vlk5", carol)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: the quality vote committed nothing")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	VoteDispute(cross(cur), "vlk5", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "vlk5", id)
+
+	// Resolving the ROUND does not release it: the tally is still live, so carol's
+	// ballot is still counted. This is the case that has no "round resolved"
+	// instant to release at, and the reason the predicate reads the claim instead.
+	uassert.Equal(t, locked, VoteLockedOf("vlk5", carol))
+
+	// R3: no re-ask left, so the seq does NOT move and carol's R2 ballot now
+	// decides this round too. Asserted, because if the seq moved this test would be
+	// case 1 wearing case 2's name.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlk5", id)
+	if cs.qVoteSeq != frozen {
+		t.Fatalf("fixture is vacuous: the seq moved from %d to %d, so the tally "+
+			"is not accumulating and this says nothing about the frozen case",
+			frozen, cs.qVoteSeq)
+	}
+	uassert.Equal(t, locked, VoteLockedOf("vlk5", carol))
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "vlk5", bob, locked)
+	})
+
+	// The claim ends, and the vote stops deciding anything.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	VoteDispute(cross(cur), "vlk5", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "vlk5", id)
+	if d := EscrowUntil("vlk5", id) - heightNow() + 1; d > 0 {
+		testing.SkipHeights(d)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "vlk5", id)
+	if cs.verdictAt == 0 && !cs.closed {
+		t.Fatal("fixture is vacuous: the claim is not terminal, so the release " +
+			"below is not caused by what this test says causes it")
+	}
+	uassert.Equal(t, int64(0), VoteLockedOf("vlk5", carol))
+	testing.SetRealm(testing.NewUserRealm(carol))
+	TransferCC(cross(cur), "vlk5", bob, locked)
+}
+
+// ONE PILE, TWO QUESTIONS, ONE COMMITMENT — the max across open questions, not the
+// sum. Each lock row is a floor ("at least this much must stay put") and one pile
+// of size max(rows) honours them all, because the same coins can satisfy more than
+// one commitment at a time.
+//
+// This was a SHIPPED BUG, found by probing rather than by reading. P11 makes the
+// quality ride its own transaction, so voting a verdict and then its quality
+// question is what an engaged holder ordinarily does — and that holder ended up
+// with 40 B committed against a 20 B balance, unable to move anything, having
+// committed one pile once. Measured before the fix, pinned here after it.
+func TestTwoQuestionsCommitOnePileOnce(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vl4-alice")
+	bob := testutils.TestAddress("vl4-bob")
+	carol := testutils.TestAddress("vl4-carol")
+	c := testCourt(cur, "vlk4", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "vlk4", "one pile, two questions")
+	matureOI(cur, "vlk4", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "vlk4", id, sideYES)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlk4", id)
+	bal := c.coin.BalanceOf(carol)
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "vlk4", id, "no")
+	one := VoteLockedOf("vlk4", carol)
+	if one <= 0 {
+		t.Fatal("fixture is vacuous: the verdict vote committed nothing")
+	}
+
+	// The ride, in its own transaction, exactly as P11 intends.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlk4", id, qualityMid)
+	two := VoteLockedOf("vlk4", carol)
+
+	// The instrument's own precondition: two rows really are open. Without this the
+	// assertion below would pass just as happily against a lane that recorded
+	// nothing for the second question.
+	if !c.voteLocks.Has(voteLockKey(carol, voteLockDispute,
+		id, uint64(mustClaim(c, id).proposalID))) {
+		t.Fatal("fixture is vacuous: no dispute lock row was written")
+	}
+	if !c.voteLocks.Has(voteLockKey(carol, voteLockQuality,
+		id, uint64(mustClaim(c, id).qVoteSeq))) {
+		t.Fatal("fixture is vacuous: no quality lock row was written")
+	}
+
+	// Two questions, one commitment. Not two.
+	uassert.Equal(t, one, two)
+	if two > bal {
+		t.Fatalf("the commitment (%d) exceeds the whole balance (%d): the same "+
+			"coins are being counted twice", two, bal)
+	}
+
+	// PAIRED: the commitment is real, and it is exactly the pile. One unit over is
+	// refused, so max is a bound rather than an unenforced number.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	TransferCC(cross(cur), "vlk4", carol, 1_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	TransferCC(cross(cur), "vlk4", bob, 1_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "vlk4", bob, 1)
+	})
+}
