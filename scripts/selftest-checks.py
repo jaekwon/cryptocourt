@@ -160,6 +160,7 @@ SEEDED = "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 GOVERNORDIR = "realm/p/governor"
+CCWRAP = "realm/r/ccwrap"
 GRC20VOTES = "realm/p/grc20votes"
 VOTES = "realm/p/grc20votes"
 
@@ -324,6 +325,25 @@ control("a locking helper passed a foreign address", f"{KOURTV2}/modvote.gno",
         "\tapprove(cur.Previous().Address(), courtSlug, 0, true)\n"
         "\tapprove(c.treasury, courtSlug, 0, true)",
         "as the holder", argv=["python3", EPOCHCOH])
+# ARM 9's controls, one per formula shape, in the two realms that expose the figure.
+# SpendableOf is stake-only and named as though it were not, and the tree has walked
+# into that three times — so what is pinned is arithmetic WITH it, in either direction:
+# quoting it as the movable amount over-promises by a vote commitment, and subtracting
+# VoteLockedOf from it understates the room because the locks combine with MAX not SUM.
+# The prose that explains the figure correctly carries no formula and is the bystander:
+# it sits in lock.gno right now and the clean run does not flag it.
+control("SpendableOf quoted as the movable amount", f"{KOURTV2}/lock.gno",
+        "// min(AllowanceCC, DisposableOf).",
+        "// min(AllowanceCC, SpendableOf).",
+        "[spendable-as-movable]", argv=["python3", EPOCHCOH])
+control("the two locks subtracted in series", f"{CCWRAP}/ccwrap.gno",
+        "// mustSpendable actually enforces.",
+        "// SpendableOf minus VoteLockedOf is what to wrap against.",
+        "[spendable-as-movable]", argv=["python3", EPOCHCOH])
+control("arm 9 losing the trees it watches", EPOCHCOH,
+        'CCWRAP = ROOT / "realm" / "r" / "ccwrap"',
+        'CCWRAP = ROOT / "realm" / "r" / "ccwrap_moved"',
+        "measuring nothing", argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',

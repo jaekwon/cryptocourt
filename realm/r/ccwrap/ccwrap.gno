@@ -374,8 +374,15 @@ func mustWrapRoom(slug string, vault address, amount int64) {
 // out BOTH the stake lock and the vote lock. So a holder who has staked, or who has
 // voted in a question that has not resolved, can be refused an amount this function
 // says is available — for a reason it never mentions. Whoever is deciding how much
-// to wrap wants the lesser of this and kourtv2.SpendableOf minus their own vote
-// commitment; kourtv2.VoteLockedOf quotes the second half.
+// to wrap wants the lesser of this and kourtv2.DisposableOf, which is the figure
+// mustSpendable actually enforces.
+//
+// This used to subtract VoteLockedOf from the stake-only figure, which DOUBLE-COUNTS
+// the overlap and understates the room by whichever lock is smaller. The two locks
+// combine with MAX, not SUM — staked coin still votes, so one pile honours both
+// commitments — and subtracting them in series is precisely the arithmetic that
+// decision rejects. kourtv2.VoteLockedOf still quotes the vote half on its own, for a
+// client that wants to say which limit binds.
 //
 // Not folded into one number on purpose: this realm has no business deciding which
 // of a holder's several commitments is the interesting one, and a single figure

@@ -29,6 +29,7 @@ import repolock  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 KOURTV2 = ROOT / "realm" / "r" / "kourtv2"
 GOVERNOR = ROOT / "realm" / "p" / "governor"
+CCWRAP = ROOT / "realm" / "r" / "ccwrap"
 
 # ARM 1 — no LIVE weight read may appear in a file that computes a tally or a bar.
 LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
@@ -280,6 +281,25 @@ WHO_PARAM_FN = re.compile(r"^func ([a-zA-Z_][A-Za-z0-9_]*)\(who address", re.M)
 CALLER_DERIVED = "cur.Previous().Address()"
 LOCKVOTE_CALLS_N = 3  # dispute.gno, modvote.gno, quality.gno — one per lane
 
+# ARM 9 — no comment may present SpendableOf as what a holder can MOVE.
+#
+# SpendableOf is stake-only and its name predates the vote lock, so it reads like the
+# answer to "how much can I spend" and is not. That trap has now been walked into three
+# times: once in its own doc, once in AllowanceCC ("the amount actually movable is
+# min(AllowanceCC, SpendableOf)" — over-promises by a whole vote commitment), and once
+# in ccwrap's WrapRoom ("SpendableOf minus their own vote commitment" — which
+# double-counts the overlap and understates the room, since the locks combine with MAX
+# not SUM because staked coin still votes). Two errors in OPPOSITE directions from one
+# missing instrument, which is what DisposableOf now is.
+#
+# The pattern is deliberately narrow: SpendableOf on a comment line that also carries a
+# formula shape — `min(` or ` minus `. Both real instances match; the passages that
+# correctly explain SpendableOf ("what an address may still STAKE", "quoting only
+# SpendableOf over-promises") carry no formula and must not be flagged. Prose about the
+# figure is fine. Arithmetic with it is what goes wrong.
+DOC_MOVABLE = re.compile(r"^\s*//.*\bSpendableOf\b.*(?:min\(| minus )|"
+                         r"^\s*//.*(?:min\(| minus ).*\bSpendableOf\b")
+
 # THE OTHER ARMS WERE AUDITED FOR THE SAME BLIND SPOT AND ARE CLEAN. Three arms have
 # now been widened because a regex hardcoded a spelling the tree already used
 # elsewhere (arm 7 missed Burn, arm 5 missed tuple assignment, arm 7 missed a non-`c`
@@ -336,6 +356,42 @@ def funcs_with_epochs(src):
 def main() -> int:
     repolock.refuse_if_held("check-epoch-coherence")
     hits, scanned, sealed_funcs = [], 0, 0
+
+    # Arm 9, its own pass over both realms that expose the figure. Deliberately not
+    # folded into the loop below: that loop's file census feeds arms 1 and 2, and
+    # adding a directory to it would move counts those arms pin.
+    doc_scanned, per_dir = 0, {}
+    for d in (KOURTV2, CCWRAP):
+        per_dir[d.name] = 0
+        for q in sorted(d.glob("*.gno")):
+            if q.name.endswith("_test.gno"):
+                continue
+            doc_scanned += 1
+            per_dir[d.name] += 1
+            for i, line in enumerate(q.read_text().splitlines()):
+                if DOC_MOVABLE.search(line):
+                    hits.append(f"[spendable-as-movable] {d.name}/{q.name}:{i+1} does "
+                                f"arithmetic with SpendableOf, which is stake-only: "
+                                f"what a holder may bond, deposit, transfer or wrap is "
+                                f"DisposableOf. Quoting SpendableOf over-promises by a "
+                                f"vote commitment; subtracting VoteLockedOf from it "
+                                f"understates the room, because the locks combine with "
+                                f"MAX not SUM")
+    # PER DIRECTORY, not a total. A total of 20+ is satisfied by kourtv2 alone, so
+    # ccwrap could move away and this arm would quietly stop watching the realm where
+    # one of the two real instances lived — measured: the control for a moved ccwrap
+    # was SILENT against the total-only form.
+    for name, n in sorted(per_dir.items()):
+        if n < 1:
+            print(f"check-epoch-coherence: arm 9 found no non-test .gno under "
+                  f"{name}; that tree moved and this arm is measuring nothing "
+                  f"there.", file=sys.stderr)
+            return 1
+    if per_dir.get("kourtv2", 0) < 20:
+        print(f"check-epoch-coherence: arm 9 scanned only "
+              f"{per_dir.get('kourtv2', 0)} kourtv2 files; the layout moved and "
+              f"this arm is measuring nothing.", file=sys.stderr)
+        return 1
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
             "lockvote": 0}
@@ -534,7 +590,9 @@ def main() -> int:
           f"function(s) each reading one epoch, no live weight in any tally, one "
           f"weight source in the engine, one vote-weight expression, "
           f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
-          f"{arm4['lockvote']} self-only vote-lock site(s).")
+          f"{arm4['lockvote']} self-only vote-lock site(s), "
+          f"{doc_scanned} file(s) clear of SpendableOf arithmetic "
+          f"({', '.join(f'{k} {v}' for k, v in sorted(per_dir.items()))}).")
     return 0
 
 

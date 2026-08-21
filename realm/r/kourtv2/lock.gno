@@ -323,8 +323,14 @@ func TransferFromCC(cur realm, courtSlug string, from, to address, amount int64)
 // AllowanceCC reports what `spender` may still move of `owner`'s court coin.
 //
 // Read it as a ceiling, not as a balance: the spend is additionally capped by
-// spendable(owner) at the moment it happens, so the amount actually movable is
-// min(AllowanceCC, SpendableOf).
+// disposable(owner) at the moment it happens, so the amount actually movable is
+// min(AllowanceCC, DisposableOf).
+//
+// NOT SpendableOf, which this comment named until it was checked. SpendableOf is
+// stake-only, so quoting it here over-promises by the whole of a vote commitment —
+// the exact over-promise the SpendableOf doc thirty lines above warns against.
+// TestAnAllowanceCannotOutrunAVoteCommitment pins the spender being refused for that
+// reason, with the uncommitted remainder still moving.
 func AllowanceCC(courtSlug string, owner, spender address) int64 {
 	return mustCourt(courtSlug).coin.Allowance(owner, spender)
 }
