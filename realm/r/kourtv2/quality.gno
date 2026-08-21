@@ -3,7 +3,9 @@
 // decided dispute round for free, and available standalone through the one
 // per-claim FLAG slot. The tally's electorate is pinned at the answer
 // (qualityEpoch, Q1): capital staked by then is disenfranchised on its own
-// payout multiplier, and the flagger cannot shop epochs.
+// payout multiplier, and the flagger cannot shop epochs. That snapshot is a
+// CEILING only — weight is also floored by what the voter still holds, so it
+// cannot be rented for the vote and handed straight back (VOTEFLOOR.md).
 //
 // The flag slot: consumed only by a CONCLUSIVE vote. Inconclusive outcomes
 // reopen it with a doubled bond (frozen at 4×b₀ after 3 cycles + a 7-day
@@ -201,13 +203,39 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if isParticipant(cs, who) {
 		panic("kourtv2: the claim's participants cannot vote its quality (Q2)")
 	}
-	// Weighed at the claim's quality epoch (Q1), pinned at PostAnswer. Rentable
-	// in principle — see RENTEDWEIGHT.md — but the hardest of the three lanes to
-	// rent into, since the anchor is set by the ANSWERER and using it means
-	// answering the claim yourself and voting from a second address.
+	// Weighed at the claim's quality epoch (Q1), pinned at PostAnswer, and then
+	// FLOORED by what the voter still holds. Two halves, and neither works alone:
+	//
+	//   ceiling (the Q1 snapshot) — you cannot buy in after the answer was given.
+	//   floor (the live balance)  — you cannot vote weight you have given back.
+	//
+	// Two earlier attempts each kept one half and failed. Ceiling only is RENTABLE:
+	// acquire float, let the epoch seal, sell it all back, vote the pinned figure,
+	// because a past checkpoint cannot be un-written by a later transfer. Live only
+	// put a live numerator against a frozen bar and produced turnout at 200-400% of
+	// its own bar. See VOTEFLOOR.md.
+	//
+	// COHERENT BY CONSTRUCTION, because a floor can only LOWER a figure that was
+	// already coherent:
+	//
+	//   Σ min(PastVotes(·,Q1), BalanceOf(·)) ≤ Σ PastVotes(·,Q1) ≤ PastTotal(Q1)
+	//
+	// so the accumulating tally stays under qualityBars, which draws supply and
+	// votable at that same Q1 rather than live.
+	//
+	// BalanceOf, NOT spendable(). Staked coin is still in the holder's balance and
+	// still votes; spendable() nets the stake out, so using it as the floor would
+	// disenfranchise every staker in the court — which is exactly the court-wide
+	// disenfranchisement v0.34 deleted, and it was caught here on the way back in.
 	w := c.coin.PastVotes(who, cs.qualityEpoch)
 	if w <= 0 {
 		panic("kourtv2: no checkpointed weight at the claim's quality epoch")
+	}
+	if held := c.coin.BalanceOf(who); held < w {
+		w = held
+	}
+	if w <= 0 {
+		panic("kourtv2: you no longer hold the coin you would vote with")
 	}
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()

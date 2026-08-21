@@ -6196,5 +6196,19 @@
     "label": "VoteWithCap: a non-positive cap is accepted as uncapped",
     "find": "\tif cap <= 0 {\n\t\tpanic(\"govern: a vote cap must be positive; use Vote for no cap\")\n\t}",
     "replace": "\tif cap < 0 {\n\t\tpanic(\"govern: a vote cap must be positive; use Vote for no cap\")\n\t}"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "VoteQuality: the own-balance floor is gone (divested weight votes)",
+    "find": "\tif held := c.coin.BalanceOf(who); held < w {\n\t\tw = held\n\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "quality.gno",
+    "label": "VoteQuality: the floor comparison is reversed (raises, not lowers)",
+    "find": "\tif held := c.coin.BalanceOf(who); held < w {",
+    "replace": "\tif held := c.coin.BalanceOf(who); held > w {"
   }
 ]

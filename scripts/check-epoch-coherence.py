@@ -57,7 +57,9 @@ LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
 # denying it, which is the direction that does not announce itself.
 TALLY_LIVE_ALLOWED = {
     ("kourtv2", "dispute.gno"): 0,
-    ("kourtv2", "quality.gno"): 0,
+    # VoteQuality's floor: min(PastVotes(who,Q1), BalanceOf(who)). A CEILING on a
+    # frozen numerator, not a live numerator — see the derivation above.
+    ("kourtv2", "quality.gno"): 1,
     ("kourtv2", "modvote.gno"): 0,
     ("kourtv2", "crystallize.gno"): 0,
     ("kourtv2", "meta.gno"): 0,

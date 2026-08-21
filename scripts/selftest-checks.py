@@ -143,6 +143,7 @@ MUTS = "scripts/mutations-kourtv2.json"
 PHYSICS = "scripts/check-demo-physics.py"
 HSHIM = "scripts/check-height-shim.py"
 LIVER = "scripts/check-live-reads.py"
+NODELEG = "scripts/check-nodelegate.py"
 DUPES = "scripts/check-web-dupes.py"
 WEBCSS = "scripts/check-web-css.py"
 WEBPAGE = "web/index.html"
@@ -159,6 +160,7 @@ SEEDED = "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 GOVERNORDIR = "realm/p/governor"
+GRC20VOTES = "realm/p/grc20votes"
 VOTES = "realm/p/grc20votes"
 
 print("check-citations")
@@ -261,6 +263,32 @@ control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',
         "measuring nothing", argv=["python3", EPOCHCOH])
+
+print("\ncheck-nodelegate")
+# The ceiling (PastVotes) is delegation-aware; the floor (BalanceOf) is not. They
+# agree in kourtv2 for one reason only — nothing there can delegate — and the day
+# that changes, every delegatee is silently docked to their own coin while the
+# arithmetic stays coherent and every suite stays green. A hazard no test can see
+# gets a machine.
+control("kourtv2 gaining a delegation entrypoint", f"{KOURTV2}/court.gno",
+        "func mustCourt(",
+        "func Delegate(cur realm, to address) {}\n\nfunc mustCourt(",
+        "[delegates]", argv=["python3", NODELEG])
+# And the other direction: with no floor there is no asymmetry to protect, so a
+# guard still reporting success would be describing a property nothing has.
+control("the own-balance floor disappearing", f"{KOURTV2}/quality.gno",
+        "\tif held := c.coin.BalanceOf(who); held < w {\n\t\tw = held\n\t}\n",
+        "",
+        "[floor-count]", argv=["python3", NODELEG])
+# Its premise is in ANOTHER package, so it can rot without anything here changing.
+control("the ceiling ceasing to be delegation-aware", f"{GRC20VOTES}/grc20votes.gno",
+        "return a.votes.ValueAt(l.archive, string(who), at)",
+        "return a.balance",
+        "may not exist", argv=["python3", NODELEG])
+control("a guard that lost the tree it watches", NODELEG,
+        'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
+        'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',
+        "measuring nothing", argv=["python3", NODELEG])
 
 print("\ncheck-membership-clears")
 # The guard exists because ResetModSet's clear cannot be pinned by any TEST — it

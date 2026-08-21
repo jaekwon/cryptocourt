@@ -2842,3 +2842,65 @@ func TestAConclusiveRideRecordsItsAuthorityMarks(cur realm, t *testing.T) {
 			cs.conclusiveTurnout, fullBar)
 	}
 }
+
+// THE FLOOR ON QUALITY WEIGHT — the snapshot is a ceiling, holding is a floor.
+//
+// carol carries aged weight at the claim's Q1 and then sells every unit. Her
+// checkpoint is untouched by the sale — that is the whole hazard, and it is why
+// the ceiling alone was rentable: acquire float, let an epoch seal, sell it back,
+// vote a figure you no longer own. The floor makes her ballot worth what she still
+// holds, which is nothing.
+//
+// PAIRED, on purpose. bob keeps his coin and must NOT be docked a single unit — a
+// floor that refuses everyone is not a floor, it is the court-wide
+// disenfranchisement v0.34 deleted. And bob's assertion pins the CEILING in the
+// same breath: he receives carol's entire position, so his live balance is now far
+// above his Q1 snapshot, and he must still be tallied at the snapshot.
+func TestQualityWeightIsFlooredByWhatIsStillHeld(cur realm, t *testing.T) {
+	c, id, _, bob, carol, _ := qfSetup(cur, t, "qfl1")
+	cs := mustClaim(c, id)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "qfl1", id)
+
+	// The instrument's own precondition: carol really does carry weight at Q1, so
+	// what follows is a floor biting rather than a voter who never had any.
+	pinned := c.coin.PastVotes(carol, cs.qualityEpoch)
+	if pinned <= 0 {
+		t.Fatal("fixture is vacuous: carol has no checkpointed weight at Q1")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	TransferCC(cross(cur), "qfl1", bob, SpendableOf("qfl1", carol))
+	uassert.Equal(t, int64(0), c.coin.BalanceOf(carol))
+	// The sale did not un-write the checkpoint. Without the floor this figure is
+	// what would have been tallied.
+	uassert.Equal(t, pinned, c.coin.PastVotes(carol, cs.qualityEpoch))
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "no longer hold", func() {
+		VoteQuality(cross(cur), "qfl1", id, qualityLow)
+	})
+
+	// THE PAIR. bob's Q1 snapshot, and a live balance now well above it.
+	bobPinned := c.coin.PastVotes(bob, cs.qualityEpoch)
+	if bobPinned <= 0 {
+		t.Fatal("fixture is vacuous: bob has no checkpointed weight at Q1")
+	}
+	if c.coin.BalanceOf(bob) <= bobPinned {
+		t.Fatal("fixture is vacuous: bob's live balance must exceed his snapshot " +
+			"for this to say anything about the ceiling")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	VoteQuality(cross(cur), "qfl1", id, qualityMid)
+
+	// Tallied at exactly the snapshot: undocked by the floor, unraised by the
+	// purchase. Read from the court's own record, which is the figure PullCarrot
+	// pays back.
+	rec := cs.qVoted.Get(beClaimKey(cs.qVoteSeq) + string(bob))
+	if rec == nil {
+		t.Fatal("fixture is vacuous: bob's weight was never recorded")
+	}
+	uassert.Equal(t, bobPinned, rec.(int64))
+	uassert.Equal(t, bobPinned, cs.qMidW)
+}

@@ -1,11 +1,11 @@
 .PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
-	scenarios scenarios-check demo-physics height-shim dump-demo seed-demo web-test web-visual deploy setup
+	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # Everything that can run without a node.
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors paths guards staleguards demo-physics scenarios-check web-test height-shim realm-test
+check: fmt vet gotest anchors paths guards staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -36,6 +36,12 @@ staleguards:
 
 demo-physics:
 	python3 scripts/check-demo-physics.py
+
+# Vote weight is min(snapshot, own balance), and those two agree in kourtv2 only
+# because nothing there can delegate. Pure Python, no toolchain, so it lives out
+# here rather than inside realm-test.
+nodelegate:
+	python3 scripts/check-nodelegate.py
 
 # Every height read in the realm must go through heightNow(), or a seeded
 # chain sees two different heights in one transaction. 65 call sites; nobody
