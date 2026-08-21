@@ -392,6 +392,68 @@ New items, each verified before deciding):
 
 (none yet)
 
+### Note from the tokenomics session — VOTING WEIGHT IS CHANGING, and §Voted needs a rewrite
+
+**Not hand-edited this time.** Leaving it here as the header asks. Implementation is
+about to land in the realm; the whitepaper should follow it, not lead it.
+
+**First, credit where it is due: §Voted already has this right and the CODE did
+not.** That paragraph says, correctly:
+
+> "The seal binds those who react to a dispute, not those who plan one: a buyer can
+> wait out the hour and open the dispute himself."
+
+That is exactly the vector I spent this session measuring, and the loop had already
+written it down. What I actually found is that `governor.propose` claimed in a code
+comment that the checkpointed electorate made weight *"impossible to rent"* — a
+claim the whitepaper never made. The comment is corrected (`ceb5d0f`).
+
+**Second, the ABSTRACT overstates what the body delivers.** Line 13–15 reads:
+
+> "Voting weight is read from an hourly snapshot sealed before the vote opened, so
+> weight cannot be bought for a vote already underway."
+
+Literally true and materially misleading side by side with §Voted, because the
+person who opens the vote picks the seal. **Measured:** 300 B of weight cast at
+600× the quorum floor with a live balance of zero and one hour of capital at risk;
+election lane, 12× the election floor on a 500 B court. Whatever the abstract says
+after this change, it should not imply a guarantee the body then takes back.
+
+**Third, what is replacing it.** Design and full review in `VOTELOCK.md`; the
+one-paragraph version for prose purposes:
+
+> Voting weight is what a holder owns **at the moment they vote** — coin bought a
+> block ago votes at full size. Casting a vote locks that coin **against transfer
+> only** until the round closes: it can still be staked, still back a bond, still
+> pay a deposit, so a voter forgoes no yield — only the option to sell for the rest
+> of the round. Weight cannot be rented, because renting requires selling it back.
+
+The three properties to convey, in owner-priority order: **(1)** voting costs the
+voter no yield, only liquidity; **(2)** rented weight cannot decide a vote;
+**(3)** newly acquired coin votes immediately, with no seasoning period.
+
+**Fourth, two things the prose must NOT overclaim, both recorded in `VOTELOCK.md`:**
+
+- **One coin still votes on every open claim at once.** The lock rations disposal,
+  not voting, so the "simultaneous across every concurrently open dispute" cost
+  that `quorumFloor`'s comment accepts is unchanged. It now carries a round of
+  price risk on the whole position, which is a price, not a fix.
+- **The quality lane gets WORSE and the others get better.** Its anchor
+  (`qualityEpoch`, pinned at `PostAnswer`) is one no voter can move, so today a
+  post-answer buyer simply cannot vote on quality — a wall. Live weight replaces
+  that wall with a price (1.25% of court supply held for a round). Constraint (3)
+  forces it: an answer-pinned anchor and "new coin votes immediately" cannot both
+  hold. If the owner would rather keep the wall, exempt quality and say so.
+
+**Fifth, a fact anchor for §Fact anchors once it lands:** court coins have **no
+`Delegate` entrypoint** (grepped, zero hits outside tests), so power is always
+self-delegated and `VotesOf == BalanceOf`. Live weight is only safe because of
+that — a delegator could otherwise hand power to a delegate, have them vote, and
+sell, with only the delegate's coin locked. The implementation reads `BalanceOf`
+rather than `VotesOf` and ships a guard so a `Delegate` entrypoint cannot be added
+silently. `r/govern` **does** expose `Delegate`, which is a second reason its lane
+keeps the snapshot and is not "upgraded" for consistency.
+
 ### Note from the tokenomics session — WHITEPAPER.md was hand-edited (sorry)
 
 I edited `WHITEPAPER.md` directly in two commits, `c44e2ab` and `1a5aaad`, before
