@@ -88,8 +88,21 @@ def control(label, path, find, replace, want, argv=None, stdin=None, cwd=None):
         out = r.stdout + r.stderr
         if want in out:
             print(f"  {label:<44} fires")
-        else:
+        elif r.returncode == 0:
             print(f"  {label:<44} SILENT — the guard did not notice")
+            failures.append(label)
+        else:
+            # It DID complain, about something else. Both are failures, but they
+            # need OPPOSITE fixes: silent means the guard has a hole, wrong
+            # complaint means this control's expected text went stale while the
+            # guard got better. Reporting the second as "SILENT" sends you
+            # looking for a hole that is not there — measured, on the arm-3
+            # retarget, which fired correctly and was reported as blind. So
+            # print what it actually said rather than only that it missed.
+            said = next((l.strip() for l in out.splitlines() if l.strip()), "")
+            print(f"  {label:<44} FIRED, WRONG COMPLAINT")
+            print(f"  {'':<44}   wanted: {want!r}")
+            print(f"  {'':<44}   said:   {said[:100]!r}")
             failures.append(label)
     finally:
         shutil.move(backup, path)
@@ -232,7 +245,17 @@ control("the engine accepting a supplied weight", f"{GOVERNORDIR}/governor.gno",
         "func (g *Governor) Vote(who address, id int64, choice string) {",
         "func (g *Governor) VoteWithWeight(who address, id int64, choice string, weight int64) {}\n\n"
         "func (g *Governor) Vote(who address, id int64, choice string) {",
-        "the engine must derive weight, never be told it",
+        "the engine must DERIVE weight",
+        argv=["python3", EPOCHCOH])
+# The cap arm's own control, and the reason the arm is not just a name match: a
+# ceiling that RAISES is the supplied-weight defect wearing a legal signature.
+# The engine derives w correctly, a consumer lifts it, and `cast` exceeds p.total
+# exactly as VoteWithWeight did — through a parameter the first version allowed.
+control("a supplied cap that raises instead of lowering",
+        f"{GOVERNORDIR}/governor.gno",
+        "if cap > 0 && cap < w {",
+        "if cap > w {",
+        "a supplied cap must only ever lower",
         argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',

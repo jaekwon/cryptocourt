@@ -6175,5 +6175,26 @@
     "label": "zero-stamp: the settle row's HEIGHT half is taken from the opening too",
     "find": "\":\" + itoa(cs.answerHeight+settleDelay)",
     "replace": "\":\" + itoa(cs.openedAt+settleDelay)"
+  },
+  {
+    "pkg": "governor",
+    "file": "governor.gno",
+    "label": "castVote: the supplied cap is ignored (the ceiling deleted)",
+    "find": "\tif cap > 0 && cap < w {\n\t\tw = cap\n\t}",
+    "replace": "\t_ = cap"
+  },
+  {
+    "pkg": "governor",
+    "file": "governor.gno",
+    "label": "castVote: the cap RAISES instead of lowering (ceiling -> floor)",
+    "find": "\tif cap > 0 && cap < w {",
+    "replace": "\tif cap > w {"
+  },
+  {
+    "pkg": "governor",
+    "file": "governor.gno",
+    "label": "VoteWithCap: a non-positive cap is accepted as uncapped",
+    "find": "\tif cap <= 0 {\n\t\tpanic(\"govern: a vote cap must be positive; use Vote for no cap\")\n\t}",
+    "replace": "\tif cap < 0 {\n\t\tpanic(\"govern: a vote cap must be positive; use Vote for no cap\")\n\t}"
   }
 ]

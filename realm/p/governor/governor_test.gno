@@ -1366,3 +1366,112 @@ func TestPartsNeverExceedTheWhole(cur realm, t *testing.T) {
 		t.Fatalf("recorded ballots sum to %d, tally says %d", sum, yes+no+abstain)
 	}
 }
+
+// weighted is an electorate with real per-address weights, which `council` cannot
+// provide: it gives every member exactly 1, and no positive cap is below 1, so the
+// clamp is untestable against it.
+type weighted struct {
+	w     map[string]int64
+	total int64
+	epoch uint32
+}
+
+func (e *weighted) PastVotes(who address, at uint32) int64 { return e.w[string(who)] }
+func (e *weighted) PastTotal(at uint32) int64              { return e.total }
+func (e *weighted) EngagedTotal(at uint32) int64           { return e.total }
+func (e *weighted) Epoch() uint32                          { return e.epoch }
+func (e *weighted) Height() int64                          { return runtime.ChainHeight() }
+
+func weightedGov(t *testing.T, w map[string]int64, total int64) *Governor {
+	t.Helper()
+	e := &weighted{w: w, total: total, epoch: 2}
+	g := New(e, coin{supply: total})
+	g.kinds.Set("fee", &entry{kind: setFee{}, live: true, rules: Rules{
+		QuorumBps: 1, ThresholdBps: 5000, VotingBlocks: 100000, GraceBlocks: 1_000_000,
+	}})
+	return g
+}
+
+// A CAP LOWERS THE TALLY, and it is the tallied figure that is recorded.
+//
+// This is the mechanism a whole panel found the suite blind to: ablating the clamp
+// while keeping the `cap <= 0` refusal left all 293 kourtv2 tests green, which makes
+// deleting it a SILENT revert to snapshot-only weight. This test is the detector.
+func TestACapLowersTheTalliedWeight(cur realm, t *testing.T) {
+	g := weightedGov(t, map[string]int64{string(gAlice): 1000}, 10_000)
+	id := g.Propose(gAlice, "fee", "1", "capped")
+
+	g.VoteWithCap(gAlice, id, "yes", 400)
+
+	yes, _, _, _ := g.Tally(id)
+	if yes != 400 {
+		t.Fatalf("tallied %d, want the cap 400 — the clamp did not bind", yes)
+	}
+	_, w, ok := g.VoteOf(id, gAlice)
+	if !ok || w != 400 {
+		t.Fatalf("recorded ballot %d (ok=%v), want 400 — the record must match "+
+			"the tally or every pro-rata payout downstream diverges", w, ok)
+	}
+}
+
+// A CAP ABOVE THE SNAPSHOT CHANGES NOTHING. The ceiling is the engine's own read,
+// so a consumer cannot raise weight — which is the property that makes a supplied
+// figure safe here where a supplied WEIGHT was a permissionless verdict flip.
+func TestACapAboveTheSnapshotCannotRaiseWeight(cur realm, t *testing.T) {
+	g := weightedGov(t, map[string]int64{string(gAlice): 1000}, 10_000)
+	id := g.Propose(gAlice, "fee", "1", "cap above")
+
+	g.VoteWithCap(gAlice, id, "yes", 9_999_999)
+
+	yes, _, _, _ := g.Tally(id)
+	if yes != 1000 {
+		t.Fatalf("tallied %d, want the snapshot 1000 — a cap must not raise", yes)
+	}
+}
+
+// A NON-POSITIVE CAP IS REFUSED. Zero is not an edge case: a renter who has sold
+// everything HAS a live balance of zero, so treating zero as "uncapped" — which the
+// plan for this change originally did — hands the full rented weight straight back.
+func TestANonPositiveCapIsRefused(cur realm, t *testing.T) {
+	g := weightedGov(t, map[string]int64{string(gAlice): 1000}, 10_000)
+	id := g.Propose(gAlice, "fee", "1", "zero cap")
+
+	mustPanic(t, "govern: a vote cap must be positive; use Vote for no cap",
+		func() { g.VoteWithCap(gAlice, id, "yes", 0) })
+	mustPanic(t, "govern: a vote cap must be positive; use Vote for no cap",
+		func() { g.VoteWithCap(gAlice, id, "yes", -1) })
+
+	if yes, no, ab, _ := g.Tally(id); yes+no+ab != 0 {
+		t.Fatalf("a refused cap still moved the tally: %d/%d/%d", yes, no, ab)
+	}
+	// And the ordinary path it must NOT refuse.
+	g.VoteWithCap(gAlice, id, "yes", 500)
+	if yes, _, _, _ := g.Tally(id); yes != 500 {
+		t.Fatalf("tallied %d after a legal cap, want 500", yes)
+	}
+}
+
+// PARTS NEVER EXCEED THE WHOLE, with a capped voter in the mix. A cap can only
+// shrink an addend, so the bound the early-decide arms rest on is preserved — but
+// it is asserted rather than argued, because `rest := p.total - cast` going negative
+// is the failure that produced a verdict flip once already.
+func TestACappedTallyStillRespectsTheWhole(cur realm, t *testing.T) {
+	g := weightedGov(t, map[string]int64{
+		string(gAlice): 4000, string(gBob): 3000, string(gCarl): 2000,
+	}, 10_000)
+	id := g.Propose(gAlice, "fee", "1", "capped whole")
+
+	g.VoteWithCap(gAlice, id, "yes", 1500)
+	g.Vote(gBob, id, "no")
+	g.VoteWithCap(gCarl, id, "abstain", 500)
+
+	yes, no, ab, _ := g.Tally(id)
+	if cast := yes + no + ab; cast > 10_000 {
+		t.Fatalf("cast %d exceeds the whole 10000 — rest is negative and the "+
+			"early-decide arms are reading a lie", cast)
+	}
+	if yes != 1500 || no != 3000 || ab != 500 {
+		t.Fatalf("tally %d/%d/%d, want 1500/3000/500 — capped addends should be "+
+			"the cap and uncapped ones the snapshot", yes, no, ab)
+	}
+}

@@ -835,7 +835,38 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
 
 // Vote records a choice, weighed at the proposal's snapshot.
 func (g *Governor) Vote(who address, id int64, choice string) {
-	g.castVote(who, id, choice, "")
+	g.castVote(who, id, choice, "", 0)
+}
+
+// VoteWithCap is Vote where the consumer supplies a CEILING on the weight, and
+// the engine still derives the weight itself and takes the lesser.
+//
+// A CEILING, NEVER A WEIGHT, and the distinction is the whole reason this method
+// is shaped like this. An earlier attempt added VoteWithWeight, which took the
+// figure to tally. A supplied weight is not drawn from p.total, so `cast` could
+// exceed it, `rest := p.total - cast` went negative, and the early-succeed arm
+// reduced to `yes*bps >= (total - abstain)*ThresholdBps` — dropping `no` out of the
+// test entirely. That was a permissionless verdict flip. Here the consumer can only
+// LOWER what this package read for itself, so
+//
+//	Σ w  ≤  Σ PastVotes(·, p.epoch)  ≤  PastTotal(p.epoch)  =  p.total
+//
+// holds as an inequality rather than as a promise a caller has to keep. A hostile
+// consumer cannot raise `cast`, and the contract electorate.gno says this engine
+// "cannot check and cannot recover from" stays enforced where it lives.
+//
+// NO SENTINEL. `cap <= 0` is refused, and Vote is the uncapped path. Treating zero
+// as "uncapped" was tried in the plan for this change and reopened the exploit
+// verbatim: a renter who has sold everything HAS a floor of zero, so zero is not an
+// edge case, it is the attack's terminal state.
+//
+// Why a consumer would want this: kourtv2 caps at the voter's live balance, so
+// weight that has been sold back cannot vote. See VOTEFLOOR.md.
+func (g *Governor) VoteWithCap(who address, id int64, choice string, cap int64) {
+	if cap <= 0 {
+		panic("govern: a vote cap must be positive; use Vote for no cap")
+	}
+	g.castVote(who, id, choice, "", cap)
 }
 
 // VoteWithReason is Vote with a note the voter wants on the record — the same
@@ -854,10 +885,10 @@ func (g *Governor) VoteWithReason(who address, id int64, choice, reason string) 
 	if len(reason) > maxReason {
 		panic("govern: that reason is too long")
 	}
-	g.castVote(who, id, choice, reason)
+	g.castVote(who, id, choice, reason, 0)
 }
 
-func (g *Governor) castVote(who address, id int64, choice, reason string) {
+func (g *Governor) castVote(who address, id int64, choice, reason string, cap int64) {
 	if g.executing {
 		panic("govern: cannot vote from inside an execution")
 	}
@@ -885,6 +916,12 @@ func (g *Governor) castVote(who address, id int64, choice, reason string) {
 	w := g.voters.PastVotes(who, p.epoch)
 	if w <= 0 {
 		panic("govern: no voting power at that epoch")
+	}
+	// The consumer's ceiling, and it may only LOWER. Written as an explicit clamp
+	// rather than a min() helper so that the one property this block exists for —
+	// w is never raised — is a single readable line that a guard can pin.
+	if cap > 0 && cap < w {
+		w = cap
 	}
 	switch choice {
 	case "yes":
