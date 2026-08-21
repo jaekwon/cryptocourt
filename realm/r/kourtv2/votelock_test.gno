@@ -748,3 +748,146 @@ func TestDisposableOfIsTheBindingFigureAndSpendableOfIsNot(cur realm, t *testing
 	// Whereas SpendableOf would have over-promised by exactly the commitment.
 	uassert.Equal(t, locked, sp-dp)
 }
+
+// A QUALITY VOTE MUST NOT OUTLIVE ITS OWN INFLUENCE.
+//
+// A failed-quorum dispute round parks the claim: verdictAt == 0, closed == false,
+// disputeOpen == false, round == 1, and failedRounds 1 of the 3 that would
+// provisionally close it — a third that only arrives if somebody volunteers two more
+// dispute bonds. Three routes out refuse: SettleUndisputed (round > 0), CloseDeadClaim
+// (the claim has an answer), ResolveDispute (nothing open). The route that does work is
+// Finalize, gated on the escrow window and then participant-only for
+// finalizeGraceBlocks — so for an ordinary quality voter, who is not a participant, the
+// wait was the escrow window plus a week. Probed at 155,521 blocks of escrow window
+// left when the round failed: about sixteen days holding their ENTIRE balance, for a
+// vote that could no longer decide anything.
+//
+// It could not decide anything because every path that COUNTS this tally (ResolveFlag,
+// resolveQualityRide, ResolveCounter) runs behind flagOpen, disputeOpen or counterOpen,
+// and each route to one of those calls openQualityTally first, which zeroes the
+// weights. Finalize does not read them at all — dispute.gno never mentions qLowW.
+func TestQualityLockReleasesWhenItsVoteCanNoLongerDecideAnything(cur realm, t *testing.T) {
+	c, id, _, bob, carol, _ := qfSetup(cur, t, "vlq1")
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlq1", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlq1", id, qualityLow)
+
+	// THE BYSTANDER, and the half a release rule breaks first: while the question is
+	// open the vote is about to be counted, so the coin stays put.
+	held := c.coin.BalanceOf(carol)
+	if VoteLockedOf("vlq1", carol) <= 0 {
+		t.Fatal("a vote in an OPEN question must hold its coin — releasing here " +
+			"would let a voter divest between casting and counting")
+	}
+	if disposable(c, carol) != 0 {
+		t.Fatalf("the whole voted balance should be committed while the question "+
+			"is open, disposable %d of %d", disposable(c, carol), held)
+	}
+
+	// Nobody votes the verdict. The window closes; anyone may resolve.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "vlq1", id)
+
+	cs := mustClaim(c, id)
+	if cs.verdictAt != 0 || cs.closed || cs.disputeOpen {
+		t.Fatal("fixture is not the parked state this test is about")
+	}
+	if cs.slotConsumed || cs.qualityReasked {
+		t.Fatal("fixture must be the pre-adjudication case, where the next round " +
+			"opens a fresh tally and discards these weights")
+	}
+	// The long way out, which is why releasing here is worth doing.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "settles by vote", func() {
+		SettleUndisputed(cross(cur), "vlq1", id)
+	})
+	uassert.AbortsContains(t, cur, "it settles, it does not die", func() {
+		CloseDeadClaim(cross(cur), "vlq1", id)
+	})
+	uassert.AbortsContains(t, cur, "no dispute to resolve", func() {
+		ResolveDispute(cross(cur), "vlq1", id)
+	})
+	uassert.AbortsContains(t, cur, "escrow window has not passed", func() {
+		Finalize(cross(cur), "vlq1", id)
+	})
+
+	uassert.Equal(t, int64(0), VoteLockedOf("vlq1", carol))
+	uassert.Equal(t, held, disposable(c, carol))
+	// The row is collectable now too, so a parked vote stops taxing the lock walk.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.Equal(t, 1, PruneVoteLocks(cross(cur), "vlq1", carol))
+}
+
+// THE OTHER HALF: when the weights DO carry into later rounds the lock must hold, even
+// with nothing open, because that is the case where a divested address was measured
+// deciding rounds it never held through.
+//
+// reaskQualityTally opens a fresh tally unless slotConsumed AND qualityReasked are both
+// set; once they are, every later round votes the SAME running total. This builds
+// exactly that state and then parks the claim on top of it: a decided round consumes
+// the slot through its ride, the reopen spends the single re-ask, and the reopened
+// round fails quorum with the accumulating tally still standing.
+//
+// Without this test the carries-forward arm of the predicate could be deleted as
+// redundant and nothing would notice.
+func TestQualityLockHoldsWhenTheTallyCarriesIntoLaterRounds(cur realm, t *testing.T) {
+	c, id, _, bob, carol, _ := qfSetup(cur, t, "vlq2")
+
+	// Round 1 DECIDES (quorum met, below the overturn bar => upheld), and its ride
+	// is conclusive, which is what consumes the slot.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlq2", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "vlq2", id, "no")
+	VoteQuality(cross(cur), "vlq2", id, qualityMid)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "vlq2", id)
+	cs := mustClaim(c, id)
+	if !cs.slotConsumed {
+		t.Fatal("fixture: the ride was not conclusive, so no slot was consumed " +
+			"and the next round would ask fresh")
+	}
+	if cs.verdictAt != 0 {
+		t.Fatal("fixture: a decided round must not be terminal yet, or there is " +
+			"no reopen window to use")
+	}
+
+	// The reopen spends the ONE re-ask, so the tally it opens is the last fresh one.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlq2", id)
+	if !cs.qualityReasked {
+		t.Fatal("fixture: the reopen did not spend the single re-ask")
+	}
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlq2", id, qualityMid)
+	locked := VoteLockedOf("vlq2", carol)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: nothing was committed")
+	}
+
+	// Park it: this round fails quorum, nothing is open, the claim is not terminal.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	ResolveDispute(cross(cur), "vlq2", id)
+	if cs.flagOpen || cs.disputeOpen || cs.counterOpen {
+		t.Fatal("fixture: a question is still open, so this is the easy case")
+	}
+	if cs.verdictAt != 0 || cs.closed {
+		t.Fatal("fixture: the claim went terminal, so the lock releases for a " +
+			"different reason and this test proves nothing")
+	}
+	if !cs.slotConsumed || !cs.qualityReasked {
+		t.Fatal("fixture: these weights would be discarded by the next round, " +
+			"which is the other test")
+	}
+
+	// HELD, because this tally is what the next round votes.
+	uassert.Equal(t, locked, VoteLockedOf("vlq2", carol))
+	uassert.Equal(t, int64(0), disposable(c, carol))
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.Equal(t, 0, PruneVoteLocks(cross(cur), "vlq2", carol))
+}

@@ -111,16 +111,43 @@ import "gno.land/p/nt/bptree/v0"
 // nothing. And if the seq never moves again, the vote keeps deciding every
 // remaining round, so the commitment should last until the claim itself is over.
 //
-// One predicate covers both:
+// THE FIRST VERSION OF THIS GOT THE PRINCIPLE RIGHT AND THE PREDICATE WRONG. It read
+// `not terminal AND cs.qVoteSeq == the seq voted in`, and claimed that in the ordinary
+// pre-adjudication case "each round re-asks, so the seq moves and the lock releases
+// almost immediately — no 12-week freeze for voting on an ordinary flag." The seq
+// moves when a round OPENS, and nothing makes a round open. A failed-quorum dispute
+// parks the claim: verdictAt == 0, closed == false, disputeOpen == false, round == 1,
+// failedRounds 1 of the 3 that would provisionally close it — and that third only
+// arrives if somebody volunteers two more dispute bonds.
 //
-//	open  iff  the claim is not terminal  AND  cs.qVoteSeq == the seq voted in
+// The first pass at this concluded the state was a DEAD END and that the freeze was
+// unbounded. That was wrong, and it was wrong the way an incomplete enumeration is
+// always wrong: SettleUndisputed refuses (round > 0), CloseDeadClaim refuses (the
+// claim has an answer), ResolveDispute refuses (nothing open) — three routes checked,
+// and Finalize never tried. Finalize is exactly the route, and the design knew it; the
+// comment on its tier default says "a failed dispute round keeps
+// verdictAt=0/decidedRounds=0 so Finalize is reachable in that window".
 //
-// which is cheap, exact, and pleasantly self-tuning. In the common
-// pre-adjudication case each round re-asks, so the seq moves and the lock releases
-// almost immediately — no 12-week freeze for voting on an ordinary flag. In the
-// frozen-accumulating case, which is precisely where a divested address was
-// measured deciding rounds it never held through, the coin stays committed for as
-// long as that vote is still being counted.
+// So the honest measurement, which is smaller than the story and still worth fixing:
+// the freeze is bounded by the escrow window plus, for anyone who is not a participant
+// in the claim, finalizeGraceBlocks. Probed at 155,521 blocks left on the escrow
+// window at the moment the round failed, plus the 120,960-block grace — about sixteen
+// days in which an ordinary quality voter's ENTIRE balance was committed, measured at
+// 20,000,000,000 of 20,000,000,000 with disposable 0, for a vote that could not decide
+// anything ever again. They cannot shorten it either: Finalize is participant-only for
+// that first week and they are not a participant.
+//
+// So the predicate has to ask whether the vote can still DECIDE anything, which is a
+// different question from whether its tally is still the current one:
+//
+//	open  iff  the claim is not terminal
+//	           AND cs.qVoteSeq == the seq voted in
+//	           AND (some question is open now  OR  these weights carry forward)
+//
+// Both new arms are needed. Without the first, the vote about to be counted would
+// release while it is being counted. Without the second, the frozen-accumulating
+// case — precisely where a divested address was measured deciding rounds it never
+// held through — would release while the same running total keeps being voted.
 //
 // It is also the hardest lane to rent into regardless, because the anchor is the
 // ANSWERER's: using it means answering the claim yourself and voting from a second
@@ -174,14 +201,35 @@ func voteLockOpen(c *Court, who address, key string) bool {
 		}
 		cs := v.(*claimState)
 		// Superseded tallies count toward nothing (qVoted keys on qVoteSeq|addr),
-		// so a vote whose seq has moved on holds no coin. A tally whose seq is
-		// still live holds it until the claim itself is over — which is the only
-		// honest release point for an accumulating tally, because that is how long
-		// the vote keeps deciding rounds.
+		// so a vote whose seq has moved on holds no coin.
 		if cs.verdictAt != 0 || cs.closed {
 			return false
 		}
-		return cs.qVoteSeq == sub
+		if cs.qVoteSeq != sub {
+			return false
+		}
+		// A LIVE QUESTION HOLDS THE COIN. This is the vote about to be counted.
+		if cs.flagOpen || cs.disputeOpen || cs.counterOpen {
+			return true
+		}
+		// NOTHING IS OPEN, so the only reason left to hold is that these weights
+		// will be voted AGAIN. They will iff the next dispute round re-asks without
+		// opening a fresh tally, which reaskQualityTally does only once
+		// slotConsumed AND qualityReasked are both set; every other route
+		// (openQualityTally from a flag, from a counter, or from a first reask)
+		// zeroes qLowW/qMidW/qHighW, and every path that could still COUNT this
+		// tally — ResolveFlag, resolveQualityRide, ResolveCounter — runs behind one
+		// of those three open flags. Finalize does not read them at all: dispute.gno
+		// never mentions qLowW. So when this returns false the vote can no longer
+		// decide anything, and holding coin against it is deadweight.
+		//
+		// Measured, on the state a failed-quorum round parks the claim in: the old
+		// predicate held a voter's ENTIRE balance there — 20,000,000,000 of
+		// 20,000,000,000, disposable 0 — until Finalize, which is the escrow window
+		// plus a participant-only week, about sixteen days for the voter who is not
+		// a participant. No adversary is needed to reach it: apathy is the ordinary
+		// outcome on an unpopular claim, and that branch's own comment says so.
+		return cs.slotConsumed && cs.qualityReasked
 	}
 	return false
 }
