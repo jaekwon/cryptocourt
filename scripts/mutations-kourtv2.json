@@ -6420,5 +6420,12 @@
     "label": "credEligible: re-derived from an uncapped PastVotes, not the tally",
     "find": "\t\tif yes >= credWeightFloor(c, cs.proposalID)/4 {",
     "replace": "\t\tif c.coin.PastVotes(cs.disputer, c.gov.EpochOf(cs.proposalID)) >= credWeightFloor(c, cs.proposalID)/4 {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "lock.gno",
+    "label": "TransferFromCC: gated on the stake-only check, so an allowance outruns a vote",
+    "find": "\tmustSpendable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)",
+    "replace": "\tmustStakable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)"
   }
 ]

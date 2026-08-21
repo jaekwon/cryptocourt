@@ -305,3 +305,80 @@ func TestTransferFromRefusesTheSameNonsense(cur realm, t *testing.T) {
 	TransferFromCC(cross(cur), "tx10", alice, bob, 1_000)
 	uassert.Equal(t, int64(1_000), CoinBalanceOf("tx10", bob))
 }
+
+// AN ALLOWANCE CANNOT BE SPENT PAST A VOTE COMMITMENT.
+//
+// This is the bypass shape worth pinning: grant an allowance while your coin is
+// free, vote (committing it), and have the spender pull the committed amount later.
+// The grant happened when the coin was disposable and the pull happens when it is
+// not, so nothing about the allowance itself is wrong — the gate has to be at the
+// SPEND. TransferFromCC calls mustSpendable, which nets out the vote lock, so it is;
+// this asserts it rather than leaving it to be read.
+//
+// tx8 above covers the same surface against the STAKE lock and nothing covered it
+// against the vote lock, which matters because the two locks reach through different
+// helpers: staking uses mustStakable and is deliberately exempt. A future change
+// moving TransferFromCC to mustStakable — plausible reasoning, since the `from`
+// party is not the caller — would silently open exactly this. check-epoch-coherence
+// arm 6 catches that lexically by pinning mustStakable's single caller; this is the
+// behavioural half, and a lexical guard wants one.
+func TestAnAllowanceCannotOutrunAVoteCommitment(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tx11-alice")
+	bob := testutils.TestAddress("tx11-bob")     // the spender
+	carol := testutils.TestAddress("tx11-carol") // the recipient
+	whale := testutils.TestAddress("tx11-whale") // authors and answers
+	mkr := testutils.TestAddress("tx11-mkr")     // stakes, then opens the dispute
+	c := testCourt(cur, "tx11", whale, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	c.coin.Mint(mkr, 20_000_000_000)
+	c.coin.Mint(alice, 10_000_000_000)
+
+	// The allowance is granted while every unit is free to move.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ApproveCC(cross(cur), "tx11", bob, 10_000_000_000)
+	uassert.Equal(t, int64(10_000_000_000), AllowanceCC("tx11", alice, bob))
+
+	// Then alice votes, which commits it. Three distinct roles: the author answers
+	// and is therefore barred from disputing its own answer, so the staker opens it
+	// and alice — party to neither — is the one who can vote.
+	id := stakeAnswerDispute(cur, "tx11", whale, mkr)
+	testing.SetRealm(testing.NewUserRealm(mkr))
+	OpenDispute(cross(cur), "tx11", id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	VoteDispute(cross(cur), "tx11", id, "no")
+	locked := VoteLockedOf("tx11", alice)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: the vote committed nothing, so there is " +
+			"nothing for the allowance to be refused against")
+	}
+	// The allowance still reads full: approving reserves nothing, which is the
+	// whole reason the gate must live at the spend.
+	uassert.Equal(t, int64(10_000_000_000), AllowanceCC("tx11", alice, bob))
+
+	// And the spender is refused, naming the vote lock rather than the stake one.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferFromCC(cross(cur), "tx11", alice, carol, locked)
+	})
+	uassert.Equal(t, int64(0), CoinBalanceOf("tx11", carol))
+
+	// PAIRED: the uncommitted remainder still moves, so the refusal above is the
+	// lock and not a broken allowance. alice is topped up past her snapshot so a
+	// disposable remainder exists at all.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "tx11", alice, 3_000_000_000)
+	free := c.coin.BalanceOf(alice) - locked
+	if free <= 0 {
+		t.Fatalf("fixture is vacuous: no free remainder to move, balance %d "+
+			"locked %d", c.coin.BalanceOf(alice), locked)
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	TransferFromCC(cross(cur), "tx11", alice, carol, free)
+	uassert.Equal(t, free, CoinBalanceOf("tx11", carol))
+
+	// And one unit more is still refused: the bound is real, not an off-by-one.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferFromCC(cross(cur), "tx11", alice, carol, 1)
+	})
+}
