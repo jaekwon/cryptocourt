@@ -421,3 +421,74 @@ func TestHyphensKeepWrappedSymbolsInjective(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.Equal(t, ccwrapPath+".wABC", Enable(cross(cur), "abc"))
 }
+
+// THE WRAP CAP — liquidity may not strand the court's own governance.
+//
+// Wrapped coin sits at this realm's address, which no key can vote (Enable, Wrap
+// and Unwrap are the whole surface), while kourtv2's `votable` nets out only the
+// court escrow. So every unit wrapped stays in the DENOMINATOR of the
+// supply-denominated bars and leaves every numerator. Measured on the uncapped
+// tree: sinking 95% of votable put unanimous castable turnout at exactly 100% of a
+// 5%-of-votable bar and 25% at 98% — an election that can never install, arriving
+// from the wrapper being POPULAR rather than from any attack.
+//
+// The cap is derived, not chosen: quorum needs castable > votable/3 on a claim
+// staking a third of the court, so the vault must stay under 66.7%; 60% leaves a
+// fifth of the remaining room.
+//
+// PAIRED, and the pair is the point — a cap that refuses ordinary wrapping is the
+// flagMinCC trap, and the first version of this one did exactly that by reading
+// votable at a sealed epoch (0 on a young court) and refusing everything.
+func TestWrapCapKeepsTheCourtAbleToVote(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cap-alice")
+	fundAndBuy(cur, "capc", alice, 40_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "capc")
+
+	bal := kourtv2.CoinBalanceOf("capc", alice)
+	room := WrapRoom("capc")
+	if room <= 0 || room >= bal {
+		t.Fatalf("fixture is vacuous: room=%d must be positive and below the "+
+			"holder's %d for a cap to be demonstrable", room, bal)
+	}
+
+	// ORDINARY WRAPPING WORKS, right up to the cap.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "capc", vault(), bal)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "capc", room)
+	uassert.Equal(t, room, kourtv2.CoinBalanceOf("capc", vault()))
+	uassert.Equal(t, int64(0), WrapRoom("capc"))
+
+	// ONE UNIT MORE IS REFUSED, so the cap is a bound and not a suggestion.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "too little of the court's coin able to vote",
+		func() { Wrap(cross(cur), "capc", 1) })
+
+	// AND THE PROPERTY IT EXISTS FOR: the coin that can still vote clears both bar
+	// shapes. Asserted on the arithmetic the bars are built from rather than on a
+	// bar reader, because an election needs moderation state this fixture has no
+	// reason to build.
+	votable := kourtv2.CoinSupply("capc") -
+		kourtv2.CoinBalanceOf("capc", kourtv2.CourtEscrow("capc"))
+	castable := votable - kourtv2.CoinBalanceOf("capc", vault())
+	if castable <= votable/3 {
+		t.Fatalf("at the cap the castable pool %d must still exceed votable/3 "+
+			"(%d), or a claim staking a third of the court has no electorate",
+			castable, votable/3)
+	}
+	if castable <= votable*500/10000 {
+		t.Fatalf("at the cap the castable pool %d must still exceed the 5%% bars "+
+			"(%d)", castable, votable*500/10000)
+	}
+
+	// UNWRAPPING FREES ROOM — it can only move the vault away from the bound, so it
+	// is uncapped, and the cap must not be a one-way ratchet.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unwrap(cross(cur), "capc", room/2)
+	if got := WrapRoom("capc"); got <= 0 {
+		t.Fatalf("unwrapping must free room, got %d", got)
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "capc", room/2)
+}

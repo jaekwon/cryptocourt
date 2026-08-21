@@ -6322,5 +6322,26 @@
     "label": "approve: the nominator's own bond is credited back as weight (free coup)",
     "find": "\t\tif held := c.coin.BalanceOf(who); held < w {",
     "replace": "\t\tif held := c.coin.BalanceOf(who) + e.bond; held < w {"
+  },
+  {
+    "pkg": "ccwrap",
+    "file": "ccwrap.gno",
+    "label": "Wrap: the votable cap is not enforced (liquidity strands governance)",
+    "find": "\tmustWrapRoom(slug, cur.Address(), amount)\n",
+    "replace": ""
+  },
+  {
+    "pkg": "ccwrap",
+    "file": "ccwrap.gno",
+    "label": "liveVotable: read at a sealed epoch, so the cap refuses everything",
+    "find": "\tv := kourtv2.CoinSupply(slug) -\n\t\tkourtv2.CoinBalanceOf(slug, kourtv2.CourtEscrow(slug))",
+    "replace": "\t_, _, v := kourtv2.VotableSupply(slug)"
+  },
+  {
+    "pkg": "ccwrap",
+    "file": "ccwrap.gno",
+    "label": "maxWrapBps raised past the votable/3 bound (60% -> 90%)",
+    "find": "const maxWrapBps = int64(6000)",
+    "replace": "const maxWrapBps = int64(9000)"
   }
 ]

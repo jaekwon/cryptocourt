@@ -126,6 +126,13 @@ PKGS = {
              "examples/gno.land/p/kourt/twap/v0"),
     "curve": (os.path.join(REPO, "realm/p/curve"),
               "examples/gno.land/p/kourt/curve/v0"),
+    # ccwrap, added when it stopped being a pure adapter. It now carries a LIVENESS
+    # bound — the wrap cap that keeps a court's own electorate able to clear the
+    # bars quoted as a share of votable — and a guard with no mutation coverage is
+    # the shape the kourtv2 note above is about. It imports kourtv2, which is
+    # already staged.
+    "ccwrap": (os.path.join(REPO, "realm/r/ccwrap"),
+               "examples/gno.land/r/kourt/ccwrap"),
 }
 
 # Which suites can plausibly OBJECT to a mutation in a given tree: that tree's own
@@ -138,6 +145,9 @@ PKGS = {
 # imports must resolve whatever is being mutated.
 OBSERVERS = {
     "kourtv2":    ["kourtv2"],
+    # ccwrap only: nothing imports it, so no other suite can observe its
+    # mutations. Listing more would let an unrelated failure read as a catch.
+    "ccwrap":     ["ccwrap"],
     "govern":     ["govern"],
     "offerer":    ["offerer", "govern"],
     "twap":       ["twap", "kourtv2"],

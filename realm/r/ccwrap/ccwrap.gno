@@ -52,9 +52,23 @@
 // supply — the quorum floor is max(1, min(X̄frozen, votable/3)) and the demotion
 // bar is capped at votable/3 — so heavy wrapping cannot make them unreachable.
 // Any NEW bar written against TotalSupply must be checked against this.
+//
+// THAT LAST SENTENCE WENT UNHEEDED, and the bar it was warning about is the
+// ELECTION FLOOR: 5% of votable, proportional, and therefore stranded exactly
+// where the two bars above are not. Measured on the uncapped tree — sinking 95% of
+// votable put unanimous castable turnout at 100% of that bar and 25% at 98%, i.e.
+// a court whose moderation can never be re-elected, reached by the wrapper being
+// POPULAR rather than by any attack. credWeightFloor has the same shape.
+//
+// So the claim above is still true of the two bars it names, and it was never a
+// claim about the whole system. What holds the system is maxWrapBps below: the
+// vault is capped at 60% of votable, which keeps the castable pool above both
+// votable/3 and the 5% bars by construction. Netting the vault out of `votable`
+// instead — the obvious fix — is worse, and the reason is with the constant.
 package ccwrap
 
 import (
+	"chain"
 	"strings"
 
 	"gno.land/p/demo/tokens/grc20"
@@ -87,6 +101,60 @@ const coinDecimals = 6
 // visible, announced hole beats either. WrappableSlug reports it before the
 // attempt, and the fix is available at court creation: use ten characters.
 const maxWrappableSlug = 10
+
+// maxWrapBps caps the vault at half the court's VOTABLE pool, and it is a liveness
+// bound rather than a preference.
+//
+// MEASURED, on the shipped tree. Wrapped coin sits in this realm's address, which
+// no key can vote — this package exposes only Enable, Wrap and Unwrap — while
+// kourtv2's `votable` nets out only c.escrow. So every unit wrapped stays in the
+// DENOMINATOR of the supply-denominated bars and leaves every numerator. Sinking a
+// fraction f of votable and asking whether the whole remaining electorate voting as
+// one still clears each bar:
+//
+//	sunk   castable/quorumFloor   castable/(5% of votable)
+//	 50%          9996%                   1000%
+//	 67%          6597%                    660%
+//	 85%          2999%                    300%
+//	 95%           999%                    100%   <- exactly the knife edge
+//	 98%           253%                     25%   <- UNREACHABLE
+//
+// The two bars this file's header already reasoned about survive, and for the
+// reason it gave: min(X̄frozen, votable/3) is claim-scoped, so it does not grow
+// with votable. What it did not cover is its own closing warning — "any NEW bar
+// written against TotalSupply must be checked against this" — and the election
+// floor is exactly such a bar: 5% of votable, proportional, and stranded at 95%.
+// An election that can never install is a court whose moderation is frozen
+// permanently, arriving not from an attack but from the wrapper being POPULAR.
+//
+// WHY A CAP AND NOT NETTING THE VAULT OUT OF `votable`, which was the obvious fix
+// and is worse. Netting would let the bar itself be moved: wrapping is free and
+// reversible, so an attacker wraps, waits for the epoch to seal, opens an election
+// (pinning a floor sized for the shrunken electorate), unwraps, and votes their
+// whole position against a bar computed for a fraction of it. The vote lock does
+// not touch that, because what moved is the denominator and not the weight.
+// Escrow is nettable precisely because it is entered by PAYING and cannot be
+// reversed at will.
+//
+// THE NUMBER IS DERIVED, not chosen. Two constraints, and the tighter one wins:
+//
+//	the 5% bars need   castable > 0.05·votable   =>  vault < 95% of votable
+//	quorum needs       castable > votable/3      =>  vault < 66.7% of votable
+//
+// The second binds, and only on a claim whose own X̄frozen reaches votable/3 — a
+// claim staking a third of the whole court, which needs the other two thirds able
+// to vote on it. 60% sits under that bound with a fifth of the remaining room to
+// spare: castable 40% against a votable/3 of 33.3%.
+//
+// A first attempt used 50% for tidiness and was wrong in the direction that
+// matters least visibly: it refused an ORDINARY wrap on a small court, where half
+// of votable is a small absolute number, which is the same trap flagMinCC exists
+// for — pricing the mechanism out of reach on precisely the youngest courts. A cap
+// picked for roundness rather than derived from the bound it defends will always
+// land somewhere like that.
+//
+// Unwrap is deliberately uncapped: it can only move the vault away from the bound.
+const maxWrapBps = int64(6000)
 
 type wrapped struct {
 	tok *grc20.Token
@@ -188,6 +256,7 @@ func Wrap(cur realm, slug string, amount int64) {
 	}
 	w := mustWrapped(slug)
 	who := cur.Previous().Address()
+	mustWrapRoom(slug, cur.Address(), amount)
 	kourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)
 	if err := w.led.Mint(who, amount); err != nil {
 		panic(err)
@@ -236,6 +305,47 @@ func Enabled(slug string) bool { return wraps.Has(slug) }
 // which by construction equals the wrapped token's total supply. Exposed as one
 // number read off the wrapped side; the escrow side is kourtv2's BalanceOf on
 // this realm's address, and a test asserts they agree.
+// liveVotable is supply net of the escrow, read NOW rather than at a sealed epoch.
+//
+// kourtv2.VotableSupply looks like the reader for this and is the wrong one: it
+// returns (0,0,0) until the second epoch and otherwise reports the last SEALED
+// epoch. Both make the cap refuse everything on a young court — measured, it
+// refused an ordinary 1 CC wrap in ccwrap's own fixture, because votable read 0.
+// A cap on a BALANCE has to be quoted on balances; a sealed reading would also let
+// a same-epoch burst overshoot the bound it exists to hold.
+func liveVotable(slug string) int64 {
+	v := kourtv2.CoinSupply(slug) -
+		kourtv2.CoinBalanceOf(slug, kourtv2.CourtEscrow(slug))
+	if v < 0 {
+		return 0
+	}
+	return v
+}
+
+// mustWrapRoom refuses a wrap that would push the vault past maxWrapBps of the
+// court's votable pool.
+func mustWrapRoom(slug string, vault address, amount int64) {
+	room := liveVotable(slug) * maxWrapBps / 10000
+	held := kourtv2.CoinBalanceOf(slug, vault)
+	if held+amount > room {
+		panic("ccwrap: that would leave too little of the court's coin able to " +
+			"vote — a claim staking a third of the court needs the other two " +
+			"thirds voting on it, so the vault is capped at 60% of votable. " +
+			"WrapRoom(slug) says how much is left; unwrapping frees more")
+	}
+}
+
+// WrapRoom is how much more can be wrapped before the cap binds. Quoted because a
+// holder refused by mustWrapRoom deserves a number rather than a rule.
+func WrapRoom(slug string) int64 {
+	room := liveVotable(slug)*maxWrapBps/10000 -
+		kourtv2.CoinBalanceOf(slug, chain.PackageAddress(realmPath))
+	if room < 0 {
+		return 0
+	}
+	return room
+}
+
 func WrappedSupply(slug string) int64 { return mustWrapped(slug).tok.TotalSupply() }
 
 func mustWrapped(slug string) *wrapped {
