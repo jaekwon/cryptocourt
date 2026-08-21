@@ -54,6 +54,17 @@ func TestTheQuoteMatchesTheCharge(cur realm, t *testing.T) {
 	_, charged, ok := c.gov.VoteOf(cs.proposalID, carol)
 	uassert.True(t, ok)
 	uassert.Equal(t, qVerdict, charged)
+	// AND THE COMMITMENT IS THAT SAME NUMBER. Asserted HERE, before the quality vote
+	// adds a second row, because voteLockedOf is a MAX and would stop isolating this
+	// lane once another row exists.
+	//
+	// This is the direction that matters. A lock BELOW the charge is the rental
+	// reopened — vote at w, commit less, sell the difference while the ballot stands,
+	// which is the 599x vote-then-sell the lock was built to price. Nothing else in
+	// the suite compared these two numbers for this lane; the structure that keeps
+	// them equal is that dispute.gno locks the figure it READS BACK from the governor
+	// rather than one it recomputes, and that structure was unpinned.
+	uassert.Equal(t, qVerdict, VoteLockedOf("qmc", carol))
 
 	// QUALITY LANE.
 	testing.SetRealm(testing.NewUserRealm(carol))
@@ -109,6 +120,11 @@ func TestTheElectionQuoteReportsTheFrozenFigure(cur realm, t *testing.T) {
 	ApproveCandidate(cross(cur), "eqf", cand)
 	_, _, turnout := ElectionTally("eqf", cand)
 	uassert.Equal(t, quoted, turnout)
+	// The COMMITMENT is the same number too, which the turnout assertion above does
+	// not show: modvote uses one `w` for the voter record, the turnout and the lock,
+	// and a lock below the charge would let this voter sell the difference while
+	// their approval still counts.
+	uassert.Equal(t, quoted, VoteLockedOf("eqf", voter))
 
 	// Top back up well above the snapshot. The quote must NOT move.
 	testing.SetRealm(testing.NewUserRealm(helper))

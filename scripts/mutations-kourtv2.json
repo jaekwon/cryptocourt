@@ -6451,6 +6451,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "approve: the election commitment is less than the weight recorded",
+  "find": "lockVote(c, who, voteLockElection, int64(e.seq), 0, w)",
+  "replace": "lockVote(c, who, voteLockElection, int64(e.seq), 0, w/2)"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "render.gno",
   "label": "positions: free-to-dispose ignores the vote lock (shows spendable)",
   "find": "\tb.WriteString(\"- free to bond, deposit or transfer: \" +\n\t\tstrconv.FormatInt(disposable(c, who), 10) + \"\\n\")",
@@ -6469,6 +6476,13 @@
   "label": "credEligible: re-derived from an uncapped PastVotes, not the tally",
   "find": "\t\tif yes >= credWeightFloor(c, cs.proposalID)/4 {",
   "replace": "\t\tif c.coin.PastVotes(cs.disputer, c.gov.EpochOf(cs.proposalID)) >= credWeightFloor(c, cs.proposalID)/4 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "VoteDispute: the commitment is less than the weight tallied (partial commitment)",
+  "find": "lockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
+  "replace": "lockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw/2)"
  },
  {
   "pkg": "kourtv2",
