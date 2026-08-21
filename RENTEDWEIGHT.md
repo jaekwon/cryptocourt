@@ -28,12 +28,30 @@ staking, since staking leaves the coin in the balance and voting.
 **The quality lane is locked too, and it was not an owner decision after all.** It
 looked unlockable because its tally accumulates — no single "round resolved" instant
 to release at — but looking for an instant was the mistake. The rule is that the
-commitment lasts exactly as long as the influence, and one predicate covers both
-cases: *open iff the claim is not terminal AND `cs.qVoteSeq` is still the seq voted
-in.* A superseded tally counts toward nothing, so the lock lets go the moment the seq
-moves (the ordinary pre-adjudication case, the very next round — nobody is frozen for
-weeks over a flag); a frozen seq keeps deciding rounds, so it keeps holding coin until
-the claim ends.
+commitment lasts exactly as long as the influence. The first predicate read *open iff
+the claim is not terminal AND `cs.qVoteSeq` is still the seq voted in*, on the reasoning
+that a superseded tally counts toward nothing, so the lock lets go the moment the seq
+moves — "the very next round, nobody is frozen for weeks over a flag".
+
+That last part was false, and it is worth keeping the correction visible because the
+principle was right and only the predicate was wrong. **The seq moves when a round
+OPENS, and nothing makes a round open.** A failed-quorum dispute parks the claim with
+`verdictAt == 0`, `closed == false` and nothing open, and in that state the vote can
+never decide anything again — every path that counts the tally runs behind `flagOpen`,
+`disputeOpen` or `counterOpen`, and each route to one calls `openQualityTally`, which
+zeroes the buckets. Measured on the shipped code: an ordinary voter's ENTIRE balance
+held, 20,000,000,000 of 20,000,000,000 with disposable 0, for about sixteen days — the
+escrow window (probed at 155,521 blocks remaining) plus the 120,960-block
+participant-only grace on `Finalize`, which they cannot shorten because they are not a
+participant. (An earlier draft of this claimed the state was a dead end and the freeze
+unbounded; that was three routes checked and `Finalize` never tried.)
+
+So the predicate asks whether the vote can still DECIDE anything: *open iff not terminal
+AND the seq is still the one voted in AND (a question is open now OR these weights carry
+forward)*, carry-forward being `slotConsumed && qualityReasked` — exactly when
+`reaskQualityTally` stops opening fresh tallies and every later round votes the same
+running total. The frozen-accumulating case still holds coin until the claim ends,
+because there the vote really is still deciding rounds.
 
 `rentedweight_test.gno` has been flipped: it asserted the exploit worked precisely
 so a fix would fail it loudly, and it now asserts every refusal, with each fixture
