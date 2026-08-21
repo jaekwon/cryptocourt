@@ -56,7 +56,9 @@ LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
 # silently inherit kourtv2's — misattribution that grants permission rather than
 # denying it, which is the direction that does not announce itself.
 TALLY_LIVE_ALLOWED = {
-    ("kourtv2", "dispute.gno"): 0,
+    # VoteDispute's cap, handed to the governor's VoteWithCap rather than
+    # clamped locally — the tally is the governor's invariant to keep.
+    ("kourtv2", "dispute.gno"): 1,
     # VoteQuality's floor: min(PastVotes(who,Q1), BalanceOf(who)). A CEILING on a
     # frozen numerator, not a live numerator — see the derivation above.
     ("kourtv2", "quality.gno"): 1,

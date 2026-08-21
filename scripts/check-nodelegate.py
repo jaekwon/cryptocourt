@@ -47,7 +47,13 @@ GOVERN = ROOT / "realm" / "r" / "govern"
 # to protect, and a guard still reporting success would be describing a property
 # nothing in the tree has.
 FLOOR = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < w \{")
-FLOOR_SITES = 2  # quality.gno, modvote.gno; grows to 3 when the dispute lane lands
+# The dispute lane does not match FLOOR: it hands the live figure to the governor
+# as a cap instead of clamping locally, so its floor is a BalanceOf read feeding
+# VoteWithCap. Counted separately rather than loosening the pattern, because a
+# looser pattern would also match reads that are not floors at all.
+FLOOR_SITES = 2  # quality.gno, modvote.gno
+CAP_CALL = re.compile(r"c\.gov\.VoteWithCap\(")
+CAP_SITES = 1  # dispute.gno
 
 # A delegation mutator reachable from kourtv2 — either a call into the ledger's
 # own Delegate, or an exported kourtv2 entrypoint that offers it.
@@ -104,6 +110,11 @@ def main():
         hits.append(f"[floor-count] kourtv2 has {floors} own-balance vote floor(s), "
                     f"expected {FLOOR_SITES} — if the floor moved, this guard's "
                     f"premise moved with it")
+    caps = sum(len(CAP_CALL.findall(p.read_text())) for p in v2)
+    if caps != CAP_SITES:
+        hits.append(f"[cap-count] kourtv2 hands the governor a live cap at {caps} "
+                    f"site(s), expected {CAP_SITES} — same premise, reached through "
+                    f"VoteWithCap rather than a local clamp")
 
     # ARM 4 — nothing in kourtv2 delegates, and nothing offers to.
     for p in v2:
@@ -140,7 +151,8 @@ def main():
         return 1
 
     print(f"check-nodelegate: {len(v2)} kourtv2 files, no delegation reachable, "
-          f"{floors} own-balance vote floor(s) pinned. The ceiling and the floor "
+          f"{floors} own-balance vote floor(s) + {caps} capped call(s) pinned. "
+          f"The ceiling and the floor "
           f"measure the same coin.")
     return 0
 

@@ -1200,7 +1200,7 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "VoteDispute: the vote is never cast with the governor",
-    "find": "\tc.gov.Vote(who, cs.proposalID, choice)",
+    "find": "\tc.gov.VoteWithCap(who, cs.proposalID, choice, held)",
     "replace": "\t_ = choice"
   },
   {
@@ -6238,5 +6238,19 @@
     "label": "ResolveElection PASS 2: the winning line skips the install condition",
     "find": "\t\t\tif !ok || l.weight < maxW-e.floor || l.weight-e.retainW < e.floor {",
     "replace": "\t\t\tif !ok || l.weight < maxW-e.floor {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "VoteDispute: the live cap is gone (rented weight votes again)",
+    "find": "\tc.gov.VoteWithCap(who, cs.proposalID, choice, held)",
+    "replace": "\tc.gov.Vote(who, cs.proposalID, choice)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "VoteDispute: the cap is the snapshot, so it never binds",
+    "find": "\theld := c.coin.BalanceOf(who)",
+    "replace": "\theld := c.coin.PastVotes(who, c.gov.EpochOf(cs.proposalID))"
   }
 ]

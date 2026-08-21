@@ -7,115 +7,190 @@ import (
 	uassert "gno.land/p/nt/uassert/v0"
 )
 
-// RENTED VOTING WEIGHT — A CHARACTERIZATION TEST, NOT A GUARD.
+// RENTED VOTING WEIGHT — CLOSED. These tests used to assert that the exploit
+// WORKED, deliberately, so that any fix would make them fail loudly rather than
+// quietly go green. That is what happened, and this file is the flip.
 //
-// READ THIS FIRST. The tests below assert that the exploit WORKS. They are not
-// endorsing it. They exist because the hole is real, measured, currently OPEN, and
-// exactly the kind of thing that gets silently forgotten — so it is pinned here
-// with its own numbers, and ANY FIX MUST FLIP THESE ASSERTIONS. A test that goes
-// green after a fix would have hidden the fix; these will fail loudly and their
-// failure is the signal that the decision in RENTEDWEIGHT.md was finally taken.
+// THE HOLE THAT WAS. Every vote was weighed at a sealed past epoch, which stops
+// weight acquired AFTER the question was asked and does nothing about weight
+// acquired shortly before — and for two of the three lanes the party who
+// INITIATES the action is the one who pins the anchor. So: acquire float on the
+// market, wait ONE epoch for the checkpoint to seal, open the dispute or election
+// yourself, sell everything back, and vote the full weight you no longer own. A
+// past checkpoint cannot be un-written by a later transfer. Measured at 600x the
+// quorum floor on the verdict lane and 12x on the election lane.
 //
-// THE HOLE. Every vote is weighed at a sealed past epoch, and governor.propose
-// used to claim in a comment that this made weight "impossible to rent". It does
-// not. The anchor is Epoch()-1 AT PROPOSE TIME, and for two of the three lanes the
-// party who INITIATES the action is the one who pins it. So: acquire float on the
-// market — possible at all only because court coins were made transferable — wait
-// ONE epoch for the checkpoint to seal, open the dispute or election yourself
-// (pinning the anchor to a window in which you hold), sell everything back, and
-// vote with the full weight you no longer own. A past checkpoint cannot be
-// un-written by a later transfer.
+// WHAT CLOSED IT. Weight became
 //
-// WHAT IS AND IS NOT NEW. "Selling out after voting costs nothing" is the standard
-// snapshot-governance property, deliberate, and pinned by r/govern's own
-// TestAVoteCannotBePassedAlongWithTheTokens. What is new is that the actor CHOOSES
-// THE ANCHOR, which converts an accepted property into a rental market. r/govern's
-// token has always been transferable, so this lane was exposed before kourtv2 was.
+//	w = min( PastVotes(who, <the question's own frozen epoch>), BalanceOf(who) )
 //
-// WHY NOTHING IS FIXED HERE. Two closures were implemented and measured, and each
-// broke an honest path; RENTEDWEIGHT.md has the numbers. It is an owner decision.
+// The snapshot is the CEILING and stops buying in after the question. The live
+// balance is the FLOOR and stops voting weight already given back. Neither half
+// works alone: two earlier attempts each kept one and failed, one to rental and
+// one to a live numerator against a frozen bar. The renter must return the coin
+// to repay the loan, and at that moment there is nothing left to vote.
 //
-// ONE HONEST QUALIFICATION, because the probe overstates the attack. TransferCC
-// between two test addresses is free. Acquiring a governance-sized position on a
-// real market and dumping it an hour later pays slippage twice plus an hour of
-// price risk, so the true cost is a market round trip — not zero. What changed is
-// that it is no longer an IRREVERSIBLE curve purchase burning GNOT at a rising
-// price, which is what the old reasoning rested on.
+// WHAT IS STILL TRUE AND DELIBERATE. Selling out AFTER voting does not undo the
+// vote. That is standard snapshot-governance behaviour, pinned by r/govern's own
+// TestAVoteCannotBePassedAlongWithTheTokens, and it is not what this file was
+// ever about — the defect was that the actor chose the anchor, which turned an
+// accepted property into a rental market.
 
-// THE VECTOR, end to end, on the verdict lane. Asserts it SUCCEEDS.
-func TestRentedWeightCanStillVoteADispute(cur realm, t *testing.T) {
+// THE VECTOR, end to end, on the verdict lane. Asserts it now FAILS.
+func TestRentedWeightCannotVoteADispute(cur realm, t *testing.T) {
 	whale := testutils.TestAddress("rw-whale")
 	author := testutils.TestAddress("rw-author")
 	renter := testutils.TestAddress("rw-renter")
+	// The whale ANSWERS, which makes them a participant and bars them from the
+	// verdict entirely. The pair below therefore needs a third holder who is not
+	// party to the claim — found the hard way, by the pair aborting on Q2.
+	keeper := testutils.TestAddress("rw-keeper")
 	c := testCourt(cur, "rntw1", author, 100_000_000_000)
 	c.coin.Mint(whale, 400_000_000_000)
 
 	id := stakeAnswerDispute(cur, "rntw1", author, whale)
 	uassert.Equal(t, int64(0), c.coin.BalanceOf(renter))
 
-	// Acquire, then wait exactly ONE epoch to seal. One epoch is all it takes.
+	// Acquire, then wait exactly ONE epoch to seal. One epoch is all it took.
 	testing.SetRealm(testing.NewUserRealm(whale))
 	TransferCC(cross(cur), "rntw1", renter, 300_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "rntw1", keeper, 20_000_000_000)
 	testing.SkipHeights(epochBlocks * 2)
 	touch(c)
 	pinned := c.coin.PastVotes(renter, c.coin.Epoch()-1)
 	uassert.Equal(t, int64(300_000_000_000), pinned)
 
-	// Pin the anchor by opening the dispute yourself. THIS is the step that turns
-	// a snapshot into a rental: without it the anchor would predate the purchase.
+	// Pin the anchor by opening the dispute yourself. This step still works — it
+	// is the anchor choice, and taking it away was a different design that was
+	// rejected for disenfranchising everyone who joined after the answer.
 	testing.SetRealm(testing.NewUserRealm(renter))
 	OpenDispute(cross(cur), "rntw1", id)
 	cs := mustClaim(c, id)
 
-	// Sell it all back. The pinned checkpoint is untouched.
+	// Sell it all back. The pinned checkpoint is STILL untouched — the fix does
+	// not pretend otherwise, it just stops the checkpoint being the whole story.
 	testing.SetRealm(testing.NewUserRealm(renter))
 	TransferCC(cross(cur), "rntw1", whale, SpendableOf("rntw1", renter))
 	uassert.Equal(t, int64(0), c.coin.VotesOf(renter))
 	uassert.Equal(t, pinned, c.coin.PastVotes(renter, c.coin.Epoch()-1))
 
-	// And the vote lands, with weight the voter does not hold.
-	testing.SetRealm(testing.NewUserRealm(renter))
-	VoteDispute(cross(cur), "rntw1", id, "yes")
-	_, w, ok := c.gov.VoteOf(cs.proposalID, renter)
-	uassert.True(t, ok)
-	uassert.Equal(t, pinned, w)
-
-	// The scale of it: the rented weight dwarfs the bar it had to clear.
+	// And the vote is refused. The scale of what is being refused: the pinned
+	// figure stood at 600x the bar it would have had to clear.
 	floor := quorumFloor(c, cs.xBarFrozen)
-	uassert.True(t, floor > 0)
-	uassert.True(t, w/floor >= 100) // measured at 600x on this fixture
+	if floor <= 0 || pinned/floor < 100 {
+		t.Fatalf("fixture is vacuous: a rental worth %d against a floor of %d is "+
+			"not the attack this test exists to refuse", pinned, floor)
+	}
+	testing.SetRealm(testing.NewUserRealm(renter))
+	uassert.AbortsContains(t, cur, "no longer hold", func() {
+		VoteDispute(cross(cur), "rntw1", id, "yes")
+	})
+	_, _, ok := c.gov.VoteOf(cs.proposalID, renter)
+	uassert.False(t, ok) // nothing was recorded
+
+	// THE PAIR, and the reason this is a floor rather than a wall: the keeper held
+	// throughout and votes at their full pinned weight, undocked.
+	keeperPinned := c.coin.PastVotes(keeper, c.gov.EpochOf(cs.proposalID))
+	if keeperPinned <= 0 {
+		t.Fatal("fixture is vacuous: the keeper has no pinned weight, so the " +
+			"refusal above is not being contrasted with anything")
+	}
+	testing.SetRealm(testing.NewUserRealm(keeper))
+	VoteDispute(cross(cur), "rntw1", id, "no")
+	_, w, ok := c.gov.VoteOf(cs.proposalID, keeper)
+	uassert.True(t, ok)
+	uassert.Equal(t, keeperPinned, w)
 }
 
-// The election lane, which is the worse one: OpenElection pins the anchor and a
-// coup is court-wide rather than one claim. Asserted on the weighting inputs,
-// since driving a full election to installation is a different fixture.
-func TestRentedWeightClearsTheElectionFloor(cur realm, t *testing.T) {
+// A PARTIAL repayment is refused only in proportion. The floor is not a
+// participation test — it prices the position down to what is actually held — and
+// this is the case that separates the two readings.
+func TestPartlyRepaidWeightVotesOnlyWhatIsLeft(cur realm, t *testing.T) {
+	whale := testutils.TestAddress("rw-whale2")
+	author := testutils.TestAddress("rw-author2")
+	renter := testutils.TestAddress("rw-renter2")
+	c := testCourt(cur, "rntw2", author, 100_000_000_000)
+	c.coin.Mint(whale, 400_000_000_000)
+
+	id := stakeAnswerDispute(cur, "rntw2", author, whale)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "rntw2", renter, 300_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+
+	testing.SetRealm(testing.NewUserRealm(renter))
+	OpenDispute(cross(cur), "rntw2", id)
+	cs := mustClaim(c, id)
+	pinned := c.coin.PastVotes(renter, c.gov.EpochOf(cs.proposalID))
+	if pinned <= 0 {
+		t.Fatal("fixture is vacuous: the renter has no pinned weight")
+	}
+
+	// Repay most of it, keep a real remainder.
+	testing.SetRealm(testing.NewUserRealm(renter))
+	TransferCC(cross(cur), "rntw2", whale, 250_000_000_000)
+	kept := c.coin.BalanceOf(renter)
+	if kept <= 0 || kept >= pinned {
+		t.Fatalf("fixture is vacuous: need 0 < kept < pinned, got %d and %d",
+			kept, pinned)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(renter))
+	VoteDispute(cross(cur), "rntw2", id, "yes")
+	_, w, ok := c.gov.VoteOf(cs.proposalID, renter)
+	uassert.True(t, ok)
+	// Exactly what is still held — not the pinned figure, and not zero.
+	uassert.Equal(t, kept, w)
+}
+
+// The election lane, which was the worse one: OpenElection pins the anchor and a
+// coup is court-wide rather than one claim.
+func TestRentedWeightCannotClearTheElectionFloor(cur realm, t *testing.T) {
 	whale := testutils.TestAddress("rw-whale5")
 	renter := testutils.TestAddress("rw-renter5")
+	newMod := testutils.TestAddress("rw-newmod5")
 	c := testCourt(cur, "rntw5", whale, 500_000_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(whale))
 	TransferCC(cross(cur), "rntw5", renter, 300_000_000_000)
 	testing.SkipHeights(epochBlocks * 2)
 	touch(c)
-	at := c.coin.Epoch() - 1
-	pinned := c.coin.PastVotes(renter, at)
 
-	// The coup is in range: a one-epoch rental stands above the floor.
-	uassert.True(t, pinned > electionFloor(c, at))
-	uassert.True(t, pinned/electionFloor(c, at) >= 10) // measured at 12x
+	testing.SetRealm(testing.NewUserRealm(whale))
+	cand := RegisterModCandidate(cross(cur), "rntw5", 1, newMod)
+	testing.SetRealm(testing.NewUserRealm(renter))
+	OpenElection(cross(cur), "rntw5", cand)
+	e := ensureMod(c).election
+	pinned := c.coin.PastVotes(renter, e.epoch)
 
-	// And selling back does not touch the pinned figure.
+	// The coup WAS in range: a one-epoch rental stood above the floor, measured
+	// at 12x. Asserted, so this test cannot pass by the rental being too small.
+	floor := electionFloor(c, e.epoch)
+	if floor <= 0 || pinned/floor < 10 {
+		t.Fatalf("fixture is vacuous: a rental of %d against a floor of %d is not "+
+			"the coup this test exists to refuse", pinned, floor)
+	}
+	testing.SkipHeights(nominationWindow)
+
+	// Repay, and the pinned figure is still there, and it still buys nothing.
 	testing.SetRealm(testing.NewUserRealm(renter))
 	TransferCC(cross(cur), "rntw5", whale, SpendableOf("rntw5", renter))
-	uassert.Equal(t, pinned, c.coin.PastVotes(renter, at))
+	uassert.Equal(t, pinned, c.coin.PastVotes(renter, e.epoch))
 	uassert.Equal(t, int64(0), c.coin.VotesOf(renter))
+
+	testing.SetRealm(testing.NewUserRealm(renter))
+	uassert.AbortsContains(t, cur, "no longer hold", func() {
+		ApproveCandidate(cross(cur), "rntw5", cand)
+	})
+	_, _, turnout := ElectionTally("rntw5", cand)
+	uassert.Equal(t, int64(0), turnout)
 }
 
-// The half that DOES work, and the reason snapshot weighting must stay: weight
-// acquired after the anchor buys nothing. Any fix must preserve this — a live-only
-// reading would trade this guarantee away and let weight borrowed inside the
-// voting window decide the vote.
+// The half that ALWAYS worked, and the reason snapshot weighting stays: weight
+// acquired after the anchor buys nothing. The floor did not trade this away — that
+// is the whole point of keeping the snapshot as a ceiling, and a live-only reading
+// would have let weight borrowed inside the voting window decide the vote.
 func TestBuyingInAfterTheAnchorBuysNothing(cur realm, t *testing.T) {
 	whale := testutils.TestAddress("rw-whale4")
 	author := testutils.TestAddress("rw-author4")

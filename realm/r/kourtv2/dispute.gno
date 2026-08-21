@@ -188,19 +188,34 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	if isParticipant(cs, who) {
 		panic("kourtv2: a participant may not vote on their own claim's verdict")
 	}
-	c.gov.Vote(who, cs.proposalID, choice)
+	// The cap is what the voter still holds. The governor keeps deriving the
+	// snapshot itself and takes the lesser, so this can only ever LOWER — which is
+	// why the dispute lane goes through VoteWithCap instead of clamping here. The
+	// tally is the governor's, and `rest := p.total - cast` is its invariant to
+	// keep; an earlier attempt handed it a finished weight instead of a ceiling and
+	// that dropped `no` out of the early-decide test entirely.
+	//
+	// Refused here rather than in the governor so the message is this court's. See
+	// quality.gno for the derivation, and VOTEFLOOR.md for why the snapshot alone
+	// was rentable: this is the lane the end-to-end rental was demonstrated on.
+	held := c.coin.BalanceOf(who)
+	if held <= 0 {
+		panic("kourtv2: you no longer hold the coin you would vote with")
+	}
+	c.gov.VoteWithCap(who, cs.proposalID, choice, held)
 	// Court-side record of the choice AND THE WEIGHT: the governor's roll is
 	// reclaimable after resolution (ReleaseRoll is permissionless), so the carrot
 	// must not depend on it.
 	//
 	// The weight used to be recomputed later from PastVotes at the proposal's
-	// epoch, which was exactly equal and needed no storage. It is stored now
-	// because equal-by-coincidence is a bad thing for a payout to rest on: the
-	// moment the tally weighs anything other than a bare snapshot read — and
-	// RENTEDWEIGHT.md's open decision is precisely about doing that — a recomputed
-	// numerator diverges from the voter's own contribution to the denominator and
-	// the carrot over-pays. Read back from the governor here, where the roll is
-	// certainly intact because this line just voted.
+	// epoch, which was exactly equal and needed no storage. It is stored because
+	// equal-by-coincidence is a bad thing for a payout to rest on — and THAT
+	// COINCIDENCE IS NOW GONE: the line above caps the tally at the voter's live
+	// balance, so a recomputed PastVotes numerator would exceed what actually
+	// counted toward the denominator and the carrot would over-pay every voter who
+	// was capped. What was defensive when written is load-bearing now. Read back
+	// from the governor here, where the roll is certainly intact because this line
+	// just voted.
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}
