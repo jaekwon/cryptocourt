@@ -2647,6 +2647,7 @@ function disputeTicket(slug, id, d, nowH){
       <div class="line"><span>overturn</span><span class="r">the verdict flips to ${sideName(1-d.answer)}${d.answerBond? `; the answer bond burns whole` : ` — no bond is left to burn`}</span></div>
       ${ladder}${closes}${quorum}
       <div class="line"><span>threshold</span><span class="r">overturn needs more than half of the yes/no weight cast; ties and all-abstain rounds uphold</span></div>
+      ${voteLockLine("verdict","votecommit")}
       <p class="small muted" style="margin:10px 0 0">The count stays sealed until the vote closes. <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></p>
       <p class="small muted" style="margin:6px 0 0">Any KOURT:${esc(slug).toUpperCase()} holder may vote, by their balance at the snapshot before this round opened; the claim's author, answerer and stakers are excluded.${demoExcluded? " The sample address is a staker here, so it is excluded — the buttons stay to show the transaction's shape.":""} <button type="button" class="helplink" data-help="help-vote">Who can vote →</button><span id="voteelig"></span></p>
       <div class="actions" style="margin-top:10px">
@@ -2668,6 +2669,65 @@ async function fillVoteEligibility(slug, id, d){
       : (p && (p.yes||p.no||p.cy||p.cn))? "staked" : null;
     el.textContent = why? ` You may not vote here — you ${why} this claim.`
       : " No stake, answer, or authorship is visible for this address — but the realm has the final say at signing; staker records persist even after full withdrawal.";
+  }catch(_){}
+}
+/* ---------------- the vote lock's disclosure ----------------
+   THE OBLIGATION THIS MEETS. The vote lock is a user commitment the realm
+   enforces at signing and this overlay did not mention anywhere: no "committed
+   until", no "cannot bond", no VoteLockedOf read, while shipping copy that
+   invites holders to vote. Nobody loses coin — the realm's refusal is legible
+   when they sign — but they lose an expectation, and the overlay is where
+   people actually vote. VOTEFLOOR.md carries the finding and the exact reads.
+
+   TWO LANES, TWO RELEASE RULES, and they are not interchangeable. A verdict
+   vote is committed until its round resolves. A quality vote is committed until
+   it can no longer decide anything: its own question closing, or the claim
+   itself ending when the tally has frozen and later rounds keep voting the same
+   running total. Do NOT write "until the tally is superseded" — that was the
+   first version of the rule and it is wrong, because a tally is superseded only
+   by a new round and nothing makes a round open. That sentence went stale in
+   three documents before check-epoch-coherence arm 11 started failing the build
+   over it.
+
+   AND STAKING IS NOT REFUSED. Committed coin stays in the balance, keeps
+   voting, and can still be staked — mustStakable ignores the vote lock
+   deliberately. Saying "your coin is locked" would be false in the direction
+   that costs a holder a legitimate action, so the wording is the realm's own:
+   it cannot also back a bond, a deposit or a transfer. */
+function voteLockLine(lane, spanId){
+  const until = lane==="quality"
+    ? "until this quality question can no longer decide anything — when it closes, or when the claim itself ends if the tally has frozen and later rounds keep voting the same running total"
+    : "until this round resolves";
+  return `<div class="line"><span>what voting commits</span><span class="r">`
+    + `Casting commits the weight you vote with, ${until}. It stays in your balance and keeps voting, and it can still be staked — but it cannot also back a bond, a deposit or a transfer.`
+    + `<span id="${esc(spanId)}"></span></span></div>`;
+}
+/* The figures, separately, because they arrive from the chain after the panel
+   has rendered and every one of them may be unavailable. A missing read prints
+   nothing rather than a zero: "commits 0" is a claim, and a wrong one. */
+function voteLockFigures(slug, would, locked, free){
+  const bits=[];
+  if(would!=null && would>0) bits.push(`this vote would commit ${cc(would,slug)}`);
+  if(locked!=null && locked>0) bits.push(`already committed by voting: ${cc(locked,slug)}`);
+  if(free!=null) bits.push(`free to bond or deposit right now: ${cc(free,slug)}`);
+  return bits.length? " " + bits.join("; ") + "." : "";
+}
+/* Fills whichever of the two lanes is on the page. DisposableOf is the binding
+   limit and SpendableOf is NOT — that one is stake-only and over-promises by
+   the whole of a vote commitment. */
+async function fillVoteCommitment(slug, id){
+  const dv=document.getElementById("votecommit"), qv=document.getElementById("qualcommit");
+  if((!dv && !qv) || !CFG.addr || !isLive()) return;
+  try{
+    const [w, locked, free] = await Promise.all([
+      tup(`ClaimVoteWeightOf(${gstr(slug)},${gstr(CFG.addr)},${id})`).catch(()=>null),
+      one(`VoteLockedOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null),
+      one(`DisposableOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null)]);
+    // The two lanes weigh at DIFFERENT epochs, so their figures are not
+    // interchangeable: crossing them is the exact defect VoteWeightWhy was
+    // split in two to fix.
+    if(dv) dv.textContent = voteLockFigures(slug, w? w[0]: null, locked, free);
+    if(qv) qv.textContent = voteLockFigures(slug, w? w[1]: null, locked, free);
   }catch(_){}
 }
 /* ---------------- the argument (related claims) ----------------
@@ -3716,6 +3776,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + qualitySection(slug,id,d)
     + argumentSection(slug,id,argLookup);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
+  if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
 });
@@ -4247,15 +4308,17 @@ function resolutionSection(slug,id,d,nowH,tl){
 function qualitySection(slug,id,d){
   if(d.phase==="open"||d.phase==="provClose"||d.phase==="closed") return "";
   const tierName = t=> t===0?"low":t===2?"high":"mid";
-  let line, act="";
+  let line, act="", qlock="";
   const voteQ = btn("Vote: low","VoteQuality",{courtSlug:slug,claimID:id,bucket:0},"no")
         + btn("Vote: mid","VoteQuality",{courtSlug:slug,claimID:id,bucket:1})
         + btn("Vote: high","VoteQuality",{courtSlug:slug,claimID:id,bucket:2},"yes");
   if(d.phase==="disputed"){ line = "While a dispute is running, the same voters also grade the claim — was it worth asking? — on the same ballot, sealed until the vote closes. No separate quality flag can be opened until the dispute ends. Anyone holding KOURT:" + esc(slug).toUpperCase() + " staked on the claim (its author, its answerer, its stakers) is excluded from both questions.";
-    act = voteQ; }
+    act = voteQ; qlock = voteLockLine("quality","qualcommit"); }
   else if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? The tally is <b>sealed</b> until it closes.";
-    act = voteQ + btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id}); }
+    act = voteQ + btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id});
+    qlock = voteLockLine("quality","qualcommit"); }
   else if(d.counterOpen){ line = "A slash is pending — the answerer may counter-flag to force one re-vote; if the window lapses unchallenged, anyone may close it.";
+    qlock = voteLockLine("quality","qualcommit");
     act = voteQ
         + btn("Counter-flag (answerer)","CounterFlag",{courtSlug:slug,claimID:id})
         + btn("Resolve counter re-vote","ResolveCounter",{courtSlug:slug,claimID:id},"","if a re-vote ran")
@@ -4267,7 +4330,7 @@ function qualitySection(slug,id,d){
   }
   const draw = d.crystallized&&d.draw? `<div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w,slug)} · author ${cc(d.draw.a,slug)} · answerer ${cc(d.draw.ans,slug)} · voters ${cc(d.draw.carrot,slug)}</span></div>`:"";
   return `<section><div class="sec-h">Quality &amp; rewards</div>
-    <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div style="margin-top:8px">${draw}</div>`:""}
+    <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div style="margin-top:8px">${draw}</div>`:""}${qlock?`<div style="margin-top:8px">${qlock}</div>`:""}
     ${act?`<div class="actions" style="margin-top:12px">${act}</div>`:""}</div></section>`;
 }
 

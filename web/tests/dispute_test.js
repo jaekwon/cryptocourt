@@ -30,6 +30,9 @@ code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code += slice('function tx(func', 'document.addEventListener("click"');
 code += slice('const MON=', 'function resolutionLadder(');
 code += slice('function voteHelpModal(', 'function disputeTicket');
+// disputeTicket now renders the vote-lock disclosure row, so its pure copy
+// helper comes along. See web/tests/votelock_test.js for that row's own asserts.
+code += slice('function voteLockLine(', 'function voteLockFigures(');
 code += slice('function disputeTicket', 'async function fillVoteEligibility');
 eval(code);
 

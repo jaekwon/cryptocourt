@@ -88,10 +88,30 @@ and `VoteLockedOf` plus `DisposableOf` for the commitment side. `VoteWeightWhy` 
 with a dispute open has two live questions at two different epochs, and a single
 answer for both is wrong in a reachable state.
 
-**Not implemented here, deliberately.** `web/index.html` belongs to another session
-and adding UI copy to a live surface is a design act on someone else's work. This is
-the handoff, not a request for permission — the finding and the exact reads are above,
-and anyone owning that file can act on it without reconstructing the reasoning.
+**MET.** `web/index.html` now carries the disclosure, on the owner's instruction. The
+row sits on both vote panels — the dispute ballot and the quality lane — because that is
+where the commitment is created, and it states the per-lane release rule statically so a
+disconnected visitor or a failed read still sees the rule rather than nothing. Three live
+figures fill in behind it when an address is connected: what this vote would commit
+(`ClaimVoteWeightOf`, the verdict half to the ballot and the quality half to the quality
+panel, never crossed), what is already committed (`VoteLockedOf`), and what is free to
+bond or deposit (`DisposableOf`, never `SpendableOf`).
+
+Three details were decided rather than deferred. The copy says the coin **can still be
+staked** — `mustStakable` ignores the vote lock deliberately, so "your coin is locked"
+would be false in the direction that costs a holder a legitimate action, and the wording
+is the realm's own. A missing read prints nothing rather than a zero, because "commits 0"
+is a claim and a wrong one; a zero FREE figure does print, because "nothing is free" is
+the disclosure. And the binding limit went in the vote row rather than on each of the four
+bond and deposit panels: the commitment is created at the vote, and adding a read to the
+me-page's batched per-court loop is a larger change to someone else's pipeline for a
+weaker gain.
+
+`web/tests/votelock_test.js` asserts the copy, the figures and the wiring — 30
+assertions, and every property ablated: the lanes crossed, the stake exemption dropped,
+`SpendableOf` substituted, the row unwired, a zero printed, and the forbidden phrasing
+reintroduced. `dispute_test.js` gained one line, the pure helper its ticket now depends
+on.
 
 ### The mutation verification, and what it does and does not say
 
