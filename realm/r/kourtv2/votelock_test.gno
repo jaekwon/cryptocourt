@@ -891,3 +891,94 @@ func TestQualityLockHoldsWhenTheTallyCarriesIntoLaterRounds(cur realm, t *testin
 	testing.SetRealm(testing.NewUserRealm(carol))
 	uassert.Equal(t, 0, PruneVoteLocks(cross(cur), "vlq2", carol))
 }
+
+// NO LANE MAY STRAND A VOTER'S COIN BEHIND SOMEBODY ELSE'S ACTION.
+//
+// The vote lock is only defensible if the voter can always get their own coin back
+// without depending on a counterparty who may have no reason to act. Resolution is
+// permissionless in both of these lanes today, which is what makes that true — and it
+// is exactly the kind of property a later "only the disputer may resolve" tidy-up would
+// remove while every existing test stayed green, because every existing test resolves
+// from a participant.
+//
+// The third lane is the exception and it is bounded rather than absent: a quality vote
+// releases the moment it can no longer decide anything (see the release test above),
+// but in the frozen-accumulating case it holds until the claim is terminal, and the
+// route there — Finalize — is participant-only for finalizeGraceBlocks. Measured at
+// roughly sixteen days. That asymmetry is deliberate: there the vote really is still
+// deciding rounds.
+//
+// Each test pairs the refusal with the release, because a lane that refused everything
+// would pass a release-only assertion trivially.
+func TestAnElectionVoterCanFreeItsOwnCoin(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("vlsr-creator")
+	opener := testutils.TestAddress("vlsr-opener")
+	voter := testutils.TestAddress("vlsr-voter")
+	newMod := testutils.TestAddress("vlsr-newmod")
+	c := electionCourt(cur, "vlsr", creator,
+		[]address{opener, voter}, []int64{600_000_000, 400_000_000})
+	c.coin.Mint(opener, 50_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(opener))
+	cand := RegisterModCandidate(cross(cur), "vlsr", 1, newMod)
+	testing.SetRealm(testing.NewUserRealm(opener))
+	OpenElection(cross(cur), "vlsr", cand)
+	testing.SkipHeights(nominationWindow)
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "vlsr", cand)
+	held := c.coin.BalanceOf(voter)
+	locked := VoteLockedOf("vlsr", voter)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: approving committed nothing")
+	}
+	uassert.Equal(t, int64(0), disposable(c, voter))
+
+	// THE BYSTANDER HALF: while the ballot is open the lock binds and resolution is
+	// refused, so the release below is not the lane simply never holding anything.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting window has not closed", func() {
+		ResolveElection(cross(cur), "vlsr")
+	})
+	uassert.Equal(t, locked, VoteLockedOf("vlsr", voter))
+
+	// And the voter resolves it THEMSELVES. No opener, no mod, no participant.
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveElection(cross(cur), "vlsr")
+	uassert.Equal(t, int64(0), VoteLockedOf("vlsr", voter))
+	uassert.Equal(t, held, disposable(c, voter))
+}
+
+func TestADisputeVoterCanFreeItsOwnCoin(cur realm, t *testing.T) {
+	c, id, _, bob, carol, _ := qfSetup(cur, t, "vlsd")
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "vlsd", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "vlsd", id, "no")
+	held := c.coin.BalanceOf(carol)
+	locked := VoteLockedOf("vlsd", carol)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: voting committed nothing")
+	}
+	// carol is neither author, answerer nor disputer — the point is that a plain
+	// voter needs nobody's cooperation.
+	cs := mustClaim(c, id)
+	if isParticipant(cs, carol) {
+		t.Fatal("fixture: carol must NOT be a participant, or this proves nothing")
+	}
+	uassert.Equal(t, int64(0), disposable(c, carol))
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "dispute vote is still open", func() {
+		ResolveDispute(cross(cur), "vlsd", id)
+	})
+	uassert.Equal(t, locked, VoteLockedOf("vlsd", carol))
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	ResolveDispute(cross(cur), "vlsd", id)
+	uassert.Equal(t, int64(0), VoteLockedOf("vlsd", carol))
+	uassert.Equal(t, held, disposable(c, carol))
+}
