@@ -42,6 +42,36 @@ found by review. They came from three moves, in descending yield:
 
 The claims that go unpinned are the ones that sound obvious.
 
+### The mutation verification, and what it does and does not say
+
+**441 of 441 caught, zero not-caught, across the whole corpus of rows touching any
+file this work changed.** Run in four chunks of ~110 against the eight changed files
+(`ccwrap`, `dispute`, `governor`, `modvote`, `quality`, `render`, `votelock`,
+`voteweight`):
+
+| chunk | rows | caught | not caught |
+|---|---|---|---|
+| 1 | 111 | 111 | 0 |
+| 2 | 110 | 110 | 0 |
+| 3 | 110 | 110 | 0 |
+| 4 | 110 | 110 | 0 |
+
+The not-caught column is mutate's own bucket, and its label matters: *"survived,
+invalid, or never applied"*. Zero means no row survived, none failed to BUILD, and
+none failed to anchor — the last of which retroactively clears the mid-run edits.
+Chunks 1 and 2 ran while `realm/` files were being committed (each checked for
+anchor overlap first, one of them checked afterwards by mistake); chunks 3 and 4 ran
+against a tree touched only under `scripts/`, which mutate does not stage, so those
+two are pristine measurements.
+
+**What it does not say.** It is a targeted set, not the full 918: the 477 rows over
+files this work never touched were not re-run, on the reasoning that a row can only
+stop being caught if either its target or its catching test moved. That reasoning is
+an argument, not a measurement, and the earlier full-corpus attempt was abandoned
+after ~1.5 hours because 8 shards saturated the machine and the run was edited under
+twice. If the full number is ever wanted, run it on an idle tree and do not touch
+`realm/` until it finishes.
+
 **AND A NINETEENTH COMMIT ADDS A FOURTH MOVE: check the algebra of a mechanism you
 are describing.** Four files and a dozen commit messages said the reverted design
 made the early-succeed arm "reduce to `yes*bps >= (total - abstain)*T`, dropping
