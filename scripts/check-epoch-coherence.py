@@ -255,6 +255,27 @@ STAKABLE_CALLS_N = 1  # stake.gno:Stake
 # pattern that hardcoded `c.`, and mc is not hypothetical, it is sixteen lines away
 # doing Mint. Same class of blind spot as leaving Burn out: the regex assumed a
 # spelling the file already contradicts elsewhere.
+# THE OTHER ARMS WERE AUDITED FOR THE SAME BLIND SPOT AND ARE CLEAN. Three arms have
+# now been widened because a regex hardcoded a spelling the tree already used
+# elsewhere (arm 7 missed Burn, arm 5 missed tuple assignment, arm 7 missed a non-`c`
+# receiver). The obvious next move is to widen everything for symmetry, and that is
+# wrong: a pattern loosened for a spelling that does not exist buys nothing and costs
+# precision. So the remaining hardcoded spellings were checked against the tree, not
+# against imagination:
+#
+#   arm 3   `^func \(g \*Governor\)`     60 of 60 Governor methods use `g`.
+#   arm 6   `mustStakable\(c, `           only `c` is ever passed to either helper.
+#   arm 5   `^\s*cs\.`                    `acs` and `dcs` exist but ONLY in _test
+#                                          files, which this guard does not scan.
+#   arm 4   the floor's `if held := ...`  one form, one site; a second floor written
+#                                          differently would still trip arm 1's
+#                                          per-file BalanceOf census, which is why
+#                                          the two arms are documented as a pair.
+#
+# Re-run those greps before widening any of them. And run them WITHOUT `-h`: piping
+# `grep -rhoE ... | grep -v _test` silently filters nothing, because -h has already
+# removed the filenames. That mistake made `acs`/`dcs` look like production code and
+# very nearly bought a pointless widening of arm 5.
 RECV = r"[a-z][A-Za-z0-9]*"
 COIN_OUT = re.compile(r"^\s*" + RECV + r"\.coin\.(?:Transfer|TransferFrom|Burn)\(", re.M)
 # The escrow exemption has to generalise with it, or mc.coin.Burn(mc.escrow, ...)
