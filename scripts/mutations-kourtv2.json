@@ -6444,6 +6444,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockedOf: the commitment is the LAST open row, not the largest (under-locks)",
+  "find": "if w := v.(int64); w > most && voteLockOpen(c, who, k) {",
+  "replace": "if w := v.(int64); voteLockOpen(c, who, k) {"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "ResolveDispute: only a participant may resolve (a voter's coin is stranded)",
   "find": "\tif !cs.disputeOpen {\n\t\tpanic(\"kourtv2: no dispute to resolve\")\n\t}",

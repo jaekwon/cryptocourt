@@ -1193,3 +1193,71 @@ func TestAResolvedElectionsCommitmentDoesNotSurviveIntoTheNext(cur realm, t *tes
 	uassert.Equal(t, int64(0), VoteLockedOf("vlq5", voter))
 	uassert.Equal(t, c.coin.BalanceOf(voter), disposable(c, voter))
 }
+
+// THE MAX IS A MAX, NOT THE LAST ROW READ — and the two are only distinguishable when a
+// holder's weights DIFFER between lanes.
+//
+// voteLockedOf walks one address's rows and keeps `w > most`. Drop that comparison and it
+// keeps whichever open row it saw last, which passes the whole suite: every existing
+// multi-lane fixture gives its voter the same weight in both lanes, so max and last are
+// the same number. TestTwoQuestionsCommitOnePileOnce catches a lock that STACKS (sum
+// instead of max) and cannot see a lock that under-reports.
+//
+// The two weights differ by design, not by contrivance. The verdict lane weighs at the
+// proposal's epoch and the quality lane at cs.qualityEpoch, pinned earlier inside
+// PostAnswer, so a holder who bought BETWEEN the answer and the dispute has a small
+// quality weight and a large verdict one. Keys are who+kind+id+sub and the kinds are "d",
+// "e", "q", so the quality row sorts LAST for any address — meaning the under-report is
+// not a corner case but the ordinary shape of this pair.
+//
+// Under-reporting is the direction that matters: it frees coin the holder committed to the
+// verdict while that vote still stands, which is vote-then-sell on the difference.
+func TestTheCommitmentIsTheLargestOpenRowNotTheLastOne(cur realm, t *testing.T) {
+	author := testutils.TestAddress("vlmx-author")
+	staker := testutils.TestAddress("vlmx-staker")
+	carol := testutils.TestAddress("vlmx-carol")
+	c := testCourt(cur, "vlmx", author, 40_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	c.coin.Mint(carol, 1_000_000_000) // small at the answer's epoch
+
+	id := stakeAnswerDispute(cur, "vlmx", author, staker)
+	cs := mustClaim(c, id)
+	qw := c.coin.PastVotes(carol, cs.qualityEpoch)
+	if qw <= 0 {
+		t.Fatal("fixture: carol has no weight at the quality epoch, so she cannot " +
+			"vote that lane at all")
+	}
+
+	// She buys in AFTER the answer and BEFORE the dispute, which is exactly the
+	// holder the two-epoch structure creates.
+	c.coin.Mint(carol, 19_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "vlmx", id)
+	dw := c.coin.PastVotes(carol, c.gov.EpochOf(cs.proposalID))
+	if dw <= qw {
+		t.Fatalf("fixture is vacuous: verdict weight %d is not above quality "+
+			"weight %d, so a max and a last-row read are the same number and this "+
+			"test proves nothing", dw, qw)
+	}
+
+	// Verdict first (kind "d"), then quality (kind "q"), so the SMALLER row is the
+	// one the walk sees last.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "vlmx", id, "no")
+	uassert.Equal(t, dw, VoteLockedOf("vlmx", carol))
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlmx", id, qualityMid)
+
+	// Two rows open, so the assertion below is about the aggregation and not about a
+	// lane that recorded nothing.
+	if got := voteLockRows(c, carol); got != 2 {
+		t.Fatalf("fixture: expected two open rows, found %d", got)
+	}
+	uassert.Equal(t, qw, cs.qVoted.Get(beClaimKey(cs.qVoteSeq)+string(carol)).(int64))
+
+	// THE COMMITMENT IS THE LARGER OF THE TWO, and one pile honours both.
+	uassert.Equal(t, dw, VoteLockedOf("vlmx", carol))
+	uassert.Equal(t, c.coin.BalanceOf(carol)-dw, disposable(c, carol))
+}
