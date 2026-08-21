@@ -77,6 +77,17 @@ func sideByte(side int) string {
 	return "n"
 }
 
+// stakeIdxMine reports whether a key the prefix scan matched is one this code actually
+// wrote for `who`.
+//
+// ONE DEFINITION, TWO CALLERS, and it exists because the second caller was written as a
+// copy of the first: `address` is a bare string type with no length invariant, so a
+// caller-supplied `who` can prefix-match every holder's buckets, and a walk that trusts
+// the match reads other people's state. pruneVoteLocks learned the same lesson worse — it
+// read an unparseable match as permission to DELETE. Two copies of that check is how the
+// second one comes to disagree with the first.
+func stakeIdxMine(pre, k string) bool { return len(k) == len(pre)+8 }
+
 // indexPosition records that `who` has opened a position on this claim's side.
 //
 // Called from getPos's CREATION branch only, which fires exactly once per
@@ -103,12 +114,7 @@ func stakeIdxWalk(c *Court, who address, fn func(claimID uint64, side int) bool)
 	}
 	pre := string(who)
 	c.stakeIdx.Iterate(pre, pre+"\xff", func(k string, v any) bool {
-		// A bucket this code did not write is not this holder's. The vote lock learned
-		// this the expensive way: `address` is a bare string type with no length
-		// invariant, so an unvalidated caller-supplied `who` prefix-matches every
-		// holder's rows, and a walk that trusts the match reads — or in
-		// pruneVoteLocks' case deleted — other people's state.
-		if len(k) != len(pre)+8 {
+		if !stakeIdxMine(pre, k) {
 			return false
 		}
 		r, ok := v.(*stakeRow)
@@ -144,7 +150,7 @@ func stakeIdxCount(c *Court, who address) int {
 	}
 	n, pre := 0, string(who)
 	c.stakeIdx.Iterate(pre, pre+"\xff", func(k string, v any) bool {
-		if len(k) != len(pre)+8 {
+		if !stakeIdxMine(pre, k) {
 			return false
 		}
 		if r, ok := v.(*stakeRow); ok {

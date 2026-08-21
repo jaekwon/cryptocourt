@@ -6669,8 +6669,8 @@
  {
   "pkg": "kourtv2",
   "file": "stakeindex.gno",
-  "label": "stakeIdxWalk: a bucket key it did not write is walked anyway",
-  "find": "\t\tif len(k) != len(pre)+8 {\n\t\t\treturn false\n\t\t}\n",
-  "replace": ""
+  "label": "stakeIdxMine: a bucket key this code did not write counts as the holder's",
+  "find": "func stakeIdxMine(pre, k string) bool { return len(k) == len(pre)+8 }",
+  "replace": "func stakeIdxMine(pre, k string) bool { return true }"
  }
 ]
