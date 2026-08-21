@@ -169,14 +169,23 @@ func voteLockKey(who address, kind string, id, sub uint64) string {
 // voteLockOpen decodes one row's key and asks whether the question it names has
 // resolved. A row whose question cannot be found at all is treated as RESOLVED:
 // the alternative is coin locked forever by a claim that no longer exists.
-func voteLockOpen(c *Court, who address, key string) bool {
+// voteLockParts unpacks a row key. Factored out when CommitmentsOf started needing
+// the same three fields the predicate needs: two decoders of one key format is the
+// shape that drifts, and the shape this design has spent a dozen commits pinning
+// against.
+func voteLockParts(who address, key string) (kind string, id, sub uint64, ok bool) {
 	tail := key[len(string(who)):]
 	if len(tail) != 1+8+8 {
-		return false // not a shape this code wrote; do not hold coin on it
+		return "", 0, 0, false // not a shape this code wrote
 	}
-	kind := tail[0:1]
-	id := beClaimID(tail[1:9])
-	sub := beClaimID(tail[9:17])
+	return tail[0:1], beClaimID(tail[1:9]), beClaimID(tail[9:17]), true
+}
+
+func voteLockOpen(c *Court, who address, key string) bool {
+	kind, id, sub, ok := voteLockParts(who, key)
+	if !ok {
+		return false // do not hold coin on a key this code did not write
+	}
 	switch kind {
 	case voteLockDispute:
 		v := c.claims.Get(beClaimKey(id))
@@ -366,6 +375,66 @@ func PruneVoteLocks(cur realm, courtSlug string, who address) int {
 		panic(errStaleRealm)
 	}
 	return pruneVoteLocks(mustCourt(courtSlug), who)
+}
+
+// CommitmentsOf is ONE read for everything a holder is committed to in this court.
+//
+//	"stake:<n>;vote:<n>;free:<n>" plus one ";q:<kind>:<id>:<sub>:<amount>" per open
+//	vote commitment, in the house format ClaimTimeline established.
+//
+// WHY THIS COSTS NO NEW STORAGE, which is the whole reason it can exist. A holder's
+// vote commitments are ALREADY an address index: c.voteLocks is keyed
+// addr|kind|id|sub, so one holder's rows are a contiguous range and this is the same
+// scan voteLockedOf already does. c.locked is already addr -> int64. So nothing is
+// added to any write path — no new tree, no storage deposit on a vote, no write gas
+// on a stake — and the read is O(that holder's own rows), measured at ~19k gas per
+// open row, and self-limiting: the vote that would add a row costs more than a
+// transfer at the same row count.
+//
+// WHAT IT SAVES is query FAN-OUT, not chain work. A client assembling this per claim
+// pays four reads per claim id — the me-page's positionOf probe does exactly that —
+// while this is one read per court however many claims the holder is in.
+//
+// STAKE POSITIONS ARE DELIBERATELY NOT ENUMERATED HERE, and the asymmetry is
+// structural rather than an oversight: cs.stakers is keyed addr|side on EACH claim,
+// so it is claim-first, and listing one holder's positions means visiting every
+// claim. Making that cheap needs a second index keyed address-first, which taxes
+// every stake with storage for the benefit of a page. The stake TOTAL is here because
+// c.locked already holds it for free, and the total is the figure that actually
+// constrains the holder; the per-claim split stays on the claim pages that carry it.
+//
+// THE ROWS MAY SUM TO MORE THAN `vote`, AND THAT IS NOT A BUG. `vote` is the MAX
+// across open rows, because the locks overlap — one pile of coin honours many
+// commitments, which is the whole point of taking the max rather than the sum. A
+// consumer that adds the q rows up gets a number the realm does not enforce. `free`
+// is the enforced figure and comes straight from disposable(), which is also why this
+// calls disposable() rather than recomputing the max to save a second tree walk: a
+// query is charged to nobody, and a second copy of that arithmetic here is exactly
+// the drift this design keeps having to correct.
+func CommitmentsOf(courtSlug string, who address) string {
+	c := mustCourt(courtSlug)
+	out := "stake:" + itoa(lockedOf(c, who)) +
+		";vote:" + itoa(voteLockedOf(c, who)) +
+		";free:" + itoa(disposable(c, who))
+	if c.voteLocks == nil {
+		return out
+	}
+	pre := string(who)
+	c.voteLocks.Iterate(pre, pre+"\xff", func(k string, v any) bool {
+		// Closed rows are not commitments. They are also the expensive ones to
+		// walk, so skipping them is both correct and the cheap direction.
+		if !voteLockOpen(c, who, k) {
+			return false
+		}
+		kind, id, sub, ok := voteLockParts(who, k)
+		if !ok {
+			return false
+		}
+		out += ";q:" + kind + ":" + itoa(int64(id)) + ":" + itoa(int64(sub)) +
+			":" + itoa(v.(int64))
+		return false
+	})
+	return out
 }
 
 // VoteLockedOf is the CC this address cannot dispose of because it voted with it

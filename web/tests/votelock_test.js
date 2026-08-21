@@ -22,6 +22,7 @@ code += slice('function fmtN(', '\n');
 code += slice('function ccSym(', '\n');
 code += slice('function cc(', 'function ugnot(');
 code += slice('function voteLockLine(', 'async function fillVoteCommitment(');
+code += slice('function parseCommitments(', '/* ---------------- the argument');
 eval(code);
 
 let fail = 0;
@@ -100,6 +101,43 @@ ok("the quality span is fed the quality weight",
 // A failed read must not break the panel, and demo mode must not query a chain.
 ok("the filler is gated on live mode and an address", src.includes('if((!dv && !qv) || !CFG.addr || !isLive()) return;'));
 ok("every read has its own catch", (src.match(/\.catch\(\(\)=>null\)\]?\),?\n?/g)||[]).length >= 3);
+
+// ---- the me-page: one read per court, and the total is not the sum ----
+// This fixture is a string the REALM actually produced, captured from the ablation
+// run in TestCommitmentsOfIsOneReadAndItsTotalIsAMaxNotASum: two open commitments of
+// 20 and 1, whose total is the larger and not the 21 they add to.
+const REAL = "stake:0;vote:20000000000;free:0;q:d:1:1:20000000000;q:q:1:1:1000000000";
+const C = parseCommitments(REAL);
+ok("the parser reads the three totals", C.stake===0 && C.vote===20000000000 && C.free===0);
+ok("the parser reads both commitment rows", C.q.length===2);
+ok("a verdict row keeps its lane and claim", C.q[0].kind==="d" && C.q[0].id===1 && C.q[0].amt===20000000000);
+ok("a quality row keeps its own lane", C.q[1].kind==="q" && C.q[1].amt===1000000000);
+ok("the rows sum to MORE than the total, which is the point",
+  C.q.reduce((t,r)=>t+r.amt,0) > C.vote);
+ok("a failed read parses to nothing", parseCommitments(null)===null && parseCommitments("")===null);
+ok("an unknown key is ignored rather than assigned",
+  (()=>{ const x=parseCommitments("stake:1;bogus:9;vote:2;free:3"); return x.stake===1 && x.vote===2 && x.free===3 && x.bogus===undefined; })());
+ok("a short q record is skipped rather than half-read",
+  parseCommitments("stake:0;vote:0;free:0;q:d:1").q.length===0);
+
+const T = commitmentsTicket(C, "orem");
+ok("no read renders no block", commitmentsTicket(null,"orem")==="");
+ok("the ticket names all three totals",
+  /committed by voting/.test(T) && /committed as stake/.test(T) && /free to bond, deposit or transfer/.test(T));
+ok("the ticket says the free figure is the enforced one", /the figure the realm enforces/.test(T));
+// The trap: two commitments, one pile. Saying "total" would invite the reader to add.
+ok("with several rows the copy denies the sum", /not their total/.test(T));
+ok("with one row it does NOT say that",
+  !/not their total/.test(commitmentsTicket(parseCommitments("stake:0;vote:5;free:0;q:d:1:1:5"),"orem")));
+ok("a claim row shows its claim, an election row shows its election",
+  /on claim #1/.test(T)
+  && /#7/.test(commitmentsTicket(parseCommitments("stake:0;vote:5;free:0;q:e:0:7:5"),"orem")));
+
+ok("the me-page reads it once per court",
+  src.includes('CommitmentsOf(${gstr(slug)},${gstr(addr)})'));
+ok("the me-page read is gated and caught",
+  src.includes('if(isLive()) com = parseCommitments(await one(`CommitmentsOf(${gstr(slug)},${gstr(addr)})`).catch(()=>null));'));
+ok("the block renders in the court's section", src.includes('+ commitmentsTicket(com, slug)'));
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);

@@ -107,6 +107,31 @@ bond and deposit panels: the commitment is created at the vote, and adding a rea
 me-page's batched per-court loop is a larger change to someone else's pipeline for a
 weaker gain.
 
+**AND A ME-PAGE THAT SHOWS EVERYTHING, for one read per court and no new storage.**
+`CommitmentsOf(courtSlug, who)` returns a holder's whole commitment picture in the
+format `ClaimTimeline` established: the stake total, the vote total, the enforced free
+figure, and one row per open commitment.
+
+It costs nothing to add because the realm had already keyed the index the right way:
+`c.voteLocks` is `addr|kind|id|sub`, so one holder's commitments are a CONTIGUOUS RANGE
+and this is the same scan `voteLockedOf` already does, and `c.locked` is already
+`addr -> int64`. No tree was added, so no vote and no stake pays storage for a page.
+What it removes is query fan-out — the me-page's positions probe costs four reads per
+claim id, and this is one read per court however many claims the holder is in.
+
+Stake POSITIONS are deliberately not enumerated, and the asymmetry is structural:
+`cs.stakers` is keyed `addr|side` on each claim, so it is claim-first, and listing one
+holder's positions means visiting every claim. Making that cheap needs a second index
+keyed address-first, which would tax every stake with storage for the benefit of a
+page. The stake TOTAL is included because `c.locked` already holds it for free, and the
+total is the figure that actually constrains the holder.
+
+The trap, stated in the code and asserted on both sides: THE ROWS MAY SUM TO MORE THAN
+THE TOTAL, because the total is a MAX — the locks overlap, so one pile of coin honours
+several commitments. The client says so in the copy wherever more than one row shows,
+and its parser is tested against a string the realm actually produced rather than an
+invented one.
+
 `web/tests/votelock_test.js` asserts the copy, the figures and the wiring — 30
 assertions, and every property ablated: the lanes crossed, the stake exemption dropped,
 `SpendableOf` substituted, the row unwired, a zero printed, and the forbidden phrasing

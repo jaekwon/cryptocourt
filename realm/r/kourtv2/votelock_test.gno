@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -1260,4 +1261,77 @@ func TestTheCommitmentIsTheLargestOpenRowNotTheLastOne(cur realm, t *testing.T) 
 	// THE COMMITMENT IS THE LARGER OF THE TWO, and one pile honours both.
 	uassert.Equal(t, dw, VoteLockedOf("vlmx", carol))
 	uassert.Equal(t, c.coin.BalanceOf(carol)-dw, disposable(c, carol))
+}
+
+// ONE READ FOR EVERYTHING A HOLDER IS COMMITTED TO, and the property a consumer will
+// get wrong if it is not stated: the q rows may SUM to more than the `vote` total,
+// because the total is a MAX. The locks overlap — one pile honours many commitments —
+// so adding the rows up produces a figure the realm does not enforce.
+//
+// The fixture is the two-lane one with DIFFERENT weights, because equal weights make a
+// max and a sum indistinguishable and would let the assertion pass on either.
+func TestCommitmentsOfIsOneReadAndItsTotalIsAMaxNotASum(cur realm, t *testing.T) {
+	author := testutils.TestAddress("com-author")
+	staker := testutils.TestAddress("com-staker")
+	carol := testutils.TestAddress("com-carol")
+	bystander := testutils.TestAddress("com-bystander")
+	c := testCourt(cur, "com", author, 40_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	c.coin.Mint(carol, 1_000_000_000)
+	c.coin.Mint(bystander, 1_000_000_000)
+
+	// A holder with nothing committed still gets the three totals and no rows.
+	empty := CommitmentsOf("com", bystander)
+	uassert.Equal(t, "stake:0;vote:0;free:1000000000", empty)
+
+	id := stakeAnswerDispute(cur, "com", author, staker)
+	cs := mustClaim(c, id)
+	qw := c.coin.PastVotes(carol, cs.qualityEpoch)
+	c.coin.Mint(carol, 19_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "com", id)
+	dw := c.coin.PastVotes(carol, c.gov.EpochOf(cs.proposalID))
+	if dw <= qw || qw <= 0 {
+		t.Fatalf("fixture is vacuous: the two lanes must weigh differently, got "+
+			"verdict %d and quality %d", dw, qw)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "com", id, "no")
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "com", id, qualityMid)
+
+	got := CommitmentsOf("com", carol)
+	// Both questions are listed, each with its own weight and its own lane letter.
+	if !strings.Contains(got, ";q:d:"+itoa(int64(id))+":"+itoa(cs.proposalID)+":"+itoa(dw)) {
+		t.Fatalf("the verdict commitment is missing or wrong: %s", got)
+	}
+	if !strings.Contains(got, ";q:q:"+itoa(int64(id))+":"+itoa(int64(cs.qVoteSeq))+":"+itoa(qw)) {
+		t.Fatalf("the quality commitment is missing or wrong: %s", got)
+	}
+	// THE TOTAL IS THE MAX. The rows sum to dw+qw; `vote` must be dw alone.
+	if !strings.Contains(got, "vote:"+itoa(dw)+";") {
+		t.Fatalf("the total is not the larger row: %s", got)
+	}
+	if strings.Contains(got, "vote:"+itoa(dw+qw)) {
+		t.Fatalf("the total is the SUM of the rows, which is a figure the realm "+
+			"does not enforce: %s", got)
+	}
+	// And the three totals agree with the readers that already export them, so a
+	// client can use either without them drifting.
+	uassert.Equal(t, "stake:"+itoa(LockedOf("com", carol))+
+		";vote:"+itoa(VoteLockedOf("com", carol))+
+		";free:"+itoa(DisposableOf("com", carol)),
+		got[:strings.Index(got, ";q:")])
+
+	// A resolved question is not a commitment: its row leaves the listing.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	ResolveDispute(cross(cur), "com", id)
+	after := CommitmentsOf("com", carol)
+	if strings.Contains(after, ";q:d:") {
+		t.Fatalf("a resolved round is still listed as a commitment: %s", after)
+	}
 }

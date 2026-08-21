@@ -2730,6 +2730,43 @@ async function fillVoteCommitment(slug, id){
     if(qv) qv.textContent = voteLockFigures(slug, w? w[1]: null, locked, free);
   }catch(_){}
 }
+/* ---------------- everything one holder is committed to ----------------
+   ONE READ PER COURT, and the reason it can be one read is that the realm already
+   keyed its vote locks address-first: c.voteLocks is addr|kind|id|sub, so a holder's
+   commitments are a contiguous range and CommitmentsOf just walks it. No index was
+   added, so no vote or stake pays storage for this page. What it replaces is fan-out
+   — the positions probe below costs four reads per claim id.
+
+   THE TOTAL IS NOT THE SUM OF THE ROWS. `vote` is the MAX across open commitments,
+   because the locks overlap: one pile of coin honours several questions at once. Any
+   consumer that adds the rows up produces a number the realm does not enforce, so the
+   copy says which is which wherever more than one row shows. */
+function parseCommitments(s){
+  if(!s) return null;
+  const out = {stake:0, vote:0, free:0, q:[]};
+  for(const rec of String(s).split(";")){
+    const f = rec.split(":");
+    if(f[0]==="q"){ if(f.length>=5) out.q.push({kind:f[1], id:+f[2], sub:+f[3], amt:+f[4]}); }
+    else if(f.length>=2 && Object.hasOwn(out, f[0])) out[f[0]] = +f[1];
+  }
+  return out;
+}
+const COMMIT_LANE = {d:"a verdict round", e:"a moderator election", q:"a quality question"};
+function commitmentsTicket(com, slug){
+  if(!com) return "";
+  const rows = com.q.map(r =>
+      `<div class="line"><span class="l">${esc(COMMIT_LANE[r.kind]||"a question")}`
+      + `${r.kind==="e"? ` #${r.sub}` : ` on claim #${r.id}`}</span>`
+      + `<span class="r tnum">${cc(r.amt,slug)}</span></div>`).join("");
+  return `<div class="ticket" style="margin-top:8px">`
+    + `<div class="line"><span class="l">committed by voting</span><span class="r tnum">${cc(com.vote,slug)}`
+    + (com.q.length>1? ` <small>the largest of ${com.q.length} open commitments, not their total — one pile of coin honours all of them</small>`:"")
+    + `</span></div>`
+    + `<div class="line"><span class="l">committed as stake</span><span class="r tnum">${cc(com.stake,slug)}</span></div>`
+    + `<div class="line"><span class="l">free to bond, deposit or transfer</span><span class="r tnum">${cc(com.free,slug)} <small>the figure the realm enforces</small></span></div>`
+    + rows + `</div>`;
+}
+
 /* ---------------- the argument (related claims) ----------------
    Overlay-level curation, labeled sample; the chain stores no relations, so
    live mode renders nothing here. Three relation types (matching the repo's
@@ -4585,6 +4622,9 @@ async function meHoldings(addr,courts){
       let arec = 0;
       if(isLive()) arec = (await one(`AnswerRecord(${gstr(slug)},${gstr(addr)})`).catch(()=>0)) || 0;
       if(arec>0) anyArec = true;
+      // One read for the whole commitment picture; see parseCommitments above.
+      let com = null;
+      if(isLive()) com = parseCommitments(await one(`CommitmentsOf(${gstr(slug)},${gstr(addr)})`).catch(()=>null));
       if(courtHasVoteSettle) maybeCourts.push([slug, cname]);
       seniorCount += sen.rows.length;
       if(sen.rows.length || (isLive() && sen.total>sen.scanned)){
@@ -4596,6 +4636,7 @@ async function meHoldings(addr,courts){
           + `</section>`);
       }
       blocks.push(`<section style="margin-top:14px"><div class="sec-h">${safeInline(cname)} <span class="count">${cc(bal,slug)} balance${rows.length?` · ${cc(rows.reduce((t,{p})=>t+(p.yes||0)+(p.no||0),0),slug)} in positions`:""}${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}</span></div>`
+        + commitmentsTicket(com, slug)
         + (rows.length? `<div class="scroll-x"><table class="data"><thead><tr><th>Claim</th><th>state</th><th>YES stake</th><th>NO stake</th><th>conviction</th></tr></thead><tbody>`
             + rows.map(({cl,p,d})=>{
                 const yourSide = (p.yes||0)>0? 0 : (p.no||0)>0? 1 : ((p.cy||0)>=(p.cn||0)?0:1);

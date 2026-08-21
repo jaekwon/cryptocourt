@@ -6472,6 +6472,20 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "CommitmentsOf: resolved questions are listed as live commitments",
+  "find": "\t\t// Closed rows are not commitments. They are also the expensive ones to\n\t\t// walk, so skipping them is both correct and the cheap direction.\n\t\tif !voteLockOpen(c, who, k) {\n\t\t\treturn false\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockParts: the id and sub fields are decoded off by one byte",
+  "find": "return tail[0:1], beClaimID(tail[1:9]), beClaimID(tail[9:17]), true",
+  "replace": "return tail[0:1], beClaimID(tail[0:8]), beClaimID(tail[8:16]), true"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "ResolveDispute: only a participant may resolve (a voter's coin is stranded)",
   "find": "\tif !cs.disputeOpen {\n\t\tpanic(\"kourtv2: no dispute to resolve\")\n\t}",
