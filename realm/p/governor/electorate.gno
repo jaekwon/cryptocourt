@@ -22,7 +22,6 @@ type Electorate interface {
 	// PastVotes is what an address could vote at a sealed epoch.
 	PastVotes(who address, at uint32) int64
 
-
 	// PastTotal is everything that existed then, which quorum is a fraction
 	// of. Taken at the same epoch as the votes it is compared against, or a
 	// quorum could be met against a supply that no longer exists.

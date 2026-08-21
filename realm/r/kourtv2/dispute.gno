@@ -608,9 +608,26 @@ func VotableSupply(courtSlug string) (raw, escrowed, votable int64) {
 // QuorumFloorOf quotes the turnout a dispute on this claim must reach.
 // ElectionFloorOf has existed since the election lane shipped; the verdict and
 // quality lanes had no equivalent, so their bars could go underwater unseen.
+//
+// WHILE A DISPUTE IS OPEN THIS RETURNS THE PINNED BAR, not a fresh computation,
+// and the distinction is not cosmetic. quorumFloor reads the live sealed epoch
+// for its votable/3 arm, while ResolveDispute enforces c.gov.QuorumFloor(pid) —
+// the value frozen into the proposal at OpenDispute. Measured on a court where
+// the third arm binds, the two were 7.5x apart (66,666,666 quoted against
+// 500,000,000 enforced), and web/index.html renders this figure during an open
+// dispute.
+//
+// The direction of harm is the one that matters: an UNDER-quoted bar sends a
+// coalition to mobilise short of quorum, the round fails for turnout, and
+// dispute.gno's own failed-quorum branch then leaves provisional = answer. So a
+// wrong quote hands the claim to the answerer by apathy — the exact S1 failure
+// mode, arriving through the read surface rather than through the bar.
 func QuorumFloorOf(courtSlug string, claimID uint64) int64 {
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
+	if cs.disputeOpen {
+		return c.gov.QuorumFloor(cs.proposalID)
+	}
 	return quorumFloor(c, cs.xBarFrozen)
 }
 

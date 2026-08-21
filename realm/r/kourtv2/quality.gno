@@ -281,9 +281,17 @@ func qualityBars(c *Court, cs *claimState) (demotionBar, fullBar int64) {
 	if quarterPct := mulDiv128(supply, quorumSupplyBps, 10000) / 4; quarterPct > demotionBar {
 		demotionBar = quarterPct
 	}
-	// Reachability, the same rule the full bar takes: a bar above a third of the
-	// votable float cannot be cleared by any set of votes, and raising an
-	// unreachable bar makes the lane MORE dead, not safer.
+	// Reachability, the same rule the full bar takes. The claim this comment used
+	// to make — "a bar above a third of the votable float CANNOT BE CLEARED BY ANY
+	// SET OF VOTES" — is arithmetically false and was measured so: four holders of
+	// 12 CC each on a 54 CC court produced turnout at 2.67x votable/3, 88% of
+	// votable. Turnout is bounded by VOTABLE, not by a third of it.
+	//
+	// So the third is a heuristic on realistic participation, not a ceiling, and
+	// nothing may lean on it as a safety bound. The real invariant — turnout <=
+	// votable(at) — holds today because the escrow is netted out, one address
+	// votes once, and every addend is weighed at one epoch. A live numerator
+	// destroys exactly that, which is why it is written down here.
 	if third := votable / 3; demotionBar > third {
 		demotionBar = third
 	}

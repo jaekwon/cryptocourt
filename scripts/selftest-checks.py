@@ -121,6 +121,7 @@ def have_gno():
 CITE = "scripts/check-citations.py"
 STORE = "scripts/check-storage.py"
 NONTRANS = "scripts/check-nontransferable.py"
+EPOCHCOH = "scripts/check-epoch-coherence.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
 PATHS = "scripts/check-paths.py"
@@ -144,6 +145,7 @@ TCLOCK = "realm/r/kourtv2/testclock.gno"
 SEEDED = "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
 GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
+GOVERNORDIR = "realm/p/governor"
 VOTES = "realm/p/grc20votes"
 
 print("check-citations")
@@ -208,6 +210,34 @@ control("a guard that lost the tree it watches", NONTRANS,
         'REALMS = ["kourtv9_moved"]',
         "measuring nothing",
         argv=["python3", NONTRANS])
+
+print("\ncheck-epoch-coherence")
+# The guard that would have caught the reverted live-weight work on its FIRST
+# commit, before a test ran. Every bar in this realm is frozen so it cannot move
+# under an open vote; a live numerator against a frozen bar gave turnout at
+# 200-400% of its own bar in several lanes, and a supplied weight voided the
+# governor's `rest` contract outright. Three arms, three controls, plus fail-closed.
+control("a live weight read reached a tally file", f"{KOURTV2}/quality.gno",
+        "w := c.coin.PastVotes(who, cs.qualityEpoch)",
+        "w := c.coin.BalanceOf(who)",
+        "live weight read(s) in a file that decides by weight",
+        argv=["python3", EPOCHCOH])
+control("one function reading two different epochs", f"{KOURTV2}/quality.gno",
+        "supply := c.coin.PastTotal(cs.qualityEpoch)",
+        "supply := c.coin.PastTotal(c.coin.Epoch() - 1)",
+        "reads", argv=["python3", EPOCHCOH])
+# The CRITICAL one: an engine told its weight rather than deriving it is what let
+# cast exceed p.total and dropped `no` out of the early-decide test.
+control("the engine accepting a supplied weight", f"{GOVERNORDIR}/governor.gno",
+        "func (g *Governor) Vote(who address, id int64, choice string) {",
+        "func (g *Governor) VoteWithWeight(who address, id int64, choice string, weight int64) {}\n\n"
+        "func (g *Governor) Vote(who address, id int64, choice string) {",
+        "the engine must derive weight, never be told it",
+        argv=["python3", EPOCHCOH])
+control("a guard that lost the tree it watches", EPOCHCOH,
+        'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
+        'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',
+        "measuring nothing", argv=["python3", EPOCHCOH])
 
 print("\ncheck-membership-clears")
 # The guard exists because ResetModSet's clear cannot be pinned by any TEST — it

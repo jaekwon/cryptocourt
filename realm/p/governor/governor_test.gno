@@ -1305,3 +1305,64 @@ func TestAnAbsoluteQuorumIsRenderedAsTheCountItIs(t *testing.T) {
 		t.Errorf("the page states the bps quorum that the floor replaced:\n%s", page)
 	}
 }
+
+// THE INVARIANT electorate.gno SAYS THIS ENGINE CANNOT CHECK, finally checked.
+//
+// electorate.gno's contract on PastTotal is the strongest claim in the package:
+// "It must be at least the sum of every PastVotes at that epoch ... a roll whose
+// parts exceed its whole reports votes that cannot exist and settles early.
+// Measured, not feared: one voter reporting a hundred against a claimed total of
+// ten carried a proposal at a 99% threshold ... The governor cannot check it and
+// cannot recover from it — a clamp was tried."
+//
+// It had no test. It is the invariant a reverted change to kourtv2 broke, by
+// adding a way to hand the engine a weight it had not derived: `cast` exceeded
+// `p.total`, `rest := p.total - cast` went negative, and the early-succeed arm
+// reduced to `yes*bps >= (total - abstain)*ThresholdBps` — dropping `no` out of
+// the test entirely. A permissionless verdict flip, and nothing in either suite
+// noticed.
+//
+// The guard against a RE-INTRODUCED weight parameter is lexical
+// (check-epoch-coherence.py, arm 3). This is the behavioural half: it asserts the
+// bound holds on a real tally after every ballot, so that any future path which
+// over-credits a voter fails here rather than in production.
+func TestPartsNeverExceedTheWhole(cur realm, t *testing.T) {
+	g, c, _ := armed(t, gAlice, gBob, gCarl)
+	id := g.Propose(gAlice, "fee", "250", "parts vs whole")
+	// The WHOLE, read from the electorate at the proposal's own epoch — the same
+	// figure propose() snapshots into p.total, and the one `rest` is computed
+	// against. Snapshot() returns (engaged, epoch), not the total.
+	total := c.PastTotal(c.epoch)
+	if total <= 0 {
+		t.Fatal("fixture is vacuous: no electorate to bound the tally against")
+	}
+
+	// One ballot of each kind, and the bound re-checked after EVERY one: an
+	// over-credit on any single vote is what breaks the early-decide arms, and
+	// those are evaluated on the way through, not at the close.
+	for i, v := range []address{gAlice, gBob, gCarl} {
+		choice := []string{"yes", "no", "abstain"}[i]
+		g.Vote(v, id, choice)
+		yes, no, abstain, _ := g.Tally(id)
+		if cast := yes + no + abstain; cast > total {
+			t.Fatalf("after %d vote(s) cast=%d exceeds total=%d — rest is now "+
+				"negative and the early-decide arms are reading a lie",
+				i+1, cast, total)
+		}
+	}
+
+	// And every recorded ballot is accounted for in the tally, so the bound above
+	// is measured on the real accumulators rather than on a stale read.
+	yes, no, abstain, _ := g.Tally(id)
+	sum := int64(0)
+	for _, v := range []address{gAlice, gBob, gCarl} {
+		_, w, ok := g.VoteOf(id, v)
+		if !ok {
+			t.Fatal("a ballot that was cast is not recorded")
+		}
+		sum += w
+	}
+	if sum != yes+no+abstain {
+		t.Fatalf("recorded ballots sum to %d, tally says %d", sum, yes+no+abstain)
+	}
+}
