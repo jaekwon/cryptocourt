@@ -353,6 +353,26 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// has no adversarial weight unless the farmer HOLDS and votes ~1.25%
 		// of court supply against their own claim (the v0.28 pricing:
 		// supply-absolute prizes demand supply-absolute weight).
+		//
+		// "HOLDS" IS ENFORCED NOW, and it was aspirational when written: before
+		// the vote floor the farmer could rent the weight, vote it against their
+		// own claim, and return it the same hour. `yes` here is c.gov.Tally, and
+		// the governor's tally is the CAPPED sum — VoteDispute hands it a ceiling
+		// of the voter's live balance, so weight that has been given back
+		// contributes nothing to this bar. Both sides read the proposal's own
+		// epoch, so the comparison is coherent.
+		//
+		// The direction is also the safe one. Capping can only LOWER `yes`, so it
+		// makes this bar harder to clear, and clearing it is what unlocks an
+		// aggressive meta verb (meta.gno) and the difficulty earning below. A
+		// floor that made the bar EASIER would be the dangerous rounding; this
+		// one withholds.
+		//
+		// It must stay a read of the TALLY and never a re-derivation from
+		// PastVotes. crystallize.gno's carrot had exactly that bug — re-deriving
+		// a numerator the tally had capped — and over-paid every capped voter
+		// until it was made to read the recorded figure instead. A mutation row
+		// pins this one, caught by TestMetaLifecycleGuards.
 		if yes >= credWeightFloor(c, cs.proposalID)/4 {
 			cs.credEligible = true
 		}

@@ -6413,5 +6413,12 @@
     "label": "positions: committed-by-voting shows zero regardless of the lock",
     "find": "\tb.WriteString(\"- committed by voting: \" + strconv.FormatInt(voted, 10) +",
     "replace": "\tb.WriteString(\"- committed by voting: \" + strconv.FormatInt(voted-voted, 10) +"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "credEligible: re-derived from an uncapped PastVotes, not the tally",
+    "find": "\t\tif yes >= credWeightFloor(c, cs.proposalID)/4 {",
+    "replace": "\t\tif c.coin.PastVotes(cs.disputer, c.gov.EpochOf(cs.proposalID)) >= credWeightFloor(c, cs.proposalID)/4 {"
   }
 ]
