@@ -46,6 +46,25 @@ import "gno.land/p/nt/bptree/v0"
 // The default direction is the safe one — a site nobody remembers to move stays
 // over-restrictive, never under.
 //
+// WHAT IT COSTS ON THE HOT PATH, and what I could not measure. voteLockedOf runs
+// inside disposable(), so every one of the seven mustSpendable call sites now walks
+// one address's lock rows. The cost is O(rows for that address), and the row count is
+// bounded twice: at most one row per question that address has voted in and which was
+// still open at its last vote, and lockVote prunes every resolved row on the next
+// vote. PruneVoteLocks exists for the address that votes and then stops. Measured
+// directly rather than argued: six open disputes voted and all six resolved leaves
+// six rows, and voting once more collapses it to one.
+//
+// A PER-CALL GAS FIGURE WAS ATTEMPTED AND IS NOT AVAILABLE from the test harness. Its
+// `--- GAS:` lines cannot be attributed to a specific crossing call: one value per
+// test is an order of magnitude above the rest, and its POSITION in the stream varies
+// between runs, so two attempts at "the last line is the transfer" produced
+// contradictory answers (489,076 and 7,163,199 for the same transfer). Anyone wanting
+// the number needs an instrument this repo does not have — check-storage.py measures
+// filetest BYTES, not gas. Recorded so the next person does not re-derive the wrong
+// figure from the same output, which is what nearly happened here: a first reading
+// suggested a 477x increase and was comparing two test totals.
+//
 // RELEASE IS LAZY. voteLockedOf sums only the rows whose question is still open,
 // so nothing iterates a whole electorate at resolution — that would put an
 // O(voters) cost on a permissionless call, which is a griefing surface of its own.
