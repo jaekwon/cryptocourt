@@ -5763,6 +5763,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: a turnout exactly at the full bar has its carrot pool zeroed",
+  "find": "cs.conclusiveTurnout < fullBar",
+  "replace": "cs.conclusiveTurnout <= fullBar"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "half-burn: the burned remainder stays in escrow instead",
   "find": "\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t}",

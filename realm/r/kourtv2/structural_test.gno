@@ -756,3 +756,70 @@ func TestTheSupplyFloorNeverReachesZero(cur realm, t *testing.T) {
 			1_000_000, got)
 	}
 }
+
+// A TALLY EXACTLY AT THE FULL BAR KEEPS THE VOTERS' CARROT, and one character decided
+// whether it was destroyed.
+//
+// crystallize.gno zeroes carrotTotal when `cs.conclusiveTurnout < fullBar`, so the exact
+// case is the difference between paying the voters who turned out and burning their pool.
+// An operator sweep of the emission and draw paths found it unpinned — the same boundary
+// class as the quality tier's, one file over and on money rather than on a tier.
+//
+// The bar is stable across the two moments it is used because qualityBars reads
+// PastTotal and the escrow's holding at the FROZEN cs.qualityEpoch, so the turnout
+// recorded at ResolveFlag is compared against the same figure at Crystallize. If that
+// ever became a live read, this test would be comparing a frozen numerator against a
+// moving denominator, which is the defect this whole design keeps being about.
+func TestATurnoutExactlyAtTheFullBarKeepsTheCarrot(cur realm, t *testing.T) {
+	author := testutils.TestAddress("cb-author")
+	flagger := testutils.TestAddress("cb-flagger")
+	voter := testutils.TestAddress("cb-voter")
+	sink := testutils.TestAddress("cb-sink")
+	c := testCourt(cur, "cb", author, 30_000_000_000)
+	c.coin.Mint(flagger, 5_000_000_000)
+	c.coin.Mint(voter, 25_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(author))
+	id := OpenClaim(cross(cur), "cb", "Exactly at the bar, and the carrot")
+	matureOI(cur, "cb", id, author, 2_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(author))
+	PostAnswer(cross(cur), "cb", id, sideYES)
+	cs := mustClaim(c, id)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "cb", id)
+	_, fullBar := qualityBars(c, cs)
+	if fullBar <= 0 || c.coin.PastVotes(voter, cs.qualityEpoch) < fullBar {
+		t.Fatalf("fixture: the full bar %d is unreachable", fullBar)
+	}
+	// Hold EXACTLY the bar, so the recorded turnout lands on it.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "cb", sink, c.coin.BalanceOf(voter)-fullBar)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "cb", id, qualityHigh)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	ResolveFlag(cross(cur), "cb", id)
+
+	if cs.conclusiveTurnout != fullBar {
+		t.Fatalf("fixture is vacuous: turnout %d is not exactly the bar %d",
+			cs.conclusiveTurnout, fullBar)
+	}
+	if cs.conclusiveSeq == 0 || cs.decidedPID != 0 {
+		t.Fatal("fixture: the carrot gate needs a conclusive flag and no decided round")
+	}
+
+	// Settle, wait out both windows, crystallize.
+	testing.SkipHeights(settleDelay + 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	SettleUndisputed(cross(cur), "cb", id)
+	testing.SkipHeights(finalizeGraceBlocks + priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	Crystallize(cross(cur), "cb", id)
+
+	// The pool survived. A bar the turnout MET is not a bar it missed.
+	if cs.carrotTotal <= 0 {
+		t.Fatalf("a turnout of exactly the full bar %d had its carrot pool zeroed; "+
+			"the voters who turned out are paid nothing", fullBar)
+	}
+}
