@@ -14,5 +14,13 @@
   "find": "cs.slotConsumed && ",
   "replace": "",
   "why": "A DELIBERATE SURVIVOR, redundant by implication: qualityReasked implies slotConsumed, so dropping the slotConsumed half changes nothing. reaskQualityTally sets qualityReasked only AFTER its `if !cs.slotConsumed` early return, and CounterFlag sets it behind a pending slash, which only a conclusive flag creates. Both tests that build a carry-forward state assert the two flags together (TestQualityLockHoldsWhenTheTallyCarriesIntoLaterRounds and TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy), so the implication is pinned even though the term is not. Kept because the predicate should say what it means — the condition IS reaskQualityTally's, and writing half of it would make the two drift silently. IF THIS COMES BACK CAUGHT, qualityReasked is now reachable without slotConsumed: promote it and delete this note."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "voteweight.gno",
+  "label": "votingWeight: the negative clamp is dropped",
+  "find": "\tif w < 0 {\n\t\tw = 0\n\t}\n",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR: w is min of two non-negative reads, so the clamp cannot fire and no test can catch its removal. PastVotes returns a checkpointed balance and BalanceOf a live one; neither goes negative — grc20votes checks sufficiency on every move and nothing burns from a user's balance, which arm 7 of check-epoch-coherence counts. The clamp stays because the thing that would make it reachable is a burn taking coin out from under a holder, and lock.gno's spendable() carries the same defensive clamp for the same anticipated case with a comment saying it is not reachable today. IF THIS COMES BACK CAUGHT, a negative weight has become reachable: promote it and go read arm 7."
  }
 ]

@@ -6528,6 +6528,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "voteweight.gno",
+  "label": "votingWeight: the snapshot CEILING is gone (buying in after the question works)",
+  "find": "\tw = snapshot\n",
+  "replace": "\tw = c.coin.BalanceOf(who)\n"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "lock.gno",
   "label": "DisposableOf: returns the stake-only figure, over-promising to a voter",
   "find": "func DisposableOf(courtSlug string, who address) int64 {\n\treturn disposable(mustCourt(courtSlug), who)",
