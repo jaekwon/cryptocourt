@@ -227,12 +227,9 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	// still votes; spendable() nets the stake out, so using it as the floor would
 	// disenfranchise every staker in the court — which is exactly the court-wide
 	// disenfranchisement v0.34 deleted, and it was caught here on the way back in.
-	w := c.coin.PastVotes(who, cs.qualityEpoch)
-	if w <= 0 {
+	w, snapshot := votingWeight(c, who, cs.qualityEpoch)
+	if snapshot <= 0 {
 		panic("kourtv2: no checkpointed weight at the claim's quality epoch")
-	}
-	if held := c.coin.BalanceOf(who); held < w {
-		w = held
 	}
 	if w <= 0 {
 		panic("kourtv2: you no longer hold the coin you would vote with")

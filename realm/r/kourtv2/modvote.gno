@@ -413,14 +413,10 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	if prior := e.voters.Get(who.String()); prior != nil {
 		w = prior.(int64)
 	} else {
-		w = c.coin.PastVotes(who, e.epoch)
-		if w <= 0 {
+		var snapshot int64
+		w, snapshot = votingWeight(c, who, e.epoch)
+		if snapshot <= 0 {
 			panic("kourtv2: no voting weight at the pinned epoch")
-		}
-		// Ceiling above, floor here. BalanceOf and not spendable(), for the reason
-		// quality.gno spells out: staked coin is still held and still votes.
-		if held := c.coin.BalanceOf(who); held < w {
-			w = held
 		}
 		if w <= 0 {
 			panic("kourtv2: you no longer hold the coin you would vote with")

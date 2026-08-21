@@ -232,9 +232,11 @@ print("\ncheck-epoch-coherence")
 # under an open vote; a live numerator against a frozen bar gave turnout at
 # 200-400% of its own bar in several lanes, and a supplied weight voided the
 # governor's `rest` contract outright. Three arms, three controls, plus fail-closed.
+# The tally files hold no live read at all now — the expression lives in
+# voteweight.gno — so this plants one where arm 1 pins zero.
 control("a live weight read reached a tally file", f"{KOURTV2}/quality.gno",
-        "w := c.coin.PastVotes(who, cs.qualityEpoch)",
-        "w := c.coin.BalanceOf(who)",
+        "w, snapshot := votingWeight(c, who, cs.qualityEpoch)",
+        "w, snapshot := c.coin.BalanceOf(who), c.coin.BalanceOf(who)",
         "live weight read(s) in a file that decides by weight",
         argv=["python3", EPOCHCOH])
 control("one function reading two different epochs", f"{KOURTV2}/quality.gno",
@@ -259,6 +261,21 @@ control("a supplied cap that raises instead of lowering",
         "if cap > w {",
         "a supplied cap must only ever lower",
         argv=["python3", EPOCHCOH])
+# ARM 4's own control, and it is the arm that has a job the census cannot do: with
+# the floor's comparison reversed, arm 1 still counts two BalanceOf reads in
+# voteweight.gno and says nothing. Only the SHAPE check stands between a ceiling
+# and a floor. Measured: [one-weight] fires here and [live-census] does not.
+control("the vote floor's comparison reversed", f"{KOURTV2}/voteweight.gno",
+        "if held := c.coin.BalanceOf(who); held < w {",
+        "if held := c.coin.BalanceOf(who); held > w {",
+        "[one-weight]", argv=["python3", EPOCHCOH])
+# And the other half: one expression, charged by three lanes and quoted to the
+# elector. A second definition in the name family fails closed.
+control("a second vote-weight definition", f"{KOURTV2}/voteweight.gno",
+        "func voteCap(c *Court, who address) int64 {",
+        "func voteCap2(c *Court, who address) int64 { return voteCap(c, who) }\n\n"
+        "func voteCap(c *Court, who address) int64 {",
+        "[one-weight]", argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',
@@ -276,7 +293,7 @@ control("kourtv2 gaining a delegation entrypoint", f"{KOURTV2}/court.gno",
         "[delegates]", argv=["python3", NODELEG])
 # And the other direction: with no floor there is no asymmetry to protect, so a
 # guard still reporting success would be describing a property nothing has.
-control("the own-balance floor disappearing", f"{KOURTV2}/quality.gno",
+control("the own-balance floor disappearing", f"{KOURTV2}/voteweight.gno",
         "\tif held := c.coin.BalanceOf(who); held < w {\n\t\tw = held\n\t}\n",
         "",
         "[floor-count]", argv=["python3", NODELEG])

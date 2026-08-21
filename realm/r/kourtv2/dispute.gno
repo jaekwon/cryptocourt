@@ -198,7 +198,7 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	// Refused here rather than in the governor so the message is this court's. See
 	// quality.gno for the derivation, and VOTEFLOOR.md for why the snapshot alone
 	// was rentable: this is the lane the end-to-end rental was demonstrated on.
-	held := c.coin.BalanceOf(who)
+	held := voteCap(c, who)
 	if held <= 0 {
 		panic("kourtv2: you no longer hold the coin you would vote with")
 	}

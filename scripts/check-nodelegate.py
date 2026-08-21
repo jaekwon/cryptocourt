@@ -51,7 +51,10 @@ FLOOR = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < w \{")
 # as a cap instead of clamping locally, so its floor is a BalanceOf read feeding
 # VoteWithCap. Counted separately rather than loosening the pattern, because a
 # looser pattern would also match reads that are not floors at all.
-FLOOR_SITES = 2  # quality.gno, modvote.gno
+# ONE now, not two: the three inline copies were replaced by voteweight.gno's
+# single votingWeight, and check-epoch-coherence arm 4 pins that there is exactly
+# one. A drop here without a matching arm-4 pin would be the floor going missing.
+FLOOR_SITES = 1  # voteweight.gno:votingWeight
 CAP_CALL = re.compile(r"c\.gov\.VoteWithCap\(")
 CAP_SITES = 1  # dispute.gno
 

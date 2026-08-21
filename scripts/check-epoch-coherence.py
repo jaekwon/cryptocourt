@@ -36,35 +36,27 @@ LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
 # Files that decide something by weight, pinned at their permitted live-read
 # count. Zero everywhere today.
 #
-# WHY A COUNT AND NOT A FLAT ZERO. `w = min(PastVotes(who, Q), BalanceOf(who))`
-# puts a live read in a tally file on purpose, and it is NOT the reverted design:
-# there the live figure WAS the numerator, so a live numerator met a frozen bar.
-# Here it is a CEILING on a frozen numerator, so
+# BACK TO A FLAT ZERO, and the refactor that allowed it is the point.
 #
-#     Σ min(PastVotes(·,Q), BalanceOf(·))  ≤  Σ PastVotes(·,Q)  ≤  PastTotal(Q)
+# For a while these carried per-file COUNTS, because `w = min(PastVotes(who, Q),
+# BalanceOf(who))` needs a live read and three lanes each had their own copy. Then
+# the expression moved into voteweight.gno — one function, four callers, plus
+# voteCap for the lane that must hand the governor a ceiling instead of a weight —
+# and every tally file went back to zero live reads. A guard that had to be
+# weakened to admit a fix is now stronger than before it, which is the shape to
+# aim for: the fix was not an exception to the rule, it was a missing abstraction.
 #
-# and the bar keeps the same instant as the thing measured against it. The live
-# read can only ever lower a figure that was already coherent.
-#
-# So the property worth pinning is not "no live read" — that would forbid the fix.
-# It is "no UNDECLARED live read": each one is counted here, a new one fails, and
-# arm 3 separately pins that the engine can only be handed a lowering cap. Neither
-# arm alone is enough; the pair is.
+# Arm 4 below pins that there is exactly ONE such expression, so this zero cannot
+# be satisfied by a second copy hiding in a non-tally file.
 # Keyed by (pkg, file) like LIVE_ALLOWED below, not by bare filename. The set this
 # replaced was filename-only, which was harmless while it meant "zero everywhere";
 # now that the value is an ALLOWANCE, a governor/meta.gno appearing one day would
 # silently inherit kourtv2's — misattribution that grants permission rather than
 # denying it, which is the direction that does not announce itself.
 TALLY_LIVE_ALLOWED = {
-    # VoteDispute's cap, handed to the governor's VoteWithCap rather than
-    # clamped locally — the tally is the governor's invariant to keep.
-    ("kourtv2", "dispute.gno"): 1,
-    # VoteQuality's floor: min(PastVotes(who,Q1), BalanceOf(who)). A CEILING on a
-    # frozen numerator, not a live numerator — see the derivation above.
-    ("kourtv2", "quality.gno"): 1,
-    # approve()'s floor, derived once per election and reused. Same shape as
-    # quality.gno: a ceiling on a frozen numerator, not a live numerator.
-    ("kourtv2", "modvote.gno"): 1,
+    ("kourtv2", "dispute.gno"): 0,
+    ("kourtv2", "quality.gno"): 0,
+    ("kourtv2", "modvote.gno"): 0,
     ("kourtv2", "crystallize.gno"): 0,
     ("kourtv2", "meta.gno"): 0,
 }
@@ -78,6 +70,9 @@ LIVE_ALLOWED = {
     ("kourtv2", "lock.gno"): 2,       # spendable() and disposable()
     ("kourtv2", "render.gno"): 2,     # the page
     ("kourtv2", "testclock.gno"): 1,  # the virgin-realm guard
+    # THE one weight expression, plus the one ceiling the dispute lane supplies.
+    # Arm 4 pins that these are the only two and that nothing else recomputes them.
+    ("kourtv2", "voteweight.gno"): 2,
     ("governor", "governor.gno"): 2,  # render only
 }
 
@@ -86,7 +81,18 @@ LIVE_ALLOWED = {
 # compared, which is the defect in its purest form.
 SEALED = re.compile(r"\.(PastVotes|PastTotal|EngagedTotal)\(\s*([^)]*?)\s*\)")
 FUNC = re.compile(r"^func\s+(?:\([^)]*\)\s*)?([A-Za-z0-9_]+)", re.M)
-MIN_SEALED_FUNCS = 9  # measured; fail closed if the surface shrinks
+# Measured; fail closed if the surface shrinks. It DID shrink, from 9 to 8, when the
+# three inline min(PastVotes, BalanceOf) copies were replaced by voteweight.gno's
+# single votingWeight — two call sites gone, one added. Lowering a fail-closed
+# threshold is normally how a guard dies quietly, so the drop is named here with its
+# cause, and arm 4 below is what makes the centralisation itself the invariant. If
+# this number falls again without a matching arm-4 change, that is the bad case.
+#
+# The eight, so a future drop can be diagnosed rather than guessed at:
+#   court.gno:supplyFloor      dispute.gno:VotableSupply   dispute.gno:quorumFloor
+#   modvote.gno:votableAt      quality.gno:qualityBars     voteweight.gno:votingWeight
+#   governor.gno:propose       governor.gno:castVote
+MIN_SEALED_FUNCS = 8
 
 # ARM 3 — the engine derives its own weight, and a consumer may only LOWER it.
 #
@@ -134,6 +140,40 @@ RAISERS = (
 )
 WEIGHT_SOURCE = re.compile(r"^\s*w\s*:?=\s*g\.voters\.PastVotes\(", re.M)
 
+# ARM 4 — the vote-weight expression has exactly one definition and the right
+# SHAPE.
+#
+# Three lanes charge min(snapshot, held) and a reader quotes it back to the elector.
+# A quote that can drift from the charge is worse than no quote: the holder plans
+# against a number the vote will not honour.
+#
+# WHAT THIS ARM ACTUALLY CATCHES, stated exactly, because the first version of this
+# comment claimed more than the code did and was wrong within the hour:
+#
+#   CAUGHT, and by this arm ALONE — the floor's comparison reversed, `held <`
+#   becoming `held >`. Arm 1's census still counts two BalanceOf reads and says
+#   nothing, so the shape check is the only thing between a ceiling and a floor.
+#   Measured: [one-weight] fires, [live-census] does not.
+#
+#   CAUGHT, but by ARM 1 and not here — a second INLINE copy of the expression.
+#   Any real second implementation has to read a live balance, which trips that
+#   file's census. So the two arms cover it between them, and neither alone.
+#
+#   NOT CAUGHT — a wrapper that merely forwards, e.g. `func effectiveWeight(...)
+#   { return votingWeight(...) }`. It adds no live read and does not match the
+#   name family below. That is a readability problem rather than a correctness
+#   one: a forwarder cannot disagree with what it forwards to. If one ever grows
+#   its own arithmetic it stops forwarding, and then it needs a BalanceOf and arm
+#   1 has it.
+#
+# The name family is deliberately a PREFIX match, so votingWeightV2 or voteCap2
+# fail closed rather than sliding past — the same fail-closed shape as arm 3's
+# int64 parameter allowlist.
+WEIGHT_FN = re.compile(r"^func votingWeight[A-Za-z0-9_]*\(", re.M)
+CAP_FN = re.compile(r"^func voteCap[A-Za-z0-9_]*\(", re.M)
+# The floor's shape, wherever it appears. Exactly one, inside votingWeight.
+FLOOR_SHAPE = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < ")
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -161,6 +201,7 @@ def funcs_with_epochs(src):
 def main() -> int:
     repolock.refuse_if_held("check-epoch-coherence")
     hits, scanned, sealed_funcs = [], 0, 0
+    arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -199,6 +240,12 @@ def main() -> int:
                     hits.append(f"[two-epochs] {pkg}/{p.name}:{name} reads "
                                 f"{sorted(epochs)} — a numerator and a bar taken "
                                 f"at different instants cannot be compared")
+
+            # Arm 4 — accumulated across the kourtv2 tree, checked after the loop.
+            if pkg == "kourtv2":
+                arm4["weight_fn"] += len(WEIGHT_FN.findall(src))
+                arm4["cap_fn"] += len(CAP_FN.findall(src))
+                arm4["floor"] += len(FLOOR_SHAPE.findall(src))
 
             # Arm 3
             if p.name == "governor.gno":
@@ -246,6 +293,24 @@ def main() -> int:
               "work was reverted. If this is deliberate, VOTELOCK.md's tension map "
               "is the argument to answer first, then change this check.",
               file=sys.stderr)
+        return 1
+
+    # Arm 4, after the whole kourtv2 tree has been read.
+    for key, want, what in (
+        ("weight_fn", 1, "votingWeight definition(s)"),
+        ("cap_fn", 1, "voteCap definition(s)"),
+        ("floor", 1, "min(snapshot, held) floor expression(s)"),
+    ):
+        if arm4[key] != want:
+            hits.append(f"[one-weight] kourtv2 has {arm4[key]} {what}, expected "
+                        f"{want} — vote weight is charged by three lanes and QUOTED "
+                        f"to the elector, so a second copy is a quote that can "
+                        f"drift from the charge")
+    if hits:
+        print("check-epoch-coherence: a tally and its bar may no longer share an "
+              "epoch.\n", file=sys.stderr)
+        for h in hits:
+            print(f"  {h}", file=sys.stderr)
         return 1
 
     if sealed_funcs < MIN_SEALED_FUNCS:
