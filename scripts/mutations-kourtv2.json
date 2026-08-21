@@ -6416,6 +6416,20 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: carry-forward keeps only its slotConsumed half",
+  "find": " && cs.qualityReasked",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: an election lock is matched against ANY unresolved election",
+  "find": "return e.seq == id && !e.resolved",
+  "replace": "return !e.resolved"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "ResolveDispute: only a participant may resolve (a voter's coin is stranded)",
   "find": "\tif !cs.disputeOpen {\n\t\tpanic(\"kourtv2: no dispute to resolve\")\n\t}",

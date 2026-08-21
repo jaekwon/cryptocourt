@@ -1075,3 +1075,121 @@ func TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy(cur realm, t *tes
 	uassert.Equal(t, int64(0), VoteLockedOf("vlq3", carol))
 	uassert.Equal(t, c.coin.BalanceOf(carol), disposable(c, carol))
 }
+
+// THE ORDINARY FLAG VOTER GETS THEIR COIN BACK WHEN THE FLAG RESOLVES, which is the
+// property the first version of this design CLAIMED and could not deliver.
+//
+// That comment said "the ordinary pre-adjudication case, the very next round — nobody is
+// frozen for weeks over a flag", on the theory that the seq moves. The seq moves when a
+// round OPENS and nothing makes a round open, so under the old predicate this voter was
+// held until the claim went terminal. It is true now, and for a different reason: with
+// slotConsumed set by the conclusive flag but qualityReasked still clear,
+// reaskQualityTally would open a FRESH tally on the next dispute round and discard these
+// weights, so they can no longer decide anything and the carries-forward arm lets go.
+//
+// This pins `cs.qualityReasked`, which the term-by-term ablation found unpinned: dropping
+// it leaves slotConsumed alone, which is true here, so the coin would stay committed for
+// a vote that is already spent.
+func TestAnOrdinaryFlagVoteReleasesWhenTheFlagResolves(cur realm, t *testing.T) {
+	c, id, _, bob, carol, _ := qfSetup(cur, t, "vlq4")
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "vlq4", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "vlq4", id, qualityMid)
+
+	held := c.coin.BalanceOf(carol)
+	locked := VoteLockedOf("vlq4", carol)
+	if locked <= 0 {
+		t.Fatal("fixture is vacuous: the flag vote committed nothing")
+	}
+	uassert.Equal(t, int64(0), disposable(c, carol))
+
+	// Self-serviceable, as in every other lane: refused while open, and the voter
+	// closes it themselves after.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "flag vote is still open", func() {
+		ResolveFlag(cross(cur), "vlq4", id)
+	})
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	ResolveFlag(cross(cur), "vlq4", id)
+
+	cs := mustClaim(c, id)
+	if !cs.slotConsumed {
+		t.Fatal("fixture: the flag was inconclusive, so no slot was consumed and " +
+			"this is not the state the test is about")
+	}
+	if cs.qualityReasked {
+		t.Fatal("fixture: the single re-ask is already spent, so these weights " +
+			"carry and holding them is correct — that is the other test")
+	}
+	if cs.verdictAt != 0 || cs.closed {
+		t.Fatal("fixture: the claim went terminal, so the release below proves " +
+			"nothing about the carries-forward arm")
+	}
+	// RELEASED, with nothing open and the claim still live.
+	uassert.Equal(t, int64(0), VoteLockedOf("vlq4", carol))
+	uassert.Equal(t, held, disposable(c, carol))
+}
+
+// A RESOLVED ELECTION'S COMMITMENT MUST NOT SURVIVE INTO THE NEXT ONE.
+//
+// c.mod.election is a single pointer, so the lock row from election N is matched against
+// whichever election is current. `e.seq == id` is what keeps a stale row from being read
+// against a live ballot, and the term-by-term ablation found it unpinned: dropping it
+// leaves `!e.resolved`, which the NEXT election satisfies, so a voter who voted once
+// would be re-committed by every later election they took no part in.
+func TestAResolvedElectionsCommitmentDoesNotSurviveIntoTheNext(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("vlq5-creator")
+	opener := testutils.TestAddress("vlq5-opener")
+	voter := testutils.TestAddress("vlq5-voter")
+	modA := testutils.TestAddress("vlq5-moda")
+	modB := testutils.TestAddress("vlq5-modb")
+	c := electionCourt(cur, "vlq5", creator,
+		[]address{opener, voter}, []int64{600_000_000, 400_000_000})
+	c.coin.Mint(opener, 200_000_000)
+
+	// Election one: the voter approves, and it resolves.
+	testing.SetRealm(testing.NewUserRealm(opener))
+	candA := RegisterModCandidate(cross(cur), "vlq5", 1, modA)
+	testing.SetRealm(testing.NewUserRealm(opener))
+	seqA := OpenElection(cross(cur), "vlq5", candA)
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "vlq5", candA)
+	if VoteLockedOf("vlq5", voter) <= 0 {
+		t.Fatal("fixture is vacuous: approving committed nothing")
+	}
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveElection(cross(cur), "vlq5")
+	uassert.Equal(t, int64(0), VoteLockedOf("vlq5", voter))
+
+	// Election two opens, with the voter taking no part in it at all.
+	// Only skip if a cooldown is actually pending. Measured the hard way: this
+	// election leaves electionCooldownUntil at 0, so an unguarded
+	// `cooldownUntil - heightNow()` is a large NEGATIVE SkipHeights, which walks the
+	// chain backwards to epoch 1 and fails in grc20votes with "that epoch has not
+	// been sealed yet" — a confusing error a long way from its cause.
+	if d := c.mod.electionCooldownUntil - heightNow() + 1; d > 0 {
+		testing.SkipHeights(d)
+		touch(c)
+	}
+	testing.SetRealm(testing.NewUserRealm(opener))
+	candB := RegisterModCandidate(cross(cur), "vlq5", 1, modB)
+	testing.SetRealm(testing.NewUserRealm(opener))
+	seqB := OpenElection(cross(cur), "vlq5", candB)
+	if seqB == seqA {
+		t.Fatal("fixture: the second election reused the sequence number, so a " +
+			"stale row would match by seq and this test proves nothing")
+	}
+	if c.mod.election.resolved {
+		t.Fatal("fixture: the second election is already resolved, so `!e.resolved` " +
+			"is false and the seq term is not what is being tested")
+	}
+
+	// The stale row from election one must not be read against the live ballot.
+	uassert.Equal(t, int64(0), VoteLockedOf("vlq5", voter))
+	uassert.Equal(t, c.coin.BalanceOf(voter), disposable(c, voter))
+}

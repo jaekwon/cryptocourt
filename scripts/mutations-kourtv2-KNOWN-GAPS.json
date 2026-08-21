@@ -6,5 +6,21 @@
   "find": " || cs.counterOpen {",
   "replace": " {",
   "why": "A DELIBERATE SURVIVOR that no test can close while the design holds, which is why it is here rather than in the main batch. Dropping this term fails nothing in the suite, measured by ablating each of the three live-question flags separately: flagOpen and disputeOpen each fail tests, counterOpen fails none. It is redundant BY IMPLICATION, not by luck — CounterFlag sets counterUsed, qualityReasked and a fresh tally together, and rearmSlashWindow re-opens the window only if counterUsed, so slotConsumed && qualityReasked holds wherever counterOpen does and the carries-forward arm already holds the coin. The term is kept because that implication spans three functions in two files with nothing enforcing it, and the failure direction without it is the bad one: ResolveCounter READS the tally, so releasing would free coin while its vote can still decide the slash. TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy pins the implication instead, since unreachable code cannot be pinned but the reason it is unreachable can. IF THIS ROW EVER COMES BACK CAUGHT, the term has become load-bearing: promote it to the main batch and delete this note."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: the cs.closed half of the quality terminal test is dropped",
+  "find": " || cs.closed {",
+  "replace": " {",
+  "why": "A DELIBERATE SURVIVOR: closed and a live quality row cannot coexist, so no test can catch this. cs.closed is written only by CloseDeadClaim, which refuses a claim with an answer ('it settles, it does not die'), and every route into the quality lane needs an answered claim. That refusal is pinned by TestQualityLockReleasesWhenItsVoteCanNoLongerDecideAnything, which asserts exactly that message. The term stays because it is the terminal test and a terminal test that only half-checks terminality is a trap for the next lane that ends a claim a new way — which is what arm 5 of check-epoch-coherence counts writers for. IF THIS COMES BACK CAUGHT, some path now closes an answered claim: promote it and delete this note."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: carry-forward keeps only its qualityReasked half",
+  "find": "cs.slotConsumed && ",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR, redundant by implication: qualityReasked implies slotConsumed, so dropping the slotConsumed half changes nothing. reaskQualityTally sets qualityReasked only AFTER its `if !cs.slotConsumed` early return, and CounterFlag sets it behind a pending slash, which only a conclusive flag creates. Both tests that build a carry-forward state assert the two flags together (TestQualityLockHoldsWhenTheTallyCarriesIntoLaterRounds and TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy), so the implication is pinned even though the term is not. Kept because the predicate should say what it means — the condition IS reaskQualityTally's, and writing half of it would make the two drift silently. IF THIS COMES BACK CAUGHT, qualityReasked is now reachable without slotConsumed: promote it and delete this note."
  }
 ]
