@@ -42,6 +42,41 @@ found by review. They came from three moves, in descending yield:
 
 The claims that go unpinned are the ones that sound obvious.
 
+### A SURFACE OBLIGATION THIS DESIGN CREATED, and the web client has not met it
+
+**The vote lock is a new user obligation with no disclosure on the web client.**
+`web/index.html` is 5,483 lines and mentions it nowhere: no "committed until", no
+"cannot sell", no `VoteLockedOf` read. Meanwhile it ships open-ballot copy that
+invites holders to vote — the sealed-means-un-summed line, the snapshot hedge
+("buying now adds nothing"), realm-refuses-at-signing. A holder who votes through
+that surface and later tries to sell, bond, deposit or wrap is refused, having been
+told nothing.
+
+**Two things make this smaller than it sounds, and one keeps it real.** The realm's
+refusal is legible at signing time — *"not enough uncommitted CC — coin you voted
+with stays in your balance and keeps voting, but it is committed until that question
+resolves"* — so nobody loses coin, they lose an expectation. And the CHAIN's own page
+already discloses it: `render.gno`'s wallet panel now carries "committed by voting: N
+— until each question resolves" plus the two separate free figures. So the chain is
+honest and only the overlay is behind. What keeps it real is that the overlay is
+where people will actually vote.
+
+**What the site needs, stated so it can be implemented without re-deriving any of
+it.** Before a vote: that casting commits this much coin until the question resolves,
+with the per-lane difference (a verdict vote until its round resolves, an election
+vote until the election resolves, a quality vote until its tally is superseded or the
+claim ends). After a vote: the committed figure, from `VoteLockedOf(slug, who)`. On
+any sell/bond/deposit/wrap affordance: the binding limit, which is NOT `SpendableOf`
+— that one is stake-only and will over-promise. `WrapRoom` is also a court-level
+bound, not a personal allowance. The realm exposes `ClaimVoteWeightOf`,
+`ElectionVoteWeightOf` and `VoteWeightWhy` for the weight side, and `VoteLockedOf`
+for the commitment side.
+
+**Not implemented here, deliberately.** `web/index.html` belongs to another session
+and adding UI copy to a live surface is a design act on someone else's work. This is
+the handoff, not a request for permission — the finding and the exact reads are above,
+and anyone owning that file can act on it without reconstructing the reasoning.
+
 ### The mutation verification, and what it does and does not say
 
 **441 of 441 caught, zero not-caught, across the whole corpus of rows touching any
