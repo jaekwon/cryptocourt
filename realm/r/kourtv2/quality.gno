@@ -201,14 +201,21 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if isParticipant(cs, who) {
 		panic("kourtv2: the claim's participants cannot vote its quality (Q2)")
 	}
-	// Weighed at the claim's quality epoch (Q1), pinned at PostAnswer. Rentable
-	// in principle — see RENTEDWEIGHT.md — but the hardest of the three lanes to
-	// rent into, since the anchor is set by the ANSWERER and using it means
-	// answering the claim yourself and voting from a second address.
-	w := c.coin.PastVotes(who, cs.qualityEpoch)
+	// LIVE WEIGHT, locked against transfer for a round. This lane used to weigh at
+	// cs.qualityEpoch, pinned at PostAnswer — an anchor no voter could move, so a
+	// post-answer buyer could not vote here at all. That was a WALL, and live
+	// weight replaces it with a PRICE (1.25% of court supply, the S4 demotion
+	// floor, held for a round). Recorded rather than glossed: this lane is the one
+	// the change makes worse, and it is the owner's call, forced by the rule that
+	// newly acquired coin must vote immediately. VOTELOCK.md carries the argument.
+	w := c.coin.BalanceOf(who)
 	if w <= 0 {
-		panic("kourtv2: no checkpointed weight at the claim's quality epoch")
+		panic("kourtv2: no court coin to vote with")
 	}
+	// No close of its own — the ride's deadline is the governor's and disputeOpen
+	// stays true — so lockVote's one-round cap IS the rule here, and a voter can
+	// outlast their lock on a long tally. That residual is priced at one round.
+	lockVote(c, who, heightNow()+c.params.votingBlocks)
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}

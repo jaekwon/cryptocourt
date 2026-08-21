@@ -838,6 +838,32 @@ func (g *Governor) Vote(who address, id int64, choice string) {
 	g.castVote(who, id, choice, "")
 }
 
+// VoteWithWeight is Vote where the CONSUMER supplies the weight instead of the
+// governor deriving it from the snapshot.
+//
+// It exists because the two consumers of this package want different electorates
+// and only one of them can be the default. r/govern keeps the snapshot: its token
+// is delegable, and a live reading there would let a delegator lend power, have
+// the delegate vote, and sell — only the delegate's coin being committed. kourtv2
+// wants live weight plus a transfer lock, so that newly bought coin can vote at
+// once and rented coin cannot (VOTELOCK.md).
+//
+// The governor deliberately does NOT check the figure against anything. It cannot:
+// the whole point is that the consumer knows a rule this package does not. What it
+// does enforce is that the weight is positive and that the proposal is open, which
+// are its own invariants — and the ordinary Vote path is untouched, so passing
+// nothing keeps the snapshot behaviour exactly.
+//
+// A consumer that supplies a weight it has not committed has simply re-opened
+// rented weight for itself. That is stated here because it is the one thing this
+// seam cannot defend against.
+func (g *Governor) VoteWithWeight(who address, id int64, choice string, weight int64) {
+	if weight <= 0 {
+		panic("govern: a supplied voting weight has to be positive")
+	}
+	g.castVoteAt(who, id, choice, "", weight)
+}
+
 // VoteWithReason is Vote with a note the voter wants on the record — the same
 // pair OpenZeppelin has. Two entrypoints rather than one optional argument
 // because MsgCall carries a fixed list of strings and gno has no optional
@@ -857,7 +883,15 @@ func (g *Governor) VoteWithReason(who address, id int64, choice, reason string) 
 	g.castVote(who, id, choice, reason)
 }
 
+// castVote derives the weight from the snapshot; castVoteAt takes one. Both
+// funnel into the same body so there is exactly one place that records a ballot.
 func (g *Governor) castVote(who address, id int64, choice, reason string) {
+	g.castVoteAt(who, id, choice, reason, 0)
+}
+
+// castVoteAt records a ballot. `given` of 0 means "derive it", which is the
+// snapshot path every existing caller takes.
+func (g *Governor) castVoteAt(who address, id int64, choice, reason string, given int64) {
 	if g.executing {
 		panic("govern: cannot vote from inside an execution")
 	}
@@ -899,7 +933,9 @@ func (g *Governor) castVote(who address, id int64, choice, reason string) {
 	// voter who has since committed coin as a bond or deposit losing that much
 	// weight is the same rule everyone else is already under.
 	// Weighed as of the snapshot, so buying in after the question was asked buys
-	// nothing, and selling out afterwards costs nothing.
+	// nothing, and selling out afterwards costs nothing — UNLESS the consumer
+	// supplied a weight, in which case that figure stands and the rule behind it
+	// is theirs (see VoteWithWeight).
 	//
 	// THE SECOND HALF IS A KNOWN, MEASURED EXPOSURE, not an oversight, and it is
 	// NOT closed here. See propose() for the mechanism and RENTEDWEIGHT.md for the
@@ -909,9 +945,12 @@ func (g *Governor) castVote(who address, id int64, choice, reason string) {
 	// nominate), and requiring the weight to have existed a week earlier
 	// disenfranchises every recent acquirer (measured, it refused an ordinary vote
 	// in this realm's own tests). Both were implemented and reverted.
-	w := g.voters.PastVotes(who, p.epoch)
-	if w <= 0 {
-		panic("govern: no voting power at that epoch")
+	w := given
+	if w == 0 {
+		w = g.voters.PastVotes(who, p.epoch)
+		if w <= 0 {
+			panic("govern: no voting power at that epoch")
+		}
 	}
 	switch choice {
 	case "yes":

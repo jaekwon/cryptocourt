@@ -1908,10 +1908,13 @@ func TestVoteQualityNeedsWeightAndAnOpenWindow(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(bob))
 	OpenFlag(cross(cur), "qfw", id)
 
-	// No checkpointed weight, no vote — while the window is still open, so this is
-	// the weight check answering and not a deadline.
+	// No coin, no vote — while the window is still open, so this is the weight
+	// check answering and not a deadline. Unchanged in substance by the move to
+	// live weight (v0.57): the ghost holds nothing at any reading. Only the
+	// refusal's wording moved, which is why this is the one weight-gate test in
+	// the suite that did NOT have to change its expectation.
 	testing.SetRealm(testing.NewUserRealm(ghost))
-	uassert.AbortsContains(t, cur, "no checkpointed weight", func() {
+	uassert.AbortsContains(t, cur, "no court coin to vote with", func() {
 		VoteQuality(cross(cur), "qfw", id, qualityLow)
 	})
 

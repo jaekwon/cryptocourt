@@ -386,14 +386,39 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	if now >= e.voteEnd {
 		panic("kourtv2: voting has closed")
 	}
-	// Weighed at the epoch OpenElection pinned. This is the lane most exposed to
-	// rented weight — the opener chooses the anchor and a coup is court-wide
-	// rather than one claim — measured at 12x this floor on a 500 B court from a
-	// one-epoch rental. NOT closed here; see RENTEDWEIGHT.md.
-	w := c.coin.PastVotes(who, e.epoch)
+	// LIVE WEIGHT, locked against transfer until the election closes. This was the
+	// lane most exposed to rented weight — OpenElection pinned the anchor, so the
+	// opener chose it, and a coup is court-wide rather than one claim; measured at
+	// 12x this floor on a 500 B court from a ONE-EPOCH rental. Now a coup costs
+	// holding the position through the whole election.
+	// Live balance PLUS this voter's own bonds on this ballot, and the second term
+	// is not a nicety.
+	//
+	// A live reading alone docks whoever paid to participate: their bond has left
+	// their balance for the escrow. Measured, a holder of EXACTLY the 5% floor who
+	// nominated a candidate then held 4.57% of votable and was refused — which is
+	// arithmetically correct, since votableAt nets the escrow out of the
+	// denominator too, but perverse as policy. A candidate's own nominator should
+	// be able to vote for them.
+	//
+	// Credited locally rather than from a per-address escrow ledger: the ballot
+	// knows its posters, so this is a bounded walk (maxBallotLines = 64) over state
+	// already here, with nothing new to keep in sync. The residual, stated: bonds
+	// this address has posted on OTHER claims in the court are still docked, which
+	// is the "escrowed coin does not vote" rule the denominator already applies.
+	w := c.coin.BalanceOf(who)
+	// At most one line per voter ("one nomination per address per election"), so
+	// this adds one bond at most; the walk is bounded by maxBallotLines anyway.
+	e.lines.Iterate("", "", func(_ string, v any) bool {
+		if l := v.(*ballotLine); l.poster == who {
+			w = mustAdd(w, l.bond)
+		}
+		return false
+	})
 	if w <= 0 {
-		panic("kourtv2: no voting weight at the pinned epoch")
+		panic("kourtv2: no court coin to vote with")
 	}
+	lockVote(c, who, e.voteEnd)
 	key := beClaimKey(candidateID) + who.String()
 	if retain {
 		key = "retain" + who.String()
