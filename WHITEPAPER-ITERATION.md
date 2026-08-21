@@ -531,6 +531,35 @@ The three properties to convey, in owner-priority order: **(1)** voting costs th
 voter no yield, only liquidity; **(2)** rented weight cannot decide a vote;
 **(3)** newly acquired coin votes immediately, with no seasoning period.
 
+> **⚠ SUPERSEDED — DO NOT WRITE PROSE FROM THE PARAGRAPH ABOVE.** It describes the
+> design `VOTELOCK.md` documents, and `VOTELOCK.md` is headed "REVERTED at v0.58".
+> What shipped is in the ERRATUM at the top of this file. Four of that paragraph's
+> claims are false of the shipped design, and it is quoted here as prose-ready, so
+> they would go straight into the paper:
+>
+> 1. *"what a holder owns at the moment they vote"* — no. Weight is
+>    `min(PastVotes(who, the question's frozen epoch), BalanceOf(who))`. The live
+>    balance is a FLOOR, not the figure.
+> 2. *"coin bought a block ago votes at full size"* — no, and this is the property
+>    the snapshot exists to deny. Coin acquired after a question's epoch votes
+>    NOTHING on that question. It votes at full size on the next one.
+> 3. *"until the round closes"* — no. Until the question RESOLVES, which is later,
+>    and the three lanes differ: a verdict vote releases at its round's resolution,
+>    an election vote at the election's, a quality vote when its tally is superseded
+>    or, if the tally has frozen, when the claim ends.
+> 4. *"it can still be staked, still back a bond, still pay a deposit, so a voter
+>    forgoes no yield"* — only the first clause survives. Staking is the single
+>    deliberate exemption, because it moves nothing and the coin keeps voting. A
+>    bond, a deposit, a transfer and a wrap all go through `mustSpendable`, which
+>    nets the vote lock out, and all four are refused. So owner-priority property
+>    (1) — "voting costs the voter no yield, only liquidity" — is not what shipped
+>    either: a voter forgoes bond and deposit yield for the length of their
+>    question.
+>
+> Property (2) and property (3) DID ship and are worth keeping: rented weight
+> cannot decide a vote, and newly acquired coin votes immediately on any question
+> opened after the purchase, with no seasoning period.
+
 **Fourth, two things the prose must NOT overclaim, both recorded in `VOTELOCK.md`:**
 
 - **One coin still votes on every open claim at once.** The lock rations disposal,
