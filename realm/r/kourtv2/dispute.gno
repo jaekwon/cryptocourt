@@ -624,7 +624,31 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 }
 
 // VotableSupply reports a court's raw supply, its escrowed weight, and the
-// difference — the weight that can actually vote — at the last sealed epoch.
+// difference, at the last sealed epoch.
+//
+// `votable` IS NOT THE WEIGHT THAT CAN ACTUALLY VOTE, and this comment said it was.
+// It nets out the court escrow and nothing else. Coin parked at a wrapper's address
+// — ccwrap's vault, so that the court coin can trade — sits INSIDE this figure while
+// no key can vote it: that realm exposes Enable, Wrap and Unwrap and no ballot. So
+// the castable total is `votable` minus whatever the wrapper holds, and the gap is
+// exactly the vault balance. Measured, on a court with 90% of one holder's coin
+// wrapped: votable unchanged at 9,380,831,518 while the castable total was
+// 1,330,986,800.
+//
+// That matters more here than in a reader whose name is merely loose, because the
+// paragraph below says this ratio is how a court tells consensus from paralysis. A
+// heavily wrapped court reads HEALTHIER on this number than it is — the failure
+// direction the reader exists to detect.
+//
+// BOUNDED, not open-ended: ccwrap caps its vault at 35% of votable (maxWrapBps),
+// derived so that a claim staking a third of the court still has the other two thirds
+// able to vote on it. So the overstatement is at most 35% while that cap holds, and
+// the cap is checked at Wrap and not maintained afterwards — see ccwrap.gno.
+//
+// NOT netted here, deliberately. kourtv2 would have to know the wrapper's address,
+// making every safety bar in every court depend on that package being correct, and
+// ccwrap's own header opens by promising the opposite. A client that knows the
+// wrapper can subtract CoinBalanceOf(slug, wrapperAddress) itself.
 //
 // This exists because the ratio it exposes is the one number that says whether
 // a court's dispute lane is alive, and it was previously unobservable: escrow's

@@ -547,6 +547,29 @@ func TestTheWrapCapHoldsTheBarsUpToItsEscrowBound(cur realm, t *testing.T) {
 	supply := kourtv2.CoinSupply("capb")
 	vaultHeld := kourtv2.CoinBalanceOf("capb", vault())
 
+	// AND kourtv2's OWN "votable" READER STILL CONTAINS THE VAULT, which is the
+	// property its corrected doc now states and the reason this cap exists at all.
+	// Asserted from here because kourtv2 cannot see the vault and so cannot test it:
+	// the court nets out its escrow and nothing else, so a wrapper's holdings are
+	// inside the figure a client reads as "what can vote". If that ever stops being
+	// true — if someone nets the vault out on the court side — this fails and the
+	// cap's whole justification needs revisiting.
+	testing.SkipHeights(720 * 2)
+	if raw, esc, votable := kourtv2.VotableSupply("capb"); raw > 0 {
+		if votable != raw-esc {
+			t.Fatalf("votable should be raw minus escrow only: %d vs %d-%d",
+				votable, raw, esc)
+		}
+		if votable-vaultHeld >= votable {
+			t.Fatalf("fixture is vacuous: the vault holds %d, so subtracting it "+
+				"must reduce votable=%d", vaultHeld, votable)
+		}
+		if vaultHeld > votable {
+			t.Fatalf("the vault (%d) cannot exceed a votable (%d) that contains it",
+				vaultHeld, votable)
+		}
+	}
+
 	// The largest escrow share at which votable/3 is still reachable, found by
 	// walking e upward against the shipped vault rather than by trusting algebra.
 	var bound int64 = -1
