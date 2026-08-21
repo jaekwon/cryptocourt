@@ -508,3 +508,70 @@ func TestVotableCountsAKeylessHolderAndTheCapIsWhy(cur realm, t *testing.T) {
 		t.Fatal("votable fell below the castable weight")
 	}
 }
+
+// THE DIVESTED HOLDER GETS THE RIGHT SENTENCE, and it is not the capped one.
+//
+// whyWeighed is a four-way switch and an operator sweep found its third arm unpinned:
+// widening `case w <= 0` to `< 0` sends a holder whose live balance is ZERO into the
+// capped arm, which tells them they are "capped at what you still hold, which is less
+// than you held when this question was asked". They hold nothing. The sentence implies a
+// residual and there is none, and this is the divested renter — the one holder the whole
+// floor exists to describe, so the one whose sentence is worth being exact about.
+//
+// Paired with the arm on either side of it, because a switch is only correct if each case
+// keeps the ones below it from firing: the never-held holder and an ordinary uncapped
+// holder must keep their own sentences.
+func TestTheDivestedHolderIsNotToldTheyAreCappedAtNothing(cur realm, t *testing.T) {
+	author := testutils.TestAddress("dw-author")
+	staker := testutils.TestAddress("dw-staker")
+	seller := testutils.TestAddress("dw-seller")
+	newcomer := testutils.TestAddress("dw-newcomer")
+	sink := testutils.TestAddress("dw-sink")
+	keeper := testutils.TestAddress("dw-keeper") // holds throughout, pays nothing
+	c := testCourt(cur, "dw", author, 40_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	c.coin.Mint(seller, 20_000_000_000)
+	c.coin.Mint(keeper, 5_000_000_000)
+
+	id := stakeAnswerDispute(cur, "dw", author, staker)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "dw", id)
+	cs := mustClaim(c, id)
+	at := c.gov.EpochOf(cs.proposalID)
+
+	// The seller held at the frozen epoch and holds nothing now.
+	if c.coin.PastVotes(seller, at) <= 0 {
+		t.Fatal("fixture: the seller has no snapshot to be divested of")
+	}
+	testing.SetRealm(testing.NewUserRealm(seller))
+	TransferCC(cross(cur), "dw", sink, DisposableOf("dw", seller))
+	if c.coin.BalanceOf(seller) != 0 {
+		t.Fatalf("fixture: the seller still holds %d, so w is not zero and the "+
+			"arm under test does not fire", c.coin.BalanceOf(seller))
+	}
+	verdict, _ := VoteWeightWhy("dw", seller, id)
+	uassert.Equal(t, "you held coin when this question was asked but hold none now, "+
+		"and weight is the lesser of the two", verdict)
+
+	// THE ARM ABOVE: a holder who never held at all gets its own sentence, not the
+	// divested one.
+	if c.coin.PastVotes(newcomer, at) != 0 {
+		t.Fatal("fixture: the newcomer is not a newcomer")
+	}
+	verdict, _ = VoteWeightWhy("dw", newcomer, id)
+	uassert.Equal(t, "you held no coin at the epoch this question was frozen at, so "+
+		"there is nothing to weigh; coin bought since counts in later questions",
+		verdict)
+
+	// THE ARM BELOW: an uncapped holder is not told they were capped. The keeper is a
+	// separate address for a reason found the hard way — the staker pays a dispute
+	// bond, so its live balance sits BELOW its snapshot and it is genuinely capped.
+	if w, snap := votingWeight(c, keeper, at); w != snap || w <= 0 {
+		t.Fatalf("fixture: the keeper is capped (w %d, snapshot %d), so it cannot "+
+			"stand for the uncapped case", w, snap)
+	}
+	verdict, _ = VoteWeightWhy("dw", keeper, id)
+	uassert.Equal(t, "weighed at the full snapshot", verdict)
+}

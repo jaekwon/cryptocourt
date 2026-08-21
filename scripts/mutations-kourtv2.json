@@ -6577,6 +6577,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "voteweight.gno",
+  "label": "whyWeighed: a holder who holds NOTHING is told they are capped at it",
+  "find": "\tcase w <= 0:",
+  "replace": "\tcase w < 0:"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "lock.gno",
   "label": "DisposableOf: returns the stake-only figure, over-promising to a voter",
   "find": "func DisposableOf(courtSlug string, who address) int64 {\n\treturn disposable(mustCourt(courtSlug), who)",
