@@ -248,8 +248,18 @@ STAKABLE_CALLS_N = 1  # stake.gno:Stake
 # sourced today so the pinned count is unchanged; what changes is that a user-sourced
 # burn can no longer arrive unnoticed. It would be worse than an ungated transfer:
 # a transfer moves locked coin, a burn destroys it.
-COIN_OUT = re.compile(r"^\s*c\.coin\.(?:Transfer|TransferFrom|Burn)\(", re.M)
-ESCROW_SRC = re.compile(r"c\.coin\.(?:Transfer|Burn)\(c\.escrow")
+# ANY Court receiver, not just `c`. Five names are already used with .coin. in this
+# tree — c (507 uses), mc (16), c2 (5), m (2), c3 (1) — because the meta court and the
+# multi-court paths hold their own Court values. None of them moves coin TODAY, so the
+# pinned count is unchanged; but `mc.coin.Transfer(who, ...)` was invisible to a
+# pattern that hardcoded `c.`, and mc is not hypothetical, it is sixteen lines away
+# doing Mint. Same class of blind spot as leaving Burn out: the regex assumed a
+# spelling the file already contradicts elsewhere.
+RECV = r"[a-z][A-Za-z0-9]*"
+COIN_OUT = re.compile(r"^\s*" + RECV + r"\.coin\.(?:Transfer|TransferFrom|Burn)\(", re.M)
+# The escrow exemption has to generalise with it, or mc.coin.Burn(mc.escrow, ...)
+# would start counting as a holder outflow.
+ESCROW_SRC = re.compile(RECV + r"\.coin\.(?:Transfer|Burn)\(" + RECV + r"\.escrow")
 GATE = re.compile(r"must(?:Spendable|Stakable)\(")
 COIN_OUT_N = 7  # see the audit above
 
