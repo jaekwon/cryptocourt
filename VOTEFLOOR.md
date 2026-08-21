@@ -14,7 +14,33 @@ records what actually happened, including the three places the plan was wrong.**
 | 7 | `82f3c96` | the vote lock: coin voted with cannot leave until the question resolves, + 3 tests + 6 rows |
 | 8 | `665d16d` | correcting step 6's own overstatement (see below) |
 | 9 | `1c54fd9` | the quality lane locked (it was never an owner decision), and voteLockedOf fixed from SUM to MAX |
-| 10 | this commit | retiring the "quality lane is an owner decision" claims |
+| 10 | `5a947e4` | retiring the "quality lane is an owner decision" claims |
+| 11 | `cbbfe32` | the bond haircut measured, refuted as a hazard, pinned as intended behaviour |
+| 12 | `32384b2` | ccwrap's vault capped so liquidity cannot strand governance |
+| 13 | `8bf4770` | one vote-weight expression (`voteweight.gno`), quoted to the elector as well as charged; arm 4 |
+| 14 | `20e440e` | the lock can never strand a voter; arm 5 pins claim terminality |
+| 15 | `14f487e` | the three 5% bars do not share a denominator; `credWeightFloor`'s base pinned |
+| 16 | `c4980eb` | the wrap cap was a precondition claiming to be an invariant: 60% → 35%, derived with escrow in it |
+| 17 | `11ac0b9` | prose sweep — three false countable claims of my own; arm 6 pins the lock's one exemption |
+| 18 | `310542d` | a permissionless prune for dead vote-lock rows |
+
+**THE PATTERN ACROSS 11-18, stated because it is the most useful thing this file
+has learned.** Every one of those commits fixed something in work that had already
+passed a full gate — suites green, guards green, mutation rows caught. None was
+found by review. They came from three moves, in descending yield:
+
+1. **Probing a claim I had written down.** The wrap cap said "by construction"; it
+   held for one block. The netting rejection cited an attack that does not work.
+   `voteLockedOf` summed where it had to take a max, twice, two commits apart.
+2. **Ablating each guard arm SEPARATELY.** Three ablations this session passed for
+   the wrong reason — arm 1 firing where arm 4 was meant to, one precondition
+   catching both directions of a bound, a planted body tripping a different arm than
+   intended. An ablation that fires is not evidence until you know WHICH arm fired.
+3. **Asking what has no symptom.** `lockVote` no longer pruning left the whole suite
+   green: the failure mode was a bill, not a wrong answer. Those are the ones review
+   cannot see, because there is nothing to look at.
+
+The claims that go unpinned are the ones that sound obvious.
 
 **A FIFTH CORRECTION, and it is the same mistake twice.** `voteLockedOf` summed a
 holder's open lock rows, double-counting the same coins: a holder who voted a verdict

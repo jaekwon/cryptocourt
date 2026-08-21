@@ -56,7 +56,26 @@ def main():
                          "of them stops helping well before the core count")
     a = ap.parse_args()
 
-    muts = json.load(open(a.batch)) if a.batch else json.load(sys.stdin)
+    # A LEGIBLE FAILURE, because the illegible one cost a whole cycle. Omitting
+    # the batch argument used to fall through to json.load(sys.stdin), which on an
+    # empty or absent stdin raises JSONDecodeError("Expecting value: line 1 column
+    # 1") — a decoder traceback for what is actually a usage mistake. Worse, run
+    # under `| tail`, the traceback surfaced as a clean exit 0 and the batch read
+    # as having passed. Stdin input is deliberate (selftest feeds mutate.py that
+    # way), so this distinguishes "nothing arrived" from "what arrived was not
+    # JSON" instead of removing the feature.
+    if a.batch:
+        muts = json.load(open(a.batch))
+    else:
+        raw = sys.stdin.read() if not sys.stdin.isatty() else ""
+        if not raw.strip():
+            ap.error("no batch file given and nothing arrived on stdin. Pass a "
+                     "corpus (scripts/mutations-kourtv2.json), or pipe a JSON "
+                     "batch in. `make mutate` does the former.")
+        try:
+            muts = json.loads(raw)
+        except json.JSONDecodeError as e:
+            ap.error(f"stdin was not a JSON batch: {e}")
     n = a.shards or max(2, min(6, (os.cpu_count() or 4) // 2))
     n = min(n, len(muts)) or 1
 

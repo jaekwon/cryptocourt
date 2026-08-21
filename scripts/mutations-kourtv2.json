@@ -478,9 +478,9 @@
   {
     "pkg": "kourtv2",
     "file": "render.gno",
-    "label": "positions: free-to-commit shows the raw balance instead",
-    "find": "\tb.WriteString(\"- free to commit: \" + strconv.FormatInt(spendable(c, who), 10) +",
-    "replace": "\tb.WriteString(\"- free to commit: \" + strconv.FormatInt(bal, 10) +"
+    "label": "positions: free-to-stake shows the raw balance instead",
+    "find": "\tb.WriteString(\"- free to stake: \" + strconv.FormatInt(spendable(c, who), 10) + \"\\n\")",
+    "replace": "\tb.WriteString(\"- free to stake: \" + strconv.FormatInt(bal, 10) + \"\\n\")"
   },
   {
     "pkg": "kourtv2",
@@ -6399,5 +6399,19 @@
     "label": "pruneVoteLocks: removes nothing and reports nothing",
     "find": "\tfor _, k := range stale {\n\t\tc.voteLocks.Remove(k)\n\t}\n\treturn len(stale)",
     "replace": "\treturn 0"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "positions: free-to-dispose ignores the vote lock (shows spendable)",
+    "find": "\tb.WriteString(\"- free to bond, deposit or transfer: \" +\n\t\tstrconv.FormatInt(disposable(c, who), 10) + \"\\n\")",
+    "replace": "\tb.WriteString(\"- free to bond, deposit or transfer: \" +\n\t\tstrconv.FormatInt(spendable(c, who), 10) + \"\\n\")"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "render.gno",
+    "label": "positions: committed-by-voting shows zero regardless of the lock",
+    "find": "\tb.WriteString(\"- committed by voting: \" + strconv.FormatInt(voted, 10) +",
+    "replace": "\tb.WriteString(\"- committed by voting: \" + strconv.FormatInt(voted-voted, 10) +"
   }
 ]

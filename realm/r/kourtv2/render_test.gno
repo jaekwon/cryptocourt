@@ -158,8 +158,18 @@ func TestRenderPositionsPage(cur realm, t *testing.T) {
 	if !strings.Contains(out, "committed as stake: 300000000") {
 		t.Fatalf("the page must show what is committed:\n%s", out)
 	}
-	if !strings.Contains(out, "free to commit: 9700000000") {
-		t.Fatalf("the page must show what is free:\n%s", out)
+	// Bob has not voted here, so the vote lock is zero and the two "free" figures
+	// coincide. Both are asserted anyway: a page that printed only one of them, or
+	// printed the same number under a label naming the wrong gate, is exactly what
+	// this line replaced.
+	if !strings.Contains(out, "committed by voting: 0") {
+		t.Fatalf("the page must show the vote commitment, zero or not:\n%s", out)
+	}
+	if !strings.Contains(out, "free to stake: 9700000000") {
+		t.Fatalf("the page must show what a stake draws on:\n%s", out)
+	}
+	if !strings.Contains(out, "free to bond, deposit or transfer: 9700000000") {
+		t.Fatalf("the page must show what a bond draws on:\n%s", out)
 	}
 	if got := LockedOf("rp1", bob) + SpendableOf("rp1", bob); got != CoinBalanceOf("rp1", bob) {
 		t.Fatalf("committed + free = %d, but bob holds %d", got, CoinBalanceOf("rp1", bob))
@@ -800,5 +810,82 @@ func TestRenderAcceptsAndRefusesEveryPathShape(cur realm, t *testing.T) {
 	// A fourth segment is refused rather than folded into the address.
 	if got := Render("rps1/" + sid + "/" + who.String() + "/extra"); !strings.Contains(got, "Not found") {
 		t.Errorf("a fourth path segment rendered a page:\n%s", got)
+	}
+}
+
+// THE WALLET PANEL WITH A VOTE LOCK ON IT, which is the only state where its two
+// "free" figures differ — and therefore the only state where the page can be wrong
+// about which gate binds.
+//
+// FOUND BY TWO SURVIVING MUTANTS. Splitting "free to commit" into "free to stake"
+// (spendable, what mustStakable allows) and "free to bond, deposit or transfer"
+// (disposable, which nets the vote lock too) came with three mutation rows. Two
+// survived the whole suite: swapping disposable for spendable, and zeroing the vote
+// commitment. Both are invisible in a fixture where nobody has voted, because there
+// the two figures are equal and the commitment is zero — so the existing positions
+// test could not see either. A row that survives is the corpus reporting missing
+// coverage, and this is the coverage.
+func TestTheWalletPanelSeparatesTheTwoGates(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rpg-alice")
+	whale := testutils.TestAddress("rpg-whale")
+	voter := testutils.TestAddress("rpg-voter")
+	c := testCourt(cur, "rpg", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+
+	// A stake AND a vote, on different claims, so both locks are live at once and
+	// neither figure is the other by accident.
+	other := stakeAnswerDispute(cur, "rpg", alice, whale)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fresh := OpenClaim(cross(cur), "rpg", "Something to stake on")
+	testing.SetRealm(testing.NewUserRealm(voter))
+	Stake(cross(cur), "rpg", fresh, sideYES, 1_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "rpg", other)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "rpg", other, "no")
+
+	bal := c.coin.BalanceOf(voter)
+	staked := lockedOf(c, voter)
+	voted := VoteLockedOf("rpg", voter)
+	free1 := spendable(c, voter)
+	free2 := disposable(c, voter)
+	// The instrument's own precondition: the two gates must actually disagree here,
+	// or the assertions below would pass against a page that printed one number
+	// twice — which is the bug this test exists for.
+	if staked <= 0 || voted <= staked || free2 >= free1 {
+		t.Fatalf("fixture is vacuous: need a live stake (%d) below a larger vote "+
+			"commitment (%d) so the free figures differ (%d vs %d)",
+			staked, voted, free1, free2)
+	}
+
+	out := Render("rpg/" + itoa(int64(other)) + "/" + voter.String())
+	for _, want := range []string{
+		"held: " + itoa(bal),
+		"committed as stake: " + itoa(staked),
+		"committed by voting: " + itoa(voted),
+		"free to stake: " + itoa(free1),
+		"free to bond, deposit or transfer: " + itoa(free2),
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the wallet panel must show %q:\n%s", want, out)
+		}
+	}
+
+	// BOTH PARTITIONS, which is what stops the page printing plausible numbers that
+	// do not add up. The locks OVERLAP rather than stack — staked coin still votes —
+	// so the second is a max, not a sum.
+	if staked+free1 != bal {
+		t.Fatalf("stake partition broken: committed %d + free-to-stake %d != "+
+			"held %d", staked, free1, bal)
+	}
+	most := staked
+	if voted > most {
+		most = voted
+	}
+	if most+free2 != bal {
+		t.Fatalf("disposal partition broken: max(stake %d, voting %d) + "+
+			"free-to-dispose %d != held %d — the locks OVERLAP, so this is a max "+
+			"and not a sum", staked, voted, free2, bal)
 	}
 }

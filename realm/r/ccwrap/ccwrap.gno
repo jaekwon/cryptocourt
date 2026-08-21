@@ -368,6 +368,19 @@ func mustWrapRoom(slug string, vault address, amount int64) {
 
 // WrapRoom is how much more can be wrapped before the cap binds. Quoted because a
 // holder refused by mustWrapRoom deserves a number rather than a rule.
+//
+// A COURT-LEVEL BOUND, NOT A PERSONAL ALLOWANCE, and the difference bites. Wrap
+// goes on to call kourtv2.TransferFromCC, which gates on mustSpendable, which nets
+// out BOTH the stake lock and the vote lock. So a holder who has staked, or who has
+// voted in a question that has not resolved, can be refused an amount this function
+// says is available — for a reason it never mentions. Whoever is deciding how much
+// to wrap wants the lesser of this and kourtv2.SpendableOf minus their own vote
+// commitment; kourtv2.VoteLockedOf quotes the second half.
+//
+// Not folded into one number on purpose: this realm has no business deciding which
+// of a holder's several commitments is the interesting one, and a single figure
+// would hide which limit is actually binding — the same complaint mustSpendable's
+// split panic messages answer on the kourtv2 side.
 func WrapRoom(slug string) int64 {
 	room := liveVotable(slug)*maxWrapBps/10000 -
 		kourtv2.CoinBalanceOf(slug, chain.PackageAddress(realmPath))

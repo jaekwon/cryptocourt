@@ -379,14 +379,34 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	// this claim's, these are every claim in this court plus any live bond, so
 	// showing them side by side without saying which is which would be worse than
 	// showing neither.
+	// TWO "free" FIGURES, NOT ONE, because there are two gates and they answer
+	// different questions. A stake draws on spendable() through mustStakable: it
+	// moves nothing, so a pending vote is no reason to refuse it. Everything else —
+	// a deposit, a bond, a transfer, a wrap — draws on disposable() through
+	// mustSpendable, which nets out the vote lock as well.
+	//
+	// This line used to read "free to commit: <spendable> — what a new stake,
+	// deposit or bond draws on", which was one number wearing three labels. After
+	// the vote lock it told a voter they had coin free for a bond that would be
+	// refused, and named the wrong gate for two of the three uses.
+	//
+	// The PARTITION the test cares about survives, twice over:
+	//   held = committed as stake     + free to stake
+	//   held = max(stake, voting)     + free to bond/deposit/transfer
+	// The two locks OVERLAP rather than stack — staked coin still votes, so one
+	// pile can answer to both — which is why the second row is a max and not a sum.
 	bal := c.coin.BalanceOf(who)
 	locked := lockedOf(c, who)
+	voted := voteLockedOf(c, who)
 	b.WriteString("\n## Your CC in this court (all claims)\n\n")
 	b.WriteString("- held: " + strconv.FormatInt(bal, 10) +
 		" (CC base units) — every unit votes, committed or not\n")
 	b.WriteString("- committed as stake: " + strconv.FormatInt(locked, 10) + "\n")
-	b.WriteString("- free to commit: " + strconv.FormatInt(spendable(c, who), 10) +
-		" — what a new stake, deposit or bond draws on\n")
+	b.WriteString("- committed by voting: " + strconv.FormatInt(voted, 10) +
+		" — until each question resolves\n")
+	b.WriteString("- free to stake: " + strconv.FormatInt(spendable(c, who), 10) + "\n")
+	b.WriteString("- free to bond, deposit or transfer: " +
+		strconv.FormatInt(disposable(c, who), 10) + "\n")
 
 	// Roles on this claim.
 	roles := ""
