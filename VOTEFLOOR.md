@@ -67,10 +67,12 @@ with the per-lane difference (a verdict vote until its round resolves, an electi
 vote until the election resolves, a quality vote until its tally is superseded or the
 claim ends). After a vote: the committed figure, from `VoteLockedOf(slug, who)`. On
 any sell/bond/deposit/wrap affordance: the binding limit, which is NOT `SpendableOf`
-— that one is stake-only and will over-promise. `WrapRoom` is also a court-level
-bound, not a personal allowance. The realm exposes `ClaimVoteWeightOf`,
-`ElectionVoteWeightOf` and `VoteWeightWhy` for the weight side, and `VoteLockedOf`
-for the commitment side. `VoteWeightWhy` returns TWO strings, one per lane — a claim
+— that one is stake-only and will over-promise. Use `DisposableOf(slug, who)`, which
+is the figure the realm actually enforces. (It did not exist when this note was first
+written, which made the note unactionable; exporting it was the fix.) `WrapRoom` is
+also a court-level bound, not a personal allowance. The realm exposes
+`ClaimVoteWeightOf`, `ElectionVoteWeightOf` and `VoteWeightWhy` for the weight side,
+and `VoteLockedOf` plus `DisposableOf` for the commitment side. `VoteWeightWhy` returns TWO strings, one per lane — a claim
 with a dispute open has two live questions at two different epochs, and a single
 answer for both is wrong in a reachable state.
 

@@ -693,3 +693,58 @@ func TestRepeatedVotingDoesNotAccumulateRows(cur realm, t *testing.T) {
 		uassert.Equal(t, int64(0), VoteLockedOf("vlk9", voter))
 	}
 }
+
+// THE TWO EXPORTED FIGURES ANSWER DIFFERENT GATES, AND DisposableOf IS THE BINDING
+// ONE.
+//
+// SpendableOf is stake-only — its name predates the vote lock — and every client had
+// it while nothing exposed the figure the realm actually enforces on a bond, a
+// deposit, a transfer or a wrap. This pins that they differ exactly when a holder has
+// voted, that DisposableOf is what a transfer really allows to the unit, and that
+// SpendableOf still answers its own question correctly for a stake.
+func TestDisposableOfIsTheBindingFigureAndSpendableOfIsNot(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vla-alice")
+	whale := testutils.TestAddress("vla-whale")
+	voter := testutils.TestAddress("vla-voter")
+	c := testCourt(cur, "vlka", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+
+	// Before voting the two agree, which is the bystander half: this change must not
+	// move the figure for a holder who has not voted.
+	uassert.Equal(t, SpendableOf("vlka", voter), DisposableOf("vlka", voter))
+
+	id := stakeAnswerDispute(cur, "vlka", alice, whale)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "vlka", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "vlka", id, "no")
+
+	// Top up so a disposable remainder exists and the two figures are both positive
+	// but unequal — otherwise this passes against a DisposableOf that returned zero.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "vlka", voter, 4_000_000_000)
+
+	sp := SpendableOf("vlka", voter)
+	dp := DisposableOf("vlka", voter)
+	locked := VoteLockedOf("vlka", voter)
+	if locked <= 0 || dp <= 0 || dp >= sp {
+		t.Fatalf("fixture is vacuous: need a live vote lock and 0 < disposable < "+
+			"spendable, got locked=%d disposable=%d spendable=%d", locked, dp, sp)
+	}
+	// SpendableOf still answers ITS question: the balance less the stake lock, which
+	// is the whole balance here because nothing is staked.
+	uassert.Equal(t, c.coin.BalanceOf(voter), sp)
+	// And DisposableOf is the balance less the vote commitment.
+	uassert.Equal(t, c.coin.BalanceOf(voter)-locked, dp)
+
+	// DisposableOf is what a transfer actually allows, to the unit.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "vlka", whale, dp)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "vlka", whale, 1)
+	})
+	// Whereas SpendableOf would have over-promised by exactly the commitment.
+	uassert.Equal(t, locked, sp-dp)
+}

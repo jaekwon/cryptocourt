@@ -83,6 +83,22 @@ func disposable(c *Court, who address) int64 {
 	return d
 }
 
+// DisposableOf is what an address may actually let LEAVE its balance in this court —
+// a bond, a claim deposit, a transfer, a wrap. The balance less whichever claim on it
+// is larger, stake or vote.
+//
+// EXPORTED BECAUSE NOTHING EXPOSED IT, and that was a real gap rather than an
+// omission of convenience: every client had SpendableOf, which is stake-only, and no
+// way at all to read the figure the realm actually enforces. A handoff note asking a
+// web client to "use the binding limit, not SpendableOf" was unactionable until this
+// existed.
+//
+// Pairs with SpendableOf, and the two differ exactly when a holder has voted. Quote
+// both or quote this one; quoting only SpendableOf over-promises.
+func DisposableOf(courtSlug string, who address) int64 {
+	return disposable(mustCourt(courtSlug), who)
+}
+
 // mustSpendable refuses a commitment that would dip into locked stake OR into coin
 // committed by voting. Called by every path that moves a user's CC OUT of their
 // balance — into the escrow or to another holder.
@@ -155,13 +171,25 @@ func releaseStake(c *Court, who address, amount int64) {
 }
 
 // LockedOf is the read for clients and for the position page: how much of an
-// address's CC is committed as stake in this court. The complement, what they
-// can still commit, is SpendableOf.
+// address's CC is committed as stake in this court. The complement — what they can
+// still STAKE — is SpendableOf. What they can still bond, deposit, transfer or wrap
+// is DisposableOf, which is a different and usually smaller number.
 func LockedOf(courtSlug string, who address) int64 {
 	return lockedOf(mustCourt(courtSlug), who)
 }
 
-// SpendableOf is the balance an address may still commit in this court.
+// SpendableOf is what an address may still STAKE. It is NOT what they may spend, and
+// the name predates the vote lock.
+//
+// Only Stake draws on this figure, through mustStakable. Every other commitment — a
+// bond, a claim deposit, a transfer, a wrap — draws on DisposableOf through
+// mustSpendable, which nets out the vote lock as well as the stake lock. So a client
+// showing this as "what you can commit" over-promises to any holder who has voted,
+// and the realm will refuse at signing.
+//
+// That is not hypothetical: render.gno's wallet panel printed exactly this figure
+// under "what a new stake, deposit or bond draws on" until it was split into two
+// rows. A single number cannot answer two gates.
 func SpendableOf(courtSlug string, who address) int64 {
 	return spendable(mustCourt(courtSlug), who)
 }

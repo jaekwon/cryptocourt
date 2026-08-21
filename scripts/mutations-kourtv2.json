@@ -6441,5 +6441,12 @@
     "label": "VoteWeightWhy: the verdict lane reuses the quality lane's epoch",
     "find": "\t\tverdict = whyWeighed(c, who, c.gov.EpochOf(cs.proposalID))",
     "replace": "\t\tverdict = whyWeighed(c, who, cs.qualityEpoch)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "lock.gno",
+    "label": "DisposableOf: returns the stake-only figure, over-promising to a voter",
+    "find": "func DisposableOf(courtSlug string, who address) int64 {\n\treturn disposable(mustCourt(courtSlug), who)",
+    "replace": "func DisposableOf(courtSlug string, who address) int64 {\n\treturn spendable(mustCourt(courtSlug), who)"
   }
 ]
