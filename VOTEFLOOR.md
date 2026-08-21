@@ -64,13 +64,40 @@ anchor overlap first, one of them checked afterwards by mistake); chunks 3 and 4
 against a tree touched only under `scripts/`, which mutate does not stage, so those
 two are pristine measurements.
 
-**What it does not say.** It is a targeted set, not the full 918: the 477 rows over
-files this work never touched were not re-run, on the reasoning that a row can only
-stop being caught if either its target or its catching test moved. That reasoning is
-an argument, not a measurement, and the earlier full-corpus attempt was abandoned
-after ~1.5 hours because 8 shards saturated the machine and the run was edited under
-twice. If the full number is ever wanted, run it on an idle tree and do not touch
-`realm/` until it finishes.
+### And then the complement, partly — with the split stated exactly
+
+The first pass covered rows over CHANGED files. The rest were skipped on an argument:
+*a row can only stop being caught if either its target or its catching test moved.*
+That is reasoning, not measurement, so it was labelled as such — and then narrowed
+rather than left standing.
+
+**636 of 918 distinct rows measured, all caught, zero not-caught.** The 282 not
+measured are `kourtv2` 258, `govern` 15, `twap` 6, `curve` 3.
+
+The narrowing is the part worth defending. The argument is strong where this work
+changed neither the code nor its tests, which is all of the untouched `kourtv2`
+files. It is WEAKER for `grc20votes`, `checkpoint` and `governor`, because the
+coherence case names them by hand:
+
+    Σ min(PastVotes, BalanceOf)  ≤  Σ PastVotes  =  PastTotal
+
+That middle EQUALITY is a property of the ledger and its archive, not of anything
+written here — asserted in `voteweight.gno`'s header and in
+`TestPastVotesSumToPastTotal`. So all 102 rows across those three packages were run
+(51 + 51, both clean) on the principle that measurement should go where the argument
+leans on someone else's invariant. The remaining 282 stay on the argument, and this
+paragraph is the record of that being a choice rather than an oversight.
+
+**Operational notes, since four attempts were lost to learn them.** Background
+mutate runs get reaped; foreground with ~60-row slices returns its result and cannot
+be lost, while 102 rows exceeds the window. Mutate is safe to interrupt — it stages
+copies, so five consecutive kills left the tree with no stray `.mutate-backup` and a
+clean `git status`. `selftest-checks.py` is NOT safe to interrupt: it rewrites files
+in place, and one kill left `check-storage.py` carrying a budget mutation that then
+read as a real guard failure. The abandoned full-corpus run failed for a different
+reason worth remembering: 8 shards saturated the machine, no shard reported for ~1.5
+hours, and `realm/` was edited under it twice before I understood that mutate
+re-stages per row.
 
 **AND A NINETEENTH COMMIT ADDS A FOURTH MOVE: check the algebra of a mechanism you
 are describing.** Four files and a dozen commit messages said the reverted design
