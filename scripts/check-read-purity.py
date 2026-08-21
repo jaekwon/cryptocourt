@@ -56,7 +56,10 @@ ROOT = Path(__file__).resolve().parent.parent
 REALM = ROOT / "realm" / "r" / "kourtv2"
 
 # Helpers that allocate a struct AND persist it into realm state.
-ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod")
+# getPos joins them for the same reason and was found missing by review: it Sets a
+# *stakePos on access (stake.gno), so an exported read reaching it persists a struct.
+# Measured before adding it — an exported read calling getPos passed this guard green.
+ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos")
 
 # An exported TOP-LEVEL declaration: `func Name(`. A receiver is not matched on
 # purpose — see the module docstring on dispute.gno's Do.

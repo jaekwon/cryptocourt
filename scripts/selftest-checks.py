@@ -467,9 +467,21 @@ control("a read that allocates state", f"{KOURTV2}/modvote.gno",
 # Fail CLOSED, both ways. An allocator that gets renamed leaves the scan looking
 # for a call that can no longer appear, and a read pattern that drifts leaves it
 # scanning nothing — either would report clean forever.
+# getPos joined ALLOCATORS because review MEASURED this guard green against an exported
+# read that called it — the allowlist was three hardcoded names and getPos was not one,
+# while being an allocate-and-persist helper of exactly the same species. This is the
+# control for that fix: plant the read, and the guard must now object.
+control("an exported read that reaches getPos", f"{KOURTV2}/stakeindex.gno",
+        "func StakedSize(courtSlug string, who address) int {",
+        "func StakedLeak(courtSlug string, who address) int64 {\n"
+        "\tc := mustCourt(courtSlug)\n"
+        "\treturn getPos(c, mustClaim(c, 1), who, sideYES).stake\n"
+        "}\n\n"
+        "func StakedSize(courtSlug string, who address) int {",
+        "getPos", argv=["python3", READPURE])
 control("an allocator renamed out from under the scan", READPURE,
-        'ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod")',
-        'ALLOCATORS = ("ensureModGone", "ensureGlobalDAO", "ensureClaimMod")',
+        'ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos")',
+        'ALLOCATORS = ("ensureModGone", "ensureGlobalDAO", "ensureClaimMod", "getPos")',
         "cannot appear",
         argv=["python3", READPURE])
 control("a read pattern that drifted off the code", READPURE,

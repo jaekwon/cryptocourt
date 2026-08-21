@@ -416,13 +416,17 @@ func PruneVoteLocks(cur realm, courtSlug string, who address) int {
 // pays four reads per claim id — the me-page's positionOf probe does exactly that —
 // while this is one read per court however many claims the holder is in.
 //
-// STAKE POSITIONS ARE DELIBERATELY NOT ENUMERATED HERE, and the asymmetry is
-// structural rather than an oversight: cs.stakers is keyed addr|side on EACH claim,
-// so it is claim-first, and listing one holder's positions means visiting every
-// claim. Making that cheap needs a second index keyed address-first, which taxes
-// every stake with storage for the benefit of a page. The stake TOTAL is here because
-// c.locked already holds it for free, and the total is the figure that actually
-// constrains the holder; the per-claim split stays on the claim pages that carry it.
+// STAKE POSITIONS ARE NOT ENUMERATED HERE, and they are no longer unenumerable: the
+// asymmetry is real — cs.stakers is keyed addr|side on EACH claim, so it is claim-first
+// and listing one holder's positions by walking claims is O(all claims) — but that is
+// what stakeindex.gno now answers, from its own address-first index. This function keeps
+// to the two lock TOTALS because they are what constrain a holder's next action;
+// StakedPage answers where their money is. An earlier version of this paragraph argued
+// the index should not exist at all, on the grounds that it "taxes every stake with
+// storage for the benefit of a page". Measured, that tax is ~57 bytes and ~36k gas on a
+// write that already costs ~604k, and the page it bought could not otherwise answer a
+// holder's own position on a claim older than the client's scan window. The argument was
+// right about the cost and wrong about the trade.
 //
 // THE ROWS MAY SUM TO MORE THAN `vote`, AND THAT IS NOT A BUG. `vote` is the MAX
 // across open rows, because the locks overlap — one pile of coin honours many

@@ -6276,6 +6276,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "stake.gno",
+  "label": "getPos: a new position is never indexed (the me-page goes blind again)",
+  "find": "\tindexPosition(c, cs.id, who, side)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "VoteQuality: the ballot's coin is never committed",
   "find": "\tlockVote(c, who, voteLockQuality, int64(claimID), int64(cs.qVoteSeq), w)",
@@ -6637,5 +6644,33 @@
   "label": "TransferCC: the escrow is refused only when BOTH ends are the escrow",
   "find": "// endpoint in either direction.\n\tif to == c.escrow || from == c.escrow {",
   "replace": "// endpoint in either direction.\n\tif to == c.escrow && from == c.escrow {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxKey: every claim shares one bucket (an unbounded packed value)",
+  "find": "const stakeIdxPage = 64",
+  "replace": "const stakeIdxPage = 1 << 62"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "sideByte: both sides of a claim record as YES",
+  "find": "\tif side == sideYES {\n\t\treturn \"y\"\n\t}\n\treturn \"n\"",
+  "replace": "\treturn \"y\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: the live stake is always reported as zero",
+  "find": "\t\t\t\tlive = pv.(*stakePos).stake\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxWalk: a bucket key it did not write is walked anyway",
+  "find": "\t\tif len(k) != len(pre)+8 {\n\t\t\treturn false\n\t\t}\n",
+  "replace": ""
  }
 ]

@@ -2751,6 +2751,31 @@ function parseCommitments(s){
   }
   return out;
 }
+/* StakedPage gives one holder's positions in one read: "c:<claimID>:<side>:<liveStake>".
+   The client used to find these by probing EVERY claim — four reads per claim id over a
+   window of the newest SCAN_DEPTH, which is why the page had to tell people "older
+   positions are not found either". The realm keys an address-first index now
+   (stakeindex.gno), so the cost is the holder's own positions and nothing is out of
+   reach. Entries are append-only, so an offset stays valid between reads. */
+function parseStaked(s){
+  if(!s) return [];
+  const out=[];
+  for(const rec of String(s).split(";")){
+    const f=rec.split(":");
+    if(f[0]==="c" && f.length>=4) out.push({id:+f[1], side:+f[2], stake:+f[3]});
+  }
+  return out;
+}
+/* One entry per (claim, side); the table wants one row per claim carrying both. */
+function stakedByClaim(list){
+  const byId = new Map();
+  for(const e of list){
+    const r = byId.get(e.id) || {id:e.id, yes:0, no:0};
+    if(e.side===0) r.yes = e.stake; else r.no = e.stake;
+    byId.set(e.id, r);
+  }
+  return [...byId.values()];
+}
 const COMMIT_LANE = {d:"a verdict round", e:"a moderator election", q:"a quality question"};
 function commitmentsTicket(com, slug){
   if(!com) return "";
@@ -4598,9 +4623,20 @@ async function meHoldings(addr,courts){
   let posClaims=0, posCourts=0, anyArec=false;
   for(const slug of courts.slugs){
     const bal = await balanceOf(slug,addr).catch(()=>{mefail++; return 0;});
-    const depth = isLive()? (parseInt(QP.scan||"",10)||SCAN_DEPTH) : 0;
-    const {ids, total} = await claimIdsFor(slug, depth).catch(()=>{mefail++; return {ids:[],total:0};});
-    if(isLive() && total>ids.length) mescan.push([slug, ids.length, total]);
+    // LIVE: one read names the holder's own positions, so only those claims are
+    // probed. DEMO has no chain and keeps the sample scan.
+    let ids;
+    if(isLive()){
+      const mine = stakedByClaim(parseStaked(
+        await one(`StakedPage(${gstr(slug)},${gstr(addr)},0,0)`).catch(()=>{mefail++; return null;})));
+      ids = mine.map(r=>r.id);
+      const held = await one(`StakedSize(${gstr(slug)},${gstr(addr)})`).catch(()=>null);
+      // The cap is on the holder's OWN positions now rather than on all claims, so
+      // this note only appears if someone really holds more than one page of them.
+      if(held!=null && held>mine.length) mescan.push([slug, mine.length, held]);
+    } else {
+      ids = (await claimIdsFor(slug, 0).catch(()=>{mefail++; return {ids:[]};})).ids;
+    }
     const probes = await inChunks(ids, 8, id => positionOf(slug,id,addr).then(p=>({id,p})).catch(()=>{mefail++; return null;}));
     const rows=[]; let courtHasVoteSettle=false;
     for(const hit of probes.filter(Boolean)){
@@ -4683,7 +4719,7 @@ async function meHoldings(addr,courts){
       <div class="stat"><div class="k">senior tickets</div><div class="v tnum">${seniorCount}</div><div class="sub">owed payouts — paid as budget accrues${isLive()? " · newest 25 per court checked":""}</div></div>
      </div></section>`;
   const depth0 = isLive()? (parseInt(QP.scan||"",10)||SCAN_DEPTH) : 0;
-  const mescanNote = mescan.length? `<div class="pager"><span class="mono small">live scan: ${mescan.map(([sl,k,n])=>`the newest ${fmtN(k)} of ${fmtN(n)} claims in ${esc(sl)}`).join(" · ")} — older positions and older pulls are not found either</span><span class="chips"><a class="pill void" href="#/me?scan=${depth0+100}">scan older ›</a></span></div>` : "";
+  const mescanNote = mescan.length? `<div class="pager"><span class="mono small">live scan: ${mescan.map(([sl,k,n])=>`${fmtN(k)} of ${fmtN(n)} of your positions in ${esc(sl)}`).join(" · ")} — your positions come from the court's address index, so none is out of reach; older PULLS still are</span><span class="chips"><a class="pill void" href="#/me?scan=${depth0+100}">scan older ›</a></span></div>` : "";
   const mewarn = mefail? `<p class="small" style="color:var(--no)">${mefail} chain read${mefail>1?"s":""} failed — this view may be incomplete; a pull is never guessed, so rows may be missing. Reload before trusting it.</p>` : "";
   box.innerHTML = (blocks.length||pullsNow.length
     ? strip + pullSec + maybeSec + seniorBlocks.join("") + blocks.join("")

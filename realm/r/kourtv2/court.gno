@@ -475,6 +475,7 @@ type Court struct {
 	// a second branch that has to agree with the write path.
 	locked         *bptree.BPTree // addr -> int64 (lock.gno)
 	voteLocks      *bptree.BPTree // addr|kind|id|sub -> int64 (votelock.gno)
+	stakeIdx       *bptree.BPTree // addr|be(claimID/page) -> *stakeRow (stakeindex.gno)
 	qualifiedCount int            // addresses at score ≥ priorityNetRecord
 
 	// Moderation state (moderation.gno) — render-layer only; no money path
@@ -584,6 +585,7 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 		records:        bptree.NewBPTree32(),
 		locked:         bptree.NewBPTree32(),
 		voteLocks:      bptree.NewBPTree32(),
+		stakeIdx:       bptree.NewBPTree32(),
 		params:         p.mustSane(),
 		createdAt:      heightNow(),
 		curBudgetBpsFP: budgetBpsFPStart,

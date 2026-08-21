@@ -287,6 +287,11 @@ func getPos(c *Court, cs *claimState, who address, side int) *stakePos {
 	}
 	p := &stakePos{lastRateAcc: c.rateAccFP, lastRawAt: rawHeight(cs)}
 	cs.stakers.Set(k, p)
+	// The address-first index, maintained at the one place a position is created.
+	// getPos is reached before the guards in Unstake and WithdrawStake, so a
+	// non-staker can arrive here — the whole message reverts in that case, which is
+	// what keeps the index and cs.stakers in step. See stakeindex.gno.
+	indexPosition(c, cs.id, who, side)
 	return p
 }
 
