@@ -230,7 +230,15 @@ STAKABLE_CALLS_N = 1  # stake.gno:Stake
 # Two pins, because either alone is weak. The COUNT fails closed on a new movement
 # even if somebody gates it in an unusual way, and the ADJACENCY catches the ordinary
 # omission. Together they mean a new outflow has to be looked at.
-COIN_OUT = re.compile(r"^\s*c\.coin\.(?:Transfer|TransferFrom)\(", re.M)
+# Burn is in here, and leaving it out was this arm's own blind spot for one commit.
+# lock.gno's spendable() clamp carries the comment "only reachable if a burn ever
+# took coins out from under a lock. It does not today (nothing burns a user's
+# balance)" — an anticipated hazard with nothing enforcing its non-occurrence, which
+# is the exact shape this whole guard exists for. All eleven Burn sites are escrow-
+# sourced today so the pinned count is unchanged; what changes is that a user-sourced
+# burn can no longer arrive unnoticed. It would be worse than an ungated transfer:
+# a transfer moves locked coin, a burn destroys it.
+COIN_OUT = re.compile(r"^\s*c\.coin\.(?:Transfer|TransferFrom|Burn)\(", re.M)
 ESCROW_SRC = re.compile(r"c\.coin\.(?:Transfer|Burn)\(c\.escrow")
 GATE = re.compile(r"must(?:Spendable|Stakable)\(")
 COIN_OUT_N = 7  # see the audit above
