@@ -434,10 +434,14 @@ two failed closures because they are why the shipped fix has the shape it does.
 
 3. **All three lanes are locked, including quality.** An earlier draft of this
    erratum said the quality lane was left unlocked as an owner decision. It is
-   locked: a quality vote holds its coin while the tally it was cast into is still
-   the live one, and releases as soon as that tally is superseded or the claim ends.
-   In the ordinary case a later round re-asks the question, so the release comes
-   almost immediately.
+   locked, and the release rule is narrower than an earlier version of this item
+   said. It is not "while the tally it was cast into is still the live one": that
+   version was probed and held a voter's entire balance on a claim parked by a
+   failed-quorum round, because a superseded tally requires a NEW ROUND to supersede
+   it and nothing makes a round open. A quality vote holds its coin while it can still
+   DECIDE something — while a question is open, or while its weights carry into later
+   rounds — and releases otherwise. An ordinary flag voter gets their coin back when
+   the flag resolves.
 
 4. **Anywhere the paper implies voting is costless.** It is not, now, and that is
    deliberate. Staking still works — the coin never leaves the balance — but a
@@ -448,11 +452,17 @@ two failed closures because they are why the shipped fix has the shape it does.
    **An earlier draft of this item said "for the length of the round" and that
    contradicted item 3 above.** The three lanes hold for different spans, and the
    paper should not flatten them: a verdict vote releases when that round resolves,
-   an election vote when the election resolves, and a quality vote when its tally is
-   superseded — usually the very next round — or, if the tally has frozen, when the
-   claim itself ends. The rule is not a duration at all. It is that the commitment
-   lasts exactly as long as the influence, which is the only formulation that covers
-   an accumulating tally.
+   an election vote when the election resolves, and a quality vote when it can no
+   longer decide anything — which is when its round ends, unless its weights are the
+   frozen total that later rounds keep voting, in which case it holds until the claim
+   itself ends. Do not write "usually the very next round"; an earlier draft did, and
+   it was wrong for the reason item 3 now records. The worst case is worth stating
+   honestly if the paper gives a number at all: the route to terminal is Finalize,
+   gated on the escrow window and then participant-only for a further week, measured
+   at about sixteen days for a voter who is not a participant in the claim.
+
+   The rule is not a duration at all. It is that the commitment lasts exactly as long
+   as the influence, which is the only formulation that covers an accumulating tally.
 
 5. **THE WRAP CAP, if the paper mentions trading on gnoswap at all.** At most 35%
    of a court's votable coin can be wrapped at any time. Wrapped coin sits at the
@@ -545,8 +555,11 @@ voter no yield, only liquidity; **(2)** rented weight cannot decide a vote;
 >    NOTHING on that question. It votes at full size on the next one.
 > 3. *"until the round closes"* — no. Until the question RESOLVES, which is later,
 >    and the three lanes differ: a verdict vote releases at its round's resolution,
->    an election vote at the election's, a quality vote when its tally is superseded
->    or, if the tally has frozen, when the claim ends.
+>    an election vote at the election's, and a quality vote when it can no longer
+>    decide anything — its own question ending, or the claim ending if its weights
+>    are the frozen total later rounds keep voting. Not "when its tally is
+>    superseded", which is what this line said until it was probed: a tally is
+>    superseded only by a new round, and nothing makes a round open.
 > 4. *"it can still be staked, still back a bond, still pay a deposit, so a voter
 >    forgoes no yield"* — only the first clause survives. Staking is the single
 >    deliberate exemption, because it moves nothing and the coin keeps voting. A

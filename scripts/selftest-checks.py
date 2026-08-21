@@ -325,6 +325,24 @@ control("a locking helper passed a foreign address", f"{KOURTV2}/modvote.gno",
         "\tapprove(cur.Previous().Address(), courtSlug, 0, true)\n"
         "\tapprove(c.treasury, courtSlug, 0, true)",
         "as the holder", argv=["python3", EPOCHCOH])
+# ARM 11's controls. It polices PROSE, so the three cases are: the code's summary
+# rewritten, the SPEC's quote rewritten while the historical copy is left in place, and a
+# fresh restatement appearing. The middle one is why the arm counts exactly rather than
+# checking presence — presence was tried and passes on it, which is the failure the arm
+# exists for.
+control("the release rule reworded in the code", f"{KOURTV2}/votelock.gno",
+        "some question is open now  OR  these weights carry forward",
+        "the tally has not been superseded",
+        "votelock.gno states the quality release clause 0", argv=["python3", EPOCHCOH])
+control("the spec's copy reworded, the record left alone", "VOTEFLOOR.md",
+        "> (some question is open now OR these weights carry forward).",
+        "> (the tally has not been superseded).",
+        "VOTEFLOOR.md states the quality release clause 1", argv=["python3", EPOCHCOH])
+control("a fresh restatement of the release rule", "VOTEFLOOR.md",
+        "> (some question is open now OR these weights carry forward).",
+        "> (some question is open now OR these weights carry forward).\n>\n"
+        "> Restated: some question is open now OR these weights carry forward.",
+        "stated somewhere new", argv=["python3", EPOCHCOH])
 # ARM 10's controls, one per sub-check, each with its own expected string. The arm has
 # to tell three situations apart: a COPY of the liveness disjunction, a second
 # DEFINITION of it, and crystallize's own question stopping being its own question.

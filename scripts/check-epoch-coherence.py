@@ -320,6 +320,32 @@ DOC_MOVABLE = re.compile(r"^\s*//.*\bSpendableOf\b.*(?:min\(| minus )|"
 QOPEN_FLAGS = ("cs.flagOpen", "cs.disputeOpen", "cs.counterOpen")
 QOPEN_LINES_N = 2
 
+# ARM 11 — the release rule says the same thing in the code and in the handoff spec.
+#
+# This one polices PROSE, and it earned its place the hard way: the quality release rule
+# has gone stale in three documents. All three said a quality vote releases "when its
+# tally is superseded", which was the FIRST version of the predicate and was wrong,
+# because a tally is superseded only by a new round and nothing makes a round open. The
+# worst instance was in VOTEFLOOR.md's web-client section — text written so another
+# session could implement the surface "without re-deriving any of it", which would have
+# become a UI telling holders the wrong thing about their own coin.
+#
+# So one clause is canonical and lives in both places: votelock.gno's summary of the
+# predicate, and the spec's quote of it. Neither can be edited alone. This does not pin
+# the CODE — arms 8 and 10 and the corpus do that — it pins that the sentence humans
+# read has not drifted from the sentence the author of the predicate wrote.
+#
+# Whitespace-normalised, because the code carries it as an aligned comment and the
+# document as prose, and an alignment change is not news.
+RULE_CLAUSE = "some question is open now OR these weights carry forward"
+# EXACT counts, per file. Presence alone was tried first and is too coarse: VOTEFLOOR.md
+# states the rule twice — once as the quote implementers work from, once in the record of
+# the correction — so a presence check passes when the SPEC's copy is rewritten and the
+# historical one is left, which is precisely the failure being guarded. Counted both
+# directions on the house rule: too few is the drift, too many is a fresh restatement of
+# a rule that has already gone stale three times and should be read before it is added.
+RULE_SITES = (("realm/r/kourtv2/votelock.gno", 1), ("VOTEFLOOR.md", 2))
+
 # THE OTHER ARMS WERE AUDITED FOR THE SAME BLIND SPOT AND ARE CLEAN. Three arms have
 # now been widened because a regex hardcoded a spelling the tree already used
 # elsewhere (arm 7 missed Burn, arm 5 missed tuple assignment, arm 7 missed a non-`c`
@@ -397,6 +423,27 @@ def main() -> int:
                                 f"vote commitment; subtracting VoteLockedOf from it "
                                 f"understates the room, because the locks combine with "
                                 f"MAX not SUM")
+    # Arm 11: the canonical release clause, in the code and in the spec that hands
+    # the surface to somebody else.
+    rule_counts = {}
+    for rel, want in RULE_SITES:
+        f = ROOT / rel
+        if not f.exists():
+            hits.append(f"[rule-drift] {rel} is gone, so arm 11 is watching nothing")
+            continue
+        rule_counts[rel] = n = " ".join(f.read_text().split()).count(RULE_CLAUSE)
+        if n != want:
+            how = ("has been rewritten somewhere — the rule has gone stale in three "
+                   "documents already, always as \"when its tally is superseded\", "
+                   "the first version of the predicate and one a probe refuted"
+                   if n < want else
+                   "is stated somewhere new; a fresh restatement of this rule is "
+                   "worth reading before it is added, and the count here is where "
+                   "you say you did")
+            hits.append(f"[rule-drift] {rel} states the quality release clause "
+                        f"{n} time(s), expected {want}: it {how}. Code and spec "
+                        f"move together or not at all")
+
     # Arm 10, over kourtv2 only: the liveness disjunction has one definition.
     qopen = []
     for q in sorted(KOURTV2.glob("*.gno")):
@@ -643,7 +690,8 @@ def main() -> int:
           f"weight source in the engine, one vote-weight expression, "
           f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
           f"{arm4['lockvote']} self-only vote-lock site(s), "
-          f"one quality-question definition, "
+          f"one quality-question definition, release clause in "
+          f"{'+'.join(f'{k.split(chr(47))[-1]} {v}' for k, v in rule_counts.items())}, "
           f"{doc_scanned} file(s) clear of SpendableOf arithmetic "
           f"({', '.join(f'{k} {v}' for k, v in sorted(per_dir.items()))}).")
     return 0

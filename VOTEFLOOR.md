@@ -64,8 +64,20 @@ where people will actually vote.
 **What the site needs, stated so it can be implemented without re-deriving any of
 it.** Before a vote: that casting commits this much coin until the question resolves,
 with the per-lane difference (a verdict vote until its round resolves, an election
-vote until the election resolves, a quality vote until its tally is superseded or the
-claim ends). After a vote: the committed figure, from `VoteLockedOf(slug, who)`. On
+vote until the election resolves, and a quality vote until it can no longer decide
+anything — its own question ending, in the ordinary case, or the claim ending if its
+weights are the frozen total that later rounds keep voting). Do NOT implement "until
+the tally is superseded": that was the first version of the rule and it was wrong,
+because a tally is superseded only by a NEW ROUND and nothing makes a round open.
+`VoteLockedOf` answers this without the client having to model any of it.
+
+The shipped condition, quoted from `votelock.gno` so the two cannot drift apart — a
+release rule stated in prose has now gone stale in three documents, and
+check-epoch-coherence arm 11 fails the build if this line and the code's own summary stop
+agreeing:
+
+> open iff the claim is not terminal AND `cs.qVoteSeq` is still the seq voted in AND
+> (some question is open now OR these weights carry forward). After a vote: the committed figure, from `VoteLockedOf(slug, who)`. On
 any sell/bond/deposit/wrap affordance: the binding limit, which is NOT `SpendableOf`
 — that one is stake-only and will over-promise. Use `DisposableOf(slug, who)`, which
 is the figure the realm actually enforces. (It did not exist when this note was first
@@ -189,9 +201,19 @@ distrusting on sight.**
 
 **And the quality lane was not an owner decision.** Three documents said it was
 unlockable because its tally accumulates and there is no single instant to release
-at. Looking for an instant was the error; the release is a CONDITION, not a moment —
-the claim is not terminal AND the tally seq voted in is still live. Both the easy and
-the hard case fall out of it, and the easy case releases immediately.
+at. Looking for an instant was the error; the release is a CONDITION, not a moment.
+
+**The first condition was wrong and a later probe found it.** It read *not terminal AND
+the tally seq voted in is still live*, on the reasoning that a superseded tally counts
+toward nothing — with the claim that the ordinary case therefore "releases immediately".
+The seq moves when a round OPENS, and nothing makes a round open: a failed-quorum dispute
+parks the claim with nothing open and no seq movement, and that state held a voter's
+ENTIRE balance, measured at 20,000,000,000 of 20,000,000,000 with disposable 0. The
+shipped condition asks whether the vote can still DECIDE anything, which is a different
+question: *not terminal AND the seq is still the one voted in AND (some question is open
+now OR these weights carry forward into later rounds)*. An ordinary flag voter now
+releases when the flag resolves, and only the frozen-accumulating case waits for the
+claim to end.
 
 **AND A FOURTH CORRECTION, this one to my own step 6.** Step 6 declared the rental
 closed on the strength of the floor. It was not. Probed on the four landed commits:
