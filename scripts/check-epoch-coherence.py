@@ -210,6 +210,31 @@ TERMINAL_CLOSED_N = 1   # claim.gno dead-claim close
 STAKABLE_CALL = re.compile(r"mustStakable\(c, ")
 STAKABLE_CALLS_N = 1  # stake.gno:Stake
 
+# ARM 7 — every coin movement OUT of a user's balance is immediately preceded by a
+# gate.
+#
+# This is the structural form of a thing that was being checked one path at a time.
+# The vote lock and the stake lock both live in mustSpendable, so a new path that
+# moves a holder's coin without calling it bypasses BOTH — silently, because the
+# transfer succeeds and no arithmetic goes wrong. It is the natural shape of the
+# mistake: a feature that needs to take a bond writes the Transfer and forgets the
+# line above it.
+#
+# Audited by hand first, which is how the pairing turned out to be exact: seven
+# user-sourced movements (the claim deposit, the answer bond, the dispute bond, the
+# flag bond, the election nomination bond, and the two transfer paths), each with its
+# gate on the line before. Movements sourced from c.escrow are exempt and must be:
+# the escrow is not a voter, holds no lock, and its outflows are refunds and burns
+# that the lanes owning them dispose of.
+#
+# Two pins, because either alone is weak. The COUNT fails closed on a new movement
+# even if somebody gates it in an unusual way, and the ADJACENCY catches the ordinary
+# omission. Together they mean a new outflow has to be looked at.
+COIN_OUT = re.compile(r"^\s*c\.coin\.(?:Transfer|TransferFrom)\(", re.M)
+ESCROW_SRC = re.compile(r"c\.coin\.(?:Transfer|Burn)\(c\.escrow")
+GATE = re.compile(r"must(?:Spendable|Stakable)\(")
+COIN_OUT_N = 7  # see the audit above
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -238,7 +263,7 @@ def main() -> int:
     repolock.refuse_if_held("check-epoch-coherence")
     hits, scanned, sealed_funcs = [], 0, 0
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
-            "verdict_w": 0, "closed_w": 0, "stakable": 0}
+            "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -286,6 +311,19 @@ def main() -> int:
                 arm4["verdict_w"] += len(TERMINAL_VERDICT.findall(src))
                 arm4["closed_w"] += len(TERMINAL_CLOSED.findall(src))
                 arm4["stakable"] += len(STAKABLE_CALL.findall(src))
+                # Arm 7, per file: count user-sourced outflows and require a gate
+                # within the three lines above each.
+                lines = src.splitlines()
+                for i, line in enumerate(lines):
+                    if not COIN_OUT.match(line) or ESCROW_SRC.search(line):
+                        continue
+                    arm4["coin_out"] += 1
+                    if not any(GATE.search(l) for l in lines[max(0, i - 3):i]):
+                        hits.append(f"[ungated-outflow] {pkg}/{p.name}:{i+1} moves "
+                                    f"a holder's coin with no mustSpendable within "
+                                    f"three lines above it — the vote lock and the "
+                                    f"stake lock both live in that call, so this "
+                                    f"path bypasses both and nothing else notices")
 
             # Arm 3
             if p.name == "governor.gno":
@@ -343,11 +381,16 @@ def main() -> int:
         ("verdict_w", TERMINAL_VERDICT_N, "cs.verdictAt writer(s)"),
         ("closed_w", TERMINAL_CLOSED_N, "cs.closed writer(s)"),
         ("stakable", STAKABLE_CALLS_N, "mustStakable caller(s)"),
+        ("coin_out", COIN_OUT_N, "user-sourced coin movement(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
-                   else "lock-exempt" if key == "stakable" else "one-weight")
-            why = ("Stake is the ONE deliberate exemption from the vote lock; a "
+                   else "lock-exempt" if key == "stakable"
+                   else "ungated-outflow" if key == "coin_out" else "one-weight")
+            why = ("a new path moving a holder's coin has to be paired with a "
+                   "gate deliberately; mustSpendable is where both locks live"
+                   if key == "coin_out" else
+                   "Stake is the ONE deliberate exemption from the vote lock; a "
                    "second mustStakable caller is a second path disposing of "
                    "committed coin, and it would look entirely reasonable"
                    if key == "stakable" else

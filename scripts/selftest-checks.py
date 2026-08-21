@@ -292,6 +292,15 @@ control("a second path exempted from the vote lock", f"{KOURTV2}/claim.gno",
         "\t\tmustSpendable(c, who, dep+fee)",
         "\t\tmustStakable(c, who, dep+fee)",
         "[lock-exempt]", argv=["python3", EPOCHCOH])
+# ARM 7's control, planting the ordinary version of the mistake: a path that moves a
+# holder's coin with the gate above it deleted. Both locks live in mustSpendable, so
+# such a path bypasses the stake lock AND the vote lock while the transfer succeeds
+# and no arithmetic goes wrong — there is nothing for a test to notice unless a test
+# happens to exist for that exact path.
+control("a coin outflow with its gate removed", f"{KOURTV2}/quality.gno",
+        "\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
+        "\tc.coin.Transfer(who, c.escrow, bond)",
+        "[ungated-outflow]", argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',
