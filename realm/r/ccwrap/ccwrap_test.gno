@@ -174,8 +174,17 @@ func TestCommittedCoinCannotBeWrapped(cur realm, t *testing.T) {
 	// here rather than left bare.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	id := kourtv2.OpenClaim(cross(cur), "cw4", "Is committed coin unsellable?")
+	//
+	// THREE QUARTERS, not a half, and the ratio is now load-bearing: maxWrapBps is
+	// a SECOND, independent gate, and this fixture's subject is the first one. With
+	// half staked the remaining spendable is about half of votable, which the 35%
+	// cap refuses — so the "and the half that must succeed" arm below would fail
+	// for a reason this test is not about, and the refusal arm would start passing
+	// on the cap's message instead of the stake's. Staking three quarters leaves
+	// spendable near a quarter of votable, comfortably under the cap, so the stake
+	// gate is the only thing being measured.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	kourtv2.Stake(cross(cur), "cw4", id, 0, kourtv2.SpendableOf("cw4", alice)/2)
+	kourtv2.Stake(cross(cur), "cw4", id, 0, kourtv2.SpendableOf("cw4", alice)*3/4)
 
 	locked := kourtv2.LockedOf("cw4", alice)
 	if locked <= 0 {
@@ -491,4 +500,88 @@ func TestWrapCapKeepsTheCourtAbleToVote(cur realm, t *testing.T) {
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Wrap(cross(cur), "capc", room/2)
+}
+
+// THE CAP IS A PRECONDITION, AND ITS NUMBER IS DERIVED WITH THE ESCROW IN IT.
+//
+// maxWrapBps reads votable ONCE, at Wrap. The escrow keeps growing afterwards and
+// every unit entering it shrinks votable while the vault stays put, so the vault's
+// SHARE of votable climbs with no further wrapping and nothing re-checks it.
+// Measured at the old 60%: wrap to the cap on an empty escrow, let the escrow reach
+// 20% of supply, and the vault is 75% of votable with the quality lane's votable/3
+// bar unreachable by the entire castable electorate.
+//
+// So the number answers a BOUND, not an invariant. Wrapping at the worst moment
+// puts vault = k·supply, and for a later escrow share e the votable/3 bar stays
+// reachable while k < (2/3)(1 − e), i.e. up to e = 1 − 3k/2. At k = 35% that is
+// 47.5% of supply escrowed.
+//
+// THIS TEST ASSERTS THE BOUND, NOT THE CONSTANT, and the difference is the whole
+// point. A first version pinned "the vault holds ~35% of supply at the cap", which
+// meant every ablation tripped that one precondition and the derivation was never
+// exercised — one assertion catching both directions is evidence for neither. Here
+// the bound is COMPUTED from whatever the cap actually is, so raising the cap fails
+// (its bound collapses: 60% only reaches 10% escrow) while tightening it passes,
+// which is the correct asymmetry for a safety bound.
+func TestTheWrapCapHoldsTheBarsUpToItsEscrowBound(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cap2-alice")
+	fundAndBuy(cur, "capb", alice, 40_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "capb")
+
+	// Wrap to the cap at the worst moment: nothing escrowed, so votable is supply
+	// and the vault takes its largest possible absolute share.
+	if esc := kourtv2.CoinBalanceOf("capb", kourtv2.CourtEscrow("capb")); esc != 0 {
+		t.Fatalf("fixture is vacuous: this arm needs an empty escrow to be the "+
+			"worst case, found %d", esc)
+	}
+	room := WrapRoom("capb")
+	if room <= 0 {
+		t.Fatal("fixture is vacuous: no room to wrap, so no cap is being exercised")
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.ApproveCC(cross(cur), "capb", vault(), room)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Wrap(cross(cur), "capb", room)
+
+	supply := kourtv2.CoinSupply("capb")
+	vaultHeld := kourtv2.CoinBalanceOf("capb", vault())
+
+	// The largest escrow share at which votable/3 is still reachable, found by
+	// walking e upward against the shipped vault rather than by trusting algebra.
+	var bound int64 = -1
+	for e := int64(0); e <= 99; e++ {
+		votable := supply - supply*e/100
+		if votable-vaultHeld <= votable/3 {
+			break
+		}
+		bound = e
+	}
+	t.Logf("vault holds %d of supply %d (%d bps); votable/3 stays reachable up to "+
+		"escrow %d%%", vaultHeld, supply, vaultHeld*10000/supply, bound)
+
+	// THE CLAIM: 47.5% of supply escrowed, so 47 must hold. Raising the cap
+	// collapses this — 60% of supply in the vault only reaches 10% escrow.
+	if bound < 47 {
+		t.Fatalf("the cap must keep votable/3 reachable to at least 47%% escrow, "+
+			"reaches only %d%% — a vault of %d bps of supply is looser than the "+
+			"derivation k < (2/3)(1-e) allows", bound, vaultHeld*10000/supply)
+	}
+	// And the 5% bars, which are slacker and must not be the binding term.
+	for _, e := range []int64{0, 20, 40, 47} {
+		votable := supply - supply*e/100
+		if votable-vaultHeld <= votable*500/10000 {
+			t.Fatalf("at escrow %d%% the castable pool %d must still exceed the "+
+				"5%% bars (%d); they should never bind before votable/3",
+				e, votable-vaultHeld, votable*500/10000)
+		}
+	}
+	// The bound is a real edge, not an open-ended pass: past it the arm does go.
+	// Without this a cap of zero would satisfy everything above.
+	votable := supply - supply*(bound+1)/100
+	if votable-vaultHeld > votable/3 {
+		t.Fatalf("escrow %d%% is meant to be past the bound, but votable/3 is "+
+			"still reachable (%d vs %d) — the walk above found the wrong edge",
+			bound+1, votable-vaultHeld, votable/3)
+	}
 }

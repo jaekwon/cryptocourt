@@ -6312,9 +6312,9 @@
   {
     "pkg": "ccwrap",
     "file": "ccwrap.gno",
-    "label": "maxWrapBps raised past the votable/3 bound (60% -> 90%)",
-    "find": "const maxWrapBps = int64(6000)",
-    "replace": "const maxWrapBps = int64(9000)"
+    "label": "maxWrapBps raised to 60%, whose escrow bound is only 10%",
+    "find": "const maxWrapBps = int64(3500)",
+    "replace": "const maxWrapBps = int64(6000)"
   },
   {
     "pkg": "kourtv2",

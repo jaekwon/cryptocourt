@@ -62,9 +62,12 @@
 //
 // So the claim above is still true of the two bars it names, and it was never a
 // claim about the whole system. What holds the system is maxWrapBps below: the
-// vault is capped at 60% of votable, which keeps the castable pool above both
-// votable/3 and the 5% bars by construction. Netting the vault out of `votable`
-// instead — the obvious fix — is worse, and the reason is with the constant.
+// vault is capped at 35% of votable, which keeps the castable pool above both
+// votable/3 and the 5% bars for any escrow under 47.5% of supply. NOT "by
+// construction" — that is what the constant's comment used to say, and the escrow
+// growing after a wrap is the case it missed. Netting the vault out of `votable`
+// would be a true invariant and is rejected on isolation grounds, which the
+// constant spells out along with the attack that turned out not to exist.
 package ccwrap
 
 import (
@@ -136,25 +139,52 @@ const maxWrappableSlug = 10
 // Escrow is nettable precisely because it is entered by PAYING and cannot be
 // reversed at will.
 //
-// THE NUMBER IS DERIVED, not chosen. Two constraints, and the tighter one wins:
+// A PRECONDITION, NOT AN INVARIANT, and getting that wrong is why this number
+// moved. The cap reads votable ONCE, at Wrap. Afterwards the escrow keeps growing —
+// bonds and deposits do nothing else — and every unit that enters it shrinks
+// votable while the vault stays exactly where it is. So the vault's SHARE of
+// votable climbs with no further wrapping and nothing re-checks it.
 //
-//	the 5% bars need   castable > 0.05·votable   =>  vault < 95% of votable
-//	quorum needs       castable > votable/3      =>  vault < 66.7% of votable
+// Measured, with the cap at 60%: wrap to the cap on an empty escrow and then let
+// the escrow reach 20% of supply, and the vault is 75% of votable with the quality
+// lane's votable/3 bar unreachable by the whole castable electorate. The previous
+// version of this comment claimed the castable pool stayed above both bar shapes
+// "by construction". It did, for one block.
 //
-// The second binds, and only on a claim whose own X̄frozen reaches votable/3 — a
-// claim staking a third of the whole court, which needs the other two thirds able
-// to vote on it. 60% sits under that bound with a fifth of the remaining room to
-// spare: castable 40% against a votable/3 of 33.3%.
+// SO THE NUMBER IS DERIVED WITH THE ESCROW IN IT. Wrapping at the worst moment —
+// an empty escrow — puts vault = k·supply. Let e be the escrow's later share of
+// supply. Then castable = (1 − e − k)·supply against a votable/3 of (1 − e)/3, so
+// the bar stays reachable while
 //
-// A first attempt used 50% for tidiness and was wrong in the direction that
-// matters least visibly: it refused an ORDINARY wrap on a small court, where half
-// of votable is a small absolute number, which is the same trap flagMinCC exists
-// for — pricing the mechanism out of reach on precisely the youngest courts. A cap
-// picked for roundness rather than derived from the bound it defends will always
-// land somewhere like that.
+//	k  <  (2/3)·(1 − e)
+//
+// and the 5% bars need only k < 0.95·(1 − e), which is slacker. At k = 35% the
+// binding bound holds until the escrow reaches 47.5% OF SUPPLY, which is far past
+// anything bonds and deposits reach together. That is the honest claim: not "by
+// construction" but "for any escrow under 47.5%".
+//
+// Two earlier numbers, both wrong in instructive ways. 50% was picked for tidiness
+// and refused an ORDINARY wrap on a small court — the flagMinCC trap, pricing the
+// mechanism out of reach on the youngest courts. 60% was derived, but from a bound
+// that quietly assumed the escrow stood still.
+//
+// WHY NOT NET THE VAULT OUT OF `votable`, which would be a true invariant. NOT for
+// the reason this comment used to give. It said an attacker could wrap, let the
+// epoch seal, open a question against the shrunken bar, unwrap, and vote their
+// whole position — and that was asserted without being run. Probed: it does not
+// work, because wrapping removes the attacker's OWN snapshot. Measured at 85% of
+// supply wrapped, the unwrapper's weight is min(snapshot 5e9, live 9e10) = 5e9.
+// Moving the bar by wrapping and holding weight at that bar's epoch are mutually
+// exclusive, and the vote floor is what makes them so.
+//
+// The real objection is ISOLATION. Netting means kourtv2 nets a balance held at
+// THIS realm's address, so every safety bar in every court would depend on this
+// package being correct — inverting the property the header opens with, that a bug
+// here "cannot corrupt court state; it can only mismanage the escrow of holders who
+// opted in". A liquidity adapter is not worth that, and a cap costs only liquidity.
 //
 // Unwrap is deliberately uncapped: it can only move the vault away from the bound.
-const maxWrapBps = int64(6000)
+const maxWrapBps = int64(3500)
 
 type wrapped struct {
 	tok *grc20.Token
@@ -330,8 +360,9 @@ func mustWrapRoom(slug string, vault address, amount int64) {
 	if held+amount > room {
 		panic("ccwrap: that would leave too little of the court's coin able to " +
 			"vote — a claim staking a third of the court needs the other two " +
-			"thirds voting on it, so the vault is capped at 60% of votable. " +
-			"WrapRoom(slug) says how much is left; unwrapping frees more")
+			"thirds voting on it, and the escrow will take its own share later, " +
+			"so the vault is capped at 35% of votable. WrapRoom(slug) says how " +
+			"much is left; unwrapping frees more")
 	}
 }
 
