@@ -982,3 +982,96 @@ func TestElectionWeightIsFrozenAtFirstApproval(cur realm, t *testing.T) {
 			"must never exceed turnout", wB, turnout2)
 	}
 }
+
+// PAYING FOR A BALLOT LINE COSTS YOU THE BOND, AND THE BOND DOES NOT VOTE.
+//
+// A nominator holding EXACTLY the election floor pays the bond, which leaves their
+// balance for the escrow, so their own approval is now worth floor-bond and cannot
+// carry the line alone. Holding floor+bond, it can. Measured across court sizes the
+// requirement is 110% of the floor on any ordinary court and at most 200% on one
+// small enough for the flagMinCC clamp to bind — mustElectionInvariants pins
+// electionBondBps < quorumSupplyBps and the clamp pins bond <= floor, so 2x is a
+// hard ceiling, not an observation.
+//
+// THIS IS THE INTENDED PROPERTY, not a rough edge: whoever pays for a line cannot
+// also be its sole sufficient approver, so a self-approved set always needs one
+// other holder. It is pinned HERE because the obvious "fix" — crediting the
+// nominator's own bond back as weight — is a known-bad change that was implemented
+// once and reverted: at low votable the bond EQUALS the floor, so the credit alone
+// clears the bar from a zero balance, which is a free moderator coup. If someone
+// re-adds that credit, the first arm below turns green and this comment is how they
+// find out why it should not have.
+func TestPayingForALineCostsTheBondItVotesWith(cur realm, t *testing.T) {
+	// ARM 1 — exactly the floor, and it is not enough.
+	creator := testutils.TestAddress("hc1-creator")
+	whale := testutils.TestAddress("hc1-whale") // never votes; supply only
+	nom := testutils.TestAddress("hc1-nom")
+	mod1 := testutils.TestAddress("hc1-mod")
+	c := electionCourt(cur, "hcut1", creator, []address{whale, nom},
+		[]int64{950_000_000, 50_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(nom))
+	cand := RegisterModCandidate(cross(cur), "hcut1", 1, mod1)
+	testing.SetRealm(testing.NewUserRealm(nom))
+	OpenElection(cross(cur), "hcut1", cand)
+	e := ensureMod(c).election
+	// The fixture's whole point: exactly the floor, before the bond is paid.
+	uassert.Equal(t, e.floor, c.coin.PastVotes(nom, e.epoch))
+	if e.bond <= 0 || e.bond >= e.floor {
+		t.Fatalf("fixture is vacuous: a bond of %d against a floor of %d cannot "+
+			"demonstrate a partial haircut", e.bond, e.floor)
+	}
+	uassert.Equal(t, e.floor-e.bond, c.coin.BalanceOf(nom))
+
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(nom))
+	ApproveCandidate(cross(cur), "hcut1", cand)
+	_, _, turnout := ElectionTally("hcut1", cand)
+	// Weighed at the live balance, which the bond reduced — so below the bar.
+	uassert.Equal(t, e.floor-e.bond, turnout)
+	if turnout >= e.floor {
+		t.Fatal("the bond was credited back: the payer must not be able to carry " +
+			"the line they paid for, or a zero-balance coup is free at low votable")
+	}
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(nom))
+	ResolveElection(cross(cur), "hcut1")
+	if IsCourtMod("hcut1", mod1) {
+		t.Fatal("a line carried only by its own payer, below quorum, must not install")
+	}
+
+	// ARM 2 — the pair. floor+bond is enough, so this is a bounded cost and not a
+	// wall: the same nominator with the bond covered installs their candidate.
+	creator2 := testutils.TestAddress("hc2-creator")
+	whale2 := testutils.TestAddress("hc2-whale")
+	nom2 := testutils.TestAddress("hc2-nom")
+	mod2 := testutils.TestAddress("hc2-mod")
+	c2 := electionCourt(cur, "hcut2", creator2, []address{whale2, nom2},
+		[]int64{950_000_000, 50_000_000})
+	// The bond money POST-seal, which is the only non-circular way to say "the
+	// floor plus the bond". Minting it pre-seal raises supply, which raises the
+	// floor, which raises the bond: solving h - 0.005(950M+h) >= 0.05(950M+h)
+	// gives h >= 55,291,006, and 55,000,000 lands 275,000 short. Post-seal the
+	// snapshot stays at exactly the floor and only the live balance moves, so the
+	// arm reads as intended: w = min(floor, floor+spare) = floor.
+	c2.coin.Mint(nom2, 10_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(nom2))
+	cand2 := RegisterModCandidate(cross(cur), "hcut2", 1, mod2)
+	testing.SetRealm(testing.NewUserRealm(nom2))
+	OpenElection(cross(cur), "hcut2", cand2)
+	e2 := ensureMod(c2).election
+	if c2.coin.BalanceOf(nom2) < e2.floor {
+		t.Fatalf("fixture is vacuous: floor+bond should leave the floor intact, "+
+			"balance %d floor %d", c2.coin.BalanceOf(nom2), e2.floor)
+	}
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(nom2))
+	ApproveCandidate(cross(cur), "hcut2", cand2)
+	testing.SkipHeights(c2.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(nom2))
+	ResolveElection(cross(cur), "hcut2")
+	if !IsCourtMod("hcut2", mod2) {
+		t.Fatal("floor+bond must be enough: the haircut is a bounded cost, not a wall")
+	}
+}

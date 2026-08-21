@@ -6315,5 +6315,12 @@
     "label": "voteLockedOf: open questions STACK instead of sharing one pile",
     "find": "\t\tif w := v.(int64); w > most && voteLockOpen(c, who, k) {\n\t\t\tmost = w\n\t\t}",
     "replace": "\t\tif voteLockOpen(c, who, k) {\n\t\t\tmost = mustAdd(most, v.(int64))\n\t\t}"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "approve: the nominator's own bond is credited back as weight (free coup)",
+    "find": "\t\tif held := c.coin.BalanceOf(who); held < w {",
+    "replace": "\t\tif held := c.coin.BalanceOf(who) + e.bond; held < w {"
   }
 ]

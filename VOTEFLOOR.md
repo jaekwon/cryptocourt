@@ -169,6 +169,9 @@ And `court.gno:418` says so directly — *"It is NOT 'netted out of the quorum f
 which this comment used to claim (v0.29) … the 5%-of-supply arm that usually
 dominates reads RAW supply."* I re-made a documented v0.29 mistake.
 
+**Superseded — see "RESOLVED" below; the cost is bounded at 2x the floor and the
+asymmetry is answered by the lock.**
+
 **So the haircut has no coherence argument, and panel 2's framing is the right
 one:** the alternative to "escrowed coin *adds* weight" is not "escrowed coin
 *subtracts* weight" — it is **escrowing is irrelevant to the vote**, which is
@@ -323,11 +326,50 @@ bar each payer must clear:
 | election nominator | 1,500 CC | **10.0%** of the election floor (exactly β/q) |
 | nominator, small court | 0.75 CC of 15 CC | **100%** of the floor |
 
-Every one is paid by someone who must act; the attacker's carry is 0.0000021% of
-their position for one block. **That asymmetry is the strongest objection to this
-plan and it is not answered.** Making escrow genuinely neutral needs a per-address
-"committed to this court" figure — five in-sites, ~30 out-sites — which is out of
-scope here and is the honest follow-up.
+**RESOLVED, and the resolution came from the lock rather than from anything in this
+section.** Two measurements, both against the shipped tree:
+
+**1. The cost is bounded at 2x the floor, and it is 1.1x on any real court.** To
+nominate a line AND remain a sufficient approver of it you need `floor + bond`.
+Measured across four court sizes:
+
+| votable | floor | bond | bond/floor | self-carry needs |
+|---|---|---|---|---|
+| 10 CC | 500,000 | 500,000 | 100% | **200% of the floor** |
+| 100 CC | 5,000,000 | 1,000,000 | 20% | 120% |
+| 1,000 CC | 50,000,000 | 5,000,000 | 10% | 110% |
+| 100,000 CC | 5,000,000,000 | 500,000,000 | 10% | 110% |
+
+2x is a CEILING and not an observation: `mustElectionInvariants` panics unless
+`electionBondBps < quorumSupplyBps`, and the `flagMinCC` clamp pins `bond <= floor`.
+The 100% row is the clamp binding on courts under ~50 CC votable; everywhere else
+the ratio is exactly β/q = 10%, fixed because `electionFloor` and the bond are both
+quoted on `votableAt` — which `TestElectionBondNeverExceedsTheFloor` ARM 2 already
+pins by putting 99% of supply in escrow.
+
+**2. The asymmetry is answered by the vote lock, not by the bond.** This section's
+objection rested on "the attacker's carry is 0.0000021% of their position for one
+block." That is no longer true: the lock commits a voter's whole voting position for
+the round, so the attacker now carries **100% of the position they are attacking
+with, for the full voting-and-resolution window.** The dominant cost stopped being
+the bond — flat, and therefore regressive — and became the position hold, which is
+proportional and identical for attacker and defender. A flat bond against unequal
+wealth is still regressive, but it is now a rounding error next to the carry, and it
+is the same property every bond in the system has rather than anything the vote
+floor introduced.
+
+**And the residual cost is the INTENDED property.** Whoever pays for a ballot line
+cannot also be its sole sufficient approver, so a self-approved set always needs one
+other holder — which is what "self-approved junk always costs" was asking for.
+`TestPayingForALineCostsTheBondItVotesWith` pins both arms, and it exists mostly to
+stop the obvious "fix": crediting the nominator's own bond back as weight was
+implemented once and reverted, because at low votable `bond == floor` makes that
+credit alone clear the bar from a zero balance — a free moderator coup. Ablated: the
+credit is caught, and `TestElectionZeroApprovalCandidateCannotInstall` does NOT
+catch it, so the new test is real coverage rather than a duplicate.
+
+So no per-address "committed to this court" figure is needed, and the ~35-site
+refactor this section proposed as the honest follow-up is not owed.
 
 Also new from panel 2, and created by this plan: a mill self-stakes its own claim to
 inflate X̄ for free (principal returns 1×), which inflates the flag bond, which docks
