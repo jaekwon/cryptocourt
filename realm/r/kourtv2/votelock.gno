@@ -226,7 +226,7 @@ func voteLockOpen(c *Court, who address, key string) bool {
 		// TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy asserts, and the
 		// dropped term is a deliberate survivor in mutations-kourtv2-KNOWN-GAPS.json.
 		// If that row ever comes back CAUGHT, this term has become load-bearing.
-		if cs.flagOpen || cs.disputeOpen || cs.counterOpen {
+		if qualityQuestionOpen(cs) {
 			return true
 		}
 		// NOTHING IS OPEN, so the only reason left to hold is that these weights

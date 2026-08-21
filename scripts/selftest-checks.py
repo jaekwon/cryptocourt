@@ -325,6 +325,25 @@ control("a locking helper passed a foreign address", f"{KOURTV2}/modvote.gno",
         "\tapprove(cur.Previous().Address(), courtSlug, 0, true)\n"
         "\tapprove(c.treasury, courtSlug, 0, true)",
         "as the holder", argv=["python3", EPOCHCOH])
+# ARM 10's controls, one per sub-check, each with its own expected string. The arm has
+# to tell three situations apart: a COPY of the liveness disjunction, a second
+# DEFINITION of it, and crystallize's own question stopping being its own question.
+control("the liveness disjunction copied back into a reader",
+        f"{KOURTV2}/voteweight.gno",
+        "\tif qualityQuestionOpen(cs) {\n\t\tquality, _ = votingWeight(c, who, cs.qualityEpoch)",
+        "\tif cs.flagOpen || cs.disputeOpen || cs.counterOpen {\n"
+        "\t\tquality, _ = votingWeight(c, who, cs.qualityEpoch)",
+        "disjoin two or more", argv=["python3", EPOCHCOH])
+control("a second definition of the same disjunction",
+        f"{KOURTV2}/crystallize.gno",
+        "if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
+        "if cs.flagOpen || cs.disputeOpen || cs.counterOpen || cs.pendingSlash > 0 {",
+        "carry all three quality-question flags", argv=["python3", EPOCHCOH])
+control("crystallize's own question becoming a partial copy",
+        f"{KOURTV2}/crystallize.gno",
+        "if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
+        "if cs.flagOpen || cs.counterOpen || cs.tierFinal {",
+        "without pendingSlash", argv=["python3", EPOCHCOH])
 # ARM 9's controls, one per formula shape, in the two realms that expose the figure.
 # SpendableOf is stake-only and named as though it were not, and the tree has walked
 # into that three times — so what is pinned is arithmetic WITH it, in either direction:

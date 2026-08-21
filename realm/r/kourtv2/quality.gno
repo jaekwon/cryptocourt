@@ -124,6 +124,25 @@ func OpenFlag(cur realm, courtSlug string, claimID uint64) {
 	openQualityTally(cs)
 }
 
+// qualityQuestionOpen is "the quality lane has a live question on this claim", and it
+// is ONE expression on purpose.
+//
+// It was written three times — the vote lock's release predicate and both weight
+// readers — which is the same hazard check-epoch-coherence arm 4 pins for the weight
+// expression itself: a quote that can drift from the charge. The drift is not symmetric.
+// A fourth way to open a quality question that reached the readers but not the lock
+// would UNDER-lock, freeing coin while its vote can still be counted; one that reached
+// the lock but not the readers would quote nothing to a holder who can in fact vote. The
+// first is a security bug and the second is a lie, so neither copy is the safe one to
+// forget.
+//
+// The three flags are not interchangeable and the lock's own comment records which of
+// them earn their place there; this helper is about whether a question exists, which is
+// the question all three consumers are asking.
+func qualityQuestionOpen(cs *claimState) bool {
+	return cs.flagOpen || cs.disputeOpen || cs.counterOpen
+}
+
 // openQualityTally starts a fresh sealed tally (flag or dispute-ride).
 func openQualityTally(cs *claimState) {
 	cs.qVoteSeq++

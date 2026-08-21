@@ -2,14 +2,6 @@
  {
   "pkg": "kourtv2",
   "file": "votelock.gno",
-  "label": "voteLockOpen: the counterOpen term is dropped from the live-question test",
-  "find": " || cs.counterOpen {",
-  "replace": " {",
-  "why": "A DELIBERATE SURVIVOR that no test can close while the design holds, which is why it is here rather than in the main batch. Dropping this term fails nothing in the suite, measured by ablating each of the three live-question flags separately: flagOpen and disputeOpen each fail tests, counterOpen fails none. It is redundant BY IMPLICATION, not by luck — CounterFlag sets counterUsed, qualityReasked and a fresh tally together, and rearmSlashWindow re-opens the window only if counterUsed, so slotConsumed && qualityReasked holds wherever counterOpen does and the carries-forward arm already holds the coin. The term is kept because that implication spans three functions in two files with nothing enforcing it, and the failure direction without it is the bad one: ResolveCounter READS the tally, so releasing would free coin while its vote can still decide the slash. TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy pins the implication instead, since unreachable code cannot be pinned but the reason it is unreachable can. IF THIS ROW EVER COMES BACK CAUGHT, the term has become load-bearing: promote it to the main batch and delete this note."
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
   "label": "voteLockOpen: the cs.closed half of the quality terminal test is dropped",
   "find": " || cs.closed {",
   "replace": " {",

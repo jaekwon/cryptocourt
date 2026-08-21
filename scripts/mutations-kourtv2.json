@@ -6339,6 +6339,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "quality.gno",
+  "label": "qualityQuestionOpen: the counterOpen term is dropped (the readers go blind to a counter poll)",
+  "find": " || cs.counterOpen\n}",
+  "replace": "\n}"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "modvote.gno",
   "label": "approve: a divested voter is no longer refused",
   "find": "\t\tif w <= 0 {\n\t\t\tpanic(\"kourtv2: you no longer hold the coin you would vote with\")\n\t\t}",
@@ -6404,8 +6411,8 @@
   "pkg": "kourtv2",
   "file": "votelock.gno",
   "label": "voteLockOpen: a quality vote releases while its question is still open",
-  "find": "\t\tif cs.flagOpen || cs.disputeOpen || cs.counterOpen {",
-  "replace": "\t\tif false && (cs.flagOpen || cs.disputeOpen || cs.counterOpen) {"
+  "find": "\t\tif qualityQuestionOpen(cs) {",
+  "replace": "\t\tif false && qualityQuestionOpen(cs) {"
  },
  {
   "pkg": "kourtv2",

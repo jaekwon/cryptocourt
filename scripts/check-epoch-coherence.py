@@ -300,6 +300,26 @@ LOCKVOTE_CALLS_N = 3  # dispute.gno, modvote.gno, quality.gno — one per lane
 DOC_MOVABLE = re.compile(r"^\s*//.*\bSpendableOf\b.*(?:min\(| minus )|"
                          r"^\s*//.*(?:min\(| minus ).*\bSpendableOf\b")
 
+# ARM 10 — "a quality question is open" has exactly ONE definition.
+#
+# The disjunction cs.flagOpen || cs.disputeOpen || cs.counterOpen was written three
+# times: the vote lock's release predicate and both weight readers. That is arm 4's
+# hazard one level down — a quote that can drift from the charge — and the drift is not
+# symmetric. A fourth way to open a quality question that reached the readers but not the
+# lock UNDER-locks, freeing coin whose vote can still be counted; one that reached the
+# lock but not the readers quotes zero to a holder who can vote right now. Neither copy
+# is the safe one to forget, so there is one, qualityQuestionOpen, and this counts it.
+#
+# TWO lines legitimately hold such a disjunction, and the second is why this arm pins a
+# SHAPE rather than a filename. crystallize.gno asks its own question —
+# `cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0` — which deliberately excludes
+# disputeOpen and adds a pending slash. It is not a copy of ours and must not be
+# "simplified" into one. So: exactly two such lines, the definition carries all three
+# flags, and the other carries pendingSlash, which is what makes it a different question
+# rather than a partial copy of this one. A third line fails closed.
+QOPEN_FLAGS = ("cs.flagOpen", "cs.disputeOpen", "cs.counterOpen")
+QOPEN_LINES_N = 2
+
 # THE OTHER ARMS WERE AUDITED FOR THE SAME BLIND SPOT AND ARE CLEAN. Three arms have
 # now been widened because a regex hardcoded a spelling the tree already used
 # elsewhere (arm 7 missed Burn, arm 5 missed tuple assignment, arm 7 missed a non-`c`
@@ -377,6 +397,38 @@ def main() -> int:
                                 f"vote commitment; subtracting VoteLockedOf from it "
                                 f"understates the room, because the locks combine with "
                                 f"MAX not SUM")
+    # Arm 10, over kourtv2 only: the liveness disjunction has one definition.
+    qopen = []
+    for q in sorted(KOURTV2.glob("*.gno")):
+        if q.name.endswith("_test.gno"):
+            continue
+        for i, line in enumerate(q.read_text().splitlines()):
+            if line.lstrip().startswith("//"):
+                continue
+            n = sum(f in line for f in QOPEN_FLAGS)
+            if n >= 2 and "||" in line:
+                qopen.append((q.name, i + 1, line.strip(), n))
+    if len(qopen) != QOPEN_LINES_N:
+        hits.append(f"[qopen-copy] {len(qopen)} line(s) disjoin two or more of the "
+                    f"quality-question flags, expected {QOPEN_LINES_N}: "
+                    f"{', '.join(f'{f}:{ln}' for f, ln, _, _ in qopen)}. "
+                    f"`a quality question is open` has ONE definition, "
+                    f"qualityQuestionOpen, because a copy that reaches the weight "
+                    f"readers but not the vote lock frees coin whose vote can still "
+                    f"be counted")
+    else:
+        defs = [r for r in qopen if r[3] == 3]
+        other = [r for r in qopen if r[3] != 3]
+        if len(defs) != 1:
+            hits.append(f"[qopen-copy] {len(defs)} line(s) carry all three "
+                        f"quality-question flags, expected exactly 1 (the "
+                        f"qualityQuestionOpen definition)")
+        elif "pendingSlash" not in other[0][2]:
+            hits.append(f"[qopen-copy] {other[0][0]}:{other[0][1]} disjoins the "
+                        f"quality-question flags without pendingSlash, so it is a "
+                        f"partial COPY of qualityQuestionOpen rather than "
+                        f"crystallize's own question: {other[0][2][:70]}")
+
     # PER DIRECTORY, not a total. A total of 20+ is satisfied by kourtv2 alone, so
     # ccwrap could move away and this arm would quietly stop watching the realm where
     # one of the two real instances lived — measured: the control for a moved ccwrap
@@ -591,6 +643,7 @@ def main() -> int:
           f"weight source in the engine, one vote-weight expression, "
           f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
           f"{arm4['lockvote']} self-only vote-lock site(s), "
+          f"one quality-question definition, "
           f"{doc_scanned} file(s) clear of SpendableOf arithmetic "
           f"({', '.join(f'{k} {v}' for k, v in sorted(per_dir.items()))}).")
     return 0

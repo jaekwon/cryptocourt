@@ -233,3 +233,55 @@ func TestTheTwoLanesGetSeparateExplanations(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "no checkpointed weight at the claim's quality "+
 		"epoch", func() { VoteQuality(cross(cur), "tls", id, qualityMid) })
 }
+
+// THE READERS MUST SEE A COUNTER POLL, and the quote they give must be the charge.
+//
+// The counter re-vote is the one quality question neither reader was ever tested
+// against: mutating the counterOpen term out of qualityQuestionOpen survived the whole
+// suite, both before and after that predicate was consolidated, which means nothing
+// asked either reader what it says while a counter poll is open. The consequence would
+// not be a crash — it is a holder told "no quality vote is open on this claim" and
+// quoted zero weight, on a question they can vote in right now.
+//
+// Paired both ways round: with nothing open the readers must SAY nothing is open, or
+// this test would pass on a reader that answers "you have weight" unconditionally.
+func TestTheReadersSeeACounterPollAndQuoteWhatItCharges(cur realm, t *testing.T) {
+	c, id, alice, _, carol, _, _ := slashSetup(cur, t, "cqr")
+	cs := mustClaim(c, id)
+
+	// THE BYSTANDER: the flag that created the slash has resolved, so no quality
+	// question is open and both readers must say exactly that.
+	if qualityQuestionOpen(cs) {
+		t.Fatal("fixture: a question is already open, so the negative half of " +
+			"this test is vacuous")
+	}
+	if _, q := ClaimVoteWeightOf("cqr", carol, id); q != 0 {
+		t.Fatalf("quoted %d quality weight with no quality question open", q)
+	}
+	_, why := VoteWeightWhy("cqr", carol, id)
+	uassert.Equal(t, "no quality vote is open on this claim", why)
+
+	// The answerer opens their one counter re-vote.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "cqr", id)
+	if !cs.counterOpen {
+		t.Fatal("fixture: the counter poll did not open")
+	}
+
+	_, quoted := ClaimVoteWeightOf("cqr", carol, id)
+	if quoted <= 0 {
+		t.Fatal("a counter poll is open and carol holds coin, so the reader must " +
+			"quote a quality weight — a zero here is the reader failing to see " +
+			"the counter lane at all")
+	}
+	_, why = VoteWeightWhy("cqr", carol, id)
+	if why == "no quality vote is open on this claim" {
+		t.Fatal("the explainer denies a counter poll that IS open")
+	}
+
+	// AND THE QUOTE IS THE CHARGE. This is the property the split readers exist for:
+	// what the elector is told, and what the vote actually commits, are one number.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "cqr", id, qualityMid)
+	uassert.Equal(t, quoted, VoteLockedOf("cqr", carol))
+}
