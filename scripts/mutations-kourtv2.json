@@ -6427,5 +6427,19 @@
     "label": "TransferFromCC: gated on the stake-only check, so an allowance outruns a vote",
     "find": "\tmustSpendable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)",
     "replace": "\tmustStakable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "voteweight.gno",
+    "label": "VoteWeightWhy: the quality lane reuses the verdict lane's epoch",
+    "find": "\t\tquality = whyWeighed(c, who, cs.qualityEpoch)",
+    "replace": "\t\tquality = whyWeighed(c, who, c.gov.EpochOf(cs.proposalID))"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "voteweight.gno",
+    "label": "VoteWeightWhy: the verdict lane reuses the quality lane's epoch",
+    "find": "\t\tverdict = whyWeighed(c, who, c.gov.EpochOf(cs.proposalID))",
+    "replace": "\t\tverdict = whyWeighed(c, who, cs.qualityEpoch)"
   }
 ]

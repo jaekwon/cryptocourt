@@ -97,20 +97,38 @@ func ElectionVoteWeightOf(courtSlug string, who address) int64 {
 	return w
 }
 
-// VoteWeightWhy explains a zero, which is the only part of this a holder cannot
-// work out for themselves. Three answers, and they call for different actions:
-// wait for the next question, buy back in, or nothing is open.
-func VoteWeightWhy(courtSlug string, who address, claimID uint64) string {
+// VoteWeightWhy explains a zero, which is the only part of this a holder cannot work
+// out for themselves — ONE ANSWER PER LANE, mirroring ClaimVoteWeightOf.
+//
+// The first version returned a single string and picked the dispute's epoch whenever
+// a dispute was open. That was wrong in a reachable state, and measured: with a
+// dispute open BOTH questions are live (VoteQuality accepts votes while
+// cs.disputeOpen) at DIFFERENT epochs — the verdict at the proposal's, the quality
+// ride at the answer's. A holder who bought after the answer but before the dispute
+// opened has a 0 quality snapshot and a positive verdict one, and the single-string
+// version told them "weighed at the full snapshot" while VoteQuality was about to
+// refuse them outright. Measured at quality 0 against verdict 10 B.
+//
+// Two lanes, two epochs, two answers. Returning a pair makes that structural instead
+// of something a reader has to remember, and it matches the shape of the figures in
+// ClaimVoteWeightOf so the two readers cannot drift apart in what they cover.
+func VoteWeightWhy(courtSlug string, who address, claimID uint64) (verdict, quality string) {
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
-	at := cs.qualityEpoch
-	open := cs.flagOpen || cs.disputeOpen || cs.counterOpen
+	verdict = "no verdict vote is open on this claim"
 	if cs.disputeOpen {
-		at = c.gov.EpochOf(cs.proposalID)
+		verdict = whyWeighed(c, who, c.gov.EpochOf(cs.proposalID))
 	}
-	if !open {
-		return "no question is open on this claim"
+	quality = "no quality vote is open on this claim"
+	if cs.flagOpen || cs.disputeOpen || cs.counterOpen {
+		quality = whyWeighed(c, who, cs.qualityEpoch)
 	}
+	return verdict, quality
+}
+
+// whyWeighed is the explanation for ONE epoch. Split out so the two lanes cannot
+// share an answer by accident, which is exactly how the first version went wrong.
+func whyWeighed(c *Court, who address, at uint32) string {
 	w, snapshot := votingWeight(c, who, at)
 	switch {
 	case snapshot <= 0:

@@ -70,7 +70,9 @@ any sell/bond/deposit/wrap affordance: the binding limit, which is NOT `Spendabl
 — that one is stake-only and will over-promise. `WrapRoom` is also a court-level
 bound, not a personal allowance. The realm exposes `ClaimVoteWeightOf`,
 `ElectionVoteWeightOf` and `VoteWeightWhy` for the weight side, and `VoteLockedOf`
-for the commitment side.
+for the commitment side. `VoteWeightWhy` returns TWO strings, one per lane — a claim
+with a dispute open has two live questions at two different epochs, and a single
+answer for both is wrong in a reachable state.
 
 **Not implemented here, deliberately.** `web/index.html` belongs to another session
 and adding UI copy to a live surface is a design act on someone else's work. This is

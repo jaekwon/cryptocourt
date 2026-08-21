@@ -64,11 +64,17 @@ func TestTheQuoteMatchesTheCharge(cur realm, t *testing.T) {
 	}
 	uassert.Equal(t, qQuality, rec.(int64))
 
-	// AND THE EXPLANATION IS THE RIGHT ONE, since a holder acts on it.
-	uassert.Equal(t, "capped at what you still hold, which is less than you held "+
-		"when this question was asked", VoteWeightWhy("qmc", carol, id))
-	// The bystander: bob held throughout, so he is quoted the full snapshot.
-	uassert.Equal(t, "weighed at the full snapshot", VoteWeightWhy("qmc", bob, id))
+	// AND THE EXPLANATION IS THE RIGHT ONE, since a holder acts on it. Per lane,
+	// because with a dispute open there are two live questions at two epochs.
+	capped := "capped at what you still hold, which is less than you held when " +
+		"this question was asked"
+	cv, cq := VoteWeightWhy("qmc", carol, id)
+	uassert.Equal(t, capped, cv)
+	uassert.Equal(t, capped, cq)
+	// The bystander: bob held throughout, so he is quoted the full snapshot in both.
+	bv, bq := VoteWeightWhy("qmc", bob, id)
+	uassert.Equal(t, "weighed at the full snapshot", bv)
+	uassert.Equal(t, "weighed at the full snapshot", bq)
 }
 
 // THE ELECTION QUOTE REPORTS THE FROZEN FIGURE, not a fresh derivation.
@@ -163,4 +169,67 @@ func TestPastVotesSumToPastTotal(cur realm, t *testing.T) {
 	if capped > total {
 		t.Fatalf("Σ min(snapshot, held) = %d exceeded PastTotal = %d", capped, total)
 	}
+}
+
+// THE TWO LANES CAN DISAGREE, AND THE EXPLAINER MUST NOT AVERAGE THEM.
+//
+// With a dispute open, BOTH questions are live — VoteQuality accepts votes while
+// cs.disputeOpen — at DIFFERENT epochs: the verdict at the proposal's, the quality
+// ride at the answer's. So a holder who bought AFTER the answer but BEFORE the
+// dispute opened has nothing at the quality epoch and a full position at the
+// dispute's.
+//
+// The first VoteWeightWhy returned one string and picked the dispute's epoch whenever
+// a dispute was open. Measured, this exact holder was told "weighed at the full
+// snapshot" while VoteQuality was about to refuse them for having no checkpointed
+// weight at all. The reader was not merely incomplete, it was wrong in the direction
+// that makes a holder act.
+func TestTheTwoLanesGetSeparateExplanations(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tls-alice")
+	whale := testutils.TestAddress("tls-whale")
+	late := testutils.TestAddress("tls-late")
+	c := testCourt(cur, "tls", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+
+	// Answered while `late` holds nothing: the quality epoch sees zero.
+	id := stakeAnswerDispute(cur, "tls", alice, whale)
+	cs := mustClaim(c, id)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+
+	// THEN they acquire, and it seals, so the dispute's epoch will see them.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "tls", late, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "tls", id)
+
+	// The instrument's own precondition: the two epochs must actually disagree, or
+	// this test is asserting nothing that a single-string version would fail.
+	qSnap := c.coin.PastVotes(late, cs.qualityEpoch)
+	dSnap := c.coin.PastVotes(late, c.gov.EpochOf(cs.proposalID))
+	if qSnap != 0 || dSnap <= 0 {
+		t.Fatalf("fixture is vacuous: need a zero quality snapshot and a positive "+
+			"dispute one, got %d and %d", qSnap, dSnap)
+	}
+
+	verdict, quality := ClaimVoteWeightOf("tls", late, id)
+	uassert.Equal(t, int64(0), quality)
+	uassert.True(t, verdict > 0)
+
+	vWhy, qWhy := VoteWeightWhy("tls", late, id)
+	uassert.Equal(t, "weighed at the full snapshot", vWhy)
+	if qWhy == vWhy {
+		t.Fatalf("the two lanes disagree for this holder, so their explanations "+
+			"must too — both said %q", qWhy)
+	}
+	uassert.Equal(t, "you held no coin at the epoch this question was frozen at, "+
+		"so there is nothing to weigh; coin bought since counts in later questions",
+		qWhy)
+
+	// And the realm agrees with the quality explanation rather than the verdict one.
+	testing.SetRealm(testing.NewUserRealm(late))
+	uassert.AbortsContains(t, cur, "no checkpointed weight at the claim's quality "+
+		"epoch", func() { VoteQuality(cross(cur), "tls", id, qualityMid) })
 }
