@@ -655,7 +655,33 @@ func ElectionWindows(courtSlug string) (int64, int64) {
 	return e.nominateEnd, e.voteEnd
 }
 
-// ElectionFloorOf is the quorum/margin floor pinned at open.
+// ElectionFloorOf is the quorum/margin floor pinned at open — 5% of votableAt, frozen
+// at the epoch OpenElection chose.
+//
+// GIVEN THE SAME TREATMENT AS QuorumFloorOf BECAUSE IT IS THE SAME CLASS OF READ: a
+// bar an elector mobilises against. That one carries a paragraph about its
+// read-surface hazard and this carried a one-line summary, which is the asymmetry
+// worth fixing rather than the wording.
+//
+// WHAT THIS FIGURE IS NOT. It is 5% of `votable`, and `votable` nets out the court
+// escrow and nothing else — coin at a wrapper's address is inside it and no key can
+// vote it (see VotableSupply's own comment). So a coalition that raises exactly this
+// much CASTABLE weight clears the bar, but a coalition told "the pool is `votable`"
+// and reasoning about its share of that pool is reasoning about a pool part of which
+// cannot turn out. ccwrap caps the vault at 35% of votable, so the gap is bounded
+// there while that cap holds.
+//
+// THE DIRECTION OF HARM, which is what makes it worth a paragraph. `install` requires
+// `e.turnout >= e.floor`, and below it nothing installs and the CURRENT moderator set
+// stands. So an over-read of achievable turnout — mobilising to what looks like the
+// bar and falling short — hands the election to the incumbents by apathy. That is the
+// same shape as QuorumFloorOf's failure, where a short round leaves provisional =
+// answer and the claim goes to the answerer.
+//
+// Nothing renders this today: web/index.html reads QuorumFloorOf and not this, so no
+// live surface is currently affected. That is why this is a note on the contract
+// rather than a bug report — it is here for whoever builds the election surface the
+// handoff in VOTEFLOOR.md asks for.
 func ElectionFloorOf(courtSlug string) int64 {
 	return mustModRead(courtSlug).mustOpenElection().floor
 }
