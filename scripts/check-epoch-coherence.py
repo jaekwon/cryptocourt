@@ -255,6 +255,31 @@ STAKABLE_CALLS_N = 1  # stake.gno:Stake
 # pattern that hardcoded `c.`, and mc is not hypothetical, it is sixteen lines away
 # doing Mint. Same class of blind spot as leaving Burn out: the regex assumed a
 # spelling the file already contradicts elsewhere.
+# ARM 8 — a vote-lock row can only ever be created by its own owner.
+#
+# The whole cost argument for the lock rests on this. voteLockedOf walks one address's
+# rows on every mustSpendable path, at a measured 110,245 gas per dead row, so an
+# address's row count is a tax on its own transfers. That is acceptable only because
+# the rows are SELF-INFLICTED: all three lockVote sites pass cur.Previous().Address(),
+# so nobody can grow another holder's row count. A single `lockVote(c, victim, ...)`
+# would convert a self-imposed cost into a griefing weapon, and it would read as
+# perfectly ordinary code — locking someone's vote is what this function is for.
+#
+# Three pins, because the address can go wrong in three places. The ARGUMENT must be
+# `who`; every BINDING of `who` in a file that locks must come from
+# cur.Previous().Address(); and any helper taking `who address` (approve does) must be
+# called with cur.Previous().Address() — or with `who` itself, which is the same
+# address one frame down and is how votelock.gno's own helpers legitimately pass it
+# along — at every site, since the parameter is where a caller-supplied address would
+# enter. Passing `who` is safe by induction: the binding pin above forces every `who`
+# in a locking file to come from the caller in the first place. The COUNT is pinned too: a fourth lane that
+# locks votes has to be argued, exactly as arm 6 pins mustStakable.
+LOCKVOTE_CALL = re.compile(r"lockVote\(c, ([A-Za-z_][A-Za-z0-9_.]*),")
+WHO_BIND = re.compile(r"^\s*who\s*:?=\s*(.+?)\s*$", re.M)
+WHO_PARAM_FN = re.compile(r"^func ([a-zA-Z_][A-Za-z0-9_]*)\(who address", re.M)
+CALLER_DERIVED = "cur.Previous().Address()"
+LOCKVOTE_CALLS_N = 3  # dispute.gno, modvote.gno, quality.gno — one per lane
+
 # THE OTHER ARMS WERE AUDITED FOR THE SAME BLIND SPOT AND ARE CLEAN. Three arms have
 # now been widened because a regex hardcoded a spelling the tree already used
 # elsewhere (arm 7 missed Burn, arm 5 missed tuple assignment, arm 7 missed a non-`c`
@@ -312,7 +337,8 @@ def main() -> int:
     repolock.refuse_if_held("check-epoch-coherence")
     hits, scanned, sealed_funcs = [], 0, 0
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
-            "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0}
+            "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
+            "lockvote": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -374,6 +400,38 @@ def main() -> int:
                                     f"stake lock both live in that call, so this "
                                     f"path bypasses both and nothing else notices")
 
+                # Arm 8, per file: a lock row belongs to its own owner.
+                calls = LOCKVOTE_CALL.findall(src)
+                arm4["lockvote"] += len(calls)
+                for arg in calls:
+                    if arg != "who":
+                        hits.append(f"[foreign-lock] {pkg}/{p.name} locks votes "
+                                    f"for `{arg}` rather than `who` — a lock row "
+                                    f"taxes its owner's every transfer, so a row "
+                                    f"created for an address other than the caller "
+                                    f"is a griefing weapon")
+                if "lockVote(" in src:
+                    for m in WHO_BIND.finditer(src):
+                        if m.group(1) != CALLER_DERIVED:
+                            hits.append(f"[foreign-lock] {pkg}/{p.name} binds `who` "
+                                        f"to `{m.group(1)}` in a file that locks "
+                                        f"votes; it must come from "
+                                        f"{CALLER_DERIVED} or the lock can be "
+                                        f"pointed at a third party")
+                    helpers = WHO_PARAM_FN.findall(src)
+                    for i, line in enumerate(lines):
+                        if line.startswith("func "):
+                            continue
+                        for fn in helpers:
+                            m = re.search(rf"\b{fn}\((.*?),", line)
+                            if m and m.group(1).strip() not in (CALLER_DERIVED,
+                                                                 "who"):
+                                hits.append(f"[foreign-lock] {pkg}/{p.name}:{i+1} "
+                                            f"calls {fn}() with "
+                                            f"`{m.group(1).strip()}` as the holder; "
+                                            f"a helper that reaches lockVote must be "
+                                            f"passed {CALLER_DERIVED}")
+
             # Arm 3
             if p.name == "governor.gno":
                 for m in GOV_METHOD.finditer(src):
@@ -431,12 +489,18 @@ def main() -> int:
         ("closed_w", TERMINAL_CLOSED_N, "cs.closed writer(s)"),
         ("stakable", STAKABLE_CALLS_N, "mustStakable caller(s)"),
         ("coin_out", COIN_OUT_N, "user-sourced coin movement(s)"),
+        ("lockvote", LOCKVOTE_CALLS_N, "vote-lock site(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
                    else "lock-exempt" if key == "stakable"
-                   else "ungated-outflow" if key == "coin_out" else "one-weight")
-            why = ("a new path moving a holder's coin has to be paired with a "
+                   else "ungated-outflow" if key == "coin_out"
+                   else "foreign-lock" if key == "lockvote" else "one-weight")
+            why = ("a fourth lane locking votes has to be argued: every lock "
+                   "row taxes its owner's own transfers, so the address it is "
+                   "created for must be the caller and nothing else"
+                   if key == "lockvote" else
+                   "a new path moving a holder's coin has to be paired with a "
                    "gate deliberately; mustSpendable is where both locks live"
                    if key == "coin_out" else
                    "Stake is the ONE deliberate exemption from the vote lock; a "
@@ -469,7 +533,8 @@ def main() -> int:
     print(f"check-epoch-coherence: {scanned} files, {sealed_funcs} sealed-epoch "
           f"function(s) each reading one epoch, no live weight in any tally, one "
           f"weight source in the engine, one vote-weight expression, "
-          f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s).")
+          f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
+          f"{arm4['lockvote']} self-only vote-lock site(s).")
     return 0
 
 

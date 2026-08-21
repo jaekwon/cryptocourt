@@ -301,6 +301,29 @@ control("a coin outflow with its gate removed", f"{KOURTV2}/quality.gno",
         "\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
         "\tc.coin.Transfer(who, c.escrow, bond)",
         "[ungated-outflow]", argv=["python3", EPOCHCOH])
+# ARM 8's four controls, one per pin, each with a DISTINCT expected string: all four
+# carry the [foreign-lock] tag, so matching on the tag alone would let any one of them
+# pass on another pin's complaint. The hazard is one edit away in each direction — a
+# lock row taxes its owner's own transfers at a measured 110,245 gas per dead row, so
+# a row created for somebody else is a griefing weapon rather than a self-imposed cost.
+control("a lock row created for a third party", f"{KOURTV2}/quality.gno",
+        "lockVote(c, who, voteLockQuality,",
+        "lockVote(c, cs.author, voteLockQuality,",
+        "rather than `who`", argv=["python3", EPOCHCOH])
+control("a fourth lane locking votes", f"{KOURTV2}/dispute.gno",
+        "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
+        "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)\n"
+        "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
+        "vote-lock site(s), expected 3", argv=["python3", EPOCHCOH])
+control("`who` rebound away from the caller", f"{KOURTV2}/quality.gno",
+        "\tlockVote(c, who, voteLockQuality,",
+        "\twho = cs.author\n\tlockVote(c, who, voteLockQuality,",
+        "binds `who` to", argv=["python3", EPOCHCOH])
+control("a locking helper passed a foreign address", f"{KOURTV2}/modvote.gno",
+        "\tapprove(cur.Previous().Address(), courtSlug, 0, true)",
+        "\tapprove(cur.Previous().Address(), courtSlug, 0, true)\n"
+        "\tapprove(c.treasury, courtSlug, 0, true)",
+        "as the holder", argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',

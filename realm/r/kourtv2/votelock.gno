@@ -55,17 +55,39 @@ import "gno.land/p/nt/bptree/v0"
 // directly rather than argued: six open disputes voted and all six resolved leaves
 // six rows, and voting once more collapses it to one.
 //
-// A PER-CALL GAS FIGURE WAS ATTEMPTED AND IS NOT AVAILABLE from the test harness. Its
-// `--- GAS:` lines cannot be attributed to a specific crossing call: one value per
-// test is an order of magnitude above the rest, and its POSITION in the stream varies
-// between runs, so two attempts at "the last line is the transfer" produced
-// contradictory answers (489,076 and 7,163,199 for the same transfer). Anyone wanting
-// the number needs an instrument this repo does not have — check-storage.py measures
-// filetest BYTES, not gas. Recorded so the next person does not re-derive the wrong
-// figure from the same output, which is what nearly happened here: a first reading
-// suggested a 477x increase and was comparing two test totals.
+// THE GAS, MEASURED. A per-call figure is not readable directly: the harness's
+// `--- GAS:` lines cannot be attributed to a crossing call, because one value per test
+// is the test TOTAL and its POSITION in the stream varies between runs (two readings of
+// "the last line is the transfer" gave 489,076 and 7,163,199 for the same transfer; a
+// first pass compared two totals and suggested a 477x regression that does not exist).
+// What IS reliable is the total — it is the MAX of the lines, one per test — so the
+// cost of a single call is a DIFFERENCE of two totals over fixtures that differ by
+// exactly that call. Stable to the byte across runs:
 //
-// RELEASE IS LAZY. voteLockedOf sums only the rows whose question is still open,
+//	TransferCC with  0 lock rows        812,842 gas
+//	TransferCC with 20 dead rows      3,017,747        110,245 per row
+//	TransferCC with 40 dead rows      5,653,751        121,022 per row
+//	TransferCC with 20 OPEN rows      1,194,543         19,085 per row
+//	PruneVoteLocks over 20 dead rows  3,711,090        185,554 per row
+//
+// Linear in rows with a small tree-depth factor, not quadratic. Dead rows cost 5.8x
+// what open ones do, and that is the short-circuit in voteLockedOf: `w > most` skips
+// voteLockOpen once some row has set a high-water mark, which open rows of equal weight
+// do on the first row and dead rows never do. So the pessimistic figure is the
+// dead-row one, and the backlog it prices is exactly what the prune clears.
+//
+// WHY ACCUMULATION CANNOT BRICK AN ADDRESS, also measured rather than argued. Rows are
+// self-inflicted: all three lockVote sites pass cur.Previous().Address(), so no third
+// party can grow another address's row count and tax its transfers. And lockVote walks
+// the rows before adding one, so the vote that creates row n+1 costs MORE than a
+// transfer at n rows — 2,952,537 against 1,194,543 at twenty rows, a factor of 2.47.
+// An address therefore reaches "cannot vote" about 2.5x sooner in row count than
+// "cannot transfer", and the transfer path keeps that much headroom at every row count
+// actually reachable. For scale, the 3B block ceiling
+// (tm2 MaxBlockMaxGas) is ~24,800 dead rows away, each of which costs a vote in a
+// separate concurrently-open question.
+//
+// RELEASE IS LAZY. voteLockedOf reads only the rows whose question is still open,
 // so nothing iterates a whole electorate at resolution — that would put an
 // O(voters) cost on a permissionless call, which is a griefing surface of its own.
 // Resolved rows are pruned when the same address next votes, bounding the rows per

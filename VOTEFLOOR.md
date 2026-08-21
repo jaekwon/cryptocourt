@@ -138,6 +138,22 @@ reason worth remembering: 8 shards saturated the machine, no shard reported for 
 hours, and `realm/` was edited under it twice before I understood that mutate
 re-stages per row.
 
+**How to measure gas here, since one attempt reported a 477x regression that does not
+exist.** The harness's `--- GAS:` lines cannot be attributed to a crossing call, and
+the reason the first attempt failed is worth stating precisely: one value per test is
+the test TOTAL, and its POSITION in the stream varies between runs, so "the last line
+is the call I made" gave two different answers for the same transfer. What is reliable
+is that the total is the MAXIMUM of a single test's lines. So measure a call as a
+DIFFERENCE of two totals over fixtures differing by exactly that call, run each test
+alone, and take the max. Stable to the byte across repeated runs. Two preconditions,
+both learned by getting them wrong: assert the test PASSED before reading any number
+(a refused transfer yielded a negative marginal cost, which is what exposed it), and
+hold total SUPPLY constant between the two fixtures — the answer bar is a
+`supplyFloor`, so minting more to afford a bigger fixture raises the bar the fixture
+must clear. The scaffold was deliberately not committed: a gas assertion in the suite
+breaks on any recalibration, and the figures now live in votelock.gno where the design
+decision they support is argued.
+
 **AND A NINETEENTH COMMIT ADDS A FOURTH MOVE: check the algebra of a mechanism you
 are describing.** Four files and a dozen commit messages said the reverted design
 made the early-succeed arm "reduce to `yes*bps >= (total - abstain)*T`, dropping
