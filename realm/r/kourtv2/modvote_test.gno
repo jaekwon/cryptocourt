@@ -259,6 +259,16 @@ func TestElectionTurnoutIsDistinctVoters(cur realm, t *testing.T) {
 	m1 := testutils.TestAddress("ev6-m1")
 	m2 := testutils.TestAddress("ev6-m2")
 	c := electionCourt(cur, "ev6", creator, []address{voter}, []int64{900_000_000})
+	// Bond money, minted AFTER electionCourt sealed the epoch, so e.epoch cannot
+	// see it: votableAt, electionFloor and electionBond are all unchanged and this
+	// is a no-op today. It exists so the voter can pay the 4,500,000 election bond
+	// at OpenElection and still hold the 900,000,000 this test asserts — the
+	// repo's own idiom (see the honest-voter mint below).
+	//
+	// Needed because vote weight is becoming min(snapshot, live balance): the bond
+	// leaves the balance, so without this the voter votes 895,500,000 and every
+	// literal here would have to move. Measured minimum: 4,499,999 fails.
+	c.coin.Mint(voter, 4_500_000)
 	other := testutils.TestAddress("ev6-other")
 	c.coin.Mint(other, 60_000_000)
 
@@ -304,7 +314,17 @@ func TestElectionZeroApprovalCandidateCannotInstall(cur realm, t *testing.T) {
 	c := electionCourt(cur, "ev7", creator,
 		[]address{whale, small, griefer},
 		[]int64{900_000_000, 50_000_000, 50_000_000})
-	_ = c
+	// `small` holds EXACTLY the 50,000,000 election floor — that is the point of
+	// this fixture, since ResolveElection's second install condition
+	// (l.weight-e.retainW < e.floor) only bites when maxW == e.floor and is what
+	// keeps the zero-approval puppet out. Post-seal bond money so paying the
+	// 5,000,000 nomination bond does not push them under their own bar.
+	//
+	// MUST be post-seal. Minting pre-seal instead also makes the test pass, and
+	// makes it VACUOUS: measured, with a pre-seal 55,291,006 the fixture still
+	// passes when that second condition is deleted, so it stops catching the
+	// mutation it was written for. Measured minimum here: 4,999,999 fails.
+	c.coin.Mint(small, 5_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(griefer))
 	puppetSet := RegisterModCandidate(cross(cur), "ev7", 1, puppet)
