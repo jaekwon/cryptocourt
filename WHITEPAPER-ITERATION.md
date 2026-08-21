@@ -392,8 +392,8 @@ New items, each verified before deciding):
 
 ### ERRATUM — rented vote weight is closed; two passages now describe the old design
 
-Shipped across six commits (`769dcc5`, `5ecf469`, `e05fee7`, `1387839`, `122df45`,
-`82f3c96`). Vote weight in all three kourtv2 lanes is now
+Shipped across seventeen commits, `769dcc5` through `67b7edb`; `VOTEFLOOR.md` has
+the table. Vote weight in all three kourtv2 lanes is now
 
     w = min( PastVotes(who, <the question's own frozen epoch>), BalanceOf(who) )
 
@@ -440,10 +440,31 @@ two failed closures because they are why the shipped fix has the shape it does.
    almost immediately.
 
 4. **Anywhere the paper implies voting is costless.** It is not, now, and that is
-   deliberate. A voter's coin is frozen against transfer for the length of the
-   round. Staking still works — the coin never leaves the balance — but a voter
-   cannot sell, bond, or deposit that amount until the verdict lands. Say so
-   plainly; it is a real cost and it is the mechanism, not a side effect.
+   deliberate. Staking still works — the coin never leaves the balance — but a
+   voter cannot sell, bond, deposit or WRAP that amount until their question is
+   done. Say so plainly; it is a real cost and it is the mechanism, not a side
+   effect.
+
+   **An earlier draft of this item said "for the length of the round" and that
+   contradicted item 3 above.** The three lanes hold for different spans, and the
+   paper should not flatten them: a verdict vote releases when that round resolves,
+   an election vote when the election resolves, and a quality vote when its tally is
+   superseded — usually the very next round — or, if the tally has frozen, when the
+   claim itself ends. The rule is not a duration at all. It is that the commitment
+   lasts exactly as long as the influence, which is the only formulation that covers
+   an accumulating tally.
+
+5. **THE WRAP CAP, if the paper mentions trading on gnoswap at all.** At most 35%
+   of a court's votable coin can be wrapped at any time. Wrapped coin sits at the
+   wrapper's address, which no key can vote, while the court's safety bars are
+   quoted as a share of votable — so without a cap a popular wrapper strands the
+   court's own governance, and an election that can never install means moderation
+   frozen permanently. Measured on the uncapped code: at 95% wrapped, unanimous
+   turnout of everyone still able to vote was exactly 100% of a 5%-of-votable bar,
+   and 25% at 98%. The number is derived, not chosen — the binding constraint is
+   that a claim staking a third of the court needs the other two thirds able to vote
+   on it, and 35% keeps that true for any escrow under 47.5% of supply. It is a
+   real product limit and belongs in the paper, not only in the code.
 
 **What has NOT changed, and must not be introduced by the rewrite:** staked coin
 still sits in the holder's balance and still votes. The floor is `BalanceOf`, not
@@ -457,6 +478,18 @@ while it is there. That is consistent with how the election denominator already
 works (`votableAt` nets escrow out), so it is a coherence fix rather than a new
 penalty — but a nominator paying a fee does vote slightly less than their holdings,
 and the paper should not imply otherwise.
+
+**With the number, since "slightly" is not a claim anyone can check.** The election
+bond is exactly 10% of the election floor on any court past about 50 CC votable
+(both are fixed fractions of the same `votableAt`, and a `mustSane` invariant keeps
+the bond below the floor). So nominating a ballot line and remaining a sufficient
+approver of it needs 110% of the floor, rising to at most 200% on a court small
+enough for the `flagMinCC` clamp to bind. The residual is the INTENDED property, not
+a rough edge: whoever pays for a line cannot also be its sole sufficient approver,
+so a self-approved set always needs one other holder. The obvious "fix" — crediting
+the nominator's own bond back as weight — was implemented once and reverted, because
+at low votable the bond equals the floor and the credit alone clears the bar from a
+zero balance.
 
 ### Note from the tokenomics session — VOTING WEIGHT IS CHANGING, and §Voted needs a rewrite
 
