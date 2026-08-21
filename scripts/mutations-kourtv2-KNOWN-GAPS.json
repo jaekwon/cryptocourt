@@ -30,5 +30,21 @@
   "find": "\tif amount <= 0 {\n\t\treturn\n\t}\n",
   "replace": "",
   "why": "A DELIBERATE SURVIVOR found by an operator-level sweep of voteweight.gno, votelock.gno and lock.gno — eleven mechanical mutations of comparison and boolean operators, of which this was the only one to survive. amount is never non-positive here: all three lockVote call sites refuse a non-positive weight before reaching it (the governor's castVote panics on w <= 0, and approve and VoteQuality each panic on both a zero snapshot and a zero live figure), so the guard cannot fire. Its removal would record an open row of weight 0, which contributes nothing to voteLockedOf's max and is cleared by the next prune — a cleanliness cost, not a safety one, which is why no test sees it. Kept because a lock function that will silently write a meaningless row is a worse primitive than one that will not. IF THIS COMES BACK CAUGHT, some lane now locks a non-positive weight and that lane's own w <= 0 guard is what to read."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the full bar may be zero (any turnout is conclusive)",
+  "find": "\tif fullBar < 1 {\n\t\tfullBar = 1\n\t}\n",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR, and the reason is MUTUAL REDUNDANCY rather than unreachability. The full bar has two lifts in sequence — the ladder (fullBar < demotionBar) and then the minimum (fullBar < 1) — and the only reachable state where either binds is a micro court whose third-of-votable arm is 0, where the full bar derives to 0 and the demotion bar has already been lifted to 1. There the ladder raises 0 to 1; delete the ladder and the minimum raises 0 to 1 instead. Same value, so removing either ALONE is invisible to any test, including TestTheQualityBarsNeverReachZeroOnAMicroCourt which asserts both bars >= 1, the ladder ordered, and an empty tally inconclusive. Removing BOTH is caught by that test, measured: the full bar goes to 0 and it reports 'an EMPTY tally clears a bar of zero'. Both are kept because a zero full bar makes the conclusive test read 0 >= 0 && 0 >= 0, so a flag nobody voted in would consume the slot and promote the claim to HIGH — and neither clamp is the one to drop when the other is what happens to be covering it. IF THIS COMES BACK CAUGHT, the two have stopped overlapping and the pair should be re-read as one rule."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the ladder may invert (full bar below the demotion bar)",
+  "find": "\tif fullBar < demotionBar {\n\t\tfullBar = demotionBar\n\t}\n",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR, and the reason is MUTUAL REDUNDANCY rather than unreachability. The full bar has two lifts in sequence — the ladder (fullBar < demotionBar) and then the minimum (fullBar < 1) — and the only reachable state where either binds is a micro court whose third-of-votable arm is 0, where the full bar derives to 0 and the demotion bar has already been lifted to 1. There the ladder raises 0 to 1; delete the ladder and the minimum raises 0 to 1 instead. Same value, so removing either ALONE is invisible to any test, including TestTheQualityBarsNeverReachZeroOnAMicroCourt which asserts both bars >= 1, the ladder ordered, and an empty tally inconclusive. Removing BOTH is caught by that test, measured: the full bar goes to 0 and it reports 'an EMPTY tally clears a bar of zero'. Both are kept because a zero full bar makes the conclusive test read 0 >= 0 && 0 >= 0, so a flag nobody voted in would consume the slot and promote the claim to HIGH — and neither clamp is the one to drop when the other is what happens to be covering it. IF THIS COMES BACK CAUGHT, the two have stopped overlapping and the pair should be re-read as one rule."
  }
 ]

@@ -5945,6 +5945,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "supplyFloor: the floor may derive to zero (anything clears the bar)",
+  "find": "\tif v < 1 {\n\t\tv = 1\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
   "file": "session.gno",
   "label": "SettleUndisputed: the 72h settlement minimum is not waited out",
   "find": "\tif passed, known := pastDeadline(cs.answeredAtTime, settleSecs); (known && !passed) ||\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay) {\n\t\tpanic(\"kourtv2: the answer has not aged the 72h settlement minimum\")\n\t}\n",
@@ -6357,6 +6364,13 @@
   "label": "boundary tier: turnout exactly at the full bar no longer promotes",
   "find": "if turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
   "replace": "if turnout > fullBar && cs.qHighW*3 >= turnout*2 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: the demotion bar may derive to zero (nothing can be below it)",
+  "find": "\tif demotionBar < 1 {\n\t\tdemotionBar = 1\n\t}\n",
+  "replace": ""
  },
  {
   "pkg": "kourtv2",

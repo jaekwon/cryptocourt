@@ -679,3 +679,80 @@ func TestATurnoutExactlyAtTheQualityFullBarClearsIt(cur realm, t *testing.T) {
 	}
 	uassert.Equal(t, int64(qualityHigh), cs.tier)
 }
+
+// THE BARS NEVER REACH ZERO, AND A ZERO BAR IS NOT A SMALL BAR.
+//
+// An operator sweep of the bar DERIVATIONS — as opposed to the comparisons against them,
+// which the previous commit pinned — left four survivors, all of them the minimum clamps:
+// the demotion bar's, the full bar's, the ladder's (full below demotion), and
+// supplyFloor's. Only quorumFloor's was pinned.
+//
+// They bind on a MICRO COURT, which is not hypothetical: StartCourt is free and a fresh
+// court's supply is whatever has been bought so far, and the realm already reasons about
+// "a court with less than 20 CC votable" elsewhere. At votable = 2 the third-of-votable
+// arm is 0, so every bar derives to zero and only the clamps lift them.
+//
+// A zero full bar is not a lenient bar, it is a broken one. The conclusive test is
+// `turnout >= fullBar && cs.qHighW*3 >= turnout*2`, which at fullBar = 0 and an EMPTY
+// tally reads 0 >= 0 && 0 >= 0 — so a flag nobody voted in would consume the slot and
+// promote the claim to HIGH. That is the same empty-denominator failure the governor's
+// `p.yes > 0` arm exists to stop, in another lane; there it was found by review and
+// commented, here it was standing on an unpinned clamp.
+func TestTheQualityBarsNeverReachZeroOnAMicroCourt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mb-alice")
+	c := testCourt(cur, "mb", alice, 2) // two units, the whole court
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	at := c.coin.Epoch() - 1
+
+	// THE PRECONDITION: the clamps must actually be what lifts these bars, or the
+	// test passes on arithmetic that never needed them.
+	votable := c.coin.PastTotal(at) - c.coin.PastVotes(c.escrow, at)
+	if votable/3 != 0 {
+		t.Fatalf("fixture is vacuous: a third of votable is %d, so the bars do not "+
+			"derive to zero and the clamps are not being tested", votable/3)
+	}
+	cs := &claimState{qualityEpoch: at, xBarFrozen: 1}
+	demotionBar, fullBar := qualityBars(c, cs)
+	if demotionBar < 1 {
+		t.Fatalf("the demotion bar is %d; nothing can be below a bar of zero",
+			demotionBar)
+	}
+	if fullBar < 1 {
+		t.Fatalf("the full bar is %d; an EMPTY tally clears a bar of zero", fullBar)
+	}
+	if fullBar < demotionBar {
+		t.Fatalf("the ladder is inverted: full %d below demotion %d",
+			fullBar, demotionBar)
+	}
+
+	// And the outcome that depends on it: an empty tally decides nothing.
+	tier, conclusive, turnout := applyQualityTally(c, cs)
+	uassert.Equal(t, int64(0), turnout)
+	if conclusive {
+		t.Fatalf("an empty tally was conclusive at tier %d — zero turnout just "+
+			"promoted a claim", tier)
+	}
+}
+
+// supplyFloor is the same clamp one layer down, and it feeds the deposit and answer bars
+// rather than the quality ladder. A zero floor means a free claim on a young court.
+func TestTheSupplyFloorNeverReachesZero(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ms-alice")
+	c := testCourt(cur, "ms", alice, 2)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+
+	// Zero bps and zero dust is the shape that derives to nothing: without the clamp
+	// this returns 0, which is why the clamp is the only thing holding the bar up.
+	if got := supplyFloor(c, 0, 0); got < 1 {
+		t.Fatalf("supplyFloor(0 bps, 0 dust) is %d, so a bar derived from it is "+
+			"zero and anything clears it", got)
+	}
+	// The bystander: an ordinary derivation is NOT forced to the clamp, or this would
+	// be a constant rather than a floor.
+	if got := supplyFloor(c, 5000, 1_000_000); got != 1_000_000 {
+		t.Fatalf("supplyFloor should return the dust arm %d on a tiny court, got %d",
+			1_000_000, got)
+	}
+}
