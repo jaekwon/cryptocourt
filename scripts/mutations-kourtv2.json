@@ -6210,5 +6210,33 @@
     "label": "VoteQuality: the floor comparison is reversed (raises, not lowers)",
     "find": "\tif held := c.coin.BalanceOf(who); held < w {",
     "replace": "\tif held := c.coin.BalanceOf(who); held > w {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "approve: the own-balance floor is gone (rented weight elects mods)",
+    "find": "\t\tif held := c.coin.BalanceOf(who); held < w {\n\t\t\tw = held\n\t\t}",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "approve: the floor comparison is reversed (raises, not lowers)",
+    "find": "\t\tif held := c.coin.BalanceOf(who); held < w {",
+    "replace": "\t\tif held := c.coin.BalanceOf(who); held > w {"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "approve: weight is re-derived per approval (line can exceed turnout)",
+    "find": "\t\tw = prior.(int64)",
+    "replace": "\t\tw = c.coin.PastVotes(who, e.epoch)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "ResolveElection PASS 2: the winning line skips the install condition",
+    "find": "\t\t\tif !ok || l.weight < maxW-e.floor || l.weight-e.retainW < e.floor {",
+    "replace": "\t\t\tif !ok || l.weight < maxW-e.floor {"
   }
 ]

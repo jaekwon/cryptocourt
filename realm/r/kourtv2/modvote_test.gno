@@ -833,3 +833,152 @@ func TestAResolvedElectionIsNoLongerOpen(cur realm, t *testing.T) {
 		ApproveCandidate(cross(cur), "lkdone", id)
 	})
 }
+
+// THE FLOOR ON ELECTION WEIGHT, and this was the worst-exposed lane: whoever calls
+// OpenElection pins the anchor, and the prize is the whole moderator set rather
+// than one claim. Measured at 12x the election floor from a one-epoch rental.
+//
+// The renter does everything right for the old design — acquire, let the epoch
+// seal, open the election themselves so the anchor lands inside their holding
+// window, sell it all back — and is now refused, because repaying the loan is what
+// empties the floor.
+//
+// PAIRED with the whale who keeps their coin and must be tallied undocked.
+func TestElectionWeightIsFlooredByWhatIsStillHeld(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("evfl-creator")
+	whale := testutils.TestAddress("evfl-whale")
+	renter := testutils.TestAddress("evfl-renter")
+	newMod := testutils.TestAddress("evfl-newmod")
+	c := electionCourt(cur, "evfl", creator,
+		[]address{whale}, []int64{500_000_000_000})
+	c.coin.Mint(whale, 50_000_000) // bond money
+
+	// Acquire, and seal the epoch that holds it.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "evfl", renter, 300_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+
+	testing.SetRealm(testing.NewUserRealm(whale))
+	cand := RegisterModCandidate(cross(cur), "evfl", 1, newMod)
+	// The renter opens it, which is the step that pins the anchor inside their
+	// holding window. That much still works — it is what made this rentable.
+	testing.SetRealm(testing.NewUserRealm(renter))
+	OpenElection(cross(cur), "evfl", cand)
+	e := ensureMod(c).election
+
+	pinned := c.coin.PastVotes(renter, e.epoch)
+	if pinned <= 0 {
+		t.Fatal("fixture is vacuous: the renter has no weight at the pinned epoch")
+	}
+	if pinned <= electionFloor(c, e.epoch) {
+		t.Fatal("fixture is vacuous: the rental must stand ABOVE the floor for " +
+			"refusing it to mean anything")
+	}
+	testing.SkipHeights(nominationWindow)
+
+	// Repay the loan. The anchor is untouched — that is the whole hazard.
+	testing.SetRealm(testing.NewUserRealm(renter))
+	TransferCC(cross(cur), "evfl", whale, SpendableOf("evfl", renter))
+	uassert.Equal(t, int64(0), c.coin.BalanceOf(renter))
+	uassert.Equal(t, pinned, c.coin.PastVotes(renter, e.epoch))
+
+	testing.SetRealm(testing.NewUserRealm(renter))
+	uassert.AbortsContains(t, cur, "no longer hold", func() {
+		ApproveCandidate(cross(cur), "evfl", cand)
+	})
+
+	// THE PAIR. The whale held throughout and is tallied at their full snapshot,
+	// not at the (larger) balance the repayment left them holding.
+	whalePinned := c.coin.PastVotes(whale, e.epoch)
+	if whalePinned <= 0 {
+		t.Fatal("fixture is vacuous: the whale has no weight at the pinned epoch")
+	}
+	if c.coin.BalanceOf(whale) <= whalePinned {
+		t.Fatal("fixture is vacuous: the whale's live balance must exceed their " +
+			"snapshot for this to say anything about the ceiling")
+	}
+	testing.SetRealm(testing.NewUserRealm(whale))
+	ApproveCandidate(cross(cur), "evfl", cand)
+	candW, _, turnout := ElectionTally("evfl", cand)
+	uassert.Equal(t, whalePinned, candW)
+	uassert.Equal(t, whalePinned, turnout)
+}
+
+// WEIGHT IS FROZEN AT THE FIRST APPROVAL, and this is not an optimisation.
+//
+// The floor is a live read and a ballot spans many transactions, so re-deriving it
+// per approval lets one voter approve line A while holding little, top up, and
+// approve line B at their full snapshot. Line B then carries weight ABOVE the
+// turnout recorded at approval A — and install compares maxW against e.turnout, so
+// that is a candidate installing on weight the election never counted. Before the
+// freeze the panels measured a line at 10x the whole turnout.
+//
+// So: approve early and poor, get rich, approve again. Both lines must read the
+// poor figure, and turnout must bound them.
+func TestElectionWeightIsFrozenAtFirstApproval(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("evfz-creator")
+	voter := testutils.TestAddress("evfz-voter")
+	helper := testutils.TestAddress("evfz-helper")
+	modA := testutils.TestAddress("evfz-moda")
+	modB := testutils.TestAddress("evfz-modb")
+	// The voter's snapshot is deliberately the SMALLER pile, so the helper can
+	// later lift their live balance clear above it. Registering a candidate locks
+	// a bond, so the transfers below go through SpendableOf rather than the mint.
+	c := electionCourt(cur, "evfz", creator,
+		[]address{voter, helper}, []int64{100_000_000_000, 400_000_000_000})
+	c.coin.Mint(voter, 50_000_000)
+	c.coin.Mint(helper, 50_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	candA := RegisterModCandidate(cross(cur), "evfz", 1, modA)
+	testing.SetRealm(testing.NewUserRealm(helper))
+	candB := RegisterModCandidate(cross(cur), "evfz", 1, modB)
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "evfz", candA)
+	testing.SkipHeights(10)
+	testing.SetRealm(testing.NewUserRealm(helper))
+	NominateCandidate(cross(cur), "evfz", candB)
+	e := ensureMod(c).election
+	snapshot := c.coin.PastVotes(voter, e.epoch)
+	testing.SkipHeights(nominationWindow)
+
+	// Go poor, keeping a real but much smaller position.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "evfz", helper, SpendableOf("evfz", voter)-1_000_000_000)
+	poor := c.coin.BalanceOf(voter)
+	if poor <= 0 || poor >= snapshot {
+		t.Fatalf("fixture is vacuous: need 0 < poor < snapshot, got %d and %d",
+			poor, snapshot)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "evfz", candA)
+	wA, _, turnout := ElectionTally("evfz", candA)
+	uassert.Equal(t, poor, wA)
+	uassert.Equal(t, poor, turnout)
+
+	// Now get rich again — back above the snapshot, so a re-derived figure would
+	// be the snapshot rather than the poor one.
+	testing.SetRealm(testing.NewUserRealm(helper))
+	TransferCC(cross(cur), "evfz", voter, 200_000_000_000)
+	if c.coin.BalanceOf(voter) <= snapshot {
+		t.Fatal("fixture is vacuous: the top-up must lift the live balance above " +
+			"the snapshot, or re-deriving would give the same answer either way")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "evfz", candB)
+
+	// Line B reads the FROZEN figure, not the restored one.
+	wB, _, turnout2 := ElectionTally("evfz", candB)
+	uassert.Equal(t, poor, wB)
+	// One voter is one voter: turnout did not move on the second approval.
+	uassert.Equal(t, turnout, turnout2)
+	// And the property the whole freeze exists for.
+	if wB > turnout2 {
+		t.Fatalf("a line carries %d against a turnout of %d — max(line.weight) "+
+			"must never exceed turnout", wB, turnout2)
+	}
+}

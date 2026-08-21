@@ -47,7 +47,7 @@ GOVERN = ROOT / "realm" / "r" / "govern"
 # to protect, and a guard still reporting success would be describing a property
 # nothing in the tree has.
 FLOOR = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < w \{")
-FLOOR_SITES = 1  # quality.gno; grows to 3 as the election and dispute lanes land
+FLOOR_SITES = 2  # quality.gno, modvote.gno; grows to 3 when the dispute lane lands
 
 # A delegation mutator reachable from kourtv2 — either a call into the ledger's
 # own Delegate, or an exported kourtv2 entrypoint that offers it.

@@ -60,7 +60,9 @@ TALLY_LIVE_ALLOWED = {
     # VoteQuality's floor: min(PastVotes(who,Q1), BalanceOf(who)). A CEILING on a
     # frozen numerator, not a live numerator — see the derivation above.
     ("kourtv2", "quality.gno"): 1,
-    ("kourtv2", "modvote.gno"): 0,
+    # approve()'s floor, derived once per election and reused. Same shape as
+    # quality.gno: a ceiling on a frozen numerator, not a live numerator.
+    ("kourtv2", "modvote.gno"): 1,
     ("kourtv2", "crystallize.gno"): 0,
     ("kourtv2", "meta.gno"): 0,
 }

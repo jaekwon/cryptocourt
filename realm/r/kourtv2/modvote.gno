@@ -124,7 +124,7 @@ type election struct {
 	lines       *bptree.BPTree
 	retainW     int64
 	nominators  *bptree.BPTree // addr -> true (one nomination per address)
-	voters      *bptree.BPTree // addr -> true (distinct-voter turnout)
+	voters      *bptree.BPTree // addr -> the weight it voted at (see approve)
 	approvals   *bptree.BPTree // be64(candID)|addr -> true (per-line dedup)
 	turnout     int64
 	resolved    bool
@@ -386,13 +386,45 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	if now >= e.voteEnd {
 		panic("kourtv2: voting has closed")
 	}
-	// Weighed at the epoch OpenElection pinned. This is the lane most exposed to
-	// rented weight — the opener chooses the anchor and a coup is court-wide
-	// rather than one claim — measured at 12x this floor on a 500 B court from a
-	// one-epoch rental. NOT closed here; see RENTEDWEIGHT.md.
-	w := c.coin.PastVotes(who, e.epoch)
-	if w <= 0 {
-		panic("kourtv2: no voting weight at the pinned epoch")
+	// Weighed at the epoch OpenElection pinned, floored by what the voter still
+	// holds, and computed ONCE PER ELECTION — at the voter's first approval, then
+	// reused for every later line on the same ballot.
+	//
+	// THE REUSE IS NOT AN OPTIMISATION, it is what keeps the tally arithmetic.
+	// The floor is a LIVE read and a ballot spans many transactions, so a
+	// re-derived figure can move between two of one voter's approvals: approve
+	// line A holding little, top up, approve line B at the full snapshot, and
+	// line B now carries weight ABOVE the turnout recorded back at approval A.
+	// install compares maxW against e.turnout and e.floor, so a line heavier than
+	// the turnout meant to bound it is a candidate installing on weight the
+	// election never counted — measured, before the freeze, at a line carrying 10x
+	// the whole turnout. Freezing at first approval makes max(line.weight) <=
+	// turnout arithmetic instead of a hope.
+	//
+	// It is also why e.voters holds the WEIGHT rather than a presence bool. "This
+	// address has voted" and "at what weight" have to be one fact in one place, or
+	// they can disagree.
+	//
+	// This was the lane most exposed to rented weight — the opener chooses the
+	// anchor and a coup is court-wide rather than one claim, measured at 12x this
+	// floor from a one-epoch rental on a 500 B court. The floor is what closes it:
+	// the renter must return the coin to repay, and then there is nothing to vote.
+	var w int64
+	if prior := e.voters.Get(who.String()); prior != nil {
+		w = prior.(int64)
+	} else {
+		w = c.coin.PastVotes(who, e.epoch)
+		if w <= 0 {
+			panic("kourtv2: no voting weight at the pinned epoch")
+		}
+		// Ceiling above, floor here. BalanceOf and not spendable(), for the reason
+		// quality.gno spells out: staked coin is still held and still votes.
+		if held := c.coin.BalanceOf(who); held < w {
+			w = held
+		}
+		if w <= 0 {
+			panic("kourtv2: you no longer hold the coin you would vote with")
+		}
 	}
 	key := beClaimKey(candidateID) + who.String()
 	if retain {
@@ -415,7 +447,7 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	// Turnout is DISTINCT-VOTER weight, not the sum of approvals — a voter who
 	// approves five lines is one voter, not five (round-7 R2).
 	if !e.voters.Has(who.String()) {
-		e.voters.Set(who.String(), true)
+		e.voters.Set(who.String(), w)
 		e.turnout += w
 	}
 }
