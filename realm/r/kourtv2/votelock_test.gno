@@ -1335,3 +1335,88 @@ func TestCommitmentsOfIsOneReadAndItsTotalIsAMaxNotASum(cur realm, t *testing.T)
 		t.Fatalf("a resolved round is still listed as a commitment: %s", after)
 	}
 }
+
+// A STRANGER COULD DESTROY A VOTER'S COMMITMENT WITH ONE PERMISSIONLESS CALL, and this
+// is the regression.
+//
+// `address` is a bare string type with no length invariant, and nothing validated the
+// `who` handed to PruneVoteLocks. So a caller passing "g1" prefix-matched EVERY holder's
+// rows, voteLockParts rejected each one on length, voteLockOpen therefore returned false,
+// and pruneVoteLocks removed all of them as stale. Probed on the shipped code before the
+// fix: one call by a stranger dropped a voter's 10,000,000,000 commitment, and the voter
+// then moved all of it after voting with it — the vote-then-sell rental this lock exists
+// to price, reduced to a single call anyone could make.
+//
+// TWO HALVES, because either alone would have stopped it and neither should be the only
+// thing standing there: PruneVoteLocks rejects a non-address, and the prune itself will
+// not delete a row it cannot positively parse as this holder's — tested by calling the
+// internal prune directly, past the guard.
+//
+// ONLY THE WRITE PATH WAS EVER EXPOSED, which is worth recording because the first read
+// of this bug assumed otherwise and added guards to the reads too. Measured with no guard
+// anywhere: a short or empty address returns VoteLockedOf 0, DisposableOf 0 and
+// CommitmentsOf "stake:0;vote:0;free:0" while the real voter is committed 10,000,000,000.
+// The reads were already safe for the SAME reason the prune was not — voteLockParts
+// rejects a foreign row on length, so a reader skips it and the max stays zero, while the
+// prune read that same rejection as "stale, delete". One check, opposite consequences.
+// The read guards were removed again as redundant; the assertions below stay, because the
+// property is worth pinning even though no guard is what holds it.
+func TestAStrangerCannotPruneAwayACommitment(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sec-alice")
+	whale := testutils.TestAddress("sec-whale")
+	voter := testutils.TestAddress("sec-voter")
+	attacker := testutils.TestAddress("sec-attacker")
+	c := testCourt(cur, "sec", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+
+	id := stakeAnswerDispute(cur, "sec", alice, whale)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "sec", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "sec", id, "no")
+	committed := VoteLockedOf("sec", voter)
+	if committed <= 0 {
+		t.Fatal("fixture is vacuous: nothing was committed to destroy")
+	}
+
+	// THE ATTACK, refused at the door.
+	for _, bad := range []string{"g1", "", "g"} {
+		testing.SetRealm(testing.NewUserRealm(attacker))
+		uassert.AbortsContains(t, cur, "not a valid address", func() {
+			PruneVoteLocks(cross(cur), "sec", address(bad))
+		})
+	}
+	// THE SECOND HALF, past the guard: the prune itself refuses to delete a row it
+	// cannot parse as this holder's.
+	if n := pruneVoteLocks(c, address("g1")); n != 0 {
+		t.Fatalf("the internal prune removed %d row(s) for a non-address; the "+
+			"entry-point guard is then the only thing standing between a stranger "+
+			"and every commitment in the court", n)
+	}
+	uassert.Equal(t, committed, VoteLockedOf("sec", voter))
+	uassert.Equal(t, int64(0), disposable(c, voter))
+
+	// And the coin still cannot move, which is the property the attack defeated.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "sec", whale, committed)
+	})
+
+	// THE BYSTANDER: a real address still prunes, so the fix is a check and not a
+	// wall. The voter's own row is live, so nothing is dropped; a resolved one is.
+	testing.SetRealm(testing.NewUserRealm(attacker))
+	uassert.Equal(t, 0, PruneVoteLocks(cross(cur), "sec", voter))
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	ResolveDispute(cross(cur), "sec", id)
+	testing.SetRealm(testing.NewUserRealm(attacker))
+	uassert.Equal(t, 1, PruneVoteLocks(cross(cur), "sec", voter))
+
+	// And a non-address gets nothing from the reads — zero, and a commitment line
+	// with three zeros in it, never another holder's figures. No guard does this;
+	// voteLockParts' length check does, by skipping every row it cannot parse.
+	uassert.Equal(t, int64(0), VoteLockedOf("sec", address("g1")))
+	uassert.Equal(t, int64(0), DisposableOf("sec", address("g1")))
+	uassert.Equal(t, "stake:0;vote:0;free:0", CommitmentsOf("sec", address("g1")))
+}

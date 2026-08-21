@@ -6486,6 +6486,20 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "PruneVoteLocks: a caller-supplied non-address is accepted (prefix-prunes the court)",
+  "find": "\tif !who.IsValid() {\n\t\tpanic(\"kourtv2: that is not a valid address\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "pruneVoteLocks: a key it cannot parse is deleted as stale",
+  "find": "\t\tif _, _, _, ok := voteLockParts(who, k); !ok {\n\t\t\treturn false\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "ResolveDispute: only a participant may resolve (a voter's coin is stranded)",
   "find": "\tif !cs.disputeOpen {\n\t\tpanic(\"kourtv2: no dispute to resolve\")\n\t}",

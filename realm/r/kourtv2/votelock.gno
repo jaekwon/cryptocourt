@@ -336,6 +336,20 @@ func pruneVoteLocks(c *Court, who address) int {
 	var stale []string
 	pre := string(who)
 	c.voteLocks.Iterate(pre, pre+"\xff", func(k string, _ any) bool {
+		// A KEY THIS CODE CANNOT PARSE IS NOT THIS HOLDER'S ROW, AND NOT OURS TO
+		// DELETE. Treating an unparseable key as stale is what turned a short
+		// `who` into a permissionless wipe: `address` is a bare string type with
+		// no length invariant, so a caller passing "g1" prefix-matched every
+		// holder's rows, voteLockParts rejected each on length, voteLockOpen
+		// returned false, and every live commitment in the court was removed as
+		// stale. Probed on the shipped code: a stranger's one call dropped a
+		// voter's 10,000,000,000 commitment and the voter then moved all of it
+		// after voting with it, which is the rental this lock exists to price.
+		// The entry points validate the address now too; this is the half that
+		// holds even if one of them ever forgets.
+		if _, _, _, ok := voteLockParts(who, k); !ok {
+			return false
+		}
 		if !voteLockOpen(c, who, k) {
 			stale = append(stale, k)
 		}
@@ -373,6 +387,13 @@ func beClaimID(s string) uint64 {
 func PruneVoteLocks(cur realm, courtSlug string, who address) int {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
+	}
+	// AFTER the frame check, which check-stale-guards requires to come first and was
+	// right to: a stale-realm caller is refused before anything else is considered.
+	// `address` is a bare string type with no length invariant, so an unvalidated
+	// `who` here prefix-matched every holder's rows and the prune removed them all.
+	if !who.IsValid() {
+		panic("kourtv2: that is not a valid address")
 	}
 	return pruneVoteLocks(mustCourt(courtSlug), who)
 }
