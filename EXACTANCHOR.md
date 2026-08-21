@@ -49,7 +49,7 @@ much coin against transfer until the round resolves.
 | attempt | what it did | why it died |
 |---|---|---|
 | **today** | weight = `PastVotes(who, Epoch()-1)`, the last **sealed** epoch at propose time | the anchor is up to `epochBlocks` (720 blocks, 1 h) stale, so a fresh buyer has no weight. Also rentable: buy, wait an epoch, open the question yourself, sell, vote. |
-| **live weight + transfer lock** (reverted, `ece5aec`) | weight = `BalanceOf(who)` at vote time | a live numerator against frozen bars gave turnout at 200–400% of its own bar in five lanes; and `VoteWithWeight` let `cast` exceed `p.total`, voiding `rest := p.total - cast` and dropping `no` out of the early-decide test — a permissionless verdict flip |
+| **live weight + transfer lock** (reverted, `ece5aec`) | weight = `BalanceOf(who)` at vote time | a live numerator against frozen bars gave turnout at 200–400% of its own bar in five lanes; and `VoteWithWeight` let `cast` exceed `p.total`, voiding `rest := p.total - cast` so the early arms compared an inflated `yes` against a denominator snapshotted at `total - abstain` — a permissionless verdict flip. (This row used to say it "dropped `no` out of the early-decide test"; that is wrong — `yes+no+rest` is identically `total - abstain`, so `no` is never in that comparison. See `governor.gno`.) |
 | **bonded electorate** (designed, not built) | weight = coin in a separate bonded state, tranched by height | works, but the bars must re-denominate in bonded stock, discounting every capital-keyed defence by 1/φ — 4.75× at φ=20%, 19× at φ=5% — and Kourt cannot buy a high φ (≈39% of the weekly emission budget at φ=60%) |
 
 **The insight the third attempt produced, kept; the subsystem it wrapped it in,

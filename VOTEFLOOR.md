@@ -42,6 +42,18 @@ found by review. They came from three moves, in descending yield:
 
 The claims that go unpinned are the ones that sound obvious.
 
+**AND A NINETEENTH COMMIT ADDS A FOURTH MOVE: check the algebra of a mechanism you
+are describing.** Four files and a dozen commit messages said the reverted design
+made the early-succeed arm "reduce to `yes*bps >= (total - abstain)*T`, dropping
+`no` out of the test entirely". Turnout is `yes+no+abstain` and `rest` is
+`total-cast`, so `yes+no+rest` is identically `total-abstain`: that reduction holds
+under every version of the code, and `no` was never in the comparison. The real
+defect was an inflated NUMERATOR against a snapshotted denominator, plus a negative
+`rest` letting the DEFEAT arm fire on an open question. The conclusion — that a
+ceiling is safe where a supplied weight was not — survives intact; the reason given
+for it did not. Nothing had checked it because it read like a restatement of the
+code rather than a claim about it.
+
 **A FIFTH CORRECTION, and it is the same mistake twice.** `voteLockedOf` summed a
 holder's open lock rows, double-counting the same coins: a holder who voted a verdict
 and then its quality ride — which P11 makes an ordinary two-transaction act — had

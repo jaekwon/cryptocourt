@@ -193,7 +193,11 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	// why the dispute lane goes through VoteWithCap instead of clamping here. The
 	// tally is the governor's, and `rest := p.total - cast` is its invariant to
 	// keep; an earlier attempt handed it a finished weight instead of a ceiling and
-	// that dropped `no` out of the early-decide test entirely.
+	// that let `yes` exceed anything the electorate held while the early arms'
+	// denominator stayed snapshotted at (total - abstain) — a proposal passing on
+	// support that did not exist. (An earlier comment here said it "dropped `no`
+	// out of the early-decide test"; that reduction holds identically either way,
+	// so it was never the symptom. governor.gno has the algebra.)
 	//
 	// Refused here rather than in the governor so the message is this court's. See
 	// quality.gno for the derivation, and VOTEFLOOR.md for why the snapshot alone

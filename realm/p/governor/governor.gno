@@ -848,10 +848,26 @@ func (g *Governor) Vote(who address, id int64, choice string) {
 //
 // A CEILING, NEVER A WEIGHT, and the distinction is the whole reason this method
 // is shaped like this. An earlier attempt added VoteWithWeight, which took the
-// figure to tally. A supplied weight is not drawn from p.total, so `cast` could
-// exceed it, `rest := p.total - cast` went negative, and the early-succeed arm
-// reduced to `yes*bps >= (total - abstain)*ThresholdBps` — dropping `no` out of the
-// test entirely. That was a permissionless verdict flip. Here the consumer can only
+// figure to tally. That was a permissionless verdict flip.
+//
+// A supplied weight is not drawn from p.total, so `cast` could exceed it and
+// `rest := p.total - cast` went NEGATIVE. Written out, the two early arms are
+//
+//	early-succeed  yes*bps                    >= (total - abstain)*T
+//	early-defeat   (total - no - abstain)*bps  < (total - abstain)*T
+//
+// because turnout is yes+no+abstain, so yes+no+rest is identically total-abstain.
+// The damage was therefore an inflated NUMERATOR against a snapshotted denominator:
+// `yes` could exceed anything the electorate held while (total - abstain) stayed
+// put, passing on support that did not exist. And a negative rest shrinks
+// (yes+rest), so the defeat arm could fire on a question still open.
+//
+// AN EARLIER VERSION OF THIS COMMENT SAID the arm "reduced to yes*bps >= (total -
+// abstain)*T, dropping `no` out of the test entirely". The identity above shows
+// that reduction is not a symptom of anything: it holds always, and `no` is not in
+// the early-succeed comparison and never was. The description was repeated in four
+// files before the algebra was checked, which is what
+// TestTheEarlyArmsIgnoreNoAndACapOnlyDelays now pins. Here the consumer can only
 // LOWER what this package read for itself, so
 //
 //	Σ w  ≤  Σ PastVotes(·, p.epoch)  ≤  PastTotal(p.epoch)  =  p.total

@@ -1317,10 +1317,15 @@ func TestAnAbsoluteQuorumIsRenderedAsTheCountItIs(t *testing.T) {
 //
 // It had no test. It is the invariant a reverted change to kourtv2 broke, by
 // adding a way to hand the engine a weight it had not derived: `cast` exceeded
-// `p.total`, `rest := p.total - cast` went negative, and the early-succeed arm
-// reduced to `yes*bps >= (total - abstain)*ThresholdBps` — dropping `no` out of
-// the test entirely. A permissionless verdict flip, and nothing in either suite
-// noticed.
+// `p.total` and `rest := p.total - cast` went negative, so the early arms compared
+// an inflated `yes` against a denominator snapshotted at (total - abstain) — a
+// proposal passing on support that did not exist. A permissionless verdict flip,
+// and nothing in either suite noticed.
+//
+// The wording here used to say the arm "dropped `no` out of the test entirely".
+// That was wrong: turnout is yes+no+abstain, so yes+no+rest is identically
+// total-abstain and `no` is not in the early-succeed comparison under ANY version
+// of the code. TestTheEarlyArmsIgnoreNoAndACapOnlyDelays demonstrates it.
 //
 // The guard against a RE-INTRODUCED weight parameter is lexical
 // (check-epoch-coherence.py, arm 3). This is the behavioural half: it asserts the
@@ -1473,5 +1478,95 @@ func TestACappedTallyStillRespectsTheWhole(cur realm, t *testing.T) {
 	if yes != 1500 || no != 3000 || ab != 500 {
 		t.Fatalf("tally %d/%d/%d, want 1500/3000/500 — capped addends should be "+
 			"the cap and uncapped ones the snapshot", yes, no, ab)
+	}
+}
+
+// THE EARLY-DECIDE ARMS, WITH THEIR ACTUAL ALGEBRA, AND WHAT A CAP DOES TO THEM.
+//
+// This is the site the reverted design broke, and the comments describing that
+// breakage were wrong about how. They said a supplied weight made the early-succeed
+// arm "reduce to yes*bps >= (total - abstain)*ThresholdBps, dropping `no` out of the
+// test entirely". But turnout is yes+no+abstain and rest is total-cast, so
+//
+//	yes + no + rest  ==  total - abstain
+//
+// IDENTICALLY — always, bug or no bug. `no` is not in the early-succeed comparison
+// and never was, so its absence cannot have been the defect. Written out, the two
+// arms are:
+//
+//	early-succeed   yes*bps        >= (total - abstain)*T
+//	early-defeat    (total - no - abstain)*bps  <  (total - abstain)*T
+//
+// The real defect was an inflated NUMERATOR against a snapshotted denominator: a
+// supplied weight is not drawn from p.total, so `yes` could exceed anything the
+// electorate held while (total - abstain) stayed put — passing on support that did
+// not exist. And negatively: rest < 0 shrinks (yes+rest), so the defeat arm could
+// fire on a question still open.
+//
+// A CEILING has the opposite sign in both arms, which is what makes it safe:
+// capping lowers yes (early-succeed harder), lowers abstain (raising the bar, so
+// harder again), and lowers no (early-defeat harder). It can only ever DELAY.
+func TestTheEarlyArmsIgnoreNoAndACapOnlyDelays(cur realm, t *testing.T) {
+	total := int64(10_000)
+	// ARM 1 — `no` does not enter early-succeed. Two proposals, identical yes and
+	// abstain, wildly different no, same decision. This is the assertion that
+	// refutes the old comment rather than merely not repeating it.
+	for _, tc := range []struct {
+		name string
+		no   int64
+	}{{"no-opposition", 0}, {"heavy-opposition", 3000}} {
+		g := weightedGov(t, map[string]int64{
+			string(gAlice): 6000, string(gBob): 3000, string(gCarl): 1000,
+		}, total)
+		id := g.Propose(gCarl, "fee", "1", tc.name)
+		g.Vote(gAlice, id, "yes") // 6000 >= (10000-0)*5000/10000 = 5000
+		if got := g.State(id); got != "succeeded" {
+			t.Fatalf("%s: yes 6000 of a 10000 whole must early-succeed on the "+
+				"yes-vs-(total-abstain) test alone, got %q", tc.name, got)
+		}
+	}
+
+	// ARM 2 — ABSTAIN does enter it, by shrinking the denominator. The same yes
+	// that was short becomes sufficient once someone abstains, which is the half of
+	// the arm the old comment got right.
+	g := weightedGov(t, map[string]int64{
+		string(gAlice): 4000, string(gBob): 3000, string(gCarl): 3000,
+	}, total)
+	id := g.Propose(gCarl, "fee", "1", "abstain shrinks the bar")
+	g.Vote(gAlice, id, "yes") // 4000 < 5000: not yet
+	if got := g.State(id); got != "active" {
+		t.Fatalf("fixture is vacuous: 4000 must be short of the 5000 bar so the "+
+			"abstain below can be what moves it, got %q", got)
+	}
+	g.Vote(gBob, id, "abstain") // bar becomes (10000-3000)*0.5 = 3500 <= 4000
+	if got := g.State(id); got != "succeeded" {
+		t.Fatalf("an abstain shrinks total-abstain and should decide this: %q", got)
+	}
+
+	// ARM 3 — A CAP ONLY DELAYS. Same weights, same block, no clock movement: the
+	// uncapped proposal decides and the capped one does not.
+	up := weightedGov(t, map[string]int64{
+		string(gAlice): 6000, string(gBob): 4000,
+	}, total)
+	a := up.Propose(gBob, "fee", "1", "uncapped")
+	up.Vote(gAlice, a, "yes")
+	if got := up.State(a); got != "succeeded" {
+		t.Fatalf("fixture is vacuous: the uncapped arm must decide, got %q", got)
+	}
+	dn := weightedGov(t, map[string]int64{
+		string(gAlice): 6000, string(gBob): 4000,
+	}, total)
+	b := dn.Propose(gBob, "fee", "1", "capped")
+	dn.VoteWithCap(gAlice, b, "yes", 4000) // 4000 < 5000
+	if got := dn.State(b); got != "active" {
+		t.Fatalf("a cap must DELAY the early success, not skip past it: %q", got)
+	}
+
+	// And the invariant both arms rest on, which is the thing that actually broke:
+	// the parts never exceed the whole, so rest is never negative.
+	yes, no, ab, _ := dn.Tally(b)
+	if cast := yes + no + ab; cast > total {
+		t.Fatalf("cast %d exceeds the whole %d: rest is negative and both early "+
+			"arms are reading a lie", cast, total)
 	}
 }
