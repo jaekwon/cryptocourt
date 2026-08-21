@@ -6208,8 +6208,8 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "vote lock: a dispute vote locks nothing",
-    "find": "\t_, closes, _, _ := c.gov.Timings(cs.proposalID)\n\tlockVote(c, who, closes)",
-    "replace": "\t_, closes, _, _ := c.gov.Timings(cs.proposalID)\n\t_ = closes"
+    "find": "\tc.gov.VoteWithWeight(who, cs.proposalID, choice, w)\n\tlockVote(c, who, closes)",
+    "replace": "\tc.gov.VoteWithWeight(who, cs.proposalID, choice, w)\n\t_ = closes"
   },
   {
     "pkg": "kourtv2",

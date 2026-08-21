@@ -212,10 +212,6 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	if w <= 0 {
 		panic("kourtv2: no court coin to vote with")
 	}
-	// No close of its own — the ride's deadline is the governor's and disputeOpen
-	// stays true — so lockVote's one-round cap IS the rule here, and a voter can
-	// outlast their lock on a long tally. That residual is priced at one round.
-	lockVote(c, who, heightNow()+c.params.votingBlocks)
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}
@@ -237,6 +233,14 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 	// own contribution to conclusiveTurnout by construction rather than by the two
 	// expressions happening to agree.
 	cs.qVoted.Set(k, w)
+	// Locked AFTER the dedup guard above, so a refused second vote cannot extend
+	// the lock. A panic reverts either way, so this is ordering for correctness
+	// rather than a live fix.
+	//
+	// No close of its own — the ride's deadline is the governor's and disputeOpen
+	// stays true — so lockVote's one-round cap IS the rule here, and a voter can
+	// outlast their lock on a long tally. That residual is priced at one round.
+	lockVote(c, who, heightNow()+c.params.votingBlocks)
 	switch bucket {
 	case qualityLow:
 		cs.qLowW = mustAdd(cs.qLowW, w)

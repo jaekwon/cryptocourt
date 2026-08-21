@@ -198,9 +198,13 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	if w <= 0 {
 		panic("kourtv2: no court coin to vote with")
 	}
+	// LOCK AFTER THE BALLOT IS ACCEPTED, not before. A panic would revert both, so
+	// this is not a live bug — but "lock what was actually cast" is the order that
+	// stays correct without relying on revert semantics, and the governor has its
+	// own refusals (already voted, proposal closed) that this must not pre-empt.
 	_, closes, _, _ := c.gov.Timings(cs.proposalID)
-	lockVote(c, who, closes)
 	c.gov.VoteWithWeight(who, cs.proposalID, choice, w)
+	lockVote(c, who, closes)
 	// Court-side record of the choice AND THE WEIGHT: the governor's roll is
 	// reclaimable after resolution (ReleaseRoll is permissionless), so the carrot
 	// must not depend on it.

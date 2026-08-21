@@ -36,6 +36,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import repolock  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 REALM = ROOT / "realm" / "r" / "kourtv2"
 
@@ -59,10 +62,19 @@ ALLOWED = {
 
 
 def main() -> int:
+    repolock.refuse_if_held("check-nodelegate")
+    files = [p for p in sorted(REALM.glob("*.gno"))
+             if not p.name.endswith("_test.gno")]
+    if not files:
+        # FAIL CLOSED. A silent zero here would report success forever, which is
+        # the shape that let another check in this repo sweep 39% of the suite
+        # while claiming a clean run. An absence check with nothing to scan is
+        # measuring nothing, and that has to be an error rather than a pass.
+        print(f"check-nodelegate: no .gno files under {REALM}; the layout moved "
+              f"and this check is measuring nothing.", file=sys.stderr)
+        return 1
     hits, scanned = [], 0
-    for path in sorted(REALM.glob("*.gno")):
-        if path.name.endswith("_test.gno"):
-            continue
+    for path in files:
         scanned += 1
         src = path.read_text()
         for m in SUSPECT.finditer(src):

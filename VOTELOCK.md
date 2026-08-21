@@ -277,6 +277,44 @@ statable before the vote and no vote can freeze coin for longer than one round.
 - `VoteLockedUntil(courtSlug, who)` so a UI can state the commitment before the
   vote rather than after.
 
+### Review of the implementation — four defects found in my own diff
+
+**1. The lock was taken BEFORE the ballot was accepted**, in all three lanes. A
+panic reverts both, so it was not a live bug — but it meant a refused duplicate
+vote or a closed proposal would have extended a lock on the way to failing, and it
+relied on revert semantics rather than being correct by order. Moved after the
+vote is recorded in every lane.
+
+**2. Render never showed the lock**, despite this plan requiring that a voter
+learn the commitment *before* casting. It is the UI. Added, in both states — the
+period when nothing is locked, the countdown when something is. It also had to say
+which of two lines to believe, because `spendable()` deliberately does NOT subtract
+the vote lock: vote-locked coin really is still free to stake or bond, which is the
+whole reason voting costs no yield, and the two figures can therefore disagree.
+
+**3. `check-nodelegate.py` reported success on an empty scan.** With no `.gno`
+files it printed "0 realm files, no way to delegate" and exited 0 — an absence
+check measuring nothing while claiming a clean run, the exact shape that let
+another guard in this repo sweep 39% of the suite. It fails closed now, and the
+repo's own `check-guards-armed` is what forced the discovery by refusing to let an
+unregistered guard exist.
+
+**4. TWO SELFTEST CONTROLS HAD BEEN SILENTLY DEAD SINCE EARLIER TODAY, both from
+my own earlier commits, and nothing caught them because `selftest` is not in the
+default gate.**
+
+- `check-nontransferable`'s control still planted a coin `Transfer` and expected a
+  trip. That guard was INVERTED this morning to watch reputation instead, so the
+  control was planting the thing the guard now permits — it could never fire again.
+- `check-isolation`'s coupling control anchored on
+  `for r in govern offerer kourtv1 kourtv2; do`, the exact Makefile line I edited
+  when `ccwrap` joined `realm-test`.
+
+Both repaired, and the lesson is the one this repo already knows one level down: a
+control that cannot fire is not a control. **`make selftest` should arguably be in
+the default gate**, or at least run whenever a guard or the Makefile's package
+lists change — flagged, not decided.
+
 ### Battery
 
 Eleven mutants, all killed, `0 build errors` each: seven new guards, and four

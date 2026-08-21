@@ -418,7 +418,6 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	if w <= 0 {
 		panic("kourtv2: no court coin to vote with")
 	}
-	lockVote(c, who, e.voteEnd)
 	key := beClaimKey(candidateID) + who.String()
 	if retain {
 		key = "retain" + who.String()
@@ -437,6 +436,9 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 		e.retainW += w
 	}
 	e.approvals.Set(key, true)
+	// Locked AFTER the approval is recorded, so a refused duplicate cannot extend
+	// the lock. Ordering for correctness; a panic reverts either way.
+	lockVote(c, who, e.voteEnd)
 	// Turnout is DISTINCT-VOTER weight, not the sum of approvals — a voter who
 	// approves five lines is one voter, not five (round-7 R2).
 	if !e.voters.Has(who.String()) {
