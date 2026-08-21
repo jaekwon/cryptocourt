@@ -701,8 +701,13 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
 	// hold), sells, and votes with weight they no longer own. Measured end to end:
 	// 300 B of pinned weight cast at 600x a quorum floor with a live balance of
 	// zero and one epoch of capital at risk. What this line buys on its own is
-	// only that weight cannot be acquired AFTER the question exists. The rental is
-	// unpriced; RENTEDWEIGHT.md records the measurement and the open decision.
+	// only that weight cannot be acquired AFTER the question exists.
+	//
+	// CLOSED, and not here — the other half is supplied by the CONSUMER, through
+	// VoteWithCap, as a ceiling of the voter's live balance. The engine still
+	// derives this snapshot and takes the lesser, so a consumer can only lower.
+	// See VOTEFLOOR.md; kourtv2 caps all three of its lanes and r/govern does not,
+	// which is why the exposure is described here rather than fixed here.
 	at := g.voters.Epoch() - 1
 	if at == 0 {
 		panic("govern: no sealed epoch yet — the chain is too young to vote")
@@ -903,9 +908,13 @@ func (g *Governor) castVote(who address, id int64, choice, reason string, cap in
 	// Weighed as of the snapshot, so buying in after the question was asked buys
 	// nothing, and selling out afterwards costs nothing.
 	//
-	// THE SECOND HALF IS A KNOWN, MEASURED EXPOSURE and it is NOT closed here; see
-	// propose() for the mechanism and RENTEDWEIGHT.md for two candidate fixes and
-	// why neither shipped.
+	// THE SECOND HALF IS A KNOWN, MEASURED EXPOSURE and it is still not closed
+	// HERE — it is closed by the caller, if the caller chooses to. VoteWithCap
+	// takes a ceiling and the clamp below applies it, so a consumer that passes
+	// the voter's live balance gets min(snapshot, held) and the rental dies;
+	// plain Vote leaves the exposure exactly as propose() describes it. kourtv2
+	// caps all three of its lanes; r/govern does not. VOTEFLOOR.md has the
+	// derivation and why both halves are needed.
 	//
 	// A 29-line block describing a LIVE-BALANCE CAP stood here and was wrong twice
 	// over: the cap was implemented, reverted in the same commit, and the prose

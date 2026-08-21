@@ -1,8 +1,47 @@
 # Vote weight: snapshot ceiling, live floor
 
-**IMPLEMENTATION PLAN, REVISION 4 — all three panels in. None passed revision 1;
-all three prescribed the same corrections, which revisions 2–3 applied. Implementing
-on panel 3's measured ordering.**
+**SHIPPED 2026-08-20, on panel 3's ordering. Revision 4 was the plan; this header
+records what actually happened, including the three places the plan was wrong.**
+
+| step | commit | what landed |
+|---|---|---|
+| 1 | (earlier) | the two fixture mints, post-seal |
+| 2 | `769dcc5` | `VoteWithCap` + the clamp + arm 1/arm 3 retarget + a raising-cap control + four governor tests + rows 1–3 |
+| 3 | `5ecf469` | quality-lane floor + paired test + `check-nodelegate.py` + rows 4, 4b |
+| 4 | `e05fee7` | election floor AND the first-approval freeze together + `e.voters` `bool→int64` + two tests + rows 5–8 |
+| 5 | `1387839` | dispute lane via `VoteWithCap`, row #171 re-anchored, `rentedweight_test.gno` flipped, 2 new rows |
+| 6 | this commit | the four stale rentability comments, `RENTEDWEIGHT.md` → CLOSED, whitepaper erratum |
+
+**THREE CORRECTIONS THE PLAN NEEDED, found while implementing:**
+
+1. **Step 6's copy sweep was mostly moot, and doing it would have introduced
+   errors.** The plan listed seven comments saying staked coin keeps voting
+   (`lock.gno:54/:74`, `stake.gno:167`, `court.gno:437`, `render.gno:373/:386`,
+   `stake_test.gno:141`) as needing correction. That list was written when the floor
+   was `spendable()`. With `BalanceOf` every one of them is still **true** — staked
+   coin is in the balance and does vote — so they were left alone. What was actually
+   stale was the opposite class: four comments asserting the rental was OPEN
+   (`governor.gno` ×2, `electorate.gno`, `crystallize.gno`).
+
+2. **`ResolveElection` PASS 2's second install condition was already covered.** The
+   plan said to add a row because nothing pinned it; the row is caught by the
+   existing `TestElectionZeroApprovalCandidateCannotInstall`. The row still earns
+   its place — the coverage is now measured rather than assumed — but the premise
+   was wrong.
+
+3. **Arm 3's first retarget was worse than the thing it replaced.** Matching a
+   trailing `int64` fired on `ReleaseRoll`, `Settle` and `Cancel`, because `id
+   int64` is an identifier and not a quantity. It is now an exact allowlist of
+   parameter names (`id`, `cap`, `quorumFloor`) that fails closed on a fourth.
+
+**And one hole the harness found that review did not:** `check-nodelegate.py`'s
+export arm could not match a bare `func Delegate(` — the pattern consumed the `D`
+and left seven characters for an eight-character `[Dd]elegate`. My own ablation had
+reported that arm green because the body I planted also *called* `.Delegate()` and
+fired a different arm. An ablation that passes for the wrong reason is not
+evidence; each half is now ablated separately.
+
+---
 
 ### Revision 4 — panel 3's checklist
 

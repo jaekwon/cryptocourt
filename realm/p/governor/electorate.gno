@@ -18,6 +18,13 @@ import (
 // A live per-address read (VotesOf) was added here while fixing rented weight and
 // removed again when the fix was reverted; RENTEDWEIGHT.md records why. Anything
 // re-adding it is re-opening that decision, not making a small change.
+//
+// AND THE FIX THAT SHIPPED DID NOT NEED IT, which is the point worth keeping. The
+// live figure arrives as a CAP from the consumer (VoteWithCap) instead of as an
+// interface method the engine calls, so this interface stays entirely about THEN.
+// The engine cannot read a live balance even if it wanted to, and a supplied
+// ceiling can only lower what the engine derived — so coherence is structural
+// rather than something each implementor has to get right.
 type Electorate interface {
 	// PastVotes is what an address could vote at a sealed epoch.
 	PastVotes(who address, at uint32) int64

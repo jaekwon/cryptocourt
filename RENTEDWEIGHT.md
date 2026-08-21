@@ -1,8 +1,24 @@
 # Rented voting weight
 
-**Status: OPEN. Measured, characterized by tests, not fixed. Two closures were
-implemented and reverted, each because it broke an honest path. The decision is
-the owner's.**
+**Status: CLOSED.** Weight is now
+
+    w = min( PastVotes(who, <the question's own frozen epoch>), BalanceOf(who) )
+
+in all three lanes — quality (`quality.gno`), election (`modvote.gno`) and verdict
+(`dispute.gno`, via the governor's `VoteWithCap`). The snapshot is the CEILING and
+stops buying in after the question; the live balance is the FLOOR and stops voting
+weight already handed back. The renter must return the coin to repay, and at that
+moment there is nothing left to vote.
+
+`rentedweight_test.gno` has been flipped: it asserted the exploit worked precisely
+so a fix would fail it loudly, and it now asserts every refusal, with each fixture
+still pinning the attack's own scale so it cannot pass by the rental being too
+small. `VOTEFLOOR.md` has the derivation, the audit trail and the four errors the
+panels caught on the way.
+
+**What is recorded below is the measurement and the two closures that FAILED.**
+Kept because both failures are load-bearing: they are why the shipped fix needs
+both halves, and why it uses `BalanceOf` rather than `spendable()`.
 
 ---
 
@@ -82,7 +98,7 @@ what need re-arguing, and this is why.
 
 ---
 
-## Closure A — cap at live weight. REVERTED.
+## Closure A — cap at live weight. REVERTED, then SHIPPED with two changes.
 
 `w = min(PastVotes(who, p.epoch), VotesOf(who))`.
 
@@ -96,6 +112,22 @@ vacuously for every implementor who skipped it.
 own escrow.** Bonds and deposits leave the balance, so whoever **pays to initiate**
 a proceeding votes at less than their weight. That is a perverse incentive aimed at
 exactly the people the system needs to act.
+
+**WHAT SHIPPED, and the two differences that made it survivable.** First, the cap
+is `BalanceOf`, not `VotesOf` and emphatically not `spendable()` — staked coin
+stays in the balance and keeps voting, so a staker is not docked, and `spendable()`
+would have re-imposed the court-wide disenfranchisement v0.34 deleted. Second, the
+haircut is ACCEPTED rather than designed around: `votableAt` already nets escrowed
+coin out of the election denominator, so escrowed coin voting was the
+inconsistency, and the two fixtures that sat at exactly the floor were rebalanced
+instead of the mechanism bent. The coherence objection below dissolves for the same
+reason — the cap only ever LOWERS a numerator that was already coherent, so
+`Σ min(PastVotes, BalanceOf) ≤ Σ PastVotes ≤ PastTotal` holds with no clamp.
+
+Third, and this is the part that made it safe rather than merely correct: the live
+figure is supplied to the governor as a **ceiling** (`VoteWithCap`), never as a
+weight. `VotesOf` is not back on the `Electorate` interface, so the engine still
+cannot read a live balance at all.
 
 Measured breakage:
 
@@ -148,7 +180,9 @@ the answer was given — which is arguably the correct electorate anyway.
   Gating only the *opener* does not work either: any long-standing holder can open
   on request while the renter buys in an hour before.
 
-**This is the most promising direction and the one I would take next.**
+**Not taken.** It is a wall for one lane and does nothing for elections, and the
+shipped fix closes all three at once without disenfranchising anyone who joined
+after the answer — which was this closure's unavoidable cost.
 
 ---
 

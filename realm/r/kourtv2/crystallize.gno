@@ -374,10 +374,11 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 	// record of the vote — never re-derived, and never from the governor.
 	//
 	// Two reasons, and the second is a bug this file briefly had. Re-deriving from
-	// PastVotes is exactly equal only while the tally is a bare snapshot read; the
-	// moment it weighs anything else — RENTEDWEIGHT.md's open decision is about
-	// exactly that — the numerator diverges from the voter's own contribution to
-	// `denom` and the carrot over-pays. And reading it from the governor is worse
+	// PastVotes is exactly equal only while the tally is a bare snapshot read, and
+	// IT NO LONGER IS: every lane now caps at the voter's live balance, so a
+	// re-derived numerator would exceed that voter's own contribution to `denom`
+	// and the carrot would over-pay everyone who was capped. What was a precaution
+	// when written is load-bearing now (VOTEFLOOR.md). And reading it from the governor is worse
 	// than either: ReleaseRoll is permissionless and sets p.voted = nil, so
 	// gov.VoteOf stops answering once anyone reclaims the roll, and a claimant who
 	// had not pulled yet would be refused a carrot they had earned. dispute.gno

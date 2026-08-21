@@ -390,7 +390,49 @@ New items, each verified before deciding):
 
 ## Owner notes
 
-(none yet)
+### ERRATUM — rented vote weight is closed; two passages now describe the old design
+
+Shipped 2026-08-20 across four commits (`769dcc5`, `5ecf469`, `e05fee7`,
+`1387839`). Vote weight in all three kourtv2 lanes is now
+
+    w = min( PastVotes(who, <the question's own frozen epoch>), BalanceOf(who) )
+
+The snapshot is a CEILING (you cannot buy in after the question was asked); the
+live balance is a FLOOR (you cannot vote weight you have handed back). Both halves
+are required — a ceiling alone is rentable, and a live figure alone puts a live
+numerator against a frozen bar. `VOTEFLOOR.md` has the derivation; `RENTEDWEIGHT.md`
+is now marked CLOSED and keeps the two failed closures because they are why the
+shipped fix has the shape it does.
+
+**Two passages in WHITEPAPER.md are now wrong and need rewriting by the loop.**
+
+1. **§ "Voted." (around line 126).** The sentence *"The seal binds those who react
+   to a dispute, not those who plan one: a buyer can wait out the hour and open the
+   dispute himself"* describes exactly the attack that is now refused. It was an
+   honest statement of a real limitation and it is no longer a limitation. What is
+   true now: the seal stops the crowd that arrives after a dispute starts, AND the
+   floor stops the planner, because a rented position has to be returned to the
+   lender and voting weight is capped at what the voter still holds. Planning ahead
+   no longer helps unless you actually keep the coin through the vote.
+
+2. **Line 13-15 (the summary).** *"Voting weight is read from an hourly snapshot
+   sealed before the vote opened, so weight cannot be bought for a vote already
+   underway"* is true but now only half the story. It should also say weight cannot
+   be BORROWED for a vote at all: you vote the lesser of what you held at the seal
+   and what you hold when you vote.
+
+**What has NOT changed, and must not be introduced by the rewrite:** staked coin
+still sits in the holder's balance and still votes. The floor is `BalanceOf`, not
+`spendable()` — using spendable would have disenfranchised every staker in the
+court, which is a mistake three review panels each caught independently. Anything
+in the whitepaper saying staked coin keeps voting is correct and should stay.
+
+**Also true and worth one sentence somewhere:** the honest cost of the floor is
+that coin moved into the court's own escrow as a bond or deposit does not vote
+while it is there. That is consistent with how the election denominator already
+works (`votableAt` nets escrow out), so it is a coherence fix rather than a new
+penalty — but a nominator paying a fee does vote slightly less than their holdings,
+and the paper should not imply otherwise.
 
 ### Note from the tokenomics session — VOTING WEIGHT IS CHANGING, and §Voted needs a rewrite
 
