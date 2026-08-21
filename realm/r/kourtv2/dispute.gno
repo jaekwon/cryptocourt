@@ -742,6 +742,20 @@ func quorumFloor(c *Court, xbar int64) int64 {
 	// open claim, since voting consumes no weight. That trade is accepted because the
 	// snipe it fixes is currently FREE while a false overturn costs a bond.
 	//
+	// THE VOTE LOCK DID NOT CLOSE THIS, and saying so matters more than the lock's
+	// good news. The lock commits the coin voted with, but voteLockedOf takes the MAX
+	// across a holder's open questions, not the sum — one pile of coin still votes in
+	// every concurrently open claim, and it must, because the two locks a holder can
+	// carry overlap rather than stack. Measured, in
+	// TestTwoQuestionsCommitOnePileOnce: two questions, one commitment.
+	//
+	// So the simultaneity survives exactly as written. What the lock adds is a CARRY
+	// cost rather than a per-claim cost: the attacker holds that one pile through the
+	// longest round it voted in, roughly a week, instead of voting everywhere and
+	// selling in the next block. The return still scales with the number of open
+	// claims; it is now earned against a week of price risk on the whole position.
+	// A reader arriving from VOTEFLOOR.md should not infer more than that.
+	//
 	// THE 5% ANCHOR IS KEPT ELSEWHERE, and the three places do NOT share a
 	// denominator. This list used to say they did, which matters because a base
 	// mismatch is the exact bug class that has already bitten twice here: the

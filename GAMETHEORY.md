@@ -214,7 +214,11 @@ gamble:** with `yes > 0, no = 0` the threshold is trivially met, so my "the atta
 burns on an uphold" mis-priced it — an uphold requires an opponent to turn out, and *turnout
 failing is this section's own premise*. Profit per unit of required weight is a flat 0.4 at
 every claim size, and voting consumes no weight, so it repeats on every claim with X̄ ≤ the
-attacker's holdings. Nobody is made whole: the answerer loses the bond, the true side's stakers
+attacker's holdings. **The vote lock shipped since this was written and does NOT close it:**
+`voteLockedOf` takes the max across a holder's open questions rather than the sum, so one pile
+still votes in every concurrently open claim (measured — `TestTwoQuestionsCommitOnePileOnce`).
+What the lock adds is a carry cost, roughly a week of holding the whole position instead of
+selling in the next block. The repetition across claims is unchanged. Nobody is made whole: the answerer loses the bond, the true side's stakers
 lose the draw, every holder pays the comp dilution. **The trade still favours relaxing — the
 snipe it fixes is currently free — but it is bigger than the original draft admitted.**
 
