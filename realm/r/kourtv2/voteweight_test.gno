@@ -175,28 +175,38 @@ func TestPastVotesSumToPastTotal(cur realm, t *testing.T) {
 	// denominator.
 	uassert.Equal(t, total, sum)
 
-	// AND VOTABLE IS EXACTLY THE CASTABLE WEIGHT, which is the property the netting
-	// exists to provide and which nothing stated as an equality.
+	// VOTABLE IS SUPPLY LESS THE ESCROW, AND NEVER LESS THAN WHAT CAN BE CAST.
 	//
-	// votableAt nets ONE address, c.escrow, and that is complete only while the
-	// escrow is the only holder of CC that cannot vote. Checked by enumeration at the
-	// time of writing — every c.coin.Mint goes to a user (buy.gno's buyer,
-	// mintEmission's entitlement holder, meta's claimant) and every Transfer is
-	// user-to-escrow or escrow-to-user — but an enumeration is a claim about today.
-	// A second keyless holder would make votable OVERSTATE what can be cast, and
-	// every bar denominated in a percentage of votable would rise above the weight
-	// able to clear it: the failure is a court that cannot reach quorum on anything,
-	// which is fail-safe and still a dead court.
+	// An earlier version of this asserted votable EQUALS the sum of user holdings and
+	// called the netting list complete. That is fixture-dependent and the claim was
+	// wrong: ccwrap's vault holds CC at a realm address that can never vote, arriving
+	// through TransferFromCC — the one generic `Transfer(from, to)` in the realm, which
+	// the enumeration behind that claim saw and did not chase. Measured with 10e9
+	// wrapped of 60e9 supply: votable 59,968,900,000 against a castable
+	// 49,968,900,000, overstated by 16.7%. TestVotableCountsAKeylessHolderAndTheCapIsWhy
+	// holds that case.
+	//
+	// So the two properties worth pinning are the definition and its DIRECTION.
+	// Over-stating is fail-safe: bars denominated in a percentage of votable rise
+	// above the weight able to clear them, which stalls a court and never passes
+	// anything it should not. Under-stating is the dangerous one — every bar drops
+	// below the electorate it is meant to measure — so the inequality is asserted, not
+	// just the arithmetic.
 	escrowW := c.coin.PastVotes(c.escrow, at)
 	if escrowW <= 0 {
 		t.Fatal("fixture is vacuous: the escrow holds nothing, so votable and the " +
 			"raw total coincide and the netting is not being tested")
 	}
+	uassert.Equal(t, total-escrowW, votableAt(c, at))
 	var userSum int64
 	for _, a := range append([]address{alice}, holders...) {
 		userSum = mustAdd(userSum, c.coin.PastVotes(a, at))
 	}
-	uassert.Equal(t, userSum, votableAt(c, at))
+	if votableAt(c, at) < userSum {
+		t.Fatalf("votable %d is BELOW the castable weight %d, so every bar quoted "+
+			"as a share of votable is now below the electorate it measures",
+			votableAt(c, at), userSum)
+	}
 
 	// And the floor can only lower it, which is the step that makes every tally
 	// coherent against a bar drawn at the same epoch.
@@ -447,5 +457,54 @@ func TestTheCoherenceChainHoldsForARealDisputeWithEveryVoterCapped(cur realm, t 
 		if charged >= snap {
 			t.Fatalf("%s was charged %d, its uncapped snapshot %d", v, charged, snap)
 		}
+	}
+}
+
+// A KEYLESS HOLDER COUNTS AS VOTABLE, AND THE WRAP CAP IS WHY THAT IS TOLERABLE.
+//
+// ccwrap's Wrap moves CC to cur.Address() — a realm address with no key and no voting
+// entrypoint — so wrapped coin is permanently uncastable and votableAt still counts it.
+// This is item 3 of the standing list, and the answer is that it stays counted.
+//
+// NETTING IT OUT WOULD BE WORSE. kourtv2 is the lower layer; ccwrap depends on it and not
+// the reverse, so kourtv2 would need a registry of addresses declared unable to vote — and
+// shrinking votable LOWERS every bar denominated in it, which makes such a registry a
+// lever for making quorum easier. A fail-safe overstatement is better than a governance
+// surface that can cheapen every question in the court.
+//
+// What bounds it instead is ccwrap's own maxWrapBps, which refuses a wrap that would push
+// the vault past its share of votable. So the overstatement is capped rather than
+// eliminated, and the residual is that a bar quoted as q% of votable really costs
+// q/(1-k)% of castable weight at a vault share of k.
+func TestVotableCountsAKeylessHolderAndTheCapIsWhy(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vkh-alice")
+	holder := testutils.TestAddress("vkh-holder")
+	vault := testutils.TestAddress("vkh-vault") // stands in for ccwrap's realm address
+	c := testCourt(cur, "vkh", alice, 40_000_000_000)
+	c.coin.Mint(holder, 20_000_000_000)
+	stakeAnswerDispute(cur, "vkh", alice, holder)
+
+	testing.SetRealm(testing.NewUserRealm(holder))
+	TransferCC(cross(cur), "vkh", vault, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	at := c.coin.Epoch() - 1
+
+	vaultW := c.coin.PastVotes(vault, at)
+	if vaultW <= 0 {
+		t.Fatal("fixture is vacuous: the vault holds nothing at the sealed epoch")
+	}
+	castable := c.coin.PastVotes(alice, at) + c.coin.PastVotes(holder, at)
+	votable := votableAt(c, at)
+
+	// Counted, deliberately, and the gap IS the vault.
+	uassert.Equal(t, castable+vaultW, votable)
+	if votable <= castable {
+		t.Fatal("fixture is vacuous: the vault is not inflating votable, so there " +
+			"is nothing here to bound")
+	}
+	// And still fail-safe: never below what can be cast.
+	if votable < castable {
+		t.Fatal("votable fell below the castable weight")
 	}
 }

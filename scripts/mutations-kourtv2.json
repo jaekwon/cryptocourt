@@ -6472,6 +6472,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "votableAt: over-nets, dropping every bar below the electorate it measures",
+  "find": "\tif v < 0 {",
+  "replace": "\tv -= c.coin.PastTotal(at) / 3\n\tif v < 0 {"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "render.gno",
   "label": "positions: free-to-dispose ignores the vote lock (shows spendable)",
   "find": "\tb.WriteString(\"- free to bond, deposit or transfer: \" +\n\t\tstrconv.FormatInt(disposable(c, who), 10) + \"\\n\")",
