@@ -25,9 +25,15 @@ so the attack costs the risk of holding that long. Until resolution and not the
 ballot close; the amount voted and not the address; blocking disposal but not
 staking, since staking leaves the coin in the balance and voting.
 
-**Still open, and it is an owner decision:** the quality lane is not locked. Its
-tally accumulates across rounds, so there is no single instant a lock could release
-at. It is also the hardest lane to rent into — the anchor is the answerer's.
+**The quality lane is locked too, and it was not an owner decision after all.** It
+looked unlockable because its tally accumulates — no single "round resolved" instant
+to release at — but looking for an instant was the mistake. The rule is that the
+commitment lasts exactly as long as the influence, and one predicate covers both
+cases: *open iff the claim is not terminal AND `cs.qVoteSeq` is still the seq voted
+in.* A superseded tally counts toward nothing, so the lock lets go the moment the seq
+moves (the ordinary pre-adjudication case, the very next round — nobody is frozen for
+weeks over a flag); a frozen seq keeps deciding rounds, so it keeps holding coin until
+the claim ends.
 
 `rentedweight_test.gno` has been flipped: it asserted the exploit worked precisely
 so a fix would fail it loudly, and it now asserts every refusal, with each fixture

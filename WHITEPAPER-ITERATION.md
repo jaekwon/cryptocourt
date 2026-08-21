@@ -432,7 +432,14 @@ two failed closures because they are why the shipped fix has the shape it does.
    expensive rather than merely awkward, and it is the honest headline: voting is a
    commitment of capital, not a free action.
 
-3. **Anywhere the paper implies voting is costless.** It is not, now, and that is
+3. **All three lanes are locked, including quality.** An earlier draft of this
+   erratum said the quality lane was left unlocked as an owner decision. It is
+   locked: a quality vote holds its coin while the tally it was cast into is still
+   the live one, and releases as soon as that tally is superseded or the claim ends.
+   In the ordinary case a later round re-asks the question, so the release comes
+   almost immediately.
+
+4. **Anywhere the paper implies voting is costless.** It is not, now, and that is
    deliberate. A voter's coin is frozen against transfer for the length of the
    round. Staking still works — the coin never leaves the balance — but a voter
    cannot sell, bond, or deposit that amount until the verdict lands. Say so

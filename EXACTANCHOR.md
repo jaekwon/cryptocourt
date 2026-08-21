@@ -205,6 +205,12 @@ floor get rebalanced rather than the mechanism bent around them.
 
 ## Still open — an owner decision, not a design gap
 
+**RESOLVED — see `votelock.gno`. Kept below as the question, since its framing was
+what made the answer findable.** The release point is not an instant but a
+condition: *the claim is not terminal AND the tally seq voted in is still live.*
+Superseded tallies count toward nothing and so hold nothing; a frozen seq keeps
+deciding rounds and so keeps holding coin until the claim ends.
+
 **The quality lane's tally accumulates across rounds.** `reaskQualityTally` re-asks
 exactly once; every later round votes the same accumulating tally. Measured, a
 fully divested address keeps deciding rounds it never held through, and there is no

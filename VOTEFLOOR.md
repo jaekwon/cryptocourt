@@ -12,7 +12,25 @@ records what actually happened, including the three places the plan was wrong.**
 | 5 | `1387839` | dispute lane via `VoteWithCap`, row #171 re-anchored, `rentedweight_test.gno` flipped, 2 new rows |
 | 6 | `122df45` | the four stale rentability comments, `RENTEDWEIGHT.md` → CLOSED, whitepaper erratum |
 | 7 | `82f3c96` | the vote lock: coin voted with cannot leave until the question resolves, + 3 tests + 6 rows |
-| 8 | this commit | correcting step 6's own overstatement (see below) |
+| 8 | `665d16d` | correcting step 6's own overstatement (see below) |
+| 9 | `1c54fd9` | the quality lane locked (it was never an owner decision), and voteLockedOf fixed from SUM to MAX |
+| 10 | this commit | retiring the "quality lane is an owner decision" claims |
+
+**A FIFTH CORRECTION, and it is the same mistake twice.** `voteLockedOf` summed a
+holder's open lock rows, double-counting the same coins: a holder who voted a verdict
+and then its quality ride — which P11 makes an ordinary two-transaction act — had
+40 B committed against a 20 B balance and could move nothing. Each row is a FLOOR
+("at least this much must stay"), so one pile of `max(rows)` honours all of them.
+This is the identical sum-vs-max error already fixed between the stake lock and the
+vote lock in `disposable()`, written two commits apart by the same hand. Generalised
+in the code comment: **a "total locked" quantity built by addition is worth
+distrusting on sight.**
+
+**And the quality lane was not an owner decision.** Three documents said it was
+unlockable because its tally accumulates and there is no single instant to release
+at. Looking for an instant was the error; the release is a CONDITION, not a moment —
+the claim is not terminal AND the tally seq voted in is still live. Both the easy and
+the hard case fall out of it, and the easy case releases immediately.
 
 **AND A FOURTH CORRECTION, this one to my own step 6.** Step 6 declared the rental
 closed on the strength of the floor. It was not. Probed on the four landed commits:
