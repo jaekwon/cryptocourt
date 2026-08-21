@@ -4627,13 +4627,17 @@ async function meHoldings(addr,courts){
     // probed. DEMO has no chain and keeps the sample scan.
     let ids;
     if(isLive()){
-      const mine = stakedByClaim(parseStaked(
-        await one(`StakedPage(${gstr(slug)},${gstr(addr)},0,0)`).catch(()=>{mefail++; return null;})));
+      const got = parseStaked(
+        await one(`StakedPage(${gstr(slug)},${gstr(addr)},0,0)`).catch(()=>{mefail++; return null;}));
+      const mine = stakedByClaim(got);
       ids = mine.map(r=>r.id);
       const held = await one(`StakedSize(${gstr(slug)},${gstr(addr)})`).catch(()=>null);
-      // The cap is on the holder's OWN positions now rather than on all claims, so
-      // this note only appears if someone really holds more than one page of them.
-      if(held!=null && held>mine.length) mescan.push([slug, mine.length, held]);
+      // POSITIONS against POSITIONS. StakedSize counts (claim, side) entries and
+      // stakedByClaim collapses both sides of a claim into one row, so comparing the
+      // grouped length here claimed the page was truncated for anyone holding both
+      // sides of a single claim. The cap is on the holder's own positions rather than
+      // on all claims, so this note now appears only if there really are more.
+      if(held!=null && held>got.length) mescan.push([slug, got.length, held]);
     } else {
       ids = (await claimIdsFor(slug, 0).catch(()=>{mefail++; return {ids:[]};})).ids;
     }

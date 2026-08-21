@@ -49,6 +49,15 @@ ok("and asks how many there are, so partial can be told from complete",
 ok("both reads are caught, so a failure degrades instead of throwing",
   /StakedPage\(\$\{gstr\(slug\)\},\$\{gstr\(addr\)\},0,0\)`\)\.catch\(/.test(src));
 
+// A holder with BOTH sides of one claim has two positions and one grouped row. The
+// first version compared StakedSize against the GROUPED length, so the page told such a
+// holder it had truncated their list when it had not — a claim of missing data, which is
+// the one thing a completeness note must never get wrong.
+ok("the grouping really collapses, so the two counts differ for a real input",
+  parseStaked(REAL).length===3 && stakedByClaim(parseStaked(REAL)).length===2);
+ok("completeness compares positions against positions",
+  src.includes("held>got.length") && !src.includes("held>mine.length"));
+
 // THE REGRESSION THAT MATTERS: live mode must not walk claims to find positions.
 ok("the me-page no longer scans a claim window in live mode",
   !src.includes('const depth = isLive()? (parseInt(QP.scan||"",10)||SCAN_DEPTH) : 0;\n    const {ids, total} = await claimIdsFor(slug, depth)'));

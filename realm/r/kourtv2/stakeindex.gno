@@ -128,6 +128,33 @@ func stakeIdxWalk(c *Court, who address, fn func(claimID uint64, side int) bool)
 	})
 }
 
+// stakeIdxCount is how many entries a holder has, counted from the packed LENGTHS
+// rather than by visiting entries.
+//
+// The house's *Size readers are O(1) tree Size() calls (strips.gno's StripSize), which
+// this cannot be — c.stakeIdx.Size() counts BUCKETS, not positions. Summing len/9 per
+// bucket is the next best thing and the reason the packed form pays off twice: the cost
+// is O(the holder's own buckets), one object load per 64 claim ids, so a holder with a
+// thousand positions costs sixteen loads rather than a thousand callbacks. The first
+// version of StakedSize walked every entry, which made the one reader that exists to
+// report completeness the one read whose cost grew with the holder's history.
+func stakeIdxCount(c *Court, who address) int {
+	if c.stakeIdx == nil {
+		return 0
+	}
+	n, pre := 0, string(who)
+	c.stakeIdx.Iterate(pre, pre+"\xff", func(k string, v any) bool {
+		if len(k) != len(pre)+8 {
+			return false
+		}
+		if r, ok := v.(*stakeRow); ok {
+			n += len(r.packed) / stakeIdxEntry
+		}
+		return false
+	})
+	return n
+}
+
 // StakedSize is how many positions this holder has ever opened in this court.
 //
 // Positions are never removed — there is no stakers.Remove anywhere in this realm, and
@@ -139,10 +166,7 @@ func StakedSize(courtSlug string, who address) int {
 	if !who.IsValid() {
 		return 0
 	}
-	c := mustCourt(courtSlug)
-	n := 0
-	stakeIdxWalk(c, who, func(_ uint64, _ int) bool { n++; return false })
-	return n
+	return stakeIdxCount(mustCourt(courtSlug), who)
 }
 
 // StakedPage lists this holder's positions in the stable order described on stakeRow —
