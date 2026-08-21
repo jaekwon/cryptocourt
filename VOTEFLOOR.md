@@ -110,8 +110,19 @@ The first pass covered rows over CHANGED files. The rest were skipped on an argu
 That is reasoning, not measurement, so it was labelled as such — and then narrowed
 rather than left standing.
 
-**636 of 918 distinct rows measured, all caught, zero not-caught.** The 282 not
-measured are `kourtv2` 258, `govern` 15, `twap` 6, `curve` 3.
+**All 921 distinct rows measured, all caught, zero not-caught.** Two rows survive by
+design and say so, both covered by txtar suites this harness does not run (`Buy`'s
+IsUserCall downgrade, and meta's COIN usage gate).
+
+This started as 636 of 918 with the remaining 282 resting on an argument, and the
+argument is left standing below because it was a real choice and it turned out to be
+right — but it is no longer what covers those rows. A number replaced it in five
+foreground slices of 50-65 rows: `stake.gno` + `session.gno` first, since Stake is the
+one deliberate exemption from the vote lock and `session.gno` holds the claim-terminal
+writers the quality lock releases on. Both came back clean, including
+`Stake: a pending vote blocks staking (over-restrictive)` — the direction that is easy
+to leave untested, because an over-restrictive gate refuses something rather than
+allowing it.
 
 The narrowing is the part worth defending. The argument is strong where this work
 changed neither the code nor its tests, which is all of the untouched `kourtv2`
@@ -124,8 +135,8 @@ That middle EQUALITY is a property of the ledger and its archive, not of anythin
 written here — asserted in `voteweight.gno`'s header and in
 `TestPastVotesSumToPastTotal`. So all 102 rows across those three packages were run
 (51 + 51, both clean) on the principle that measurement should go where the argument
-leans on someone else's invariant. The remaining 282 stay on the argument, and this
-paragraph is the record of that being a choice rather than an oversight.
+leans on someone else's invariant. That ordering is still the right one; the rest were
+simply measured afterwards rather than left to it.
 
 **Operational notes, since four attempts were lost to learn them.** Background
 mutate runs get reaped; foreground with ~60-row slices returns its result and cannot
