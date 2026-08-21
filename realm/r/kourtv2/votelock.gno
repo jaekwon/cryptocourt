@@ -31,13 +31,20 @@ import "gno.land/p/nt/bptree/v0"
 //     a zero-cost moderator coup. Escrowed coin does not vote — which is what
 //     votableAt already says.
 //
-// IT BLOCKS DISPOSAL, NOT STAKING, and that distinction is deliberate. Every path
-// gated by mustSpendable moves coin OUT of the holder's balance except Stake,
-// which is a pure lock that leaves the coin where it is and keeps it voting. There
-// is no reason a pending vote should stop someone staking, and plenty of reason it
-// should stop them handing the coin back to a lender. So Stake keeps its own
-// stake-only check and everything else respects both locks. The default direction
-// is the safe one: a site nobody remembers to move stays over-restrictive.
+// IT BLOCKS DISPOSAL, NOT STAKING, and that distinction is deliberate. All SEVEN
+// mustSpendable call sites move coin OUT of the holder's balance — the claim
+// deposit, the answer bond, the dispute bond, the flag bond, the election
+// nomination bond, and the two transfer paths in lock.gno — so all seven respect
+// both locks. Stake is the single exemption and does not go through mustSpendable
+// at all: it calls mustStakable, because staking is a pure lock that leaves the
+// coin where it is and keeps it voting, and a pending vote is no reason to refuse
+// it.
+//
+// mustStakable therefore has EXACTLY ONE caller, and that is a safety invariant
+// rather than a fact about today's code: a second site reaching for it would be a
+// second path escaping the vote lock. check-epoch-coherence arm 6 pins the count.
+// The default direction is the safe one — a site nobody remembers to move stays
+// over-restrictive, never under.
 //
 // RELEASE IS LAZY. voteLockedOf sums only the rows whose question is still open,
 // so nothing iterates a whole electorate at resolution — that would put an

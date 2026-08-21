@@ -88,10 +88,13 @@ FUNC = re.compile(r"^func\s+(?:\([^)]*\)\s*)?([A-Za-z0-9_]+)", re.M)
 # cause, and arm 4 below is what makes the centralisation itself the invariant. If
 # this number falls again without a matching arm-4 change, that is the bad case.
 #
-# The eight, so a future drop can be diagnosed rather than guessed at:
-#   court.gno:supplyFloor      dispute.gno:VotableSupply   dispute.gno:quorumFloor
-#   modvote.gno:votableAt      quality.gno:qualityBars     voteweight.gno:votingWeight
-#   governor.gno:propose       governor.gno:castVote
+# The NINE, so a future drop can be diagnosed rather than guessed at. (It was eight
+# for one commit; credWeightFloorAt then arrived reading EngagedTotal, and the
+# enumeration went stale the moment it was written — which is the argument for the
+# threshold being a floor rather than an equality.)
+#   court.gno:supplyFloor        dispute.gno:VotableSupply   dispute.gno:quorumFloor
+#   dispute.gno:credWeightFloorAt  modvote.gno:votableAt     quality.gno:qualityBars
+#   voteweight.gno:votingWeight  governor.gno:propose        governor.gno:castVote
 MIN_SEALED_FUNCS = 8
 
 # ARM 3 — the engine derives its own weight, and a consumer may only LOWER it.
@@ -192,6 +195,21 @@ TERMINAL_CLOSED = re.compile(r"^\s*cs\.closed = true", re.M)
 TERMINAL_VERDICT_N = 3  # dispute.gno provClose + Finalize, session.gno settle
 TERMINAL_CLOSED_N = 1   # claim.gno dead-claim close
 
+# ARM 6 — mustStakable has exactly ONE caller, and that is a safety invariant.
+#
+# Every mustSpendable call site moves coin OUT of a holder's balance, so all of them
+# respect the vote lock. Stake is the single deliberate exemption: it is a pure lock
+# that leaves the coin where it is and keeps it voting, so a pending vote is no
+# reason to refuse it, and it calls mustStakable instead.
+#
+# A SECOND caller would be a second path escaping the vote lock, and it would do so
+# silently — mustStakable is a legitimate-looking helper with a reassuring name, and
+# reaching for it is the natural mistake when a new path hits the vote lock and the
+# author decides the lock is being unhelpful. So the count is pinned, and the
+# exemption has to be argued rather than copied.
+STAKABLE_CALL = re.compile(r"mustStakable\(c, ")
+STAKABLE_CALLS_N = 1  # stake.gno:Stake
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -220,7 +238,7 @@ def main() -> int:
     repolock.refuse_if_held("check-epoch-coherence")
     hits, scanned, sealed_funcs = [], 0, 0
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
-            "verdict_w": 0, "closed_w": 0}
+            "verdict_w": 0, "closed_w": 0, "stakable": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -267,6 +285,7 @@ def main() -> int:
                 arm4["floor"] += len(FLOOR_SHAPE.findall(src))
                 arm4["verdict_w"] += len(TERMINAL_VERDICT.findall(src))
                 arm4["closed_w"] += len(TERMINAL_CLOSED.findall(src))
+                arm4["stakable"] += len(STAKABLE_CALL.findall(src))
 
             # Arm 3
             if p.name == "governor.gno":
@@ -323,10 +342,16 @@ def main() -> int:
         ("floor", 1, "min(snapshot, held) floor expression(s)"),
         ("verdict_w", TERMINAL_VERDICT_N, "cs.verdictAt writer(s)"),
         ("closed_w", TERMINAL_CLOSED_N, "cs.closed writer(s)"),
+        ("stakable", STAKABLE_CALLS_N, "mustStakable caller(s)"),
     ):
         if arm4[key] != want:
-            tag = "terminal" if key.endswith("_w") else "one-weight"
-            why = ("the quality vote lock releases on `verdictAt != 0 || closed`, "
+            tag = ("terminal" if key.endswith("_w")
+                   else "lock-exempt" if key == "stakable" else "one-weight")
+            why = ("Stake is the ONE deliberate exemption from the vote lock; a "
+                   "second mustStakable caller is a second path disposing of "
+                   "committed coin, and it would look entirely reasonable"
+                   if key == "stakable" else
+                   "the quality vote lock releases on `verdictAt != 0 || closed`, "
                    "so a new way for a claim to END leaves those votes locked "
                    "forever and silently — read votelock.gno's voteLockQuality arm"
                    if key.endswith("_w") else

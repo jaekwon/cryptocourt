@@ -284,6 +284,14 @@ control("a fourth way for a claim to end", f"{KOURTV2}/session.gno",
         "\tcs.verdictAt = heightNow()",
         "\tcs.verdictAt = heightNow()\n\tcs.verdictAt = heightNow()",
         "[terminal]", argv=["python3", EPOCHCOH])
+# ARM 6's control. mustStakable is the ONE exemption from the vote lock, and it is
+# a helper with a reassuring name — reaching for it is the natural move when a new
+# path hits the lock and the author decides the lock is being unhelpful. Planting
+# exactly that.
+control("a second path exempted from the vote lock", f"{KOURTV2}/claim.gno",
+        "\t\tmustSpendable(c, who, dep+fee)",
+        "\t\tmustStakable(c, who, dep+fee)",
+        "[lock-exempt]", argv=["python3", EPOCHCOH])
 control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv2"',
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',

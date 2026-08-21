@@ -12,8 +12,9 @@ package kourtv2
 // WHY IT IS A FUNCTION AND NOT THREE INLINE COPIES. Three lanes charge this weight
 // and a reader QUOTES it to the elector, and a quote that can drift from the charge
 // is worse than no quote at all — the holder plans against a number the vote will
-// not honour. One expression, four callers, and check-epoch-coherence pins that
-// there is exactly one.
+// not honour. One expression, six call sites — the quality lane, the election lane,
+// both readers, the explainer, and the verdict lane through voteCap — and
+// check-epoch-coherence arm 4 pins that there is exactly one definition of it.
 //
 // BalanceOf, never spendable(). Staked coin is still in the holder's balance and
 // still votes; spendable() nets the stake out, so using it here would disenfranchise
