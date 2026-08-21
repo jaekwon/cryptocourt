@@ -6546,5 +6546,26 @@
   "label": "DisposableOf: returns the stake-only figure, over-promising to a voter",
   "find": "func DisposableOf(courtSlug string, who address) int64 {\n\treturn disposable(mustCourt(courtSlug), who)",
   "replace": "func DisposableOf(courtSlug string, who address) int64 {\n\treturn spendable(mustCourt(courtSlug), who)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "mustSpendable: an exact-amount spend is refused (boundary off by one)",
+  "find": "if disposable(c, who) >= amount {",
+  "replace": "if disposable(c, who) > amount {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "mustStakable: an exact-amount stake is refused (boundary off by one)",
+  "find": "if s := spendable(c, who); s < amount {",
+  "replace": "if s := spendable(c, who); s <= amount {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "TransferCC: the escrow is refused only when BOTH ends are the escrow",
+  "find": "// endpoint in either direction.\n\tif to == c.escrow || from == c.escrow {",
+  "replace": "// endpoint in either direction.\n\tif to == c.escrow && from == c.escrow {"
  }
 ]

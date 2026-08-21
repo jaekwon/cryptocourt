@@ -161,6 +161,18 @@ reason worth remembering: 8 shards saturated the machine, no shard reported for 
 hours, and `realm/` was edited under it twice before I understood that mutate
 re-stages per row.
 
+**An operator-level sweep of the three core files, and what it found.** The corpus
+catches the mutations somebody thought of, which is not the same as the mutations that
+matter: the last-open-row-instead-of-the-largest under-lock was not in it, and survived
+everything. So voteweight.gno, votelock.gno and lock.gno were swept mechanically instead —
+every comparison and boolean operator on the weight and lock decision path, flipped or
+nudged by one, eleven mutations in all. Ten are caught, including both gate boundaries
+(an exact-amount spend and an exact-amount stake), all three escrow-endpoint guards, and
+all three `&&` predicates turned into `||`. The single survivor is lockVote's
+`amount <= 0`, which cannot fire because every call site refuses a non-positive weight
+first; it is recorded in KNOWN-GAPS with that reason. Worth repeating after any change to
+those three files, since it costs about two minutes and does not depend on guessing.
+
 **How to measure gas here, since one attempt reported a 477x regression that does not
 exist.** The harness's `--- GAS:` lines cannot be attributed to a crossing call, and
 the reason the first attempt failed is worth stating precisely: one value per test is

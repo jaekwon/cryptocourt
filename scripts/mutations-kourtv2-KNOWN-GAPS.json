@@ -22,5 +22,13 @@
   "find": "\tif w < 0 {\n\t\tw = 0\n\t}\n",
   "replace": "",
   "why": "A DELIBERATE SURVIVOR: w is min of two non-negative reads, so the clamp cannot fire and no test can catch its removal. PastVotes returns a checkpointed balance and BalanceOf a live one; neither goes negative — grc20votes checks sufficiency on every move and nothing burns from a user's balance, which arm 7 of check-epoch-coherence counts. The clamp stays because the thing that would make it reachable is a burn taking coin out from under a holder, and lock.gno's spendable() carries the same defensive clamp for the same anticipated case with a comment saying it is not reachable today. IF THIS COMES BACK CAUGHT, a negative weight has become reachable: promote it and go read arm 7."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "lockVote: a zero-weight row is recorded instead of skipped",
+  "find": "\tif amount <= 0 {\n\t\treturn\n\t}\n",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR found by an operator-level sweep of voteweight.gno, votelock.gno and lock.gno — eleven mechanical mutations of comparison and boolean operators, of which this was the only one to survive. amount is never non-positive here: all three lockVote call sites refuse a non-positive weight before reaching it (the governor's castVote panics on w <= 0, and approve and VoteQuality each panic on both a zero snapshot and a zero live figure), so the guard cannot fire. Its removal would record an open row of weight 0, which contributes nothing to voteLockedOf's max and is cleared by the next prune — a cleanliness cost, not a safety one, which is why no test sees it. Kept because a lock function that will silently write a meaningless row is a worse primitive than one that will not. IF THIS COMES BACK CAUGHT, some lane now locks a non-positive weight and that lane's own w <= 0 guard is what to read."
  }
 ]
