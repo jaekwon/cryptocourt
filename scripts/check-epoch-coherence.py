@@ -75,7 +75,7 @@ LIVE_ALLOWED = {
     ("kourtv2", "buy.gno"): 1,        # CoinBalanceOf, a read entrypoint
     ("kourtv2", "court.gno"): 1,      # CoinSupply
     ("kourtv2", "emission.gno"): 1,   # the budget base
-    ("kourtv2", "lock.gno"): 1,       # spendable()
+    ("kourtv2", "lock.gno"): 2,       # spendable() and disposable()
     ("kourtv2", "render.gno"): 2,     # the page
     ("kourtv2", "testclock.gno"): 1,  # the virgin-realm guard
     ("governor", "governor.gno"): 2,  # render only

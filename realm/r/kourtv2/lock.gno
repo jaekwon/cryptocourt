@@ -65,10 +65,56 @@ func spendable(c *Court, who address) int64 {
 	return s
 }
 
-// mustSpendable refuses a commitment that would dip into locked stake. Called by
-// every path that transfers a user's CC into the escrow, and by Stake itself —
-// the same coins cannot back two positions in one court.
+// disposable is what an address may let LEAVE its balance: the balance less
+// whichever claim on it is larger. MAX, not sum, and this is the whole subtlety —
+// a stake lock and a vote lock can cover the same coins (staked CC still votes, so
+// a staker who votes is holding one pile answering to two claims). Adding them
+// would refuse a transfer the holder can honestly make; taking the max refuses
+// exactly the coins that either claim reaches.
+func disposable(c *Court, who address) int64 {
+	claim := lockedOf(c, who)
+	if v := voteLockedOf(c, who); v > claim {
+		claim = v
+	}
+	d := c.coin.BalanceOf(who) - claim
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
+// mustSpendable refuses a commitment that would dip into locked stake OR into coin
+// committed by voting. Called by every path that moves a user's CC OUT of their
+// balance — into the escrow or to another holder.
+//
+// NOT called by Stake, which uses mustStakable below. Staking moves nothing: the
+// coin stays in the balance and keeps voting, so a pending vote is no reason to
+// refuse it. Every other caller disposes of coin, and disposal is exactly what the
+// vote lock exists to prevent. The default here is the conservative one on purpose
+// — a new call site that nobody thinks about gets the stricter check.
 func mustSpendable(c *Court, who address, amount int64) {
+	if disposable(c, who) >= amount {
+		return
+	}
+	// NAME THE CONSTRAINT THAT ACTUALLY BINDS. One merged message would make every
+	// refusal read as a stake problem — including the ones that are not — and a
+	// holder cannot act on "something is locked". Three existing tests assert the
+	// stake wording and they were right to: in their fixtures the stake IS what
+	// binds, so a merged message would have made them fail for no defect.
+	if voteLockedOf(c, who) > lockedOf(c, who) {
+		panic("kourtv2: not enough uncommitted CC — coin you voted with stays in " +
+			"your balance and keeps voting, but it is committed until that " +
+			"question resolves and cannot also back a deposit, a bond, or a " +
+			"transfer")
+	}
+	panic("kourtv2: not enough unstaked CC — " +
+		"staked coins stay in your balance and keep voting, but they are " +
+		"committed and cannot also back a deposit, a bond, or another stake")
+}
+
+// mustStakable refuses a stake that would dip into locked stake, and deliberately
+// ignores the vote lock. See mustSpendable for why the two differ.
+func mustStakable(c *Court, who address, amount int64) {
 	if s := spendable(c, who); s < amount {
 		panic("kourtv2: not enough unstaked CC — " +
 			"staked coins stay in your balance and keep voting, but they are " +

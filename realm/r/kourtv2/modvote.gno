@@ -449,6 +449,11 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	if !e.voters.Has(who.String()) {
 		e.voters.Set(who.String(), w)
 		e.turnout += w
+		// Committed until the election resolves. Taken HERE, on the first approval,
+		// for the same reason the weight is frozen here: one voter is one
+		// commitment, and approving five lines must not lock five times the coin.
+		// See votelock.gno.
+		lockVote(c, who, voteLockElection, int64(e.seq), 0, w)
 	}
 }
 

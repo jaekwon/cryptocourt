@@ -164,8 +164,10 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	}
 	touch(c)
 
-	// A LOCK, not a transfer (lock.gno): the coins stay here and keep voting.
-	mustSpendable(c, who, amount)
+	// A LOCK, not a transfer (lock.gno): the coins stay here and keep voting. So
+	// this is the ONE mustSpendable caller that uses the stake-only check — nothing
+	// leaves the balance, and a pending vote is no reason to refuse a stake.
+	mustStakable(c, who, amount)
 	lockStake(c, who, amount)
 	advancePools(c, cs)
 	p := getPos(c, cs, who, side)

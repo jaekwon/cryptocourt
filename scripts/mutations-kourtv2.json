@@ -430,7 +430,7 @@
     "pkg": "kourtv2",
     "file": "stake.gno",
     "label": "lock: Stake itself skips the spendable check",
-    "find": "\tmustSpendable(c, who, amount)\n",
+    "find": "\tmustStakable(c, who, amount)\n",
     "replace": ""
   },
   {
@@ -6252,5 +6252,40 @@
     "label": "VoteDispute: the cap is the snapshot, so it never binds",
     "find": "\theld := c.coin.BalanceOf(who)",
     "replace": "\theld := c.coin.PastVotes(who, c.gov.EpochOf(cs.proposalID))"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "VoteDispute: the ballot's coin is never committed (vote-then-sell)",
+    "find": "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "modvote.gno",
+    "label": "approve: the ballot's coin is never committed (vote-then-sell)",
+    "find": "\t\tlockVote(c, who, voteLockElection, int64(e.seq), 0, w)",
+    "replace": ""
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "voteLockOpen: a dispute lock releases at the ballot close, not resolution",
+    "find": "\t\treturn cs.disputeOpen && cs.proposalID == int64(sub)",
+    "replace": "\t\treturn c.gov.State(cs.proposalID) == \"active\" && cs.proposalID == int64(sub)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "lock.gno",
+    "label": "disposable: the stake and vote locks STACK instead of overlapping",
+    "find": "\tclaim := lockedOf(c, who)\n\tif v := voteLockedOf(c, who); v > claim {\n\t\tclaim = v\n\t}",
+    "replace": "\tclaim := mustAdd(lockedOf(c, who), voteLockedOf(c, who))"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "stake.gno",
+    "label": "Stake: a pending vote blocks staking (over-restrictive)",
+    "find": "\tmustStakable(c, who, amount)",
+    "replace": "\tmustSpendable(c, who, amount)"
   }
 ]

@@ -225,6 +225,13 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 		panic("kourtv2: the governor did not record the vote it just accepted")
 	}
 	cs.qVoted.Set("dw"+beClaimKey(uint64(cs.proposalID))+string(who), dw)
+	// AND THE COIN IS COMMITTED UNTIL THIS ROUND RESOLVES. The floor above stops a
+	// renter voting weight they have already handed back; this stops them handing
+	// it back the moment after. Measured on the floor alone: the rental survived as
+	// vote-then-sell at 599x the quorum floor. Locked at the weight the governor
+	// tallied, not at the balance — a voter capped down should be committed to what
+	// their ballot was worth and no more. See votelock.gno.
+	lockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)
 }
 
 // ResolveDispute reads the FROZEN tally of a closed dispute vote and
