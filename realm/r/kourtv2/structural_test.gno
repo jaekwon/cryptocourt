@@ -3,6 +3,7 @@ package kourtv2
 import (
 	"testing"
 
+	grc20votes "gno.land/p/kourt/grc20votes/v0"
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
 )
@@ -502,4 +503,179 @@ func TestS4TheDemotionBarStaysReachableOnAnEscrowedCourt(cur realm, t *testing.T
 	got, _ := qualityBars(c, cs)
 	uassert.Equal(t, third, got)
 	uassert.True(t, got < quarter) // the clamp really did cut the floor
+}
+
+// THE BARS AT THEIR EXACT VALUES. An operator sweep of the lane bars turned three
+// exact-threshold cases into survivors: turnout exactly at the quality full bar, turnout
+// exactly at the dispute quorum floor, and a split exactly at the overturn threshold.
+// Each is a one-character change with a different outcome and money moving the other way,
+// and nothing noticed. The quality lane even has a test called
+// TestApplyQualityTallyOnEveryBoundary, which catches three of its four boundaries.
+//
+// A voter's weight is min(snapshot, balance), so any exact figure can be hit by holding a
+// large snapshot and then transferring the excess away: the snapshot stays, the balance
+// becomes the target, and user-to-user transfers leave supply and votable untouched.
+
+// EXACTLY AT THE QUORUM FLOOR IS QUORUM MET, not apathy. `cast < floor` is the failed
+// branch; at cast == floor the round must be DECIDED. Getting this wrong half-burns the
+// disputer's bond, defaults the verdict to the answer and discards a turnout that did
+// clear the bar — on the most contested rounds, which are the ones that land near it.
+func TestATurnoutExactlyAtTheQuorumFloorIsNotApathy(cur realm, t *testing.T) {
+	author := testutils.TestAddress("bq-author")
+	staker := testutils.TestAddress("bq-staker")
+	voter := testutils.TestAddress("bq-voter")
+	sink := testutils.TestAddress("bq-sink")
+	c := testCourt(cur, "bq", author, 40_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	c.coin.Mint(voter, 20_000_000_000)
+
+	id := stakeAnswerDispute(cur, "bq", author, staker)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "bq", id)
+	cs := mustClaim(c, id)
+
+	floor := c.gov.QuorumFloor(cs.proposalID)
+	snap := c.coin.PastVotes(voter, c.gov.EpochOf(cs.proposalID))
+	if floor <= 0 || snap < floor {
+		t.Fatalf("fixture: floor %d is not reachable from a snapshot of %d",
+			floor, snap)
+	}
+	// Hold EXACTLY the floor, so weight == min(snapshot, balance) == floor.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "bq", sink, c.coin.BalanceOf(voter)-floor)
+	uassert.Equal(t, floor, c.coin.BalanceOf(voter))
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "bq", id, "no")
+	yes, no, ab, _ := c.gov.Tally(cs.proposalID)
+	if cast := yes + no + ab; cast != floor {
+		t.Fatalf("fixture is vacuous: cast %d is not exactly the floor %d, so this "+
+			"is not the boundary case", cast, floor)
+	}
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	ResolveDispute(cross(cur), "bq", id)
+
+	// Quorum was met, so this is a DECIDED round and not a failed one.
+	if cs.failedRounds != 0 {
+		t.Fatalf("turnout of exactly the floor %d was treated as apathy: "+
+			"failedRounds is %d", floor, cs.failedRounds)
+	}
+}
+
+// EXACTLY AT THE OVERTURN THRESHOLD OVERTURNS. disputeThresholdBps is 5001, documented as
+// "> 5000 so a tie never overturns", so the exact case is yes:no = 5001:4999 —
+// yes*10000 == (yes+no)*5001. One character makes that an UPHOLD instead, which burns the
+// disputer's bond rather than the answerer's.
+func TestASplitExactlyAtTheOverturnThresholdOverturns(cur realm, t *testing.T) {
+	author := testutils.TestAddress("bo-author")
+	staker := testutils.TestAddress("bo-staker")
+	yesV := testutils.TestAddress("bo-yes")
+	noV := testutils.TestAddress("bo-no")
+	sink := testutils.TestAddress("bo-sink")
+	c := testCourt(cur, "bo", author, 40_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	c.coin.Mint(yesV, 20_000_000_000)
+	c.coin.Mint(noV, 20_000_000_000)
+
+	id := stakeAnswerDispute(cur, "bo", author, staker)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "bo", id)
+	cs := mustClaim(c, id)
+	answer := cs.answer
+
+	// Scale the 5001:4999 pair up until it clears the quorum floor.
+	floor := c.gov.QuorumFloor(cs.proposalID)
+	scale := floor/10000 + 1
+	wantYes, wantNo := 5001*scale, 4999*scale
+	if wantYes+wantNo < floor {
+		t.Fatalf("fixture: %d+%d does not clear the floor %d", wantYes, wantNo, floor)
+	}
+	for who, want := range map[address]int64{yesV: wantYes, noV: wantNo} {
+		if c.coin.PastVotes(who, c.gov.EpochOf(cs.proposalID)) < want {
+			t.Fatalf("fixture: %s cannot reach %d", who, want)
+		}
+		testing.SetRealm(testing.NewUserRealm(who))
+		TransferCC(cross(cur), "bo", sink, c.coin.BalanceOf(who)-want)
+	}
+	testing.SetRealm(testing.NewUserRealm(yesV))
+	VoteDispute(cross(cur), "bo", id, "yes")
+	testing.SetRealm(testing.NewUserRealm(noV))
+	VoteDispute(cross(cur), "bo", id, "no")
+
+	yes, no, _, _ := c.gov.Tally(cs.proposalID)
+	if yes*grc20votes.Bps != (yes+no)*c.params.disputeThresholdBps {
+		t.Fatalf("fixture is vacuous: %d*%d != (%d+%d)*%d, so this is not the "+
+			"exact threshold", yes, grc20votes.Bps, yes, no,
+			c.params.disputeThresholdBps)
+	}
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	ResolveDispute(cross(cur), "bo", id)
+
+	if cs.decidedRounds != 1 {
+		t.Fatalf("a split exactly at the threshold did not decide: decidedRounds %d",
+			cs.decidedRounds)
+	}
+	if cs.provisional != int8(oppositeSide(int(answer))) {
+		t.Fatalf("a split exactly at the threshold did not OVERTURN: provisional "+
+			"%d, answer %d", cs.provisional, answer)
+	}
+}
+
+// EXACTLY AT THE QUALITY FULL BAR CLEARS IT. `turnout >= fullBar` is the gate on every
+// conclusive quality outcome, and the exact case was the one boundary
+// TestApplyQualityTallyOnEveryBoundary does not reach — it covers the two-thirds high
+// split, the median-low half and the demotion bar, and not this.
+func TestATurnoutExactlyAtTheQualityFullBarClearsIt(cur realm, t *testing.T) {
+	author := testutils.TestAddress("bf-author")
+	flagger := testutils.TestAddress("bf-flagger")
+	voter := testutils.TestAddress("bf-voter")
+	sink := testutils.TestAddress("bf-sink")
+	c := testCourt(cur, "bf", author, 30_000_000_000)
+	c.coin.Mint(flagger, 5_000_000_000)
+	c.coin.Mint(voter, 25_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(author))
+	id := OpenClaim(cross(cur), "bf", "Exactly at the full bar")
+	matureOI(cur, "bf", id, author, 2_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(author))
+	PostAnswer(cross(cur), "bf", id, sideYES)
+	cs := mustClaim(c, id)
+
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	OpenFlag(cross(cur), "bf", id)
+	_, fullBar := qualityBars(c, cs)
+	snap := c.coin.PastVotes(voter, cs.qualityEpoch)
+	if fullBar <= 0 || snap < fullBar {
+		t.Fatalf("fixture: full bar %d unreachable from a snapshot of %d",
+			fullBar, snap)
+	}
+	// Hold EXACTLY the bar.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	TransferCC(cross(cur), "bf", sink, c.coin.BalanceOf(voter)-fullBar)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteQuality(cross(cur), "bf", id, qualityHigh)
+
+	turnout := cs.qLowW + cs.qMidW + cs.qHighW
+	if turnout != fullBar {
+		t.Fatalf("fixture is vacuous: turnout %d is not exactly the full bar %d",
+			turnout, fullBar)
+	}
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(flagger))
+	ResolveFlag(cross(cur), "bf", id)
+
+	if !cs.slotConsumed {
+		t.Fatalf("turnout of exactly the full bar %d was treated as inconclusive",
+			fullBar)
+	}
+	uassert.Equal(t, int64(qualityHigh), cs.tier)
 }

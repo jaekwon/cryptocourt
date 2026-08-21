@@ -6353,6 +6353,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "quality.gno",
+  "label": "boundary tier: turnout exactly at the full bar no longer promotes",
+  "find": "if turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
+  "replace": "if turnout > fullBar && cs.qHighW*3 >= turnout*2 {"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "modvote.gno",
   "label": "approve: a divested voter is no longer refused",
   "find": "\t\tif w <= 0 {\n\t\t\tpanic(\"kourtv2: you no longer hold the coin you would vote with\")\n\t\t}",
@@ -6511,6 +6518,20 @@
   "label": "VoteDispute: the commitment is less than the weight tallied (partial commitment)",
   "find": "lockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
   "replace": "lockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw/2)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "boundary quorum: turnout exactly at the floor is treated as failed",
+  "find": "case cast < floor:",
+  "replace": "case cast <= floor:"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "boundary overturn: exactly at the dispute threshold no longer overturns",
+  "find": "case yes > 0 && yes*grc20votes.Bps >= (yes+no)*c.params.disputeThresholdBps:",
+  "replace": "case yes > 0 && yes*grc20votes.Bps > (yes+no)*c.params.disputeThresholdBps:"
  },
  {
   "pkg": "kourtv2",
