@@ -474,11 +474,6 @@ type Court struct {
 	// every deposit and bond, and a lazily-built tree would give each of those
 	// a second branch that has to agree with the write path.
 	locked         *bptree.BPTree // addr -> int64 (lock.gno)
-	// voteLockUntil is addr -> the height until which this address may not
-	// TRANSFER its court coin, because it voted. It is not a stake lock: staking,
-	// bonding and deposits are unaffected, so a voter forgoes no yield. See
-	// lock.gno and VOTELOCK.md.
-	voteLockUntil  *bptree.BPTree // addr -> int64 height
 	qualifiedCount int            // addresses at score ≥ priorityNetRecord
 
 	// Moderation state (moderation.gno) — render-layer only; no money path

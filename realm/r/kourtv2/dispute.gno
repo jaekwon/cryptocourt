@@ -188,23 +188,7 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	if isParticipant(cs, who) {
 		panic("kourtv2: a participant may not vote on their own claim's verdict")
 	}
-	// LIVE WEIGHT, and the vote locks it against transfer until the round closes.
-	// BalanceOf rather than VotesOf on purpose: they are equal for a court coin
-	// today because no Delegate entrypoint exists, and reading the balance means
-	// this does not silently depend on that staying true — a delegator could
-	// otherwise lend power, have the delegate vote, and sell, with only the
-	// delegate's coin committed. check-nodelegate.py refuses the entrypoint.
-	w := c.coin.BalanceOf(who)
-	if w <= 0 {
-		panic("kourtv2: no court coin to vote with")
-	}
-	// LOCK AFTER THE BALLOT IS ACCEPTED, not before. A panic would revert both, so
-	// this is not a live bug — but "lock what was actually cast" is the order that
-	// stays correct without relying on revert semantics, and the governor has its
-	// own refusals (already voted, proposal closed) that this must not pre-empt.
-	_, closes, _, _ := c.gov.Timings(cs.proposalID)
-	c.gov.VoteWithWeight(who, cs.proposalID, choice, w)
-	lockVote(c, who, closes)
+	c.gov.Vote(who, cs.proposalID, choice)
 	// Court-side record of the choice AND THE WEIGHT: the governor's roll is
 	// reclaimable after resolution (ReleaseRoll is permissionless), so the carrot
 	// must not depend on it.
@@ -221,7 +205,11 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 		cs.qVoted = bptree.NewBPTree32()
 	}
 	cs.qVoted.Set("d"+beClaimKey(uint64(cs.proposalID))+string(who), choice)
-	cs.qVoted.Set("dw"+beClaimKey(uint64(cs.proposalID))+string(who), w)
+	_, dw, ok := c.gov.VoteOf(cs.proposalID, who)
+	if !ok {
+		panic("kourtv2: the governor did not record the vote it just accepted")
+	}
+	cs.qVoted.Set("dw"+beClaimKey(uint64(cs.proposalID))+string(who), dw)
 }
 
 // ResolveDispute reads the FROZEN tally of a closed dispute vote and

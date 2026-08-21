@@ -7,214 +7,216 @@ import (
 	uassert "gno.land/p/nt/uassert/v0"
 )
 
-// RENTED VOTING WEIGHT — closed at v0.57 by live weight plus a transfer lock.
+// RENTED VOTING WEIGHT — A CHARACTERIZATION TEST, NOT A GUARD.
 //
-// This file was a CHARACTERIZATION suite one commit ago: it asserted the exploit
-// SUCCEEDED, with the instruction that any fix must flip it. The fix landed and it
-// flipped. What follows is the regression suite it was designed to become.
+// READ THIS FIRST. The tests below assert that the exploit WORKS. They are not
+// endorsing it. They exist because the hole is real, measured, currently OPEN, and
+// exactly the kind of thing that gets silently forgotten — so it is pinned here
+// with its own numbers, and ANY FIX MUST FLIP THESE ASSERTIONS. A test that goes
+// green after a fix would have hidden the fix; these will fail loudly and their
+// failure is the signal that the decision in RENTEDWEIGHT.md was finally taken.
 //
-// THE HOLE THAT WAS. Weight was read from a sealed past epoch, and the anchor was
-// `Epoch()-1` AT PROPOSE TIME — so whoever opened the dispute or election chose it.
-// Buy float, wait ONE epoch (~1h) for the checkpoint to seal, open the round
-// yourself, sell everything back, and vote with weight you no longer owned; a past
-// checkpoint cannot be un-written by a later transfer. Measured before the fix:
-// 300 B of weight cast at 600x the quorum floor with a live balance of ZERO.
+// THE HOLE. Every vote is weighed at a sealed past epoch, and governor.propose
+// used to claim in a comment that this made weight "impossible to rent". It does
+// not. The anchor is Epoch()-1 AT PROPOSE TIME, and for two of the three lanes the
+// party who INITIATES the action is the one who pins it. So: acquire float on the
+// market — possible at all only because court coins were made transferable — wait
+// ONE epoch for the checkpoint to seal, open the dispute or election yourself
+// (pinning the anchor to a window in which you hold), sell everything back, and
+// vote with the full weight you no longer own. A past checkpoint cannot be
+// un-written by a later transfer.
 //
-// THE FIX, both halves load-bearing:
+// WHAT IS AND IS NOT NEW. "Selling out after voting costs nothing" is the standard
+// snapshot-governance property, deliberate, and pinned by r/govern's own
+// TestAVoteCannotBePassedAlongWithTheTokens. What is new is that the actor CHOOSES
+// THE ANCHOR, which converts an accepted property into a rental market. r/govern's
+// token has always been transferable, so this lane was exposed before kourtv2 was.
 //
-//   - Weight is what the voter holds AT THE MOMENT THEY VOTE. No anchor to choose,
-//     and newly bought coin votes at once — the owner's rule.
-//   - Voting locks that coin AGAINST TRANSFER ONLY until the round closes. Staking,
-//     bonding and deposits are untouched, so voting costs no YIELD, only liquidity.
-//     Renting requires selling back, and selling is the one thing forbidden.
+// WHY NOTHING IS FIXED HERE. Two closures were implemented and measured, and each
+// broke an honest path; RENTEDWEIGHT.md has the numbers. It is an owner decision.
 //
-// WHAT IT COST, and it is not small: an OPEN vote can now be BOUGHT into. See
-// TestVotingWindowAndWeightGates, where a latecomer minted more CC than the honest
-// holder now votes and decides. No denominator prevents that — you gain 100% of
-// what you acquire while a 5%-of-votable bar gains 5% of it. VOTELOCK.md carries
-// the measurement and the owner's decision.
+// ONE HONEST QUALIFICATION, because the probe overstates the attack. TransferCC
+// between two test addresses is free. Acquiring a governance-sized position on a
+// real market and dumping it an hour later pays slippage twice plus an hour of
+// price risk, so the true cost is a market round trip — not zero. What changed is
+// that it is no longer an IRREVERSIBLE curve purchase burning GNOT at a rising
+// price, which is what the old reasoning rested on.
 
-// Sell first, then try to vote: nothing is left to vote with. This is the literal
-// sequence that was measured working before the fix.
-func TestRentedWeightCannotVoteADispute(cur realm, t *testing.T) {
+// THE VECTOR, end to end, on the verdict lane. Asserts it SUCCEEDS.
+func TestRentedWeightCanStillVoteADispute(cur realm, t *testing.T) {
 	whale := testutils.TestAddress("rw-whale")
 	author := testutils.TestAddress("rw-author")
 	renter := testutils.TestAddress("rw-renter")
-	c := testCourt(cur, "rntw1", author, 40_000_000_000)
-	c.coin.Mint(whale, 10_000_000_000)
+	c := testCourt(cur, "rntw1", author, 100_000_000_000)
+	c.coin.Mint(whale, 400_000_000_000)
 
 	id := stakeAnswerDispute(cur, "rntw1", author, whale)
+	uassert.Equal(t, int64(0), c.coin.BalanceOf(renter))
 
-	// Acquire, then wait the one epoch that used to be the whole cost.
+	// Acquire, then wait exactly ONE epoch to seal. One epoch is all it takes.
 	testing.SetRealm(testing.NewUserRealm(whale))
-	TransferCC(cross(cur), "rntw1", renter, 9_000_000_000)
+	TransferCC(cross(cur), "rntw1", renter, 300_000_000_000)
 	testing.SkipHeights(epochBlocks * 2)
 	touch(c)
-	// The old anchor still shows the rented weight. That is the point: a
-	// checkpoint is untouchable, which is why the fix could not live there.
-	uassert.Equal(t, int64(9_000_000_000), c.coin.PastVotes(renter, c.coin.Epoch()-1))
+	pinned := c.coin.PastVotes(renter, c.coin.Epoch()-1)
+	uassert.Equal(t, int64(300_000_000_000), pinned)
 
-	// Open the round to pin the old anchor, then sell it all back.
+	// Pin the anchor by opening the dispute yourself. THIS is the step that turns
+	// a snapshot into a rental: without it the anchor would predate the purchase.
 	testing.SetRealm(testing.NewUserRealm(renter))
 	OpenDispute(cross(cur), "rntw1", id)
+	cs := mustClaim(c, id)
+
+	// Sell it all back. The pinned checkpoint is untouched.
 	testing.SetRealm(testing.NewUserRealm(renter))
 	TransferCC(cross(cur), "rntw1", whale, SpendableOf("rntw1", renter))
+	uassert.Equal(t, int64(0), c.coin.VotesOf(renter))
+	uassert.Equal(t, pinned, c.coin.PastVotes(renter, c.coin.Epoch()-1))
 
+	// And the vote lands, with weight the voter does not hold.
 	testing.SetRealm(testing.NewUserRealm(renter))
-	uassert.AbortsContains(t, cur, "no court coin to vote with", func() {
-		VoteDispute(cross(cur), "rntw1", id, "yes")
-	})
+	VoteDispute(cross(cur), "rntw1", id, "yes")
+	_, w, ok := c.gov.VoteOf(cs.proposalID, renter)
+	uassert.True(t, ok)
+	uassert.Equal(t, pinned, w)
+
+	// The scale of it: the rented weight dwarfs the bar it had to clear.
+	floor := quorumFloor(c, cs.xBarFrozen)
+	uassert.True(t, floor > 0)
+	uassert.True(t, w/floor >= 100) // measured at 600x on this fixture
 }
 
-// THE OTHER ORDERING, and the one the lock exists for: vote FIRST, then try to
-// sell. The ballot stands — a cast vote is never undone — so the coin must not be
-// allowed to leave, or the weight was rented after all.
-func TestCoinVotedWithCannotBeSoldUntilTheRoundCloses(cur realm, t *testing.T) {
-	whale := testutils.TestAddress("rw-whale2")
-	author := testutils.TestAddress("rw-author2")
-	renter := testutils.TestAddress("rw-renter2")
-	c := testCourt(cur, "rntw2", author, 40_000_000_000)
-	c.coin.Mint(whale, 10_000_000_000)
+// The election lane, which is the worse one: OpenElection pins the anchor and a
+// coup is court-wide rather than one claim. Asserted on the weighting inputs,
+// since driving a full election to installation is a different fixture.
+func TestRentedWeightClearsTheElectionFloor(cur realm, t *testing.T) {
+	whale := testutils.TestAddress("rw-whale5")
+	renter := testutils.TestAddress("rw-renter5")
+	c := testCourt(cur, "rntw5", whale, 500_000_000_000)
 
-	id := stakeAnswerDispute(cur, "rntw2", author, whale)
 	testing.SetRealm(testing.NewUserRealm(whale))
-	TransferCC(cross(cur), "rntw2", renter, 9_000_000_000)
+	TransferCC(cross(cur), "rntw5", renter, 300_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	at := c.coin.Epoch() - 1
+	pinned := c.coin.PastVotes(renter, at)
 
-	testing.SetRealm(testing.NewUserRealm(renter))
-	OpenDispute(cross(cur), "rntw2", id)
-	testing.SetRealm(testing.NewUserRealm(renter))
-	VoteDispute(cross(cur), "rntw2", id, "yes")
+	// The coup is in range: a one-epoch rental stands above the floor.
+	uassert.True(t, pinned > electionFloor(c, at))
+	uassert.True(t, pinned/electionFloor(c, at) >= 10) // measured at 12x
 
-	// Locked, and the height is published so a UI can state it BEFORE the vote.
-	until := VoteLockedUntil("rntw2", renter)
-	uassert.True(t, until > heightNow())
-
+	// And selling back does not touch the pinned figure.
 	testing.SetRealm(testing.NewUserRealm(renter))
-	uassert.AbortsContains(t, cur, "cannot be transferred until block", func() {
-		TransferCC(cross(cur), "rntw2", whale, 1_000_000)
-	})
-	// The allowance door is shut too, keyed on the OWNER rather than the spender —
-	// otherwise an approval would launder the sale.
-	testing.SetRealm(testing.NewUserRealm(renter))
-	ApproveCC(cross(cur), "rntw2", whale, 1_000_000)
-	testing.SetRealm(testing.NewUserRealm(whale))
-	uassert.AbortsContains(t, cur, "cannot be transferred until block", func() {
-		TransferFromCC(cross(cur), "rntw2", renter, whale, 1_000_000)
-	})
-
-	// And it lifts by itself — no sweep, no claim, nothing to strand.
-	testing.SkipHeights(until - heightNow())
-	uassert.Equal(t, int64(0), VoteLockedUntil("rntw2", renter))
-	testing.SetRealm(testing.NewUserRealm(renter))
-	TransferCC(cross(cur), "rntw2", whale, 1_000_000)
+	TransferCC(cross(cur), "rntw5", whale, SpendableOf("rntw5", renter))
+	uassert.Equal(t, pinned, c.coin.PastVotes(renter, at))
+	uassert.Equal(t, int64(0), c.coin.VotesOf(renter))
 }
 
-// THE OWNER'S FIRST CONSTRAINT: voting must cost no YIELD. The lock is
-// transfer-only, so every earning use of the coin survives it. If this fails, the
-// mechanism has become a tax on participating.
-func TestVotingCostsNoYieldOnlyLiquidity(cur realm, t *testing.T) {
-	whale := testutils.TestAddress("rw-whale3")
-	author := testutils.TestAddress("rw-author3")
-	voter := testutils.TestAddress("rw-voter3")
-	c := testCourt(cur, "rntw3", author, 40_000_000_000)
-	c.coin.Mint(whale, 10_000_000_000)
-	c.coin.Mint(voter, 10_000_000_000)
-
-	id := stakeAnswerDispute(cur, "rntw3", author, whale)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	OpenDispute(cross(cur), "rntw3", id)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	VoteDispute(cross(cur), "rntw3", id, "yes")
-	uassert.True(t, VoteLockedUntil("rntw3", voter) > heightNow())
-
-	// FILING still works, which means the DEPOSIT still moved.
-	testing.SetRealm(testing.NewUserRealm(voter))
-	other := OpenClaim(cross(cur), "rntw3", "Can a vote-locked holder still stake?")
-
-	// STAKING still works — so the conviction this coin would have earned is not
-	// forgone, which is the whole argument that voting is not economically
-	// disadvantageous.
-	testing.SetRealm(testing.NewUserRealm(voter))
-	Stake(cross(cur), "rntw3", other, sideYES, 1_000_000_000)
-	uassert.Equal(t, int64(1_000_000_000), StakeOf("rntw3", other, sideYES, voter))
-
-	// Only the sale is refused.
-	testing.SetRealm(testing.NewUserRealm(voter))
-	uassert.AbortsContains(t, cur, "cannot be transferred until block", func() {
-		TransferCC(cross(cur), "rntw3", whale, 1_000)
-	})
-}
-
-// THE OWNER'S THIRD CONSTRAINT: coin bought a moment ago votes at full size, with
-// no seasoning at all — same block, no epoch sealed.
-func TestNewlyAcquiredCoinVotesImmediately(cur realm, t *testing.T) {
+// The half that DOES work, and the reason snapshot weighting must stay: weight
+// acquired after the anchor buys nothing. Any fix must preserve this — a live-only
+// reading would trade this guarantee away and let weight borrowed inside the
+// voting window decide the vote.
+func TestBuyingInAfterTheAnchorBuysNothing(cur realm, t *testing.T) {
 	whale := testutils.TestAddress("rw-whale4")
 	author := testutils.TestAddress("rw-author4")
-	buyer := testutils.TestAddress("rw-buyer4")
-	c := testCourt(cur, "rntw4", author, 40_000_000_000)
-	c.coin.Mint(whale, 10_000_000_000)
+	voter := testutils.TestAddress("rw-voter4")
+	c := testCourt(cur, "rntw4", author, 100_000_000_000)
+	c.coin.Mint(whale, 400_000_000_000)
 
 	id := stakeAnswerDispute(cur, "rntw4", author, whale)
-	// The whale opens it: author is also the ANSWERER here, and an answerer may
-	// not dispute their own answer.
+
 	testing.SetRealm(testing.NewUserRealm(whale))
+	TransferCC(cross(cur), "rntw4", voter, 10_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+
+	testing.SetRealm(testing.NewUserRealm(voter))
 	OpenDispute(cross(cur), "rntw4", id)
 
-	uassert.Equal(t, int64(0), c.coin.BalanceOf(buyer))
+	// Buy a great deal more AFTER the anchor is pinned.
 	testing.SetRealm(testing.NewUserRealm(whale))
-	TransferCC(cross(cur), "rntw4", buyer, 6_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(buyer))
-	VoteDispute(cross(cur), "rntw4", id, "yes")
+	TransferCC(cross(cur), "rntw4", voter, 300_000_000_000)
+	uassert.True(t, c.coin.VotesOf(voter) > 300_000_000_000)
 
-	_, w, ok := c.gov.VoteOf(mustClaim(c, id).proposalID, buyer)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "rntw4", id, "yes")
+	_, w, ok := c.gov.VoteOf(mustClaim(c, id).proposalID, voter)
 	uassert.True(t, ok)
-	uassert.Equal(t, int64(6_000_000_000), w) // full size, no haircut
+	// Capped at the snapshot, unmoved by the later purchase.
+	uassert.True(t, w <= 10_000_000_000)
 }
 
-// Voting on a second round EXTENDS the lock and never shortens it. Without the
-// monotone rule, voting again on a shorter round would release the first round's
-// coin early and hand the rental straight back.
-func TestASecondVoteNeverShortensTheLock(cur realm, t *testing.T) {
-	whale := testutils.TestAddress("rw-whale5")
-	author := testutils.TestAddress("rw-author5")
-	voter := testutils.TestAddress("rw-voter5")
-	c := testCourt(cur, "rntw5", author, 40_000_000_000)
+// THE CARROT SURVIVES THE GOVERNOR'S ROLL BEING RECLAIMED.
+//
+// dispute.gno has said since the choice record was added that the carrot must not
+// depend on the governor's roll, because ReleaseRoll is permissionless and sets
+// p.voted = nil. A first version of PullCarrot's rewrite ignored that and read the
+// weight back with gov.VoteOf, which stops answering once the roll is gone — so a
+// claimant who had not pulled yet would have been refused a carrot they earned.
+//
+// It was LATENT rather than live: kourtv2 exposes no ReleaseRoll entrypoint, so
+// nothing reclaims its rolls today. Which is exactly why no test caught it, and
+// why this one reaches past the entrypoints to call the governor directly.
+func TestTheCarrotSurvivesRollReclamation(cur realm, t *testing.T) {
+	author := testutils.TestAddress("rw-author6")
+	whale := testutils.TestAddress("rw-whale6")
+	voter := testutils.TestAddress("rw-voter6")
+	// Kept small on purpose: effMinAnswerX is 10 bps of SUPPLY, so a big court
+	// makes stakeAnswerDispute's ~900M X-bar unanswerable outright.
+	c := testCourt(cur, "rntw6", author, 40_000_000_000)
 	c.coin.Mint(whale, 10_000_000_000)
 	c.coin.Mint(voter, 10_000_000_000)
 
-	id := stakeAnswerDispute(cur, "rntw5", author, whale)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	OpenDispute(cross(cur), "rntw5", id)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	VoteDispute(cross(cur), "rntw5", id, "yes")
-	first := VoteLockedUntil("rntw5", voter)
-	uassert.True(t, first > heightNow())
+	id := stakeAnswerDispute(cur, "rntw6", author, whale)
+	cs := mustClaim(c, id)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "rntw6", id)
+	pid := cs.proposalID
 
-	// A lock that would end EARLIER must not pull the first one in.
-	testing.SkipHeights(10)
-	lockVote(c, voter, heightNow()+5)
-	uassert.Equal(t, first, VoteLockedUntil("rntw5", voter))
+	// A non-participant votes with the verdict, which is who the carrot pays.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "rntw6", id, "no") // uphold
+	recorded := cs.qVoted.Get("dw" + beClaimKey(uint64(pid)) + string(voter))
+	if recorded == nil {
+		t.Fatal("fixture is vacuous: no court-side weight was recorded, so " +
+			"nothing is being shown to survive")
+	}
 
-	// One ending LATER does extend it — but only as far as one round from now,
-	// because the cap binds before the extension does. Asserting the capped value
-	// rather than the requested one pins both behaviours at once: a later round
-	// extends, and no round can push the lock past a single round from today.
-	lockVote(c, voter, first+100_000)
-	uassert.Equal(t, heightNow()+c.params.votingBlocks, VoteLockedUntil("rntw5", voter))
-	uassert.True(t, VoteLockedUntil("rntw5", voter) > first)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	ResolveDispute(cross(cur), "rntw6", id)
+	if d := EscrowUntil("rntw6", id) - heightNow() + 1; d > 0 {
+		testing.SkipHeights(d)
+	}
+	testing.SetRealm(testing.NewUserRealm(author))
+	Finalize(cross(cur), "rntw6", id)
+
+	// RECLAIM THE ROLL. Reached directly, because no entrypoint offers it — and
+	// asserted, so this cannot pass against a governor that quietly refused.
+	c.gov.ReleaseRoll(whale, pid)
+	_, _, ok := c.gov.VoteOf(pid, voter)
+	uassert.False(t, ok) // the governor has genuinely forgotten the ballot
+
+	// The court has not. The carrot still pays.
+	drainForCarrot(cur, "rntw6", cs)
+	testing.SetRealm(testing.NewUserRealm(author))
+	Crystallize(cross(cur), "rntw6", id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	paid := PullCarrot(cross(cur), "rntw6", id)
+	uassert.True(t, paid > 0)
 }
 
-// The lock is capped at one round however long a lane's window claims to be, so
-// the commitment is statable before the vote rather than discovered after.
-func TestTheLockIsCappedAtOneRound(cur realm, t *testing.T) {
-	author := testutils.TestAddress("rw-author6")
-	c := testCourt(cur, "rntw6", author, 10_000_000_000)
-
-	lockVote(c, author, heightNow()+c.params.votingBlocks*100)
-	uassert.Equal(t, heightNow()+c.params.votingBlocks, VoteLockedUntil("rntw6", author))
-
-	// A round that already closed locks nothing at all.
-	other := testutils.TestAddress("rw-other6")
-	lockVote(c, other, heightNow()-1)
-	uassert.Equal(t, int64(0), VoteLockedUntil("rntw6", other))
+// drainForCarrot advances until the reservoir covers the claim's draw, so the
+// carrot is not zero for want of emission rather than for want of a record.
+func drainForCarrot(cur realm, slug string, cs *claimState) {
+	want := mustMul(tierMidX, convToCC(cs.yesConvHi, cs.yesConvLo)) * 3
+	for i := 0; i < 400; i++ {
+		if Reservoir(slug) >= want {
+			return
+		}
+		testing.SkipHeights(20_000)
+		testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("rw-poker")))
+		Poke(cross(cur), slug)
+	}
+	panic("fixture is vacuous: the reservoir never covered the draw")
 }

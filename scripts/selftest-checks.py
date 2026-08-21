@@ -121,7 +121,6 @@ def have_gno():
 CITE = "scripts/check-citations.py"
 STORE = "scripts/check-storage.py"
 NONTRANS = "scripts/check-nontransferable.py"
-NODELEG = "scripts/check-nodelegate.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
 PATHS = "scripts/check-paths.py"
@@ -181,15 +180,25 @@ print("\ncheck-nontransferable")
 # write so that it can never fire. Both arms exist because both failure modes
 # are live: the thing it watches for actually appearing, and the guard losing
 # sight of the tree it is supposed to be watching.
-# INVERTED with the guard. It used to plant a coin Transfer and require a trip;
-# court coins are transferable by decision now, so planting one proves nothing and
-# the control silently stopped firing. What the guard watches is REPUTATION, so
-# that is what the control has to plant.
+# INVERTED with the guard, and it had been silently dead since: the control
+# planted a coin Transfer, which the guard PERMITS now that court coins are
+# transferable by decision, so it could never fire again. Two arms now, one per
+# property the guard actually watches.
 control("reputation that became transferable", f"{KOURTV2}/records.gno",
         "func AnswerRecord(courtSlug string, who address) int {",
         "func AssignRecord(cur realm, courtSlug string, to address) {}\n\n"
         "func AnswerRecord(courtSlug string, who address) int {",
-        "appears to have become transferable",
+        "must not be movable appears to have become movable",
+        argv=["python3", NONTRANS])
+# The redemption arm. A verb list was the wrong instrument — it tripped on
+# WithdrawStake and V1's Redeem* while a real redemption could be called anything
+# — so the guard pins SendCoins to buy.gno at an exact count. This plants one
+# elsewhere, which is what a CC-to-GNOT path would have to do.
+control("a path that sends GNOT back to a user", f"{KOURTV2}/records.gno",
+        "func AnswerRecord(courtSlug string, who address) int {",
+        "func Payout(cur realm) { b.SendCoins(cur.Address(), to, x) }\n\n"
+        "func AnswerRecord(courtSlug string, who address) int {",
+        "must not be movable appears to have become movable",
         argv=["python3", NONTRANS])
 # Fail CLOSED, not open. This is the shape that let check-isolation sweep 39% of
 # the suite while reporting success: a scope list that no longer resolves must be
@@ -199,28 +208,6 @@ control("a guard that lost the tree it watches", NONTRANS,
         'REALMS = ["kourtv9_moved"]',
         "measuring nothing",
         argv=["python3", NONTRANS])
-
-print("\ncheck-nodelegate")
-# The guard that keeps live-weight voting rental-proof. Vote weight is the LIVE
-# BalanceOf and voting locks the coin against transfer, so renting requires
-# selling back — which delegation would route around entirely: the delegator
-# hands power over, the delegate votes, the LOCK LANDS ON THE DELEGATE, and the
-# delegator sells. Both arms, because both failure modes are live.
-control("a court coin that gained a way to delegate voting power",
-        f"{KOURTV2}/records.gno",
-        "func AnswerRecord(courtSlug string, who address) int {",
-        "func DelegateVotes(cur realm, courtSlug string, to address) {}\n\n"
-        "func AnswerRecord(courtSlug string, who address) int {",
-        "gained a way to delegate voting power",
-        argv=["python3", NODELEG])
-# Fail CLOSED. An absence check with nothing to scan reports success forever, and
-# that is the exact shape that let check-isolation sweep 39% of the suite while
-# claiming a clean run.
-control("a guard that lost the tree it watches", NODELEG,
-        'REALM = ROOT / "realm" / "r" / "kourtv2"',
-        'REALM = ROOT / "realm" / "r" / "kourtv9_moved"',
-        "measuring nothing",
-        argv=["python3", NODELEG])
 
 print("\ncheck-membership-clears")
 # The guard exists because ResetModSet's clear cannot be pinned by any TEST — it

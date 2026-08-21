@@ -387,27 +387,6 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	b.WriteString("- committed as stake: " + strconv.FormatInt(locked, 10) + "\n")
 	b.WriteString("- free to commit: " + strconv.FormatInt(spendable(c, who), 10) +
 		" — what a new stake, deposit or bond draws on\n")
-	// THE VOTE LOCK, and it is shown whether or not it is currently held, because
-	// the point of publishing it is that a voter learns the commitment BEFORE
-	// casting rather than when a transfer is refused.
-	//
-	// Note "free to commit" above deliberately does NOT subtract this: the vote
-	// lock blocks transfer only, so vote-locked coin really is still free to stake,
-	// bond or deposit. That is the whole reason voting costs no yield — but it does
-	// mean the two lines can disagree, so this one says which is which.
-	if until := VoteLockedUntil(slug, who); until > 0 {
-		b.WriteString("- voted, so NOT transferable until block " +
-			strconv.FormatInt(until, 10) + " (" +
-			strconv.FormatInt(until-heightNow(), 10) + " blocks away) — it can " +
-			"still be staked, bonded or spent on a deposit; only a transfer is " +
-			"refused\n")
-	} else {
-		b.WriteString("- voting locks the coin you vote with against TRANSFER " +
-			"until that round closes (at most " +
-			strconv.FormatInt(c.params.votingBlocks, 10) + " blocks). It stays " +
-			"stakeable and bondable throughout, so voting costs liquidity and " +
-			"never yield.\n")
-	}
 
 	// Roles on this claim.
 	roles := ""

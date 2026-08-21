@@ -1130,7 +1130,7 @@
     "pkg": "kourtv2",
     "file": "quality.gno",
     "label": "VoteQuality: a zero-weight address votes",
-    "find": "\tif w <= 0 {\n\t\tpanic(\"kourtv2: no court coin to vote with\")\n\t}",
+    "find": "\tif w <= 0 {\n\t\tpanic(\"kourtv2: no checkpointed weight at the claim's quality epoch\")\n\t}",
     "replace": ""
   },
   {
@@ -1200,8 +1200,8 @@
     "pkg": "kourtv2",
     "file": "dispute.gno",
     "label": "VoteDispute: the vote is never cast with the governor",
-    "find": "\tc.gov.VoteWithWeight(who, cs.proposalID, choice, w)",
-    "replace": "\t_, _ = choice, w"
+    "find": "\tc.gov.Vote(who, cs.proposalID, choice)",
+    "replace": "\t_ = choice"
   },
   {
     "pkg": "kourtv2",
@@ -1815,8 +1815,8 @@
   {
     "pkg": "kourtv2",
     "file": "modvote.gno",
-    "label": "modvote: an address with no coin may vote",
-    "find": "\t\tpanic(\"kourtv2: no court coin to vote with\")\n",
+    "label": "modvote: an address with no weight at the pinned epoch may vote",
+    "find": "\t\tpanic(\"kourtv2: no voting weight at the pinned epoch\")\n",
     "replace": ""
   },
   {
@@ -3658,8 +3658,8 @@
     "pkg": "governor",
     "file": "governor.gno",
     "label": "castVote: weight is read at the CURRENT epoch, not the snapshot",
-    "find": "\t\tw = g.voters.PastVotes(who, p.epoch)",
-    "replace": "\t\tw = g.voters.PastVotes(who, g.voters.Epoch()-1)"
+    "find": "\tw := g.voters.PastVotes(who, p.epoch)",
+    "replace": "\tw := g.voters.PastVotes(who, g.voters.Epoch()-1)"
   },
   {
     "pkg": "governor",
@@ -6175,54 +6175,5 @@
     "label": "zero-stamp: the settle row's HEIGHT half is taken from the opening too",
     "find": "\":\" + itoa(cs.answerHeight+settleDelay)",
     "replace": "\":\" + itoa(cs.openedAt+settleDelay)"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "lock.gno",
-    "label": "vote lock: TransferCC does not check it",
-    "find": "\ttouch(c)\n\tmustNotVoteLocked(c, from)\n\tmustSpendable(c, from, amount)\n\tc.coin.Transfer(from, to, amount)",
-    "replace": "\ttouch(c)\n\tmustSpendable(c, from, amount)\n\tc.coin.Transfer(from, to, amount)"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "lock.gno",
-    "label": "vote lock: TransferFromCC does not check it (allowance launders the sale)",
-    "find": "\tmustNotVoteLocked(c, from)\n\tmustSpendable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)",
-    "replace": "\tmustSpendable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "lock.gno",
-    "label": "vote lock: the lock is not monotone, so a later short round releases an earlier one",
-    "find": "\tif cur := voteLockedUntil(c, who); cur >= roundEnd {\n\t\treturn\n\t}",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "lock.gno",
-    "label": "vote lock: the one-round cap is gone",
-    "find": "\tif lid := now + c.params.votingBlocks; roundEnd > lid {\n\t\troundEnd = lid\n\t}",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "dispute.gno",
-    "label": "vote lock: a dispute vote locks nothing",
-    "find": "\tc.gov.VoteWithWeight(who, cs.proposalID, choice, w)\n\tlockVote(c, who, closes)",
-    "replace": "\tc.gov.VoteWithWeight(who, cs.proposalID, choice, w)\n\t_ = closes"
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "modvote.gno",
-    "label": "vote lock: an election vote locks nothing",
-    "find": "\tlockVote(c, who, e.voteEnd)",
-    "replace": ""
-  },
-  {
-    "pkg": "kourtv2",
-    "file": "modvote.gno",
-    "label": "election weight: the voter's own ballot bond is not credited",
-    "find": "\te.lines.Iterate(\"\", \"\", func(_ string, v any) bool {\n\t\tif l := v.(*ballotLine); l.poster == who {\n\t\t\tw = mustAdd(w, l.bond)\n\t\t}\n\t\treturn false\n\t})",
-    "replace": ""
   }
 ]

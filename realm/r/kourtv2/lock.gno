@@ -175,7 +175,6 @@ func TransferCC(cur realm, courtSlug string, to address, amount int64) {
 		panic("kourtv2: the court escrow is not a transfer endpoint")
 	}
 	touch(c)
-	mustNotVoteLocked(c, from)
 	mustSpendable(c, from, amount)
 	c.coin.Transfer(from, to, amount)
 }
@@ -243,9 +242,6 @@ func TransferFromCC(cur realm, courtSlug string, from, to address, amount int64)
 		panic("kourtv2: the court escrow is not a transfer endpoint")
 	}
 	touch(c)
-	// Keyed on the OWNER, not the spender: an allowance cannot be used to move
-	// coin its owner voted with, exactly as it cannot outrank a stake lock.
-	mustNotVoteLocked(c, from)
 	mustSpendable(c, from, amount)
 	c.coin.TransferFrom(cur.Previous().Address(), from, to, amount)
 }
@@ -257,91 +253,4 @@ func TransferFromCC(cur realm, courtSlug string, from, to address, amount int64)
 // min(AllowanceCC, SpendableOf).
 func AllowanceCC(courtSlug string, owner, spender address) int64 {
 	return mustCourt(courtSlug).coin.Allowance(owner, spender)
-}
-
-// -------------------------------------------------------------- vote lock --
-//
-// VOTING LOCKS COIN AGAINST TRANSFER, AND AGAINST NOTHING ELSE.
-//
-// Vote weight in this realm is what the voter holds AT THE MOMENT THEY VOTE, not
-// a sealed snapshot. That is deliberate and it is the point: coin acquired one
-// block ago votes at full size, with no seasoning period. What makes live weight
-// safe is this lock — you cannot sell what you voted with until the round closes,
-// so weight cannot be RENTED, and an atomic borrow-vote-repay cannot repay.
-//
-// WHY IT IS TRANSFER-ONLY, WHICH IS THE WHOLE DESIGN. A voter's coin can still be
-// staked to earn conviction, still back a bond, still pay a claim deposit. So
-// voting costs NO YIELD — the only thing given up is the option to SELL for the
-// rest of the round. That is what makes the mechanism affordable without paying
-// voters anything new: the alternative, freezing coin out of every use and
-// compensating for it, needs emission proportional to turnout x time against a
-// supply-derived ceiling, and the existing carrot is keyed to conviction so it is
-// structurally tiny on exactly the young claims where turnout is scarcest
-// (measured: 7% of 3.8M against a 1.25M lock cost, a 4.6x loss).
-//
-// WHAT IT IS NOT. It does not ration voting: one coin still votes on every open
-// claim at once, so the "simultaneous across every concurrently open dispute" cost
-// quorumFloor's comment accepts is unchanged. It rations DISPOSAL.
-//
-// NO SWEEP, NO RELEASE TRANSACTION, NOTHING STRANDED. The gate is a height
-// comparison, so the lock lifts by itself. That is the failure mode the deleted
-// unbonding queue had, and it is not repeated here.
-//
-// BOUNDED BY ONE ROUND. votingBlocks is the ceiling however long a lane's window
-// nominally runs, so the commitment is statable before the vote is cast rather
-// than discovered after.
-
-// voteLockedUntil is the height until which `who` may not transfer. The ONLY
-// reader of the tree — same rule as lockedOf, for the same reason.
-func voteLockedUntil(c *Court, who address) int64 {
-	if c.voteLockUntil == nil {
-		return 0
-	}
-	if v := c.voteLockUntil.Get(string(who)); v != nil {
-		return v.(int64)
-	}
-	return 0
-}
-
-// lockVote extends `who`'s transfer lock to cover a round closing at `roundEnd`.
-// MONOTONE: it never shortens an existing lock, so voting on a second claim
-// cannot release the first. Capped at one round from now.
-func lockVote(c *Court, who address, roundEnd int64) {
-	now := heightNow()
-	if lid := now + c.params.votingBlocks; roundEnd > lid {
-		roundEnd = lid
-	}
-	if roundEnd <= now {
-		return // a round already closed locks nothing
-	}
-	if c.voteLockUntil == nil {
-		c.voteLockUntil = bptree.NewBPTree32()
-	}
-	if cur := voteLockedUntil(c, who); cur >= roundEnd {
-		return
-	}
-	c.voteLockUntil.Set(string(who), roundEnd)
-}
-
-// mustNotVoteLocked refuses a transfer while the sender is inside a round they
-// voted in. Called by TransferCC and TransferFromCC and by nothing else — a
-// stake, a bond or a deposit is not a disposal and is deliberately allowed.
-func mustNotVoteLocked(c *Court, who address) {
-	if until := voteLockedUntil(c, who); until > heightNow() {
-		panic("kourtv2: you voted in a round that has not closed — court coin " +
-			"you voted with cannot be transferred until block " +
-			itoa(until) + ". It can still be staked, bonded, or spent on a " +
-			"deposit: voting costs you liquidity, never yield")
-	}
-}
-
-// VoteLockedUntil is the height until which an address may not transfer, and 0 if
-// it may. Published so a UI can state the commitment BEFORE the vote is cast; a
-// lock a voter only learns about afterwards is a trap however fair it is.
-func VoteLockedUntil(courtSlug string, who address) int64 {
-	c := mustCourt(courtSlug)
-	if until := voteLockedUntil(c, who); until > heightNow() {
-		return until
-	}
-	return 0
 }

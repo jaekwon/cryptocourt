@@ -61,6 +61,11 @@ REALMS = ["kourtv1", "kourtv2"]
 # An exported entrypoint whose name says it moves value between holders. Matched
 # on the exported surface only: unexported helpers are this realm's own business,
 # and the escrow-to-user refunds are exactly what the realm is supposed to do.
+# TWO patterns, because the inversion of this guard dropped coverage nobody
+# replaced and it took an external review to notice.
+#
+# REPUTATION, which is what the inversion was for: an address's earned standing
+# must not be movable.
 SUSPECT = re.compile(
     r"^func (Assign|Migrate|Move|Set|Bequeath|Gift|Sell|Grant|Delegate|Transfer)"
     r"[A-Za-z0-9_]*(Record|Credential|Standing|Score|Reputation|Priority)"
@@ -68,13 +73,29 @@ SUSPECT = re.compile(
     re.M,
 )
 
-# Exported names that match the pattern and move no coins:
-#   TransferGlobalAdmin  — hands over an admin role.
-#   ApproveCandidate     — casts a ballot approval in a moderator election.
-#   ApproveRetain        — the same, for the retain line.
-# Excluded by exact name rather than by narrowing the pattern, so that a genuine
-# ERC20-style `Approve`, or a future `ApproveSpender`/`TransferAnythingElse`,
-# still trips. A tripwire that stops catching things is worse than none.
+# REDEMPTION, which the inversion silently stopped watching, guarded on the axis
+# that actually matters: DENOMINATION, not verb names.
+#
+# The inversion added a required reputation-noun suffix, and `SellCC` and
+# `RedeemForGNOT` both began to PASS — tested, they did. A verb list was the wrong
+# instrument anyway: it trips on `WithdrawStake`, `WithdrawBonus` and V1's three
+# `Redeem*` entrypoints, all of which return a holder's own CC INSIDE the court and
+# touch no GNOT, while a genuine redemption could be called anything.
+#
+# What is existential is that no GNOT ever leaves this realm to a user. buy.gno
+# says it ("the GNOT is BURNED ... nothing ever redeems") and REGULATIONS.md's whole
+# position rests on it. GNOT can only move via a banker's SendCoins, so the property
+# is checkable exactly: SendCoins appears in buy.gno ONLY, at a pinned count.
+#
+# kourtv2's two are the burn to the keyless sink and the buyer's dust change from
+# the curve; kourtv1's one is its burn. A third in kourtv2, or a first anywhere
+# else, is a redemption path and this refuses it.
+SENDCOINS = re.compile(r"\bSendCoins\s*\(")
+SENDCOINS_ALLOWED = {("kourtv1", "buy.gno"): 1, ("kourtv2", "buy.gno"): 2}
+
+# Exact names both patterns would otherwise trip on. WithdrawStake and
+# WithdrawBonus are the reason REDEEM needs a list at all: they return a holder's
+# own CC inside the court and touch no GNOT.
 ALLOWED = {"TransferGlobalAdmin", "ApproveCandidate", "ApproveRetain"}
 
 
@@ -91,30 +112,43 @@ def main() -> int:
             return 1
         for p in files:
             scanned += 1
-            for m in SUSPECT.finditer(p.read_text()):
+            src = p.read_text()
+            for m in SUSPECT.finditer(src):
                 name = m.group(0)[len("func "):].split("(")[0]
                 if name in ALLOWED:
                     continue
-                line = p.read_text()[: m.start()].count("\n") + 1
-                hits.append((realm, p.name, line, name))
+                line = src[: m.start()].count("\n") + 1
+                hits.append(("reputation", realm, p.name, line, name))
+            n = len(SENDCOINS.findall(src))
+            want = SENDCOINS_ALLOWED.get((realm, p.name), 0)
+            if n != want:
+                hits.append(("GNOT leaves the realm", realm, p.name, 0,
+                             f"{n} SendCoins call(s), expected {want}"))
 
     if hits:
-        print("check-nontransferable: REPUTATION appears to have become "
-              "transferable.\n", file=sys.stderr)
-        for realm, fname, line, name in hits:
-            print(f"  {realm}/{fname}:{line}  {name}", file=sys.stderr)
-        print("\nAn address's earned standing must not be movable. The coin is "
+        print("check-nontransferable: something that must not be movable "
+              "appears to have become movable.\n", file=sys.stderr)
+        for kind, realm, fname, line, name in hits:
+            print(f"  [{kind}] {realm}/{fname}:{line}  {name}", file=sys.stderr)
+        print("\nTwo properties are guarded here. An address's earned standing "
+              "must not be movable. The coin is "
               "transferable by decision (TransferCC), but answerRecord is keyed "
               "by address with no Remove precisely so a credential cannot be "
               "sold — the answer-priority window and the difficulty record both "
               "price a CAREER, and a sellable one prices nothing. If this is "
               "intended, it is an owner decision: say so here and in "
-              "MODERATION.md, and price rent-a-lead first.", file=sys.stderr)
+              "MODERATION.md, and price rent-a-lead first.\n\nAnd no GNOT may "
+              "leave the realm to a user: SendCoins belongs in buy.gno only, at "
+              "the pinned count (the burn, plus the buyer's dust change). A new "
+              "one anywhere is a redemption path, and \"the payment is burned, "
+              "nothing ever redeems\" is the claim REGULATIONS.md rests on.",
+              file=sys.stderr)
         return 1
 
     print(f"check-nontransferable: {scanned} realm files, no entrypoint moves "
-          f"an address's record. Coin is transferable by decision; standing is "
-          f"not.")
+          f"an address's record and none redeems CC for GNOT. Coin is "
+          f"transferable between holders by decision; standing and the one-way "
+          f"curve are not.")
     return 0
 
 

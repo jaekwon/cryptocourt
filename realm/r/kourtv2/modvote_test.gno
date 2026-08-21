@@ -78,12 +78,7 @@ func TestElectionBelowQuorumRetains(cur realm, t *testing.T) {
 	newMod := testutils.TestAddress("ev2-newmod")
 	c := electionCourt(cur, "ev2", creator,
 		[]address{whale, dust}, []int64{1_000_000_000, 10_000_000})
-	// NOT minted after the seal any more. That extra 50 CC used to be the whole
-	// point of this fixture — it proved post-seal coin could not vote, so turnout
-	// stayed at 10 CC against a ~50 CC floor. Under live weight (v0.57) it counts,
-	// dust clears the floor, and the election installs, which would make this test
-	// assert its own opposite. The sub-quorum property is what is being tested, so
-	// the fixture keeps the sub-quorum HOLDING and drops the misdirection.
+	c.coin.Mint(dust, 50_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(dust))
 	cand := RegisterModCandidate(cross(cur), "ev2", 1, newMod)
@@ -123,18 +118,10 @@ func TestElectionDecoyLosesToEarliestNomination(cur realm, t *testing.T) {
 	small := testutils.TestAddress("ev3-small")
 	honestMod := testutils.TestAddress("ev3-honest")
 	puppet := testutils.TestAddress("ev3-puppet")
-	// Minted INTO the sealed epoch rather than after it. The two post-seal mints
-	// this fixture used to make were invisible to the old pinned weighting, so the
-	// margin arithmetic below was computed on 400/20 alone; under live weight
-	// (v0.57) they would count and the decoy's lead would cross the margin. Folding
-	// them into the sealed balances keeps the margin being tested rather than the
-	// weighting.
-	// 400/18 rather than the old 400/20: small's live weight now includes the bond
-	// they posted for the decoy line (credited, since escrowed-by-you coin should
-	// still vote), so the sealed holding has to come down for their lead to stay
-	// INSIDE the margin — which is the property under test.
 	c := electionCourt(cur, "ev3", creator,
-		[]address{big, small}, []int64{400_000_000, 18_000_000})
+		[]address{big, small}, []int64{400_000_000, 20_000_000})
+	c.coin.Mint(big, 50_000_000)
+	c.coin.Mint(small, 50_000_000)
 
 	// The honest set, nominated FIRST; then a decoy that swaps in a puppet.
 	testing.SetRealm(testing.NewUserRealm(big))
@@ -713,44 +700,21 @@ func TestVotingWindowAndWeightGates(cur realm, t *testing.T) {
 		ApproveCandidate(cross(cur), "votegate", offBallot)
 	})
 
-	// INVERTED AT v0.57, AND THIS IS THE CLEAREST STATEMENT OF THE TRADE.
-	//
-	// This block used to assert the opposite: "weight is pinned at the epoch the
-	// election opened; the latecomer is minted more CC than the honest voter holds
-	// and still cannot vote, because it held none at the pin." That property is
-	// what the owner's rule — newly acquired coin votes immediately, no seasoning —
-	// deliberately removes. So the latecomer now votes, and with more weight than
-	// the honest holder.
-	//
-	// Stated plainly because it is the cost, not a detail: an OPEN vote can now be
-	// bought into. And no choice of denominator prevents it — you gain 100% of what
-	// you acquire while a 5%-of-votable bar gains 5% of it. Measured in
-	// VOTELOCK.md. What the change buys instead is that the coin cannot be RENTED:
-	// voting locks it against transfer until the round closes, so a buyer keeps the
-	// position and its price risk.
+	// Weight is pinned at the epoch the election opened. The latecomer is
+	// minted more CC than the honest voter holds and still cannot vote,
+	// because it held none at the pin. No epoch is sealed here on purpose:
+	// sealing one would need epochBlocks*2 heights, and the fixture must stay
+	// inside the voting window or it would measure the CLOSED refusal instead.
 	latecomer := testutils.TestAddress("vg-late")
 	c.coin.Mint(latecomer, 5_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(latecomer))
-	ApproveCandidate(cross(cur), "votegate", onBallot)
-	// And the vote it just cast locked the coin it voted with.
-	if VoteLockedUntil("votegate", latecomer) <= heightNow() {
-		t.Fatal("a vote must lock the coin it was cast with")
-	}
-	// The long-standing holder votes too, so the line above is not a ballot that
-	// happens to accept everyone regardless.
-	testing.SetRealm(testing.NewUserRealm(voter))
-	ApproveCandidate(cross(cur), "votegate", onBallot)
-
-	// AND A GHOST WITH NO COIN AT ALL IS STILL REFUSED. This arm replaces the
-	// coverage the inverted latecomer assertion above used to provide: the weight
-	// guard's mutation survived the whole suite once the latecomer began voting,
-	// measured, so the zero-weight case needs saying separately. "Anyone who buys
-	// can vote" is not "anyone can vote".
-	ghost := testutils.TestAddress("vg-ghost")
-	testing.SetRealm(testing.NewUserRealm(ghost))
-	uassert.AbortsContains(t, cur, "no court coin to vote with", func() {
+	uassert.AbortsContains(t, cur, "no voting weight at the pinned epoch", func() {
 		ApproveCandidate(cross(cur), "votegate", onBallot)
 	})
+	// The pinned holder still votes, so the refusal above is about the pin and
+	// not about a ballot that was shut for everyone.
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "votegate", onBallot)
 
 	// voteEnd is inclusive-closed: exactly at it the board is shut, including
 	// to the holder who was voting a moment earlier.

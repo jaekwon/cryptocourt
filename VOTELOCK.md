@@ -1,54 +1,95 @@
-# Vote-lock: solve rented weight, let new coin vote at once, cost the voter no yield
+# Vote-lock: BUILT, REVIEWED BY THREE INDEPENDENT PANELS, REVERTED
 
-**IMPLEMENTED at v0.57. Draft 1 → two review rounds → converged design → built.
-The implementation surfaced one consequence bigger than anything in the plan; it is
-the first section below.**
+**REVERTED at v0.58. Do not re-implement from this document without reading
+"Why it came out" below — the design satisfies all three constraints and is still
+unsafe, and the reason is structural rather than a bug list.**
+
+## Why it came out
+
+**CRITICAL, and it alone was sufficient: `governor.VoteWithWeight` voids the
+governor's `rest` contract, giving a permissionless verdict flip.**
+
+`wouldBe` computes `rest := p.total - cast` and says so beside it:
+
+> *"Negative if an electorate's parts exceed its whole, **which this token cannot
+> do** and a replacement might; a clamp here changed no outcome... **The contract is
+> on the electorate instead**, where somebody swapping one will read it."*
+
+A consumer-supplied weight is not drawn from `p.total`, so `cast` can exceed it and
+`rest` goes negative. The early-succeed arm then reduces algebraically to
+`yes*bps >= (total - abstain)*ThresholdBps` — **`no` drops out of the test entirely**.
+Abstain with more than the sealed supply and the round closes early on a single
+`yes`; later `no` voters are refused "that proposal is closed"; `ResolveDispute`
+reads the truncated tally and overturns. ~50% of sealed supply, acquirable
+mid-window from a zero balance, released one round later. Confirmed end to end.
+
+**HIGH: live weight is incoherent with every frozen bar in the system, not just the
+one this document considered.** §"Turnout can now exceed the snapshot denominator"
+said *"the threshold test is a ratio, so it is unaffected"* — true for the
+threshold, false for every ABSOLUTE numerator measured against a frozen bar:
+
+| bar | anchor | confirmed consequence |
+|---|---|---|
+| `credWeightFloor` | frozen `engaged` at the proposal epoch | `yes` reached **200% of its own denominator**; bar cleared **160×**; the career credential is purchasable inside the window |
+| `qualityBars` | frozen at `PostAnswer` | supply grew 21×, bars did not move; one post-answer buyer cleared `fullBar` **400×**, latched `slotConsumed` and levied a real slash off the answerer's bond |
+| quality **promotion** | same | buying `fullBar` (5% of supply) **doubles the claim's draw** — this document priced only demotion |
+| `electionFloor` | frozen at `OpenElection` | gains **0%** of a buy-in, not the 5% claimed above |
+| election `turnout` vs `line.weight` | two live readings at different times | a line can carry **10× the election's whole turnout** |
+
+Both `votable/3` reachability clamps are void for their stated purpose too:
+turnout is no longer bounded by votable at any epoch.
+
+**HIGH, and self-inflicted: the election bond credit added here was a free coup.**
+`electionBond` clamps to `electionFloor` whenever votable < 20 CC, so an attacker
+holding exactly the floor posts it all as the bond (balance → 0) and votes the whole
+floor on credited weight alone. Installs, bond refunds, **net cost zero**, and
+`AppointMods` refuses forever after. At ordinary scale it is a standing 10%
+discount on every coup. The credit was double duty: the same coin as anti-spam bond
+and as deciding vote.
+
+**MEDIUM, three more:** the lock ended at the *ballot close*, so a voter sold before
+`ResolveDispute` applied the verdict they caused; the quality tally accumulates
+across rounds, so a **fully divested** address decided a later round it never voted
+in, zeroing the draw via `tierLowX`; and the lock had **no amount**, freezing a
+voter's entire future inventory for a round on one dust abstain — while `render.gno`
+told them it locks "the coin you vote with".
+
+## What the constraints actually demand
+
+The three constraints are individually reasonable and jointly force live weight,
+and live weight is incoherent with a system whose every bar is deliberately frozen
+so it cannot move under an open vote. **That is the finding.** Anyone reviving this
+needs to answer it first, not patch the six sites:
+
+- **`min(snapshot, live)`** restores coherence and kills the rental, but violates
+  constraint (3): newly acquired coin has a snapshot of zero.
+- **Making every bar live** restores coherence and gives up "the bar cannot move
+  under an open vote", which `ProposeWithQuorum` exists to guarantee.
+- **Clamping turnout at the frozen denominator** keeps (3) and bounds the
+  incoherence, but makes the tally non-additive — whose ballot gets clipped?
+
+## What was kept from the reverted work
+
+- `check-nontransferable.py` rebuilt on the axis that matters. The inversion earlier
+  the same day had added a required reputation-noun suffix, and `SellCC` /
+  `RedeemForGNOT` both silently began to PASS — so the one property this design
+  treats as existential ("the payment is burned, nothing ever redeems") had no
+  tripwire at all. Verb lists were the wrong instrument: they trip on
+  `WithdrawStake` and V1's three `Redeem*`, all of which return a holder's own CC
+  and touch no GNOT. The guard now pins `SendCoins` to `buy.gno` at an exact count
+  — two in kourtv2 (the burn, and the buyer's dust change), one in kourtv1.
+- Two selftest controls that had been **silently dead**: the coin-`Transfer` control
+  (planting what the guard now permits) and the Makefile coupling anchor (moved when
+  `ccwrap` joined `realm-test`). `make selftest` is not in the default gate, which
+  is how both survived.
+
+---
 
 Three constraints, all three binding:
 
 1. **Voting must not be economically disadvantageous.**
 2. **Rented weight must not decide votes.**
 3. **Newly acquired coin must vote immediately** — no seasoning, no waiting.
-
----
-
-## THE CONSEQUENCE THE PLAN MISSED: an open vote can now be BOUGHT into
-
-Found while implementing, not while planning, and it is the price of constraint
-(3) rather than a defect in the build. Two existing tests were pinning the
-property being removed, and one of them says it outright:
-
-> *"Weight is pinned at the epoch the election opened. The latecomer is minted more
-> CC than the honest voter holds and still cannot vote, because it held none at the
-> pin."* — `TestVotingWindowAndWeightGates`, before this change
-
-Under live weight that latecomer votes, and decides. **And no choice of denominator
-prevents it**, which is the part worth internalising:
-
-| | |
-|---|---|
-| dust's weight, snapshot | 10,000,000 |
-| dust's weight, live (after minting 50 M mid-election) | 60,000,000 |
-| floor, 5% of *sealed* votable | 50,500,000 |
-| floor, 5% of *live* votable | 53,000,000 |
-
-Sub-quorum becomes quorum either way. **You gain 100% of what you acquire while a
-5%-of-votable bar gains 5% of it**, so a fractional bar cannot resist buy-in. The
-old snapshot did not price the attack — it *forbade* it, and (3) is the instruction
-to stop forbidding it.
-
-What is bought is not cheap and not rented: curve minting burns GNOT
-irreversibly, market buying pays the spread, and the vote-lock holds the position
-through the round. So the honest framing is **"votes are purchasable at market,
-and the buyer keeps the position"** — not "votes are cheap".
-
-Also inverted for the same reason: `TestElectionBelowQuorumRetains` and
-`TestElectionDecoyLosesToEarliestNomination` both minted coin *after* the epoch
-seal specifically so it would not count. Their fixtures were rebalanced into the
-sealed epoch so they still test quorum and margin rather than the weighting.
-
-**This is the one thing to reverse if the trade is unwanted, and reversing it means
-giving up (3).**
 
 ---
 
@@ -255,72 +296,5 @@ statable before the vote and no vote can freeze coin for longer than one round.
 6. Readers: `VoteLockedUntil(courtSlug, who)` so a UI can state the commitment
    **before** the vote is cast, not after.
 
-**Built, in that order.** Whitepaper note first (`WHITEPAPER-ITERATION.md`, since
-`WHITEPAPER.md` is loop-managed), then the implementation, then the battery.
-
-### What shipped
-
-- `c.voteLockUntil`, and `mustNotVoteLocked` on `TransferCC` / `TransferFromCC`
-  only — keyed on the OWNER in the allowance door, so an approval cannot launder
-  the sale.
-- `lockVote` is monotone and capped at one round. Both properties are
-  mutation-verified: dropping the monotone check releases an earlier round's coin
-  when a shorter one is voted in, and dropping the cap lets a lock run past a round.
-- Live `BalanceOf` weight in all three lanes, plus the voter's own ballot-line
-  bonds in the election lane — because a live reading alone docks whoever paid to
-  participate, measured as a holder of exactly the 5% floor being pushed to 4.57%
-  by the fee they paid to nominate.
-- `governor.VoteWithWeight`, so `r/govern` keeps the snapshot untouched. Its whole
-  suite passes unchanged, which is the evidence nothing moved there.
-- `scripts/check-nodelegate.py`, wired into `realm-test`, verified to fire on a
-  planted `DelegateVotes`.
-- `VoteLockedUntil(courtSlug, who)` so a UI can state the commitment before the
-  vote rather than after.
-
-### Review of the implementation — four defects found in my own diff
-
-**1. The lock was taken BEFORE the ballot was accepted**, in all three lanes. A
-panic reverts both, so it was not a live bug — but it meant a refused duplicate
-vote or a closed proposal would have extended a lock on the way to failing, and it
-relied on revert semantics rather than being correct by order. Moved after the
-vote is recorded in every lane.
-
-**2. Render never showed the lock**, despite this plan requiring that a voter
-learn the commitment *before* casting. It is the UI. Added, in both states — the
-period when nothing is locked, the countdown when something is. It also had to say
-which of two lines to believe, because `spendable()` deliberately does NOT subtract
-the vote lock: vote-locked coin really is still free to stake or bond, which is the
-whole reason voting costs no yield, and the two figures can therefore disagree.
-
-**3. `check-nodelegate.py` reported success on an empty scan.** With no `.gno`
-files it printed "0 realm files, no way to delegate" and exited 0 — an absence
-check measuring nothing while claiming a clean run, the exact shape that let
-another guard in this repo sweep 39% of the suite. It fails closed now, and the
-repo's own `check-guards-armed` is what forced the discovery by refusing to let an
-unregistered guard exist.
-
-**4. TWO SELFTEST CONTROLS HAD BEEN SILENTLY DEAD SINCE EARLIER TODAY, both from
-my own earlier commits, and nothing caught them because `selftest` is not in the
-default gate.**
-
-- `check-nontransferable`'s control still planted a coin `Transfer` and expected a
-  trip. That guard was INVERTED this morning to watch reputation instead, so the
-  control was planting the thing the guard now permits — it could never fire again.
-- `check-isolation`'s coupling control anchored on
-  `for r in govern offerer kourtv1 kourtv2; do`, the exact Makefile line I edited
-  when `ccwrap` joined `realm-test`.
-
-Both repaired, and the lesson is the one this repo already knows one level down: a
-control that cannot fire is not a control. **`make selftest` should arguably be in
-the default gate**, or at least run whenever a guard or the Makefile's package
-lists change — flagged, not decided.
-
-### Battery
-
-Eleven mutants, all killed, `0 build errors` each: seven new guards, and four
-pre-existing corpus rows re-anchored onto the changed lines. **One survived first
-and was a real coverage gap I had created** — inverting the latecomer assertion
-removed the only test that a zero-coin address is refused, so the election weight
-guard could be deleted unnoticed. A ghost arm was added back to
-`TestVotingWindowAndWeightGates` and the mutant now dies there. "Anyone who buys
-can vote" is not "anyone can vote", and the suite has to say so separately.
+**Order:** whitepaper first (the owner asked), then implementation, then the guard
+mutation battery, then the audit.
