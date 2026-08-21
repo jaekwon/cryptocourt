@@ -879,3 +879,63 @@ func TestTheBountyIsBoundedByBothTheBurnAndTheBond(t *testing.T) {
 		t.Errorf("a negative bond paid a bounty of %d, want 0", got)
 	}
 }
+
+// credWeightFloor IS QUOTED ON RAW SUPPLY, AND THAT IS THE SAFE DIRECTION.
+//
+// It is the one 5% bar in the realm with no votable clamp: the election floor is
+// 5% of votable, the quality full bar is clamped down to votable/3, and this one
+// is 5% of `engaged`, which EngagedTotal defines as PastTotal — raw supply.
+//
+// That looks like the base mismatch that has bitten this design twice, and it is
+// the opposite. credWeightFloor gates a POWER: credEligible needs weight >=
+// floor/4 voted AGAINST a claim before an aggressive meta verb will execute, so a
+// LARGER floor withholds the verb. Quoting on supply is therefore strictly more
+// conservative than quoting on votable, and it grows more conservative as escrow
+// grows — measured below.
+//
+// Pinned because "fix the base for consistency" is an inviting change that would
+// make an aggressive moderation override cheaper to unlock in exactly the
+// conditions where the court is most loaded.
+func TestCredWeightFloorIsQuotedOnSupplyNotVotable(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cwf-alice")
+	bob := testutils.TestAddress("cwf-bob")
+	c := testCourt(cur, "cwf", alice, 50_000_000_000)
+	c.coin.Mint(bob, 50_000_000_000)
+	id := stakeAnswerDispute(cur, "cwf", alice, bob)
+	cs := mustClaim(c, id)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cwf", id)
+
+	supply := c.coin.TotalSupply()
+	uassert.Equal(t, supply*quorumSupplyBps/10000, credWeightFloor(c, cs.proposalID))
+
+	// Move two fifths of supply into the escrow, as bonds and deposits do. votable
+	// falls; supply does not.
+	c.coin.Transfer(bob, c.escrow, 40_000_000_000)
+	testing.SkipHeights(epochBlocks * 2)
+	touch(c)
+	at := c.coin.Epoch() - 1
+	_, esc, votable := VotableSupply("cwf")
+	if esc <= 0 || votable >= c.coin.PastTotal(at) {
+		t.Fatalf("fixture is vacuous: escrow=%d must be positive and votable=%d "+
+			"strictly below supply=%d, or the two bases cannot be told apart",
+			esc, votable, c.coin.PastTotal(at))
+	}
+
+	onSupply := mulDiv128(c.coin.PastTotal(at), quorumSupplyBps, 10000)
+	onVotable := mulDiv128(votable, quorumSupplyBps, 10000)
+	// The bar a fresh round is judged against tracks SUPPLY. Asserted as an
+	// equality against the supply figure and an inequality against the votable one,
+	// so a re-base fails whichever way it is written.
+	fresh := credWeightFloorAt(c, at)
+	uassert.Equal(t, onSupply, fresh)
+	if fresh <= onVotable {
+		t.Fatalf("the supply base must be STRICTER than the votable one, or this "+
+			"test is not distinguishing them: %d vs %d", fresh, onVotable)
+	}
+	// And it is stricter by supply/votable, which grows without bound as escrow does.
+	if fresh*100/onVotable < 150 {
+		t.Fatalf("at two fifths escrowed the supply base should be ~1.67x the "+
+			"votable one, measured %d%%", fresh*100/onVotable)
+	}
+}

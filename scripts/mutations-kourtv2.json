@@ -6371,5 +6371,12 @@
     "label": "ResolveElection: grows a fee, stranding a fully-committed approver",
     "find": "func ResolveElection(cur realm, courtSlug string) {\n",
     "replace": "func ResolveElection(cur realm, courtSlug string) {\n\tmustSpendable(mustCourt(courtSlug), cur.Previous().Address(), 1)\n"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "dispute.gno",
+    "label": "credWeightFloor: re-based on votable, cheapening an aggressive verb",
+    "find": "\treturn mulDiv128(c.coin.EngagedTotal(at), quorumSupplyBps, grc20votes.Bps)",
+    "replace": "\treturn mulDiv128(votableAt(c, at), quorumSupplyBps, grc20votes.Bps)"
   }
 ]

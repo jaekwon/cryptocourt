@@ -718,9 +718,27 @@ func quorumFloor(c *Court, xbar int64) int64 {
 	// open claim, since voting consumes no weight. That trade is accepted because the
 	// snipe it fixes is currently FREE while a false overturn costs a bond.
 	//
-	// The 5%-of-supply anchor is KEPT where it is still the right denominator: the
-	// quality lane's full bar, the election floor, and credWeightFloor below. Note
-	// check-demo-physics reads quorumSupplyBps out of this file BY NAME.
+	// THE 5% ANCHOR IS KEPT ELSEWHERE, and the three places do NOT share a
+	// denominator. This list used to say they did, which matters because a base
+	// mismatch is the exact bug class that has already bitten twice here: the
+	// election bond was quoted on supply against a floor on votable, and ccwrap's
+	// vault sat inside votable while no key could vote it. Read off the code:
+	//
+	//   election floor      5% of VOTABLE (modvote.gno electionFloor)
+	//   quality full bar    5% of SUPPLY, then clamped down to votable/3 — the
+	//                       clamp is what keeps it reachable, not the base
+	//   credWeightFloor     5% of ENGAGED, and EngagedTotal == PastTotal, so RAW
+	//                       SUPPLY with no votable clamp at all
+	//
+	// credWeightFloor is the outlier and it is deliberate. It gates a POWER —
+	// credEligible needs weight >= floor/4 voted AGAINST before an aggressive meta
+	// verb executes — so a larger floor WITHHOLDS the verb. Measured at two fifths
+	// escrowed: 5.00e9 on supply against 3.00e9 on votable, so the supply base is
+	// 1.67x stricter, and it grows stricter as escrow grows. Re-basing it on
+	// votable "for consistency" would make an aggressive override that much cheaper
+	// to unlock, which is what TestCredWeightFloorIsQuotedOnSupplyNotVotable stops.
+	//
+	// Note check-demo-physics reads quorumSupplyBps out of this file BY NAME.
 	// LAST, deliberately: governor.ProposeWithQuorum refuses a non-positive
 	// floor, and a fully-escrowed court has votable == 0.
 	if floor < 1 {
@@ -831,4 +849,12 @@ func ladderWindow(p Params) int64 {
 func credWeightFloor(c *Court, pid int64) int64 {
 	engaged, _ := c.gov.Snapshot(pid)
 	return mulDiv128(engaged, quorumSupplyBps, grc20votes.Bps)
+}
+
+// credWeightFloorAt is credWeightFloor's expression against an explicit epoch,
+// for asking what a FRESH round would be judged against. Split out so the test
+// that pins the denominator reads the shipped formula instead of a paraphrase of
+// it — a paraphrased bar cannot notice the shipped one being re-based.
+func credWeightFloorAt(c *Court, at uint32) int64 {
+	return mulDiv128(c.coin.EngagedTotal(at), quorumSupplyBps, grc20votes.Bps)
 }
