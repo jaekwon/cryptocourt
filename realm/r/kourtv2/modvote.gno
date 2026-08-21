@@ -397,9 +397,25 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	// line B now carries weight ABOVE the turnout recorded back at approval A.
 	// install compares maxW against e.turnout and e.floor, so a line heavier than
 	// the turnout meant to bound it is a candidate installing on weight the
-	// election never counted — measured, before the freeze, at a line carrying 10x
-	// the whole turnout. Freezing at first approval makes max(line.weight) <=
+	// election never counted. Freezing at first approval makes max(line.weight) <=
 	// turnout arithmetic instead of a hope.
+	//
+	// THE RATIO IS UNBOUNDED, and an earlier version of this comment borrowed "10x
+	// the whole turnout" from VOTELOCK.md — a figure the panels measured on the
+	// REVERTED design, where both readings were live. That is a different mechanism
+	// and the number does not transfer. Here the ceiling still caps at the snapshot,
+	// so with the freeze removed a voter who approves line A holding e and then tops
+	// up gets line B at the snapshot against a turnout of e: the ratio is
+	// snapshot/e, arbitrarily large as e falls to one unit. Derivable rather than
+	// measured, and strictly worse than the borrowed figure — which is why carrying
+	// a magnitude across a design boundary is worth catching even when the truth
+	// turns out to be the less flattering number.
+	//
+	// A concrete instance, by arithmetic on the shipped fixture's own constants
+	// rather than by a fresh measurement: TestElectionWeightIsFrozenAtFirstApproval
+	// gives its voter a 100 B snapshot and has them approve while retaining about
+	// 1 B, so ablating the freeze there puts line B at roughly 100x the recorded
+	// turnout — an order of magnitude past the 10x that was borrowed.
 	//
 	// It is also why e.voters holds the WEIGHT rather than a presence bool. "This
 	// address has voted" and "at what weight" have to be one fact in one place, or

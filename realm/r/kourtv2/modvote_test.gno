@@ -911,8 +911,12 @@ func TestElectionWeightIsFlooredByWhatIsStillHeld(cur realm, t *testing.T) {
 // per approval lets one voter approve line A while holding little, top up, and
 // approve line B at their full snapshot. Line B then carries weight ABOVE the
 // turnout recorded at approval A — and install compares maxW against e.turnout, so
-// that is a candidate installing on weight the election never counted. Before the
-// freeze the panels measured a line at 10x the whole turnout.
+// that is a candidate installing on weight the election never counted. The ratio is
+// UNBOUNDED: line B reads the snapshot while turnout holds whatever the voter had at
+// approval A, so it is snapshot/e for an e of the voter's choosing. (An earlier note
+// here said "the panels measured a line at 10x the whole turnout" — that figure was
+// measured on the REVERTED design, where both readings were live, and does not
+// transfer to this one.)
 //
 // So: approve early and poor, get rich, approve again. Both lines must read the
 // poor figure, and turnout must bound them.
