@@ -190,8 +190,18 @@ FLOOR_SHAPE = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < ")
 #
 # So the writers are counted. A change here is not necessarily wrong — it just has
 # to be made by someone who has read votelock.gno's voteLockQuality arm.
-TERMINAL_VERDICT = re.compile(r"^\s*cs\.verdictAt = ", re.M)
-TERMINAL_CLOSED = re.compile(r"^\s*cs\.closed = true", re.M)
+# ANY assignment form, and requiring ` = ` was this arm's blind spot. Five places in
+# this realm already assign cs fields in TUPLE form (answer.gno's stake freeze,
+# dispute.gno's carrot record twice, quality.gno's tally reset, stake.gno's
+# conviction), so `cs.verdictAt, cs.verdictAtTime = now, t` is the idiomatic way to
+# write a new terminal path here — and under the old pattern an ADDED one left the
+# count at three and went unseen. Converting an existing one would have fired, by
+# dropping the count, which is the kind of half-coverage that reads as coverage.
+#
+# `\b` after the field name matters: cs.verdictAtTime is a DIFFERENT field, assigned
+# in its own right, and must not be counted as a terminal write.
+TERMINAL_VERDICT = re.compile(r"^\s*cs\.verdictAt\b[^=\n]*=", re.M)
+TERMINAL_CLOSED = re.compile(r"^\s*cs\.closed\b[^=\n]*=", re.M)
 TERMINAL_VERDICT_N = 3  # dispute.gno provClose + Finalize, session.gno settle
 TERMINAL_CLOSED_N = 1   # claim.gno dead-claim close
 
