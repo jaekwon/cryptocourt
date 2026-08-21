@@ -6378,5 +6378,26 @@
     "label": "credWeightFloor: re-based on votable, cheapening an aggressive verb",
     "find": "\treturn mulDiv128(c.coin.EngagedTotal(at), quorumSupplyBps, grc20votes.Bps)",
     "replace": "\treturn mulDiv128(votableAt(c, at), quorumSupplyBps, grc20votes.Bps)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "lockVote: the routine prune stops running (rows accumulate per vote)",
+    "find": "\tpruneVoteLocks(c, who)\n\tc.voteLocks.Set(",
+    "replace": "\tc.voteLocks.Set("
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "pruneVoteLocks: prunes LIVE rows too (an exit from a commitment)",
+    "find": "\t\tif !voteLockOpen(c, who, k) {\n\t\t\tstale = append(stale, k)\n\t\t}",
+    "replace": "\t\tstale = append(stale, k)"
+  },
+  {
+    "pkg": "kourtv2",
+    "file": "votelock.gno",
+    "label": "pruneVoteLocks: removes nothing and reports nothing",
+    "find": "\tfor _, k := range stale {\n\t\tc.voteLocks.Remove(k)\n\t}\n\treturn len(stale)",
+    "replace": "\treturn 0"
   }
 ]

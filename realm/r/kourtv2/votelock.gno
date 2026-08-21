@@ -190,7 +190,34 @@ func lockVote(c *Court, who address, kind string, id, sub, amount int64) {
 	if c.voteLocks == nil {
 		c.voteLocks = bptree.NewBPTree32()
 	}
-	// Collect first: the tree must not be modified during iteration.
+	pruneVoteLocks(c, who)
+	c.voteLocks.Set(voteLockKey(who, kind, uint64(id), uint64(sub)), amount)
+}
+
+// pruneVoteLocks drops the rows whose questions have resolved, and returns how
+// many it dropped.
+//
+// IT CANNOT CHANGE ANY BALANCE OR ANY COMMITMENT, which is what makes the exported
+// wrapper safe to leave permissionless. It removes exactly the rows voteLockedOf
+// already skips — the predicate is the same voteLockOpen in both — so the committed
+// figure before a prune and after it are equal by construction, and
+// TestPruningDropsDeadRowsWithoutMovingTheCommitment asserts that rather than
+// trusting it.
+//
+// WHY IT NEEDS AN ENTRYPOINT AT ALL. lockVote prunes, so the common case cleans
+// itself: an address that keeps voting never carries dead rows. An address that
+// votes in several simultaneously-open questions and then STOPS carries one row per
+// question, forever. Measured: six open disputes voted, all six resolved, six rows
+// still there with ZERO coin committed, and every mustSpendable on that address
+// walking all six. Bounded only by how many questions were open at once, which a
+// court with many live claims does not bound usefully — and each row is persistent
+// state paying a storage deposit for nothing.
+//
+// Collect before removing: the tree must not be modified during iteration.
+func pruneVoteLocks(c *Court, who address) int {
+	if c.voteLocks == nil {
+		return 0
+	}
 	var stale []string
 	pre := string(who)
 	c.voteLocks.Iterate(pre, pre+"\xff", func(k string, _ any) bool {
@@ -202,7 +229,7 @@ func lockVote(c *Court, who address, kind string, id, sub, amount int64) {
 	for _, k := range stale {
 		c.voteLocks.Remove(k)
 	}
-	c.voteLocks.Set(voteLockKey(who, kind, uint64(id), uint64(sub)), amount)
+	return len(stale)
 }
 
 // beClaimID is beClaimKey's inverse, for reading an id back out of a composite
@@ -214,6 +241,25 @@ func beClaimID(s string) uint64 {
 		v = v<<8 | uint64(s[i])
 	}
 	return v
+}
+
+// PruneVoteLocks drops `who`'s resolved lock rows and returns the count, so an
+// address that voted in several questions and then stopped is not left walking dead
+// rows on every transfer.
+//
+// PERMISSIONLESS, and deliberately so: it removes only rows that voteLockedOf
+// already ignores, so it cannot free committed coin or change what anyone may
+// spend. A third party paying gas to shrink someone else's state is doing them and
+// the chain a favour, and there is nothing for a griefer to gain — the worst
+// available move is cleaning up.
+//
+// Takes `who` rather than acting on the caller for the same reason: it is
+// maintenance, not a privilege.
+func PruneVoteLocks(cur realm, courtSlug string, who address) int {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	return pruneVoteLocks(mustCourt(courtSlug), who)
 }
 
 // VoteLockedOf is the CC this address cannot dispose of because it voted with it

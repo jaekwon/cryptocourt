@@ -531,3 +531,165 @@ func TestAFullyCommittedApproverCanAlwaysFreeTheirOwnCoin(cur realm, t *testing.
 	testing.SetRealm(testing.NewUserRealm(voter))
 	TransferCC(cross(cur), "vlk7", other, 1)
 }
+
+// PRUNING DROPS DEAD ROWS AND MOVES NOTHING ELSE.
+//
+// lockVote prunes, so an address that keeps voting never accumulates. One that
+// votes in several simultaneously-open questions and then STOPS carries a row per
+// question forever — measured at six open disputes voted, all six resolved, six
+// rows still present with ZERO coin committed, and every mustSpendable on that
+// address walking all six. Each is persistent state paying a storage deposit for
+// nothing, and the count is bounded only by how many questions were open at once.
+//
+// The safety argument for leaving the entrypoint permissionless is an EQUALITY, not
+// a judgement: prune removes exactly the rows voteLockedOf already skips, because
+// both ask voteLockOpen. So the committed figure is identical either side of a
+// prune. That is asserted here, together with the pair that matters more — a LIVE
+// row must survive, or "prune" would be a way to walk out of a commitment.
+func TestPruningDropsDeadRowsWithoutMovingTheCommitment(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vl8-alice")
+	whale := testutils.TestAddress("vl8-whale")
+	voter := testutils.TestAddress("vl8-voter")
+	c := testCourt(cur, "vlk8", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+
+	// Three questions, all voted, all resolved: three dead rows.
+	dead := make([]uint64, 0, 3)
+	for i := 0; i < 3; i++ {
+		id := stakeAnswerDispute(cur, "vlk8", alice, whale)
+		testing.SetRealm(testing.NewUserRealm(whale))
+		OpenDispute(cross(cur), "vlk8", id)
+		testing.SetRealm(testing.NewUserRealm(voter))
+		VoteDispute(cross(cur), "vlk8", id, "no")
+		dead = append(dead, id)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	for _, id := range dead {
+		testing.SetRealm(testing.NewUserRealm(whale))
+		ResolveDispute(cross(cur), "vlk8", id)
+	}
+
+	// A fourth question, voted and left OPEN, so there is a live row to protect.
+	live := stakeAnswerDispute(cur, "vlk8", alice, whale)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "vlk8", live)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "vlk8", live, "no")
+
+	// lockVote pruned on that fourth vote, so re-dirty the state: resolve the
+	// fourth's PREDECESSORS are already gone, so instead add two more dead rows
+	// after the live one exists.
+	extra := make([]uint64, 0, 2)
+	for i := 0; i < 2; i++ {
+		id := stakeAnswerDispute(cur, "vlk8", alice, whale)
+		testing.SetRealm(testing.NewUserRealm(whale))
+		OpenDispute(cross(cur), "vlk8", id)
+		testing.SetRealm(testing.NewUserRealm(voter))
+		VoteDispute(cross(cur), "vlk8", id, "no")
+		extra = append(extra, id)
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	for _, id := range extra {
+		testing.SetRealm(testing.NewUserRealm(whale))
+		ResolveDispute(cross(cur), "vlk8", id)
+	}
+
+	before := VoteLockedOf("vlk8", voter)
+	rows := voteLockRows(c, voter)
+	if rows < 2 || before <= 0 {
+		t.Fatalf("fixture is vacuous: need dead rows AND a live commitment, got "+
+			"rows=%d committed=%d", rows, before)
+	}
+
+	// Anyone may prune, so a bystander does it.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	dropped := PruneVoteLocks(cross(cur), "vlk8", voter)
+	if dropped <= 0 {
+		t.Fatal("nothing was pruned, so this says nothing about pruning")
+	}
+	// THE EQUALITY: the commitment is untouched.
+	uassert.Equal(t, before, VoteLockedOf("vlk8", voter))
+	// And the live row survived — pruning is not an exit from a commitment.
+	uassert.Equal(t, rows-dropped, voteLockRows(c, voter))
+	if voteLockRows(c, voter) < 1 {
+		t.Fatal("the LIVE row was pruned: prune must never be a way to walk out " +
+			"of a commitment")
+	}
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
+		TransferCC(cross(cur), "vlk8", whale, before)
+	})
+
+	// Idempotent: a second prune finds nothing, so it is not a repeatable state
+	// churn a griefer could bill to the court.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.Equal(t, 0, PruneVoteLocks(cross(cur), "vlk8", voter))
+
+	// And once the live question resolves, the last row goes too.
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	ResolveDispute(cross(cur), "vlk8", live)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.True(t, PruneVoteLocks(cross(cur), "vlk8", voter) > 0)
+	uassert.Equal(t, 0, voteLockRows(c, voter))
+	uassert.Equal(t, int64(0), VoteLockedOf("vlk8", voter))
+}
+
+// voteLockRows counts an address's lock rows, live and dead. Test-only: the realm
+// has no reason to know, and a reader would be one more surface to keep honest.
+func voteLockRows(c *Court, who address) int {
+	if c.voteLocks == nil {
+		return 0
+	}
+	n := 0
+	pre := string(who)
+	c.voteLocks.Iterate(pre, pre+"\xff", func(_ string, _ any) bool { n++; return false })
+	return n
+}
+
+// THE COMMON CASE CLEANS ITSELF, which is the whole reason PruneVoteLocks is for
+// the pathological case only. An address that votes, sees the question resolve, and
+// votes again carries ONE row — not one per vote it has ever cast.
+//
+// FOUND BY ABLATION, not by design: deleting lockVote's prune call left every other
+// test in the suite green. Three tests catch a prune that removes too much and one
+// catches a prune that removes nothing, but nothing at all noticed the routine
+// prune simply not happening — the failure mode with no symptom except a bill.
+func TestRepeatedVotingDoesNotAccumulateRows(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vl9-alice")
+	whale := testutils.TestAddress("vl9-whale")
+	voter := testutils.TestAddress("vl9-voter")
+	c := testCourt(cur, "vlk9", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	c.coin.Mint(voter, 10_000_000_000)
+
+	for round := 1; round <= 3; round++ {
+		id := stakeAnswerDispute(cur, "vlk9", alice, whale)
+		testing.SetRealm(testing.NewUserRealm(whale))
+		OpenDispute(cross(cur), "vlk9", id)
+		testing.SetRealm(testing.NewUserRealm(voter))
+		VoteDispute(cross(cur), "vlk9", id, "no")
+
+		// One row: this question. The previous rounds' rows were pruned by this
+		// very vote, because their questions had resolved.
+		if got := voteLockRows(c, voter); got != 1 {
+			t.Fatalf("round %d: expected exactly 1 lock row after voting a single "+
+				"open question, found %d — lockVote's prune is not running, so "+
+				"rows accumulate one per vote for the address's whole life",
+				round, got)
+		}
+		if VoteLockedOf("vlk9", voter) <= 0 {
+			t.Fatalf("round %d: fixture is vacuous, nothing was committed", round)
+		}
+
+		testing.SkipHeights(c.params.votingBlocks + 1)
+		testing.SetRealm(testing.NewUserRealm(whale))
+		ResolveDispute(cross(cur), "vlk9", id)
+		// Still one row, now dead — the prune happens on the NEXT vote, not on
+		// resolution, because resolution is permissionless and must not be made to
+		// pay for an unbounded sweep of everyone who voted.
+		uassert.Equal(t, 1, voteLockRows(c, voter))
+		uassert.Equal(t, int64(0), VoteLockedOf("vlk9", voter))
+	}
+}
