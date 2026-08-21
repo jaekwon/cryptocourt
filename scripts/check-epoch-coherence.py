@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 KOURTV2 = ROOT / "realm" / "r" / "kourtv2"
 GOVERNOR = ROOT / "realm" / "p" / "governor"
 CCWRAP = ROOT / "realm" / "r" / "ccwrap"
+GRC20VOTES = ROOT / "realm" / "p" / "grc20votes"
 
 # ARM 1 — no LIVE weight read may appear in a file that computes a tally or a bar.
 LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
@@ -346,6 +347,23 @@ RULE_CLAUSE = "some question is open now OR these weights carry forward"
 # a rule that has already gone stale three times and should be read before it is added.
 RULE_SITES = (("realm/r/kourtv2/votelock.gno", 1), ("VOTEFLOOR.md", 2))
 
+# ARM 12 — the coin's checkpoint archive is never trimmed.
+#
+# checkpoint.Archive.Trim exists and is used, correctly, on the claim's hourly stake
+# series. The grc20votes ledger holds an archive of the SAME type, and every question in
+# the realm reads two values out of it at a PAST epoch: PastVotes for each voter's
+# ceiling, PastTotal for the bar those votes are judged against. Trim guarantees exactness
+# only "at and above keepFrom", so a trim past a live question's epoch makes both inexact
+# and does not have to move them together. That is a numerator and a denominator at
+# different instants — the defect that produced turnout at 200-400% of its own bar.
+#
+# It would read as an ordinary storage saving, which is why it is counted rather than
+# commented about. Two call sites, both on the stake series; a third, or one on any other
+# receiver, fails closed.
+TRIM_CALL = re.compile(r"([A-Za-z_][A-Za-z0-9_.]*)\.Trim\(")
+TRIM_OK_RECEIVER = "c.csArch"
+TRIM_CALLS_N = 2
+
 # THE OTHER ARMS WERE AUDITED FOR THE SAME BLIND SPOT AND ARE CLEAN. Three arms have
 # now been widened because a regex hardcoded a spelling the tree already used
 # elsewhere (arm 7 missed Burn, arm 5 missed tuple assignment, arm 7 missed a non-`c`
@@ -423,6 +441,33 @@ def main() -> int:
                                 f"vote commitment; subtracting VoteLockedOf from it "
                                 f"understates the room, because the locks combine with "
                                 f"MAX not SUM")
+    # Arm 12: nobody trims the coin's archive.
+    trims = []
+    for d in (KOURTV2, GRC20VOTES, CCWRAP):
+        for q in sorted(d.glob("*.gno")):
+            if q.name.endswith("_test.gno"):
+                continue
+            for i, line in enumerate(q.read_text().splitlines()):
+                if line.lstrip().startswith("//") or "strings.Trim" in line:
+                    continue
+                m = TRIM_CALL.search(line)
+                if m:
+                    trims.append((f"{d.name}/{q.name}", i + 1, m.group(1)))
+    if len(trims) != TRIM_CALLS_N:
+        hits.append(f"[archive-trim] {len(trims)} Trim call(s), expected "
+                    f"{TRIM_CALLS_N}: "
+                    f"{', '.join(f'{f}:{ln} on {r}' for f, ln, r in trims)}. Every "
+                    f"question reads PastVotes and PastTotal at a PAST epoch, and Trim "
+                    f"is exact only at and above keepFrom, so trimming past a live "
+                    f"question's epoch moves its weights and its bar to different "
+                    f"instants")
+    for f, ln, recv in trims:
+        if recv != TRIM_OK_RECEIVER:
+            hits.append(f"[archive-trim] {f}:{ln} trims `{recv}`, and the only "
+                        f"archive safe to trim is {TRIM_OK_RECEIVER}, the claim's "
+                        f"hourly stake series. The coin's archive is what every vote "
+                        f"weight and every bar is read from")
+
     # Arm 11: the canonical release clause, in the code and in the spec that hands
     # the surface to somebody else.
     rule_counts = {}
@@ -690,7 +735,8 @@ def main() -> int:
           f"weight source in the engine, one vote-weight expression, "
           f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
           f"{arm4['lockvote']} self-only vote-lock site(s), "
-          f"one quality-question definition, release clause in "
+          f"one quality-question definition, {len(trims)} stake-series trim(s) and "
+          f"no coin-archive trim, release clause in "
           f"{'+'.join(f'{k.split(chr(47))[-1]} {v}' for k, v in rule_counts.items())}, "
           f"{doc_scanned} file(s) clear of SpendableOf arithmetic "
           f"({', '.join(f'{k} {v}' for k, v in sorted(per_dir.items()))}).")

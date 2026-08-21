@@ -149,7 +149,25 @@ type Ledger struct {
 
 	accounts   *bptree.BPTree // address -> *account
 	allowances *bptree.BPTree // owner + sep + spender -> int64
-	archive    *checkpoint.Archive
+
+	// THIS ARCHIVE IS NEVER TRIMMED, and that is a property of the design rather
+	// than an omission. checkpoint.Archive has a Trim, the claim's hourly stake
+	// series uses it, and one line here would look like an ordinary storage
+	// saving.
+	//
+	// Trim's own contract is "ValueAt exact AT AND ABOVE keepFrom". Every question
+	// in the realm above is anchored at a PAST epoch and reads two values from
+	// here — PastVotes for each voter's ceiling and PastTotal for the bar those
+	// votes are judged against — so trimming past a live question's epoch makes
+	// both inexact, independently of each other. That is the numerator and the
+	// denominator drifting to different instants, which is the defect that
+	// produced turnout at 200-400% of its own bar and was reverted.
+	//
+	// What would have to be true to relax it: keepFrom below the oldest epoch any
+	// open question is anchored at, which means knowing every open question — a
+	// fact this package deliberately does not have. check-epoch-coherence arm 12
+	// pins the call sites meanwhile.
+	archive *checkpoint.Archive
 
 	supply checkpoint.Series
 	total  int64

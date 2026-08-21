@@ -161,6 +161,7 @@ GOVERN = "realm/r/govern"
 KOURTV2 = "realm/r/kourtv2"
 GOVERNORDIR = "realm/p/governor"
 CCWRAP = "realm/r/ccwrap"
+GRC20VOTESDIR = "realm/p/grc20votes"
 GRC20VOTES = "realm/p/grc20votes"
 VOTES = "realm/p/grc20votes"
 
@@ -325,6 +326,24 @@ control("a locking helper passed a foreign address", f"{KOURTV2}/modvote.gno",
         "\tapprove(cur.Previous().Address(), courtSlug, 0, true)\n"
         "\tapprove(c.treasury, courtSlug, 0, true)",
         "as the holder", argv=["python3", EPOCHCOH])
+# ARM 12's controls. Two isolate the sub-checks — the receiver and the count — and the
+# third is the mistake as it would actually arrive: a storage saving added inside the
+# ledger, trimming the supply series that every bar in the realm is read from.
+control("a Trim pointed at another archive", f"{KOURTV2}/stakeseries.gno",
+        'c.csArch.Trim(csKey(cs.id, "nh"), keep, trimBudget)',
+        'c.coinArch.Trim(csKey(cs.id, "nh"), keep, trimBudget)',
+        "the only archive safe to trim is", argv=["python3", EPOCHCOH])
+control("a third Trim call site", f"{KOURTV2}/stakeseries.gno",
+        '\tc.csArch.Trim(csKey(cs.id, "nh"), keep, trimBudget)',
+        '\tc.csArch.Trim(csKey(cs.id, "nh"), keep, trimBudget)\n'
+        '\tc.csArch.Trim(csKey(cs.id, "xh"), keep, trimBudget)',
+        "Trim call(s), expected 2", argv=["python3", EPOCHCOH])
+control("the coin's own supply series trimmed to save storage",
+        f"{GRC20VOTESDIR}/grc20votes.gno",
+        "\tl.supply.SetAt(l.archive, supplyKey, l.Epoch(), l.total)",
+        "\tl.archive.Trim(supplyKey, l.Epoch()-1, 4)\n"
+        "\tl.supply.SetAt(l.archive, supplyKey, l.Epoch(), l.total)",
+        "trims `l.archive`", argv=["python3", EPOCHCOH])
 # ARM 11's controls. It polices PROSE, so the three cases are: the code's summary
 # rewritten, the SPEC's quote rewritten while the historical copy is left in place, and a
 # fresh restatement appearing. The middle one is why the arm counts exactly rather than
