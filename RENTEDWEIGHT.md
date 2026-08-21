@@ -7,8 +7,27 @@
 in all three lanes — quality (`quality.gno`), election (`modvote.gno`) and verdict
 (`dispute.gno`, via the governor's `VoteWithCap`). The snapshot is the CEILING and
 stops buying in after the question; the live balance is the FLOOR and stops voting
-weight already handed back. The renter must return the coin to repay, and at that
-moment there is nothing left to vote.
+weight already handed back.
+
+**AND THE FLOOR ALONE WAS NOT ENOUGH — it reordered the attack rather than pricing
+it, and this was MEASURED on the shipped floor rather than reasoned about.** The
+floor asks what you hold at the moment of voting and says nothing about the moment
+after, and a cast ballot is never undone. So the rental survived unchanged in cost:
+borrow, seal, open the dispute yourself, **vote while still holding**, repay in the
+very next call. Probed at **599× the quorum floor with a final balance of zero**,
+against the 600× measured before any of this work. One step to the right, same
+price.
+
+What prices it is the second half: **coin you voted with cannot leave your balance
+until the question resolves** (`votelock.gno`). A renter must carry the position
+across the whole voting-and-resolution window — about a week instead of an hour —
+so the attack costs the risk of holding that long. Until resolution and not the
+ballot close; the amount voted and not the address; blocking disposal but not
+staking, since staking leaves the coin in the balance and voting.
+
+**Still open, and it is an owner decision:** the quality lane is not locked. Its
+tally accumulates across rounds, so there is no single instant a lock could release
+at. It is also the hardest lane to rent into — the anchor is the answerer's.
 
 `rentedweight_test.gno` has been flipped: it asserted the exploit worked precisely
 so a fix would fail it loudly, and it now asserts every refusal, with each fixture

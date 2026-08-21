@@ -10,7 +10,24 @@ records what actually happened, including the three places the plan was wrong.**
 | 3 | `5ecf469` | quality-lane floor + paired test + `check-nodelegate.py` + rows 4, 4b |
 | 4 | `e05fee7` | election floor AND the first-approval freeze together + `e.voters` `bool→int64` + two tests + rows 5–8 |
 | 5 | `1387839` | dispute lane via `VoteWithCap`, row #171 re-anchored, `rentedweight_test.gno` flipped, 2 new rows |
-| 6 | this commit | the four stale rentability comments, `RENTEDWEIGHT.md` → CLOSED, whitepaper erratum |
+| 6 | `122df45` | the four stale rentability comments, `RENTEDWEIGHT.md` → CLOSED, whitepaper erratum |
+| 7 | `82f3c96` | the vote lock: coin voted with cannot leave until the question resolves, + 3 tests + 6 rows |
+| 8 | this commit | correcting step 6's own overstatement (see below) |
+
+**AND A FOURTH CORRECTION, this one to my own step 6.** Step 6 declared the rental
+closed on the strength of the floor. It was not. Probed on the four landed commits:
+the floor asks what you hold at the MOMENT of voting and nothing about the moment
+after, and a cast ballot is never undone — so borrow-seal-open-VOTE-repay measured
+**599× the quorum floor with a final balance of zero**, against the 600× measured
+before any of the work. The floor reordered the attack; it did not price it. That is
+exactly what revision 3 said when it put the lock back in scope, and step 7 is that
+lock. `RENTEDWEIGHT.md` and the whitepaper erratum have both been corrected, because
+a document claiming a closure that does not hold is worse than one that says nothing.
+
+The lesson is the one this file keeps re-learning: **measure the closure, do not
+reason about it.** Every closure claim in this project that went unmeasured has been
+wrong, and this one was mine, written in a commit message, one commit after I had
+finished congratulating the harness for catching the same class of error.
 
 **THREE CORRECTIONS THE PLAN NEEDED, found while implementing:**
 

@@ -392,17 +392,25 @@ New items, each verified before deciding):
 
 ### ERRATUM — rented vote weight is closed; two passages now describe the old design
 
-Shipped 2026-08-20 across four commits (`769dcc5`, `5ecf469`, `e05fee7`,
-`1387839`). Vote weight in all three kourtv2 lanes is now
+Shipped across six commits (`769dcc5`, `5ecf469`, `e05fee7`, `1387839`, `122df45`,
+`82f3c96`). Vote weight in all three kourtv2 lanes is now
 
     w = min( PastVotes(who, <the question's own frozen epoch>), BalanceOf(who) )
 
 The snapshot is a CEILING (you cannot buy in after the question was asked); the
 live balance is a FLOOR (you cannot vote weight you have handed back). Both halves
 are required — a ceiling alone is rentable, and a live figure alone puts a live
-numerator against a frozen bar. `VOTEFLOOR.md` has the derivation; `RENTEDWEIGHT.md`
-is now marked CLOSED and keeps the two failed closures because they are why the
-shipped fix has the shape it does.
+numerator against a frozen bar.
+
+**AND THERE IS A THIRD PART, which an earlier draft of this erratum wrongly left
+out.** The floor alone only reordered the rental: it asks what you hold when you
+vote and nothing about the moment after, so borrow-seal-open-VOTE-repay measured
+599× the quorum floor with a final balance of zero — the same price as before the
+work. What prices it is that **coin you voted with cannot leave your balance until
+the question resolves.** Voting is a commitment, which is what was asked for.
+
+`VOTEFLOOR.md` has the derivation; `RENTEDWEIGHT.md` is marked CLOSED and keeps the
+two failed closures because they are why the shipped fix has the shape it does.
 
 **Two passages in WHITEPAPER.md are now wrong and need rewriting by the loop.**
 
@@ -417,9 +425,18 @@ shipped fix has the shape it does.
 
 2. **Line 13-15 (the summary).** *"Voting weight is read from an hourly snapshot
    sealed before the vote opened, so weight cannot be bought for a vote already
-   underway"* is true but now only half the story. It should also say weight cannot
-   be BORROWED for a vote at all: you vote the lesser of what you held at the seal
-   and what you hold when you vote.
+   underway"* is true but now only part of the story. It should also say weight
+   cannot be BORROWED for a vote at all: you vote the lesser of what you held at
+   the seal and what you hold when you vote, **and what you voted with is committed
+   until the question resolves.** That last clause is the one that makes renting
+   expensive rather than merely awkward, and it is the honest headline: voting is a
+   commitment of capital, not a free action.
+
+3. **Anywhere the paper implies voting is costless.** It is not, now, and that is
+   deliberate. A voter's coin is frozen against transfer for the length of the
+   round. Staking still works — the coin never leaves the balance — but a voter
+   cannot sell, bond, or deposit that amount until the verdict lands. Say so
+   plainly; it is a real cost and it is the mechanism, not a side effect.
 
 **What has NOT changed, and must not be introduced by the rewrite:** staked coin
 still sits in the holder's balance and still votes. The floor is `BalanceOf`, not
