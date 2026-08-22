@@ -704,6 +704,19 @@ control("the elsewhere annotation renamed", ELSEWHERE,
         'if r.get("elsewhereNOPE"):',
         "measuring nothing",
         argv=["python3", ELSEWHERE])
+# A HARNESS THAT DIES IS NOT A HARNESS THAT OBJECTS, and "exited nonzero" cannot
+# tell them apart. The plant makes every mutation unbuildable by appending a broken
+# declaration to the file the check writes; the realm then kills the in-memory node
+# during genesis, the txtar never runs, and the exit code is nonzero all the same.
+# Planting here rather than in the corpus on purpose — an arm that edits the corpus
+# JSON depends on its whitespace, which turned six anchor arms into BROKEN CONTROL
+# once already (see inject's comment).
+control("a harness that dies instead of objecting", ELSEWHERE,
+        'open(path, "w").write(src.replace(row["find"], row["replace"], 1))',
+        'open(path, "w").write(src.replace(row["find"], row["replace"], 1)'
+        ' + "\\nfunc (")',
+        "WITHOUT NAMING A LINE",
+        argv=["python3", ELSEWHERE])
 
 print("\ncheck-paths")
 # Every want below NAMES THE FILE the mutation exposes. An earlier version of

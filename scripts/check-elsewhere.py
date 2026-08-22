@@ -74,13 +74,35 @@ def run_harness(where, gnoroot):
     return None, "unrecognised harness kind"
 
 
+# A HARNESS THAT DIES OBJECTS TO NOTHING, and "exited nonzero" cannot tell the two
+# apart. The check below is that the named harness FAILS under the mutation — which
+# a mutation that merely stops the realm building also satisfies, without the
+# property ever being evaluated. Same shape as a mutation that fails to compile
+# being scored as caught: invalid, not a result.
+#
+# WHAT THAT ACTUALLY LOOKS LIKE HAD TO BE MEASURED, because the obvious guess was
+# wrong. A first version of this scanned for compiler text — "build error",
+# "undefined:", "syntax error" — and an ablation planted an unclosed paren in
+# emission.gno to check it. The guard accepted the row anyway: gno never prints a
+# compiler message here. The unbuildable realm kills the in-memory NODE during
+# genesis, and the output is a tm2 goroutine dump ending in `FAIL\tpkg` with no
+# mention of the realm at all. The txtar script never runs.
+#
+# So the discriminator is not the failure's text but whether the harness named a
+# LOCATION. A real objection points at a line — `FAIL: testdata/x.txtar:82` from a
+# txtar, `stakeindex.gno:StakedPage calls getPos` from a python guard. A death
+# points at nothing. That rule covers the node panic and whatever the next mode
+# turns out to be, which a list of compiler spellings would not.
+LOCATED = (r"FAIL: testdata/\S+:\d+: .*", r"^\s+\S+\.gno:\S+ .*")
+
+
 def complaint(out):
-    """The most specific line the harness produced, for the success report."""
-    for pat in (r"FAIL: testdata/\S+:\d+: .*", r"^\s+\S+\.gno:\S+ .*"):
+    """The located line the harness produced, or None if it named nothing."""
+    for pat in LOCATED:
         m = re.search(pat, out, re.M)
         if m:
             return m.group(0).strip()[:96]
-    return "(failed, no line matched)"
+    return None
 
 
 def main():
@@ -140,7 +162,28 @@ def main():
                 bad.append((label, where, "the harness PASSED under the mutation, so "
                                           "it does not assert this property"))
             else:
-                ok.append((label, where, complaint(out)))
+                c = complaint(out)
+                if c is None:
+                    # The most failure-shaped line, not the last one: the last line of
+                    # a dead txtar run is usually a linker warning from the go build,
+                    # which says nothing about why it died.
+                    # Prefer a line that SAYS something: a bare `FAIL` is the last
+                    # failure-shaped line of a dead txtar and carries no information.
+                    hint, fallback = None, "(no output)"
+                    for l in out.strip().split("\n"):
+                        if hint is None and re.search(r"panic|error:|Error:", l):
+                            hint = l.strip()[:64]
+                        if re.match(r"\s*(FAIL|--- FAIL)", l) and len(l.strip()) > 8:
+                            fallback = l.strip()[:64]
+                    hint = hint or fallback
+                    bad.append((label, where,
+                                "the harness FAILED WITHOUT NAMING A LINE, so nothing "
+                                "says it evaluated the property. An unbuildable "
+                                "mutation looks exactly like this — it kills the "
+                                "in-memory node during genesis and the script never "
+                                "runs. Failed at: %s" % hint))
+                else:
+                    ok.append((label, where, c))
     finally:
         if gnoroot:
             subprocess.run(["python3", "scripts/gnoroot.py", "remove",
@@ -161,7 +204,14 @@ def main():
 
     print("check-elsewhere: %d `elsewhere` row(s), every named harness objects:" % len(ok))
     for label, where, c in ok:
-        print("  %-58s %s" % (label[:58], os.path.basename(where)))
+        print("  %-52s %s" % (label[:52], os.path.basename(where)))
+        # THE COMPLAINT IS PRINTED, not just computed. It was extracted and
+        # discarded, which hid the one thing a reader needs to judge the result:
+        # this script accepts ANY nonzero exit as an objection, so a mutation that
+        # merely stops the realm building would pass as "the harness holds the
+        # property". Showing the line lets that be told apart at a glance — a
+        # `FAIL: testdata/x.txtar:NN` is an assertion, anything else is a lead.
+        print("      %s" % c)
     return 0
 
 
