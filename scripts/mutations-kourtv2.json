@@ -6819,5 +6819,68 @@
   "label": "folders: MoveItemInFolder moves a claim that is not in the folder",
   "find": "\tif at < 0 {\n\t\tpanic(\"kourtv2: that claim is not in the folder\")\n\t}\n",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: midGross reads the LOSING pool's conviction",
+  "find": "\tif int(cs.provisional) == sideYES {",
+  "replace": "\tif int(cs.provisional) != sideYES {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the draw cap binds on the OVERTURN path instead of the standing one",
+  "find": "\tif int(cs.provisional) == int(cs.answer) {",
+  "replace": "\tif int(cs.provisional) != int(cs.answer) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the answerer slice is zeroed on the STANDING path instead of the overturn",
+  "find": "\tif int(cs.provisional) != int(cs.answer) {\n\t\tcs.drawAnswerer = 0",
+  "replace": "\tif int(cs.provisional) == int(cs.answer) {\n\t\tcs.drawAnswerer = 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the author slice is zeroed for every UNSEEDED claim",
+  "find": "\tif cs.seeded {\n\t\tcs.drawAuthor = 0",
+  "replace": "\tif !cs.seeded {\n\t\tcs.drawAuthor = 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the open-question gate needs ALL THREE at once",
+  "find": "\tif cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
+  "replace": "\tif cs.flagOpen && cs.counterOpen && cs.pendingSlash > 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: a zero deposit is still transferred and decremented",
+  "find": "\tif cs.deposit > 0 {",
+  "replace": "\tif cs.deposit >= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: a with-verdict voter is one who EITHER voted or agreed",
+  "find": "\t\tif v == nil || v.(string) != cs.carrotChoice {",
+  "replace": "\t\tif v == nil && v.(string) != cs.carrotChoice {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "PullState: a YES verdict reports no winner pull",
+  "find": "\tif cs.provisional >= 0 {",
+  "replace": "\tif cs.provisional > 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "crystallize: the sub-bar carrot is withheld on EITHER condition",
+  "find": "\tif cs.decidedPID == 0 && cs.conclusiveSeq != 0 {",
+  "replace": "\tif cs.decidedPID == 0 || cs.conclusiveSeq != 0 {"
  }
 ]

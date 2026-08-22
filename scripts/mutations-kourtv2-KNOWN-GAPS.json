@@ -70,5 +70,29 @@
   "find": "\tif pay <= 0 {\n\t\treturn 0\n\t}",
   "replace": "\tif pay < 0 {\n\t\treturn 0\n\t}",
   "why": "VALID BUT UNPINNABLE BY ANY .gno TEST, which is a different thing from a survivor. pay is never negative (covered is monotone in cumAccrual and clamped to the amount, and paid only ever rises to meet it), so the guard fires exactly at pay == 0. Dropping it changes NO state: e.paid += 0, seniorOwed -= 0, seniorPaid += 0, mintEmission returns on its own amount <= 0 guard, and the function returns 0 either way. The single difference is a spurious SeniorPaid event carrying paid=0 - and events are exactly what emission.gno's header says clients index to build the 'what am I owed' view, so the noise is real. It cannot be asserted: there is no event accessor anywhere in the gno stdlib (grepped gnovm/stdlibs and gnovm/tests/stdlibs for `func Events` - no match) and no test in this repo reads events. Kept because a crank anyone may call must not emit a payment that did not happen. IF AN EVENT ACCESSOR EVER LANDS, promote this to the corpus with a test asserting no SeniorPaid on a settled entitlement."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "WithdrawBonus: the zero-conviction guard needs BOTH to be zero",
+  "find": "\tif convCC <= 0 || cs.winPoolConvCC <= 0 {",
+  "replace": "\tif convCC <= 0 && cs.winPoolConvCC <= 0 {",
+  "why": "INVALID BY UNREACHABILITY, not a survivor. The two forms can only differ where exactly one operand is non-positive. convCC == 0 with a positive pool: the mutant proceeds and mulDiv128 returns 0, capBonus floors it at 0, mintEmission returns on its own guard - the same 0. convCC > 0 with a zero pool: the mutant divides by zero, but that state cannot exist, because the caller has already panicked unless side == provisional, so this position's conviction is PART of winPoolConvCC (= midGross of the winning side). MEASURED both ways: a probe panicking on `convCC > 0 && winPoolConvCC <= 0` fired ZERO times across the suite, and a companion probe on `convCC > 0` fired, so the line is genuinely exercised and the zero is not vacuous. Kept because it is the only thing standing between a zero-conviction winning side and a division by zero when BOTH are zero - which is reachable, and which both forms handle."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: the zero-weight guard needs BOTH to be zero",
+  "find": "\tif w <= 0 || denom <= 0 {",
+  "replace": "\tif w <= 0 && denom <= 0 {",
+  "why": "INVALID BY UNREACHABILITY, same shape as the WithdrawBonus guard above. w == 0 with a positive denominator gives share 0 through mulDiv128 and returns 0 at the `share <= 0` floor either way. w > 0 with a zero denominator would divide by zero and cannot happen: on the decided path denom is cs.carrotDenom, the winning side's tally on the deciding round, and the block above has already panicked unless this voter's recorded choice EQUALS carrotChoice, so w is one of that sum's terms; on the conclusive path denom is conclusiveTurnout and w is this voter's weight within it. MEASURED: a probe on `w > 0 && denom <= 0` fired ZERO times, and a companion probe on `w > 0` fired, so the line is exercised. Kept for the reachable both-zero case."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "AuthorBonus: the second seeded gate is dropped",
+  "find": "\tif cs.seeded {\n\t\tmintEmission(c, who, 0)\n\t\treturn 0\n\t}\n",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR, and its own comment already says why: the draw is zeroed at crystallize, so this is belt-and-braces, asserted at the payout site because that is where a future change would most plausibly break it. It cannot fire today - drawAuthor is 0 on every seeded claim, so dropping the gate falls through to capBonus(0, ...) = 0 and pays the same nothing. MEASURED: a probe panicking on `cs.seeded && cs.drawAuthor != 0` fired ZERO times across the suite, while a companion probe on `cs.seeded` alone fired, so AuthorBonus IS reached with a seeded claim and the first probe's silence is about the state, not about coverage. The crystallize-time gate that makes it redundant IS pinned, by both `the author slice is zeroed for every UNSEEDED claim` and `P7: the author slice is not paid`. IF THIS COMES BACK CAUGHT, a seeded claim now carries an author draw: read I5 in MODERATION.md section 8 before promoting it."
  }
 ]
