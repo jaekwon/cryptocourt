@@ -7442,5 +7442,89 @@
   "label": "RemoveArgument: c.mod == nil read as 'no moderators', so no moderator may ever remove",
   "find": "\t\tcm := ensureMod(c)\n\t\tif !cm.members.Has(who.String()) {\n\t\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t\t}\n\t\trequireActiveMod(cm, who)",
   "replace": "\t\tif c.mod == nil {\n\t\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t\t}\n\t\trequireActiveMod(c.mod, who)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: a SEEDED claim pays the deposit and an ordinary one does not",
+  "find": "\tif !seeded {\n\t\tdep = effMinDeposit(c)",
+  "replace": "\tif seeded {\n\t\tdep = effMinDeposit(c)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: only the deposit is checked against the locks, not the fee",
+  "find": "\t\tmustSpendable(c, who, dep+fee)",
+  "replace": "\t\tmustSpendable(c, who, dep)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: the fee never reaches the escrow",
+  "find": "\t\tc.coin.Transfer(who, c.escrow, dep+fee)",
+  "replace": "\t\tc.coin.Transfer(who, c.escrow, dep)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: the court's ledger counts the deposit but not the fee",
+  "find": "\t\tc.deposit += dep + fee",
+  "replace": "\t\tc.deposit += dep"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: the fee is not divided down to bps",
+  "find": "\t\tfee = dep * depositFeeBps / 10000",
+  "replace": "\t\tfee = dep * depositFeeBps"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: a fresh claim's verdict sentinel is sideYES",
+  "find": "\t\tprovisional:  -1, // int8 zero is sideYES",
+  "replace": "\t\tprovisional:  0, // int8 zero is sideYES"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: an empty title is accepted",
+  "find": "\tif len(title) == 0 || len(title) > 200 {",
+  "replace": "\tif len(title) == 0 && len(title) > 200 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "openClaim: the body cap is off by one",
+  "find": "\tif len(body) > maxClaimBodyLen {",
+  "replace": "\tif len(body) > maxClaimBodyLen+1 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: a zero deposit is still transferred",
+  "find": "\tif cs.deposit > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
+  "replace": "\tif cs.deposit >= 0 {\n\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: an ANSWERED claim may die instead of settling",
+  "find": "\tif cs.frozenAt != 0 {",
+  "replace": "\tif cs.frozenAt == 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the timeout needs both clocks to agree, so it never refuses",
+  "find": "(known && !passed) ||\n\t\t(!known && heightNow() < cs.openedAt+deadClaimTimeout)",
+  "replace": "(known && !passed) &&\n\t\t(!known && heightNow() < cs.openedAt+deadClaimTimeout)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "CloseDeadClaim: the height fallback is off by one block",
+  "find": "(!known && heightNow() < cs.openedAt+deadClaimTimeout)",
+  "replace": "(!known && heightNow() <= cs.openedAt+deadClaimTimeout)"
  }
 ]
