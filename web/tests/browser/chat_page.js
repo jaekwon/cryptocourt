@@ -238,6 +238,38 @@ async function courtPage(browser, opts) {
     ok("esc leaves ordinary text alone", esc("Orem Truth Court") === "Orem Truth Court");
   }
 
+  // DEMO MODE MUST NOT TOUCH THE NETWORK, and only a check that loads BOTH files
+  // can see this. chat.js has always had the guard — "demo mode means no
+  // network" — and chat_test.js has always asserted it, passing, while the page
+  // did the opposite: index.html declares its own global `chatBase()` in an
+  // inline script evaluated AFTER chat.js, so the later declaration won and the
+  // guard was unreachable. Measured before the fix, a demo court page issued
+  //
+  //     GET http://…/api/chat/health
+  //     GET http://…/api/chat/dev/orem?limit=50
+  //
+  // against sample data. The harness that slices chat.js alone cannot see a
+  // collision that needs the other file to exist, which is why this lives here.
+  {
+    const page = await browser.newPage();
+    const asked = [];
+    await page.setRequestInterception(true);
+    page.on("request", r => {
+      const u = r.url();
+      if (u.includes("chat.invalid")) { asked.push(u); return r.abort().catch(() => {}); }
+      r.continue().catch(() => {});
+    });
+    await page.evaluateOnNewDocument(() => {
+      localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo", chat: "http://chat.invalid:8791"}));
+      localStorage.setItem("cc.intro", "1");
+    });
+    await page.goto(PAGE + "#/c/orem", {waitUntil: "domcontentloaded"});
+    await new Promise(r => setTimeout(r, 1800));
+    ok("a demo court page asks the chat endpoint for nothing",
+       asked.length === 0, asked.slice(0, 2).join(" "));
+    await page.close();
+  }
+
   await browser.close();
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);

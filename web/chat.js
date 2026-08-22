@@ -280,11 +280,29 @@ function chatDemoThread(slug) {
   };
 }
 
-// chatBase resolves the service URL, and returns "" for "do not use the network".
+// chatEndpoint resolves the service URL, and returns "" for "do not use the
+// network".
+//
+// NAMED chatEndpoint, NOT chatBase, AND THAT RENAME IS A BUG FIX. index.html
+// declares its own global `function chatBase()` — no argument, resolving the
+// origin when nothing is configured — in an inline script that is evaluated
+// AFTER this file loads. Same name, so the later declaration won and this
+// function was unreachable in the page: measured, chatBase.length was 0 there.
+//
+// What that silently removed is the demo guard below. mountChat called
+// chatBase(o.cfg) and got index.html's version, which ignores its argument and
+// answers from the global CFG — so a page in DEMO mode with an endpoint
+// configured issued real requests against sample data:
+//
+//     GET http://…/api/chat/health
+//     GET http://…/api/chat/dev/orem?limit=50
+//
+// The four assertions that prove this guard works kept passing, because the
+// harness slices this file alone and never sees the collision.
 //
 // Absent config means off, not a default host: a page that quietly starts posting to
 // a guessed origin because nobody configured one is worse than a page with no chat.
-function chatBase(cfg) {
+function chatEndpoint(cfg) {
   if (!cfg || cfg.mode === "demo") return "";
   const b = String(cfg.chat || "").trim();
   if (!b) return "";
@@ -428,7 +446,7 @@ let CHATGEN = 0;
 function mountChat(el, opts) {
   if (!el) return () => {};
   const o = opts || {};
-  const base = chatBase(o.cfg);
+  const base = chatEndpoint(o.cfg);
   const chain = o.chain || "dev";
   const court = o.court || "";
   const gen = ++CHATGEN;
@@ -644,7 +662,7 @@ function mountChat(el, opts) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {chatEsc, chatFlag, chatWhen, chatStatusLine, chatValidate,
-    chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatBase,
+    chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatEndpoint,
     chatFetch, chatPost, chatStyles, chatHealth, mountChat, CHATCSS,
     CHATLIMITS};
 }

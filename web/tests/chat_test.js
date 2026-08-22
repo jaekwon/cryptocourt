@@ -226,11 +226,11 @@ const XSS = '<img src=x onerror=alert(1)>';
 
 // ---------------------------------------------------------------- config
 {
-  ok("no config means no network", chatBase(null) === "");
-  ok("demo mode means no network", chatBase({mode: "demo", chat: "http://x"}) === "");
-  ok("an unset endpoint means no network", chatBase({mode: "live"}) === "");
+  ok("no config means no network", chatEndpoint(null) === "");
+  ok("demo mode means no network", chatEndpoint({mode: "demo", chat: "http://x"}) === "");
+  ok("an unset endpoint means no network", chatEndpoint({mode: "live"}) === "");
   ok("a trailing slash is trimmed",
-     chatBase({mode: "live", chat: "http://x:8791/"}) === "http://x:8791");
+     chatEndpoint({mode: "live", chat: "http://x:8791/"}) === "http://x:8791");
 }
 
 // ---------------------------------------------------------------- empty room
