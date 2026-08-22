@@ -497,6 +497,25 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**RANKED ITEM 1(b) VERIFIED COMPLETE, AND THE QUESTION IT RAISES REFUTED.** The backlog
+asks for ONE test covering both participant-only windows, because Crystallize's
+`now < verdictAt+finalizeGraceBlocks` shares its shape with Finalize's in dispute.gno.
+TestTheParticipantOnlyWindowsEndOnTheirExactBlock does exactly that — it drives Finalize
+at dispute.gno:554 and Crystallize at crystallize.gno:44 in one test, each at its edge.
+
+Reading the two together raises an obvious suspicion: the SAME constant on DIFFERENT
+anchors, `escrowUntil + finalizeGraceBlocks` against `verdictAt + finalizeGraceBlocks`.
+That looks like one site having copied the other and kept the wrong base. It is correct.
+Each window is a week of participant-only measured from the moment its own call becomes
+available: Finalize's from the escrow window lapsing ("a stranger must not pick the settle
+block", v0.11 A13), Crystallize's from the verdict existing. Shared policy, shared
+constant, different triggers.
+
+The only thing left is a naming smell worth nobody's time to fix: `finalizeGraceBlocks` is
+named for one of its two callers, so at the Crystallize site the constant reads as if it
+were borrowed. Recorded rather than renamed — a rename touches two money paths to make a
+comment read better.
+
 **THE CLONE PROTECTS THE LONG PASS AND LEAVES THE SHORT BATCHES EXPOSED.** Running the
 full corpus from a pinned clone is recorded above as the way to keep the working tree free.
 What that recipe does NOT cover is the handful of one-to-five-row verification batches run
