@@ -33,7 +33,9 @@ re-verification pass; rounds 1 and 2 are §8 and §9), and all twelve hold on th
   §4.1(d)'s premise holds, by a mechanism with a different name.
 
 **But four of the nine ADDRESSES had rotted**, which is why they are all now written as
-symbols rather than `file:line`. `claim.gno:368-378` pointed at the fee burn and now lands in
+symbols rather than `file:line`. (The four dead addresses below are quoted as EVIDENCE, not as
+citations, and where they land is stated as of round 3 — that will drift too, which is the
+point.) `claim.gno:368-378` pointed at the fee burn and now lands in
 `EditClaimTitle`; `dispute.gno:312` at the uphold comp and now lands on `cs.answerBond = 0`;
 `render.gno:378` at the record render, which moved about a hundred lines; `court.gno:227` at a
 deploy ceiling, and now lands inside a comment explaining why a *different* check was removed
@@ -143,6 +145,11 @@ vindicated it. Options, with the objection to each:
 manipulation-proof and cheap where it applies. **This is the single biggest open question in the
 design and it needs the audit's judgement, not mine.**
 
+> **[DISSOLVED — §9.1, §9.2b, §10.5 item 4.]** It was not a question. §9.1 found a fifth option
+> covering 100% of the linkage need, and then measured that a *perfect* linkage pays **zero** on
+> the owner's own docket — the answered claims are exactly the singletons. The converged design
+> uses **no linkage at all**.
+
 ### 4.2 ANTI-STRADDLE — stake is no-loss, so why not hold both sides of everything?
 
 `WithdrawStake` returns 1× on both sides (S), so holding both sides of a claim costs only carry.
@@ -157,6 +164,10 @@ every claim** and collect on all of them.
   threshold ≤ 1 works. **(A) Whether that result transfers here is unknown and is the second
   question for the audit.**
 
+  > **[ANSWERED — §9.5, §10.2. It does NOT transfer.]** Measured bit-identical (delta
+  > `0.000000`), and the threshold is *regressive* here. Netting transfers a fortiori, and is
+  > replaced by §9.3 rule 3.
+
 ### 4.3 ANTI-SPAM — what stops farming credit by asking questions nobody cares about?
 
 Filing costs a deposit plus a fee (S), and **the fee burns unconditionally when a claim dies
@@ -164,10 +175,15 @@ unanswered** (S — `CloseDeadClaim`, claim.gno). So expiry is already not free.
 
 - A self-answered pair of claims could farm credit at the cost of two fees.
 - **(A) The floor is presumably that credit must require the claim to have carried *someone
-  else's* conviction** — but `GAMETHEORY.md` already records that the "never carried stake"
+  else's* conviction** — **[MEASURED INSUFFICIENT, §9.2:** none of the options constrains who
+  supplies the *verdict*, and self-vindication came out at **+0.116651 CC, a net gain.]** but `GAMETHEORY.md` already records that the "never carried stake"
   predicate is **farmable by a 1-unit self-stake**, so a naive version of this fails.
 
 ## 5. Draft numbers — ALL (A), for the audit to derive or refute
+
+> **[THE AUDIT DID. This whole table is superseded — read §10.5 for what replaced it.]** Kept as
+> the record of what was proposed before rounds 1 and 2, because two of its rows were refuted
+> for reasons worth keeping: the unit (§8.3) and the threshold (§9.5, §10.2).
 
 The earlier lost version had *~1 coin to file* and *~17 points for a five-year call*. I can
 reconstruct the shape but **not** defend the constants, so they are stated as a starting point to
@@ -175,8 +191,8 @@ be replaced:
 
 | quantity | draft | basis |
 |---|---|---|
-| credit per vindicated expired claim | 1 point × conviction weight | (A) |
-| conviction weight | `min(1, ownConv / u*·mg_max)`, `u*` = 1/3 | (D) from §13.5's straddle threshold |
+| credit per vindicated expired claim | ~~1 point × conviction weight~~ **SUPERSEDED — §8.3, §10.3:** a claim count cannot measure years; the unit is unioned coverage-weeks | (A) |
+| conviction weight | ~~`min(1, ownConv / u*·mg_max)`, `u*` = 1/3~~ **DEAD — §10.2** | ~~(D) from §13.5's straddle threshold~~ — and it never followed from it: §3.3 and §4.2 both quote that threshold as **25%**, not 1/3 |
 | five-year call, 5 re-askings, full weight | **5 points** | (D) — *not 17; I cannot reconstruct 17 and will not pretend to* |
 | priority gate | 3 points (existing `priorityNetRecord`) | (S) |
 | bond discount at full credential | ≤ 25% of the bond | (D) — §13.5 measured 75% of the price as non-discountable by construction |
@@ -185,6 +201,10 @@ be replaced:
 means the credential *saturates early* and the fifth year adds nothing. Either the gate rises,
 the credit scales with hold time within each claim, or the reward has a second dimension. **(A) —
 the audit should resolve which.**
+
+> **[RESOLVED — §8.1 to §8.4.]** None of the three. The saturation is a *step*, not a curve
+> (§8.1); scaling with hold time within a claim is **not available** (§8.2); the unit was wrong
+> (§8.3); and the reader must be hyperbolic (§8.4).
 
 ## 6. What the audit must prove
 
@@ -264,7 +284,8 @@ the alternative was already refuted there: own-stake (average hold time) is scal
 base unit held for the claim's life scores maximal.
 
 **So the two properties must be split across different factors:** a **gate** that costs capital
-(`u ≥ u* = 1/3`) and a **magnitude** that carries time — safe *only because* the gate is
+(`u ≥ u* = 1/3` — **VOID, §10.2: this gate does no work; see §9.5**) and a **magnitude** that
+carries time — safe *only because* the gate is
 capital-priced.
 
 ### 8.3 The UNIT was wrong, which is why nothing worked
@@ -276,6 +297,10 @@ earns the identical three. **A claim count cannot measure years.**
 
 > **Denominate the credential in wall-clock coverage, UNIONED:**
 > `coverage(addr) = |⋃ᵢ [holdStartᵢ, claimEndᵢ]|` over expired claims where `uᵢ ≥ 1/3`.
+>
+> **[SUPERSEDED IN ITS GATE ONLY — §10.3.]** The union is right and is kept. `uᵢ ≥ 1/3` is
+> replaced by positive **net capital-time on the vindicated side**. Do not implement this line
+> as written.
 
 **The union is the load-bearing word** — summing overlapping claims lets 15 concurrent claims
 manufacture 180 weeks inside one year. It is O(1) state and O(1) work: store `lastCreditedUntil`
@@ -441,7 +466,8 @@ deciding a question yours never reached.* **Sharpest counsel flag in the design.
    field** — never in `score` — read through `P_max · cov/(cov + 156wk)`. Bounded by the calendar,
    mints nothing, monotone in years at 25% / 50% / 62.5% for 1 / 3 / 5 years, and **collectable by
    someone who never answers again.**
-3. **Prefer the unscoped variant** (§8.3, property 3) unless §4.1's linkage question resolves
+3. **Prefer the unscoped variant** (§8.3, property 3) — **[now unconditional, §10.5 item 4:
+   there is no linkage question left]** — unless §4.1's linkage question resolves
    cleanly — it needs **no linkage at all**.
 4. **Extend `check-nontransferable.py`** before any credential field lands.
 5. **Two new counsel flags:** an economically-valuable credential on an unadjudicated position
@@ -684,3 +710,115 @@ unrelated claims and spent on the snipe.** It decouples the discount from the cl
    is `> 0` and it is the owner's own concession — but it is small, and 75% of every bond is
    non-discountable by construction, so no calibration makes it large. **If more is wanted the lever
    is priority, not discount.**
+
+---
+
+## 10. ROUND 3 — the two rounds never reconciled, and this is the reconciliation
+
+Rounds 1 (§8) and 2 (§9) each ended in a recommendation, and **neither says what it does to the
+other.** §9.3 opens "Build this instead", which reads as superseding §8.9 — but §9 is scoped to
+linkage and never revisits §8.9's items one by one. The result is a document with **three live
+answers to the same three questions**, and a reader who stops at the first boxed definition
+(§8.3's, which looks the most like a spec) builds the wrong thing. That is the whole reason this
+file is not converged, so the reconciliation is the work.
+
+Nothing below is new analysis. Every leg is a measurement already in §8 or §9; what was missing
+was a decision about which one governs.
+
+### 10.1 The three unreconciled pairs
+
+| # | question | round 1 (§8) | round 2 (§9) |
+|---|---|---|---|
+| i | **unit** | unioned coverage-weeks (§8.3) | net capital-time per (address, claim) (§9.3 r2–3) |
+| ii | **form** | published standing, hyperbolic reader (§8.9) | "SPENT, not standing" (§9.3 r4) |
+| iii | **gate** | `uᵢ ≥ 1/3` (§8.2 — "safe *only because* the gate is") | "**There is no threshold**", and it is regressive (§9.5) |
+
+### 10.2 (iii) is decided outright: THERE IS NO `u*`, and §8.2's safety claim is void
+
+§9.5 measured it — bond floor `100.980000` with the straddler idle and `100.980000` LOADED,
+**delta 0.000000, bit-identical** — so the cost ratio collapses to `(1 − d·min(1, u/u*)) ≤ 1` for
+every stake and every `u*`. Worse, with `u = s/(P+s)` the whale saturates while the small
+contrarian gets nothing: the threshold is *regressive here*, the inverse of §13.5. It is replaced
+by §9.3 rule 3's netting, which is measured strictly dominant (a symmetric 300/300 straddle nets
+**0.000000**; one block of entry asymmetry on 600 CC nets **0.000015**; a directional 300 CC nets
+**22.950000**).
+
+**So every `u* = 1/3` in this file is dead**, and §8.2's "safe *only because* the gate is
+`u ≥ u* = 1/3`" is not a weaker claim than it was — it is void, because the thing it names as the
+source of safety does no work at all.
+
+**And a separate defect found while tracing it:** §5's table derives `u* = 1/3` and labels the
+basis "(D) from §13.5's straddle threshold" — but §3.3 and §4.2 both quote that threshold as
+`u* ≥ 1 − L0/k` = **25%**. 1/3 ≠ 1/4. The (D) never followed from its stated basis, independently
+of §9.5 abolishing it. A number carried through four sections on a derivation that does not
+produce it is exactly the shape §8.1's own lesson names.
+
+### 10.3 (i) is a false conflict — the two units do DIFFERENT jobs, and both are needed
+
+Netting cannot be done in coverage-weeks: rule 3 nets a *signed magnitude*, and two opposing
+intervals do not subtract. So capital-time is forced for the gate. But capital-time cannot be the
+credential either — it conflates size with duration, and a whale holding one week would outrank a
+small holder who held for a year, which is the precise opposite of the requirement in §1.
+
+**Decision: keep §8.3's unioned coverage as the credential, and replace its gate.**
+
+> `coverage(addr) = |⋃ᵢ [holdStartᵢ, claimEndᵢ]|` over expired claims where the address's **net
+> capital-time on the vindicated side is positive** (§9.3 rule 3), in place of `uᵢ ≥ 1/3`.
+
+Capital-time decides **whether** a claim's interval counts; the calendar decides **how much** it
+is worth. That keeps §8.3's answer to "a claim count cannot measure years" and §9.3's answer to
+the straddle, and it discards only the threshold both rounds now agree does nothing.
+
+### 10.4 (ii) resolves the same way, and round 2's objection dissolves under 10.3
+
+§9.3 rule 4 rejects standing for a stated reason: *"capital-time is farmable in size, so a
+standing credential means one farm buys an unbounded stream."* That is an objection to standing
+**denominated in capital-time** — which 10.3 has just declined to do. Denominated in coverage
+the objection does not apply: size no longer buys credential, it only decides whether an interval
+counts, and the quantity is **bounded by the calendar** — five years of holding is five years, at
+any size.
+
+**Decision: §8.9 item 2 stands.** Published standing, in a new field, never in `score`, read
+through the hyperbolic `P_max · cov/(cov + 156wk)` (§8.4), monotone at 25% / 50% / 62.5% for
+1 / 3 / 5 years, and collectable by someone who never answers again. It is the only one of the
+two forms that satisfies §1 at all: the owner asked for *"reputation or something"* held across
+five years, and a credit consumed on use is not a standing.
+
+Round 2's underlying worry is real and survives as a bound, not as a veto: the sybil. §9.5
+records it — netting is per (address, claim), so two addresses restore the un-netted straddle at
+2× carry for 1× credit, **credit/carry 1.275 cold / 3.213 hot**. That is the ×2 already on the
+residual list, and it applies to coverage identically.
+
+### 10.5 The converged spec, in one place
+
+1. **No bond discount as the primary payout.** §8.5 rejected it three ways; §9.7 adds that a
+   credential discount and §13.5's conviction lever share **one ≤ 25% budget and cannot stack**,
+   and that at HIGH tier `δ = 25%` moves the ratio to **1.725 (+33.3%)**.
+2. **Credential = unioned coverage-weeks**, gated per claim by positive net capital-time on the
+   vindicated side (10.3). Accrual window **pinned at 12 weeks** — today unbounded (§9.3 r1).
+   Keyed on **raw `∫stake·dt`**, which is `d_eff`-invariant (r2).
+3. **Published standing** in a new field, never `score`, hyperbolic reader (10.4).
+4. **No linkage mechanism at all** — no parent, no vote, no edge, no text match (§9.3). This
+   dissolves §4.1, which called linkage "the single biggest open question in the design": it was
+   not a question, because §9.1's measurement shows a *perfect* linkage pays **zero** on the
+   owner's own docket, for the structural reason in §9.2b.
+5. **Payout is PRIORITY** (§9.3 r6) — not fungible, rate-limited to one active claim per address,
+   so a hedged position cannot monetize it. If relief is also wanted, `v ≤ 0.3112`, **take
+   `v = 1/4`** (§9.6), knowing it delivers ~1.587 CC on the owner's own largest position over
+   five years (§9.8 r5).
+6. **Debit optional**, via (e) plus `decidedRounds > 0 && credEligible` (§9.3 r5).
+7. **Extend `check-nontransferable.py` before any credential field lands** (§8.9 item 4), and the
+   two counsel flags stand (item 5).
+
+### 10.6 What is still open after this
+
+Convergence here means the *recommendation* is single-valued, not that the design is finished.
+Genuinely open, and none of it blocks the others:
+
+- **The `P_max` constant.** §8.9 fixes the reader's SHAPE and its 156-week scale; the height is
+  still free, and it is what decides whether the credential is worth anything.
+- **Sybil ×2 is irreducible** (§9.5, §9.8 r3). Accepted, not solved.
+- **The two counsel flags** (§8.9 item 5) are legal questions, not engineering ones, and are the
+  one thing in this file that genuinely cannot be settled by measurement.
+- **Nothing is implemented.** The status line at the top still holds, and the corpus carries no
+  row for any of this because none of it exists yet.
