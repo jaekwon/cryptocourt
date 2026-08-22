@@ -7680,5 +7680,75 @@
   "label": "pendingKey: two claims opened at the same height collide",
   "find": "func pendingKey(cs *claimState) string {\n\treturn beHeightKey(cs.openedAt) + beClaimKey(cs.id)",
   "replace": "func pendingKey(cs *claimState) string {\n\treturn beHeightKey(cs.openedAt)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "pastDeadline: a missing stamp reports the deadline as KNOWN",
+  "find": "func pastDeadline(stamp, secs int64) (passed, known bool) {\n\tif stamp == 0 {\n\t\treturn false, false\n\t}",
+  "replace": "func pastDeadline(stamp, secs int64) (passed, known bool) {\n\tif stamp == 0 {\n\t\treturn false, true\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "pastDeadline: the stamp test is inverted, so every stamped claim falls back",
+  "find": "func pastDeadline(stamp, secs int64) (passed, known bool) {\n\tif stamp == 0 {",
+  "replace": "func pastDeadline(stamp, secs int64) (passed, known bool) {\n\tif stamp != 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "pastDeadline: a deadline passes one second late",
+  "find": "\treturn nowTime() >= stamp+secs, true",
+  "replace": "\treturn nowTime() > stamp+secs, true"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "pastDeadline: the window is measured from now, not from the stamp",
+  "find": "\treturn nowTime() >= stamp+secs, true",
+  "replace": "\treturn nowTime() >= secs, true"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "deadlineTime: a missing stamp answers a real instant",
+  "find": "func deadlineTime(stamp, secs int64) int64 {\n\tif stamp == 0 {\n\t\treturn 0\n\t}",
+  "replace": "func deadlineTime(stamp, secs int64) int64 {\n\tif stamp == 0 {\n\t\treturn secs\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "blocksToSecs: the cadence is four seconds a block, not five",
+  "find": "func blocksToSecs(b int64) int64 { return b * 5 }",
+  "replace": "func blocksToSecs(b int64) int64 { return b * 4 }"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "heightNow: a sealed chain may report a height below what it showed",
+  "find": "\t\tif h < tcHeightFloor {",
+  "replace": "\t\tif h > tcHeightFloor {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "heightNow: an armed clock reads the live chain instead of its frozen base",
+  "find": "\t\th = tcHeightBase + tcHeightSkew // frozen: only AdvanceTestHeight moves it",
+  "replace": "\t\th = runtime.ChainHeight() + tcHeightSkew"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "ClaimTimeline: the settle line is published for a claim already decided",
+  "find": "\t\tif cs.verdictAt == 0 && !cs.closed {",
+  "replace": "\t\tif cs.verdictAt == 0 || !cs.closed {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "ClaimTimeline: an unanswered claim publishes an answer line",
+  "find": "\tif cs.answerHeight != 0 {",
+  "replace": "\tif cs.answerHeight == 0 {"
  }
 ]
