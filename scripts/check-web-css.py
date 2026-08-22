@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
-"""Check that the overlay's stylesheet is not silently broken.
+"""Check that index.html's stylesheet is not silently broken.
+
+SCOPE, STATED BECAUSE THE LAST GUARD THAT LEFT IT VAGUE COST A BUG. This reads
+the <style> block in web/index.html and nothing else. The overlay ships a SECOND
+stylesheet — CHATCSS in web/chat.js, 1.2KB and 19 rules, injected by chatStyles()
+— and it is NOT checked here.
+
+That is a deliberate boundary, not an oversight, and it is worth the sentence
+because check-web-dupes had the same shape and was not deliberate: its docstring
+said "the overlay" while it read one of the two shipped files, so a cross-file
+function collision walked past it and a demo court page started calling the real
+chat service (500e543, fixed in c1df426).
+
+Why the boundary is left where it is: this script is a flat scan over one `css`
+string, so a second source means restructuring it into a function — real risk to
+a working guard — and two of its three checks cannot fire on CHATCSS at all,
+which contains no comments. Only brace balance could, on 1.2KB. If CHATCSS grows
+comments, or grows at all, that arithmetic changes and this should be a loop over
+both sources rather than a note.
 
 WHY THIS EXISTS. A `/* ... */` comment inside `.emb{}` was edited badly and left
 a stray `*/` with prose in front of it. CSS error recovery then skipped forward
