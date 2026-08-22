@@ -104,15 +104,10 @@ def realms_with_filetests():
 
 
 def stage(root, target):
+    """This realm plus the p/ packages it imports, at their on-chain paths."""
     pairs = [(os.path.join(REPO, "realm/p", d), f"{P}/{d}/v0") for d in target["deps"]]
     pairs.append((target["src"], target["dest"]))
-    for src, rel in pairs:
-        dst = os.path.join(root, rel)
-        shutil.rmtree(dst, ignore_errors=True)
-        os.makedirs(dst)
-        for f in os.listdir(src):
-            if f.endswith(".gno") or f == "gnomod.toml":
-                shutil.copy(os.path.join(src, f), dst)
+    gnoroot.stage(root, pairs)
 
 
 def main():

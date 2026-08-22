@@ -163,6 +163,34 @@ def _skip_staging(directory, names):
     return set()
 
 
+def stage(root, pairs):
+    """Copy each (source dir, destination rel-path) pair into a shadow root.
+
+    THIS LOOP EXISTED THREE TIMES — check-storage, check-isolation and mutate —
+    byte-identical apart from the loop variable, and each computed its own pairs:
+    a realm plus its p/ deps, every realm the Makefile names, or both trees. The
+    pairs are the part that legitimately differs. The copy was not.
+
+    The line that made it worth merging is the filter. `.gno` or `gnomod.toml`
+    was written out in all three, so a fourth kind of file that has to be staged
+    — another manifest, a testdata dir — would have been added to one and missed
+    by two, and the symptom would be a guard measuring a package built from an
+    incomplete copy. That is the same drift check-mutation-anchors already
+    imports PKGS from mutate.py to avoid, rather than restating it.
+
+    It lives here because this module already owns the shadow root's lifecycle
+    and what is deliberately NOT symlinked into it (STAGED, _skip_staging).
+    Staging packages into one is the same concern from the other end.
+    """
+    for src, rel in pairs:
+        dst = os.path.join(root, rel)
+        shutil.rmtree(dst, ignore_errors=True)
+        os.makedirs(dst)
+        for f in os.listdir(src):
+            if f.endswith(".gno") or f == "gnomod.toml":
+                shutil.copy(os.path.join(src, f), dst)
+
+
 def remove(path):
     """Delete a shadow root, refusing anything that is not one.
 

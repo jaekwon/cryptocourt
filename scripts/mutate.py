@@ -165,17 +165,6 @@ OBSERVERS = {
 }
 
 
-def stage(root):
-    """Copy both trees into GNOROOT/examples at the paths they hold on chain."""
-    for src, rel in PKGS.values():
-        dst = os.path.join(root, rel)
-        shutil.rmtree(dst, ignore_errors=True)
-        os.makedirs(dst)
-        for g in os.listdir(src):
-            if g.endswith(".gno") or g == "gnomod.toml":
-                shutil.copy(os.path.join(src, g), dst)
-
-
 # A MUTANT CAN HANG INSTEAD OF FAILING, and until this bound one did — for 56
 # minutes at 110% of a core, with no way to tell it from a slow suite.
 #
@@ -212,7 +201,7 @@ def run_suite(root, pkg=None, mut=None):
     # scripts/gnoroot.py) — so a long batch no longer holds a shared tree, and a
     # concurrent runner in another worktree cannot delete the mutant mid-test and
     # have it scored INVALID.
-    stage(root)
+    gnoroot.stage(root, PKGS.values())
     if mut is not None:
         f = os.path.join(root, PKGS[mut.get("pkg", "govern")][1], mut["file"])
         src = open(f).read()

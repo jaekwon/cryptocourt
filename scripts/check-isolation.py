@@ -91,16 +91,6 @@ def realms():
 
 REALMS = realms()
 
-def stage(root):
-    for src, rel in REALMS:
-        dst = os.path.join(root, rel)
-        shutil.rmtree(dst, ignore_errors=True)
-        os.makedirs(dst)
-        for f in os.listdir(src):
-            if f.endswith(".gno") or f == "gnomod.toml":
-                shutil.copy(os.path.join(src, f), dst)
-
-
 def main():
     # The last guard to take the lock, and the one that needed it most: this is
     # the heaviest reader in the repo — it stages every realm and runs the suite
@@ -141,7 +131,7 @@ def main():
     red = set()   # (pkg, test) pairs that fail WITH their package too
     rered = []    # packages whose suite is red as a whole
     with gnoroot.shadow("check-isolation") as root:
-        stage(root)
+        gnoroot.stage(root, REALMS)
         # The together-run comes FIRST, and unconditionally. It used to run only
         # for packages that had already produced a per-test failure, which meant
         # the success line — "pass alone as well as together" — asserted a thing
