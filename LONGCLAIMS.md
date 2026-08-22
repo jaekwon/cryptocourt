@@ -192,7 +192,7 @@ be replaced:
 | quantity | draft | basis |
 |---|---|---|
 | credit per vindicated expired claim | ~~1 point × conviction weight~~ **SUPERSEDED — §8.3, §10.3:** a claim count cannot measure years; the unit is unioned coverage-weeks | (A) |
-| conviction weight | ~~`min(1, ownConv / u*·mg_max)`, `u*` = 1/3~~ **DEAD — §10.2** | ~~(D) from §13.5's straddle threshold~~ — and it never followed from it: §3.3 and §4.2 both quote that threshold as **25%**, not 1/3 |
+| conviction weight | ~~`min(1, ownConv / u*·mg_max)`, `u*` = 1/3~~ **DEAD — §10.2** (the threshold does no work here; the derivation itself was sound — §13.5 says "25%; take 1/3 for margin") | (D) from §13.5's straddle threshold |
 | five-year call, 5 re-askings, full weight | **5 points** | (D) — *not 17; I cannot reconstruct 17 and will not pretend to* |
 | priority gate | 3 points (existing `priorityNetRecord`) | (S) |
 | bond discount at full credential | ≤ 25% of the bond | (D) — §13.5 measured 75% of the price as non-discountable by construction |
@@ -747,11 +747,18 @@ by §9.3 rule 3's netting, which is measured strictly dominant (a symmetric 300/
 `u ≥ u* = 1/3`" is not a weaker claim than it was — it is void, because the thing it names as the
 source of safety does no work at all.
 
-**And a separate defect found while tracing it:** §5's table derives `u* = 1/3` and labels the
-basis "(D) from §13.5's straddle threshold" — but §3.3 and §4.2 both quote that threshold as
-`u* ≥ 1 − L0/k` = **25%**. 1/3 ≠ 1/4. The (D) never followed from its stated basis, independently
-of §9.5 abolishing it. A number carried through four sections on a derivation that does not
-produce it is exactly the shape §8.1's own lesson names.
+**A CORRECTION TO THIS SECTION, made an hour after writing it.** It first claimed a second,
+independent defect: that §5's `u* = 1/3` did not follow from its stated basis, since §3.3 and
+§4.2 both quote §13.5's threshold as `u* ≥ 1 − L0/k` = **25%**, and 1/3 ≠ 1/4. **That was
+wrong.** `GAMETHEORY.md` §13.5 reads, in full: *"a derived threshold: `u* ≥ 1 − L0/k` = 25%;
+**take 1/3 for margin**"*. 25% is the derived bound and 1/3 is §13.5's own operating value with
+margin added, so the (D) is sound and always was. The two numbers were never in conflict; I
+compared them across two sections of this file without reading the section of the other file
+that reconciles them.
+
+It changes nothing about the decision above — `u* = 1/3` is still dead here — but it changes the
+REASON, and the reason is the whole content of a finding. It is dead because §9.5 measured the
+threshold to do no work and to be regressive in this design, not because anyone mis-derived it.
 
 ### 10.3 (i) is a false conflict — the two units do DIFFERENT jobs, and both are needed
 
