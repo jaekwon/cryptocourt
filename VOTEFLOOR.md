@@ -497,6 +497,26 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**A COMMENT SAYING SOMETHING IS UNTESTED IS A LEAD, NOT A MEASUREMENT.** render_test.gno
+states it plainly — "TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never
+the PAGE" — and an operator inventory of modrender.gno agreed: three boundaries in
+listedPage with no corpus row at all (the zero-limit contract, the offset skip, the
+length stop). Both existing callers pass offset 0, so I predicted two survivors and wrote
+a paging-consistency test for them.
+
+Measured: all three rows caught, and only ONE of them by the new test. The zero-limit
+contract needed it; the offset skip is caught by TestFrontPageRanksByBurnAndSkipsHidden
+and the length stop by TestDirectoryRanksByBurn, both of which exercise the page
+incidentally while pointing at something else. So the comment was right that no test
+NAMES the page and wrong that nothing covers it, and my prediction of two survivors was
+half wrong. The corpus is three rows better either way — the boundaries are now pinned
+BY NAME instead of by accident — and the test earns its keep for exactly one of them.
+
+**Assert paging as a RELATIONSHIP when the fixture cannot own the data.** Suites share one
+realm, so by the time this test runs the directory holds courts from every other test and
+no slug sits at a fixed index. Absolute positions are untestable; `page(k) == all[k:]` and
+`page(0,n) == all[:n]` are not, and they are exactly what an off-by-one breaks.
+
 **THE SANITISE POLICY HOLDS, AND THREE HYPOTHESES ABOUT IT DIED ON A GREP.** Render
 receives attacker-controlled input, and the house rule is that markdown output sanitises
 while exported READS return raw for the overlay to sanitise itself — stated in

@@ -8239,5 +8239,29 @@
   "find": "\tbond := cs.disputeBond0()\n",
   "replace": "\tbond := cs.disputeBond0() * 2\n",
   "why": "The property that single-siting the formula bought, and it is worth its own row because it is the one the duplication used to put at risk: DisputeBondNext and render.gno's claim page quote disputeBond0, and OpenDispute must charge exactly that. Doubling the charge is the cheapest way to ask whether anything compares the two."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "listedPage: a limit of zero returns one court instead of none",
+  "find": "\tif limit <= 0 {\n\t\treturn out\n\t}",
+  "replace": "\tif limit < 0 {\n\t\treturn out\n\t}",
+  "why": "render_test.gno says outright that the PAGE was never tested - \"TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never the PAGE\" - and both existing calls pass offset 0, so this arm was free. Closed by TestTheListedCourtPageIsConsistentAtItsOffsetAndLimit, which asserts paging CONSISTENCY rather than absolute positions: suites share one realm, so no fixed slug sits at a fixed index, but page(k) must equal the full listing from k onward and page(0,n) its first n. That relationship is what these mutations break."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "listedPage: the offset skips one row too many, so a page drops a court",
+  "find": "\t\tif skipped < offset {",
+  "replace": "\t\tif skipped <= offset {",
+  "why": "render_test.gno says outright that the PAGE was never tested - \"TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never the PAGE\" - and both existing calls pass offset 0, so this arm was free. Closed by TestTheListedCourtPageIsConsistentAtItsOffsetAndLimit, which asserts paging CONSISTENCY rather than absolute positions: suites share one realm, so no fixed slug sits at a fixed index, but page(k) must equal the full listing from k onward and page(0,n) its first n. That relationship is what these mutations break."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "listedPage: the page runs one court past its limit",
+  "find": "\t\treturn len(out) >= limit",
+  "replace": "\t\treturn len(out) > limit",
+  "why": "render_test.gno says outright that the PAGE was never tested - \"TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never the PAGE\" - and both existing calls pass offset 0, so this arm was free. Closed by TestTheListedCourtPageIsConsistentAtItsOffsetAndLimit, which asserts paging CONSISTENCY rather than absolute positions: suites share one realm, so no fixed slug sits at a fixed index, but page(k) must equal the full listing from k onward and page(0,n) its first n. That relationship is what these mutations break."
  }
 ]
