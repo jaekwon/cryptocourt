@@ -40,4 +40,11 @@ for (const f of CHECKS) {
   }
 }
 console.log(failed ? `\nchat-visual: ${failed} failing` : `\nchat-visual: ${CHECKS.length} browser check(s) pass.`);
+// AND THE VERDICT IN THE WORDS THE RUNNER READS. run.js decides a check passed by
+// `r.status === 0 && /ALL PASS/.test(out)`, and this file said "4 browser
+// check(s) pass." — true, green, exit 0, and reported as FAIL by the runner
+// because it was phrased differently. It passed standalone the whole time, which
+// is why registering it in CHECKS without once running it THROUGH run.js proved
+// nothing about whether it was registered correctly.
+console.log(failed ? `\n${failed} FAILURES` : "\nALL PASS");
 process.exit(failed ? 1 : 0);

@@ -82,10 +82,21 @@ for (const f of CHECKS) {
   const r = spawnSync(process.execPath, [p], {encoding: "utf8"});
   const out = (r.stdout || "") + (r.stderr || "");
   if (r.status === 0 && /ALL PASS/.test(out)) {
-    console.log(`ok    ${f}  (${(out.match(/^ok:/gm) || []).length} measurements)`);
+    // `^ok:` is a leaf harness's assertion; `^ok ` is a WRAPPER reporting one of
+    // its children. Counting only the first printed "0 measurements" next to
+    // chat_all.js, which had just run 157 of them — a number that invites exactly
+    // the "this check is vacuous" reading this suite exists to make impossible.
+    const n = (out.match(/^ok[: ]/gm) || []).length;
+    console.log(`ok    ${f}  (${n} measurement${n === 1 ? "" : "s"})`);
   } else {
     failed++;
-    console.log(`FAIL  ${f}  ${(out.split("\n").find(l => /^FAIL|Error:/.test(l)) || "").trim().slice(0, 90)}`);
+    // A REASON EVEN WHEN THERE IS NO FAIL LINE. A check that exits 0 without ever
+    // printing ALL PASS fails here and used to do it in silence — "FAIL
+    // chat_all.js" and nothing after, which reads as a crash rather than as a
+    // wrapper that phrased its verdict differently. Which is exactly what it was.
+    const why = (out.split("\n").find(l => /^FAIL|Error:/.test(l)) || "").trim().slice(0, 90)
+      || (r.status === 0 ? "exited 0 but never printed ALL PASS" : `exited ${r.status}`);
+    console.log(`FAIL  ${f}  ${why}`);
   }
 }
 console.log(failed ? `\nweb-visual: ${failed} failing` : `\nweb-visual: ${CHECKS.length} browser check(s) pass.`);
