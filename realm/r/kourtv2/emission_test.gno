@@ -370,3 +370,81 @@ func TestTheSeniorQuoteIsWhatGetsPaid(cur realm, t *testing.T) {
 			"clamped to what was promised", paidLate, payableLate, amount)
 	}
 }
+
+// The R_max pause is a CEILING and not a floor: at the cap the period's budget is
+// forgone forever rather than banked. accrueSegment decides that with `reservoirR()
+// >= rMax()`, and the operator in it is the whole policy — `>` would bank one more
+// segment at the cap, `>=` forgoes it.
+//
+// NOTHING VISITED THE EDGE. TestRMaxPausesAccrual looks like it covers this and
+// cannot: it allows R up to `rMax + curPeriodBudget`, a whole period's slack, so the
+// `>=`-to-`>` flip stays inside its tolerance. And the tolerance is not sloppiness —
+// natural accrual OVERSHOOTS the cap and can never land on it. rollTo banks a whole
+// period in ONE segment, and the cap shrinks with the step-down every roll, so R
+// arrives at the pause already past it and then sits frozen while rMax keeps falling.
+// Measured on this fixture at period 12: R = 149,492,558 against rMax = 140,317,044,
+// an overshoot of 9,175,514 — a quarter of the 35,079,261 period budget. The
+// exact-equality state is not reachable by waiting.
+//
+// It IS reachable by SPENDING. A junior draw of exactly the overshoot lands R on the
+// cap, and reserveJunior is the same call crystallize makes — so this is a state a
+// real court reaches whenever a draw happens to clear the bank exactly.
+//
+// TWO ORDERINGS CARRY THE TEST. The draw must come after the overshoot exists, or it
+// clamps to R and lands somewhere arbitrary; and the one-unit draw must come after
+// the pause has been asserted, or the edge is never occupied. The pair is the point:
+// AT the cap nothing accrues, ONE UNIT below it the same advance accrues — which is
+// also what proves the first half is not passing because the advance was too short to
+// accrue anything.
+func TestTheReservoirPauseHoldsAtExactlyTheCap(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rmx-alice")
+	c := testCourt(cur, "rmx", alice, 10_000_000_000)
+	rollTo(c, 1)
+	if c.curPeriodBudget <= 0 {
+		t.Fatalf("setup: period 1 must carry a live budget, got %d", c.curPeriodBudget)
+	}
+	// Quiet periods, until the pause has fired on its own and R is past the cap.
+	rollTo(c, 12)
+	over := c.reservoirR() - c.rMax()
+	if over <= 0 {
+		t.Fatalf("setup: quiet accrual must overshoot the cap (that is why the edge "+
+			"needs a draw to reach): R=%d rMax=%d", c.reservoirR(), c.rMax())
+	}
+
+	// Spend exactly the overshoot. R now sits ON the cap.
+	if got := reserveJunior(c, over); got != over {
+		t.Fatalf("setup: the draw must take the whole %d overshoot, took %d", over, got)
+	}
+	if r, m := c.reservoirR(), c.rMax(); r != m {
+		t.Fatalf("setup: R must sit exactly on the cap, R=%d rMax=%d", r, m)
+	}
+
+	// AT the cap: a period's worth of blocks accrues nothing, forever forgone.
+	acc0, rem0 := c.cumAccrual, c.accrualRem
+	testing.SkipHeights(100)
+	touch(c)
+	if c.cumAccrual != acc0 {
+		t.Fatalf("at exactly the cap accrual must pause: %d units accrued, and the "+
+			"reservoir is a ceiling, not a floor", c.cumAccrual-acc0)
+	}
+	if c.accrualRem != rem0 {
+		t.Errorf("a paused segment must not consume the carry either: %d vs %d",
+			c.accrualRem, rem0)
+	}
+
+	// ONE UNIT below the cap: the same advance accrues. Without this half the
+	// assertion above would hold for a fixture that could not accrue at all.
+	if got := reserveJunior(c, 1); got != 1 {
+		t.Fatalf("setup: a one-unit draw must be taken from a full bank, got %d", got)
+	}
+	if r, m := c.reservoirR(), c.rMax(); r != m-1 {
+		t.Fatalf("setup: R must sit one unit under the cap, R=%d rMax=%d", r, m)
+	}
+	acc1 := c.cumAccrual
+	testing.SkipHeights(100)
+	touch(c)
+	if c.cumAccrual <= acc1 {
+		t.Fatalf("one unit under the cap the same 100 blocks must accrue, got %d",
+			c.cumAccrual-acc1)
+	}
+}

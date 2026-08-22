@@ -70,6 +70,22 @@ func accrueSegment(c *Court, blocks int64) {
 	if blocks <= 0 || c.curPeriodBudget <= 0 {
 		return
 	}
+	// `>=` and not `>`: AT the cap the segment is forgone. That operator is the
+	// whole ceiling-not-floor policy and nothing visited its edge for a long time,
+	// because natural accrual cannot land on the cap — it arrives past it and then
+	// sits frozen while the step-down lowers rMax underneath. A junior draw of
+	// exactly the overshoot is what occupies the edge;
+	// TestTheReservoirPauseHoldsAtExactlyTheCap builds that state and pins both sides
+	// of it.
+	//
+	// THE SECOND CONJUNCT IS IMPLIED BY THE FIRST, here and today. Above this line
+	// curPeriodBudget > 0, so rMax = rMaxPeriods x curPeriodBudget > 0; the first
+	// conjunct then needs reservoirR() > 0, which needs cumAccrual > reservedTail,
+	// which is the second. So no test can distinguish `>=` from `>` in it — a probe
+	// that panicked on the deciding state (first conjunct true AND cumAccrual ==
+	// reservedTail) fired zero times across the whole realm suite. It stays because
+	// rMaxPeriods is a DIAL: at 0 the first conjunct is vacuously true and this
+	// becomes the only thing that keeps accruing for a senior who is still waiting.
 	if c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail {
 		return // full and no senior waits: the budget is forgone (ceiling, not floor)
 	}
