@@ -467,6 +467,34 @@ survives every suite and fails `check-read-purity.py` with
 `elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
 resolves, so the annotation cannot rot into a shrug.
 
+**THE CAP SWEEP, MECHANISED.** The boundary lesson below generalises into a query: for
+every cap-like constant in the realm, does any corpus row mutate the OPERATOR of a
+comparison against it? Measured: 18 cap constants, 29 comparisons, and 9 of the 29 with no
+row touching their operator. Two of those nine were the folders walks already argued
+invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALID, 2 real.
+Worth repeating whenever a cap is added, because it costs one query and it found a read
+that exceeds its own documented bound.
+
+**A FIXTURE THAT WRITES N POINTS MAY NOT STORE N POINTS.** The seriesRowCap test failed on
+its first run against CORRECT code: 401 change points came back with the cap flag clear.
+checkpoint.Series keeps its two newest values in inline slots and only rolls older ones
+into the archive — measured at 20 written, 18 archived — and the cap governs the ARCHIVED
+population only. So writing exactly seriesRowCap+1 archived two fewer than intended and
+left the cap slack. The fix is not to hardcode "+2": the test COUNTS the archived entries
+and refuses to run unless they sit exactly on the two sides of the cap, so it cannot
+silently drift off the boundary if the inline split ever changes. Same discipline as
+asserting `maxFolderDepth == 4` before building a chain by hand — **a fixture that assumes
+where the boundary is should assert it.**
+
+**WHEN THE OBSERVABLE CANNOT DISTINGUISH THE TWO CASES, RECORD IT RATHER THAN CONTRIVE.**
+The other seriesRowCap site — ClaimSeries's trim, `if len(rows) > seriesRowCap` narrowed to
+`>=` — is valid and stays unpinned. Its only observable is the `more` flag, which needs the
+union of the two sides to be EXACTLY the cap; but the intact code trims any larger union
+down to the cap, so a returned count of 400 cannot be told apart from "was 401, trimmed".
+A fixture could not prove it hit the boundary, and computing the pre-trim union in the test
+would restate the formula. Recorded in KNOWN-GAPS with the promotion trigger (make the
+union size observable) instead.
+
 **PAIR THE REFUSAL AT THE BOUNDARY, NOT MERELY SOMEWHERE LEGAL.** The standing rule is
 to pair every "must be refused" with the ordinary input it must NOT refuse, and
 TestFolderNesting obeyed it — a cycle refused, a self-parent refused, a too-tall subtree
@@ -608,6 +636,14 @@ cannot change the program at all. Recognise these on sight rather than measuring
   comment argues while still calling it a survivor.
 - **A conjunct implied by the conjunct before it.** See the R_max pause, whose second
   half is provably entailed by its first; recorded in KNOWN-GAPS with the derivation.
+- **A counting loop's early EXIT, when the count is only ever compared against the same
+  threshold.** argument.gno counts a claim's out-edges with `return outN > maxArgOut` as
+  the walk's stop condition and then decides with `if outN >= maxArgOut { panic }`.
+  Narrowing the stop to `>=` makes the walk halt at 32 instead of 33 — and the decision
+  panics either way, because it only asks whether the count reached the cap. The row I
+  wrote for it was mislabelled as well as invalid: it claimed "exactly 32 is refused",
+  which is what the intact code does anyway. The cap DECISION on the next line is the
+  thing worth a row, and it already had one.
 - **A loop bound set far above any reachable iteration count.** folders.gno's cycle walk
   runs `for up, n := parent, 0; up != 0 && n <= maxFolders; n++` with maxFolders = 100,
   and narrowing it to `<` survives. It cannot do otherwise: the only two writes to a

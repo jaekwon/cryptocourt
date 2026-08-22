@@ -8113,5 +8113,34 @@
   "label": "mustNestable: the depth cap allows one level more than it says",
   "find": "\tif cm.folderDepth(parent)+height > maxFolderDepth {",
   "replace": "\tif cm.folderDepth(parent)+height > maxFolderDepth+1 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "seriesRowCap: the series emits one point more than its cap",
+  "find": "if len(pts) >= seriesRowCap {",
+  "replace": "if len(pts) > seriesRowCap {",
+  "why": "SURVIVED an operator sweep of every cap comparison in the realm, and the flag is the reason it matters more than one extra point: the walk sets `more` when it MEETS the cap, so widening `>=` to `>` means it never fires at all on a history of exactly seriesRowCap+1 - at len(pts) == 400 the test `400 > 400` is false, the 401st point is appended, and the walk ends with nothing left to reject. The read returns one point past its documented bound AND tells the client the history is complete. Closed by TestTheSeriesRowCapHoldsAtExactlyItsOwnBoundary on the DAILY grain, the one where the cap is reachable (hourly is trimmed to hourlyKeep = 168). Measured SURVIVED before it, caught after, 0 not caught of 1."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "maxBallotLines: the ballot admits one line more than its cap",
+  "find": "if e.lines.Size() >= maxBallotLines {",
+  "replace": "if e.lines.Size() > maxBallotLines {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "maxCourtNameLen: a name of exactly the maximum length is refused",
+  "find": "if len(name) == 0 || len(name) > maxCourtNameLen {",
+  "replace": "if len(name) == 0 || len(name) >= maxCourtNameLen {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "maxModSetSize: a set of exactly the maximum size is refused",
+  "find": "if len(in) > maxModSetSize {",
+  "replace": "if len(in) >= maxModSetSize {"
  }
 ]
