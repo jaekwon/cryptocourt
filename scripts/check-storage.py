@@ -27,7 +27,6 @@ regression.
     python3 scripts/check-storage.py
 """
 
-import contextlib
 import os
 import re
 import shutil
@@ -104,7 +103,6 @@ def realms_with_filetests():
     return out
 
 
-@contextlib.contextmanager
 def stage(root, target):
     pairs = [(os.path.join(REPO, "realm/p", d), f"{P}/{d}/v0") for d in target["deps"]]
     pairs.append((target["src"], target["dest"]))
