@@ -976,7 +976,6 @@ try{ stored = JSON.parse(store.get("cc.cfg")||"{}"); }catch(_){}
 const CFG = cleanCfg(stored);
 const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", JSON.stringify(CFG)); };
 
-const CC_DEC = 6;          // court coin decimals; economic figures are raw base units
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
 const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
 
@@ -1449,6 +1448,12 @@ function priceText(price, minted){
   return price===0? "under 1" : fmtN(price);
 }
 function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court coin"; }
+/* Every economic figure the realm returns is in RAW BASE UNITS — court coins
+   carry six decimals (coinDecimals in court.gno), so 1_000_000 is one CC. This
+   `/1e6` is that conversion, and it is the only place the overlay makes it. A
+   named CC_DEC constant used to sit up with the other globals and was never read
+   by anything, here or elsewhere, from the courtv2 port onward; the knowledge is
+   kept where the division happens instead of where it was declared. */
 function cc(n, slug){ const v=(n||0)/1e6;
   return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" "+ccSym(slug); }
 function ugnot(n){ return fmtN(n)+" µGNOT"; }
