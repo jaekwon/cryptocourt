@@ -286,6 +286,37 @@ all three `&&` predicates turned into `||`. The single survivor is lockVote's
 first; it is recorded in KNOWN-GAPS with that reason. Worth repeating after any change to
 those three files, since it costs about two minutes and does not depend on guessing.
 
+**THREE KINDS OF PASS, and the third is the cheap one that finds the most.** The full pass
+observes everything and costs five and a half hours. The delta pass observes the rows added
+since, and cost thirty-four minutes to find a row mis-attributed at birth. The third is
+narrower and sharper: **every row whose TARGET FILE has changed.** That is where a catcher
+can have drifted, and it is a small fraction of the corpus — 482 of 1,147 rows after one
+busy session, against 1,147 for the full sweep.
+
+The reason to run it is not theoretical. In one tick my own edit to StakedPage broke two
+rows outright (the anchors guard caught those before the commit, which is what it is for),
+and the two rows the two big passes found wrong were both of this shape — a row that still
+ANCHORS while the test that caught it has moved out from under it. Anchoring is checked on
+every commit; catching is not.
+
+**THE KNOWN-GAPS FILE IS ITSELF A SET OF UNTESTED CLAIMS, so run it.** Every row in it says
+some version of "no test can catch this, and IF IT COMES BACK CAUGHT, read X before
+promoting it" — and nothing was running them. `make anchors` checks their anchors resolve;
+no pass checks that they still survive. A gap closed by somebody else's new test would sit
+there asserting the opposite for ever, which is exactly the stale-claim class this file
+exists to hunt. mutate.py already has the machinery: a row carrying `elsewhere` that turns
+out to be caught HERE is reported as an error telling you to drop the annotation. Passing
+the gaps file to mutate-parallel is the whole audit.
+
+BUDGET FORTY MINUTES, NOT TWENTY, and the reason is worth knowing before you start: two of
+the gaps are rows the file itself describes as non-terminating or pathologically slow —
+`ClaimSeries: the merge advances the side that did NOT change`, whose flipped advance guard
+loops for ever, and `Cost: the slope is d, not 2d`, which doubles the span the curve's
+one-unit correction loops must climb. Each burns a full SUITE_TIMEOUT (600s) every time the
+audit runs, measured. Filtering those two out by label makes the audit twenty minutes and
+loses nothing, because what they assert is a property of the harness's bound rather than of
+any test.
+
 **WHERE THE CORPUS ACTUALLY IS, measured, because a density scan by realm file misses it
 entirely.** Rows per 100 code lines, per package: kourtv2 is thoroughly covered and the
 LIBRARIES underneath it are not — and the libraries are where the arithmetic lives.
