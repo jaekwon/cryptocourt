@@ -206,6 +206,23 @@ reason worth remembering: 8 shards saturated the machine, no shard reported for 
 hours, and `realm/` was edited under it twice before I understood that mutate
 re-stages per row.
 
+**THE FULL-CORPUS PASS RAN, AND IT WAS NOT ALL GREEN — which is the whole reason to run
+one.** 983 rows in 17 slices of 60, 19:48 to 01:17, five and a half hours from an
+isolated clone at one commit: **979 caught, 3 surviving by design with an `elsewhere`
+annotation, and 1 SURVIVOR.**
+
+The survivor is `folders: a court may hold unlimited folders` — the maxFolders cap. That
+row was verified caught when it was written, and 983 rows later it is not: its catching
+test moved out from under it while the folder work grew. Re-measured against HEAD, not
+just against the pinned clone, and it survives there too, so it was a live hole and not
+an artefact of the older tree. Now pinned by TestACourtStopsAtItsFolderCap.
+
+That is exactly the failure a per-row check at insertion time CANNOT find: a row's
+verdict is a fact about a moment, and the corpus was an assembled claim of 983 such
+moments. One had expired. The pass is worth repeating after any large refactor, and the
+cost is known now — five and a half hours of wall clock while other work continues, at
+one 60-row slice per 11-19 minutes depending on what else is running.
+
 **How to run the full corpus while somebody else is editing the tree — run it from a
 CLONE.** mutate stages the realm sources from the repo it is invoked in, per row, so a
 concurrent session's commits land inside a long run and produce rows that report `INVALID

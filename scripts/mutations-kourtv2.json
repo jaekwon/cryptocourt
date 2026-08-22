@@ -7596,5 +7596,89 @@
   "label": "onClaimAnswered: latches bind on ordinary courts instead of meta",
   "find": "func onClaimAnswered(c *Court, cs *claimState) {\n\tif c.id != metaSlug {",
   "replace": "func onClaimAnswered(c *Court, cs *claimState) {\n\tif c.id == metaSlug {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripDeadline: the strip sorts by when a claim OPENED, not when it can be acted on",
+  "find": "func stripDeadline(cs *claimState) int64 { return cs.answerHeight + settleDelay }",
+  "replace": "func stripDeadline(cs *claimState) int64 { return cs.openedAt + settleDelay }"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripKey: two claims sharing a deadline collide on one key",
+  "find": "\treturn beHeightKey(stripDeadline(cs)) + beClaimKey(cs.id)\n}",
+  "replace": "\treturn beHeightKey(stripDeadline(cs))\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "globalStripKey: the realm-wide strip drops the court from its key",
+  "find": "\treturn beHeightKey(stripDeadline(cs)) + slug + beClaimKey(cs.id)",
+  "replace": "\treturn beHeightKey(stripDeadline(cs)) + beClaimKey(cs.id)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripEnter: nothing ever enters the strip",
+  "find": "func stripEnter(c *Court, cs *claimState) {\n\tif cs.inStrip {",
+  "replace": "func stripEnter(c *Court, cs *claimState) {\n\tif !cs.inStrip {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripExit: nothing ever leaves the strip",
+  "find": "func stripExit(c *Court, cs *claimState) {\n\tif !cs.inStrip {",
+  "replace": "func stripExit(c *Court, cs *claimState) {\n\tif cs.inStrip {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripEnter: the membership flag is never set, so exit never fires",
+  "find": "\tglobalStripIdx.Set(globalStripKey(c.id, cs), &stripRow{slug: c.id, claimID: cs.id})\n\tcs.inStrip = true",
+  "replace": "\tglobalStripIdx.Set(globalStripKey(c.id, cs), &stripRow{slug: c.id, claimID: cs.id})"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripPageIDs: the actor caps bind on an UNCONTENDED page instead of a full one",
+  "find": "\tcapBinds := c.stripIdx.Size() > renderPageSize",
+  "replace": "\tcapBinds := c.stripIdx.Size() < renderPageSize"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripPageIDs: an actor must exceed BOTH caps to be held back",
+  "find": "\t\t\tif perAnswerer[a] >= stripActorCap || perAuthor[b] >= stripActorCap {",
+  "replace": "\t\t\tif perAnswerer[a] >= stripActorCap && perAuthor[b] >= stripActorCap {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripPageIDs: the caps apply to seeded claims as well",
+  "find": "\t\tif capBinds && !cs.seeded {",
+  "replace": "\t\tif capBinds || !cs.seeded {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripPageIDs: the page returns one row more than asked",
+  "find": "\t\treturn len(out) >= limit",
+  "replace": "\t\treturn len(out) > limit"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "stripPageIDs: a nil index is walked when the limit is positive",
+  "find": "\tif c.stripIdx == nil || limit <= 0 {",
+  "replace": "\tif c.stripIdx == nil && limit <= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "strips.gno",
+  "label": "pendingKey: two claims opened at the same height collide",
+  "find": "func pendingKey(cs *claimState) string {\n\treturn beHeightKey(cs.openedAt) + beClaimKey(cs.id)",
+  "replace": "func pendingKey(cs *claimState) string {\n\treturn beHeightKey(cs.openedAt)"
  }
 ]
