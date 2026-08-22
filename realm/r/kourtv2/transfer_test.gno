@@ -172,11 +172,20 @@ func TestTransferRefusesNonsense(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "cannot transfer to yourself", func() {
 		TransferCC(cross(cur), "tx6", alice, 1_000)
 	})
+	// THE FULL MESSAGE, not the substring, and the difference is the whole
+	// assertion. grc20votes has its own mustBePositive that panics "grc20votes:
+	// amount must be positive", so "must be positive" alone is satisfied by
+	// EITHER layer — and measured, it is: weakening this guard to `< 0` leaves a
+	// zero-amount transfer still aborting, from the ledger, and this test still
+	// passed. Naming the realm's own message is what makes it a test of the realm's
+	// own guard. The guard is worth keeping despite the ledger's: it refuses before
+	// touch(c) and it says which realm refused.
 	for _, n := range []int64{0, -1, -5_000_000} {
 		testing.SetRealm(testing.NewUserRealm(alice))
-		uassert.AbortsContains(t, cur, "must be positive", func() {
-			TransferCC(cross(cur), "tx6", bob, n)
-		})
+		uassert.AbortsContains(t, cur,
+			"kourtv2: transfer amount must be positive", func() {
+				TransferCC(cross(cur), "tx6", bob, n)
+			})
 	}
 	uassert.Equal(t, int64(0), CoinBalanceOf("tx6", bob))
 }
@@ -295,9 +304,12 @@ func TestTransferFromRefusesTheSameNonsense(cur realm, t *testing.T) {
 		TransferFromCC(cross(cur), "tx10", alice, c.escrow, 1_000)
 	})
 	testing.SetRealm(testing.NewUserRealm(bob))
-	uassert.AbortsContains(t, cur, "must be positive", func() {
-		TransferFromCC(cross(cur), "tx10", alice, bob, 0)
-	})
+	// The realm's message, not the substring the ledger's own guard also matches —
+	// see the note in TestTransferRefusesNonsense.
+	uassert.AbortsContains(t, cur,
+		"kourtv2: transfer amount must be positive", func() {
+			TransferFromCC(cross(cur), "tx10", alice, bob, 0)
+		})
 	uassert.Equal(t, int64(0), CoinBalanceOf("tx10", bob))
 
 	// The ordinary spend it must not refuse.

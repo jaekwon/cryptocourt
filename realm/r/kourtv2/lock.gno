@@ -220,13 +220,19 @@ func SpendableOf(courtSlug string, who address) int64 {
 // curve and no exit — and MODERATION.md had recorded transferability as an open
 // owner call the whole time. This closes it in favour of transferable.
 //
-// GATED ON spendable(), WHICH IS THE WHOLE SAFETY ARGUMENT. spendable() is
-// BalanceOf minus lockedOf, so committed capital cannot be sold out from under
-// the thing it is committed to: a live stake, an answer bond, a dispute bond, a
-// flag bond, a claim deposit or an election bond. Without this gate a staker
-// could sell the coins backing a position and keep both the proceeds and the
-// position — the same double-commit hazard mustSpendable exists to prevent, from
-// the other direction.
+// GATED ON disposable(), WHICH IS THE WHOLE SAFETY ARGUMENT. The gate is
+// mustSpendable, and despite its name that function tests disposable() — the
+// balance less the LARGER of the stake lock and the vote lock — so committed
+// capital cannot be sold out from under the thing it is committed to: a live
+// stake, an answer bond, a dispute bond, a flag bond, a claim deposit, an
+// election bond, or a vote in flight. Without this gate a staker could sell the
+// coins backing a position and keep both the proceeds and the position — the same
+// double-commit hazard mustSpendable exists to prevent, from the other direction.
+//
+// This paragraph named spendable() (stake-only) until it was checked, which
+// UNDERSTATED its own gate by the whole of a vote commitment. AllowanceCC's doc
+// thirty lines below carries the same correction, made earlier; this one was
+// missed because the sentence reads as true either way.
 //
 // WHAT THIS DOES NOT MAKE TRANSFERABLE:
 //

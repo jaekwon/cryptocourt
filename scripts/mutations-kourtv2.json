@@ -8045,5 +8045,43 @@
   "find": "\tif fullBar < demotionBar {\n\t\tfullBar = demotionBar\n\t}\n\tif fullBar < 1 {\n\t\tfullBar = 1\n\t}\n",
   "replace": "",
   "why": "THE ONLY MUTATION OF THIS PAIR WITH TEETH, which is why it replaced two rows that each claimed to be a survivor. The tail of qualityBars is `if fullBar < demotionBar { fullBar = demotionBar }` followed by `if fullBar < 1 { fullBar = 1 }`, and demotionBar has already been floored to 1 above. So the ordering clamp can only fire when fullBar would be 0, and in that case demotionBar is EXACTLY 1 (it was clamped to the same votable/3, then floored) - both clamps therefore yield fullBar == 1 and deleting either one ALONE cannot change the program. Those two single deletions sat in KNOWN-GAPS as 'the full bar may be zero' and 'the ladder may invert'; both were invalid mutations and both stated consequences were false. MEASURED, full kourtv2 suite each time: ordering clamp alone PASS, unit floor alone PASS, BOTH deleted FAIL at TestTheQualityBarsNeverReachZeroOnAMicroCourt with 'the full bar is 0; an EMPTY tally clears a bar of zero', control green before and after. The lines are adjacent and each occurs once, so the joint deletion is writable as one row - a masking pair does not always mean no row can be written. What it costs if it goes: applyQualityTally opens with `turnout >= fullBar && cs.qHighW*3 >= turnout*2`, which at fullBar == 0 and an empty tally reads 0 >= 0 && 0 >= 0, so a vote nobody cast CONCLUSIVELY promotes the claim to the high-quality payout multiplier."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "TransferCC: a zero-amount transfer is allowed",
+  "find": "\tif amount <= 0 {\n\t\tpanic(\"kourtv2: transfer amount must be positive\")\n\t}\n\tfrom := cur.Previous().Address()",
+  "replace": "\tif amount < 0 {\n\t\tpanic(\"kourtv2: transfer amount must be positive\")\n\t}\n\tfrom := cur.Previous().Address()",
+  "why": "PINNED ONLY AFTER THE ASSERTION WAS TIGHTENED, and the reason is worth keeping. grc20votes has its own mustBePositive panicking 'grc20votes: amount must be positive', so the test's AbortsContains on the substring 'must be positive' was satisfied by EITHER layer: measured, this mutation left a zero transfer still aborting - from the ledger - and the test still passed, so the row read SURVIVED. Naming the realm's own full message makes it a test of the realm's own guard, and the row is now caught by TestTransferRefusesNonsense. The guard earns its keep beside the ledger's: it refuses before touch(c) and it names which realm refused."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "TransferFromCC: a zero-amount spend is allowed",
+  "find": "\tif amount <= 0 {\n\t\tpanic(\"kourtv2: transfer amount must be positive\")\n\t}\n\tif from == to {",
+  "replace": "\tif amount < 0 {\n\t\tpanic(\"kourtv2: transfer amount must be positive\")\n\t}\n\tif from == to {",
+  "why": "The same masking layer as the TransferCC row above and closed the same way - see its why. Caught by TestTransferFromRefusesTheSameNonsense once the assertion named 'kourtv2: transfer amount must be positive' instead of the substring grc20votes' own mustBePositive also satisfies."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "ApproveCC: a zero allowance is refused instead of clearing",
+  "find": "\tif amount < 0 {\n\t\tpanic(\"kourtv2: negative allowance\")",
+  "replace": "\tif amount <= 0 {\n\t\tpanic(\"kourtv2: negative allowance\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "ApproveCC: the escrow is refused as an endpoint only when BOTH ends are it",
+  "find": "\tif spender == c.escrow || owner == c.escrow {",
+  "replace": "\tif spender == c.escrow && owner == c.escrow {",
+  "why": "The same || -> && shape already carried for TransferCC, on the entrypoint that was missing it. An allowance naming the escrow would sit there looking like a claim on escrowed coin."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "releaseStake: releasing the whole lock panics instead of clearing it",
+  "find": "\tif amount > l {\n\t\tpanic(\"kourtv2: releasing more stake than is locked\")",
+  "replace": "\tif amount >= l {\n\t\tpanic(\"kourtv2: releasing more stake than is locked\")"
  }
 ]

@@ -371,6 +371,21 @@ a raw `0xff` into a failure message and killed the ablation driver with
 in a `finally` — which is the whole argument for putting it there. Capture subprocess
 output with `errors='replace'`; a mutant can emit any bytes at all.
 
+**THE MONEY PATHS ARE NO LONGER THE THIN SURFACE — MEASURE BEFORE PICKING A TARGET.**
+The standing backlog calls them "the weakest surface in the repo", which was true when it
+was written and is now inverted by the sweeps it asked for. Corpus rows per 100 lines of
+kourtv2 source, non-test files:
+
+    stake.gno 13.6   emission.gno 13.2   quality.gno 13.1   answer.gno 10.2
+    crystallize.gno 9.7   ...   votelock.gno 4.0   modrender.gno 3.4
+    folders.gno 3.2   supersede.gno 3.0   lock.gno 2.8
+
+emission.gno alone carries 40 rows over 302 lines, so "emission, crystallize and the
+senior queue are essentially unswept" is stale. The thinnest file in the realm was
+lock.gno — which is still a money path, and the most consequential one, since it decides
+whether a coin may move at all. Density is not coverage, but it is the cheapest available
+proxy for where to look next, and it beats re-reading a premise.
+
 **A SENTENCE ADDRESSED TO THE NEXT CONTRIBUTOR IS NOT AN ENFORCEMENT MECHANISM.**
 lock.gno's header ends its account of the double-commit risk with "If a new spend path
 is ever added, it belongs in that test too" — and measured, the promise was being kept
@@ -418,6 +433,30 @@ survives every suite and fails `check-read-purity.py` with
 `stakeindex.gno:StakedPage calls getPos`, exit 1. That row belongs in KNOWN-GAPS with
 `elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
 resolves, so the annotation cannot rot into a shrug.
+
+**A SUBSTRING ASSERTION CAN BE SATISFIED BY A LAYER YOU ARE NOT TESTING.** The masking
+layers found so far were all in the CODE; this one is in the test. TransferCC and
+TransferFromCC both open `if amount <= 0 { panic("kourtv2: transfer amount must be
+positive") }`, and both had a test passing 0 and asserting
+`AbortsContains(..., "must be positive")` — which looks like the guard is pinned. It was
+not. grc20votes carries its own `mustBePositive` panicking "grc20votes: amount must be
+positive", so the substring is satisfied by EITHER layer, and the operator sweep reported
+both rows SURVIVED. Measured directly rather than argued: with the realm guard weakened to
+`< 0`, a zero-amount TransferCC still aborts, with `panic: grc20votes: amount must be
+positive`.
+
+The fix costs nothing and turns two unpinnable rows into two caught ones — assert the
+realm's OWN full message, "kourtv2: transfer amount must be positive". Both rows went from
+SURVIVED to caught (TestTransferRefusesNonsense, TestTransferFromRefusesTheSameNonsense),
+0 not caught of 2, with the control green either side. So: **when an AbortsContains
+substring would also match an inner layer's refusal, it is not testing the outer guard.**
+Prefer the full message wherever a deeper layer refuses the same input — and note that the
+outer guard still earns its place, because it refuses before `touch(c)` and it says which
+realm refused.
+
+Not every loose assertion is wrong for this reason: stake_test's `Stake(..., 0)` asserting
+"must be positive" is sound, because a zero stake reaches no ledger call at all (lockStake
+returns early and nothing transfers), so no second layer can satisfy it.
 
 **A MASKING PAIR DOES NOT ALWAYS MEAN NO ROW CAN BE WRITTEN — CHECK ADJACENCY.** The
 standing rule for overlapping checks is "ablate jointly to prove teeth, then record that
@@ -479,6 +518,13 @@ cannot change the program at all. Recognise these on sight rather than measuring
   comment argues while still calling it a survivor.
 - **A conjunct implied by the conjunct before it.** See the R_max pause, whose second
   half is provably entailed by its first; recorded in KNOWN-GAPS with the derivation.
+- **A defensive guard on an internal helper whose every caller has already refused the
+  value.** lockStake and releaseStake both open `if amount <= 0 { return }`, and
+  narrowing either to `< 0` survives — but all three call sites provably pass a positive:
+  Stake panics on `amount <= 0` before lockStake, Unstake panics the same way before
+  releaseStake, and session.gno's release takes `p.stake` after refusing `p.stake <= 0`.
+  Unreachable, so not a survivor. Worth keeping as belt-and-braces on helpers whose
+  contract is "paired one release per lock", but not worth a row.
 - **A floor standing next to a clamp that already delivers it.** qualityBars ends with
   `if fullBar < demotionBar { fullBar = demotionBar }` then `if fullBar < 1 { fullBar =
   1 }`, and demotionBar was floored to 1 earlier — so the ordering clamp can only fire
