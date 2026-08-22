@@ -186,6 +186,26 @@ func StakedSize(courtSlug string, who address) int {
 //
 // Read with StakedSize to tell a partial page from a complete one. limit is clamped to
 // stakePageMax; a limit of zero or less means "the cap".
+//
+// CONVICTION IS NOT HERE, and the reason on record was wrong, so here is the measured
+// one. The old note said including it would cost extra work; it would not. ConvictionOf
+// already settles to now WITHOUT mutating — a transient copy against a preview of the
+// era integral, which its own comment explains — so inside this walk the marginal cost
+// per position is arithmetic on a claimState and a stakePos this function has ALREADY
+// loaded. It is the client's alternative that is expensive: web/index.html's
+// positionOf() is four reads per claim (two StakeOf, two ConvictionOf), each re-doing
+// the court, claim and position lookups this page did once. Counted for a holder with N
+// positions in one court: 2 + 4N reads today against 2 with conviction here, and TWO of
+// those four already duplicate the liveStake this page returns and the me-page throws
+// away.
+//
+// What actually blocks it is the FORMAT CONTRACT, not the cost. parseStaked skips any
+// record whose arity is not four, so appending a fifth field would make the deployed
+// overlay drop every row and show a holder nothing — a blank me-page is a worse failure
+// than a few extra reads. The compatible shape is a second record type ("v:<claimID>:
+// <side>:<conv>") which today's parser ignores by design, and that is a coordinated
+// realm+client change: worth doing, not worth doing half, and not worth shipping the
+// realm half alone since nothing improves until the client reads it.
 func StakedPage(courtSlug string, who address, offset, limit int) string {
 	if !who.IsValid() {
 		return ""
