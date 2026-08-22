@@ -222,6 +222,34 @@ the recorded full pass — 983 rows in 5½ hours is the same ~75s/row. So the ar
 any batch is `rows / shards * 75s`, and the reason to keep foreground slices at 50-65
 rows is that they finish inside the tool-call window while a 96-row shard cannot.
 
+**THE SECOND FULL PASS RAN, AND THIS ONE WAS ALL GREEN.** 1,174 rows in 20 slices of 60 at
+5 shards, from a clone pinned at 39a8c4f, 10:17:20 to 13:32:42 — three hours fifteen. Every
+slice clean:
+
+    20/20 slices, 0 not caught
+    1,171 caught + 3 surviving BY DESIGN with an `elsewhere` = 1,174
+    the three: Buy's IsUserCall downgrade, and the two arming rows (nextID,
+    TotalSupply) — all txtar-backed, and `make check` now runs txtar-test
+
+Then the delta: 12 rows had been added while it ran, so they were observed the same way from
+a SECOND clone at HEAD, 12/12 caught. Together 1,186 rows observed green in one coherent
+effort, which is what ranked item 2 asked for — "an assembled claim, not an observed one" is
+no longer true of this corpus.
+
+**THE CONTRAST WITH THE FIRST PASS IS THE POINT.** That one (983 rows) found one EXPIRED row
+— `folders: a court may hold unlimited folders`, verified caught when written and not caught
+983 rows later, because its catching test had moved out from under it. This pass found none.
+The difference is not luck: between the two, the corpus grew by 191 rows and every batch
+added since has been measured on the FULL suite rather than on the filter that found it,
+which is the practice that first pass's failure bought.
+
+**SLICE TIMINGS, and the honest accounting of them.** Fastest 308s, slowest 1,356s, mean
+586s. That spread is almost entirely MY doing: the slow tail lines up with the slices during
+which I was running guard targets, realm-test and small mutation batches on the same machine.
+A slice is ~5 minutes on a quiet box and up to 22 when something else is working. So the
+`rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
+if you intend to keep working alongside it.
+
 **THE FULL-CORPUS PASS RAN, AND IT WAS NOT ALL GREEN — which is the whole reason to run
 one.** 983 rows in 17 slices of 60, 19:48 to 01:17, five and a half hours from an
 isolated clone at one commit: **979 caught, 3 surviving by design with an `elsewhere`
