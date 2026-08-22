@@ -8316,5 +8316,13 @@
   "label": "Wrap: the room check happens AFTER the coin has moved",
   "find": "\tmustWrapRoom(slug, cur.Address(), amount)\n\tkourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)",
   "replace": "\tkourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)\n\tmustWrapRoom(slug, cur.Address(), amount)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "mustSpendable: the two lock messages are swapped, so each names the wrong lock",
+  "find": "\tcase vl > sl:\n",
+  "replace": "\tcase sl > vl:\n",
+  "why": "mustSpendable's four cases exist so a refusal names the constraint that actually binds, and the two middle wordings carry 14 and 10 test references between them - but nothing rowed the ORDER of the predicates, only the tie and the no-lock case. Making both middle predicates `sl > vl` sends a vote-locked holder to the tie wording instead of the uncommitted one, which is a refusal telling the holder to release something that is not what binds. Caught by TestAFrozenQualityTallyHoldsCoinUntilTheClaimEnds."
  }
 ]
