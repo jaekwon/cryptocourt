@@ -497,6 +497,22 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE CLONE PROTECTS THE LONG PASS AND LEAVES THE SHORT BATCHES EXPOSED.** Running the
+full corpus from a pinned clone is recorded above as the way to keep the working tree free.
+What that recipe does NOT cover is the handful of one-to-five-row verification batches run
+between commits, because those go through the LIVE scripts/mutate.py — and another session
+edits that file. Measured today: a five-row ccwrap batch ran at 11:28, and at 11:34
+mutate.py, gnoroot.py, check-storage.py and check-isolation.py all changed underneath from
+another session. Six minutes of margin, entirely by luck.
+
+The failure this invites is the dangerous direction. A half-edited harness does not usually
+report nonsense; it reports rows as CAUGHT, because anything that makes the staged suite
+fail to build or run looks exactly like an objection. So the practice is: **run verification
+batches from the clone too, or check `stat` on scripts/mutate.py against the batch's start
+time before believing an all-caught result.** `git status` before a commit already catches
+the tree being shared; this is the same discipline one layer down, for the harness rather
+than the sources.
+
 **CORPUS DENSITY PER PACKAGE, AND WHAT THE ZEROES MEAN.** Rows per 100 code lines across
 every tree the harness can stage: checkpoint 16.6, grc20votes 15.2, governor 15.0,
 curve 13.9, kourtv2 13.2, govern 9.0, twap 8.7, **ccwrap 2.2**, and three at ZERO —
