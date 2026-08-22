@@ -297,8 +297,9 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "dispute bond never doubles per failed round",
-  "find": "\tbond := mustMul(base, int64(1)<<uint(shift))",
-  "replace": "\tbond := base"
+  "find": "\treturn mustMul(base, int64(1)<<uint(shift))",
+  "replace": "\treturn base",
+  "why": "Re-pointed when OpenDispute stopped computing this formula itself. It used to be written twice, byte for byte - once inline in OpenDispute (the CHARGE) and once in disputeBond0 (the QUOTE that DisputeBondNext and the claim page read) - so a row needed the whole inline block plus the two lines after it as an anchor, just to pick one copy. One site, one short anchor, and the mutation now moves the charge and the quote together."
  },
  {
   "pkg": "kourtv2",
@@ -1542,23 +1543,26 @@
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "OpenDispute: the bond takes the LARGER of the two arms",
-  "find": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
-  "replace": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm > base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)"
+  "label": "disputeBond0: the bond takes the LARGER of the two arms",
+  "find": "\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n",
+  "replace": "\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm > base {\n\t\tbase = arm\n\t}\n",
+  "why": "Re-pointed when OpenDispute stopped computing this formula itself. It used to be written twice, byte for byte - once inline in OpenDispute (the CHARGE) and once in disputeBond0 (the QUOTE that DisputeBondNext and the claim page read) - so a row needed the whole inline block plus the two lines after it as an anchor, just to pick one copy. One site, one short anchor, and the mutation now moves the charge and the quote together."
  },
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "OpenDispute: the answer-bond arm is dropped",
-  "find": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
-  "replace": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)"
+  "label": "disputeBond0: the answer-bond arm is dropped",
+  "find": "\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n",
+  "replace": "",
+  "why": "Re-pointed when OpenDispute stopped computing this formula itself. It used to be written twice, byte for byte - once inline in OpenDispute (the CHARGE) and once in disputeBond0 (the QUOTE that DisputeBondNext and the claim page read) - so a row needed the whole inline block plus the two lines after it as an anchor, just to pick one copy. One site, one short anchor, and the mutation now moves the charge and the quote together."
  },
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "OpenDispute: the bond does not double per failed round",
-  "find": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := cs.failedRounds\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
-  "replace": "\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}\n\tif base < 1 {\n\t\tbase = 1\n\t}\n\tshift := int64(0)\n\tif shift > maxFailedRounds-1 {\n\t\tshift = maxFailedRounds - 1\n\t}\n\tbond := mustMul(base, int64(1)<<uint(shift))\n\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)"
+  "label": "disputeBond0: the failed-round shift is always zero",
+  "find": "\tshift := cs.failedRounds\n",
+  "replace": "\tshift := int64(0)\n",
+  "why": "Re-pointed when OpenDispute stopped computing this formula itself. It used to be written twice, byte for byte - once inline in OpenDispute (the CHARGE) and once in disputeBond0 (the QUOTE that DisputeBondNext and the claim page read) - so a row needed the whole inline block plus the two lines after it as an anchor, just to pick one copy. One site, one short anchor, and the mutation now moves the charge and the quote together."
  },
  {
   "pkg": "kourtv2",
@@ -8227,5 +8231,13 @@
   "find": "\tif len(code) == 0 || len(code) > maxReasonLen {",
   "replace": "\tif len(code) > maxReasonLen {",
   "why": "The other half of the same line, writable for the first time now that the check has one site. Purge erases text behind a code and takes a global-DAO threshold to fire, so the code IS the record of why; an empty one makes the act unauditable."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "OpenDispute: the bond CHARGED is not the bond QUOTED",
+  "find": "\tbond := cs.disputeBond0()\n",
+  "replace": "\tbond := cs.disputeBond0() * 2\n",
+  "why": "The property that single-siting the formula bought, and it is worth its own row because it is the one the duplication used to put at risk: DisputeBondNext and render.gno's claim page quote disputeBond0, and OpenDispute must charge exactly that. Doubling the charge is the cheapest way to ask whether anything compares the two."
  }
 ]

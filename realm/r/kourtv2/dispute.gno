@@ -127,18 +127,7 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 	// doubled per failed round, claim-scoped (a fresh disputer address cannot
 	// reset the multiplier). provClose bounds failedRounds ≤ 2 here; the
 	// clamp guards the shift regardless.
-	base := cs.xBarFrozen * disputeBondXBps / 10000
-	if arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {
-		base = arm
-	}
-	if base < 1 {
-		base = 1
-	}
-	shift := cs.failedRounds
-	if shift > maxFailedRounds-1 {
-		shift = maxFailedRounds - 1
-	}
-	bond := mustMul(base, int64(1)<<uint(shift))
+	bond := cs.disputeBond0()
 	mustSpendable(c, who, bond)
 	c.coin.Transfer(who, c.escrow, bond)
 
@@ -441,8 +430,16 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 	cs.disputeOpen = false
 }
 
-// disputeBond0 quotes the bond the NEXT round posts at the claim's current
-// failed-round count — OpenDispute's formula, factored for DisputeBondNext.
+// disputeBond0 is the dispute bond at the claim's current failed-round count: the
+// ONE definition, quoted by DisputeBondNext and the claim page and CHARGED by
+// OpenDispute.
+//
+// It said "OpenDispute's formula, factored for DisputeBondNext" while OpenDispute
+// went on computing the same eleven lines itself, byte for byte. That is a quote
+// that can drift from the charge — the shape check-epoch-coherence's one-weight arm
+// exists to prevent for vote weight, unguarded here for money. What drift would look
+// like: render.gno tells the user "N CC units (doubles per failed round)" and
+// DisputeBondNext returns N, and then OpenDispute takes something else.
 func (cs *claimState) disputeBond0() int64 {
 	base := cs.xBarFrozen * disputeBondXBps / 10000
 	if arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {

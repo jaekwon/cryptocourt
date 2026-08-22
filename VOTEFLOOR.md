@@ -497,6 +497,32 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE DISPUTE BOND WAS QUOTED AND CHARGED FROM TWO COPIES OF ONE FORMULA.** Following the
+purge duplication out of the same cap sweep found the sharper case. `disputeBond0`'s doc
+read "OpenDispute's formula, factored for DisputeBondNext" — and OpenDispute went on
+computing the same ELEVEN LINES itself, byte for byte. The comment asserted a relationship
+the code did not have, which is the most productive lens firing on a money path.
+
+What each copy is for: `disputeBond0` is the QUOTE — DisputeBondNext returns it and
+render.gno prints it on the claim page as "N CC units (doubles per failed round)".
+OpenDispute's copy is the CHARGE — `mustSpendable` then `Transfer(who, c.escrow, bond)`.
+So a drift between them shows the user one number and takes another. That is precisely the
+shape check-epoch-coherence's one-weight arm exists to prevent for vote weight ("a quote
+that can drift from the charge", its own words), unguarded here for money.
+
+Nothing had drifted, so this is a refactor: OpenDispute now charges `cs.disputeBond0()`,
+full suite green either side because the formula was identical. What it bought, measured:
+four broken anchors reported by `make anchors` and re-pointed from ~13-line blocks to
+single lines (three of them had needed the whole inline block PLUS the two lines after it,
+purely to pick one of the two identical copies), and one row that could not have been
+written while the duplication stood — `OpenDispute: the bond CHARGED is not the bond
+QUOTED`, doubling the charge to ask whether anything compares the two. Caught by
+TestDisputeBondTakesTheSmallerArmOnACappedCourt. Six rows, 0 not caught of 6.
+
+**TWO DUPLICATIONS, ONE SWEEP, AND NEITHER WAS THE THING BEING SWEPT.** Both came out of a
+cap-boundary inventory, via anchors that needed absurd amounts of context. A long `find` is
+evidence about the CODE, not just an inconvenience for the corpus.
+
 **AN UNPINNABLE BOUNDARY CAN BE A CODE SMELL, NOT A TESTING PROBLEM.** Three of the
 thirteen unswept cap comparisons could not be given a corpus row at all: `if
 len(categoryCode) == 0 || len(categoryCode) > maxReasonLen` appeared THREE times in
