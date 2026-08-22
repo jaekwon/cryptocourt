@@ -8030,5 +8030,12 @@
   "label": "StakedPage: the stake and the conviction are crossed",
   "find": "\t\t\t\tlive = pos.stake\n\t\t\t\tconv = convPreviewCC(cs, pos, acc)\n",
   "replace": "\t\t\t\tlive = convPreviewCC(cs, pos, acc)\n\t\t\t\tconv = pos.stake\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "RestoreFolder: the moderation-log event is never emitted",
+  "find": "\temitModAct(c.id, 0, \"folder-restore\", who)\n",
+  "replace": ""
  }
 ]

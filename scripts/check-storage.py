@@ -79,6 +79,14 @@ TARGETS = [
             # a latch that allocated on a REFUSED arm would be a way to make a
             # realm pay for strangers' attempts.
             "z_testclock_filetest.gno": None,
+            # The mod-log events, which needed a WRITING filetest: an event is
+            # only observable through the `Events:` directive, and to emit one
+            # you have to perform the act. A court, a folder, and three verbs
+            # cost 50,194b measured, so the ceiling is 60,000 — headroom for a
+            # fourth verb without hiding a court that got twice as expensive to
+            # start. This is the only filetest here allowed to write at all, and
+            # the two above stay at None precisely so that stays visible.
+            "z_events_filetest.gno": 60_000,
         },
     },
 ]
