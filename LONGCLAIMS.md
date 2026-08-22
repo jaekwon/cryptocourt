@@ -8,6 +8,45 @@ the *primary* concern and the bond the secondary one. This file exists so it can
 again. Numbers here are **re-derived from scratch** and every one of them is marked as
 **(D)** derived, **(S)** read from source, or **(A)** assumed and needing audit.
 
+**Every (S) claim in this file has been re-verified against the tree** (audit round 2), and all
+twelve hold on the substance:
+
+- `deadClaimSecs = int64(12 * 7 * 86400)`, `priorityColdStartN = 3`,
+  `priorityWindowBlocks = int64(17_280)` — all as stated.
+- §8.1's "all **7** non-test sites touching `answerRecord.score`" measured at exactly 7, and
+  every one of them still inside `records.gno`, which is what makes the "only authority"
+  argument hold.
+- `resetOverturned` still zeroes the whole score (`r.score = 0`).
+- The fee still burns unconditionally when a claim dies (`c.coin.Burn(c.escrow, cs.fee)` in
+  `CloseDeadClaim`), with the deposit refunded alongside it — §4.3's anti-spam floor.
+- `PostAnswer`'s deadline refusal has no `cs.closed` dependency, so "whether or not anyone has
+  closed the claim" is exact; its own comment gives the reason (closing is "permissionless but
+  OPTIONAL").
+- `WithdrawStake` (in `session.gno`, not `stake.gno`) returns principal "1× regardless" and is
+  withdrawable at verdict-final on both sides — §4.2's straddle premise.
+- Conviction is capital×time (`stake.gno`: "moving it costs capital × TIME, and past
+  capital-time is immutable").
+- **"Wordlocked" is this file's own jargon, not an identifier** — worth saying, because
+  grepping for it finds nothing and a reader may conclude the mechanism is missing. It is
+  `EditClaimTitle`'s polish window: the title freezes when that window closes, and
+  independently the moment any stake lands ("staking has begun; the title is frozen"). So
+  §4.1(d)'s premise holds, by a mechanism with a different name.
+
+**But four of the nine ADDRESSES had rotted**, which is why they are all now written as
+symbols rather than `file:line`. `claim.gno:368-378` pointed at the fee burn and now lands in
+`EditClaimTitle`; `dispute.gno:312` at the uphold comp and now lands on `cs.answerBond = 0`;
+`render.gno:378` at the record render, which moved about a hundred lines; `court.gno:227` at a
+deploy ceiling, and now lands inside a comment explaining why a *different* check was removed
+as tautological. Not one of the claims became false — only their addresses did, which is
+exactly what `scripts/check-citations.py` says in its own header about why file:line citations
+are banned. That guard's scope is source prose plus `docs/DESIGN.md`; this file was outside it,
+and its own scope comment names that risk ("listed so that the first one somebody adds is
+watched rather than discovered"). **Do not reintroduce a `file:line` here.** Extending the
+guard over the working docs was measured and rejected: 312 such citations across the root
+`.md` files, GAMETHEORY.md alone holding 103. Those are journals, where an address that
+described the tree at the time of writing is a record rather than a defect. This file is an
+active specification an implementer will follow, so it is held to the source-prose rule.
+
 ---
 
 ## 1. The requirement, in the owner's words
@@ -33,7 +72,7 @@ inflation of five years of wins (that is a money printer), and **> 0** (today it
   sniper 11 retries and takes per-claim destruction from 19% to 89.3%. **There is no fourth
   branch.** So "make the old claim answerable again" is not available and this design must not
   smuggle it back in.
-- **Principal returns 1× and the prize is minted** (`REGULATIONS.md:18-21`, escape (b)). Any
+- **Principal returns 1× and the prize is minted** (REGULATIONS.md's “Master finding”, escape (b)). Any
   reward here must not be funded by a counterparty.
 - **An expired claim pays nothing today.** **M**, from `GAMETHEORY.md` item 4: a 300 CC position
   held 12 weeks evaporates **22.950015 CC of conviction** and receives principal only.
@@ -121,7 +160,7 @@ every claim** and collect on all of them.
 ### 4.3 ANTI-SPAM — what stops farming credit by asking questions nobody cares about?
 
 Filing costs a deposit plus a fee (S), and **the fee burns unconditionally when a claim dies
-unanswered** (S — `claim.gno:368-378`). So expiry is already not free. But:
+unanswered** (S — `CloseDeadClaim`, claim.gno). So expiry is already not free. But:
 
 - A self-answered pair of claims could farm credit at the cost of two fees.
 - **(A) The floor is presumably that credit must require the claim to have carried *someone
@@ -165,7 +204,7 @@ the audit should resolve which.**
    is a question about the requirement, not the mechanism, and it should be surfaced rather than
    assumed.
 6. **Interaction with the settled bond work.** The discount keys on the same floor C3 re-keys
-   (`answer.gno:148`) and draws on the same budget §13.2 shows is spendable only once. **Can the
+   (`PostAnswer`'s bond floor) and draws on the same budget §13.2 shows is spendable only once. **Can the
    credential discount and C3 coexist, or does one foreclose the other?**
 7. **Does any of this smuggle re-answerability back in?** §5's trichotomy is exhaustive; a design
    that effectively re-opens an expired claim inherits all three failures.
@@ -187,7 +226,7 @@ sidesteps §4.1 entirely.**
 ### 8.1 The saturation is worse than §5 admitted — it is a step, not a curve
 
 Enumerated, all **7** non-test sites touching `answerRecord.score` (S). **The only authority
-reader is `records.gno:46`, a boolean:** `score >= 3 && activePriority == 0`. Everything else is
+reader is `mayAnswerInPriority` (records.gno), a boolean:** `score >= 3 && activePriority == 0`. Everything else is
 threshold bookkeeping or display. `creditUpheld` increments by exactly **1** — no magnitude, no
 time — despite the file header calling it "difficulty-weighted."
 
@@ -204,7 +243,7 @@ early" — it is a Heaviside step and **four of the five years land on flat part
 
 1. **A second credit source arms a court-wide lockout.** `creditUpheld` also increments
    `c.qualifiedCount`, and at 3 qualified addresses `priorityGateActive` turns on and
-   `answer.gno:65-68` **panics for everyone else for 24h**. So a cheaper second source lets **three
+   `PostAnswer`'s priority gate **panics for everyone else for 24h**. So a cheaper second source lets **three
    addresses** lock the whole court out of answering. A reward that inflicts a refusal on
    non-recipients.
 2. **`resetOverturned` zeroes the WHOLE score** (S). One wrong answer years later would burn the
@@ -289,7 +328,7 @@ does not pay coin. Its value is carry over the 72h lock at `r0WeeklyBps = 25`:
 **0.016%–0.003% of X̄ per claim answered.**
 
 **(b) It pays NEGATIVE 48 CC on the credential's own qualifying path.** `answerBond0` is the base
-for the answerer's **uphold comp** (`dispute.gno:312`), and at today's constants the dispute
+for the answerer's **uphold comp** (`ResolveDispute`'s uphold comp, which reads `answerBond0`), and at today's constants the dispute
 arms **tie exactly** (`min(20%·X̄, 40%·A)` = `min(200, 200)`), so a discount bites from the first
 basis point:
 
@@ -339,7 +378,7 @@ draw cap as a hard precondition.**
 floor, with the floor applied last and dominating. A discount inserted *before* the floor can
 never breach it, so it never touches collateralization, never touches `L`, and never draws the
 budget. Free headroom at the 12-week corner: **38.3% today at 5000 bps → 0.000% under C3 at 600.**
-The ceiling even falls out of `court.gno:227`, a check the realm already runs at deploy.
+The ceiling even falls out of `maxAnswerBondBps` (pinned at deploy by `mustInvariants`), a check the realm already runs at deploy.
 
 > **So C3 pre-empts the credential's entire payout, because C3 spends the same currency on
 > everyone.** §13.5's own table: 500.0000 → 249.7357 is a **250.26 CC** give-back, unconditional,
@@ -352,10 +391,10 @@ The ceiling even falls out of `court.gno:227`, a check the realm already runs at
 
 | candidate | verdict |
 |---|---|
-| **Published standing / docket visibility** | **RECOMMENDED.** `render.gno:378` already renders the record when `> 0`, so the surface exists. Mints nothing. Non-transferable by construction. **Accrues and displays with no further participation — the only candidate that clears that bar**, and the only thing a stake-locked five-year holder can actually receive. Coin value 0, but "reputation" is the owner's own named acceptable payout. |
+| **Published standing / docket visibility** | **RECOMMENDED.** `renderClaim`'s answerer-record line already renders the record when `> 0`, so the surface exists. Mints nothing. Non-transferable by construction. **Accrues and displays with no further participation — the only candidate that clears that bar**, and the only thing a stake-locked five-year holder can actually receive. Coin value 0, but "reputation" is the owner's own named acceptable payout. |
 | Claim-filing discount | **REJECT — circular.** Tempting, because the fee **burns unconditionally** on expiry, making it *real* coin (~2.4 CC, ~15× the bond discount's carry). But that same unconditional burn **is** the anti-spam floor §4.3 relies on. Discounting it funds the farm it exists to deter. |
 | Voting weight | **REJECT + counsel flag.** REGULATIONS.md is direct: DAO Report "voting doesn't help"; governance + utility + yield "all three pull back toward Howey"; and **Ooki** reaches "members = token-holders who **VOTED**", so it *expands the personal-liability cohort*. |
-| Waiver of `mustSpendable` | **REJECT on source.** `lock.gno:79-81`: only Stake, Unstake and the settlement withdrawal may touch that tree and **"no other path may touch this tree."** And it would not help — the contrarian is 129 CC short *after* F9. |
+| Waiver of `mustSpendable` | **REJECT on source.** `disposable` (lock.gno): only Stake, Unstake and the settlement withdrawal may touch that tree and **"no other path may touch this tree."** And it would not help — the contrarian is 129 CC short *after* F9. |
 | Graded answer priority | **REJECT.** Participation-contingent (same failure), and it gates only ~10.4 CC — the answerer's real prize is the 160 CC uphold comp, which a discount *reduces*. |
 
 ### 8.8 Regulatory — §3.2's argument partly INVERTS
