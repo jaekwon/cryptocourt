@@ -8,8 +8,8 @@ the *primary* concern and the bond the secondary one. This file exists so it can
 again. Numbers here are **re-derived from scratch** and every one of them is marked as
 **(D)** derived, **(S)** read from source, or **(A)** assumed and needing audit.
 
-**Every (S) claim in this file has been re-verified against the tree** (audit round 2), and all
-twelve hold on the substance:
+**Every (S) claim in this file has been re-verified against the tree** (round 3 — a source
+re-verification pass; rounds 1 and 2 are §8 and §9), and all twelve hold on the substance:
 
 - `deadClaimSecs = int64(12 * 7 * 86400)`, `priorityColdStartN = 3`,
   `priorityWindowBlocks = int64(17_280)` — all as stated.
@@ -505,6 +505,40 @@ CC of external carry. **And the policing lanes do not reach it:** a conclusive q
 The only capital-keyed gate that *is* priced is already shipped: `credEligible` requires the
 overturn side to carry **≥ 1.25% of court supply**. Applied to this docket it leaves **1 of 11
 claims eligible ever** — a singleton. **So verdict-keyed credit pays zero twice over.**
+
+### 9.2b §9.1's table REPRODUCES independently — and the 0/5 is structural, not a fixture accident
+
+Every number in §9.1 was re-derived from `scenarios/covid.py` by parsing it (`ast`, not a regex —
+two hand-rolled parsers gave wrong answers first) and counting:
+
+    11 titles, byte lengths 123..153            — as stated
+    (d) literal byte-identity  0 classes, 0/11  — as stated
+    (e) strip one trailing [..] 3 classes, 8/11 — as stated
+    expired with a LATER sibling                          5
+    expired with a sibling that reached a VERDICT         0
+
+**But the reason for the 0 is worth stating, because it is stronger than the count.** The three
+claims that were answered — `FUNDING`, `PROXIMAL`, `REPORTING` — are *exactly* the three
+SINGLETONS, the ones with no sibling under (e). And all three families are entirely unanswered:
+
+    family     LAB20, LAB23, LAB25        answered: none
+    family     TEST21, TEST23, TEST25     answered: none
+    family     GOF21, GOF25               answered: none
+    singleton  FUNDING                    answered: FUNDING
+    singleton  PROXIMAL                   answered: PROXIMAL
+    singleton  REPORTING                  answered: REPORTING
+
+So in this docket **linkage and adjudication are disjoint sets**. The 0/5 is not "the fixture
+happened to leave five stragglers" — it is that the repeatedly-asked question is the one nobody
+will answer, and the answerable question is the one nobody needs to re-ask. That is the same
+selection pressure the design already knows about from the other side (a claim is answered when
+X̄ matures and someone will post a bond; the hard open questions are precisely the ones where
+neither happens), and it means **no improvement to the linkage predicate can rescue a
+verdict-keyed credit.** §9.1 concluded that from a count; it holds for a reason.
+
+The one caveat, stated so it is not mistaken for more than it is: this is ONE docket, hand-built
+to represent the owner's own test case. It cannot establish a frequency. What it does establish
+is that the mechanism pays zero on the motivating example, which is sufficient to reject it.
 
 ### 9.3 Build this instead: credit for conviction that was never REFUTED
 
