@@ -33,7 +33,14 @@
 # The cost is that MAKEFLAGS do not propagate to the inner run, which this target
 # does not need.
 #
-# The worktree is created and removed by this target; nothing is left behind.
+# A KILLED RUN LEAVES THE WORKTREE. The cleanup is the last line of the recipe,
+# so a SIGTERM part-way through realm-test skips it — which is not
+# hypothetical, it happened on the first long run of this target. The recipe
+# therefore removes the path BEFORE it creates one, the same posture
+# scripts/gnoroot.py takes about leaked shadow roots: the next run cleans up
+# after the last, rather than pretending the last one always could. What a
+# killed run leaves is a checkout of a commit in the gopath, which is inert
+# but looks enough like a real one to confuse — `git worktree list` names it.
 # ONE AT A TIME, unlike scripts/gnoroot.py, which keys its shadow roots by pid
 # so two runners never share one. A make variable cannot reach the recipe's pid
 # as cleanly, and the cost of the simpler thing is only that two concurrent
