@@ -62,5 +62,13 @@
   "find": "c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail",
   "replace": "c.reservoirR() >= c.rMax() && c.cumAccrual > c.reservedTail",
   "why": "INVALID, NOT A SURVIVOR: the conjunct is implied by the one before it, so the two operators agree on every reachable state. accrueSegment has already returned unless curPeriodBudget > 0, so rMax = rMaxPeriods x curPeriodBudget > 0; the first conjunct then requires reservoirR() > 0, which requires cumAccrual - reservedTail - juniorReserved > 0 through both clamps, hence cumAccrual > reservedTail. MEASURED as well as argued: a probe panicking on the deciding state (first conjunct true AND cumAccrual == reservedTail) fired ZERO times across the whole kourtv2 suite. The conjunct is kept because rMaxPeriods is a dial - at 0 the first conjunct is vacuously true and this becomes the only thing still accruing for a waiting senior. IF THIS EVER COMES BACK CAUGHT, either rMax gained a floor or reservoirR stopped clamping: re-derive the implication before promoting it."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: a zero payment is paid, emitted and counted",
+  "find": "\tif pay <= 0 {\n\t\treturn 0\n\t}",
+  "replace": "\tif pay < 0 {\n\t\treturn 0\n\t}",
+  "why": "VALID BUT UNPINNABLE BY ANY .gno TEST, which is a different thing from a survivor. pay is never negative (covered is monotone in cumAccrual and clamped to the amount, and paid only ever rises to meet it), so the guard fires exactly at pay == 0. Dropping it changes NO state: e.paid += 0, seniorOwed -= 0, seniorPaid += 0, mintEmission returns on its own amount <= 0 guard, and the function returns 0 either way. The single difference is a spurious SeniorPaid event carrying paid=0 - and events are exactly what emission.gno's header says clients index to build the 'what am I owed' view, so the noise is real. It cannot be asserted: there is no event accessor anywhere in the gno stdlib (grepped gnovm/stdlibs and gnovm/tests/stdlibs for `func Events` - no match) and no test in this repo reads events. Kept because a crank anyone may call must not emit a payment that did not happen. IF AN EVENT ACCESSOR EVER LANDS, promote this to the corpus with a test asserting no SeniorPaid on a settled entitlement."
  }
 ]

@@ -448,3 +448,57 @@ func TestTheReservoirPauseHoldsAtExactlyTheCap(cur realm, t *testing.T) {
 			c.cumAccrual-acc1)
 	}
 }
+
+// A court with NO SUPPLY YET must survive its first period roll. StartCourt creates
+// the court and mints nothing — the curve does that on the first buy — so between
+// creation and the first buyer TotalSupply() is 0, and any state-changing call that
+// crosses a period boundary rolls the period in exactly that state. rollPeriod's
+// `if s > 0` is what keeps it alive: the else branch prices the budget at zero and
+// waits for a buyer.
+//
+// NOTHING PINNED IT, because every existing fixture mints before it rolls — testCourt
+// itself mints on the line after StartCourt. Flipping the guard to `s >= 0` divides by
+// a zero supply, which panics inside touch, and touch is the first thing EVERY
+// state-changing entrypoint calls: the first crank after the first quiet week would
+// brick a court that has not sold a coin yet, permanently and for everybody. The
+// mutation survived the whole suite.
+func TestAFreshCourtWithNoSupplyRollsItsFirstPeriod(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("nosup-alice")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	StartCourt(cross(cur), "nosup", "A court nobody has bought into")
+	c := mustCourt("nosup")
+	if s := c.coin.TotalSupply(); s != 0 {
+		t.Fatalf("setup: a fresh court must hold no supply, got %d", s)
+	}
+
+	// Two quiet periods, crossed by the public crank rather than by touch directly,
+	// because the crank is the route a stranger actually has.
+	testing.SkipHeights(2*periodBlocks + 5)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Poke(cross(cur), "nosup")
+
+	if c.periodIndex < 2 {
+		t.Fatalf("the crank must have rolled both quiet periods, periodIndex=%d",
+			c.periodIndex)
+	}
+	if c.curPeriodBudget != 0 || c.dEffBpsFP != 0 {
+		t.Errorf("with no supply the budget and d_eff price at zero, got %d and %d",
+			c.curPeriodBudget, c.dEffBpsFP)
+	}
+	if c.cumAccrual != 0 {
+		t.Errorf("and nothing accrues out of a zero budget, got %d", c.cumAccrual)
+	}
+
+	// PAIRED: the same court, once it has supply, does get a budget and does accrue.
+	// Without this half every assertion above would also hold for a court whose
+	// emission was broken outright.
+	c.coin.Mint(alice, 10_000_000_000)
+	rollTo(c, 4)
+	if c.curPeriodBudget <= 0 {
+		t.Fatalf("once supply exists the roll must price a budget, got %d",
+			c.curPeriodBudget)
+	}
+	if c.cumAccrual <= 0 {
+		t.Fatalf("and accrual must start, got %d", c.cumAccrual)
+	}
+}

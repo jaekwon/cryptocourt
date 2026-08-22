@@ -1641,8 +1641,8 @@
   "pkg": "kourtv2",
   "file": "folders.gno",
   "label": "folders: RemoveFromFolder accepts a claim that is not in it",
-  "find": "\t\tpanic(\"kourtv2: that claim is not in the folder\")\n",
-  "replace": ""
+  "find": "\tif !found {\n\t\tpanic(\"kourtv2: that claim is not in the folder\")\n\t}\n",
+  "replace": "\t_ = found\n"
  },
  {
   "pkg": "kourtv2",
@@ -6742,5 +6742,82 @@
   "label": "folders: PurgeFolder leaves the description in state",
   "find": "\tf.name = \"\"\n\tf.desc = \"\"",
   "replace": "\tf.name = \"\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: a zero-supply court divides by its zero supply",
+  "find": "\tif s > 0 {",
+  "replace": "\tif s >= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: a zero realized mint is called negative",
+  "find": "\t\tif c.emaMinted < 0 {",
+  "replace": "\t\tif c.emaMinted <= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "rollPeriod: a court with no absolute budget takes the absolute branch",
+  "find": "\t\tif c.absBudget > 0 {",
+  "replace": "\t\tif c.absBudget >= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "mintEmission: a zero mint is passed to the ledger",
+  "find": "\tif amount <= 0 {\n\t\treturn\n\t}\n\tc.coin.Mint",
+  "replace": "\tif amount < 0 {\n\t\treturn\n\t}\n\tc.coin.Mint"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "PullSenior: a missing entitlement is read instead of refused",
+  "find": "\ttouch(c)\n\tv := c.queue.Get(beClaimKey(seq))\n\tif v == nil {",
+  "replace": "\ttouch(c)\n\tv := c.queue.Get(beClaimKey(seq))\n\tif v != nil {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: RetireFolder orphans the folders inside it",
+  "find": "\tif cm.folderHeight(folderID) > 1 {\n\t\tpanic(\"kourtv2: retire the folders inside it first\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: MoveItemInFolder accepts a position outside the list",
+  "find": "\tif to < 0 || to >= len(f.items) {\n\t\tpanic(\"kourtv2: that position is outside the folder\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: a folder holds unlimited claims",
+  "find": "\tif len(f.items) >= maxFolderItems {\n\t\tpanic(\"kourtv2: a folder holds at most \" + strconv.Itoa(maxFolderItems) + \" claims\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: the folder cap is off by one, so 201 claims fit",
+  "find": "\tif len(f.items) >= maxFolderItems {",
+  "replace": "\tif len(f.items) > maxFolderItems {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: the cap is checked before the duplicate scan, so a full folder refuses a re-add",
+  "find": "\tfor _, x := range f.items {\n\t\tif x == claimID {\n\t\t\treturn\n\t\t}\n\t}\n\tif len(f.items) >= maxFolderItems {\n\t\tpanic(\"kourtv2: a folder holds at most \" + strconv.Itoa(maxFolderItems) + \" claims\")\n\t}\n",
+  "replace": "\tif len(f.items) >= maxFolderItems {\n\t\tpanic(\"kourtv2: a folder holds at most \" + strconv.Itoa(maxFolderItems) + \" claims\")\n\t}\n\tfor _, x := range f.items {\n\t\tif x == claimID {\n\t\t\treturn\n\t\t}\n\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: MoveItemInFolder moves a claim that is not in the folder",
+  "find": "\tif at < 0 {\n\t\tpanic(\"kourtv2: that claim is not in the folder\")\n\t}\n",
+  "replace": ""
  }
 ]

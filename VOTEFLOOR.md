@@ -227,6 +227,81 @@ all three `&&` predicates turned into `||`. The single survivor is lockVote's
 first; it is recorded in KNOWN-GAPS with that reason. Worth repeating after any change to
 those three files, since it costs about two minutes and does not depend on guessing.
 
+**Operator classes that are INVALID BY CONSTRUCTION — do not spend a suite run on
+them.** A sweep of emission.gno flipped every comparison in the file and most of them
+cannot change the program at all. Recognise these on sight rather than measuring them:
+
+- **A clamp's own operator.** `if x > lim { x = lim }` and `if x >= lim { x = lim }`
+  are the same program, and so are a zero floor's two forms, `if p < 0 { p = 0 }` and
+  `<= 0`. Four of ten rows in the first money sweep were this.
+- **An early return whose body is already a no-op for the boundary value.**
+  accrueSegment's `blocks <= 0 || curPeriodBudget <= 0` looks like two guards worth
+  pinning and neither can be: at zero, `num` collapses to the carried remainder, and
+  `rem / periodBlocks` is 0 because `rem` is a modulus of `periodBlocks`, so cumAccrual
+  and the carry both come out unchanged. advanceRateAcc's `blocks <= 0` is the same
+  shape — `blocks` is never negative and multiplying by zero adds zero — which its own
+  comment argues while still calling it a survivor.
+- **A conjunct implied by the conjunct before it.** See the R_max pause, whose second
+  half is provably entailed by its first; recorded in KNOWN-GAPS with the derivation.
+- **A comparison against a value the code has just clamped.** touch's `boundary <
+  segEnd` and `segEnd == boundary` both sit under `segEnd = min(now, boundary)`, so the
+  equality cases are no-ops and `<=`/`>=` are the same program.
+- **A mutant that does not terminate**, e.g. touch's `for lastAccrual < now` flipped to
+  `<=`, which never advances lastAccrual. Its catch is guaranteed and worthless, and it
+  HANGS the shard rather than failing it, so the harness cannot classify it. Skip
+  deliberately and say so.
+
+What was left after removing those was six rows worth running, and it found one real
+gap (a zero-supply court's first roll) plus one valid-but-unpinnable (a zero-payment
+event, since no event accessor exists anywhere in the gno stdlib).
+
+**Another session may be editing the same tree, and treating that as a footnote cost
+real work.** In one hour a concurrent session committed six times under me and twice
+appended rows to `scripts/mutations-kourtv2.json`. Four distinct costs, in the order
+they arrived:
+
+1. A mutate batch reported EVERY row as `INVALID (did not build)` while their file was
+   mid-commit — the same "re-run before investigating" shape as the staging transient
+   above. It cleared on a re-run with nothing changed.
+2. One of my corpus rows went in as part of THEIR commit, because we both had the
+   shared JSON open and they wrote last.
+3. Five rows I had just added and verified were CLOBBERED by their next write of that
+   file: they had read it before my append and wrote back their own copy. A lost update,
+   silent, no conflict, nothing in `git status` to see.
+4. Then I made it worse. Trying to get a clean base I ran `git checkout --
+   scripts/mutations-kourtv2.json`, which DESTROYED three uncommitted rows of theirs.
+   They were never staged, so there was no blob to recover — `git fsck --lost-found`
+   over every dangling blob found nothing, and their commit then shipped without them.
+   I had the rule already ("restore from a scratch COPY, never `git checkout` a file
+   with uncommitted work") and applied it only to my own edits.
+
+What actually works: `git status` immediately before staging, never `git add -A`, and
+for a shared JSON stage a version computed as `HEAD + my rows` rather than the working
+file — otherwise their uncommitted rows ride along in your commit and their anchors will
+not exist for anybody else. Append to a shared JSON at TEXT level, or at least match its
+existing serialisation (this corpus is written with `indent=1` and ASCII-escaped, so a
+`json.dump` with `ensure_ascii=False` rewrites every em-dash line and turns a one-row
+addition into an 84-line diff that will lose a race). And treat a destroyed row as
+recoverable ONLY from the tree it describes: the three lost ones were reconstructible
+because their labels named their guards exactly, so each could be re-derived against the
+committed source and re-verified as caught rather than guessed at.
+
+Also: `nohup … &` inside a background shell makes the tool report "completed" the
+instant the shell exits, with the real work still running and an empty output file —
+run the command in the foreground of a background task instead.
+
+**ADDING CODE CAN BREAK AN EXISTING CORPUS ROW, which is not obvious and is the reason
+`make anchors` belongs before every commit and not just the ones that touch a mutated
+line.** A row anchors on source TEXT, so a new function that happens to reuse an
+existing panic string retroactively makes that row ambiguous — it now matches twice, and
+a row that matches twice measures nothing. That is exactly what landed: a new
+`MoveItemInFolder` reused `panic("kourtv2: that claim is not in the folder")` from
+`RemoveFromFolder`, and the older row for the remove-side guard went ambiguous in a
+commit that never touched it. The fix is to widen the anchor upward until it is unique
+(`if !found {` plus the panic), not to narrow the new code. Worth knowing that the guard
+was already red at HEAD when I found it, in a commit whose own message says which guards
+it closes — the check has to be READ, not merely run.
+
 **How to measure gas here, since one attempt reported a 477x regression that does not
 exist.** The harness's `--- GAS:` lines cannot be attributed to a crossing call, and
 the reason the first attempt failed is worth stating precisely: one value per test is
