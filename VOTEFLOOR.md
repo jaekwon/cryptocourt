@@ -509,14 +509,27 @@ signature and in a comment ("a caller who forgot one"). So substituting any addr
 change anything: INVALID, not survivors, and the correct classification for three rows that
 look exactly like caller-authentication holes.
 
-**AND THE MONEY READING OF THEM IS REFUTED.** govern.gno says Settle is "Permissionless, and
-the freed deposit goes to whoever calls", and ReleaseRoll "refunds its deposit to whoever
-calls" — with `who` dead, that reads as a comment promising a refund the code cannot make,
-on a money path. Measured: **the governor package and govern.gno contain ZERO
-Transfer/Mint/Burn calls, in any file.** No coin moves anywhere on these paths. `proposeBps`
-is a holding threshold, not an escrow, and "deposit" in those comments is metaphor for the
-proposal SLOT being freed. Loose wording on a money-adjacent surface, not a defect — worth
-the measurement precisely because the phrasing invites the wrong conclusion.
+**AND THE MONEY READING OF THEM IS REFUTED — TWICE, THE SECOND TIME AGAINST MY OWN FIRST
+ANSWER.** govern.gno says Settle is "Permissionless, and the freed deposit goes to whoever
+calls", and ReleaseRoll "refunds its deposit to whoever calls" — with `who` dead, that reads
+as a comment promising a refund the code cannot make, on a money path. First measurement:
+**the governor package and govern.gno contain ZERO Transfer/Mint/Burn calls, in any file.**
+No coin moves on these paths. From which I concluded that "deposit" was metaphor for the
+proposal SLOT. THAT WAS WRONG.
+
+It is gno's STORAGE deposit, and governor.gno says so forty lines away: the per-proposal
+tree "buys a whole node on the first vote (~4,500 bytes) where a shared tree would cost one
+entry, but dropping it is one assignment and the deposit goes back to whoever settles."
+Allocating state costs a storage deposit; freeing it refunds that deposit to the
+transaction's caller. votelock.gno:329 uses the same notion — "state paying a storage
+deposit for nothing".
+
+So the comments are ACCURATE, and the dead `who` is explained rather than excused: the
+refund is the CHAIN's doing, so the code needs no address to make it happen. The absence of
+Transfer/Mint/Burn is consistent with that, not evidence against it — a storage refund is
+not a coin transfer written in realm code. The verdict never moved (no defect, three invalid
+mutations); the REASON was wrong for one commit, which is the same right-verdict-wrong-reason
+failure this file keeps finding in other people's records.
 
 **THE FOURTH IS A REAL GAP, of a class already in the file.** Governor.Offer uses `who`
 exactly once, at `"offerer", who.String()` inside an event emission, and nothing reads it —
