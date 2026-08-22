@@ -33,6 +33,11 @@ const (
 	// Four, matching the depth the overlay's own curation schema has validated
 	// since before the chain could nest at all.
 	maxFolderDepth = 4
+	// One folder's claim list. FolderItems returns the WHOLE list in one read, and
+	// AddToFolder scans it for duplicates on every add — so without a cap the read
+	// grows with what a moderator wrote and filling a folder costs O(n²). 200
+	// claims under one heading is already more than a heading is for.
+	maxFolderItems = 200
 	// A CAP THE OVERLAY ALREADY ASSUMED AND THE CHAIN DID NOT ENFORCE. web's
 	// CHAIN_FOLDER_CAP is 100 and it stops reading there; the realm had no limit,
 	// so a court could hold folders the overlay would silently truncate. It is
@@ -51,6 +56,12 @@ type folder struct {
 	items  []uint64 // claim IDs, in curation order
 	purged bool     // name/desc tombstoned behind a category code
 	code   string
+	// retired: struck from the tree, but the ROW SURVIVES. Not a delete, and the
+	// difference is forced by a client: the overlay enumerates folders by walking
+	// ids 1..FolderCount and calls that contiguity load-bearing, so removing an
+	// entry would renumber the world underneath it. FolderCount is folders.Size(),
+	// so a retired folder still counts and every id still resolves.
+	retired bool
 	// parent folder, 0 = a root heading. Zero on pre-nesting folders, which read
 	// as roots — the same "zero on pre-upgrade" shape claimState.openedAtTime
 	// already uses, so there is no migration step and no version field.
@@ -212,6 +223,9 @@ func AddToFolder(cur realm, courtSlug string, folderID, claimID uint64) {
 			return
 		}
 	}
+	if len(f.items) >= maxFolderItems {
+		panic("kourtv2: a folder holds at most " + strconv.Itoa(maxFolderItems) + " claims")
+	}
 	f.items = append(f.items, claimID)
 	emitModAct(c.id, claimID, "folder-add", who)
 }
@@ -349,6 +363,116 @@ func FolderItems(courtSlug string, folderID uint64) []uint64 {
 	out := make([]uint64, len(f.items))
 	copy(out, f.items)
 	return out
+}
+
+// RetireFolder strikes a folder from the tree. The gap this fills is small and
+// real: a folder created by mistake could not be got rid of at all — PurgeFolder
+// is the global DAO's m-of-n act carrying a statutory category code, for illegal
+// content, not for "that was a typo".
+//
+// It does NOT remove the row. See the `retired` field: the overlay walks ids
+// 1..FolderCount, so deleting an entry would renumber every folder above it.
+//
+// Refuses a folder that still has children, so the tree cannot grow orphans and
+// a moderator retires bottom-up. Clears the claim list, which un-files those
+// claims — safe by this module's founding promise, since the flat newest-first
+// docket always remains and folders "curate and can never bury".
+func RetireFolder(cur realm, courtSlug string, folderID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := requireFolderMod(c, who)
+	f := cm.mustFolder(folderID)
+	if cm.folderHeight(folderID) > 1 {
+		panic("kourtv2: retire the folders inside it first")
+	}
+	f.retired = true
+	f.items = nil
+	emitModAct(c.id, 0, "folder-retire", who)
+}
+
+// RestoreFolder puts a retired folder back. Folder acts are "instantly
+// reversible" by this module's own decision rule, which is the stated reason they
+// need only one moderator rather than m-of-n — so the reverse has to exist, or
+// that rule was only ever half true.
+func RestoreFolder(cur realm, courtSlug string, folderID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := requireFolderMod(c, who)
+	f := cm.mustFolder(folderID)
+	if f.purged {
+		panic("kourtv2: a purged folder cannot be restored")
+	}
+	f.retired = false
+	emitModAct(c.id, 0, "folder-restore", who)
+}
+
+// MoveItemInFolder puts a claim at a given position in a folder's list. The list
+// is documented as "claim IDs, in curation order" and until now that order was
+// whatever order they were added in — curation you cannot re-order is a log.
+// Bounded by maxFolderItems, like every other walk of this list.
+func MoveItemInFolder(cur realm, courtSlug string, folderID, claimID uint64, to int) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := requireFolderMod(c, who)
+	f := cm.mustFolder(folderID)
+	at := -1
+	for i, x := range f.items {
+		if x == claimID {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		panic("kourtv2: that claim is not in the folder")
+	}
+	if to < 0 || to >= len(f.items) {
+		panic("kourtv2: that position is outside the folder")
+	}
+	if to == at {
+		return
+	}
+	// Rebuild rather than slide in place: f.items is realm state, and an
+	// in-place shuffle writes through the persisted backing array on every step,
+	// so a rebuild is the version whose intermediate states are never stored.
+	out := make([]uint64, 0, len(f.items))
+	for i, x := range f.items {
+		if i == at {
+			continue
+		}
+		if len(out) == to {
+			out = append(out, claimID)
+		}
+		out = append(out, x)
+	}
+	if len(out) == to {
+		out = append(out, claimID)
+	}
+	f.items = out
+	emitModAct(c.id, claimID, "folder-order", who)
+}
+
+// FolderRetired reports whether a folder has been struck from the tree. The row
+// still exists and still counts toward FolderCount; this is how a reader knows
+// to skip it.
+func FolderRetired(courtSlug string, folderID uint64) bool {
+	c := mustCourt(courtSlug)
+	if c.mod == nil {
+		return false
+	}
+	v := c.mod.folders.Get(beClaimKey(folderID))
+	if v == nil {
+		return false
+	}
+	return v.(*folder).retired
 }
 
 // FolderParent is the folder this one sits in, 0 for a root heading. The overlay

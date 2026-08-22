@@ -345,3 +345,86 @@ func TestFolderDescReadAndPurgeGate(cur realm, t *testing.T) {
 	uassert.True(t, strings.Contains(FolderName("fdsc", id), "purged"))
 	uassert.True(t, strings.Contains(FolderName("fdsc", id), "CSAM"))
 }
+
+// RETIREMENT, which is this realm's "delete" and deliberately is not one. The
+// overlay walks ids 1..FolderCount, so the row has to survive or every folder
+// above the deleted one renumbers under a client that is already reading them.
+func TestRetireFolderKeepsTheRowAndTheNumbering(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fr-alice")
+	testCourt(cur, "fret", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "fret", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	a := CreateFolder(cross(cur), "fret", "First", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	b := CreateFolder(cross(cur), "fret", "Second", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "fret", "a claim to file")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "fret", a, id)
+
+	before := FolderCount("fret")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "fret", a)
+
+	uassert.True(t, FolderRetired("fret", a))
+	uassert.Equal(t, before, FolderCount("fret")) // the row survives
+	uassert.Equal(t, "Second", FolderName("fret", b))
+	uassert.Equal(t, 0, len(FolderItems("fret", a))) // the claim is un-filed
+	// and the claim itself is untouched — folders curate, they never bury
+	uassert.True(t, strings.Contains(ClaimTitle("fret", id), "a claim to file"))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RestoreFolder(cross(cur), "fret", a)
+	uassert.False(t, FolderRetired("fret", a))
+}
+
+// A PARENT CANNOT BE RETIRED OUT FROM UNDER ITS CHILDREN, or the tree grows
+// orphans that no walk from the roots can reach.
+func TestRetireFolderRefusesAParent(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fro-alice")
+	testCourt(cur, "frorp", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "frorp", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	top := CreateFolder(cross(cur), "frorp", "Top", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CreateFolderIn(cross(cur), "frorp", top, "Inside", "")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "retire the folders inside it first", func() {
+		RetireFolder(cross(cur), "frorp", top)
+	})
+}
+
+// ORDER. "Claim IDs, in curation order" was whatever order they were added in;
+// curation you cannot re-order is a log.
+func TestMoveItemInFolder(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fo-alice")
+	testCourt(cur, "ford", alice, 100_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "ford", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	f := CreateFolder(cross(cur), "ford", "Ordered", "")
+	ids := []uint64{}
+	for i := 0; i < 3; i++ {
+		testing.SetRealm(testing.NewUserRealm(alice))
+		id := OpenClaim(cross(cur), "ford", "claim "+strings.Repeat("y", i+1))
+		ids = append(ids, id)
+		testing.SetRealm(testing.NewUserRealm(alice))
+		AddToFolder(cross(cur), "ford", f, id)
+	}
+	// last to first
+	testing.SetRealm(testing.NewUserRealm(alice))
+	MoveItemInFolder(cross(cur), "ford", f, ids[2], 0)
+	got := FolderItems("ford", f)
+	uassert.Equal(t, ids[2], got[0])
+	uassert.Equal(t, ids[0], got[1])
+	uassert.Equal(t, ids[1], got[2])
+	uassert.Equal(t, 3, len(got)) // nothing lost, nothing duplicated
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "outside the folder", func() {
+		MoveItemInFolder(cross(cur), "ford", f, ids[0], 9)
+	})
+}
