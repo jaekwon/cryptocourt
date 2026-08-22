@@ -485,7 +485,12 @@ control("an exported read that reaches getPos", f"{KOURTV2}/stakeindex.gno",
         "\treturn getPos(c, mustClaim(c, 1), who, sideYES).stake\n"
         "}\n\n"
         "func StakedSize(courtSlug string, who address) int {",
-        "getPos", argv=["python3", READPURE])
+        # NOT bare "getPos": the guard PRINTS that word when it passes, listing the
+        # allocators it confined ("… getPos, ensureArgs, ensureSup all confined to write
+        # paths"), so this arm reported "fires" whatever the plant did. Found by the
+        # vacuity audit below, not by reading. The planted function's own name cannot
+        # appear in a clean run.
+        "StakedLeak calls getPos", argv=["python3", READPURE])
 # NARROWED TO ONE ELEMENT ON PURPOSE. This plant used to name the whole ALLOCATORS
 # tuple, and the tuple GREW — ensureArgs and ensureSup joined it and pushed it onto two
 # lines, so the literal stopped matching, the plant became a no-op, and the control
@@ -1330,6 +1335,73 @@ for g in unguarded:
     failures.append(f"{g} has no control")
 if not unguarded:
     print(f"  all {len(guards)} committed guards in scripts/ have a control")
+
+print("\nvacuity")
+# THE ARM THAT AUDITS THE OTHER ARMS. A control whose `want` string is ALREADY in its
+# guard's clean output reports "fires" no matter what its plant did — it is a green light
+# wired to nothing. This file's own comments record the class happening once, two arms
+# wanting bare "STALE" and "ALLOWLIST" that the baseline already printed while two real
+# stale paths were outstanding; it happened again with an arm wanting bare "getPos", which
+# check-read-purity prints in its SUCCESS line. Reading for it does not work: the arm looks
+# right and the run says fires.
+#
+# So it is mechanical now. Parse this file's own control() calls, run each distinct guard
+# on the CLEAN tree once, and object to any `want` the clean output already contains.
+# Controls whose argv is not a plain list of literals or module constants cannot be
+# resolved and are COUNTED OUT LOUD rather than skipped quietly — an audit that silently
+# ignores what it cannot parse is the same vacuity one level up.
+def vacuity_audit():
+    import ast
+    tree = ast.parse(open(__file__).read())
+    consts = {}
+    for node in tree.body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and isinstance(node.value, ast.Constant)):
+            consts[node.targets[0].id] = node.value.value
+    parsed, unresolved, cache, bad = 0, 0, {}, []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "control"):
+            continue
+        parsed += 1
+        if len(node.args) < 5 or not isinstance(node.args[4], ast.Constant):
+            unresolved += 1
+            continue
+        want = node.args[4].value
+        label = node.args[0].value if isinstance(node.args[0], ast.Constant) else "?"
+        cmd = None
+        for kw in node.keywords:
+            if kw.arg == "argv" and isinstance(kw.value, ast.List):
+                parts = []
+                for e in kw.value.elts:
+                    if isinstance(e, ast.Constant):
+                        parts.append(e.value)
+                    elif isinstance(e, ast.Name) and e.id in consts:
+                        parts.append(consts[e.id])
+                    else:
+                        parts = None
+                        break
+                cmd = parts
+        if not cmd:
+            unresolved += 1
+            continue
+        key = tuple(cmd)
+        if key not in cache:
+            r = subprocess.run(list(cmd), capture_output=True, text=True,
+                               errors="replace", cwd=REPO)
+            cache[key] = r.stdout + r.stderr
+        if want in cache[key]:
+            bad.append((label, want, " ".join(cmd)))
+    print(f"  {parsed} control(s) parsed, {len(cache)} guard(s) run clean, "
+          f"{unresolved} not resolvable")
+    for label, want, cmd in bad:
+        print(f"  {label:<44} WANTS WHAT THE CLEAN RUN ALREADY PRINTS ({want!r})")
+        failures.append(f"{label} wants a string {cmd} prints when it passes")
+    if not bad:
+        print("  no control wants a string its guard already prints")
+
+
+vacuity_audit()
 
 if failures:
     print(f"\n{len(failures)} control(s) did not fire. A guard that cannot fail "
