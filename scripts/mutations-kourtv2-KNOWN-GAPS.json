@@ -86,5 +86,21 @@
   "find": "\tif cs.seeded {\n\t\tmintEmission(c, who, 0)\n\t\treturn 0\n\t}\n",
   "replace": "",
   "why": "A DELIBERATE SURVIVOR, and its own comment already says why: the draw is zeroed at crystallize, so this is belt-and-braces, asserted at the payout site because that is where a future change would most plausibly break it. It cannot fire today - drawAuthor is 0 on every seeded claim, so dropping the gate falls through to capBonus(0, ...) = 0 and pays the same nothing. MEASURED: a probe panicking on `cs.seeded && cs.drawAuthor != 0` fired ZERO times across the suite, while a companion probe on `cs.seeded` alone fired, so AuthorBonus IS reached with a seeded claim and the first probe's silence is about the state, not about coverage. The crystallize-time gate that makes it redundant IS pinned, by both `the author slice is zeroed for every UNSEEDED claim` and `P7: the author slice is not paid`. IF THIS COMES BACK CAUGHT, a seeded claim now carries an author draw: read I5 in MODERATION.md section 8 before promoting it."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "ClaimSeries: the merge advances the side that did NOT change at this epoch",
+  "find": "\t\tif i < len(ys) && ys[i].e == e {",
+  "replace": "\t\tif i < len(ys) && ys[i].e != e {",
+  "why": "NOT A SURVIVOR AND NOT A CATCH - THIS ONE HANGS. The merge loop advances i only inside `if i < len(ys) && ys[i].e == e`, and `e` is the min of the two heads, so unmutated at least one side always matches and an index always moves. Inverting the test makes the matching side the one that does NOT advance: neither index moves, `e` never changes, and the loop appends rows for ever. A hang cannot be caught, because catching needs the suite to finish and say so. mutate.py bounds every suite with SUITE_TIMEOUT (600s, MUTATE_SUITE_TIMEOUT to override) and reports a row that reaches it as TIMED OUT, counted with the non-results - so this row is classified rather than silently mistaken for either outcome. It stays here as the answer to 'why is that operator not pinned', and it is not in the corpus because a full pass should not spend a ten-minute timeout re-observing a bound that selftest-checks.py already tests. ONE REFINEMENT worth keeping: the non-termination is not in the loop CONDITION, it is in the loop's ADVANCE guard, so 'skip mutations of for-statements' would not have caught this - two independent sweeps hit it, at ten and fifty-six minutes."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "recordPools: the trim rides on every call, not once per epoch",
+  "find": "\tif hE > cs.histTrimmedTo {",
+  "replace": "\tif hE >= cs.histTrimmedTo {",
+  "why": "INVALID BY CONVERGENCE: `hE > cs.histTrimmedTo` to `>=` makes the trim ride again on every recordPools within the same hourly epoch, and the extra rides cannot change the state they reach. keep = hE - hourlyKeep is identical on each ride, so an extra ride can only free pages that are ALREADY older than the keep window - pages the next epoch's ride would free anyway, bounded by trimBudget either way. The difference is gas and the 'rides at most once per hourly epoch per claim' claim in recordPools' comment, which is a cost statement and not a state one. Kept because the once-per-epoch bound is what makes the trim budget's arithmetic hold ('a budget of 2 per touched hour strictly outruns' one candidate page per 32 changed epochs) - remove the bound and that sentence stops being true even though no read changes. IF THIS COMES BACK CAUGHT, someone has pinned the ride count: check they meant the cost and not the content."
  }
 ]

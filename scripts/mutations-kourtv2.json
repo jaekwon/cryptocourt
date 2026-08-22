@@ -6896,5 +6896,68 @@
   "label": "mustSpendable: a tie names the stake instead of naming both locks",
   "find": "\tdefault:\n\t\tpanic(\"kourtv2: not enough free CC \u2014 you have as much staked as you have \" +\n\t\t\t\"committed by voting, and the two overlap, so releasing either one on \" +\n\t\t\t\"its own frees nothing: the coin stays in your balance and keeps \" +\n\t\t\t\"voting, but it cannot also back a deposit, a bond, or a transfer\")",
   "replace": "\tdefault:\n\t\tpanic(\"kourtv2: not enough unstaked CC \u2014 \" +\n\t\t\t\"staked coins stay in your balance and keep voting, but they are \" +\n\t\t\t\"committed and cannot also back a deposit, a bond, or another stake\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "setIfChanged: the series records only when the value did NOT change",
+  "find": "\tif v != s.Value() {",
+  "replace": "\tif v == s.Value() {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "setIfChanged: every call writes, so a quiet epoch still costs storage",
+  "find": "\tif v != s.Value() {\n\t\ts.SetAt(a, key, e, v)\n\t}\n",
+  "replace": "\ts.SetAt(a, key, e, v)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "trimClaimHistory: a nil archive is trimmed instead of skipped",
+  "find": "\tif c.csArch == nil || hE <= hourlyKeep+1 {",
+  "replace": "\tif c.csArch == nil && hE <= hourlyKeep+1 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "collectSeriesKeyed: a nil archive is walked instead of skipped",
+  "find": "\tif a != nil && key != \"\" {",
+  "replace": "\tif a != nil || key != \"\" {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "collectSeriesKeyed: the previous inline point is kept only when absent",
+  "find": "\tif e1, pv := s.Prev(); e1 != 0 {",
+  "replace": "\tif e1, pv := s.Prev(); e1 == 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "collectSeriesKeyed: the current inline point is kept only when absent",
+  "find": "\tif e0 := s.Since(); e0 != 0 {",
+  "replace": "\tif e0 := s.Since(); e0 == 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "ClaimSeries: the header's now is zero-based against a 1-based record",
+  "find": "\tnow := uint32(heightNow()/width) + 1",
+  "replace": "\tnow := uint32(heightNow() / width)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "recordPools: the NO hourly series records the YES pool",
+  "find": "\tsetIfChanged(a, &cs.noH, csKey(cs.id, \"nh\"), hE, cs.noStake)",
+  "replace": "\tsetIfChanged(a, &cs.noH, csKey(cs.id, \"nh\"), hE, cs.yesStake)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "recordPools: the NO daily series is stamped with the hourly epoch",
+  "find": "\tsetIfChanged(a, &cs.noD, csKey(cs.id, \"nd\"), dE, cs.noStake)",
+  "replace": "\tsetIfChanged(a, &cs.noD, csKey(cs.id, \"nd\"), hE, cs.noStake)"
  }
 ]
