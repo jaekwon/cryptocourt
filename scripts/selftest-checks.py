@@ -699,6 +699,15 @@ print("\ncheck-curation-reachable")
 control("an entrypoint the product cannot ask for", WEBPAGE,
         '${btn("Order folders","OrderFolders"', '${btn("Order folders","OrderFoldersXX"',
         "named by neither shipped web file", argv=["python3", CURREACH])
+# THE OTHER HALF: naming an entrypoint is not calling it correctly. btn() builds
+# the transaction form from its object literal's KEYS, so a realm parameter that
+# gets renamed leaves every stale button rendering a form that looks right and
+# fills the wrong field. Neither side's tests can see it — the realm suite does
+# not know buttons exist, the web harnesses do not know what a signature says.
+control("a button argument the function does not have", WEBPAGE,
+        '{courtSlug:slug,parentID:0,ids:"3,1,2"}',
+        '{courtSlug:slug,parent:0,ids:"3,1,2"}',
+        "do not match", argv=["python3", CURREACH])
 control("a scan that finds no entrypoints", CURREACH,
         'r"^func ([A-Z]\\w*)\\(cur realm"', 'r"^func (ZZZ\\w*)\\(cur realm"',
         "matched too little to be real", argv=["python3", CURREACH])

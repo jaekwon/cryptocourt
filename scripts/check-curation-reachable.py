@@ -28,6 +28,7 @@ longer than its findings teaches people to add exemptions.
 
     python3 scripts/check-curation-reachable.py
 """
+import glob
 import io
 import os
 import re
@@ -95,12 +96,79 @@ if missing:
         print("  %-22s named by neither shipped web file" % name, file=sys.stderr)
     print("  Add it to the curate page, or exempt it in this guard with a "
           "reason.", file=sys.stderr)
+
+# ---------------------------------------------------------------------------
+# AND THE ARGUMENTS, because naming an entrypoint is not the same as calling it
+# correctly. btn() renders a transaction form from an object literal whose KEYS
+# become the parameter names in the link:
+#
+#     btn("Order folders", "OrderFolders", {courtSlug: ..., parentID: ..., ids: ...})
+#     func OrderFolders(cur realm, courtSlug string, parentID uint64, ids string)
+#
+# Rename a realm parameter and every button still passing the old name goes on
+# rendering a form that looks right and prefills the wrong field — or none. That
+# is a break across the realm/web boundary that NEITHER side tests: the realm's
+# suite does not know buttons exist, and the web harnesses do not know what a
+# signature says. It is the same seam the reachability half above is about, one
+# step further in.
+#
+# Order is compared too, not just the set. gnoweb matches by name so a reordering
+# is harmless today, but a button whose arguments are in a different order from
+# the function it calls is a reader's trap, and the cost of holding the line is
+# nothing while it already holds.
+ALLSRC = "".join(io.open(f, encoding="utf-8").read()
+                 for f in sorted(glob.glob(os.path.join(ROOT, "realm", "r", "kourtv2", "*.gno")))
+                 if not f.endswith("_test.gno"))
+BTN = re.compile(r'btn\(\s*"(?:[^"\\]|\\.)*"\s*,\s*"(\w+)"\s*,\s*\{([^}]*)\}')
+
+
+def realm_params(fn):
+    """Parameter names of a crossing function, after `cur realm`, or None."""
+    m = re.search(r"^func %s\(cur realm(?:,\s*)?([^)]*)\)" % re.escape(fn), ALLSRC, re.M)
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    if not raw:
+        return []
+    # `slug, name string` declares two parameters sharing one type: the names
+    # before the typed one belong to it, so they cannot be read left to right.
+    out, pending = [], []
+    for part in raw.split(","):
+        toks = part.strip().split()
+        if len(toks) == 1:
+            pending.append(toks[0])
+        else:
+            out += pending + [toks[0]]
+            pending = []
+    return out + pending
+
+
+mismatch, buttons = [], 0
+for fn, argsrc in BTN.findall(page):
+    buttons += 1
+    keys = re.findall(r"(\w+)\s*:", argsrc)
+    p = realm_params(fn)
+    if p is None:
+        mismatch.append((fn, keys, "no such crossing function in r/kourtv2"))
+    elif keys != p:
+        mismatch.append((fn, keys, p))
+
+if mismatch:
+    print("check-curation-reachable: a button's arguments do not match the "
+          "function it calls", file=sys.stderr)
+    for fn, keys, want in mismatch:
+        print("  %-22s button %s  vs  realm %s" % (fn, keys, want), file=sys.stderr)
+    print("  The form is built from these names. A stale one prefills the wrong "
+          "field, or none.", file=sys.stderr)
+
+if missing or mismatch:
     sys.exit(1)
 
-if len(found) < 20:
-    sys.exit("check-curation-reachable: only %d entrypoint(s) found in the "
-             "curation sources — the scan matched too little to be real, which "
-             "is a broken guard rather than a clean tree" % len(found))
+if len(found) < 20 or buttons < 20:
+    sys.exit("check-curation-reachable: %d entrypoint(s) and %d button(s) — the "
+             "scan matched too little to be real, which is a broken guard rather "
+             "than a clean tree" % (len(found), buttons))
 
-print("check-curation-reachable: %d curation entrypoint(s), all reachable from "
-      "the product (%d exempt with a reason)." % (len(found), len(EXEMPT)))
+print("check-curation-reachable: %d curation entrypoint(s) all reachable from the "
+      "product (%d exempt with a reason), and %d button(s) whose arguments match "
+      "the functions they call." % (len(found), len(EXEMPT), buttons))
