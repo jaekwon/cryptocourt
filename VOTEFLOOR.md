@@ -222,6 +222,25 @@ the recorded full pass — 983 rows in 5½ hours is the same ~75s/row. So the ar
 any batch is `rows / shards * 75s`, and the reason to keep foreground slices at 50-65
 rows is that they finish inside the tool-call window while a 96-row shard cannot.
 
+**AND THE GAP FILE WAS CHECKED THE OTHER WAY ROUND, which is the half a full pass cannot
+see.** A main-corpus row is wrong if it stops being caught; a KNOWN-GAPS row is wrong if it
+STARTS being caught, because then the gap has closed and nobody noticed. `make gaps` asks
+exactly that, and it had not been run since the file churned today.
+
+    21 rows run (2 skipped as `slow`), 17 surviving + 4 by-design `elsewhere` = 21
+    ZERO caught
+
+So no recorded gap is stale: every one still genuinely survives, and the four with an
+`elsewhere` are covered by the harness each names — two txtar scripts, check-read-purity,
+and the seeded-realm txtar. The two skipped rows are the documented non-results, a
+non-terminating mutant and a timeout, both marked `slow` precisely so a pass does not spend
+ten minutes re-observing a bound selftest-checks already holds.
+
+Together with the full pass this is a complete statement about the corpus, both halves:
+1,186 main rows observed caught or by-design, and 21 gap rows observed still-surviving. The
+main corpus was an assembled claim; the gap file was an assembled claim too, and neither is
+now.
+
 **THE SECOND FULL PASS RAN, AND THIS ONE WAS ALL GREEN.** 1,174 rows in 20 slices of 60 at
 5 shards, from a clone pinned at 39a8c4f, 10:17:20 to 13:32:42 — three hours fifteen. Every
 slice clean:
