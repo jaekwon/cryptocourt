@@ -379,6 +379,27 @@ survives every suite and fails `check-read-purity.py` with
 `elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
 resolves, so the annotation cannot rot into a shrug.
 
+**A MASKING PAIR DOES NOT ALWAYS MEAN NO ROW CAN BE WRITTEN — CHECK ADJACENCY.** The
+standing rule for overlapping checks is "ablate jointly to prove teeth, then record that
+no single-mutation row can be written", and the second half is too pessimistic. A corpus
+row is a text substitution, so when the overlapping checks are CONTIGUOUS in the source
+the joint deletion is a single `find`. The full-bar clamps are two adjacent lines, each
+occurring once, so two false gap rows collapsed into one real caught row. Measured, full
+kourtv2 suite per arm: ordering clamp alone PASS, unit floor alone PASS, both deleted
+FAIL at `TestTheQualityBarsNeverReachZeroOnAMicroCourt` ("the full bar is 0; an EMPTY
+tally clears a bar of zero"), control green either side. Ask where the checks SIT before
+concluding a pair is unpinnable.
+
+**`head` TRUNCATES EVIDENCE, AND A TRUNCATED GREP READS EXACTLY LIKE A COMPLETE ONE.** I
+went looking for a test pinning the bars, ran `grep -rn qualityBars realm/r/kourtv2/
+*_test.gno | head`, saw hits from two files, and concluded the third regime was unpinned
+— then designed a fixture for it. `TestTheQualityBarsNeverReachZeroOnAMicroCourt` was
+already there, in a file whose match sat below the cut, asserting the same property with
+the same derivation in its comment. Same failure as `grep -h` defeating a path filter:
+the instrument quietly answered a narrower question than the one asked. When the
+conclusion is "nothing covers this", COUNT the matches (`grep -c`, or no pipe at all)
+before believing it.
+
 **AN `elsewhere` IS A PROMISE ABOUT A ROUTINE, so check the routine and not just the
 path.** Resolving was never the whole question. The annotation says "that harness covers
 this", which is worth exactly as much as the chance anybody runs that harness — and
@@ -418,6 +439,13 @@ cannot change the program at all. Recognise these on sight rather than measuring
   comment argues while still calling it a survivor.
 - **A conjunct implied by the conjunct before it.** See the R_max pause, whose second
   half is provably entailed by its first; recorded in KNOWN-GAPS with the derivation.
+- **A floor standing next to a clamp that already delivers it.** qualityBars ends with
+  `if fullBar < demotionBar { fullBar = demotionBar }` then `if fullBar < 1 { fullBar =
+  1 }`, and demotionBar was floored to 1 earlier — so the ordering clamp can only fire
+  when fullBar would be 0, and demotionBar is EXACTLY 1 there. Both lines yield
+  `fullBar == 1`; deleting either ALONE cannot change the program. KNOWN-GAPS carried
+  both single deletions as survivors, with consequences ("the full bar may be zero",
+  "the ladder may invert") that neither mutation can actually produce.
 - **A comparison against a value the code has just clamped.** touch's `boundary <
   segEnd` and `segEnd == boundary` both sit under `segEnd = min(now, boundary)`, so the
   equality cases are no-ops and `<=`/`>=` are the same program.

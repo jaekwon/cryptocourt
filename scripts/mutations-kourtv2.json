@@ -8037,5 +8037,13 @@
   "label": "RestoreFolder: the moderation-log event is never emitted",
   "find": "\temitModAct(c.id, 0, \"folder-restore\", who)\n",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "quality.gno",
+  "label": "qualityBars: BOTH minimum clamps on the full bar are gone (an empty tally promotes)",
+  "find": "\tif fullBar < demotionBar {\n\t\tfullBar = demotionBar\n\t}\n\tif fullBar < 1 {\n\t\tfullBar = 1\n\t}\n",
+  "replace": "",
+  "why": "THE ONLY MUTATION OF THIS PAIR WITH TEETH, which is why it replaced two rows that each claimed to be a survivor. The tail of qualityBars is `if fullBar < demotionBar { fullBar = demotionBar }` followed by `if fullBar < 1 { fullBar = 1 }`, and demotionBar has already been floored to 1 above. So the ordering clamp can only fire when fullBar would be 0, and in that case demotionBar is EXACTLY 1 (it was clamped to the same votable/3, then floored) - both clamps therefore yield fullBar == 1 and deleting either one ALONE cannot change the program. Those two single deletions sat in KNOWN-GAPS as 'the full bar may be zero' and 'the ladder may invert'; both were invalid mutations and both stated consequences were false. MEASURED, full kourtv2 suite each time: ordering clamp alone PASS, unit floor alone PASS, BOTH deleted FAIL at TestTheQualityBarsNeverReachZeroOnAMicroCourt with 'the full bar is 0; an EMPTY tally clears a bar of zero', control green before and after. The lines are adjacent and each occurs once, so the joint deletion is writable as one row - a masking pair does not always mean no row can be written. What it costs if it goes: applyQualityTally opens with `turnout >= fullBar && cs.qHighW*3 >= turnout*2`, which at fullBar == 0 and an empty tally reads 0 >= 0 && 0 >= 0, so a vote nobody cast CONCLUSIVELY promotes the claim to the high-quality payout multiplier."
  }
 ]
