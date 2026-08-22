@@ -672,6 +672,23 @@ func CourtDesc(courtSlug string) string {
 	return courtDescFor(mustCourt(courtSlug))
 }
 
+// CourtStakeOpenDelay is this court's polish window in blocks: how long after a
+// claim opens before staking may begin, and therefore how long its title stays
+// editable by its author (§9, EditClaimTitle).
+//
+// ZERO IS THE COMMON ANSWER and the reason this read exists. StartCourt passes
+// 0; only StartCourtP opts in. On a zero court the window has closed before the
+// opening transaction returns, so EditClaimTitle refuses every call — and a
+// client with no way to ask would have to either hide a live window or offer a
+// dead one. It could not know which, because nothing exposed the number.
+//
+// Ungated: a court's parameters are not secret, the same posture CourtName and
+// CourtTier take. No migration — the field is on every court already, zero by
+// default, so a court started before this read answers correctly without a write.
+func CourtStakeOpenDelay(courtSlug string) int64 {
+	return mustCourt(courtSlug).params.stakeOpenDelayBlocks
+}
+
 // CourtCount is how many courts have been started.
 func CourtCount() int { return courts.Size() }
 

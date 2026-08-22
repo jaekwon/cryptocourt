@@ -1468,6 +1468,36 @@ function wall(nowH, targetH){
 /* Moderation provenance on the claim page: one banner, precedence mirroring
    the chain's own switch (purged, then redacted, then plain hide) — a listing
    act stated in the administrative register, never a verdict. */
+/* THE POLISH WINDOW, WHICH EXPIRES. EditClaimTitle is the author's one chance to
+   fix a typo in the question: the realm freezes the title the moment a stake
+   lands or the opening delay passes. It had no path anywhere in the product, so
+   the window opened and shut with nothing able to reach it — worse than a
+   missing feature, because a missing feature does not run out.
+
+   Offered only while it could still succeed: live, open, nothing staked on
+   either side, and not on a claim whose title is withheld, where inviting an
+   edit to text the page will not show is nonsense. The time bound is the one
+   condition NOT checked here — a client cannot know the opening delay has passed
+   without another read, and guessing would either hide a live window or promise
+   a dead one. WHO you are is likewise the realm's business: it refuses a
+   non-author at signing, the posture the curate page already takes about
+   moderators.
+
+   A function rather than an expression inline in the route, because the source
+   harnesses can only reach what they can slice — the same reason
+   resolveFolderPath was pulled out when a folder route shipped broken. */
+function polishLink(slug, id, d, mPurged, mRedacted, polishBlocks){
+  if(!isLive() || !d || d.phase!=="open") return "";
+  // NO WINDOW, NO OFFER, and this is the condition the first version missed.
+  // StartCourt passes stakeOpenDelay 0 and only StartCourtP opts in, so on most
+  // courts EditClaimTitle refuses every call — the title froze before the
+  // opening transaction returned. Offering it there would be a link that always
+  // fails. Null (a realm too old to answer) hides it for the same reason.
+  if(!(Number(polishBlocks) > 0)) return "";
+  if(d.yesStake || d.noStake) return "";
+  if(mPurged===true || mRedacted===true) return "";
+  return `<a class="tlink" target="_blank" rel="noopener" title="the author's polish window: before the first stake, and before the opening delay passes" href="${esc(tx("EditClaimTitle",{courtSlug:slug,claimID:id,newTitle:d.title}))}">fix the title<span aria-hidden="true">↗</span></a>`;
+}
 function modBanner(mPurged, mRedacted, mHidden, slug){
   if(mPurged===true) return `<div class="notice void"><span class="g">▤</span><div><b>Removed on legal grounds.</b>
     The claim's lifecycle is unaffected: stakes, verdict and refunds proceed. The category code stands in place of the title.
@@ -2274,7 +2304,8 @@ on(/^\/$/, async ()=>{
     + introStrip()
     + `<div class="lead-row"><div><h1 class="page-h">Courts of record</h1>
        <p class="page-sub">Each court runs its own coin and its own docket of claims of fact. Stake on YES or NO; your staked coin always returns 1×, and conviction — stake × time held — earns the reward when the verdict goes your way. Pick the court whose judgment you trust.</p></div>
-       ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary")}</div>`
+       ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary")}
+       ${btn("Start a court with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one epoch before staking opens, so an author can fix the wording")}</div>`
     + statsStrip
     + `<div id="qscope">`
     + qBarHtml("court name or orem/7", qCaption({mode:"idle", demo:!isLive(), kind:"court names", loaded:(page===1?featured.length:0)+listed.length, total:listedTotal+(page===1?featured.length:0)}))
@@ -3973,14 +4004,20 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const openedBy = author? `<span class="tfact">opened by <span class="mono" aria-hidden="true">${shortAddr(author)}</span><span class="sr-only">${esc(author)}</span></span>` : "";
   // moderation provenance: four booleans, claim route only; a failed read
   // renders nothing — the page makes no completeness certificate to defend
-  let mHidden=null, mRedacted=null, mPurged=null, mSeeded=null;
+  let mHidden=null, mRedacted=null, mPurged=null, mSeeded=null, polishBlocks=null;
   if(isLive()){
     const s2m = gstr(slug);
-    [mHidden, mRedacted, mPurged, mSeeded] = await Promise.all([
+    // polishBlocks rides along in the same round trip. It is the court's
+    // stakeOpenDelay: zero on every court StartCourt made, and zero means the
+    // title froze before the opening transaction returned. A realm too old to
+    // answer leaves it null, which hides the offer — the safe direction, since
+    // the alternative is a form the realm refuses.
+    [mHidden, mRedacted, mPurged, mSeeded, polishBlocks] = await Promise.all([
       one(`HiddenFromListing(${s2m},${id})`).catch(()=>null),
       one(`TextRedacted(${s2m},${id})`).catch(()=>null),
       one(`ClaimPurged(${s2m},${id})`).catch(()=>null),
       one(`ClaimSeeded(${s2m},${id})`).catch(()=>null),
+      one(`CourtStakeOpenDelay(${s2m})`).catch(()=>null),
     ]);
   } else { const dd0=DEMO.claims[slug+"/"+id]||{};
     mHidden=dd0.hidden===true; mRedacted=dd0.redacted===true; mPurged=dd0.purged===true; mSeeded=dd0.seeded===true; }
@@ -4016,12 +4053,13 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const chip = fmClaim[id]? `<a class="tlink" href="#/c/${esc(slug)}/f/${esc(fmClaim[id].path)}" title="${cu.source==="local"? esc(CUR_LABEL) : "sample curation"}">filed under <span class="tname">${safeInline(fmClaim[id].label)}</span> · ${cu.source==="local"? "local":"sample"}</a>` : "";
   // live maps draw only the newest window — do not offer a link that dead-ends
   const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">on the map<span aria-hidden="true">→</span></a>` : "";
+  const polish = polishLink(slug, id, d, mPurged, mRedacted, polishBlocks);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
     + claimBody(d)
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
-        <span class="tacts">${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
+        <span class="tacts">${polish}${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
         <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
     + modBanner(mPurged, mRedacted, mHidden, slug)

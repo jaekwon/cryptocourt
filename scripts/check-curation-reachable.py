@@ -34,8 +34,19 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCES = [os.path.join(ROOT, "realm", "r", "kourtv2", "folders.gno"),
-           os.path.join(ROOT, "realm", "r", "kourtv2", "argument.gno")]
+# The curator-and-author surface: filing, staking, answering, and the filing
+# system. Widened from folders+argument once those were clean, because the same
+# gap turned up in claim.gno (OpenClaimP, EditClaimTitle) and court.gno
+# (StartCourtP) — a "P" variant that says one more thing, reachable by nobody.
+#
+# moderation.gno is deliberately OUT. Thirteen of its sixteen entrypoints are
+# global-DAO and purge acts — GlobalHide, TransferGlobalAdmin, PurgeCourt — which
+# belong to an admin surface this overlay does not have. Listing them here would
+# mean thirteen exemptions against three findings, and a guard whose exemption
+# list dwarfs its findings teaches people to write exemptions.
+SOURCES = [os.path.join(ROOT, "realm", "r", "kourtv2", f) for f in
+           ("folders.gno", "argument.gno", "claim.gno", "court.gno",
+            "stake.gno", "answer.gno")]
 PAGES = [os.path.join(ROOT, "web", "index.html"),
          os.path.join(ROOT, "web", "chat.js")]
 
@@ -46,6 +57,10 @@ EXEMPT = {
                    "description behind a category code, and the page's on-chain "
                    "section is framed as the bond-free single-signer acts. It "
                    "belongs with the other purge paths, wherever those land.",
+    "OpenClaim": "superseded in the UI by OpenClaimP, which is the same "
+                 "entrypoint with a body — and a body is optional, so the P form "
+                 "covers every call the plain one made. It stays in the realm "
+                 "because every filetest, txtar and scenario in the tree uses it.",
 }
 
 ENTRY = re.compile(r"^func ([A-Z]\w*)\(cur realm", re.M)
@@ -82,7 +97,7 @@ if missing:
           "reason.", file=sys.stderr)
     sys.exit(1)
 
-if len(found) < 8:
+if len(found) < 20:
     sys.exit("check-curation-reachable: only %d entrypoint(s) found in the "
              "curation sources — the scan matched too little to be real, which "
              "is a broken guard rather than a clean tree" % len(found))
