@@ -5241,6 +5241,29 @@ function embedSnippet(slug, id, opts){
        + `style="border:1px solid #ddd;border-radius:6px;max-width:100%"></iframe>`;
 }
 
+/* THE DOMAIN RUNS TO NOW, not to the last change — the one rule the clip and
+   the embed share, written once so a correction cannot land in only one of them.
+
+   Change-only samples mean the last row can be days old while the value still
+   holds; ending the axis there labelled the right edge with the last CHANGE and
+   drew the line to it anyway, so the flat "nothing since" stretch was invisible
+   and the date under it was wrong. embedSpark carried its own copy of these
+   seven statements under a comment reading "same domain rule as the clip" —
+   which is the tell: a second site that can only describe itself by pointing at
+   the first should not be a second site.
+
+   `at` rides along in the result because both callers mark the answer on the
+   axis once they have scaled to it. `nowH` does not: neither uses it again. */
+function seriesDomain(pts, tl){
+  const nowH = tl && tl.now ? tl.now.h : null;
+  const at = tl && tl.answered ? tl.answered.h : null;
+  const x0 = pts[0][0];
+  let x1 = pts[pts.length - 1][0];
+  if(nowH != null && nowH > x1) x1 = nowH;
+  if(at != null && at > x1) x1 = at;
+  return {x0, x1: Math.max(x1, x0 + 1), at};
+}
+
 /* The clip. 1200x630 is the size every link unfurler crops to, so a reader who
    drops the PNG into a post gets the same framing they would have got from a
    generated preview — the one thing a serverless page cannot mint for itself. */
@@ -5360,18 +5383,8 @@ function drawClip(slug, id, d, courtName, theme, note, url, ser, tl){
       // domain to the full width drew the line and its end dot straight through
       // them.
       const L = 56, R = W - 56, PR = R - 62;
-      const nowH = tl && tl.now ? tl.now.h : null;
-      const at = tl && tl.answered ? tl.answered.h : null;
-      // THE DOMAIN RUNS TO NOW, not to the last change. Change-only samples mean
-      // the last row can be days old while the value still holds; ending the
-      // axis there labelled the right edge with the last CHANGE and drew the
-      // line to it anyway, so the flat "nothing since" stretch was invisible and
-      // the date under it was wrong.
-      const x0 = pts[0][0];
-      let x1 = pts[pts.length - 1][0];
-      if(nowH != null && nowH > x1) x1 = nowH;
-      if(at != null && at > x1) x1 = at;
-      x1 = Math.max(x1, x0 + 1);
+      // To NOW, not to the last change — see seriesDomain for why.
+      const {x0, x1, at} = seriesDomain(pts, tl);
       const px = h => L + (PR - L) * ((h - x0) / (x1 - x0));
       const py = p => bot - (bot - top) * (p / 100);
       // A SCALE, not just a shape. One dashed line at 50 said "which side is
@@ -5623,15 +5636,8 @@ function embedSpark(ser, tl, d){
   // for the scale, and the same 100/50/0 rows.
   const W = 300, H = 76, PL = 5, PR = 272, Y100 = 7, Y0 = 66;
   const y = p => +(Y0 - (p / 100) * (Y0 - Y100)).toFixed(1);
-  const nowH = tl && tl.now ? tl.now.h : null;
-  const at = tl && tl.answered ? tl.answered.h : null;
-  // Same domain rule as the clip: to NOW, not to the last change, or the flat
-  // "nothing since" stretch is invisible and the date under it is wrong.
-  const x0 = pts[0][0];
-  let x1 = pts[pts.length - 1][0];
-  if(nowH != null && nowH > x1) x1 = nowH;
-  if(at != null && at > x1) x1 = at;
-  x1 = Math.max(x1, x0 + 1);
+  // The same domain as the clip, and now literally the same code.
+  const {x0, x1, at} = seriesDomain(pts, tl);
   // The same 4% breathing room signalChart gives its domain. Without it the
   // first event mark lands ON the left frame instead of inside the plot, which
   // is precisely the padding difference between the two charts.
