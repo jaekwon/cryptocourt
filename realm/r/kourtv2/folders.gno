@@ -13,7 +13,10 @@
 // there is none to bound). Suspension still refuses folder writes.
 package kourtv2
 
-import "strconv"
+import (
+	"strconv"
+	"strings"
+)
 
 const maxFolderTextLen = 200
 
@@ -458,6 +461,57 @@ func MoveItemInFolder(cur realm, courtSlug string, folderID, claimID uint64, to 
 	}
 	f.items = out
 	emitModAct(c.id, claimID, "folder-order", who)
+}
+
+// FolderTree is every folder's SHAPE in one read: "id:parent:flags" per folder,
+// comma separated, ids ascending. flags is "r" retired, "p" purged, "rp" both,
+// "-" neither.
+//
+// STRUCTURE ONLY, AND THAT IS THE POINT. A client assembling the tree otherwise
+// needs FolderParent + FolderRetired + FolderPurged per folder — three round
+// trips each, 300 for a court at the cap, to learn something that fits in about
+// a kilobyte. Names and descriptions stay one read per folder because they are
+// unbounded-ish user text that a client only needs for the folders it actually
+// draws, and because splicing them into a delimited string would mean escaping
+// user text into a format this realm would then have to keep escaping correctly
+// for ever.
+//
+// Bounded by maxFolders, so this read cannot grow past ~1.2KB whatever anybody
+// writes. No moderation gate: the shape of a court's filing system is not
+// secret, and the two things that ARE gated — a purged folder's name and its
+// description — are gated in the reads that return them. The flags say a row is
+// purged so a client knows to expect a tombstone rather than a name.
+func FolderTree(courtSlug string) string {
+	c := mustCourt(courtSlug)
+	if c.mod == nil {
+		return ""
+	}
+	var b strings.Builder
+	n := 0
+	c.mod.folders.Iterate("", "", func(_ string, v any) bool {
+		f, ok := v.(*folder)
+		if !ok {
+			return false
+		}
+		if n > 0 {
+			b.WriteString(",")
+		}
+		flags := ""
+		if f.retired {
+			flags += "r"
+		}
+		if f.purged {
+			flags += "p"
+		}
+		if flags == "" {
+			flags = "-"
+		}
+		b.WriteString(strconv.FormatUint(f.id, 10) + ":" +
+			strconv.FormatUint(f.parent, 10) + ":" + flags)
+		n++
+		return false
+	})
+	return b.String()
 }
 
 // FolderRetired reports whether a folder has been struck from the tree. The row

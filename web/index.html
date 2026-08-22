@@ -2347,11 +2347,22 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   const docketPager = pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims", undefined, dkChips) + hiddenNote;
   const docketPagerBot = (totalClaims>PAGE_N || page>1)? pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims") : "";
   const chainF = isLive()? await chainFolders(slug).catch(()=>null) : null;
+  // The court's own description, from the chain. Falls back to curation when the
+  // realm has none — an older deployment, or a court whose moderators have not
+  // written one — so the field degrades to what it was rather than to nothing.
+  const chainDesc = isLive()
+    ? await one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>"")
+    : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])
     + `<div class="lead-row"><div>
         <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
-        ${(()=>{ const cu=curationFor(slug); if(!cu||!cu.desc) return "";
-          return `<p class="sub">${esc(cu.desc)}<span class="small muted"> · ${cu.source==="local"? CUR_LABEL : "demo copy — the chain stores only a name"}</span></p>`; })()}
+        ${(()=>{
+          // The chain first: it stores a description now, so copy saying it
+          // "stores only a name" was true of the sample and wrong of the realm.
+          // Curation is the fallback, still labelled as curation.
+          if(chainDesc) return `<p class="sub">${esc(chainDesc)}<span class="small muted"> · the court's own record</span></p>`;
+          const cu=curationFor(slug); if(!cu||!cu.desc) return "";
+          return `<p class="sub">${esc(cu.desc)}<span class="small muted"> · ${cu.source==="local"? CUR_LABEL : "demo copy — this court has none on chain"}</span></p>`; })()}
         <div class="tagrow">
           <span class="tfacts">${tierPill(s.tier)}<span class="tfact mono">/${esc(slug)}</span></span>
           <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
@@ -3044,7 +3055,35 @@ async function chainFolders(slug){
   if(n==null) return null;                 // the read itself failed
   if(n<1) return {folders:[], count:0, capped:false};
   const F = Math.min(n, CHAIN_FOLDER_CAP);
-  const fids=[]; for(let i=1;i<=F;i++) fids.push(i);
+  // THE SHAPE IN ONE READ. FolderTree answers "id:parent:flags" per folder, so
+  // the parent, the retired bit and the purged bit cost one round trip for the
+  // whole court instead of three per folder — 300 at the cap. Names and items
+  // still come per folder, because those are user text and only the folders
+  // actually drawn need them.
+  //
+  // Falls back to a flat list when the read is absent: a realm deployed before
+  // FolderTree existed answers nothing, and a flat tree is what the overlay drew
+  // for that realm anyway. The feature degrades to the old behaviour rather than
+  // to an error.
+  const treeRaw = await one(`FolderTree(${s2})`).then(unesc).catch(()=>null);
+  const shape = new Map();
+  if(typeof treeRaw === "string" && treeRaw){
+    for(const row of treeRaw.split(",")){
+      const bits = row.split(":");
+      if(bits.length !== 3) continue;
+      const id = parseInt(bits[0],10), parent = parseInt(bits[1],10);
+      if(!Number.isInteger(id) || !Number.isInteger(parent)) continue;
+      shape.set(id, {parent, retired: bits[2].includes("r"), purged: bits[2].includes("p")});
+    }
+  }
+  const fids=[]; for(let i=1;i<=F;i++){
+    const sh = shape.get(i);
+    // A RETIRED FOLDER IS SKIPPED, NOT DRAWN GREY. The realm keeps the row so
+    // ids stay contiguous for exactly this walk; it is struck from the tree, so
+    // the tree does not show it.
+    if(sh && sh.retired) continue;
+    fids.push(i);
+  }
   const folders = await inChunks(fids, 6, async fid=>{
     try{
       const [name, itemsRaw] = await Promise.all([
@@ -3055,10 +3094,32 @@ async function chainFolders(slug){
       const rawS = String(itemsRaw);
       const el = [...rawS.matchAll(/\((\d+)\s+uint64\)/g)].map(m2=>Number(m2[1]));
       const ids = el.length? el : ((rawS.replace(/\[\]uint64|uint64/g,"").match(/\d+/g)||[]).map(Number));
-      return {name:String(name), claims:ids, folders:[], fid, path:String(fid), chain:true};
+      const sh = shape.get(fid);
+      return {name:String(name), claims:ids, folders:[], fid,
+              parent: sh? sh.parent : 0, path:String(fid), chain:true};
     }catch(_){ return {name:"read failed — reload to retry", claims:[], folders:[], fid, path:String(fid), chain:true, failed:true}; }
   });
-  return {folders, count:n, capped:n>CHAIN_FOLDER_CAP};
+  return {folders: nestChainFolders(folders), count:n, capped:n>CHAIN_FOLDER_CAP};
+}
+
+/* Hang each folder under its parent. The realm caps depth at 4 and refuses
+   cycles, but this walk does not trust that — a client that hangs on malformed
+   state is a client that a bad read can wedge, and the cost of not trusting it
+   is one Set. A folder whose parent was skipped (retired) or never read (past
+   CHAIN_FOLDER_CAP) stays at the root rather than disappearing. */
+function nestChainFolders(flat){
+  const byId = new Map(flat.map(f=>[f.fid, f]));
+  const roots = [];
+  for(const f of flat){
+    const p = f.parent && byId.get(f.parent);
+    if(!p || p === f){ roots.push(f); continue; }
+    // refuse to descend into a loop: walk up, and root the folder if we meet it
+    let up = p, hops = 0, loop = false;
+    while(up && hops++ < 8){ if(up === f){ loop = true; break; } up = byId.get(up.parent); }
+    if(loop){ roots.push(f); continue; }
+    p.folders.push(f);
+  }
+  return roots;
 }
 /* one source, labeled: local curation ?? chain (live) ?? sample (demo) ?? none.
    Never merged — local enforces one-folder-per-claim and nesting, the chain

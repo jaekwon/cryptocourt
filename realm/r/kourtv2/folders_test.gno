@@ -428,3 +428,38 @@ func TestMoveItemInFolder(cur realm, t *testing.T) {
 		MoveItemInFolder(cross(cur), "ford", f, ids[0], 9)
 	})
 }
+
+// THE SHAPE READ. One round trip for what would otherwise be three per folder —
+// 300 at the cap — so the thing worth pinning is that it reports the structure
+// FAITHFULLY, including the two states a client must not mistake for a normal
+// folder.
+func TestFolderTree(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ft-alice")
+	testCourt(cur, "ftree", alice, 50_000_000_000)
+	uassert.Equal(t, "", FolderTree("ftree")) // no moderation state yet
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "ftree", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	top := CreateFolder(cross(cur), "ftree", "Top", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kid := CreateFolderIn(cross(cur), "ftree", top, "Inside", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	gone := CreateFolder(cross(cur), "ftree", "Mistake", "")
+
+	// parents are reported, so a client can build the tree without asking again
+	uassert.Equal(t, "1:0:-,2:1:-,3:0:-", FolderTree("ftree"))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "ftree", gone)
+	uassert.Equal(t, "1:0:-,2:1:-,3:0:r", FolderTree("ftree"))
+
+	// A PURGED ROW IS FLAGGED, so a client knows to expect a tombstone from
+	// FolderName rather than a name — the shape is not secret, the text is.
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeFolder(cross(cur), "ftree", kid, "CSAM")
+	uassert.Equal(t, "1:0:-,2:1:p,3:0:r", FolderTree("ftree"))
+}

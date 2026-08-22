@@ -19,6 +19,16 @@ let CALLS=[]; let QSHAPE="tokens";
 global.qeval = async expr => {
   CALLS.push(expr);
   if(/FolderCount/.test(expr)) return `(${global.FCOUNT} int)`;
+  // FolderTree is the shape read: "id:parent:flags" per folder, one round trip
+  // instead of three each. FTREE lets a test say what the chain's tree looks
+  // like; the default is the flat one every existing case here assumed, so the
+  // pre-nesting expectations still mean what they meant.
+  if(/FolderTree/.test(expr)){
+    if(global.FTREE === null) return `("" string)`;   // a realm without the read
+    if(global.FTREE) return `("${global.FTREE}" string)`;
+    const rows=[]; for(let i=1;i<=global.FCOUNT;i++) rows.push(`${i}:0:-`);
+    return `("${rows.join(",")}" string)`;
+  }
   if(/FolderName\(.*,(\d+)\)/.test(expr)){
     const fid=+expr.match(/,(\d+)\)/)[1];
     return fid===2? `("[purged:9.2]<img src=x onerror=alert(1)>" string)` : `("Folder ${fid}" string)`;
@@ -49,6 +59,10 @@ code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code += "var store={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}},del:k=>{try{localStorage.removeItem(k)}catch(_){}}};\n";
 code += "const demoCourt = slug => Object.hasOwn(DEMO.courts, slug)? DEMO.courts[slug] : null;\n";
+// chainFolders reads FolderTree through unesc now, so the harness needs the real
+// one rather than a stand-in — a stub that unescaped differently would test the
+// stub.
+code += slice('function unesc(', '/* Untrusted text') + '\n';
 code += 'async function inChunks(items, size, fn){ const out=[]; for(let i=0;i<items.length;i+=size) out.push(...await Promise.all(items.slice(i,i+size).map(fn))); return out; }\n';
 code += slice('const CURATION_V', '/* ------').replace('const CURATION_V','var CURATION_V');
 code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER_CAP','var CHAIN_FOLDER_CAP');
@@ -67,7 +81,11 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("3 folders read", cf.folders.length===3 && cf.count===3 && !cf.capped);
   ok("ids parsed from (N uint64) tokens", JSON.stringify(cf.folders[0].claims)==="[1,11]" && JSON.stringify(cf.folders[2].claims)==="[3,13]");
   ok("no 64 leakage", !cf.folders.some(f=>f.claims.includes(64)));
-  ok("read count = 1 + 2F", CALLS.length===1+2*3);
+  // 2 + 2F now: FolderCount, FolderTree, then name+items per folder. The extra
+  // read is the whole point of FolderTree — the parent, retired and purged bits
+  // it carries would otherwise be three MORE reads per folder, 300 at the cap.
+  // Pinned because a read count is the one cost a client can regress silently.
+  ok("read count = 2 + 2F", CALLS.length===2+2*3);
   ok("fids contiguous + paths set", cf.folders.every((f,i)=>f.fid===i+1 && f.path===String(i+1) && f.chain===true));
   // bare-bracket shape fallback
   QSHAPE="bare"; const cf2 = await chainFolders("orem");
@@ -126,4 +144,33 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
+
+// NESTING FROM THE CHAIN. The realm answers the shape in one read; the overlay
+// has to turn it into a tree without trusting it — a client that hangs on
+// malformed state is a client a bad read can wedge.
+  CFG.mode='live'; global.FCOUNT=3;
+  global.FTREE = "1:0:-,2:1:-,3:0:-";
+  const r = await chainFolders("orem");
+  ok("chain folders nest", r.folders.length===2 && r.folders[0].folders.length===1);
+  ok("the child hangs off its parent", r.folders[0].folders[0].fid===2);
+
+  // A RETIRED FOLDER IS SKIPPED. The realm keeps its row so ids stay contiguous
+  // for this very walk; it is struck from the tree, so it is not in the tree.
+  global.FTREE = "1:0:-,2:1:r,3:0:-";
+  const r2 = await chainFolders("orem");
+  ok("a retired folder is not drawn", r2.folders.length===2 && r2.folders[0].folders.length===0);
+
+  // A CYCLE CANNOT HANG THE CLIENT. The realm refuses to make one; this asserts
+  // the overlay survives being told otherwise.
+  global.FTREE = "1:2:-,2:1:-,3:0:-";
+  const r3 = await chainFolders("orem");
+  ok("a cyclic tree still terminates and keeps every folder",
+     r3.folders.length + r3.folders.reduce((n,f)=>n+f.folders.length,0) === 3);
+
+  // AND A REALM WITHOUT THE READ still gets the flat list it always got.
+  global.FTREE = null;
+  const r4 = await chainFolders("orem");
+  ok("no FolderTree degrades to a flat list", r4.folders.length===3);
+  global.FTREE = undefined; CFG.mode='demo';
+
 })();
