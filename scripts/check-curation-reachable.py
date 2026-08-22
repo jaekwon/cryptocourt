@@ -46,8 +46,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # mean thirteen exemptions against three findings, and a guard whose exemption
 # list dwarfs its findings teaches people to write exemptions.
 SOURCES = [os.path.join(ROOT, "realm", "r", "kourtv2", f) for f in
-           ("folders.gno", "argument.gno", "claim.gno", "court.gno",
-            "stake.gno", "answer.gno")]
+           ("folders.gno", "argument.gno", "supersede.gno", "claim.gno",
+            "court.gno", "stake.gno", "answer.gno")]
 PAGES = [os.path.join(ROOT, "web", "index.html"),
          os.path.join(ROOT, "web", "chat.js")]
 
