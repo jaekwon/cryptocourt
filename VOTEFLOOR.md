@@ -311,6 +311,28 @@ Also: `nohup … &` inside a background shell makes the tool report "completed" 
 instant the shell exits, with the real work still running and an empty output file —
 run the command in the foreground of a background task instead.
 
+**THE SHARED CORPUS FILE HAS NOW LOST UPDATES FOUR TIMES, so stop relying on care and
+shrink the window instead.** Twice my rows rode into another session's commit; once I
+destroyed three of theirs with `git checkout`; once they destroyed 84 uncommitted rows
+including twelve of mine, and said so in their own commit subject. Every instance had the
+same shape: rows appended to `scripts/mutations-kourtv2.json`, then MINUTES of guards and
+suites, then a commit — with the whole verification window open for the other writer to
+read-modify-write over.
+
+The fix is ordering, not discipline. Verify the ROWS first, by ablating each mutation
+directly (`scratchpad/ablate.py`) while the corpus file is untouched, and only then append
+and commit in ONE command: append, run `make anchors` and read its exit status, stage,
+commit. The window drops from minutes to seconds, and the batch survives in the scratchpad
+either way — every sweep here kept its batch JSON, which is the only reason twelve
+destroyed rows cost nothing but a re-append.
+
+Rejected, deliberately: splitting the corpus per author or per topic.
+`check-mutation-anchors.py` globs `scripts/mutations-*.json`, so a second file WOULD be
+picked up with no tooling change — but a corpus that answers "what does this repo pin" out
+of N files is worse for every future reader than a race that now closes in seconds, and
+per-topic naming does not remove the race anyway, it just moves it to whoever else touches
+that topic.
+
 **ADDING CODE CAN BREAK AN EXISTING CORPUS ROW, which is not obvious and is the reason
 `make anchors` belongs before every commit and not just the ones that touch a mutated
 line.** A row anchors on source TEXT, so a new function that happens to reuse an

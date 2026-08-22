@@ -7211,5 +7211,89 @@
   "label": "CreateFolderIn: the parent is ignored, so every subfolder is filed at the root",
   "find": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parentID})",
   "replace": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: 0})"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: a pending approval goes stale one block late",
+  "find": "\t\tif now >= a.openedAt+pendingTTLBlocks {",
+  "replace": "\t\tif now > a.openedAt+pendingTTLBlocks {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: the same moderator may approve twice",
+  "find": "\tif a.approvers.Has(who.String()) {\n\t\treturn false, \"\"\n\t}",
+  "replace": "\tif !a.approvers.Has(who.String()) {\n\t\treturn false, \"\"\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: an act needs one MORE than the threshold",
+  "find": "\tif a.approvers.Size() >= m {",
+  "replace": "\tif a.approvers.Size() > m {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: a fired approval is left in the pending tree",
+  "find": "\t\tpending.Remove(key)\n\t\treturn true, a.reason",
+  "replace": "\t\treturn true, a.reason"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: the LAST approver's reason is recorded, not the first",
+  "find": "\t\treturn true, a.reason",
+  "replace": "\t\treturn true, reason"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: every approval restarts the deadline, so it slides",
+  "find": "\t\ta = v.(*approval)\n",
+  "replace": "\t\ta = v.(*approval)\n\t\ta.openedAt = now\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "requireMod: only a NON-member may act as a moderator",
+  "find": "\tif !cm.members.Has(who.String()) {",
+  "replace": "\tif cm.members.Has(who.String()) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "requireActiveMod: a suspended set may act and an active one may not",
+  "find": "\tif cm.suspended {\n\t\tpanic(\"kourtv2: this moderator set is suspended",
+  "replace": "\tif !cm.suspended {\n\t\tpanic(\"kourtv2: this moderator set is suspended"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "SetPurgeThreshold: a threshold outside 1..n is accepted",
+  "find": "\tif m < 1 || m > d.n {",
+  "replace": "\tif m < 1 && m > d.n {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "SetPurgeThreshold: changing the bar keeps the signatures banked under the old one",
+  "find": "\tif m != d.purgeM {\n\t\t// Lowering the bar",
+  "replace": "\tif false {\n\t\t// Lowering the bar"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "TransferGlobalAdmin: seating a fresh key keeps the banked signatures",
+  "find": "\t\tclearPendingOnMembershipChange(&d.pending)\n\t}\n\td.admin = to",
+  "replace": "\t}\n\td.admin = to"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "checkReason: a moderation reason may be any length",
+  "find": "\tif len(reason) > maxReasonLen {",
+  "replace": "\tif len(reason) > maxReasonLen*1000 {"
  }
 ]
