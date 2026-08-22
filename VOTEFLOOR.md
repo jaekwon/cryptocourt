@@ -206,6 +206,27 @@ reason worth remembering: 8 shards saturated the machine, no shard reported for 
 hours, and `realm/` was edited under it twice before I understood that mutate
 re-stages per row.
 
+**How to run the full corpus while somebody else is editing the tree — run it from a
+CLONE.** mutate stages the realm sources from the repo it is invoked in, per row, so a
+concurrent session's commits land inside a long run and produce rows that report `INVALID
+(did not build)` for no reason. A `git clone --depth 1` of HEAD into the scratchpad is
+immune, and it also frees the working tree for ordinary work while the run proceeds:
+
+    git clone -q --depth 1 --no-hardlinks file:///…/cryptocourt-mod $S/corpusrun
+    cd $S/corpusrun
+    export GNOROOT=/Users/jk/gopath/src/github.com/gnolang/gno   # REQUIRED, see below
+    for f in $S/slices/s*.json; do python3 scripts/mutate-parallel.py "$f" --shards 5; done
+
+The GNOROOT export is not optional and the failure is obscure: `gno env GNOROOT` derives
+its answer from the CURRENT DIRECTORY, so inside the scratchpad it returns a plausible
+path that does not exist, `gnoroot.real_root()` turns that into `""`, and every shard
+dies with `FileNotFoundError: ''` from `os.listdir("")`. Set it to the real gno checkout
+and the clone behaves exactly like the repo. Slice into 60-row files and append each
+slice's verdict to a log as it finishes, so a reaped run loses at most the slice in
+flight and the log says where to resume. Measured cadence on this machine, with another
+session working: **11 minutes per 60-row slice at 5 shards**, so a 983-row pass is about
+three hours.
+
 **A transient staging failure that looks exactly like a broken tree.** `t.sh` and
 `realm-test` occasionally fail with `package "gno.land/p/kourt/bptree/v0" is not
 available` and `[setup failed]` against a path in the module cache. That package does not
