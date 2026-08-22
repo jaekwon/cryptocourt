@@ -72,17 +72,7 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	// defence-in-depth. TestSettleRetainsNothingAfterDustLowNoSlash is the fixture
 	// that isolates the former (a consumed slot with no slash reserved).
 	if cs.answerBond > 0 {
-		reserve := int64(0)
-		if cs.pendingSlash == 0 && !cs.slotConsumed {
-			reserve = slashSizeFor(cs)
-			if reserve > cs.answerBond {
-				reserve = cs.answerBond
-			}
-		}
-		if refund := cs.answerBond - reserve; refund > 0 {
-			c.coin.Transfer(c.escrow, cs.answerer, refund)
-		}
-		cs.answerBond = reserve
+		settleAnswerBond(c, cs)
 	}
 	releasePriority(c, cs.answerer, claimID)
 }

@@ -641,6 +641,38 @@ func slashSizeFor(cs *claimState) int64 {
 	return slashSizeAt(cs.xBarFrozen, hi, lo)
 }
 
+// settleAnswerBond carves the slash reserve out of the answer bond at a terminal
+// path, refunds the remainder to the answerer, and leaves the bond holding the
+// reserve and nothing else.
+//
+// ONE COPY BECAUSE THE CODE ASKED FOR ONE. Finalize (dispute.gno) and
+// SettleUndisputed (session.gno) ran these ten lines character-identically, and
+// dispute.gno's own note names that as the goal: "the two terminal paths finally
+// share ONE predicate, which is the v0.44 symmetry goal". They shared it by
+// being retyped in both places. Now they share it by construction. The corpus
+// was paying for the copy in the open — M3-HIGH-1 stood as TWO rows with
+// byte-identical find and replace, one aimed at each path.
+//
+// pendingSlash == 0 is defence-in-depth and !slotConsumed is the load-bearing
+// clause (pendingSlash > 0 implies slotConsumed on this straight-line path);
+// session.gno records which fixture isolates which. The caller keeps its own
+// `if cs.answerBond > 0` guard: each terminal path has its own reason to be
+// standing there and its own note about it, and what is shared is only what
+// happens once it is.
+func settleAnswerBond(c *Court, cs *claimState) {
+	reserve := int64(0)
+	if cs.pendingSlash == 0 && !cs.slotConsumed {
+		reserve = slashSizeFor(cs)
+		if reserve > cs.answerBond {
+			reserve = cs.answerBond
+		}
+	}
+	if refund := cs.answerBond - reserve; refund > 0 {
+		c.coin.Transfer(c.escrow, cs.answerer, refund)
+	}
+	cs.answerBond = reserve
+}
+
 // bountyFor is the A19-shaped bounty: min(the flagger's own bond, 80% × the
 // CC that actually burned on the outcome). Floors; never negative.
 func bountyFor(bond, burned int64) int64 {

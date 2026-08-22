@@ -758,30 +758,23 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "M3-HIGH-1: SettleUndisputed returns the WHOLE bond",
-  "find": "\t\t\treserve = slashSizeFor(cs)\n\t\t\tif reserve > cs.answerBond {",
-  "replace": "\t\t\treserve = 0\n\t\t\tif reserve > cs.answerBond {"
+  "file": "quality.gno",
+  "label": "M3-HIGH-1: a terminal path returns the WHOLE bond",
+  "find": "\t\treserve = slashSizeFor(cs)\n\t\tif reserve > cs.answerBond {",
+  "replace": "\t\treserve = 0\n\t\tif reserve > cs.answerBond {"
  },
  {
   "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "M3-HIGH-1: Finalize returns the WHOLE bond",
-  "find": "\t\t\treserve = slashSizeFor(cs)\n\t\t\tif reserve > cs.answerBond {",
-  "replace": "\t\t\treserve = 0\n\t\t\tif reserve > cs.answerBond {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "session.gno",
+  "file": "quality.gno",
   "label": "M3-HIGH-1: settle retains only HALF the slash size",
-  "find": "\t\t\treserve = slashSizeFor(cs)\n\t\t\tif reserve > cs.answerBond {",
-  "replace": "\t\t\treserve = slashSizeFor(cs) / 2\n\t\t\tif reserve > cs.answerBond {"
+  "find": "\t\treserve = slashSizeFor(cs)\n\t\tif reserve > cs.answerBond {",
+  "replace": "\t\treserve = slashSizeFor(cs) / 2\n\t\tif reserve > cs.answerBond {"
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
+  "file": "quality.gno",
   "label": "settle does not shrink answerBond to the reserve",
-  "find": "\t\tcs.answerBond = reserve",
+  "find": "\tcs.answerBond = reserve",
   "replace": ""
  },
  {
@@ -2277,24 +2270,24 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "SettleUndisputed: nothing is retained for a later slash (M3-HIGH-1)",
-  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\t\tif false {"
+  "file": "quality.gno",
+  "label": "settleAnswerBond: nothing is retained for a later slash (M3-HIGH-1)",
+  "find": "\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "SettleUndisputed: the retained reserve is forgotten",
-  "find": "\t\tcs.answerBond = reserve",
-  "replace": "\t\tcs.answerBond = 0"
+  "file": "quality.gno",
+  "label": "settleAnswerBond: the retained reserve is forgotten",
+  "find": "\tcs.answerBond = reserve",
+  "replace": "\tcs.answerBond = 0"
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "SettleUndisputed: the whole bond refunds AND the reserve is kept",
-  "find": "\t\tif refund := cs.answerBond - reserve; refund > 0 {",
-  "replace": "\t\tif refund := cs.answerBond; refund > 0 {"
+  "file": "quality.gno",
+  "label": "settleAnswerBond: the whole bond refunds AND the reserve is kept",
+  "find": "\tif refund := cs.answerBond - reserve; refund > 0 {",
+  "replace": "\tif refund := cs.answerBond; refund > 0 {"
  },
  {
   "pkg": "kourtv2",
@@ -2358,13 +2351,6 @@
   "label": "Finalize: a consumed slot's low is reset to mid",
   "find": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
   "replace": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "Finalize: nothing is retained for a later slash (M3-HIGH-1 twin)",
-  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\t\tif false {"
  },
  {
   "pkg": "kourtv2",
@@ -5743,10 +5729,10 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "Finalize: a reserve is retained on an ALREADY-adjudicated slot",
-  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\t\tif cs.pendingSlash == 0 {"
+  "file": "quality.gno",
+  "label": "settleAnswerBond: a reserve is retained on an ALREADY-adjudicated slot",
+  "find": "\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\tif cs.pendingSlash == 0 {"
  },
  {
   "pkg": "kourtv2",
@@ -7964,17 +7950,17 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "SettleUndisputed: a slash reserve is withheld even when one is already pending",
-  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\t\tif cs.pendingSlash == 0 || !cs.slotConsumed {"
+  "file": "quality.gno",
+  "label": "settleAnswerBond: a slash reserve is withheld even when one is already pending",
+  "find": "\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\tif cs.pendingSlash == 0 || !cs.slotConsumed {"
  },
  {
   "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "SettleUndisputed: a zero refund is still transferred",
-  "find": "\t\tif refund := cs.answerBond - reserve; refund > 0 {",
-  "replace": "\t\tif refund := cs.answerBond - reserve; refund >= 0 {"
+  "file": "quality.gno",
+  "label": "settleAnswerBond: a zero refund is still transferred",
+  "find": "\tif refund := cs.answerBond - reserve; refund > 0 {",
+  "replace": "\tif refund := cs.answerBond - reserve; refund >= 0 {"
  },
  {
   "pkg": "kourtv2",

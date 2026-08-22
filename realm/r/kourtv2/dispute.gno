@@ -595,17 +595,7 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 		// ONE predicate, which is the v0.44 symmetry goal. v0.43's proof that an
 		// overturn cannot retain now rests on one lock instead of two — the
 		// enclosing `answerBond > 0` (decidedRounds++ was the second).
-		reserve := int64(0)
-		if cs.pendingSlash == 0 && !cs.slotConsumed {
-			reserve = slashSizeFor(cs)
-			if reserve > cs.answerBond {
-				reserve = cs.answerBond
-			}
-		}
-		if refund := cs.answerBond - reserve; refund > 0 {
-			c.coin.Transfer(c.escrow, cs.answerer, refund)
-		}
-		cs.answerBond = reserve
+		settleAnswerBond(c, cs)
 	}
 	// The record moves once, from the final verdict (P13) — and "upheld"
 	// means a DECIDED vote upheld it AGAINST real opposition: quorum-less
