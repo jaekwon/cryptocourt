@@ -7197,5 +7197,19 @@
   "label": "CourtStakeOpenDelay answers for a court that does not exist instead of refusing",
   "find": "func CourtStakeOpenDelay(courtSlug string) int64 {\n\treturn",
   "replace": "func CourtStakeOpenDelay(courtSlug string) int64 {\n\tif !courts.Has(courtSlug) {\n\t\treturn 0\n\t}\n\treturn"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "RestoreFolder: a purged folder is restorable, so one moderator undoes an m-of-n purge",
+  "find": "\tif f.purged {\n\t\tpanic(\"kourtv2: a purged folder cannot be restored\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "CreateFolderIn: the parent is ignored, so every subfolder is filed at the root",
+  "find": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parentID})",
+  "replace": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: 0})"
  }
 ]
