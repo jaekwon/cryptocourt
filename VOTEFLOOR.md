@@ -1124,15 +1124,28 @@ harness it names:
 
 Every one honest, each failing at a specific line with a specific complaint.
 
-**THE ROT PATH IS REAL AND CURRENTLY UNWATCHED, and I am not building the watcher.** If a
-txtar is edited to drop one of those assertions, the row stays surviving in `make gaps` —
-which is exactly what it is supposed to do — and nothing notices the excuse went hollow. A
-`make elsewhere` target would close it: apply each row's mutation, run only its named
-harness, require failure. What makes it more than an afternoon is that the two harness kinds
-need different plumbing — a txtar runs against a staged GNOROOT the way mutate already
-stages, while check-read-purity reads the REPO — plus restore-on-failure discipline and its
-own control arm, and a half-built guard is worse than none. The recipe above is written out
-so re-running it by hand is mechanical rather than a re-derivation.
+**THE ROT PATH IS NOW WATCHED, and the reason first given for leaving it alone was
+wrong.** That reason was: the two harness kinds need different plumbing, because a txtar
+runs against a staged GNOROOT while check-read-purity reads the REPO. They do not. The txtar
+harness stages realms into GNOROOT/examples FROM THE REPO, and the guards read the repo
+directly, so BOTH kinds see a mutation applied to realm/ in place. One code path serves
+both: mutate the repo, run the named harness, require failure, restore. The whole sweep is
+25 seconds, not the afternoon it was estimated at — wrong on the plumbing and wrong on the
+cost.
+
+`scripts/check-elsewhere.py` (target `elsewhere-test`, in `make check`) does it, and the
+rot it closes has no other watcher: if a txtar loses one of those assertions the row keeps
+surviving in `make gaps`, which is the EXPECTED result there, so nothing else can tell.
+Ablated both ways — weakening the assertion inside kourtv2_paymentauth.txtar makes it name
+the row and say "the harness PASSED under the mutation, so it does not assert this
+property", and renaming the `elsewhere` key makes it report "measuring nothing" rather than
+a clean tree.
+
+**IT MUTATES THE REPO IN PLACE, which mutate.py refuses to do for a good reason** — a killed
+run leaves a mutation behind, invisible in `git status` if the file was already dirty. So
+every write is paired with a restore in a `finally`, and the bytes are compared afterwards;
+a mismatch is reported as a failure OF THIS SCRIPT rather than as a finding about the row.
+Run it on a clean tree.
 
 **AN `elsewhere` IS A PROMISE ABOUT A ROUTINE, so check the routine and not just the
 path.** Resolving was never the whole question. The annotation says "that harness covers

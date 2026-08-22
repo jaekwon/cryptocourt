@@ -138,6 +138,7 @@ EPOCHCOH = "scripts/check-epoch-coherence.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
 SPENDPATH = "scripts/check-spend-paths.py"
+ELSEWHERE = "scripts/check-elsewhere.py"
 ABORTASRT = "scripts/check-abort-assertions.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
@@ -676,6 +677,25 @@ control("the reachable package set coming back empty", ABORTASRT,
         'ALWAYS = set()\nIMPORT = re.compile(r"NOTHINGMATCHESTHIS")',
         "scanning for a shape the tree no longer has",
         argv=["python3", ABORTASRT])
+
+print("\ncheck-elsewhere")
+# The third level of the `elsewhere` question. A row carrying one is excused from the
+# mutation harness because something ELSE objects; if that something stops objecting,
+# the row keeps surviving in `make gaps` — the expected result there — and nothing
+# notices the excuse went hollow. So the plant weakens the assertion inside a named
+# txtar and requires the check to say the harness no longer holds the property.
+control("a named txtar that stopped asserting", "gnoland/testdata/kourtv2_paymentauth.txtar",
+        "stderr 'direct user call'",
+        "stderr ''",
+        "does not assert this property",
+        argv=["python3", ELSEWHERE])
+# Fail CLOSED: the annotation renamed out from under the collector leaves it checking
+# nothing, which would report clean for ever.
+control("the elsewhere annotation renamed", ELSEWHERE,
+        'if r.get("elsewhere"):',
+        'if r.get("elsewhereNOPE"):',
+        "measuring nothing",
+        argv=["python3", ELSEWHERE])
 
 print("\ncheck-paths")
 # Every want below NAMES THE FILE the mutation exposes. An earlier version of

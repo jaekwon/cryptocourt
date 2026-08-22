@@ -1,4 +1,4 @@
-.PHONY: check check-frozen realm-test chain-test txtar-test isolation-test mutate gaps selftest fmt vet gotest chat anchors paths guards staleguards \
+.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors paths guards staleguards \
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
@@ -59,7 +59,7 @@ check-frozen:
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors paths guards staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test
+check: fmt vet gotest anchors paths guards staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test elsewhere-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -289,6 +289,12 @@ scenarios-check:
 	done; \
 	[ $$rc -eq 0 ] && echo "scenarios-check: every generated txtar matches its scenario."; \
 	exit $$rc
+
+# Every `elsewhere` row's named harness must OBJECT to that row's mutation — level 3 of
+# the annotation's three questions (resolves / is run / asserts). Applies the mutation to
+# the repo in place and restores it, so run it on a clean tree. Measured ~25s.
+elsewhere-test:
+	@python3 scripts/check-elsewhere.py
 
 txtar-test:
 	@root=$$(python3 scripts/gnoroot.py build --label txtar --pid $$$$) || exit 1; \
