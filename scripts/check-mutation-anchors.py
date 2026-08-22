@@ -89,6 +89,7 @@ this said "the corpus's one" and there are three.)
 import glob
 import json
 import os
+import re
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -115,6 +116,57 @@ MAY_BE_EMPTY = {
 REQUIRED = ("file", "find", "replace")
 
 
+# AN `elsewhere` IS A PROMISE ABOUT A ROUTINE, so check the routine. The annotation says
+# "this row survives here BY DESIGN, that harness covers it" — worth exactly as much as the
+# chance anybody runs that harness. Measured when this was written: six of the seven
+# elsewhere rows named txtar scripts, and `make check` did not reach txtar-test at all, so
+# six promises rested on a suite only ever run by hand.
+#
+# THE FIRST VERSION OF THIS CHECK WAS VACUOUS, and the way it failed is the whole reason the
+# rule is shaped as it is. It asked whether the path — or any ancestor directory of it —
+# appeared in a recipe reachable from `check`, so gnoland/testdata matched scenarios-check,
+# a target that REGENERATES the scenario txtars and cmps them for staleness and never runs
+# one. Both arms of the ablation reported "covered": with txtar-test in check and with it
+# removed. A check that cannot go red is not a check, and being mentioned in a recipe is not
+# being executed by it.
+#
+# So the question is EXECUTION, and it is answered per kind of harness, because "what runs
+# this" has a different answer for a txtar script than for a python guard. An extension this
+# does not know is a FAILURE and not a pass: an unrecognised harness is precisely the case
+# where nobody has thought about whether it runs.
+def routinely_run(path, src=None):
+    if src is None:
+        mk = os.path.join(REPO, "Makefile")
+        if not os.path.isfile(mk):
+            return True, ""  # no Makefile to judge; not this guard's business
+        src = open(mk, encoding="utf-8", errors="ignore").read()
+    deps, bodies = {}, {}
+    for m in re.finditer(r"^([a-z][a-z0-9-]*):([^\n=]*)\n((?:\t[^\n]*\n)*)",
+                         src, re.M):
+        deps[m.group(1)] = m.group(2).split()
+        bodies[m.group(1)] = m.group(3)
+    seen, stack = set(), ["check"]
+    while stack:
+        t = stack.pop()
+        if t in seen:
+            continue
+        seen.add(t)
+        stack.extend(deps.get(t, []))
+    hay = "\n".join(bodies.get(t, "") for t in sorted(seen))
+    if path.endswith(".txtar"):
+        # One executor in this tree: the tagged go test over ./gnoland/. Nothing else
+        # can run a txtar script, so its presence is the whole question.
+        if re.search(r"go test\b[^\n]*-tags[= ]txtar", hay):
+            return True, ""
+        return False, "no `go test -tags txtar` runs in check"
+    if path.endswith(".py"):
+        if re.search(r"python3?\s+" + re.escape(path), hay):
+            return True, ""
+        return False, "no `python3 %s` runs in check" % path
+    return False, ("this guard does not know what executes a %s harness, so it cannot "
+                   "tell whether anything does" % (os.path.splitext(path)[1] or "extensionless"))
+
+
 def row_verdicts(rows, resolve):
     """Problems visible in ONE row. `resolve(pkg, file)` returns (path, text),
     text None when the file is missing; (None, None) when the pkg is unknown.
@@ -139,6 +191,13 @@ def row_verdicts(rows, resolve):
             bad.append("STALE ELSEWHERE %r on %r names a file that does not "
                        "exist.\n                An excuse pointing at nothing is "
                        "worse than no excuse." % (where, label or "<unlabelled>"))
+        elif where:
+            ran, why = routinely_run(where)
+            if not ran:
+                bad.append("UNRUN ELSEWHERE %r on %r: %s.\n                An excuse is "
+                           "only as good as the routine behind it — six of these pointed "
+                           "at txtar scripts while txtar-test sat outside check."
+                           % (where, label or "<unlabelled>", why))
         pkg = r.get("pkg", "govern")
         path, text = resolve(pkg, r["file"])
         if path is None:
@@ -257,6 +316,31 @@ CROSS_FIXTURES = [
 ]
 
 
+# The reachability rule's own fixtures. The FOURTH one is the whole point: the first
+# version of this check passed a txtar whose directory merely appeared in a staleness
+# comparison, so both arms of its ablation reported "covered". A runner that exists in a
+# target `check` never reaches is exactly that mistake, spelled out.
+IN_CHECK = "check: realm-test txtar-test\n\ntxtar-test:\n\tgo test -tags txtar ./gnoland/\n"
+NO_RUNNER = "check: realm-test\n\nrealm-test:\n\tgno test .\n"
+UNREACHED = ("check: realm-test\n\nrealm-test:\n\tgno test .\n\n"
+             "txtar-test:\n\tgo test -tags txtar ./gnoland/\n")
+MENTIONED = ("check: scenarios-check\n\nscenarios-check:\n"
+             "\tcmp -s gnoland/testdata/x.txtar $$tmp/x.txtar\n")
+PY_IN = "check: realm-test\n\nrealm-test:\n\tpython3 scripts/g.py || exit 1\n"
+
+RUN_FIXTURES = [
+    ("gnoland/testdata/a.txtar", IN_CHECK, True),
+    ("gnoland/testdata/a.txtar", NO_RUNNER, False),
+    ("gnoland/testdata/a.txtar", UNREACHED, False),
+    ("gnoland/testdata/a.txtar", MENTIONED, False),
+    ("scripts/g.py", PY_IN, True),
+    ("scripts/other.py", PY_IN, False),
+    # An unrecognised harness is a failure, not a pass: not knowing what runs it is
+    # precisely the case where nobody has checked that anything does.
+    ("docs/NOTES.md", IN_CHECK, False),
+]
+
+
 def selftest():
     bad = []
     for rows, want in ROW_FIXTURES:
@@ -265,6 +349,12 @@ def selftest():
     for pairs, want in CROSS_FIXTURES:
         got = "\n".join(cross_verdicts(pairs))
         bad += _check(got, want, "cross")
+    for path, src, want in RUN_FIXTURES:
+        ran, why = routinely_run(path, src)
+        if ran != want:
+            bad += ["SELFTEST routinely_run(%r) returned %s, wanted %s%s.\n"
+                    "         The elsewhere rule is the one that already went vacuous "
+                    "once." % (path, ran, want, " (" + why + ")" if why else "")]
     return bad
 
 
@@ -372,7 +462,8 @@ def main():
         return 1
     print("check-mutation-anchors: %d row(s) across %d corpus file(s) each anchor "
           "exactly once and appear once, %d fixture(s) hold. (%s)"
-          % (total, len(corpora), len(ROW_FIXTURES) + len(CROSS_FIXTURES),
+          % (total, len(corpora),
+             len(ROW_FIXTURES) + len(CROSS_FIXTURES) + len(RUN_FIXTURES),
              ", ".join("%s: %d" % (os.path.basename(k), v)
                        for k, v in sorted(counts.items()))))
     return 0

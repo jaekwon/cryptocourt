@@ -379,6 +379,29 @@ survives every suite and fails `check-read-purity.py` with
 `elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
 resolves, so the annotation cannot rot into a shrug.
 
+**AN `elsewhere` IS A PROMISE ABOUT A ROUTINE, so check the routine and not just the
+path.** Resolving was never the whole question. The annotation says "that harness covers
+this", which is worth exactly as much as the chance anybody runs that harness — and
+measured on the target graph, six of the seven `elsewhere` rows named `.txtar` scripts
+while `make check` did not reach `txtar-test` at all. Six rows excused by a suite the
+routine never ran. `txtar-test` is now in `check`: it is 36s of the several minutes
+`check` already costs, and it is the only harness where the deployer is the caller, so
+several arming gates are unreachable anywhere else. check-mutation-anchors now requires
+each `elsewhere` to be EXECUTED by something reachable from `check`.
+
+**A REACHABILITY CHECK THAT ASKS "IS IT MENTIONED" IS VACUOUS.** The first version of
+that rule looked for the path, or any ancestor directory of it, in the recipes `check`
+reaches. It passed — and it passed identically with `txtar-test` REMOVED, because
+`gnoland/testdata` appears in `scenarios-check`, which regenerates the scenario txtars
+and `cmp`s them for staleness and never runs one. Both arms of the ablation reported
+"covered", which is the only reason the vacuity was visible at all: **run the ablation
+even when the check is already green, because green is what a vacuous check returns.**
+The rule now asks about EXECUTION and answers per kind of harness — `go test -tags
+txtar` for a txtar, `python3 <path>` for a guard — and an extension it does not
+recognise is a FAILURE, since not knowing what runs a harness is precisely the case
+where nobody has checked that anything does. Its seven fixtures include the unreached
+runner and the mentioned-but-not-run directory, the two shapes that fooled it.
+
 **Operator classes that are INVALID BY CONSTRUCTION — do not spend a suite run on
 them.** A sweep of emission.gno flipped every comparison in the file and most of them
 cannot change the program at all. Recognise these on sight rather than measuring them:

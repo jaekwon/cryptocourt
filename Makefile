@@ -59,7 +59,7 @@ check-frozen:
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors paths guards staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test
+check: fmt vet gotest anchors paths guards staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
