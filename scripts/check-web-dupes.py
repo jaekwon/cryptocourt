@@ -88,12 +88,15 @@ def main():
             seen[m.group(1)].append((CHAT.name, ctext[:m.start()].count("\n") + 1))
 
     # A page with no declarations at all would pass every check below having
-    # asked nothing. There were 156 when this was written.
+    # asked nothing. The threshold is well under the real figure across both
+    # shipped files, and deliberately not pinned to it: a count in a comment
+    # drifts every time somebody writes a function, and this one only has to
+    # separate "the scan works" from "the scan found nothing".
     if len(seen) < 100:
-        print(f"check-web-dupes: only {len(seen)} top-level function(s) found in "
-              f"{PAGE.name} — the scan has lost its anchor (a changed script "
-              f"delimiter or indentation style) and would pass vacuously.",
-              file=sys.stderr)
+        print(f"check-web-dupes: only {len(seen)} top-level function(s) found "
+              f"across {PAGE.name} and {CHAT.name} — the scan has lost its anchor "
+              f"(a changed script delimiter or indentation style) and would pass "
+              f"vacuously.", file=sys.stderr)
         return 1
 
     dupes = {k: v for k, v in seen.items() if len(v) > 1}

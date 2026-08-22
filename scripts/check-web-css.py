@@ -91,8 +91,11 @@ while i < len(css):
         # declaration in between, and a naive balance check sees a tidy pair —
         # which is exactly what the CSS parser sees, and why this needs its own
         # test. The signature is braces: prose does not open a rule it fails to
-        # close. Measured on this file, all 78 comments balance their braces, so
-        # an unbalanced one means real CSS is inside a comment.
+        # close. Every comment in this file balances its braces, so an
+        # unbalanced one means real CSS is inside a comment. No count is pinned
+        # here on purpose — it was written as "all 78", it is 79 today, and it
+        # would be wrong again next time somebody explains a rule. The loop
+        # below measures the property; prose does not need to restate it.
         body = css[i:j]
         if body.count("{") != body.count("}"):
             bad.append("line %d: a comment contains %d '{' and %d '}' — an "
