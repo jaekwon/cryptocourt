@@ -497,6 +497,28 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE ADJACENCY LESSON, APPLIED BACKWARDS TO AN OLDER GAP.** `Minted: the down-correction
+overshoots` says "MASKED BY THE OTHER LOOP, and no single-mutation row can be written", and
+that is true — the down-loop's `cst <= coin` and the up-loop's `cst > coin` repair each
+other, so nudging either alone survives. But the same row already recorded the joint
+measurement: nudging BOTH fails three curve tests. And the two loops sit next to each
+other, separated by one comment line.
+
+So the pair takes ONE `find`, exactly like the quality-bar clamps: added as `Minted: BOTH
+correction loops are nudged, so the buyer is short-changed`, measured caught, 0 not caught
+of 1. The surviving half stays in KNOWN-GAPS with a cross-reference, because it carries
+information the joint row does not — WHY that half cannot be pinned alone.
+
+**Two records that name different tests can both be right.** The gap row quotes
+TestMintedIsMaximalAndNeverShortChangesTheBuyer; the harness reported
+TestLargeValuesStayInside128Bits. Three tests fail on this mutation and a shard reports the
+first it hits, so neither record is wrong — but a reader comparing them would think one was,
+which is why the row now says so.
+
+**The rule to carry forward: "no single-mutation row can be written" is a statement about
+the halves, never about the pair.** Whenever that phrase appears in a gap's reason, check
+whether the overlapping checks are CONTIGUOUS — two of today's four masking pairs were.
+
 **AUDIT THE AUDIT RECORD: A GAP THAT INVITED CONSTRUCTION, CONSTRUCTED.** The 23
 KNOWN-GAPS rows each claim to be unpinnable, and those claims age. Re-reading them all,
 one carried an explicit invitation — `Cost: the int64 ceiling is off by one`, "NOT
