@@ -1278,6 +1278,20 @@ else:
         print(f"  {'and the exit code says so':<44} SILENT — exited 0")
         failures.append("a dead shard exits nonzero")
 
+    # AN EMPTY BATCH IS THE CHEAPEST NON-RESULT OF ALL, and it read as a pass for
+    # the whole life of the file: `[]` decodes, no shard dies, and the verdict is
+    # "0 not caught ... of 0" at exit 0. The way to reach it is a filtered batch
+    # whose filter matched nothing — which is how every ad-hoc batch here is built.
+    lbl = "an empty batch is refused, not reported"
+    r = subprocess.run(["python3", "scripts/mutate-parallel.py", "--shards", "2"],
+                       input="[]", capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    if r.returncode != 0 and "measure nothing" in out:
+        print(f"  {lbl:<44} fires")
+    else:
+        print(f"  {lbl:<44} SILENT — exit {r.returncode} on zero rows")
+        failures.append(lbl)
+
     # A HUNG BASELINE IS NOT A RED ONE, and this arm exists because the two
     # already drifted once. The driver knows a shard's baseline failed by a string
     # in its stderr OR by `code == 2` — and `code == 2` was dead for the whole

@@ -299,6 +299,48 @@ Waiting for PID 97216 gave `anchors exit=0`, 1212 rows across 2 corpus files. A 
 distinguishes its own failure modes in PROSE is worth the extra lines; a caller that reads only
 the number throws that away.
 
+**THEN THE SAME CLASS TURNED UP IN THE HARNESS ITSELF, WHICH IS WHERE IT COSTS MOST.** Having
+made the mistake three times in one session — an `&&` chain carrying past a failure, a `;` where
+a gate belonged, and `${PIPESTATUS[0]}` which is EMPTY in zsh so the gate never gated at all —
+the question worth asking was whether the repo's own build swallows status the same way. Two
+candidates, and the interesting part is that they went opposite ways.
+
+**`mutate-parallel.py` reported a green verdict over ZERO measurements.** `[]` is valid JSON, so
+it survives the decoder, no shard dies, and the run prints `0 not caught (survived, invalid, or
+never applied), of 0` and exits **0**. Its own docstring forbids exactly this — *"a shard whose
+rows never ran must not be able to look like a shard whose rows all passed"* — and the file
+already carried a fix for the neighbouring case (empty stdin surfacing as a clean exit under
+`| tail`), which is what makes the residual worth naming rather than shrugging at: the author
+had seen the class, closed one instance, and left the one next door.
+
+The live way to reach it is A FILTER THAT MATCHED NOTHING, which is how every ad-hoc batch in
+this session was built — a list comprehension over the corpus keyed on `label`, against a corpus
+that renames labels as the code moves. Every filtered batch all session could have measured zero
+rows and printed a pass. They did not, because each filter carried a hand-written
+`assert len(rows) == N`; but that was my discipline, not the tool's, and the tool is what the
+next person will trust. Zero rows is now refused, with a message that names the likely cause.
+
+    empty batch  ->  exit 2, "would measure nothing and still exit 0"
+    one row      ->  exit 1, past the guard, failing for its own reason (no over-fire)
+
+**`scenarios-check` was the hypothesis, and it was REFUTED.** Its work is driven by
+`for f in $$(python3 scripts/scenario.py --list-ci)`, and a dead generator gives zero iterations
+at exit 0 — the pattern, exactly. But the recipe has a SECOND loop that walks the existing
+txtars and requires each to appear in the list, so a dead generator makes all four fail that
+test and `rc=1` carries out. Measured on a scratch copy of the recipe with both call sites
+replaced by `false`: **exit 1 with 4 complaints**, against the real target's exit 0. It fails
+loudly, merely with a misleading message ("which is now CI = False" when the truth is that the
+generator died). Written up as a refutation rather than quietly dropped, because the reasoning
+that predicted a hole was sound and only the second loop saved it.
+
+**AND THE CONTROL FOR THE NEW ARM WAS BRIEFLY WRONG IN THE FAMILIAR WAY.** First attempt ran the
+pre-fix copy from the scratchpad: SILENT, as wanted — but at exit **1** with no verdict line,
+because a copy outside the repo cannot resolve its relative path to `scripts/mutate.py`. It was
+silent because it was broken, not because it tolerated zero rows. Re-run from inside `scripts/`
+it gave the real control: **SILENT at exit 0, printing `0 not caught … of 0`**. That is the third
+time this session an ablation passed for the wrong reason, and the tell each time was a detail
+that did not fit — here, an exit code of 1 where the hole predicts 0.
+
 **THE FULL-CORPUS PASS RAN, AND IT WAS NOT ALL GREEN — which is the whole reason to run
 one.** 983 rows in 17 slices of 60, 19:48 to 01:17, five and a half hours from an
 isolated clone at one commit: **979 caught, 3 surviving by design with an `elsewhere`

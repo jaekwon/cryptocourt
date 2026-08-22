@@ -76,6 +76,22 @@ def main():
             muts = json.loads(raw)
         except json.JSONDecodeError as e:
             ap.error(f"stdin was not a JSON batch: {e}")
+    # AND THE SAME MISTAKE ONE STEP LATER: `[]` is valid JSON. It survives the
+    # decode above, and the run then reports "0 not caught ... of 0" and exits 0 —
+    # a green verdict over zero measurements, which is the exact failure this file
+    # exists to prevent and which its own docstring forbids ("a shard whose rows
+    # never ran must not be able to look like a shard whose rows all passed").
+    #
+    # The live way to hit it is a FILTER THAT MATCHED NOTHING. Every ad-hoc batch
+    # here is built by piping a list comprehension over the corpus, and a `label`
+    # that has since been renamed yields `[]` rather than an error. `make gaps` can
+    # reach it too, by marking every gap row `slow`. A zero-row run is never a
+    # result worth having, so it is refused rather than reported.
+    if not muts:
+        ap.error("the batch is empty, so this run would measure nothing and still "
+                 "exit 0. If a filter built it, the filter matched no rows — check "
+                 "the labels against scripts/mutations-kourtv2.json, which renames "
+                 "them as the code moves.")
     n = a.shards or max(2, min(6, (os.cpu_count() or 4) // 2))
     n = min(n, len(muts)) or 1
 
