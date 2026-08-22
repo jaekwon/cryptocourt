@@ -497,6 +497,33 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE SANITISE POLICY HOLDS, AND THREE HYPOTHESES ABOUT IT DIED ON A GREP.** Render
+receives attacker-controlled input, and the house rule is that markdown output sanitises
+while exported READS return raw for the overlay to sanitise itself — stated in
+modrender.gno ("the ClaimBody read -> sanitize.Block ... Render's markdown ->
+sanitize.Blockquote"), enforced by nothing. Enumerating every non-comment line in the five
+markdown-building files that touches a user-text field (title, body, desc, name, tombstone,
+reason, code) gives 19 hits, 8 sanitised and 11 raw. Each of the three ways that looked like
+a hole was refuted:
+
+  UNSANITISED TEXT IN MARKDOWN. No. The raw hits are field ASSIGNMENTS, emptiness tests,
+  and the documented raw reads. FolderTree emits only ids, parents and flags.
+
+  AN INCONSISTENT PAIR. claimTitleFor wraps a tombstone as `"[removed · " +
+  sanitize.InlineText(...) + "]"` while FolderName wraps a purge code as `"[purged:" +
+  f.code + "]"`, raw — the same shape, one sanitised. Different CONTEXTS, both correct:
+  claimTitleFor feeds Render, FolderName is an exported read. Reading the enclosing
+  function is what settles it, not the line.
+
+  RENDER CONSUMING THE RAW READ. That would be the actual defect — raw text re-entering
+  markdown through the read. FolderName and FolderDesc have NO callers outside their own
+  definitions.
+
+NO GUARD WAS BUILT, and the enumeration above is why: a naive "user field on a line must be
+sanitised" check has 11 legitimate raw hits to allowlist, which is the nuisance shape that
+gets a check switched off. The policy is currently kept and the dataflow is shallow enough
+to re-run this enumeration by hand after any render work.
+
 **AN ABSENT AGGREGATE TEST IS NOT A GAP IF EVERY BREAKAGE IS INDIVIDUALLY CAUGHT.** The
 backlog says the senior queue is "essentially unswept", and one measurement seems to agree:
 NO test walks c.queue at all — grepped the suite for c.queue, .queue.Iterate and queueSeq,
