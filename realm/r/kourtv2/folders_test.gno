@@ -256,3 +256,63 @@ func TestFolderRulesAreEnforced(cur realm, t *testing.T) {
 		RenameFolder(cross(cur), "fru", fid, "Back Again", "undo the purge")
 	})
 }
+
+// NESTING (COURTS_STRUCTURE.md §6 sections). The guards are the whole feature:
+// a tree that can cycle is not a tree, and a depth cap nobody enforces is a
+// comment.
+func TestFolderNesting(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fn-alice")
+	testCourt(cur, "fnest", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "fnest", 1, alice)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	root := CreateFolder(cross(cur), "fnest", "Origins", "top")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	mid := CreateFolderIn(cross(cur), "fnest", root, "Laboratory", "second level")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	leaf := CreateFolderIn(cross(cur), "fnest", mid, "Sequence features", "third")
+
+	uassert.Equal(t, uint64(0), FolderParent("fnest", root))
+	uassert.Equal(t, root, FolderParent("fnest", mid))
+	uassert.Equal(t, mid, FolderParent("fnest", leaf))
+
+	// A CYCLE, refused. Putting the root inside its own grandchild.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "inside itself", func() {
+		MoveFolder(cross(cur), "fnest", root, leaf)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "cannot contain itself", func() {
+		MoveFolder(cross(cur), "fnest", mid, mid)
+	})
+
+	// THE DEPTH CAP COUNTS THE SUBTREE, not just the new parent. `root` is a
+	// 3-high subtree; hanging it under a 2-deep folder would make 5. Checking
+	// only the parent's depth would have allowed this, which is the bug the
+	// height walk exists for.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	other := CreateFolder(cross(cur), "fnest", "Elsewhere", "another root")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	deep := CreateFolderIn(cross(cur), "fnest", other, "One down", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "nest at most", func() {
+		MoveFolder(cross(cur), "fnest", root, deep)
+	})
+
+	// A LEAF still moves, and 0 returns a folder to the root.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	MoveFolder(cross(cur), "fnest", leaf, other)
+	uassert.Equal(t, other, FolderParent("fnest", leaf))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	MoveFolder(cross(cur), "fnest", leaf, 0)
+	uassert.Equal(t, uint64(0), FolderParent("fnest", leaf))
+}
+
+// A COURT WITHOUT MODERATION STATE answers 0 rather than allocating one — the
+// read-purity rule, pinned where it is easy to break by reaching for ensureMod.
+func TestFolderParentOnUnmoderatedCourt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fp-alice")
+	testCourt(cur, "fpar", alice, 10_000_000_000)
+	uassert.Equal(t, uint64(0), FolderParent("fpar", 1))
+}

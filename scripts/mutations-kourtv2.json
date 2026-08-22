@@ -6693,5 +6693,33 @@
   "label": "stakeIdxMine: a bucket key this code did not write counts as the holder's",
   "find": "func stakeIdxMine(pre, k string) bool { return len(k) == len(pre)+8 }",
   "replace": "func stakeIdxMine(pre, k string) bool { return true }"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: a court may hold unlimited folders",
+  "find": "\tif cm.folders.Size() >= maxFolders {\n\t\tpanic(\"kourtv2: this court already has \" + strconv.Itoa(maxFolders) + \" folders\")\n\t}\n\tif len(name) == 0",
+  "replace": "\tif len(name) == 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: MoveFolder ignores the moved subtree's own height",
+  "find": "\tcm.mustNestable(folderID, newParent, cm.folderHeight(folderID))",
+  "replace": "\tcm.mustNestable(folderID, newParent, 1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: a folder may be nested inside itself",
+  "find": "\t\tif up == id {\n\t\t\tpanic(\"kourtv2: that would put a folder inside itself\")\n\t\t}\n",
+  "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "emission.gno",
+  "label": "accrueSegment: the R_max pause banks one more segment AT the cap",
+  "find": "\tif c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail {",
+  "replace": "\tif c.reservoirR() > c.rMax() && c.cumAccrual >= c.reservedTail {"
  }
 ]
