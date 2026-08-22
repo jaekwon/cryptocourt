@@ -414,6 +414,25 @@ control("a guard that lost the tree it watches", EPOCHCOH,
         'KOURTV2 = ROOT / "realm" / "r" / "kourtv9_moved"',
         "measuring nothing", argv=["python3", EPOCHCOH])
 
+# ARM 13, the mint census. Arm 7 pins coin LEAVING a holder; nothing pinned coin
+# arriving, and the consequence is worse: an unaccounted mint is supply the dilution
+# ceiling cannot see, because emittedTotal feeds d_eff and only mintEmission updates
+# it while the two curve paths advance `minted` instead. Nothing goes wrong
+# arithmetically and the recipient's balance is correct, so only a census notices.
+control("a mint nothing accounts for", f"{KOURTV2}/emission.gno",
+        "func mintEmission(c *Court, to address, amount int64) {",
+        "func selfTestLeakMint(c *Court, to address, amount int64) {\n"
+        "\tc.coin.Mint(to, amount)\n}\n\n"
+        "func mintEmission(c *Court, to address, amount int64) {",
+        "[unaccounted-mint]", argv=["python3", EPOCHCOH])
+# THE RECEIVER GENERALITY IS THE ARM'S OWN BLIND SPOT, and it is not hypothetical:
+# meta's franchise mint is on `mc`, not `c`. Hardcoding the spelling counts two of
+# three and calls the census clean — the same mistake arm 7 records being widened for.
+control("the mint scan hardcoding one receiver", EPOCHCOH,
+        r'MINT = re.compile(r"^\s*" + RECV + r"\.coin\.Mint\(", re.M)',
+        r'MINT = re.compile(r"^\s*c\.coin\.Mint\(", re.M)',
+        "2 mint site(s), expected 3", argv=["python3", EPOCHCOH])
+
 print("\ncheck-nodelegate")
 # The ceiling (PastVotes) is delegation-aware; the floor (BalanceOf) is not. They
 # agree in kourtv2 for one reason only — nothing there can delegate — and the day

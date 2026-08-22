@@ -393,6 +393,37 @@ ESCROW_SRC = re.compile(RECV + r"\.coin\.(?:Transfer|Burn)\(" + RECV + r"\.escro
 GATE = re.compile(r"must(?:Spendable|Stakable)\(")
 COIN_OUT_N = 7  # see the audit above
 
+# ARM 13 — every mint is accounted, and there are exactly three of them.
+#
+# Arm 7 censuses coin leaving a holder's balance. Nothing censused coin ARRIVING, and
+# the two are not symmetric in consequence: an ungated outflow moves committed coin,
+# while an unaccounted mint breaks the DILUTION CEILING. emission.gno says so in one
+# line — "mintEmission is the ONLY emission mint: bounds-checked against the court's
+# own ledger and counted into emittedTotal (which feeds d_eff)" — and nothing enforced
+# it. A fourth mint site that skipped emittedTotal would emit real coin that the
+# ceiling could not see, silently, because no arithmetic goes wrong and the buyer's
+# balance is correct.
+#
+# THREE SITES, audited by hand rather than assumed, and every one of them pairs its
+# mint with the accounting that makes it legitimate:
+#
+#   buy.gno         c.minted += delta      then c.coin.Mint  — the curve
+#   meta.gno        mc.minted += delta     then mc.coin.Mint — the franchise claim,
+#                                                              sharing meta's own
+#                                                              monotone curve position
+#   emission.gno    c.coin.Mint            then c.emittedTotal = mustAdd(...)
+#
+# So the accounting sits ABOVE the mint on the curve paths and BELOW it in
+# mintEmission, which is why the window is +/-2 lines rather than "the lines above"
+# like arm 7's gate.
+#
+# The RECV spelling matters here more than anywhere: meta's mint is on `mc`, not `c`.
+# A pattern hardcoding `c.coin.Mint` would have counted two of three and called the
+# census clean — the exact blind spot arm 7 records having been widened for.
+MINT = re.compile(r"^\s*" + RECV + r"\.coin\.Mint\(", re.M)
+MINT_ACCT = re.compile(r"\.minted\s*\+=|\.emittedTotal\s*=")
+MINT_N = 3  # see the audit above
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -538,7 +569,7 @@ def main() -> int:
         return 1
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
-            "lockvote": 0}
+            "lockvote": 0, "mint": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -599,6 +630,21 @@ def main() -> int:
                                     f"three lines above it — the vote lock and the "
                                     f"stake lock both live in that call, so this "
                                     f"path bypasses both and nothing else notices")
+
+                # Arm 13, per file: count mints and require the accounting that
+                # makes each one legitimate within two lines either side.
+                for i, line in enumerate(lines):
+                    if not MINT.match(line):
+                        continue
+                    arm4["mint"] += 1
+                    near = lines[max(0, i - 2):i + 3]
+                    if not any(MINT_ACCT.search(l) for l in near):
+                        hits.append(f"[unaccounted-mint] {pkg}/{p.name}:{i+1} mints "
+                                    f"coin with neither a curve position advanced "
+                                    f"(.minted +=) nor emittedTotal updated within "
+                                    f"two lines — emission that the dilution ceiling "
+                                    f"cannot see, or curve supply the position does "
+                                    f"not record")
 
                 # Arm 8, per file: a lock row belongs to its own owner.
                 calls = LOCKVOTE_CALL.findall(src)
@@ -690,12 +736,14 @@ def main() -> int:
         ("stakable", STAKABLE_CALLS_N, "mustStakable caller(s)"),
         ("coin_out", COIN_OUT_N, "user-sourced coin movement(s)"),
         ("lockvote", LOCKVOTE_CALLS_N, "vote-lock site(s)"),
+        ("mint", MINT_N, "mint site(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
                    else "lock-exempt" if key == "stakable"
                    else "ungated-outflow" if key == "coin_out"
-                   else "foreign-lock" if key == "lockvote" else "one-weight")
+                   else "foreign-lock" if key == "lockvote"
+                   else "unaccounted-mint" if key == "mint" else "one-weight")
             why = ("a fourth lane locking votes has to be argued: every lock "
                    "row taxes its owner's own transfers, so the address it is "
                    "created for must be the caller and nothing else"
@@ -707,6 +755,11 @@ def main() -> int:
                    "second mustStakable caller is a second path disposing of "
                    "committed coin, and it would look entirely reasonable"
                    if key == "stakable" else
+                   "a fourth mint is coin the dilution ceiling cannot see: "
+                   "emittedTotal feeds d_eff and only mintEmission updates it, "
+                   "while the curve paths advance `minted` instead — a mint that "
+                   "does neither is supply nothing is counting"
+                   if key == "mint" else
                    "the quality vote lock releases on `verdictAt != 0 || closed`, "
                    "so a new way for a claim to END leaves those votes locked "
                    "forever and silently — read votelock.gno's voteLockQuality arm"
@@ -735,6 +788,7 @@ def main() -> int:
           f"weight source in the engine, one vote-weight expression, "
           f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
           f"{arm4['lockvote']} self-only vote-lock site(s), "
+          f"{arm4['mint']} accounted mint site(s), "
           f"one quality-question definition, {len(trims)} stake-series trim(s) and "
           f"no coin-archive trim, release clause in "
           f"{'+'.join(f'{k.split(chr(47))[-1]} {v}' for k, v in rule_counts.items())}, "

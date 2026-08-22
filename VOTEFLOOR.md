@@ -206,6 +206,22 @@ reason worth remembering: 8 shards saturated the machine, no shard reported for 
 hours, and `realm/` was edited under it twice before I understood that mutate
 re-stages per row.
 
+**A SHARDED RUN IS SILENT BY CONSTRUCTION, so do not read silence as a hang.**
+mutate-parallel spawns each shard with `capture_output=True` and stores
+`(returncode, stdout, stderr)`, so a shard's rows are printed only when that WHOLE shard
+exits — the docstring's "prints every row as its shard reports it" means per shard, not
+per row. Measured on a 382-row regression batch over 4 shards: one header line and
+nothing else for 45 minutes, with four `gno test` processes working the whole time.
+Confirm progress by counting those processes (`ps -eo command | grep -c "[g]no test"`
+should equal the shard count), not by reading the log.
+
+**THROUGHPUT, MEASURED, so a batch size can be chosen deliberately:** about 75 seconds
+per row per shard, which is one staged GNOROOT plus one full kourtv2 suite under 4-way
+contention. That puts 96 rows per shard at roughly two hours, and it is consistent with
+the recorded full pass — 983 rows in 5½ hours is the same ~75s/row. So the arithmetic for
+any batch is `rows / shards * 75s`, and the reason to keep foreground slices at 50-65
+rows is that they finish inside the tool-call window while a 96-row shard cannot.
+
 **THE FULL-CORPUS PASS RAN, AND IT WAS NOT ALL GREEN — which is the whole reason to run
 one.** 983 rows in 17 slices of 60, 19:48 to 01:17, five and a half hours from an
 isolated clone at one commit: **979 caught, 3 surviving by design with an `elsewhere`
