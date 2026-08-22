@@ -1,5 +1,52 @@
-.PHONY: check realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
+.PHONY: check check-frozen realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
+
+# The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
+#
+# WHY IT IS WORTH A TARGET. `make check` reads the directory, and a guard armed
+# by hand in another session — break it, watch it fail, restore it — is invisible
+# to a run whose staging step lands inside that window. It cost three diagnoses
+# in one day: a failing argument_test, a failing argumentcaps_test, and a red
+# kourtv2 suite in check-storage. None reproduced; all three were somebody's arm
+# caught mid-flight. repolock closes this when the mutator announces itself
+# (`repolock.py hold -- ...`); this closes it when nobody does, by testing a
+# COMMIT instead of a directory. It is also what a reviewer actually wants to
+# know: does the thing I would pull pass.
+#
+# THE PATH IS NOT ARBITRARY, and this is the part that is easy to get wrong.
+# go.mod carries `replace ... => ../../gnolang/gno`, which resolves only from a
+# sibling directory inside the gopath. The first draft of this put the worktree
+# in /tmp, where `go vet` died on the missing replacement directory before a
+# single check ran — five lines of output, none of them about this repo.
+#
+# `make`, NOT `$(MAKE)`, and that is not a style choice. GNU make EXECUTES a
+# recipe line containing $(MAKE) even under `make -n`, deliberately, so that a
+# sub-make can dry-run too. The cleanup lives on that same line — so `make -n
+# check-frozen`, which anybody would reasonably type first to see what this does,
+# ran `git worktree remove` for real. It deleted the worktree out from under a
+# gate that was running inside it, and the run died with
+#
+#     can't open file 'scripts/check-nontransferable.py': No such file
+#
+# blaming a guard that had done nothing wrong. A dry run must not be able to
+# delete a directory. Plain `make` is not special-cased, so -n only prints it.
+# The cost is that MAKEFLAGS do not propagate to the inner run, which this target
+# does not need.
+#
+# The worktree is created and removed by this target; nothing is left behind.
+# ONE AT A TIME, unlike scripts/gnoroot.py, which keys its shadow roots by pid
+# so two runners never share one. A make variable cannot reach the recipe's pid
+# as cleanly, and the cost of the simpler thing is only that two concurrent
+# `check-frozen` runs would fight over the same directory — noisily, not
+# silently, since the second `git worktree add` refuses a path that exists.
+FROZEN := $(abspath $(CURDIR)/../cc-gatecheck)
+check-frozen:
+	@git worktree remove --force "$(FROZEN)" >/dev/null 2>&1 || true
+	@git worktree add -q --detach "$(FROZEN)" HEAD
+	@echo "gate: frozen checkout of $$(git rev-parse --short HEAD) at $(FROZEN)"
+	@( cd "$(FROZEN)" && make check ); s=$$?; \
+	  git worktree remove --force "$(FROZEN)" >/dev/null 2>&1 || true; \
+	  exit $$s
 
 # Everything that can run without a node.
 #
