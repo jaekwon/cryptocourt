@@ -7526,5 +7526,75 @@
   "label": "CloseDeadClaim: the height fallback is off by one block",
   "find": "(!known && heightNow() < cs.openedAt+deadClaimTimeout)",
   "replace": "(!known && heightNow() <= cs.openedAt+deadClaimTimeout)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "accrueFranchise: meta's own buys accrue a franchise too",
+  "find": "\tif c.id == metaSlug || spent <= 0 {",
+  "replace": "\tif c.id == metaSlug && spent <= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "accrueFranchise: an overflowing sum is stored instead of skipped",
+  "find": "\tsum, ok := overflow.Add64(prev, spent)\n\tif !ok {",
+  "replace": "\tsum, ok := overflow.Add64(prev, spent)\n\tif ok {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "ClaimMetaFranchise: a curve at its cap DESTROYS the entitlement",
+  "find": "\tif delta <= 0 {\n\t\treturn 0",
+  "replace": "\tif delta < 0 {\n\t\treturn 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "ClaimMetaFranchise: the curve position does not advance with the mint",
+  "find": "\tmc.minted += delta // ONE monotone position, shared with meta's own Buy\n",
+  "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "ClaimMetaFranchise: a partial fill keeps the WHOLE entitlement",
+  "find": "\t\tfranchise.Set(k, owed-used) // a partial fill leaves the rest claimable",
+  "replace": "\t\tfranchise.Set(k, owed) // a partial fill leaves the rest claimable"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "ClaimMetaFranchise: the mint runs on a stale accrual clock",
+  "find": "\ttouch(mc) // the mint changes meta's live supply; its accrual clock must be current\n",
+  "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "onClaimAnswered: a DIFFERENT appeal may steal a held review slot",
+  "find": "\t\tif held.(uint64) != cs.id {",
+  "replace": "\t\tif held.(uint64) == cs.id {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "onClaimAnswered: a poisoned parse binds unless it is also invalid",
+  "find": "\tif !p.valid || p.poisoned {",
+  "replace": "\tif !p.valid && p.poisoned {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "releaseMetaLatch: a claim releases another claim's latch",
+  "find": "held != nil && held.(uint64) == cs.id {",
+  "replace": "held != nil {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "onClaimAnswered: latches bind on ordinary courts instead of meta",
+  "find": "func onClaimAnswered(c *Court, cs *claimState) {\n\tif c.id != metaSlug {",
+  "replace": "func onClaimAnswered(c *Court, cs *claimState) {\n\tif c.id == metaSlug {"
  }
 ]
