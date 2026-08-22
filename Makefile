@@ -154,6 +154,7 @@ realm-test:
 		if [ -n "$$REQUIRE_GNO" ]; then echo "gno not installed"; exit 1; fi; \
 		echo "gno not installed - skipping realm tests"; exit 0; \
 	fi; \
+	python3 scripts/repolock.py check realm-test || exit 1; \
 	python3 scripts/check-citations.py || exit 1; \
 	python3 scripts/check-docnumbers.py || exit 1; \
 	python3 scripts/check-storage.py || exit 1; \

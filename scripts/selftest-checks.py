@@ -1074,6 +1074,23 @@ try:
                        capture_output=True, text=True,
                        env={**os.environ, repolock.ENV: str(_ghost.pid)})
     _lockcase("the owner's own children are not locked out", r.returncode == 0)
+    # THE RECIPE, NOT JUST THE READERS. Every python guard inside realm-test
+    # called refuse_if_held; the recipe around them did not, so a run that was
+    # scrupulous about check-citations went on to copy realm/r/*/*.gno into a
+    # GNOROOT with no such scruple. Two consecutive `make check` runs then failed
+    # on tests nobody had touched — argument_test once, argumentcaps_test the
+    # next — because the copy caught a guard another session had armed by hand
+    # and restored moments later. Neither reproduced, and both cost a diagnosis.
+    r = subprocess.run([sys.executable, os.path.join(REPO, "scripts/repolock.py"),
+                        "check", "realm-test"],
+                       capture_output=True, text=True, env=_noenv)
+    _lockcase("the realm-test gate refuses before it stages",
+              r.returncode == 1 and "rewriting the working tree" in r.stderr)
+    # And the wiring itself, because an arm on a command the recipe stopped
+    # calling would pass for ever while the hole was open again.
+    _mk = open(os.path.join(REPO, "Makefile")).read()
+    _lockcase("and realm-test still calls it",
+              "repolock.py check realm-test" in _mk)
 finally:
     _ghost.kill()
     _ghost.wait()
