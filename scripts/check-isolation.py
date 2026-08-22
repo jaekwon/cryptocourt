@@ -129,6 +129,7 @@ def main():
     bad, total = [], 0
     red = set()   # (pkg, test) pairs that fail WITH their package too
     rered = []    # packages whose suite is red as a whole
+    never = []    # (pkg, test) whose -run filter selected nothing at all
     with gnoroot.shadow("check-isolation") as root:
         gnoroot.stage(root, REALMS)
         # The together-run comes FIRST, and unconditionally. It used to run only
@@ -152,11 +153,23 @@ def main():
             base = os.path.join(root, rel)
             for t in names:
                 total += 1
-                r = subprocess.run(["gno", "test", "-run", f"^{t}$", "."], cwd=base,
-                                   capture_output=True, text=True,
+                # `-v` IS LOAD-BEARING, not noise. `gno test -run` exits 0 when the
+                # filter matches NOTHING, and without -v the output is identical to
+                # a pass — filetests run regardless, so a name that selects no test
+                # still prints its GAS lines and then `ok`. This loop reads only the
+                # return code, so such a test would be counted in `total` and
+                # asserted to "pass alone" having never run: the same non-result-as-
+                # result this file was already bitten by once (see the together-run
+                # comment above). `=== RUN` is the only discriminator, and -v is what
+                # prints it.
+                r = subprocess.run(["gno", "test", "-run", f"^{t}$", "-v", "."],
+                                   cwd=base, capture_output=True, text=True,
                                    env={**os.environ, "GNOROOT": root})
+                out = r.stdout + r.stderr
                 if r.returncode != 0:
-                    bad.append((rel, t, (r.stdout + r.stderr).strip().split("\n")))
+                    bad.append((rel, t, out.strip().split("\n")))
+                elif not re.search(r"^=== RUN\s+%s\b" % re.escape(t), out, re.M):
+                    never.append((rel, t))
 
     alone = [(rel, t, out) for rel, t, out in bad if (rel, t) not in red]
     broken = [(rel, t, out) for rel, t, out in bad if (rel, t) in red]
@@ -178,7 +191,16 @@ def main():
               f"prints. A slug collision or a package-level panic looks like this.")
         for line in out[:4]:
             print(f"        {line}")
-    if bad or unattributed:
+    for rel, t in never:
+        print(f"NEVER   {t} ({os.path.basename(rel)}) was selected by no test — "
+              f"`gno test -run ^{t}$` ran zero tests and exited 0, so this test "
+              f"would have been counted as passing alone without running. The name "
+              f"is harvested from the source, so either it is not a test the runner "
+              f"recognises or -run's matching has changed.")
+    if bad or unattributed or never:
+        if never:
+            print(f"\n{len(never)} of {total} tests never ran at all. That is worse "
+                  f"than a failure: the summary line below counts them as passing.")
         if alone:
             print(f"\n{len(alone)} of {total} tests pass only in company. A test "
                   f"that needs its neighbours is reporting on their state, not on "

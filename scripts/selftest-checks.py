@@ -1175,6 +1175,26 @@ else:
             argv=["python3", "scripts/check-isolation.py",
                   "--only", "TestAMalformedRulesPayloadIsRefusedAtTheDoor"])
 
+    # AND THE HALF THE TOGETHER-RUN FIX LEFT BEHIND. That fix made the guard check
+    # "passes together"; this one is about whether the per-test run happened AT ALL.
+    # `gno test -run` exits 0 when the filter matches nothing, and without `-v` the
+    # output is indistinguishable from a pass — filetests run either way, printing
+    # their GAS lines and then `ok`. The loop read only the return code, so such a
+    # test was counted in `total` and asserted to pass alone having never run.
+    #
+    # THE PLANT IS IN THE GUARD'S OWN FILTER, not in a test source, and that is
+    # forced rather than lazy: nothing a test file can contain produces a name the
+    # harvester finds and `-run` misses. Measured across the tree — every one of the
+    # 751 `func Test*` declarations has a real test signature (564 crossing, 187
+    # plain) — so the hole is latent today and only a mutated filter can reach it.
+    control("a test that never ran is not a pass",
+            os.path.join(REPO, "scripts/check-isolation.py"),
+            'f"^{t}$", "-v"',
+            'f"^{t}zzzNOMATCH$", "-v"',
+            "never ran at all",
+            argv=["python3", "scripts/check-isolation.py",
+                  "--only", "TestARefilingIsLegalExactlyAtTheDeathDeadline"])
+
     # mutate.py takes its work on stdin rather than from a file it owns, so its
     # controls are shaped differently: feed it a mutation and require the right
     # verdict. The first three are the ways it can report a non-result as a
