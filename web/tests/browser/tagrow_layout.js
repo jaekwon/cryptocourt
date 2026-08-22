@@ -235,12 +235,20 @@ const ROUTES = [
       ok("dark: the stake bar emits in its own colour",
          /rgba\(111, 192, 165/.test(n.bar || ""), n.bar);
       ok("dark: the active nav item has a lit leading edge", /inset/.test(n.nav || ""), n.nav);
-      // A grid declared before the `background:` shorthand is silently discarded;
-      // this asserts it actually reaches the computed style, and at the right cell.
-      ok("dark: the grid actually paints", /linear-gradient\(rgba\(154, 168, 238/.test(n.bg || ""),
-         (n.bg || "").slice(0, 60));
-      ok("dark: on a 44px cell", /44px 44px/.test(n.bgSize || ""), n.bgSize);
-      ok("dark: panels have a lit top lip", /inset/.test(n.panel || ""), n.panel);
+      // THE GRID IS GONE, removed at the owner's word once the register landed:
+      // it was meant to be texture behind filled cards, and with every fill taken
+      // away it became a pattern running through every panel, table and docket
+      // row. The assertion is inverted rather than deleted — the token was
+      // removed, not switched off, so a linear-gradient reappearing here would
+      // mean it came back by accident.
+      ok("dark: no background grid", !/linear-gradient/.test(n.bg || ""), (n.bg || "").slice(0, 60));
+      // AND NO LIT LIP EITHER, for the same reason and by the same decision. The
+      // lip is an inset highlight along a panel's top edge: on a FILLED card it
+      // reads as light landing on a slab, and on an unfilled one it is a bright
+      // line hanging in space. The register took the fills away, so the lip went
+      // with them — as did the active nav item's outer glow, which had become a
+      // glowing rectangle around nothing.
+      ok("dark: an unfilled panel carries no lit lip", !/inset/.test(n.panel || ""), n.panel);
     }
     // THE ONE THAT ACTUALLY SHIPPED BROKEN — and it has to be FOCUSED to test,
     // which the first version of this check forgot. The page moves focus to the

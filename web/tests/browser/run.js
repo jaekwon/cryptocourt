@@ -27,6 +27,20 @@
 //                        unstylable, and a curator-supplied folder label that
 //                        made the page scroll sideways at 390px.
 //
+//   route_crawl.js     — follows every internal link the overlay draws and holds
+//                        the destination to what the link named. It exists for a
+//                        bug that shipped: chain folders started nesting, the
+//                        route kept resolving against the root array, and every
+//                        chain subfolder answered "no such folder" while the
+//                        court page linked to it. The source harnesses could not
+//                        see it (two functions agreeing to disagree), the layout
+//                        checks only measure routes they are handed, and reading
+//                        the row's LABEL proves nothing — a link renders the same
+//                        whether or not it opens. Note it checks BOTH halves:
+//                        the first version only asked "does the page exist", and
+//                        an armed run went green because the broken resolution
+//                        landed on the WRONG folder rather than on none.
+//
 //   render_snapshot.js — captures the rendered text of 13 demo routes. Used to
 //                        prove a refactor changes nothing: capture, refactor,
 //                        capture, diff. It is how the DEMO split was shown to
@@ -47,7 +61,7 @@ try {
 
 // Only the pass/fail checks run here. render_snapshot.js is a TOOL: it prints a
 // snapshot rather than asserting, so running it in a gate would prove nothing.
-const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js"];
+const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js", "route_crawl.js"];
 let failed = 0;
 for (const f of CHECKS) {
   const p = path.join(__dirname, f);

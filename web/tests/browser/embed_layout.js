@@ -290,21 +290,26 @@ const CASES = [
   await page.reload({waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 600));
   const spark = await page.evaluate(() => {
-    const sv = document.querySelector('.espark');
+    // THE CARD'S CHART IS THE CLAIM PAGE'S CHART NOW, sharing its classes rather
+    // than a private .eline/.efill/.e50 vocabulary — that was the point of the
+    // change, so this probe follows it. `.espark` is the FIGURE; the svg is
+    // inside it, which is where the aria-label lives.
+    const fig = document.querySelector('.espark');
+    if(!fig) return {has:false};
+    const sv = fig.tagName.toLowerCase() === 'svg' ? fig : fig.querySelector('svg');
     if(!sv) return {has:false};
     const r = sv.getBoundingClientRect();
-    const line = sv.querySelector('.eline');
+    const line = sv.querySelector('.ln');
     const dd = line ? line.getAttribute('d') : "";
-    // Step-after: the chain stores change-only samples, so every segment must be
-    // horizontal or vertical. A sloped segment would be interpolation — motion
-    // the chain never recorded.
-    const nums = (dd.match(/-?[\d.]+/g) || []).map(Number);
-    let sloped = 0;
-    for(let i = 2; i + 1 < nums.length; i += 2)
-      if(nums[i] !== nums[i-2] && nums[i+1] !== nums[i-1]) sloped++;
-    return {has:true, w:r.width, h:r.height, segs:(dd.match(/L/g)||[]).length, sloped,
+    // Step-after, asserted STRUCTURALLY rather than by comparing coordinates: the
+    // path is built from H and V commands, so a diagonal cannot be expressed at
+    // all. An `L` appearing here would mean somebody started interpolating —
+    // drawing motion between two samples that the chain never recorded.
+    return {has:true, w:r.width, h:r.height,
+            segs:(dd.match(/[HV]/g)||[]).length,
+            sloped:(dd.match(/L/g)||[]).length,
             labelled: !!sv.getAttribute('aria-label'),
-            fill: !!sv.querySelector('.efill'), ref: !!sv.querySelector('.e50')};
+            fill: !!sv.querySelector('.ar'), ref: !!sv.querySelector('.mid')};
   });
   ok("the card draws the recorded path", spark.has);
   // ...and when there is none, says so rather than dropping the chart silently,
@@ -322,8 +327,16 @@ const CASES = [
      JSON.stringify(nopath));
   ok("and that card still fits", nopath.over <= 0, `over=${nopath.over}px`);
   ok("it spans the card", spark.w >= 300, `w=${Math.round(spark.w||0)}`);
-  ok("the plot height is fixed", Math.round(spark.h) === 56, `h=${spark.h}`);
-  ok("it has more than one segment", spark.segs > 2, `segs=${spark.segs}`);
+  // NO LONGER A FIXED HEIGHT, and the fixed one was the bug. `height:56px` with
+  // preserveAspectRatio="none" stretched a 300x56 viewBox to the card's width:
+  // every slope in the trace flattened by ~13% and the endpoint circle drew as an
+  // ellipse. The box takes the viewBox's own ratio now, so what this asserts is
+  // that the scaling is UNIFORM — the shape a reader shares is the shape the
+  // chain recorded.
+  ok("the plot keeps the viewBox's aspect, so slopes are true",
+     Math.abs(spark.w / spark.h - 300 / 76) < 0.05,
+     `w=${Math.round(spark.w)} h=${Math.round(spark.h)} ratio=${(spark.w/spark.h).toFixed(2)}`);
+  ok("it has more than one step", spark.segs > 2, `segs=${spark.segs}`);
   ok("every segment is a step, never a slope", spark.sloped === 0, `sloped=${spark.sloped}`);
   ok("it carries the 50% reference", spark.ref);
   ok("and a label for a screen reader", spark.labelled);
