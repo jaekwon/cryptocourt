@@ -3810,12 +3810,24 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
       }catch(_){ m.drop=true; }
     });
   }
+  // THE FOLDER'S OWN DESCRIPTION, one read on the one page that shows it. Not
+  // fetched for the folder LIST: that would be a read per row for text the list
+  // does not draw, which is the cost FolderTree exists to avoid — the same rule,
+  // applied to the same data, in the other direction.
+  //
+  // Chain courts only. A curation folder's description already travelled with
+  // the file it came from, and asking the chain about a folder it does not have
+  // would be a read that can only fail.
+  const fdesc = (curF.source==="chain" && f.fid)
+    ? await one(`FolderDesc(${gstr(slug)},${f.fid})`).then(unesc).catch(()=>"")
+    : (f.desc || "");
   const fwin = resolved.filter(m=>!m.drop && !m.pending);
   omitted += resolved.filter(m=>m.drop).length;
   const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, (f.claims||[]).length, "claims", "curated order");
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},...trail])
-    + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span></h1>
-       <p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
+    + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span></h1>`
+    + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
+    + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
     + (subs? `<section><div class="sec-h">Subfolders</div><div class="docket">${subs}</div></section>` : "")
     + `<section${subs?' style="margin-top:22px"':""}><div class="sec-h">Claims <span class="count">${(f.claims||[]).length}</span></div>`
     + fpager
