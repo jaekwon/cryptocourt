@@ -387,6 +387,42 @@ whole fixture buys: no new mutation coverage at all. The corpus already carries 
 caught rows over those cursors. What it buys is a direct assertion that holds for enqueue
 paths which do not exist yet.
 
+**A HARNESS THAT DIES IS NOT A HARNESS THAT OBJECTS**, which is the same class one
+level up. `check-elsewhere` asks whether the harness a row names FAILS under the
+mutation — and a mutation that merely stops the realm building satisfies that without
+the property ever being evaluated. The first attempt to close it guessed the failure's
+shape and was wrong: it scanned for compiler text ("build error", "undefined:",
+"syntax error"), and an ablation planting an unclosed paren in emission.gno went
+straight through. Measured, an unbuildable realm produces no compiler message at all —
+it kills the in-memory node during genesis and the output is a tm2 goroutine dump
+ending in a bare `FAIL`, with the realm never mentioned and the txtar never run. So the
+discriminator is not the failure's TEXT but whether it named a LOCATION: a real
+objection points at `testdata/x.txtar:82`, a death points at nothing. Ablated 7/7
+accepted, 6/7 flagged when every mutation is made unbuildable — the seventh being the
+python text scanner, which legitimately still names a line in a file that will not
+build. The guard was also computing the complaint line and throwing it away; printing
+it is what made all of this visible in the first place.
+
+**AND THEN THE SWEEP STOPPED, BECAUSE THE CENSUS INSTRUMENT WAS UNRELIABLE.** The
+obvious next question was whether the other guards refuse a zero-item scan, so all 26
+were grepped for the idiom. It reported 10 without one. Reading two of those 10 refuted
+it immediately: `check-abort-assertions` says *"found no abort assertions at all"* and
+returns 1, `check-height-shim` says *"clock.gno holds NO raw height read"* and returns
+1. Both refuse; the grep simply did not know their spellings. Publishing "10 guards
+lack a zero-refusal" would have been a false finding of exactly the kind this file keeps
+recording — and the fix for it is not a better regex, because the property is
+behavioural and each guard's empty input is a different shape.
+
+So the honest statement is the narrow one: this class is substantially already handled
+here, and two marginal residuals were found by reading rather than grepping.
+`check-live-reads` prints `0 live read(s)` and then "every read answered" if every read
+is skipped; `check-storage` reports an observation with no budget (`UNKNOWN`) but never
+the reverse, so a budget entry watching a read that no longer runs is silently idle.
+Neither is in `make check`, and neither is fixed this firing — the second is a
+stale-configuration question rather than a non-result-as-result one, and closing it
+properly means auditing every budget entry against what actually runs, which is its own
+pass and not a tail-end change to a guard that spawns suites.
+
 **AND THE CONTROL FOR THE NEW ARM WAS BRIEFLY WRONG IN THE FAMILIAR WAY.** First attempt ran the
 pre-fix copy from the scratchpad: SILENT, as wanted — but at exit **1** with no verdict line,
 because a copy outside the repo cannot resolve its relative path to `scripts/mutate.py`. It was
