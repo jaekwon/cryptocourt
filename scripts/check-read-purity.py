@@ -59,7 +59,8 @@ REALM = ROOT / "realm" / "r" / "kourtv2"
 # getPos joins them for the same reason and was found missing by review: it Sets a
 # *stakePos on access (stake.gno), so an exported read reaching it persists a struct.
 # Measured before adding it — an exported read calling getPos passed this guard green.
-ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensureArgs")
+ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensureArgs",
+              "ensureSup")
 
 # An exported TOP-LEVEL declaration: `func Name(`. A receiver is not matched on
 # purpose — see the module docstring on dispute.gno's Do.

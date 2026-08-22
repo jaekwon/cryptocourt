@@ -489,6 +489,12 @@ type Court struct {
 	// carries no storage deposit.
 	argOut          *bptree.BPTree // be(from)|be(to) -> *argEdge
 	argIn           *bptree.BPTree // be(to)|be(from) -> the SAME *argEdge
+	// Supersedes edges (supersede.gno, docs/SUPERSEDES.md). Same two-index, one
+	// object shape, and nil for the same reason. Outbound is at most ONE per
+	// claim — a re-filing re-files one question — so supOf is keyed by `from`
+	// alone rather than by the pair.
+	supOf           *bptree.BPTree // be(from)        -> *supEdge
+	supBy           *bptree.BPTree // be(to)|be(from) -> the SAME *supEdge
 	// locked is addr -> staked CC still sitting in that holder's own balance
 	// (lock.gno). Created eagerly with the others: it is a money-path read on
 	// every deposit and bond, and a lazily-built tree would give each of those
