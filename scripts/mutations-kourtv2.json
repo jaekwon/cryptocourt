@@ -7183,5 +7183,19 @@
   "label": "hideBanner: a legal-grounds tombstone is rendered unsanitised",
   "find": "\t\treturn \"> **Removed on legal grounds** (\" + sanitize.InlineText(clm.tombstone) +",
   "replace": "\t\treturn \"> **Removed on legal grounds** (\" + clm.tombstone +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "CourtStakeOpenDelay always answers zero, so a live polish window reads as none",
+  "find": "\treturn mustCourt(courtSlug).params.stakeOpenDelayBlocks\n}",
+  "replace": "\treturn 0\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "CourtStakeOpenDelay answers for a court that does not exist instead of refusing",
+  "find": "func CourtStakeOpenDelay(courtSlug string) int64 {\n\treturn",
+  "replace": "func CourtStakeOpenDelay(courtSlug string) int64 {\n\tif !courts.Has(courtSlug) {\n\t\treturn 0\n\t}\n\treturn"
  }
 ]
