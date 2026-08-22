@@ -135,6 +135,23 @@
   "label": "RestoreFolder: the moderation-log event is never emitted",
   "find": "\temitModAct(c.id, 0, \"folder-restore\", who)\n",
   "replace": "",
-  "why": "A DELIBERATE SURVIVOR, and it stands for a whole class. NOTHING in this suite asserts an emitted event: emitModAct calls chain.Emit, and the only facility that can observe those is a filetest's `Events:` directive, which no filetest here uses. So all ten of folders.gno's emitModAct calls are unheld \u2014 this row is the one that says so out loud, rather than ten rows saying it ten times.\n\nWHY IT MATTERS RATHER THAN BEING A CURIOSITY: the mod-log event stream is how a moderator's curation acts become visible after the fact. A folder retired, renamed or reordered emits; an argument or supersedes edge removed by a moderator emits NOTHING AT ALL, which is a real asymmetry in accountability and is why no emit was added to those verbs when supersede.gno landed \u2014 adding a call no test can hold would have widened this gap while looking like it narrowed it.\n\nIF THIS COMES BACK CAUGHT, somebody has written a filetest that asserts events. Promote it, delete this note, and give the edge verbs their emits \u2014 at that point they can be armed."
+  "why": "A DELIBERATE SURVIVOR, and it stands for a whole class. NOTHING in this suite asserts an emitted event: emitModAct calls chain.Emit, and the only facility that can observe those is a filetest's `Events:` directive, which no filetest here uses. So all ten of folders.gno's emitModAct calls are unheld — this row is the one that says so out loud, rather than ten rows saying it ten times.\n\nWHY IT MATTERS RATHER THAN BEING A CURIOSITY: the mod-log event stream is how a moderator's curation acts become visible after the fact. A folder retired, renamed or reordered emits; an argument or supersedes edge removed by a moderator emits NOTHING AT ALL, which is a real asymmetry in accountability and is why no emit was added to those verbs when supersede.gno landed — adding a call no test can hold would have widened this gap while looking like it narrowed it.\n\nIF THIS COMES BACK CAUGHT, somebody has written a filetest that asserts events. Promote it, delete this note, and give the edge verbs their emits — at that point they can be armed."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedSize: the address guard is dropped",
+  "find": "func StakedSize(courtSlug string, who address) int {\n\tif !who.IsValid() {\n\t\treturn 0\n\t}\n",
+  "replace": "func StakedSize(courtSlug string, who address) int {\n",
+  "why": "INVALID BY MASKING, and the load-bearing half is pinned. StakedSize's `!who.IsValid()` early return cannot change any answer while stakeIdxMine stands: the walk only accepts a key whose length is exactly len(prefix)+8, so a short or malformed `who` matches nothing and the count is 0 with or without the guard, and a `who` of an address's length that is not a real address matches no key either because no such key was ever written. Dropping it therefore reports SURVIVED. MEASURED: dropping it ALONE changes nothing; dropping it TOGETHER with weakening stakeIdxMine to `>=` fails TestNoReadAnswersForANonAddress and TestTheStakeIndexPacksAndOrdersAcrossBuckets - so the pair has teeth and stakeIdxMine is the half that carries them, which its own row pins. Kept because an exported read should refuse junk at its entry rather than rely on a key-length invariant three functions down, and because the same guard in StakedPage is what the junk-input sweep asserts across all eighteen address readers."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: the read ALLOCATES a position instead of looking one up",
+  "find": "\t\t\tif pv := cv.(*claimState).stakers.Get(posKey(who, side)); pv != nil {\n\t\t\t\tlive = pv.(*stakePos).stake\n\t\t\t}",
+  "replace": "\t\t\tlive = getPos(c, cv.(*claimState), who, side).stake",
+  "why": "CAUGHT BY A GUARD, NOT BY A SUITE, which is what `elsewhere` is for. Replacing the cs.stakers.Get lookup with getPos makes the read ALLOCATE a position on access - the defect the comment on that line names - and no test sees it, because a freshly allocated position reads zero stake and the page prints the same string. check-read-purity.py sees it exactly: `stakeindex.gno:StakedPage calls getPos`, exit 1, measured by applying this row and running the guard. The harness runs suites, so this row will always report SURVIVED there; the annotation names the guard that does the work.",
+  "elsewhere": "scripts/check-read-purity.py"
  }
 ]

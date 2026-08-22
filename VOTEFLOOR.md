@@ -265,6 +265,20 @@ all three `&&` predicates turned into `||`. The single survivor is lockVote's
 first; it is recorded in KNOWN-GAPS with that reason. Worth repeating after any change to
 those three files, since it costs about two minutes and does not depend on guessing.
 
+**A MUTANT'S OUTPUT IS NOT TEXT.** Decoding a packed index one byte at a time printed
+a raw `0xff` into a failure message and killed the ablation driver with
+`UnicodeDecodeError`, mid-mutation. The file was restored only because the restore sits
+in a `finally` — which is the whole argument for putting it there. Capture subprocess
+output with `errors='replace'`; a mutant can emit any bytes at all.
+
+**A GUARD CAN BE THE CATCHER, and `elsewhere` is how to say so.** The mutation harness
+runs SUITES, so a defect that only a `scripts/check-*.py` guard sees reports as a
+survivor. Measured example: making `StakedPage` call `getPos` (a read that allocates)
+survives every suite and fails `check-read-purity.py` with
+`stakeindex.gno:StakedPage calls getPos`, exit 1. That row belongs in KNOWN-GAPS with
+`elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
+resolves, so the annotation cannot rot into a shrug.
+
 **Operator classes that are INVALID BY CONSTRUCTION — do not spend a suite run on
 them.** A sweep of emission.gno flipped every comparison in the file and most of them
 cannot change the program at all. Recognise these on sight rather than measuring them:

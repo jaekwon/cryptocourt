@@ -7750,5 +7750,82 @@
   "label": "ClaimTimeline: an unanswered claim publishes an answer line",
   "find": "\tif cs.answerHeight != 0 {",
   "replace": "\tif cs.answerHeight == 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxKey: the index is not bucketed, so arrival order becomes claim order",
+  "find": "\treturn string(who) + beClaimKey(claimID/stakeIdxPage)",
+  "replace": "\treturn string(who) + beClaimKey(claimID)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "sideByte: the two sides are written under each other's byte",
+  "find": "\tif side == sideYES {\n\t\treturn \"y\"\n\t}",
+  "replace": "\tif side != sideYES {\n\t\treturn \"y\"\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxMine: a LONGER key counts as this holder's, so a prefix reads strangers",
+  "find": "func stakeIdxMine(pre, k string) bool { return len(k) == len(pre)+8 }",
+  "replace": "func stakeIdxMine(pre, k string) bool { return len(k) >= len(pre)+8 }"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "indexPosition: a bucket keeps only its newest entry",
+  "find": "\t\tr.packed += entry",
+  "replace": "\t\tr.packed = entry"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxWalk: the packed entries are decoded one byte at a time",
+  "find": "\t\tfor i := 0; i+stakeIdxEntry <= len(r.packed); i += stakeIdxEntry {",
+  "replace": "\t\tfor i := 0; i+stakeIdxEntry <= len(r.packed); i++ {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxWalk: the side byte is read as its opposite",
+  "find": "\t\t\tif r.packed[i+8] == 'y' {",
+  "replace": "\t\t\tif r.packed[i+8] != 'y' {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "stakeIdxCount: the count is the byte length, not the entry count",
+  "find": "\t\t\tn += len(r.packed) / stakeIdxEntry",
+  "replace": "\t\t\tn += len(r.packed)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: a zero limit means zero rows instead of the cap",
+  "find": "\tif limit <= 0 || limit > stakePageMax {",
+  "replace": "\tif limit < 0 || limit > stakePageMax {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: the offset skips one row too many",
+  "find": "\t\tif seen < offset {",
+  "replace": "\t\tif seen <= offset {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: the page returns one row more than asked",
+  "find": "\t\treturn sent >= limit",
+  "replace": "\t\treturn sent > limit"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: the leading separator is kept",
+  "find": "\treturn out[1:]",
+  "replace": "\treturn out"
  }
 ]
