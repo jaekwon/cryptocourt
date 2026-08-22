@@ -172,13 +172,7 @@ func RemoveSupersede(cur realm, courtSlug string, from uint64) {
 		panic("kourtv2: that claim re-files nothing")
 	}
 	e := v.(*supEdge)
-	if e.author != who {
-		cm := ensureMod(c)
-		if !cm.members.Has(who.String()) {
-			panic("kourtv2: only the edge's author or a court moderator may remove it")
-		}
-		requireActiveMod(cm, who)
-	}
+	requireEdgeRemover(c, e.author, who)
 	// BOTH indexes, or the edge survives in one direction and the two reads
 	// disagree about whether it exists.
 	c.supOf.Remove(beClaimKey(from))

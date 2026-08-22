@@ -410,6 +410,33 @@ func requireActiveMod(cm *courtMod, who address) {
 	}
 }
 
+// requireEdgeRemover gates removal of a claim-to-claim edge: its author may
+// always take it back, and so may an active moderator of the court.
+//
+// ONE COPY BECAUSE THIS BLOCK ALREADY DRIFTED. RemoveArgument tested
+// `c.mod == nil` where RemoveSupersede called ensureMod, and those are not the
+// same question: a nil c.mod means nobody has moderated this court YET, not that
+// it has no moderators — ensureMod seeds the creator. The old form refused a
+// genuine moderator on every court where no folder had ever been filed, which is
+// most of them, and contradicted RemoveArgument's own doc comment. Fixing it
+// meant copying this shape across, after which argument.gno's note read "see
+// supersede.gno for the full note" — a site that can only explain itself by
+// pointing at another site.
+//
+// The membership test is spelled out rather than left to requireMod so the
+// refusal keeps naming BOTH parties who may act. "not a moderator of this court"
+// is true and unhelpful to someone who is simply not the author.
+func requireEdgeRemover(c *Court, author, who address) {
+	if author == who {
+		return
+	}
+	cm := ensureMod(c)
+	if !cm.members.Has(who.String()) {
+		panic("kourtv2: only the edge's author or a court moderator may remove it")
+	}
+	requireActiveMod(cm, who)
+}
+
 // mustCategoryCode gates the statutory code every PURGE carries. Purge is the
 // LEGAL removal — it erases text behind a code and takes a global-DAO threshold to
 // fire — and the code is the record of WHY, so an empty one makes the act

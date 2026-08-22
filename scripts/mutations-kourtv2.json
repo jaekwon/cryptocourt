@@ -7054,10 +7054,10 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "argument.gno",
-  "label": "RemoveArgument: only a non-author may remove an edge",
-  "find": "\tif e.author != who {",
-  "replace": "\tif e.author == who {"
+  "file": "moderation.gno",
+  "label": "requireEdgeRemover: only a non-author may remove an edge",
+  "find": "\tif author == who {",
+  "replace": "\tif author != who {"
  },
  {
   "pkg": "kourtv2",
@@ -7252,8 +7252,8 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "requireMod: only a NON-member may act as a moderator",
-  "find": "\tif !cm.members.Has(who.String()) {",
-  "replace": "\tif cm.members.Has(who.String()) {"
+  "find": "func requireMod(cm *courtMod, who address) {\n\tif !cm.members.Has(who.String()) {",
+  "replace": "func requireMod(cm *courtMod, who address) {\n\tif cm.members.Has(who.String()) {"
  },
  {
   "pkg": "kourtv2",
@@ -7418,10 +7418,10 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "argument.gno",
-  "label": "RemoveArgument: c.mod == nil read as 'no moderators', so no moderator may ever remove",
-  "find": "\t\tcm := ensureMod(c)\n\t\tif !cm.members.Has(who.String()) {\n\t\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t\t}\n\t\trequireActiveMod(cm, who)",
-  "replace": "\t\tif c.mod == nil {\n\t\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t\t}\n\t\trequireActiveMod(c.mod, who)"
+  "file": "moderation.gno",
+  "label": "requireEdgeRemover: c.mod == nil read as 'no moderators', so no moderator may ever remove",
+  "find": "\tcm := ensureMod(c)\n\tif !cm.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t}\n\trequireActiveMod(cm, who)",
+  "replace": "\tif c.mod == nil {\n\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t}\n\trequireActiveMod(c.mod, who)"
  },
  {
   "pkg": "kourtv2",

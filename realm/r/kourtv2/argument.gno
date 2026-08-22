@@ -177,22 +177,7 @@ func RemoveArgument(cur realm, courtSlug string, from, to uint64) {
 		panic("kourtv2: no such argument edge")
 	}
 	e := v.(*argEdge)
-	if e.author != who {
-		// ensureMod, NOT `c.mod == nil` — see supersede.gno for the full note. A
-		// nil c.mod means nobody has moderated this court yet, not that it has no
-		// moderators: ensureMod seeds the creator. The old form refused a genuine
-		// moderator on any court where no folder had ever been filed, which is
-		// most of them, and contradicted this function's own doc comment.
-		//
-		// The membership test is spelled out rather than left to requireMod so the
-		// refusal keeps naming BOTH parties who may act. "not a moderator of this
-		// court" is true and unhelpful to someone who is simply not the author.
-		cm := ensureMod(c)
-		if !cm.members.Has(who.String()) {
-			panic("kourtv2: only the edge's author or a court moderator may remove it")
-		}
-		requireActiveMod(cm, who)
-	}
+	requireEdgeRemover(c, e.author, who)
 	// BOTH indexes, or the edge survives in one direction and the two reads
 	// disagree about whether it exists.
 	c.argOut.Remove(argKey(from, to))

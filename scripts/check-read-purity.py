@@ -59,8 +59,12 @@ REALM = ROOT / "realm" / "r" / "kourtv2"
 # getPos joins them for the same reason and was found missing by review: it Sets a
 # *stakePos on access (stake.gno), so an exported read reaching it persists a struct.
 # Measured before adding it — an exported read calling getPos passed this guard green.
+# requireEdgeRemover is not an ensureX and allocates nothing itself; it is here
+# because it CALLS ensureMod, so a read reaching it would allocate while naming
+# none of the words above. The scan is textual, so an allocator behind one hop
+# has to be named or the hop is a hole. It was added the moment that hop was.
 ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensureArgs",
-              "ensureSup")
+              "ensureSup", "requireEdgeRemover")
 
 # An exported TOP-LEVEL declaration: `func Name(`. A receiver is not matched on
 # purpose — see the module docstring on dispute.gno's Do.
