@@ -269,6 +269,36 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**A RED GUARD WHOSE CAUSE BELONGED TO SOMEBODY ELSE — and the same exit code, twice, for
+entirely different reasons.** `make anchors` went red with three broken rows, all in
+`moderation.gno`, all broken by another session's 39 uncommitted lines sitting in the working
+tree. Re-pointing them was the obvious move and it was the wrong one: their edit was mid-flight,
+so any anchor I wrote would re-break on their next keystroke. They were left alone and the
+red was recorded as theirs to settle. It then settled itself — `5b7068d refactor(kourtv2): the
+two paths that seat a global member share the block` landed, which is the AddGlobalMod /
+TransferGlobalAdmin duplication an earlier firing had already named as the only genuinely
+identical pair left, and the corpus moved with the code:
+
+    3 rows removed, 2 added, main corpus 1190 -> 1189
+    the two duplicated-block rows collapsed into one at the shared site
+    plus a new row for what is unique to TransferGlobalAdmin
+    both new rows measured: 2/2 caught (harness mtime checked either side)
+
+Net minus one because the duplication is gone, and coverage is not merely preserved but
+slightly better — the second row pins a leg that had no row before. Same shape as this
+firing's own `mustCategoryCode` and `disputeBond0` collapses, arrived at independently.
+
+**THE LESSON IS ABOUT READING THE MESSAGE, NOT THE EXIT CODE.** On re-check, anchors still
+exited 2 — with ZERO `BAD ANCHOR` lines. The cause was now a REPOLOCK: *"process 97216 is
+rewriting the working tree (a selftest run … breaks guards on purpose and restores them).
+Reading the sources now would report ITS mutation as MY finding."* Identical exit code,
+completely unrelated cause, and the correct response to each is the opposite of the other —
+one says fix an anchor, the other says fix nothing and wait. Had I gated on `rc != 0` and gone
+looking for anchors to repair, I would have "fixed" rows against a tree that was mid-mutation.
+Waiting for PID 97216 gave `anchors exit=0`, 1212 rows across 2 corpus files. A guard that
+distinguishes its own failure modes in PROSE is worth the extra lines; a caller that reads only
+the number throws that away.
+
 **THE FULL-CORPUS PASS RAN, AND IT WAS NOT ALL GREEN — which is the whole reason to run
 one.** 983 rows in 17 slices of 60, 19:48 to 01:17, five and a half hours from an
 isolated clone at one commit: **979 caught, 3 surviving by design with an `elsewhere`
