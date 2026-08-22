@@ -35,6 +35,15 @@ twelve weeks, so a live question outlives its contract and gets re-put. The
 covid fixture uses it three times. It deserves a spec entry before it gets an
 entrypoint; it is not in this change.
 
+**That entry now exists as a proposal: `docs/SUPERSEDES.md`.** Writing it turned
+up why the punt was right for a better reason than "no spec": `supersedes` is not
+an opinion the way an argument edge is. "X re-files Y, which died unanswered" is
+a statement about the docket's own history, and `claimState.closed` is the
+realm's own record of exactly that — set in one place, only when a claim has no
+answer and the timeout has passed. So the chain can verify the predicate instead
+of storing an assertion, which makes it a different design, not a second copy of
+this one. Still unimplemented, and one policy call in it is the owner's.
+
 ## Shape
 
 Two `bptree`s on the court, sharing one edge object:

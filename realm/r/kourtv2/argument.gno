@@ -17,9 +17,13 @@
 // CONTAINMENT (`part-of`) is §5's other edge, but its own guards say "only
 // sections may be containment parents" and §6 defers sections — so claim→claim
 // containment is the shape §5 forbids, and flat folders are the containment this
-// realm actually chose. SUPERSEDES is in no spec at all; it means "a re-filing
-// after a claim died unanswered", which this docket produces constantly, and it
-// deserves a spec entry before an entrypoint.
+// realm actually chose. SUPERSEDES has no §5 entry; it means "a re-filing after a
+// claim died unanswered", which this docket produces constantly. It is designed
+// in docs/SUPERSEDES.md and deliberately not built here, because it is not the
+// same kind of thing: an argument edge is an opinion and this is a checkable fact
+// about the docket (`claimState.closed` is the realm's own record that a claim
+// died without an answer), so it wants a verifying entrypoint rather than a
+// second copy of this one.
 package kourtv2
 
 import (
