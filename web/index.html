@@ -2443,6 +2443,52 @@ function folderCount(f){
 /* Screen-2 layout: folders are a compact CLICKABLE list, the docket is
    sectioned (open / recently settled) with each claim carrying its folder as
    meta — so a long docket never nests. Folders remain overlay-level. */
+/* Resolve a /f/<path> to a folder and its ancestry, for both path schemes.
+
+   TWO SCHEMES, because there are two kinds of folder. A chain folder has a
+   stable fid and is addressed by it; a curation folder has no id at all, so
+   position is the only handle it has and its path is dotted indices. Neither is
+   convertible to the other, so the source decides.
+
+   EXTRACTED FROM THE ROUTE so it can be tested. It lived inline in the folder
+   view and carried a regression nothing could reach: when chainFolders started
+   nesting, this searched only the root array, so every chain SUBFOLDER answered
+   "no such folder" while the court page linked to it. A harness that could only
+   see chainFolders' output tested the tree and never the lookup.
+
+   Returns {folder, trail} or null. */
+function resolveFolderPath(curF, fpath){
+  if(!curF || !curF.folders || !curF.folders.length) return null;
+  if(curF.source === "chain"){
+    // one exact integer: "01" and "1.2" are not aliases of "1"
+    if(!/^\d+$/.test(fpath) || String(parseInt(fpath,10)) !== fpath) return null;
+    const fid = parseInt(fpath,10);
+    const path = [];
+    const dig = (list, up) => {
+      for(const x of list){
+        if(x.fid === fid){ path.push(...up, x); return true; }
+        if(x.folders && x.folders.length && dig(x.folders, [...up, x])) return true;
+      }
+      return false;
+    };
+    dig(curF.folders, []);
+    if(!path.length) return null;
+    return {folder: path[path.length-1],
+            trail: path.map(a=>({label:a.name, href:"#/c/__SLUG__/f/"+a.fid}))};
+  }
+  let f = {name:"", folders:curF.folders};
+  const trail = [];
+  let sofar = "";
+  for(const part of String(fpath).split(".")){
+    const ix = parseInt(part,10);
+    f = (f.folders||[])[ix];
+    if(!f) return null;
+    sofar = sofar? sofar+"."+part : part;
+    trail.push({label:f.name, href:"#/c/__SLUG__/f/"+sofar});
+  }
+  return {folder:f, trail};
+}
+
 function folderMeta(folders, prefix, map, ppath){
   (folders||[]).forEach((f,i)=>{
     const label = prefix? prefix+" · "+f.name : f.name;
@@ -3764,29 +3810,24 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
       + notFound(isLive()? "This court's moderators have filed no folders, and no local curation is present — the docket is the whole record." : "No folders in this court.");
     return;
   }
-  let f = {name:"", folders:curF.folders}; const trail=[]; let sofar="";
-  if(curF.source==="chain"){
-    // chain paths are the folder's own stable fid, one exact segment —
-    // "01" and "1.2" are not aliases of "1"
-    if(!/^\d+$/.test(fpath) || String(parseInt(fpath,10))!==fpath){
-      main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No such folder on this court.");
-      return;
-    }
-    const fid = parseInt(fpath,10);
-    f = curF.folders.find(x=>x.fid===fid);
-    if(!f){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No such folder on this court."); return; }
-    trail.push({label:f.name, href:"#/c/"+slug+"/f/"+fid});
-  } else for(const part of fpath.split(".")){
-    const ix = parseInt(part,10);
-    f = (f.folders||[])[ix];
-    if(!f){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No such folder."); return; }
-    sofar = sofar? sofar+"."+part : part;
-    trail.push({label:f.name, href:"#/c/"+slug+"/f/"+sofar});
+  const hit = resolveFolderPath(curF, fpath);
+  if(!hit){
+    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}])
+      + notFound(curF.source==="chain"? "No such folder on this court." : "No such folder.");
+    return;
   }
+  const f = hit.folder;
+  const trail = hit.trail.map(t=>({label:t.label, href:t.href.replace("__SLUG__", esc(slug))}));
   delete trail[trail.length-1].href;
   const claims = await listClaims(slug);
   const byId = Object.fromEntries(claims.map(cl=>[cl.id,cl]));
-  const subs = (f.folders||[]).map((sf,i)=>folderRowHtml(slug,sf,fpath+"."+i)).join("");
+  // A CHAIN SUBFOLDER LINKS BY ITS OWN ID. The index path is a curation idea:
+  // curation folders have no ids, so position is all there is. A chain folder
+  // has a stable fid, and an index path would ALSO be unstable — retiring one
+  // folder shifts every later sibling's index, silently repointing bookmarks at
+  // a different folder.
+  const subs = (f.folders||[]).map((sf,i)=>
+    folderRowHtml(slug, sf, sf.chain? String(sf.fid) : fpath+"."+i)).join("");
   // page over the folder's ids in CURATED order first (the realm orders its
   // items; a re-sort would betray the "curated order" caption), then resolve
   // only THIS PAGE's out-of-window ids — bounded at 25×3 reads per page

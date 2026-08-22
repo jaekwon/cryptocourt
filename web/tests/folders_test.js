@@ -66,6 +66,7 @@ code += slice('function unesc(', '/* Untrusted text') + '\n';
 code += 'async function inChunks(items, size, fn){ const out=[]; for(let i=0;i<items.length;i+=size) out.push(...await Promise.all(items.slice(i,i+size).map(fn))); return out; }\n';
 code += slice('const CURATION_V', '/* ------').replace('const CURATION_V','var CURATION_V');
 code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER_CAP','var CHAIN_FOLDER_CAP');
+code += slice('function resolveFolderPath(', 'function folderMeta(');
 code += slice('function folderCount(', 'function folderRowHtml');
 code += slice('function folderRowHtml(', 'function isDone');
 code += 'function safeInline(x){ return esc(String(x)); }\n';
@@ -139,7 +140,24 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("F1: map data build has first-wins across folders", src.includes("first-wins across folders too"));
   ok("F2: folder page resolves only this page's ids", src.includes("resolve\n  // only THIS PAGE's out-of-window ids") || src.includes("only THIS PAGE's out-of-window ids"));
   ok("F3: no id re-sort on chain members", !src.includes("members.concat(got).sort((a,b)=>b.id-a.id)"));
-  ok("F5: exact fid match (no aliasing)", src.includes('String(parseInt(fpath,10))!==fpath'));
+  // F5 was a grep for the guard's exact spelling, which reformatting broke while
+  // the guard still worked. It is a CALL now: the resolver is a function rather
+  // than a hundred lines inside a view, so the property can be asked for
+  // directly instead of pattern-matched in source.
+  {
+    const chainF = {source:"chain", folders:[{fid:1, name:"One", folders:[{fid:2, name:"Two", folders:[]}]}]};
+    ok("F5: exact fid match (no aliasing)",
+       !resolveFolderPath(chainF,"01") && !resolveFolderPath(chainF,"1.2") && !!resolveFolderPath(chainF,"1"));
+    // THE REGRESSION THAT SHIPPED: after nesting, this searched only the root
+    // array, so a subfolder answered "no such folder" while the court page
+    // linked to it. Asked of the resolver, which is where it lived.
+    const kid = resolveFolderPath(chainF,"2");
+    ok("a chain subfolder resolves", !!kid && kid.folder.fid===2);
+    ok("and its trail is its ancestry", !!kid && kid.trail.length===2 && kid.trail[0].label==="One");
+    // curation still addresses by position, because those folders have no ids
+    const curF2 = {source:"local", folders:[{name:"A", folders:[{name:"B", folders:[]}]}]};
+    ok("curation resolves by dotted index", resolveFolderPath(curF2,"0.0").folder.name==="B");
+  }
   ok("F4: stale route comment gone", !src.includes("demo-only route — the overlay does not read on-chain folders yet"));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
@@ -166,6 +184,27 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   const r3 = await chainFolders("orem");
   ok("a cyclic tree still terminates and keeps every folder",
      r3.folders.length + r3.folders.reduce((n,f)=>n+f.folders.length,0) === 3);
+
+  // A SUBFOLDER IS REACHABLE BY ITS OWN ID, and this is the case the harness
+  // did NOT have when nesting landed: chainFolders started returning roots, the
+  // route resolver still searched the root array with .find(), and every chain
+  // subfolder answered "No such folder" while the court page linked to it. The
+  // list rendered correctly the whole time, which is why reading the row's label
+  // proved nothing — the link had to be followed.
+  global.FTREE = "1:0:-,2:1:-,3:0:-";
+  const r5 = await chainFolders("orem");
+  const kid = r5.folders[0].folders[0];
+  ok("a subfolder keeps its own fid, not a positional path", kid && kid.fid===2);
+  const findById = (list, fid) => {
+    for(const x of list){
+      if(x.fid===fid) return x;
+      const hit = x.folders && x.folders.length && findById(x.folders, fid);
+      if(hit) return hit;
+    }
+    return null;
+  };
+  ok("a subfolder is findable in the tree, not just among the roots",
+     !!findById(r5.folders, 2) && !r5.folders.some(f=>f.fid===2));
 
   // AND A REALM WITHOUT THE READ still gets the flat list it always got.
   global.FTREE = null;
