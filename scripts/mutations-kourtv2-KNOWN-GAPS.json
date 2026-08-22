@@ -128,5 +128,13 @@
   "replace": "\n",
   "elsewhere": "gnoland/testdata/kourtv2_testclock.txtar",
   "why": "UNREACHABLE FROM THIS SUITE, and now covered by txtar - it was covered NOWHERE until this row was written. `tcEverArmed = true` is written only by the arming path, which no gno test can complete (a court always exists by then), and every test that reads TestClockFabricated sets the flag BY HAND - so the write itself had no observer. kourtv2_testclock.txtar is the one harness where arming succeeds; it now asserts TestClockFabricated() is true after arming AND still true after sealing. MEASURED: deleting the line fails that script at the new assertion. The sealing half is also held here by TestSealingKeepsTheDisclosure, with the flag set by hand."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "RestoreFolder: the moderation-log event is never emitted",
+  "find": "\temitModAct(c.id, 0, \"folder-restore\", who)\n",
+  "replace": "",
+  "why": "A DELIBERATE SURVIVOR, and it stands for a whole class. NOTHING in this suite asserts an emitted event: emitModAct calls chain.Emit, and the only facility that can observe those is a filetest's `Events:` directive, which no filetest here uses. So all ten of folders.gno's emitModAct calls are unheld \u2014 this row is the one that says so out loud, rather than ten rows saying it ten times.\n\nWHY IT MATTERS RATHER THAN BEING A CURIOSITY: the mod-log event stream is how a moderator's curation acts become visible after the fact. A folder retired, renamed or reordered emits; an argument or supersedes edge removed by a moderator emits NOTHING AT ALL, which is a real asymmetry in accountability and is why no emit was added to those verbs when supersede.gno landed \u2014 adding a call no test can hold would have widened this gap while looking like it narrowed it.\n\nIF THIS COMES BACK CAUGHT, somebody has written a filetest that asserts events. Promote it, delete this note, and give the edge verbs their emits \u2014 at that point they can be armed."
  }
 ]
