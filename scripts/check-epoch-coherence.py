@@ -448,6 +448,40 @@ PURGE_AUTH = 'panic("kourtv2: only a global DAO member may purge")'
 PURGE_CODE = "mustCategoryCode("
 PURGE_VERBS_N = 4  # PurgeClaim, PurgeCourt, PurgeModLogRow, PurgeFolder
 
+# ARM 15 — the entitlement queue has exactly one placement site, and one writer each
+# for the two cursors that position it.
+#
+# enqueueSenior states the invariant: "Placing it past juniorReserved keeps the whole
+# number line disjoint: seniors and juniors tile [0, reservedTail+juniorReserved)
+# without overlap." That is the repair for audit M3-CRITICAL-1 — juniors mint eagerly
+# and occupy [reservedTail, reservedTail+juniorReserved) WITHOUT advancing reservedTail,
+# so a senior placed at the bare tail is paid accrual a junior already minted, and
+# emittedTotal passes cumAccrual.
+#
+# WHY A CENSUS AND NOT A TEST, measured rather than assumed. No test walks c.queue at
+# all (grepped the suite for c.queue, .queue.Iterate and queueSeq: nothing), which looks
+# like the invariant is unpinned. It is not: every single mutation that breaks the
+# tiling already has a caught row — the start cursor ignoring juniorReserved, the tail
+# never advancing, the queue seq not advancing so entitlements overwrite, and
+# juniorReserved's accumulation, which TestTheReservoirPauseHoldsAtExactlyTheCap catches
+# by asserting reservoirR() == rMax() after drawing the overshoot. 21 caught rows cover
+# the queue and the reservoir between them. A queue-walking test was drafted and thrown
+# away: it would have caught the same mutations and nothing else.
+#
+# What no row can cover is a SECOND placement path, because that is code nobody has
+# written. Three counts, one per way a new path would arrive: another &entitlement{}, or
+# another writer of either cursor. Any of them can break the tiling while every existing
+# row stays green.
+#
+# RECEIVER-GENERAL DELIBERATELY. Only `c.` is used with these fields today, and arm 7's
+# note warns that loosening a pattern for a spelling that does not exist costs precision
+# — but the META court is a Court and already carries `mc.minted`, so `mc.reservedTail =`
+# is the shape a second emission path would most plausibly take.
+ENT_NEW = re.compile(r"&entitlement\{")
+TAIL_W = re.compile(r"\b" + RECV + r"\.reservedTail\s*=(?!=)")
+JUNIOR_W = re.compile(r"\b" + RECV + r"\.juniorReserved\s*=(?!=)")
+ENT_NEW_N, TAIL_W_N, JUNIOR_W_N = 1, 1, 1  # all three in emission.gno
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -593,7 +627,13 @@ def main() -> int:
         return 1
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
-            "lockvote": 0, "mint": 0, "purge": 0}
+            "lockvote": 0, "mint": 0, "purge": 0,
+            "ent_new": 0, "ent_tail": 0, "ent_junior": 0}
+    # The three arm-15 keys share the ent_ prefix and deliberately avoid the _w
+    # suffix: the tag selector reads `key.endswith("_w")` as "a claim-terminal
+    # writer", so naming them tail_w/junior_w printed a queue-tiling reason under a
+    # [terminal] tag. Found by ablation, and only because the grep for the tag came
+    # up empty while the arm was in fact firing.
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -684,6 +724,11 @@ def main() -> int:
                                         f"global-DAO threshold; a verb missing either "
                                         f"is a legal removal nobody authorised or "
                                         f"nobody can audit")
+
+                # Arm 15, per file: one placement site, one writer per cursor.
+                arm4["ent_new"] += len(ENT_NEW.findall(src))
+                arm4["ent_tail"] += len(TAIL_W.findall(src))
+                arm4["ent_junior"] += len(JUNIOR_W.findall(src))
 
                 # Arm 8, per file: a lock row belongs to its own owner.
                 calls = LOCKVOTE_CALL.findall(src)
@@ -777,6 +822,9 @@ def main() -> int:
         ("lockvote", LOCKVOTE_CALLS_N, "vote-lock site(s)"),
         ("mint", MINT_N, "mint site(s)"),
         ("purge", PURGE_VERBS_N, "purge verb(s)"),
+        ("ent_new", ENT_NEW_N, "entitlement placement site(s)"),
+        ("ent_tail", TAIL_W_N, "reservedTail writer(s)"),
+        ("ent_junior", JUNIOR_W_N, "juniorReserved writer(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
@@ -784,7 +832,9 @@ def main() -> int:
                    else "ungated-outflow" if key == "coin_out"
                    else "foreign-lock" if key == "lockvote"
                    else "unaccounted-mint" if key == "mint"
-                   else "ungated-purge" if key == "purge" else "one-weight")
+                   else "ungated-purge" if key == "purge"
+                   else "queue-tiling" if key in ("ent_new", "ent_tail", "ent_junior")
+                   else "one-weight")
             why = ("a fourth lane locking votes has to be argued: every lock "
                    "row taxes its owner's own transfers, so the address it is "
                    "created for must be the caller and nothing else"
@@ -796,6 +846,11 @@ def main() -> int:
                    "second mustStakable caller is a second path disposing of "
                    "committed coin, and it would look entirely reasonable"
                    if key == "stakable" else
+                   "seniors and juniors tile the accrual line without overlap, and "
+                   "that holds because ONE site places an entitlement and ONE writer "
+                   "moves each cursor. A second of any of them can pay a senior accrual "
+                   "a junior already minted, which is audit M3-CRITICAL-1 returning"
+                   if key in ("ent_new", "ent_tail", "ent_junior") else
                    "a fifth verb performing the LEGAL removal has to be argued: "
                    "purge erases text behind a statutory code and takes a global-DAO "
                    "threshold, and both gates are spelled out per verb rather than "
@@ -836,6 +891,7 @@ def main() -> int:
           f"{arm4['lockvote']} self-only vote-lock site(s), "
           f"{arm4['mint']} accounted mint site(s), "
           f"{arm4['purge']} doubly-gated purge verb(s), "
+          f"{arm4['ent_new']} entitlement placement site(s), "
           f"one quality-question definition, {len(trims)} stake-series trim(s) and "
           f"no coin-archive trim, release clause in "
           f"{'+'.join(f'{k.split(chr(47))[-1]} {v}' for k, v in rule_counts.items())}, "

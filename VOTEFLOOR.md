@@ -497,6 +497,28 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**AN ABSENT AGGREGATE TEST IS NOT A GAP IF EVERY BREAKAGE IS INDIVIDUALLY CAUGHT.** The
+backlog says the senior queue is "essentially unswept", and one measurement seems to agree:
+NO test walks c.queue at all — grepped the suite for c.queue, .queue.Iterate and queueSeq,
+nothing. enqueueSenior's tiling invariant (seniors and juniors occupy disjoint stretches of
+the accrual line, the audit M3-CRITICAL-1 repair) therefore looked unpinned, and a
+queue-walking test with disjointness and conservation arms was written.
+
+It was then thrown away, because it caught nothing new. Every single mutation that breaks
+the tiling already has a caught row: the start cursor ignoring juniorReserved, the senior
+tail never advancing, the queue seq not advancing so entitlements overwrite. The one
+accumulation with no row of its own — reserveJunior's `c.juniorReserved = mustAdd(...)` —
+is caught anyway by TestTheReservoirPauseHoldsAtExactlyTheCap, which asserts
+`reservoirR() == rMax()` after drawing exactly the overshoot, so a reservation that never
+lands leaves R above the cap. Counted: 21 caught rows across the queue and the reservoir,
+plus 2 gaps that carry derivations. Conservation is rowed three ways (seniorOwed grows, is
+reduced, seniorPaid advances).
+
+So the ABSENCE of a walker was not evidence of a gap. The lesson generalises: when the
+invariant is a conjunction of per-site facts and every site is pinned, an aggregate test
+adds coverage only against code shapes that do not exist yet — and for THAT, the
+instrument is a census, not a test. Which is what ARM 15 is.
+
 **THE LONG-ANCHOR QUERY, MECHANISED — AND THE THIRD ANSWER WAS "DO NOT REFACTOR".**
 Both duplications above were found through anchors needing absurd context, so the signal
 is worth measuring directly: corpus rows sorted by `len(find)`. Median is 49 characters,
@@ -504,7 +526,15 @@ p90 is 94, and the top twelve run 200-326 — every one of them a place where th
 the same thing more than once. That query is cheap and should be re-run after any batch of
 rows.
 
-Its next answer was the global-DAO purge gate: `ensureGlobalDAO()` plus a members.Has
+**THE QUERY HAS FALSE POSITIVES, AND THEY ARE THE OPPOSITE OF THE FINDING.** A long
+`find` can also mean one long STATEMENT rather than repeated code: lock.gno's
+`mustSpendable: a tie names the stake instead of naming both locks` row is 308 characters
+over four lines, third-longest in the corpus, and it is nothing to fix — the anchor is a
+single multi-line panic message, which is the whole point of that switch. Read the anchor
+before believing the query. Duplication looks like N copies of a BLOCK; a long message
+looks like one string.
+
+Its next real answer was the global-DAO purge gate: `ensureGlobalDAO()` plus a members.Has
 check, FOUR byte-identical copies, one per purge verb. Same shape as the two just
 collapsed, on the most authority-sensitive path in the realm — and the right call was to
 LEAVE IT ALONE.
@@ -523,6 +553,28 @@ pinned at 4. Ablated four ways — a verb losing either gate names that verb and
 planted fifth verb trips both, and a drifted verb pattern reports "0 purge verb(s),
 expected 4". **A census is the answer when the risk is the NEXT caller, not the current
 ones.**
+
+**A THIRD CANDIDATE, REFUTED BY READING IT.** supersedeOrdered's own comment says its
+wall-clock-preferred/height-fallback shape is "exactly how CloseDeadClaim decides the same
+question about the same claim", which reads like a third copy of the deadline arithmetic.
+It is not. CloseDeadClaim asks an ABSOLUTE question — has this claim's deadline passed by
+NOW — and already factors its clock preference through `pastDeadline(openedAtTime,
+deadClaimSecs)`. supersedeOrdered asks a RELATIVE one: is `from` at least deadClaimSecs
+after `to`. Two claims against each other cannot use a helper written for one claim against
+now, so there is nothing to single-site. And the redundancy that remains is deliberate:
+SupersedeClaim requires `to.closed` before it ever consults the ordering, so the two
+predicates are belt and braces rather than a quote and a charge. CloseDeadClaim carries
+FOURTEEN corpus rows including both clocks' boundaries; it is the best-pinned function this
+query pointed at.
+
+**AND THE ADMIN GATE IS NOT THE SAME CASE, which is why the query needs reading rather
+than obeying.** `cur.Previous().Address() != d.admin` appears FOUR times in
+moderation.gno, which looks like the purge gate all over again. It is not: the four carry
+THREE different messages — "manages membership" (AddGlobalMod and RemoveGlobalMod, the
+only genuinely identical pair), "sets the purge threshold", "transfers the seat" — and
+naming the specific power is the value, exactly as mustSpendable's four cases are. One
+condition with three deliberate messages is not four copies of one check. Left alone, and
+the same check-read-purity argument would apply anyway.
 
 **THE DISPUTE BOND WAS QUOTED AND CHARGED FROM TWO COPIES OF ONE FORMULA.** Following the
 purge duplication out of the same cap sweep found the sharper case. `disputeBond0`'s doc

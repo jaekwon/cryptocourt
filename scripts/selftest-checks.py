@@ -469,6 +469,38 @@ control("the purge verb pattern drifting off the code", EPOCHCOH,
         "0 purge verb(s), expected 4",
         argv=["python3", EPOCHCOH])
 
+# ARM 15, the entitlement-queue census. enqueueSenior's tiling invariant — seniors and
+# juniors occupy disjoint stretches of the accrual line — holds because ONE site places
+# an entitlement and ONE writer moves each cursor. Every way to break it with a single
+# mutation already has a caught row (21 of them across the queue and the reservoir), so
+# what this pins is a SECOND placement path: code nobody has written, which no corpus row
+# can reach. A drafted queue-walking test was thrown away for catching only what those
+# rows already catch.
+control("a second entitlement placement site", f"{KOURTV2}/emission.gno",
+        "func enqueueSenior(c *Court, to address, amount int64, purpose string) uint64 {",
+        "func selfTestPlaceSenior(c *Court, to address, amount int64) {\n"
+        "\te := &entitlement{to: to, amount: amount, start: 0, purpose: \"comp\"}\n"
+        "\tc.queue.Set(beClaimKey(c.queueSeq), e)\n}\n\n"
+        "func enqueueSenior(c *Court, to address, amount int64, purpose string) uint64 {",
+        "2 entitlement placement site(s), expected 1",
+        argv=["python3", EPOCHCOH])
+# A cursor moved from somewhere else desynchronises the tail from the queue. Planted on
+# the META receiver, which is the spelling a second emission path would most plausibly
+# use — mc already carries mc.minted sixteen lines from here.
+control("a second reservedTail writer", f"{KOURTV2}/emission.gno",
+        "// rMax banks at most rMaxPeriods of the CURRENT period's budget.",
+        "func selfTestBumpTail(mc *Court, n int64) {\n"
+        "\tmc.reservedTail = mustAdd(mc.reservedTail, n)\n}\n\n"
+        "// rMax banks at most rMaxPeriods of the CURRENT period's budget.",
+        "2 reservedTail writer(s), expected 1",
+        argv=["python3", EPOCHCOH])
+# Fail CLOSED: a placement pattern that stops matching counts nothing for ever.
+control("the placement pattern drifting off the code", EPOCHCOH,
+        r'ENT_NEW = re.compile(r"&entitlement\{")',
+        r'ENT_NEW = re.compile(r"&entitlementNOPE\{")',
+        "0 entitlement placement site(s), expected 1",
+        argv=["python3", EPOCHCOH])
+
 print("\ncheck-nodelegate")
 # The ceiling (PastVotes) is delegation-aware; the floor (BalanceOf) is not. They
 # agree in kourtv2 for one reason only — nothing there can delegate — and the day
