@@ -1,4 +1,4 @@
-.PHONY: check check-frozen realm-test chain-test txtar-test isolation-test mutate selftest fmt vet gotest chat anchors paths guards staleguards \
+.PHONY: check check-frozen realm-test chain-test txtar-test isolation-test mutate gaps selftest fmt vet gotest chat anchors paths guards staleguards \
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
@@ -350,6 +350,24 @@ isolation-test:
 # builds its own.
 mutate:
 	python3 scripts/mutate-parallel.py scripts/mutations-kourtv2.json
+
+# THE GAPS ARE CLAIMS, SO RUN THEM. Every row in the KNOWN-GAPS file asserts that no test
+# can catch it, and until this target existed nothing checked that: `make anchors` verifies
+# their anchors resolve and stops there. A gap closed by somebody's new test would sit
+# there asserting the opposite for ever — which happened, and running this is how the
+# RestoreFolder row got promoted. mutate.py also errors on an `elsewhere` row that turns
+# out to be caught here, telling you to drop the annotation.
+#
+# Rows marked "slow" are skipped BY NAME rather than waited out: two of them are the
+# harness's own timeout cases (a merge loop whose flipped advance guard never terminates, a
+# halved curve slope that doubles what its one-unit loops must climb), and each burns a full
+# SUITE_TIMEOUT every run. What they assert is a property of that bound, not of any test.
+gaps:
+	@python3 -c "import json,sys; \
+	  rows=[r for r in json.load(open('scripts/mutations-kourtv2-KNOWN-GAPS.json')) if not r.get('slow')]; \
+	  print('gaps: %d row(s), %d skipped as slow' % (len(rows), \
+	    len(json.load(open('scripts/mutations-kourtv2-KNOWN-GAPS.json')))-len(rows)), file=sys.stderr); \
+	  json.dump(rows, sys.stdout)" | python3 scripts/mutate-parallel.py --shards 4
 
 # Break each guard on purpose and check it notices. Periodic rather than
 # per-commit: a check that reports success while measuring nothing is the

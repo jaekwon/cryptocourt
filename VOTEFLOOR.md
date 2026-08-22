@@ -293,6 +293,18 @@ narrower and sharper: **every row whose TARGET FILE has changed.** That is where
 can have drifted, and it is a small fraction of the corpus — 482 of 1,147 rows after one
 busy session, against 1,147 for the full sweep.
 
+**RUN, AND CLEAN: 482 rows in 9 slices, 04:26 to 05:40, 0 not caught — no survivor, no bad
+anchor, no timeout.** One hour fourteen against five and a half hours for the full pass,
+over the set where the risk actually is. A clean result here is worth as much as a dirty
+one: it says the fifteen source files that changed in a busy session, three of mine and a
+dozen of another session's, did not orphan a single catcher.
+
+**And `make gaps` exists now**, because the audit that found the RestoreFolder row was one I
+ran by hand and would not have run again. 21 rows in four shards, two skipped by an explicit
+`"slow": true` on the rows whose own notes say they burn a SUITE_TIMEOUT — marked rather
+than rediscovered by waiting twenty minutes. First run of the target: 17 survive as
+documented, 4 reported as covered elsewhere with every annotation resolving, exit 0.
+
 The reason to run it is not theoretical. In one tick my own edit to StakedPage broke two
 rows outright (the anchors guard caught those before the commit, which is what it is for),
 and the two rows the two big passes found wrong were both of this shape — a row that still
