@@ -497,6 +497,33 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE UNUSED-PARAMETER CLASS, BOUNDED.** Having found three dead `who` parameters by hand,
+the general question is worth one query: across 868 functions in the realm, which take a
+NAMED parameter the body never mentions (comments stripped, `_` excluded)? Thirty-eight.
+The breakdown is what matters:
+
+  ~30 are INTERFACE IMPLEMENTATIONS and cannot be otherwise — Describe(payload),
+  Check(payload), Do(rlm, payload) implement the governor Kind interface, and a kind that
+  ignores its payload still has to accept one. checkpoint's WalkDesc(v) is a callback
+  signature. Nothing to fix and nothing to row.
+
+  3 are the governor `who` parameters already resolved (Settle, ReleaseRoll, Execute).
+
+  2 are `run`'s dispatch and `describe`'s g inside the governor's own rules plumbing.
+
+  3 are vestigial *Court/*courtMod parameters in kourtv2: unslash(c, cs) works entirely
+  on cs, addNomination ignores its cm, installModSet ignores its c.
+
+The three kourtv2 ones are HARMLESS in the way the `who` ones were not: an unused *Court
+cannot be the wrong court, because nothing reads it. They are the same misleading-signature
+shape one notch down — a reader may assume unslash touches court-level state, and it does
+not — and removing them would ripple through call sites for a cosmetic gain, so they stay.
+
+**What the sweep buys is the bound.** "Are there other misleading signatures on an authority
+surface?" now has an answer with a number behind it: no, the address case was the whole of
+it. The instrument was validated against realm code before the claim — unslash's body was
+read and confirmed to use only `cs`.
+
 **THE govern REALM'S CALLER-IDENTITY SURFACE: EIGHT ENTRYPOINTS, THREE ROWED.** govern.gno
 has eight crossing entrypoints and every one passes `cur.Previous().Address()` into the
 engine. Three carried the "the REALM, not the caller" row — Propose, Vote, Cancel — the
