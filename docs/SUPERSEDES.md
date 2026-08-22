@@ -1,7 +1,8 @@
 # `supersedes` — the spec entry it was punted for
 
-**Status: designed and audited, NOT implemented. One decision is the owner's; it
-is named at the bottom.**
+**Status: designed, audited, and settled. NOT implemented.** The one open
+question — who may assert a re-filing — was taken to three independent reviews
+and converged; see the last section.
 
 `docs/ARGUMENT_EDGES.md` shipped argument edges and punted this one, for a reason
 that still stands as far as it goes:
@@ -49,6 +50,7 @@ of both — the weight of chain state with the reliability of a comment.
 | `from.openedAtTime >= to.openedAtTime + deadClaimSecs` | `from` was filed no earlier than the moment `to` could first have died. This is derivable and needs no new field |
 | `from` has no outgoing edge yet | a re-filing re-files one question |
 | `to` holds fewer than 8 inbound | bounds the read |
+| `to` holds fewer than 2 inbound **from this author** | the anti-sybil term; see the last section for why the claim deposit alone is not the price it looks like |
 
 **Cycles are unrepresentable, not refused.** Every edge strictly increases
 `openedAtTime` by at least twelve weeks, so a chain can only run forward in time
@@ -75,19 +77,18 @@ either half possibly empty, the same packed shape `ClaimArguments` returns.
 
 ## Who may add, and what it costs
 
-The author of `from`, or an active court moderator.
+The author of `from`, or an active court moderator — settled in the last section,
+which is also where the reasoning lives.
 
-That is narrower than the argument edge's "anybody", and deliberately: an
-argument edge is a stranger's counter-evidence and pricing it would defeat the
-point, whereas "my claim re-files that one" is a statement about one's own
-filing. A moderator may also record it, because a docket's curator noticing that
-two claims are the same question is the ordinary case.
-
-**The flood is priced by the claim, not by the edge.** Filling one dead claim's
-eight inbound slots takes eight real claims, each carrying its own deposit —
-orders of magnitude above the storage deposit an edge costs. No per-author cap is
-needed here, unlike `maxArgInPerAuthor`, because the expensive thing is already
-required.
+**The flood is priced by the claim AND by a per-author term.** Because only
+`from`'s author may assert, filling one dead claim's eight inbound slots takes
+eight real claims, each carrying its own deposit — orders of magnitude above an
+edge's storage deposit. An earlier draft of this document stopped there and
+concluded that no `maxArgInPerAuthor` analogue was needed. That was wrong twice
+over: it is true only under author-only assertion (so it was an argument FOR the
+rule, quietly assumed while the rule was still undecided), and even then one
+address can fill all eight slots with eight of its own claims. Hence the
+per-author cap of 2 in the predicate above.
 
 Removal: the edge's author, or an active moderator, single-signer — the same
 authority argument edges use for the same reason (reversible by re-adding).
@@ -120,7 +121,10 @@ claim that paid a deposit to exist.
 cap, two `Set`s. No walk over the chain, because the time predicate removes the
 reason to have one.
 
-**Spam without a price.** Priced by the claim deposit, above.
+**Spam without a price.** Priced by the claim deposit and bounded by the
+per-author inbound cap, above. The deposit alone was not enough, and the draft
+that said it was had assumed the authorization rule it was meant to be arguing
+for.
 
 **Moderation gaps.** Covered by the same purge gate as argument edges; moderators
 may remove any edge.
@@ -129,18 +133,74 @@ may remove any edge.
 nil, every read returns empty, the first write creates them — the shape `c.mod`
 and the argument trees already use.
 
-## The one decision that is not mine
+## Who may assert it — settled, and not for the reason first given
 
-Everything above follows from what the repo already says. This does not:
+**The author of `from`, or an active court moderator.** Single-signer, the
+composite `RemoveArgument` already uses.
 
-**Should a re-filing be sayable by a third party at all?** The design above says
-the author of `from` or a moderator. The alternative is the argument edge's rule
-— anybody, at any time — on the grounds that "these two claims are the same
-question" is an observation, not a confession, and that the time-and-death
-predicate already stops it being abused.
+Three independent reviews were run on this question, one arguing from the
+docket's purpose, one from attack surface, one from the repo's own authority
+tiers. Two recommended author-or-moderator outright. The third recommended
+"anybody" — and then attached an amendment ("the author of `from` outranks a
+stranger on `from`'s single outgoing slot") which is author-or-moderator with a
+round of griefing in front of it. So the convergence is (a), and the reasons that
+carried it are better than the one this document opened with.
 
-I recommend author-or-moderator, because an unverifiable *intent* ("this was
-filed AS a re-filing") is the one part of the assertion the chain cannot check,
-and the author is the only party who knows it. But it is a policy call about what
-the docket is for, the entrypoint is easy to add and hard to take back, and it is
-exactly the kind of call the original punt was protecting.
+**The predicate is necessary, not sufficient.** `to.closed` plus the twelve-week
+gap certifies that the PAIR IS ELIGIBLE. It does not certify that the two claims
+ask the same question — and since `deadClaimSecs` is twelve weeks and this docket
+produces dead claims constantly, nearly every dead claim in a court qualifies as
+a `to` for any given `from`. The chain says what is allowed; the caller says
+WHICH, out of hundreds, and that choice is the entire content of the assertion.
+Compare the realm's genuinely permissionless entrypoints — `CloseDeadClaim`,
+`ResolveDispute`, `SettleUndisputed`. Their predicates are logically equivalent
+to the act, so the caller contributes nothing and "the verdict is the authority,
+not the caller" holds. Here the caller contributes the whole judgment.
+
+**Cardinality one is what makes it different from an argument edge.** Outbound is
+capped at one, and removal belongs to the edge's author. Compose those with
+"anybody" and a stranger consumes my claim's only outgoing slot with a `to` I
+would never have chosen — an assertion about what I meant by filing, which I
+cannot remove, which permanently blocks the true edge, bought for one storage
+deposit. `AddArgument` has no such exposure, and not because it is better
+guarded: its openness is safe BECAUSE its cardinality is thirty-two and
+non-exclusive. Exclusive, author-attributable, per-claim state is the shape
+`EditClaimTitle` guards, and it guards it author-only.
+
+**And the spam pricing above is only true under (a).** "Filling one dead claim's
+eight inbound slots takes eight real claims, each carrying its own deposit" holds
+only if the asserter must have authored them. Let anybody assert, and an attacker
+points eight OTHER PEOPLE's existing claims at one dead claim for eight storage
+deposits — collapsing the price by orders of magnitude and forcing a
+`maxArgInPerAuthor` analogue back in, which would make this a second copy of the
+argument edge, the exact outcome `argument.gno` says the separate design exists
+to avoid.
+
+### One amendment, adopted
+
+**A per-author inbound cap of 2 of the 8.** Under (a) a single address can still
+fill all eight slots with eight of its own claims. Argument edges kept a
+per-author term with an inbound cap eight times looser, and the reason given
+there applies here unchanged. It costs one counter in a scan the write already
+does, and it guarantees at least four distinct re-filers stay representable.
+
+### The strongest argument against, kept rather than buried
+
+**(a)'s privilege is forward-only, and it decays.** The edge a reader most needs
+is the oldest one — "this 2020 claim was re-put in 2023" — and under (a) its only
+authorized asserter is the author of the 2023 claim, who may themselves be dead,
+refunded and gone. The chain of re-filings breaks at its oldest link, exactly
+where the record is most useful, and the only remedy is a moderator: which puts
+the completeness of the record in the hands of the court's curators.
+
+There is a second, sharper form of it. **`CloseDeadClaim` is permissionless.**
+The `to.closed` bit this entire predicate rests on is written by whoever bothers
+to send the transaction. Requiring authorship for the derived statement, having
+not required it for the primitive it derives from, is a real inconsistency and
+should be admitted as one.
+
+Both are true. They are outweighed because the failure modes are not symmetric: a
+missing edge is a false negative that either of two parties can fix at any later
+time, while a squatted slot is a false positive the subject cannot fix at all,
+which also blocks the true edge, bought for a rounding error. An incomplete graph
+is a better thing to own than adverse possession of somebody else's filing.
