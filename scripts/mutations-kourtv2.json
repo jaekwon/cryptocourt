@@ -7897,5 +7897,47 @@
   "label": "Average: maturity is off by one in the filled test",
   "find": "\treturn sum / int64(count), count == want && r.filled >= want",
   "replace": "\treturn sum / int64(count), count == want && r.filled > want"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: a transfer of the whole balance is refused",
+  "find": "\tif src == nil || src.balance < amount {",
+  "replace": "\tif src == nil || src.balance <= amount {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "move: the sender's voting power GROWS on a send",
+  "find": "\tl.addVotes(delegateeOf(from, src), -amount)\n\tl.addVotes(delegateeOf(to, dst), amount)",
+  "replace": "\tl.addVotes(delegateeOf(from, src), amount)\n\tl.addVotes(delegateeOf(to, dst), amount)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "addVotes: a holder spending to exactly zero panics",
+  "find": "\tif next < 0 {",
+  "replace": "\tif next <= 0 {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "addVotes: the snapshot is written into the PREVIOUS, sealed epoch",
+  "find": "\ta.votes.SetAt(l.archive, string(who), l.Epoch(), next)",
+  "replace": "\ta.votes.SetAt(l.archive, string(who), l.Epoch()-1, next)"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Mint: the supply ceiling is checked but not enforced",
+  "find": "\tif !ok || next > MaxSupply {",
+  "replace": "\tif !ok || next > MaxSupply*2 {"
+ },
+ {
+  "pkg": "grc20votes",
+  "file": "grc20votes.gno",
+  "label": "Burn: burning the whole balance is refused",
+  "find": "\tif a == nil || a.balance < amount {",
+  "replace": "\tif a == nil || a.balance <= amount {"
  }
 ]
