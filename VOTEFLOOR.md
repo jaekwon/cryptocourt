@@ -1100,6 +1100,28 @@ the instrument quietly answered a narrower question than the one asked. When the
 conclusion is "nothing covers this", COUNT the matches (`grep -c`, or no pipe at all)
 before believing it.
 
+**THE WHOLE ROUTINE, RUN ONCE, END TO END — and the check on the check.** Every target had
+been run piecemeal today; `make check` itself had not. It passes in **1 minute 57**, which
+is worth knowing on its own: the routine is cheap enough that there is no excuse for
+skipping it.
+
+    gofmt clean; vet; gotest (6 Go packages)
+    anchors 1,213 rows / 24 fixtures; paths; guards 26 committed / all armed;
+    staleguards 125 entrypoints; demo-physics; nodelegate; scenarios-check
+    web-test (10 JS suites); height-shim
+    realm-test: 8 python guards + 12 gno suites
+    txtar-test 39s; elsewhere-test 7 rows
+    exit 0
+
+**A GREEN `make check` IS NOT SELF-EVIDENTLY A FULL RUN, and that is the trap here.**
+realm-test opens with `if ! command -v gno >/dev/null; then ... echo "gno not installed -
+skipping realm tests"; exit 0; fi` — it SKIPS, silently and successfully, unless REQUIRE_GNO
+is set. So on a machine without the toolchain the heaviest third of the routine evaporates
+and `check` still exits 0. Verified rather than assumed this time: `command -v gno` resolves
+to /Users/jk/gopath/bin/gno, and the log carries 12 `ok  .` lines — 7 p/ packages and 5 r/
+realms, the kourtv2 suite among them at 12.73s. Count those lines, or set REQUIRE_GNO, or
+the exit code is telling you less than it appears to.
+
 **AND THE THIRD LEVEL: DOES THE NAMED HARNESS ACTUALLY ASSERT IT?** The `elsewhere`
 question has three levels, and this file has now answered all three.
 
