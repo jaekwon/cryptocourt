@@ -483,13 +483,48 @@ survives every suite and fails `check-read-purity.py` with
 `elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
 resolves, so the annotation cannot rot into a shrug.
 
-**THE CAP SWEEP, MECHANISED.** The boundary lesson below generalises into a query: for
-every cap-like constant in the realm, does any corpus row mutate the OPERATOR of a
-comparison against it? Measured: 18 cap constants, 29 comparisons, and 9 of the 29 with no
-row touching their operator. Two of those nine were the folders walks already argued
+**THE CAP SWEEP, MECHANISED — AND THE FIRST VERSION OF THE QUERY WAS TOO LOOSE.** The
+boundary lesson below generalises into a query: for every cap-like constant in the realm,
+does any corpus row mutate the OPERATOR of a comparison against it? The first cut asked
+whether any row's `find` CONTAINED the comparison, and that is not the same question — the
+cap-DROP rows ("the folder cap is dropped") contain the text while changing something else
+entirely, so a boundary with a drop row looked covered. Requiring the row to keep the
+comparison and change its operator (`ops_of(find) != ops_of(replace)`) raised the unswept
+count from 9 to 13. Both numbers came from the same tree ten minutes apart; the difference
+is entirely in what was asked. Measured: 18 cap constants, 29 comparisons, and 13 of the 29
+with no row mutating their operator. Two of those nine were the folders walks already argued
 invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALID, 2 real.
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
+
+**THE SECOND CAP BATCH: 5 caught, 5 surviving, all five closed.** maxSlugLen,
+maxFailedRounds, maxSupInPerAuthor, maxHeightStep and maxHeightTotal were already held by
+tests that had no rows. The five survivors were maxReasonLen at both its sites, maxSupIn,
+and supersedeOrdered's deadline on BOTH clocks. Two of them are worth their own lines:
+
+- **checkReason's cap contradicted its own message.** It panics "a moderation reason is at
+  most 200 characters", and with `>=` a 200-character reason is refused — the guard
+  disagreeing with the sentence it prints. Pure function of one string, so it is tested as
+  one; a court fixture would only add setup between the bound and the assertion.
+- **supersedeOrdered has TWO branches and they are chosen, not both run.** The time clock
+  is used only when both claims carry an openedAtTime; the height fallback covers
+  pre-upgrade claims. The same off-by-one lives in each, and a test of one leaves the
+  other's arithmetic free. Its comment also claims the twelve-week gap is what makes
+  re-filing cycles UNREPRESENTABLE rather than refused — so the boundary is load-bearing
+  for a structural property, not just a date.
+
+**A HYPOTHESIS I PROBED AND HAD REFUTED, recorded because the wrong explanation nearly
+went into a comment.** The maxSupIn fixture first failed with "not enough CC ... more than
+you hold" from a helper CLOSURE that captured `cur` and called `OpenClaim(cross(cur), ...)`
+— the deposit charged to an address with no coin. Restructuring to a top-level helper
+taking `cur realm` as a parameter (the shape stakeAnswerDispute uses) fixed it, and the
+obvious story was that a captured realm does not carry through the extra frame. That story
+is FALSE: a probe doing exactly that — one inline crossing call, then the identical call
+from a closure capturing `cur` — succeeded on both (`id=1`, `id=2`). So the closure was not
+the cause, the real cause is unestablished, and the comment in the test now claims only
+that the helper matches the suite's shape. Two changes went in together (closure to
+function, and `alice` to `c.admin`) which is exactly the one-thing-at-a-time rule broken;
+the probe is what caught it before the false claim was committed.
 
 **A FIXTURE THAT WRITES N POINTS MAY NOT STORE N POINTS.** The seriesRowCap test failed on
 its first run against CORRECT code: 401 change points came back with the cap flag clear.

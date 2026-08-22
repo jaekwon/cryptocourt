@@ -8142,5 +8142,78 @@
   "label": "maxModSetSize: a set of exactly the maximum size is refused",
   "find": "if len(in) > maxModSetSize {",
   "replace": "if len(in) >= maxModSetSize {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "maxSlugLen: a slug of exactly the maximum length is refused",
+  "find": "len(slug) > maxSlugLen",
+  "replace": "len(slug) >= maxSlugLen"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "maxFailedRounds: a claim dies one failed round early",
+  "find": "cs.failedRounds >= maxFailedRounds",
+  "replace": "cs.failedRounds > maxFailedRounds"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "maxReasonLen: a purge code of exactly the maximum length is refused",
+  "find": "len(categoryCode) > maxReasonLen",
+  "replace": "len(categoryCode) >= maxReasonLen"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "maxReasonLen: a reason of exactly the maximum length is refused",
+  "find": "len(reason) > maxReasonLen",
+  "replace": "len(reason) >= maxReasonLen",
+  "why": "SURVIVED a sweep of every cap comparison in the realm, and it contradicts its own message while doing it: checkReason panics 'a moderation reason is at most 200 characters', so refusing a 200-character reason makes the guard disagree with the sentence it prints. Closed by TestAReasonOfExactlyTheMaximumLengthIsAccepted, which calls checkReason directly - it is a pure function of one string, and a court fixture would only add setup between the bound and the assertion."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "maxSupIn: a claim is re-filed one time more than the cap",
+  "find": "inN >= maxSupIn",
+  "replace": "inN > maxSupIn",
+  "why": "SURVIVED because reaching the cap through the public path is expensive: eight distinct `from` claims and at least four authors, since maxSupInPerAuthor is 2. The cap counts rows under one prefix of c.supBy, so TestTheInboundRefilingCapHoldsAtExactlyEight seeds the rows directly and drives only the NINTH through SupersedeClaim, the call that does the counting. Both sides of the boundary: eight seeded rows must refuse the next re-filing, seven must accept it."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "maxSupInPerAuthor: one author records one re-filing more than the cap",
+  "find": "mine >= maxSupInPerAuthor",
+  "replace": "mine > maxSupInPerAuthor"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "maxHeightStep: a step of exactly the maximum is refused",
+  "find": "n > maxHeightStep",
+  "replace": "n >= maxHeightStep"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "maxHeightTotal: the skew budget admits one block more",
+  "find": "tcHeightSkew > maxHeightTotal-n",
+  "replace": "tcHeightSkew >= maxHeightTotal-n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "supersedeOrdered: a re-filing exactly at the death deadline is refused",
+  "find": "from.openedAtTime >= to.openedAtTime+deadClaimSecs",
+  "replace": "from.openedAtTime > to.openedAtTime+deadClaimSecs",
+  "why": "SURVIVED, and the deadline is the whole ordering rule: at exactly twelve weeks the claim CAN have died, so the re-filing is legitimate. supersedeOrdered is a pure function of two claimStates, so TestARefilingIsLegalExactlyAtTheDeathDeadline tests the boundary directly rather than winding a clock twelve weeks. Its sibling row covers the height fallback, which is a separate branch chosen by whether both claims carry an openedAtTime - a test of one leaves the other's arithmetic free."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "supersedeOrdered: the height fallback deadline is exclusive",
+  "find": "from.openedAt >= to.openedAt+deadClaimTimeout",
+  "replace": "from.openedAt > to.openedAt+deadClaimTimeout"
  }
 ]
