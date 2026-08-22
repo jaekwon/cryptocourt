@@ -2808,17 +2808,26 @@ function argRow(slug, rid, chip, lookup){
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
     ${d? statusPill(d.statusText) : ""}</span></a>`;
 }
-function argumentSection(slug, id, lookup){
+function argumentSection(slug, id, lookup, chainRows){
   const cur = curationFor(slug);
-  if(!cur || !cur.relations.length) return "";
-  const rels = cur.relations;
+  const chain = Array.isArray(chainRows)? chainRows : [];
+  if((!cur || !cur.relations.length) && !chain.length) return "";
+  const rels = cur? cur.relations : [];
   const mine = rels.filter(r=>r.from===id || r.to===id);
-  if(!mine.length) return "";
+  if(!mine.length && !chain.length) return "";
   const dOf = i => lookup? lookup(i) : null;
   const parent = mine.find(r=>r.type==="part" && r.from===id);
   const children = mine.filter(r=>r.type==="part" && r.to===id).map(r=>r.from);
+  // THE CHAIN OWNS `bears` NOW. Curation keeps only the two kinds the realm has
+  // no concept of — containment, which §5 says may only hang off a section, and
+  // supersedes, which is in no spec — so a curation bears-edge is dropped rather
+  // than shown beside a chain one saying the same thing differently. Nothing
+  // merges silently: a row is either the chain's record or somebody's file.
   const rel = [];
+  const seen = new Set();
+  chain.forEach(([other, chip]) => { rel.push([other, chip]); seen.add(other + "|" + chip); });
   mine.forEach(r=>{
+    if(r.type==="bears" && chain.length) return; // the chain answered this kind
     if(r.type==="bears" && r.to===id) rel.push([r.from, r.stance==="supports"? "supports":"contradicts"]);
     else if(r.type==="bears" && r.from===id) rel.push([r.to, r.stance==="supports"? "supported by this":"contradicted by this"]);
     else if(r.type==="supersedes" && r.to===id) rel.push([r.from, "supersedes"]);
@@ -2831,7 +2840,16 @@ function argumentSection(slug, id, lookup){
   // and argument (a graph on top of it, any number, supports/counters). This
   // section renders BOTH, so heading it with the name of one axis labelled half
   // its own contents — and a reader asked what it meant, which is the evidence.
-  let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${cur.source==="local"? CUR_LABEL+" — the chain stores no relations" : "sample curation — the chain stores no relations"}</span></div>`;
+  // THE CAPTION HAD TO CHANGE, because it asserted something that stopped being
+  // true: "the chain stores no relations". It stores argument edges now. What it
+  // still does not store is containment and supersedes, so the caption names the
+  // source that actually applies rather than one blanket disclaimer.
+  const srcNote = chain.length
+    ? (mine.some(r=>r.type!=="bears")
+        ? "argument edges from the chain; containment and supersedes are curation"
+        : "the chain's own record")
+    : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
+  let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${esc(srcNote)}</span></div>`;
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
   // other way, so it belongs beside it rather than under "Related" — that group
   // is the argument graph, and filing a containment edge in it is exactly the
@@ -2950,6 +2968,39 @@ function cleanCuration(raw, slug, validIds){
   return {errs, warn, cur: errs.length? null : out};
 }
 /* precedence: local (this browser) ?? demo sample ?? none */
+/* THE CHAIN'S OWN ARGUMENT EDGES. ClaimArguments answers
+   "out:<to>:<s|c>,...;in:<from>:<s|c>,..." — bounded by the realm's own caps, so
+   this parse can never be handed more rows than a page can draw.
+
+   Only the ARGUMENT edge lives on chain, which is not a shortcoming to route
+   around: COURTS_STRUCTURE.md §5's containment guard is "only sections may be
+   containment parents", so claim→claim part-of is the shape the spec forbids,
+   and `supersedes` is in no spec at all. Those two stay curation and are labelled
+   as curation, which is why this returns only the bears rows and the caller
+   merges rather than replaces. */
+async function chainArguments(slug, id){
+  if(!isLive()) return null;
+  const raw = await one(`ClaimArguments(${gstr(slug)},${id})`).then(unesc).catch(()=>null);
+  if(typeof raw !== "string" || raw.indexOf("out:") !== 0) return null;
+  const half = raw.split(";in:");
+  const rows = [];
+  const eat = (blob, inbound) => {
+    for(const part of String(blob||"").split(",")){
+      const bits = part.split(":");
+      if(bits.length !== 2) continue;
+      const other = parseInt(bits[0], 10);
+      if(!Number.isInteger(other) || other < 1) continue;
+      const contests = bits[1] === "c";
+      rows.push([other, inbound
+        ? (contests ? "contradicts" : "supports")
+        : (contests ? "contradicted by this" : "supported by this")]);
+    }
+  };
+  eat(half[0].slice(4), false);
+  eat(half[1], true);
+  return rows;
+}
+
 function curationFor(slug){
   const rawS = store.get(curKey(slug));
   if(rawS){
@@ -3330,7 +3381,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
     + `<section><div class="sec-h">On-chain curation <span class="count">moderators — no bonds, gas only</span></div>
-       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders are flat, append-order lists; nesting, ordering, and relations exist only in the local layer below (folder descriptions are stored on chain but not yet readable — see the Owner-notes wishlist).</p>
+       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders nest, reorder, retire and carry a readable description; argument edges between claims are on chain too. What is still local: claim-to-claim containment (COURTS_STRUCTURE.md §5 allows a containment parent to be a section only, and folders are that) and supersedes (in no spec yet).</p>
        <div class="panel"><h4>Folders</h4><div class="actions">
          ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
          ${btn("Rename folder","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
@@ -3344,7 +3395,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}</div></div>
       </section>`
     + `<section style="margin-top:22px"><div class="sec-h">Local curation <span class="count">anyone — this browser only</span></div>
-       <p class="small" style="margin:0 0 10px">What the chain cannot hold yet — description, nested folders, relations — lives in a file you keep. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>
+       <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and argument edges are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>
        <div class="panel"><h4>Export</h4>
          <p class="small muted" style="margin:0 0 8px">${cur? (cur.source==="local"? "exports your local curation" : "exports the demo sample") : "exports an empty skeleton to start from"}</p>
          <div class="actions"><button class="btn" id="cur-dl"><span class="g">↓</span> Download JSON</button>
@@ -3809,6 +3860,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // ("now:<unix>:<height>"), so use that when it is there. On an ordinary chain
   // it equals the RPC height and nothing changes; on a skewed one it is the only
   // value the series can be read against.
+  const chainArgs = await chainArguments(slug, id);
   const seriesH = (tline && tline.now && tline.now.h != null)? tline.now.h : nowH;
   let ser=null;
   if(isLive()){ if(seriesH!=null) ser = await fetchStakeSeries(slug, id, seriesH); }
@@ -3836,7 +3888,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
-    + argumentSection(slug,id,argLookup);
+    + argumentSection(slug,id,argLookup,chainArgs);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button
