@@ -116,3 +116,49 @@ func TestMintedIsMaximalAndNeverShortChangesTheBuyer(t *testing.T) {
 			tried)
 	}
 }
+
+// A COST OF EXACTLY MaxInt64 IS PRICED, NOT REFUSED — the case KNOWN-GAPS recorded as
+// "NOT CONSTRUCTED, and recorded as that rather than as unreachable".
+//
+// `if q > uint64(maxInt64)` narrowed to `>=` differs only where the ceil-divided
+// quotient lands on 2^63-1 exactly. The gap row searched for that case at d = 1, argued
+// the numerator would have to be 2^64-2 whose factor pairs have opposite parity, and
+// concluded no integer (from, s1) exists. THE ARGUMENT WAS INCOMPLETE: the window is
+// ((q-1)m, qm], so at d = 1 the numerator may also be 2^64-3, which is odd and factors
+// as 1 x (2^64-3) — same parity, so from and s1 are integral. That solution needs
+// s1 = 2^63-1 and dies on the cap (New refuses cap > 2^50), which is the real
+// obstruction and not parity.
+//
+// Searching under the cap instead: diff = k*Q with Q = 2^63-1 = 7^2 * 73 * 127 * 337 *
+// 92737 * 649657 makes m = k exactly, so any even k whose k*Q factors into
+// (s1-from)(s1+from) with s1 <= 2^50 lands the quotient ON the ceiling. 74 such
+// solutions exist; this is the first, at d = 2.
+//
+// The three arms are the boundary and its two sides, because a ceiling that refuses one
+// unit early and one that refuses one unit late are different defects with the same
+// smell: the exact value is priced, one unit more is refused, one unit less is priced.
+func TestCostPricesACostOfExactlyMaxInt64(t *testing.T) {
+	const from = int64(994862694074946)
+	const delta = int64(18542)
+	c := New(2, 1<<50)
+
+	got, ok := c.Cost(from, delta)
+	if !ok {
+		t.Fatal("a cost of exactly MaxInt64 fits an int64, so it must be priced " +
+			"rather than refused as unaffordable")
+	}
+	if got != maxInt64 {
+		t.Fatalf("this span was constructed to cost exactly MaxInt64; it cost %d "+
+			"(the fixture no longer sits on the boundary and proves nothing)", got)
+	}
+	// ONE UNIT MORE overshoots the ceiling and must be refused.
+	if _, ok := c.Cost(from, delta+1); ok {
+		t.Fatal("one unit past a MaxInt64 cost cannot fit an int64 and must be refused")
+	}
+	// ...and one unit less is comfortably priced, so the refusal above is about the
+	// ceiling and not about the span or the curve.
+	if under, ok := c.Cost(from, delta-1); !ok || under >= maxInt64 {
+		t.Fatalf("one unit short of the ceiling must be priced below it: %d ok=%v",
+			under, ok)
+	}
+}

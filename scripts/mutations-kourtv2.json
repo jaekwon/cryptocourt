@@ -8263,5 +8263,13 @@
   "find": "\t\treturn len(out) >= limit",
   "replace": "\t\treturn len(out) > limit",
   "why": "render_test.gno says outright that the PAGE was never tested - \"TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never the PAGE\" - and both existing calls pass offset 0, so this arm was free. Closed by TestTheListedCourtPageIsConsistentAtItsOffsetAndLimit, which asserts paging CONSISTENCY rather than absolute positions: suites share one realm, so no fixed slug sits at a fixed index, but page(k) must equal the full listing from k onward and page(0,n) its first n. That relationship is what these mutations break."
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: the int64 ceiling is off by one",
+  "find": "\tif q > uint64(maxInt64) {",
+  "replace": "\tif q >= uint64(maxInt64) {",
+  "why": "PROMOTED FROM KNOWN-GAPS: the row invited construction ('IF SOMEONE CONSTRUCTS the exact case, promote it') and the case exists. Its own argument was incomplete, not wrong about the difficulty: it searched d = 1, said the numerator must be 2^64-2 whose factor pairs have opposite parity, and stopped. The window is ((q-1)m, qm], so at d = 1 the numerator may also be 2^64-3 - odd, factoring as 1 x (2^64-3), same parity, integral from and s1. That one dies on the CAP (New refuses cap > 2^50, and it needs s1 = 2^63-1), which is the real obstruction and not parity. Searching under the cap: diff = k*Q with Q = 2^63-1 = 7^2 * 73 * 127 * 337 * 92737 * 649657 makes m = k exactly, so any even k whose k*Q factors as (s1-from)(s1+from) with s1 <= 2^50 lands the quotient ON the ceiling. 74 solutions; the first is d=2, from=994862694074946, delta=18542, where q = 9223372036854775807 exactly, guard 1 (hi2 >= m) does not fire because hi2 = 1 < m = 4, and Cost returns (MaxInt64, true) intact against (0, false) mutated. Pinned by TestCostPricesACostOfExactlyMaxInt64."
  }
 ]

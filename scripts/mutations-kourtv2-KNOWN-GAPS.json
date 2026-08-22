@@ -143,14 +143,6 @@
  {
   "pkg": "curve",
   "file": "curve.gno",
-  "label": "Cost: the int64 ceiling is off by one",
-  "find": "\tif q > uint64(maxInt64) {",
-  "replace": "\tif q >= uint64(maxInt64) {",
-  "why": "NOT CONSTRUCTED, and recorded as that rather than as unreachable. `q > maxInt64` narrowed to `>=` differs only when the quotient is EXACTLY 2^63-1, which needs (s1^2 - from^2 + m - 1) / m to land on that value with s1 <= cap <= 2^50. For d = 1 the numerator must be 2^64-2, whose factor pairs always have opposite parity, so no integer (from, s1) exists; other d values were not searched. The neighbouring guard is what actually protects the division - `hi2 >= m` refuses before bits.Div64 can panic, and whenever hi2 >= m the quotient is about 2^64 and this ceiling would refuse anyway - so the two overlap and this one is the outer of the pair. IF SOMEONE CONSTRUCTS the exact case, promote it."
- },
- {
-  "pkg": "curve",
-  "file": "curve.gno",
   "label": "Minted: the down-correction overshoots, so a buyer is under-minted",
   "find": "\t\tif ok && cst <= coin {",
   "replace": "\t\tif ok && cst < coin {",

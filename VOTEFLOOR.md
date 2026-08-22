@@ -497,6 +497,32 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**AUDIT THE AUDIT RECORD: A GAP THAT INVITED CONSTRUCTION, CONSTRUCTED.** The 23
+KNOWN-GAPS rows each claim to be unpinnable, and those claims age. Re-reading them all,
+one carried an explicit invitation — `Cost: the int64 ceiling is off by one`, "NOT
+CONSTRUCTED, and recorded as that rather than as unreachable ... IF SOMEONE CONSTRUCTS the
+exact case, promote it."
+
+The case exists. Its own argument was INCOMPLETE rather than wrong about the difficulty:
+it searched d = 1, said the numerator must be 2^64-2 whose factor pairs have opposite
+parity, and stopped there. The window is ((q-1)m, qm], so at d = 1 the numerator may also
+be 2^64-3 — odd, factoring as 1 x (2^64-3), same parity, integral from and s1. That
+solution dies on the CAP (New refuses cap > 2^50 and it needs s1 = 2^63-1), which is the
+real obstruction and not parity.
+
+Searching under the cap instead: diff = k*Q with Q = 2^63-1 = 7^2 x 73 x 127 x 337 x
+92737 x 649657 makes m = k exactly, so any even k whose k*Q factors as
+(s1-from)(s1+from) with s1 <= 2^50 lands the quotient ON the ceiling. 74 solutions; the
+first is d=2, from=994862694074946, delta=18542, where q = 9223372036854775807 exactly,
+guard 1 does not fire because hi2 = 1 < m = 4, and Cost returns (MaxInt64, true) intact
+against (0, false) mutated. Promoted, and caught by TestCostPricesACostOfExactlyMaxInt64.
+
+**Two lessons, and the second is the reusable one.** A gap's REASON is a claim like any
+other and can be wrong in a way the verdict is not — this row's verdict (survives) was
+right the whole time, its explanation was not. And a search that reports "no solution"
+should say what it searched: "d = 1" was doing the work in that sentence, and nothing
+flagged that the other d values were never tried except the row's own honesty.
+
 **A COMMENT SAYING SOMETHING IS UNTESTED IS A LEAD, NOT A MEASUREMENT.** render_test.gno
 states it plainly — "TestDirectoryRanksByBurn tests the INDEX (ListedCourtsBy) and never
 the PAGE" — and an operator inventory of modrender.gno agreed: three boundaries in
