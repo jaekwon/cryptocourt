@@ -7099,5 +7099,89 @@
   "label": "claimIDFromKey: an eight-byte key reads as claim zero",
   "find": "\tif len(k) < 8 {",
   "replace": "\tif len(k) <= 8 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "claimTitleFor: a tombstone code is rendered unsanitised",
+  "find": "\t\t\t\treturn \"[removed \u00b7 \" + sanitize.InlineText(clm.tombstone) + \"]\"",
+  "replace": "\t\t\t\treturn \"[removed \u00b7 \" + clm.tombstone + \"]\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "claimTitleFor: the purge test is inverted",
+  "find": "\t\t\tif clm.purged {\n\t\t\t\treturn \"[removed",
+  "replace": "\t\t\tif !clm.purged {\n\t\t\t\treturn \"[removed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "claimTitleFor: the global-redaction test is inverted",
+  "find": "\t\t\tif clm.global {\n\t\t\t\treturn \"[text withheld]\"",
+  "replace": "\t\t\tif !clm.global {\n\t\t\t\treturn \"[text withheld]\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "claimBodyVisible: a body is withheld only when purged AND globally redacted",
+  "find": "\t\t\tif clm.purged || clm.global {\n\t\t\t\treturn \"\"",
+  "replace": "\t\t\tif clm.purged && clm.global {\n\t\t\t\treturn \"\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "courtNameFor: a purged court's tombstone is rendered unsanitised",
+  "find": "\t\treturn \"[removed \u00b7 \" + sanitize.InlineText(c.mod.courtTombstone) + \"]\"",
+  "replace": "\t\treturn \"[removed \u00b7 \" + c.mod.courtTombstone + \"]\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "courtNameFor: the purge gate needs only a moderation record",
+  "find": "\tif c.mod != nil && c.mod.courtPurged {\n\t\treturn \"[removed",
+  "replace": "\tif c.mod != nil || c.mod.courtPurged {\n\t\treturn \"[removed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "courtDescFor: a court description is rendered unsanitised",
+  "find": "\treturn sanitize.InlineText(c.desc)",
+  "replace": "\treturn c.desc"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "courtDescFor: a purged court still renders its description",
+  "find": "\tif c.mod != nil && c.mod.courtPurged {\n\t\treturn \"\"\n\t}",
+  "replace": "\tif false {\n\t\treturn \"\"\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "claimBodyFor: a claim body is rendered without the strict block filter",
+  "find": "\treturn sanitize.Block(body)",
+  "replace": "\treturn body"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "claimBodyQuoted: a quoted body skips the blockquote filter",
+  "find": "\treturn sanitize.Blockquote(body)",
+  "replace": "\treturn body"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "listedPage: only hidden-tier courts are listed",
+  "find": "\t\tif c.tier == tierHidden {",
+  "replace": "\t\tif c.tier != tierHidden {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "hideBanner: a legal-grounds tombstone is rendered unsanitised",
+  "find": "\t\treturn \"> **Removed on legal grounds** (\" + sanitize.InlineText(clm.tombstone) +",
+  "replace": "\t\treturn \"> **Removed on legal grounds** (\" + clm.tombstone +"
  }
 ]

@@ -102,5 +102,13 @@
   "find": "\tif hE > cs.histTrimmedTo {",
   "replace": "\tif hE >= cs.histTrimmedTo {",
   "why": "INVALID BY CONVERGENCE: `hE > cs.histTrimmedTo` to `>=` makes the trim ride again on every recordPools within the same hourly epoch, and the extra rides cannot change the state they reach. keep = hE - hourlyKeep is identical on each ride, so an extra ride can only free pages that are ALREADY older than the keep window - pages the next epoch's ride would free anyway, bounded by trimBudget either way. The difference is gas and the 'rides at most once per hourly epoch per claim' claim in recordPools' comment, which is a cost statement and not a state one. Kept because the once-per-epoch bound is what makes the trim budget's arithmetic hold ('a budget of 2 per touched hour strictly outruns' one candidate page per 32 changed epochs) - remove the bound and that sentence stops being true even though no read changes. IF THIS COMES BACK CAUGHT, someone has pinned the ride count: check they meant the cost and not the content."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "qualifiedSymbol: a court symbol is rendered unsanitised",
+  "find": "\treturn platformTicker + \":\" + sanitize.InlineText(c.coin.Symbol())",
+  "replace": "\treturn platformTicker + \":\" + c.coin.Symbol()",
+  "why": "INVALID BY ALPHABET, not a survivor. qualifiedSymbol wraps the coin symbol in InlineText and the wrap cannot change the output: courtSymbol is strings.ToUpper(slug), and mustSlug validates a slug as lowercase letters, digits and hyphens, 1..11 characters, so a symbol's alphabet is [A-Z0-9-] and holds no markdown metacharacter for a sanitiser to act on. THE PREMISE IS PINNED rather than argued: TestACourtSymbolsAlphabetIsWhatMakesItsSanitiserRedundant asserts the alphabet directly, so if slug validation ever widens, that test goes red and this row must be promoted. Kept because the render layer's rule is that user text is sanitised wherever it is printed, and a surface exempted by an upstream invariant should still read like the others - the alternative is a reader having to re-derive the slug charset to know why one call is missing."
  }
 ]
