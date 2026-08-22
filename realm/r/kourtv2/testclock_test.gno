@@ -166,7 +166,7 @@ func TestTestClockRefusesStrangersAndBackwardsTime(cur realm, t *testing.T) {
 	if TestClockActive() || TestClockSkew() != 0 {
 		t.Error("sealing must disarm and zero the skew")
 	}
-	uassert.AbortsContains(t, cur, "sealed", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: the test clock is sealed; this realm is not a test chain", func() {
 		EnableTestClock(cross(cur))
 	})
 }

@@ -50,14 +50,14 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 		t.Fatal("the dispute bond must escrow")
 	}
 	testing.SetRealm(testing.NewUserRealm(bob))
-	uassert.AbortsContains(t, cur, "already open", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: a dispute is already open on this claim", func() {
 		OpenDispute(cross(cur), "dp1", id)
 	})
 	// A disputed claim cannot settle undisputed.
 	uassert.AbortsContains(t, cur, "settles by vote", func() {
 		SettleUndisputed(cross(cur), "dp1", id)
 	})
-	uassert.AbortsContains(t, cur, "still open", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: the dispute vote is still open", func() {
 		ResolveDispute(cross(cur), "dp1", id)
 	})
 

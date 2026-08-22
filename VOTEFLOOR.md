@@ -373,18 +373,28 @@ output with `errors='replace'`; a mutant can emit any bytes at all.
 
 **THE MONEY PATHS ARE NO LONGER THE THIN SURFACE — MEASURE BEFORE PICKING A TARGET.**
 The standing backlog calls them "the weakest surface in the repo", which was true when it
-was written and is now inverted by the sweeps it asked for. Corpus rows per 100 lines of
-kourtv2 source, non-test files:
+was written and is now inverted by the sweeps it asked for. emission.gno alone carries 40
+rows over 185 lines of code, so "emission, crystallize and the senior queue are
+essentially unswept" is stale.
 
-    stake.gno 13.6   emission.gno 13.2   quality.gno 13.1   answer.gno 10.2
-    crystallize.gno 9.7   ...   votelock.gno 4.0   modrender.gno 3.4
-    folders.gno 3.2   supersede.gno 3.0   lock.gno 2.8
+**COUNT CODE LINES, NOT FILE LINES — 45% OF THIS SOURCE IS COMMENTARY.** The first version
+of this table divided rows by raw line count and got a materially different ranking,
+because the comment share is nowhere near uniform: votelock.gno is 141 lines of code under
+a 160-line header, lock.gno 150 of 361. Corpus rows per 100 CODE lines (blank and
+comment-only lines dropped), thinnest first:
 
-emission.gno alone carries 40 rows over 302 lines, so "emission, crystallize and the
-senior queue are essentially unswept" is stale. The thinnest file in the realm was
-lock.gno — which is still a money path, and the most consequential one, since it decides
-whether a coin may move at all. Density is not coverage, but it is the cheapest available
-proxy for where to look next, and it beats re-reading a premise.
+    folders.gno 4.9   supersede.gno 5.0   modrender.gno 5.3   moderation.gno 6.5
+    directory.gno 6.5   stakeseries.gno 7.3   modvote.gno 8.1   argument.gno 8.9
+    lock.gno 10.0   ...   stake.gno 20.0   emission.gno 21.6   quality.gno 26.5
+    answer.gno 27.4   session.gno 30.3   records.gno 34.6
+
+On the raw metric lock.gno looked like the thinnest file in the realm at 2.8, which is
+what sent the operator sweep there; on code lines it is NINTH at 10.0, and the genuinely
+thin files are the curation surfaces — folders, supersede, modrender. The sweep was still
+worth doing, because lock.gno decides whether a coin may move at all and it turned up a
+whole class of mis-asserted refusals, but the reason given for choosing it was not the true
+one. Density is not coverage; it is the cheapest proxy for where to look next, and it is
+only as good as its denominator.
 
 **A SENTENCE ADDRESSED TO THE NEXT CONTRIBUTOR IS NOT AN ENFORCEMENT MECHANISM.**
 lock.gno's header ends its account of the double-commit risk with "If a new spend path
@@ -397,6 +407,29 @@ can only assert about the paths it names and the suite cannot go red for one nob
 a test for. Custody used to make that structural: the coins left the balance, so the
 LEDGER refused the second spend on every path including the ones nobody thought about.
 A lock cannot do that, so scripts/check-spend-paths.py does.
+
+**GREP THE GUARDS BEFORE WRITING A GUARD.** The adjacency half of
+check-spend-paths.py — every user-to-escrow transfer must be preceded by a spend gate —
+already existed as check-epoch-coherence.py ARM 7, with the same
+`must(?:Spendable|Stakable)\(` regex and the same three-line lookback, plus a pinned count
+of seven user-sourced movements. I wrote the copy after grepping lock.gno for the policy
+and the Makefile for how guards are wired, but never the guards themselves for whether the
+rule was already enforced.
+
+The copy was also WORSE, in exactly the two ways ARM 7 records having been fixed: it
+matched only `c.coin.Transfer(`, so it was blind to Burn (eleven sites) and to every other
+Court receiver — mc, c2, m, c3, of which mc is "sixteen lines away doing Mint". ARM 7's
+comment names that mistake: "the regex assumed a spelling the file already contradicts
+elsewhere." Two implementations of one rule is how the second comes to disagree with the
+first — stakeindex.gno's stakeIdxMine comment says the same thing about two readers of one
+tree — so the duplicate was deleted and the rule left where it was already enforced.
+
+What survived is the half nothing else pins: ARM 7 makes a new outflow get LOOKED AT by
+failing its count; it does not make the new path get a TEST, which is what lock.gno's
+header actually promises. Cross-check found while reading for this: votelock.gno's header
+states the same census independently — "All SEVEN mustSpendable call sites move coin OUT of
+the holder's balance", enumerated, with Stake the single mustStakable exemption — so seven
+plus one is the eight the guard pins, a number the design commits to in two places.
 
 **PREFER A NAMED CENSUS TO A COUNT.** The first version counted spend guards against
 `// PATH n` arms in the one test the header names, and it fired on correct code: two of
@@ -457,6 +490,43 @@ realm refused.
 Not every loose assertion is wrong for this reason: stake_test's `Stake(..., 0)` asserting
 "must be positive" is sound, because a zero stake reaches no ledger call at all (lockStake
 returns early and nothing transfers), so no second layer can satisfy it.
+
+**THE SUBSTRING CLASS, SWEPT.** Having found one instance the expensive way, the
+question "how many other assertions could an inner layer satisfy" is mechanical: collect
+every `panic("…")` in the realm and in the p/ packages the realm imports, collect every
+`AbortsContains`/`mustPanicWith` substring in the suite, and flag a substring matched by
+BOTH. The first cut of that instrument was too blunt and said 37 — it counted kourtv1 and
+ccwrap, which share dozens of messages with kourtv2 because one is its ancestor and the
+other its wrapper, and which the kourtv2 suite never calls. Restricted to IMPORTED
+packages it said 16; requiring a competing kourtv2 message as well, 15. That last
+refinement matters: `'allowance exceeded'` is produced ONLY by grc20votes, and kourtv2
+delegates allowance enforcement to the ledger, so asserting the ledger's message there is
+correct rather than ambiguous.
+
+All 15 tightened to the realm's own full message, full suite green — so none of them was
+matching something other than the message named, and the tightening was free. Only the
+transfer pair is known to have been hiding a live survivor; the other 13 are hygiene, and
+saying otherwise would be claiming 13 closures nobody measured. `scripts/
+check-abort-assertions.py` now keeps the class at zero: 347 assertions, none satisfiable
+by a p/ layer that also has a kourtv2 counterpart.
+
+**NOT GATED, AND MEASURED SO THE DECISION IS ON THE RECORD:** a substring can be loose
+WITHIN kourtv2 too, and 46 assertions match more than one kourtv2 message — `'moderator'`
+matches fifteen. Almost all are harmless, because the other messages are unreachable from
+the call under assertion, and a guard reporting 46 findings against a correct tree is the
+nuisance that gets switched off. The cross-layer rule is the one with a demonstrated
+failure behind it, so that is the one with teeth.
+
+**THE GUARD'S FIRST VERSION WAS VACUOUS, and only the ablation said so.** It scanned test
+files LINE BY LINE, so an assertion whose message sits on the line below its call — which
+gofmt produces as soon as the message is long enough to wrap — was structurally invisible.
+It reported 345 assertions and a clean tree while being blind to the two transfer
+assertions the whole check was written for, because tightening them had wrapped them.
+Reverting one to its loose form produced NO complaint. Scanning the file text instead (the
+`\s*` in the pattern already spanned newlines) found 347 and both arms then fired. Twice
+now a new check has been vacuous on its first run — the `elsewhere` reachability rule and
+this one — so treat "my new guard passes" as an untested claim until an ablation makes it
+fail.
 
 **A MASKING PAIR DOES NOT ALWAYS MEAN NO ROW CAN BE WRITTEN — CHECK ADJACENCY.** The
 standing rule for overlapping checks is "ablate jointly to prove teeth, then record that

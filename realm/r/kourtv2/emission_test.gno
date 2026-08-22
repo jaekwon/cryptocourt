@@ -236,8 +236,10 @@ func TestSeniorQueueRefusesJunkAndNeverOverwrites(cur realm, t *testing.T) {
 	}
 
 	// Junk is refused rather than parked in a queue that never forgets.
-	mustPanicWith("must be positive", func() { enqueueSenior(c, alice, 0, "comp") })
-	mustPanicWith("must be positive", func() { enqueueSenior(c, alice, -1, "comp") })
+	mustPanicWith("kourtv2: a senior entitlement must be positive",
+		func() { enqueueSenior(c, alice, 0, "comp") })
+	mustPanicWith("kourtv2: a senior entitlement must be positive",
+		func() { enqueueSenior(c, alice, -1, "comp") })
 
 	// reserveJunior CLAMPS rather than aborting (F4 — it is on a shared settlement
 	// path), and it clamps from below as well as above.

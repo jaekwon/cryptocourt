@@ -49,7 +49,7 @@ func TestFlagInconclusiveReopensAndDoubles(cur realm, t *testing.T) {
 	bobBefore := c.coin.BalanceOf(bob)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	OpenFlag(cross(cur), "qf1", id)
-	uassert.AbortsContains(t, cur, "already open", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: a flag vote is already open", func() {
 		OpenFlag(cross(cur), "qf1", id)
 	})
 	// Participants cannot vote their own claim's quality (Q2).
@@ -60,11 +60,11 @@ func TestFlagInconclusiveReopensAndDoubles(cur realm, t *testing.T) {
 	// A dust-weight low: directionally backed, below the demotion bar.
 	testing.SetRealm(testing.NewUserRealm(dust))
 	VoteQuality(cross(cur), "qf1", id, qualityLow)
-	uassert.AbortsContains(t, cur, "already voted", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: already voted this quality tally", func() {
 		VoteQuality(cross(cur), "qf1", id, qualityLow)
 	})
 	testing.SetRealm(testing.NewUserRealm(bob))
-	uassert.AbortsContains(t, cur, "still open", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: the flag vote is still open", func() {
 		ResolveFlag(cross(cur), "qf1", id)
 	})
 
@@ -270,7 +270,7 @@ func TestCounterRevoteOverturnsSlash(cur realm, t *testing.T) {
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	CounterFlag(cross(cur), "qf6", id)
-	uassert.AbortsContains(t, cur, "already", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: the one counter re-vote was already used", func() {
 		CounterFlag(cross(cur), "qf6", id)
 	})
 	// Maximal mobilization: carol re-votes MID at the full bar.

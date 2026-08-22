@@ -167,13 +167,13 @@ func TestReservedSlugsRefused(cur realm, t *testing.T) {
 	a := testutils.TestAddress("sym-res")
 	for _, bad := range []string{"kourt", "court", "gnot", "usdc"} {
 		testing.SetRealm(testing.NewUserRealm(a))
-		uassert.AbortsContains(t, cur, "reserved", func() {
+		uassert.AbortsContains(t, cur, "kourtv2: that slug is reserved", func() {
 			StartCourt(cross(cur), bad, "impostor")
 		})
 	}
 	// The meta slug is refused on the PUBLIC path too (init owns it).
 	testing.SetRealm(testing.NewUserRealm(a))
-	uassert.AbortsContains(t, cur, "reserved", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: the 'meta' slug is reserved", func() {
 		StartCourt(cross(cur), metaSlug, "impostor")
 	})
 }
@@ -192,11 +192,11 @@ func TestQualifiedSymbolRendering(cur realm, t *testing.T) {
 	}
 	// The platform ticker and its homophone are not squattable as slugs.
 	testing.SetRealm(testing.NewUserRealm(a))
-	uassert.AbortsContains(t, cur, "reserved", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: that slug is reserved", func() {
 		StartCourt(cross(cur), "kourt", "impostor")
 	})
 	testing.SetRealm(testing.NewUserRealm(a))
-	uassert.AbortsContains(t, cur, "reserved", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: that slug is reserved", func() {
 		StartCourt(cross(cur), "court", "impostor")
 	})
 }

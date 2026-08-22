@@ -33,17 +33,20 @@ about the paths it names. Custody used to make this structural — the coins lef
 the balance, so the LEDGER refused the second spend on every path including the
 ones nobody thought about. A lock cannot do that. Only a structural check can.
 
-TWO ARMS, because the promise has two halves.
+ADJACENCY IS NOT CHECKED HERE, AND THIS FILE ONCE DID CHECK IT. That was a
+duplicate: check-epoch-coherence.py ARM 7 already requires every user-sourced
+coin movement to be immediately preceded by a gate, with the same
+`must(?:Spendable|Stakable)\\(` regex and the same three-line lookback, plus a
+pinned count of seven such movements. Its version is strictly better — it covers
+Burn as well as Transfer, and any Court receiver (c, mc, c2, m, c3), where the
+copy here matched only `c.coin.Transfer(`; ARM 7's own comments record fixing
+both of those blind spots, calling the narrow regex out as having "assumed a
+spelling the file already contradicts elsewhere". The copy was written without
+grepping the guards for the policy first, and two implementations of one rule is
+how the second one comes to disagree with the first. Deleted, with the rule left
+where it was already enforced.
 
-  ADJACENCY — every `c.coin.Transfer(<who>, c.escrow, <amt>)` must be preceded,
-  within a few lines, by `mustSpendable(c, <who>, <amt>)` or `mustStakable(c,
-  <who>, <amt>)` for the SAME holder and the SAME amount. Same amount matters as
-  much as same holder: sizing the check against one figure and the transfer
-  against another is how the double-commit arrives with a guard sitting right
-  above it. Escrow-to-holder transfers are payouts and are not spends, so they
-  are skipped.
-
-  CENSUS — the set of functions that call a spend guard must be exactly the set
+WHAT IS LEFT IS THE HALF NOTHING ELSE PINS: the CENSUS — the set of functions that call a spend guard must be exactly the set
   named in SPEND_PATHS below, each mapped to the test that proves its refusal.
   This is the arm that catches the new path: adding one makes the tree and the
   map disagree, and the only way to make it agree is to name the test that
@@ -59,9 +62,18 @@ TWO ARMS, because the promise has two halves.
   locks in place instead of transferring (that is the whole point of lock.gno),
   so it has a guard but no transfer, and a census over transfers would miss it.
 
-Both arms refuse to pass vacuously: no transfers found, no guards found, or the
-named test missing all mean the pattern has drifted off the code rather than
-that the code is clean.
+  ARM 7 makes a new outflow get LOOKED AT, by failing its count. It does not make
+  the new path get a TEST, which is the thing lock.gno's header actually promises.
+  That is the gap this file fills, and the reason it survives as its own check
+  rather than folding into that one.
+
+The census refuses to pass vacuously: no guards found, or a named test missing,
+both mean the pattern has drifted off the code rather than that the code is clean.
+
+votelock.gno's header states the same census independently — "All SEVEN
+mustSpendable call sites move coin OUT of the holder's balance", enumerating them,
+with Stake the single mustStakable exemption. Seven plus one is the eight below, so
+the number here is one the design commits to in two places.
 """
 
 import re
@@ -100,45 +112,8 @@ FUNC = re.compile(r"^func (?:\([^)]*\) )?([A-Za-z_]\w*)\(")
 
 # The two spend guards. Both take (c, who, amount) and both panic.
 GUARD = re.compile(r"\bmust(?:Spendable|Stakable)\(")
-TRANSFER = re.compile(r"\bc\.coin\.Transfer\(")
-
-# How far above a transfer its guard may sit. Three lines covers a guard, a
-# comment and a blank; more than that and the two are not obviously a pair to a
-# human reader either.
-LOOKBACK = 3
 
 
-def args_at(text, start):
-    """Split the argument list of a call whose '(' is at `start`, respecting
-    nesting so an amount like mulDiv128(a, b, c) stays one argument. Returns
-    None when the parens do not close on this text."""
-    depth, cur, out = 0, "", []
-    for ch in text[start:]:
-        if ch == "(":
-            depth += 1
-            if depth == 1:
-                continue
-        elif ch == ")":
-            depth -= 1
-            if depth == 0:
-                out.append(cur)
-                return [a.strip() for a in out]
-        if depth == 1 and ch == ",":
-            out.append(cur)
-            cur = ""
-        else:
-            cur += ch
-    return None
-
-
-def calls(line, pattern):
-    """Every (args) of `pattern` on this line, as lists of argument text."""
-    found = []
-    for m in pattern.finditer(line):
-        a = args_at(line, m.end() - 1)
-        if a is not None:
-            found.append(a)
-    return found
 
 
 def sources():
@@ -155,41 +130,23 @@ def main():
               file=sys.stderr)
         return 1
 
-    spends, guards, bad = 0, 0, []
+    guards, bad = 0, []
     callers = set()
     for p in files:
-        lines = p.read_text().splitlines()
         fn = None
-        for i, line in enumerate(lines):
+        for line in p.read_text().splitlines():
             m = FUNC.match(line)
             if m:
                 fn = m.group(1)
-            hits = len(calls(line, GUARD))
+            hits = len(GUARD.findall(line))
             # The declarations themselves are not call sites.
             if hits and not line.startswith("func must"):
                 guards += hits
                 callers.add((p.name, fn))
-            for a in calls(line, TRANSFER):
-                if len(a) != 3:
-                    bad.append((p.name, i + 1, line.strip(),
-                                "the argument list did not parse as (from, to, amount)"))
-                    continue
-                src, dst, amt = a
-                if dst != "c.escrow" or src == "c.escrow":
-                    continue  # a payout, or not an escrow move at all
-                spends += 1
-                window = lines[max(0, i - LOOKBACK):i]
-                ok = any([src, amt] == g[1:]
-                         for w in window for g in calls(w, GUARD))
-                if not ok:
-                    bad.append((p.name, i + 1, line.strip(),
-                                f"no mustSpendable/mustStakable(c, {src}, {amt}) "
-                                f"in the {LOOKBACK} lines above"))
 
-    if not spends or not guards:
-        print(f"check-spend-paths: found {spends} escrow spend(s) and {guards} "
-              f"spend guard(s); one of them being zero means this check is "
-              f"scanning for a shape the realm no longer has.", file=sys.stderr)
+    if not guards:
+        print("check-spend-paths: found no spend guards at all, so this check is "
+              "scanning for a shape the realm no longer has.", file=sys.stderr)
         return 1
 
     tests = "\n".join(p.read_text() for p in REALM.glob("*_test.gno"))
@@ -211,9 +168,8 @@ def main():
                         "that proves it refuses to dip into a lock"))
 
     if bad:
-        print("check-spend-paths: a holder's CC can leave their balance without "
-              "being checked against what they have already committed.\n",
-              file=sys.stderr)
+        print("check-spend-paths: a spend path has no proof that it refuses to "
+              "dip into a lock.\n", file=sys.stderr)
         for name, line, src, why in bad:
             where = f"{name}:{line}" if line else name
             print(f"  {where}: {src}\n      {why}", file=sys.stderr)
@@ -227,9 +183,8 @@ def main():
               f"belongs in that test too\").", file=sys.stderr)
         return 1
 
-    print(f"check-spend-paths: {spends} holder-to-escrow transfer(s) each guarded "
-          f"on the lines above, and {len(callers)} spend path(s) all named in "
-          f"SPEND_PATHS with a covering test that exists.")
+    print(f"check-spend-paths: {len(callers)} spend path(s) ({guards} guard call "
+          f"site(s)) all named in SPEND_PATHS with a covering test that exists.")
     return 0
 
 

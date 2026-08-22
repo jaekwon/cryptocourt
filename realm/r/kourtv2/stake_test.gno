@@ -331,7 +331,7 @@ func TestDeadClaimCloses(cur realm, t *testing.T) {
 		t.Fatal("a dead claim's staker exits 1x")
 	}
 	testing.SetRealm(testing.NewUserRealm(bob))
-	uassert.AbortsContains(t, cur, "closed", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: this claim is closed", func() {
 		Stake(cross(cur), "dd1", id, sideYES, 1)
 	})
 }
@@ -346,7 +346,7 @@ func TestStakeGuards(cur realm, t *testing.T) {
 		Stake(cross(cur), "g1", id, 2, 1)
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "must be positive", func() {
+	uassert.AbortsContains(t, cur, "kourtv2: stake must be positive", func() {
 		Stake(cross(cur), "g1", id, sideYES, 0)
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))

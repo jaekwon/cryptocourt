@@ -138,6 +138,7 @@ EPOCHCOH = "scripts/check-epoch-coherence.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
 SPENDPATH = "scripts/check-spend-paths.py"
+ABORTASRT = "scripts/check-abort-assertions.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
 MUTS = "scripts/mutations-kourtv2.json"
@@ -515,13 +516,15 @@ print("\ncheck-spend-paths")
 # balance under a lock, so the LEDGER cannot refuse the second commitment and the
 # realm ends up owing CC it does not hold.
 #
-# The first arm is the one that matters at review time - a transfer whose guard is
-# gone. The plant deletes the guard rather than weakening it, because a weakened
-# one is what the corpus rows already cover.
-control("an escrow transfer with no spend guard", f"{KOURTV2}/answer.gno",
+# A path that stops calling its guard. This used to assert the ADJACENCY complaint,
+# which is gone: that rule was a weaker duplicate of check-epoch-coherence ARM 7 and
+# was deleted rather than left to drift out of step with it. The census catches the
+# same plant, from the other side - the function is still in SPEND_PATHS and no
+# longer calls a guard.
+control("a spend path that stopped calling its guard", f"{KOURTV2}/answer.gno",
         "\tmustSpendable(c, who, bond)\n",
         "",
-        "no mustSpendable/mustStakable(c, who, bond)",
+        "no longer calls a spend guard",
         argv=["python3", SPENDPATH])
 # The arm for the NEXT path somebody adds, which is the whole reason this guard
 # exists: the suite cannot go red for a path no test names, so the census has to.
@@ -545,6 +548,44 @@ control("a census pointing at a deleted test", SPENDPATH,
         '"TestDeletedLastWeek"',
         "does not exist",
         argv=["python3", SPENDPATH])
+
+print("\ncheck-abort-assertions")
+# The failure this exists for is a test that PASSES for the wrong reason, so
+# nothing goes red on its own - both transfer-amount guards were unpinned for as
+# long as their tests asserted the substring "must be positive", which grc20votes'
+# own mustBePositive also satisfies. Loosening a tightened assertion is the plant.
+control("an assertion an inner layer also satisfies", f"{KOURTV2}/dispute_test.gno",
+        '"kourtv2: a dispute is already open on this claim", func() {',
+        '"already open", func() {',
+        "can be satisfied by a layer it is not testing",
+        argv=["python3", ABORTASRT])
+# THE SHAPE THAT MADE THE FIRST VERSION VACUOUS. It scanned line by line, so an
+# assertion whose message sits on the line BELOW its call - which gofmt produces as
+# soon as the message is long enough to wrap - was invisible, and the guard reported
+# a clean tree while seeing neither of the two assertions this check was written
+# for. Found by ablation, not by reading. This arm plants that exact shape.
+control("a wrapped assertion the scan must still see", f"{KOURTV2}/stake_test.gno",
+        '"kourtv2: stake must be positive", func() {',
+        '"must be positive",\n\t\tfunc() {',
+        "can be satisfied by a layer it is not testing",
+        argv=["python3", ABORTASRT])
+# Fail CLOSED: a pattern that stops matching the tests, and a reachable-package set
+# that comes back empty, both leave this reporting clean for ever.
+# THE WHOLE alternation, not just its first branch. The plant here used to read
+# "AbortsContains" -> "AbortsNOPE", which left mustPanicWith( and AbortsWith( still
+# matching, so the guard went on finding hundreds of assertions and reported clean:
+# this arm was SILENT and the selftest said so on its first run. A pattern-drift
+# plant has to break the pattern, not one of its branches.
+control("an assertion pattern that drifted off the tests", ABORTASRT,
+        r"r'(?:AbortsContains\(t, cur,|mustPanicWith\(|AbortsWith\(t, cur,)'",
+        r"r'(?:AbortsNOPE\(t, cur,)'",
+        "drifted off the tests",
+        argv=["python3", ABORTASRT])
+control("the reachable package set coming back empty", ABORTASRT,
+        'ALWAYS = {"grc20votes"}',
+        'ALWAYS = set()\nIMPORT = re.compile(r"NOTHINGMATCHESTHIS")',
+        "scanning for a shape the tree no longer has",
+        argv=["python3", ABORTASRT])
 
 print("\ncheck-paths")
 # Every want below NAMES THE FILE the mutation exposes. An earlier version of
