@@ -469,6 +469,12 @@ type Court struct {
 	queue           *bptree.BPTree // entitlement seq (be64) -> *entitlement
 	queueSeq        uint64
 	records         *bptree.BPTree // addr -> *answerRecord (records.gno)
+	// Argument edges (argument.gno, COURTS_STRUCTURE.md §5). Two indexes over ONE
+	// edge object so both directions are a prefix scan. Nil until the first edge
+	// exists — every read tests for nil rather than allocating, because a query
+	// carries no storage deposit.
+	argOut          *bptree.BPTree // be(from)|be(to) -> *argEdge
+	argIn           *bptree.BPTree // be(to)|be(from) -> the SAME *argEdge
 	// locked is addr -> staked CC still sitting in that holder's own balance
 	// (lock.gno). Created eagerly with the others: it is a money-path read on
 	// every deposit and bond, and a lazily-built tree would give each of those
