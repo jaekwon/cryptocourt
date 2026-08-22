@@ -7820,5 +7820,40 @@
   "label": "StakedPage: the leading separator is kept",
   "find": "\treturn out[1:]",
   "replace": "\treturn out"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: a start position AT the cap is refused, so the curve cannot be topped up",
+  "find": "\tif from < 0 || delta < 0 || from > c.cap {",
+  "replace": "\tif from < 0 || delta < 0 || from >= c.cap {"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: reaching EXACTLY the cap is refused",
+  "find": "\tif !add || s1 > c.cap {",
+  "replace": "\tif !add || s1 >= c.cap {"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: the price rounds DOWN, so a buyer underpays the curve",
+  "find": "\tlo2, carry := bits.Add64(lo, m-1, 0)",
+  "replace": "\tlo2, carry := bits.Add64(lo, 0, 0)"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: the overflow guard admits a quotient it cannot hold",
+  "find": "\tif hi2 >= m {",
+  "replace": "\tif hi2 > m {"
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Minted: the buyer is charged for one step less than they received",
+  "find": "\tspent, _ = c.Cost(from, delta) // round-up cost of exactly what was minted",
+  "replace": "\tspent, _ = c.Cost(from, delta-1) // round-up cost of exactly what was minted"
  }
 ]

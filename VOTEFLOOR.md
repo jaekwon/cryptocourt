@@ -286,6 +286,22 @@ all three `&&` predicates turned into `||`. The single survivor is lockVote's
 first; it is recorded in KNOWN-GAPS with that reason. Worth repeating after any change to
 those three files, since it costs about two minutes and does not depend on guessing.
 
+**A KILLED PARALLEL RUN LEAVES SHARDS BEHIND, and one of mine stole a core for six hours
+and twenty-four minutes.** `pkill -f "<batch>.json"` matches the mutate-parallel DRIVER,
+whose argv carries the batch path — it does NOT match the per-shard `scripts/mutate.py`
+children, which read their rows from stdin and carry no batch name at all. One shard from
+a sweep killed at 20:35 was still running at 02:27, re-spawning a fresh `gno test` each
+time I killed its current one, and it had been competing with every measurement since:
+the corpus slices drifted from 11 to 19 minutes, and the "109s vs 54s" whole-package
+timing I correctly diagnosed as load noise was partly this.
+
+To kill a parallel run: `pkill -f mutate-parallel` AND `pkill -f mutate.py`, then
+`ps -eo pid,ppid,etime,command | grep -E "mutate.py|gno test"` and look for a PPID of 1
+and an elapsed time older than the run. An orphan re-parents to init and keeps going;
+nothing in the harness times it out, because the harness that would have is the one that
+died. No correctness risk — a shard mutates its own staged root, never the repo — but
+every timing number taken while one is alive is wrong.
+
 **A MUTANT'S OUTPUT IS NOT TEXT.** Decoding a packed index one byte at a time printed
 a raw `0xff` into a failure message and killed the ablation driver with
 `UnicodeDecodeError`, mid-mutation. The file was restored only because the restore sits

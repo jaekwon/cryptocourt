@@ -162,5 +162,37 @@
   "replace": "\tif CourtCount() > 2 {",
   "elsewhere": "gnoland/testdata/kourtv2_usedrealm_seeded.txtar",
   "why": "UNPINNABLE BY THIS SUITE FOR A COUNTING REASON, and the corpus delta pass is what found it. The guard is CourtCount() > 1; widening it to > 2 still REFUSES in the gno suite, because by the time any test runs the realm holds dozens of courts and every small threshold is already exceeded. So a test can assert the refusal - and tcbase_test.gno does - without being able to discriminate the threshold at all. Only a harness holding exactly TWO courts can, and kourtv2_usedrealm_seeded.txtar is that harness: it creates one user court beside meta and asserts the message. MEASURED both ways: the mutation passes the whole kourtv2 suite (44.6s, ok) and fails that txtar at line 123 with `no match for this realm already has courts found in stderr`. This row was recorded as CAUGHT when it was written, on a FILTERED run where only two courts existed - which is exactly the mis-attribution a full pass exists to catch."
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: the int64 ceiling is off by one",
+  "find": "\tif q > uint64(maxInt64) {",
+  "replace": "\tif q >= uint64(maxInt64) {",
+  "why": "NOT CONSTRUCTED, and recorded as that rather than as unreachable. `q > maxInt64` narrowed to `>=` differs only when the quotient is EXACTLY 2^63-1, which needs (s1^2 - from^2 + m - 1) / m to land on that value with s1 <= cap <= 2^50. For d = 1 the numerator must be 2^64-2, whose factor pairs always have opposite parity, so no integer (from, s1) exists; other d values were not searched. The neighbouring guard is what actually protects the division - `hi2 >= m` refuses before bits.Div64 can panic, and whenever hi2 >= m the quotient is about 2^64 and this ceiling would refuse anyway - so the two overlap and this one is the outer of the pair. IF SOMEONE CONSTRUCTS the exact case, promote it."
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Minted: the down-correction overshoots, so a buyer is under-minted",
+  "find": "\t\tif ok && cst <= coin {",
+  "replace": "\t\tif ok && cst < coin {",
+  "why": "MASKED BY THE OTHER LOOP, and no single-mutation row can be written. Nudging the down-loop to `cst < coin` makes it step one PAST the answer whenever the payment exactly equals a span's price - and the up-loop immediately repairs it, because Cost(from, s1+1-from) then equals coin, which is not `> coin`, so it steps back. MEASURED: this mutation alone survives every suite; nudging BOTH loops together (`cst < coin` and `cst >= coin`) fails TestMintedIsMaximalAndNeverShortChangesTheBuyer with `paying the exact price of 1 units from 0 minted only 0`, and fails two existing curve tests as well. So the pair has teeth and neither half can be pinned on its own. Kept because a correction loop that stops on the wrong comparison is only correct by the grace of its neighbour."
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Minted: the up-correction stops one short",
+  "find": "\t\tif !ok || cst > coin {",
+  "replace": "\t\tif !ok || cst >= coin {",
+  "why": "UNREACHABLE, by an argument the arithmetic makes and a probe confirms. The up-loop's `cst > coin` narrowed to `>=` can only matter when the isqrt estimate lands BELOW the true answer AND that answer's cost equals the payment exactly. Those are mutually exclusive: if coin == Cost(from, delta) = ceil((s1^2 - from^2)/2d) with s1 = from+delta, then 2d*coin >= s1^2 - from^2, so from^2 + 2d*coin >= s1^2 and isqrt of that is at least s1 - the estimate is never below the answer at an exact payment. PROBED as well as argued: 4 values of d x 60 starts x 8 spans, zero cases where the estimate undershot at an exact price. Kept because the loop is also the repair for the down-loop's overshoot (see the row above), where the comparison it makes is load-bearing."
+ },
+ {
+  "pkg": "curve",
+  "file": "curve.gno",
+  "label": "Cost: the slope is d, not 2d, so every purchase is half price",
+  "find": "\tm := uint64(2 * c.d)",
+  "replace": "\tm := uint64(c.d)",
+  "why": "TIMED OUT RATHER THAN CAUGHT, which the harness now says out loud. Halving the slope halves every price, so Minted's correction loops - which walk ONE unit at a time - have to climb through roughly twice the span, and the observer suites ran past SUITE_TIMEOUT. A timeout is a non-result: it is not a catch, and treating it as one would credit the suite with an objection it never made. The mutation is obviously behaviour-changing (every purchase at half price), so this is a cost problem and not a coverage one. IF a bounded variant is wanted, mutate the slope in a way that keeps the loops short - or assert Price/Backing directly, which read d without looping."
  }
 ]
