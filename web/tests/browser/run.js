@@ -41,6 +41,18 @@
 //                        an armed run went green because the broken resolution
 //                        landed on the WRONG folder rather than on none.
 //
+//   chat_all.js        — a WRAPPER, and the reason it is one. It runs the four
+//                        chat harnesses: chat_page, chat_render, chat_live and
+//                        chat_moderation (which skips itself, and says so, unless
+//                        OLLAMA_LIVE=1). They sat here unregistered and therefore
+//                        unrun, and two of their assertions had gone false in the
+//                        meantime — the moniker maxlength after the limit moved to
+//                        counting letters, and "blanking the field turns chat off"
+//                        after `undefined` came to mean the default, which is ON.
+//                        Both were caught the first time anything ran them.
+//                        check-browser-checks-registered.py now fails `make check`
+//                        if a harness here is reachable from no runner.
+//
 //   render_snapshot.js — captures the rendered text of 13 demo routes. Used to
 //                        prove a refactor changes nothing: capture, refactor,
 //                        capture, diff. It is how the DEMO split was shown to
@@ -61,7 +73,8 @@ try {
 
 // Only the pass/fail checks run here. render_snapshot.js is a TOOL: it prints a
 // snapshot rather than asserting, so running it in a gate would prove nothing.
-const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js", "route_crawl.js"];
+const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js", "route_crawl.js",
+                "chat_all.js"];
 let failed = 0;
 for (const f of CHECKS) {
   const p = path.join(__dirname, f);

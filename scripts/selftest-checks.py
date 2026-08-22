@@ -147,6 +147,9 @@ NODELEG = "scripts/check-nodelegate.py"
 DUPES = "scripts/check-web-dupes.py"
 WEBCSS = "scripts/check-web-css.py"
 WEBSEL = "scripts/check-web-selectors.py"
+BROWREG = "scripts/check-browser-checks-registered.py"
+RUNJS = "web/tests/browser/run.js"
+CHATALL = "web/tests/browser/chat_all.js"
 WEBPAGE = "web/index.html"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
@@ -687,6 +690,32 @@ control("a scan that matches nothing", WEBSEL,
         'if not name.endswith(".js") or name == "run.js":',
         'if True or not name.endswith(".js"):',
         "matched nothing", argv=["python3", WEBSEL])
+
+print("\ncheck-browser-checks-registered")
+# The defect, and it is measured rather than imagined: run.js listed four checks
+# while five more files sat beside it, four of them asserting harnesses for the
+# chat panel. chat_all.js was written to wrap them and says in its own header
+# that it was waiting for "one entry added to CHECKS later" — which never came.
+# 157 assertions went unrun, and two of them had gone false in the meantime.
+control("a browser harness no runner runs", RUNJS,
+        ',\n                "chat_all.js"', "",
+        "not reachable from run.js", argv=["python3", BROWREG])
+# A registration that points at nothing. `make web-visual` would say FAIL missing
+# at RUN time, but web-visual needs puppeteer and is not in `check` — which is
+# the whole reason this guard is static.
+control("a runner lists a file that is not there", RUNJS,
+        '"route_crawl.js"', '"route_crwal.js"',
+        "is registered but does not exist", argv=["python3", BROWREG])
+# A wrapper that runs nothing prints "0 browser check(s) pass" — a green line for
+# no work done, which is the exact shape of the failure this guard is about.
+control("a registered wrapper with an empty list", CHATALL,
+        '["chat_page.js", "chat_render.js", "chat_live.js", "chat_moderation.js"]', "[]",
+        "empty CHECKS list", argv=["python3", BROWREG])
+# And the tripwire, because a guard policing an empty directory reports a clean
+# tree forever.
+control("a scan too small to be real", BROWREG,
+        'if f.endswith(".js")', 'if f == "run.js"',
+        "too few to be a real scan", argv=["python3", BROWREG])
 
 print("\ncheck-web-css")
 # The defect this exists for: a comment edited badly, leaving prose and a second
