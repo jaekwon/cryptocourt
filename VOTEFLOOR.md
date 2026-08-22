@@ -206,6 +206,15 @@ reason worth remembering: 8 shards saturated the machine, no shard reported for 
 hours, and `realm/` was edited under it twice before I understood that mutate
 re-stages per row.
 
+**A transient staging failure that looks exactly like a broken tree.** `t.sh` and
+`realm-test` occasionally fail with `package "gno.land/p/kourt/bptree/v0" is not
+available` and `[setup failed]` against a path in the module cache. That package does not
+exist in this repo, in the gno tree, or in the cache — the error is a race in shadow-root
+staging, most likely when a mutate run or another session is touching the same GNOROOT.
+It cost twenty minutes once: the suite went red immediately after a new test file landed,
+removing the file did not fix it, and the same suite passed on the next run with no change
+at all. RE-RUN BEFORE INVESTIGATING, and if it clears, it was never real.
+
 **An operator-level sweep of the three core files, and what it found.** The corpus
 catches the mutations somebody thought of, which is not the same as the mutations that
 matter: the last-open-row-instead-of-the-largest under-lock was not in it, and survived

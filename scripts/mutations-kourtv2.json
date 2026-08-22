@@ -5770,6 +5770,13 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "Crystallize: the participant-only window is one block long at its edge",
+  "find": "if now < cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {",
+  "replace": "if now <= cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "half-burn: the burned remainder stays in escrow instead",
   "find": "\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t}",
@@ -6588,6 +6595,13 @@
   "label": "boundary overturn: exactly at the dispute threshold no longer overturns",
   "find": "case yes > 0 && yes*grc20votes.Bps >= (yes+no)*c.params.disputeThresholdBps:",
   "replace": "case yes > 0 && yes*grc20votes.Bps > (yes+no)*c.params.disputeThresholdBps:"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: the participant-only window is one block long at its edge",
+  "find": "if now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {",
+  "replace": "if now <= cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {"
  },
  {
   "pkg": "kourtv2",
