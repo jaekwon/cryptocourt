@@ -46,6 +46,7 @@ import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, "scripts"))
+import gnoroot  # noqa: E402
 import repolock  # noqa: E402
 
 # This run rewrites the working tree, one guard at a time. Announce it so a
@@ -123,12 +124,19 @@ def feed(label, mutations, want):
 
 
 def have_gno():
-    try:
-        r = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
-                           text=True, timeout=30)
-        return bool(r.stdout.strip())
-    except (FileNotFoundError, subprocess.SubprocessError):
-        return False
+    """Whether there is a toolchain for the gno-dependent controls to use.
+
+    THIS ASKED A DIFFERENT QUESTION UNTIL NOW: whether `gno env GNOROOT`
+    printed anything. That is not the same as whether there is a GNOROOT.
+    The command resolves against the CURRENT DIRECTORY, so from a git
+    worktree it answers with a path derived from the worktree's prefix that
+    does not exist — non-empty output, no toolchain — and this said yes.
+    gnoroot.real_root() has carried the os.path.isdir() for exactly that
+    since it cost mutate.py two runs; the reasoning is in gnoroot.build,
+    which is also why this now defers to it rather than keeping a third
+    copy of the same three lines.
+    """
+    return bool(gnoroot.real_root())
 
 
 CITE = "scripts/check-citations.py"
@@ -1386,8 +1394,6 @@ if _saved_owner is not None:
     os.environ[repolock.ENV] = _saved_owner
 
 print("\ngnoroot.py")
-sys.path.insert(0, os.path.join(REPO, "scripts"))
-import gnoroot  # noqa: E402
 
 
 def rootcase(label, ok):

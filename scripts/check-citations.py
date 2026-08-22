@@ -35,10 +35,10 @@ mistaken for a real run.
 
 import os
 import re
-import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gnoroot
 import repolock
 
 # Every tree that belongs to this design: the realm, the package the checkpoint
@@ -202,16 +202,6 @@ CITATIONS = [
 ]
 
 
-def gnoroot():
-    try:
-        out = subprocess.run(["gno", "env", "GNOROOT"], capture_output=True,
-                             text=True, timeout=30)
-    except (FileNotFoundError, subprocess.SubprocessError):
-        return None
-    root = out.stdout.strip()
-    return root if root and os.path.isdir(root) else None
-
-
 def sources():
     out = []
     for root in SRC:
@@ -237,8 +227,8 @@ def main():
     raw = "\n".join(open(f).read() for f in files)
     prose = " ".join(re.sub(r"^\s*(//|#)", " ", raw, flags=re.M).split())
 
-    root = gnoroot()
-    if root is None:
+    root = gnoroot.real_root()
+    if not root:
         if os.environ.get("REQUIRE_GNO"):
             print("check-citations: gno not installed", file=sys.stderr)
             return 1
