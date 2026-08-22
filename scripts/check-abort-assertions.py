@@ -44,7 +44,6 @@ matches it, so this check goes quiet on its own.
 """
 
 import glob
-import os
 import re
 import sys
 

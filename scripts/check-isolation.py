@@ -44,7 +44,6 @@ rather than passing quietly.
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 

@@ -22,7 +22,6 @@ running chain.
 import base64
 import json
 import re
-import subprocess
 import sys
 import urllib.request
 

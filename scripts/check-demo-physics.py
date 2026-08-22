@@ -21,7 +21,6 @@ The constants are READ FROM THE REALM, never copied. If someone retunes
 `r0WeeklyBps` or `periodBlocks`, this check retunes with them; a check that
 hardcodes the number it is checking only pins the moment it was written.
 """
-import json
 import pathlib
 import re
 import sys

@@ -39,7 +39,6 @@ WHAT THIS FILE REFUSES TO DO.
     emit -simulate skip and are asserted on-chain.
 """
 
-import json
 import re
 import shlex
 import pathlib

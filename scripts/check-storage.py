@@ -36,7 +36,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gnoroot
 import repolock
-import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Every realm that has filetests, with what each is allowed to write.
