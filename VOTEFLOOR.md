@@ -497,6 +497,29 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**RANKED ITEM 3 VERIFIED COMPLETE, AND ITS OWN PARENTHETICAL IS STALE.** The item asks for
+"a message naming both on a tie, with its own test" and adds "the tie-break itself is in
+KNOWN-GAPS as something that should stay unpinned". Both halves check out, but not the way
+the sentence reads: there is NO KNOWN-GAPS row for the tie-break, and there should not be.
+The four-case rewrite of mustSpendable made the tie DIRECTLY assertable, so it moved from
+unpinnable to pinned instead of into the gap file — `mustSpendable: a tie names the stake
+instead of naming both locks` sits in the main corpus, caught. An item's parenthetical
+describes the plan at the time it was written; the fix can overtake it.
+
+**A MESSAGE'S PREFIX IS THE WRONG THING TO GREP FOR.** Checking whether each of the four
+lock messages is asserted, by counting test references to its opening words: "not enough
+uncommitted CC" 14, "not enough unstaked CC" 10, and **"not enough free CC" — the tie
+message — ZERO**. That reads as the tie wording being unasserted, and would have been a
+finding worth writing up.
+
+It is not. lockmessage_test.gno asserts "releasing either one" and "frees nothing" — the
+DISTINCTIVE INTERIOR of the tie message, not its prefix. Tests here quote the middle
+precisely so a reworded prefix does not break them, which is good practice and makes a
+prefix grep useless as a coverage instrument. Grep an interior fragment, or grep several
+and take the union. Same class as the earlier `grep | head` truncation: the instrument
+answered a narrower question than the one asked, and its answer looked like an
+answer to the broad one.
+
 **RANKED ITEM 1(b) VERIFIED COMPLETE, AND THE QUESTION IT RAISES REFUTED.** The backlog
 asks for ONE test covering both participant-only windows, because Crystallize's
 `now < verdictAt+finalizeGraceBlocks` shares its shape with Finalize's in dispute.gno.
