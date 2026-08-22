@@ -7386,5 +7386,61 @@
   "label": "AdvanceTestHeight: the height floor stops following",
   "find": "\tif h := tcHeightBase + tcHeightSkew; h > tcHeightFloor {",
   "replace": "\tif h := tcHeightBase + tcHeightSkew; h < tcHeightFloor {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "SupersedeClaim: the ordering term is dropped, so a claim can re-file one filed after it",
+  "find": "\tif !supersedeOrdered(f, t) {\n\t\tpanic(\"kourtv2: a re-filing must come after the claim it re-files could have died\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "SupersedeClaim: a LIVE claim can be superseded, so the edge stops meaning anything",
+  "find": "\tif !t.closed {\n\t\tpanic(\"kourtv2: only a claim that died unanswered can be superseded\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "SupersedeClaim: the one-outbound cap is dropped, and supOf's key stops being unique",
+  "find": "\tif c.supOf.Get(beClaimKey(from)) != nil {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "SupersedeClaim: the per-author inbound cap is dropped, so one address fills all eight slots",
+  "find": "\tif mine >= maxSupInPerAuthor {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "RemoveSupersede: only the forward index is cleared, so the two reads disagree",
+  "find": "\tc.supBy.Remove(beClaimKey(e.to) + beClaimKey(from))",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "ClaimSupersedes: the purge gate on the `of` half is dropped",
+  "find": "\t\t\tif !argTextGone(c, e.to) {\n\t\t\t\tb.WriteString(strconv.FormatUint(e.to, 10))\n\t\t\t}",
+  "replace": "\t\t\tb.WriteString(strconv.FormatUint(e.to, 10))"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "supersede.gno",
+  "label": "SupersedeClaim: c.mod == nil read as 'no moderators', refusing the creator it seeds",
+  "find": "\t\tcm := ensureMod(c)\n\t\tif !cm.members.Has(who.String()) {\n\t\t\tpanic(\"kourtv2: only the re-filing claim's author or a court moderator may record it\")\n\t\t}\n\t\trequireActiveMod(cm, who)",
+  "replace": "\t\tif c.mod == nil {\n\t\t\tpanic(\"kourtv2: only the re-filing claim's author or a court moderator may record it\")\n\t\t}\n\t\trequireActiveMod(c.mod, who)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "RemoveArgument: c.mod == nil read as 'no moderators', so no moderator may ever remove",
+  "find": "\t\tcm := ensureMod(c)\n\t\tif !cm.members.Has(who.String()) {\n\t\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t\t}\n\t\trequireActiveMod(cm, who)",
+  "replace": "\t\tif c.mod == nil {\n\t\t\tpanic(\"kourtv2: only the edge's author or a court moderator may remove it\")\n\t\t}\n\t\trequireActiveMod(c.mod, who)"
  }
 ]
