@@ -121,10 +121,11 @@ func TestABankedSignatureExpiresOnItsDeadlineBlock(cur realm, t *testing.T) {
 }
 
 // SEATING A KEY DISCARDS THE BANKED SIGNATURES, on the path that once did not.
-// TransferGlobalAdmin's own comment records the hole as history: "AddGlobalMod wipes on
-// this exact operation; this path did not, which made it the STRICTLY BETTER route for
-// an admin wanting to complete a stuck purge: seat a fresh key without resetting the
-// banked signatures." The wipe is there now and nothing held it — the fix was one line
+// seatGlobalMember's comment records the hole as history: AddGlobalMod cleared the
+// banked approvals when the member set changed and TransferGlobalAdmin did not, which
+// made the transfer "the STRICTLY BETTER route for an admin wanting to complete a stuck
+// purge: seat a fresh key without resetting the signatures banked against the old set."
+// Both paths share those lines now. The wipe is there and nothing held it — the fix was one line
 // and the test for it was never written, which is the shape a regression comes back in.
 //
 // The act chosen is a PURGE, because that is the irreversible one the comment names.

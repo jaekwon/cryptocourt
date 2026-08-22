@@ -103,11 +103,30 @@ func AddGlobalMod(cur realm, who address) {
 	if cur.Previous().Address() != d.admin {
 		panic("kourtv2: only the global DAO admin manages membership")
 	}
-	if !d.members.Has(who.String()) {
-		d.members.Set(who.String(), true)
-		d.n++
-		clearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over
+	seatGlobalMember(d, who)
+}
+
+// seatGlobalMember adds an address to the DAO's member set, or does nothing at
+// all if it is already in it.
+//
+// ITS TWO CALLERS HAD ALREADY DRIFTED ON THESE FOUR LINES, which is the reason
+// they are one block now. AddGlobalMod cleared the banked m-of-n approvals when
+// the member set changed and TransferGlobalAdmin did not, and that made the
+// transfer the STRICTLY BETTER route for an admin wanting to complete a stuck
+// purge: seat a fresh key without resetting the signatures banked against the
+// old set. Both clear now. Sharing the lines is what stops the next one added
+// here from reaching one caller and missing the other.
+//
+// ONLY THE ADD IS SHARED. Removal is not the mirror of it — RemoveGlobalMod
+// also has to pull purgeM down to the smaller n — and seating cannot put m
+// above n, so there is nothing to clamp on this side.
+func seatGlobalMember(d *daoState, who address) {
+	if d.members.Has(who.String()) {
+		return
 	}
+	d.members.Set(who.String(), true)
+	d.n++
+	clearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over
 }
 
 func RemoveGlobalMod(cur realm, who address) {
@@ -163,14 +182,10 @@ func TransferGlobalAdmin(cur realm, to address) {
 	if cur.Previous().Address() != d.admin {
 		panic("kourtv2: only the global DAO admin transfers the seat")
 	}
-	if !d.members.Has(to.String()) {
-		d.members.Set(to.String(), true)
-		d.n++
-		// AddGlobalMod wipes on this exact operation; this path did not, which
-		// made it the STRICTLY BETTER route for an admin wanting to complete a
-		// stuck purge: seat a fresh key without resetting the banked signatures.
-		clearPendingOnMembershipChange(&d.pending)
-	}
+	// Seating an EXISTING member changes no set and clears nothing, here as in
+	// AddGlobalMod: the banked approvals are consent to a membership, and this
+	// path has not altered one.
+	seatGlobalMember(d, to)
 	d.admin = to
 }
 

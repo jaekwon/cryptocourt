@@ -535,8 +535,8 @@
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
-  "label": "mod: AddGlobalMod keeps stale approvals",
-  "find": "\t\tclearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over\n",
+  "label": "mod: seating a global member keeps the stale approvals",
+  "find": "\tclearPendingOnMembershipChange(&d.pending) // stale approvals must not carry over\n",
   "replace": ""
  },
  {
@@ -556,9 +556,9 @@
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
-  "label": "mod: TransferGlobalAdmin keeps the banked signatures",
-  "find": "\t\t// stuck purge: seat a fresh key without resetting the banked signatures.\n\t\tclearPendingOnMembershipChange(&d.pending)\n",
-  "replace": "\t\t// stuck purge: seat a fresh key without resetting the banked signatures.\n"
+  "label": "TransferGlobalAdmin: the seat moves without seating the key",
+  "find": "\tseatGlobalMember(d, to)\n\td.admin = to",
+  "replace": "\td.admin = to"
  },
  {
   "pkg": "kourtv2",
@@ -7289,13 +7289,6 @@
   "label": "SetPurgeThreshold: changing the bar keeps the signatures banked under the old one",
   "find": "\tif m != d.purgeM {\n\t\t// Lowering the bar",
   "replace": "\tif false {\n\t\t// Lowering the bar"
- },
- {
-  "pkg": "kourtv2",
-  "file": "moderation.gno",
-  "label": "TransferGlobalAdmin: seating a fresh key keeps the banked signatures",
-  "find": "\t\tclearPendingOnMembershipChange(&d.pending)\n\t}\n\td.admin = to",
-  "replace": "\t}\n\td.admin = to"
  },
  {
   "pkg": "kourtv2",
