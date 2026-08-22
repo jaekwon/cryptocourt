@@ -228,6 +228,13 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("no FolderTree degrades to a flat list", r4.folders.length===3);
   global.FTREE = undefined; CFG.mode='demo';
 
+  // COPY THAT WENT STALE ONCE ALREADY. The page said the chain "is flat" for a
+  // while after folders started nesting; it said supersedes was "in no spec"
+  // after the spec was written. Both were true when typed and both survived the
+  // thing that falsified them, because prose has no test unless somebody writes
+  // one. This is that, for the second of them.
+  ok("the page no longer calls supersedes unspecified", !src.includes("in no spec"));
+
   // THE SUMMARY GOES LAST, and it had not. It sat just after the "F4" line with
   // process.exit under it, so the nine assertions below — the whole NESTING FROM
   // THE CHAIN block — were unreachable and had never run once. The block was

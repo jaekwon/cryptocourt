@@ -2908,7 +2908,8 @@ function argumentSection(slug, id, lookup, chainRows){
   const children = mine.filter(r=>r.type==="part" && r.to===id).map(r=>r.from);
   // THE CHAIN OWNS `bears` NOW. Curation keeps only the two kinds the realm has
   // no concept of — containment, which §5 says may only hang off a section, and
-  // supersedes, which is in no spec — so a curation bears-edge is dropped rather
+  // supersedes, which has a design in docs/SUPERSEDES.md but no entrypoint yet — so
+  // a curation bears-edge is dropped rather
   // than shown beside a chain one saying the same thing differently. Nothing
   // merges silently: a row is either the chain's record or somebody's file.
   const rel = [];
@@ -3063,7 +3064,9 @@ function cleanCuration(raw, slug, validIds){
    Only the ARGUMENT edge lives on chain, which is not a shortcoming to route
    around: COURTS_STRUCTURE.md §5's containment guard is "only sections may be
    containment parents", so claim→claim part-of is the shape the spec forbids,
-   and `supersedes` is in no spec at all. Those two stay curation and are labelled
+   and `supersedes` has a design (docs/SUPERSEDES.md) but no entrypoint: it is a
+   verifiable fact rather than an opinion, so it wants a checking entrypoint of
+   its own rather than a second bears edge. Those two stay curation, labelled
    as curation, which is why this returns only the bears rows and the caller
    merges rather than replaces. */
 async function chainArguments(slug, id){
@@ -3538,7 +3541,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
     + `<section><div class="sec-h">On-chain curation <span class="count">moderators — no bonds, gas only</span></div>
-       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders nest, reorder, retire and carry a readable description; argument edges between claims are on chain too. What is still local: claim-to-claim containment (COURTS_STRUCTURE.md §5 allows a containment parent to be a section only, and folders are that) and supersedes (in no spec yet).</p>
+       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders nest, reorder, retire and carry a readable description; argument edges between claims are on chain too. What is still local: claim-to-claim containment (COURTS_STRUCTURE.md §5 allows a containment parent to be a section only, and folders are that) and supersedes, which now has a design (docs/SUPERSEDES.md) but no entrypoint — the chain can verify that one rather than take somebody's word for it, so it is waiting on a decision about who may assert it.</p>
        <div class="panel"><h4>Folders</h4><div class="actions">
          ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
          ${btn("Create subfolder","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Folder name",desc:"One line on what belongs here"},"","under a heading, four deep")}
