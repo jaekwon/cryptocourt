@@ -105,3 +105,19 @@ gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
 stdout 'false'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockFabricated()"
 stdout 'false'
+
+# --- AND THE COURT-COUNT ARM, which its own audit named and nothing exercised ---
+# `CourtCount() > 1` was the AUDITED BUG this file's header names, and up to here the
+# count has been 1, so every refusal above came from the usage gate. One user court
+# takes the count to 2 and the count arm becomes the FIRST thing that refuses — a
+# different message, which is what makes this an assertion about that arm and not a
+# second copy of the one above. Nothing anywhere reached it: widening the check to
+# `> 2` survives the gno suite (which cannot arm at all) and survived both of these
+# files (which never held two courts).
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func StartCourt -args orem -args 'Orem Truth Court' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.CourtCount()"
+stdout '\(2 int\)'
+
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func EnableTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stderr 'this realm already has courts'

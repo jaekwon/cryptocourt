@@ -7295,5 +7295,96 @@
   "label": "checkReason: a moderation reason may be any length",
   "find": "\tif len(reason) > maxReasonLen {",
   "replace": "\tif len(reason) > maxReasonLen*1000 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "mustDeployer: only a stranger may drive the test clock",
+  "find": "\tif cur.Previous().Address() != tcDeployer {",
+  "replace": "\tif cur.Previous().Address() == tcDeployer {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClock: a sealed realm can be armed again",
+  "find": "\tif tcSealed {\n\t\tpanic(\"kourtv2: the test clock is sealed",
+  "replace": "\tif !tcSealed {\n\t\tpanic(\"kourtv2: the test clock is sealed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClock: arming twice is allowed",
+  "find": "\tif tcArmed {\n\t\tpanic(\"kourtv2: the test clock is already armed\")",
+  "replace": "\tif !tcArmed {\n\t\tpanic(\"kourtv2: the test clock is already armed\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClock: a realm with one user court may still be armed",
+  "find": "\tif CourtCount() > 1 {",
+  "replace": "\tif CourtCount() > 2 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClockAt: a base of zero is accepted",
+  "find": "\tif base <= 0 {",
+  "replace": "\tif base < 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClockAt: a base one second past 2100 is accepted",
+  "find": "\tif base > maxBase {\n\t\tpanic(\"kourtv2: the test clock's base must be an instant before 2100\")",
+  "replace": "\tif base > maxBase+1 {\n\t\tpanic(\"kourtv2: the test clock's base must be an instant before 2100\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestClock: the step bound and the sign share one test",
+  "find": "\tif secs <= 0 || secs > maxAdvanceStep {",
+  "replace": "\tif secs <= 0 && secs > maxAdvanceStep {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestClock: the total is checked without room for the step (the wrap audit)",
+  "find": "\tif tcSkew > maxAdvanceTotal-secs {",
+  "replace": "\tif tcSkew > maxAdvanceTotal {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestClock: the peak stops tracking the furthest advance",
+  "find": "\tif tcSkew > tcPeakSkew {",
+  "replace": "\tif tcSkew < tcPeakSkew {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestClock: the floor stops following the clock",
+  "find": "\tif n := tcBase + tcSkew; n > tcFloor {",
+  "replace": "\tif n := tcBase + tcSkew; n < tcFloor {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestHeight: the step bound and the sign share one test",
+  "find": "\tif n <= 0 || n > maxHeightStep {",
+  "replace": "\tif n <= 0 && n > maxHeightStep {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestHeight: the total is checked without room for the step",
+  "find": "\tif tcHeightSkew > maxHeightTotal-n {",
+  "replace": "\tif tcHeightSkew > maxHeightTotal {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "AdvanceTestHeight: the height floor stops following",
+  "find": "\tif h := tcHeightBase + tcHeightSkew; h > tcHeightFloor {",
+  "replace": "\tif h := tcHeightBase + tcHeightSkew; h < tcHeightFloor {"
  }
 ]

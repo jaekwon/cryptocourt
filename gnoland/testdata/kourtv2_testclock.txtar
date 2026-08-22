@@ -69,6 +69,16 @@ stdout 'OK!'
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
 stdout 'true'
 
+# THE DISCLOSURE, on the ONE path that can write it. `tcEverArmed = true` is set by
+# the arming path and nowhere else, and the gno suite cannot reach that path at all
+# (some earlier test has always created a court by then, so EnableTestClock refuses)
+# — deleting the line survives the whole mutation gate. This is the only harness
+# where the write is observable. The other half, that SEALING does not clear it, is
+# covered by TestSealingKeepsTheDisclosure with the flag set by hand; the seal below
+# asserts it again on a chain that armed for real.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockFabricated()"
+stdout 'true'
+
 # --- A claim on the review court, funded by buying meta CC --------------------
 # Buy accepts the meta slug: accrueFranchise skips meta exactly because Buy mints
 # there directly. On a fresh chain the deposit floor sits on its dust arm.
@@ -153,6 +163,11 @@ stdout 'true'
 # And the explicit seal still closes it for good, without rewinding.
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func SealTestClock -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
+
+# And the disclosure OUTLIVES the seal, on a chain whose dates really were driven:
+# the steering wheel is gone, the history is not.
+gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockFabricated()"
+stdout 'true'
 
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.TestClockActive()"
 stdout 'false'

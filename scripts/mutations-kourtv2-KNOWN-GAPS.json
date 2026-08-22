@@ -110,5 +110,23 @@
   "find": "\treturn platformTicker + \":\" + sanitize.InlineText(c.coin.Symbol())",
   "replace": "\treturn platformTicker + \":\" + c.coin.Symbol()",
   "why": "INVALID BY ALPHABET, not a survivor. qualifiedSymbol wraps the coin symbol in InlineText and the wrap cannot change the output: courtSymbol is strings.ToUpper(slug), and mustSlug validates a slug as lowercase letters, digits and hyphens, 1..11 characters, so a symbol's alphabet is [A-Z0-9-] and holds no markdown metacharacter for a sanitiser to act on. THE PREMISE IS PINNED rather than argued: TestACourtSymbolsAlphabetIsWhatMakesItsSanitiserRedundant asserts the alphabet directly, so if slug validation ever widens, that test goes red and this row must be promoted. Kept because the render layer's rule is that user text is sanitised wherever it is printed, and a surface exempted by an upstream invariant should still read like the others - the alternative is a reader having to re-derive the slug charset to know why one call is missing."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClock: a used realm is refused only if BOTH claims and coin exist",
+  "find": "\tif m.nextID > 1 || m.coin.TotalSupply() > 0 {",
+  "replace": "\tif m.nextID > 1 && m.coin.TotalSupply() > 0 {",
+  "elsewhere": "gnoland/testdata/kourtv2_usedrealm_seeded.txtar",
+  "why": "UNREACHABLE FROM THIS SUITE BY CONSTRUCTION, and covered by txtar. The usage gate sits behind EnableTestClock's court check, and by the time any gno test runs some earlier test has created a court - so a SUCCESSFUL arming, and therefore the usage gate, cannot be reached here at all. testclock.gno's own scope note says this and names the two txtars that isolate one arm each (this `elsewhere` can hold one path, and the guard checks it resolves, so the second is named here): seeded gives the meta court two claims with the coin supply still zero (and asserts CourtCount()==1, so the count arm is not what refuses), coin does the reverse. Both assert the 'has been used' message from the deployer's own key, which only a txtar can be."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClock: the disclosure does not outlive sealing",
+  "find": "\ttcEverArmed = true         // never cleared again, not even by sealing\n",
+  "replace": "\n",
+  "elsewhere": "gnoland/testdata/kourtv2_testclock.txtar",
+  "why": "UNREACHABLE FROM THIS SUITE, and now covered by txtar - it was covered NOWHERE until this row was written. `tcEverArmed = true` is written only by the arming path, which no gno test can complete (a court always exists by then), and every test that reads TestClockFabricated sets the flag BY HAND - so the write itself had no observer. kourtv2_testclock.txtar is the one harness where arming succeeds; it now asserts TestClockFabricated() is true after arming AND still true after sealing. MEASURED: deleting the line fails that script at the new assertion. The sealing half is also held here by TestSealingKeepsTheDisclosure, with the flag set by hand."
  }
 ]
