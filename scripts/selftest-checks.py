@@ -149,6 +149,7 @@ WEBCSS = "scripts/check-web-css.py"
 WEBSEL = "scripts/check-web-selectors.py"
 BROWREG = "scripts/check-browser-checks-registered.py"
 REACH = "scripts/check-web-tests-reachable.py"
+CURREACH = "scripts/check-curation-reachable.py"
 FOLDERSJS = "web/tests/folders_test.js"
 RUNJS = "web/tests/browser/run.js"
 CHATALL = "web/tests/browser/chat_all.js"
@@ -688,6 +689,20 @@ control("a browser check queries a class the overlay no longer has",
         "appears in neither shipped file", argv=["python3", WEBSEL])
 # And the tripwire. A scan that matches nothing must fail rather than report a
 # clean tree — the same discipline check-web-dupes takes about its own corpus.
+print("\ncheck-curation-reachable")
+# The defect: nine curation entrypoints built in this programme — subfolders,
+# MoveFolder, retire/restore, OrderFolders, both argument edges, SetCourtDesc —
+# reachable from no page, while the curate page's own prose said the realm did
+# all of it. Worst was OpenClaimP: a claim body was asked for by name, shipped,
+# and RENDERED by the claim page, while both "Open a claim" buttons still called
+# OpenClaim, so the field could be read and never written.
+control("an entrypoint the product cannot ask for", WEBPAGE,
+        '${btn("Order folders","OrderFolders"', '${btn("Order folders","OrderFoldersXX"',
+        "named by neither shipped web file", argv=["python3", CURREACH])
+control("a scan that finds no entrypoints", CURREACH,
+        'r"^func ([A-Z]\\w*)\\(cur realm"', 'r"^func (ZZZ\\w*)\\(cur realm"',
+        "matched too little to be real", argv=["python3", CURREACH])
+
 print("\ncheck-web-tests-reachable")
 # The defect: folders_test.js printed its summary and exited in the MIDDLE of its
 # own IIFE, so seven assertions below it had never run — the whole chain-nesting

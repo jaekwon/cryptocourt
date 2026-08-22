@@ -3447,9 +3447,9 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + (pager||"")
     + qBarHtml("title or #id", idleCap)
     + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket <span class="count">${openWin}</span></div>`
-    + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}</div>`
+    + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
-        : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaim",{courtSlug:slug,title:"Your claim of fact"})}</p></div>`)
+        : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
     + `</section>`
     + (done.length? `<section data-qsec style="margin-top:22px"><div class="sec-h">Recently settled <span class="count">${doneWin}</span></div><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
     + (()=>{ // the chain's own policing lists — page 1, chain order, never sorted or filtered
@@ -3510,15 +3510,26 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
        <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders nest, reorder, retire and carry a readable description; argument edges between claims are on chain too. What is still local: claim-to-claim containment (COURTS_STRUCTURE.md §5 allows a containment parent to be a section only, and folders are that) and supersedes (in no spec yet).</p>
        <div class="panel"><h4>Folders</h4><div class="actions">
          ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
+         ${btn("Create subfolder","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Folder name",desc:"One line on what belongs here"},"","under a heading, four deep")}
          ${btn("Rename folder","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
+         ${btn("Move folder","MoveFolder",{courtSlug:slug,folderID:2,newParent:1},"","0 is a root heading")}
+         ${btn("Retire folder","RetireFolder",{courtSlug:slug,folderID:1},"","struck from the tree, row kept")}
+         ${btn("Restore folder","RestoreFolder",{courtSlug:slug,folderID:1})}
          ${btn("Add claim to folder","AddToFolder",{courtSlug:slug,folderID:1,claimID:1})}
          ${btn("Remove claim from folder","RemoveFromFolder",{courtSlug:slug,folderID:1,claimID:1})}</div></div>
+       <div class="panel" style="margin-top:14px"><h4>Order</h4><div class="actions">
+         ${btn("Order folders","OrderFolders",{courtSlug:slug,parentID:0,ids:"3,1,2"},"","every sibling under that heading, once each")}
+         ${btn("Move a claim within a folder","MoveItemInFolder",{courtSlug:slug,folderID:1,claimID:1,to:0},"","0 is first")}</div></div>
+       <div class="panel" style="margin-top:14px"><h4>Relations</h4><div class="actions">
+         ${btn("Argue one claim bears on another","AddArgument",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — supports or contests")}
+         ${btn("Withdraw an argument edge","RemoveArgument",{courtSlug:slug,from:1,to:2},"","its author, or a moderator")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Docket</h4><div class="actions">
          ${btn("Open a seeded claim","OpenClaimSeeded",{courtSlug:slug,title:"Your claim of fact"},"","deposit and fee waived")}
          ${btn("Hide from listing","HideItem",{courtSlug:slug,claimID:1,reason:"Why this is hidden"},"","m of n moderators")}
          ${btn("Unhide","UnhideItem",{courtSlug:slug,claimID:1,reason:"Why this returns"},"","m of n moderators")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Court</h4><div class="actions">
-         ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}</div></div>
+         ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}
+         ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}</div></div>
       </section>`
     + `<section style="margin-top:22px"><div class="sec-h">Local curation <span class="count">anyone — this browser only</span></div>
        <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and argument edges are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>

@@ -53,6 +53,7 @@ height-shim:
 	python3 scripts/check-web-selectors.py
 	python3 scripts/check-browser-checks-registered.py
 	python3 scripts/check-web-tests-reachable.py
+	python3 scripts/check-curation-reachable.py
 
 # The overlay's own regression suite. It lived in a scratch directory until r31,
 # where it could not be enumerated: two harnesses had been broken for fourteen
