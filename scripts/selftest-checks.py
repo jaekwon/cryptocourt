@@ -915,6 +915,28 @@ else:
         "find": "const maxLive = 64", "replace": "const maxLive = 65",
         "elsewhere": "somewhere this harness cannot run"}], "drop its `elsewhere`")
 
+    # A MUTANT THAT HANGS RATHER THAN FAILS, which is the one shape with no bound
+    # at all until SUITE_TIMEOUT. This exact flip spun a suite for 56 minutes at
+    # 110% of a core and would have spun for ever: `e` is the min of the two heads,
+    # so the side that matches `e` is the side the flip stops advancing, neither
+    # index moves, and the loop appends rows without end. A mutation like that can
+    # never be caught, because catching needs the suite to finish and object.
+    #
+    # The `want` is TIMED OUT and not "caught": the branch order in mutate.py puts
+    # this before the fallthrough that prints "caught: failed", because a row
+    # nothing ever judged is a non-result, the same as one that did not build.
+    #
+    # 240s rather than the 600s default so the arm costs four minutes instead of
+    # ten. It has to stay well clear of a legitimately slow suite on a loaded
+    # machine, which is the same reason the default is as high as it is.
+    os.environ["MUTATE_SUITE_TIMEOUT"] = "240"
+    feed("a mutant that hangs rather than fails", [{
+        "pkg": "kourtv2", "file": "stakeseries.gno",
+        "label": "the merge loop stops advancing",
+        "find": "if i < len(ys) && ys[i].e == e {",
+        "replace": "if i < len(ys) && ys[i].e != e {"}], "TIMED OUT")
+    os.environ.pop("MUTATE_SUITE_TIMEOUT", None)
+
     control("a suite that is already failing", f"{GOVERN}/clock_test.gno",
             "func resumeClock() { advanceBlocks(0) }",
             "func resumeClock() { advanceBlocks(0) }\n\nfunc TestSelfTestDeliberateFailure(t *testing.T) {\n\tt.Error(\"deliberate\")\n}",
@@ -953,6 +975,46 @@ else:
     else:
         print(f"  {'and the exit code says so':<44} SILENT — exited 0")
         failures.append("a dead shard exits nonzero")
+
+    # A HUNG BASELINE IS NOT A RED ONE, and this arm exists because the two
+    # already drifted once. The driver knows a shard's baseline failed by a string
+    # in its stderr OR by `code == 2` — and `code == 2` was dead for the whole
+    # life of the file, because mutate.py returned 2 from main() and nobody passed
+    # it to sys.exit. So the string carried it alone, and a NEW message the string
+    # did not match would have fallen through to the summary tripwire and been
+    # reported as "no summary line": true, and silent about what actually happened.
+    lbl = "a hung baseline is reported as its own thing"
+    src = os.path.join(REPO, "realm/r/kourtv2/stakeseries.gno")
+    find = "if i < len(ys) && ys[i].e == e {"
+    text = open(src).read()
+    if text.count(find) != 1:
+        # The arm did not apply, so it proves nothing. Said out loud rather than
+        # passing quietly — an arm that silently no-ops is this file's own subject.
+        print(f"  {lbl:<44} NOT ARMED — the anchor matched "
+              f"{text.count(find)}x, so nothing hung")
+        failures.append(lbl + " [anchor did not apply]")
+    else:
+        backup = src + ".selftest-backup"
+        shutil.copy(src, backup)
+        try:
+            open(src, "w").write(text.replace(find, "if i < len(ys) && ys[i].e != e {"))
+            os.environ["MUTATE_SUITE_TIMEOUT"] = "60"
+            r = subprocess.run(["python3", "scripts/mutate-parallel.py", "--shards", "1"],
+                               input=json.dumps([
+                                   {"pkg": "governor", "file": "governor.gno",
+                                    "label": "a row that never gets its turn",
+                                    "find": "const maxLive = 64",
+                                    "replace": "const maxLive = 63"}]),
+                               capture_output=True, text=True)
+            out = r.stdout + r.stderr
+        finally:
+            shutil.move(backup, src)
+            os.environ.pop("MUTATE_SUITE_TIMEOUT", None)
+        if "baseline did not finish" in out:
+            print(f"  {lbl:<44} fires")
+        else:
+            print(f"  {lbl:<44} SILENT — a hang read as something else")
+            failures.append(lbl)
 
 # ----------------------------------------------------------------- gnoroot --
 # Each runner now gets its OWN GNOROOT — symlinks to everything but a private copy

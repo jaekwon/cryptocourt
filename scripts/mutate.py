@@ -27,6 +27,13 @@ Two ways this can lie to you:
   And a suite that is already red reports every mutation as caught. The
   baseline runs first; if it fails, nothing else runs.
 
+  A mutant that HANGS is none of the above, and it is the one that had no bound
+  at all. Flip a comparison in a merge loop and the loop stops advancing rather
+  than producing a wrong answer, so the suite never finishes to object — one such
+  row spun for 56 minutes and would have spun for ever, indistinguishable from a
+  slow machine. Every suite is bounded by SUITE_TIMEOUT now and a row that
+  reaches it is TIMED OUT: counted with the non-results, never as a catch.
+
 Usage — a JSON list of mutations on stdin, each applied and reverted in turn:
 
     python3 scripts/mutate.py <<'EOF'
@@ -169,9 +176,25 @@ def stage(root):
                 shutil.copy(os.path.join(src, g), dst)
 
 
+# A MUTANT CAN HANG INSTEAD OF FAILING, and until this bound one did — for 56
+# minutes at 110% of a core, with no way to tell it from a slow suite.
+#
+# The row was `ys[i].e == e` -> `!=` in ClaimSeries' merge loop. That loop sets
+# `e` to the min of the two heads, so unmutated at least one side matches `e` and
+# an index always advances; the flip makes the matching side the one that does
+# NOT advance, so neither index moves, `e` never changes, and it appends rows for
+# ever. A mutation like that cannot be caught, because catching needs the suite
+# to finish and say so.
+#
+# Ten minutes per suite, because the whole batch used to fit in that budget — so
+# a suite alone reaching it is not slow, it is stuck. Overridable for a loaded
+# machine, where every suite is genuinely slower.
+SUITE_TIMEOUT = int(os.environ.get("MUTATE_SUITE_TIMEOUT", "600"))
+
+
 def run_suite(root, pkg=None, mut=None):
     """Run the OBSERVER suites for `pkg`; all of them when pkg is None (the baseline).
-    Returns (passed, output).
+    Returns (passed, output, hung) — `hung` names the suites that ran out of time.
 
     `mut` is applied to the STAGED COPY after staging and before testing, so the repo's
     own sources are never written to. See the note in this file's header on why that
@@ -194,17 +217,29 @@ def run_suite(root, pkg=None, mut=None):
         f = os.path.join(root, PKGS[mut.get("pkg", "govern")][1], mut["file"])
         src = open(f).read()
         open(f, "w").write(src.replace(mut["find"], mut["replace"]))
-    out, passed = "", True
+    out, passed, hung = "", True, []
     for nm in names:
         rel = PKGS[nm][1]
-        r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
-                           capture_output=True, text=True,
-                           env={**os.environ, "GNOROOT": root})
+        try:
+            r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
+                               capture_output=True, text=True,
+                               timeout=SUITE_TIMEOUT,
+                               env={**os.environ, "GNOROOT": root})
+        except subprocess.TimeoutExpired as e:
+            # Whatever it managed to say before it was killed. TimeoutExpired
+            # carries bytes on some versions even under text=True, so decode
+            # defensively rather than crash the batch on the one row that hung.
+            for chunk in (e.stdout, e.stderr):
+                if chunk:
+                    out += chunk if isinstance(chunk, str) else chunk.decode("utf-8", "replace")
+            hung.append(nm)
+            passed = False
+            continue
         out += r.stdout + r.stderr
         passed = passed and r.returncode == 0
     for _, rel in PKGS.values():
         shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
-    return passed, out
+    return passed, out, hung
 
 
 # Absolute paths throughout, since a mutation may name a file in either tree and
@@ -245,7 +280,17 @@ def main():
     # is the same lie a build failure tells and was told once in this session
     # by a test of mine that was broken rather than by code that was. Nothing
     # below means anything unless this passes.
-    if not run_suite(root)[0]:
+    base_ok, _, base_hung = run_suite(root)
+    if base_hung:
+        # Distinguished from red, because the fix is different: a red baseline is
+        # a broken test, a hung one is a suite that never answered — including the
+        # case where somebody has a break armed in the working tree right now.
+        print("BASELINE DID NOT FINISH — %s ran past %ds before any mutation.\n"
+              "Nothing below would mean anything. Check for an armed break in the "
+              "working tree, or raise MUTATE_SUITE_TIMEOUT if the machine is loaded."
+              % (", ".join(base_hung), SUITE_TIMEOUT), file=sys.stderr)
+        return 2
+    if not base_ok:
         print("BASELINE IS RED — the suite fails before any mutation.\n"
               "Every result below would report as caught. Fix the suite first.",
               file=sys.stderr)
@@ -270,7 +315,7 @@ def main():
             survivors.append(label + " [bad anchor]")
             continue
 
-        ok, out = run_suite(root, m.get("pkg", "govern"), mut=m)
+        ok, out, hung = run_suite(root, m.get("pkg", "govern"), mut=m)
 
         # Filetests are named by FILE, not by a TestXxx function, so a catch
         # from one has no Test name anywhere in the output.
@@ -285,7 +330,18 @@ def main():
         bm = re.search(r"(\d+) build errors", out)
         broke = (bm and int(bm.group(1)) > 0) or "gnoTypeCheckError" in out
 
-        if ok and covered:
+        if hung:
+            # FIRST, and that ordering is the whole point. A timeout leaves `ok`
+            # false, so without this branch the chain below would fall through to
+            # the final `else` and print "caught: failed" — reporting a mutation
+            # nothing ever judged as one the suite objected to. That is the same
+            # lie this file already refuses twice: a build failure counted as a
+            # catch, and an anchor that matched nothing counted as exercised.
+            # Nothing was measured, so it goes with the other non-results.
+            print(f"{label:<46} TIMED OUT after {SUITE_TIMEOUT}s "
+                  f"({', '.join(hung)}) <<<")
+            survivors.append(label + " [timed out]")
+        elif ok and covered:
             # A guard whose coverage lives in a suite this harness does not run —
             # today only the txtar tests, which need a real node. Such a row survives
             # for ever here, so omitting it was the alternative, and omission is
@@ -323,4 +379,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # sys.exit(main()), NOT main(). main() has returned 2 for a red baseline since
+    # it was written and the value went straight in the bin, so the process exited
+    # 0 — and mutate-parallel.py, which checks `code == 2` for exactly this, has
+    # been carrying a dead condition and leaning on a string match beside it.
+    sys.exit(main())

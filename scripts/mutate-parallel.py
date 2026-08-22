@@ -118,7 +118,19 @@ def main():
             broken.append(f"shard {i} produced nothing")
             continue
         code, stdout, stderr = res
-        if "BASELINE IS RED" in stderr or code == 2:
+        # A HUNG BASELINE IS NOT A RED ONE, and they want different things done.
+        # Red means a broken test; hung means a suite that never answered, which
+        # on this repo usually means somebody has a break armed in the working
+        # tree right now. Checked before the red case because the shard prints
+        # only one of the two, and named separately so the report says which.
+        #
+        # (Both a string match AND `code == 2`: the code was dead until mutate.py
+        # started passing main()'s return to sys.exit, and the string is what
+        # actually fired for the whole time it was dead.)
+        if "BASELINE DID NOT FINISH" in stderr:
+            broken.append(f"shard {i}: baseline did not finish — a suite ran past "
+                          f"its timeout before any mutation was applied")
+        elif "BASELINE IS RED" in stderr or code == 2:
             broken.append(f"shard {i}: baseline is red")
         elif code != 0:
             broken.append(f"shard {i}: exited {code}")
