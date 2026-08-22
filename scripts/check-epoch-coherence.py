@@ -424,6 +424,30 @@ MINT = re.compile(r"^\s*" + RECV + r"\.coin\.Mint\(", re.M)
 MINT_ACCT = re.compile(r"\.minted\s*\+=|\.emittedTotal\s*=")
 MINT_N = 3  # see the audit above
 
+# ARM 14 — every PURGE verb carries both of its gates.
+#
+# Purge is the LEGAL removal: it erases text behind a statutory category code and takes
+# a global-DAO threshold to fire. Four verbs do it — PurgeClaim, PurgeCourt,
+# PurgeModLogRow, PurgeFolder — and each opens with the same two gates, the authority
+# check and mustCategoryCode.
+#
+# The category-code check is now single-sited, so its CONDITION cannot drift. What no
+# single site fixes is a FIFTH verb that forgets to call it, or forgets the authority
+# gate: that is a new function, and a corpus row cannot be written for code nobody has
+# written yet. Hence a census.
+#
+# THE AUTHORITY GATE IS DELIBERATELY NOT EXTRACTED, and this arm is what makes leaving
+# it alone defensible. Four identical copies of `ensureGlobalDAO()` plus a members.Has
+# check is exactly the duplication the category code just lost — but hiding
+# ensureGlobalDAO behind a helper would take it out of check-read-purity's sight, which
+# greps function BODIES for allocator calls, so an exported read reaching the helper
+# would no longer be flagged. Pinning that every purge verb still spells the gate out
+# keeps both guards working on the same text.
+PURGE_VERB = re.compile(r"^func (Purge\w*)\(cur realm", re.M)
+PURGE_AUTH = 'panic("kourtv2: only a global DAO member may purge")'
+PURGE_CODE = "mustCategoryCode("
+PURGE_VERBS_N = 4  # PurgeClaim, PurgeCourt, PurgeModLogRow, PurgeFolder
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -569,7 +593,7 @@ def main() -> int:
         return 1
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
-            "lockvote": 0, "mint": 0}
+            "lockvote": 0, "mint": 0, "purge": 0}
 
     for pkg, d in (("kourtv2", KOURTV2), ("governor", GOVERNOR)):
         files = [p for p in sorted(d.glob("*.gno"))
@@ -645,6 +669,21 @@ def main() -> int:
                                     f"two lines — emission that the dilution ceiling "
                                     f"cannot see, or curve supply the position does "
                                     f"not record")
+
+                # Arm 14, per file: each purge verb carries both gates.
+                for m in PURGE_VERB.finditer(src):
+                    arm4["purge"] += 1
+                    nxt = src.find("\nfunc ", m.end())
+                    body = src[m.end():nxt if nxt != -1 else len(src)]
+                    for need, what in ((PURGE_AUTH, "the global-DAO authority gate"),
+                                       (PURGE_CODE, "mustCategoryCode")):
+                        if need not in body:
+                            hits.append(f"[ungated-purge] {pkg}/{p.name}:{m.group(1)} "
+                                        f"does not carry {what}. Purge erases text "
+                                        f"behind a statutory code and takes a "
+                                        f"global-DAO threshold; a verb missing either "
+                                        f"is a legal removal nobody authorised or "
+                                        f"nobody can audit")
 
                 # Arm 8, per file: a lock row belongs to its own owner.
                 calls = LOCKVOTE_CALL.findall(src)
@@ -737,13 +776,15 @@ def main() -> int:
         ("coin_out", COIN_OUT_N, "user-sourced coin movement(s)"),
         ("lockvote", LOCKVOTE_CALLS_N, "vote-lock site(s)"),
         ("mint", MINT_N, "mint site(s)"),
+        ("purge", PURGE_VERBS_N, "purge verb(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
                    else "lock-exempt" if key == "stakable"
                    else "ungated-outflow" if key == "coin_out"
                    else "foreign-lock" if key == "lockvote"
-                   else "unaccounted-mint" if key == "mint" else "one-weight")
+                   else "unaccounted-mint" if key == "mint"
+                   else "ungated-purge" if key == "purge" else "one-weight")
             why = ("a fourth lane locking votes has to be argued: every lock "
                    "row taxes its owner's own transfers, so the address it is "
                    "created for must be the caller and nothing else"
@@ -755,6 +796,11 @@ def main() -> int:
                    "second mustStakable caller is a second path disposing of "
                    "committed coin, and it would look entirely reasonable"
                    if key == "stakable" else
+                   "a fifth verb performing the LEGAL removal has to be argued: "
+                   "purge erases text behind a statutory code and takes a global-DAO "
+                   "threshold, and both gates are spelled out per verb rather than "
+                   "factored, so a new one carries them only if somebody remembers"
+                   if key == "purge" else
                    "a fourth mint is coin the dilution ceiling cannot see: "
                    "emittedTotal feeds d_eff and only mintEmission updates it, "
                    "while the curve paths advance `minted` instead — a mint that "
@@ -789,6 +835,7 @@ def main() -> int:
           f"{arm4['verdict_w'] + arm4['closed_w']} claim-terminal writer(s), "
           f"{arm4['lockvote']} self-only vote-lock site(s), "
           f"{arm4['mint']} accounted mint site(s), "
+          f"{arm4['purge']} doubly-gated purge verb(s), "
           f"one quality-question definition, {len(trims)} stake-series trim(s) and "
           f"no coin-archive trim, release clause in "
           f"{'+'.join(f'{k.split(chr(47))[-1]} {v}' for k, v in rule_counts.items())}, "

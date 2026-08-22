@@ -497,6 +497,33 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE LONG-ANCHOR QUERY, MECHANISED — AND THE THIRD ANSWER WAS "DO NOT REFACTOR".**
+Both duplications above were found through anchors needing absurd context, so the signal
+is worth measuring directly: corpus rows sorted by `len(find)`. Median is 49 characters,
+p90 is 94, and the top twelve run 200-326 — every one of them a place where the code says
+the same thing more than once. That query is cheap and should be re-run after any batch of
+rows.
+
+Its next answer was the global-DAO purge gate: `ensureGlobalDAO()` plus a members.Has
+check, FOUR byte-identical copies, one per purge verb. Same shape as the two just
+collapsed, on the most authority-sensitive path in the realm — and the right call was to
+LEAVE IT ALONE.
+
+Why, because "we single-sited the last two" is not an argument: `ensureGlobalDAO` is in
+check-read-purity's ALLOCATORS, and that guard greps function BODIES for allocator calls.
+Hiding the gate behind a helper takes it out of that guard's sight, so an exported read
+reaching the helper would stop being flagged — the fix would have to be paired with adding
+the helper to ALLOCATORS, which is more moving parts than the duplication costs. And each
+of the four copies is already pinned by its own caught row.
+
+What the duplication actually risks is a FIFTH verb that forgets a gate, and no corpus row
+can cover code nobody has written. So check-epoch-coherence gained ARM 14 instead: every
+`^func Purge\w*(cur realm` must carry the authority gate AND mustCategoryCode, count
+pinned at 4. Ablated four ways — a verb losing either gate names that verb and that gate, a
+planted fifth verb trips both, and a drifted verb pattern reports "0 purge verb(s),
+expected 4". **A census is the answer when the risk is the NEXT caller, not the current
+ones.**
+
 **THE DISPUTE BOND WAS QUOTED AND CHARGED FROM TWO COPIES OF ONE FORMULA.** Following the
 purge duplication out of the same cap sweep found the sharper case. `disputeBond0`'s doc
 read "OpenDispute's formula, factored for DisputeBondNext" — and OpenDispute went on

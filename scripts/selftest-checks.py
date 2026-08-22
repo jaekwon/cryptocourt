@@ -433,6 +433,42 @@ control("the mint scan hardcoding one receiver", EPOCHCOH,
         r'MINT = re.compile(r"^\s*c\.coin\.Mint\(", re.M)',
         "2 mint site(s), expected 3", argv=["python3", EPOCHCOH])
 
+# ARM 14, the purge census. Purge is the LEGAL removal — it erases text behind a
+# statutory code and takes a global-DAO threshold — and both gates are spelled out per
+# verb rather than factored, deliberately: hiding ensureGlobalDAO behind a helper would
+# take it out of check-read-purity's sight, which greps function BODIES. So what needs
+# pinning is that every verb still carries them, and that a FIFTH verb cannot arrive
+# without carrying them — a case no corpus row can cover, because the code does not
+# exist yet.
+control("a purge verb with no category-code gate", f"{KOURTV2}/moderation.gno",
+        "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n"
+        "\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n"
+        "\twho := cur.Previous().Address()\n"
+        "\td := ensureGlobalDAO()\n"
+        "\tif !d.members.Has(who.String()) {\n"
+        "\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n"
+        "\tmustCategoryCode(categoryCode)\n",
+        "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n"
+        "\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n"
+        "\twho := cur.Previous().Address()\n"
+        "\td := ensureGlobalDAO()\n"
+        "\tif !d.members.Has(who.String()) {\n"
+        "\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n",
+        "PurgeCourt does not carry mustCategoryCode",
+        argv=["python3", EPOCHCOH])
+# The gate that matters most, on the verb furthest from the tests.
+control("a purge verb with no authority gate", f"{KOURTV2}/folders.gno",
+        '\t\tpanic("kourtv2: only a global DAO member may purge")',
+        '\t\tpanic("kourtv2: computer says no")',
+        "PurgeFolder does not carry the global-DAO authority gate",
+        argv=["python3", EPOCHCOH])
+# Fail CLOSED: a verb pattern that stops matching leaves the census counting nothing.
+control("the purge verb pattern drifting off the code", EPOCHCOH,
+        r'PURGE_VERB = re.compile(r"^func (Purge\w*)\(cur realm", re.M)',
+        r'PURGE_VERB = re.compile(r"^func (PurgeNOPE\w*)\(cur realm", re.M)',
+        "0 purge verb(s), expected 4",
+        argv=["python3", EPOCHCOH])
+
 print("\ncheck-nodelegate")
 # The ceiling (PastVotes) is delegation-aware; the floor (BalanceOf) is not. They
 # agree in kourtv2 for one reason only — nothing there can delegate — and the day
