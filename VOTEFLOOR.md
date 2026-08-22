@@ -223,6 +223,27 @@ moments. One had expired. The pass is worth repeating after any large refactor, 
 cost is known now — five and a half hours of wall clock while other work continues, at
 one 60-row slice per 11-19 minutes depending on what else is running.
 
+**AND THEN THE DELTA PASS FOUND A SECOND ONE, of a different kind.** The corpus grew by
+114 rows while the full pass ran, so those were observed the same way afterwards, in three
+slices from their own clone: 113 caught, 1 not — `EnableTestClock: a realm with one user
+court may still be armed`.
+
+That row is not expired. It was MIS-ATTRIBUTED at birth: I measured it caught on a
+FILTERED run, where the only courts in existence were meta and the one the test made, so
+`CourtCount() > 1` and `> 2` genuinely differ. In the whole suite the realm holds dozens
+of courts, every small threshold is already exceeded, and both versions refuse — so the
+test still asserts the refusal truthfully while discriminating nothing about the
+threshold. Measured: the mutation passes the whole kourtv2 suite (44.6s, ok) and fails
+`kourtv2_usedrealm_seeded.txtar:123` with *no match for `this realm already has courts`*,
+because that harness holds exactly two courts. Reclassified to KNOWN-GAPS with the txtar
+as its `elsewhere`.
+
+**THE RULE THAT FALLS OUT: verify a new row on the FULL suite, never on the filter used to
+find it.** A filtered run is for triage. It over-reports survivors (three sweeps running,
+most filtered survivors were the filter) and — this is the new half — it can also
+over-report CATCHES, because a small fixture can make a threshold discriminable that the
+real suite never will.
+
 **How to run the full corpus while somebody else is editing the tree — run it from a
 CLONE.** mutate stages the realm sources from the repo it is invoked in, per row, so a
 concurrent session's commits land inside a long run and produce rows that report `INVALID

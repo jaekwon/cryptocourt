@@ -153,5 +153,14 @@
   "replace": "\t\t\tlive = getPos(c, cv.(*claimState), who, side).stake",
   "why": "CAUGHT BY A GUARD, NOT BY A SUITE, which is what `elsewhere` is for. Replacing the cs.stakers.Get lookup with getPos makes the read ALLOCATE a position on access - the defect the comment on that line names - and no test sees it, because a freshly allocated position reads zero stake and the page prints the same string. check-read-purity.py sees it exactly: `stakeindex.gno:StakedPage calls getPos`, exit 1, measured by applying this row and running the guard. The harness runs suites, so this row will always report SURVIVED there; the annotation names the guard that does the work.",
   "elsewhere": "scripts/check-read-purity.py"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "testclock.gno",
+  "label": "EnableTestClock: a realm with one user court may still be armed",
+  "find": "\tif CourtCount() > 1 {",
+  "replace": "\tif CourtCount() > 2 {",
+  "elsewhere": "gnoland/testdata/kourtv2_usedrealm_seeded.txtar",
+  "why": "UNPINNABLE BY THIS SUITE FOR A COUNTING REASON, and the corpus delta pass is what found it. The guard is CourtCount() > 1; widening it to > 2 still REFUSES in the gno suite, because by the time any test runs the realm holds dozens of courts and every small threshold is already exceeded. So a test can assert the refusal - and tcbase_test.gno does - without being able to discriminate the threshold at all. Only a harness holding exactly TWO courts can, and kourtv2_usedrealm_seeded.txtar is that harness: it creates one user court beside meta and asserts the message. MEASURED both ways: the mutation passes the whole kourtv2 suite (44.6s, ok) and fails that txtar at line 123 with `no match for this realm already has courts found in stderr`. This row was recorded as CAUGHT when it was written, on a FILTERED run where only two courts existed - which is exactly the mis-attribution a full pass exists to catch."
  }
 ]

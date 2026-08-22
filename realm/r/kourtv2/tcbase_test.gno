@@ -31,9 +31,17 @@ func TestADeclaredBaseOfZeroIsRefusedByItsOwnGuard(cur realm, t *testing.T) {
 	// always created a court") for its pairing half, so it passed in the full suite
 	// and FAILED run alone — with only this test running the realm really is virgin,
 	// EnableTestClockAt SUCCEEDS, and the assertion that it be refused is false.
-	// Creating the court here makes the count arm deterministic, and it turns out to
-	// make that arm reachable from this suite at all, which the scope note did not
-	// claim: what is unreachable here is a SUCCESSFUL arming, not the refusal.
+	// Creating the court here makes the refusal deterministic — what is unreachable in
+	// this suite is a SUCCESSFUL arming, not a refusal, which the scope note never
+	// claimed either way.
+	//
+	// WHAT THIS CANNOT DISCRIMINATE, learned from the corpus delta pass rather than
+	// from review: the THRESHOLD. Widening `CourtCount() > 1` to `> 2` still refuses
+	// here, because by the time any gno test runs the realm holds dozens of courts, so
+	// every small threshold is already exceeded. Measured — the mutation passes this
+	// whole suite and fails kourtv2_usedrealm_seeded.txtar, which holds exactly two
+	// courts and is therefore the only harness that can tell 1 from 2. The row lives in
+	// KNOWN-GAPS with that txtar as its `elsewhere`.
 	testCourt(cur, "tcb", testutils.TestAddress("tcb-alice"), 1_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(deployer))
