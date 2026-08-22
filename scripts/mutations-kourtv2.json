@@ -7939,5 +7939,54 @@
   "label": "Burn: burning the whole balance is refused",
   "find": "\tif a == nil || a.balance < amount {",
   "replace": "\tif a == nil || a.balance <= amount {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: a claim with a resolved round settles by silence instead of by vote",
+  "find": "\tif cs.disputeOpen || cs.round > 0 {",
+  "replace": "\tif cs.disputeOpen && cs.round > 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the 72h minimum never refuses",
+  "find": "(known && !passed) ||\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay)",
+  "replace": "(known && !passed) &&\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: the mid default overwrites a tier already decided",
+  "find": "\tif !cs.tierFinal && !cs.slotConsumed {",
+  "replace": "\tif !cs.tierFinal || !cs.slotConsumed {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: a slash reserve is withheld even when one is already pending",
+  "find": "\t\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
+  "replace": "\t\tif cs.pendingSlash == 0 || !cs.slotConsumed {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "SettleUndisputed: a zero refund is still transferred",
+  "find": "\t\tif refund := cs.answerBond - reserve; refund > 0 {",
+  "replace": "\t\tif refund := cs.answerBond - reserve; refund >= 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "WithdrawStake: the WINNING side may withdraw before the verdict",
+  "find": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0 && side != int(cs.provisional)) {",
+  "replace": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0 && side == int(cs.provisional)) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "session.gno",
+  "label": "WithdrawStake: conviction is not settled before the stake is zeroed",
+  "find": "\taccrue(c, cs, p, side) // settles to the freeze pin (a no-op if already settled)\n",
+  "replace": "\n"
  }
 ]
