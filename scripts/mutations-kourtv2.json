@@ -8332,5 +8332,35 @@
   "find": "engine.VoteWithReason(cur.Previous().Address(), id, choice, reason)",
   "replace": "engine.VoteWithReason(cur.Address(), id, choice, reason)",
   "why": "The unrowed twin of `Vote: the vote is cast by the REALM, not the caller`, which was rowed. Eight crossing entrypoints in govern.gno pass cur.Previous().Address() and only three carried this row; sweeping the other five found one real catch, one events-only gap, and three dead parameters."
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "New: a zero-width ring is accepted, so every bucket index divides by zero",
+  "find": "\tif width <= 0 {",
+  "replace": "\tif width < 0 {",
+  "why": "The ring is what makes a price spike expensive - kourtv2 reads it for open interest and for X-bar, the answerability floor that gates PostAnswer and sizes a flag bond - and every bucket index is `height / r.width`. A zero width is division by zero on the first read, so the constructor is the only place it can be refused."
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "New: a zero-bucket ring is accepted",
+  "find": "\tif n <= 0 {",
+  "replace": "\tif n < 0 {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "New: eight-byte values are refused, the widest the encoder supports",
+  "find": "\tif bpp < 1 || bpp > 8 {",
+  "replace": "\tif bpp < 1 || bpp >= 8 {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "put: a ZERO observation is refused as negative",
+  "find": "\tif v < 0 {",
+  "replace": "\tif v <= 0 {",
+  "why": "A zero observation is legal and ordinary: it is what the ring holds when nobody is staked. Refusing it would panic on the first empty epoch."
  }
 ]

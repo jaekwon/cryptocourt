@@ -525,6 +525,27 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**twap SWEPT, AND TWO CANDIDATES KILLED BY READING THEM.** The ring is money-adjacent —
+kourtv2 reads it for open interest and for X-bar, the answerability floor that gates
+PostAnswer and sizes a flag bond — and it sat at 8.7 rows per 100 code lines with 31
+comparisons, 20 of them unrowed. Most of those are serialisation guards, nil checks and
+clamps. Two looked consequential and both are INVALID:
+
+  `Average`'s `if bkt > r.base { v = r.last }` narrowed to `>=` looks like it would use the
+  persisted value for the head bucket instead of reading the stored one — except Observe's
+  last-value-in-bucket posture means bucket[base] IS r.last. Same program.
+
+  `StaleBy`'s `if bn <= r.base { return 0 }` narrowed to `<` looks like it changes the
+  answer at bn == base, and does not: the fall-through returns `bn - r.base`, which is 0.
+
+Two suite runs saved by classifying before running, which is the whole point of the rule.
+
+The four that were real are the CONSTRUCTOR and encoder guards, all caught: a zero width
+(every bucket index is `height / r.width`, so zero is division by zero on the first read), a
+zero bucket count, the 8-byte upper bound the encoder actually supports, and a zero
+observation being refused as negative — zero is what the ring holds when nobody is staked,
+so refusing it would panic on the first empty epoch. twap 14 -> 18 rows.
+
 **THE UNUSED-PARAMETER CLASS, BOUNDED.** Having found three dead `who` parameters by hand,
 the general question is worth one query: across 868 functions in the realm, which take a
 NAMED parameter the body never mentions (comments stripped, `_` excluded)? Thirty-eight.
