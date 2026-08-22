@@ -286,6 +286,26 @@ all three `&&` predicates turned into `||`. The single survivor is lockVote's
 first; it is recorded in KNOWN-GAPS with that reason. Worth repeating after any change to
 those three files, since it costs about two minutes and does not depend on guessing.
 
+**WHERE THE CORPUS ACTUALLY IS, measured, because a density scan by realm file misses it
+entirely.** Rows per 100 code lines, per package: kourtv2 is thoroughly covered and the
+LIBRARIES underneath it are not — and the libraries are where the arithmetic lives.
+
+| package | rows | code | per 100 |
+|---|---|---|---|
+| cshares | 0 | 273 | 0.0 |
+| tickbook | 0 | 363 | 0.0 |
+| twap | 8 → 10 | 161 | 5.0 → 6.2 |
+| curve | 5 → 10 | 108 | 4.6 → 9.3 |
+| grc20votes | 38 | 289 | 13.1 |
+| governor | 199 | 1327 | 15.0 |
+| checkpoint | 24 | 145 | 16.6 |
+
+cshares and tickbook are the two zeros and they stay zero DELIBERATELY: both are imported
+only by `realm/r/kourtv1`, and V1 is untouched by owner ruling. Neither has a PKGS entry in
+mutate.py, which is why they were never swept — the absence is a scope decision, not an
+oversight, and a future density scan should not chase them. What is left worth sweeping is
+grc20votes (the ledger and its voting snapshots) and checkpoint.
+
 **A KILLED PARALLEL RUN LEAVES SHARDS BEHIND, and one of mine stole a core for six hours
 and twenty-four minutes.** `pkill -f "<batch>.json"` matches the mutate-parallel DRIVER,
 whose argv carries the batch path — it does NOT match the per-shard `scripts/mutate.py`

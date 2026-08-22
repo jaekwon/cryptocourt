@@ -7855,5 +7855,47 @@
   "label": "Minted: the buyer is charged for one step less than they received",
   "find": "\tspent, _ = c.Cost(from, delta) // round-up cost of exactly what was minted",
   "replace": "\tspent, _ = c.Cost(from, delta-1) // round-up cost of exactly what was minted"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Observe: a repeat observation in the same bucket is called a rewind",
+  "find": "\tif bn < r.base {",
+  "replace": "\tif bn <= r.base {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Observe: the same-bucket update is treated as a step",
+  "find": "\tif bn == r.base {",
+  "replace": "\tif bn != r.base {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Observe: after a gap the NEW value lands in the oldest stepped bucket",
+  "find": "\t\tif i == steps-1 {",
+  "replace": "\t\tif i == 0 {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Observe: the filled count may exceed the ring",
+  "find": "\t\tif r.filled < r.n {",
+  "replace": "\t\tif r.filled <= r.n {"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: maturity needs only ONE of its two conditions",
+  "find": "\treturn sum / int64(count), count == want && r.filled >= want",
+  "replace": "\treturn sum / int64(count), count == want || r.filled >= want"
+ },
+ {
+  "pkg": "twap",
+  "file": "twap.gno",
+  "label": "Average: maturity is off by one in the filled test",
+  "find": "\treturn sum / int64(count), count == want && r.filled >= want",
+  "replace": "\treturn sum / int64(count), count == want && r.filled > want"
  }
 ]
