@@ -1,4 +1,5 @@
 // The chat panel ON THE REAL COURT PAGE.
+// check-web-selectors: gone chatdry — the dry-run notice, removed in 6e5c1e1 at the owner's word
 //
 // chat_render.js tests the panel in isolation and chat_live.js tests it against a
 // server. Neither touches index.html, and the wiring there is where the interesting
@@ -190,26 +191,33 @@ async function courtPage(browser, opts) {
       try { raw = localStorage.getItem("cc.cfg"); } catch (e) {}
       return {cfg: CFG.chat, raw: raw};
     });
-    ok("blanking the field turns chat off", cleared.cfg === undefined);
+    // EMPTY, NOT ABSENT, and the difference is the whole reason chat reaches
+    // anybody. `undefined` means "no preference", and since 81f93f8 no preference
+    // means ON when the page is served from an origin that can host the service.
+    // So "off" needs a value of its own — cleanCfg preserves `chat:""` for
+    // exactly this, and asserting undefined here would be asserting that turning
+    // chat off turns it back on.
+    ok("blanking the field turns chat off", cleared.cfg === "");
     ok("...and removes it from storage rather than keeping a stale value",
        !!cleared.raw && !cleared.raw.includes("8791"));
     await page.close();
   }
 
-  // The dry-run notice's element must be hidden by the MARKUP, not merely empty.
+  // THE DRY-RUN NOTICE IS GONE, at the owner's word: the panel used to tell every
+  // reader "Automatic moderation is not applying timeouts on this server right
+  // now", which is operator telemetry wearing a safety warning's clothes.
   //
-  // The node harness models this with a stub default, which is exactly the kind of thing a
-  // stub can get wrong — so the real attribute is checked here, in a real parser, on the real
-  // shell. Demo mode never fetches health, so the notice must stay hidden throughout.
+  // Asserted as an ABSENCE rather than deleted, because the slot, its style and
+  // its export were all removed — a .chatdry reappearing would mean the notice
+  // came back rather than that somebody renamed something.
   {
     const {page, errors} = await courtPage(browser);
-    const r = await page.evaluate(() => {
-      const d = document.querySelector("#courtchat .chatdry");
-      return {present: !!d, hidden: d ? d.hidden : null, text: d ? d.textContent : null};
-    });
-    ok("the panel has somewhere to put a dry-run notice", r.present);
-    ok("...hidden by the markup, not just empty", r.hidden === true);
-    ok("...and empty in demo mode, which never asks", r.text === "");
+    const r = await page.evaluate(() => ({
+      dry: !!document.querySelector("#courtchat .chatdry"),
+      log: !!document.querySelector("#courtchat .chatlog"),
+    }));
+    ok("the panel carries no dry-run notice", r.dry === false);
+    ok("...and this is not vacuous — the panel really mounted", r.log === true);
     ok("no errors: " + (errors[0] || "none"), errors.length === 0);
     await page.close();
   }

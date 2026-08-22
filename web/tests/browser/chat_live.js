@@ -1,4 +1,5 @@
 // The whole chat stack, through a real browser, against a real server.
+// check-web-selectors: gone chatdry — the dry-run notice, removed in 6e5c1e1 at the owner's word
 //
 // chat_render.js checks rendering with no service behind it. This runs the other half:
 // a headless Chrome drives web/chat-demo.html against a kourtchat it starts itself, on
@@ -392,16 +393,17 @@ function freePort() {
          h.backlog === undefined && h.scanner_seen_at === undefined &&
            h.unscannable === undefined);
 
-      // The page mounted at the start of this run, against this same server, so its notice
-      // has already been fetched — the health request happens once per mount.
-      await page.waitForFunction(
-        () => !document.querySelector("#livechat .chatdry").hidden, {timeout: 20000});
-      const dry = await page.evaluate(() =>
-        document.querySelector("#livechat .chatdry").textContent);
-      ok("the panel discloses that timeouts are not being applied",
-         /not applying timeouts/.test(dry));
-      ok("...without telling anybody they are safe to try",
-         !/safe|will not|won't|free/i.test(dry));
+      // The panel still FETCHES health — appeal_to comes from it — but it no longer
+      // repeats the enforcing state to the reader. That notice was removed at the
+      // owner's word, so what is checked now is that the server still answers and
+      // the page still says nothing about it.
+      const shown = await page.evaluate(() => ({
+        dry: !!document.querySelector("#livechat .chatdry"),
+        text: (document.querySelector("#livechat") || {}).textContent || "",
+      }));
+      ok("the panel carries no dry-run notice", shown.dry === false);
+      ok("...and does not tell the reader about enforcement at all",
+         !/not applying timeouts|dry run/i.test(shown.text));
     }
 
     // ------------------------------------------------------- A CLOSED COURT

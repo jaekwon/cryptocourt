@@ -146,6 +146,7 @@ LIVER = "scripts/check-live-reads.py"
 NODELEG = "scripts/check-nodelegate.py"
 DUPES = "scripts/check-web-dupes.py"
 WEBCSS = "scripts/check-web-css.py"
+WEBSEL = "scripts/check-web-selectors.py"
 WEBPAGE = "web/index.html"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
@@ -669,6 +670,23 @@ control("a court built on a clockless ledger", COURT,
 control("a shim that no longer reads the chain", CLOCKF,
         "h = runtime.ChainHeight()", "h = int64(0)",
         "lost its anchor", argv=["python3", HSHIM])
+
+print("\ncheck-web-selectors")
+# The defect: three browser assertions queried .eline/.efill/.e50 for a day after
+# the share card's chart started sharing the claim page's .ln/.ar/.mid. A
+# querySelector for a class that does not exist returns null — the assertion goes
+# on reporting on nothing. web-visual needs puppeteer and is deliberately not in
+# `check`, so nothing said a word.
+control("a browser check queries a class the overlay no longer has",
+        "web/tests/browser/embed_layout.js",
+        "sv.querySelector('.ln')", "sv.querySelector('.eline')",
+        "appears in neither shipped file", argv=["python3", WEBSEL])
+# And the tripwire. A scan that matches nothing must fail rather than report a
+# clean tree — the same discipline check-web-dupes takes about its own corpus.
+control("a scan that matches nothing", WEBSEL,
+        'if not name.endswith(".js") or name == "run.js":',
+        'if True or not name.endswith(".js"):',
+        "matched nothing", argv=["python3", WEBSEL])
 
 print("\ncheck-web-css")
 # The defect this exists for: a comment edited badly, leaving prose and a second
