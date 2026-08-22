@@ -7988,5 +7988,40 @@
   "label": "WithdrawStake: conviction is not settled before the stake is zeroed",
   "find": "\taccrue(c, cs, p, side) // settles to the freeze pin (a no-op if already settled)\n",
   "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: a court with NO configured bond cap clamps the bond to zero",
+  "find": "\tif c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {",
+  "replace": "\tif c.params.answerBondCapCC >= 0 && bond > c.params.answerBondCapCC {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the collateral floor takes the SMALLER of the two sides",
+  "find": "\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {",
+  "replace": "\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp < floor {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: trailing stake exactly AT the floor is refused",
+  "find": "\tif xbar < effMinAnswerX(c) {",
+  "replace": "\tif xbar <= effMinAnswerX(c) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the dead-claim height fallback is one block late",
+  "find": "(!known && now >= cs.openedAt+deadClaimTimeout)",
+  "replace": "(!known && now > cs.openedAt+deadClaimTimeout)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: a closed claim may be answered and an open one may not",
+  "find": "\tif cs.closed {\n\t\tpanic(\"kourtv2: this claim is closed\")",
+  "replace": "\tif !cs.closed {\n\t\tpanic(\"kourtv2: this claim is closed\")"
  }
 ]
