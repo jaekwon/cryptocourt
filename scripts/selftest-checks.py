@@ -152,6 +152,9 @@ WEBSEL = "scripts/check-web-selectors.py"
 BROWREG = "scripts/check-browser-checks-registered.py"
 REACH = "scripts/check-web-tests-reachable.py"
 CURREACH = "scripts/check-curation-reachable.py"
+CHATLIM = "scripts/check-chat-limits.py"
+CHATJS = "web/chat.js"
+SANITIZE = "internal/chat/sanitize.go"
 FOLDERSJS = "web/tests/folders_test.js"
 RUNJS = "web/tests/browser/run.js"
 CHATALL = "web/tests/browser/chat_all.js"
@@ -866,6 +869,25 @@ control("a browser check queries a class the overlay no longer has",
         "appears in neither shipped file", argv=["python3", WEBSEL])
 # And the tripwire. A scan that matches nothing must fail rather than report a
 # clean tree — the same discipline check-web-dupes takes about its own corpus.
+print("\ncheck-chat-limits")
+# The defect: a limit restated in a second language and left to drift. It already
+# has — chat_render.js asserted the moniker input's maxlength equalled the
+# server's limit, which stopped being true when the limit moved to counting
+# LETTERS, and the assertion was wrong for two commits with nothing to say so.
+control("the client drifts from the server", CHATJS,
+        "const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};",
+        "const CHATLIMITS = {body: 500, moniker: 24, bytes: 4096};",
+        "disagree about a limit", argv=["python3", CHATLIM])
+control("the server moves and the client does not", SANITIZE,
+        "\tMaxMonikerRunes = 24\n", "\tMaxMonikerRunes = 32\n",
+        "disagree about a limit", argv=["python3", CHATLIM])
+# And the tripwire: a comparison that found nothing to compare must not report
+# agreement.
+control("the CHATLIMITS anchor is lost", CHATJS,
+        "const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};",
+        "const CHATLIMITSX = {body: 400, moniker: 24, bytes: 4096};",
+        "lost its anchor", argv=["python3", CHATLIM])
+
 print("\ncheck-curation-reachable")
 # The defect: nine curation entrypoints built in this programme — subfolders,
 # MoveFolder, retire/restore, OrderFolders, both argument edges, SetCourtDesc —
