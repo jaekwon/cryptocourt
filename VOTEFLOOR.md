@@ -497,6 +497,38 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**CORPUS DENSITY PER PACKAGE, AND WHAT THE ZEROES MEAN.** Rows per 100 code lines across
+every tree the harness can stage: checkpoint 16.6, grc20votes 15.2, governor 15.0,
+curve 13.9, kourtv2 13.2, govern 9.0, twap 8.7, **ccwrap 2.2**, and three at ZERO —
+offerer (49 lines), cshares (273), tickbook (363). Six hundred and eighty-five lines with
+no coverage at all looks alarming and is not:
+
+  offerer is DOCUMENTED as staged-but-never-mutated, in mutate.py's own PKGS comment —
+  "the govern realm's offer filetest imports it, so leaving it out makes the baseline red
+  for a staging reason and every mutation reads as caught. That is the same lie as a build
+  failure counted as a catch, told by omission."
+
+  cshares and tickbook are imported ONLY by realm/r/kourtv1 — V1 support, and V1 is out
+  of scope.
+
+**AND ccwrap's 2.2 WAS A THIN CORPUS, NOT THIN TESTS — density measures the wrong thing.**
+It holds Wrap and Unwrap, which move CC, so it read as the thinnest live money surface in
+the repo. Five mutations written for it — both orderings, both amount guards, and the room
+check moved after the transfer — and ALL FIVE were already caught. Nothing about the realm
+needed changing; five properties simply had no rows.
+
+The one worth naming is Unwrap's ordering, which its comment calls load-bearing: "BURN
+BEFORE THE RELEASE ... releasing first would let a reentrant caller — or simply a bug in a
+future edit here — draw twice against one balance." I expected that to need an adversarial
+realm to observe, and it does not: TestUnwrapCannotOverdraw catches it by MESSAGE
+SPECIFICITY, because an overdraw in the right order fails at the burn with the ledger's
+error and swapped fails at the transfer with kourtv2's. Same mechanism as the transfer-guard
+finding earlier — the assertion that names its message is the one with teeth.
+
+So: density points at where the CORPUS is thin, which is worth rowing for its own sake (a
+property with no row is a property nobody will notice losing), but it says nothing about
+whether the tests are there. Only the sweep says that.
+
 **THE ADJACENCY LESSON, APPLIED BACKWARDS TO AN OLDER GAP.** `Minted: the down-correction
 overshoots` says "MASKED BY THE OTHER LOOP, and no single-mutation row can be written", and
 that is true — the down-loop's `cst <= coin` and the up-loop's `cst > coin` repair each

@@ -8279,5 +8279,42 @@
   "find": "\t// Step DOWN while the rounded-up cost of reaching s1 exceeds the payment.\n\tfor s1 > from {\n\t\tcst, ok := c.Cost(from, s1-from)\n\t\tif ok && cst <= coin {\n\t\t\tbreak\n\t\t}\n\t\ts1--\n\t}\n\t// Step UP while one more coin still fits (and stays under the cap).\n\tfor s1 < c.cap {\n\t\tcst, ok := c.Cost(from, s1+1-from)\n\t\tif !ok || cst > coin {\n\t\t\tbreak\n\t\t}\n\t\ts1++\n\t}\n",
   "replace": "\t// Step DOWN while the rounded-up cost of reaching s1 exceeds the payment.\n\tfor s1 > from {\n\t\tcst, ok := c.Cost(from, s1-from)\n\t\tif ok && cst < coin {\n\t\t\tbreak\n\t\t}\n\t\ts1--\n\t}\n\t// Step UP while one more coin still fits (and stays under the cap).\n\tfor s1 < c.cap {\n\t\tcst, ok := c.Cost(from, s1+1-from)\n\t\tif !ok || cst >= coin {\n\t\t\tbreak\n\t\t}\n\t\ts1++\n\t}\n",
   "why": "THE JOINT MUTATION OF A MASKING PAIR, writable because the two loops are CONTIGUOUS. The down-loop's `cst <= coin` and the up-loop's `cst > coin` each repair the other: nudging the down-loop alone steps one past the answer whenever the payment equals a span's price exactly, and the up-loop steps back because that cost is not `> coin`. So neither half can be pinned on its own and the KNOWN-GAPS row for the down half records exactly that. What it also recorded, and what makes this row possible, is that nudging BOTH fails TestMintedIsMaximalAndNeverShortChangesTheBuyer with 'paying the exact price of 1 units from 0 minted only 0'. A masking pair is unrowable only when its halves are far apart; adjacent ones take one `find`. MEASURED caught, and the harness names TestLargeValuesStayInside128Bits rather than the Maximal test the gap row quotes: three tests fail on this mutation and a shard reports the first one it hits, so the two records agree even though they name different tests."
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Unwrap: the CC is released BEFORE the wrapped coin is burned",
+  "find": "\tif err := w.led.Burn(who, amount); err != nil {\n\t\tpanic(err)\n\t}\n\tkourtv2.TransferCC(cross(cur), slug, who, amount)",
+  "replace": "\tkourtv2.TransferCC(cross(cur), slug, who, amount)\n\tif err := w.led.Burn(who, amount); err != nil {\n\t\tpanic(err)\n\t}",
+  "why": "THE ORDERING THE COMMENT CALLS LOAD-BEARING: 'BURN BEFORE THE RELEASE, the mirror of Wrap's order and for the mirror reason: releasing first would let a reentrant caller - or simply a bug in a future edit here - draw twice against one balance.' It had no row. Caught by TestUnwrapCannotOverdraw, and the mechanism is message specificity: in the right order an overdraw fails at the BURN with the ledger's error, and swapped it fails at the transfer with kourtv2's, so the test's expected abort no longer matches."
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Wrap: the wrapped coin is minted BEFORE the court coin is taken",
+  "find": "\tkourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)\n\tif err := w.led.Mint(who, amount); err != nil {\n\t\tpanic(err)\n\t}",
+  "replace": "\tif err := w.led.Mint(who, amount); err != nil {\n\t\tpanic(err)\n\t}\n\tkourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)",
+  "why": "The mirror ordering in Wrap, also unrowed, also caught. Minting first would issue wrapped coin against court coin that has not arrived yet."
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Wrap: a zero amount is accepted",
+  "find": "\tif amount <= 0 {\n\t\tpanic(\"ccwrap: wrap amount must be positive\")",
+  "replace": "\tif amount < 0 {\n\t\tpanic(\"ccwrap: wrap amount must be positive\")"
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Unwrap: a zero amount is accepted",
+  "find": "\tif amount <= 0 {\n\t\tpanic(\"ccwrap: unwrap amount must be positive\")",
+  "replace": "\tif amount < 0 {\n\t\tpanic(\"ccwrap: unwrap amount must be positive\")"
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Wrap: the room check happens AFTER the coin has moved",
+  "find": "\tmustWrapRoom(slug, cur.Address(), amount)\n\tkourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)",
+  "replace": "\tkourtv2.TransferFromCC(cross(cur), slug, who, cur.Address(), amount)\n\tmustWrapRoom(slug, cur.Address(), amount)"
  }
 ]
