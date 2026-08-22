@@ -49,6 +49,12 @@ guard over the working docs was measured and rejected: 312 such citations across
 described the tree at the time of writing is a record rather than a defect. This file is an
 active specification an implementer will follow, so it is held to the source-prose rule.
 
+**The decision was validated the same afternoon**, which is worth one line because this rule
+will otherwise be re-litigated. A refactor landed hours later — "both terminal paths settle the
+answer bond in one place" — and it shifted the fee-burn region in `claim.gno` again. All eight
+symbol references still resolve, uniquely; a `file:line` written this morning would already be
+drifting by evening.
+
 ---
 
 ## 1. The requirement, in the owner's words
