@@ -1532,12 +1532,17 @@ function sparkSvg(pts){
   const xy=pts.map((p,i)=>(P+i*(W-2*P)/(n-1)).toFixed(1)+","+(H-P-(Math.max(0,Math.min(100,p))/100)*(H-2*P)).toFixed(1));
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><line class="base" x1="${P}" y1="${H/2}" x2="${W-P}" y2="${H/2}"></line><polyline points="${xy.join(" ")}"></polyline></svg>`;
 }
+/* The three ratios in the order the spark draws them, or null unless all three
+   are finite. Derived from ratios() rather than recomputing: the two functions
+   had the same three statements, character for character, including the
+   trailing-week fallback — trailYesMature && trailOImature && trailOI > 0, else
+   null — which is the part with a rule in it and the part a change would have to
+   land in twice. They differ only in shape and gate, so that is all this keeps:
+   ratios() answers {inst,life,week} for callers that can render a partial
+   series, this orders them and refuses an incomplete one. */
 function claimSeries(d){
-  const inst=pctYes(d.yesStake,d.noStake);
-  const life=pctYes(d.convYes,d.convNo);
-  const week=(d.trailYes!=null)? d.trailYes
-    : (d.trailYesMature&&d.trailOImature&&d.trailOI>0? Math.round(1000*d.trailYesAvg/d.trailOI)/10 : null);
-  return ([inst,life,week].every(Number.isFinite))? [life,week,inst] : null;
+  const r = ratios(d);
+  return ([r.inst,r.life,r.week].every(Number.isFinite))? [r.life,r.week,r.inst] : null;
 }
 /* THE DOCKET'S SIGNAL CELL, and why it is not just sparkSvg().
    The three-point spark needs all THREE series — lifetime conviction, the
