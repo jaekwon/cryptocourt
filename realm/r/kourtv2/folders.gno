@@ -314,6 +314,30 @@ func FolderName(courtSlug string, folderID uint64) string {
 	return f.name
 }
 
+// FolderDesc returns a folder's description. The field has been written and
+// length-capped since folders existed and had no way out, which the overlay has
+// been carrying as "stored but unreadable — wishlisted". This is that.
+//
+// NO PURGE BRANCH, and its absence is the point rather than an omission. This
+// read was first written with `if f.purged { return "" }` and the test for it
+// passed — then failed to fail when the branch was deleted, because PurgeFolder
+// does not flag this text, it ERASES it (name and desc are both set to ""). The
+// branch was dead code, and dead code in a moderation path is worse than absent:
+// it reads as the thing standing between a purge and a leak when the erasure is
+// what actually stands there.
+//
+// Worth knowing, because the two differ: a purged CLAIM keeps its title and body
+// in state and every read gates on the flag, so the bytes are still on chain. A
+// purged FOLDER's text is gone. FolderName still needs its branch — it
+// substitutes the "[purged:CODE]" tombstone for the erased name.
+func FolderDesc(courtSlug string, folderID uint64) string {
+	c := mustCourt(courtSlug)
+	if c.mod == nil {
+		panic("kourtv2: no such folder")
+	}
+	return c.mod.mustFolder(folderID).desc
+}
+
 // FolderItems returns a copy of a folder's claim-ID list (a value slice — never
 // a pointer into realm state, borrow rule #2).
 func FolderItems(courtSlug string, folderID uint64) []uint64 {

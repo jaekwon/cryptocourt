@@ -6735,5 +6735,12 @@
   "label": "court: SetCourtDesc accepts any caller",
   "find": "\trequireFolderMod(c, who)\n\tmustCourtDesc(desc)",
   "replace": "\tmustCourtDesc(desc)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folders: PurgeFolder leaves the description in state",
+  "find": "\tf.name = \"\"\n\tf.desc = \"\"",
+  "replace": "\tf.name = \"\""
  }
 ]

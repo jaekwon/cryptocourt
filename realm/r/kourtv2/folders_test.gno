@@ -316,3 +316,32 @@ func TestFolderParentOnUnmoderatedCourt(cur realm, t *testing.T) {
 	testCourt(cur, "fpar", alice, 10_000_000_000)
 	uassert.Equal(t, uint64(0), FolderParent("fpar", 1))
 }
+
+// THE DESCRIPTION READ. The field has been stored and capped since folders
+// existed; it just had no way out. The gate is the only thing worth pinning: a
+// purged folder's description goes, and its NAME keeps the tombstone that says
+// why — one explanation per row, not two.
+func TestFolderDescReadAndPurgeGate(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fd-alice")
+	testCourt(cur, "fdsc", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "fdsc", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := CreateFolder(cross(cur), "fdsc", "Document trail", "Claims resting on released records.")
+
+	uassert.True(t, strings.Contains(FolderDesc("fdsc", id), "released records"))
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeFolder(cross(cur), "fdsc", id, "CSAM")
+
+	// ERASED, not hidden. This assertion is the one that survives arming: the
+	// read has no purge branch to break, because PurgeFolder zeroes the text
+	// itself. The name still carries the tombstone, which is what tells a reader
+	// the row exists and why it is blank.
+	uassert.Equal(t, "", FolderDesc("fdsc", id))
+	uassert.True(t, strings.Contains(FolderName("fdsc", id), "purged"))
+	uassert.True(t, strings.Contains(FolderName("fdsc", id), "CSAM"))
+}
