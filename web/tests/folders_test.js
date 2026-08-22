@@ -160,9 +160,6 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   }
   ok("F4: stale route comment gone", !src.includes("demo-only route — the overlay does not read on-chain folders yet"));
 
-  console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
-  process.exit(fail?1:0);
-
 // NESTING FROM THE CHAIN. The realm answers the shape in one read; the overlay
 // has to turn it into a tree without trusting it — a client that hangs on
 // malformed state is a client a bad read can wedge.
@@ -207,9 +204,21 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      !!findById(r5.folders, 2) && !r5.folders.some(f=>f.fid===2));
 
   // AND A REALM WITHOUT THE READ still gets the flat list it always got.
+  global.FCOUNT=3;
   global.FTREE = null;
   const r4 = await chainFolders("orem");
   ok("no FolderTree degrades to a flat list", r4.folders.length===3);
   global.FTREE = undefined; CFG.mode='demo';
 
+  // THE SUMMARY GOES LAST, and it had not. It sat just after the "F4" line with
+  // process.exit under it, so the nine assertions below — the whole NESTING FROM
+  // THE CHAIN block — were unreachable and had never run once. The block was
+  // appended after the summary rather than before it, which is invisible on
+  // review: the file reads top to bottom and every one of those lines looks live.
+  //
+  // Those nine cover chain nesting, which is exactly where a regression shipped
+  // this week: subfolders became unreachable while the court page went on linking
+  // to them. The tests for it existed and could not have caught it.
+  console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
+  process.exit(fail?1:0);
 })();
