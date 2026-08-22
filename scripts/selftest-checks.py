@@ -974,6 +974,16 @@ control("a second declaration of an existing name", WEBPAGE,
         "async function claimSeries(slug,id,d){",
         "declared more than",
         argv=["python3", DUPES])
+# ACROSS THE FILE BOUNDARY, which this guard could not see until it read both
+# shipped files. chat.js and index.html's inline script share one global scope —
+# the page loads chat.js with a plain <script src> — and chat.js's
+# `function chatBase(cfg)` lost to index.html's `function chatBase()`, declared
+# later. That silently removed chat.js's demo guard and a demo court page started
+# calling the real chat service (500e543). The guard for exactly that defect was
+# reading one of the two files.
+control("a name declared in chat.js AND the page", "web/chat.js",
+        "function chatEndpoint(cfg) {", "function chatBase(cfg) {",
+        "declared more than", argv=["python3", DUPES])
 # And the tripwire, which is the half that matters if the scan ever stops
 # finding anything: a guard that counted zero declarations would report every
 # name unique having asked nothing.

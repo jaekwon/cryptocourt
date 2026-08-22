@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """No two function declarations in the overlay may share a name.
 
-WHY THIS IS A GUARD AND NOT A CONVENTION. web/index.html is one file with a
-single ~4,000-line <script> and 156 function declarations in one flat scope.
+WHY THIS IS A GUARD AND NOT A CONVENTION. The overlay is two shipped files —
+index.html's single ~4,000-line <script> and chat.js — and they share ONE global
+scope, because the page loads chat.js with a plain <script src>. Between them
+that is one flat namespace of nearly 190 function declarations.
 A second `function foo(...)` does not warn, does not throw, and does not
 show up in `node --check`: it silently REPLACES the first, and every existing
 caller starts calling the new one.
@@ -26,6 +28,18 @@ function are fine and are excluded by their indentation: a `function` at column
 0 is top-level in this file, anything indented is local to its enclosing scope
 and shadows deliberately.
 
+AND IT HAPPENED AGAIN ACROSS THE FILE BOUNDARY, which is why chat.js is in
+scope now and was not before. chat.js declared `function chatBase(cfg)`;
+index.html declares its own `function chatBase()` in an inline script evaluated
+AFTER the <script src>, so the later one won and chat.js's was unreachable in the
+page. What that removed was chat.js's first line, `if (!cfg || cfg.mode ===
+"demo") return ""` — so a DEMO court page issued real requests to the configured
+chat service against sample data. Fixed by renaming, in 500e543.
+
+This guard existed for precisely that defect and could not see it, because it
+read one of the two files. A scope that stops at a file boundary the language
+does not have is not a scope.
+
 Object-literal methods, class methods and assignments to properties are not
 declarations and are not scanned; they cannot collide in this way.
 
@@ -38,6 +52,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PAGE = ROOT / "web" / "index.html"
+CHAT = ROOT / "web" / "chat.js"
 
 # Column 0 only. An indented `function` is nested and shadows on purpose.
 DECL = re.compile(r"^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", re.M)
@@ -64,7 +79,13 @@ def main():
     seen = collections.defaultdict(list)
     for m in DECL.finditer(body):
         line = body[:m.start()].count("\n") + 1 + text[:a].count("\n")
-        seen[m.group(1)].append(line)
+        seen[m.group(1)].append((PAGE.name, line))
+    # chat.js in full: it is a plain script, so every top-level declaration in it
+    # lands in the same global scope the page's own <script> uses.
+    if CHAT.is_file():
+        ctext = CHAT.read_text(encoding="utf-8")
+        for m in DECL.finditer(ctext):
+            seen[m.group(1)].append((CHAT.name, ctext[:m.start()].count("\n") + 1))
 
     # A page with no declarations at all would pass every check below having
     # asked nothing. There were 156 when this was written.
@@ -78,10 +99,10 @@ def main():
     dupes = {k: v for k, v in seen.items() if len(v) > 1}
     if dupes:
         print(f"check-web-dupes: {len(dupes)} function name(s) declared more than "
-              f"once in web/index.html:", file=sys.stderr)
-        for name, lines in sorted(dupes.items()):
-            at = ", ".join(f"line {n}" for n in lines)
-            print(f"  {name}(): {at}", file=sys.stderr)
+              f"once across the overlay's shipped files:", file=sys.stderr)
+        for name, at in sorted(dupes.items()):
+            where = ", ".join(f"{f} line {n}" for f, n in at)
+            print(f"  {name}(): {where}", file=sys.stderr)
         print("\n  One flat scope: the LAST declaration wins and every earlier\n"
               "  caller silently calls it instead. Rename one of them. This is\n"
               "  the defect that made the court page throw 'pts.map is not a\n"
@@ -89,8 +110,10 @@ def main():
               "  Promise.", file=sys.stderr)
         return 1
 
-    print(f"check-web-dupes: {len(seen)} top-level function(s) in web/index.html, "
-          f"every name declared exactly once.")
+    files = sorted({f for at in seen.values() for f, _ in at})
+    print(f"check-web-dupes: {len(seen)} top-level function(s) across "
+          f"{', '.join(files)}, every name declared exactly once in the one "
+          f"global scope they share.")
     return 0
 
 
