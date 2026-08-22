@@ -180,5 +180,13 @@
   "find": "if len(ids) > maxFolders*21 {",
   "replace": "if len(ids) >= maxFolders*21 {",
   "why": "VALID BUT NO LEGAL INPUT REACHES THE BOUNDARY. The bound is `len(ids) > maxFolders*21`, sized in the comment for 'a uint64 at its longest plus its separator' - 2,100 bytes. Folder ids are assigned sequentially and maxFolders caps them at 100, so the longest list of ids that RESOLVES is about 400 bytes; an input of exactly 2,100 bytes can only be built from ids that do not exist. So both the intact and the mutated code refuse it, and they differ only in which message comes back - 'that is too long to be a list of folder ids' against the later unknown-folder refusal. Pinnable the same way the transfer amount guards were, by asserting the specific message; not worth a 2,100-byte fixture for a refusal that arrives either way. The bound's PURPOSE - refuse before strings.Split allocates - is unaffected by one byte."
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "Offer: the kind is offered by the REALM, not the caller",
+  "find": "engine.Offer(cur.Previous().Address(), k, r)",
+  "replace": "engine.Offer(cur.Address(), k, r)",
+  "why": "VALID BUT OBSERVABLE ONLY THROUGH AN EVENT, the same class as PullSenior's zero payment. Governor.Offer uses `who` exactly once, at line 340 - `\"offerer\", who.String()` inside the emission - and nothing else reads it: a name once offered is bound to its code forever regardless of who offered it. So substituting the realm's own address changes one attribute of one event and no state, and no _test.gno can read events. The filetest `Events:` directive can, but govern's offer path runs through z_offer_filetest.gno whose subject is the offer/adopt flow; asserting an offerer attribute there would pin this. PROMOTE IT if that filetest gains an Events block."
  }
 ]

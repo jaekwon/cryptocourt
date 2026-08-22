@@ -8324,5 +8324,13 @@
   "find": "\tcase vl > sl:\n",
   "replace": "\tcase sl > vl:\n",
   "why": "mustSpendable's four cases exist so a refusal names the constraint that actually binds, and the two middle wordings carry 14 and 10 test references between them - but nothing rowed the ORDER of the predicates, only the tie and the no-lock case. Making both middle predicates `sl > vl` sends a vote-locked holder to the tie wording instead of the uncommitted one, which is a refusal telling the holder to release something that is not what binds. Caught by TestAFrozenQualityTallyHoldsCoinUntilTheClaimEnds."
+ },
+ {
+  "pkg": "govern",
+  "file": "govern.gno",
+  "label": "VoteWithReason: the vote is cast by the REALM, not the caller",
+  "find": "engine.VoteWithReason(cur.Previous().Address(), id, choice, reason)",
+  "replace": "engine.VoteWithReason(cur.Address(), id, choice, reason)",
+  "why": "The unrowed twin of `Vote: the vote is cast by the REALM, not the caller`, which was rowed. Eight crossing entrypoints in govern.gno pass cur.Previous().Address() and only three carried this row; sweeping the other five found one real catch, one events-only gap, and three dead parameters."
  }
 ]

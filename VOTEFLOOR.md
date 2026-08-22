@@ -497,6 +497,34 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**THE govern REALM'S CALLER-IDENTITY SURFACE: EIGHT ENTRYPOINTS, THREE ROWED.** govern.gno
+has eight crossing entrypoints and every one passes `cur.Previous().Address()` into the
+engine. Three carried the "the REALM, not the caller" row — Propose, Vote, Cancel — the
+substitution that AGENTS.md names as the primary gno hazard. Five did not. Sweeping them
+gave 1 caught, 4 surviving, and the four resolve into two quite different things.
+
+**THREE OF THEM ARE DEAD PARAMETERS.** Governor.Settle's body is `g.settle(g.mustProposal(id))`
+— `who` unused. ReleaseRoll's uses it nowhere either. Execute mentions `who` only in its
+signature and in a comment ("a caller who forgot one"). So substituting any address cannot
+change anything: INVALID, not survivors, and the correct classification for three rows that
+look exactly like caller-authentication holes.
+
+**AND THE MONEY READING OF THEM IS REFUTED.** govern.gno says Settle is "Permissionless, and
+the freed deposit goes to whoever calls", and ReleaseRoll "refunds its deposit to whoever
+calls" — with `who` dead, that reads as a comment promising a refund the code cannot make,
+on a money path. Measured: **the governor package and govern.gno contain ZERO
+Transfer/Mint/Burn calls, in any file.** No coin moves anywhere on these paths. `proposeBps`
+is a holding threshold, not an escrow, and "deposit" in those comments is metaphor for the
+proposal SLOT being freed. Loose wording on a money-adjacent surface, not a defect — worth
+the measurement precisely because the phrasing invites the wrong conclusion.
+
+**THE FOURTH IS A REAL GAP, of a class already in the file.** Governor.Offer uses `who`
+exactly once, at `"offerer", who.String()` inside an event emission, and nothing reads it —
+a name once offered is bound to its code forever regardless of who offered it. So the
+mutation changes one attribute of one event and no state, which no `_test.gno` can observe.
+Same shape as PullSenior's zero payment, recorded with the same promotion trigger: an
+`Events:` block on the offer filetest would pin it.
+
 **RANKED ITEM 3 VERIFIED COMPLETE, AND ITS OWN PARENTHETICAL IS STALE.** The item asks for
 "a message naming both on a tie, with its own test" and adds "the tie-break itself is in
 KNOWN-GAPS as something that should stay unpinned". Both halves check out, but not the way
