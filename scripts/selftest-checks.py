@@ -486,9 +486,14 @@ control("an exported read that reaches getPos", f"{KOURTV2}/stakeindex.gno",
         "}\n\n"
         "func StakedSize(courtSlug string, who address) int {",
         "getPos", argv=["python3", READPURE])
+# NARROWED TO ONE ELEMENT ON PURPOSE. This plant used to name the whole ALLOCATORS
+# tuple, and the tuple GREW — ensureArgs and ensureSup joined it and pushed it onto two
+# lines, so the literal stopped matching, the plant became a no-op, and the control
+# reported "did not fire" for months of edits without anyone reading it as a dead control.
+# One element cannot go stale the same way.
 control("an allocator renamed out from under the scan", READPURE,
-        'ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos")',
-        'ALLOCATORS = ("ensureModGone", "ensureGlobalDAO", "ensureClaimMod", "getPos")',
+        '"ensureMod",',
+        '"ensureModGone",',
         "cannot appear",
         argv=["python3", READPURE])
 control("a read pattern that drifted off the code", READPURE,
@@ -717,9 +722,15 @@ print("\ncheck-web-tests-reachable")
 # own IIFE, so seven assertions below it had never run — the whole chain-nesting
 # block, written for a failure that then shipped. It reported 31 of the 38 it
 # held and looked perfect doing it.
+# THIS PLANT USED TO DELETE THE SUMMARY, and the guard skips a file that has none
+# (`if m is None: continue` — a harness with no verdict of its own is the runner's
+# problem). So it planted a defect the guard deliberately ignores, reported "did not
+# fire", and the invariant it names — no assertion BELOW the verdict — had never been
+# exercised at all. The summary stays put now and an assertion goes after it, which is
+# the defect in the control's own name.
 control("a harness prints its verdict with assertions below it", FOLDERSJS,
-        '  console.log(fail? "\\n"+fail+" FAILURES" : "\\nALL PASS");\n  process.exit(fail?1:0);\n})();',
-        '})();\n// the summary moved up, which is the bug this guard is about',
+        '  process.exit(fail?1:0);',
+        '  process.exit(fail?1:0);\n  ok("planted below the summary", true);',
         "assertion(s) after the summary", argv=["python3", REACH])
 # The tripwire. A guard that scanned no harnesses would report a clean tree for
 # ever, which is the vacuity it exists to catch in the harnesses themselves.
