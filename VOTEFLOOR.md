@@ -1100,6 +1100,40 @@ the instrument quietly answered a narrower question than the one asked. When the
 conclusion is "nothing covers this", COUNT the matches (`grep -c`, or no pipe at all)
 before believing it.
 
+**AND THE THIRD LEVEL: DOES THE NAMED HARNESS ACTUALLY ASSERT IT?** The `elsewhere`
+question has three levels, and this file has now answered all three.
+
+  1. Does the path RESOLVE? check-mutation-anchors has always asked that.
+  2. Does anything in `make check` RUN it? Added this morning — six of seven rows named
+     txtar scripts while txtar-test sat outside check.
+  3. Does the harness ASSERT the property? A txtar that runs and says nothing about the
+     mutation leaves the excuse exactly as hollow as an unrun one.
+
+Level 3 measured, all SEVEN elsewhere rows, by applying each mutation and running only the
+harness it names:
+
+    StakedPage -> getPos            check-read-purity.py  exit 1,
+                                    "stakeindex.gno:StakedPage calls getPos"
+    Buy IsUserCall -> IsUser        paymentauth.txtar:37  no match for `direct user call`
+    arming `||` -> `&&`             seeded.txtar:82       unexpected "gnokey" success
+    arming nextID arm dropped       seeded.txtar:82       unexpected "gnokey" success
+    arming TotalSupply arm dropped  coin.txtar:59         unexpected "gnokey" success
+    CourtCount > 1 -> > 2           seeded.txtar:123      no match for `this realm
+                                                          already has courts`
+    tcEverArmed never set           testclock.txtar:80    no match for `true` in stdout
+
+Every one honest, each failing at a specific line with a specific complaint.
+
+**THE ROT PATH IS REAL AND CURRENTLY UNWATCHED, and I am not building the watcher.** If a
+txtar is edited to drop one of those assertions, the row stays surviving in `make gaps` —
+which is exactly what it is supposed to do — and nothing notices the excuse went hollow. A
+`make elsewhere` target would close it: apply each row's mutation, run only its named
+harness, require failure. What makes it more than an afternoon is that the two harness kinds
+need different plumbing — a txtar runs against a staged GNOROOT the way mutate already
+stages, while check-read-purity reads the REPO — plus restore-on-failure discipline and its
+own control arm, and a half-built guard is worse than none. The recipe above is written out
+so re-running it by hand is mechanical rather than a re-derivation.
+
 **AN `elsewhere` IS A PROMISE ABOUT A ROUTINE, so check the routine and not just the
 path.** Resolving was never the whole question. The annotation says "that harness covers
 this", which is worth exactly as much as the chance anybody runs that harness — and
