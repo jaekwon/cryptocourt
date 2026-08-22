@@ -178,34 +178,27 @@ func StakedSize(courtSlug string, who address) int {
 // StakedPage lists this holder's positions in the stable order described on stakeRow —
 // bucket by claim id, then arrival within a bucket.
 //
-//	"c:<claimID>:<side>:<liveStake>;c:<claimID>:<side>:<liveStake>;…"
+//	"c:<claimID>:<side>:<liveStake>:<convictionCC>;c:…"
 //
 // side is 0 for YES and 1 for NO, matching sideYES/sideNO. liveStake is what is staked
 // NOW, which is zero for a position withdrawn in full — the entry is still listed
-// because its conviction may still be owed.
+// because its conviction may still be owed, and the fifth field is that conviction.
+//
+// CONVICTION RIDES ALONG because leaving it out cost the CLIENT more than carrying it
+// costs the chain. Measured on the me-page before this: one StakedPage plus one
+// StakedSize, and then FOUR reads per claim through positionOf (two StakeOf, two
+// ConvictionOf), each re-doing the court, claim and position lookups this walk has
+// already done — and two of those four re-read the liveStake this page had already
+// handed over. Here the marginal cost is arithmetic on a claimState and a stakePos
+// already in hand, with the court-level half of it hoisted out of the loop.
+//
+// The figure is ConvictionOf's, from the same helper, so the two cannot drift: a
+// transient settle against a preview of the era integral, capped at the freeze pin, in
+// CC draw-base units.
 //
 // Read with StakedSize to tell a partial page from a complete one. limit is clamped to
 // stakePageMax; a limit of zero or less means "the cap".
 //
-// CONVICTION IS NOT HERE, and the reason on record was wrong, so here is the measured
-// one. The old note said including it would cost extra work; it would not. ConvictionOf
-// already settles to now WITHOUT mutating — a transient copy against a preview of the
-// era integral, which its own comment explains — so inside this walk the marginal cost
-// per position is arithmetic on a claimState and a stakePos this function has ALREADY
-// loaded. It is the client's alternative that is expensive: web/index.html's
-// positionOf() is four reads per claim (two StakeOf, two ConvictionOf), each re-doing
-// the court, claim and position lookups this page did once. Counted for a holder with N
-// positions in one court: 2 + 4N reads today against 2 with conviction here, and TWO of
-// those four already duplicate the liveStake this page returns and the me-page throws
-// away.
-//
-// What actually blocks it is the FORMAT CONTRACT, not the cost. parseStaked skips any
-// record whose arity is not four, so appending a fifth field would make the deployed
-// overlay drop every row and show a holder nothing — a blank me-page is a worse failure
-// than a few extra reads. The compatible shape is a second record type ("v:<claimID>:
-// <side>:<conv>") which today's parser ignores by design, and that is a coordinated
-// realm+client change: worth doing, not worth doing half, and not worth shipping the
-// realm half alone since nothing improves until the client reads it.
 func StakedPage(courtSlug string, who address, offset, limit int) string {
 	if !who.IsValid() {
 		return ""
@@ -214,6 +207,9 @@ func StakedPage(courtSlug string, who address, offset, limit int) string {
 		limit = stakePageMax
 	}
 	c := mustCourt(courtSlug)
+	// The era integral ONCE for the whole page: it is court-level, so computing it per
+	// position would be the same number N times (stake.gno's ratePreview).
+	acc := ratePreview(c)
 	out, seen, sent := "", 0, 0
 	stakeIdxWalk(c, who, func(claimID uint64, side int) bool {
 		if seen < offset {
@@ -223,13 +219,17 @@ func StakedPage(courtSlug string, who address, offset, limit int) string {
 		seen++
 		// cs.stakers.Get, never getPos — getPos ALLOCATES a position on access, and a
 		// read that persists lets anyone grow the realm for free.
-		var live int64
+		var live, conv int64
 		if cv := c.claims.Get(beClaimKey(claimID)); cv != nil {
-			if pv := cv.(*claimState).stakers.Get(posKey(who, side)); pv != nil {
-				live = pv.(*stakePos).stake
+			cs := cv.(*claimState)
+			if pv := cs.stakers.Get(posKey(who, side)); pv != nil {
+				pos := pv.(*stakePos)
+				live = pos.stake
+				conv = convPreviewCC(cs, pos, acc)
 			}
 		}
-		out += ";c:" + itoa(int64(claimID)) + ":" + itoa(int64(side)) + ":" + itoa(live)
+		out += ";c:" + itoa(int64(claimID)) + ":" + itoa(int64(side)) +
+			":" + itoa(live) + ":" + itoa(conv)
 		sent++
 		return sent >= limit
 	})

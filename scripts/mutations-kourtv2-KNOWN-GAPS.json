@@ -149,8 +149,8 @@
   "pkg": "kourtv2",
   "file": "stakeindex.gno",
   "label": "StakedPage: the read ALLOCATES a position instead of looking one up",
-  "find": "\t\t\tif pv := cv.(*claimState).stakers.Get(posKey(who, side)); pv != nil {\n\t\t\t\tlive = pv.(*stakePos).stake\n\t\t\t}",
-  "replace": "\t\t\tlive = getPos(c, cv.(*claimState), who, side).stake",
+  "find": "\t\t\tif pv := cs.stakers.Get(posKey(who, side)); pv != nil {\n\t\t\t\tpos := pv.(*stakePos)\n\t\t\t\tlive = pos.stake\n\t\t\t\tconv = convPreviewCC(cs, pos, acc)\n\t\t\t}",
+  "replace": "\t\t\tpos := getPos(c, cs, who, side)\n\t\t\tlive = pos.stake\n\t\t\tconv = convPreviewCC(cs, pos, acc)",
   "why": "CAUGHT BY A GUARD, NOT BY A SUITE, which is what `elsewhere` is for. Replacing the cs.stakers.Get lookup with getPos makes the read ALLOCATE a position on access - the defect the comment on that line names - and no test sees it, because a freshly allocated position reads zero stake and the page prints the same string. check-read-purity.py sees it exactly: `stakeindex.gno:StakedPage calls getPos`, exit 1, measured by applying this row and running the guard. The harness runs suites, so this row will always report SURVIVED there; the annotation names the guard that does the work.",
   "elsewhere": "scripts/check-read-purity.py"
  },

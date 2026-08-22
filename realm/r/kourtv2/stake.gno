@@ -248,14 +248,30 @@ func ConvictionOf(courtSlug string, claimID uint64, side int, who address) int64
 	if v == nil {
 		return 0
 	}
-	p := v.(*stakePos)
-	// A transient copy settled against a PREVIEW of the era integral: the
-	// stored integral plus the un-walked tail at the current rate (reads must
-	// not mutate; the tail approximation resolves exactly at the next touch).
+	return convPreviewCC(cs, v.(*stakePos), ratePreview(c))
+}
+
+// ratePreview is the era integral as a READ may see it: the stored value plus the
+// un-walked tail at the current rate. Reads must not mutate, so the tail is an
+// approximation that resolves exactly at the next touch.
+//
+// SPLIT OUT so a reader that answers for MANY positions computes it once. It is
+// court-level and identical for every position in a walk, and StakedPage hoists it
+// out of its loop for exactly that reason.
+func ratePreview(c *Court) int64 {
 	acc := c.rateAccFP
 	if tail := heightNow() - c.lastAccrual; tail > 0 {
 		acc = mustAdd(acc, mustMul(rateBpsFP(c), tail))
 	}
+	return acc
+}
+
+// convPreviewCC settles ONE position against that preview and returns the CC-unit draw
+// base — the same figure ConvictionOf has always answered, now in one place because two
+// readers need it. Duplicating these six lines is the shape crystallize.gno records
+// getting caught for: the mutation harness reported four rows as matching TWICE because
+// PullSenior and SeniorEntitlement each carried their own copy of one formula.
+func convPreviewCC(cs *claimState, p *stakePos, acc int64) int64 {
 	if cs.frozenAt != 0 && cs.rateAccAtFreeze < acc {
 		acc = cs.rateAccAtFreeze
 	}

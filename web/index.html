@@ -2850,7 +2850,10 @@ function parseStaked(s){
   const out=[];
   for(const rec of String(s).split(";")){
     const f=rec.split(":");
-    if(f[0]==="c" && f.length>=4) out.push({id:+f[1], side:+f[2], stake:+f[3]});
+    // FIVE fields now — the fifth is conviction — and FOUR is still accepted, because a
+    // cached page can outlive a realm upgrade in either direction and a record this
+    // parser drops is a position the holder is told they do not have.
+    if(f[0]==="c" && f.length>=4) out.push({id:+f[1], side:+f[2], stake:+f[3], conv:+(f[4]||0)});
   }
   return out;
 }
@@ -2858,8 +2861,8 @@ function parseStaked(s){
 function stakedByClaim(list){
   const byId = new Map();
   for(const e of list){
-    const r = byId.get(e.id) || {id:e.id, yes:0, no:0};
-    if(e.side===0) r.yes = e.stake; else r.no = e.stake;
+    const r = byId.get(e.id) || {id:e.id, yes:0, no:0, cy:0, cn:0};
+    if(e.side===0){ r.yes = e.stake; r.cy = e.conv; } else { r.no = e.stake; r.cn = e.conv; }
     byId.set(e.id, r);
   }
   return [...byId.values()];
@@ -4883,11 +4886,11 @@ async function meHoldings(addr,courts){
     const bal = await balanceOf(slug,addr).catch(()=>{mefail++; return 0;});
     // LIVE: one read names the holder's own positions, so only those claims are
     // probed. DEMO has no chain and keeps the sample scan.
-    let ids;
+    let ids, mine = [];
     if(isLive()){
       const got = parseStaked(
         await one(`StakedPage(${gstr(slug)},${gstr(addr)},0,0)`).catch(()=>{mefail++; return null;}));
-      const mine = stakedByClaim(got);
+      mine = stakedByClaim(got);
       ids = mine.map(r=>r.id);
       const held = await one(`StakedSize(${gstr(slug)},${gstr(addr)})`).catch(()=>null);
       // POSITIONS against POSITIONS. StakedSize counts (claim, side) entries and
@@ -4899,7 +4902,14 @@ async function meHoldings(addr,courts){
     } else {
       ids = (await claimIdsFor(slug, 0).catch(()=>{mefail++; return {ids:[]};})).ids;
     }
-    const probes = await inChunks(ids, 8, id => positionOf(slug,id,addr).then(p=>({id,p})).catch(()=>{mefail++; return null;}));
+    // LIVE MODE READS THE PAGE IT ALREADY HAS. StakedPage carries the stake AND the
+    // conviction for every position, so probing positionOf per claim would repeat four
+    // reads — two StakeOf, two ConvictionOf — for numbers already in hand, and two of
+    // the four would re-read the very stake this page returned. Demo mode has no page,
+    // so it still probes.
+    const probes = isLive()
+      ? mine.map(r => ({id:r.id, p:{yes:r.yes, no:r.no, cy:r.cy, cn:r.cn}}))
+      : await inChunks(ids, 8, id => positionOf(slug,id,addr).then(p=>({id,p})).catch(()=>{mefail++; return null;}));
     const rows=[]; let courtHasVoteSettle=false;
     for(const hit of probes.filter(Boolean)){
       const {id,p}=hit; if(!(p.yes||p.no||p.cy||p.cn)) continue;

@@ -113,15 +113,47 @@ func TestStakingIsIndexedAndTheReadReportsLiveStake(cur realm, t *testing.T) {
 	uassert.Equal(t, 3, StakedSize("sidx2", bob))
 	page := StakedPage("sidx2", bob, 0, 0)
 	// One read, three positions, each with the side and the live figure.
-	uassert.Equal(t, "c:"+itoa(int64(id1))+":0:3000000000"+
-		";c:"+itoa(int64(id1))+":1:1000000000"+
-		";c:"+itoa(int64(id2))+":0:2000000000", page)
+	// FIVE FIELDS: the conviction rides along now. It is asserted as a SHAPE plus a
+	// property rather than a literal, because conviction is a stake-time integral and
+	// pinning a number here would pin the fixture's block count instead of the format.
+	parts := strings.Split(page, ";")
+	uassert.Equal(t, 3, len(parts))
+	for i, want := range []string{
+		"c:" + itoa(int64(id1)) + ":0:3000000000:",
+		"c:" + itoa(int64(id1)) + ":1:1000000000:",
+		"c:" + itoa(int64(id2)) + ":0:2000000000:",
+	} {
+		if !strings.HasPrefix(parts[i], want) {
+			t.Fatalf("record %d is %q, want the prefix %q", i, parts[i], want)
+		}
+		if len(strings.Split(parts[i], ":")) != 5 {
+			t.Fatalf("record %d must carry five fields, got %q", i, parts[i])
+		}
+	}
+
+	// AND THE CONVICTION FIELD MUST BE ABLE TO BE NON-ZERO, or every assertion above
+	// holds for a page that reports a constant. Conviction is a stake-time integral, so
+	// it is zero until blocks pass: let some pass, then read it back and compare against
+	// what ConvictionOf answers for the same position — one formula, two readers, and
+	// this is the assertion that keeps them one.
+	testing.SkipHeights(5_000)
+	rec := strings.Split(strings.Split(StakedPage("sidx2", bob, 0, 1), ";")[0], ":")
+	if len(rec) != 5 {
+		t.Fatalf("setup: the record must carry five fields, got %v", rec)
+	}
+	if rec[4] == "0" {
+		t.Fatal("after 5,000 blocks a live position must report some conviction")
+	}
+	if want := itoa(ConvictionOf("sidx2", id1, sideYES, bob)); rec[4] != want {
+		t.Fatalf("the page's conviction is %s and ConvictionOf says %s — the two "+
+			"readers have drifted", rec[4], want)
+	}
 
 	// Withdraw one in full. The entry REMAINS, at zero.
 	testing.SetRealm(testing.NewUserRealm(bob))
 	Unstake(cross(cur), "sidx2", id2, sideYES, 2_000_000_000)
 	uassert.Equal(t, 3, StakedSize("sidx2", bob))
-	if !strings.Contains(StakedPage("sidx2", bob, 0, 0), "c:"+itoa(int64(id2))+":0:0") {
+	if !strings.Contains(StakedPage("sidx2", bob, 0, 0), "c:"+itoa(int64(id2))+":0:0:") {
 		t.Fatalf("a fully withdrawn position must stay listed at zero, since its "+
 			"conviction may still be owed: %s", StakedPage("sidx2", bob, 0, 0))
 	}

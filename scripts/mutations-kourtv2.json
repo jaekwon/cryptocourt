@@ -6684,8 +6684,8 @@
   "pkg": "kourtv2",
   "file": "stakeindex.gno",
   "label": "StakedPage: the live stake is always reported as zero",
-  "find": "\t\t\t\tlive = pv.(*stakePos).stake\n",
-  "replace": ""
+  "find": "\t\t\t\tlive = pos.stake\n",
+  "replace": "\t\t\t\tlive = 0\n"
  },
  {
   "pkg": "kourtv2",
@@ -8023,5 +8023,12 @@
   "label": "PostAnswer: a closed claim may be answered and an open one may not",
   "find": "\tif cs.closed {\n\t\tpanic(\"kourtv2: this claim is closed\")",
   "replace": "\tif !cs.closed {\n\t\tpanic(\"kourtv2: this claim is closed\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeindex.gno",
+  "label": "StakedPage: the stake and the conviction are crossed",
+  "find": "\t\t\t\tlive = pos.stake\n\t\t\t\tconv = convPreviewCC(cs, pos, acc)\n",
+  "replace": "\t\t\t\tlive = convPreviewCC(cs, pos, acc)\n\t\t\t\tconv = pos.stake\n"
  }
 ]

@@ -21,11 +21,18 @@ function ok(what, cond){ if(cond){ console.log("ok: "+what); } else { fail++; co
 
 // This fixture is a string the REALM produced, asserted verbatim in
 // TestStakingIsIndexedAndTheReadReportsLiveStake: two sides of claim 1, one of claim 2.
-const REAL = "c:1:0:3000000000;c:1:1:1000000000;c:2:0:2000000000";
+const REAL = "c:1:0:3000000000:7100;c:1:1:1000000000:2400;c:2:0:2000000000:0";
 const P = parseStaked(REAL);
 ok("every entry is parsed", P.length===3);
 ok("claim, side and live stake survive", P[0].id===1 && P[0].side===0 && P[0].stake===3000000000);
 ok("the NO side is its own entry", P[1].id===1 && P[1].side===1 && P[1].stake===1000000000);
+ok("conviction comes across with the stake", P[0].conv===7100 && P[1].conv===2400);
+// A FOUR-FIELD RECORD IS STILL READ. A cached page can outlive a realm upgrade in either
+// direction, and a record this parser drops is a position the holder is told they do not
+// have — the failure the index was built to end.
+const OLD = parseStaked("c:9:0:500");
+ok("a four-field record still parses", OLD.length===1 && OLD[0].stake===500);
+ok("and its conviction reads as zero rather than NaN", OLD[0].conv===0);
 ok("a missing read parses to nothing", parseStaked(null).length===0 && parseStaked("").length===0);
 ok("a malformed record is skipped, not half-read", parseStaked("c:1:0").length===0);
 ok("a foreign record type is ignored", parseStaked("q:d:1:1:5;c:9:0:7").length===1);
@@ -34,6 +41,8 @@ ok("a zero stake is kept, not dropped", parseStaked("c:4:0:0")[0].stake===0);
 
 const G = stakedByClaim(P);
 ok("both sides collapse onto one claim row", G.length===2);
+ok("each side's conviction lands on its own field", G[0].cy===7100 && G[0].cn===2400);
+ok("a one-sided claim leaves the other conviction zero", G[1].cy===0 && G[1].cn===0);
 ok("the row carries each side separately",
   G[0].id===1 && G[0].yes===3000000000 && G[0].no===1000000000);
 ok("a one-sided claim leaves the other side zero",
@@ -42,6 +51,13 @@ ok("a NO-only position does not land in yes",
   (()=>{ const r=stakedByClaim(parseStaked("c:5:1:900"))[0]; return r.yes===0 && r.no===900; })());
 
 // ---- the wiring, which is the actual fix ----
+// AND THE FAN-OUT IS GONE. The page carries stake AND conviction, so live mode must not
+// probe positionOf per claim — four reads apiece, two of them re-reading the stake this
+// page just returned.
+ok("live mode builds its rows from the page it already read",
+  src.includes("? mine.map(r => ({id:r.id, p:{yes:r.yes, no:r.no, cy:r.cy, cn:r.cn}}))"));
+ok("demo mode still probes, having no page to read",
+  /: await inChunks\(ids, 8, id => positionOf\(slug,id,addr\)/.test(src));
 ok("live mode asks the index for the holder's own positions",
   src.includes('StakedPage(${gstr(slug)},${gstr(addr)},0,0)'));
 ok("and asks how many there are, so partial can be told from complete",
