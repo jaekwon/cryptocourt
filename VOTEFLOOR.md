@@ -371,6 +371,46 @@ a raw `0xff` into a failure message and killed the ablation driver with
 in a `finally` — which is the whole argument for putting it there. Capture subprocess
 output with `errors='replace'`; a mutant can emit any bytes at all.
 
+**A SENTENCE ADDRESSED TO THE NEXT CONTRIBUTOR IS NOT AN ENFORCEMENT MECHANISM.**
+lock.gno's header ends its account of the double-commit risk with "If a new spend path
+is ever added, it belongs in that test too" — and measured, the promise was being kept
+perfectly: eight spend paths, all five holder-to-escrow transfers guarded on the
+IMMEDIATELY preceding line, six of the paths carrying a `// PATH n` arm in
+TestLockedStakeCannotBeSpentTwice and the other two proved by tests of their own. Nothing
+was broken. What was missing was any way for the NINTH path to be noticed, because a test
+can only assert about the paths it names and the suite cannot go red for one nobody wrote
+a test for. Custody used to make that structural: the coins left the balance, so the
+LEDGER refused the second spend on every path including the ones nobody thought about.
+A lock cannot do that, so scripts/check-spend-paths.py does.
+
+**PREFER A NAMED CENSUS TO A COUNT.** The first version counted spend guards against
+`// PATH n` arms in the one test the header names, and it fired on correct code: two of
+the eight paths (TransferCC, TransferFromCC) move coin holder-to-holder rather than into
+the escrow and are proved elsewhere, so the counts were 8 against 6 and the honest tree
+looked broken. A map from path to the test that proves it fixes the false positive AND
+says more than the count could — where each proof actually lives. The same shape as
+check-storage.py's per-realm budget list, and it fails closed both ways: a path missing
+from the map is "a NEW spend path", a map entry naming a test that no longer exists is a
+census pointing at nothing.
+
+**THE GUARD'S OWN ARMS, ablated separately, each firing its own complaint:** deleting a
+mustSpendable trips BOTH adjacency and census (the transfer is now unguarded and the
+function no longer calls a guard); moving that same guard five lines further up trips
+adjacency ALONE (the caller is still a caller); a planted new spend path trips the census
+alone; renaming a covering test to one that does not exist trips its own arm. Control
+green before and after. Distances measured while setting LOOKBACK: all five real
+transfers sit exactly ONE line below their guard, so the window of 3 has two lines of
+slack and is not near its own boundary.
+
+**A NAME CAN UNDERSTATE A CHECK, and reading the definition is the only way to know.**
+`mustSpendable` sounds like it enforces `spendable` (stake-only), and both transfer paths
+call it while AllowanceCC's comment promises the spend is "additionally capped by
+disposable(owner)". That looked exactly like a comment asserting a property the code does
+not implement — the most productive lens firing on a money path. It is not: mustSpendable
+calls `disposable` internally, so it enforces the MAX of the stake and vote locks and the
+comment is accurate. Recorded because the refutation is the useful part; the hazard was
+hypothesised from a name and died on reading four lines of the function.
+
 **A GUARD CAN BE THE CATCHER, and `elsewhere` is how to say so.** The mutation harness
 runs SUITES, so a defect that only a `scripts/check-*.py` guard sees reports as a
 survivor. Measured example: making `StakedPage` call `getPos` (a read that allocates)

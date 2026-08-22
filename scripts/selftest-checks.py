@@ -137,6 +137,7 @@ NONTRANS = "scripts/check-nontransferable.py"
 EPOCHCOH = "scripts/check-epoch-coherence.py"
 MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
+SPENDPATH = "scripts/check-spend-paths.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
 MUTS = "scripts/mutations-kourtv2.json"
@@ -506,6 +507,44 @@ control("a read pattern that drifted off the code", READPURE,
         r'EXPORTED = re.compile(r"^funcNOPE ([A-Z]\w*)\(([^)]*)\)")',
         "cannot be right",
         argv=["python3", READPURE])
+
+print("\ncheck-spend-paths")
+# THREE ARMS, one per way the promise in lock.gno's header can quietly stop being
+# kept. The rule is that nothing takes CC out of a holder's balance without asking
+# what they have already committed, and the harm is a mint: the coins stay in the
+# balance under a lock, so the LEDGER cannot refuse the second commitment and the
+# realm ends up owing CC it does not hold.
+#
+# The first arm is the one that matters at review time - a transfer whose guard is
+# gone. The plant deletes the guard rather than weakening it, because a weakened
+# one is what the corpus rows already cover.
+control("an escrow transfer with no spend guard", f"{KOURTV2}/answer.gno",
+        "\tmustSpendable(c, who, bond)\n",
+        "",
+        "no mustSpendable/mustStakable(c, who, bond)",
+        argv=["python3", SPENDPATH])
+# The arm for the NEXT path somebody adds, which is the whole reason this guard
+# exists: the suite cannot go red for a path no test names, so the census has to.
+control("a new spend path nobody censused", f"{KOURTV2}/lock.gno",
+        "func TransferCC(cur realm,",
+        "func SelfTestDrainCC(cur realm, courtSlug string, to address, amount int64) {\n"
+        "\tc := mustCourt(courtSlug)\n"
+        "\tfrom := cur.Previous().Address()\n"
+        "\tmustSpendable(c, from, amount)\n"
+        "\tc.coin.Transfer(from, to, amount)\n"
+        "}\n\n"
+        "func TransferCC(cur realm,",
+        "SelfTestDrainCC",
+        argv=["python3", SPENDPATH])
+# Fail CLOSED on the census itself. A map naming a test that has been deleted is
+# the same failure as an `elsewhere` pointing at nothing: it reads as coverage and
+# is not. The guard's own text is the thing edited here, deliberately - that is
+# where this particular rot lives.
+control("a census pointing at a deleted test", SPENDPATH,
+        '"TestStakedCoinCannotBeTransferred"',
+        '"TestDeletedLastWeek"',
+        "does not exist",
+        argv=["python3", SPENDPATH])
 
 print("\ncheck-paths")
 # Every want below NAMES THE FILE the mutation exposes. An earlier version of

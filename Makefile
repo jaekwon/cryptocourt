@@ -217,6 +217,7 @@ realm-test:
 	python3 scripts/check-epoch-coherence.py || exit 1; \
 	python3 scripts/check-membership-clears.py || exit 1; \
 	python3 scripts/check-read-purity.py || exit 1; \
+	python3 scripts/check-spend-paths.py || exit 1; \
 	root=$$(python3 scripts/gnoroot.py build --label realm-test --pid $$$$) || exit 1; \
 	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
 	export GNOROOT="$$root"; \
