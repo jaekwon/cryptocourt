@@ -497,6 +497,32 @@ invalid, leaving seven to sweep — 3 caught by tests that had no rows, 2 INVALI
 Worth repeating whenever a cap is added, because it costs one query and it found a read
 that exceeds its own documented bound.
 
+**AN UNPINNABLE BOUNDARY CAN BE A CODE SMELL, NOT A TESTING PROBLEM.** Three of the
+thirteen unswept cap comparisons could not be given a corpus row at all: `if
+len(categoryCode) == 0 || len(categoryCode) > maxReasonLen` appeared THREE times in
+moderation.gno, byte-identical, so no `find` matched once. The existing rows for them had
+solved that by anchoring on each verb's ENTIRE prologue — signature, stale-realm check,
+caller lookup, global-DAO membership, then the block — a ~10-line anchor that any edit
+anywhere in the prologue breaks.
+
+The anchor problem was the symptom. Four byte-identical copies of one check (PurgeClaim,
+PurgeCourt, PurgeModLogRow in moderation.gno and PurgeFolder in folders.gno) sit on the
+realm's most authority-sensitive path: purge is the LEGAL removal, it erases text behind a
+statutory code, and it takes a global-DAO threshold to fire. None had drifted yet, which is
+the only reason collapsing them is a refactor rather than a bug fix — and it is exactly the
+hazard stakeIdxMine's comment names about two readers of one tree, at four copies.
+
+Collapsed to `mustCategoryCode`, beside checkReason which is the same species of gate. What
+that bought, measured: the full suite green before and after (the condition and message are
+unchanged, only the frame moved); five broken anchors reported by `make anchors` and
+re-pointed to short stable ones; the length boundary rowable for the first time; and a
+SECOND row that had never been writable — the empty-code half of the same line, caught by
+TestFolderRulesAreEnforced. Six rows, `0 not caught of 6`.
+
+**When a boundary resists being rowed, ask why before reaching for a longer anchor.** A
+`find` that needs ten lines of context is telling you the code says the same thing in
+several places.
+
 **THE SECOND CAP BATCH: 5 caught, 5 surviving, all five closed.** maxSlugLen,
 maxFailedRounds, maxSupInPerAuthor, maxHeightStep and maxHeightTotal were already held by
 tests that had no rows. The five survivors were maxReasonLen at both its sites, maxSupIn,

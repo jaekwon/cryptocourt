@@ -1662,8 +1662,9 @@
   "pkg": "kourtv2",
   "file": "folders.gno",
   "label": "folders: a purge needs no statutory category code",
-  "find": "\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
-  "replace": ""
+  "find": "func PurgeFolder(cur realm, courtSlug string, folderID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tmustCategoryCode(categoryCode)\n",
+  "replace": "func PurgeFolder(cur realm, courtSlug string, folderID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n",
+  "why": "Re-pointed when the four byte-identical copies of this check were collapsed into mustCategoryCode. The row's subject is unchanged - this verb stops requiring a statutory code - but the anchor is now the verb's prologue through its one call line, instead of the whole prologue through an inline block that three other verbs spelled identically."
  },
  {
   "label": "strips: the per-actor cap never binds on a court strip",
@@ -1998,8 +1999,9 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "moderation/PurgeClaim: kourtv2: purge needs a statutory category code",
-  "find": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
-  "replace": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n"
+  "find": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tmustCategoryCode(categoryCode)\n",
+  "replace": "func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n",
+  "why": "Re-pointed when the four byte-identical copies of this check were collapsed into mustCategoryCode. The row's subject is unchanged - this verb stops requiring a statutory code - but the anchor is now the verb's prologue through its one call line, instead of the whole prologue through an inline block that three other verbs spelled identically."
  },
  {
   "pkg": "kourtv2",
@@ -2012,15 +2014,17 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "moderation/PurgeCourt: kourtv2: purge needs a statutory category code",
-  "find": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
-  "replace": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n"
+  "find": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tmustCategoryCode(categoryCode)\n",
+  "replace": "func PurgeCourt(cur realm, courtSlug string, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n",
+  "why": "Re-pointed when the four byte-identical copies of this check were collapsed into mustCategoryCode. The row's subject is unchanged - this verb stops requiring a statutory code - but the anchor is now the verb's prologue through its one call line, instead of the whole prologue through an inline block that three other verbs spelled identically."
  },
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "moderation/PurgeModLogRow: kourtv2: purge needs a statutory category code",
-  "find": "func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n\t\tpanic(\"kourtv2: purge needs a statutory category code\")\n",
-  "replace": "func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tif len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {\n"
+  "find": "func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tmustCategoryCode(categoryCode)\n",
+  "replace": "func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, categoryCode string) {\n\tif !cur.IsCurrent() {\n\t\tpanic(errStaleRealm)\n\t}\n\twho := cur.Previous().Address()\n\td := ensureGlobalDAO()\n\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n",
+  "why": "Re-pointed when the four byte-identical copies of this check were collapsed into mustCategoryCode. The row's subject is unchanged - this verb stops requiring a statutory code - but the anchor is now the verb's prologue through its one call line, instead of the whole prologue through an inline block that three other verbs spelled identically."
  },
  {
   "pkg": "kourtv2",
@@ -8159,10 +8163,10 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "folders.gno",
+  "file": "moderation.gno",
   "label": "maxReasonLen: a purge code of exactly the maximum length is refused",
-  "find": "len(categoryCode) > maxReasonLen",
-  "replace": "len(categoryCode) >= maxReasonLen"
+  "find": "\tif len(code) == 0 || len(code) > maxReasonLen {",
+  "replace": "\tif len(code) == 0 || len(code) >= maxReasonLen {"
  },
  {
   "pkg": "kourtv2",
@@ -8215,5 +8219,13 @@
   "label": "supersedeOrdered: the height fallback deadline is exclusive",
   "find": "from.openedAt >= to.openedAt+deadClaimTimeout",
   "replace": "from.openedAt > to.openedAt+deadClaimTimeout"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "mustCategoryCode: an EMPTY purge code is accepted",
+  "find": "\tif len(code) == 0 || len(code) > maxReasonLen {",
+  "replace": "\tif len(code) > maxReasonLen {",
+  "why": "The other half of the same line, writable for the first time now that the check has one site. Purge erases text behind a code and takes a global-DAO threshold to fire, so the code IS the record of why; an empty one makes the act unauditable."
  }
 ]

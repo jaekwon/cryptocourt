@@ -380,9 +380,7 @@ func PurgeFolder(cur realm, courtSlug string, folderID uint64, categoryCode stri
 	if !d.members.Has(who.String()) {
 		panic("kourtv2: only a global DAO member may purge")
 	}
-	if len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {
-		panic("kourtv2: purge needs a statutory category code")
-	}
+	mustCategoryCode(categoryCode)
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	f := cm.mustFolder(folderID)

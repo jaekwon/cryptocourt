@@ -395,6 +395,25 @@ func requireActiveMod(cm *courtMod, who address) {
 	}
 }
 
+// mustCategoryCode gates the statutory code every PURGE carries. Purge is the
+// LEGAL removal — it erases text behind a code and takes a global-DAO threshold to
+// fire — and the code is the record of WHY, so an empty one makes the act
+// unauditable and an unbounded one makes the record itself the abuse.
+//
+// ONE SITE FOR FOUR VERBS. This block was written out inline in PurgeClaim,
+// PurgeCourt, PurgeModLogRow and PurgeFolder, four byte-identical copies of the
+// same three lines. None had drifted yet, which is the only reason collapsing them
+// is a refactor and not a bug fix: two copies of one check is how the second comes
+// to disagree with the first, and four copies on the realm's most
+// authority-sensitive path is four chances. It also made the boundary unpinnable —
+// a corpus row needs an anchor that matches once, and three identical texts in one
+// file have none.
+func mustCategoryCode(code string) {
+	if len(code) == 0 || len(code) > maxReasonLen {
+		panic("kourtv2: purge needs a statutory category code")
+	}
+}
+
 func checkReason(reason string) {
 	if len(reason) > maxReasonLen {
 		panic("kourtv2: a moderation reason is at most 200 characters")
@@ -659,9 +678,7 @@ func PurgeClaim(cur realm, courtSlug string, claimID uint64, categoryCode string
 	if !d.members.Has(who.String()) {
 		panic("kourtv2: only a global DAO member may purge")
 	}
-	if len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {
-		panic("kourtv2: purge needs a statutory category code")
-	}
+	mustCategoryCode(categoryCode)
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	_ = mustClaim(c, claimID) // the claim must exist, whether or not this fires
@@ -760,9 +777,7 @@ func PurgeCourt(cur realm, courtSlug string, categoryCode string) {
 	if !d.members.Has(who.String()) {
 		panic("kourtv2: only a global DAO member may purge")
 	}
-	if len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {
-		panic("kourtv2: purge needs a statutory category code")
-	}
+	mustCategoryCode(categoryCode)
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	fire, code := approveAction(d.pending, "purgecourt:"+c.id, who, categoryCode, d.purgeM)
@@ -925,9 +940,7 @@ func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, category
 	if !d.members.Has(who.String()) {
 		panic("kourtv2: only a global DAO member may purge")
 	}
-	if len(categoryCode) == 0 || len(categoryCode) > maxReasonLen {
-		panic("kourtv2: purge needs a statutory category code")
-	}
+	mustCategoryCode(categoryCode)
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	clm := lookupClaimMod(cm, claimID)
