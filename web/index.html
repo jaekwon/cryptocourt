@@ -3122,13 +3122,29 @@ async function chainFolders(slug){
       shape.set(id, {parent, retired: bits[2].includes("r"), purged: bits[2].includes("p")});
     }
   }
-  const fids=[]; for(let i=1;i<=F;i++){
+  // ROW ORDER IS THE CURATOR'S ORDER. FolderTree emits siblings in the order
+  // OrderFolders placed them, and a Map keeps insertion order — so walking
+  // 1..F here would parse that order out of the read and then throw it away,
+  // redrawing every court in id order. The realm can express a sequence now;
+  // this is the half that shows it.
+  const fids=[];
+  const take = i => {
     const sh = shape.get(i);
     // A RETIRED FOLDER IS SKIPPED, NOT DRAWN GREY. The realm keeps the row so
     // ids stay contiguous for exactly this walk; it is struck from the tree, so
     // the tree does not show it.
-    if(sh && sh.retired) continue;
+    if(sh && sh.retired) return;
     fids.push(i);
+  };
+  if(shape.size){
+    for(const id of shape.keys()) if(id>=1 && id<=F) take(id);
+    // Anything the tree did not name — a row that failed to parse, or a realm
+    // whose count and tree disagree — is still drawn, after the ordered ones.
+    // Dropping it would make a malformed row invisible rather than merely last.
+    for(let i=1;i<=F;i++) if(!shape.has(i)) take(i);
+  } else {
+    // No tree read at all: a realm deployed before FolderTree. Same walk as ever.
+    for(let i=1;i<=F;i++) take(i);
   }
   const folders = await inChunks(fids, 6, async fid=>{
     try{
@@ -3168,8 +3184,11 @@ function nestChainFolders(flat){
   return roots;
 }
 /* one source, labeled: local curation ?? chain (live) ?? sample (demo) ?? none.
-   Never merged — local enforces one-folder-per-claim and nesting, the chain
-   allows multi-membership and is flat; a merged tree has no honest caption. */
+   Never merged — local enforces one-folder-per-claim, the chain allows a claim
+   to sit in several folders; a merged tree has no honest caption. (This used to
+   say the chain "is flat" as the second reason. It nests now — parent ids, four
+   deep, read in one call by FolderTree — so that half of the sentence had become
+   untrue while the conclusion it supported stayed right.) */
 function foldersFor(slug, chainF){
   const cur = curationFor(slug);
   if(cur && cur.source==="local") return cur;

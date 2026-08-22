@@ -69,6 +69,16 @@ type folder struct {
 	// as roots — the same "zero on pre-upgrade" shape claimState.openedAtTime
 	// already uses, so there is no migration step and no version field.
 	parent uint64
+	// Where this folder sits among its siblings, 1-based. ZERO MEANS UNPLACED,
+	// and unplaced sorts LAST (see folderAfter) — which is the whole reason this
+	// field costs nothing to adopt. A court that has never been ordered has every
+	// ord at zero, so every folder is unplaced and the list falls back to id
+	// order: exactly what it emitted before this field existed. And a folder
+	// created AFTER an ordering lands at the end, where a new folder belongs,
+	// instead of jumping to the front the way a plain 0-is-first rule would put
+	// it. items has had curation order since MoveItemInFolder; this is the same
+	// courtesy for the headings themselves.
+	ord int
 }
 
 // folderDepth counts headings above this one. A root is 1. Bounded by maxFolders
@@ -129,6 +139,86 @@ func (cm *courtMod) mustNestable(id, parent uint64, height int) {
 	if cm.folderDepth(parent)+height > maxFolderDepth {
 		panic("kourtv2: folders nest at most " + strconv.Itoa(maxFolderDepth) + " deep")
 	}
+}
+
+// folderAfter reports whether a sorts after b WITHIN ONE SIBLING GROUP, on
+// (placed, ord, id).
+//
+// UNPLACED LAST is the load-bearing clause. `ord == 0` means nobody has ever
+// placed this folder, so a group nobody has ordered sorts entirely by id — and a
+// folder created after an ordering lands at the end, where a new folder belongs,
+// rather than at the head of a list the curator just arranged.
+func folderAfter(a, b *folder) bool {
+	ap, bp := a.ord > 0, b.ord > 0
+	if ap != bp {
+		return bp // b is placed and a is not, so a goes after it
+	}
+	if ap && a.ord != b.ord {
+		return a.ord > b.ord
+	}
+	return a.id > b.id
+}
+
+// folderRows is every folder in display order: the id-order spine the tree has
+// always emitted, with each sibling group PERMUTED WITHIN THE SLOTS IT ALREADY
+// OCCUPIED.
+//
+// The first version sorted globally by (parent, placed, ord, id), and grouping
+// by parent broke the promise this whole feature is built on. TestFolderTree
+// caught it: a nested court reads "1:0:-,2:1:-,3:0:-" and grouping re-emitted it
+// as "1:0:-,3:0:-,2:1:-" — every already-deployed nested court's read changing
+// shape on a feature nobody had used yet. Keeping the slots means an unordered
+// court is byte-identical, whatever its shape, which is what "no migration"
+// actually requires. It also keeps a parent ahead of its own children instead of
+// letting ordered children overtake it.
+//
+// An insertion sort, and deliberately not an import: nothing in this tree
+// imports "sort", the list is capped at maxFolders (100), and a realm's
+// dependency surface is paid for at deploy time. n² on 100 rows stays in the
+// same order of magnitude as the tree walk that produced it.
+func (cm *courtMod) folderRows() []*folder {
+	out := make([]*folder, 0, maxFolders)
+	cm.folders.Iterate("", "", func(_ string, v any) bool {
+		if f, ok := v.(*folder); ok {
+			out = append(out, f)
+		}
+		return false
+	})
+	for i := range out {
+		// Each group once, at its first slot.
+		first := true
+		for j := 0; j < i; j++ {
+			if out[j].parent == out[i].parent {
+				first = false
+				break
+			}
+		}
+		if !first {
+			continue
+		}
+		p := out[i].parent
+		slots := make([]int, 0, len(out))
+		grp := make([]*folder, 0, len(out))
+		for j, g := range out {
+			if g.parent == p {
+				slots = append(slots, j)
+				grp = append(grp, g)
+			}
+		}
+		for a := 1; a < len(grp); a++ {
+			f := grp[a]
+			b := a - 1
+			for b >= 0 && folderAfter(grp[b], f) {
+				grp[b+1] = grp[b]
+				b--
+			}
+			grp[b+1] = f
+		}
+		for k, g := range grp {
+			out[slots[k]] = g
+		}
+	}
+	return out
 }
 
 func (cm *courtMod) mustFolder(id uint64) *folder {
@@ -463,9 +553,109 @@ func MoveItemInFolder(cur realm, courtSlug string, folderID, claimID uint64, to 
 	emitModAct(c.id, claimID, "folder-order", who)
 }
 
+// OrderFolders places every folder under one heading, in the order given: a
+// comma-separated list of ids, assigned 1..n. parentID 0 is the root headings.
+//
+// THE WHOLE SIBLING LIST, NOT ONE FOLDER, and the alternative is worth naming
+// because it was the first design. A per-folder setter makes reordering eight
+// headings eight transactions, each leaving a tree a reader can see mid-shuffle,
+// and "insert between" needs a renumber the moment two neighbours are adjacent
+// integers. One list is one transaction and idempotent.
+//
+// The list must be EXACTLY the sibling set — no omissions, no strangers, no
+// duplicates. Allowing a subset reads as the kinder rule and is not: the
+// unlisted keep ord 0, which sorts last, so ordering three of five silently
+// demotes the other two, and the call's effect depends on state the caller may
+// not have read. Ignoring unknown ids is worse still, since a typo becomes a
+// silent no-op on the folder the curator meant.
+//
+// Retired and purged siblings are IN the set. Their rows survive, they still
+// appear in FolderTree behind their flags, and a restored folder that had been
+// excluded would come back wherever it happened to fall.
+//
+// Moderator-gated, single-signer, like CreateFolder and RenameFolder: additive
+// and reversible acts are 1-of-n here, and a wrong order is fixed by sending the
+// right one. Bounded by maxFolders in both directions — the walk, and the parse.
+func OrderFolders(cur realm, courtSlug string, parentID uint64, ids string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := requireFolderMod(c, who)
+	if parentID != 0 {
+		cm.mustFolder(parentID)
+	}
+	// BOUND THE PARSE BEFORE IT HAPPENS. strings.Split allocates one entry per
+	// comma, so a megabyte of commas is a megabyte of work done before any check
+	// could refuse it — the cost is paid in the argument, not in the state. 21
+	// bytes is a uint64 at its longest plus its separator.
+	if len(ids) > maxFolders*21 {
+		panic("kourtv2: that is too long to be a list of folder ids")
+	}
+	sibs := make([]*folder, 0, maxFolders)
+	cm.folders.Iterate("", "", func(_ string, v any) bool {
+		if f, ok := v.(*folder); ok && f.parent == parentID {
+			sibs = append(sibs, f)
+		}
+		return false
+	})
+	if len(sibs) == 0 {
+		panic("kourtv2: there are no folders under that heading to order")
+	}
+	parts := strings.Split(ids, ",")
+	if len(parts) != len(sibs) {
+		panic("kourtv2: that heading holds " + strconv.Itoa(len(sibs)) +
+			" folders and the order lists " + strconv.Itoa(len(parts)) +
+			"; it must list every one of them, exactly once")
+	}
+	order := make([]*folder, 0, len(parts))
+	for _, p := range parts {
+		id, err := strconv.ParseUint(strings.TrimSpace(p), 10, 64)
+		if err != nil {
+			panic("kourtv2: an order is a comma-separated list of folder ids")
+		}
+		var f *folder
+		for _, s := range sibs {
+			if s.id == id {
+				f = s
+				break
+			}
+		}
+		if f == nil {
+			panic("kourtv2: folder " + strconv.FormatUint(id, 10) +
+				" is not under that heading")
+		}
+		// NAME THE REPEAT, because the count check above cannot see it: a list
+		// that repeats one id and drops another is the right LENGTH, and without
+		// this it would silently leave the dropped folder unplaced.
+		for _, x := range order {
+			if x.id == id {
+				panic("kourtv2: folder " + strconv.FormatUint(id, 10) +
+					" is listed twice")
+			}
+		}
+		order = append(order, f)
+	}
+	// Nothing above this line has written. A refusal halfway through a list would
+	// otherwise leave half a court reordered.
+	for i, f := range order {
+		f.ord = i + 1
+	}
+	emitModAct(c.id, 0, "folder-sort", who)
+}
+
 // FolderTree is every folder's SHAPE in one read: "id:parent:flags" per folder,
-// comma separated, ids ascending. flags is "r" retired, "p" purged, "rp" both,
+// comma separated, in DISPLAY order — the id-order spine it has always emitted,
+// with each sibling group permuted into the curator's order (OrderFolders) among
+// the slots that group already held, never-ordered folders last within their
+// group. A court nobody has ordered therefore reads EXACTLY as it always did,
+// ids ascending, nested or not. flags is "r" retired, "p" purged, "rp" both,
 // "-" neither.
+//
+// Order travels in the ROW ORDER rather than in a new field, which costs a
+// client nothing: the overlay's nestChainFolders already appends children as it
+// meets them, so it renders the curator's order without parsing anything new.
 //
 // STRUCTURE ONLY, AND THAT IS THE POINT. A client assembling the tree otherwise
 // needs FolderParent + FolderRetired + FolderPurged per folder — three round
@@ -488,11 +678,7 @@ func FolderTree(courtSlug string) string {
 	}
 	var b strings.Builder
 	n := 0
-	c.mod.folders.Iterate("", "", func(_ string, v any) bool {
-		f, ok := v.(*folder)
-		if !ok {
-			return false
-		}
+	for _, f := range c.mod.folderRows() {
 		if n > 0 {
 			b.WriteString(",")
 		}
@@ -509,8 +695,7 @@ func FolderTree(courtSlug string) string {
 		b.WriteString(strconv.FormatUint(f.id, 10) + ":" +
 			strconv.FormatUint(f.parent, 10) + ":" + flags)
 		n++
-		return false
-	})
+	}
 	return b.String()
 }
 

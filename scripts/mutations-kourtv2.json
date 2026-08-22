@@ -6959,5 +6959,145 @@
   "label": "recordPools: the NO daily series is stamped with the hourly epoch",
   "find": "\tsetIfChanged(a, &cs.noD, csKey(cs.id, \"nd\"), dE, cs.noStake)",
   "replace": "\tsetIfChanged(a, &cs.noD, csKey(cs.id, \"nd\"), hE, cs.noStake)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "OrderFolders: a repeated id is accepted, so one sibling is left unplaced",
+  "find": "\t\t\tif x.id == id {",
+  "replace": "\t\t\tif x.id == id && false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "OrderFolders: writes as it parses, so a refusal leaves half a court reordered",
+  "find": "\t\torder = append(order, f)",
+  "replace": "\t\torder = append(order, f)\n\t\tf.ord = len(order)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "OrderFolders: the moderator gate is gone",
+  "find": "\tcm := requireFolderMod(c, who)\n\tif parentID != 0 {",
+  "replace": "\tcm := ensureMod(c)\n\tif parentID != 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folderAfter: an unplaced folder sorts FIRST, so a new one jumps the curated list",
+  "find": "\t\treturn bp // b is placed and a is not, so a goes after it",
+  "replace": "\t\treturn !bp"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folderRows: a group is packed contiguously instead of into the slots it held",
+  "find": "\t\tfor k, g := range grp {\n\t\t\tout[slots[k]] = g\n\t\t}",
+  "replace": "\t\tfor k, g := range grp {\n\t\t\tout[slots[0]+k] = g\n\t\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: a claim may bear on itself",
+  "find": "\tif from == to {",
+  "replace": "\tif from != to {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the stances are swapped",
+  "find": "\tcase \"supports\":\n\t\tst = argSupports",
+  "replace": "\tcase \"supports\":\n\t\tst = argContests"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the source claim need not exist",
+  "find": "\tmustClaim(c, from)\n\tmustClaim(c, to)",
+  "replace": "\tmustClaim(c, to)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the duplicate test is inverted",
+  "find": "\tif c.argOut.Get(k) != nil {",
+  "replace": "\tif c.argOut.Get(k) == nil {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the outbound scan stops on the FIRST matching key",
+  "find": "\t\tif !strings.HasPrefix(key, beClaimKey(from)) {",
+  "replace": "\t\tif strings.HasPrefix(key, beClaimKey(from)) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the outbound cap allows one more than it says",
+  "find": "\tif outN >= maxArgOut {",
+  "replace": "\tif outN > maxArgOut {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the inbound cap allows one more than it says",
+  "find": "\tif inN >= maxArgIn {",
+  "replace": "\tif inN > maxArgIn {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the per-author cap allows one more than it says",
+  "find": "\tif mine >= maxArgInPerAuthor {",
+  "replace": "\tif mine > maxArgInPerAuthor {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the per-author count counts OTHER authors' edges",
+  "find": "ok && e.author == who {",
+  "replace": "ok && e.author != who {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "RemoveArgument: only a non-author may remove an edge",
+  "find": "\tif e.author != who {",
+  "replace": "\tif e.author == who {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "RemoveArgument: the outbound index keeps the edge",
+  "find": "\tc.argOut.Remove(argKey(from, to))\n",
+  "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "RemoveArgument: the inbound index keeps the edge",
+  "find": "\tc.argIn.Remove(argKey(to, from))\n",
+  "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ClaimArguments: a purged endpoint must be BOTH purged and globally redacted",
+  "find": "\treturn clm != nil && (clm.purged || clm.global)",
+  "replace": "\treturn clm != nil && (clm.purged && clm.global)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "stanceCode: the codes are swapped",
+  "find": "\tif s == argContests {",
+  "replace": "\tif s != argContests {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "claimIDFromKey: an eight-byte key reads as claim zero",
+  "find": "\tif len(k) < 8 {",
+  "replace": "\tif len(k) <= 8 {"
  }
 ]

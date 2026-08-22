@@ -203,6 +203,24 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("a subfolder is findable in the tree, not just among the roots",
      !!findById(r5.folders, 2) && !r5.folders.some(f=>f.fid===2));
 
+  // ROW ORDER IS THE CURATOR'S ORDER. OrderFolders places siblings on chain and
+  // FolderTree emits them in that order — so the client must DRAW them in the
+  // order it read. This is the half that was missing: chainFolders parsed the
+  // tree into a Map and then built its fetch list with `for(i=1;i<=F;i++)`,
+  // which is id order, so the sequence survived the read and died one line later.
+  global.FCOUNT=3; global.FTREE="3:0:-,1:0:-,2:0:-";
+  const ord = await chainFolders("orem");
+  ok("chain folders are drawn in the order the realm sent them",
+     ord.folders.map(f=>f.fid).join(",")==="3,1,2");
+
+  // A row the tree did not name is still drawn, after the ordered ones. Dropping
+  // it would make a malformed or missing row invisible rather than merely last,
+  // which is how a court loses a folder to a parse slip.
+  global.FCOUNT=3; global.FTREE="3:0:-,1:0:-";
+  const gap = await chainFolders("orem");
+  ok("an id the tree never named is drawn last, not dropped",
+     gap.folders.map(f=>f.fid).join(",")==="3,1,2");
+
   // AND A REALM WITHOUT THE READ still gets the flat list it always got.
   global.FCOUNT=3;
   global.FTREE = null;
