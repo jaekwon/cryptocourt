@@ -333,6 +333,60 @@ loudly, merely with a misleading message ("which is now CI = False" when the tru
 generator died). Written up as a refutation rather than quietly dropped, because the reasoning
 that predicted a hole was sound and only the second loop saved it.
 
+**THEN THE CLASS TURNED UP IN THE FAST LOOP ITSELF — `gno test -run` EXITS 0 WHEN THE
+FILTER MATCHES NOTHING.** This is the one that matters most, because `t.sh kourtv2
+<TestName>` is the instrument every increment in this session was checked with. Measured
+side by side, a real name and a typo:
+
+    real name:  === RUN / --- PASS / ok . 3.49s   exit 0
+    typo:                             ok . 3.76s   exit 0
+
+`-run` does not suppress filetests, so a name that selects NO test still prints a screen
+of GAS lines and then `ok`. There is no discriminator without `-v`; with it, `=== RUN` is
+the only one. So every green from that loop was formally ambiguous between "the test
+passed" and "the test never ran". The greens themselves survive — the transcripts show
+`--- PASS: <name>` each time, which is the RUN line — but the loop could not have told me
+otherwise, and that is the same defect as a gate that never gates. `t.sh` now requires at
+least one `=== RUN` and says so loudly when there is none, buffered rather than piped so
+`gno test`'s real status is not replaced by `tee`'s. Truth table measured over all four
+quadrants: rc=0+ran → pass, rc=0+none → NO TEST MATCHED, rc≠0 either way → the real code.
+
+**AND THE SAME HOLE WAS IN A GUARD, WHERE IT WAS WORSE.** `check-isolation.py` runs each
+test alone via `gno test -run ^name$` and concluded "passes alone" from the return code
+only — so a test whose filter selected nothing was counted in `total` and asserted to pass
+under the summary line *"all N tests across M packages pass alone as well as together"*.
+The file had already been bitten by this exact class once, and says so in its own comment
+about the together-run. It is LATENT rather than live, and that was measured rather than
+assumed: all 751 `func Test*` declarations in the tree have a real test signature (564
+crossing, 187 plain), and the zero-tests-harvested case was already refused at the outer
+level. The residual was the per-test case. Now `-v` is load-bearing and a miss reports as
+NEVER, a category distinct from ALONE and BROKEN.
+
+The crossing case had to be measured separately and nearly was not: the first ablation
+used a plain `func Test(t *testing.T)`, but 564 of 751 tests are `func Test(cur realm, t
+*testing.T)`. If gno named those differently in its RUN line, the new arm would report
+NEVER for three quarters of the suite. It does not — verified on a crossing test before
+the commit, not after.
+
+**AND THE TILING TEST SHOWED WHY "WHICH ARM FIRED" IS THE WHOLE QUESTION.** An unlanded
+fixture for the entitlement queue (M3-CRITICAL-1: a senior must be seated past every
+junior draw already minted) turned out to fail under the M3 mutation — but via its
+setup guard, reporting *"this fixture cannot tell disjoint from contiguous"*. It asserted
+senior-vs-senior disjointness, and M3 does not break that: with `start = reservedTail` the
+seniors tile CONTIGUOUSLY, `start == prevEnd` exactly, and what overlaps is the
+senior/JUNIOR boundary the walk never looked at. A fixture complaint for a money-path
+defect is a pass for the wrong reason wearing a red coat. Rewritten as the arithmetic the
+invariant actually claims — `start_i == Σ(prior senior amounts) + juniorReserved at i` —
+it now reports *entitlement 2 short by 1500000*, which is `j1` exactly.
+
+Then the disjointness walk was CUT rather than kept alongside it: once every start is
+pinned to an exact value, the walk can never be the assertion that goes red. An assertion
+that cannot fail on its own is the test-side twin of a mutation that cannot change
+behaviour — it reads as coverage and measures nothing. And the honest note about what the
+whole fixture buys: no new mutation coverage at all. The corpus already carries five
+caught rows over those cursors. What it buys is a direct assertion that holds for enqueue
+paths which do not exist yet.
+
 **AND THE CONTROL FOR THE NEW ARM WAS BRIEFLY WRONG IN THE FAMILIAR WAY.** First attempt ran the
 pre-fix copy from the scratchpad: SILENT, as wanted — but at exit **1** with no verdict line,
 because a copy outside the repo cannot resolve its relative path to `scripts/mutate.py`. It was
