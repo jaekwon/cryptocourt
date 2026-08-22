@@ -148,6 +148,8 @@ DUPES = "scripts/check-web-dupes.py"
 WEBCSS = "scripts/check-web-css.py"
 WEBSEL = "scripts/check-web-selectors.py"
 BROWREG = "scripts/check-browser-checks-registered.py"
+REACH = "scripts/check-web-tests-reachable.py"
+FOLDERSJS = "web/tests/folders_test.js"
 RUNJS = "web/tests/browser/run.js"
 CHATALL = "web/tests/browser/chat_all.js"
 WEBPAGE = "web/index.html"
@@ -686,6 +688,21 @@ control("a browser check queries a class the overlay no longer has",
         "appears in neither shipped file", argv=["python3", WEBSEL])
 # And the tripwire. A scan that matches nothing must fail rather than report a
 # clean tree — the same discipline check-web-dupes takes about its own corpus.
+print("\ncheck-web-tests-reachable")
+# The defect: folders_test.js printed its summary and exited in the MIDDLE of its
+# own IIFE, so seven assertions below it had never run — the whole chain-nesting
+# block, written for a failure that then shipped. It reported 31 of the 38 it
+# held and looked perfect doing it.
+control("a harness prints its verdict with assertions below it", FOLDERSJS,
+        '  console.log(fail? "\\n"+fail+" FAILURES" : "\\nALL PASS");\n  process.exit(fail?1:0);\n})();',
+        '})();\n// the summary moved up, which is the bug this guard is about',
+        "assertion(s) after the summary", argv=["python3", REACH])
+# The tripwire. A guard that scanned no harnesses would report a clean tree for
+# ever, which is the vacuity it exists to catch in the harnesses themselves.
+control("a scan too small to be real", REACH,
+        'if not name.endswith(".js") or name in SKIP:', 'if True:',
+        "too few to be a real scan", argv=["python3", REACH])
+
 control("a scan that matches nothing", WEBSEL,
         'if not name.endswith(".js") or name == "run.js":',
         'if True or not name.endswith(".js"):',
