@@ -227,6 +227,22 @@ func courtNameFor(c *Court) string {
 	return sanitize.InlineText(c.name)
 }
 
+// courtDescFor is the description behind the same gate as the name: a purged
+// court answers with nothing rather than with its tombstone, because the NAME
+// already carries "[removed · <code>]" and repeating it under itself is noise
+// where the point is absence. InlineText, not Block — the field is a single
+// paragraph by construction (mustCourtDesc refuses newlines), and it renders
+// inline beside the name in list rows.
+func courtDescFor(c *Court) string {
+	if c.desc == "" {
+		return ""
+	}
+	if c.mod != nil && c.mod.courtPurged {
+		return ""
+	}
+	return sanitize.InlineText(c.desc)
+}
+
 // hideBanner names the authority hiding a claim, for deep links (which always
 // render). Empty when nothing hides it.
 func hideBanner(c *Court, cs *claimState) string {

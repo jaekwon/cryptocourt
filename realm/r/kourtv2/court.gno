@@ -402,9 +402,23 @@ func (p Params) mustSane() Params {
 // a /p/ pointer (borrow rule #2). Emission state lives on the court so each
 // coin's reservoir is isolated with its ledger.
 type Court struct {
-	id    string
-	name  string
-	tier  uint8
+	id   string
+	name string
+	// One paragraph saying what this court is for and what it will not take.
+	// Empty on every court that predates it, which reads as "no description" —
+	// the same "zero on pre-upgrade" shape claimState.openedAtTime uses, so there
+	// is no migration and no version field.
+	//
+	// EDITABLE, unlike a claim's body, and the asymmetry is the design. A claim's
+	// body is fixed at creation because a revisable one lets an author take a
+	// position, watch the market, then rewrite the framing until their side is the
+	// true one (COURTS_STRUCTURE.md §4) — the body is part of the thing being
+	// adjudicated. A court description is a signpost over a docket, adjudicates
+	// nothing, and gates nothing: no money path reads it. When it goes wrong the
+	// remedy is the one that already exists for bad curation — the moderators who
+	// wrote it are elected, and replaceable by the same vote.
+	desc string
+	tier uint8
 	admin address // creator; recorded, unused — no retune path exists
 
 	coin *grc20votes.Ledger // the court coin (CC)
@@ -611,6 +625,39 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 
 // mustCourtName: 1..maxCourtNameLen. Capped so a purge-worthy name is bounded
 // and render stays predictable (MODERATION.md §2 user-text inventory).
+// maxCourtDescLen matches the overlay's own curation schema, which has validated
+// exactly this for as long as the description has been a browser-side field: 240
+// characters, and no newline. Single paragraph is not fussiness — the description
+// renders inline beside a court name in list rows, where a newline forges a row.
+const maxCourtDescLen = 240
+
+// SetCourtDesc writes the court's description. One active moderator, the same
+// authority every other curation write takes and for the same reason recorded in
+// folders.gno: zero economic weight, instantly reversible, so the m-of-n ceremony
+// would tax routine curation for no security gain.
+func SetCourtDesc(cur realm, courtSlug, desc string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	requireFolderMod(c, who)
+	mustCourtDesc(desc)
+	c.desc = desc
+	emitModAct(c.id, 0, "court-desc", who)
+}
+
+func mustCourtDesc(desc string) {
+	if len(desc) > maxCourtDescLen {
+		panic("kourtv2: a court description is at most 240 characters")
+	}
+	for i := 0; i < len(desc); i++ {
+		if desc[i] == '\n' || desc[i] == '\r' {
+			panic("kourtv2: a court description is a single paragraph")
+		}
+	}
+}
+
 func mustCourtName(name string) {
 	if len(name) == 0 || len(name) > maxCourtNameLen {
 		panic("kourtv2: a court name is 1..100 characters")
@@ -618,6 +665,12 @@ func mustCourtName(name string) {
 }
 
 // ------------------------------------------------------------------ reads --
+
+// CourtDesc is the court's description, gated the way its name is. Empty for a
+// court that has none and for a purged one.
+func CourtDesc(courtSlug string) string {
+	return courtDescFor(mustCourt(courtSlug))
+}
 
 // CourtCount is how many courts have been started.
 func CourtCount() int { return courts.Size() }

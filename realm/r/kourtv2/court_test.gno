@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -95,13 +96,13 @@ func TestSlugCharsetIsWhatMakesTheRawRenderSafe(cur realm, t *testing.T) {
 		"has:colon",   // splits the realm:path separator
 		"has space",
 		"has\nnewline",
-		"HasUpper",     // case-folding could collide two courts
-		"has_under",    // not in the charset
-		"has.dot",      //
-		"has\\back",    //
-		"has`tick",     // code span
-		"has*star",     // emphasis
-		"has<angle",    // raw HTML
+		"HasUpper",  // case-folding could collide two courts
+		"has_under", // not in the charset
+		"has.dot",   //
+		"has\\back", //
+		"has`tick",  // code span
+		"has*star",  // emphasis
+		"has<angle", // raw HTML
 	} {
 		testing.SetRealm(testing.NewUserRealm(alice))
 		uassert.AbortsContains(t, cur, "lowercase letters, digits, and hyphens only",
@@ -391,4 +392,42 @@ func TestASlugsLengthBoundIsEnforced(cur realm, t *testing.T) {
 	if !Exists(ok) {
 		t.Error("a slug of exactly maxSlugLen characters was refused")
 	}
+}
+
+// THE COURT DESCRIPTION. Two things are worth pinning: the single-paragraph rule
+// (it renders inline beside a name in list rows, where a newline forges a row),
+// and that a purged court's description goes with its name rather than surviving
+// under a tombstone.
+func TestCourtDesc(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cd-alice")
+	testCourt(cur, "cdsc", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "cdsc", 1, alice)
+
+	uassert.Equal(t, "", CourtDesc("cdsc"))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SetCourtDesc(cross(cur), "cdsc", "Claims of fact from the public record.")
+	uassert.True(t, strings.Contains(CourtDesc("cdsc"), "public record"))
+
+	// A NEWLINE IS REFUSED, because the field renders inline.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "single paragraph", func() {
+		SetCourtDesc(cross(cur), "cdsc", "first\nsecond")
+	})
+	long := ""
+	for i := 0; i < maxCourtDescLen+1; i++ {
+		long += "x"
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "at most 240", func() {
+		SetCourtDesc(cross(cur), "cdsc", long)
+	})
+
+	// NOT ANYBODY — curation authority, the same single active moderator every
+	// other folder-class write takes.
+	stranger := testutils.TestAddress("cd-stranger")
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "moderator", func() {
+		SetCourtDesc(cross(cur), "cdsc", "mine now")
+	})
 }

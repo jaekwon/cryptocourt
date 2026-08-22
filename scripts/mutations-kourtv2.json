@@ -17,7 +17,7 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "v0.54: tier ratchet removed",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a ⅔ mandate (§3.4 F3)\n\t}\n",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a \u2154 mandate (\u00a73.4 F3)\n\t}\n",
   "replace": ""
  },
  {
@@ -353,8 +353,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "7.4: the DIRECTORY renders the inflation ceiling",
-  "find": "\tb.WriteString(\"# \" + platformName + \"\\n\\nStake on claims of fact. Your principal always returns 1×.\\n\\n\")",
-  "replace": "\tb.WriteString(\"# \" + platformName + \"\\n\\nStake on claims of fact. Your principal always returns 1×. Inflation ceiling 20%.\\n\\n\")"
+  "find": "\tb.WriteString(\"# \" + platformName + \"\\n\\nStake on claims of fact. Your principal always returns 1\u00d7.\\n\\n\")",
+  "replace": "\tb.WriteString(\"# \" + platformName + \"\\n\\nStake on claims of fact. Your principal always returns 1\u00d7. Inflation ceiling 20%.\\n\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -584,7 +584,7 @@
   "pkg": "kourtv2",
   "file": "meta.gno",
   "label": "meta: a manufactured contest may seize authority (credEligible removed)",
-  "find": "\t\t\tpanic(\"kourtv2: a manufactured contest cannot seize authority — this verb needs weight voted against it\")\n",
+  "find": "\t\t\tpanic(\"kourtv2: a manufactured contest cannot seize authority \u2014 this verb needs weight voted against it\")\n",
   "replace": ""
  },
  {
@@ -682,7 +682,7 @@
   "pkg": "kourtv2",
   "file": "stake.gno",
   "label": "staking is not frozen by an answer",
-  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"kourtv2: staking is frozen — this claim has an answer\")\n\t}",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"kourtv2: staking is frozen \u2014 this claim has an answer\")\n\t}",
   "replace": ""
  },
  {
@@ -835,7 +835,7 @@
  {
   "pkg": "kourtv2",
   "file": "answer.gno",
-  "label": "PostAnswer: the freeze does not pin rateAcc — H1's conviction pin is never taken",
+  "label": "PostAnswer: the freeze does not pin rateAcc \u2014 H1's conviction pin is never taken",
   "find": "\tcs.rateAccAtFreeze = c.rateAccFP",
   "replace": ""
  },
@@ -843,7 +843,7 @@
   "pkg": "kourtv2",
   "file": "answer.gno",
   "label": "PostAnswer: xBarFrozen is never pinned, so every %-of-X quantity reads zero (P6 base unset)",
-  "find": "\tcs.xBarFrozen = xbar // P6: the one base for every later %-of-X̄ quantity",
+  "find": "\tcs.xBarFrozen = xbar // P6: the one base for every later %-of-X\u0304 quantity",
   "replace": ""
  },
  {
@@ -1744,7 +1744,7 @@
  },
  {
   "label": "modrender: a purged claim renders its title instead of the tombstone",
-  "find": "\t\t\tif clm.purged {\n\t\t\t\treturn \"[removed · \" + sanitize.InlineText(clm.tombstone) + \"]\"\n\t\t\t}\n",
+  "find": "\t\t\tif clm.purged {\n\t\t\t\treturn \"[removed \u00b7 \" + sanitize.InlineText(clm.tombstone) + \"]\"\n\t\t\t}\n",
   "replace": "",
   "pkg": "kourtv2",
   "file": "modrender.gno"
@@ -2746,7 +2746,7 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "ride: a conclusive LOW skips the dust burns (deposit and fee) — the v0.50 refund bug",
+  "label": "ride: a conclusive LOW skips the dust burns (deposit and fee) \u2014 the v0.50 refund bug",
   "find": "\tif tier == qualityLow {\n\t\tburnConclusiveLowDust(c, cs)\n\t}",
   "replace": ""
  },
@@ -2768,7 +2768,7 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "ride: the slash records a STALE flagger as its bounty beneficiary",
-  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" — a ride posts no bond, so no bounty",
+  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty",
   "replace": "\t\toriginateSlash(c, cs, now, cs.flagger)"
  },
  {
@@ -2810,7 +2810,7 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "disposeSlashOnRide: the electorate's rescue BURNS the reserve",
-  "find": "\t\trefundSlash(c, cs) // the electorate failed the second ⅔ (ResolveCounter's rescue)",
+  "find": "\t\trefundSlash(c, cs) // the electorate failed the second \u2154 (ResolveCounter's rescue)",
   "replace": "\t\tsettleSlash(c, cs)"
  },
  {
@@ -2824,14 +2824,14 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "disposeSlashOnRide: the re-arm on an unoffered challenge SETTLES instead",
-  "find": "\t\trearmSlashWindow(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar ⅔-low ride re-confirms the flag",
-  "replace": "\t\tsettleSlash(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar ⅔-low ride re-confirms the flag"
+  "find": "\t\trearmSlashWindow(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag",
+  "replace": "\t\tsettleSlash(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag"
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "disposeSlashOnRide: a confirmed slash is FORGIVEN instead of settled",
-  "find": "\t\tsettleSlash(c, cs) // a full-bar ⅔-low ride re-confirms the flag",
+  "find": "\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag",
   "replace": "\t\trefundSlash(c, cs)"
  },
  {
@@ -2887,8 +2887,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "7.4: a PRE-crystallize-only branch renders backing",
-  "find": "\t\t\tb.WriteString(\"- flag slot open — bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")",
-  "replace": "\t\t\tb.WriteString(\"- flag slot open — backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
+  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -2909,7 +2909,7 @@
   "pkg": "kourtv2",
   "file": "claim.gno",
   "label": "OpenClaim: the provisional sentinel is the int8 zero, which reads as sideYES",
-  "find": "\t\tprovisional:  -1, // int8 zero is sideYES — the sentinel must be explicit",
+  "find": "\t\tprovisional:  -1, // int8 zero is sideYES \u2014 the sentinel must be explicit",
   "replace": "\t\tprovisional: 0,"
  },
  {
@@ -2985,7 +2985,7 @@
  {
   "pkg": "kourtv2",
   "file": "court.gno",
-  "label": "CONST answerBondBps halved (6%·X-bar -> 3%)",
+  "label": "CONST answerBondBps halved (6%\u00b7X-bar -> 3%)",
   "find": "\tanswerBondBps = int64(600)",
   "replace": "\tanswerBondBps = int64(300)"
  },
@@ -3006,7 +3006,7 @@
  {
   "pkg": "kourtv2",
   "file": "court.gno",
-  "label": "CONST flagBondXBps halved (2%·X-bar -> 1%)",
+  "label": "CONST flagBondXBps halved (2%\u00b7X-bar -> 1%)",
   "find": "\tflagBondXBps    = int64(200)",
   "replace": "\tflagBondXBps    = int64(100)"
  },
@@ -3027,7 +3027,7 @@
  {
   "pkg": "kourtv2",
   "file": "court.gno",
-  "label": "CONST slashXBps halved (4.5%·X-bar floor -> 2.25%)",
+  "label": "CONST slashXBps halved (4.5%\u00b7X-bar floor -> 2.25%)",
   "find": "\tslashXBps       = int64(450)",
   "replace": "\tslashXBps       = int64(225)"
  },
@@ -3070,7 +3070,7 @@
   "pkg": "kourtv2",
   "file": "court.gno",
   "label": "CONST periodBlocks halved (1 week -> half)",
-  "find": "\tperiodBlocks = int64(120_960) // 1 week — the emission accounting period",
+  "find": "\tperiodBlocks = int64(120_960) // 1 week \u2014 the emission accounting period",
   "replace": "\tperiodBlocks = int64(60_480)"
  },
  {
@@ -3846,7 +3846,7 @@
  {
   "pkg": "governor",
   "file": "governor.gno",
-  "label": "settle: there is no timelock — ready is now",
+  "label": "settle: there is no timelock \u2014 ready is now",
   "find": "\t\tp.ready = now + p.rules.DelayBlocks",
   "replace": "\t\tp.ready = now"
  },
@@ -3973,7 +3973,7 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "propose: a chain with no sealed epoch may still vote",
-  "find": "\tif at == 0 {\n\t\tpanic(\"govern: no sealed epoch yet — the chain is too young to vote\")\n\t}",
+  "find": "\tif at == 0 {\n\t\tpanic(\"govern: no sealed epoch yet \u2014 the chain is too young to vote\")\n\t}",
   "replace": ""
  },
  {
@@ -4176,8 +4176,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "clip: the cut lands inside the character BEFORE the boundary",
-  "find": "\tfor n > 0 && s[n]&0xC0 == 0x80 {\n\t\tn--\n\t}\n\treturn s[:n] + \"…\"",
-  "replace": "\tfor n > 0 && s[n]&0xC0 == 0x80 {\n\t\tn--\n\t}\n\tn--\n\treturn s[:n] + \"…\""
+  "find": "\tfor n > 0 && s[n]&0xC0 == 0x80 {\n\t\tn--\n\t}\n\treturn s[:n] + \"\u2026\"",
+  "replace": "\tfor n > 0 && s[n]&0xC0 == 0x80 {\n\t\tn--\n\t}\n\tn--\n\treturn s[:n] + \"\u2026\""
  },
  {
   "pkg": "governor",
@@ -4813,8 +4813,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "renderOne: an absolute quorum floor is rendered as a FRACTION of engaged",
-  "find": "\tif p.quorumFloor > 0 {\n\t\tout += ufmt.Sprintf(\"\\nturnout %d of %d, needs %d · \"",
-  "replace": "\tif p.quorumFloor < 0 {\n\t\tout += ufmt.Sprintf(\"\\nturnout %d of %d, needs %d · \""
+  "find": "\tif p.quorumFloor > 0 {\n\t\tout += ufmt.Sprintf(\"\\nturnout %d of %d, needs %d \u00b7 \"",
+  "replace": "\tif p.quorumFloor < 0 {\n\t\tout += ufmt.Sprintf(\"\\nturnout %d of %d, needs %d \u00b7 \""
  },
  {
   "pkg": "governor",
@@ -4932,8 +4932,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "proposalLine: a row does not end its markdown list item",
-  "find": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** — `%s` · %s\\n\",",
-  "replace": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** — `%s` · %s\","
+  "find": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** \u2014 `%s` \u00b7 %s\\n\",",
+  "replace": "\treturn ufmt.Sprintf(\"- [#%d](:%d) **%s** \u2014 `%s` \u00b7 %s\","
  },
  {
   "pkg": "govern",
@@ -5184,8 +5184,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "claimStatus: a SETTLED claim reads as provisional",
-  "find": "\tcase cs.verdictAt != 0:\n\t\treturn \"settled — every stake withdraws 1×\"",
-  "replace": "\tcase cs.verdictAt < 0:\n\t\treturn \"settled — every stake withdraws 1×\""
+  "find": "\tcase cs.verdictAt != 0:\n\t\treturn \"settled \u2014 every stake withdraws 1\u00d7\"",
+  "replace": "\tcase cs.verdictAt < 0:\n\t\treturn \"settled \u2014 every stake withdraws 1\u00d7\""
  },
  {
   "pkg": "kourtv2",
@@ -5428,7 +5428,7 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "flagBondFor: the bond is sized off the answer bond, not X̄",
+  "label": "flagBondFor: the bond is sized off the answer bond, not X\u0304",
   "find": "\tb0 := cs.xBarFrozen * flagBondXBps / 10000",
   "replace": "\tb0 := cs.answerBond0 * flagBondXBps / 10000"
  },
@@ -5443,7 +5443,7 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "flagBondFor: the re-flag multiplier is uncapped",
-  "find": "\tif exp > 2 {\n\t\texp = 2 // 2^2 = the frozen 4× multiplier\n\t}",
+  "find": "\tif exp > 2 {\n\t\texp = 2 // 2^2 = the frozen 4\u00d7 multiplier\n\t}",
   "replace": ""
  },
  {
@@ -5513,13 +5513,13 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "ride: the v0.54 promotion mandate is dropped entirely",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a ⅔ mandate (§3.4 F3)\n\t}",
+  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a \u2154 mandate (\u00a73.4 F3)\n\t}",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "ride: the ⅔ mandate is exclusive at its own value",
+  "label": "ride: the \u2154 mandate is exclusive at its own value",
   "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
   "replace": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 <= turnout*2 {"
  },
@@ -5534,7 +5534,7 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "ride: the ride never originates the slash (v0.50's sock-dispute immunity)",
-  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {\n\t\toriginateSlash(c, cs, now, \"\") // \"\" — a ride posts no bond, so no bounty\n\t}",
+  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {\n\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty\n\t}",
   "replace": "\t_, _ = now, fullBar"
  },
  {
@@ -5547,7 +5547,7 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "ride: the slash's ⅔-low bar is exclusive",
+  "label": "ride: the slash's \u2154-low bar is exclusive",
   "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
   "replace": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 > turnout*2 {"
  },
@@ -5555,8 +5555,8 @@
   "pkg": "kourtv2",
   "file": "quality.gno",
   "label": "ride: the ride pays a bounty it did not post a bond for",
-  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" — a ride posts no bond, so no bounty",
-  "replace": "\t\toriginateSlash(c, cs, now, \"x\") // \"\" — a ride posts no bond, so no bounty"
+  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty",
+  "replace": "\t\toriginateSlash(c, cs, now, \"x\") // \"\" \u2014 a ride posts no bond, so no bounty"
  },
  {
   "pkg": "kourtv2",
@@ -5863,7 +5863,7 @@
   "pkg": "kourtv2",
   "file": "stake.gno",
   "label": "Unstake: a FROZEN claim still releases principal",
-  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"kourtv2: stakes are frozen — withdraw at settlement (principal is never withheld)\")\n\t}",
+  "find": "\tif cs.frozenAt != 0 {\n\t\tpanic(\"kourtv2: stakes are frozen \u2014 withdraw at settlement (principal is never withheld)\")\n\t}",
   "replace": ""
  },
  {
@@ -5912,7 +5912,7 @@
   "pkg": "kourtv2",
   "file": "court.gno",
   "label": "PARAM minAnswerX halved (1 CC -> 0.5 CC, off its dust arm)",
-  "find": "\t\tminAnswerX:           1_000_000, // 1 CC — a DUST arm; the fraction carries policy",
+  "find": "\t\tminAnswerX:           1_000_000, // 1 CC \u2014 a DUST arm; the fraction carries policy",
   "replace": "\t\tminAnswerX:           500_000,"
  },
  {
@@ -6065,7 +6065,7 @@
  {
   "pkg": "kourtv2",
   "file": "meta.gno",
-  "label": "v0.55: setmods is a cheaper `unsuspend` — the global term is dropped",
+  "label": "v0.55: setmods is a cheaper `unsuspend` \u2014 the global term is dropped",
   "find": "\t\tif cm.suspended && cm.suspendActByGlobal > cs.openedAt {\n\t\t\tpanic(\"kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal\")\n\t\t}\n",
   "replace": ""
  },
@@ -6721,5 +6721,19 @@
   "label": "accrueSegment: the R_max pause banks one more segment AT the cap",
   "find": "\tif c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail {",
   "replace": "\tif c.reservoirR() > c.rMax() && c.cumAccrual >= c.reservedTail {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "court: a description may contain newlines",
+  "find": "\t\tif desc[i] == '\\n' || desc[i] == '\\r' {\n\t\t\tpanic(\"kourtv2: a court description is a single paragraph\")\n\t\t}\n",
+  "replace": "\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "court: SetCourtDesc accepts any caller",
+  "find": "\trequireFolderMod(c, who)\n\tmustCourtDesc(desc)",
+  "replace": "\tmustCourtDesc(desc)"
  }
 ]

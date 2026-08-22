@@ -160,6 +160,9 @@ func renderCourt(slug string) string {
 	c := mustCourt(slug)
 	b := strings.Builder{}
 	b.WriteString("# " + courtNameFor(c) + "\n\n")
+	if d := courtDescFor(c); d != "" {
+		b.WriteString(d + "\n\n")
+	}
 	b.WriteString("- coin: " + qualifiedSymbol(c) + " — this court's own coin, not interchangeable with any other court's\n")
 	b.WriteString("- coin price: " + strconv.FormatInt(c.crv.Price(c.minted), 10) + " ugnot per CC unit (one-way; the GNOT is burned)\n")
 	b.WriteString("- supply: " + strconv.FormatInt(c.coin.TotalSupply(), 10) +
