@@ -824,6 +824,24 @@ else:
     # when the guard is right, which is the failure mode a self-test has to be
     # most careful about: crying wolf about your own guards is how they get
     # switched off.
+    # A REFUSAL THAT NAMES NOTHING COSTS A RE-RUN. check-storage refuses to price
+    # a realm whose suite is red — correctly, since costs measured against broken
+    # tests mean nothing — and it used to stop at "does not pass. Fix the tests
+    # first." It already HAS the failure: it runs with -v and threw the output
+    # away, so learning which test broke meant staging the realm again by hand and
+    # waiting out a suite that takes over a minute. Twice today.
+    # AFTER THE IMPORTS. The first version of this arm inserted the failing test
+    # straight after `package kourtv2`, which puts a declaration above the import
+    # block: the suite then fails to BUILD rather than to test, there is no
+    # "--- FAIL: TestName" line to name, and the arm called the guard silent when
+    # the guard was right. It printed the parser error through the no-test-named
+    # fallback below, which is the only reason the bad arm was spotted at all.
+    control("a red suite is named, not just refused", f"{KOURTV2}/court_test.gno",
+            "func TestStartCourtCreatesABareCourt(cur realm, t *testing.T) {",
+            "func TestSelfTestDeliberateFailure(cur realm, t *testing.T) {\n"
+            "\tt.Error(\"deliberate\")\n}\n\n"
+            "func TestStartCourtCreatesABareCourt(cur realm, t *testing.T) {",
+            "TestSelfTestDeliberateFailure", argv=["python3", STORE])
     control("a filetest nobody budgeted for", STORE,
             '"z_use_filetest.gno": None,\n', "", "UNKNOWN",
             argv=["python3", STORE])

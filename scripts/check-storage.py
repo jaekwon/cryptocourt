@@ -149,6 +149,21 @@ def main():
             if r.returncode != 0:
                 print(f"check-storage: {realm}'s suite does not pass, so its costs "
                       f"mean nothing. Fix the tests first.", file=sys.stderr)
+                # AND SAY WHICH TEST, because this refusal used to end here. It
+                # already has the output — it ran with -v — and threw it away, so
+                # the only way to learn what broke was to stage the realm again by
+                # hand and re-run a suite that takes over a minute. The failure is
+                # not this guard's finding, but the lines that name it are free.
+                named = [ln.strip() for ln in out.split("\n")
+                         if "--- FAIL" in ln or ln.startswith("panic:")
+                         or ln.startswith("failed:")]
+                for ln in named[:6]:
+                    print("  %s" % ln[:150], file=sys.stderr)
+                if not named:
+                    print("  (the suite named no failing test — last lines:)",
+                          file=sys.stderr)
+                    for ln in [x for x in out.strip().split("\n") if x.strip()][-4:]:
+                        print("  %s" % ln.strip()[:150], file=sys.stderr)
                 return 1
 
             seen = {}
