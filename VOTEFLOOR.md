@@ -414,14 +414,44 @@ recording — and the fix for it is not a better regex, because the property is
 behavioural and each guard's empty input is a different shape.
 
 So the honest statement is the narrow one: this class is substantially already handled
-here, and two marginal residuals were found by reading rather than grepping.
-`check-live-reads` prints `0 live read(s)` and then "every read answered" if every read
-is skipped; `check-storage` reports an observation with no budget (`UNKNOWN`) but never
-the reverse, so a budget entry watching a read that no longer runs is silently idle.
-Neither is in `make check`, and neither is fixed this firing — the second is a
-stale-configuration question rather than a non-result-as-result one, and closing it
-properly means auditing every budget entry against what actually runs, which is its own
-pass and not a tail-end change to a guard that spawns suites.
+here. Two marginal residuals were recorded at this point — and **BOTH WERE FALSE, and
+the correction is the more useful entry.**
+
+They were written up as: `check-live-reads` printing `0 live read(s)` followed by "every
+read answered" if every read is skipped, and `check-storage` reporting an observation
+with no budget (`UNKNOWN`) but never the reverse. Checked properly on the next firing,
+neither exists:
+
+    check-storage    has all THREE directions already — UNWATCHED (a realm with
+                     filetests and no entry), MISSING (a budget whose filetest did
+                     not run), UNKNOWN (a filetest with no budget). MISSING is the
+                     check claimed absent, and selftest even carries an arm whose
+                     comment distinguishes it: "UNKNOWN, not MISSING."
+    check-live-reads 56 probes, 49 of them UNCONDITIONAL (guard is probe[2] if
+                     len(probe) > 2). `checked == 0` needs every probe guarded and
+                     every guard false, which cannot happen unless the table is
+                     edited — and that edit is already armed as "a gutted probe
+                     table", explicitly because it "would otherwise report a clean
+                     scan having asked nothing."
+
+**THE FAILURE MODE WAS IDENTICAL IN BOTH, and it is the one this file keeps recording
+in other people's work.** Each time I read the guard's TAIL — the success print and
+`return 1 if bad else 0` — and inferred the absence of a check I had not gone looking
+for. Both times the check was about twenty lines above where I stopped reading. And
+both were published in the same firing that recorded "GREP BEFORE HYPOTHESISING. Do not
+write up a hazard you could not demonstrate", which is exactly what a hazard written up
+from a partial read is.
+
+Worth being precise about the cost, because it is not zero and it is not a crisis: no
+code was changed on the strength of either, so nothing broke. What they cost is the
+document's credibility — a reader budgeting work off that paragraph would have gone
+looking for two holes that were never there, in guards that were already doing the job.
+A false hazard is as expensive as a missed one, and cheaper to prevent: read the whole
+function before writing down what it does not do.
+
+With those struck, the class closes cleanly. The four instances found and fixed —
+mutate-parallel's empty batch, `gno test -run`'s empty selection, check-isolation's
+per-test run, check-elsewhere's dead harness — appear to be the whole of it here.
 
 **AND THE CONTROL FOR THE NEW ARM WAS BRIEFLY WRONG IN THE FAMILIAR WAY.** First attempt ran the
 pre-fix copy from the scratchpad: SILENT, as wanted — but at exit **1** with no verdict line,
