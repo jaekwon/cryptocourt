@@ -6882,5 +6882,19 @@
   "label": "crystallize: the sub-bar carrot is withheld on EITHER condition",
   "find": "\tif cs.decidedPID == 0 && cs.conclusiveSeq != 0 {",
   "replace": "\tif cs.decidedPID == 0 || cs.conclusiveSeq != 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "mustSpendable: a holder with NO lock is told their stake is in the way",
+  "find": "\tcase vl <= 0 && sl <= 0:\n\t\tpanic(\"kourtv2: not enough CC \u2014 none of your balance is staked or \" +\n\t\t\t\"committed by voting, so this is simply more than you hold\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "mustSpendable: a tie names the stake instead of naming both locks",
+  "find": "\tdefault:\n\t\tpanic(\"kourtv2: not enough free CC \u2014 you have as much staked as you have \" +\n\t\t\t\"committed by voting, and the two overlap, so releasing either one on \" +\n\t\t\t\"its own frees nothing: the coin stays in your balance and keeps \" +\n\t\t\t\"voting, but it cannot also back a deposit, a bond, or a transfer\")",
+  "replace": "\tdefault:\n\t\tpanic(\"kourtv2: not enough unstaked CC \u2014 \" +\n\t\t\t\"staked coins stay in your balance and keep voting, but they are \" +\n\t\t\t\"committed and cannot also back a deposit, a bond, or another stake\")"
  }
 ]

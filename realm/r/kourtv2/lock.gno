@@ -117,15 +117,34 @@ func mustSpendable(c *Court, who address, amount int64) {
 	// holder cannot act on "something is locked". Three existing tests assert the
 	// stake wording and they were right to: in their fixtures the stake IS what
 	// binds, so a merged message would have made them fail for no defect.
-	if voteLockedOf(c, who) > lockedOf(c, who) {
+	// FOUR CASES, not two, and the two that were missing each told the holder
+	// something false. disposable() subtracts the MAX of the two locks, so on a TIE
+	// neither lock is the constraint by itself — releasing either one frees nothing,
+	// which is the opposite of what naming one of them implies. And with NO lock at
+	// all this fell through to the stake wording, so a holder who has never staked
+	// was told their stake was in the way when the plain fact is that the balance is
+	// short. Both were reachable: a transfer above the balance takes the second, and
+	// staking exactly one's own snapshot and then voting takes the first.
+	vl, sl := voteLockedOf(c, who), lockedOf(c, who)
+	switch {
+	case vl <= 0 && sl <= 0:
+		panic("kourtv2: not enough CC — none of your balance is staked or " +
+			"committed by voting, so this is simply more than you hold")
+	case vl > sl:
 		panic("kourtv2: not enough uncommitted CC — coin you voted with stays in " +
 			"your balance and keeps voting, but it is committed until that " +
 			"question resolves and cannot also back a deposit, a bond, or a " +
 			"transfer")
+	case sl > vl:
+		panic("kourtv2: not enough unstaked CC — " +
+			"staked coins stay in your balance and keep voting, but they are " +
+			"committed and cannot also back a deposit, a bond, or another stake")
+	default:
+		panic("kourtv2: not enough free CC — you have as much staked as you have " +
+			"committed by voting, and the two overlap, so releasing either one on " +
+			"its own frees nothing: the coin stays in your balance and keeps " +
+			"voting, but it cannot also back a deposit, a bond, or a transfer")
 	}
-	panic("kourtv2: not enough unstaked CC — " +
-		"staked coins stay in your balance and keep voting, but they are " +
-		"committed and cannot also back a deposit, a bond, or another stake")
 }
 
 // mustStakable refuses a stake that would dip into locked stake, and deliberately

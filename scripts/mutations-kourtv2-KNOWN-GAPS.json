@@ -49,14 +49,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "lock.gno",
-  "label": "mustSpendable: on EQUAL locks the message names the vote lock, not the stake",
-  "find": "\tif voteLockedOf(c, who) > lockedOf(c, who) {",
-  "replace": "\tif voteLockedOf(c, who) >= lockedOf(c, who) {",
-  "why": "A DELIBERATE SURVIVOR that should stay unpinned. mustSpendable picks which constraint to name by comparing voteLockedOf against lockedOf, and disposable() subtracts the MAX of the two — so when they are EQUAL both bind exactly and either sentence is true. The comparison is a tie-break between two correct answers, not a correctness property, and a test asserting one of them would freeze a free choice. Recorded so the next sweep does not read it as a hole. What WOULD be an improvement is a message naming both when they tie, since a holder told only about the stake may unstake and find the vote lock still binding; that is a wording change with its own tests, not a fix to this operator. IF THIS COMES BACK CAUGHT, someone has pinned the tie-break — check that they meant to."
- },
- {
-  "pkg": "kourtv2",
   "file": "emission.gno",
   "label": "accrueSegment: the pause's senior conjunct compares > instead of >=",
   "find": "c.reservoirR() >= c.rMax() && c.cumAccrual >= c.reservedTail",
