@@ -8083,5 +8083,35 @@
   "label": "releaseStake: releasing the whole lock panics instead of clearing it",
   "find": "\tif amount > l {\n\t\tpanic(\"kourtv2: releasing more stake than is locked\")",
   "replace": "\tif amount >= l {\n\t\tpanic(\"kourtv2: releasing more stake than is locked\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "mustNestable: the depth cap is exclusive, so a nesting exactly AT it is refused",
+  "find": "\tif cm.folderDepth(parent)+height > maxFolderDepth {",
+  "replace": "\tif cm.folderDepth(parent)+height >= maxFolderDepth {",
+  "why": "SURVIVED THE SWEEP AND IS NOW PINNED. TestFolderNesting pins the cap's refusals and pairs them with a move that must still work, but that pairing sits at depth 2 against a cap of 4 - two levels clear of the edge - so the arithmetic was free either side of it. Narrowing `>` to `>=` lets a court nest only 3 deep while the panic message keeps promising 4. Closed by TestFoldersNestExactlyToTheirCapAndNoFurther, which asserts the cap is REACHABLE rather than only that overshooting it is refused: measured SURVIVED before that test and caught after, 0 not caught of 2."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folderDepth: every folder reports one level deeper than it is",
+  "find": "func (cm *courtMod) folderDepth(id uint64) int {\n\td := 0",
+  "replace": "func (cm *courtMod) folderDepth(id uint64) int {\n\td := 1",
+  "why": "The same boundary reached from the other side - `d := 0` started at 1 - and it survived for the same reason: nothing nested to the cap, so a uniform off-by-one in the depth was invisible. One test catches both, because both make an exactly-at-cap nesting fail."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "folderHeight: a leaf reports zero height, so the subtree undercounts",
+  "find": "func (cm *courtMod) folderHeight(id uint64) int {\n\th := 1",
+  "replace": "func (cm *courtMod) folderHeight(id uint64) int {\n\th := 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "folders.gno",
+  "label": "mustNestable: the depth cap allows one level more than it says",
+  "find": "\tif cm.folderDepth(parent)+height > maxFolderDepth {",
+  "replace": "\tif cm.folderDepth(parent)+height > maxFolderDepth+1 {"
  }
 ]

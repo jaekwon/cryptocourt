@@ -467,6 +467,26 @@ survives every suite and fails `check-read-purity.py` with
 `elsewhere` naming the guard's path — and check-mutation-anchors verifies the path
 resolves, so the annotation cannot rot into a shrug.
 
+**PAIR THE REFUSAL AT THE BOUNDARY, NOT MERELY SOMEWHERE LEGAL.** The standing rule is
+to pair every "must be refused" with the ordinary input it must NOT refuse, and
+TestFolderNesting obeyed it — a cycle refused, a self-parent refused, a too-tall subtree
+refused, and "a leaf still moves" as the paired success. But the cap is 4 and that success
+sits at depth 2, so the cap's arithmetic was unconstrained within two levels of its own
+edge. An operator sweep of the nesting code measured what that cost: 5 mutations, 2 caught
+and 2 surviving, and BOTH survivors were off-by-ones at the untested boundary — `>`
+narrowed to `>=` on the cap, and folderDepth's `d := 0` started at 1. Either one leaves a
+court able to nest only 3 deep while the panic message goes on promising 4.
+
+One test closed both (measured: SURVIVED before, `0 not caught of 2` after) because both
+make an exactly-at-cap nesting fail. The lesson is the placement, not the pairing: **the
+success case has to be the LAST LEGAL VALUE, not a comfortable one.** A pair at depth 2
+against a cap of 4 tests that the feature works; a pair at 4 and 5 tests the cap.
+
+Corollary worth the line: assert the constant too. This fixture builds a chain by hand and
+opens with `if maxFolderDepth != 4 { t.Fatalf(...) }`, because if the cap ever moves the
+chain silently stops being "exactly at the cap" and the test goes on passing while
+measuring the wrong depth.
+
 **A SUBSTRING ASSERTION CAN BE SATISFIED BY A LAYER YOU ARE NOT TESTING.** The masking
 layers found so far were all in the CODE; this one is in the test. TransferCC and
 TransferFromCC both open `if amount <= 0 { panic("kourtv2: transfer amount must be
@@ -588,6 +608,14 @@ cannot change the program at all. Recognise these on sight rather than measuring
   comment argues while still calling it a survivor.
 - **A conjunct implied by the conjunct before it.** See the R_max pause, whose second
   half is provably entailed by its first; recorded in KNOWN-GAPS with the derivation.
+- **A loop bound set far above any reachable iteration count.** folders.gno's cycle walk
+  runs `for up, n := parent, 0; up != 0 && n <= maxFolders; n++` with maxFolders = 100,
+  and narrowing it to `<` survives. It cannot do otherwise: the only two writes to a
+  folder's `parent` (the creation at folders.gno:281 and the move at :299) are each
+  immediately preceded by mustNestable, so no chain exceeds maxFolderDepth = 4 and no
+  cycle can be created — n never passes 4, and 99 versus 100 is unobservable. The bound's
+  own comment says it exists for "state which somehow holds a cycle", i.e. for state the
+  code prevents; keep it, do not row it.
 - **A defensive guard on an internal helper whose every caller has already refused the
   value.** lockStake and releaseStake both open `if amount <= 0 { return }`, and
   narrowing either to `< 0` survives — but all three call sites provably pass a positive:
