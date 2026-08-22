@@ -1100,6 +1100,27 @@ the instrument quietly answered a narrower question than the one asked. When the
 conclusion is "nothing covers this", COUNT the matches (`grep -c`, or no pipe at all)
 before believing it.
 
+**I COMMITTED WITH `make anchors` RED, WHICH IS THE ONE PROCESS RULE WRITTEN DOWN IN
+CAPITALS.** The rule exists because it happened before: "a commit went in with `make anchors`
+already failing because an `&&` chain carried on past the error. Check the guard result
+before committing, not alongside it." I wrote `out=$(make anchors); rc=$?; echo "ANCHORS
+EXIT=$rc"; git status && git add … && git commit …` — the `;` after the echo means the commit
+never consults `rc`. Printing the exit code is not gating on it. The commit message then
+asserted "anchors green" while anchors had exited 2.
+
+The commit's CONTENT was harmless — VOTEFLOOR.md, 22 insertions, nothing else — and the
+failure was not mine: another session has 39 uncommitted lines in moderation.gno, which
+leaves three corpus rows' `find` matching 0x ("mod: AddGlobalMod keeps stale approvals" and
+two TransferGlobalAdmin rows). That is theirs to settle when their edit lands, and
+re-pointing those anchors now would only re-break as they iterate, so they are left alone.
+
+Not amended away. The false claim is corrected here and in the commit that follows, because
+erasing it would hide the process failure, and the failure is the more useful record: the
+gate has to be `make anchors || exit`, or a separate command whose result is read before the
+commit is typed. Every other commit today ran anchors as its own step and read the number;
+this one folded it into the same command as the commit and got away with it until it did
+not.
+
 **THE WHOLE ROUTINE, RUN ONCE, END TO END — and the check on the check.** Every target had
 been run piecemeal today; `make check` itself had not. It passes in **1 minute 57**, which
 is worth knowing on its own: the routine is cheap enough that there is no excuse for
