@@ -102,6 +102,25 @@ def build(real, label, pid=None):
     runs — a stale copy of examples/ would silently test against yesterday's
     tree, which costs more than the half second it saves.
     """
+    # SAY WHAT WENT WRONG. real_root() returns "" for every way of not finding a
+    # toolchain — gno absent from PATH, or `gno env GNOROOT` naming a directory
+    # that is not there — and without this the empty string travelled down to
+    # os.listdir("") and surfaced as:
+    #
+    #     FileNotFoundError: [Errno 2] No such file or directory: ''
+    #
+    # which names no file, no cause and no fix. That is not hypothetical: `gno
+    # env GNOROOT` is CWD-DEPENDENT, so running any of these scripts from a git
+    # worktree outside the checkout answers with a path derived from the
+    # worktree's own prefix, which does not exist — and mutate.py died twice on
+    # that traceback before anybody thought to run the command by hand.
+    if not real or not os.path.isdir(real):
+        raise SystemExit(
+            "gnoroot: no gno toolchain to shadow (GNOROOT=%r). `gno env GNOROOT` "
+            "resolves against the CURRENT DIRECTORY, so running this from a git "
+            "worktree or any path outside the checkout can answer with a "
+            "directory that does not exist. Set GNOROOT explicitly, or run from "
+            "the repository." % (real,))
     pid = os.getpid() if pid is None else pid
     reap()  # clear anything a killed run left, before adding one more
     # The worktree name, so a listing of BASE says whose each root is.

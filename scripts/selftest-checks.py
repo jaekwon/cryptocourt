@@ -1139,6 +1139,21 @@ else:
     rootcase("removing a non-shadow under the base is refused",
              gnoroot.remove(os.path.join(gnoroot.BASE, "not-a-shadow")) == 1)
 
+    # NO TOOLCHAIN MUST SAY SO. real_root() returns "" for every way of failing
+    # to find one, and build() used to carry that straight to os.listdir(""),
+    # which raises `FileNotFoundError: ''` — no file named, no cause, no fix.
+    # `gno env GNOROOT` resolves against the CURRENT DIRECTORY, so running any of
+    # these scripts from a git worktree answers with a path built from the
+    # worktree's own prefix that does not exist; mutate.py died on that traceback
+    # twice before anyone ran the command by hand. Both shapes, because "" and a
+    # wrong path arrive by different routes.
+    for _bad, _what in (("", "an empty GNOROOT"), ("/no/such/gnoroot", "a GNOROOT that is not there")):
+        try:
+            gnoroot.build(_bad, "selftest-noroot")
+            rootcase(_what + " is refused", False)
+        except SystemExit as _e:
+            rootcase(_what + " is refused", "no gno toolchain to shadow" in str(_e))
+
     # The reaper must take an ABANDONED root and leave a live one alone. Getting
     # this backwards deletes the tree a running suite is testing against, which
     # is the same collision the whole module exists to remove.
