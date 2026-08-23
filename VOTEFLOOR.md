@@ -452,6 +452,67 @@ ZERO-BYTE log and no way to tell which arm it died on. Run it BACKGROUNDED and w
 leftover mutant and no orphaned `.selftest-backup` — but that is a fact about timing, not a
 guarantee, and the next kill can land mid-control.
 
+
+## The false-premise sweep, run as an instrument and now exhausted
+
+Two findings in one session came from the same shape — a comment asserting a value
+CANNOT be user text, which is exactly what licenses the next reader to render it
+raw. So it was worth running deliberately rather than stumbling into a third time:
+grep every non-test comment in `realm/` asserting "never user text", "not user
+text", "an enum", "cannot contain", "cannot hold", "a fixed set", "is a constant".
+Eleven hits. Here is all of it, refutations included, so nobody runs it again.
+
+**TWO WERE REAL, and they were the same field.** `modAct.code` was documented as
+"a category/act code (an enum), never user text" while `mustCategoryCode` checks
+LENGTH ONLY. Eight of the eleven acts that write a log row pass a fixed string;
+three concatenate the caller's code. Fixed at `7dcbbbb`, and the sweep then led
+straight to the bigger gap beside it — the log's OTHER free-text field, `reason`,
+whose escaping was also unpinned and which can never be constrained because it is
+prose by design. Fixed at `1e6565f`.
+
+**ONE WAS A DESIGN CHANGE I STARTED AND REVERSED.** Recorded at task level and in
+`mustCategoryCode` itself: the event is permanent, which argues for an alphabet at
+the door, but `directory.gno`'s "never user text" is SetTier's own local
+justification rather than a realm-wide invariant, and the events header permits a
+category code explicitly. Narrowing it would have retired a live, exercised
+defence across four tombstone surfaces while `reason` kept needing it.
+
+**TWO WERE THE SAME CLAIM AND IT HOLDS.** `p/governor/governor.gno`'s TextOnly doc
+and `r/offerer/offerer.gno` both say the built-in kinds are safe because "their
+payloads are kind names and addresses, which cannot hold a newline". I went
+looking for the injection: `adoptKind.describe` and `retireKind.describe` both
+interpolate the payload RAW into markdown, nothing in `p/governor` imports a
+sanitiser at all, `Offer` is ungated, and the adopt payload must name an offered
+kind — so a hostile name would reach the page every holder votes from.
+
+It cannot. `mustBeUsableName` refuses every byte `<= ' '` or `> '~'`, so no
+newline, and it is itself tested — printable-ASCII, empty and over-length all
+pinned in governor_test. THE VALIDATOR WAS THE THING I NEARLY MISSED, for the
+second time in one session: the same shape as grc20's `validName` killing the
+ccwrap block-forging hypothesis. Both times the claim was true and the code three
+frames away was why.
+
+What survives is narrow and deliberately left. The alphabet permits a BACKTICK,
+and both describes wrap the payload in backticks precisely to render it inert, so
+a name containing one breaks out of the code span. That yields INLINE markdown —
+a link, emphasis — and never structure, because a newline is impossible. The
+project has priced that in explicitly, in `mustBeUsableTitle`'s own words:
+"Markdown within a line is left alone — it cannot leave the row it belongs to, and
+structure is the part a reader cannot check." Narrowing a well-tested validator
+for a hazard the design already accepts is the same trade rejected two paragraphs
+above.
+
+**THE OTHER FIVE WERE NOT THIS CLASS AT ALL** — claims about a call's cost, where
+a policy can live, and a bps constant. Worth stating, because the grep that finds
+the class also finds those, and the next reader should not mistake five
+non-results for five checks.
+
+**WHAT THE INSTRUMENT IS WORTH.** Three real gaps from eleven hits, two of them in
+the same field, and two refutations that each took one read of the validator. The
+grep is cheap and the follow-through is not: every hit needs the door checked
+before the render, because the interesting answer is usually "something else
+already validates this".
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:
