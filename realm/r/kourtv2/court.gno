@@ -93,8 +93,11 @@ const (
 	// one counter-flag window (v0.28–v0.31; draw-proportional arm v0.40).
 	flagBondXBps    = int64(200)
 	flagMinCC       = int64(1_000_000) // 1 CC
-	flagFrozenMultX = int64(4)         // bond freezes at 4×b₀ = 8%·X̄ after 3 inconclusives
-	flagFreezeAfter = 3
+	flagFrozenMultX = int64(4) // bond freezes at 4×b₀ = 8%·X̄ after 3 inconclusives
+	// (flagFreezeAfter = 3 stood here and was read by nothing. flagBondFor caps
+	// the EXPONENT at 2, which is the same rule counted from zero, so the
+	// constant was a second spelling of a number it did not supply — and the
+	// two comments naming "3 inconclusives" already carry the intent.)
 	slashXBps       = int64(450)   // 4.5%·X̄ answer-bond slash FLOOR (whale-gated; bounty 2% ≤ 80%×4.5% ✓)
 	slashDrawBps    = int64(16000) // v0.40: draw-proportional arm — slash ≥ 1.6× the winning-pool mid draw (midGross), so a patient mill's punishment tracks its take, not just X̄; floored by slashXBps, clamped to the bond. k=1.6 lands the 12-wk (dead-claim) mill q* on the ~0.22 target and flattens the hold-time curve (three-designer convergence, v0.40)
 	depositFeeBps   = int64(1000)  // 10% of the deposit, conditionally refunded
