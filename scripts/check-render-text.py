@@ -56,6 +56,31 @@ TITLE_READERS = {
     ("claim.gno", "EditClaimTitle"): "write, not a read",
 }
 
+# The court's own two user-text fields. Same policy, separate gates:
+# courtNameFor and courtDescFor. `c.name` matters twice over — modrender.gno's note
+# says a whole-court purge is a legal-hold act and "rendering the raw name anywhere
+# would leave the offending text on the directory and on every page of that court".
+#
+# NOTE ON THE RAW PUBLIC READ, recorded here because this is where somebody will
+# look. CourtName returns `mustCourt(slug).name` unsanitised and that is sanctioned
+# — sanitize/v0's rule is "sanitise once, at the point of output", and its own doc
+# says "a court's parameters are not secret". But mustCourtName validates LENGTH
+# ONLY: no alphabet, and no newline check, where mustCourtDesc refuses newlines with
+# a stated reason that applies to the name just as well ("it renders inline beside a
+# court name in list rows, where a newline forges a row"). kourtv2's own render is
+# safe because InlineText folds. The consumer that is NOT is realm/r/ccwrap, which
+# builds a GRC20 token name as "Wrapped " + CourtName(slug) — raw user text crossing
+# into another realm's display field. Left alone deliberately: tightening
+# mustCourtName now would refuse names live courts may already hold, which is a
+# migration question, and by the sanitise-at-output rule the fix belongs at ccwrap's
+# output rather than at this realm's input.
+COURT_TEXT_READERS = {
+    ("modrender.gno", "courtNameFor"): "display gate, via sanitize.InlineText",
+    ("modrender.gno", "courtDescFor"): "display gate, via sanitize.InlineText",
+    ("court.gno", "CourtName"): "raw public read — consumers sanitise at their own output",
+    ("court.gno", "SetCourtDesc"): "write, not a read",
+}
+
 # Every caller of claimBodyVisible, which returns RAW body text, and the helper
 # each one is required to apply. They deliberately differ.
 BODY_CALLERS = {
@@ -85,7 +110,7 @@ def functions(path):
 def main():
     repolock.refuse_if_held("check-render-text")
 
-    bad, seen_title, seen_body = [], set(), set()
+    bad, seen_title, seen_body, seen_court = [], set(), set(), set()
     for path in sorted(REALM.glob("*.gno")):
         if path.name.endswith("_test.gno"):
             continue
@@ -98,6 +123,12 @@ def main():
                                "TITLE_READERS. If it DISPLAYS the title it must go "
                                "through claimTitleFor; if it parses it, add it here "
                                "with that reason." % key)
+            if re.search(r"\bc\.(?:name|desc)\b|mustCourt\([^)]*\)\.(?:name|desc)\b", body):
+                seen_court.add(key)
+                if key not in COURT_TEXT_READERS:
+                    bad.append("%s/%s reads the court's raw name or description and is "
+                               "not in COURT_TEXT_READERS. If it DISPLAYS the field it "
+                               "must go through courtNameFor or courtDescFor." % key)
             if "claimBodyVisible(" in body and fn != "claimBodyVisible":
                 seen_body.add(key)
                 want = BODY_CALLERS.get(key)
@@ -112,6 +143,9 @@ def main():
     for key in sorted(set(TITLE_READERS) - seen_title):
         bad.append("%s/%s is in TITLE_READERS but no longer reads the title — the "
                    "gate moved or the entry is stale" % key)
+    for key in sorted(set(COURT_TEXT_READERS) - seen_court):
+        bad.append("%s/%s is in COURT_TEXT_READERS but no longer reads c.name or "
+                   "c.desc — the gate moved or the entry is stale" % key)
     for key in sorted(set(BODY_CALLERS) - seen_body):
         bad.append("%s/%s is in BODY_CALLERS but no longer calls claimBodyVisible — "
                    "the gate moved or the entry is stale" % key)
@@ -133,8 +167,9 @@ def main():
               "realm.", file=sys.stderr)
         return 1
 
-    print("check-render-text: %d sanctioned title reader(s) and %d body caller(s), "
-          "each routed through its own gate." % (len(seen_title), len(seen_body)))
+    print("check-render-text: %d title reader(s), %d court-text reader(s) and %d body "
+          "caller(s), each routed through its own gate."
+          % (len(seen_title), len(seen_court), len(seen_body)))
     return 0
 
 
