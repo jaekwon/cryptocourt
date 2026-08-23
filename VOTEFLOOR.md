@@ -269,6 +269,50 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE MONEY PATHS ARE NOW THE BEST-COVERED SURFACE, NOT THE WEAKEST — measured, and it
+inverts the premise this work started from.** An operator-coverage sweep over every
+non-test kourtv2 file, counting boundary-operator lines with no corpus row anchored on
+them:
+
+    moderation.gno  55 uncovered   11 covered    50 rows
+    court.gno       43             11            51
+    folders.gno     41             17            29
+    render.gno      41             11            38
+    ...
+    dispute.gno     31             24            61
+    quality.gno     23             53           151
+    crystallize.gno 18             23            48
+    stake.gno       15             16            52
+
+The money files are at the BOTTOM of the uncovered ranking and the top of the row counts.
+"The money paths are the weakest surface in the repo" was true when it was written and is
+not true now.
+
+**AND THEN THE RANKING MISLED ME, WHICH IS THE MORE USEFUL FINDING.** court.gno looked
+like the obvious next target at 43 uncovered lines. It is not a target at all. Most of
+those lines are `mustInvariants` and the tier loop beside it, which compare CONSTANTS
+ONLY, at init — and a constant-only gate is unpinnable by mutation in BOTH directions.
+Measured on one of them rather than argued:
+
+    loosened so it can never fire  -> suite exit 0, ZERO failing tests
+    tightened so it fires at init  -> exit 1, ZERO NAMED failures (the realm dies at
+                                      load, so every test dies and none discriminates)
+
+Loosening is invisible because the constants satisfy the tighter bound anyway, so the gate
+never fired in the first place. Tightening is not a catch but a broken measurement. Their
+value is real and lies outside mutation testing entirely: a future constant change cannot
+ship silently. One representative KNOWN-GAPS row now anchors the class at the exact line,
+with its `why` naming the other twelve, rather than thirteen rows saying the same thing.
+
+**SO THE INSTRUMENT NEEDS A CAVEAT IN THE SAME BREATH AS ITS OUTPUT.** It counts operator
+lines and asks whether a row is anchored there. It does NOT ask whether the operator is
+mutable-and-observable, which is the only thing that makes an uncovered line a gap. It
+also has a plain false-positive rate: `->` inside a struct field comment matches the `>`
+pattern, which is most of what it flagged in court.gno's declarations. Read it as a lead
+generator, exactly as the per-function coverage heuristic is read — the real target for the
+next sweep is whichever file has the most uncovered operators that a test could actually
+distinguish, and that is a question the count cannot answer.
+
 **THE TARGETED REGRESSION PASS CAME BACK CLEAN — 389 rows, and the one survivor was
 supposed to survive.**
 
