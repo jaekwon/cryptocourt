@@ -291,6 +291,46 @@ QUIET rate, not the 75s contended one. The advice to "budget double if you inten
 working alongside it" is now measured from both ends — the second pass paid the double, this
 one did not, and the only difference was whether I touched the machine.
 
+## The ranked list is exhausted, with the measurement for each item
+
+Written in one place because the list has been re-stated unchanged on every firing while its
+three items closed one by one, and I have now re-derived TWO of them from scratch on separate
+firings — reading the item, reading the code, running `git log -S`, and arriving at "already
+done". That is what an unrecorded closure costs, and it is cheaper to pay once here.
+
+**Item 1, the money paths.** Both recorded survivors are closed and named:
+
+    (a) emission's early return at exactly R_max   TestTheReservoirPauseHoldsAtExactlyTheCap
+    (b) Crystallize's participant-only window      TestTheParticipantOnlyWindowsEndOnTheir-
+                                                   ExactBlock — plural, because it covers
+                                                   Finalize's window in dispute.gno by the
+                                                   same shape, which is what was asked
+
+And the third clause, "emission, crystallize and the senior queue are essentially unswept",
+is refuted by counting: 46 rows touch that surface — emission.gno 22, crystallize.gno 15 —
+and the two functions the item names by hand carry 12 between them, `PullSenior` 7 and
+`enqueueSenior` 5, including `enqueueSenior: the start cursor ignores juniorReserved
+(M3-CRITICAL-1)`. Every one of them was observed caught in the third full pass. The premise
+had in fact inverted: measured by uncovered operators, the money files are the BEST covered
+in the realm and moderation is the worst.
+
+**Item 2, one full-corpus run.** Three passes now. The second closed the claim (1,174 + a
+12-row delta from a second clone); the third re-observed it at 1,199 with an empty diff
+against HEAD, so no delta run was needed.
+
+**Item 3, the two leftovers.** The tie message names both locks and `lockmessage_test.gno`
+asserts its distinctive interior; `StakedPage` has carried conviction since `f76bb3d` and is
+pinned by `StakedPage: the stake and the conviction are crossed` — a row that could not be
+written if the field were missing.
+
+**THE LESSON IS ABOUT LISTS, NOT ABOUT THESE THREE ITEMS.** A ranked backlog is a snapshot of
+what was true when it was written, and it decays silently: nothing about re-reading it says
+which entries have since been fixed. Three separate firings spent real time re-deriving
+closed items from it. So the rule for any standing list here: before working an item, spend
+the two minutes to ask the harness whether it is still true — `git log -S` on the symbol, a
+row count for the surface, a `-run` on the test that would already cover it. The cheapest
+measurement in this repo is the one that tells you the work is already done.
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:
