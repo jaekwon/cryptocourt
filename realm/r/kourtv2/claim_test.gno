@@ -319,3 +319,62 @@ func TestClaimBodyIsBoundedAndModerated(cur realm, t *testing.T) {
 	uassert.Equal(t, "", ClaimBody("bdy", withBody))
 	uassert.True(t, strings.Contains(ClaimTitle("bdy", withBody), "removed"))
 }
+
+// An ordinary court's filing deposit is its OWN fraction of supply, not the dust.
+//
+// effMinDeposit is max(minClaimDepositCC, ordDepositFloorBps of supply) for every
+// court but meta, and court.gno says why that fraction exists at all: it was unpegged
+// from effMinAnswerX/100, "which failed §5.3 arithmetically: a 50-row flood parked
+// half of ONE self-answer escape".
+//
+// NOTHING ASSERTED THE BPS ARM. Measured: raising ordDepositFloorBps from 1 to 5
+// survived the whole kourtv2 suite. Its sibling ordAnswerXFloorBps is CAUGHT — by
+// TestAnswerBondCapBindsWhenTheFloorIsBelowIt, a test written ABOUT that floor — so
+// the answer-bond floor was pinned and the deposit floor declared on the next line of
+// court.gno was not.
+//
+// THE SEAL COMES FROM matureOI, NOT FROM A BARE SkipHeights, and that is the whole
+// shape of this fixture. supplyFloor reads PastTotal(epoch-1), so the FIRST claim on
+// a fresh court is always priced at the dust arm and the bps constant is unreachable.
+// Advancing the clock directly does reach it — and leaks: a bare
+// SkipHeights(epochBlocks+1) here moved the epoch under
+// TestTheArgumentCapsBindAtTheirStatedNumbers, which then aborted on "not enough CC"
+// in AddArgument. It passes alone and failed only in company, which is the reason this
+// repo's standing rule is to run the FULL suite before believing a green one.
+//
+// So the epoch is sealed the way the answer-floor test seals it, by maturing the OI
+// ring on a throwaway first claim, and the assertion lands on a SECOND claim opened
+// afterwards.
+func TestAnOrdinaryCourtsDepositFloorIsItsOwnFractionOfSupply(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("odep-alice")
+	const supply = int64(500_000_000_000) // 500k CC; 0.01% of it is 50 CC, well over dust
+	c := testCourt(cur, "odep", alice, supply)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	first := OpenClaim(cross(cur), "odep", "a throwaway to seal an epoch")
+	matureOI(cur, "odep", first, alice, 350_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "odep", "what does filing cost here")
+
+	// THE EXPECTATION IS A LITERAL, AND THAT IS THE POINT. Writing it as
+	// `supply * ordDepositFloorBps / 10000` reads better and CANNOT FAIL: the
+	// mutation moves the constant, the expectation moves with it, and the assertion
+	// passes either way. Measured — the first version of this test was written that
+	// way and the row still SURVIVED after it landed. 50 CC is 0.01% of 500k CC,
+	// stated once here so the number this court charges is pinned rather than
+	// re-derived from the thing under test.
+	const wantDeposit = int64(50_000_000)
+	got := mustClaim(c, id).deposit
+	if got != wantDeposit {
+		t.Errorf("deposit = %d, want %d — 0.01%% of a %d supply",
+			got, wantDeposit, supply)
+	}
+	// THE ARM THAT MAKES THE ONE ABOVE MEAN SOMETHING. Without it a fixture that
+	// silently fell back to dust would pass while measuring nothing — and it did
+	// exactly that once, which is how the leak above was found.
+	if got == c.params.minClaimDepositCC {
+		t.Error("the deposit fell back to the dust floor, so the bps arm this test " +
+			"exists for was never reached")
+	}
+}

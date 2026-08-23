@@ -8590,5 +8590,19 @@
   "label": "PARAM maxWrappableSlug lowered (the wrappable-slug bound)",
   "find": "const maxWrappableSlug = 10",
   "replace": "const maxWrappableSlug = 4"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM ordDepositFloorBps raised (an ordinary court's smallest deposit)",
+  "find": "\tordDepositFloorBps = int64(1)  // 0.01% \u2014 \u00a75.3's rule is meta-only; opening a",
+  "replace": "\tordDepositFloorBps = int64(5)  // 0.01% \u2014 \u00a75.3's rule is meta-only; opening a"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM StartCourt opens a polish window instead of none",
+  "find": "\treturn startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 0)",
+  "replace": "\treturn startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 1_000)"
  }
 ]
