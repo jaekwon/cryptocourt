@@ -181,6 +181,7 @@ READPURE = "scripts/check-read-purity.py"
 SPENDPATH = "scripts/check-spend-paths.py"
 ELSEWHERE = "scripts/check-elsewhere.py"
 CONTROLS = "scripts/check-control-anchors.py"
+COLLISIONS = "scripts/check-mutant-collisions.py"
 ABORTASRT = "scripts/check-abort-assertions.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
@@ -719,6 +720,38 @@ control("the reachable package set coming back empty", ABORTASRT,
         'ALWAYS = set()\nIMPORT = re.compile(r"NOTHINGMATCHESTHIS")',
         "scanning for a shape the tree no longer has",
         argv=["python3", ABORTASRT])
+
+print("\ncheck-mutant-collisions")
+# check-mutation-anchors compares the (pkg, file, find, replace) TRIPLE, so two
+# rows expressing one mutation through different anchor text are distinct to it —
+# eleven such pairs were found by hand before this guard existed. The arm uses an
+# EXACT duplicate rather than a widened anchor, deliberately: the guard hashes the
+# mutated SOURCE, so both arrive at the same code path and the hash cannot tell
+# how the anchors differed. An exact twin needs no hardcoded realm text and so
+# cannot rot. The widened-anchor case was ablated by hand when the guard landed.
+#
+# Prepended with a JSON round-trip, not a string splice, for the reason inject()
+# records below: an arm must not depend on the whitespace of the file it edits.
+_col = "two rows that produce one mutant"
+exercised.add(os.path.basename(COLLISIONS))
+_bk = MUTS + ".selftest-backup"
+shutil.copy(MUTS, _bk)
+try:
+    _corpus = json.load(open(_bk))
+    _twin = dict(_corpus[0])
+    _twin["label"] = "SELFTEST duplicate mutant"
+    with open(MUTS, "w") as _fh:
+        json.dump([_twin] + _corpus, _fh, indent=2, ensure_ascii=False)
+        _fh.write("\n")
+    _r = subprocess.run(["python3", COLLISIONS], capture_output=True, text=True)
+    _out = _r.stdout + _r.stderr
+    if _r.returncode != 0 and "SAME mutant" in _out:
+        print(f"  {_col:<44} fires")
+    else:
+        print(f"  {_col:<44} SILENT — exit {_r.returncode} on a duplicated row")
+        failures.append(_col)
+finally:
+    shutil.move(_bk, MUTS)
 
 print("\ncheck-control-anchors")
 # The other half of check-guards-armed's division of labour: that one says

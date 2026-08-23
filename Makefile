@@ -1,4 +1,4 @@
-.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors paths guards controls staleguards \
+.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions paths guards controls staleguards \
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
@@ -59,7 +59,7 @@ check-frozen:
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors paths guards controls staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test elsewhere-test
+check: fmt vet gotest anchors collisions paths guards controls staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test elsewhere-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -89,6 +89,13 @@ guards:
 # in `check` for the same reason check-guards-armed does.
 controls:
 	python3 scripts/check-control-anchors.py
+
+# check-mutation-anchors compares the (pkg, file, find, replace) triple, so two
+# rows expressing ONE mutation through different anchor text are distinct to it.
+# Eleven such pairs were found by hand; this finds the next one by applying every
+# row and hashing the result. Static, no suite runs, well under a second.
+collisions:
+	python3 scripts/check-mutant-collisions.py
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this
 # — cross() is IsCurrent-strict, so a returned frame cannot be handed to an
