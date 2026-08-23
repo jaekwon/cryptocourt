@@ -331,6 +331,127 @@ the two minutes to ask the harness whether it is still true — `git log -S` on 
 row count for the surface, a `-run` on the test that would already cover it. The cheapest
 measurement in this repo is the one that tells you the work is already done.
 
+
+## The wrap page, and a hypothesis the harness refuted
+
+**THE HAZARD WAS REAL AND MY MECHANISM FOR IT WAS WRONG.** ccwrap's `Enable` builds the
+wrapped token's name as `"Wrapped " + kourtv2.CourtName(slug)` and its `Render` wrote that
+name into an H1. `mustCourtName` validates LENGTH ONLY, 1..100 characters, where
+`mustCourtDesc` beside it walks the string and refuses newlines — so I wrote up an injection
+that could forge headings, list rows and a `<form>` on the page, and built a test that
+counted newlines to prove it.
+
+The test failed, and not the way it was meant to:
+
+    Exception: invalid token name (empty, too long, or contains control chars)
+
+`Enable` aborts inside `grc20.NewToken`, so `Render` is never reached. grc20's `validName`
+rejects every rune below 0x20 and 0x7f, and every CommonMark block construct — heading, list
+row, HTML block types 6 and 7 — needs a line of its own. **Block forging is not reachable at
+all**, and the newline-counting test could never have passed for the reason I gave.
+
+What IS reachable is everything inline. `validName`'s own comment says it "permits Unicode
+letters, digits, punctuation, and spaces — name is purely a display field", and that includes
+`< > & [ ] ( ) * _ ` #`. So `<img src=x onerror=1>` is a legal court name, 21 of the 56 bytes
+available, and it lands in an H1 as live markup with no sanitiser after the realm. The fix
+stands; the reason for it is narrower than the one I first wrote, and this is the record of
+the correction.
+
+**THE ASSERTION IS ON THE BACKSLASH, NOT THE PAYLOAD**, which is the third time this repo has
+had to learn it. `Contains(out, "<img")` matches the ESCAPED `\<img` exactly as well as the
+raw one, so it passes whether the sanitiser ran or not — the mistake that cost three versions
+of an earlier render test, deleted in the end for adding no coverage. `markdown.EscapeInline`
+writes `'\\'` before each byte in its set, read from the source rather than assumed, so the
+invariant is: every `<` on this page is preceded by a backslash. Nothing else in the template
+can produce one — the other three fields are a symbol constrained to `[A-Za-z0-9_-]`, a token
+path, and an integer. Ablation: `unescaped '<' at byte 10`, with 0 build errors.
+
+**AND A SECOND BUG FELL OUT OF THE SAME READ.** A court name may be 100 characters, this
+realm prepends eight, and grc20's `MaxNameLen` is 64 — so any court named 57 or longer could
+never be wrapped, and `Enable` said so only by aborting inside `NewToken` behind a message
+naming neither courts nor names nor the fix. `Enable` already does exactly this arithmetic
+for the SLUG and states the reason in its own comment: "Caught here with the reason, rather
+than surfacing as grc20's ErrInvalidSymbol from three frames down." The name had the same
+failure mode and no guard. It matters more than a nicer string, because a court's name cannot
+be changed after `StartCourt`: for that court the failure is permanent and the message is all
+anyone gets. Bounded now against `grc20.MaxNameLen` rather than a literal 64, so it cannot
+drift from the rule it quotes, and tested both ways — 57 refused, 56 accepted.
+
+**THE OBVIOUS CORPUS ROW WOULD HAVE BEEN A FALSE CATCH.** Deleting the `InlineText` call
+removes the sanitize import's only use, so the file stops compiling — and gno reports that as
+`0 build errors, 1 test errors`, a FAILING SUITE, which is what this harness scores as a
+catch. The row would have reported coverage that did not exist, in the exact shape mutate.py's
+own header warns about. The row moves the sanitiser onto the symbol instead: compiles, import
+stays used, name goes raw.
+
+## The anchored-census class, found by the selftest on a guard from this same session
+
+One arm reported `a position is removed from the stake index  SILENT — the guard did not
+notice`. The cause is one character of regex: `STAKERS_REMOVE` was
+`^\s*\w+\.stakers\.Remove\(`, anchored so the call must BEGIN the statement, while its own
+control plants `if pv := cs.stakers.Remove(...)` — the shape a removal would actually be
+written in. The pattern could not see its own plant. The sibling arm added in the SAME commit,
+`LOCKED_READ`, used `^(?!\s*//).*\b` and fires.
+
+The narrow shape had a real reason and it is kept: a bare `stakers.Remove` pattern matches the
+THREE COMMENTS that state the absence claim, counting the promise as its own violation. So the
+receiver requirement stays and only the anchor goes.
+
+**Then the same shape, measured across every census in the file and the suite:**
+
+    STAKERS_REMOVE    0  ->  0     changed — its arm was SILENT
+    COIN_OUT         36  -> 36     changed — money census
+    MINT              3  ->  3     changed — money census
+    WEIGHT_SOURCE     1  ->  1     changed — `if w := ...` binds a weight too
+    TERMINAL_VERDICT, TERMINAL_CLOSED, WHO_BIND    left alone — field assignments
+
+Every count identical on the shipped tree, so nothing was being missed anywhere: the
+narrowness was latent throughout, not a live miss, and saying so is the difference between a
+fragility fix and a bug fix. Three other guards in the suite carry `^\s*` patterns —
+`cm.members =`, `Max\w+ = \d+`, `const CHECKS = [` — and all three are left, because a Go
+assignment or declaration is a STATEMENT that gofmt puts on its own line. **The rule the class
+comes down to: anchor a declaration census, never a CALL census, because a call is an
+expression and can sit anywhere in a line.**
+
+**WHY NO EXISTING ARM COULD HAVE CAUGHT IT, which is the part that transfers.** The mint
+census already had two arms — one planting an extra mint, one planting a narrowed RECEIVER —
+and both plant at the start of a statement, the shape the pattern already assumed. A control
+that mirrors its own pattern's assumption cannot reveal that the assumption is wrong. And for
+an ABSENCE census the "pattern drifting off the code" arm family cannot help either: narrowing
+a pattern whose expected count is zero still counts zero. The only instrument that reaches it
+is a plant in the source, in a realistic shape.
+
+So the arm that closes it plants an ACCOUNTED mid-line mint. The first version planted an
+unaccounted one and reported `FIRED, WRONG COMPLAINT` — because the guard returns at its
+`if hits:` as soon as any per-file complaint exists, so the census registry below is
+unreachable. With `.minted +=` on the line above, the per-file check is satisfied and the only
+thing left to notice is four mint sites where the census says three. That makes the arm about
+SHAPE, cleanly separated from the accounting arm beside it.
+
+## Two instruments now exhausted, and the corrected numbers
+
+The uncovered-operator sweep was retired earlier for measuring row anchoring rather than test
+coverage. Package DENSITY is now retired too, and the reason is that its first form was wrong.
+Rows per SOURCE line ranged 13.8 to 53 and pointed at `ccwrap` and `govern` as thin — but
+`govern`'s 886 lines include `doc.gno`, 426 lines at 99% comment, and this repo's code is 40%
+comment throughout. Counting CODE lines only:
+
+    ccwrap 14.4   govern 10.1   twap 8.9   kourtv2 7.4   curve 7.2
+    grc20votes 6.7   governor 6.7   offerer 6.1   checkpoint 6.0
+
+A 6.0-to-14.4 spread, not 13.8-to-53. Coverage is close to uniform, ccwrap was the thinnest
+and now has two more rows, and no package stands out as neglected. So density has nothing left
+to point at, and what remains is the productive lens: a comment or document asserting a
+property nothing enforces.
+
+**AND AN OPERATIONAL ONE THAT COST TEN MINUTES.** `selftest-checks.py` runs longer than the
+ten-minute foreground tool cap, so a foreground run gets SIGTERMed — and with buffered stdout
+redirected to a file, the signal discards the entire buffer: ten minutes of work leaving a
+ZERO-BYTE log and no way to tell which arm it died on. Run it BACKGROUNDED and with `python3
+-u`. The restore survived that kill — the tree came back carrying only my own edits, with no
+leftover mutant and no orphaned `.selftest-backup` — but that is a fact about timing, not a
+guarantee, and the next kill can land mid-control.
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:
