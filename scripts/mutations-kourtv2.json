@@ -23,13 +23,6 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "v0.54: ratchet gates demotions too",
-  "find": "if cs.slotConsumed && tier > int(cs.tier) && bucketW",
-  "replace": "if cs.slotConsumed && bucketW"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
   "label": "v0.54: mandate tightened to 3/4",
   "find": "bucketW(cs, tier)*3 < turnout*2 {",
   "replace": "bucketW(cs, tier)*4 < turnout*3 {"
@@ -114,13 +107,6 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "F3 ratchet: high promotion needs no 2/3",
-  "find": "if turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
-  "replace": "if turnout >= fullBar {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
   "label": "quality fullBar loses its 5%-supply floor",
   "find": "\tfullBar = arm\n\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {\n\t\tfullBar = fivePct\n\t}",
   "replace": "\tfullBar = arm"
@@ -145,20 +131,6 @@
   "label": "enqueueSenior: the start cursor ignores juniorReserved (M3-CRITICAL-1)",
   "find": "\tstart := mustAdd(c.reservedTail, c.juniorReserved)",
   "replace": "\tstart := c.reservedTail"
- },
- {
-  "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "settle clobbers a conclusive tier",
-  "find": "\tif !cs.tierFinal && !cs.slotConsumed {",
-  "replace": "\tif !cs.tierFinal {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "Finalize clobbers a conclusive tier",
-  "find": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal && !cs.slotConsumed {",
-  "replace": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal {"
  },
  {
   "pkg": "kourtv2",
@@ -201,13 +173,6 @@
   "label": "T1/T2 boundary: T2 predicate drops the full-bar requirement",
   "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {",
   "replace": "\tif cs.answerBond > 0 && !slashGrade {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "2A: inconclusive-MID half-burn becomes a full return",
-  "find": "\t\t} else {\n\t\t\thalf := cs.flagBond / 2",
-  "replace": "\t\t} else {\n\t\t\thalf := cs.flagBond"
  },
  {
   "pkg": "kourtv2",
@@ -271,13 +236,6 @@
   "label": "PRINCIPAL: withdraw returns less than the stake",
   "find": "\tamount := p.stake\n\tp.stake = 0",
   "replace": "\tamount := p.stake - p.stake/100\n\tp.stake = 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "PRINCIPAL: withdraw leaves the position open",
-  "find": "\tamount := p.stake\n\tp.stake = 0",
-  "replace": "\tamount := p.stake"
  },
  {
   "pkg": "kourtv2",
@@ -1053,7 +1011,7 @@
  {
   "pkg": "kourtv2",
   "file": "session.gno",
-  "label": "WithdrawStake: the position is not zeroed, so the stake is withdrawable twice",
+  "label": "WithdrawStake (PRINCIPAL): the position is not zeroed, so the stake is withdrawable twice",
   "find": "\tamount := p.stake\n\tp.stake = 0\n",
   "replace": "\tamount := p.stake\n"
  },
@@ -2047,7 +2005,7 @@
  {
   "pkg": "kourtv2",
   "file": "render.gno",
-  "label": "render/claimStatus: a provisional YES verdict reads as merely answered (>= 0 -> > 0)",
+  "label": "render/claimStatus: a provisional YES verdict reads as merely answered (>= 0 -> > 0; sideYES is 0, so YES is hidden)",
   "find": "\tcase cs.provisional >= 0:\n",
   "replace": "\tcase cs.provisional > 0:\n"
  },
@@ -2572,7 +2530,7 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "ResolveFlag: an inconclusive MID returns the bond whole (T2 half-burn gone)",
+  "label": "ResolveFlag (2A): an inconclusive MID returns the bond whole (T2 half-burn gone)",
   "find": "\t\t\thalf := cs.flagBond / 2",
   "replace": "\t\t\thalf := cs.flagBond"
  },
@@ -2593,7 +2551,7 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "applyQualityTally: HIGH promotes without the two-thirds",
+  "label": "applyQualityTally (F3 ratchet): HIGH promotes without the two-thirds",
   "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
   "replace": "\tif turnout >= fullBar {"
  },
@@ -2719,7 +2677,7 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "ride F3: the mandate gates DEMOTIONS as well as promotions",
+  "label": "ride F3 / v0.54: the mandate gates DEMOTIONS as well as promotions",
   "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
   "replace": "\tif cs.slotConsumed && bucketW(cs, tier)*3 < turnout*2 {"
  },
@@ -3273,7 +3231,7 @@
  {
   "pkg": "grc20votes",
   "file": "grc20votes.gno",
-  "label": "move: the weight debit is signed the wrong way",
+  "label": "move: the weight debit is signed the wrong way, so the sender's voting power GROWS on a send",
   "find": "\tl.addVotes(delegateeOf(from, src), -amount)",
   "replace": "\tl.addVotes(delegateeOf(from, src), amount)"
  },
@@ -5184,13 +5142,6 @@
  {
   "pkg": "kourtv2",
   "file": "render.gno",
-  "label": "claimStatus: a provisional YES verdict is not shown at all (sideYES is 0)",
-  "find": "\tcase cs.provisional >= 0:",
-  "replace": "\tcase cs.provisional > 0:"
- },
- {
-  "pkg": "kourtv2",
-  "file": "render.gno",
   "label": "pct: a zero denominator is divided by",
   "find": "\tif den <= 0 || num < 0 {",
   "replace": "\tif den < 0 || num < 0 {"
@@ -5474,20 +5425,6 @@
   "label": "bountyFor: a negative bounty is paid",
   "find": "\tif b < 0 {\n\t\tb = 0\n\t}",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "disputeBond0 (the QUOTE copy): the own-answer arm is dropped",
-  "find": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {\n\t\tbase = arm\n\t}",
-  "replace": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "disputeBond0 (the QUOTE copy): the two arms take the MAX instead of the min",
-  "find": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm < base {",
-  "replace": "func (cs *claimState) disputeBond0() int64 {\n\tbase := cs.xBarFrozen * disputeBondXBps / 10000\n\tif arm := cs.answerBond0 * disputeBondOfAnswerBps / 10000; arm > base {"
  },
  {
   "pkg": "kourtv2",
@@ -6076,13 +6013,6 @@
   "label": "zero-stamp: pastDeadline calls an absent stamp KNOWN",
   "find": "\tif stamp == 0 {\n\t\treturn false, false\n\t}\n",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "clock.gno",
-  "label": "zero-stamp: an absent stamp reports known=true, so no caller falls back",
-  "find": "\t\treturn false, false\n",
-  "replace": "\t\treturn false, true\n"
  },
  {
   "pkg": "kourtv2",
@@ -7664,7 +7594,7 @@
  {
   "pkg": "kourtv2",
   "file": "clock.gno",
-  "label": "pastDeadline: a missing stamp reports the deadline as KNOWN",
+  "label": "pastDeadline: a missing stamp reports the deadline as KNOWN, so no caller falls back",
   "find": "func pastDeadline(stamp, secs int64) (passed, known bool) {\n\tif stamp == 0 {\n\t\treturn false, false\n\t}",
   "replace": "func pastDeadline(stamp, secs int64) (passed, known bool) {\n\tif stamp == 0 {\n\t\treturn false, true\n\t}"
  },
@@ -7891,13 +7821,6 @@
   "label": "move: a transfer of the whole balance is refused",
   "find": "\tif src == nil || src.balance < amount {",
   "replace": "\tif src == nil || src.balance <= amount {"
- },
- {
-  "pkg": "grc20votes",
-  "file": "grc20votes.gno",
-  "label": "move: the sender's voting power GROWS on a send",
-  "find": "\tl.addVotes(delegateeOf(from, src), -amount)\n\tl.addVotes(delegateeOf(to, dst), amount)",
-  "replace": "\tl.addVotes(delegateeOf(from, src), amount)\n\tl.addVotes(delegateeOf(to, dst), amount)"
  },
  {
   "pkg": "grc20votes",
