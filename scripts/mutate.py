@@ -199,8 +199,28 @@ SUITE_TIMEOUT = int(os.environ.get("MUTATE_SUITE_TIMEOUT", "600"))
 # surfaces, deploy invariants included: the first attempt at this fix matched every
 # gno*Error and threw away a genuine catch where kourtv2's own flood invariant had
 # fired. Measured, on the P-CONST grc20votes Bps row.
-COMPILE_CODES = frozenset({"gnoTypeCheckError", "gnoParserError"})
+# Read from gno's own enumeration — gnovm/cmd/gno/common.go, the gnoCode consts —
+# rather than from whichever ones happened to turn up here. The first version of this
+# named two, both met by accident: gnoTypeCheckError via an unused import, and
+# gnoParserError by planting an unbalanced paren. Naming a set from encounters means
+# the next code that appears is silently mistaken for something.
+#
+# SPLIT BY WHETHER THE CODE IS AMBIGUOUS, which is the only split that matters here.
+# gnoImportError is the SAME types.Error case as gnoTypeCheckError, reclassified when
+# the message names an unknown import path, so it is exactly as unambiguous. The rest
+# all mean the package never got far enough to run.
+COMPILE_CODES = frozenset({
+    "gnoTypeCheckError", "gnoParserError", "gnoPreprocessError", "gnoImportError",
+    "gnoReadError", "gnoGnoModError", "gnoPackageNameMismatchError",
+})
+# AMBIGUOUS, and the reason mutant_builds() exists. gnoUnknownError is both "the
+# mutant could never run" (a planted goroutine: "goroutines are not permitted") and
+# "it ran and a realm panic objected" (a deploy invariant firing, which is a CATCH).
+# Listing it here says only "do not treat this as a build failure on the strength of
+# the code"; `gno lint` is what actually decides it.
 RUNTIME_CODES = frozenset({"gnoUnknownError"})
+# gnoLintError is deliberately in NEITHER set: `gno test` should not emit it, and if
+# it ever does, the unclassified path below is the honest answer rather than a guess.
 
 def mutant_builds(root, pkg):
     """Ask the TOOLCHAIN whether the mutant compiles, instead of inferring it.
@@ -416,13 +436,24 @@ def main():
         # fine" is how the parser door stayed open; assuming it means "did not build"
         # is how a real catch gets thrown away, which is what a catch-all over every
         # gno*Error did the moment it met gnoUnknownError.
-        for c in sorted(codes - COMPILE_CODES - RUNTIME_CODES):
-            print(f"mutate: UNCLASSIFIED gno error code {c} — scoring this row as a "
-                  f"catch on the strength of a failing suite. If {c} means the mutant "
-                  f"did not build, add it to COMPILE_CODES; the verdict above is not "
-                  f"trustworthy until someone decides.", file=sys.stderr)
+        unknown = sorted(codes - COMPILE_CODES - RUNTIME_CODES)
+        for c in unknown:
+            print(f"mutate: UNCLASSIFIED gno error code {c} — this row is counted "
+                  f"with the non-results, not as a catch. Decide what {c} means and "
+                  f"add it to COMPILE_CODES or RUNTIME_CODES; common.go's own list "
+                  f"ends with 'TODO: add new gno codes here', so this will happen "
+                  f"again.", file=sys.stderr)
 
-        if hung:
+        if unknown:
+            # BEFORE the catch verdicts, for the same reason the timeout branch is:
+            # an unclassified code means nobody knows whether the mutant ran, and
+            # this file's oldest rule is that a non-result must not report as a
+            # result. Warning and scoring a catch anyway — which is what the first
+            # version of this did — is the over-claim, and the safe reading of "we
+            # do not know" is not coverage.
+            print(f"{label:<46} UNCLASSIFIED ({', '.join(unknown)}) <<<")
+            survivors.append(label + " [unclassified]")
+        elif hung:
             # FIRST, and that ordering is the whole point. A timeout leaves `ok`
             # false, so without this branch the chain below would fall through to
             # the final `else` and print "caught: failed" — reporting a mutation
