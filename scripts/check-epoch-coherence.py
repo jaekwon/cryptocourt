@@ -482,6 +482,27 @@ TAIL_W = re.compile(r"\b" + RECV + r"\.reservedTail\s*=(?!=)")
 JUNIOR_W = re.compile(r"\b" + RECV + r"\.juniorReserved\s*=(?!=)")
 ENT_NEW_N, TAIL_W_N, JUNIOR_W_N = 1, 1, 1  # all three in emission.gno
 
+# TWO ABSENCE/UNIQUENESS CLAIMS THE SOURCE MAKES AND NOTHING CHECKED.
+#
+# stakeindex.gno states the first as a fact about the whole realm: "Positions are
+# never removed — there is no stakers.Remove anywhere in this realm", and
+# dispute.gno repeats it while reasoning about a stake's fate. The numbering
+# stakeindex hands out depends on it: a removed position would renumber the rows
+# after it. Measured 0 code sites — and worth noting the naive grep finds THREE
+# matches, all of them the comments that state the claim, so the pattern requires
+# a receiver to avoid counting the promise as its own violation.
+STAKERS_REMOVE = re.compile(r"^\s*\w+\.stakers\.Remove\(", re.M)
+STAKERS_REMOVE_N = 0
+
+# lock.gno states the second about lockedOf: "This is the ONLY reader of the tree:
+# a second one is a second place for the nil-tree and missing-key branches to
+# disagree with the write path." Both of those branches now carry corpus rows, but
+# nothing stopped a THIRD reader appearing beside them with its own answer for a
+# missing key. Writes are unrestricted and deliberately so — Set and Remove both
+# live in lockStake/releaseStake — so this counts reads only.
+LOCKED_READ = re.compile(r"^(?!\s*//).*\bc\.locked\.Get\(", re.M)
+LOCKED_READ_N = 1
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -626,6 +647,7 @@ def main() -> int:
               f"this arm is measuring nothing.", file=sys.stderr)
         return 1
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
+            "stakers_rm": 0, "locked_read": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
             "lockvote": 0, "mint": 0, "purge": 0,
             "ent_new": 0, "ent_tail": 0, "ent_junior": 0}
@@ -681,6 +703,8 @@ def main() -> int:
                 arm4["verdict_w"] += len(TERMINAL_VERDICT.findall(src))
                 arm4["closed_w"] += len(TERMINAL_CLOSED.findall(src))
                 arm4["stakable"] += len(STAKABLE_CALL.findall(src))
+                arm4["stakers_rm"] += len(STAKERS_REMOVE.findall(src))
+                arm4["locked_read"] += len(LOCKED_READ.findall(src))
                 # Arm 7, per file: count user-sourced outflows and require a gate
                 # within the three lines above each.
                 lines = src.splitlines()
@@ -825,6 +849,8 @@ def main() -> int:
         ("ent_new", ENT_NEW_N, "entitlement placement site(s)"),
         ("ent_tail", TAIL_W_N, "reservedTail writer(s)"),
         ("ent_junior", JUNIOR_W_N, "juniorReserved writer(s)"),
+        ("stakers_rm", STAKERS_REMOVE_N, "stakers.Remove call(s)"),
+        ("locked_read", LOCKED_READ_N, "c.locked reader(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
@@ -834,8 +860,24 @@ def main() -> int:
                    else "unaccounted-mint" if key == "mint"
                    else "ungated-purge" if key == "purge"
                    else "queue-tiling" if key in ("ent_new", "ent_tail", "ent_junior")
+                   else "position-removed" if key == "stakers_rm"
+                   else "second-lock-reader" if key == "locked_read"
                    else "one-weight")
-            why = ("a fourth lane locking votes has to be argued: every lock "
+            why = ("stakeindex states it as a fact about the whole realm — "
+                   "\"Positions are never removed - there is no stakers.Remove "
+                   "anywhere in this realm\" - and the row numbering it hands out "
+                   "depends on it: removing a position renumbers every row after "
+                   "it. If a removal is genuinely wanted, the numbering has to be "
+                   "reconsidered with it"
+                   if key == "stakers_rm" else
+                   "lock.gno calls lockedOf \"the ONLY reader of the tree: a "
+                   "second one is a second place for the nil-tree and missing-key "
+                   "branches to disagree with the write path\". Both branches "
+                   "carry corpus rows; a second reader with its own answer for a "
+                   "missing key is what they cannot catch. Writes are unrestricted "
+                   "and this counts reads only"
+                   if key == "locked_read" else
+                   "a fourth lane locking votes has to be argued: every lock "
                    "row taxes its owner's own transfers, so the address it is "
                    "created for must be the caller and nothing else"
                    if key == "lockvote" else

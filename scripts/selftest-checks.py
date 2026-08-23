@@ -258,6 +258,22 @@ control("a guard that lost the tree it watches", NONTRANS,
         argv=["python3", NONTRANS])
 
 print("\ncheck-epoch-coherence")
+# TWO ABSENCE/UNIQUENESS CLAIMS the source states and nothing checked until now.
+# Both plants are static-only: this guard reads .gno as text, so a plant that
+# changes a call's meaning without regard for the body is legitimate here.
+control("a position is removed from the stake index", f"{KOURTV2}/stakeindex.gno",
+        "if pv := cs.stakers.Get(posKey(who, side)); pv != nil {",
+        "if pv := cs.stakers.Remove(posKey(who, side)); pv != nil {",
+        "position-removed",
+        argv=["python3", EPOCHCOH])
+# The write at :189 rather than :170: lockStake's Set sits next to a lockedOf
+# CALL, so flipping that one would read as a reader either way and the arm could
+# pass for the wrong reason.
+control("a second reader of the lock tree", f"{KOURTV2}/lock.gno",
+        "\tc.locked.Set(string(who), l-amount)",
+        "\tc.locked.Get(string(who))",
+        "second-lock-reader",
+        argv=["python3", EPOCHCOH])
 # The guard that would have caught the reverted live-weight work on its FIRST
 # commit, before a test ran. Every bar in this realm is frozen so it cannot move
 # under an open vote; a live numerator against a frozen bar gave turnout at
