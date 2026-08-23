@@ -635,6 +635,107 @@ turned out to need 33 allowlisted `*bptree.BPTree` fields. Being consistent abou
 that is worth more than an extra arm, so the measurement is recorded instead: one
 arithmetic site, seven constant-bound checks, all of the latter in court.gno.
 
+
+## Three doors into "a non-result reported as a result", and why the third needed a different key
+
+mutate.py's header warns about this class in four separate paragraphs — an anchor that
+matched nothing, a build failure counted as a catch, a red baseline, a mutant that
+hangs. Each was closed by reading the harness's own output. A fifth was open, and it
+turned out to be three doors rather than one, with the last unreachable by reading
+output at all.
+
+**HOW IT WAS FOUND: BY BEING WRONG TWICE MYSELF.** My ad-hoc probes were using
+`grep 'FAIL: 0 build errors'` as the invalid check, and it scored a compile failure as
+a catch twice in one session — ccwrap's unused import, then dispute.gno's unused
+variable. Reading how mutate.py got those RIGHT is what exposed what it got wrong: it
+checks the build-error COUNT (never the phrase) *or* the string `gnoTypeCheckError`,
+and that second clause was the part my grep lacked. The string was sitting in my own
+ccwrap log and I read straight past it.
+
+**DOOR ONE — THE TYPE ERROR.** Already closed, and the reason it needs naming is that
+gno reports it as a TEST error:
+
+    ccwrap.gno:79:2: "…/sanitize/v0" imported as sanitize and not used
+                                                   (code=gnoTypeCheckError)
+    FAIL: 0 build errors, 1 test errors
+
+**DOOR TWO — THE PARSE ERROR.** Open. An unbalanced paren in lock.gno:
+
+    0 build errors, 1 test errors        code=gnoParserError
+
+No `gnoTypeCheckError`, no build errors, so a mutant that never PARSED looked exactly
+like coverage. LATENT rather than live, and measured rather than assumed: all 1,240
+corpus mutants were applied and parsed with `gofmt -e`, zero failures. So no row was a
+false catch. `check-mutant-collisions` now refuses any row whose mutant stops parsing,
+where the mutated source is already in hand and no suite has to run to find out — about
+7 seconds for the corpus, and `gofmt` is the parser because .gno is Go syntax.
+
+**AND THE FIRST FIX FOR IT WAS WRONG, which is the part worth keeping.** Matching every
+`code=gno*Error` also matches `gnoUnknownError`, and that is how gno reports a REALM
+PANIC AT INIT — deploy invariants included. It threw away a genuine catch: the
+`P-CONST grc20votes Bps` row, where kourtv2's own 50-row-flood invariant fires. A
+detector that discards real catches is not "safely under-claiming", it is broken.
+Caught by pairing the refusal with the input it must NOT refuse — eight rows across
+eight packages, which went 7/8 and then 8/8 after narrowing to named codes.
+
+**DOOR THREE — THE MUTANT THAT CANNOT RUN, and no code can close it.** A planted
+goroutine, which gno excludes outright:
+
+    0 build errors, 1 test errors
+    governor.gno:1532:2: goroutines are not permitted (code=gnoUnknownError)
+
+The SAME code as the realm panic above. One means "never ran" and the other means "ran
+and something objected", so no set of code names separates them — the enumeration
+completion that was queued for this would not have worked, and was abandoned on that
+measurement rather than shipped.
+
+`gno lint` answers it directly, and both sides were checked before it was trusted:
+
+    clean code                              lint 0    test 0    survives
+    goroutine mutant (never runs)           lint 1    test 1    INVALID
+    Bps mutant (runs, init panic)           lint 0    test 1    CAUGHT
+
+So lint means "it built", and nothing more. It runs INSIDE the staged cycle, before the
+suites — which settles the verdict and skips N suite runs that would prove nothing. The
+first attempt linted AFTER the unstage and died on a missing directory: the staged tree
+only exists inside `run_suite`.
+
+**THE COST, MEASURED.** lint is 3.3s against 12.9s for kourtv2's suite, so about +10%
+on a full pass, and less on any run containing invalid rows since those now skip their
+suites. Both directions re-verified after wiring: the goroutine row is INVALID where it
+had been a CATCH, and the eight known-caught rows are still 0-not-caught.
+
+**THE BOUNDARY, stated so it is not mistaken for more than it is.** lint covers the
+MUTATED package only. A mutation that breaks a CONSUMER's build surfaces as
+`gnoTypeCheckError`, which comes from exactly one place in gno — the `types.Error` case
+in cmd/gno/common.go — and therefore always means "did not compile". Linting every
+observer would cost 3.3s x N per row for a case the codes already settle.
+
+**AND THE SHAPE OF ALL THREE.** Each door was a place where the harness inferred "did
+it build?" from text that was never designed to answer that question. Two of them can
+be read from the text if you name the right code; the third cannot be read at all, and
+pretending otherwise is what the first fix did. When a verdict depends on a fact the
+toolchain knows, ask the toolchain.
+
+**AND A FOURTH THING, found by running the gate for the third.** Selftest #8 ran 32
+minutes against the usual 16 and froze in its last section with no output and nothing
+to blame. `mutate.py` was a DIRECT CHILD of the selftest with no children of its own
+and no gno process running: blocked reading the batch it takes from stdin. The vacuity
+audit runs whatever a control arm names, with `capture_output` and no `stdin`, so the
+child inherits a pipe that never reaches EOF.
+
+Killing only that child was safe — mutate.py writes solely to staged copies, unlike a
+selftest control, which can leave a mutant in the tree — and the tree came back clean.
+That run was NOT counted as a pass: it printed "every control fires" with one guard's
+output truncated by the kill, which is a non-result wearing a result's clothes.
+
+vacuity now closes stdin and bounds each guard at 600s, and mutate.py refuses an EMPTY
+batch — which is what it receives there. Without that refusal an empty batch runs a
+full baseline across every staged package for nothing and reports "0 not caught, of 0"
+at exit 0: a clean bill of health for having measured nothing, which is this harness's
+oldest complaint about itself. A guard-runner that can hang for ever is worse than one
+that returns a wrong answer, because a wrong answer at least ends.
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:
