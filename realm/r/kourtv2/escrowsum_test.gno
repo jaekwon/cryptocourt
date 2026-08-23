@@ -119,10 +119,94 @@ func TestTheEscrowHoldsExactlyWhatItOwes(cur realm, t *testing.T) {
 	Finalize(cross(cur), "esum", id)
 	mustReconcile(t, c, "after Finalize settles the answer bond")
 
+	// THE FLAG LANE, because without it the flagBond term of the sum is decorative:
+	// measured by dropping that term, the test still passed. A quality flag escrows a
+	// fifth kind of obligation, and crystallize refuses while one is open, so it opens
+	// and resolves here — before the draw.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenFlag(cross(cur), "esum", id)
+	if cs.flagBond == 0 {
+		t.Fatal("setup: OpenFlag must escrow a bond, or the flagBond term is untested")
+	}
+	mustReconcile(t, c, "after OpenFlag escrows the flag bond")
+
+	// A CONCLUSIVE LOW, not a mid, and that is the whole point of choosing it: a low
+	// reserves a slash, and pendingSlash is the one term whose placement in the sum
+	// needed an argument rather than a reading — it is carved OUT of answerBond, so the
+	// escrow holds both halves. Measured with a mid vote first, dropping the
+	// pendingSlash term left the test PASSING, which made that argument untested.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "esum", id, qualityLow)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveFlag(cross(cur), "esum", id)
+	if cs.pendingSlash == 0 {
+		t.Fatal("setup: a conclusive low must reserve a slash, or the pendingSlash " +
+			"term is untested")
+	}
+	mustReconcile(t, c, "after ResolveFlag reserves a slash out of the bond")
+
+	// The counter window closes and the reserve burns: the escrow loses coin and the
+	// field clears together.
+	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
+	ResolveSlashWindow(cross(cur), "esum", id)
+	mustReconcile(t, c, "after ResolveSlashWindow burns the reserve")
+
 	// And the whole way out: crystallize releases the deposit and fee, and the escrow
 	// must end owing exactly what it holds — which for this claim is nothing.
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "esum", id)
 	mustReconcile(t, c, "after Crystallize releases the deposit and fee")
+}
+
+// THE ELECTION LANE GETS ITS OWN FIXTURE, because the claim lifecycle above cannot
+// reach it: an election needs a court shaped by electionCourt (holders with sealed
+// weights, no claims), and cramming both into one fixture would leave each half
+// contorted. Measured why it is needed at all — with only the claim fixture, dropping
+// the `l.bond` term from escrowObligations left the test PASSING, so that term was
+// decorative.
+//
+// A court with no claims makes this maximally discriminating: the claim loop
+// contributes nothing, so the election bonds are the ENTIRE obligation and any error
+// in that term shows up undiluted.
+func TestTheEscrowHoldsExactlyWhatItOwesInTheElectionLane(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("esum2-creator")
+	alice := testutils.TestAddress("esum2-alice")
+	bob := testutils.TestAddress("esum2-bob")
+	c := electionCourt(cur, "esum2", creator,
+		[]address{alice, bob}, []int64{690_000_000, 310_000_000})
+	c.coin.Mint(alice, 50_000_000) // bond money
+	c.coin.Mint(bob, 50_000_000)
+
+	mustReconcile(t, c, "a fresh election court")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	cand := RegisterModCandidate(cross(cur), "esum2", 1,
+		testutils.TestAddress("esum2-mod1"))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	OpenElection(cross(cur), "esum2", cand)
+	if c.coin.BalanceOf(c.escrow) == 0 {
+		t.Fatal("setup: OpenElection must escrow a nomination bond, or the election " +
+			"term of the sum is untested")
+	}
+	mustReconcile(t, c, "after OpenElection escrows the first nomination bond")
+
+	// A second line from a second poster: two bonds live at once, so an error that
+	// counts one line and stops is caught as well as one that counts none.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	cand2 := RegisterModCandidate(cross(cur), "esum2", 1,
+		testutils.TestAddress("esum2-mod2"))
+	testing.SetRealm(testing.NewUserRealm(bob))
+	NominateCandidate(cross(cur), "esum2", cand2)
+	mustReconcile(t, c, "after a second nomination escrows a second bond")
+
+	// And out: the lane returns or burns each bond by its own rules, and the sum has
+	// to follow whichever it does.
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ApproveCandidate(cross(cur), "esum2", cand)
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ResolveElection(cross(cur), "esum2")
+	mustReconcile(t, c, "after ResolveElection disposes the nomination bonds")
 }
