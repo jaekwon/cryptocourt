@@ -378,3 +378,39 @@ func TestAnOrdinaryCourtsDepositFloorIsItsOwnFractionOfSupply(cur realm, t *test
 			"exists for was never reached")
 	}
 }
+
+// THE OI RING IS A WEEK OF HOURLY BUCKETS, and nothing said so. twapBuckets sizes
+// the ring that conviction and the trailing-average quorum are computed from — the
+// most load-bearing of the six unrowed constants after the two money floors — and
+// it had neither a row nor a symbolic test reference.
+//
+// Both expectations are LITERALS. `twapBuckets*8` would move together with the
+// constant it is supposed to hold still, which is the trap the deposit-floor pin
+// above fell into on its first draft.
+//
+// The ring is a VALUE type whose methods return a new Ring, so the second arm
+// fills a COPY and the claim's own ring is never touched. Nothing leaks out of
+// this test, which is why it can afford 400 observations.
+func TestTheOpenInterestRingIsExactlyAWeekOfHourlyBuckets(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("oiring-alice")
+	c := testCourt(cur, "oiring", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "oiring", "how wide is the ring")
+
+	cs := mustClaim(c, id)
+	if got := len(cs.oi.Bytes()); got != 1344 {
+		t.Errorf("the OI ring's buffer is %d bytes, want 1344 — a week of 168 hourly "+
+			"buckets at 8 bytes each", got)
+	}
+	// AND IT CAPS AT A WEEK. Filling well past capacity is the arm that would still
+	// fail if the buffer were sized right but the window were not: `filled` is what
+	// maturity is judged on, so this is the number a quorum actually sees.
+	r := cs.oi
+	for k := int64(0); k < 400; k++ {
+		r = r.Observe(heightNow()+k*epochBlocks, (k+1)*1_000_000)
+	}
+	if got := r.Filled(); got != 168 {
+		t.Errorf("400 hourly observations filled %d buckets, want 168: the ring caps at "+
+			"a week, and any other number is a different trailing window", got)
+	}
+}

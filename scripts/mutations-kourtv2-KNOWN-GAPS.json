@@ -204,13 +204,5 @@
   "find": "\t\thadSlash := cs.pendingSlash > 0\n\t\tresolveQualityRide(c, cs)",
   "replace": "\t\tresolveQualityRide(c, cs)\n\t\thadSlash := cs.pendingSlash > 0",
   "why": "SURVIVES, and the comment's stated harm is NOT what happens. dispute.gno captures hadSlash before resolveQualityRide and says running both on one tally \"would settle the slash in the very call that levied it - burned with no window and no Q5 challenge\". It would not: on a JUST-LEVIED slash counterUsed is false, so disposeSlashOnRide takes its !cs.counterUsed case and REARMS rather than settles. The only state that differs is lastFlagEventAt, which originateSlash does not set and rearmSlashWindow does - read by crystallize.gno as the 24h quiet window after the last flag event, so the mutation delays Crystallize by up to a day on the levying-ride path. NOT PROMOTED TO A CAUGHT ROW because Crystallize also requires pendingSlash == 0, and every route to that restamps lastFlagEventAt again, so the difference is plausibly masked before it can be observed - which leaves it undecided between survivor and INVALID, and that is stated rather than guessed. A first attempt replaced `if hadSlash` with a fresh read instead of reordering; that leaves hadSlash declared-and-unused, which gno reports as a TEST error not a build error, so an ad-hoc probe scored it CAUGHT while mutate correctly called it INVALID. For an ordering claim the mutation must reorder."
- },
- {
-  "pkg": "kourtv2",
-  "file": "claim.gno",
-  "label": "PARAM twapBuckets halved (the OI ring covers half a week, not one)",
-  "find": "const twapBuckets = 168 // a week of hourly buckets, as V1",
-  "replace": "const twapBuckets = 84 // a week of hourly buckets, as V1",
-  "why": "SURVIVES: the ring's size is documented as \"a week of hourly buckets, as V1\" and nothing asserts the week. Conviction and the trailing-average quorum are both computed from this ring, so the number is money-adjacent. A fixture has to show maturity or an average depending on 168 specifically — twap's own tests use its Ring directly and never see kourtv2's choice of size."
  }
 ]

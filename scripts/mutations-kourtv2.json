@@ -8646,5 +8646,19 @@
   "label": "PARAM metaWeeklyBudget doubled (the meta court's weekly emission budget)",
   "find": "\tmetaWeeklyBudget = int64(100_000_000) // 100 CC/week, stepped down",
   "replace": "\tmetaWeeklyBudget = int64(200_000_000) // 100 CC/week, stepped down"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "PARAM twapBuckets halved (the OI ring covers half a week, not one)",
+  "find": "const twapBuckets = 168 // a week of hourly buckets, as V1",
+  "replace": "const twapBuckets = 84 // a week of hourly buckets, as V1"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "PARAM twapBuckets doubled (the OI ring covers two weeks)",
+  "find": "const twapBuckets = 168 // a week of hourly buckets, as V1",
+  "replace": "const twapBuckets = 336 // a week of hourly buckets, as V1"
  }
 ]
