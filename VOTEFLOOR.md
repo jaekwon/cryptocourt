@@ -269,6 +269,37 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
+that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
+lines, 199 rows). Two claims looked guardable:
+
+    keys.gno       enc is order-preserving because "proposal ids ... cannot be decimal
+                   strings: \"10\" sorts before \"9\""
+    governor.gno   inDelay is "One definition, so a boundary cannot be moved on one side
+                   only" — Execute refuses while it holds and the page counts down while
+                   it holds, and "those two must not disagree by even a block"
+
+Both hold. `now < p.ready` is written exactly once; the other nine `.ready` mentions are an
+assignment, message formatting, a getter and expiresAt's own arithmetic. The decimal
+formatters in governor are all event fields and one fraction display, never key building.
+
+And both are already pinned BY ROWS, from both sides:
+
+    inDelay: the delay window is off by one                           (the boundary)
+    Execute: the delay window is not enforced                         (Execute's side)
+    renderOne: a proposal in its timelock does not say it is waiting   (the page's side)
+
+That is strictly better than the guard I was about to write. A census arm would assert
+that the comparison appears once; these three rows assert that a TEST NOTICES when either
+consumer stops agreeing with it. For an agreement claim — two callers that must not
+diverge — pinning both consumers is the only coverage that means anything, and counting
+definitions would not have told me whether either side was tested at all.
+
+So the rule for the next one of these: for a UNIQUENESS claim (one writer, one reader, no
+call anywhere), a census arm is the right instrument, because absence cannot be tested.
+For an AGREEMENT claim, look for rows on every consumer first — a guard there measures the
+weaker property.
+
 **TWO p/ PACKAGES HAVE ZERO CORPUS ROWS, AND THAT IS CORRECT — closing the lead before
 somebody spends a firing on it.** Surveying the p/ layer, which none of this work had
 touched, turns up what looks like the largest gap in the repo:
