@@ -269,6 +269,28 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE THIRD FULL PASS, AND IT NEEDED NO DELTA RUN.** 1,199 rows, 5 shards, one batch rather
+than 20 slices, from a clone pinned at 36f0ef5, 00:26 to 02:45 — two hours nineteen.
+
+    1,196 caught + 3 surviving BY DESIGN with an `elsewhere` = 1,199
+    0 not caught (survived, invalid, or never applied), of 1199
+    zero [timed out], zero [invalid], zero [bad anchor] anywhere in 1,209 log lines
+    the three by-design rows are the SAME three the second pass named
+
+What it bought over the second pass, since a re-run of a green thing is worth nothing on its
+own: 85 commits, 13 realm files changed (699 insertions, 73 deletions) and 25 new rows. That
+is the surface the second pass could not have covered.
+
+**AND THE PART THAT IS A RESULT ABOUT THE METHOD.** The second pass had 12 rows added while
+it ran and needed a second clone at HEAD to observe them; this one has `git diff 36f0ef5..HEAD`
+EMPTY for both `realm/` and `scripts/mutations-*.json`, so the rows measured ARE HEAD's rows
+and no delta run was needed. That is not luck either — it is the whole reason the run was
+launched from a clone and the reason I did static-only work while it ran. Which also
+pins the throughput note above: 240 rows per shard in 8,340 seconds is 34.7s per row, the
+QUIET rate, not the 75s contended one. The advice to "budget double if you intend to keep
+working alongside it" is now measured from both ends — the second pass paid the double, this
+one did not, and the only difference was whether I touched the machine.
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:
