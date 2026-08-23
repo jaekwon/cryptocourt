@@ -94,6 +94,42 @@ CROSSING = re.compile(r"\bcur\s+realm\b")
 # the census pattern the other guards here use.
 POINTER_RETURN_OK = {}
 
+# AND THE OTHER HALF OF POINTER DISCIPLINE: a p/ type held in realm state BY
+# POINTER, which is the shape the arm above stops from ever being handed out.
+#
+# twap.gno states it as a property of the whole realm: the Ring "is never a heap
+# object of its own, and never held by pointer in realm state: every method takes a
+# Ring by value", and gives the reason — a Ring inline in a claim "costs nothing
+# extra to keep, whereas a *Ring would be a second object". Nothing enforced it.
+# Two consequences, not one: a second allocation per field, and borrow rule #2 if
+# such a pointer ever escaped through a read, because a pointer across the realm
+# boundary is mutable by its holder and the write commits under this realm's
+# authority.
+#
+# NARROW ON PURPOSE, AND THE MEASUREMENT IS WHY. The obvious guard — "no pointer to
+# a p/ type in realm state" — would be simply wrong here: kourtv2 holds 33 such
+# fields and nearly all are *bptree.BPTree, which is what a tree IS, plus
+# *grc20votes.Ledger, *governor.Governor and *checkpoint.Archive. Writing that
+# census would have meant a 33-entry allowlist and no property. So this pins the one
+# type whose own package states the claim, and nothing more.
+#
+# ANCHORING IS SAFE HERE, unlike the call censuses in check-epoch-coherence that
+# were unanchored for missing `if pv := cs.stakers.Remove(...)`. A Go struct field
+# declaration is always the start of its line; there is no mid-line form to miss.
+# Do not "fix" this into a `.*` shape.
+#
+# THE COUNT IS 2, NOT 4, and how I got that wrong is worth the two lines. A first
+# pass over every realm printed four Ring fields as `claim.gno:34, :35, :81, :82`
+# and I read them as one file — but two of them are in kourtv1/claim.gno and two in
+# kourtv2/claim.gno. The output was BASENAMES, so the directory that distinguished
+# them was the column not printed. Same shape as `grep -h` defeating a path filter:
+# confirm the instrument before believing its report. kourtv1 is behaviourally
+# frozen and this guard is kourtv2-scoped by design, so its two are out of scope
+# here rather than uncounted.
+RING_PTR = re.compile(r"^\s*\w+\s+\*twap\.Ring\b", re.M)
+RING_VAL = re.compile(r"^\s*\w+\s+twap\.Ring\b", re.M)
+RING_VAL_N = 2  # kourtv2/claim.gno: oi and yes, both on the pool
+
 
 def functions(src):
     """Split a .gno source into (decl, name, body) triples on top-level funcs."""
@@ -130,6 +166,37 @@ def main() -> int:
               f"that name, so this check is scanning for a call that cannot "
               f"appear. Re-point ALLOCATORS at the helpers that allocate now.",
               file=sys.stderr)
+        return 1
+
+    # The Ring census, per file so a violation can be named by line.
+    ring_ptr, ring_val = [], 0
+    for p in files:
+        for i, line in enumerate(p.read_text().split("\n"), 1):
+            if RING_PTR.match(line):
+                ring_ptr.append((p.name, i, line.strip()))
+            elif RING_VAL.match(line):
+                ring_val += 1
+
+    if ring_ptr:
+        print("check-read-purity: a twap.Ring is held in realm state BY POINTER.\n",
+              file=sys.stderr)
+        for fn, ln, text in ring_ptr:
+            print(f"  {fn}:{ln}  {text}", file=sys.stderr)
+        print("\ntwap.gno states the opposite as a property of the whole realm — the "
+              "Ring \"is never a heap object of its own, and never held by pointer in "
+              "realm state: every method takes a Ring by value\" — and gives the "
+              "reason: inline it costs nothing extra to keep, where a *Ring is a "
+              "second object per field. It is also borrow rule #2 waiting to happen, "
+              "because a pointer that ever escaped through a read would let its holder "
+              "write under this realm's authority. Hold it by value.", file=sys.stderr)
+        return 1
+
+    if ring_val != RING_VAL_N:
+        print(f"check-read-purity: {ring_val} twap.Ring field(s) held by value, "
+              f"expected {RING_VAL_N}. Either a Ring was added or removed — update "
+              f"RING_VAL_N and say which — or the field pattern has drifted off the "
+              f"code, in which case the pointer arm above is measuring nothing and "
+              f"would stay silent on a real violation.", file=sys.stderr)
         return 1
 
     reads, bad, ptr = 0, [], []
@@ -184,7 +251,8 @@ def main() -> int:
 
     print(f"check-read-purity: {reads} exported read(s), none hands out a pointer, "
           f"none allocates "
-          f"({', '.join(ALLOCATORS)} all confined to write paths).")
+          f"({', '.join(ALLOCATORS)} all confined to write paths); "
+          f"{ring_val} twap.Ring field(s), every one held by value.")
     return 0
 
 

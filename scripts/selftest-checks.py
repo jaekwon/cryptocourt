@@ -625,6 +625,26 @@ control("an exported read that hands out a pointer", f"{KOURTV2}/folders.gno",
         "func FolderItems(courtSlug string, folderID uint64) *[]uint64 {",
         "FolderItems returns *[]uint64",
         argv=["python3", READPURE])
+# AND THE OTHER END OF THE SAME POINTER: one held in realm STATE, which is what the
+# arm above stops from being handed out. twap.gno states it about the whole realm —
+# the Ring "is never a heap object of its own, and never held by pointer in realm
+# state" — and gives its reason, that inline it costs nothing extra where a *Ring is
+# a second object per field. Nothing enforced it, and it is borrow rule #2 waiting
+# for a read to hand it over.
+#
+# Two arms, because the two failures need opposite fixes: a pointer field is the
+# violation, and a field pattern that has drifted off the code leaves the pointer arm
+# scanning nothing and silent on a real one.
+control("a twap.Ring held in realm state by pointer", f"{KOURTV2}/claim.gno",
+        "\toi  twap.Ring // total stake, hourly, one week",
+        "\toi  *twap.Ring // total stake, hourly, one week",
+        "BY POINTER",
+        argv=["python3", READPURE])
+control("the Ring field pattern drifting off the code", f"{KOURTV2}/claim.gno",
+        "\tyes twap.Ring // YES pool, hourly, one week",
+        "\tyes twap.Circle // YES pool, hourly, one week",
+        "expected 2",
+        argv=["python3", READPURE])
 # The guard's failure mode is a read that allocates SUCCEEDING where it should
 # have panicked, so nothing in the suite goes red — the drift is invisible to
 # tests by construction. The control has to inject a whole read rather than edit
