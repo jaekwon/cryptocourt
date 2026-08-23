@@ -8632,5 +8632,19 @@
   "label": "PARAM trimBudget lowered (the series trim frees one page per ride)",
   "find": "\ttrimBudget = 2",
   "replace": "\ttrimBudget = 1"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM metaWeeklyBudget halved (the meta court's weekly emission budget)",
+  "find": "\tmetaWeeklyBudget = int64(100_000_000) // 100 CC/week, stepped down",
+  "replace": "\tmetaWeeklyBudget = int64(50_000_000) // 100 CC/week, stepped down"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM metaWeeklyBudget doubled (the meta court's weekly emission budget)",
+  "find": "\tmetaWeeklyBudget = int64(100_000_000) // 100 CC/week, stepped down",
+  "replace": "\tmetaWeeklyBudget = int64(200_000_000) // 100 CC/week, stepped down"
  }
 ]
