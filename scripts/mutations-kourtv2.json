@@ -1869,28 +1869,28 @@
  {
   "pkg": "kourtv2",
   "file": "modvote.gno",
-  "label": "modvote/mustCandidate:242: kourtv2: no such candidate",
+  "label": "modvote/mustCandidate: a court with NO candidate tree reads as holding the candidate",
   "find": "\tif cm.candidates == nil {\n\t\tpanic(\"kourtv2: no such candidate\")\n",
   "replace": "\tif cm.candidates == nil {\n"
  },
  {
   "pkg": "kourtv2",
   "file": "modvote.gno",
-  "label": "modvote/mustCandidate:246: kourtv2: no such candidate",
+  "label": "modvote/mustCandidate: a MISSING candidate key reads as a candidate",
   "find": "\tif v == nil {\n\t\tpanic(\"kourtv2: no such candidate\")\n",
   "replace": "\tif v == nil {\n"
  },
  {
   "pkg": "kourtv2",
   "file": "modvote.gno",
-  "label": "modvote/mustOpenElection:329: kourtv2: no election is open",
+  "label": "modvote/mustOpenElection: an action runs with no election open",
   "find": "\t\tpanic(\"kourtv2: no election is open\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "modvote.gno",
-  "label": "modvote/mustModRead:545: kourtv2: this court has no moderation state yet",
+  "label": "modvote/mustModRead: a court with no moderation state is read anyway",
   "find": "\t\tpanic(\"kourtv2: this court has no moderation state yet\")\n",
   "replace": ""
  },
@@ -2019,56 +2019,56 @@
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/OpenFlag:82: kourtv2: quality is settled; the draw has crystallized",
+  "label": "quality/OpenFlag: a flag opens after the draw crystallized",
   "find": "\t\tpanic(\"kourtv2: quality is settled; the draw has crystallized\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/OpenFlag:85: kourtv2: this claim closed without a draw; there is no quality t",
+  "label": "quality/OpenFlag: a flag opens on a claim closed without a draw",
   "find": "\t\tpanic(\"kourtv2: this claim closed without a draw; there is no quality to vote\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/OpenFlag:97: kourtv2: a slash is in its counter-flag window",
+  "label": "quality/OpenFlag: a flag opens while a slash is in its counter-flag window",
   "find": "\t\tpanic(\"kourtv2: a slash is in its counter-flag window\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/VoteQuality:176: kourtv2: quality is 0 (low), 1 (mid) or 2 (high)",
+  "label": "quality/VoteQuality: a quality value outside 0..2 is accepted",
   "find": "\t\tpanic(\"kourtv2: quality is 0 (low), 1 (mid) or 2 (high)\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/VoteQuality:179: kourtv2: no quality vote is open on this claim",
+  "label": "quality/VoteQuality: a vote lands with no quality vote open",
   "find": "\t\tpanic(\"kourtv2: no quality vote is open on this claim\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/ResolveFlag:314: kourtv2: no flag vote to resolve",
+  "label": "quality/ResolveFlag: a resolve runs with no flag vote",
   "find": "\t\tpanic(\"kourtv2: no flag vote to resolve\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/CounterFlag:736: kourtv2: no slash is pending on this claim",
+  "label": "quality/CounterFlag: a counter opens with no slash pending",
   "find": "\t\tpanic(\"kourtv2: no slash is pending on this claim\")\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "quality.gno",
-  "label": "quality/CounterFlag:748: kourtv2: the counter-flag window has lapsed",
+  "label": "quality/CounterFlag: a counter opens after its window lapsed",
   "find": "\t\tpanic(\"kourtv2: the counter-flag window has lapsed\")\n",
   "replace": ""
  },
