@@ -269,6 +269,39 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE STRONGEST REMAINING MONEY GAP: THE ESCROW'S BALANCE IS NOT RECONCILED AGAINST WHAT IT
+OWES.** Found by asking the ledger question one level up. `claim_test.gno` already pins the
+LEDGER — its own header, "THE CONSERVATION CHECK THAT DID NOT EXIST", records that
+`Court.deposit` was documented as "sum of escrowed deposits+fees, for the conservation checks"
+and "READ NOWHERE", and it now asserts `c.deposit == Σ over live claims of (cs.deposit +
+cs.fee)`. That is the accounting identity. The PHYSICAL one — that the escrow's actual coin
+balance equals the sum of every obligation recorded against it — is not asserted anywhere. All
+17 escrow-balance assertions in the suite are either drain-to-zero at the end of one claim's
+life or a per-operation delta (`escrow0 - dep - fee`).
+
+Enumerated statically, because the scope decides whether the test is worth writing. FIVE
+transfers create an escrow obligation, across THREE subsystems:
+
+    answer.gno:198    -> cs.answerBond  (and cs.pendingSlash, carved out of it)
+    claim.gno:326     -> cs.deposit + cs.fee   (the part c.deposit already tracks)
+    dispute.gno:132   -> the disputer's posted bond
+    quality.gno:118   -> cs.flagBond
+    modvote.gno:345   -> e.bond, in a different tree entirely
+
+Against 29 outflows (transfers and burns) spread over claim, crystallize, dispute, quality and
+modvote. So the invariant is six components, not one, and a walk over claims alone would not
+close it.
+
+**NOT WRITTEN THIS FIRING, and the reasons are worth stating rather than leaving it to look
+like an oversight.** First, validating it needs `gno test` runs, and a 389-row regression pass
+is holding five shards — the operational notes already record contention stretching a slice
+from ~5 minutes to 22, so measuring anything now would distort the measurement I launched.
+Second, and more important: a conservation assertion built from a partial obligation list
+fails on CORRECT code, which is the worst failure a test can have and the one this file has
+been bitten by twice. Six components across three subsystems is exactly the shape where a
+missed term looks like a bug in the realm. The enumeration above is the part that had to be
+done first, and it is done.
+
 **THE SELFTEST RAN, AND IT WAS CLEAN.** Four firings of guard changes had been verified only
 in isolation, each deferral defensible and the pile not. The window finally opened — the
 other session quiet for 25 minutes with no live processes — so it ran in the background,
