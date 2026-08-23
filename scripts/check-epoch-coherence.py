@@ -530,6 +530,31 @@ STAKERS_REMOVE_N = 0
 LOCKED_READ = re.compile(r"^(?!\s*//).*\bc\.locked\.Get\(", re.M)
 LOCKED_READ_N = 1
 
+# A THIRD UNIQUENESS CLAIM, this one in the engine's state machine. governor.gno
+# says "setState is the only writer of p.state, and does everything that follows
+# from a proposal reaching one, so no new code path has to remember" — and then
+# lists what follows: the reason is CLIPPED, the slot is released unless the
+# proposal succeeded and awaits execution, and the outcome is announced. A second
+# writer skips all three, and the first of those is unbounded-string retention in
+# a record kept for the life of the realm. Measured 1 write across every non-test
+# file in realm/.
+#
+# THE PATTERN SHAPE COST TWO WRONG ATTEMPTS AND BOTH ARE WORTH RECORDING.
+#
+# First, the write is a TUPLE assignment — `p.state, p.reason = st, clip(reason)`
+# — so anything anchored as `\w+\.state\s*=` misses it entirely. That is the same
+# class as the anchored call censuses above, arriving from the other direction:
+# there the call was not at the start of the statement, here the `=` is not next
+# to the field.
+#
+# Second, `[^=\n]*=(?!=)` still matched four COMPARISONS, because `!=` lets the
+# `!` be eaten by the wildcard and the `=` match on its own. The probe set that
+# missed it tested `==` and not `!=` — the operator that appears four times in
+# this very file. So the excluded set is `=!<>`, and the probes below the fix
+# covered tuple, plain, read, `==`, `!=`, `case !=`, `>=` and a comment.
+STATE_WRITE = re.compile(r"^(?!\s*//).*\.state\b[^=!<>\n]*=(?!=)", re.M)
+STATE_WRITE_N = 1
+
 
 def funcs_with_epochs(src):
     """Map function name -> set of epoch expressions it reads."""
@@ -674,7 +699,7 @@ def main() -> int:
               f"this arm is measuring nothing.", file=sys.stderr)
         return 1
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
-            "stakers_rm": 0, "locked_read": 0,
+            "stakers_rm": 0, "locked_read": 0, "stateWriter": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
             "lockvote": 0, "mint": 0, "purge": 0,
             "ent_new": 0, "ent_tail": 0, "ent_junior": 0}
@@ -721,6 +746,12 @@ def main() -> int:
                     hits.append(f"[two-epochs] {pkg}/{p.name}:{name} reads "
                                 f"{sorted(epochs)} — a numerator and a bar taken "
                                 f"at different instants cannot be compared")
+
+            # OUTSIDE the kourtv2 branch below, deliberately: the single writer it
+            # counts lives in the ENGINE, and a new one appearing on the realm side
+            # would be exactly as much of a violation. Counting everywhere is also
+            # why the measured total is 1 rather than 1-per-tree.
+            arm4["stateWriter"] += len(STATE_WRITE.findall(src))
 
             # Arm 4 — accumulated across the kourtv2 tree, checked after the loop.
             if pkg == "kourtv2":
@@ -878,6 +909,7 @@ def main() -> int:
         ("ent_junior", JUNIOR_W_N, "juniorReserved writer(s)"),
         ("stakers_rm", STAKERS_REMOVE_N, "stakers.Remove call(s)"),
         ("locked_read", LOCKED_READ_N, "c.locked reader(s)"),
+        ("stateWriter", STATE_WRITE_N, "proposal-state writer(s)"),
     ):
         if arm4[key] != want:
             tag = ("terminal" if key.endswith("_w")
@@ -889,6 +921,7 @@ def main() -> int:
                    else "queue-tiling" if key in ("ent_new", "ent_tail", "ent_junior")
                    else "position-removed" if key == "stakers_rm"
                    else "second-lock-reader" if key == "locked_read"
+                   else "second-state-writer" if key == "stateWriter"
                    else "one-weight")
             why = ("stakeindex states it as a fact about the whole realm — "
                    "\"Positions are never removed - there is no stakers.Remove "
@@ -897,6 +930,13 @@ def main() -> int:
                    "it. If a removal is genuinely wanted, the numbering has to be "
                    "reconsidered with it"
                    if key == "stakers_rm" else
+                   "governor.gno calls setState \"the only writer of p.state, and "
+                   "does everything that follows from a proposal reaching one, so no "
+                   "new code path has to remember\" — the reason is CLIPPED, the slot "
+                   "is released unless the proposal awaits execution, and the outcome "
+                   "is announced. A second writer skips all three, and the first of "
+                   "those is an unbounded string kept for the life of the realm"
+                   if key == "stateWriter" else
                    "lock.gno calls lockedOf \"the ONLY reader of the tree: a "
                    "second one is a second place for the nil-tree and missing-key "
                    "branches to disagree with the write path\". Both branches "
@@ -937,7 +977,7 @@ def main() -> int:
                    "vote weight is charged by three lanes and QUOTED to the "
                    "elector, so a second copy is a quote that can drift from the "
                    "charge")
-            hits.append(f"[{tag}] kourtv2 has {arm4[key]} {what}, expected "
+            hits.append(f"[{tag}] {arm4[key]} {what}, expected "
                         f"{want} — {why}")
     if hits:
         print("check-epoch-coherence: a tally and its bar may no longer share an "

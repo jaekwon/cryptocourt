@@ -269,6 +269,25 @@ control("a position is removed from the stake index", f"{KOURTV2}/stakeindex.gno
 # The write at :189 rather than :170: lockStake's Set sits next to a lockedOf
 # CALL, so flipping that one would read as a reader either way and the arm could
 # pass for the wrong reason.
+# A UNIQUENESS census rather than an absence one, and that changes what it needs.
+# The twap.Ring arm and the stakers.Remove arm both expect ZERO, so a pattern that
+# drifts off the code still counts zero and stays silent — each needed a second
+# arm for the drift. This one expects ONE, so both directions mismatch on their
+# own: a second writer counts 2, and a dead pattern counts 0. One arm is enough,
+# and that is a property of the expected value, not an oversight.
+#
+# governor.gno says setState "is the only writer of p.state, and does everything
+# that follows from a proposal reaching one, so no new code path has to remember".
+# The three things a second writer would skip are the clip on the reason, the slot
+# release, and the announcement — and the first is an unbounded string kept for the
+# life of the realm.
+control("a second writer of the proposal state", f"{GOVERNORDIR}/governor.gno",
+        "func (g *Governor) setState(p *proposal, st int8, reason string) {",
+        "func (g *Governor) selfTestSecondStateWriter(p *proposal) {\n"
+        "\tp.state = stateActive\n}\n\n"
+        "func (g *Governor) setState(p *proposal, st int8, reason string) {",
+        "proposal-state writer(s), expected 1",
+        argv=["python3", EPOCHCOH])
 control("a second reader of the lock tree", f"{KOURTV2}/lock.gno",
         "\tc.locked.Set(string(who), l-amount)",
         "\tc.locked.Get(string(who))",
