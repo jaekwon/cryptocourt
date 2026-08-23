@@ -513,6 +513,128 @@ grep is cheap and the follow-through is not: every hit needs the door checked
 before the render, because the interesting answer is usually "something else
 already validates this".
 
+
+## The uniqueness sweep, and three ways a pattern's SHAPE was the bug
+
+After the false-premise sweep paid out, the sibling instrument was obvious: comments
+claiming a site is THE ONLY one. A uniqueness claim fails silently in the way an
+absence claim does — the second site simply appears — and no row can catch it,
+because a row asserts that a test notices when EXISTING code changes, never that
+the set grew. Sixteen claims across `realm/`, and most were already covered:
+
+    lock.gno "the ONLY reader of the tree"        check-epoch-coherence, LOCKED_READ_N
+    modrender.gno "THE single place a title..."   check-render-text, TITLE_READERS
+    modvote.gno "the one chokepoint both..."      TestModSetSizeIsCapped
+    clock.gno "the ONLY height read"              check-height-shim — 2 raw reads,
+                                                  both inside the shim
+    emission.gno "the ONLY emission mint"         check-epoch-coherence, MINT_N
+
+**ONE WAS UNCENSUSED, in the engine's state machine.** `governor.gno` says setState
+"is the only writer of p.state, and does everything that follows from a proposal
+reaching one, so no new code path has to remember", and then names what follows: the
+reason is CLIPPED, the slot is released unless the proposal awaits execution, and the
+outcome is announced. A second writer skips all three, and the first of those is an
+unbounded string kept in a record that lives as long as the realm. Measured 1 write
+across every non-test file under `realm/`. Now `STATE_WRITE_N`.
+
+**AND THE PATTERN FOUGHT BACK THREE TIMES, which is the transferable part.**
+
+    1. The first grep found NOTHING. The write is a TUPLE assignment —
+       `p.state, p.reason = st, clip(reason)` — so anything anchored as
+       `\w+\.state\s*=` misses it. Same class as the anchored CALL censuses fixed
+       earlier today, arriving from the opposite side: there the call was not at the
+       start of the statement, here the `=` is not beside the field.
+
+    2. The fix then matched FOUR COMPARISONS. `[^=\n]*=(?!=)` lets `!=` through,
+       because the wildcard eats the `!` and the `=` matches alone. The probe set
+       that missed it tested `==` and not `!=` — the operator that appears four
+       times in that very file. Excluding `=!<>` fixed it, and the probe list is
+       now tuple, plain, read, `==`, `!=`, `case !=`, `>=`, comment.
+
+    3. The census KEY collided with a tag convention. `state_w` ends in `_w`, and
+       the tag chain reads `"terminal" if key.endswith("_w")`, so the arm fired
+       with another arm's name and another arm's explanation. The file warns about
+       exactly this two lines from where the key was added: the arm-15 keys "share
+       the ent_ prefix and deliberately avoid the _w suffix". A warning in the
+       source is only as good as reading the line above the one you are editing.
+
+Each was caught by measuring rather than by review, and each cost one probe. The
+lesson is not "be careful with regexes" — it is that a census's PATTERN is code with
+its own failure modes, and the only instrument for it is a probe set that includes
+the shapes you did not think of. Two of the three would have shipped as a guard that
+could never fire.
+
+**A RESULT ABOUT FAIL-CLOSED-NESS, general enough to reuse.** A UNIQUENESS census
+(expected 1) is self-fail-closed: a second site counts 2, a dead pattern counts 0,
+and both mismatch. An ABSENCE census (expected 0) is NOT — a dead pattern still
+counts zero and stays silent forever — which is why the twap.Ring and stakers.Remove
+arms each needed a SECOND arm for pattern drift and this one does not. That is a
+property of the expected value, not of the care taken, so it can be decided from the
+number alone.
+
+Also fixed while in there: the shared complaint template hardcoded "kourtv2 has",
+which is a false locality claim for the one arm that counts across kourtv2 AND the
+engine. Neutral now, and true for every arm.
+
+## The regression pass this session's own changes earned
+
+    142 caught, 0 not caught, of 142 — and zero [timed out] / [invalid] / [bad anchor]
+
+Every row whose TARGET file changed or whose CATCHING suite changed since the last
+full pass: moderation.gno 66, modvote.gno 36, modrender.gno 22, ccwrap.gno 10,
+offerer.gno 8. modvote.gno's source did not move, but moderation_test.gno did and
+modvote rows can be caught from there, so it went in rather than being argued out.
+
+The point of it was ccwrap.gno, the only file whose BEHAVIOUR moved — an import
+added, a length guard inside Enable, Render's arguments rewrapped — and all ten of
+its rows still catch, including the eight that predate today. `make anchors` passing
+says the anchors still RESOLVE; it says nothing about whether a test still notices.
+This is the measurement of the second thing, and it also confirms that the fourteen
+rows added across today's commits, each measured caught alone when written, are
+caught TOGETHER — the distinction the first full pass taught when it found a row
+that had been green when written and had quietly expired 983 rows later.
+
+## The ordering sweep, and one candidate row that had to be thrown away first
+
+Third instrument in the same family, and the one the canonicalise-then-validate gap
+suggested: comments claiming a step happens BEFORE or AFTER another. Seventeen
+across `realm/`. The interesting property of this class is that a single find/replace
+usually CANNOT express the reordering — but it can often express the CONSEQUENCE, by
+replacing a captured value with a fresh read of the thing that moved.
+
+**AND THAT IS WHERE THE FIRST CANDIDATE DIED.** `dispute.gno` captures
+`firstResolution := cs.provisional < 0` with "capture BEFORE the switch mutates it",
+and no corpus row mentions it. Two use sites, and they are not equivalent:
+
+    inside the switch    `if firstResolution { cs.provisional = cs.answer; ... }`
+    after the switch     `if firstResolution && !cs.provClose {`
+
+At the FIRST, the write to provisional is inside the very block the condition
+guards, so nothing has mutated it yet and `cs.provisional < 0` is THE SAME PROGRAM.
+A row there would be INVALID, not a survivor — the trap this repo has now recorded
+four times, and the one that four of ten mutations in the original money sweep fell
+into. At the SECOND, the write may already have run and set provisional to
+`cs.answer`, so a fresh read is FALSE where the capture was TRUE and the guarded
+block is skipped. One claim, two use sites, one writable row. Recorded rather than
+written, because the probe belongs on a quiet machine.
+
+**A NEGATIVE THAT WAS DECIDED, NOT DEFERRED.** quality.gno's slash sizer says "One
+function, two callers: 'the bond collateralizes the slash' is then enforced by
+SHARED CODE rather than by two parallel arithmetic paths that a drained pool can
+pull apart (audit round 2)". The claim HOLDS: the slash arithmetic — the flat
+`xbar * slashXBps / 10000` and the `mulDiv128` draw arm — appears exactly ONCE, in
+slashSizeAt, and five corpus rows already pin the floor's behaviour.
+
+No census was added, and the reason is the same one that stopped a census this
+morning. The only pattern that could catch a SECOND arithmetic path is the two bps
+constants, and seven of their nine uses are deploy-invariant checks in court.gno,
+comparing the constants against bond bounds rather than sizing anything. A census
+over them would be a seven-entry allowlist with no property left in it — the shape
+already rejected when the obvious "no pointer to a p/ type in realm state" guard
+turned out to need 33 allowlisted `*bptree.BPTree` fields. Being consistent about
+that is worth more than an extra arm, so the measurement is recorded instead: one
+arithmetic site, seven constant-bound checks, all of the latter in court.gno.
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:
