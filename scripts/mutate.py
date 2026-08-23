@@ -186,6 +186,22 @@ OBSERVERS = {
 SUITE_TIMEOUT = int(os.environ.get("MUTATE_SUITE_TIMEOUT", "600"))
 
 
+# GNO'S ERROR CODES, split by what they mean for a mutation run.
+#
+# COMPILE means the mutant never ran, so the row measured nothing and is INVALID.
+# Both of these arrive with "0 build errors" in the summary line, which is why the
+# count alone is not enough: gno reports a type error and a parse error as TEST
+# errors. gnoParserError was found by planting an unbalanced paren, and until it was
+# named here an unparseable mutant scored as a CATCH.
+#
+# RUNTIME means the mutant ran and something objected — which is a CATCH, and must
+# not be mistaken for a build failure. gnoUnknownError is how a realm panic at init
+# surfaces, deploy invariants included: the first attempt at this fix matched every
+# gno*Error and threw away a genuine catch where kourtv2's own flood invariant had
+# fired. Measured, on the P-CONST grc20votes Bps row.
+COMPILE_CODES = frozenset({"gnoTypeCheckError", "gnoParserError"})
+RUNTIME_CODES = frozenset({"gnoUnknownError"})
+
 def run_suite(root, pkg=None, mut=None):
     """Run the OBSERVER suites for `pkg`; all of them when pkg is None (the baseline).
     Returns (passed, output, hung) — `hung` names the suites that ran out of time.
@@ -321,8 +337,34 @@ def main():
         # build failure, so every catch without a Test name in it was being
         # reported as INVALID. That is the same lie as counting a build failure
         # as a catch, told the other way round, and it hid four real catches.
+        # AND THE ERROR CODE, ANY of them, not just the type-check one. Measured on
+        # a staged copy: an unbalanced paren in lock.gno reports
+        #
+        #     0 build errors, 1 test errors        code=gnoParserError
+        #
+        # so a mutant that does not PARSE looked exactly like a catch — the very lie
+        # the paragraph above exists to prevent, arriving through the door that was
+        # left open when only gnoTypeCheckError was named. Latent rather than live
+        # when found: all 1,240 corpus mutants were confirmed to parse (gofmt -e on
+        # each), and check-mutant-collisions now refuses any row that stops doing so.
+        #
+        # The pattern is deliberately a CATCH-ALL over gno's error codes rather than
+        # the two known spellings, because a third code would reopen the hole in
+        # silence. It biases toward scoring a real catch as INVALID, and that is the
+        # safe direction: this harness must under-claim coverage, never over-claim.
         bm = re.search(r"(\d+) build errors", out)
-        broke = (bm and int(bm.group(1)) > 0) or "gnoTypeCheckError" in out
+        codes = set(re.findall(r"code=(gno\w*Error)", out))
+        broke = (bm and int(bm.group(1)) > 0) or bool(codes & COMPILE_CODES)
+        # A code that is neither a known compile failure nor a known runtime one is
+        # SAID OUT LOUD rather than assumed either way. Assuming it means "compiled
+        # fine" is how the parser door stayed open; assuming it means "did not build"
+        # is how a real catch gets thrown away, which is what a catch-all over every
+        # gno*Error did the moment it met gnoUnknownError.
+        for c in sorted(codes - COMPILE_CODES - RUNTIME_CODES):
+            print(f"mutate: UNCLASSIFIED gno error code {c} — scoring this row as a "
+                  f"catch on the strength of a failing suite. If {c} means the mutant "
+                  f"did not build, add it to COMPILE_CODES; the verdict above is not "
+                  f"trustworthy until someone decides.", file=sys.stderr)
 
         if hung:
             # FIRST, and that ordering is the whole point. A timeout leaves `ok`

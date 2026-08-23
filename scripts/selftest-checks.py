@@ -881,6 +881,35 @@ try:
 finally:
     shutil.move(_bk2, MUTS)
 
+# THE THIRD FAILURE MODE: a row whose mutant does not PARSE. It is not unappliable
+# and it is not a no-op — it is a row that mutate.py would score as a CATCH, because
+# a failing suite is what a catch looks like and an unparseable mutant fails the
+# suite. mutate's detector is a catch-all over gno's error codes now, but this
+# refuses the row where no suite has to run to find out, and the mutated source is
+# already in hand. The plant is spelled out rather than derived from corpus[0], so it
+# cannot quietly become parseable when the first row changes.
+_unp = "a row whose mutant does not parse"
+_bk3 = MUTS + ".selftest-backup"
+shutil.copy(MUTS, _bk3)
+try:
+    _corpus3 = json.load(open(_bk3))
+    _brk = {"pkg": "governor", "file": "governor.gno",
+            "label": "SELFTEST unparseable row",
+            "find": "\treturn p.yes, p.no, p.abstain, p.total",
+            "replace": "\treturn p.yes, p.no, p.abstain, p.total))"}
+    with open(MUTS, "w") as _fh3:
+        json.dump([_brk] + _corpus3, _fh3, indent=2, ensure_ascii=False)
+        _fh3.write("\n")
+    _r3 = subprocess.run(["python3", COLLISIONS], capture_output=True, text=True)
+    _out3 = _r3.stdout + _r3.stderr
+    if _r3.returncode != 0 and "does not PARSE" in _out3:
+        print(f"  {_unp:<44} fires")
+    else:
+        print(f"  {_unp:<44} SILENT — exit {_r3.returncode} on an unparseable row")
+        failures.append(_unp)
+finally:
+    shutil.move(_bk3, MUTS)
+
 print("\ncheck-control-anchors")
 # The other half of check-guards-armed's division of labour: that one says
 # REGISTERED, selftest says BROKEN CONTROL — and until this guard existed, only
@@ -1435,6 +1464,17 @@ else:
         "pkg": "governor", "file": "governor.gno", "label": "x",
         "find": "\treturn p.yes, p.no, p.abstain, p.total",
         "replace": "\treturn p.yes, p.no, p.abstain, p.thereIsNoSuchField"}], "INVALID")
+    # AND THE PARSE DOOR, which is a different one. The arm above plants a
+    # nonexistent FIELD, so gno answers with gnoTypeCheckError — the one code the
+    # detector used to name. A mutant that does not PARSE answers with
+    # code=gnoParserError and "0 build errors", and nothing in that output says
+    # "build failure", so it scored as a CATCH: coverage that did not exist.
+    # Measured on a staged copy with an unbalanced paren in lock.gno before the
+    # detector was widened to any code=gno*Error.
+    feed("a mutant that cannot parse", [{
+        "pkg": "governor", "file": "governor.gno", "label": "x",
+        "find": "\treturn p.yes, p.no, p.abstain, p.total",
+        "replace": "\treturn p.yes, p.no, p.abstain, p.total))"}], "INVALID")
     # A pkg nobody has is refused rather than defaulted. Silently falling back
     # to the realm would mutate a file the caller did not name and report the
     # verdict as though it had — a mutation runner lying about WHAT it broke,

@@ -41,7 +41,9 @@ import glob
 import hashlib
 import json
 import os
+import subprocess
 import sys
+import tempfile
 
 from pathlib import Path
 
@@ -109,6 +111,31 @@ def main():
             unappliable.append((corpus, label, "its replace changes NO BYTES, so the "
                                                "row applies cleanly and tests nothing"))
             continue
+        # AND IT MUST PARSE, which is a hole this guard is well placed to close.
+        # mutate.py scores a failing suite as a catch, and a mutant that cannot parse
+        # fails the suite — measured on a staged copy, an unbalanced paren reports
+        # "0 build errors, 1 test errors" with code=gnoParserError and nothing that
+        # said "build failure", so it read exactly like coverage. mutate's detector is
+        # widened to any code=gno*Error now, but a row whose mutant does not parse is
+        # testing nothing whichever way it is scored, so it is refused HERE where the
+        # mutated source is already in hand and no suite has to run.
+        #
+        # gofmt is the parser: .gno is Go syntax, so a temp .go file is all it needs.
+        # About 7 seconds for the whole corpus, and zero failures across 1,240 mutants
+        # when this arm was added — latent, not live.
+        with tempfile.NamedTemporaryFile("w", suffix=".go", delete=False) as tf:
+            tf.write(mutated)
+            tmp = tf.name
+        try:
+            pr = subprocess.run(["gofmt", "-e", tmp], capture_output=True, text=True)
+        finally:
+            os.unlink(tmp)
+        if pr.returncode != 0:
+            first = (pr.stderr.strip().split("\n") or [""])[0]
+            unappliable.append((corpus, label, "its mutant does not PARSE: %s"
+                                % first.split(":", 1)[-1].strip()[:80]))
+            continue
+
         blob = r["file"] + "\0" + mutated
         mutants[hashlib.sha256(blob.encode()).hexdigest()].append((corpus, label))
 
@@ -134,7 +161,7 @@ def main():
         return 1
 
     print("check-mutant-collisions: %d row(s) across %d corpus file(s) produce %d "
-          "distinct mutant(s) — no two rows measure the same tree."
+          "distinct mutant(s), every one parsing — no two rows measure the same tree."
           % (len(rows), len({c for c, _ in rows}), len(mutants)))
     return 0
 
