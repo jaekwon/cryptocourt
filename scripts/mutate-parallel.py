@@ -36,6 +36,7 @@ import threading
 
 SRC = os.path.dirname(os.path.abspath(__file__))
 ROW = re.compile(r"caught:|SURVIVED|BAD ANCHOR|INVALID|covered elsewhere:")
+CAUGHT_ROW = re.compile(r"\bcaught:")
 SUMMARY = re.compile(r"(\d+) not caught \(survived, invalid, or never applied\), of (\d+)")
 
 
@@ -54,6 +55,19 @@ def main():
                     help="concurrent shards; defaults to a quarter of the cores, "
                          "min 2 max 6 — each shard runs whole gno suites, so more "
                          "of them stops helping well before the core count")
+    # THE GAP FILE IS READ THE OTHER WAY ROUND, and until this flag existed the
+    # reading was not a check. A main-corpus row is wrong when it stops being
+    # caught; a KNOWN-GAPS row is wrong when it STARTS being caught, because the
+    # gap has closed and nobody struck it off. `make gaps` ran exactly that batch
+    # and then exited 0 whether or not any row was caught — the verdict below is
+    # printed unconditionally, so a closed gap was visible only to a reader who
+    # did the arithmetic (sent − surviving − by-design) by hand. Which is how it
+    # was found: 21 sent, 17 surviving, 4 by-design, and the exit code would have
+    # said the same had it been 16 and 4.
+    ap.add_argument("--expect-survive", action="store_true",
+                    help="invert the verdict: every row is EXPECTED to survive, so "
+                         "any row that is caught fails the run. For the KNOWN-GAPS "
+                         "batch, where a caught row means the gap closed")
     a = ap.parse_args()
 
     # A LEGIBLE FAILURE, because the illegible one cost a whole cycle. Omitting
@@ -128,7 +142,7 @@ def main():
 
     # Every row, then one verdict. Shard boundaries are an implementation detail
     # and deliberately absent from the output.
-    notcaught, elsewhere, total, broken = [], [], 0, []
+    notcaught, elsewhere, total, broken, caught = [], [], 0, [], []
     for i, res in enumerate(out):
         if res is None:
             broken.append(f"shard {i} produced nothing")
@@ -153,6 +167,11 @@ def main():
         for line in stdout.split("\n"):
             if ROW.search(line):
                 print(line)
+                # `caught:` with the colon is the per-row verdict; the summary
+                # line reads "N not caught (survived, ..." and has no colon, so
+                # it cannot be mistaken for one here.
+                if CAUGHT_ROW.search(line):
+                    caught.append(line.strip())
         m = SUMMARY.search(stdout)
         if not m:
             broken.append(f"shard {i}: no summary line, so its rows are unaccounted for")
@@ -180,6 +199,17 @@ def main():
               f"this harness does not run:")
         for s in elsewhere:
             print(f"  {s}")
+    if a.expect_survive and caught:
+        print(f"\nmutate: {len(caught)} row(s) were CAUGHT in a batch where every row "
+              f"is expected to survive. A recorded gap has closed — strike it off "
+              f"KNOWN-GAPS and move it to the main corpus, or the file is claiming a "
+              f"hole that is not there:", file=sys.stderr)
+        for c in caught:
+            print(f"  {c}", file=sys.stderr)
+        return 1
+    if a.expect_survive:
+        print(f"\nevery one of the {total} row(s) still survives — no recorded gap "
+              f"has closed.")
     return 0
 
 

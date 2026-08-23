@@ -376,7 +376,7 @@ gaps:
 	  rows=[r for r in json.load(open('scripts/mutations-kourtv2-KNOWN-GAPS.json')) if not r.get('slow')]; \
 	  print('gaps: %d row(s), %d skipped as slow' % (len(rows), \
 	    len(json.load(open('scripts/mutations-kourtv2-KNOWN-GAPS.json')))-len(rows)), file=sys.stderr); \
-	  json.dump(rows, sys.stdout)" | python3 scripts/mutate-parallel.py --shards 4
+	  json.dump(rows, sys.stdout)" | python3 scripts/mutate-parallel.py --shards 4 --expect-survive
 
 # Break each guard on purpose and check it notices. Periodic rather than
 # per-commit: a check that reports success while measuring nothing is the

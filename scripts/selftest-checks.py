@@ -1325,6 +1325,30 @@ else:
         print(f"  {lbl:<44} SILENT — exit {r.returncode} on zero rows")
         failures.append(lbl)
 
+    # AND THE GAP FILE READ THE OTHER WAY ROUND. `make gaps` runs the KNOWN-GAPS
+    # batch, where every row is SUPPOSED to survive — so the finding there is a row
+    # that has STARTED being caught, meaning the gap closed and nobody struck it
+    # off. Until --expect-survive existed the run printed its verdict and exited 0
+    # either way, so that finding was visible only to a reader who did the
+    # arithmetic by hand (sent − surviving − by-design). Same governor anchor as the
+    # arms above, deliberately: if it rots, three arms break loudly rather than one
+    # silently. Measured caught by TestTheSlotCountBelongsToThePageNotTheSection.
+    lbl = "a closed gap is a finding, not a footnote"
+    r = subprocess.run(["python3", "scripts/mutate-parallel.py", "--shards", "1",
+                        "--expect-survive"],
+                       input=json.dumps([
+                           {"pkg": "governor", "file": "governor.gno",
+                            "label": "SELFTEST a row that is caught",
+                            "find": "const maxLive = 64",
+                            "replace": "const maxLive = 63"}]),
+                       capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    if r.returncode != 0 and "CAUGHT in a batch" in out:
+        print(f"  {lbl:<44} fires")
+    else:
+        print(f"  {lbl:<44} SILENT — exit {r.returncode} on a caught row")
+        failures.append(lbl)
+
     # A HUNG BASELINE IS NOT A RED ONE, and this arm exists because the two
     # already drifted once. The driver knows a shard's baseline failed by a string
     # in its stderr OR by `code == 2` — and `code == 2` was dead for the whole
