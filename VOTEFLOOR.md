@@ -269,6 +269,32 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**TWO p/ PACKAGES HAVE ZERO CORPUS ROWS, AND THAT IS CORRECT — closing the lead before
+somebody spends a firing on it.** Surveying the p/ layer, which none of this work had
+touched, turns up what looks like the largest gap in the repo:
+
+    checkpoint   731 lines   1 test file    24 rows
+    cshares      751 lines   2 test files    0 rows
+    curve        490 lines   2 test files   15 rows
+    governor    2854 lines   3 test files  199 rows
+    grc20votes   824 lines   1 test file    43 rows
+    tickbook     883 lines   2 test files    0 rows
+    twap         563 lines   3 test files   18 rows
+
+1,634 lines of money-adjacent library code — a conditional-share ledger and a
+tick-quantised limit order book — with no mutation ever run against them. It reads like
+the biggest single hole here, and it is not a hole at all.
+
+Both are **V1-ONLY**. Every one of the seven realm files that reference them is under
+`realm/r/kourtv1`, and `realm/r/kourtv2` references neither, measured. They appear in the
+Makefile's staging list purely so kourtv1's own suite builds. V1 is untouched by standing
+owner constraint, so the corpus targeting kourtv2 and leaving these two at zero is the
+correct state, not an oversight.
+
+Written down because the next reader of that table will see "751 lines, 0 rows" and either
+lose a firing to it or, worse, start adding V1 rows against the constraint. A zero that is
+RIGHT needs its reason recorded exactly as much as a zero that is wrong.
+
 **THE UNCOVERED-OPERATOR SWEEP IS DONE, and the reason is a bias in the instrument rather
 than a clean bill of health.** It has now pointed me at three files in a row where there
 was nothing to find, and the pattern is the same each time.
