@@ -1349,6 +1349,32 @@ else:
         print(f"  {lbl:<44} SILENT — exit {r.returncode} on a caught row")
         failures.append(lbl)
 
+    # AND THE OTHER HALF OF THAT FLAG, which the first version got wrong. mutate.py
+    # puts four things in its not-caught list and three are NON-RESULTS —
+    # `[timed out]`, `[invalid]`, `[bad anchor]`. Counting them as not-caught is
+    # right for the main corpus (fail closed), but inverted for the gap file it
+    # flips: a row that never ran would be reported as "still surviving", which is
+    # the very thing --expect-survive was added to stop. Measured for real — the
+    # pre-fix code printed "every one of the 1 row(s) still survives" for a row that
+    # HUNG and was killed at 120s.
+    #
+    # The plant is a rotted anchor rather than a hang: same non-result class, and it
+    # needs no timeout, so this arm costs one baseline instead of three minutes.
+    lbl = "an unmeasured row is not a surviving gap"
+    r = subprocess.run(["python3", "scripts/mutate-parallel.py", "--shards", "1",
+                        "--expect-survive"],
+                       input=json.dumps([
+                           {"pkg": "kourtv2", "file": "emission.gno",
+                            "label": "SELFTEST an anchor that matches nothing",
+                            "find": "NoSourceLineSaysThis", "replace": "x"}]),
+                       capture_output=True, text=True)
+    out = r.stdout + r.stderr
+    if r.returncode != 0 and "UNMEASURED" in out:
+        print(f"  {lbl:<44} fires")
+    else:
+        print(f"  {lbl:<44} SILENT — exit {r.returncode} on a row that never ran")
+        failures.append(lbl)
+
     # A HUNG BASELINE IS NOT A RED ONE, and this arm exists because the two
     # already drifted once. The driver knows a shard's baseline failed by a string
     # in its stderr OR by `code == 2` — and `code == 2` was dead for the whole

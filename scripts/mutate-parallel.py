@@ -199,6 +199,26 @@ def main():
               f"this harness does not run:")
         for s in elsewhere:
             print(f"  {s}")
+    # AND A SURVIVAL THAT WAS NEVER MEASURED IS NOT A GAP. mutate.py puts FOUR
+    # different things in its not-caught list, and three of them are non-results:
+    # `[timed out]` (nothing ran to completion), `[invalid]` (did not build) and
+    # `[bad anchor]` (the mutation never applied). For the main corpus, counting
+    # those as not-caught is right and deliberate — fail closed, an unmeasured row
+    # is not a pass. Inverted for the gap file it flips the wrong way: a row that
+    # timed out would be reported as "still surviving", which is the same
+    # non-result-as-result this flag was added to prevent, one level down. Found by
+    # reading why two gaps runs split 17+4 and then 18+3 — mutate.py checks TIMED
+    # OUT before `ok and covered`, so a timed-out by-design row lands here.
+    if a.expect_survive:
+        unmeasured = [s for s in notcaught
+                      if s.endswith(("[timed out]", "[invalid]", "[bad anchor]"))]
+        if unmeasured:
+            print(f"\nmutate: {len(unmeasured)} row(s) did not survive so much as go\n"
+                  f"UNMEASURED, so this run cannot say the gap is still open:",
+                  file=sys.stderr)
+            for u in unmeasured:
+                print(f"  {u}", file=sys.stderr)
+            return 1
     if a.expect_survive and caught:
         print(f"\nmutate: {len(caught)} row(s) were CAUGHT in a batch where every row "
               f"is expected to survive. A recorded gap has closed — strike it off "
@@ -208,8 +228,8 @@ def main():
             print(f"  {c}", file=sys.stderr)
         return 1
     if a.expect_survive:
-        print(f"\nevery one of the {total} row(s) still survives — no recorded gap "
-              f"has closed.")
+        print(f"\nevery one of the {total} row(s) was measured and still survives — "
+              f"no recorded gap has closed.")
     return 0
 
 
