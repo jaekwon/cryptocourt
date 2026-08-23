@@ -88,7 +88,6 @@ import sys
 
 import gnoroot
 
-SRC = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Both trees, because the realm imports the package and either can be the thing
 # worth breaking. The package has to be staged whatever is being mutated:

@@ -43,7 +43,6 @@ assert the inner layer's full message instead — and then no kourtv2 message
 matches it, so this check goes quiet on its own.
 """
 
-import glob
 import re
 import sys
 
