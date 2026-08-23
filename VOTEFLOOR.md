@@ -269,6 +269,43 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE UNCOVERED-OPERATOR SWEEP IS DONE, and the reason is a bias in the instrument rather
+than a clean bill of health.** It has now pointed me at three files in a row where there
+was nothing to find, and the pattern is the same each time.
+
+    court.gno       43 uncovered -> deploy gates, unpinnable in BOTH directions (measured)
+    render surface  my own test  -> the property already pinned, better, by an older test
+    folders.gno     41 uncovered -> 29 rows AND six dedicated ordering tests
+
+folders.gno is the clearest case. Of its 41 uncovered operator lines, THIRTEEN are
+`if c.mod == nil` or `if v == nil` read-guards — the same class as moderation.gno's twelve,
+which all measured caught, so the marginal protection of thirteen more rows is small
+against ~35s each on every pass. The interesting remainder looked like the ordering logic:
+`folderAfter` is a five-line comparator with no row on any of its six operators, and its
+header names a load-bearing clause ("UNPLACED LAST ... a folder created after an ordering
+lands at the end, where a new folder belongs, rather than at the head of a list the curator
+just arranged"). A comparator with no coverage is where silent wrongness lives.
+
+Except it has coverage. `folderorder_test.gno` holds SIX ordering tests, one of them
+`TestANewFolderLandsLastAfterAnOrdering` — the clause, by name, with a comment restating
+it. Not measured whether that test kills the specific `ord > 0` -> `ord >= 0` mutation,
+and deliberately so: a full-corpus pass is holding five shards and I am not spending its
+wall clock on a row I have already decided not to add.
+
+**THE BIAS, STATED SO THE NEXT SWEEP DOES NOT REPEAT THIS: the instrument measures ROW
+ANCHORING, not TEST COVERAGE, and those diverge exactly where a file is covered by
+dedicated test FILES rather than by per-line rows.** A file with a purpose-built test suite
+reads as "uncovered" line by line while being thoroughly tested. Ranking by uncovered
+operators therefore finds the files whose coverage is organised differently, not the files
+whose coverage is missing. PLAN §13 already recorded the same shape for the per-FUNCTION
+heuristic (10 flagged, 4 false positives, "a lead generator, not a coverage measure"); this
+is the per-LINE version of that lesson, and both cheap selectors are now exhausted.
+
+What remains genuinely un-swept is not findable by counting anything: it is the property
+nobody wrote down. That lens has produced every real find of the last several firings — the
+escrow balance nobody reconciled, AppointMods' three unrowed authority gates, the render
+gates nothing enforced.
+
 **THE SANITISER CENSUS, FOLLOWED TO ITS END: no unsanitised user text reaches a page.**
 The lead came from an existing test's own prose — TestNoUserStringOpensStructureOnAnyPage
 says "four of its FIVE call sites had nothing holding them", which invites the question of
