@@ -204,5 +204,53 @@
   "find": "\t\thadSlash := cs.pendingSlash > 0\n\t\tresolveQualityRide(c, cs)",
   "replace": "\t\tresolveQualityRide(c, cs)\n\t\thadSlash := cs.pendingSlash > 0",
   "why": "SURVIVES, and the comment's stated harm is NOT what happens. dispute.gno captures hadSlash before resolveQualityRide and says running both on one tally \"would settle the slash in the very call that levied it - burned with no window and no Q5 challenge\". It would not: on a JUST-LEVIED slash counterUsed is false, so disposeSlashOnRide takes its !cs.counterUsed case and REARMS rather than settles. The only state that differs is lastFlagEventAt, which originateSlash does not set and rearmSlashWindow does - read by crystallize.gno as the 24h quiet window after the last flag event, so the mutation delays Crystallize by up to a day on the levying-ride path. NOT PROMOTED TO A CAUGHT ROW because Crystallize also requires pendingSlash == 0, and every route to that restamps lastFlagEventAt again, so the difference is plausibly masked before it can be observed - which leaves it undecided between survivor and INVALID, and that is stated rather than guessed. A first attempt replaced `if hadSlash` with a fresh read instead of reordering; that leaves hadSlash declared-and-unused, which gno reports as a TEST error not a build error, so an ad-hoc probe scored it CAUGHT while mutate correctly called it INVALID. For an ordering claim the mutation must reorder."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM metaWeeklyBudget halved (the meta court's weekly emission budget)",
+  "find": "\tmetaWeeklyBudget = int64(100_000_000) // 100 CC/week, stepped down",
+  "replace": "\tmetaWeeklyBudget = int64(50_000_000) // 100 CC/week, stepped down",
+  "why": "SURVIVES: nothing asserts how much the meta court emits per week. The budget is a money number with no row and no symbolic test reference — the two ways a change could be noticed, both absent. A fixture has to advance the emission clock a week and compare what was minted against the budget; today halving it changes no assertion anywhere."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM ordDepositFloorBps raised (an ordinary court's smallest deposit)",
+  "find": "\tordDepositFloorBps = int64(1)  // 0.01% — §5.3's rule is meta-only; opening a",
+  "replace": "\tordDepositFloorBps = int64(5)  // 0.01% — §5.3's rule is meta-only; opening a",
+  "why": "SURVIVES: no test pins the floor on an ORDINARY court's deposit. answerXFloorBps' sibling row is CAUGHT by TestAnswerBondCapBindsWhen..., so the answer-bond floor is pinned and the deposit floor is not — the asymmetry is the finding. A fixture opens a claim on a court whose supply is small enough that the floor binds rather than the bps, and asserts the deposit equals it."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "claim.gno",
+  "label": "PARAM twapBuckets halved (the OI ring covers half a week, not one)",
+  "find": "const twapBuckets = 168 // a week of hourly buckets, as V1",
+  "replace": "const twapBuckets = 84 // a week of hourly buckets, as V1",
+  "why": "SURVIVES: the ring's size is documented as \"a week of hourly buckets, as V1\" and nothing asserts the week. Conviction and the trailing-average quorum are both computed from this ring, so the number is money-adjacent. A fixture has to show maturity or an average depending on 168 specifically — twap's own tests use its Ring directly and never see kourtv2's choice of size."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PARAM reSetWindowBlocks halved (the moderator re-set window)",
+  "find": "\treSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day",
+  "replace": "\treSetWindowBlocks = int64(120_960) // ~14 days at 17_280 blocks/day",
+  "why": "SURVIVES: nothing asserts the ~14 days a windowed re-set stays open. The window's EXISTENCE is covered (rows on the re-set path), its LENGTH is not. A fixture skips to just inside and just outside the boundary, which is the shape the grace-window tests already use elsewhere."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "PARAM trimBudget raised (the series trim does four times the work per ride)",
+  "find": "\ttrimBudget = 2",
+  "replace": "\ttrimBudget = 8",
+  "why": "SURVIVES, and it is the one of the six where that may be CORRECT rather than a gap. trimBudget bounds how much the series trim does per ride; if the series converges to the same state either way, no assertion can distinguish them and the row is closer to INVALID than to a survivor. TestAYoungCourtsHourlyHistorySurvivesEveryTrimRide asserts history SURVIVES trimming, which a larger budget does not violate. Recorded rather than decided: settling it needs a probe for an observable difference, not an argument."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM stakeOpenDelayBlocks raised from 0 (every court gets a polish window)",
+  "find": "\t\tstakeOpenDelayBlocks: 0, // default: no polish window (opt in via StartCourtP)",
+  "replace": "\t\tstakeOpenDelayBlocks: 1_000, // default: no polish window (opt in via StartCourtP)",
+  "why": "SURVIVES, and the reason is a FIXTURE artefact worth recording: raising the default should close staking for 1000 blocks after OpenClaim, but the fixtures reach staking through matureOI, which skips heights to fill the OI ring first — so the window has always elapsed by the time anything stakes. A fixture that stakes IMMEDIATELY after OpenClaim would catch it. This is the ASK WHETHER THE FIXTURE CAN FAIL rule from the other side: the suite cannot see the default because of how every fixture gets to the call."
  }
 ]

@@ -736,6 +736,118 @@ at exit 0: a clean bill of health for having measured nothing, which is this har
 oldest complaint about itself. A guard-runner that can hang for ever is worse than one
 that returns a wrong answer, because a wrong answer at least ends.
 
+
+## Every tunable number, and the sweep that had to be fixed twice to find them
+
+A constant is a policy. Change one and nothing looks wrong: the code compiles, the
+tests may well pass, and the number that decides a bond or a window is simply
+different. The corpus already had a PARAM/P-CONST family of rows for exactly this —
+`P-CONST checkpoint MaxKey 128 -> 1280`, `PARAM votingBlocks halved` — so the
+question was whether that family was COMPLETE, which is a question the corpus can
+answer about itself without running anything.
+
+**IT WAS NOT, AND THE FIRST TWO ANSWERS WERE WRONG.** The first extractor matched
+`^\t([a-z]...)` — one leading tab, lowercase first letter — and reported kourtv2 with
+57 constants and every other package with ZERO. That should have been obviously
+false: `grc20votes` has `Bps` and `checkpoint` has `MaxKey`, and both already carry
+rows that had been read an hour earlier. Exported constants and the top-level `const
+NAME = V` form were both invisible to it. Corrected, kourtv2 has 70.
+
+That is the third time in one session that a sweep's silence turned out to be a claim
+about the sweep: a ugrep pattern with an unescaped paren whose error was read as "no
+matches", a probe set that tested `==` and not the `!=` appearing four times in the
+same file, and this. **A sweep reporting zero is a statement about the instrument
+until the instrument has been shown to find something it should.**
+
+**WHAT THE CORRECTED SWEEP SAYS.** checkpoint, curve, governor, grc20votes, twap and
+offerer have ZERO unrowed constants — a real measurement now. Seven were unrowed AND
+unnamed by any test, plus one params default:
+
+    kourtv2  metaWeeklyBudget     100_000_000   the meta court's weekly emission budget
+    kourtv2  ordAnswerXFloorBps            10   an ordinary court's smallest answer bond
+    kourtv2  ordDepositFloorBps             1   an ordinary court's smallest deposit
+    kourtv2  twapBuckets                  168   the OI ring, "a week of hourly buckets"
+    kourtv2  reSetWindowBlocks        241_920   the moderator re-set window, ~14 days
+    kourtv2  trimBudget                     2   the series trim's per-ride budget
+    kourtv2  stakeOpenDelayBlocks           0   the polish window's DEFAULT
+    ccwrap   maxWrappableSlug              10   the wrappable-slug bound
+
+Four are money or money-adjacent: the emission budget, both ordinary-court floors, and
+twapBuckets — which sizes the ring that conviction and the trailing-average quorum are
+computed from.
+
+**THE TEST-REFERENCE CHECK IS A FILTER FOR INVALID, NOT A COVERAGE CLAIM**, and that
+distinction is why thirteen unrowed constants became eight rows rather than thirteen. A
+constant the tests name SYMBOLICALLY cannot be usefully mutated: changing its value moves
+the code and the expectation together, so the mutation is INVALID rather than surviving —
+the trap that took four of ten in the original money sweep. `nominationWindow` is named in
+five test files, `qualityHigh` in four; those were left alone.
+
+**MEASURED: TWO CAUGHT, SIX SURVIVED.**
+
+    ordAnswerXFloorBps    CAUGHT   TestAnswerBondCapBindsWhenTheFloorIsBelowIt
+    maxWrappableSlug      CAUGHT   TestTheWrappableSlugBoundIsRealOnBothSides
+    metaWeeklyBudget      SURVIVED nothing asserts the meta court's weekly emission
+    ordDepositFloorBps    SURVIVED nothing pins an ordinary court's deposit floor
+    twapBuckets           SURVIVED nothing asserts the OI ring covers a week
+    stakeOpenDelayBlocks  SURVIVED the polish window's DEFAULT
+    reSetWindowBlocks     SURVIVED the window's existence is covered, its LENGTH is not
+    trimBudget            SURVIVED and this one may be correct — see below
+
+maxWrappableSlug is the predicted case and it landed: its test asserts that bound without
+ever naming the constant, which is exactly why "unreferenced by tests" could never have
+meant "unpinned".
+
+**THE SHARPEST RESULT IS AN ASYMMETRY.** `ordAnswerXFloorBps` is CAUGHT and its sibling
+`ordDepositFloorBps` SURVIVES. Two floors, declared on adjacent lines of court.gno, both
+money, and only one of them is noticed if it moves.
+
+**AND ONE SURVIVOR IS A FIXTURE ARTEFACT, not a missing assertion.** Raising
+`stakeOpenDelayBlocks` from 0 should close staking for a thousand blocks after OpenClaim.
+It changes nothing because every fixture reaches staking through `matureOI`, which skips
+heights to fill the OI ring first — so the polish window has always elapsed by the time
+anything stakes. The suite cannot see this default because of HOW every fixture arrives at
+the call, not because of what it asserts. That is the ASK WHETHER THE FIXTURE CAN FAIL rule
+read from the other end, and the fix is a test that stakes immediately.
+
+**trimBudget IS RECORDED AS UNDECIDED**, deliberately. It bounds how much the series trim
+does per ride; if the series converges to the same state either way, no assertion can
+distinguish them and the row is closer to INVALID than to a survivor.
+TestAYoungCourtsHourlyHistorySurvivesEveryTrimRide asserts history SURVIVES trimming, which
+a LARGER budget does not violate. Settling it needs a probe for an observable difference,
+not an argument, so the gap file says so rather than claiming a finding.
+
+**AND THE ANCHORS HAD TO COME FROM THE FILES.** Four of the eight were in a file or a form
+that reconstruction would have got wrong: `twapBuckets` is in claim.gno, not court.gno
+beside its neighbours; `maxWrappableSlug` is a top-level `const`, not a block member; two
+carry trailing comments and `ordDepositFloorBps`' wraps onto the next line. The extraction
+raised StopIteration on the first wrong guess rather than quietly producing a bad anchor,
+which is the only reason that was cheap.
+
+## And the full pass that looked for false catches, and found none
+
+The measuring instrument changed today: mutate.py now asks `gno lint` whether the mutant
+built instead of inferring it from output text. Every prior "caught" verdict in this corpus
+was produced by the old detector, and eight spot-checked rows are not 1,215. So the corpus
+was re-measured whole, from a clone pinned at 9023a2f.
+
+    0 not caught (survived, invalid, or never applied), of 1215
+    1212 caught + 3 covered elsewhere = 1215, verified by independent count
+    0 invalid, 0 unclassified, 0 timed out, 0 survived, 0 bad anchor
+    09:26 to 12:13 — 2h47m against a 2h34m estimate
+
+A row whose mutant does not build was scored a CATCH under the old detector and reports
+INVALID under this one. NOTHING FLIPPED, so no row in this corpus was claiming coverage it
+never had. That settles all three doors as latent corpus-wide rather than live — the parse
+door already known latent by parsing all 1,240 mutants, the type door named from the start,
+and the third door, unclosable by any error code, settled here.
+
+"Latent" is a measurement and not a reassurance: the doors were real, and they are shut.
+
+The 2h47m against 2h34m is the contention lesson again, and this time self-inflicted with
+the cause known: two gofmt sweeps over 1,240 mutants and the constant extractions ran
+alongside it. The quiet rate is 34.7s per row per shard; work beside a pass and it stretches.
+
 **GOVERNOR'S CLAIMS ARE PINNED BY MUTATION, WHICH IS BETTER THAN A GUARD — and the shape of
 that coverage is the lesson.** Same sweep as kourtv2's, applied to the dispute arbiter (2854
 lines, 199 rows). Two claims looked guardable:

@@ -8576,5 +8576,19 @@
   "find": "\tif idx < 0 {\n\t\tpanic(\"kourtv2: no such moderation-log row\")",
   "replace": "\tif idx < -1 {\n\t\tpanic(\"kourtv2: no such moderation-log row\")",
   "why": "moderation.gno states the ordering: \"Resolve the row BEFORE the vote, so an unreachable id is refused on the first approval rather than after m-of-n has been spent on it.\" idx is -1 or >= 0, so `< -1` makes the refusal unreachable and clm.log[idx] then indexes -1. The sibling refusal, \"that claim has no moderation log\", already had a row; this one did not."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "court.gno",
+  "label": "PARAM ordAnswerXFloorBps doubled (an ordinary court's smallest answer bond)",
+  "find": "\tordAnswerXFloorBps = int64(10) // 0.10% of an ordinary court's own supply",
+  "replace": "\tordAnswerXFloorBps = int64(20) // 0.10% of an ordinary court's own supply"
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "PARAM maxWrappableSlug lowered (the wrappable-slug bound)",
+  "find": "const maxWrappableSlug = 10",
+  "replace": "const maxWrappableSlug = 4"
  }
 ]
