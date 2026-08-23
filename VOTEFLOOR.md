@@ -1393,6 +1393,24 @@ unpinnable to pinned instead of into the gap file — `mustSpendable: a tie name
 instead of naming both locks` sits in the main corpus, caught. An item's parenthetical
 describes the plan at the time it was written; the fix can overtake it.
 
+**AND THE ITEM'S SECOND HALF, which the paragraph above left unrecorded.** "Conviction is
+absent from StakedPage, so the client makes a few small reads per position (fine, but
+recorded)" was closed by `f76bb3d`, which made the page emit `live:conv` per position with
+`conv = convPreviewCC(cs, pos, acc)`. It is PINNED, not merely present: `StakedPage: the
+stake and the conviction are crossed` is a main-corpus row that could not be written at all
+if the field were missing, and it sits beside five other StakedPage rows. The client side
+followed — the live branch reads `r.cy, r.cn` off the page it already has, and its own
+comment states the saving, that probing `positionOf` per claim "would repeat four reads —
+two StakeOf, two ConvictionOf — for numbers already in hand".
+
+Worth the four lines because of how the gap behaved. The note above declares the whole item
+complete while substantiating only the tie half, so a reader who checks it cannot tell
+whether the other half was examined or forgotten — and the item names both. That is enough
+to make it re-derivable, and it WAS re-derived, from scratch, by a later firing that read
+the item, read the code, found the client comment, ran `git log -S`, and arrived back here.
+A LEDGER THAT RECORDS HALF A CLOSURE COSTS MORE THAN ONE THAT RECORDS NONE: none sends the
+next reader to the code, half sends them to a note that answers the wrong half first.
+
 **A MESSAGE'S PREFIX IS THE WRONG THING TO GREP FOR.** Checking whether each of the four
 lock messages is asserted, by counting test references to its opening words: "not enough
 uncommitted CC" 14, "not enough unstaked CC" 10, and **"not enough free CC" — the tie
