@@ -269,6 +269,36 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE TARGETED REGRESSION PASS CAME BACK CLEAN — 389 rows, and the one survivor was
+supposed to survive.**
+
+    389 rows over 5 shards, 45 minutes, from a clone pinned at d7e6975
+    1 not caught, of 389  ->  "Offer: the kind is offered by the REALM, not the caller"
+    that row is a KNOWN-GAPS deliberate survivor ("VALID BUT OBSERVABLE ONLY
+    THROUGH AN EVENT"), and it is the ONLY gap row the batch contained
+    so: 388 main-corpus rows caught, 1 gap row surviving as designed
+
+So no row among the 389 at risk has expired. That was the question — the last full pass ran
+against `39a8c4f`, and 70 commits later 30 rows were new or re-pointed while 8 source files
+had changed under rows whose anchors still matched.
+
+**THE VERDICT NEEDED INTERPRETING, AND THAT IS A FLAW IN MY BATCH, NOT IN THE CORPUS.** The
+builder swept both corpus files, so it mixed rows expected to be CAUGHT with a row expected to
+SURVIVE, and then the summary line — "1 not caught, of 389" — read like a finding. I had to go
+and check which corpus the survivor came from before I could say whether the pass was green.
+A batch should not need that: the two corpora have opposite success criteria, which is exactly
+why `--expect-survive` exists. The builder should either exclude gap rows or run them as their
+own batch under that flag. Recorded rather than fixed, because the fix belongs with the next
+batch that needs building and not as a speculative edit to a scratch script.
+
+**AND THE THROUGHPUT FIGURE IN THIS FILE IS PESSIMISTIC BY 2x.** Measured here: 389 rows over 5
+shards in 45 minutes is **34.7s per row per shard**, against the ~75s/row recorded above from a
+4-shard run on the main tree. Two differences plausibly explain it — the clone was the only
+thing touching its own staged trees, and the main-tree figure was taken while other work was
+running — so the honest reading is that ~75s/row is the number for a busy machine and ~35s the
+number for a quiet one. `rows / shards * 75s` is a safe upper bound for planning, and it
+over-estimated this run by an hour.
+
 **THE STRONGEST REMAINING MONEY GAP: THE ESCROW'S BALANCE IS NOT RECONCILED AGAINST WHAT IT
 OWES.** Found by asking the ledger question one level up. `claim_test.gno` already pins the
 LEDGER — its own header, "THE CONSERVATION CHECK THAT DID NOT EXIST", records that
