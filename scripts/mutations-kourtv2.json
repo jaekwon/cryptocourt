@@ -8560,5 +8560,13 @@
   "find": "line += \" \u2014 \" + sanitize.InlineText(a.reason)",
   "replace": "line += \" \u2014 \" + a.reason",
   "why": "The sibling of the purge-code row, and the more important half: a code could in principle be narrowed to an alphabet, but a reason is prose by design and checkReason bounds it by LENGTH ONLY, so escaping at render is the only defence it will ever have. Measured uncaught before the fixture existed \u2014 dropping this call left the whole kourtv2 suite green. modtext_test's forge fixtures reach the claim body, the court desc and the tombstone code, never a reason and never this page."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "the escrow clock reads provisional FRESH, so it is never set at the first resolution",
+  "find": "\tif firstResolution && !cs.provClose {",
+  "replace": "\tif cs.provisional < 0 && !cs.provClose {",
+  "why": "dispute.gno captures firstResolution with \"capture BEFORE the switch mutates it\", and the block this guards sets the escrow clock \u2014 \"set ONCE, at the first resolution, and never recomputed\". By here the first-resolution branch has already written provisional = answer, so a FRESH read is false where the capture was true and the clock is never set. Measured caught by the realm panic \"the escrow window has passed; Finalize the verdict\", with 0 build errors. NOTE the sibling use site inside the switch is NOT writable: there the write is inside the block the condition guards, so a fresh read is the same program and the row would be INVALID."
  }
 ]
