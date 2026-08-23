@@ -269,6 +269,26 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**AND THE SECOND SELFTEST RUN CLOSED THE LOOP ON EVERY ARM ADDED SINCE.** 18 minutes,
+EXIT=0, and the numbers that matter:
+
+    156 arm(s), all "fires"
+    0 SILENT, 0 VACUOUS, 0 BROKEN CONTROL, 0 WRONG COMPLAINT, 0 NOT ARMED
+    vacuity: 118 control(s) parsed, 33 guard(s) run clean, 0 NOT RESOLVABLE
+    tree restored, no stray .selftest-backup
+
+All NINE arms written this session fire in situ rather than only in the harnesses built
+for them: an empty batch refused, a test that never ran, a harness that dies instead of
+objecting, a control arm whose plant no longer applies, a closed gap, an unmeasured row,
+two rows producing one mutant, a row whose replace changes nothing, and a render gate that
+stops sanitising.
+
+**The 0 not resolvable is the line worth pointing at.** vacuity_audit reported "7 not
+resolvable" when it was first read; the fix imported check-control-anchors' evaluator
+instead of writing a third copy, and that was verified by slicing the function out and
+exec'ing it. This is the same number from the REAL run, which is the difference between a
+unit test of a resolver and the resolver doing its job inside the thing that uses it.
+
 **THE MONEY PATHS ARE NOW THE BEST-COVERED SURFACE, NOT THE WEAKEST — measured, and it
 inverts the premise this work started from.** An operator-coverage sweep over every
 non-test kourtv2 file, counting boundary-operator lines with no corpus row anchored on
