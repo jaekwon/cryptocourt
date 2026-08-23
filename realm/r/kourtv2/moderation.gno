@@ -466,6 +466,21 @@ func requireEdgeRemover(c *Court, author, who address) {
 // authority-sensitive path is four chances. It also made the boundary unpinnable —
 // a corpus row needs an anchor that matches once, and three identical texts in one
 // file have none.
+// mustCategoryCode bounds the code by LENGTH ONLY, deliberately, and the reason
+// is worth stating because an alphabet here looks like an easy win and is not.
+//
+// Where this value ends up: emitPurge writes it into an event, and an event is
+// permanent — so this is the one field on the purge path where a bad value cannot
+// be undone afterwards. That argues for an alphabet at the door. Against it: the
+// escaping at render is what actually defends the pages, it is TESTED on four
+// surfaces with a code that forges structure, and `reason` sits beside this field
+// carrying prose that can never be constrained at all. Narrowing the code would
+// retire a live, exercised defence for one field while its free-text sibling
+// keeps needing it — strengthening the lock on one of two doors.
+//
+// So the code stays free text and every surface escapes it. What callers get
+// instead is this note: purge is m-of-n precisely because it is irreversible, and
+// the code is the part of it that outlives the claim.
 func mustCategoryCode(code string) {
 	if len(code) == 0 || len(code) > maxReasonLen {
 		panic("kourtv2: purge needs a statutory category code")
@@ -1145,7 +1160,11 @@ func emitPurge(slug string, claimID uint64, categoryCode string, actor address) 
 	chain.Emit(purgeEvent,
 		"court", slug,
 		"claim", strconv.FormatUint(claimID, 10),
-		"code", categoryCode, // a statutory category enum, not user text
+		// Caller-supplied and bounded by LENGTH ONLY — see mustCategoryCode, which
+		// says why there is no alphabet. It said "a statutory category enum, not
+		// user text", which was wrong: nothing makes it an enum. The section header
+		// above is still accurate, because a category code is what it allows.
+		"code", categoryCode,
 		"by", actor.String(),
 		"height", eventHeight(),
 	)

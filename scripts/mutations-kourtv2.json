@@ -8552,5 +8552,13 @@
   "find": "sanitize.InlineText(a.code) + \" \u00b7 by \"",
   "replace": "a.code + \" \u00b7 by \"",
   "why": "modAct's doc claimed code was \"an enum, never user text\" and that was false for three of the eleven acts that write a row: global-hide, purge and purgerow each concatenate a caller-supplied statutory code, and mustCategoryCode validates LENGTH ONLY. Measured uncaught before the fixture existed \u2014 dropping this call left the whole kourtv2 suite green. The actor is a global DAO member, so the door is narrow, but purge is the LEGAL-HOLD act and its tombstone would have been a place to put removed text back."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "renderModLog: a moderation reason reaches the page unsanitised",
+  "find": "line += \" \u2014 \" + sanitize.InlineText(a.reason)",
+  "replace": "line += \" \u2014 \" + a.reason",
+  "why": "The sibling of the purge-code row, and the more important half: a code could in principle be narrowed to an alphabet, but a reason is prose by design and checkReason bounds it by LENGTH ONLY, so escaping at render is the only defence it will ever have. Measured uncaught before the fixture existed \u2014 dropping this call left the whole kourtv2 suite green. modtext_test's forge fixtures reach the claim body, the court desc and the tombstone code, never a reason and never this page."
  }
 ]

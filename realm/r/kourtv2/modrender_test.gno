@@ -450,3 +450,54 @@ func TestAPurgeCodeCannotWriteMarkupIntoTheModLog(cur realm, t *testing.T) {
 		t.Errorf("an ordinary purge code no longer appears in the log:\n%s", ok)
 	}
 }
+
+// A moderation REASON cannot write markup into the moderation log either.
+//
+// The sibling of the purge-code test above, and the more important half: a code
+// could in principle be narrowed to an alphabet, but a reason is prose by design
+// and checkReason bounds it by LENGTH ONLY. So escaping at render is the only
+// defence this field will ever have.
+//
+// It had no test. Measured on a staged copy, anchor count printed and exit status
+// gated: dropping sanitize.InlineText from the reason field leaves the entire
+// kourtv2 suite green. The log's two free-text fields were both unpinned, and
+// modtext_test's forge fixtures reach the claim body, the court desc and the
+// tombstone code — never a reason, and never this page.
+//
+// Asserted on the BACKSLASH, not the payload, for the reason recorded in
+// VOTEFLOOR: Contains(out, "<img") matches the escaped form just as happily.
+func TestAModerationReasonCannotWriteMarkupIntoTheModLog(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ri-alice")
+	testCourt(cur, "rsninj", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rsninj", "a claim to hide")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "rsninj", id, "<img src=x onerror=1> [f](u)")
+
+	out := Render("rsninj/mod")
+	for i := 0; i < len(out); i++ {
+		if out[i] == '<' && (i == 0 || out[i-1] != '\\') {
+			t.Errorf("the moderation log carries an unescaped '<' at byte %d, so a "+
+				"moderation reason reaches the reader as markup:\n%s", i, out)
+			break
+		}
+	}
+
+	// AND THE ORDINARY REASON IT MUST STILL SHOW. The log is why a moderator's act
+	// can be reviewed at all, so a reason escaped into nothing would be the worse
+	// bug — and it would satisfy the loop above.
+	//
+	// "spam" and not "off-topic", which is what this arm was written with first: a
+	// HYPHEN is in markdown.EscapeInline's set, so an ordinary-looking reason comes
+	// back as `off\-topic` and the assertion fails on correct code. The arm has to
+	// use a string with nothing escapable in it, or it is testing the escaping it
+	// is supposed to be the control for.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id2 := OpenClaim(cross(cur), "rsninj", "a second claim to hide")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "rsninj", id2, "spam")
+	if ok := Render("rsninj/mod"); !strings.Contains(ok, "spam") {
+		t.Errorf("an ordinary moderation reason no longer appears in the log:\n%s", ok)
+	}
+}
