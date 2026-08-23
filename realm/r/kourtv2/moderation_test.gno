@@ -1132,3 +1132,57 @@ func TestGlobalDAOStateGuardsRefuseNoOps(cur realm, t *testing.T) {
 		AppointMods(cross(cur), "noopc", 1)
 	})
 }
+
+// The m-of-n threshold is validated against the CANONICAL set, not the raw list.
+//
+// moderation.gno states both the rule and the bug it closed: "Canonicalize FIRST,
+// then validate: checking m against the raw list let {A,A,B} with m=3 install
+// n=2/m=3 — a set in which no action can ever reach its own threshold, including
+// UnhideItem, so any standing hide became locally permanent." A set that cannot
+// reach its own threshold cannot be repaired by its own members either, so the
+// only way out is an election install or a meta verdict.
+//
+// THE BOUND WAS ALREADY TESTED, AND THAT DID NOT HELP — which is why this test
+// exists and why it looks redundant. Four fixtures assert "m-of-n threshold must
+// be in 1..n", and every one of them passes DISTINCT members: moderation_test's
+// own `pair` is two different addresses, and modvote_test's is one. With distinct
+// members len(mods) EQUALS len(canon), so `m > len(canon)` and `m > len(mods)` are
+// the same program and no such fixture can tell them apart. Measured before
+// writing this, with the mutation applied to a staged copy and the anchor count
+// checked first: swapping canon for the raw list leaves the entire kourtv2 suite
+// green at BOTH sites — the check inside AppointMods in moderation.gno and the one
+// inside RegisterModCandidate in modvote.gno. A duplicate member is the only input
+// that separates them.
+//
+// Both entry points, because canonicalMembers is the chokepoint they share and
+// each does its own threshold check against the result — the same reason
+// TestModSetSizeIsCapped covers both.
+func TestTheThresholdIsCheckedAgainstTheCanonicalSet(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cn-alice")
+	testCourt(cur, "canonord", alice, 10_000_000_000)
+
+	a := testutils.TestAddress("cn-m1")
+	b := testutils.TestAddress("cn-m2")
+	dup := []address{a, a, b} // three entries, two members
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
+		AppointMods(cross(cur), "canonord", 3, dup...)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "m-of-n threshold must be in 1..n", func() {
+		RegisterModCandidate(cross(cur), "canonord", 3, dup...)
+	})
+
+	// AND THE ORDINARY INPUT IT MUST NOT REFUSE: the same list at m=2 is a legal
+	// 2-of-2 set once canonicalised. Without this arm, a version that refused any
+	// list containing a duplicate would pass both refusals above — and refusing
+	// duplicates outright would be the wrong fix, since a caller listing the same
+	// address twice has asked for something perfectly reachable.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "canonord", 2, dup...)
+	if !IsCourtMod("canonord", a) || !IsCourtMod("canonord", b) {
+		t.Fatal("a duplicated list at m=2 must install as the 2-of-2 set it " +
+			"canonicalises to")
+	}
+}

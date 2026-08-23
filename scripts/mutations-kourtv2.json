@@ -8528,5 +8528,21 @@
   "find": "\tif len(name) > grc20.MaxNameLen {",
   "replace": "\tif len(name) > 1000 {",
   "why": "A court name may be 100 characters and this realm prepends \"Wrapped \", where grc20's MaxNameLen is 64. Without the bound a long-named court aborts inside NewToken with \"invalid token name (empty, too long, or contains control chars)\" \u2014 naming neither courts nor names nor the fix \u2014 and a court name cannot be changed after StartCourt, so that is permanent for that court. Enable already does this arithmetic for the slug and says why in its own comment."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "AppointMods: the threshold is checked against the raw list, so a duplicate installs an unreachable set",
+  "find": "\tif m < 1 || m > len(canon) {",
+  "replace": "\tif m < 1 || m > len(mods) {",
+  "why": "moderation.gno states the rule AND the bug it closed: checking m against the raw list let {A,A,B} with m=3 install n=2/m=3, a set no action can ever act for \u2014 including UnhideItem, so a standing hide became locally permanent, and the set cannot repair itself. Measured UNCAUGHT before the fixture existed: the four tests that assert the 1..n bound all pass DISTINCT members, where len(mods) equals len(canon) and the two expressions are the same program."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "RegisterModCandidate: the threshold is checked against the raw list, so a duplicate registers an unreachable set",
+  "find": "\tif m < 1 || m > len(canon) {",
+  "replace": "\tif m < 1 || m > len(members) {",
+  "why": "The same defect at the other entry point sharing canonicalMembers, and it was uncaught the same way. One fixture covers both, the way TestModSetSizeIsCapped covers both for the size cap."
  }
 ]
