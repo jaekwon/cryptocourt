@@ -8544,5 +8544,13 @@
   "find": "\tif m < 1 || m > len(canon) {",
   "replace": "\tif m < 1 || m > len(members) {",
   "why": "The same defect at the other entry point sharing canonicalMembers, and it was uncaught the same way. One fixture covers both, the way TestModSetSizeIsCapped covers both for the size cap."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "renderModLog: the purge code reaches the page unsanitised",
+  "find": "sanitize.InlineText(a.code) + \" \u00b7 by \"",
+  "replace": "a.code + \" \u00b7 by \"",
+  "why": "modAct's doc claimed code was \"an enum, never user text\" and that was false for three of the eleven acts that write a row: global-hide, purge and purgerow each concatenate a caller-supplied statutory code, and mustCategoryCode validates LENGTH ONLY. Measured uncaught before the fixture existed \u2014 dropping this call left the whole kourtv2 suite green. The actor is a global DAO member, so the door is narrow, but purge is the LEGAL-HOLD act and its tombstone would have been a place to put removed text back."
  }
 ]

@@ -266,8 +266,24 @@ type claimMod struct {
 }
 
 // modAct is one append-only moderation-log row. rowID lets purge address a
-// single row. code is a category/act code (an enum), never user text; reason
-// is the stored (sanitized-at-render) text, purgeable.
+// single row.
+//
+// code is an act tag, and it is NOT AN ENUM. This said "a category/act code (an
+// enum), never user text", and that was wrong in the way that matters: eight of
+// the eleven acts that write a row do pass a fixed string ("hide", "unhide",
+// "meta-clear" and the like), but three CONCATENATE a caller-supplied statutory
+// code into it — "global-hide:"+categoryCode, "purge:"+code and
+// "purgerow:"+code — and mustCategoryCode validates LENGTH ONLY, with no alphabet
+// and no membership test. So those three carry free text with every punctuation
+// mark available.
+//
+// renderModLog therefore sanitises code exactly as it sanitises reason, and that
+// is not belt-and-braces. A "never user text" claim on a field that IS user text
+// is precisely what licenses a later reader to render it raw, which is how the
+// same mistake reached ccwrap's page. Pinned by
+// TestAPurgeCodeCannotWriteMarkupIntoTheModLog.
+//
+// reason is the stored text, sanitized at render, and purgeable.
 type modAct struct {
 	rowID  uint64
 	actor  address

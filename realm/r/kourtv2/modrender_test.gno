@@ -386,3 +386,67 @@ func TestClaimBodyCannotForgePageStructure(cur realm, t *testing.T) {
 		}
 	}
 }
+
+// A purge code cannot write markup into the moderation log.
+//
+// modAct's own doc said the opposite — "code is a category/act code (an enum),
+// never user text" — and that is false for three of the eleven acts that write a
+// log row. Eight pass a fixed string ("hide", "unhide", "meta-clear" and the
+// like), but three CONCATENATE a caller-supplied statutory code into it:
+// "global-hide:"+categoryCode, "purge:"+code and "purgerow:"+code. And
+// mustCategoryCode validates LENGTH ONLY — non-empty, at most maxReasonLen — with
+// no alphabet and no enum membership, so those three carry free text with every
+// punctuation mark available.
+//
+// A false "cannot be user text" is worse than no comment, because it is exactly
+// what licenses the next reader to render the field raw. renderModLog does
+// sanitise it today, defensively and against its own doc, and NOTHING PINNED
+// THAT: measured on a staged copy with the anchor count printed and the exit
+// status gated, dropping sanitize.InlineText from the code field leaves the whole
+// kourtv2 suite green.
+//
+// The actor is a global DAO member, so this is not an open door — but purge is
+// the LEGAL-HOLD act, whose whole purpose is removing text that must not be
+// displayed, and the tombstone it leaves would have been a place to put text
+// back. gnoweb runs no HTML sanitiser after a realm.
+//
+// Asserted on the BACKSLASH rather than the payload, for the reason recorded in
+// VOTEFLOOR: Contains(out, "<img") matches the ESCAPED form just as well, so it
+// passes whether the sanitiser ran or not.
+func TestAPurgeCodeCannotWriteMarkupIntoTheModLog(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ci-alice")
+	testCourt(cur, "codeinj", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "codeinj", "a claim someone wants gone")
+
+	// The LIVE admin, not DirectoryAdmin(): the global DAO is a package singleton
+	// whose seat an earlier test in this process may have moved. m=1 so one
+	// signature fires, which is what the ~30 other purge fixtures here do.
+	dadmin := ensureGlobalDAO().admin
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeClaim(cross(cur), "codeinj", id, "<img src=x onerror=1>")
+
+	out := Render("codeinj/mod")
+	for i := 0; i < len(out); i++ {
+		if out[i] == '<' && (i == 0 || out[i-1] != '\\') {
+			t.Errorf("the moderation log carries an unescaped '<' at byte %d, so a "+
+				"purge code reaches the reader as markup:\n%s", i, out)
+			break
+		}
+	}
+
+	// AND THE ORDINARY CODE IT MUST STILL SHOW. The log is the audit trail for an
+	// irreversible act, so a code that renders as nothing would be a worse bug
+	// than an unescaped one — and without this arm, sanitising to the empty string
+	// would pass the loop above.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id2 := OpenClaim(cross(cur), "codeinj", "a second claim someone wants gone")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeClaim(cross(cur), "codeinj", id2, "CSAM")
+	if ok := Render("codeinj/mod"); !strings.Contains(ok, "purge:CSAM") {
+		t.Errorf("an ordinary purge code no longer appears in the log:\n%s", ok)
+	}
+}
