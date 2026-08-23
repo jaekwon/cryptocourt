@@ -269,6 +269,62 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**VERIFYING SOMEBODY ELSE'S REFACTOR, and the hole that showed up while doing it.** Two
+refactors landed from another session on money-path code — `settleAnswerBond` collapsing
+Finalize's and SettleUndisputed's identical ten lines into one helper, and a second
+consolidating the edge-removal gates. Both were carefully done and carefully verified;
+what they verified was **one** row by measurement and the rest by anchors-plus-clean-suite.
+An anchor resolving is not the same as a mutation being caught, and that difference is
+exactly what expired the `folders` row in the first full pass. So the 12 rows those two
+commits added or re-pointed were measured:
+
+    12 row(s) added or re-pointed across ea0394c and 35434e0
+    12/12 caught, harness mtime checked either side
+
+Coverage held, and the catching tests are pleasingly diverse —
+`TestDecidedRoundBuysNoSlashImmunity`, `TestCrystallizeMidHappyPathDrainsEscrow`,
+`TestSlashSurvivesSettle`, `TestCrystallizeLowTierZeroDrawCarrotStillPays` — which is what
+a helper reached through many paths should look like.
+
+**FOUR HYPOTHESES, ALL REFUTED BY READING, and none of them written up as a finding.** The
+refactor moved a `Transfer` out of two functions, so: (1) does `check-spend-paths`' census
+now describe a tree that moved? No — it counts GUARD CALLERS, not transfers, and says so in
+its own docstring; an escrow→answerer refund needs no spendability guard. (2) Does ARM 7's
+`COIN_OUT_N` still hold? Yes, and by construction: `ESCROW_SRC` excludes escrow-sourced
+lines, so the count is of USER-sourced movement and refunds were never in it. (3)
+`settleAnswerBond` deliberately retains a reserve while a future flag could still slash,
+and Crystallize returns the WHOLE bond — can a flag land after crystallize and find nothing
+to take? No: `OpenFlag` refuses outright on `cs.crystallized`. (4) Is that refusal pinned?
+Yes, by `TestOpenFlagRefusesEveryClosedState`, which constructs each terminal state,
+restores between arms, and even carries a positive arm (a `provClose`d claim must NOT be
+refused). A grep for the panic's first half missed it because the assertion uses its
+second half.
+
+Four dead ends is the correct outcome of an audit on well-covered code, and the discipline
+that matters is that none of them reached a document.
+
+**AND THE GAP FILE'S CHECK WAS NOT A CHECK.** `make gaps` reads the corpus the other way
+round — a KNOWN-GAPS row is wrong when it STARTS being caught — and it printed its verdict
+and **exited 0 either way**. Found by reading the exit code and then remembering that this
+tool's exit code says only "the run is a result": the verdict line is unconditional. The
+answer had to be computed by hand:
+
+    21 sent, 17 surviving + 4 by-design = 21  ->  0 caught
+    had it been 16 and 4, exit=0 all the same
+
+`--expect-survive` now inverts the verdict for that batch, ablated three ways (a caught row
+with the flag exits 1 and names it; the same row without the flag still exits 0; a
+surviving gap row with the flag exits 0 and says so), with a control arm on the same
+governor anchor two neighbouring arms already use.
+
+**One observation recorded without an explanation, because it is a measurement and not a
+guess.** Two `make gaps` runs minutes apart split the same 21 rows differently — `17`
+not-caught + `4` by-design, then `18` + `3`. The total, and therefore the verdict, is
+identical both times and correct. But one row moved category, so the by-design/ordinary
+split is not stable run to run. It costs six minutes a sample to chase and does not affect
+whether a gap has closed, so it is written down rather than investigated: if a future
+reader sees an excused row reported as an ordinary survivor, this is why, and it is not new.
+
 **A RED GUARD WHOSE CAUSE BELONGED TO SOMEBODY ELSE — and the same exit code, twice, for
 entirely different reasons.** `make anchors` went red with three broken rows, all in
 `moderation.gno`, all broken by another session's 39 uncommitted lines sitting in the working
