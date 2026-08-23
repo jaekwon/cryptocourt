@@ -43,7 +43,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import repolock
 
 ROOT = Path(__file__).resolve().parent.parent
-GNO_CHECKOUT = "/Users/jk/gopath/src/github.com/gnolang/gno"
 
 # The corpus knows which tree a row's `file` lives in; mutate.py owns that map.
 import mutate  # noqa: E402
