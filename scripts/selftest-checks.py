@@ -68,45 +68,17 @@ failures = []
 exercised = set()
 
 
-# One clean-tree run per distinct guard command, kept so every arm can be asked
-# the question below without paying for it 117 times.
-_baseline = {}
-
-
-def _clean(argv, stdin, cwd):
-    key = (tuple(argv), stdin, cwd)
-    if key not in _baseline:
-        r = subprocess.run(list(argv), capture_output=True, text=True,
-                           input=stdin, cwd=cwd)
-        _baseline[key] = r.stdout + r.stderr
-    return _baseline[key]
-
-
 def control(label, path, find, replace, want, argv=None, stdin=None, cwd=None):
     """Apply an edit, run the guard, and require `want` in its output.
 
-    AND REQUIRE THAT THE GUARD WAS NOT ALREADY SAYING IT. An arm whose `want` is
-    a substring of the CLEAN output reports "fires" while its mutation does
-    nothing at all — the same green as an arm that works, over no evidence. That
-    is not hypothetical here: check-paths' own comment records it, two arms at
-    once, when their wants were the bare words "STALE" and "ALLOWLIST" which the
-    baseline output already contained while two real stale paths were
-    outstanding. The wants were then made specific and the class was left
-    unguarded, so nothing stopped the next one.
-
-    Measured across the whole file before adding this: 117 arms, 114 baselined
-    fresh (0 vacuous) and 3 — check-elsewhere's — settled by reading, each want
-    appearing exactly once and only inside a branch that returns 1. So this
-    starts from a clean tree and exists to keep it that way.
+    Whether that `want` is a string the guard ALREADY prints on a clean tree
+    is asked once, in aggregate, by vacuity_audit() at the end of this file.
+    It is not asked here: doing both means running every distinct guard
+    baseline twice in a run that already takes twenty-four minutes.
     """
     for a in (argv or ["python3", "scripts/check-citations.py"]):
         if a.endswith(".py"):
             exercised.add(os.path.basename(a))
-    cmd = argv or ["python3", "scripts/check-citations.py"]
-    if want in _clean(cmd, stdin, cwd):
-        print(f"  {label:<44} VACUOUS CONTROL (want already in clean output)")
-        failures.append(label)
-        return
     backup = path + ".selftest-backup"
     shutil.copy(path, backup)
     try:
@@ -1757,38 +1729,49 @@ print("\nvacuity")
 # Controls whose argv is not a plain list of literals or module constants cannot be
 # resolved and are COUNTED OUT LOUD rather than skipped quietly — an audit that silently
 # ignores what it cannot parse is the same vacuity one level up.
+# THE RESOLVER IS SHARED, not re-written here. This function's first version took
+# `want` and every argv element only as an ast.Constant, and counted the rest out
+# loud: 7 of 117 unresolvable. Six of those seven were arms passing no `argv` at
+# all — control() defaults them to check-citations, so they were resolvable all
+# along — and the seventh builds its want by concatenation. check-control-anchors
+# already evaluates the five shapes these call sites use (literal, module
+# constant, f-string, os.path.join, concatenation) and is measured at 117 of 117,
+# so it is imported rather than copied. A third copy of this logic is exactly the
+# duplication the corpus now fails a build over.
+def _resolver():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "cca", os.path.join(REPO, "scripts", "check-control-anchors.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
 def vacuity_audit():
     import ast
-    tree = ast.parse(open(__file__).read())
-    consts = {}
-    for node in tree.body:
-        if (isinstance(node, ast.Assign) and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name)
-                and isinstance(node.value, ast.Constant)):
-            consts[node.targets[0].id] = node.value.value
+    cca = _resolver()
+    src = open(__file__).read()
+    tree = ast.parse(src)
+    consts = cca.build(tree, {"REPO": REPO})
     parsed, unresolved, cache, bad = 0, 0, {}, []
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "control"):
             continue
         parsed += 1
-        if len(node.args) < 5 or not isinstance(node.args[4], ast.Constant):
+        want = cca.ev(node.args[4], consts) if len(node.args) >= 5 else None
+        if want is None:
             unresolved += 1
             continue
-        want = node.args[4].value
-        label = node.args[0].value if isinstance(node.args[0], ast.Constant) else "?"
-        cmd = None
+        label = cca.ev(node.args[0], consts) or "?"
+        # control()'s own default when an arm passes no argv.
+        cmd = ["python3", "scripts/check-citations.py"]
         for kw in node.keywords:
-            if kw.arg == "argv" and isinstance(kw.value, ast.List):
-                parts = []
-                for e in kw.value.elts:
-                    if isinstance(e, ast.Constant):
-                        parts.append(e.value)
-                    elif isinstance(e, ast.Name) and e.id in consts:
-                        parts.append(consts[e.id])
-                    else:
-                        parts = None
-                        break
-                cmd = parts
+            if kw.arg == "argv":
+                if not isinstance(kw.value, ast.List):
+                    cmd = None
+                    break
+                parts = [cca.ev(e, consts) for e in kw.value.elts]
+                cmd = None if any(x is None for x in parts) else parts
         if not cmd:
             unresolved += 1
             continue
