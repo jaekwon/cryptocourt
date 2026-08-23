@@ -71,6 +71,29 @@ ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensur
 EXPORTED = re.compile(r"^func ([A-Z]\w*)\(([^)]*)\)")
 CROSSING = re.compile(r"\bcur\s+realm\b")
 
+# AND AN EXPORTED READ MUST NOT HAND OUT A POINTER, which is the second half of
+# the same rule and was enforced by nothing. Three places in kourtv2 cite "borrow
+# rule #2" for it — court.gno on /p/ pointers, strips.gno on realm state, and
+# folders.gno most explicitly, at FolderItems: "returns a copy of a folder's
+# claim-ID list (a value slice — never a pointer into realm state, borrow rule
+# #2)". Nothing checked that the next read keeps the promise.
+#
+# The harm is not a wrong answer. A pointer handed across the realm boundary is
+# mutable by whoever holds it, and a write through it commits under THIS realm's
+# authority, so a reader becomes a writer without a crossing call and without a
+# storage deposit. That is a different and worse failure than the allocation one
+# above, which only grows state.
+#
+# NO POINTER AT ALL is deliberately stricter than "no pointer into realm state".
+# Distinguishing a freshly-allocated return from an escaping one is not something
+# a static reader can do honestly, and the strict form is the property that
+# actually holds: measured, ZERO of the exported reads return a pointer, while
+# nine UNEXPORTED helpers do (mustClaim, mustFolder, getPos and the like) and are
+# untouched by this because they never cross the boundary. A read that genuinely
+# needs to return a fresh pointer goes in the allowlist with its reason, which is
+# the census pattern the other guards here use.
+POINTER_RETURN_OK = {}
+
 
 def functions(src):
     """Split a .gno source into (decl, name, body) triples on top-level funcs."""
@@ -109,7 +132,7 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    reads, bad = 0, []
+    reads, bad, ptr = 0, [], []
     for p in files:
         for decl, name, body in functions(p.read_text()):
             m = EXPORTED.match(decl)
@@ -119,12 +142,31 @@ def main() -> int:
             hit = sorted({a for a in ALLOCATORS if f"{a}(" in body})
             if hit:
                 bad.append((p.name, name, hit))
+            # The return type only: EXPORTED consumes the parameter list, so a
+            # pointer PARAMETER cannot be mistaken for a pointer return.
+            ret = decl[m.end():].strip().rstrip("{").strip()
+            if "*" in ret and name not in POINTER_RETURN_OK:
+                ptr.append((p.name, name, ret))
 
     if not reads:
         # Every exported read vanished, which means the pattern stopped matching
         # the code rather than that the code stopped needing the rule.
         print(f"check-read-purity: found no exported reads at all, which cannot "
               f"be right — the pattern has drifted from the code.", file=sys.stderr)
+        return 1
+
+    if ptr:
+        print("check-read-purity: an exported read hands out a POINTER.\n",
+              file=sys.stderr)
+        for fn, name, ret in ptr:
+            print(f"  {fn}:{name} returns {ret}", file=sys.stderr)
+        print("\nA pointer that crosses the realm boundary is mutable by whoever "
+              "holds it, and a write through it commits under THIS realm's authority "
+              "— a reader becomes a writer with no crossing call and no storage "
+              "deposit (borrow rule #2, cited at FolderItems in folders.gno). Return "
+              "a value or a copy. If the pointer is genuinely freshly allocated and "
+              "cannot alias realm state, add the read to POINTER_RETURN_OK with that "
+              "reason.", file=sys.stderr)
         return 1
 
     if bad:
@@ -140,7 +182,8 @@ def main() -> int:
               f"must allocate.", file=sys.stderr)
         return 1
 
-    print(f"check-read-purity: {reads} exported read(s), none allocates "
+    print(f"check-read-purity: {reads} exported read(s), none hands out a pointer, "
+          f"none allocates "
           f"({', '.join(ALLOCATORS)} all confined to write paths).")
     return 0
 

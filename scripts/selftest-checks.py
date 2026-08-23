@@ -569,6 +569,20 @@ control("a membership pattern that drifted off the code", MEMCLEAR,
         argv=["python3", MEMCLEAR])
 
 print("\ncheck-read-purity")
+# THE SECOND HALF OF THE SAME RULE: an exported read must not hand out a POINTER.
+# Three sites cite "borrow rule #2" for it and nothing enforced it — a pointer
+# across the realm boundary is mutable by whoever holds it, and a write through it
+# commits under this realm's authority, so a reader becomes a writer with no
+# crossing call and no storage deposit.
+#
+# The plant does not have to COMPILE, and that is worth saying: this guard reads
+# .gno as text and never builds the realm, so turning a return type into a pointer
+# is a legitimate plant even though the body no longer matches it.
+control("an exported read that hands out a pointer", f"{KOURTV2}/folders.gno",
+        "func FolderItems(courtSlug string, folderID uint64) []uint64 {",
+        "func FolderItems(courtSlug string, folderID uint64) *[]uint64 {",
+        "FolderItems returns *[]uint64",
+        argv=["python3", READPURE])
 # The guard's failure mode is a read that allocates SUCCEEDING where it should
 # have panicked, so nothing in the suite goes red — the drift is invisible to
 # tests by construction. The control has to inject a whole read rather than edit
