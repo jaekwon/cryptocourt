@@ -2,6 +2,7 @@ package ccwrap
 
 import (
 	"chain"
+	"strings"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -607,4 +608,103 @@ func TestTheWrapCapHoldsTheBarsUpToItsEscrowBound(cur realm, t *testing.T) {
 			"still reachable (%d vs %d) — the walk above found the wrong edge",
 			bound+1, votable-vaultHeld, votable/3)
 	}
+}
+
+// A court's name cannot write markup onto the wrap page.
+//
+// Enable derives the wrapped token's name as `"Wrapped " + kourtv2.CourtName(slug)`
+// and Render writes that name into an H1. kourtv2's mustCourtName validates LENGTH
+// ONLY, 1..100 characters — mustCourtDesc beside it walks the string and refuses
+// newlines, the name does not — so by the time it reaches this realm it is free-form
+// user text, and gnoweb runs no HTML sanitiser after a realm.
+//
+// WHAT IS NOT REACHABLE, measured rather than assumed, because the first version of
+// this test asserted it and failed: block structure. grc20's validName rejects every
+// rune below 0x20, so a newline in a court name aborts Enable inside NewToken with
+// "invalid token name (empty, too long, or contains control chars)" and Render is
+// never reached at all. Headings, list rows and CommonMark §4.6 HTML blocks each
+// need a line of their own, so none of them can get here.
+//
+// WHAT IS REACHABLE is everything inline. validName's own comment says it "permits
+// Unicode letters, digits, punctuation, and spaces — name is purely a display
+// field", and that includes < > & [ ] ( ) * _ ` #. So `<img src=x onerror=1>` is a
+// legal court name and lands in an H1 as live markup.
+//
+// THE ASSERTION IS ON THE BACKSLASH, NOT ON THE PAYLOAD. `Contains(out, "<img")`
+// matches the ESCAPED `\<img` exactly as well as the raw one, so it passes whether
+// the sanitiser ran or not — that mistake cost three wrong versions of an earlier
+// render test. markdown.EscapeInline writes '\\' before each byte in its set, so the
+// invariant is: every `<` on this page is preceded by a backslash. Nothing else in
+// the template can produce one — the other three fields are a symbol constrained to
+// [A-Za-z0-9_-], a token path, and an integer.
+func TestACourtNameCannotWriteMarkupOntoTheWrapPage(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-inject")
+
+	// 33 bytes, so "Wrapped " + this is 41 — inside grc20's MaxNameLen of 64.
+	hostile := "<img src=x onerror=1> [f](u) **b**"
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.StartCourt(cross(cur), "wrapinj", hostile)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "wrapinj")
+
+	out := Render("wrapinj")
+	for i := 0; i < len(out); i++ {
+		if out[i] == '<' && (i == 0 || out[i-1] != '\\') {
+			t.Errorf("the wrap page carries an unescaped '<' at byte %d, so a court "+
+				"name reaches the reader as markup:\n%s", i, out)
+			break
+		}
+	}
+
+	// Paired with the ordinary name it must NOT mangle: letters and spaces are in no
+	// escape set, so an ordinary court still renders as its own heading. Without this
+	// arm a Render that emitted nothing at all would satisfy the loop above.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.StartCourt(cross(cur), "wrapok", "Acme Arbitration")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "wrapok")
+	if ok := Render("wrapok"); !strings.Contains(ok, "# Wrapped Acme Arbitration\n") {
+		t.Errorf("an ordinary court name no longer renders as its own heading:\n%s", ok)
+	}
+}
+
+// A court whose name is too long to wrap is told so HERE, by this realm.
+//
+// mustCourtName allows 100 characters and this realm prepends "Wrapped ", where
+// grc20's MaxNameLen is 64 — so a court name of 57 or more can never become a token
+// name. Enable already does exactly this arithmetic for the SLUG and says why in its
+// own comment: "Caught here with the reason, rather than surfacing as grc20's
+// ErrInvalidSymbol from three frames down." The NAME had the same failure mode and no
+// guard, so a long-named court aborted inside NewToken behind a message that names
+// neither courts nor names nor what to do about it.
+//
+// It matters more than a nicer string. A court's name cannot be changed after
+// StartCourt, so for that court the failure is permanent, and the only thing anyone
+// gets is the message.
+func TestACourtNameTooLongToWrapIsRefusedHere(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cw-longname")
+
+	long := ""
+	for len(long) < 57 {
+		long += "n"
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.StartCourt(cross(cur), "wraplong", long)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "too long to wrap", func() {
+		Enable(cross(cur), "wraplong")
+	})
+
+	// And the boundary it must NOT refuse. 56 is the longest that fits, so this arm
+	// is what makes the guard a bound rather than an off-by-one that costs a court
+	// its wrapping for no reason.
+	fits := ""
+	for len(fits) < 56 {
+		fits += "y"
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	kourtv2.StartCourt(cross(cur), "wrapfit", fits)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Enable(cross(cur), "wrapfit")
+	uassert.True(t, Enabled("wrapfit"))
 }

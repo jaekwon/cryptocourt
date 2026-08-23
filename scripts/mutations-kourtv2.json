@@ -8512,5 +8512,21 @@
   "find": "\t\t2000, // a fifth of the supply",
   "replace": "\t\t3000, // a fifth of the supply",
   "why": "The other catching mechanism: an offerable-but-undocumented tuple gets past Offer, so only reading the terms back through KindRules finds it. Pairs with the grace row \u2014 one row per mechanism."
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Render: the sanitiser is applied to the symbol instead of the court name",
+  "find": "sanitize.InlineText(w.tok.GetName()), w.tok.GetSymbol(),",
+  "replace": "w.tok.GetName(), sanitize.InlineText(w.tok.GetSymbol()),",
+  "why": "NOT the obvious mutation, and the reason is worth keeping. Simply dropping the call removes the sanitize import's ONLY use, so the file stops compiling \u2014 and gno reports that as `0 build errors, 1 test errors`, which a harness scoring a failing suite as a catch would count as coverage it does not have. Moving the call to the symbol keeps the import used, compiles, and leaves the name raw. Measured: unescaped '<' at byte 10, TestACourtNameCannotWriteMarkupOntoTheWrapPage fails, the length test still passes."
+ },
+ {
+  "pkg": "ccwrap",
+  "file": "ccwrap.gno",
+  "label": "Enable: the wrapped-name bound is not enforced, so grc20 refuses three frames down",
+  "find": "\tif len(name) > grc20.MaxNameLen {",
+  "replace": "\tif len(name) > 1000 {",
+  "why": "A court name may be 100 characters and this realm prepends \"Wrapped \", where grc20's MaxNameLen is 64. Without the bound a long-named court aborts inside NewToken with \"invalid token name (empty, too long, or contains control chars)\" \u2014 naming neither courts nor names nor the fix \u2014 and a court name cannot be changed after StartCourt, so that is permanent for that court. Enable already does this arithmetic for the slug and says why in its own comment."
  }
 ]

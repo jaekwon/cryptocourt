@@ -465,9 +465,35 @@ control("a mint nothing accounts for", f"{KOURTV2}/emission.gno",
 # meta's franchise mint is on `mc`, not `c`. Hardcoding the spelling counts two of
 # three and calls the census clean — the same mistake arm 7 records being widened for.
 control("the mint scan hardcoding one receiver", EPOCHCOH,
-        r'MINT = re.compile(r"^\s*" + RECV + r"\.coin\.Mint\(", re.M)',
-        r'MINT = re.compile(r"^\s*c\.coin\.Mint\(", re.M)',
+        r'MINT = re.compile(r"^(?!\s*//).*\b" + RECV + r"\.coin\.Mint\(", re.M)',
+        r'MINT = re.compile(r"^(?!\s*//).*\bc\.coin\.Mint\(", re.M)',
         "2 mint site(s), expected 3", argv=["python3", EPOCHCOH])
+# AND THE OTHER HALF OF THE SAME BLIND SPOT: the CALL SHAPE, not the receiver.
+#
+# The arm above plants a narrowed receiver, and the arm two above plants an extra
+# mint at the start of its own statement. Neither could see the anchoring, because
+# both plant in the shape the pattern already assumed — `^\s*` matched them
+# whichever way it was written. This one plants a mint inside an `if err := ...`,
+# which is how a mint with a returned error would actually be written, and the
+# anchored pattern counted it as nothing at all. That is not a hypothesis: the
+# sibling absence census next to it, stakers.Remove, was written anchored and its
+# own arm reported SILENT for exactly this reason.
+#
+# THE PLANTED MINT IS ACCOUNTED FOR, deliberately, and that is what makes this arm
+# about SHAPE rather than about accounting. An unaccounted mint never reaches the
+# count: the guard returns at its `if hits:` as soon as any per-file complaint
+# exists, so the census registry below it is unreachable and the arm would report a
+# WRONG COMPLAINT — measured, that is exactly what the first version of this arm
+# did. With `.minted +=` on the line above, the per-file check is satisfied and the
+# only thing left to notice is that the realm now has four mint sites where the
+# census says three.
+control("a mint the census cannot see because of where it sits", f"{KOURTV2}/emission.gno",
+        "func mintEmission(c *Court, to address, amount int64) {",
+        "func selfTestMidLineMint(c *Court, to address, amount int64) {\n"
+        "\tc.minted += amount\n"
+        "\tif err := c.coin.Mint(to, amount); err != nil {\n\t\tpanic(err)\n\t}\n}\n\n"
+        "func mintEmission(c *Court, to address, amount int64) {",
+        "mint site(s), expected 3", argv=["python3", EPOCHCOH])
 
 # ARM 14, the purge census. Purge is the LEGAL removal — it erases text behind a
 # statutory code and takes a global-DAO threshold — and both gates are spelled out per
@@ -736,6 +762,27 @@ control("a render gate that stops sanitising", f"{KOURTV2}/modrender.gno",
         "\treturn sanitize.Block(body)",
         "\treturn body",
         "does not apply sanitize.Block",
+        argv=["python3", RENDERTEXT])
+
+# AND THE FOREIGN HALF, added when the census grew past kourtv2 — which is where it
+# had a hole. CourtName is sanctioned to return raw text because "consumers sanitise
+# at their own output", and the one consumer, ccwrap, did not: it wrote the wrapped
+# token's name into an H1. The guard's first run against the SHIPPED tree named that
+# site, so this arm had a real defect to prove itself on before it had a plant.
+#
+# Two arms, because the two failures need opposite fixes. A display site that stops
+# sanitising is an injection. A NEW reader of raw court text is a consumer nobody
+# reviewed, and it may be perfectly fine — it just cannot be silent.
+control("a wrap page that stops sanitising", f"{CCWRAP}/ccwrap.gno",
+        "sanitize.InlineText(w.tok.GetName())",
+        "w.tok.GetName()",
+        "without applying sanitize.InlineText",
+        argv=["python3", RENDERTEXT])
+
+control("a new foreign reader of raw court text", f"{CCWRAP}/ccwrap.gno",
+        "func Enabled(slug string) bool { return wraps.Has(slug) }",
+        "func Enabled(slug string) bool { _ = kourtv2.CourtName(slug); return wraps.Has(slug) }",
+        "not in FOREIGN_TEXT_READERS",
         argv=["python3", RENDERTEXT])
 
 print("\ncheck-mutant-collisions")

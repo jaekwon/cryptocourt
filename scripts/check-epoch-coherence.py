@@ -143,7 +143,15 @@ RAISERS = (
     "cap > w {",
     "cap >= w {",
 )
-WEIGHT_SOURCE = re.compile(r"^\s*w\s*:?=\s*g\.voters\.PastVotes\(", re.M)
+# Unanchored for the reason recorded at STAKERS_REMOVE: `if w := g.voters.PastVotes(...)`
+# binds a weight just as much as a bare assignment does, and the anchored form saw
+# nothing. Measured 1 either way on the shipped tree. The three OTHER anchored
+# patterns in this file are left as they are on purpose — TERMINAL_VERDICT,
+# TERMINAL_CLOSED and WHO_BIND match ASSIGNMENTS to a field, and a Go assignment is
+# a statement that gofmt puts on its own line, so there is no mid-line form to miss.
+# The rule the class comes down to: anchor a declaration census, never a CALL census,
+# because a call is an expression and can sit anywhere in a line.
+WEIGHT_SOURCE = re.compile(r"^(?!\s*//).*\bw\s*:?=\s*g\.voters\.PastVotes\(", re.M)
 
 # ARM 4 — the vote-weight expression has exactly one definition and the right
 # SHAPE.
@@ -386,7 +394,10 @@ TRIM_CALLS_N = 2
 # removed the filenames. That mistake made `acs`/`dcs` look like production code and
 # very nearly bought a pointless widening of arm 5.
 RECV = r"[a-z][A-Za-z0-9]*"
-COIN_OUT = re.compile(r"^\s*" + RECV + r"\.coin\.(?:Transfer|TransferFrom|Burn)\(", re.M)
+# Not anchored to the start of the statement — see the note on STAKERS_REMOVE. A
+# call inside an `if err := ...` was invisible to the anchored form. Measured 36
+# either way on the shipped tree, so this changes no count today.
+COIN_OUT = re.compile(r"^(?!\s*//).*\b" + RECV + r"\.coin\.(?:Transfer|TransferFrom|Burn)\(", re.M)
 # The escrow exemption has to generalise with it, or mc.coin.Burn(mc.escrow, ...)
 # would start counting as a holder outflow.
 ESCROW_SRC = re.compile(RECV + r"\.coin\.(?:Transfer|Burn)\(" + RECV + r"\.escrow")
@@ -420,7 +431,7 @@ COIN_OUT_N = 7  # see the audit above
 # The RECV spelling matters here more than anywhere: meta's mint is on `mc`, not `c`.
 # A pattern hardcoding `c.coin.Mint` would have counted two of three and called the
 # census clean — the exact blind spot arm 7 records having been widened for.
-MINT = re.compile(r"^\s*" + RECV + r"\.coin\.Mint\(", re.M)
+MINT = re.compile(r"^(?!\s*//).*\b" + RECV + r"\.coin\.Mint\(", re.M)
 MINT_ACCT = re.compile(r"\.minted\s*\+=|\.emittedTotal\s*=")
 MINT_N = 3  # see the audit above
 
@@ -491,7 +502,23 @@ ENT_NEW_N, TAIL_W_N, JUNIOR_W_N = 1, 1, 1  # all three in emission.gno
 # after it. Measured 0 code sites — and worth noting the naive grep finds THREE
 # matches, all of them the comments that state the claim, so the pattern requires
 # a receiver to avoid counting the promise as its own violation.
-STAKERS_REMOVE = re.compile(r"^\s*\w+\.stakers\.Remove\(", re.M)
+#
+# AND IT MUST NOT BE ANCHORED TO THE START OF THE STATEMENT, which is how it was
+# first written — `^\s*\w+\.stakers\.Remove\(`. Its own control arm plants
+# `if pv := cs.stakers.Remove(...)`, the shape a removal would actually be written
+# in, and the anchored pattern could not see it: selftest reported the arm SILENT.
+# The receiver requirement is kept, because the reason above still holds; what
+# changed is skipping COMMENT LINES rather than requiring the call to begin the
+# line, which is the shape LOCKED_READ below already used in this same commit.
+#
+# The lesson generalises past this line, so COIN_OUT and MINT were re-measured the
+# same way: both were anchored too, and on the shipped tree the counts are
+# identical either way (36 and 3), so nothing was being missed — it was latent.
+# A control arm that plants in the very shape its pattern assumes cannot reveal
+# that the pattern is too narrow, and for an ABSENCE census the "pattern drifting
+# off the code" arms cannot help either: narrowing a pattern whose expected count
+# is zero still counts zero.
+STAKERS_REMOVE = re.compile(r"^(?!\s*//).*\b\w+\.stakers\.Remove\(", re.M)
 STAKERS_REMOVE_N = 0
 
 # lock.gno states the second about lockedOf: "This is the ONLY reader of the tree:

@@ -76,6 +76,7 @@ import (
 
 	"gno.land/p/demo/tokens/grc20"
 	"gno.land/p/nt/avl/v0"
+	sanitize "gno.land/p/nt/markdown/sanitize/v0"
 	"gno.land/p/nt/seqid/v0"
 	ufmt "gno.land/p/nt/ufmt/v0"
 	"gno.land/r/demo/defi/grc20reg"
@@ -241,6 +242,17 @@ func Enable(cur realm, slug string) string {
 	// it is the claim and not the coin: the two are not interchangeable, since
 	// only the unwrapped one can stake.
 	name := "Wrapped " + kourtv2.CourtName(slug)
+	// The same arithmetic the slug gets above, for the same stated reason. A court
+	// name may be 100 characters and this prepends eight, where grc20 allows 64 —
+	// so without this a long-named court aborted inside NewToken behind a message
+	// naming neither courts nor names. The bound is read from grc20 rather than
+	// written as 64 here, so it cannot drift from the rule it is quoting.
+	if len(name) > grc20.MaxNameLen {
+		panic(ufmt.Sprintf("ccwrap: court name too long to wrap: a wrapped name is "+
+			"\"Wrapped \" plus the court's own and GRC20 allows %d characters, so a "+
+			"court can be wrapped only if its name is %d or fewer",
+			grc20.MaxNameLen, grc20.MaxNameLen-len("Wrapped ")))
+	}
 	symbol := wrappedSymbol(slug)
 	tok, led := grc20.NewToken(name, symbol, coinDecimals, nextTokenID.Next(), cur)
 	// Registered BEFORE being recorded here, so a rejected registration leaves
@@ -410,8 +422,16 @@ func mustWrapped(slug string) *wrapped {
 func Render(path string) string {
 	if path != "" {
 		w := mustWrapped(path)
+		// The token's name carries the court's own, which is user text validated
+		// for LENGTH ONLY at the door. Sanitised HERE and not at Enable: the stored
+		// name is what a wallet, an explorer and a pool display, and escaping it
+		// there would put backslashes into all three. grc20's validName already
+		// refuses control characters, so no name can open a BLOCK; what it permits
+		// and this stops is inline markup — `<img src=x onerror=1>` is a legal
+		// court name, and gnoweb runs no HTML sanitiser after a realm.
 		return ufmt.Sprintf("# %s\n\n- symbol: %s\n- token path: %s\n- wrapped: %d\n",
-			w.tok.GetName(), w.tok.GetSymbol(), TokenKey(path), w.tok.TotalSupply())
+			sanitize.InlineText(w.tok.GetName()), w.tok.GetSymbol(),
+			TokenKey(path), w.tok.TotalSupply())
 	}
 	s := "# Wrapped court coins\n\n" +
 		"A 1:1 claim on court coin, held here in escrow, in a shape a DEX can " +

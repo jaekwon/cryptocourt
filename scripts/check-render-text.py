@@ -92,6 +92,44 @@ BODY_CALLERS = {
     ("modrender.gno", "claimBodyQuoted"): "sanitize.Blockquote",
 }
 
+# ---------------------------------------------------------------- foreign --
+#
+# THE SCOPE ABOVE IS kourtv2 ONLY, AND THAT IS WHERE THE HOLE WAS. CourtName is
+# sanctioned to return raw text on the rule that "consumers sanitise at their own
+# output" — and nothing checked that any consumer did. The note above even named
+# the consumer, r/ccwrap, and left it: the reasoning was that tightening
+# mustCourtName would refuse names live courts may already hold. That is still
+# right, and it is not a reason for the OUTPUT to stay unsanitised.
+#
+# What was actually there: mustCourtName validates length only, 1..100 characters,
+# where mustCourtDesc beside it walks the string and refuses newlines. ccwrap's
+# Enable built the wrapped token's name as `"Wrapped " + kourtv2.CourtName(slug)`
+# and its Render wrote that name into an H1 with `ufmt.Sprintf("# %s\n\n"...)`.
+# So any address that could call StartCourt could put headings, list rows and raw
+# HTML on ccwrap's page, and gnoweb runs no sanitiser after a realm.
+#
+# Four realms have a Render: govern delegates to the engine, kourtv1 is frozen and
+# reads none of kourtv2's text, kourtv2 is censused above. ccwrap was the whole of
+# the uncovered surface — and the reason to spend a census on ONE site is that rows
+# cannot say "a second consumer appeared". A row asserts a test notices when this
+# call site changes; only the set can notice a new one.
+RAW_TEXT_READ = re.compile(r"\bkourtv2\.(?:CourtName|CourtDesc|ClaimTitle)\(")
+
+# Functions outside kourtv2 that read its raw user text, and why each is allowed.
+FOREIGN_TEXT_READERS = {
+    ("ccwrap", "ccwrap.gno", "Enable"):
+        "stores the raw name as the token's own name — DATA, not output. Escaping "
+        "here would put backslashes into the string every wallet, explorer and pool "
+        "displays; sanitise/v0's rule is sanitise once, at the point of output.",
+}
+
+# A token's name is user text by the time it is read back, so writing it to a page
+# is an output context like any other. One site today, and it must name its helper.
+NAME_DISPLAY = re.compile(r"\.GetName\(\)")
+FOREIGN_NAME_DISPLAY = {
+    ("ccwrap", "ccwrap.gno", "Render"): "sanitize.InlineText",
+}
+
 FUNC = re.compile(r"^func (?:\([^)]*\)\s*)?(\w+)")
 
 
@@ -154,6 +192,42 @@ def main():
         bad.append("%s/%s is in BODY_CALLERS but no longer calls claimBodyVisible — "
                    "the gate moved or the entry is stale" % key)
 
+    # And the same census over every OTHER realm, which is where ccwrap was.
+    seen_fread, seen_fshow = set(), set()
+    for rdir in sorted(p for p in (ROOT / "realm" / "r").iterdir()
+                       if p.is_dir() and p.name != "kourtv2"):
+        for path in sorted(rdir.glob("*.gno")):
+            if path.name.endswith(("_test.gno", "_filetest.gno")):
+                continue
+            for fn, body in functions(path):
+                key = (rdir.name, path.name, fn)
+                if RAW_TEXT_READ.search(body):
+                    seen_fread.add(key)
+                    if key not in FOREIGN_TEXT_READERS:
+                        bad.append("%s/%s/%s reads kourtv2's RAW user text from "
+                                   "another realm and is not in FOREIGN_TEXT_READERS. "
+                                   "If it displays that text it must sanitise at its "
+                                   "own output; if it stores it, add it here with that "
+                                   "reason." % key)
+                if NAME_DISPLAY.search(body):
+                    seen_fshow.add(key)
+                    want = FOREIGN_NAME_DISPLAY.get(key)
+                    if want is None:
+                        bad.append("%s/%s/%s writes a token's name to its output and "
+                                   "is not in FOREIGN_NAME_DISPLAY. A wrapped token's "
+                                   "name carries the court name it was derived from, "
+                                   "so it is user text." % key)
+                    elif want not in body:
+                        bad.append("%s/%s/%s writes a token's name to its output "
+                                   "without applying %s — raw court text reaches the "
+                                   "page" % (key + (want,)))
+    for key in sorted(set(FOREIGN_TEXT_READERS) - seen_fread):
+        bad.append("%s/%s/%s is in FOREIGN_TEXT_READERS but no longer reads kourtv2's "
+                   "raw text — the reader moved or the entry is stale" % key)
+    for key in sorted(set(FOREIGN_NAME_DISPLAY) - seen_fshow):
+        bad.append("%s/%s/%s is in FOREIGN_NAME_DISPLAY but no longer writes a token "
+                   "name — the gate moved or the entry is stale" % key)
+
     if not seen_title or not seen_body:
         print("check-render-text: found no title readers or no body callers at all, "
               "so this check is measuring nothing. The gates were renamed.",
@@ -172,8 +246,10 @@ def main():
         return 1
 
     print("check-render-text: %d title reader(s), %d court-text reader(s) and %d body "
-          "caller(s), each routed through its own gate."
-          % (len(seen_title), len(seen_court), len(seen_body)))
+          "caller(s) in kourtv2, plus %d foreign reader(s) of its raw text and %d "
+          "foreign token-name display(s) — each routed through its own gate."
+          % (len(seen_title), len(seen_court), len(seen_body),
+             len(seen_fread), len(seen_fshow)))
     return 0
 
 
