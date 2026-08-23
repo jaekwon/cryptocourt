@@ -69,11 +69,45 @@ failures = []
 exercised = set()
 
 
+# One clean-tree run per distinct guard command, kept so every arm can be asked
+# the question below without paying for it 117 times.
+_baseline = {}
+
+
+def _clean(argv, stdin, cwd):
+    key = (tuple(argv), stdin, cwd)
+    if key not in _baseline:
+        r = subprocess.run(list(argv), capture_output=True, text=True,
+                           input=stdin, cwd=cwd)
+        _baseline[key] = r.stdout + r.stderr
+    return _baseline[key]
+
+
 def control(label, path, find, replace, want, argv=None, stdin=None, cwd=None):
-    """Apply an edit, run the guard, and require `want` in its output."""
+    """Apply an edit, run the guard, and require `want` in its output.
+
+    AND REQUIRE THAT THE GUARD WAS NOT ALREADY SAYING IT. An arm whose `want` is
+    a substring of the CLEAN output reports "fires" while its mutation does
+    nothing at all — the same green as an arm that works, over no evidence. That
+    is not hypothetical here: check-paths' own comment records it, two arms at
+    once, when their wants were the bare words "STALE" and "ALLOWLIST" which the
+    baseline output already contained while two real stale paths were
+    outstanding. The wants were then made specific and the class was left
+    unguarded, so nothing stopped the next one.
+
+    Measured across the whole file before adding this: 117 arms, 114 baselined
+    fresh (0 vacuous) and 3 — check-elsewhere's — settled by reading, each want
+    appearing exactly once and only inside a branch that returns 1. So this
+    starts from a clean tree and exists to keep it that way.
+    """
     for a in (argv or ["python3", "scripts/check-citations.py"]):
         if a.endswith(".py"):
             exercised.add(os.path.basename(a))
+    cmd = argv or ["python3", "scripts/check-citations.py"]
+    if want in _clean(cmd, stdin, cwd):
+        print(f"  {label:<44} VACUOUS CONTROL (want already in clean output)")
+        failures.append(label)
+        return
     backup = path + ".selftest-backup"
     shutil.copy(path, backup)
     try:
