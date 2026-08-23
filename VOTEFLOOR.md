@@ -269,6 +269,61 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE SELFTEST RAN, AND IT WAS CLEAN.** Four firings of guard changes had been verified only
+in isolation, each deferral defensible and the pile not. The window finally opened — the
+other session quiet for 25 minutes with no live processes — so it ran in the background,
+which is the only safe way: it must not be killed, and 24 minutes exceeds any single
+foreground call.
+
+    EXIT=0, 154 arm(s), all "fires"
+    0 SILENT, 0 VACUOUS, 0 BROKEN CONTROL, 0 WRONG COMPLAINT, 0 NOT ARMED
+    tree restored: no stray .selftest-backup, git status clean
+
+That clears the whole debt at once, including the change with the widest reach — a baseline
+run added to every one of the 117 control arms — and confirms the five new arms fire in situ
+rather than only in the harnesses I built for them. Worth noting the log stayed at 0 bytes
+for 13 minutes: python buffers stdout to a file, so an empty log is not a hung run. The only
+lines that appeared early were stderr.
+
+**AND IT PRINTED A SECTION I DID NOT WRITE, WHICH IS THE REAL LESSON.**
+
+    vacuity
+      117 control(s) parsed, 30 guard(s) run clean, 7 not resolvable
+      no control wants a string its guard already prints
+
+`vacuity_audit()` landed at **03:47** that morning. I added the same check inside
+`control()` at **17:51** — fourteen hours later — after reading `control()` and correctly
+observing that it takes no baseline, and then never grepping the rest of the file, where the
+check already sat 1650 lines further down. My commit message asserted the class "was left
+unguarded, so nothing stopped the next one". False. It was guarded, and their comment records
+a second instance I did not know about: an arm wanting bare `getPos`, which check-read-purity
+prints in its SUCCESS line.
+
+**This is exactly what check-mutant-collisions was built to fail a build over** — "a pair
+means two people, or two firings, did not see each other's work" — committed by me, in the
+same day, in the file I was reading. The mechanical check catches it in the corpus; nothing
+catches it in the guards, and the answer there is to grep the whole file before concluding a
+check is absent. Same failure as the two false residuals and the `u* = 1/3` retraction: a
+conclusion about ABSENCE drawn from a partial read.
+
+Resolved by removing MINE, not theirs: theirs landed first, carries its own control arm, and
+reports the same fact in aggregate, while mine was twelve lines with no other coupling. And
+keeping both ran the same 30 clean guard baselines TWICE in a 24-minute run. What mine had
+over theirs was kept by fixing theirs rather than preserving a duplicate — their resolver
+took `want` and each argv element only as an `ast.Constant` and counted 7 of 117 out loud, six
+of which were arms passing no `argv` at all (control() defaults those to check-citations, so
+they were resolvable all along). It now imports check-control-anchors' evaluator instead of
+being a third copy of it. Measured after: **117 parsed, 32 guards run clean, 0 not
+resolvable**, still no vacuous arm.
+
+**TWO STDERR LINES DURING THE RUN WERE NOT WHAT THEY LOOKED LIKE.** `gnoroot: refusing to
+remove` fired twice, once for the real gno checkout and once for its own BASE directory. Both
+are the safety check working as designed, not leaks — the reading was wrong before it was
+checked. What IS in there is three stale shadow roots from **two days earlier**, 2.1M each,
+labelled from other sessions' killed runs (`tokrev`, `vet2`). Today's run cleaned up after
+itself. They are left alone: 6.3MB in an OS temp directory, and deleting another session's
+artefacts without knowing why they exist buys nothing.
+
 **I ALMOST REPORTED ELEVEN COVERAGE LOSSES THAT WERE NOT THERE.** Another session's commit
 removed 18 corpus rows and added 7, under the message "eleven rows that measured a mutant
 another row already made". Verifying it, my check keyed each removed row on its
