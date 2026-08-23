@@ -202,6 +202,43 @@ SUITE_TIMEOUT = int(os.environ.get("MUTATE_SUITE_TIMEOUT", "600"))
 COMPILE_CODES = frozenset({"gnoTypeCheckError", "gnoParserError"})
 RUNTIME_CODES = frozenset({"gnoUnknownError"})
 
+def mutant_builds(root, pkg):
+    """Ask the TOOLCHAIN whether the mutant compiles, instead of inferring it.
+
+    THE ERROR CODE IS NOT A DISCRIMINATOR, and that is measured rather than
+    assumed. A mutation that plants a goroutine — a mutant that cannot run at all,
+    since gno excludes them — reports:
+
+        0 build errors, 1 test errors
+        governor.gno:1532:2: goroutines are not permitted (code=gnoUnknownError)
+
+    and a mutation whose only failure is a REALM PANIC AT INIT, which is a genuine
+    catch, reports gnoUnknownError too. The same code for "never ran" and for "ran
+    and something objected", so no amount of naming codes can separate them. That
+    is what this function is for.
+
+    `gno lint` answers it directly, and both sides were checked before this was
+    trusted: clean code exits 0 with no output; the goroutine mutant exits 1; and
+    the Bps mutation whose kourtv2 init invariant panics — a real catch — LINTS
+    CLEAN and only fails under `gno test`. So lint means "it built", nothing more.
+
+    Costs about 3.3s on kourtv2 against 12.9s for its suite, and it is only asked
+    when a catch is about to be scored, which is the one verdict that would be
+    wrong if the mutant never built.
+    """
+    rel = PKGS[pkg][1]
+    try:
+        r = subprocess.run(["gno", "lint", "."],
+                           cwd=os.path.join(root, rel),
+                           capture_output=True, text=True,
+                           timeout=SUITE_TIMEOUT,
+                           env={**os.environ, "GNOROOT": root})
+    except subprocess.TimeoutExpired:
+        # A lint that will not finish is not evidence of building.
+        return False, "gno lint timed out"
+    return r.returncode == 0, (r.stdout + r.stderr).strip()
+
+
 def run_suite(root, pkg=None, mut=None):
     """Run the OBSERVER suites for `pkg`; all of them when pkg is None (the baseline).
     Returns (passed, output, hung) — `hung` names the suites that ran out of time.
@@ -223,12 +260,21 @@ def run_suite(root, pkg=None, mut=None):
     # concurrent runner in another worktree cannot delete the mutant mid-test and
     # have it scored INVALID.
     gnoroot.stage(root, PKGS.values())
+    out, passed, hung, built = "", True, [], True
     if mut is not None:
         f = os.path.join(root, PKGS[mut.get("pkg", "govern")][1], mut["file"])
         src = open(f).read()
         open(f, "w").write(src.replace(mut["find"], mut["replace"]))
-    out, passed, hung = "", True, []
-    for nm in names:
+        # ASKED HERE, BEFORE THE SUITES, and the placement earns its keep twice.
+        # A mutant that cannot compile makes every suite fail, so settling it now
+        # skips N suite runs that would prove nothing — and the staged tree only
+        # exists INSIDE this function, which is what the first attempt at this got
+        # wrong: it linted after the unstage and died on a missing directory.
+        built, lint_out = mutant_builds(root, mut.get("pkg", "govern"))
+        if not built:
+            out += lint_out
+            passed = False
+    for nm in names if built else []:
         rel = PKGS[nm][1]
         try:
             r = subprocess.run(["gno", "test", "."], cwd=os.path.join(root, rel),
@@ -249,7 +295,7 @@ def run_suite(root, pkg=None, mut=None):
         passed = passed and r.returncode == 0
     for _, rel in PKGS.values():
         shutil.rmtree(os.path.join(root, rel), ignore_errors=True)
-    return passed, out, hung
+    return passed, out, hung, built
 
 
 # Absolute paths throughout, since a mutation may name a file in either tree and
@@ -274,6 +320,16 @@ def anchor_count(m):
 
 def main():
     muts = json.load(sys.stdin)
+    if not muts:
+        # AN EMPTY BATCH IS NOT A RUN. One line here, against a full baseline
+        # across every staged package for nothing without it — and "0 not caught,
+        # of 0" at exit 0 would be a clean bill of health for having measured
+        # nothing, which is this file's oldest complaint about itself.
+        # mutate-parallel already refuses one; this is the same rule at the layer
+        # below, where the vacuity audit and any other caller invoking this script
+        # with no batch ends up.
+        print("mutate: no mutations on stdin — nothing to measure.", file=sys.stderr)
+        return 1
     # One shadow GNOROOT for the whole batch, removed at exit. atexit does not run
     # on a kill, same as the backups below — but a leaked root is a directory in
     # the system temp that nothing reads, whereas the shared-tree lock this
@@ -290,7 +346,7 @@ def main():
     # is the same lie a build failure tells and was told once in this session
     # by a test of mine that was broken rather than by code that was. Nothing
     # below means anything unless this passes.
-    base_ok, _, base_hung = run_suite(root)
+    base_ok, _, base_hung, _ = run_suite(root)
     if base_hung:
         # Distinguished from red, because the fix is different: a red baseline is
         # a broken test, a hung one is a suite that never answered — including the
@@ -325,7 +381,7 @@ def main():
             survivors.append(label + " [bad anchor]")
             continue
 
-        ok, out, hung = run_suite(root, m.get("pkg", "govern"), mut=m)
+        ok, out, hung, built = run_suite(root, m.get("pkg", "govern"), mut=m)
 
         # Filetests are named by FILE, not by a TestXxx function, so a catch
         # from one has no Test name anywhere in the output.
@@ -392,6 +448,15 @@ def main():
         elif broke:
             # Nothing was measured: a mutation that cannot build proves exactly
             # as much as one that was never applied.
+            print(f"{label:<46} INVALID (did not build) <<<")
+            survivors.append(label + " [invalid]")
+        elif not built:
+            # THE LAST DOOR, and the only one the output text cannot close. `broke`
+            # above reads gno's error codes, and gnoUnknownError means both "this
+            # mutant could never run" and "it ran and a realm panic objected" — the
+            # second being a catch. Asked of the toolchain instead: the suite failed,
+            # so this is about to be called a catch, and a catch is the one verdict
+            # that is wrong if nothing ever compiled.
             print(f"{label:<46} INVALID (did not build) <<<")
             survivors.append(label + " [invalid]")
         elif covered:

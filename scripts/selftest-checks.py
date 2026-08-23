@@ -1475,6 +1475,19 @@ else:
         "pkg": "governor", "file": "governor.gno", "label": "x",
         "find": "\treturn p.yes, p.no, p.abstain, p.total",
         "replace": "\treturn p.yes, p.no, p.abstain, p.total))"}], "INVALID")
+    # AND THE THIRD DOOR, which no amount of reading gno's output can close. The two
+    # arms above are decided from error codes; this one cannot be. A planted goroutine
+    # is a mutant that CANNOT RUN — gno excludes them — and it reports
+    # "0 build errors, 1 test errors ... goroutines are not permitted
+    # (code=gnoUnknownError)". A mutation whose only failure is a REALM PANIC AT INIT,
+    # which is a genuine catch, reports gnoUnknownError too. Same code, opposite
+    # verdicts, so mutate.py asks `gno lint` instead of reading the text — measured
+    # both ways: the goroutine mutant lints 1, and the Bps mutation whose kourtv2
+    # init invariant panics lints 0 and stays a catch.
+    feed("a mutant that cannot run at all", [{
+        "pkg": "governor", "file": "governor.gno", "label": "x",
+        "find": "\treturn p.yes, p.no, p.abstain, p.total",
+        "replace": "\tgo func() {}()\n\treturn p.yes, p.no, p.abstain, p.total"}], "INVALID")
     # A pkg nobody has is refused rather than defaulted. Silently falling back
     # to the realm would mutate a file the caller did not name and report the
     # verdict as though it had — a mutation runner lying about WHAT it broke,
@@ -1973,8 +1986,17 @@ def vacuity_audit():
             continue
         key = tuple(cmd)
         if key not in cache:
+            # stdin CLOSED, and a timeout, because this loop runs whatever a
+            # control arm names — and one of those things reads a batch from
+            # stdin. With stdin inherited it blocks on a pipe that never reaches
+            # EOF, and the whole selftest deadlocks in its last section with no
+            # output and nothing to blame: measured, a 32-minute run that had to
+            # be unstuck by killing the child by hand. A guard-runner that can
+            # hang forever is worse than one that reports a wrong answer, because
+            # a wrong answer at least ends.
             r = subprocess.run(list(cmd), capture_output=True, text=True,
-                               errors="replace", cwd=REPO)
+                               errors="replace", cwd=REPO,
+                               stdin=subprocess.DEVNULL, timeout=600)
             cache[key] = r.stdout + r.stderr
         if want in cache[key]:
             bad.append((label, want, " ".join(cmd)))
