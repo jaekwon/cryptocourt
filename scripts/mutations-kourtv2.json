@@ -8352,5 +8352,101 @@
   "find": "\tif c.mod != nil && c.mod.suspended {\n\t\tpanic(\"kourtv2: this moderator set is suspended; only an election or a meta verdict may reinstate it\")\n\t}\n",
   "replace": "",
   "why": "The third guard, and its own comment states the attack it stops: AppointMods is creator-only and FREE, so a suspended creator who could re-appoint would self-unsuspend for zero cost, \"turning meta's bonded, voted disarm into a no-op\". Caught by TestSuspendedCreatorCannotReappoint \u2014 which is how this was confirmed, after grepping the panic message across the tests wrongly suggested nothing asserted it: the test pins the guard while asserting a shorter fragment of the message."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "RemoveGlobalMod: the admin becomes the only member that CAN be removed",
+  "find": "\tif who == d.admin {",
+  "replace": "\tif who != d.admin {",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "ensureMod: an existing moderator set is discarded instead of returned",
+  "find": "\tif c.mod != nil {",
+  "replace": "\tif c.mod == nil {",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "courtIsPurged: a purged court reads as live",
+  "find": "\treturn c.mod != nil && c.mod.courtPurged",
+  "replace": "\treturn c.mod == nil && c.mod.courtPurged",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "HiddenFromListing: a court WITH a moderator set always reads as visible",
+  "find": "func HiddenFromListing(courtSlug string, claimID uint64) bool {\n\tc := mustCourt(courtSlug)\n\tif c.mod == nil {",
+  "replace": "func HiddenFromListing(courtSlug string, claimID uint64) bool {\n\tc := mustCourt(courtSlug)\n\tif c.mod != nil {",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators. Anchored with 2 line(s) of context above to stay unique \u2014 `if c.mod == nil {` occurs seven times in this file."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "TextRedacted: a court WITH a moderator set never redacts its text",
+  "find": "func TextRedacted(courtSlug string, claimID uint64) bool {\n\tc := mustCourt(courtSlug)\n\tif c.mod == nil {",
+  "replace": "func TextRedacted(courtSlug string, claimID uint64) bool {\n\tc := mustCourt(courtSlug)\n\tif c.mod != nil {",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators. Anchored with 2 line(s) of context above to stay unique \u2014 `if c.mod == nil {` occurs seven times in this file."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "ClaimPurged: a court WITH a moderator set reads every claim as unpurged",
+  "find": "func ClaimPurged(courtSlug string, claimID uint64) bool {\n\tc := mustCourt(courtSlug)\n\tif c.mod == nil {",
+  "replace": "func ClaimPurged(courtSlug string, claimID uint64) bool {\n\tc := mustCourt(courtSlug)\n\tif c.mod != nil {",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators. Anchored with 2 line(s) of context above to stay unique \u2014 `if c.mod == nil {` occurs seven times in this file."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PendingApproval: a court WITH a moderator set reports nothing pending",
+  "find": "\t\tif c.mod == nil {",
+  "replace": "\t\tif c.mod != nil {",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "CourtSuspended: a suspended moderator set reads as active",
+  "find": "\treturn c.mod != nil && c.mod.suspended",
+  "replace": "\treturn c.mod == nil && c.mod.suspended",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "IsCourtMod: the no-set fallback is taken only WHEN a set exists",
+  "find": "\tif c.mod == nil {\n\t\treturn who == c.admin",
+  "replace": "\tif c.mod != nil {\n\t\treturn who == c.admin",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "IsCourtMod: with no set, everyone EXCEPT the creator is a moderator",
+  "find": "\t\treturn who == c.admin",
+  "replace": "\t\treturn who != c.admin",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "ModThreshold: a court WITH a moderator set reports the 1-of-1 default",
+  "find": "\tif c.mod == nil {\n\t\treturn 1, 1",
+  "replace": "\tif c.mod != nil {\n\t\treturn 1, 1",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "ModLogLen: a court WITH a moderator set reports an empty log",
+  "find": "\tif c.mod == nil {\n\t\treturn 0",
+  "replace": "\tif c.mod != nil {\n\t\treturn 0",
+  "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
  }
 ]
