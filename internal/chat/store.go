@@ -464,9 +464,7 @@ func (s *Store) Post(ctx context.Context, in PostInput) (int64, error) {
 	defer tx.Rollback()
 
 	var frozen int
-	if err := tx.QueryRowContext(ctx,
-		`SELECT count(*) FROM frozen WHERE chain=? AND court=? AND lifted_at IS NULL`,
-		in.Chain, in.Court).
+	if err := tx.QueryRowContext(ctx, sqlCourtFrozen, in.Chain, in.Court).
 		Scan(&frozen); err != nil {
 		return 0, err
 	}
@@ -1109,9 +1107,7 @@ func (s *Store) Reveal(ctx context.Context, id int64) (Revealed, error) {
 // BOTH verbs — Post has always checked it inside its transaction; Recent had not.
 func (s *Store) IsFrozen(ctx context.Context, chain, court string) (bool, error) {
 	var n int
-	if err := s.r.QueryRowContext(ctx,
-		`SELECT count(*) FROM frozen WHERE chain=? AND court=? AND lifted_at IS NULL`,
-		chain, court).Scan(&n); err != nil {
+	if err := s.r.QueryRowContext(ctx, sqlCourtFrozen, chain, court).Scan(&n); err != nil {
 		return false, err
 	}
 	return n > 0, nil
@@ -1475,6 +1471,18 @@ const sqlInForce = `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?
 const sqlNotFrozen = `NOT EXISTS (SELECT 1 FROM frozen f
 	                    WHERE f.chain = messages.chain AND f.court = messages.court
 	                      AND f.lifted_at IS NULL)`
+
+// sqlCourtFrozen asks the same question of ONE named court, by parameter, where
+// sqlNotFrozen correlates to `messages` and can only appear inside a query over
+// that table. Neither can stand in for the other, which is why there are two.
+//
+// It is a constant for the reason the note below gives: this exact predicate was
+// written out at both places that consult a freeze — Post, inside its write
+// transaction, and IsFrozen, on the read handle so the serving path pays nothing
+// — 645 lines apart, where no reader compares them. Prune and PruneDryRun keep
+// their copies deliberately and say so, but that argument rests on the two being
+// side by side.
+const sqlCourtFrozen = `SELECT count(*) FROM frozen WHERE chain=? AND court=? AND lifted_at IS NULL`
 
 // sqlAwaitingReview is THE definition of §7's deferred queue, and it is one string because
 // it was seven.
