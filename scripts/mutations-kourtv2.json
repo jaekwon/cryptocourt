@@ -8328,5 +8328,29 @@
   "find": "\tif amount == l {",
   "replace": "\tif amount != l {",
   "why": "The `amount > l` panic above has two rows; the equality below it had none. Inverted, a PARTIAL release removes the whole lock \u2014 freeing more CC than was released \u2014 and an exact one leaves a zero row behind. Note `== l` to `>= l` would be INVALID rather than a survivor: the panic on `amount > l` above makes the two identical."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "AppointMods: the creator-only gate is inverted, so anyone BUT the creator appoints",
+  "find": "\tif cur.Previous().Address() != c.admin {",
+  "replace": "\tif cur.Previous().Address() == c.admin {",
+  "why": "AppointMods carries three sequential authority guards and NONE of them had a row, on the highest-consequence surface in the realm. All three are tested; the corpus simply never recorded it, which keeps the coverage out of every regression pass. This is the caller-authentication one \u2014 inverted, the creator is the only address refused."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "AppointMods: the spent-appointment gate is dropped, so the creator appoints after an election",
+  "find": "\tif c.mod != nil && c.mod.creatorUnseated {",
+  "replace": "\tif false && c.mod != nil && c.mod.creatorUnseated {",
+  "why": "The second of AppointMods' three guards. Once an election has installed a set the creator's appointment power is spent; dropping this lets the creator seat a set around the electorate that replaced them."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "AppointMods: a suspended creator re-appoints around the suspension",
+  "find": "\tif c.mod != nil && c.mod.suspended {\n\t\tpanic(\"kourtv2: this moderator set is suspended; only an election or a meta verdict may reinstate it\")\n\t}\n",
+  "replace": "",
+  "why": "The third guard, and its own comment states the attack it stops: AppointMods is creator-only and FREE, so a suspended creator who could re-appoint would self-unsuspend for zero cost, \"turning meta's bonded, voted disarm into a no-op\". Caught by TestSuspendedCreatorCannotReappoint \u2014 which is how this was confirmed, after grepping the panic message across the tests wrongly suggested nothing asserted it: the test pins the guard while asserting a shorter fragment of the message."
  }
 ]
