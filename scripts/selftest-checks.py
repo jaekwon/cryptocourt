@@ -154,6 +154,7 @@ SPENDPATH = "scripts/check-spend-paths.py"
 ELSEWHERE = "scripts/check-elsewhere.py"
 CONTROLS = "scripts/check-control-anchors.py"
 COLLISIONS = "scripts/check-mutant-collisions.py"
+RENDERTEXT = "scripts/check-render-text.py"
 ABORTASRT = "scripts/check-abort-assertions.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
@@ -692,6 +693,20 @@ control("the reachable package set coming back empty", ABORTASRT,
         'ALWAYS = set()\nIMPORT = re.compile(r"NOTHINGMATCHESTHIS")',
         "scanning for a shape the tree no longer has",
         argv=["python3", ABORTASRT])
+
+print("\ncheck-render-text")
+# The census that keeps user text behind its gate. Both policies it enforces are
+# stated in modrender.gno and were enforced by nothing: claimTitleFor is "THE
+# single place a claim's title becomes display text", and claimBodyVisible's
+# callers "MUST SANITISE FOR [their] OWN OUTPUT CONTEXT". The plant drops one
+# caller's sanitiser, which is the violation with teeth — sanitize.Block escapes
+# CommonMark block types 1-5 but not 6 and 7, so a <form> in a body would only be
+# CONTAINED, and gnoweb runs no HTML sanitiser after the realm.
+control("a render gate that stops sanitising", f"{KOURTV2}/modrender.gno",
+        "\treturn sanitize.Block(body)",
+        "\treturn body",
+        "does not apply sanitize.Block",
+        argv=["python3", RENDERTEXT])
 
 print("\ncheck-mutant-collisions")
 # check-mutation-anchors compares the (pkg, file, find, replace) TRIPLE, so two
