@@ -269,6 +269,49 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**I ALMOST REPORTED ELEVEN COVERAGE LOSSES THAT WERE NOT THERE.** Another session's commit
+removed 18 corpus rows and added 7, under the message "eleven rows that measured a mutant
+another row already made". Verifying it, my check keyed each removed row on its
+`(pkg, file, find, replace)` and asked whether that key survived. Seven did. Eleven did not,
+and the output I was one step from writing up read **"REMOVED rows whose mutation is NOW
+ABSENT — real coverage loss (11)"**.
+
+The tell was that the eleven "lost" labels paired off semantically with the seven added ones
+— `v0.54:` with `ride F3 / v0.54:`, `2A:` with `ResolveFlag (2A):`, and so on. Reading their
+commit message gave the answer: they had hashed the MUTATED SOURCE, not the anchor text. The
+pairs produce byte-identical mutants **through different anchors**, so a key built from
+`find`/`replace` cannot see the equivalence at all. My instrument was measuring textual
+identity for a claim about semantic identity.
+
+Verified independently before building anything on top of it, and their result is exact:
+
+    1199 row(s) across 2 corpus file(s) -> 1199 distinct mutant(s)
+    0 collisions, 0 unresolved
+
+**AND THE BLIND SPOT THEY DOCUMENTED IS NOW A GUARD.** Their message says it outright:
+*"check-mutation-anchors could not see these. It compares the (pkg, file, find, replace)
+TRIPLE, so two rows expressing the same mutation through different anchors are distinct to
+it."* Eleven pairs found by hand, the limitation written down, the check left unbuilt — which
+is the exact shape this file keeps recording. `check-mutant-collisions` applies every row and
+hashes the result, keyed by file so identical edits to different files do not collide. It is
+static, needs no suite run, and measures well under a second, so it runs in `make check`.
+
+Worth stating why a duplicate is worth FAILING over when both rows are caught and nothing is
+unsafe: it costs a full suite run per pass, for ever, for a fact already known; it makes the
+corpus read bigger than it is, and the row count is the headline number in every summary; and
+it is a rot signal — every pair so far was an early terse row plus a later one naming the
+function, meaning a later round re-derived a mutation the corpus already had. That is two
+firings not seeing each other's work, which is worth a red build.
+
+**ONE ABLATION FAILED TO ARM, AND SAYING SO IS THE POINT.** The first attempt injected a
+widened-anchor twin from an inline script that could not `import mutate` — `scripts/` was not
+on the path — so nothing was written and the guard simply re-reported the clean tree at exit
+0. Read carelessly that looks like an arm that fired green. Re-run with the path fixed it
+names both rows and both corpus files. Second attempt then hit `StopIteration` because the
+row I had hardcoded no longer exists; the fix was to stop naming a row and take the first one
+that resolves. Two failed ablations before one that armed, on a guard whose whole subject is
+things that look measured and are not.
+
 **THE PART I SCOPED OUT WAS THE DANGEROUS HALF.** `check-control-anchors` was written with an
 explicit boundary: it checks that a plant applies, and "cannot tell you an arm's `want` string
 is still the right one", on the argument that a stale `want` needs a deliberate edit while a
