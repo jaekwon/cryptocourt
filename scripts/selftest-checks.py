@@ -725,6 +725,31 @@ try:
 finally:
     shutil.move(_bk, MUTS)
 
+# THE SECOND FAILURE MODE: a row that applies cleanly and changes NO BYTES. Not
+# unappliable — it tests nothing. The realistic way in is a re-point after a
+# refactor, where `find` is updated to the moved text and the same text lands in
+# `replace`. Planted as find == replace, which is the degenerate form.
+_nop = "a row whose replace changes nothing"
+_bk2 = MUTS + ".selftest-backup"
+shutil.copy(MUTS, _bk2)
+try:
+    _corpus2 = json.load(open(_bk2))
+    _flat = dict(_corpus2[0])
+    _flat["label"] = "SELFTEST no-op row"
+    _flat["replace"] = _flat["find"]
+    with open(MUTS, "w") as _fh2:
+        json.dump([_flat] + _corpus2, _fh2, indent=2, ensure_ascii=False)
+        _fh2.write("\n")
+    _r2 = subprocess.run(["python3", COLLISIONS], capture_output=True, text=True)
+    _out2 = _r2.stdout + _r2.stderr
+    if _r2.returncode != 0 and "changes NO BYTES" in _out2:
+        print(f"  {_nop:<44} fires")
+    else:
+        print(f"  {_nop:<44} SILENT — exit {_r2.returncode} on a no-op row")
+        failures.append(_nop)
+finally:
+    shutil.move(_bk2, MUTS)
+
 print("\ncheck-control-anchors")
 # The other half of check-guards-armed's division of labour: that one says
 # REGISTERED, selftest says BROKEN CONTROL — and until this guard existed, only

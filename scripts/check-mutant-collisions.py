@@ -26,12 +26,14 @@ keyed by file so identical edits to different files do not collide. Same hash
 from two rows means the harness would compile and test byte-identical trees
 twice.
 
-FAILS CLOSED ON A ROW IT CANNOT APPLY. A row whose anchor matches zero or twice
-is check-mutation-anchors' business and it will say so, but it is NOT skipped
-quietly here: an unappliable row is a row whose mutant is unknown, and an unknown
-mutant cannot be shown to be distinct. Reporting it as a failure with a pointer
-to the guard that owns it costs one duplicated complaint and buys the guarantee
-that this check saw every row.
+FAILS CLOSED ON ANY ROW THAT YIELDS NO USABLE MUTANT, which is two cases. A row
+whose anchor matches zero or twice is check-mutation-anchors' business and it will
+say so, but it is NOT skipped quietly here: its mutant is unknown, and an unknown
+mutant cannot be shown to be distinct. Reporting it costs one duplicated complaint
+and buys the guarantee that this check saw every row. The second case is a row
+that applies perfectly and changes NO BYTES, which is not unappliable at all — it
+is a row that tests nothing, and it is caught here because the mutated source is
+already in hand.
 """
 
 import collections
@@ -93,7 +95,21 @@ def main():
             unappliable.append((corpus, label, "its anchor matches %dx, so its mutant "
                                                "is unknown (`make anchors` owns that)" % n))
             continue
-        blob = r["file"] + "\0" + src.replace(r["find"], r["replace"], 1)
+        mutated = src.replace(r["find"], r["replace"], 1)
+        # AND A ROW THAT CHANGES NO BYTES MEASURES NOTHING. Same rule the corpus
+        # applies to its own findings — "a mutation that cannot change behaviour is
+        # INVALID, not a survivor" — at the textual level, where it is exact rather
+        # than an argument. The realistic way in is a re-point after a refactor:
+        # `find` is updated to the moved text and the same text lands in `replace`.
+        # In the main corpus such a row reports SURVIVED and fails the run, which is
+        # loud but misdiagnosed; in KNOWN-GAPS it sits as a recorded gap for ever
+        # while testing nothing at all. Free to check here because the mutated
+        # source is already in hand. Measured zero across 1199 rows when added.
+        if mutated == src:
+            unappliable.append((corpus, label, "its replace changes NO BYTES, so the "
+                                               "row applies cleanly and tests nothing"))
+            continue
+        blob = r["file"] + "\0" + mutated
         mutants[hashlib.sha256(blob.encode()).hexdigest()].append((corpus, label))
 
     collisions = {h: v for h, v in mutants.items() if len(v) > 1}
@@ -110,8 +126,8 @@ def main():
                   "line a run prints when the row survives — and fold any reference the "
                   "other carried into it rather than losing it.", file=sys.stderr)
         if unappliable:
-            print("\ncheck-mutant-collisions: %d row(s) could not be applied, so this "
-                  "check did not see them and cannot say their mutants are distinct:"
+            print("\ncheck-mutant-collisions: %d row(s) yielded no usable mutant, so "
+                  "this check cannot say their mutants are distinct:"
                   % len(unappliable), file=sys.stderr)
             for corpus, label, why in unappliable:
                 print("  [%s] %s\n      %s" % (corpus, label, why), file=sys.stderr)
