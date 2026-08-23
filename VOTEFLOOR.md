@@ -269,6 +269,52 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE VERIFY LIST SAID "selftest if a guard changed", AND I HAD DEFERRED IT THREE TIMES.**
+Each deferral had a stated reason and each was individually defensible; three of them
+accumulate into an unverified claim. So the question was faced directly, and the answer is a
+decision rather than a dodge: **the full selftest is not run while another session is
+committing every half hour.** It rewrites repository files in place for tens of minutes, and
+the repolock protects READERS, not writers — a guard refuses to read a tree under mutation,
+but nothing stops another session's editor from saving into a file selftest has temporarily
+broken, or stops selftest's restore from landing on top of their edit. Risking somebody
+else's work to verify my own is the wrong trade.
+
+What CAN be done safely is the static half, and doing it turned out to be the useful move
+anyway. My arms' plants were checked by hand — both still matched exactly once — and that
+hand-check is precisely what a guard should be doing.
+
+**SO THE OTHER HALF OF check-guards-armed'S SENTENCE IS NOW A GUARD.** That file states the
+division of labour itself: *"this says REGISTERED, selftest says BROKEN CONTROL"*. And its
+own justification applies word for word to the second half — it exists because selftest "must
+run alone and is therefore run periodically rather than per commit, and an unarmed guard sits
+in the tree until somebody remembers". A rotted PLANT sits there the same way, and this repo
+has already lost **six arms at once** to it, when the corpus was re-serialised at a different
+indent and every arm anchored on its `"[\n {\n"` head became a no-op.
+
+A control arm plants `find` → `replace` and requires the guard to object. If `find` no longer
+appears in the target, the plant does nothing: the guard runs against an unmodified tree,
+correctly says nothing, and the arm reports SILENT — proving nothing while wearing the same
+green as an arm that works. Detecting that needs no execution at all, so it is now in
+`make check`:
+
+    check-control-anchors: 117 control arm(s) across 64 file(s), every plant matches exactly once
+
+**RESOLVED WITH `ast`, AND THE DIFFERENCE WAS MEASURED.** The call sites use five shapes — a
+literal, a module constant, an f-string, `os.path.join(REPO, ...)`, and one deliberate
+concatenation (`'PATHS = "scripts/check-pa' + 'ths.py"'`, built that way so the file's own
+text does not contain the literal its arm renames; its comment says "Do not tidy the
+concatenation away"). A regex over the source resolved **113 of 116**. Evaluating the AST
+against the module's own constants resolves **117 of 117**. Unresolvable is a FAILURE, not a
+skip: a refactor that moved a plant's path behind a helper would otherwise drop it out of
+coverage while the guard kept printing a smaller number as though it were the whole story.
+
+**AND THE FIRST ABLATION FAILED TO FIRE, CORRECTLY.** I mangled `241921 blocks` in an arm and
+the guard still reported all 116 clean. The guard was right: `241921` is that arm's
+`replace`, not its `find`. Re-run against a real `find` it names the arm, its line, its
+target file and the count — *"its anchor matches 0x in scripts/check-elsewhere.py"*. Worth
+recording because the instinct on a silent ablation is to suspect the guard, and this time
+the guard was the only thing in the room that was right.
+
 **VERIFYING SOMEBODY ELSE'S REFACTOR, and the hole that showed up while doing it.** Two
 refactors landed from another session on money-path code — `settleAnswerBond` collapsing
 Finalize's and SettleUndisputed's identical ten lines into one helper, and a second
