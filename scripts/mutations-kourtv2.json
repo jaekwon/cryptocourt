@@ -8288,5 +8288,45 @@
   "find": "\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\t\tcs.answerBond = 0",
   "replace": "\t\tcs.answerBond = 0",
   "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three crystallize.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the field is cleared and the coin stays: the escrow holds 18000000 and owes 0."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "lockedOf: a pre-lock court reads every balance as fully staked",
+  "find": "\tif c.locked == nil { // pre-lock court, or a fixture that built one by hand",
+  "replace": "\tif c.locked != nil { // pre-lock court, or a fixture that built one by hand",
+  "why": "lockedOf's own header calls itself \"the ONLY reader of the tree: a second one is a second place for the nil-tree and missing-key branches to disagree with the write path\" \u2014 and neither branch had a row. This is the nil-tree one."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "lockedOf: a missing key reads as a lock instead of zero",
+  "find": "\tif v := c.locked.Get(string(who)); v != nil {",
+  "replace": "\tif v := c.locked.Get(string(who)); v == nil {",
+  "why": "The missing-key branch the same header names. Inverting it makes an unlocked holder read as locked and a locked one read as free."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "mustSpendable: the stake-heavier arm absorbs the tie",
+  "find": "\tcase sl > vl:",
+  "replace": "\tcase sl >= vl:",
+  "why": "Three of the switch's four arms had a row (vl<=0&&sl<=0, vl>sl, default); this was the fourth. Widening it swallows the DEFAULT case, so a holder whose two locks bind equally is told their stake is the problem instead of being told both locks are."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "lockStake: the lock tree is never created, so the first stake is not recorded",
+  "find": "\tif c.locked == nil {\n\t\tc.locked = bptree.NewBPTree32()",
+  "replace": "\tif c.locked != nil {\n\t\tc.locked = bptree.NewBPTree32()",
+  "why": "The write path's counterpart to lockedOf's nil branch. Inverted, a court's first stake finds no tree to write into."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "lock.gno",
+  "label": "releaseStake: an exact release leaves a zero row instead of removing it",
+  "find": "\tif amount == l {",
+  "replace": "\tif amount != l {",
+  "why": "The `amount > l` panic above has two rows; the equality below it had none. Inverted, a PARTIAL release removes the whole lock \u2014 freeing more CC than was released \u2014 and an exact one leaves a zero row behind. Note `== l` to `>= l` would be INVALID rather than a survivor: the panic on `amount > l` above makes the two identical."
  }
 ]
