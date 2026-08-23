@@ -63,8 +63,14 @@ TARGETS = [
     {
         "src": os.path.join(REPO, "realm/r/kourtv2"),
         "dest": "examples/gno.land/r/kourt/kourtv2",
-        "deps": ["checkpoint", "grc20votes", "governor", "twap", "cshares",
-                 "tickbook", "curve"],
+        # WHAT KOURTV2 ACTUALLY IMPORTS. cshares and tickbook were here too, and
+        # the import graph says only the V1 court uses those — V1 is not a target
+        # here, so both were copied into every run for nothing. mutate.py reached
+        # the same conclusion for its own staging and records it there: "v0.57
+        # claimed the realm-test set's seven were all needed; that was wrong".
+        # The Makefile's realm-test still names seven and is right to: it stages
+        # the UNION for five realms, kourtv1 among them.
+        "deps": ["checkpoint", "grc20votes", "governor", "twap", "curve"],
         # None, and it holds today: the whole read surface — directory, coin,
         # curve, moderation, election, strips, franchise and both render routes
         # — writes zero bytes. Worth stating because two reads in this realm HAD
