@@ -147,6 +147,7 @@ MEMCLEAR = "scripts/check-membership-clears.py"
 READPURE = "scripts/check-read-purity.py"
 SPENDPATH = "scripts/check-spend-paths.py"
 ELSEWHERE = "scripts/check-elsewhere.py"
+CONTROLS = "scripts/check-control-anchors.py"
 ABORTASRT = "scripts/check-abort-assertions.py"
 PATHS = "scripts/check-paths.py"
 ANCHORS = "scripts/check-mutation-anchors.py"
@@ -685,6 +686,24 @@ control("the reachable package set coming back empty", ABORTASRT,
         'ALWAYS = set()\nIMPORT = re.compile(r"NOTHINGMATCHESTHIS")',
         "scanning for a shape the tree no longer has",
         argv=["python3", ABORTASRT])
+
+print("\ncheck-control-anchors")
+# The other half of check-guards-armed's division of labour: that one says
+# REGISTERED, selftest says BROKEN CONTROL — and until this guard existed, only
+# selftest said it, which means only when selftest ran. A plant whose anchor has
+# rotted is a no-op: the guard runs against an unmodified tree, correctly says
+# nothing, and the arm reports SILENT. Six arms were lost that way at once.
+#
+# THE PLANT IS BUILT BY CONCATENATION, deliberately, exactly as the
+# check-guards-armed arm below builds _reg: if this file contained the literal
+# it searches for, the string would appear TWICE here — once in the arm it
+# breaks and once in this arm's own find — and the plant would be ambiguous.
+# Do not tidy it away.
+_ca = 'if r.get("elsewh' + 'ere"):'
+control("a control arm whose plant no longer applies", SELF,
+        _ca, _ca.replace("elsewhere", "elsewhereGONE"),
+        "anchor matches 0x",
+        argv=["python3", CONTROLS])
 
 print("\ncheck-elsewhere")
 # The third level of the `elsewhere` question. A row carrying one is excused from the

@@ -1,4 +1,4 @@
-.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors paths guards staleguards \
+.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors paths guards controls staleguards \
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
@@ -59,7 +59,7 @@ check-frozen:
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors paths guards staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test elsewhere-test
+check: fmt vet gotest anchors paths guards controls staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test elsewhere-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -80,6 +80,15 @@ paths:
 # listing; runs no arms and touches no file.
 guards:
 	python3 scripts/check-guards-armed.py
+
+# The other half of that check. `guards` asks whether each guard is REGISTERED in
+# selftest-checks.py; this asks whether each control arm's PLANT still applies. A
+# rotted anchor makes the arm a no-op — the guard runs against an unmodified tree
+# and is reported SILENT — and until now only selftest could see that, which means
+# only when somebody remembered to run it. Static, touches no file, so it belongs
+# in `check` for the same reason check-guards-armed does.
+controls:
+	python3 scripts/check-control-anchors.py
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this
 # — cross() is IsCurrent-strict, so a returned frame cannot be handed to an
