@@ -2904,3 +2904,52 @@ func TestQualityWeightIsFlooredByWhatIsStillHeld(cur realm, t *testing.T) {
 	uassert.Equal(t, bobPinned, rec.(int64))
 	uassert.Equal(t, bobPinned, cs.qMidW)
 }
+
+// A ride that LEVIES the slash leaves the answerer their counter-flag window.
+//
+// This covers a path no other fixture reached: every slash test in this lane
+// INHERITS its reserve from the flag lane — slashSetup does OpenFlag, a low vote,
+// ResolveFlag — and then rides it. Here the RIDE itself originates the reserve,
+// which is what v0.50 made possible, and the assertion is that the answerer can
+// still put the slash's own question to the electorate afterwards. CounterFlag
+// aborts once pendingSlash is zero, so calling it is that promise expressed
+// through an entrypoint rather than a field.
+//
+// WHAT THIS DOES NOT PIN, said plainly because the comment it came from suggests
+// otherwise. dispute.gno captures hadSlash BEFORE the ride and warns that running
+// both on one tally "would settle the slash in the very call that levied it —
+// burned with no window and no Q5 challenge for the answerer". Moving that capture
+// AFTER the ride does NOT break this test, and measurement says why: on a
+// just-levied slash counterUsed is false, so disposeSlashOnRide takes its
+// `!cs.counterUsed` case and REARMS the window instead of settling it. The burn the
+// comment describes is unreachable on this path, so the window survives either way
+// and no assertion about it can separate the two orders.
+//
+// What DOES differ is lastFlagEventAt — originateSlash never sets it and
+// rearmSlashWindow does — which crystallize.gno reads as its 24h quiet window. That
+// difference is recorded in KNOWN-GAPS rather than pinned here, because every route
+// to a pendingSlash of zero restamps the field again and the difference is
+// plausibly masked before anything can observe it.
+func TestARideThatLeviesTheSlashLeavesTheAnswererTheirWindow(cur realm, t *testing.T) {
+	c, id, alice, bob, carol, _ := qfSetup(cur, t, "qf9")
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "qf9", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteQuality(cross(cur), "qf9", id, qualityLow)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "qf9", id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "qf9", id)
+
+	// SETUP, not the assertion: the ride has to adjudicate LOW, or nothing was
+	// levied on this tally and the test would pass for the wrong reason.
+	if tier, _ := QualityTier("qf9", id); tier != qualityLow {
+		t.Fatalf("setup: the ride must adjudicate LOW to levy a reserve, got %d", tier)
+	}
+
+	// THE ASSERTION: the reserve is still pending, so its window is open and the
+	// answerer can put the slash's own question to the electorate.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CounterFlag(cross(cur), "qf9", id)
+}

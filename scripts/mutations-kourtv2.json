@@ -8568,5 +8568,13 @@
   "find": "\tif firstResolution && !cs.provClose {",
   "replace": "\tif cs.provisional < 0 && !cs.provClose {",
   "why": "dispute.gno captures firstResolution with \"capture BEFORE the switch mutates it\", and the block this guards sets the escrow clock \u2014 \"set ONCE, at the first resolution, and never recomputed\". By here the first-resolution branch has already written provisional = answer, so a FRESH read is false where the capture was true and the clock is never set. Measured caught by the realm panic \"the escrow window has passed; Finalize the verdict\", with 0 build errors. NOTE the sibling use site inside the switch is NOT writable: there the write is inside the block the condition guards, so a fresh read is the same program and the row would be INVALID."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PurgeModLogRow: an unreachable row id is not refused, so m-of-n is spent on it",
+  "find": "\tif idx < 0 {\n\t\tpanic(\"kourtv2: no such moderation-log row\")",
+  "replace": "\tif idx < -1 {\n\t\tpanic(\"kourtv2: no such moderation-log row\")",
+  "why": "moderation.gno states the ordering: \"Resolve the row BEFORE the vote, so an unreachable id is refused on the first approval rather than after m-of-n has been spent on it.\" idx is -1 or >= 0, so `< -1` makes the refusal unreachable and clm.log[idx] then indexes -1. The sibling refusal, \"that claim has no moderation log\", already had a row; this one did not."
  }
 ]
