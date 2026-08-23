@@ -134,6 +134,25 @@ REQUIRED = ("file", "find", "replace")
 # this" has a different answer for a txtar script than for a python guard. An extension this
 # does not know is a FAILURE and not a pass: an unrecognised harness is precisely the case
 # where nobody has thought about whether it runs.
+# A LABEL MUST NAME THE DEFECT, NOT A LINE. The label is the line a run prints when
+# a row survives, so its whole job is to say what broke — and a line number stops
+# being true the moment anything above it moves. This repo refuses line-number
+# citations everywhere else for the same reason: check-citations rejects them in .gno
+# and .md alike, with "Cite the file and an anchor instead. Line numbers rot."
+#
+# Twelve rows carried one — `modvote/mustCandidate:242: kourtv2: no such candidate` —
+# after an earlier cleanup was believed to have removed them all, and two of those
+# twelve differed from each other ONLY by the number, so the line was doing the work
+# a name should have done: one guards a nil candidate tree, the other a missing key.
+#
+# The shape is `symbol:digits`, not a bare `:digits`, and that is deliberate. Real
+# labels carry colons and digits all over — "v0.52: CounterFlag does not latch",
+# "M3-HIGH-1: a terminal path returns the WHOLE bond", "P-CONST checkpoint MaxKey 128
+# -> 1280" — and a looser pattern would fire on those. Measured: this one matches
+# ZERO of the 1,240 labels in the corpus today and both of the twelve as they were.
+LINE_NUMBERED_LABEL = re.compile(r"[A-Za-z_]\w*:\d+")
+
+
 def routinely_run(path, src=None):
     if src is None:
         mk = os.path.join(REPO, "Makefile")
@@ -184,6 +203,12 @@ def row_verdicts(rows, resolve):
             bad.append("UNLABELLED row in %s: %r.\n"
                        "           The label is a row's only identity in the "
                        "batch's output." % (r["file"], r["find"][:60]))
+        elif LINE_NUMBERED_LABEL.search(label):
+            bad.append("LINE-NUMBERED LABEL %r.\n"
+                       "                    The label is what a run PRINTS when the "
+                       "row survives, and a line number stops being true the moment "
+                       "anything above it moves — the same reason check-citations "
+                       "refuses them in source and docs. Name the defect." % label)
         # Independent of whether the row resolves, so it is not swallowed by a
         # `continue` below: a dead excuse is a dead excuse either way.
         where = r.get("elsewhere")
@@ -295,6 +320,11 @@ ROW_FIXTURES = [
     # was right there in PKGS.
     ([{"pkg": "kourtv2", "label": "L", "find": "once", "replace": "x"}],
      "MALFORMED ROW"),
+    ([R(label="quality/OpenFlag:82: settled")], "LINE-NUMBERED LABEL"),
+    # And the labels that legitimately carry a colon and digits must NOT trip it, or
+    # the arm would refuse the corpus it is meant to keep readable.
+    ([R(label="v0.52: CounterFlag does not latch")], None),
+    ([R(label="P-CONST checkpoint MaxKey 128 -> 1280")], None),
     # The clean case must stay clean, or every fixture above proves nothing.
     ([R()], None),
 ]
