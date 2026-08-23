@@ -269,6 +269,35 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE SANITISER CENSUS, FOLLOWED TO ITS END: no unsanitised user text reaches a page.**
+The lead came from an existing test's own prose — TestNoUserStringOpensStructureOnAnyPage
+says "four of its FIVE call sites had nothing holding them", which invites the question of
+what the fifth is and whether anything holds it now. Counting instead of guessing: 21 lines
+mention `sanitize.` in the non-test realm, four of them comments, so **17 real call sites**
+— more than five, because the mod-log and banner renders sanitise inline at the write site
+rather than through a named gate.
+
+Then the inverse query, which is the one that could have found something: a write of
+user-derived text with NO sanitiser on it. Searched across render.gno and modrender.gno for
+writes touching `.reason`, `.code`, `.tombstone`, `.name`, `.desc`, `.title`, `.Symbol()`
+or `.String()` without a `sanitize.` on the line. **One hit**, and it is safe:
+
+    modrender.gno:376  b.WriteString("## Moderators\n\n1-of-1 — " + c.admin.String() + ...
+
+An address is bech32 — a fixed alphabet with no markdown or HTML metacharacter in it — so
+this is INVALID BY ALPHABET, the same reasoning the corpus already records for
+`qualifiedSymbol`. `c.admin` is written from `cur.Previous().Address()`, so it cannot be an
+arbitrary string either. Not a vulnerability, and nothing to change: sanitising an address
+adds nothing.
+
+Worth recording the one inconsistency it exposes, since a future reader could rely on the
+wrong half of it: modrender.gno **:352 sanitises an address** (`a.String()`) while **:376
+does not**. Both are safe; they simply do not agree, so "every address write is sanitised"
+is a false generalisation and "no address write needs it" is the true one. Left alone —
+de-sanitising :352 would be churn, and adding one at :376 would imply a danger that is not
+there. Also notable is :437's `sanitize.InlineCode(key)`, a THIRD helper for a third output
+context (inside a code span, where backticks and not markdown are the hazard).
+
 **I WROTE A TEST, GOT IT WRONG THREE TIMES, AND THEN DELETED IT — and the deletion is
 the right outcome.** The trigger was a claim of my own: I had written in a commit message
 that this realm's render is safe from a hostile court name "because InlineText folds",
