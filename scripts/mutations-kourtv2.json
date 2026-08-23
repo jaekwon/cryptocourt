@@ -8618,5 +8618,19 @@
   "label": "PARAM reSetWindowBlocks doubled (the moderator re-set window)",
   "find": "\treSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day",
   "replace": "\treSetWindowBlocks = int64(483_840) // ~14 days at 17_280 blocks/day"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "PARAM trimBudget raised (the series trim does four times the work per ride)",
+  "find": "\ttrimBudget = 2",
+  "replace": "\ttrimBudget = 8"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "PARAM trimBudget lowered (the series trim frees one page per ride)",
+  "find": "\ttrimBudget = 2",
+  "replace": "\ttrimBudget = 1"
  }
 ]

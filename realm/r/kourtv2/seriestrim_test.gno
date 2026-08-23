@@ -97,3 +97,82 @@ func TestAYoungCourtsHourlyHistorySurvivesEveryTrimRide(cur realm, t *testing.T)
 			"anything", len(pts)-len(after))
 	}
 }
+
+// ONE RIDE FREES EXACTLY TWO PAGES, which is the whole content of trimBudget and
+// was the last of the six recorded constant gaps left undecided. The note said
+// settling it needed a probe for an observable difference rather than an argument,
+// because if the series converges to the same state at every budget then nothing
+// can tell two budgets apart and the row is INVALID rather than a survivor.
+//
+// IT IS OBSERVABLE, and Trim's own arithmetic says exactly when. With C candidate
+// pages and a budget b, Trim collects b+1 keys and deletes b when C >= b+1;
+// otherwise the walk exhausts the candidates and it deletes C-1, sparing the
+// newest all-below page. So two budgets differ only where C >= b+1 holds for the
+// smaller one: at four candidate pages a budget of 2 deletes two and leaves the
+// THIRD page's point as the oldest, while any budget of 3 or more deletes three
+// and leaves the fourth.
+//
+// FOUR CANDIDATE PAGES IS WHY PRODUCTION NEVER SEES A DIFFERENCE, and why the
+// constant reads as unpinnable at first glance: a trim rides every touched hour
+// and production adds at most one candidate page per 32 changed epochs, so C is
+// never above 1 or 2 while anything is touching the claim. Candidates only pile up
+// across a GAP in which nobody touches it, which is what the 400-hour skip builds.
+//
+// SIX POINTS, NOT FOUR, because Trim never touches the two inline points: the
+// Series keeps the newest two itself and only the older four reach the archive.
+// A four-point fixture archives two pages, both budgets delete one, and the test
+// would have passed against every mutation while looking like coverage.
+//
+// The expectation is the literal offset 64 — two pages of 32 — and never
+// `trimBudget*PageEpochs`, which would move with the code it is meant to hold
+// still. Nothing here reads the ambient height either: the fixture opens its own
+// claim, whose series starts empty, and builds its own room.
+func TestOneTrimRideFreesExactlyTwoArchivePages(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tbud-alice")
+	testCourt(cur, "tbud", alice, 40_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "tbud", "six pages of history and one ride")
+
+	c := mustCourt("tbud")
+	cs := mustClaim(c, id)
+	a := ensureCSArch(c)
+	key := csKey(cs.id, "yh")
+
+	// The next page boundary at or above the current hour, taken BEFORE the skip so
+	// every point below lands in the past. heightNow(), not testingHeight(): the
+	// production clock is floored by tcHeightFloor and freezable by an armed test
+	// clock, so it can sit a long way from runtime.ChainHeight(), and recordPools
+	// reads heightNow(). The first draft placed points against the wrong clock and
+	// panicked with "the clock went backwards".
+	base := ((hourEpochAt(heightNow()) / 32) + 1) * 32
+	testing.SkipHeights(epochBlocks * 400)
+	for k := uint32(0); k < 6; k++ {
+		cs.yesH.SetAt(a, key, base+k*32, int64(k+1)*1_000_000)
+	}
+	before, capped := collectSeriesKeyed(a, &cs.yesH, key)
+	if len(before) != 6 {
+		t.Fatalf("setup: six change points, one per page, got %d", len(before))
+	}
+	if capped {
+		t.Fatal("setup: the row cap must not be involved, or a loss below is not the trim's")
+	}
+
+	recordPools(c, cs) // ONE ride of the production path
+
+	after, _ := collectSeriesKeyed(a, &cs.yesH, key)
+	// SIX BECOME FIVE, and the arithmetic is worth spelling out because the obvious
+	// guard is satisfied by the wrong number. The ride frees two pages AND appends a
+	// point for the current hour, so a budget of ONE also lands on six — an earlier
+	// draft guarded `len(after) >= len(before)` and reported that as "the ride must
+	// free something", which is a real defect wearing a broken fixture's words. This
+	// file's header already tells that story once; this is the same trap.
+	if len(after) != 5 {
+		t.Errorf("the ride left %d points, want 5: two pages freed and one point "+
+			"appended for the current hour, from six", len(after))
+	}
+	if got := after[0].e; got != base+64 {
+		t.Errorf("one ride left the oldest surviving point at base+%d, want base+64: a "+
+			"ride that frees two pages leaves the THIRD point as the oldest, and any "+
+			"other offset is a different budget", got-base)
+	}
+}

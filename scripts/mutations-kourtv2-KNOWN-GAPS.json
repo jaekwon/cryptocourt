@@ -220,13 +220,5 @@
   "find": "const twapBuckets = 168 // a week of hourly buckets, as V1",
   "replace": "const twapBuckets = 84 // a week of hourly buckets, as V1",
   "why": "SURVIVES: the ring's size is documented as \"a week of hourly buckets, as V1\" and nothing asserts the week. Conviction and the trailing-average quorum are both computed from this ring, so the number is money-adjacent. A fixture has to show maturity or an average depending on 168 specifically — twap's own tests use its Ring directly and never see kourtv2's choice of size."
- },
- {
-  "pkg": "kourtv2",
-  "file": "stakeseries.gno",
-  "label": "PARAM trimBudget raised (the series trim does four times the work per ride)",
-  "find": "\ttrimBudget = 2",
-  "replace": "\ttrimBudget = 8",
-  "why": "SURVIVES, and it is the one of the six where that may be CORRECT rather than a gap. trimBudget bounds how much the series trim does per ride; if the series converges to the same state either way, no assertion can distinguish them and the row is closer to INVALID than to a survivor. TestAYoungCourtsHourlyHistorySurvivesEveryTrimRide asserts history SURVIVES trimming, which a larger budget does not violate. Recorded rather than decided: settling it needs a probe for an observable difference, not an argument."
  }
 ]
