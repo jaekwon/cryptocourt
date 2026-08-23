@@ -269,6 +269,47 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**THE PART I SCOPED OUT WAS THE DANGEROUS HALF.** `check-control-anchors` was written with an
+explicit boundary: it checks that a plant applies, and "cannot tell you an arm's `want` string
+is still the right one", on the argument that a stale `want` needs a deliberate edit while a
+rotted anchor rots on its own. That argument is sound for one direction and blind to the
+other. A `want` that stops matching fails loudly. A `want` that matches for the WRONG
+REASON — because it is already a substring of the guard's CLEAN output — reports **"fires"**
+while its mutation does nothing.
+
+And it had already happened here. `check-paths`' own comment records it: two arms whose wants
+were the bare words "STALE" and "ALLOWLIST", which the baseline output already contained
+"while two real stale paths were outstanding — so two arms printed 'fires' without their
+mutation doing anything". The wants were made specific; the CLASS was left unguarded. Same
+shape as everything else this file records: a comment naming a defect that nothing enforces.
+
+**MEASURED BEFORE CHANGING ANYTHING**, because a new check should start from a known state.
+117 arms resolve to **32 distinct guard commands**, so the question costs 32 runs rather
+than 117:
+
+    104 arms baselined across the 24 cheap commands   0 vacuous
+     10 arms baselined across isolation/storage/mutate 0 vacuous
+      3 arms (check-elsewhere) settled by reading      0 vacuous
+    117 of 117 non-vacuous
+
+The three exceptions are deliberate and the reason is the same one that stopped the full
+selftest: `check-elsewhere` rewrites `realm/` in place, and another session is committing.
+Settled statically instead, which is strong enough here — each of its three wants appears
+exactly once in the guard and only inside a branch that returns 1, while the success path
+prints nothing but its header, the row labels and their complaints.
+
+`control()` now takes one cached clean-tree run per distinct `(argv, stdin, cwd)` and refuses
+an arm whose `want` is already there. **Note what that deliberately also catches:** if a guard
+is legitimately reporting a REAL problem on the clean tree, every arm wanting that text is
+flagged vacuous — which is correct, because such an arm cannot tell its own mutation from the
+problem already present. That is exactly what happened to the two check-paths arms.
+
+**ABLATED ON THE REAL FUNCTION, NOT A COPY**, which is worth the extra ten lines: the new
+`_baseline`/`_clean`/`control` source was sliced out of the file, `exec`'d, and driven against
+a stub guard both ways — a want present only after the plant fires, a want already in the clean
+output reports VACUOUS CONTROL and lands in `failures`, and the target restores. Copying the
+logic into a test would have proven the copy.
+
 **THE VERIFY LIST SAID "selftest if a guard changed", AND I HAD DEFERRED IT THREE TIMES.**
 Each deferral had a stated reason and each was individually defensible; three of them
 accumulate into an unverified claim. So the question was faced directly, and the answer is a
