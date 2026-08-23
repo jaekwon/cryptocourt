@@ -62,7 +62,11 @@ TITLE_READERS = {
 # would leave the offending text on the directory and on every page of that court".
 #
 # NOTE ON THE RAW PUBLIC READ, recorded here because this is where somebody will
-# look. CourtName returns `mustCourt(slug).name` unsanitised and that is sanctioned
+# look. The length-only validation below is NOT a new observation — render_test.gno's
+# TestNoUserStringOpensStructureOnAnyPage says it in its own header ("NEITHER is
+# validated at the door: StartCourt stores `name` unchecked and OpenClaim stores
+# `title` the same way") and pins the consequence on every page. What is new here is
+# only the CONSUMER, at the end of this note. CourtName returns `mustCourt(slug).name` unsanitised and that is sanctioned
 # — sanitize/v0's rule is "sanitise once, at the point of output", and its own doc
 # says "a court's parameters are not secret". But mustCourtName validates LENGTH
 # ONLY: no alphabet, and no newline check, where mustCourtDesc refuses newlines with

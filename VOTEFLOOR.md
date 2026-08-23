@@ -269,6 +269,46 @@ A slice is ~5 minutes on a quiet box and up to 22 when something else is working
 `rows / shards * 75s` arithmetic recorded above holds only for a quiet machine; budget double
 if you intend to keep working alongside it.
 
+**I WROTE A TEST, GOT IT WRONG THREE TIMES, AND THEN DELETED IT — and the deletion is
+the right outcome.** The trigger was a claim of my own: I had written in a commit message
+that this realm's render is safe from a hostile court name "because InlineText folds",
+without measuring it. Measured, it is true and precise:
+
+    raw name:    "Bad\nCourt <form action=x>"
+    rendered as: "Bad Court \<form action=x\>"     newline folded, brackets escaped
+
+Then the test I built around it was wrong three times, each in a way this file has
+recorded before:
+
+  1. `strings.Contains(out, "<form")` — which matches the ESCAPED `\<form` too, since one
+     is a substring of the other. It reported a security hole that does not exist. The
+     same substring-masking class as before, producing a false ALARM this time.
+  2. "every `<` in the output must be escaped" — a property of the WHOLE PAGE, not of my
+     name. Passed alone, FAILED IN COMPANY, because the directory lists other tests'
+     courts and the realm's own chrome. That is the passes-alone-fails-together shape
+     check-isolation exists to catch, and I wrote it.
+  3. Asserting on the DIRECTORY as well as the court page. The listing is PAGINATED, so
+     with the whole suite's courts present this one is not on page 1 — failing in company
+     again, for a second and different reason.
+
+**And then the measurement that ended it.** With the test withdrawn and the name gate
+removed, the suite still goes red: `TestNoUserStringOpensStructureOnAnyPage` already
+catches it, and is broader than my instance — "No user string can open page structure of
+its own, on ANY page", covering four of five sanitizer call sites with a forged-verdict
+payload. So the test added no coverage and was deleted.
+
+**THE STANDARD THIS APPLIES IS THE ONE SET TWO FIRINGS AGO, and it cuts the other way
+here.** The escrow terminal-paths test was KEPT although redundant, because its redundancy
+was contingent on today's obligation field set — a new field would slip past the others.
+This redundancy is STRUCTURAL: an existing test asserts the general property of which mine
+was one instance, so a new user string or surface is caught by the general test rather
+than missed by it. Contingent redundancy is a hedge; structural redundancy is dead weight.
+
+**One correction owed:** the note I added to check-render-text's census last firing
+presented mustCourtName's length-only validation as newly noticed. It is not —
+render_test.gno's header says it plainly. The census now cites that test, and claims only
+the ccwrap consumer as new.
+
 **AND THE SECOND SELFTEST RUN CLOSED THE LOOP ON EVERY ARM ADDED SINCE.** 18 minutes,
 EXIT=0, and the numbers that matter:
 
