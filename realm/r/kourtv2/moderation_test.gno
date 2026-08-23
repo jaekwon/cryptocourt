@@ -1186,3 +1186,72 @@ func TestTheThresholdIsCheckedAgainstTheCanonicalSet(cur realm, t *testing.T) {
 			"canonicalises to")
 	}
 }
+
+// THE RE-SET WINDOW'S LENGTH, BRACKETED FROM BOTH SIDES. That the window EXISTS
+// was already covered; that it is fourteen days was not, so reSetWindowBlocks
+// could have held any number at all and nothing in the suite would have objected.
+// The constants sweep found it unpinned, and this is the pin.
+//
+// The expectation is the LITERAL 241_920 and never the constant. An assertion
+// written as `reSetWindowBlocks` moves together with the code it is supposed to
+// hold still — which is exactly how the first draft of the deposit-floor pin
+// passed against its own mutation.
+//
+// The skip totals 241_920, which is 336 whole epochs, so it leaves the phase of
+// the epoch clock untouched for every test that runs after this one. A bare skip
+// that lands mid-epoch is what broke TestTheArgumentCapsBindAtTheirStatedNumbers
+// once already.
+func TestTheReSetWindowIsExactlyFourteenDaysLong(cur realm, t *testing.T) {
+	const windowIs = int64(241_920) // 14 days at 17_280 blocks/day
+
+	alice := testutils.TestAddress("rsw-alice")
+	c := testCourt(cur, "rsw", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rsw", "hidden, put back, and then re-set")
+
+	// Two global mods at a threshold of 2, so that INSIDE the window a lone key
+	// cannot act. That refusal is the entire difference the window makes: with a
+	// 1-of-1 set the m-of-n call fires on the first signature and the window
+	// becomes invisible.
+	dadmin := ensureGlobalDAO().admin
+	second := testutils.TestAddress("rsw-second")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), second)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+
+	// Hide — no prior clear, so no window applies — then the DMCA put-back.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHide(cross(cur), "rsw", id, "DMCA")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalClear(cross(cur), "rsw", id)
+
+	cm := ensureMod(c)
+	clearedAt := lookupClaimMod(cm, id).globalClearedAt
+	if clearedAt == 0 {
+		t.Fatal("setup: the put-back must record the height it happened at")
+	}
+
+	// ONE BLOCK INSIDE. A lone key must not win the reversal race.
+	if step := clearedAt + windowIs - 1 - heightNow(); step > 0 {
+		testing.SkipHeights(step)
+	} else {
+		t.Fatalf("setup: the window's near edge is already behind us (step %d)", step)
+	}
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHide(cross(cur), "rsw", id, "DMCA")
+	if lookupClaimMod(cm, id).global {
+		t.Fatalf("a lone key re-set the claim %d blocks after the put-back, which "+
+			"is still inside a %d-block window", heightNow()-clearedAt, windowIs)
+	}
+
+	// AND ONE BLOCK OUT, where the same lone key acts. The guard is
+	// `now < clearedAt+window`, so the window is over AT clearedAt+window.
+	testing.SkipHeights(1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHide(cross(cur), "rsw", id, "DMCA")
+	if !lookupClaimMod(cm, id).global {
+		t.Errorf("the window outlasted its stated %d blocks: a lone key still could "+
+			"not re-set at clearedAt+%d", windowIs, heightNow()-clearedAt)
+	}
+}

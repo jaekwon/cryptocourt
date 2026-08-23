@@ -8604,5 +8604,19 @@
   "label": "PARAM StartCourt opens a polish window instead of none",
   "find": "\treturn startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 0)",
   "replace": "\treturn startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 1_000)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PARAM reSetWindowBlocks halved (the moderator re-set window)",
+  "find": "\treSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day",
+  "replace": "\treSetWindowBlocks = int64(120_960) // ~14 days at 17_280 blocks/day"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PARAM reSetWindowBlocks doubled (the moderator re-set window)",
+  "find": "\treSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day",
+  "replace": "\treSetWindowBlocks = int64(483_840) // ~14 days at 17_280 blocks/day"
  }
 ]

@@ -223,14 +223,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "moderation.gno",
-  "label": "PARAM reSetWindowBlocks halved (the moderator re-set window)",
-  "find": "\treSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day",
-  "replace": "\treSetWindowBlocks = int64(120_960) // ~14 days at 17_280 blocks/day",
-  "why": "SURVIVES: nothing asserts the ~14 days a windowed re-set stays open. The window's EXISTENCE is covered (rows on the re-set path), its LENGTH is not. A fixture skips to just inside and just outside the boundary, which is the shape the grace-window tests already use elsewhere."
- },
- {
-  "pkg": "kourtv2",
   "file": "stakeseries.gno",
   "label": "PARAM trimBudget raised (the series trim does four times the work per ride)",
   "find": "\ttrimBudget = 2",
