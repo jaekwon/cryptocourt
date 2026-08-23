@@ -322,8 +322,36 @@ guess.** Two `make gaps` runs minutes apart split the same 21 rows differently �
 not-caught + `4` by-design, then `18` + `3`. The total, and therefore the verdict, is
 identical both times and correct. But one row moved category, so the by-design/ordinary
 split is not stable run to run. It costs six minutes a sample to chase and does not affect
-whether a gap has closed, so it is written down rather than investigated: if a future
-reader sees an excused row reported as an ordinary survivor, this is why, and it is not new.
+whether a gap has closed, so it is written down rather than investigated.
+
+**EXPLAINED THE NEXT FIRING, AND IT WAS HIDING A REAL DEFECT IN MY OWN FIX.** The answer
+was free: it is not sharding, and reading `mutate.py` gives it in one line. Its branch order
+checks `TIMED OUT` **before** `elif ok and covered`, so a by-design row that times out is
+appended to `survivors` rather than to `elsewhere` — same total, one row reclassified,
+exactly what was seen. Confirmed from the other side: with nothing timing out the split is
+`17 + 4` again, observed twice more. Six minutes of sampling would not have found this;
+reading the classifier did. **The general lesson is the one this file keeps re-learning from
+the other direction — when an observation looks like non-determinism, read the code that
+produces it before deciding it is expensive to chase.**
+
+And it was load-bearing, because `mutate.py` puts FOUR things in that list and three are
+non-results: `[timed out]`, `[invalid]`, `[bad anchor]`. For the main corpus, counting them
+as not-caught is right and deliberate — fail closed. **Inverted for the gap file it flips
+the wrong way**, and `--expect-survive` as first written checked only whether a row was
+CAUGHT, so a row that never ran was reported as *still surviving*. That is the same
+non-result-as-result the flag exists to prevent, one level down, introduced while fixing the
+level above.
+
+Measured rather than argued, using the gap file's own documented hanging row at
+`MUTATE_SUITE_TIMEOUT=120`:
+
+    pre-fix : exit 0 — "every one of the 1 row(s) still survives — no recorded gap has closed"
+    post-fix: exit 1 — "1 row(s) did not survive so much as go UNMEASURED"
+
+The pre-fix line is a false claim about a row that hung and was killed. Paired both ways
+(an ordinary surviving gap row still passes; the full file passes with all 21 measured), and
+armed in selftest with a rotted anchor rather than a hang — same non-result class, one
+baseline instead of three minutes.
 
 **A RED GUARD WHOSE CAUSE BELONGED TO SOMEBODY ELSE — and the same exit code, twice, for
 entirely different reasons.** `make anchors` went red with three broken rows, all in
