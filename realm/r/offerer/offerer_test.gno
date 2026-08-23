@@ -1,6 +1,10 @@
 package offerer
 
-import "testing"
+import (
+	"testing"
+
+	"gno.land/r/kourt/govern"
+)
 
 // Describe is a total function of the payload, which is the constraint every
 // Kind is under and the easiest one to break by accident.
@@ -131,5 +135,66 @@ func TestAPayloadCannotBecomePageStructure(t *testing.T) {
 		if err := k.Check(ok); err != nil {
 			t.Errorf("Check refused an ordinary greeting %q: %v", ok, err)
 		}
+	}
+}
+
+// The terms this realm offers on, READ BACK from the registry rather than
+// re-typed — and the one test here that exercises OfferNamed at all.
+//
+// Every test above reaches into the package and calls a method on a `greeting`
+// value it built itself. None of them calls the entrypoint, so until now nothing
+// anywhere observed the six numbers OfferNamed actually publishes: not this
+// suite, not govern's (its tests offer their own kinds), and not a txtar, since
+// no script mentions this realm. The terms were free to be anything.
+//
+// They have already been wrong once. governor_test.gno's
+// TestAGraceOfZeroIsRefusedSoEverySlotComesBack says so in its own header —
+// "the offerer example offered with a grace of zero as the shape to copy" —
+// and a grace of zero is refused, so that tuple did not merely document bad
+// practice, it made this realm's only entrypoint abort every time it was
+// called. A demo realm that cannot be demonstrated, and green suites all round.
+//
+// TestTheMintIsGovernedOnTheBootstrapTerms is the shape copied here: assert the
+// terms the LIVE registry carries, not the literal in the constructor.
+//
+// THE LAST ARM IS THE ONE THAT MATTERS, and it is not redundant with the table.
+// A golden-value table is silenced by updating the golden — the natural thing to
+// do when a term changes on purpose, and it would carry a regression straight
+// through. `GraceBlocks > 0` is a property, not a value: it cannot be satisfied
+// by editing the expectation, only by keeping the realm offerable.
+func TestTheTermsAGreetingIsOfferedOn(cur realm, t *testing.T) {
+	const name = "offerer/terms-probe"
+
+	// Also the assertion that OfferNamed COMPLETES. With an unofferable tuple
+	// this aborts rather than failing, which is a catch either way.
+	OfferNamed(cross(cur), name)
+
+	got, ok := govern.KindRules(name)
+	if !ok {
+		t.Fatalf("OfferNamed(%q) registered no terms, so the holders would have "+
+			"nothing to adopt this kind on", name)
+	}
+	for _, c := range []struct {
+		field     string
+		got, want int64
+	}{
+		{"QuorumBps", got.QuorumBps, 2000},
+		{"ThresholdBps", got.ThresholdBps, 5100},
+		{"VotingBlocks", got.VotingBlocks, 100},
+		{"DelayBlocks", got.DelayBlocks, 0},
+		{"GraceBlocks", got.GraceBlocks, 5000},
+		{"ProposeBps", got.ProposeBps, 0},
+	} {
+		if c.got != c.want {
+			t.Errorf("offered on %s=%d, want %d — the terms holders would be "+
+				"adopting are not the ones this realm documents", c.field,
+				c.got, c.want)
+		}
+	}
+
+	if got.GraceBlocks <= 0 {
+		t.Errorf("offered on GraceBlocks=%d: a decided proposal with no expiry "+
+			"holds its slot for the life of the realm, so Offer refuses this "+
+			"and OfferNamed can never succeed", got.GraceBlocks)
 	}
 }

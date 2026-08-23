@@ -8448,5 +8448,69 @@
   "find": "\tif c.mod == nil {\n\t\treturn 0",
   "replace": "\tif c.mod != nil {\n\t\treturn 0",
   "why": "From the authority-shaped sweep of moderation.gno's uncovered operators."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "Describe: the rendering reads live state, so two holders vote on different questions",
+  "find": "\treturn \"greet the holders with: \" + payload",
+  "replace": "\treturn \"greet the holders with: \" + payload + strconv.Itoa(greeted)",
+  "why": "The constraint the package header names first, and the one the governor cannot detect: Describe must be a total function of the payload. strconv is already imported by Do, so this compiles."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "Check: an empty greeting is accepted",
+  "find": "\tif payload == \"\" {\n\t\treturn errEmpty\n\t}\n",
+  "replace": "",
+  "why": "errEmpty is a package-level var, so dropping its only use does not fail to build the way an unused local or import would."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "Check: the length bound is off by one, so an exactly-280 greeting is refused",
+  "find": "\tif len(payload) > 280 {",
+  "replace": "\tif len(payload) >= 280 {",
+  "why": "The suite asserts the bound in both directions, which is what makes this a boundary row rather than an invalid one."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "Check: the free-text payload skips TextOnly, so a proposer can write page structure",
+  "find": "\treturn govern.TextOnly(payload)",
+  "replace": "\treturn nil",
+  "why": "The injection the file spends fifteen lines of comment on. The govern import survives because OfferNamed still uses Offer and NewRules."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "Name: a kind reports a fixed name, so one realm can only ever register one",
+  "find": "func (g greeting) Name() string { return g.name }",
+  "replace": "func (g greeting) Name() string { return \"greet/one\" }",
+  "why": "Name is the registry key. The catching test loops three names, so the first iteration passes and the second fails \u2014 which is the point of looping."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "Do: the greeting is performed but not recorded, so a chain test cannot see it ran",
+  "find": "\tgreeted++\n\tlast = payload",
+  "replace": "\tlast = payload",
+  "why": "Greeted() is the only evidence a transaction receipt cannot supply, so the counter not moving is the failure that matters."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "OfferNamed: offered with a grace of zero, so the entrypoint aborts every call",
+  "find": "\t\t5000, // but a real expiry",
+  "replace": "\t\t0, // but a real expiry",
+  "why": "The tuple this realm ACTUALLY shipped once \u2014 governor_test.gno's grace-of-zero test names it as the shape that was copied. Offer refuses it, so the failure is not a wrong number but a demo realm whose only entrypoint aborts while every suite stays green. Caught by the abort, not by the terms table."
+ },
+ {
+  "pkg": "offerer",
+  "file": "offerer.gno",
+  "label": "OfferNamed: offered on a quorum the realm does not document",
+  "find": "\t\t2000, // a fifth of the supply",
+  "replace": "\t\t3000, // a fifth of the supply",
+  "why": "The other catching mechanism: an offerable-but-undocumented tuple gets past Offer, so only reading the terms back through KindRules finds it. Pairs with the grace row \u2014 one row per mechanism."
  }
 ]

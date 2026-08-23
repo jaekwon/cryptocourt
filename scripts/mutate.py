@@ -108,10 +108,16 @@ PKGS = {
                    "examples/gno.land/p/kourt/grc20votes/v0"),
     "governor": (os.path.join(REPO, "realm/p/governor"),
                  "examples/gno.land/p/kourt/governor/v0"),
-    # Staged but never mutated: the govern realm's offer filetest imports it,
-    # so leaving it out makes the baseline red for a staging reason and every
-    # mutation reads as caught. That is the same lie as a build failure counted
-    # as a catch, told by omission.
+    # Staged because the govern realm's offer filetest imports it, so leaving it
+    # out makes the baseline red for a staging reason and every mutation reads as
+    # caught. That is the same lie as a build failure counted as a catch, told by
+    # omission.
+    #
+    # It said "staged but never mutated" for as long as that was true, and the
+    # zero read as deliberate rather than as a hole — a package present in this
+    # map with no row in the corpus is exactly as unmeasured as one that is
+    # missing, and this comment explained only the staging. It now carries 8
+    # rows, measured 8/8 caught, which is what says its five tests have teeth.
     "offerer": (os.path.join(REPO, "realm/r/offerer"),
                 "examples/gno.land/r/kourt/offerer"),
     # kourtv2 and the packages it needs staged. Added after this harness spent a
