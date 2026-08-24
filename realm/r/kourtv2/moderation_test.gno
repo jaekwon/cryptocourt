@@ -1199,7 +1199,7 @@ func TestTheThresholdIsCheckedAgainstTheCanonicalSet(cur realm, t *testing.T) {
 //
 // The skip totals 241_920, which is 336 whole epochs, so it leaves the phase of
 // the epoch clock untouched for every test that runs after this one. A bare skip
-// that lands mid-epoch is what broke TestTheArgumentCapsBindAtTheirStatedNumbers
+// that lands mid-epoch is what broke TestTheAssociationCapsBindAtTheirStatedNumbers
 // once already.
 func TestTheReSetWindowIsExactlyFourteenDaysLong(cur realm, t *testing.T) {
 	const windowIs = int64(241_920) // 14 days at 17_280 blocks/day

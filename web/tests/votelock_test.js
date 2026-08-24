@@ -22,7 +22,7 @@ code += slice('function fmtN(', '\n');
 code += slice('function ccSym(', '\n');
 code += slice('function cc(', 'function ugnot(');
 code += slice('function voteLockLine(', 'async function fillVoteCommitment(');
-code += slice('function parseCommitments(', '/* ---------------- the argument');
+code += slice('function parseCommitments(', '/* ---------------- the associations');
 eval(code);
 
 let fail = 0;

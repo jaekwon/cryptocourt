@@ -486,12 +486,12 @@ type Court struct {
 	queue           *bptree.BPTree // entitlement seq (be64) -> *entitlement
 	queueSeq        uint64
 	records         *bptree.BPTree // addr -> *answerRecord (records.gno)
-	// Argument edges (argument.gno, COURTS_STRUCTURE.md §5). Two indexes over ONE
+	// Argument edges (association.gno, COURTS_STRUCTURE.md §5). Two indexes over ONE
 	// edge object so both directions are a prefix scan. Nil until the first edge
 	// exists — every read tests for nil rather than allocating, because a query
 	// carries no storage deposit.
-	argOut          *bptree.BPTree // be(from)|be(to) -> *argEdge
-	argIn           *bptree.BPTree // be(to)|be(from) -> the SAME *argEdge
+	assocOut          *bptree.BPTree // be(from)|be(to) -> *assocEdge
+	assocIn           *bptree.BPTree // be(to)|be(from) -> the SAME *assocEdge
 	// Supersedes edges (supersede.gno, docs/SUPERSEDES.md). Same two-index, one
 	// object shape, and nil for the same reason. Outbound is at most ONE per
 	// claim — a re-filing re-files one question — so supOf is keyed by `from`
@@ -539,7 +539,7 @@ type Court struct {
 	absBudget int64
 
 	// assocBond: this court's override of the realm's default association bond,
-	// or 0 for "use the realm default" (argument.gno).
+	// or 0 for "use the realm default" (association.gno).
 	//
 	// ZERO IS UNSET, NOT FREE, and that is the whole reason for the sentinel.
 	// Every court that predates this field carries the int64 zero value, so a

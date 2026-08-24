@@ -44,7 +44,7 @@ func supFixture(cur realm, t *testing.T, slug string) (address, *Court, uint64, 
 func TestSupersedeTheWholeEdge(cur realm, t *testing.T) {
 	alice, c, old, sibling, neu := supFixture(cur, t, "sup1")
 
-	// BOTH DIRECTIONS FROM ONE OBJECT, the shape argument.gno established: `of`
+	// BOTH DIRECTIONS FROM ONE OBJECT, the shape association.gno established: `of`
 	// is the one claim this re-files, `by` is everything that re-files this.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	SupersedeClaim(cross(cur), "sup1", neu, old)
@@ -92,7 +92,7 @@ func TestSupersedeTheWholeEdge(cur realm, t *testing.T) {
 		SupersedeClaim(cross(cur), "sup1", over, old)
 	})
 	// ANOTHER address is still free: the cap is per author, not a first-come lock
-	// on the claim — the distinction maxArgInPerAuthor draws.
+	// on the claim — the distinction maxAssocInPerAuthor draws.
 	carol := testutils.TestAddress("sup1-c")
 	c.coin.Mint(carol, 50_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(carol))

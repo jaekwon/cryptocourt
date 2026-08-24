@@ -9,7 +9,7 @@ import (
 	uassert "gno.land/p/nt/uassert/v0"
 )
 
-// inbound is the ClaimArguments row a single incoming edge makes, built from the
+// inbound is the ClaimAssociations row a single incoming edge makes, built from the
 // ids the fixture actually handed out rather than from the "1" a fresh court
 // happens to start at — claim ids are not reset between tests in this package.
 func inbound(from uint64, code string) string {
@@ -20,7 +20,7 @@ func inbound(from uint64, code string) string {
 // pay, that a disapproval BURNS, that an unjudged bond comes back, and that the
 // figure is settable in two places.
 //
-// WHY A BOND EXISTS AT ALL is argument.gno's own note. What these tests hold is
+// WHY A BOND EXISTS AT ALL is association.gno's own note. What these tests hold is
 // the property that keeps it on the right side of COURTS_STRUCTURE.md §5:
 // anybody may still attach an edge, and an honest stranger is out the money only
 // until somebody looks at it.
@@ -67,18 +67,18 @@ func TestAnAuthorAndAModeratorPayNoAssociationBond(cur realm, t *testing.T) {
 	// The asserting claim's own author, who moderates nothing.
 	before := c.coin.BalanceOf(poster)
 	testing.SetRealm(testing.NewUserRealm(poster))
-	AddArgument(cross(cur), "bond1", a, b, "supports")
+	AddAssociation(cross(cur), "bond1", a, b, "supports")
 	uassert.Equal(t, before, c.coin.BalanceOf(poster))
 
 	// A moderator, who authored neither claim.
 	modBefore := c.coin.BalanceOf(mod)
 	testing.SetRealm(testing.NewUserRealm(mod))
-	AddArgument(cross(cur), "bond1", b, a, "contests")
+	AddAssociation(cross(cur), "bond1", b, a, "contests")
 	uassert.Equal(t, modBefore, c.coin.BalanceOf(mod))
 }
 
 // A DISAPPROVAL BURNS, and the supply is where that shows. Removing the edge
-// alone would be indistinguishable from RemoveArgument; the burn is the part that
+// alone would be indistinguishable from RemoveAssociation; the burn is the part that
 // costs a griefer something, so it is asserted against TotalSupply rather than
 // against the escrow, which a refund would also empty.
 func TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge(cur realm, t *testing.T) {
@@ -86,8 +86,8 @@ func TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge(cur realm, t *test
 	bond := AssociationBond("bond2")
 
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	AddArgument(cross(cur), "bond2", ids[0], ids[1], "contests")
-	uassert.True(t, strings.Contains(ClaimArguments("bond2", ids[1]), inbound(ids[0], "c")))
+	AddAssociation(cross(cur), "bond2", ids[0], ids[1], "contests")
+	uassert.True(t, strings.Contains(ClaimAssociations("bond2", ids[1]), inbound(ids[0], "c")))
 	supplyWithBond := c.coin.TotalSupply()
 
 	// NEITHER VERB IS THE POSTER'S. Approval that the bonded party could grant
@@ -108,11 +108,11 @@ func TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge(cur realm, t *test
 	DisapproveAssociation(cross(cur), "bond2", ids[0], ids[1])
 
 	uassert.Equal(t, supplyWithBond-bond, c.coin.TotalSupply())
-	uassert.False(t, strings.Contains(ClaimArguments("bond2", ids[1]), inbound(ids[0], "c")))
+	uassert.False(t, strings.Contains(ClaimAssociations("bond2", ids[1]), inbound(ids[0], "c")))
 	// And the money cannot be burned twice: the edge is gone, so the second call
 	// has nothing to find.
 	testing.SetRealm(testing.NewUserRealm(author))
-	uassert.AbortsContains(t, cur, "no such argument edge", func() {
+	uassert.AbortsContains(t, cur, "no such association", func() {
 		DisapproveAssociation(cross(cur), "bond2", ids[0], ids[1])
 	})
 }
@@ -130,7 +130,7 @@ func TestAnUnjudgedAssociationBondComesBackAfterTheWindow(cur realm, t *testing.
 	before := c.coin.BalanceOf(stranger)
 
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	AddArgument(cross(cur), "bond3", ids[0], ids[1], "supports")
+	AddAssociation(cross(cur), "bond3", ids[0], ids[1], "supports")
 	uassert.Equal(t, before-bond, c.coin.BalanceOf(stranger))
 
 	// Too early.
@@ -139,7 +139,7 @@ func TestAnUnjudgedAssociationBondComesBackAfterTheWindow(cur realm, t *testing.
 		ClaimAssociationBond(cross(cur), "bond3", ids[0], ids[1])
 	})
 
-	e := mustArgEdge(c, ids[0], ids[1])
+	e := mustAssocEdge(c, ids[0], ids[1])
 	uassert.Equal(t, bond, e.bond)
 	e.bondUntil = nowTime() - 1 // the window has closed
 
@@ -154,7 +154,7 @@ func TestAnUnjudgedAssociationBondComesBackAfterTheWindow(cur realm, t *testing.
 	uassert.Equal(t, before, c.coin.BalanceOf(stranger))
 	// The EDGE survives the refund. The bond was a deposit against griefing, not
 	// a fee for the assertion, so taking it back does not retract what was said.
-	uassert.True(t, strings.Contains(ClaimArguments("bond3", ids[1]), inbound(ids[0], "s")))
+	uassert.True(t, strings.Contains(ClaimAssociations("bond3", ids[1]), inbound(ids[0], "s")))
 	// And it cannot be drawn twice.
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	uassert.AbortsContains(t, cur, "no bond is held", func() {
@@ -229,16 +229,16 @@ func massFixture(cur realm, t *testing.T, slug string, mods int, extra ...addres
 	c.coin.Mint(stranger, AssociationBond(slug)*8)
 
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	AddArgument(cross(cur), slug, a, b, "contests") // outbound from a
+	AddAssociation(cross(cur), slug, a, b, "contests") // outbound from a
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	AddArgument(cross(cur), slug, b, a, "supports") // inbound to a
+	AddAssociation(cross(cur), slug, b, a, "supports") // inbound to a
 	return c, boss, stranger, a, b
 }
 
 // ONE TRANSACTION CLEARS A CLAIM, IN BOTH DIRECTIONS. The direction half is the
 // point: a stranger may fill a claim's 32 outbound slots as readily as its 64
-// inbound ones, because AddArgument's `from` is any claim in the court and not
-// the caller's own — so a sweep that only walked argIn would leave half the junk
+// inbound ones, because AddAssociation's `from` is any claim in the court and not
+// the caller's own — so a sweep that only walked assocIn would leave half the junk
 // and half the bonds.
 func TestApprovingAllAssociationsSettlesBothDirectionsAtOnce(cur realm, t *testing.T) {
 	c, boss, stranger, a, b := massFixture(cur, t, "mass1", 1)
@@ -254,7 +254,7 @@ func TestApprovingAllAssociationsSettlesBothDirectionsAtOnce(cur realm, t *testi
 	// as the whole packed string: the two halves are joined by ";" and not ",", so
 	// counting comma-separated fields reads one row where there are two.
 	uassert.Equal(t, "out:"+strconv.FormatUint(b, 10)+":c;in:"+
-		strconv.FormatUint(b, 10)+":s", ClaimArguments("mass1", a))
+		strconv.FormatUint(b, 10)+":s", ClaimAssociations("mass1", a))
 	// And a second sweep finds nothing left to settle rather than paying twice.
 	testing.SetRealm(testing.NewUserRealm(boss))
 	uassert.Equal(t, 0, ApproveAllAssociations(cross(cur), "mass1", a))
@@ -303,7 +303,7 @@ func TestTheBulkBurnTakesTwoSignaturesAndSparesWhatArrivedMidVote(cur realm, t *
 	late := OpenClaim(cross(cur), "mass3", "A claim filed while the vote was open")
 	testing.SkipHeights(1)
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	AddArgument(cross(cur), "mass3", late, a, "supports")
+	AddAssociation(cross(cur), "mass3", late, a, "supports")
 	lateHeld := c.coin.BalanceOf(stranger)
 
 	// The second signature fires, and takes exactly the two the first one saw.
@@ -313,9 +313,9 @@ func TestTheBulkBurnTakesTwoSignaturesAndSparesWhatArrivedMidVote(cur realm, t *
 
 	// The late edge is untouched: bond still held, edge still there.
 	uassert.Equal(t, lateHeld, c.coin.BalanceOf(stranger))
-	uassert.Equal(t, bond, mustArgEdge(c, late, a).bond)
-	uassert.True(t, strings.Contains(ClaimArguments("mass3", a), inbound(late, "s")))
+	uassert.Equal(t, bond, mustAssocEdge(c, late, a).bond)
+	uassert.True(t, strings.Contains(ClaimAssociations("mass3", a), inbound(late, "s")))
 	// And the two it burned are gone from both directions.
-	uassert.False(t, strings.Contains(ClaimArguments("mass3", a), inbound(b, "s")))
-	uassert.False(t, strings.Contains(ClaimArguments("mass3", b), inbound(a, "c")))
+	uassert.False(t, strings.Contains(ClaimAssociations("mass3", a), inbound(b, "s")))
+	uassert.False(t, strings.Contains(ClaimAssociations("mass3", b), inbound(a, "c")))
 }

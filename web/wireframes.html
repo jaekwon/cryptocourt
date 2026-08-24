@@ -195,7 +195,7 @@ button.btn{font:inherit; cursor:default}
 .pager .pill.off{opacity:.35}
 .cols{display:grid; grid-template-columns:minmax(0,1fr) 288px; gap:22px; align-items:start}
 .cols aside .panel+.panel{margin-top:14px}
-.crow.argrow{grid-template-columns:52px minmax(0,1fr) auto 124px}
+.crow.assocrow{grid-template-columns:52px minmax(0,1fr) auto 124px}
 p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .panel .kv+.kv{margin-top:8px}
 </style>
@@ -358,16 +358,16 @@ gnokey maketx call \
     <span class="px"><svg class="spark" viewBox="0 0 60 16" aria-hidden="true"><line class="base" x1="2" y1="8" x2="58" y2="8"></line><polyline points="2.0,3.2 30.0,3.2 58.0,3.2"></polyline></svg><b>90.0%</b><small>YES now</small></span>
     <span class="pill good">settled</span></a></div></section><section data-qfold style="margin-top:22px"><div class="sec-h">Needs review <span class="count">4 · the chain's own list</span></div>
         <p class="small muted" style="margin:0 0 8px">answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
-        <div class="docket"><a class="crow argrow" href="#/c/orem/7">
+        <div class="docket"><a class="crow assocrow" href="#/c/orem/7">
         <span class="id">#7</span>
         <span><span class="t">The reservoir release logs match the stated schedule.</span><span class="m" style="display:block">settles at height 4,550,000</span></span>
-        <span class="pill escrow">settling</span></a><a class="crow argrow" href="#/c/orem/3">
+        <span class="pill escrow">settling</span></a><a class="crow assocrow" href="#/c/orem/3">
         <span class="id">#3</span>
         <span><span class="t">The bridge inspection rated the north span 'serviceable'.</span><span class="m" style="display:block">settles at height 4,690,000</span></span>
-        <span class="pill escrow">in dispute</span></a><a class="crow argrow" href="#/c/orem/6">
+        <span class="pill escrow">in dispute</span></a><a class="crow assocrow" href="#/c/orem/6">
         <span class="id">#6</span>
         <span><span class="t">The vendor's audit found zero critical findings.</span><span class="m" style="display:block">settles at height 4,798,000</span></span>
-        <span class="pill open">answered</span></a><a class="crow argrow" href="#/c/orem/2">
+        <span class="pill open">answered</span></a><a class="crow assocrow" href="#/c/orem/2">
         <span class="id">#2</span>
         <span><span class="t">SpaceX Starship Flight 12 reached orbital velocity.</span><span class="m" style="display:block">settles at height 4,809,000</span></span>
         <span class="pill open">answered</span></a></div>
@@ -995,19 +995,19 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
   <div class="pad">
     <div class="crumbs">Directory <i>/</i> Orem Truth Court <i>/</i> Claim #9</div>
     <h2 class="page-h">The city's 2025 annual report is accurate on its headline claims.</h2>
-    <section style="margin-top:22px"><div class="sec-h">The argument <span class="count">sample curation — the chain stores no relations</span></div><div class="sec-h" style="margin-top:6px">Rests on <span class="count">1 of 3 parts settled</span></div><p class="small muted" style="margin:0 0 8px">2 of 3 parts are still undecided — any verdict here is reached without them.</p><div class="docket"><a class="crow argrow" href="#/c/orem/3">
+    <section style="margin-top:22px"><div class="sec-h">The argument <span class="count">sample curation — the chain stores no relations</span></div><div class="sec-h" style="margin-top:6px">Rests on <span class="count">1 of 3 parts settled</span></div><p class="small muted" style="margin:0 0 8px">2 of 3 parts are still undecided — any verdict here is reached without them.</p><div class="docket"><a class="crow assocrow" href="#/c/orem/3">
     <span class="id">#3</span>
     <span><span class="t">The bridge inspection rated the north span 'serviceable'.</span></span>
     <span class="pill void">one part</span>
-    <span class="pill escrow">in dispute</span></a><a class="crow argrow" href="#/c/orem/4">
+    <span class="pill escrow">in dispute</span></a><a class="crow assocrow" href="#/c/orem/4">
     <span class="id">#4</span>
     <span><span class="t">Q3 city revenue exceeded the June forecast.</span></span>
     <span class="pill void">one part</span>
-    <span class="pill good">settled</span></a><a class="crow argrow" href="#/c/orem/7">
+    <span class="pill good">settled</span></a><a class="crow assocrow" href="#/c/orem/7">
     <span class="id">#7</span>
     <span><span class="t">The reservoir release logs match the stated schedule.</span></span>
     <span class="pill void">one part</span>
-    <span class="pill escrow">settling</span></a></div><div class="sec-h" style="margin-top:14px">Related</div><div class="docket"><a class="crow argrow" href="#/c/orem/6">
+    <span class="pill escrow">settling</span></a></div><div class="sec-h" style="margin-top:14px">Related</div><div class="docket"><a class="crow assocrow" href="#/c/orem/6">
     <span class="id">#6</span>
     <span><span class="t">The vendor's audit found zero critical findings.</span></span>
     <span class="pill void">supports</span>
@@ -1017,7 +1017,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
   parent — the children are what the case rests on), <em>bears on</em> (supports / contradicts — outside evidence), and
   <em>supersedes</em> (a sharper re-filing after a no-decision, which this court mechanically produces). Rows carry title +
   relation chip + status pill only — no YES%, because a stance chip next to a number reads as a trading hint. The section is
-  generated from the live argumentSection function; live mode renders nothing (the chain stores no relations) unless local curation supplies relations — then the section shows yours, labeled — and a relationless claim omits the section entirely.</div>
+  generated from the live associationSection function; live mode renders nothing (the chain stores no relations) unless local curation supplies relations — then the section shows yours, labeled — and a relationless claim omits the section entirely.</div>
 </figure>
 
 <!-- ============================================================ SCREEN 5 -->

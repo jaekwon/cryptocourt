@@ -70,7 +70,7 @@ node the website can read in live mode (`E2E-ITERATION.md` has the phases).
 Nothing of mine is committed — the human owns commits, per the rule above.
 
 **2026-08-23 — association-bond session (this one).** Shipped the association
-bond on claim-to-claim edges in `realm/r/kourtv2/argument.gno`: a stranger who
+bond on claim-to-claim edges in `realm/r/kourtv2/association.gno`: a stranger who
 attaches an edge posts a refundable bond, the claim's own author and an active
 moderator post nothing. Six new entrypoints — `SetAssociationBondDefault`,
 `SetCourtAssociationBond`, `ApproveAssociation`, `DisapproveAssociation`,
@@ -84,8 +84,8 @@ functions and changed none (`isActiveMod`, `pendingOpenedAt` — the latter sits
 against `approveAction` because it repeats that function's staleness rule and
 adjacency is the only guard available against the two copies drifting). Four of
 your test files gained a mint each, because a non-author caller now needs CC to
-attach an edge: `argmod_test.gno`, `argument_test.gno`, `argumentcaps_test.gno`,
-`stake_test.gno` (that last one also gained PATH 7 — `AddArgument` is a new
+attach an edge: `assocmod_test.gno`, `association_test.gno`, `associationcaps_test.gno`,
+`stake_test.gno` (that last one also gained PATH 7 — `AddAssociation` is a new
 spend path and `check-spend-paths.py` now names it).
 
 **Three guards moved and one of them was broken before I touched it.**
@@ -121,12 +121,36 @@ finding from doing that — **`make selftest` rewrites the whole of
 `mutations-kourtv2.json` with different JSON formatting**, so check the diff after
 running it or you will commit an 8,700-line reformat.
 
-**Not done, and mine to finish:** the `argument` → `association` rename (the
-user's word — `argEdge`/`argOut`/`argIn`/`argKey`/`maxArg*`, three entrypoints,
-the corpus rows, the overlay's buttons and parser). Also unbuilt: the page shows
-no bond FIGURE and no pending-signature count, so a curator pressing "Burn every
-bond on a claim" cannot see how close the m-of-n is — which is true of every
-m-of-n act on that page, not just this one.
+**The `argument` → `association` rename is DONE**, in a follow-up commit so the
+behaviour change stayed reviewable on its own. Every internal identifier, the
+three entrypoints (`AddAssociation`, `RemoveAssociation`, `ClaimAssociations`),
+the panic strings, the corpus rows, the overlay's classes and parser, eleven test
+fixture slugs, and six files: `argument.gno` → `association.gno`, its three test
+files, `docs/ARGUMENT_EDGES.md` → `docs/ASSOCIATIONS.md`, and
+`web/tests/arg_test.js` → `assoc_test.js`.
+
+**Three things in there a sed would have got wrong,** so if you ever redo a
+rename in this tree: (1) `TestOrderFoldersBoundsItsArgument` is about a FUNCTION
+argument and must not move — the pass ran on whole identifiers from an explicit
+map, never on the substring, and it also left `args`, `margin` and `target`
+alone. (2) `\b` DOES NOT FIRE inside a corpus anchor: the JSON escape
+`\tdropArgEdge` puts a word character (`t`) immediately before the identifier, so
+four rows silently kept the old name — `check-mutation-anchors` caught all four,
+and a plain-substring re-scan is what found them. (3) `votelock_test.js` SLICES
+`index.html` between two literal markers and one of them is a section comment
+this rename touched; miss it and the harness slices to end-of-file and still
+reports its 47 assertions passing.
+
+**§5's word is untouched.** COURTS_STRUCTURE.md still says "argument edge" and
+every quotation of it keeps that word — a citation that paraphrases is not a
+citation. `association.gno`'s header and `docs/ASSOCIATIONS.md`'s first paragraph
+each state the mapping once, which is the only place it needs saying.
+`web/wireframes.html` keeps its old prose on purpose: it is a snapshot of screens
+as they were, and it was already stale on that heading before this.
+
+**Still unbuilt:** the page shows no bond FIGURE and no pending-signature count,
+so a curator pressing "Burn every bond on a claim" cannot see how close the
+m-of-n is — which is true of every m-of-n act on that page, not just this one.
 
 ## THE RENAME — this is the thing most likely to trip you
 

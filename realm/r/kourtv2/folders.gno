@@ -31,7 +31,7 @@ const maxFolderTextLen = 200
 // guard is "only sections may be containment parents": a claim's container is a
 // FOLDER (AddToFolder, already here), a folder's container is another folder
 // (this change), and claim→claim containment stays forbidden — which is why
-// argument.gno implements the argument edge and not that one.
+// association.gno implements the argument edge and not that one.
 const (
 	// Four, matching the depth the overlay's own curation schema has validated
 	// since before the chain could nest at all.

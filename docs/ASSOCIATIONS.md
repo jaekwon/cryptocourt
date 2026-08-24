@@ -1,4 +1,11 @@
-# Argument edges on chain
+# Associations on chain
+
+**§5 calls this an argument edge; the code calls it an association.** One thing,
+two names, and `realm/r/kourtv2/association.gno` carries the note on why: this
+tree already uses "argument" for a function's parameters, so a file holding both
+meanings is a file where `TestOrderFoldersBoundsItsArgument` reads like it is
+about this feature. Quotations of §5 below keep §5's word — a citation that
+paraphrases is not a citation.
 
 **Status: designed, scoped down from what the overlay draws, implementing.**
 
@@ -19,7 +26,7 @@ the first thing this design had to settle.
 | `part` (containment) | §5's **containment** edge — but its guards say **"only sections may be containment parents"**, and §6 defers sections | **blocked**, and the overlay's claim→claim `part` edges contradict the spec |
 | `supersedes` | not in §5, or anywhere else in the docs | **unspecified** — the overlay invented it |
 
-So this change implements argument edges only.
+So this change implements associations only.
 
 §5's four properties all still hold, including after the association bond was
 added: a bond nobody is refused and everybody honest gets back is a deposit
@@ -42,7 +49,7 @@ entrypoint; it is not in this change.
 
 **That entry now exists as a proposal: `docs/SUPERSEDES.md`.** Writing it turned
 up why the punt was right for a better reason than "no spec": `supersedes` is not
-an opinion the way an argument edge is. "X re-files Y, which died unanswered" is
+an opinion the way an association is. "X re-files Y, which died unanswered" is
 a statement about the docket's own history, and `claimState.closed` is the
 realm's own record of exactly that — set in one place, only when a claim has no
 answer and the timeout has passed. So the chain can verify the predicate instead
@@ -54,8 +61,8 @@ this one. Still unimplemented, and one policy call in it is the owner's.
 Two `bptree`s on the court, sharing one edge object:
 
 ```
-argOut : beClaimKey(from) + beClaimKey(to) -> *argEdge
-argIn  : beClaimKey(to)   + beClaimKey(from) -> *argEdge   (the SAME pointer)
+assocOut : beClaimKey(from) + beClaimKey(to) -> *assocEdge
+assocIn  : beClaimKey(to)   + beClaimKey(from) -> *assocEdge   (the SAME pointer)
 ```
 
 A claim page needs both directions — the edges this claim asserts, and the edges
@@ -118,7 +125,7 @@ transaction, and `DisapproveAllAssociations` burns them.
   it.
 - **The bulk burn is bounded to edges that predate its proposal.** Between the
   first signature and the m-th, a stranger may post an honest bond nobody has
-  looked at. `argEdge.at` is compared against the proposal's open height so that
+  looked at. `assocEdge.at` is compared against the proposal's open height so that
   bond survives — *unjudged means approved* has to hold against a bulk verb too,
   or it is a default rather than a rule. It also closes the mirror attack: a
   griefer who could invalidate the proposal by adding one edge a day would stall
@@ -126,7 +133,7 @@ transaction, and `DisapproveAllAssociations` burns them.
 
 **Both are per CLAIM, not per court**, and that is what makes them bounded. The
 griefing is per claim by construction — the caps section below names the inbound
-cap itself as the vector — and `maxArgOut+maxArgIn` bounds one claim's incident
+cap itself as the vector — and `maxAssocOut+maxAssocIn` bounds one claim's incident
 edges exactly. A per-court sweep would cost O(edges in the docket): a transaction
 that gets more expensive as the court succeeds and one day cannot be sent. Court
 scope would need a third index holding only bonded edges. That is the design if it
@@ -173,7 +180,7 @@ to "this claim's page cannot be served", which is worse and unbounded.
 
 **The target claim's author may NOT remove inbound edges.** That is deliberate
 and it is the whole point of the feature: a claim's author deleting the edges
-that say "this is contradicted by #12" is exactly the censorship an argument
+that say "this is contradicted by #12" is exactly the censorship an association
 graph exists to resist.
 
 ## Moderation

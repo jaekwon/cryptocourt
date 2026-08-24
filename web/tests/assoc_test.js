@@ -1,4 +1,4 @@
-// B8 harness: argumentSection + resolutionLadder + demo-data ripples.
+// B8 harness: associationSection + resolutionLadder + demo-data ripples.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 function slice(from, to){
@@ -32,7 +32,7 @@ code += slice('function phaseClass(', 'function docketRow');
 code += "var store={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:()=>{},del:()=>{}};\n";
 code += "const demoCourt = slug => Object.hasOwn(DEMO.courts, slug)? DEMO.courts[slug] : null;\n";
 code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var CURATION_V');
-code += slice('function argRow(', '/* ======================= local curation');
+code += slice('function assocRow(', '/* ======================= local curation');
 code += slice('function resolutionLadder(', 'function resolutionSection');
 code += slice('function demoCensus(', 'function courtRecordPanel');
 code += slice('function folderCount(', 'function folderMeta');
@@ -51,12 +51,12 @@ ok("folder counts 4/3/3 (+1 nested)", folderCount(f[0])===4 && folderCount(f[1])
 ok("relations well-formed: every endpoint exists", DEMO.relations.orem.every(r=>DEMO.claims["orem/"+r.from] && DEMO.claims["orem/"+r.to]));
 ok("one parent max per claim", (()=>{ const p={}; for(const r of DEMO.relations.orem){ if(r.type==="part"){ if(p[r.from]) return false; p[r.from]=1; } } return true; })());
 
-// ---- argument section: #9 the parent ----
+// ---- association section: #9 the parent ----
 const demoLookup = i => { const dd=DEMO.claims["orem/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
-const h9 = argumentSection("orem", 9, demoLookup);
+const h9 = associationSection("orem", 9, demoLookup);
 ok("#9: section renders", h9.includes("Where this claim sits"));
 // The heading must not name ONE of the two axes it renders — COURTS_STRUCTURE
-// §5 keeps containment and argument separate, and the old head merged them.
+// §5 keeps containment and association separate, and the old head merged them.
 ok("#9: heading names neither axis alone", !h9.includes("The argument"));
 ok("#9: sample label", h9.includes("sample curation — the chain stores no relations"));
 ok("#9: rests on 3, 1 settled", h9.includes("1 of 3 parts settled"));
@@ -67,14 +67,14 @@ ok("#9: fineprint", h9.includes("Curation, not mechanics: relations move no stak
 ok("#9: no yes% or sparkline in rows", !h9.includes("YES now") && !h9.includes("spark"));
 
 // ---- #3: part-of line + contradicts (incoming) ----
-const h3 = argumentSection("orem", 3, demoLookup);
+const h3 = associationSection("orem", 3, demoLookup);
 // The parent is a ROW like every other relation, on the containment axis with
-// "Rests on" rather than in the argument graph under "Related". It was a bare
+// "Rests on" rather than in the association graph under "Related". It was a bare
 // paragraph: no chip, and no status pill on the whole it is a part of.
 ok("#3: Part of subsection", h3.includes(">Part of<"));
 // "the whole" asserted the parent was the top of the tree. Containment is a
 // tree and the design runs three levels, so a parent is usually a part too.
-ok("#3: parent is a row, chipped by its relation", /argrow[^]*?#\/c\/orem\/9/.test(h3) && h3.includes(">contains this<"));
+ok("#3: parent is a row, chipped by its relation", /assocrow[^]*?#\/c\/orem\/9/.test(h3) && h3.includes(">contains this<"));
 ok("#3: chip does not claim to be the top of the tree", !h3.includes(">the whole<"));
 ok("#3: parent row carries the whole's status", h3.slice(h3.indexOf(">Part of<")).slice(0,700).includes("pill"));
 ok("#3: parent is NOT filed under Related", h3.indexOf(">Part of<") < (h3.includes(">Related<")? h3.indexOf(">Related<") : Infinity));
@@ -82,26 +82,26 @@ ok("#3: #11 contradicts", h3.includes(">contradicts<") && h3.includes("#/c/orem/
 ok("#3: no rests-on subsection", !h3.includes("Rests on"));
 
 // ---- #5: superseded (incoming supersedes) ----
-const h5 = argumentSection("orem", 5, demoLookup);
+const h5 = associationSection("orem", 5, demoLookup);
 ok("#5: #10 supersedes", h5.includes(">supersedes<") && h5.includes("#/c/orem/10"));
 
 // ---- #10: outgoing supersedes ----
-const h10 = argumentSection("orem", 10, demoLookup);
+const h10 = associationSection("orem", 10, demoLookup);
 ok("#10: superseded by this", h10.includes("superseded by this") && h10.includes("#/c/orem/5"));
 
 // ---- #6: outgoing supports ----
-const h6 = argumentSection("orem", 6, demoLookup);
+const h6 = associationSection("orem", 6, demoLookup);
 ok("#6: supported by this", h6.includes("supported by this") && h6.includes("#/c/orem/9"));
 
 // ---- #11: outgoing contradicts ----
-const h11 = argumentSection("orem", 11, demoLookup);
+const h11 = associationSection("orem", 11, demoLookup);
 ok("#11: contradicted by this", h11.includes("contradicted by this") && h11.includes("#/c/orem/3"));
 
 // ---- relationless + live ----
-ok("#1: section omitted", argumentSection("orem",1,demoLookup)==="");
-ok("#2: section omitted", argumentSection("orem",2,demoLookup)==="");
+ok("#1: section omitted", associationSection("orem",1,demoLookup)==="");
+ok("#2: section omitted", associationSection("orem",2,demoLookup)==="");
 CFG.mode='live';
-ok("live: section absent", argumentSection("orem",9,demoLookup)==="");
+ok("live: section absent", associationSection("orem",9,demoLookup)==="");
 CFG.mode='demo';
 
 // ---- status pills in rows reflect phases ----
@@ -132,17 +132,17 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
 
 // relation-chip layout + colour (owner report: "contradicts" overlapped the
 // wrapped title from orem/3; the contradiction family must read bright red)
-ok("chip cluster is right-aligned in its own column", src.includes(".docket a.crow.argrow{grid-template-columns:52px minmax(0,1fr) 268px"));
-ok("specificity matches .docket a.crow (which sets the docket grid)", !src.includes("\n.crow.argrow{grid-template-columns"));
+ok("chip cluster is right-aligned in its own column", src.includes(".docket a.crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px"));
+ok("specificity matches .docket a.crow (which sets the docket grid)", !src.includes("\n.crow.assocrow{grid-template-columns"));
 ok("both pills ride one .rt cluster", src.includes('<span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">'));
 ok("contradiction family wears .contra", (()=>{
-  const r=argRow("orem",11,"contradicts",()=>({title:"t",statusText:"open"}));
-  const r2=argRow("orem",11,"contradicted by this",()=>({title:"t",statusText:"open"}));
-  const r3=argRow("orem",4,"one part",()=>({title:"t",statusText:"open"}));
+  const r=assocRow("orem",11,"contradicts",()=>({title:"t",statusText:"open"}));
+  const r2=assocRow("orem",11,"contradicted by this",()=>({title:"t",statusText:"open"}));
+  const r3=assocRow("orem",4,"one part",()=>({title:"t",statusText:"open"}));
   return /pill contra/.test(r) && /pill contra/.test(r2) && /pill void/.test(r3);
 })());
 ok("--contra token defined for both themes", (src.match(/--contra:/g)||[]).length===4);
 ok("the map's contradicts edge speaks the same colour", src.includes(".medge.bears.no{stroke:var(--contra)"));
-ok("narrow screens stack the chip under the title", src.includes(".docket a.crow.argrow .rt{grid-column:2"));
+ok("narrow screens stack the chip under the title", src.includes(".docket a.crow.assocrow .rt{grid-column:2"));
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);

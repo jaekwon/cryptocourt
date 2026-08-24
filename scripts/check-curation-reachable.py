@@ -8,11 +8,11 @@ global DAO, token transfers and maintenance pokes are not a curator's business
 and belong to other surfaces, if any. But the curation surface was not:
 
     CreateFolderIn  MoveFolder  RetireFolder  RestoreFolder  MoveItemInFolder
-    OrderFolders  AddArgument  RemoveArgument  SetCourtDesc
+    OrderFolders  AddAssociation  RemoveAssociation  SetCourtDesc
 
 Nine entrypoints, every one of them built in this programme, none reachable from
 the page whose own prose said "on-chain folders nest, reorder, retire and carry a
-readable description; argument edges between claims are on chain too". The realm
+readable description; associations between claims are on chain too". The realm
 could do it, the page said so, and the curator had no button.
 
 The worst of them was OpenClaimP. A claim body was asked for by name, shipped to
@@ -20,7 +20,7 @@ chain, rendered by the claim page — and could not be WRITTEN, because the two
 "Open a claim" buttons still called OpenClaim and no other path offered the
 field. The feature was readable and unreachable at the same time.
 
-SCOPE, deliberately narrow. Only folders.gno and argument.gno: the curation
+SCOPE, deliberately narrow. Only folders.gno and association.gno: the curation
 surface, where "a moderator does this from the site" is the whole point, and
 where an unreachable entrypoint is a bug rather than a design choice. Widening
 this to all 78 would need a policy for each, and a guard whose exemption list is
@@ -46,7 +46,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # mean thirteen exemptions against three findings, and a guard whose exemption
 # list dwarfs its findings teaches people to write exemptions.
 SOURCES = [os.path.join(ROOT, "realm", "r", "kourtv2", f) for f in
-           ("folders.gno", "argument.gno", "supersede.gno", "claim.gno",
+           ("folders.gno", "association.gno", "supersede.gno", "claim.gno",
             "court.gno", "stake.gno", "answer.gno")]
 PAGES = [os.path.join(ROOT, "web", "index.html"),
          os.path.join(ROOT, "web", "chat.js")]

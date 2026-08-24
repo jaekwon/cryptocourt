@@ -338,8 +338,8 @@ func TestClaimBodyIsBoundedAndModerated(cur realm, t *testing.T) {
 // a fresh court is always priced at the dust arm and the bps constant is unreachable.
 // Advancing the clock directly does reach it — and leaks: a bare
 // SkipHeights(epochBlocks+1) here moved the epoch under
-// TestTheArgumentCapsBindAtTheirStatedNumbers, which then aborted on "not enough CC"
-// in AddArgument. It passes alone and failed only in company, which is the reason this
+// TestTheAssociationCapsBindAtTheirStatedNumbers, which then aborted on "not enough CC"
+// in AddAssociation. It passes alone and failed only in company, which is the reason this
 // repo's standing rule is to run the FULL suite before believing a green one.
 //
 // So the epoch is sealed the way the answer-floor test seals it, by maturing the OI

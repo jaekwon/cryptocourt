@@ -1,7 +1,16 @@
-// Argument edges: claims that bear on other claims (COURTS_STRUCTURE.md §5, and
-// docs/ARGUMENT_EDGES.md for this design and what it deliberately leaves out).
+// Associations: claims that bear on other claims (COURTS_STRUCTURE.md §5, and
+// docs/ASSOCIATIONS.md for this design and what it deliberately leaves out).
 //
-// §5's table is the whole specification and it is short: an argument edge has a
+// ONE THING, TWO NAMES, and this is the only place that has to say so. §5 calls
+// it an ARGUMENT edge, and every quotation of §5 in this tree keeps that word,
+// because a citation that paraphrases is not a citation. The code calls it an
+// ASSOCIATION: "argument" is already the word for a function's parameters, and a
+// file with both meanings in it is a file where `TestOrderFoldersBoundsIts-
+// Argument` reads like it is about this feature. So: §5's argument edge is this
+// realm's association, in the same way §5's "counters" is this realm's
+// `assocContests`.
+//
+// §5's table is the whole specification and it is short: an association has a
 // stance (supports / counters), any number may exist, ANYBODY may add one at any
 // time, and it does nothing mechanical. That last line is load-bearing —
 //
@@ -20,7 +29,7 @@
 // realm actually chose. SUPERSEDES has no §5 entry; it means "a re-filing after a
 // claim died unanswered", which this docket produces constantly. It is designed
 // in docs/SUPERSEDES.md and deliberately not built here, because it is not the
-// same kind of thing: an argument edge is an opinion and this is a checkable fact
+// same kind of thing: an association is an opinion and this is a checkable fact
 // about the docket (`claimState.closed` is the realm's own record that a claim
 // died without an answer), so it wants a verifying entrypoint rather than a
 // second copy of this one.
@@ -34,19 +43,19 @@ import (
 )
 
 const (
-	argSupports  = int8(0)
-	argContests  = int8(1)
+	assocSupports = int8(0)
+	assocContests = int8(1)
 	// THE CAPS BOUND A READ, not a writer's enthusiasm. A claim page lists every
 	// incident edge, so without a cap its render grows with whatever an attacker
 	// is willing to pay to write — the failure seriesRowCap exists to prevent
 	// elsewhere in this realm.
-	maxArgOut = 32
-	maxArgIn  = 64
+	maxAssocOut = 32
+	maxAssocIn  = 64
 	// The anti-sybil term, and the reason the inbound cap is not itself a free
 	// griefing vector: filling one claim's 64 inbound slots takes 16 distinct
 	// addresses, each paying its own storage deposit. That is the same price
 	// every other flood surface here pays.
-	maxArgInPerAuthor = 4
+	maxAssocInPerAuthor = 4
 )
 
 // ---- the association bond ------------------------------------------------
@@ -60,7 +69,7 @@ const (
 //
 // THE REFUND IS THE POINT, and it is what keeps this on the right side of §5. A
 // bond that is never returned is a price on speech — exactly what "no mechanical
-// effect" was protecting, and what AddArgument's own note calls pricing out the
+// effect" was protecting, and what AddAssociation's own note calls pricing out the
 // counter-evidence this edge exists to carry. A bond returned once a moderator
 // agrees the edge was worth attaching costs an honest contributor nothing but
 // the wait, and costs a griefer everything.
@@ -135,26 +144,26 @@ func AssociationBondDefault() int64 { return assocBondDefault }
 // a quarter waiting on one who is not.
 const assocBondWindowSecs = int64(14 * 86400)
 
-// mustArgEdge is the lookup every association verb starts with. Both the nil
+// mustAssocEdge is the lookup every association verb starts with. Both the nil
 // tree and the missing key answer the caller the same way, because the
 // difference between "this court has no edges" and "this pair has none" is not
 // a distinction the caller can act on.
-func mustArgEdge(c *Court, from, to uint64) *argEdge {
-	if c.argOut == nil {
-		panic("kourtv2: no such argument edge")
+func mustAssocEdge(c *Court, from, to uint64) *assocEdge {
+	if c.assocOut == nil {
+		panic("kourtv2: no such association")
 	}
-	v := c.argOut.Get(argKey(from, to))
+	v := c.assocOut.Get(assocKey(from, to))
 	if v == nil {
-		panic("kourtv2: no such argument edge")
+		panic("kourtv2: no such association")
 	}
-	return v.(*argEdge)
+	return v.(*assocEdge)
 }
 
-// dropArgEdge clears BOTH indexes, or the edge survives in one direction and the
+// dropAssocEdge clears BOTH indexes, or the edge survives in one direction and the
 // two reads disagree about whether it exists.
-func dropArgEdge(c *Court, from, to uint64) {
-	c.argOut.Remove(argKey(from, to))
-	c.argIn.Remove(argKey(to, from))
+func dropAssocEdge(c *Court, from, to uint64) {
+	c.assocOut.Remove(assocKey(from, to))
+	c.assocIn.Remove(assocKey(to, from))
 }
 
 // burnAssocBond destroys a held bond and zeroes it, so nothing can be burned
@@ -163,13 +172,13 @@ func dropArgEdge(c *Court, from, to uint64) {
 //
 // THREE CALLERS AND IT DOES NOT DROP THE EDGE, because they disagree about
 // dropping and only about that: DisapproveAssociation and the bulk burn drop as
-// part of the judgement, while RemoveArgument drops every edge it is given,
+// part of the judgement, while RemoveAssociation drops every edge it is given,
 // bonded or not, so a drop in here would be a second one. Writing the burn out
 // three times was the first shape, and check-mutation-anchors refused it — two
 // corpus rows had become ambiguous across the copies. That is the guard doing
 // its job: a second spelling of one rule is how one copy comes to forget to
 // zero the field, and an unzeroed bond can be burned again.
-func burnAssocBond(c *Court, e *argEdge) {
+func burnAssocBond(c *Court, e *assocEdge) {
 	amt := e.bond
 	e.bond = 0
 	c.coin.Burn(c.escrow, amt)
@@ -177,7 +186,7 @@ func burnAssocBond(c *Court, e *argEdge) {
 
 // releaseAssocBond returns a held bond to the edge's author and zeroes it, so
 // nothing can be released twice.
-func releaseAssocBond(c *Court, e *argEdge) {
+func releaseAssocBond(c *Court, e *assocEdge) {
 	if e.bond <= 0 {
 		return
 	}
@@ -196,7 +205,7 @@ func ApproveAssociation(cur realm, courtSlug string, from, to uint64) {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	requireActiveMod(ensureMod(c), who)
-	e := mustArgEdge(c, from, to)
+	e := mustAssocEdge(c, from, to)
 	if e.bond <= 0 {
 		panic("kourtv2: no bond is held on that edge")
 	}
@@ -215,12 +224,12 @@ func DisapproveAssociation(cur realm, courtSlug string, from, to uint64) {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	requireActiveMod(ensureMod(c), who)
-	e := mustArgEdge(c, from, to)
+	e := mustAssocEdge(c, from, to)
 	if e.bond <= 0 {
 		panic("kourtv2: no bond is held on that edge; remove it instead")
 	}
 	burnAssocBond(c, e)
-	dropArgEdge(c, from, to)
+	dropAssocEdge(c, from, to)
 }
 
 // ClaimAssociationBond lets the author take back a bond no moderator judged
@@ -231,7 +240,7 @@ func ClaimAssociationBond(cur realm, courtSlug string, from, to uint64) {
 	}
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
-	e := mustArgEdge(c, from, to)
+	e := mustAssocEdge(c, from, to)
 	if e.bond <= 0 {
 		panic("kourtv2: no bond is held on that edge")
 	}
@@ -249,35 +258,35 @@ func ClaimAssociationBond(cur realm, courtSlug string, from, to uint64) {
 // asserts, ins are the `from` of edges asserted about it.
 //
 // BOTH DIRECTIONS, because both caps are griefing vectors. A stranger may fill a
-// claim's 32 outbound slots as readily as its 64 inbound ones — AddArgument's
+// claim's 32 outbound slots as readily as its 64 inbound ones — AddAssociation's
 // `from` is any claim in the court, not the caller's own — so "clear the junk off
 // this claim" is not true if it clears half of it.
 //
 // COLLECTED BEFORE ANYTHING IS SETTLED, and that is not tidiness: the disapprove
 // path REMOVES keys from the very trees this walks, and mutating a bptree
-// mid-iteration is undefined. The two slices are bounded by maxArgOut and
-// maxArgIn, which is what makes the mass verbs cost no more than the caps the
+// mid-iteration is undefined. The two slices are bounded by maxAssocOut and
+// maxAssocIn, which is what makes the mass verbs cost no more than the caps the
 // write path already enforces.
 func pendingIncident(c *Court, claimID uint64) ([]uint64, []uint64) {
 	outs, ins := []uint64{}, []uint64{}
-	if c.argOut == nil {
+	if c.assocOut == nil {
 		return outs, ins
 	}
 	p := beClaimKey(claimID)
-	c.argOut.Iterate(p, "", func(key string, v any) bool {
+	c.assocOut.Iterate(p, "", func(key string, v any) bool {
 		if !strings.HasPrefix(key, p) {
 			return true
 		}
-		if e := v.(*argEdge); e.bond > 0 {
+		if e := v.(*assocEdge); e.bond > 0 {
 			outs = append(outs, claimIDFromKey(key[8:]))
 		}
 		return false
 	})
-	c.argIn.Iterate(p, "", func(key string, v any) bool {
+	c.assocIn.Iterate(p, "", func(key string, v any) bool {
 		if !strings.HasPrefix(key, p) {
 			return true
 		}
-		if e := v.(*argEdge); e.bond > 0 {
+		if e := v.(*assocEdge); e.bond > 0 {
 			ins = append(ins, claimIDFromKey(key[8:]))
 		}
 		return false
@@ -296,8 +305,8 @@ func pendingIncident(c *Court, claimID uint64) ([]uint64, []uint64) {
 // removed, hidden, or struck one at a time.
 //
 // PER CLAIM, not per court, and that is what makes it bounded. The griefing this
-// answers IS per claim — ARGUMENT_EDGES.md names the inbound cap itself as the
-// vector — and a claim's incident edges are bounded by maxArgOut+maxArgIn exactly.
+// answers IS per claim — ASSOCIATIONS.md names the inbound cap itself as the
+// vector — and a claim's incident edges are bounded by maxAssocOut+maxAssocIn exactly.
 // A per-court sweep would cost O(edges in the docket): a transaction that gets
 // more expensive as the court succeeds and one day cannot be sent at all. Court
 // scope would need a third index holding only bonded edges; that is the design if
@@ -313,11 +322,11 @@ func ApproveAllAssociations(cur realm, courtSlug string, claimID uint64) int {
 	outs, ins := pendingIncident(c, claimID)
 	n := 0
 	for _, to := range outs {
-		releaseAssocBond(c, mustArgEdge(c, claimID, to))
+		releaseAssocBond(c, mustAssocEdge(c, claimID, to))
 		n++
 	}
 	for _, from := range ins {
-		releaseAssocBond(c, mustArgEdge(c, from, claimID))
+		releaseAssocBond(c, mustAssocEdge(c, from, claimID))
 		n++
 	}
 	return n
@@ -377,19 +386,19 @@ func DisapproveAllAssociations(cur realm, courtSlug string, claimID uint64, reas
 // burnIfOlder burns one edge's bond and drops the edge, but only if the edge was
 // written at or before `opened`. Returns 1 if it did.
 func burnIfOlder(c *Court, from, to uint64, opened int64) int {
-	e := mustArgEdge(c, from, to)
+	e := mustAssocEdge(c, from, to)
 	if e.bond <= 0 || e.at > opened {
 		return 0
 	}
 	burnAssocBond(c, e)
-	dropArgEdge(c, from, to)
+	dropAssocEdge(c, from, to)
 	return 1
 }
 
-// argEdge is ONE object held in TWO indexes. argOut and argIn store the same
+// assocEdge is ONE object held in TWO indexes. assocOut and assocIn store the same
 // pointer, so a stance cannot desync from itself and removal has to clear both
 // or the edge survives in one direction — which is what the removal test pins.
-type argEdge struct {
+type assocEdge struct {
 	// bond is the CC this edge's author posted and has not got back: held in
 	// c.escrow while no moderator has judged it, and zeroed the moment it moves
 	// either way. So `bond > 0` IS the pending state and there is no second
@@ -415,27 +424,27 @@ type argEdge struct {
 	at int64
 }
 
-// ensureArgs allocates the two indexes. WRITE PATHS ONLY — it is named in
+// ensureAssocs allocates the two indexes. WRITE PATHS ONLY — it is named in
 // check-read-purity.py's ALLOCATORS for that reason. A read that reached for it
 // would let the first caller change what the second one sees, and a query
 // carries no storage deposit, so it would be unpaid state growth.
-func ensureArgs(c *Court) {
-	if c.argOut == nil {
-		c.argOut = bptree.NewBPTree32()
+func ensureAssocs(c *Court) {
+	if c.assocOut == nil {
+		c.assocOut = bptree.NewBPTree32()
 	}
-	if c.argIn == nil {
-		c.argIn = bptree.NewBPTree32()
+	if c.assocIn == nil {
+		c.assocIn = bptree.NewBPTree32()
 	}
 }
 
-// argKey is the 16-byte composite both indexes use, so "every edge incident to
+// assocKey is the 16-byte composite both indexes use, so "every edge incident to
 // claim X" is one prefix scan rather than a walk of the whole tree.
-func argKey(a, b uint64) string { return beClaimKey(a) + beClaimKey(b) }
+func assocKey(a, b uint64) string { return beClaimKey(a) + beClaimKey(b) }
 
-// argTextGone reports whether a claim's text is withheld — a purged or globally
+// assocTextGone reports whether a claim's text is withheld — a purged or globally
 // redacted claim. An edge pointing at one is not returned, for the same reason
 // its title is not.
-func argTextGone(c *Court, id uint64) bool {
+func assocTextGone(c *Court, id uint64) bool {
 	if c.mod == nil {
 		return false
 	}
@@ -443,7 +452,7 @@ func argTextGone(c *Court, id uint64) bool {
 	return clm != nil && (clm.purged || clm.global)
 }
 
-// AddArgument records that claim `from` bears on claim `to`, with a stance.
+// AddAssociation records that claim `from` bears on claim `to`, with a stance.
 // ANYBODY, at any time (§5) — and that is still true, which is the only reason
 // what follows is allowed to charge for it.
 //
@@ -457,7 +466,7 @@ func argTextGone(c *Court, id uint64) bool {
 // everybody — storage is cheap enough that spamming it was rational. So the
 // price falls on being WRONG, not on speaking, and nobody already accountable
 // pays it at all. See the note above assocBondDefaultInit.
-func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
+func AddAssociation(cur realm, courtSlug string, from, to uint64, stance string) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
@@ -469,9 +478,9 @@ func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 	var st int8
 	switch stance {
 	case "supports":
-		st = argSupports
+		st = assocSupports
 	case "contests":
-		st = argContests
+		st = assocContests
 	default:
 		panic("kourtv2: a stance is \"supports\" or \"contests\"")
 	}
@@ -491,9 +500,9 @@ func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 		bond = assocBondFor(c)
 	}
 
-	ensureArgs(c)
-	k := argKey(from, to)
-	if c.argOut.Get(k) != nil {
+	ensureAssocs(c)
+	k := assocKey(from, to)
+	if c.assocOut.Get(k) != nil {
 		panic("kourtv2: that edge already exists; remove it to change its stance")
 	}
 
@@ -501,33 +510,33 @@ func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 	// many are already asserted about the target, and how many of those are this
 	// author's.
 	outN := 0
-	c.argOut.Iterate(beClaimKey(from), "", func(key string, _ any) bool {
+	c.assocOut.Iterate(beClaimKey(from), "", func(key string, _ any) bool {
 		if !strings.HasPrefix(key, beClaimKey(from)) {
 			return true
 		}
 		outN++
-		return outN > maxArgOut
+		return outN > maxAssocOut
 	})
-	if outN >= maxArgOut {
-		panic("kourtv2: this claim already asserts " + strconv.Itoa(maxArgOut) + " argument edges")
+	if outN >= maxAssocOut {
+		panic("kourtv2: this claim already asserts " + strconv.Itoa(maxAssocOut) + " associations")
 	}
 	inN, mine := 0, 0
-	c.argIn.Iterate(beClaimKey(to), "", func(key string, v any) bool {
+	c.assocIn.Iterate(beClaimKey(to), "", func(key string, v any) bool {
 		if !strings.HasPrefix(key, beClaimKey(to)) {
 			return true
 		}
 		inN++
-		if e, ok := v.(*argEdge); ok && e.author == who {
+		if e, ok := v.(*assocEdge); ok && e.author == who {
 			mine++
 		}
 		return false
 	})
-	if inN >= maxArgIn {
-		panic("kourtv2: that claim already carries " + strconv.Itoa(maxArgIn) + " argument edges")
+	if inN >= maxAssocIn {
+		panic("kourtv2: that claim already carries " + strconv.Itoa(maxAssocIn) + " associations")
 	}
-	if mine >= maxArgInPerAuthor {
-		panic("kourtv2: you already hold " + strconv.Itoa(maxArgInPerAuthor) +
-			" argument edges on that claim")
+	if mine >= maxAssocInPerAuthor {
+		panic("kourtv2: you already hold " + strconv.Itoa(maxAssocInPerAuthor) +
+			" associations on that claim")
 	}
 
 	// Every refusal above has fired, so this is the first line that can cost the
@@ -536,33 +545,33 @@ func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 		mustSpendable(c, who, bond)
 		c.coin.Transfer(who, c.escrow, bond)
 	}
-	e := &argEdge{stance: st, author: who, at: heightNow(), bond: bond}
+	e := &assocEdge{stance: st, author: who, at: heightNow(), bond: bond}
 	if bond > 0 {
 		e.bondUntil = nowTime() + assocBondWindowSecs
 	}
-	c.argOut.Set(k, e)
-	c.argIn.Set(argKey(to, from), e)
+	c.assocOut.Set(k, e)
+	c.assocIn.Set(assocKey(to, from), e)
 }
 
-// RemoveArgument withdraws an edge. The edge's OWN AUTHOR, always; an active
+// RemoveAssociation withdraws an edge. The edge's OWN AUTHOR, always; an active
 // court moderator, always. Not the target claim's author — a claim's author
 // deleting the edges that say "this is contested by #12" is exactly the
-// censorship an argument graph exists to resist, and it is the one removal rule
+// censorship an association graph exists to resist, and it is the one removal rule
 // worth being unable to bend.
-func RemoveArgument(cur realm, courtSlug string, from, to uint64) {
+func RemoveAssociation(cur realm, courtSlug string, from, to uint64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
-	if c.argOut == nil {
-		panic("kourtv2: no such argument edge")
+	if c.assocOut == nil {
+		panic("kourtv2: no such association")
 	}
-	v := c.argOut.Get(argKey(from, to))
+	v := c.assocOut.Get(assocKey(from, to))
 	if v == nil {
-		panic("kourtv2: no such argument edge")
+		panic("kourtv2: no such association")
 	}
-	e := v.(*argEdge)
+	e := v.(*assocEdge)
 	requireEdgeRemover(c, e.author, who)
 	// A HELD BOND FOLLOWS WHOEVER REMOVED THE EDGE. An author withdrawing their
 	// own assertion takes their bond with them — they are not being judged. A
@@ -576,10 +585,10 @@ func RemoveArgument(cur realm, courtSlug string, from, to uint64) {
 			burnAssocBond(c, e)
 		}
 	}
-	dropArgEdge(c, from, to)
+	dropAssocEdge(c, from, to)
 }
 
-// ClaimArguments is every edge incident to one claim, packed:
+// ClaimAssociations is every edge incident to one claim, packed:
 //
 //	out:<to>:<s|c>,<to>:<s|c>;in:<from>:<s|c>,...
 //
@@ -587,24 +596,24 @@ func RemoveArgument(cur realm, courtSlug string, from, to uint64) {
 // rather than returned as a struct for the same reason ClaimSeries is: one read,
 // one round trip, and a shape the overlay already knows how to parse.
 //
-// Bounded by construction — maxArgOut + maxArgIn rows, whatever anybody writes.
+// Bounded by construction — maxAssocOut + maxAssocIn rows, whatever anybody writes.
 // Reads nil trees as empty and never allocates: a court that has never carried an
 // edge answers "out:;in:" without the query creating anything.
-func ClaimArguments(courtSlug string, claimID uint64) string {
+func ClaimAssociations(courtSlug string, claimID uint64) string {
 	c := mustCourt(courtSlug)
 	mustClaim(c, claimID)
 	var b strings.Builder
 	b.WriteString("out:")
-	if c.argOut != nil {
+	if c.assocOut != nil {
 		p := beClaimKey(claimID)
 		n := 0
-		c.argOut.Iterate(p, "", func(key string, v any) bool {
+		c.assocOut.Iterate(p, "", func(key string, v any) bool {
 			if !strings.HasPrefix(key, p) {
 				return true
 			}
-			e := v.(*argEdge)
+			e := v.(*assocEdge)
 			other := claimIDFromKey(key[8:])
-			if argTextGone(c, other) {
+			if assocTextGone(c, other) {
 				return false
 			}
 			if n > 0 {
@@ -616,16 +625,16 @@ func ClaimArguments(courtSlug string, claimID uint64) string {
 		})
 	}
 	b.WriteString(";in:")
-	if c.argIn != nil {
+	if c.assocIn != nil {
 		p := beClaimKey(claimID)
 		n := 0
-		c.argIn.Iterate(p, "", func(key string, v any) bool {
+		c.assocIn.Iterate(p, "", func(key string, v any) bool {
 			if !strings.HasPrefix(key, p) {
 				return true
 			}
-			e := v.(*argEdge)
+			e := v.(*assocEdge)
 			other := claimIDFromKey(key[8:])
-			if argTextGone(c, other) {
+			if assocTextGone(c, other) {
 				return false
 			}
 			if n > 0 {
@@ -640,7 +649,7 @@ func ClaimArguments(courtSlug string, claimID uint64) string {
 }
 
 func stanceCode(s int8) string {
-	if s == argContests {
+	if s == assocContests {
 		return "c"
 	}
 	return "s"

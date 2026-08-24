@@ -63,7 +63,7 @@ REALM = ROOT / "realm" / "r" / "kourtv2"
 # because it CALLS ensureMod, so a read reaching it would allocate while naming
 # none of the words above. The scan is textual, so an allocator behind one hop
 # has to be named or the hop is a hole. It was added the moment that hop was.
-ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensureArgs",
+ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensureAssocs",
               "ensureSup", "requireEdgeRemover")
 
 # An exported TOP-LEVEL declaration: `func Name(`. A receiver is not matched on

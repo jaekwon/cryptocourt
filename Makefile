@@ -6,7 +6,7 @@
 # WHY IT IS WORTH A TARGET. `make check` reads the directory, and a guard armed
 # by hand in another session — break it, watch it fail, restore it — is invisible
 # to a run whose staging step lands inside that window. It cost three diagnoses
-# in one day: a failing argument_test, a failing argumentcaps_test, and a red
+# in one day: a failing association_test, a failing associationcaps_test, and a red
 # kourtv2 suite in check-storage. None reproduced; all three were somebody's arm
 # caught mid-flight. repolock closes this when the mutator announces itself
 # (`repolock.py hold -- ...`); this closes it when nobody does, by testing a

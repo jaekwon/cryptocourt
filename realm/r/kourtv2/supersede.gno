@@ -2,7 +2,7 @@
 // docs/SUPERSEDES.md is the design, the settled authorization rule, and the
 // argument against that rule which was kept rather than buried.
 //
-// WHY THIS IS NOT A SECOND COPY OF argument.gno. An argument edge is speech —
+// WHY THIS IS NOT A SECOND COPY OF association.gno. An argument edge is speech —
 // "this claim supports that one" is a view, anybody may add one, and the chain
 // checks nothing because there is nothing to check. This is a statement about
 // the docket's own history, and the chain holds the evidence: claimState.closed
@@ -41,7 +41,7 @@ const (
 	maxSupInPerAuthor = 2
 )
 
-// supEdge is ONE object in TWO indexes, the shape argument.gno established. `to`
+// supEdge is ONE object in TWO indexes, the shape association.gno established. `to`
 // is redundant with supBy's key and necessary in supOf's, which is keyed by
 // `from` alone because outbound is capped at one.
 type supEdge struct {
@@ -88,7 +88,7 @@ func supersedeOrdered(from, to *claimState) bool {
 // author, so under a permissionless rule a stranger could take a claim's only
 // outgoing slot with a `to` its author would never have chosen — an assertion
 // about what they meant by filing, which they could not remove, permanently
-// blocking the true edge, for one storage deposit. AddArgument has no such
+// blocking the true edge, for one storage deposit. AddAssociation has no such
 // exposure because its cardinality is 32 and non-exclusive.
 func SupersedeClaim(cur realm, courtSlug string, from, to uint64) {
 	if !cur.IsCurrent() {
@@ -100,7 +100,7 @@ func SupersedeClaim(cur realm, courtSlug string, from, to uint64) {
 		panic("kourtv2: a claim cannot supersede itself")
 	}
 	// Both endpoints in THIS court: a cross-court edge would split one object's
-	// moderation between two moderator sets, the rule argument edges took.
+	// moderation between two moderator sets, the rule associations took.
 	f := mustClaim(c, from)
 	t := mustClaim(c, to)
 
@@ -156,7 +156,7 @@ func SupersedeClaim(cur realm, courtSlug string, from, to uint64) {
 }
 
 // RemoveSupersede withdraws the edge `from` asserts. Its author, or an active
-// moderator — the composite RemoveArgument uses, and reversible by re-adding,
+// moderator — the composite RemoveAssociation uses, and reversible by re-adding,
 // which is why it is single-signer.
 func RemoveSupersede(cur realm, courtSlug string, from uint64) {
 	if !cur.IsCurrent() {
@@ -185,7 +185,7 @@ func RemoveSupersede(cur realm, courtSlug string, from uint64) {
 //
 // `of` is the one claim this one re-files (empty if none); `by` is every claim
 // that re-files THIS one. Both halves always present, either may be empty
-// ("of:;by:"). Nine rows at worst, against ClaimArguments' ninety-six.
+// ("of:;by:"). Nine rows at worst, against ClaimAssociations' ninety-six.
 //
 // Reads nil trees as empty and never allocates: a court that has never carried
 // an edge answers without the query creating anything.
@@ -200,7 +200,7 @@ func ClaimSupersedes(courtSlug string, claimID uint64) string {
 			// The same gate the titles take: an edge pointing at a purged or
 			// globally-redacted claim is not returned, or the read would put a
 			// withheld claim's id back on another claim's page.
-			if !argTextGone(c, e.to) {
+			if !assocTextGone(c, e.to) {
 				b.WriteString(strconv.FormatUint(e.to, 10))
 			}
 		}
@@ -214,7 +214,7 @@ func ClaimSupersedes(courtSlug string, claimID uint64) string {
 				return true
 			}
 			other := claimIDFromKey(key[8:])
-			if argTextGone(c, other) {
+			if assocTextGone(c, other) {
 				return false
 			}
 			if n > 0 {

@@ -104,8 +104,8 @@ def refuse_if_held(who):
 #     refuse_if_held, and the recipe around them did not — so a reader that was
 #     careful about check-citations went on to copy realm/r/*/*.gno into a
 #     GNOROOT with no such scruple. That is not hypothetical: two consecutive
-#     `make check` runs failed on tests nobody had touched, one in argument_test
-#     and one in argumentcaps_test, because the copy caught a break that another
+#     `make check` runs failed on tests nobody had touched, one in association_test
+#     and one in associationcaps_test, because the copy caught a break that another
 #     session had armed by hand and restored moments later. Neither reproduced.
 #     A false failure in a different gate is the worst kind, and this file's own
 #     docstring says so.

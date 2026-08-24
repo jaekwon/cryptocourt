@@ -1777,7 +1777,7 @@ a 160-line header, lock.gno 150 of 361. Corpus rows per 100 CODE lines (blank an
 comment-only lines dropped), thinnest first:
 
     folders.gno 4.9   supersede.gno 5.0   modrender.gno 5.3   moderation.gno 6.5
-    directory.gno 6.5   stakeseries.gno 7.3   modvote.gno 8.1   argument.gno 8.9
+    directory.gno 6.5   stakeseries.gno 7.3   modvote.gno 8.1   association.gno 8.9
     lock.gno 10.0   ...   stake.gno 20.0   emission.gno 21.6   quality.gno 26.5
     answer.gno 27.4   session.gno 30.3   records.gno 34.6
 
@@ -2578,8 +2578,8 @@ cannot change the program at all. Recognise these on sight rather than measuring
 - **A conjunct implied by the conjunct before it.** See the R_max pause, whose second
   half is provably entailed by its first; recorded in KNOWN-GAPS with the derivation.
 - **A counting loop's early EXIT, when the count is only ever compared against the same
-  threshold.** argument.gno counts a claim's out-edges with `return outN > maxArgOut` as
-  the walk's stop condition and then decides with `if outN >= maxArgOut { panic }`.
+  threshold.** association.gno counts a claim's out-edges with `return outN > maxAssocOut` as
+  the walk's stop condition and then decides with `if outN >= maxAssocOut { panic }`.
   Narrowing the stop to `>=` makes the walk halt at 32 instead of 33 — and the decision
   panics either way, because it only asks whether the count reached the cap. The row I
   wrote for it was mislabelled as well as invalid: it claimed "exactly 32 is refused",

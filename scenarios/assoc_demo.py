@@ -1,6 +1,6 @@
 """The association bond, on a real chain: who pays to connect two claims.
 
-WHAT THIS IS FOR. `AddArgument` lets anybody say "claim 4 bears on claim 1", and
+WHAT THIS IS FOR. `AddAssociation` lets anybody say "claim 4 bears on claim 1", and
 COURTS_STRUCTURE.md §5 says anybody still may. What changed is the price, and the
 price is the whole story this file tells, in the order it happens:
 
@@ -13,7 +13,7 @@ price is the whole story this file tells, in the order it happens:
   * the mass APPROVE gives every bond back and leaves every edge standing.
 
 WHAT IS ASSERTED, AND WHAT IS ONLY NARRATED. Every edge appearing and vanishing
-is asserted against `ClaimArguments`, which is the read the claim page draws from.
+is asserted against `ClaimAssociations`, which is the read the claim page draws from.
 The MONEY is narrated but not asserted, and the reason is a limitation of this
 DSL rather than a choice: `Balance` takes an address, and `_args_sh` runs every
 argument through `shlex.quote`, so a `$ACTOR_ADDR` would reach the chain as the
@@ -82,30 +82,30 @@ s.claim("author", "assoc", "The clerk's office logged 41 provisional ballots tha
 # ---------------------------------------------------------------- free ----
 
 s.note("THE AUTHOR CONNECTS THEIR OWN CLAIM AND PAYS NOTHING")
-s._call("author", "AddArgument", ["assoc", "2", "1", "contests"])
-s.expect("ClaimArguments", ["assoc", 1], r'in:2:c"')
+s._call("author", "AddAssociation", ["assoc", "2", "1", "contests"])
+s.expect("ClaimAssociations", ["assoc", 1], r'in:2:c"')
 
 s.note("A MODERATOR CONNECTS TWO CLAIMS IT DID NOT WRITE, AND PAYS NOTHING")
-s._call(DEPLOYER, "AddArgument", ["assoc", "3", "2", "supports"])
-s.expect("ClaimArguments", ["assoc", 2], r'out:1:c;in:3:s"')
+s._call(DEPLOYER, "AddAssociation", ["assoc", "3", "2", "supports"])
+s.expect("ClaimAssociations", ["assoc", 2], r'out:1:c;in:3:s"')
 
 # -------------------------------------------------------------- priced ----
 
 s.note("A STRANGER CONNECTS TWO CLAIMS AND POSTS 5 CC — held in the court escrow")
-s._call("stranger", "AddArgument", ["assoc", "4", "1", "supports"])
-s.expect("ClaimArguments", ["assoc", 1], r'in:2:c,4:s"')
+s._call("stranger", "AddAssociation", ["assoc", "4", "1", "supports"])
+s.expect("ClaimAssociations", ["assoc", 1], r'in:2:c,4:s"')
 
 s.note("a moderator judges it worth carrying: APPROVE returns the bond, edge stays")
 s._call(DEPLOYER, "ApproveAssociation", ["assoc", "4", "1"])
-s.expect("ClaimArguments", ["assoc", 1], r'in:2:c,4:s"')
+s.expect("ClaimAssociations", ["assoc", 1], r'in:2:c,4:s"')
 
 s.note("the same stranger connects another pair, so a second bond goes up")
-s._call("stranger", "AddArgument", ["assoc", "4", "3", "contests"])
-s.expect("ClaimArguments", ["assoc", 3], r'out:2:s;in:4:c"')
+s._call("stranger", "AddAssociation", ["assoc", "4", "3", "contests"])
+s.expect("ClaimAssociations", ["assoc", 3], r'out:2:s;in:4:c"')
 
 s.note("this one a moderator judges junk: DISAPPROVE burns it and drops the edge")
 s._call(DEPLOYER, "DisapproveAssociation", ["assoc", "4", "3"])
-s.expect("ClaimArguments", ["assoc", 3], r'out:2:s;in:"')
+s.expect("ClaimAssociations", ["assoc", 3], r'out:2:s;in:"')
 
 s.note("and neither judgement was ever the poster's to make")
 s.expect_refuse("stranger", "ApproveAssociation", ["assoc", "2", "1"],
@@ -114,23 +114,23 @@ s.expect_refuse("stranger", "ApproveAssociation", ["assoc", "2", "1"],
 # --------------------------------------------------------------- bulk ----
 
 s.note("A GRIEFER FILLS ONE CLAIM WITH JUNK: three bonded edges onto claim 4")
-s._call("griefer", "AddArgument", ["assoc", "1", "4", "contests"])
-s._call("griefer", "AddArgument", ["assoc", "2", "4", "contests"])
-s._call("griefer", "AddArgument", ["assoc", "3", "4", "contests"])
-s.expect("ClaimArguments", ["assoc", 4], r'in:1:c,2:c,3:c"')
+s._call("griefer", "AddAssociation", ["assoc", "1", "4", "contests"])
+s._call("griefer", "AddAssociation", ["assoc", "2", "4", "contests"])
+s._call("griefer", "AddAssociation", ["assoc", "3", "4", "contests"])
+s.expect("ClaimAssociations", ["assoc", 4], r'in:1:c,2:c,3:c"')
 
 s.note("ONE TRANSACTION CLEARS IT: three bonds burned, three edges dropped")
 s._call(DEPLOYER, "DisapproveAllAssociations", ["assoc", "4", "coordinated junk"])
 # Claim 4's own outbound 4->1 SURVIVES: its bond was approved, so it is no longer
 # pending, and the sweep takes only what still holds one.
-s.expect("ClaimArguments", ["assoc", 4], r'out:1:s;in:"')
+s.expect("ClaimAssociations", ["assoc", 4], r'out:1:s;in:"')
 
 s.note("the mass APPROVE is single-signer, because it only ever gives money back")
-s._call("stranger", "AddArgument", ["assoc", "1", "3", "supports"])
-s._call("stranger", "AddArgument", ["assoc", "2", "3", "supports"])
-s.expect("ClaimArguments", ["assoc", 3], r'out:2:s;in:1:s,2:s"')
+s._call("stranger", "AddAssociation", ["assoc", "1", "3", "supports"])
+s._call("stranger", "AddAssociation", ["assoc", "2", "3", "supports"])
+s.expect("ClaimAssociations", ["assoc", 3], r'out:2:s;in:1:s,2:s"')
 s._call(DEPLOYER, "ApproveAllAssociations", ["assoc", "3"])
-s.expect("ClaimArguments", ["assoc", 3], r'out:2:s;in:1:s,2:s"')
+s.expect("ClaimAssociations", ["assoc", 3], r'out:2:s;in:1:s,2:s"')
 
 s.note("read the balances back: gnokey query vm/qeval -data '...Balance(\"assoc\",ADDR)'")
 

@@ -183,7 +183,7 @@ func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 		OpenElection(cross(cur), "lk1", candID)
 	})
 
-	// PATH 7 — the association bond (argument.gno). bob authored neither endpoint
+	// PATH 7 — the association bond (association.gno). bob authored neither endpoint
 	// and moderates nothing, so attaching an edge prices him, and the price has to
 	// come out of SPENDABLE CC like every other commitment here. A second claim is
 	// needed only because an edge cannot point at itself.
@@ -191,7 +191,7 @@ func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 	other := OpenClaim(cross(cur), "lk1", "A second claim, so an edge has two ends")
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
-		AddArgument(cross(cur), "lk1", other, id, "contests")
+		AddAssociation(cross(cur), "lk1", other, id, "contests")
 	})
 
 	// Nothing above moved a coin, and SUPPLY IS UNCHANGED — the assertion the

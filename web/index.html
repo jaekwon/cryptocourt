@@ -647,15 +647,15 @@ button.helplink:hover{color:var(--accent)}
 /* court scope line + record panel (p.sub so the stat tiles' div.sub stay untouched) */
 p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .panel .kv+.kv{margin-top:8px}
-/* argument rows: no sparkline slot — id · title · relation chip · status pill */
+/* association rows: no sparkline slot — id · title · relation chip · status pill */
 /* the relation chip needs its own column: a wrapped title must never end a
    few pixels from it and read as one sentence. Specificity matches
    `.docket a.crow`, which sets the docket's own four-track grid. */
-.docket a.crow.argrow{grid-template-columns:52px minmax(0,1fr) 268px; gap:20px}
-.docket a.crow.argrow>.rt,.docket a.crow.argrow>.pill{justify-self:end}
-.docket a.crow.argrow .rt{justify-content:flex-end; gap:10px; flex-wrap:wrap}
-@media (max-width:820px){ .docket a.crow.argrow{grid-template-columns:44px minmax(0,1fr); gap:10px}
-  .docket a.crow.argrow .rt{grid-column:2; justify-content:flex-start; margin-top:2px} }
+.docket a.crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px; gap:20px}
+.docket a.crow.assocrow>.rt,.docket a.crow.assocrow>.pill{justify-self:end}
+.docket a.crow.assocrow .rt{justify-content:flex-end; gap:10px; flex-wrap:wrap}
+@media (max-width:820px){ .docket a.crow.assocrow{grid-template-columns:44px minmax(0,1fr); gap:10px}
+  .docket a.crow.assocrow .rt{grid-column:2; justify-content:flex-start; margin-top:2px} }
 /* the map */
 .mapwrap{border:1px solid var(--line); border-radius:var(--r); background:var(--inset); overflow:hidden}
 .mapwrap svg{display:block; width:100%; height:clamp(420px,62vh,640px); cursor:grab; touch-action:none; outline-offset:-2px}
@@ -1147,7 +1147,7 @@ const DEMO_CHAIN = {
       author:"g1author4x9q2demo0000000000000000000000",
       yesStake:2_000_000, noStake:1_500_000, convYes:52703, convNo:39528, trailYes:57,
       phase:"closed" },
-    // the argument set: #9 is a composite whose parts are #3/#4/#7 — a case
+    // the association set: #9 is a composite whose parts are #3/#4/#7 — a case
     // half-won; #10 re-files the unfalsifiable #5 as a documentary claim;
     // #11 is the countervailing document behind #3's live dispute
     "orem/9":{ title:"The city's 2025 annual report is accurate on its headline claims.",
@@ -2049,7 +2049,7 @@ function pagerHtml(base, page, shown, total, label, order, chips){
 function pageSlice(list, page){ return list.slice((page-1)*PAGE_N, page*PAGE_N); }
 
 /* ---- D4 sort chips: a display re-order of the loaded rows, never a re-read.
-   Scoped to [data-sortable] only — folder pages, the specimen tour, argument
+   Scoped to [data-sortable] only — folder pages, the specimen tour, association
    dockets and /needs keep their load-bearing order. Keys ride data-* attrs
    stamped at build (demo) or by the spark fill (live); keyless rows sink. ---- */
 const SORT_TAILS = {
@@ -2887,23 +2887,23 @@ function commitmentsTicket(com, slug){
     + rows + `</div>`;
 }
 
-/* ---------------- the argument (related claims) ----------------
+/* ---------------- the associations (related claims) ----------------
    Overlay-level curation, labeled sample; the chain stores no relations, so
    live mode renders nothing here. Three relation types (matching the repo's
    own future design in docs/COURTS_STRUCTURE.md §5): part-of (one parent),
    bears-on (supports|contradicts), supersedes (a re-filing after a
    no-decision). Rows carry title + relation chip + status pill ONLY — a
    yes-share next to a stance chip would read as a trading hint (§7.4). */
-function argRow(slug, rid, chip, lookup){
+function assocRow(slug, rid, chip, lookup){
   const d = lookup? lookup(rid) : null;
   // an id the current chain page doesn't carry renders bare — never invented
-  return `<a class="crow argrow" href="#/c/${esc(slug)}/${rid}">
+  return `<a class="crow assocrow" href="#/c/${esc(slug)}/${rid}">
     <span class="id">#${rid}</span>
     <span><span class="t">${d? safeInline(d.title) : `<span class="muted">claim #${rid} — not in the rendered docket window</span>`}</span></span>
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
     ${d? statusPill(d.statusText) : ""}</span></a>`;
 }
-function argumentSection(slug, id, lookup, chainRows){
+function associationSection(slug, id, lookup, chainRows){
   const cur = curationFor(slug);
   const chain = Array.isArray(chainRows)? chainRows : [];
   if((!cur || !cur.relations.length) && !chain.length) return "";
@@ -2936,18 +2936,18 @@ function argumentSection(slug, id, lookup, chainRows){
   // section renders BOTH, so heading it with the name of one axis labelled half
   // its own contents — and a reader asked what it meant, which is the evidence.
   // THE CAPTION HAD TO CHANGE, because it asserted something that stopped being
-  // true: "the chain stores no relations". It stores argument edges now. What it
+  // true: "the chain stores no relations". It stores associations now. What it
   // still does not store is containment and supersedes, so the caption names the
   // source that actually applies rather than one blanket disclaimer.
   const srcNote = chain.length
     ? (mine.some(r=>r.type!=="bears")
-        ? "argument edges from the chain; containment and supersedes are curation"
+        ? "associations from the chain; containment and supersedes are curation"
         : "the chain's own record")
     : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
   let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${esc(srcNote)}</span></div>`;
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
   // other way, so it belongs beside it rather than under "Related" — that group
-  // is the argument graph, and filing a containment edge in it is exactly the
+  // is the association graph, and filing a containment edge in it is exactly the
   // merge §5 forbids. It also used to be the only relation in the section
   // rendered as a bare line of prose: no relation chip, and no status pill, so
   // the one thing you most want to know about the whole you are a part of —
@@ -2964,16 +2964,16 @@ function argumentSection(slug, id, lookup, chainRows){
   // looked right for the one case the fixture is able to show.
   if(parent){
     g += `<div class="sec-h" style="margin-top:6px">Part of</div>`
-      + `<div class="docket">${argRow(slug, parent.to, "contains this", lookup)}</div>`;
+      + `<div class="docket">${assocRow(slug, parent.to, "contains this", lookup)}</div>`;
   }
   if(children.length){
     g += `<div class="sec-h" style="margin-top:${parent?14:6}px">Rests on <span class="count">${settledN} of ${children.length} part${children.length===1?"":"s"} settled</span></div>`
       + (undecided? `<p class="small muted" style="margin:0 0 8px">${undecided} of ${children.length} parts are still undecided — any verdict here is reached without them.</p>`:"")
-      + `<div class="docket">${children.map(i=>argRow(slug,i,"one part",lookup)).join("")}</div>`;
+      + `<div class="docket">${children.map(i=>assocRow(slug,i,"one part",lookup)).join("")}</div>`;
   }
   if(rel.length){
     g += `<div class="sec-h" style="margin-top:${children.length||parent?14:6}px">Related</div>`
-      + `<div class="docket">${rel.map(([i,c])=>argRow(slug,i,c,lookup)).join("")}</div>`;
+      + `<div class="docket">${rel.map(([i,c])=>assocRow(slug,i,c,lookup)).join("")}</div>`;
   }
   g += `<p class="small muted" style="margin:10px 0 0">Curation, not mechanics: relations move no stake, no bond, no bar, no verdict — each claim is decided alone. They are here so you need not leave the page you vote on to find the argument.</p></section>`;
   return g;
@@ -3063,7 +3063,7 @@ function cleanCuration(raw, slug, validIds){
   return {errs, warn, cur: errs.length? null : out};
 }
 /* precedence: local (this browser) ?? demo sample ?? none */
-/* THE CHAIN'S OWN ARGUMENT EDGES. ClaimArguments answers
+/* THE CHAIN'S OWN ARGUMENT EDGES. ClaimAssociations answers
    "out:<to>:<s|c>,...;in:<from>:<s|c>,..." — bounded by the realm's own caps, so
    this parse can never be handed more rows than a page can draw.
 
@@ -3076,15 +3076,15 @@ function cleanCuration(raw, slug, validIds){
    curation, labelled
    as curation, which is why this returns only the bears rows and the caller
    merges rather than replaces. */
-/* Every relation the CHAIN holds about one claim: argument edges and re-filings,
+/* Every relation the CHAIN holds about one claim: associations and re-filings,
    in one round trip each, merged into the [id, chip] rows the render wants.
    Either read may be absent on an older realm and the other still counts — a
    realm that predates supersede.gno answers nothing for it, which is not a
-   reason to drop its argument edges. */
-async function chainArguments(slug, id){
+   reason to drop its associations. */
+async function chainAssociations(slug, id){
   if(!isLive()) return null;
   const [raw, sup] = await Promise.all([
-    one(`ClaimArguments(${gstr(slug)},${id})`).then(unesc).catch(()=>null),
+    one(`ClaimAssociations(${gstr(slug)},${id})`).then(unesc).catch(()=>null),
     one(`ClaimSupersedes(${gstr(slug)},${id})`).then(unesc).catch(()=>null),
   ]);
   const rows = [];
@@ -3515,11 +3515,11 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + (()=>{ // the chain's own policing lists — page 1, chain order, never sorted or filtered
       if(pageOf()>1) return "";
       const byId = {}; (allRows||claims).forEach(c2=>{ byId[c2.id]=c2; });
-      const srow = r => `<a class="crow argrow" href="#/c/${esc(slug)}/${r.id}">
+      const srow = r => `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
         <span><span class="t">${safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at height ${fmtN(r.deadline)}</span>`:""}</span>
         ${byId[r.id]? statusPill(byId[r.id].statusText) : ""}</a>`;
-      const prow = r => `<a class="crow argrow" href="#/c/${esc(slug)}/${r.id}">
+      const prow = r => `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
         <span><span class="t">${safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}</span>
         ${byId[r.id]? statusPill(byId[r.id].statusText) : ""}</a>`;
@@ -3567,7 +3567,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
     + `<section><div class="sec-h">On-chain curation <span class="count">moderators — no bonds, gas only</span></div>
-       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders nest, reorder, retire and carry a readable description; argument edges between claims are on chain too. What is still local: claim-to-claim containment (COURTS_STRUCTURE.md §5 allows a containment parent to be a section only, and folders are that) and that is now the only kind: re-filings are on chain (SupersedeClaim), where the realm checks that the older claim really did die unanswered and that the newer one came after, rather than taking anybody's word for it.</p>
+       <p class="small" style="margin:0 0 10px">These write the court's real record. Any single active moderator files folders and seeded claims for gas alone — no deposit, no bond; hide/unhide gathers signatures until m of n moderators agree. This page does not check who you are — the realm refuses non-moderators at signing. On-chain folders nest, reorder, retire and carry a readable description; associations between claims are on chain too. What is still local: claim-to-claim containment (COURTS_STRUCTURE.md §5 allows a containment parent to be a section only, and folders are that) and that is now the only kind: re-filings are on chain (SupersedeClaim), where the realm checks that the older claim really did die unanswered and that the newer one came after, rather than taking anybody's word for it.</p>
        <div class="panel"><h4>Folders</h4><div class="actions">
          ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
          ${btn("Create subfolder","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Folder name",desc:"One line on what belongs here"},"","under a heading, four deep")}
@@ -3581,14 +3581,14 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Order folders","OrderFolders",{courtSlug:slug,parentID:0,ids:"3,1,2"},"","every sibling under that heading, once each")}
          ${btn("Move a claim within a folder","MoveItemInFolder",{courtSlug:slug,folderID:1,claimID:1,to:0},"","0 is first")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Relations</h4><div class="actions">
-         ${btn("Argue one claim bears on another","AddArgument",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — free for the claim's author or a moderator, a refundable bond for everybody else")}
+         ${btn("Argue one claim bears on another","AddAssociation",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — free for the claim's author or a moderator, a refundable bond for everybody else")}
          ${btn("Approve an association","ApproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — returns the bond, the edge stays")}
          ${btn("Disapprove an association","DisapproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — burns the bond and drops the edge")}
          ${btn("Take back an unjudged bond","ClaimAssociationBond",{courtSlug:slug,from:1,to:2},"","the edge's author, once the 14-day window has closed")}
          ${btn("Settle every bond on a claim","ApproveAllAssociations",{courtSlug:slug,claimID:1},"","a moderator, single-signer — every bond goes back")}
          ${btn("Burn every bond on a claim","DisapproveAllAssociations",{courtSlug:slug,claimID:1,reason:"Why this claim was cleared"},"","m of n moderators — spares anything bonded after the vote opened")}
          ${btn("Set this court's association bond","SetCourtAssociationBond",{courtSlug:slug,amount:1000000},"","a moderator — 0 restores the realm default")}
-         ${btn("Withdraw an argument edge","RemoveArgument",{courtSlug:slug,from:1,to:2},"","its author, or a moderator")}
+         ${btn("Withdraw an association","RemoveAssociation",{courtSlug:slug,from:1,to:2},"","its author, or a moderator")}
          ${btn("Record a re-filing","SupersedeClaim",{courtSlug:slug,from:2,to:1},"","the newer claim's author, or a moderator — the older one must have died unanswered")}
          ${btn("Withdraw a re-filing","RemoveSupersede",{courtSlug:slug,from:2},"","its author, or a moderator")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Docket</h4><div class="actions">
@@ -3600,7 +3600,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}</div></div>
       </section>`
     + `<section style="margin-top:22px"><div class="sec-h">Local curation <span class="count">anyone — this browser only</span></div>
-       <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and argument edges are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>
+       <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and associations are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>
        <div class="panel"><h4>Export</h4>
          <p class="small muted" style="margin:0 0 8px">${cur? (cur.source==="local"? "exports your local curation" : "exports the demo sample") : "exports an empty skeleton to start from"}</p>
          <div class="actions"><button class="btn" id="cur-dl"><span class="g">↓</span> Download JSON</button>
@@ -4017,18 +4017,18 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   }
   const cs = await courtStats(slug); const d = await claimDetail(slug,id);
   const nowH = await chainHeight();
-  // titles for the argument rows: demo reads its dataset; live reuses the
+  // titles for the association rows: demo reads its dataset; live reuses the
   // docket's own render read ONCE, and only when local curation has relations
-  let argLookup = null;
+  let assocLookup = null;
   const cu = curationFor(slug);
   {
     if(cu && cu.relations.length){
-      if(!isLive()) argLookup = i => { const dd=DEMO.claims[slug+"/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
+      if(!isLive()) assocLookup = i => { const dd=DEMO.claims[slug+"/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
       else try{
         const pl = await listClaims(slug);
         const by = Object.fromEntries(pl.map(c2=>[c2.id, {title:c2.title, statusText:c2.statusText}]));
-        argLookup = i => by[i] || null;
-      }catch(_){ argLookup = ()=>null; }
+        assocLookup = i => by[i] || null;
+      }catch(_){ assocLookup = ()=>null; }
     }
   }
   if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
@@ -4078,7 +4078,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // ("now:<unix>:<height>"), so use that when it is there. On an ordinary chain
   // it equals the RPC height and nothing changes; on a skewed one it is the only
   // value the series can be read against.
-  const chainArgs = await chainArguments(slug, id);
+  const chainAssocs = await chainAssociations(slug, id);
   const seriesH = (tline && tline.now && tline.now.h != null)? tline.now.h : nowH;
   let ser=null;
   if(isLive()){ if(seriesH!=null) ser = await fetchStakeSeries(slug, id, seriesH); }
@@ -4107,7 +4107,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
-    + argumentSection(slug,id,argLookup,chainArgs);
+    + associationSection(slug,id,assocLookup,chainAssocs);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button

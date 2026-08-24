@@ -4,7 +4,7 @@
 question — who may assert a re-filing — was taken to three independent reviews
 and converged; see the last section.
 
-`docs/ARGUMENT_EDGES.md` shipped argument edges and punted this one, for a reason
+`docs/ASSOCIATIONS.md` shipped associations and punted this one, for a reason
 that still stands as far as it goes:
 
 > **`supersedes` is real but unspecified.** It means "a re-filing after a claim
@@ -19,7 +19,7 @@ falls out of that difference.
 
 ## It is not an opinion, and that changes everything
 
-§5's argument edge is speech. "This claim supports that one" is a view, any
+§5's argument edge — this realm's association — is speech. "This claim supports that one" is a view, any
 number may exist, **anybody may add one at any time**, and the chain checks
 nothing because there is nothing to check.
 
@@ -44,7 +44,7 @@ of both — the weight of chain state with the reliability of a comment.
 
 | check | why |
 |---|---|
-| both claims exist in **this** court | a cross-court edge splits one object's moderation between two moderator sets — same rule argument edges took |
+| both claims exist in **this** court | a cross-court edge splits one object's moderation between two moderator sets — same rule associations took |
 | `from != to` | — |
 | `to.closed` | it died unanswered. A claim with an answer settles; nothing re-files it |
 | `from.openedAtTime >= to.openedAtTime + deadClaimSecs` | `from` was filed no earlier than the moment `to` could first have died. This is derivable and needs no new field |
@@ -55,13 +55,13 @@ of both — the weight of chain state with the reliability of a comment.
 **Cycles are unrepresentable, not refused.** Every edge strictly increases
 `openedAtTime` by at least twelve weeks, so a chain can only run forward in time
 and `13 → 11 → 1` (the covid fixture's shape) cannot close on itself. This is
-worth stating because the folder code pays for a cycle walk and argument edges
+worth stating because the folder code pays for a cycle walk and associations
 reason about one; here the arithmetic does it for free, and a future edit that
 weakens the time check would silently take that away.
 
 ## Shape
 
-Two trees on the court, the pattern `argOut`/`argIn` already established:
+Two trees on the court, the pattern `assocOut`/`assocIn` already established:
 
 ```
 supOf : beClaimKey(from)                  -> to        (at most one, by the cap)
@@ -73,7 +73,7 @@ Both nil until the first edge; every read tests nil rather than calling an
 from being unpaid state growth.
 
 Read: `ClaimSupersedes(courtSlug, id) string` → `of:<id>;by:<id>,<id>` with
-either half possibly empty, the same packed shape `ClaimArguments` returns.
+either half possibly empty, the same packed shape `ClaimAssociations` returns.
 
 ## Who may add, and what it costs
 
@@ -84,19 +84,19 @@ which is also where the reasoning lives.
 `from`'s author may assert, filling one dead claim's eight inbound slots takes
 eight real claims, each carrying its own deposit — orders of magnitude above an
 edge's storage deposit. An earlier draft of this document stopped there and
-concluded that no `maxArgInPerAuthor` analogue was needed. That was wrong twice
+concluded that no `maxAssocInPerAuthor` analogue was needed. That was wrong twice
 over: it is true only under author-only assertion (so it was an argument FOR the
 rule, quietly assumed while the rule was still undecided), and even then one
 address can fill all eight slots with eight of its own claims. Hence the
 per-author cap of 2 in the predicate above.
 
 Removal: the edge's author, or an active moderator, single-signer — the same
-authority argument edges use for the same reason (reversible by re-adding).
+authority associations use for the same reason (reversible by re-adding).
 
 ## Moderation
 
 An edge carries no text of its own, so there is no new escaping surface. What the
-gate must still do is what `argTextGone` already does: an edge to or from a
+gate must still do is what `assocTextGone` already does: an edge to or from a
 purged or globally-redacted claim is not returned, for the same reason that
 claim's title is not.
 
@@ -112,7 +112,7 @@ alone. No money path reads this.
 ## Audit
 
 **Unbounded read cost.** No. Outgoing is one by construction; inbound is capped
-at 8. `ClaimSupersedes` is nine rows at worst, against `ClaimArguments`' 96.
+at 8. `ClaimSupersedes` is nine rows at worst, against `ClaimAssociations`' 96.
 
 **Storage growth.** Two claim ids per edge, and an edge cannot exist without a
 claim that paid a deposit to exist.
@@ -126,17 +126,17 @@ per-author inbound cap, above. The deposit alone was not enough, and the draft
 that said it was had assumed the authorization rule it was meant to be arguing
 for.
 
-**Moderation gaps.** Covered by the same purge gate as argument edges; moderators
+**Moderation gaps.** Covered by the same purge gate as associations; moderators
 may remove any edge.
 
 **Migration for already-deployed courts.** None. Two new nilable fields read as
 nil, every read returns empty, the first write creates them — the shape `c.mod`
-and the argument trees already use.
+and the association trees already use.
 
 ## Who may assert it — settled, and not for the reason first given
 
 **The author of `from`, or an active court moderator.** Single-signer, the
-composite `RemoveArgument` already uses.
+composite `RemoveAssociation` already uses.
 
 Three independent reviews were run on this question, one arguing from the
 docket's purpose, one from attack surface, one from the repo's own authority
@@ -157,12 +157,12 @@ Compare the realm's genuinely permissionless entrypoints — `CloseDeadClaim`,
 to the act, so the caller contributes nothing and "the verdict is the authority,
 not the caller" holds. Here the caller contributes the whole judgment.
 
-**Cardinality one is what makes it different from an argument edge.** Outbound is
+**Cardinality one is what makes it different from an association.** Outbound is
 capped at one, and removal belongs to the edge's author. Compose those with
 "anybody" and a stranger consumes my claim's only outgoing slot with a `to` I
 would never have chosen — an assertion about what I meant by filing, which I
 cannot remove, which permanently blocks the true edge, bought for one storage
-deposit. `AddArgument` has no such exposure, and not because it is better
+deposit. `AddAssociation` has no such exposure, and not because it is better
 guarded: its openness is safe BECAUSE its cardinality is thirty-two and
 non-exclusive. Exclusive, author-attributable, per-claim state is the shape
 `EditClaimTitle` guards, and it guards it author-only.
@@ -172,14 +172,14 @@ eight inbound slots takes eight real claims, each carrying its own deposit" hold
 only if the asserter must have authored them. Let anybody assert, and an attacker
 points eight OTHER PEOPLE's existing claims at one dead claim for eight storage
 deposits — collapsing the price by orders of magnitude and forcing a
-`maxArgInPerAuthor` analogue back in, which would make this a second copy of the
-argument edge, the exact outcome `argument.gno` says the separate design exists
+`maxAssocInPerAuthor` analogue back in, which would make this a second copy of the
+association, the exact outcome `association.gno` says the separate design exists
 to avoid.
 
 ### One amendment, adopted
 
 **A per-author inbound cap of 2 of the 8.** Under (a) a single address can still
-fill all eight slots with eight of its own claims. Argument edges kept a
+fill all eight slots with eight of its own claims. Associations kept a
 per-author term with an inbound cap eight times looser, and the reason given
 there applies here unchanged. It costs one counter in a scan the write already
 does, and it guarantees at least four distinct re-filers stay representable.

@@ -10,7 +10,7 @@ import (
 
 // A MODERATOR CAN REMOVE AN EDGE ON A COURT THAT HAS NEVER BEEN MODERATED.
 //
-// RemoveArgument's doc says "the edge's OWN AUTHOR, always; an active court
+// RemoveAssociation's doc says "the edge's OWN AUTHOR, always; an active court
 // moderator, always". The second half was false on most courts. The check read
 //
 //	if c.mod == nil { panic("only the edge's author or a court moderator...") }
@@ -42,23 +42,23 @@ func TestAModeratorRemovesAnEdgeOnACourtWithNoModerationHistory(cur realm, t *te
 	// because he authored neither claim and moderates nothing. Fund him for it.
 	c.coin.Mint(bob, 10_000_000)
 	testing.SetRealm(testing.NewUserRealm(bob))
-	AddArgument(cross(cur), "amod", one, two, "contests")
-	uassert.True(t, strings.Contains(ClaimArguments("amod", one), "out:2:c"))
+	AddAssociation(cross(cur), "amod", one, two, "contests")
+	uassert.True(t, strings.Contains(ClaimAssociations("amod", one), "out:2:c"))
 
 	// alice moderates by virtue of having created the court, and has never used
 	// it. She is not the edge's author.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	RemoveArgument(cross(cur), "amod", one, two)
-	uassert.Equal(t, "out:;in:", ClaimArguments("amod", one))
+	RemoveAssociation(cross(cur), "amod", one, two)
+	uassert.Equal(t, "out:;in:", ClaimAssociations("amod", one))
 
 	// And the refusal still names both parties rather than falling through to
 	// requireMod's "not a moderator of this court", which is true and unhelpful
 	// to somebody who is simply not the author.
 	testing.SetRealm(testing.NewUserRealm(bob))
-	AddArgument(cross(cur), "amod", one, two, "supports")
+	AddAssociation(cross(cur), "amod", one, two, "supports")
 	stranger := testutils.TestAddress("amod-s")
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	uassert.AbortsContains(t, cur, "only the edge's author or a court moderator", func() {
-		RemoveArgument(cross(cur), "amod", one, two)
+		RemoveAssociation(cross(cur), "amod", one, two)
 	})
 }

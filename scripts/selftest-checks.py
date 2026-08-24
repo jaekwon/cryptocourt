@@ -690,13 +690,13 @@ control("an exported read that reaches getPos", f"{KOURTV2}/stakeindex.gno",
         "}\n\n"
         "func StakedSize(courtSlug string, who address) int {",
         # NOT bare "getPos": the guard PRINTS that word when it passes, listing the
-        # allocators it confined ("… getPos, ensureArgs, ensureSup all confined to write
+        # allocators it confined ("… getPos, ensureAssocs, ensureSup all confined to write
         # paths"), so this arm reported "fires" whatever the plant did. Found by the
         # vacuity audit below, not by reading. The planted function's own name cannot
         # appear in a clean run.
         "StakedLeak calls getPos", argv=["python3", READPURE])
 # NARROWED TO ONE ELEMENT ON PURPOSE. This plant used to name the whole ALLOCATORS
-# tuple, and the tuple GREW — ensureArgs and ensureSup joined it and pushed it onto two
+# tuple, and the tuple GREW — ensureAssocs and ensureSup joined it and pushed it onto two
 # lines, so the literal stopped matching, the plant became a no-op, and the control
 # reported "did not fire" for months of edits without anyone reading it as a dead control.
 # One element cannot go stale the same way.
@@ -1173,7 +1173,7 @@ control("the CHATLIMITS anchor is lost", CHATJS,
 
 print("\ncheck-curation-reachable")
 # The defect: nine curation entrypoints built in this programme — subfolders,
-# MoveFolder, retire/restore, OrderFolders, both argument edges, SetCourtDesc —
+# MoveFolder, retire/restore, OrderFolders, both association verbs, SetCourtDesc —
 # reachable from no page, while the curate page's own prose said the realm did
 # all of it. Worst was OpenClaimP: a claim body was asked for by name, shipped,
 # and RENDERED by the claim page, while both "Open a claim" buttons still called
@@ -1726,7 +1726,7 @@ try:
     # called refuse_if_held; the recipe around them did not, so a run that was
     # scrupulous about check-citations went on to copy realm/r/*/*.gno into a
     # GNOROOT with no such scruple. Two consecutive `make check` runs then failed
-    # on tests nobody had touched — argument_test once, argumentcaps_test the
+    # on tests nobody had touched — association_test once, associationcaps_test the
     # next — because the copy caught a guard another session had armed by hand
     # and restored moments later. Neither reproduced, and both cost a diagnosis.
     r = subprocess.run([sys.executable, os.path.join(REPO, "scripts/repolock.py"),
