@@ -93,6 +93,24 @@ TARGETS = [
             "z_events_filetest.gno": 60_000,
         },
     },
+    {
+        "src": os.path.join(REPO, "realm/r/ccwrap"),
+        "dest": "examples/gno.land/r/kourt/ccwrap",
+        # ccwrap had NO filetest, and so no guard against a read that allocates —
+        # the same drift this registry's comment above describes about kourtv2.
+        # The coverage check below catches a realm whose filetest has no budget;
+        # a realm with no filetest at all was invisible to it, and ccwrap was
+        # that realm with six exported reads and two render routes.
+        "deps": ["checkpoint", "grc20votes", "governor", "twap", "curve"],
+        "realm_deps": ["kourtv2"],
+        "budgets": {
+            # None, and measured: enabled/wrappable/token-key/wrap-room and the
+            # front page write zero bytes. WrappedSupply and Render(slug) are NOT
+            # in it — both go through mustWrapped and need a wrap to exist, and
+            # enabling one is a write, so a None file cannot reach them.
+            "z_read_filetest.gno": None,
+        },
+    },
 ]
 
 
@@ -109,8 +127,13 @@ def realms_with_filetests():
 
 
 def stage(root, target):
-    """This realm plus the p/ packages it imports, at their on-chain paths."""
+    """This realm plus the p/ packages and realms it imports, at their on-chain paths."""
     pairs = [(os.path.join(REPO, "realm/p", d), f"{P}/{d}/v0") for d in target["deps"]]
+    # A realm that imports ANOTHER REALM needs it staged too — ccwrap imports
+    # kourtv2. Kept separate from "deps" because those resolve under realm/p and
+    # carry a /v0 path suffix, and a realm does neither.
+    for r in target.get("realm_deps", ()):
+        pairs.append((os.path.join(REPO, "realm/r", r), f"examples/gno.land/r/kourt/{r}"))
     pairs.append((target["src"], target["dest"]))
     gnoroot.stage(root, pairs)
 
