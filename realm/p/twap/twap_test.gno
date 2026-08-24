@@ -288,35 +288,22 @@ func TestSeedThenFillIsMatureWithRealData(t *testing.T) {
 // persisted state and a caller that reconstructs a ring from bad bytes must be
 // refused just as loudly as one that builds a fresh one.
 func TestConstructorsRejectInsaneGeometry(t *testing.T) {
-	mustPanicWith := func(want string, fn func()) {
-		t.Helper()
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatalf("expected a panic saying %q; nothing panicked", want)
-			}
-			if got, ok := r.(string); !ok || !contains(got, want) {
-				t.Fatalf("panic %v, want one saying %q", r, want)
-			}
-		}()
-		fn()
-	}
 
 	// width must be positive: it is the divisor for the bucket index.
-	mustPanicWith("width must be positive", func() { New(0, buckets, 1) })
-	mustPanicWith("width must be positive", func() { New(-1, buckets, 1) })
-	mustPanicWith("width must be positive", func() { Load(0, buckets, 1, 0, 0, 0, 0, "") })
+	mustPanicWith(t, "width must be positive", func() { New(0, buckets, 1) })
+	mustPanicWith(t, "width must be positive", func() { New(-1, buckets, 1) })
+	mustPanicWith(t, "width must be positive", func() { Load(0, buckets, 1, 0, 0, 0, 0, "") })
 
 	// n must be positive: a zero-bucket ring has no slot to write.
-	mustPanicWith("n must be positive", func() { New(hour, 0, 1) })
-	mustPanicWith("n must be positive", func() { New(hour, -1, 1) })
-	mustPanicWith("n must be positive", func() { Load(hour, 0, 1, 0, 0, 0, 0, "") })
+	mustPanicWith(t, "n must be positive", func() { New(hour, 0, 1) })
+	mustPanicWith(t, "n must be positive", func() { New(hour, -1, 1) })
+	mustPanicWith(t, "n must be positive", func() { Load(hour, 0, 1, 0, 0, 0, 0, "") })
 
 	// bpp must be 1..8: outside that, put/get would slice past a sample.
-	mustPanicWith("bpp must be 1..8", func() { New(hour, buckets, 0) })
-	mustPanicWith("bpp must be 1..8", func() { New(hour, buckets, 9) })
-	mustPanicWith("bpp must be 1..8", func() { New(hour, buckets, -1) })
-	mustPanicWith("bpp must be 1..8", func() { Load(hour, buckets, 9, 0, 0, 0, 0, "") })
+	mustPanicWith(t, "bpp must be 1..8", func() { New(hour, buckets, 0) })
+	mustPanicWith(t, "bpp must be 1..8", func() { New(hour, buckets, 9) })
+	mustPanicWith(t, "bpp must be 1..8", func() { New(hour, buckets, -1) })
+	mustPanicWith(t, "bpp must be 1..8", func() { Load(hour, buckets, 9, 0, 0, 0, 0, "") })
 
 	// And the boundaries are ACCEPTED, so the guard is not off by one at either end.
 	_ = New(1, 1, 1)
