@@ -3940,3 +3940,35 @@ checking, 7 not — a headline. The 7 do not belong together:
 Reported as "7 of 16 mutating methods do not check their effect" it would have read
 as a finding. Every one of the seven has a different reason, and none is the hazard
 the sentinels were built for.
+
+## Two surfaces, no findings: a doc with nothing to cross-check, and a harness layer that refuses to be empty
+
+**COURTS_TOKENOMICS.md HAS NO IMPLEMENTATION CONSTANTS TO DRIFT.** The hypothesis
+was the one check-docnumbers exists for — a table somebody reads before launching,
+gone stale invisibly. 864 lines, and its numbers are ANALYTICAL rather than
+implementation: `N·√((1−p)/p)`, a 20–35% fee band, forty round-trips per unit of
+liquidity, a 0.01 tick grid. Nothing there is a value the code must equal, so there
+is no mechanical check to write. My pattern for "identifier plus number" returned
+zero, and for once the zero was right for a reason the pattern could not express —
+which is the same situation as a sweep's silence, read the other way round.
+
+**THE WEB HARNESS LAYER IS CLEAN ON ALL THREE QUESTIONS I COULD ASK OF IT.**
+
+    22 .js files in web/tests, 21 of them *_test.js, and web-test reports
+    "21 harnesses pass" — the 22nd is run.js, the runner itself
+
+  1. **Is every harness run?** run.js:18 globs the directory —
+     `readdirSync(dir).filter(f => f.endsWith("_test.js")).sort()` — so a new
+     harness is picked up rather than needing a list edited.
+  2. **Can the suite pass having run nothing?** No: line 19 refuses an empty set,
+     "web/tests: no *_test.js found — the suite cannot be empty". That is the
+     vacuity guard at the runner level, and it is the check most such runners lack.
+  3. **Can a harness report success with assertions unreached?** Guarded, with a
+     measured history: check-web-tests-reachable exists because folders_test.js
+     "printed its summary and called process.exit in the middle of its own IIFE",
+     so everything below that line never ran while the file said ALL PASS.
+
+**AND THE 22-versus-21 WAS MY OWN INSTRUMENT.** `ls web/tests/*.js | wc -l` counts
+the runner as a harness. A one-file discrepancy in a test count is exactly the shape
+of a real finding — a harness that exists and never runs — so it was worth
+resolving rather than reporting, and resolving it took one command.
