@@ -3739,3 +3739,40 @@ door refuses one more than the ceiling" and not "the ceiling is 922...". A liter
 there would break the test every time bps changed, for a reason the test does not
 care about. The distinction is what the expectation is ABOUT: a number, or a
 relation at a number.
+
+## twap owns the right panic helper and cannot reach it from the file that needs it
+
+**THE SAME DEFECT AS THE CSHARES HOIST, one package over, and this time the tool to
+fix it is already written.** twap has TWO ways to assert a panic:
+
+    twap_test.gno:291     mustPanicWith := func(want string, fn func()) { ... }
+                          — recovers, and FAILS unless contains(got, want)
+    freshness_test.gno    shouldPanic(t, name, fn)
+                          — recovers, and the name is a description it never reads
+
+The strong one is a LOCAL CLOSURE inside one test function, so nothing in another
+file can use it. TestLoadValidates lives in freshness_test.gno and therefore uses
+the weak one:
+
+    shouldPanic(t, "wrong buf length",   func() { Load(1, 4, 1, 0, 0, 0, 0, "ABC") })
+    shouldPanic(t, "head out of range",  func() { Load(1, 4, 1, 4, 0, 0, 0, "ABCD") })
+    shouldPanic(t, "filled out of range",func() { Load(1, 4, 1, 0, 0, 0, 5, "ABCD") })
+
+Those three labels name three different branches. Load has at least five —
+width, n, bpp, `len(buf) != n*bpp`, and `head/filled out of range` — and the
+assertions cannot tell them apart. Each input is crafted to reach its branch today;
+nothing holds it there. Add a validation ahead of them, or move one, and all three
+keep passing while asserting nothing about the branch they are named for. The same
+file's TestNewValidates, four functions away, checks its messages.
+
+**THE FIX IS TO PROMOTE mustPanicWith TO PACKAGE SCOPE** and use it in
+TestLoadValidates — the helper already exists, already takes the substring, and
+already fails with "panic %v, want one saying %q". Not applied in this increment:
+realm/p/twap/twap.gno is a selftest plant target
+(`control("a pure package reading the chain directly", TWAP, ...)`) and a selftest
+is running, so editing that package now risks interleaving with a staged plant.
+
+**WHY THIS KEEPS TURNING UP.** Three instances now — cshares' hoisted setup, the
+/p/ packages' label-only shouldPanic, and this one. Each package copied the helper
+rather than sharing it, so each got a different strength, and the realm side has a
+guard (check-abort-assertions) that reaches none of them.
