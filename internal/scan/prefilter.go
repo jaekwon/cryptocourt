@@ -151,6 +151,14 @@ func Reporting(body string) bool {
 func foldDots(s string) string {
 	r := strings.NewReplacer(
 		"·", ".", "․", ".", "‧", ".", "•", ".",
+		// 。 U+3002 and ｡ U+FF61, and they are here because NFKC DOES NOT COVER
+		// THEM. clean() normalises the body before anything reads it, which folds
+		// the compatibility dots — ． U+FF0E and ﹒ U+FE52 both become "." on their
+		// own, and so does ․ U+2024 above — but an ideographic full stop has no
+		// decomposition, and NFKC maps ｡ to 。 rather than to a dot. Measured:
+		// "join t。me/scamroom" scored Clean and was stored verbatim, while every
+		// other dot form in the same probe scored Spam.
+		"。", ".", "｡", ".",
 		"(dot)", ".", "[dot]", ".", "{dot}", ".", " dot ", ".", "-dot-", ".",
 	)
 	return r.Replace(s)
