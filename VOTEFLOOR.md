@@ -3284,3 +3284,52 @@ there requires p.valid, which parseModTitle sets only for the six — and a
 defensive panic on an unreachable branch is precisely what this corpus cannot
 measure: the mutation that removes it changes no behaviour, so it would be INVALID
 rather than a survivor, and the row would be noise. Left alone deliberately.
+
+## The web overlay's escaping holds, and one attribute is safe for a reason nothing writes down
+
+**A FRESH SURFACE: the Go chat service and the browser overlay**, neither audited
+before. Read entirely from a --depth 1 clone at e9d62a5, because selftest-checks
+was rewriting the working tree throughout — it plants defects and reverts them, so
+a finding read off that tree could be the selftest's own plant.
+
+**FOUR NEGATIVES, each measured rather than assumed.**
+
+  1. **Every guard is wired.** 28 of 29 scripts/check-*.py are named in the
+     Makefile. The exception, check-live-reads.py, says why in its own header: it
+     is a CONFORMANCE check against a running node and "deliberately NOT part of
+     `make check` — that gate must not require a running chain". Its selftest arms
+     are the two refusals it makes WITHOUT a node, including a tripwire for a
+     gutted probe table, so the control is not vacuous either.
+  2. **chatEsc covers the set**: & < > " ' and backtick, with & first so nothing
+     is double-unescaped. chatLineHtml passes EVERY interpolation through it —
+     moniker, body, age, country, suffix — and two of those are pattern-validated
+     as well (`^[0-9a-f]{1,16}$` for the suffix, exactly-two-letters for the flag).
+  3. **One sanitiser, one entry point.** SanitizeMoniker and SanitizeBody are
+     called on the single POST path; the store's INSERT is reached from nowhere
+     else outside tests.
+  4. **esc() in the overlay covers the same set**, and untrusted chain text goes
+     through safeInline() with a comment saying exactly why the overlay must not
+     re-introduce a hole the realm closed.
+
+**AND ONE LATENT COUPLING, worth the words because it is invisible where it
+matters.** `crumbs()` escapes the LABEL in both branches — `${esc(p.label)}` — and
+does NOT escape the HREF: `<a href="${p.href}">`. It is not exploitable today, and
+the reason is two invariants written down nowhere near it:
+
+    "#/"                        literal
+    "#/c/" + slug               slug comes from a route: /^\/c\/([a-z0-9-]+)$/
+    "#/c/__SLUG__/f/" + a.fid   a FOLDER ID from chain data, not route-validated
+    "#/c/__SLUG__/f/" + sofar   built from path segments
+    t.href.replace("__SLUG__")  templated
+
+Every slug-bearing route restricts the slug to `[a-z0-9-]+` and ids to `\d+` or
+`[0-9.]+`, so no quote can reach that attribute through the router; and folder ids
+are numeric-dotted on chain. So the attribute is safe because of the ROUTER and the
+REALM, not because of anything crumbs does. Widen one route's charset and it
+becomes live, in a function whose reviewer has no reason to look at the router.
+
+**THE FIX IS ONE CHARACTER-LEVEL CHANGE — `esc(p.href)` — and it is free**: none of
+the five expressions contains a character esc touches, and `&` becoming `&amp;` is
+correct in an HTML attribute rather than a change. Not applied in this increment:
+web/index.html is 5.4k lines shared with another session, and selftest was mid-run
+on the tree. Queued rather than dropped.
