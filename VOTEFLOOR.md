@@ -3972,3 +3972,38 @@ which is the same situation as a sweep's silence, read the other way round.
 the runner as a harness. A one-file discrepancy in a test count is exactly the shape
 of a real finding — a harness that exists and never runs — so it was worth
 resolving rather than reporting, and resolving it took one command.
+
+## The association subsystem, measured rather than taken on trust
+
+**A CLAIM NOBODY HAD RE-CHECKED.** The main corpus's invariant is that every row in
+it is CAUGHT. The association subsystem landed 41 rows into it a day ago, and the
+rename refactor (argument -> association) moved every one of their anchors
+afterwards. Whether they were still caught was an assembled claim, not an observed
+one — the same distinction that made the 210-row drift pass worth running.
+
+    41 association.gno rows, anchors all resolving exactly once
+    0 not caught (survived, invalid, or never applied), of 41
+
+Caught by their own fixtures: TestAnAuthorAndAModeratorPayNoAssociationBond,
+TestAnUnjudgedAssociationBondComesBackAfterTheWindow,
+TestTheBulkBurnTakesTwoSignaturesAndSparesWhatArrivedMidVote,
+TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge.
+
+**AND THE CONSERVATION HYPOTHESIS WAS REFUTED BY BETTER REASONING THAN MINE.** Fresh
+money code — bonds posted, burned, refunded, drawn — is where a conservation bug
+lives, and AUDIT.md sets the precedent with its two-ledger audit of kourtv1. So: is
+conservation asserted? It is, and with the DISCRIMINATING measure chosen on purpose:
+
+    // ... so it is asserted against TotalSupply rather than
+    // against the escrow, which a refund would also empty.
+
+That is the whole difficulty in one sentence. The escrow returning to zero cannot
+tell a burn from a refund; only supply can. The tests then pin both directions —
+supplyWithBond unchanged when an unjudged bond comes back, supplyWithBond-bond after
+a disapproval, and the burn refused a second time because the edge is gone.
+
+**WHY THIS WAS WORTH AN ITERATION.** Every other surface left was one I had already
+swept or one with no mechanical check. This was fresh code carrying money, with a
+corpus claim over it that had been invalidated-and-restored by a rename in between.
+The measurement was cheap — 41 rows in five shards, one foreground run — and it
+turns "their rows were caught when written" into "their rows are caught now".
