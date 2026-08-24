@@ -3849,3 +3849,43 @@ exercises it at the extreme, in every path. That is the shape this session has b
 looking for all day, and it is what a claim backed by a pin looks like when it is
 done right — as against a `why` asserting invalidity with nothing behind it, of
 which three needed correcting.
+
+## check-frozen passes at HEAD: this session's commits stand without the other tree
+
+**THE GAP THIS CLOSES WAS MINE, not the repo's.** Every guard run in this session
+executed against a working tree that also held another session's uncommitted work —
+claim.gno, court.gno, crystallize.gno, dispute.gno, quality.gno,
+check-read-purity.py, standing.gno and standing_test.gno. So each green result was a
+statement about that mixed tree. `make check-frozen` adds a DETACHED WORKTREE at
+HEAD and runs the full gate inside it, which is the only way to ask whether the
+commits stand alone.
+
+    gate: frozen checkout of 80cf8c6 at .../cc-gatecheck
+    CHECKFROZEN_RC=0
+
+Everything: fmt, vet, gotest across chat/geo/scan and three cmds, anchors,
+collisions, rendertext, paths, guards, controls, staleguards, demo-physics,
+nodelegate, scenarios-check, web-constants, web-test, height-shim, realm-test,
+txtar-test (gnoland 42.4s), elsewhere-test.
+
+**AND THE PART WORTH KEEPING IS HOW NEARLY I MISREAD IT.** The log's tail is full of
+lines like
+
+    FAIL: testdata/kourtv2_paymentauth.txtar:37: no match for `direct user call` found in stderr
+
+which look like a failing gate. They are the opposite. The header above them says
+`check-elsewhere: 7 elsewhere row(s), every named harness objects:` and each FAIL is
+the OBJECTION — the proof that the txtar named by a KNOWN-GAPS row actually catches
+the mutation that row excuses. A guard whose evidence of success is a printed FAIL
+is a guard you must read rather than grep.
+
+My own grep for failures — `^FAIL|--- FAIL|Error 1` — returned 0, and it was right
+by ACCIDENT: those lines are indented, so the pattern would have missed a real
+failure too. The status line and the section header are the evidence; the count was
+noise that happened to agree.
+
+**WHAT IT DOES AND DOES NOT SETTLE.** It settles that HEAD is self-sufficient: the
+corpus anchors resolve against committed sources, check-web-constants' MIRRORS
+anchor finds periodBlocks in a committed court.gno, and the new guards pass without
+the other session's files. It says nothing about what happens when their work lands
+— that is a delta pass, and the last one is recorded above at 210 rows.
