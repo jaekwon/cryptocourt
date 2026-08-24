@@ -176,6 +176,7 @@ FOLDERSJS = "web/tests/folders_test.js"
 RUNJS = "web/tests/browser/run.js"
 CHATALL = "web/tests/browser/chat_all.js"
 WEBPAGE = "web/index.html"
+WEBCONST = "scripts/check-web-constants.py"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
 STALEG = "scripts/check-stale-guards.py"
@@ -1311,6 +1312,17 @@ control("a script block the scan cannot find", WEBPAGE,
         "<script>", "<scriptX>",
         "no <script> block to scan",
         argv=["python3", DUPES])
+
+print("\ncheck-web-constants")
+# WEEK is not decoration: the overlay passes it INTO realm reads — TrailingOI and
+# TrailingYes both take it as the trailing window — so a drift from periodBlocks
+# queries the wrong span while the page keeps rendering and keeps looking right.
+# The realm side carries three corpus rows; the overlay's copy carried nothing,
+# and check-live-reads is the only other thing that mentions it and is
+# deliberately outside `make check`.
+control("the overlay's mirrored constant drifts", WEBPAGE,
+        "const WEEK = 120960;", "const WEEK = 120961;",
+        "queries the wrong window", argv=["python3", WEBCONST])
 
 print("\ncheck-live-reads")
 # This one needs a running node, so its arms are the two refusals it makes

@@ -1,4 +1,4 @@
-.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions rendertext paths guards controls staleguards \
+.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions rendertext paths guards controls staleguards \ web-constants
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
@@ -59,7 +59,7 @@ check-frozen:
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors collisions rendertext paths guards controls staleguards demo-physics nodelegate scenarios-check web-test height-shim realm-test txtar-test elsewhere-test
+check: fmt vet gotest anchors collisions rendertext paths guards controls staleguards demo-physics nodelegate scenarios-check web-constants web-test height-shim realm-test txtar-test elsewhere-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -102,6 +102,12 @@ collisions:
 # reader is "the set changed" and no regex over call sites can say that.
 rendertext:
 	python3 scripts/check-render-text.py
+
+# Every realm constant the overlay RESTATES must still equal the realm's. WEEK is
+# not decoration: the overlay passes it into TrailingOI/TrailingYes, so a drift
+# queries the wrong window and the page still looks right.
+web-constants:
+	python3 scripts/check-web-constants.py
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this
 # — cross() is IsCurrent-strict, so a returned frame cannot be handed to an
