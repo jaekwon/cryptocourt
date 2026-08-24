@@ -3410,8 +3410,19 @@ function mapWrapTitle(title, innerW, fs, maxLines){
   const words = String(title).split(/\s+/); const lines=[]; let cur="";
   for(const w of words){
     const t = cur? cur+" "+w : w;
-    if(t.length<=budget) cur=t;
-    else { if(cur) lines.push(cur); cur=w.slice(0,budget); if(lines.length+1>=cap) break; }
+    if(t.length<=budget){ cur=t; continue; }
+    if(cur) lines.push(cur);
+    // BREAK WHEN THE CAP IS FULL, not when its last line is STARTED. The old
+    // test was `lines.length+1>=cap`, which fired the moment the final line
+    // began — so that line kept exactly the one word that overflowed the line
+    // before it, and the ellipsis rule below then chopped it. Every two-line
+    // label in this map read like "Public health and / its…" or "SARS-CoV-2
+    // entered the / human…": one word and a stub, on both the folder boxes and
+    // every claim title. It has been that way since the layout was first
+    // written, and nothing pinned it, because the wrap has no owner among the
+    // harnesses — geometry checks ask where the text sits, never what it says.
+    if(lines.length>=cap){ cur=""; break; }
+    cur=w.slice(0,budget);
   }
   if(cur && lines.length<cap) lines.push(cur);
   if(lines.join(" ").length < String(title).length && lines.length)

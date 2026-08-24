@@ -187,6 +187,31 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
      L.spokes.filter(s=>s.kind==="also").length===4);
 }
 
+// THE WRAP, which had no owner among these checks and was broken the whole time.
+// Every geometric check asks where a label SITS; none asked what it says, so a
+// two-line label that kept one word and a stub on its second line — "Public
+// health and / its…", "SARS-CoV-2 entered the / human…" — passed everything for
+// as long as the map has existed. The property is simple: a line that has room
+// for another word gets one.
+{
+  const fits = (lines, budget) => lines.every(l => l.length <= budget);
+  const w = 136, fs_ = 12, budget = Math.floor(w/(fs_*MAPK.charW));
+  const two = mapWrapTitle("Public health and its measurement", w, fs_, 2);
+  ok("a two-line label fills its second line", two.length===2 && two[1]==="its measurement");
+  ok("and neither line is over budget", fits(two, budget));
+  ok("a title that fits exactly is not ellipsised",
+     mapWrapTitle("Measures and outcomes", w, fs_, 2).join(" ")==="Measures and outcomes");
+  // Still truncates when it genuinely must, and only on the LAST allowed line.
+  const long = mapWrapTitle("A tribunal applying the ordinary standard would find that "
+    + "congressional testimony misled the committee.", 160, 11, 2);
+  ok("a title too long for the cap ends in an ellipsis", long.length===2 && /…$/.test(long[1]));
+  ok("but its earlier lines are whole", !/…/.test(long[0]));
+  ok("the cap is honoured", mapWrapTitle("one two three four five six seven eight nine ten",
+     60, 11, 2).length===2);
+  ok("a one-line cap is a single line",
+     mapWrapTitle("Public health and its measurement", w, fs_, 1).length===1);
+}
+
 // determinism: same input → same bytes
 ok("deterministic bytes", mapSvg(mapLayout(demoData,"titles"),demoData,"orem")===svgs.titles);
 
