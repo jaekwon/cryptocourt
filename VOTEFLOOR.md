@@ -4007,3 +4007,33 @@ swept or one with no mechanical check. This was fresh code carrying money, with 
 corpus claim over it that had been invalidated-and-restored by a rename in between.
 The measurement was cheap — 41 rows in five shards, one foreground run — and it
 turns "their rows were caught when written" into "their rows are caught now".
+
+## internal/geo closes the Go layer, and the flag is trust-gated at both ends
+
+**THE LAST UNOPENED GO PACKAGE.** 227 lines, and its header states its own worth
+before anything else: "it is decoration. Any VPN defeats it, mobile carriers route
+through the wrong country routinely ... nothing may be built on top of it." Also a
+deliberate absence, named as one: no third-party geolocation API, which "would ship
+every visitor's address to somebody else's service".
+
+**THE CLAIM HOLDS, and it is the same claim the chat suffix makes.** Every non-test
+use of country is server.go computing it, store.go storing it, and the read path
+returning it for display. No throttle, ban, dedup or moderation decision touches it.
+
+**AND THE PIPELINE IS TIGHTER THAN THE CLAIM NEEDS.** Two hypotheses died here:
+
+  - A SELF-ASSERTED FLAG. The country comes from a header before it comes from geo,
+    and a client-settable country would let anyone wear any flag. It is gated:
+    `if s.CountryHeader != "" && s.Policy.TrustsPeer(r.RemoteAddr)`, so only a
+    configured reverse proxy is believed and a direct client's header is ignored.
+  - JUNK REACHING THE DATABASE. Both paths validate against ccRe before storing, not
+    just at render, and the comment says why: "Validated on the way in as well, not
+    only on the way out: a lookup table is a file somebody edited, and two letters is
+    the whole contract." The client's chatFlag then re-checks the same shape.
+
+**THAT COMPLETES THE GO LAYER** — chat, scan, geo and the three cmd tools have now
+all been read. Together with the realms, the /p/ packages, the web overlay, the
+guards, the corpus records, the docs and the txtar scenarios, the surfaces this loop
+was pointed at are swept. What remains is not another sweep: it is the delta pass
+that the other session's uncommitted work will earn when it lands, and one comment
+fix in claim.gno that cannot be staged while that file is theirs.
