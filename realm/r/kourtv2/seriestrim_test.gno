@@ -176,3 +176,59 @@ func TestOneTrimRideFreesExactlyTwoArchivePages(cur realm, t *testing.T) {
 			"other offset is a different budget", got-base)
 	}
 }
+
+// A SECOND RIDE IN THE SAME HOUR MUST FREE NOTHING MORE, which is the once-per-
+// epoch bound `hE > cs.histTrimmedTo` states — and it was recorded in KNOWN-GAPS
+// as INVALID BY CONVERGENCE, on the argument that relaxing it to `>=` costs gas
+// and changes no state: "an extra ride can only free pages that are ALREADY older
+// than the keep window - pages the next epoch's ride would free anyway".
+//
+// THAT IS FALSE WHENEVER THERE ARE MORE CANDIDATES THAN THE BUDGET, and the note
+// itself asked for this check ("IF THIS COMES BACK CAUGHT, someone has pinned the
+// ride count: check they meant the cost and not the content"). It is the content.
+// One ride frees trimBudget pages; a second frees trimBudget MORE, immediately,
+// and every read in between sees a shorter history whose oldest point is 64 epochs
+// younger. Measured on this fixture's own setup:
+//
+//	`>`  (shipped)   oldest = base+64,  five points
+//	`>=` (relaxed)   oldest = base+128, three points
+//
+// "The next epoch's ride would free them anyway" is true and beside the point: a
+// series read is answered at a height, not eventually.
+//
+// The expectations are literals, and the second ride is the whole assertion — the
+// first is already pinned by TestOneTrimRideFreesExactlyTwoArchivePages above, so
+// this test's own arm is that calling again inside the hour is a NO-OP.
+func TestASecondTrimRideInTheSameHourFreesNothingMore(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tride-alice")
+	testCourt(cur, "tride", alice, 40_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "tride", "two rides inside one hour")
+
+	c := mustCourt("tride")
+	cs := mustClaim(c, id)
+	a := ensureCSArch(c)
+	key := csKey(cs.id, "yh")
+
+	// Same shape as the test above: six points across six consecutive pages, the
+	// oldest four of them archived candidates once the horizon has moved past.
+	base := ((hourEpochAt(heightNow()) / 32) + 1) * 32
+	testing.SkipHeights(epochBlocks * 400)
+	for k := uint32(0); k < 6; k++ {
+		cs.yesH.SetAt(a, key, base+k*32, int64(k+1)*1_000_000)
+	}
+
+	recordPools(c, cs) // ride one
+	recordPools(c, cs) // ride two, same hourly epoch — must do nothing
+
+	after, _ := collectSeriesKeyed(a, &cs.yesH, key)
+	if len(after) != 5 {
+		t.Errorf("two rides in one hour left %d points, want 5 — the same five a "+
+			"single ride leaves, because the second must not trim at all", len(after))
+	}
+	if got := after[0].e; got != base+64 {
+		t.Errorf("two rides in one hour left the oldest point at base+%d, want base+64: "+
+			"a second ride inside the hour freed pages the once-per-epoch bound reserves "+
+			"for the next one", got-base)
+	}
+}

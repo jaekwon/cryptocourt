@@ -82,14 +82,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "stakeseries.gno",
-  "label": "recordPools: the trim rides on every call, not once per epoch",
-  "find": "\tif hE > cs.histTrimmedTo {",
-  "replace": "\tif hE >= cs.histTrimmedTo {",
-  "why": "INVALID BY CONVERGENCE: `hE > cs.histTrimmedTo` to `>=` makes the trim ride again on every recordPools within the same hourly epoch, and the extra rides cannot change the state they reach. keep = hE - hourlyKeep is identical on each ride, so an extra ride can only free pages that are ALREADY older than the keep window - pages the next epoch's ride would free anyway, bounded by trimBudget either way. The difference is gas and the 'rides at most once per hourly epoch per claim' claim in recordPools' comment, which is a cost statement and not a state one. Kept because the once-per-epoch bound is what makes the trim budget's arithmetic hold ('a budget of 2 per touched hour strictly outruns' one candidate page per 32 changed epochs) - remove the bound and that sentence stops being true even though no read changes. IF THIS COMES BACK CAUGHT, someone has pinned the ride count: check they meant the cost and not the content."
- },
- {
-  "pkg": "kourtv2",
   "file": "modrender.gno",
   "label": "qualifiedSymbol: a court symbol is rendered unsanitised",
   "find": "\treturn platformTicker + \":\" + sanitize.InlineText(c.coin.Symbol())",

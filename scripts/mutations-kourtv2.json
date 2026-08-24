@@ -8876,5 +8876,12 @@
   "find": "\t\tif e := v.(*assocEdge); e.bond > 0 {\n\t\t\touts = append(outs, claimIDFromKey(key[8:]))\n\t\t}",
   "replace": "\t\touts = append(outs, claimIDFromKey(key[8:]))",
   "why": "`bond > 0` IS the pending state; ignore it and the sweep counts edges it did not settle. Caught by the second sweep in TestApprovingAllAssociationsSettlesBothDirectionsAtOnce, which must find nothing left."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stakeseries.gno",
+  "label": "recordPools: the trim rides on every call, not once per epoch",
+  "find": "\tif hE > cs.histTrimmedTo {",
+  "replace": "\tif hE >= cs.histTrimmedTo {"
  }
 ]
