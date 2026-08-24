@@ -3476,3 +3476,45 @@ virgin budget — and run entirely alone it is first, so it passes. Isolation an
 first-position are the same thing for that test. What would break it is a new test
 file sorting ahead of it inside a full suite run, which isolation cannot see and
 its own failure message names instead.
+
+## govern's doc.gno makes 24 absolute claims about 444 lines, and the ones that matter hold
+
+**THE ONE SUBSTANTIAL REALM NEVER AUDITED HERE.** Read from a --depth 1 clone at
+d9b9ef6 because selftest-checks was rewriting the working tree.
+
+**AND THE LEAD THAT TOOK ME THERE WAS MY OWN ARTEFACT.** govern looked like the
+most under-rowed live package — 20 rows against 1,101 lines, 1.8 per hundred where
+kourtv2, grc20votes, checkpoint and twap all sit near 6 or 7. It is not:
+doc.gno is 426 lines of which exactly ONE is code (`package govern`). govern's
+logic is 444 lines with 20 rows, which is 4.5 per hundred and unremarkable. A
+density figure computed over a documentation file measures the documentation.
+
+**SO THE DOC BECAME THE TARGET, which is the better one anyway**: 24 absolute
+claims — never, cannot, must not — about 444 lines of code, all of it checkable.
+Four checked, each with the instrument confirmed:
+
+  1. **"the registry is never iterated - an ungated registry is unbounded"**
+     TRUE, and stronger than claimed: there is no `.Iterate(` and no `for … range`
+     ANYWHERE in govern's logic. Zero unbounded reads over state. The instrument
+     was confirmed against kourtv2, where the same pattern finds 57.
+  2. **"Block height … never block time, which production …"** TRUE: no
+     Timestamp, no BlockTime, no time. anywhere in the logic.
+  3. **"A kind's Do never receives this realm's own capability"** TRUE, and this
+     is the one with teeth. govern.gno:94 reads
+     `return k.Do(0, cur.Sub(subpath), payload)` — a sub-realm with its own pkgpath
+     and address, never `cur`. The doc says why: "Passing cur itself would make
+     one adoption vote a grant of govern's identity everywhere govern is trusted."
+  4. **AND IT IS PINNED TWICE**, once for each way to break it, both caught in the
+     main corpus:
+
+         dispatch: a kind is handed THIS REALM's own capability
+         dispatch: every kind shares ONE sub-realm identity
+
+     The first is the mutation the doc's own sentence describes. The second is the
+     failure that sentence does not describe — a single shared subpath, which
+     would confine the capability but stop distinguishing which power was granted.
+     Somebody read their own paragraph and then asked what else it permitted.
+
+That is the pattern this repo gets right and which the session has been testing
+for: the most consequential documented property is the one carrying the most
+rows, and the rows cover a failure mode the prose did not think to name.
