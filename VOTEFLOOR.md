@@ -3593,3 +3593,26 @@ a selftest plant target** — `control("a budget nobody can meet", STORE, ...)` 
 and a selftest run is in flight, so the file on disk may be holding a planted
 mutation right now. Editing a file while the harness is rewriting it is how you
 commit somebody's plant, or fix a defect that was never there.
+
+### A correction to the paragraph above, one command later
+
+That entry says VOTEFLOOR.md is safe to stage during a selftest run. **It is a
+plant target** — selftest-checks.py lines 421-425 hold two control arms that
+rewrite it, for check-epoch-coherence. I printed the grep count and labelled the
+line "(0 = not a plant target, safe to stage)" while the number printed beside it
+was 3. Labelling an instrument's output instead of reading it is the same failure as
+the case-insensitive grep that nearly reported eight survivors, committed in the
+same breath as a paragraph about not trusting a list over a directory.
+
+**NO PLANT WAS EVER CAPTURED, and that is measured, not hoped.** Every VOTEFLOOR
+commit this session is a PURE APPEND:
+
+    4f1a374 +38 -0    7f89deb +37 -0    9be8d60 +42 -0    d9b9ef6 +48 -0
+    7136f1e +35 -0    e9d1c71 +60 -0    d31227d +49 -0    e9d62a5 +44 -0
+    9421b11 +55 -0    30013fc +46 -0
+
+Ten commits, zero deletions. The one commit to this file with deletions is 653fe50,
+another session's rename refactor. A planted mutation lands as a MODIFICATION, so
+capturing one would have shown up as a deletion paired with an insertion — which is
+why `cat >>` was safe here by construction rather than by luck. Editing an existing
+line in a plant-target file while the harness runs would not be.
