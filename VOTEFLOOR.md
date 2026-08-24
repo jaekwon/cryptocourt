@@ -3819,3 +3819,33 @@ ALONE. Everything green this session was green in a tree that also held
 standing.gno, claim.gno and four other files I did not write. Two guards
 (demo-physics, height-shim) do pass at HEAD alone, measured just now. The rest are
 owed a `make check-frozen` on a quiet machine.
+
+## checkpoint's packed encoding handles the sign, and tests it at the extreme
+
+**THE HYPOTHESIS.** A page is "[epoch:4 BE][value:8 BE] entries, 12 bytes each" —
+a hand-rolled binary encoding of int64 values, and big-endian packing is naturally
+unsigned. A negative stake or conviction packed as unsigned and read back as
+unsigned decodes to something enormous, silently. Hand-rolled codecs are where
+that lives.
+
+**REFUTED, and by more than the code.** be64 casts `uint64(v)` and packs the BIT
+PATTERN, with the comment saying so — "so a negative value round-trips through
+rd64" — which is correct two's complement in both directions. And it is tested at
+the hardest possible value:
+
+    checkpoint_test.gno:  func TestNegativeValuesRoundTripThroughTheArchive
+                          const minI64 = int64(-9223372036854775808)
+                          v = minI64   // archived; the extreme two's-complement pattern
+                          v = minI64   // the inline prev slot
+
+minI64 is the case that breaks naive implementations, since its absolute value is
+not representable — and it is driven through BOTH storage paths, the archive and
+the inline slot, which is the same value through each place it can live. That is
+the pairing discipline applied to a codec rather than to a refusal.
+
+**WHY THIS IS WORTH A PARAGRAPH DESPITE FINDING NOTHING.** The comment claims a
+property ("a negative value round-trips") and the test named for that property
+exercises it at the extreme, in every path. That is the shape this session has been
+looking for all day, and it is what a claim backed by a pin looks like when it is
+done right — as against a `why` asserting invalidity with nothing behind it, of
+which three needed correcting.
