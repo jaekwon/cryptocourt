@@ -2244,13 +2244,22 @@ function errorView(e){
 }
 function notFound(msg){ return `<div class="empty"><div class="g">◌</div><p class="page-h" style="font-size:15px;font-weight:600;margin:0 0 6px">${esc(msg)}</p><p><a class="btn" href="#/">Back to the directory</a></p></div>`; }
 const crumbs = parts => {
+  // The HREF is escaped as well as the label, and that is not symmetry for its
+  // own sake. It used to be raw, which was safe only because of two invariants
+  // written down nowhere near here: every slug-bearing route restricts the slug
+  // to [a-z0-9-]+ and ids to \d+ or [0-9.]+, and folder ids are numeric-dotted
+  // on chain — and one of the five href expressions ("#/c/__SLUG__/f/"+a.fid)
+  // comes from chain data, not from a route at all. Widen one route and this
+  // attribute goes live in a function whose reviewer has no reason to look at
+  // the router. Escaping costs nothing: no href here contains a character esc
+  // touches, and & becoming &amp; is correct inside an attribute.
   // first-visit exit on every deep-linkable route: the directory carries the
   // full strip, the about page IS the destination — everywhere else, one line
   const path = (location.hash.replace(/^#/,"")||"/").split("?")[0].replace(/^#/,"");
   const orient = (path!=="/" && !path.startsWith("/about") && store.get("cc.intro")!=="1")
     ? `<span class="orient" style="margin-left:auto; display:inline-flex; gap:7px; align-items:center"><a class="small" href="#/about">first time here? how this office works →</a><button class="pill void" data-introdismiss aria-label="Dismiss this note" style="padding:1px 7px; cursor:pointer">×</button></span>` : "";
   return `<div class="crumbs">`+parts.map((p,i)=>
-    (i?`<span class="sep">/</span>`:"")+(p.href?`<a href="${p.href}">${esc(p.label)}</a>`:`<span>${esc(p.label)}</span>`)).join("")+orient+`</div>`;
+    (i?`<span class="sep">/</span>`:"")+(p.href?`<a href="${esc(p.href)}">${esc(p.label)}</a>`:`<span>${esc(p.label)}</span>`)).join("")+orient+`</div>`;
 };
 
 /* ============================ views ==================================== */
