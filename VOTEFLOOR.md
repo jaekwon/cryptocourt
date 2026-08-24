@@ -3662,3 +3662,40 @@ actor — so I had measured its error handling, not the staleness arm. Editing a
 note's text changes the output without breaking generation, and then the arm fires.
 A probe that fails for a different reason than the one you are testing is not a
 weaker result, it is no result.
+
+## 27 of 29 guards run in `make check`, and both exceptions are the documented ones
+
+**THE SHARPER VERSION OF AN EARLIER CHECK.** Iteration twelve established that 28
+of 29 check-*.py are NAMED in the Makefile. That is weaker than it sounds: a guard
+named in a target nobody runs is unwired. So this asks the real question — which
+guards are reachable from `make check` by transitive closure over the prerequisite
+graph?
+
+    make check has 18 prerequisites: fmt vet gotest anchors collisions rendertext
+    paths guards controls staleguards demo-physics nodelegate scenarios-check
+    web-test height-shim realm-test txtar-test elsewhere-test
+
+    reachable: 27 of 29
+    not:  check-isolation.py   — its own target, once per test, ~3 hours
+          check-live-reads.py  — needs a running node, "deliberately NOT part of
+                                 make check - that gate must not require a chain"
+
+Both exclusions were already verified as deliberate, with their own selftest arms
+(check-live-reads' arms are the two refusals it makes WITHOUT a node). So the
+wiring is complete.
+
+**AND IT CORRECTS MY OWN EVIDENCE.** Twice earlier I quoted that prerequisite list
+as ending at `realm-test`, because I read it with `grep '^check:' | cut -c1-160`
+and the line is longer than 160 characters. `txtar-test` and `elsewhere-test` were
+past the cut. The conclusion I drew from it (isolation-test is absent) happened to
+be right, but I published a truncated command output as a complete list, which is
+the same error as labelling a grep's count instead of reading it — twice in three
+iterations, both times by trusting my own formatting.
+
+**IT ALSO STRENGTHENS AN EARLIER CONCLUSION rather than weakening it.** Iteration
+eleven leaned on check-elsewhere.py to say the "covered elsewhere" claims are
+machine-verified at three levels. That guard is in `elsewhere-test`, and
+elsewhere-test IS a prerequisite of check — so those claims are verified on every
+routine run, not when somebody remembers. check-elsewhere's own header records why
+that matters: "Until txtar-test was added to check, SIX of the seven rows named
+txtar scripts that the routine never ran."
