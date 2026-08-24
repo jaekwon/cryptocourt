@@ -3776,3 +3776,46 @@ is running, so editing that package now risks interleaving with a staged plant.
 /p/ packages' label-only shouldPanic, and this one. Each package copied the helper
 rather than sharing it, so each got a different strength, and the realm side has a
 guard (check-abort-assertions) that reaches none of them.
+
+## The repo lock is machine-wide, and it defeats the one gate built to be isolated
+
+**WHAT I WENT LOOKING FOR.** `make check-frozen` adds a DETACHED WORKTREE at HEAD
+and runs `make check` inside it, so the gate measures COMMITTED state rather than
+the working tree. That matters to this whole session: every guard run here has
+included another session's uncommitted work, so a green result could in principle
+have depended on their changes rather than on mine. check-frozen is the answer to
+that, and it is not in `check`'s prerequisites — it is the outer gate.
+
+**IT CANNOT RUN BESIDE A SELFTEST, and the reason is one line:**
+
+    LOCK = os.path.join(tempfile.gettempdir(), "kourt-worktree-mutating.lock")
+    f.write(str(pid))
+
+One fixed path in /tmp for every checkout on the machine, holding a PID and nothing
+else. So a guard in a CLONE refuses because a selftest is running in the ORIGINAL:
+
+    check-mutation-anchors: process 12477 is rewriting the working tree
+
+which is false about the clone's tree and unknowable from inside it. Measured: six
+guards returned rc=2 in a fresh clone at HEAD while the main checkout selftested;
+demo-physics and height-shim returned 0 because they do not take the lock.
+
+**THE SCOPE IS WIDER THAN THE RATIONALE.** repolock's own header says why it exists,
+and the reason is repository-specific: selftest "edits those sources in place"
+because "the guards read the repository's own sources", while "every other runner
+stages into its own GNOROOT shadow, so they are safe to run concurrently". A
+different checkout's sources are not the ones being edited. Writing the holder's
+repo root beside the pid, and refusing only on a match, would make the refusal true
+where it fires and would let the isolated gate run while a selftest is in flight —
+which is exactly when you most want to check committed state.
+
+**NOT CHANGED, and the sequencing is the reason rather than the risk.** repolock is
+imported by every guard, so touching it needs a selftest run; two commits are
+already queued behind selftests and a third is in flight. A fourth guard-adjacent
+change stacked on the same blocked resource would be bad ordering, not diligence.
+
+**AND THE HONEST GAP IT LEAVES.** I have not verified that HEAD passes the guard set
+ALONE. Everything green this session was green in a tree that also held
+standing.gno, claim.gno and four other files I did not write. Two guards
+(demo-physics, height-shim) do pass at HEAD alone, measured just now. The rest are
+owed a `make check-frozen` on a quiet machine.
