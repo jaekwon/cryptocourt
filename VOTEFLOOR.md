@@ -3699,3 +3699,43 @@ elsewhere-test IS a prerequisite of check — so those claims are verified on ev
 routine run, not when somebody remembers. check-elsewhere's own header records why
 that matters: "Until txtar-test was added to check, SIX of the seven rows named
 txtar scripts that the routine never ran."
+
+## AUDIT.md's fixes are still fixed, and one of its tests refines the literal rule
+
+**THE HYPOTHESIS WITH THE WORST CONSEQUENCE I COULD THINK OF.** docs/AUDIT.md is
+566 lines of security findings with status claims — "twap: 3 findings, all fixed",
+"tickbook: 2 CRITICAL, both fixed", "governor: 2 fixes APPLIED". A finding marked
+FIXED whose fix was later reverted is a silent regression, and nothing enforces a
+status line in a document.
+
+**IT NAMES ITS PINS, which is what makes it checkable at all.** Each governor fix
+cites the regression test that holds it: TestSupplyPastTheCeilingIsRefused,
+TestTieBoundaryAtThreshold, TestAllAbstainDefeats,
+TestEngagedAboveSupplyIsClamped, TestProposeWithQuorumRaisesTheBar.
+
+    30 distinct tests cited across AUDIT.md
+    30 exist in the tree
+     0 cited but not defined
+
+**AND EXISTENCE IS NOT ENOUGH**, so the highest-consequence one was followed into
+the code. F1 was a tally overflow that "could overflow yes·bps and flip an
+outcome":
+
+    governor.gno:82    const maxWeighable = int64(9223372036854775807) / bps
+    governor.gno:719   if total > maxWeighable {
+    changes_test.gno   total = maxWeighable + 1  -> Propose aborts
+                       total = maxWeighable      -> Propose accepted,
+                                                   "right at the ceiling"
+
+Live, and paired: the refusal is asserted against the ordinary input one unit
+below it, which is the discipline this file keeps asking for.
+
+**AND THAT TEST REFINES THE LITERAL RULE RATHER THAN BREAKING IT.** It writes
+`maxWeighable + 1`, using the symbol this session's rule says to avoid — "an
+expectation spelled with the constant under test moves with it". The rule holds for
+a VALUE PIN: TestTheMetaCourtsWeeklyBudgetIsTheCalibratedValue must say 100_000_000
+or it asserts nothing. It is WRONG for a BOUNDARY test, where the property is "the
+door refuses one more than the ceiling" and not "the ceiling is 922...". A literal
+there would break the test every time bps changed, for a reason the test does not
+care about. The distinction is what the expectation is ABOUT: a number, or a
+relation at a number.
