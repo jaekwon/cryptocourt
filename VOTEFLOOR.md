@@ -4037,3 +4037,39 @@ guards, the corpus records, the docs and the txtar scenarios, the surfaces this 
 was pointed at are swept. What remains is not another sweep: it is the delta pass
 that the other session's uncommitted work will earn when it lands, and one comment
 fix in claim.gno that cannot be staged while that file is theirs.
+
+## The inverse invariant, run for the first time since I emptied six rows out of it
+
+**THE RISK WAS MINE.** The main corpus's invariant is that every row is CAUGHT;
+KNOWN-GAPS carries the opposite one — every row must SURVIVE. This session added six
+fixtures (the deposit floor, the re-set window, both trim rides, the meta budget pin,
+the OI ring) and removed six rows. Any of those fixtures could incidentally catch a
+row still recorded as a gap, which would make the file's central claim false without
+anything failing.
+
+    make gaps
+    every one of the 23 row(s) was measured and still survives — no recorded gap has closed.
+    4 row(s) survive here BY DESIGN, covered by a suite this harness does not run:
+      StakedPage ... scripts/check-read-purity.py
+      EnableTestClock (used realm) ... kourtv2_usedrealm_coin.txtar
+      EnableTestClock (one user court) ... kourtv2_usedrealm_seeded.txtar
+      EnableTestClock (disclosure) ... kourtv2_testclock.txtar
+
+rc=0. Nothing I wrote closed a gap by accident, and the four `elsewhere` rows still
+name harnesses that resolve.
+
+**AND THE TWO IT SKIPS ARE NOT A HOLE, though they look like one.** 23 measured of 25
+rows; the other two carry `"slow": true`, and the reason is not that they are slow to
+pass — it is that they cannot pass or fail at all:
+
+    ClaimSeries: the merge advances the side that did NOT change — "THIS ONE HANGS":
+      the mutation stops the loop advancing either index, so the suite runs to
+      SUITE_TIMEOUT.
+    Cost: the slope is d, not 2d — "TIMED OUT RATHER THAN CAUGHT": halving the slope
+      makes Minted's one-unit-at-a-time correction loops climb twice the span.
+
+A timeout is a NON-RESULT by this repo's own rule, not a survivor — so these two are
+in the file as a RECORD of what cannot be measured rather than as a claim that was
+measured. The target does not overclaim either: it prints "N row(s), M skipped as
+slow" and then asserts only over the N. That is the distinction the whole file exists
+to keep, applied to itself.
