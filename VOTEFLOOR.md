@@ -3889,3 +3889,54 @@ corpus anchors resolve against committed sources, check-web-constants' MIRRORS
 anchor finds periodBlocks in a committed court.gno, and the new guards pass without
 the other session's files. It says nothing about what happens when their work lands
 — that is a delta pass, and the last one is recorded above at 210 rows.
+
+## The operator tools already learned the lesson I came to teach them
+
+**FRESH SURFACE: cmd/, never audited** — kourtchat (250 lines), kourtmod (124) and
+kourtchatctl (1041), the last being fourteen subcommands of operator power: ban,
+unban/revoke, kick, hide, reveal, freeze, unfreeze, dismiss, prune, review.
+
+**THE HYPOTHESIS, which is the fixture-cannot-fail rule pointed at tooling.** An
+admin CLI that reports success without having changed anything is worse than one
+that errors: the operator believes a ban was lifted, or a message hidden, and moves
+on. `revoke 999` on a mistyped id is the obvious probe.
+
+**IT IS HANDLED, and the code documents my hypothesis as its own MEASURED past
+defects.** store.go's sentinel block:
+
+    // ErrNoConsequence and AlreadyRevokedError exist because `unban` used to lie
+    // in two ways.
+    // Measured: `unban 999` printed "sql: no rows in result set" — a driver string
+    // for "no such consequence" ... And `unban 1` on an already-reversed row
+    // affected zero rows, returned nil, and the tool printed "consequence 1
+    // reversed by bob" while the row said alice. In the one place this design keeps
+    // an audit trail on purpose, the tool credited the wrong person for somebody
+    // else's decision.
+
+and ErrNotVisible for the same class in hide: "`kourtchatctl hide` discarded the
+error entirely and printed 'message N exists but is already out of sight' for
+anything HideMessage returned — measured, a hide against a closed database returns
+'sql: database is closed' and the operator was told the message was hidden."
+
+Both fixes are live: HideMessage checks RowsAffected and returns ErrNotVisible,
+Unfreeze returns (bool, error), Reveal distinguishes sql.ErrNoRows, and cmdUnban
+switches on the typed AlreadyRevokedError separately from ErrNoConsequence.
+
+**AND MY SWEEP'S RAW NUMBER WOULD HAVE BEEN A FALSE FINDING.** Counting mutating
+Store methods against "does it check RowsAffected or return a sentinel" gave 9 of 16
+checking, 7 not — a headline. The 7 do not belong together:
+
+    Close, Secret            not id-targeted mutations; a no-op means nothing
+    Freeze                   an upsert, so it cannot affect zero rows — which is
+                             why Unfreeze (a delete) is the one that returns bool
+    Heartbeat                a liveness stamp; a no-op is benign
+    Claim                    correctness is the TRANSACTION, not a row count: it
+                             reclaims leases older than 300s, then selects inside
+                             the same tx, so two workers cannot double-claim
+    RecordVerdict, Failure   write a scan result for a row that may have been
+                             pruned meanwhile; losing a verdict for a message that
+                             no longer exists is the correct outcome
+
+Reported as "7 of 16 mutating methods do not check their effect" it would have read
+as a finding. Every one of the seven has a different reason, and none is the hazard
+the sentinels were built for.
