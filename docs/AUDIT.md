@@ -199,6 +199,14 @@ test that had asserted the old refusal.
   reentrancy latch, lifecycle, batch atomicity via abort-rollback.
 - Coverage to add in the changes phase: tally boundaries (tie/quorum), all-abstain
   (a past bug with no regression test), `batch.gno` (untested), the latch.
+- **All four of the above are now COVERED**, verified against the tree rather than
+  assumed from the plan: tally boundaries by `TestTieBoundaryAtThreshold`,
+  all-abstain by `TestAllAbstainDefeats` (both in `changes_test.gno`), `batch.gno`
+  by 20 corpus rows over its 144 lines — the highest row density in the repo — and
+  the latch by `g.executing`, guarded at governor.gno:678 and :913, with 4
+  references in `governor_test.gno` and 4 corpus rows anchored on it. Noted because
+  the line above reads as open work and is not: somebody would otherwise plan it
+  twice.
 - **Verdict:** safe for the court to consume with `grc20votes` and
   `ThresholdBps>5000`; the three changes are safe with the noted constraints.
 
