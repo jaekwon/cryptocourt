@@ -2105,8 +2105,8 @@ not in it" becomes a distinct and reportable state. Until then `freeze` covers t
 compliance half, and an operator who wants a closed namespace has the chain allowlist.
 
 **BOTH KINDS OF EVIDENCE ARE GATED OFF BY DEFAULT, and that is worth knowing before trusting a
-green run.** Nine `TestLive*` fixtures in `internal/scan` need `OLLAMA_LIVE=1`, and nothing in the
-Makefile, the scripts or CI sets it — so `go test ./internal/scan/` prints `ok` while every one of
+green run.** FIFTEEN `TestLive*` fixtures in `internal/scan` need `OLLAMA_LIVE=1`, and nothing in
+the Makefile, the scripts or CI sets it — so `go test ./internal/scan/` prints `ok` while every one of
 them skips, and `go test` shows a skip only under `-v`. The browser harnesses were worse: they were
 not in the runner's `CHECKS` at all, so `make web-visual` reported a clean pass over one file out
 of five, and `chat_render.js` was asserting something false for two commits before anybody ran it.
@@ -2114,6 +2114,7 @@ of five, and `chat_render.js` was asserting something false for two commits befo
 The gating itself is right — a 3GB model and a headless Chrome do not belong in every `make check`
 — so the answer is not to ungate them but to run them deliberately and say when:
 
+    grep -c 'func TestLive' internal/scan/*_test.go   # recount: this said NINE once
     OLLAMA_LIVE=1 go test ./internal/scan/ -run TestLive -timeout 1800s
     node web/tests/browser/chat_all.js          # add OLLAMA_LIVE=1 for chat_moderation.js
 
