@@ -3185,3 +3185,58 @@ f0eb2f1's full pass. Their target files have not changed and no rows were added 
 them, so that pass still speaks for them — with the residual that a TEST file
 change can move a catcher without touching the mutated source, which is the one
 thing only a full pass settles.
+
+## A fresh-eyes pass that returned four negatives and one dangling citation, and a count I should not have believed
+
+**FOUR CLEAN NEGATIVES, each with its instrument checked before its verdict.**
+
+  1. **No exported pointer escapes realm state.** AGENTS.md's rule — never return a
+     pointer to a `/p/` type that has exported mutators, because readonly taint does
+     not block method dispatch — has nothing to bite on here: zero exported funcs or
+     methods in kourtv2/ccwrap return a pointer. The sweep first returned zero with
+     the exported-only filter, which is a claim about the sweep, so the same pattern
+     was re-run without that filter and found 14 unexported pointer returns. The
+     mechanics work; the zero is real.
+  2. **ccwrap's Render cannot be injected.** The detail page sanitises the court name
+     (already fixed earlier) and otherwise writes the SYMBOL, not the raw slug —
+     `TokenKey` is realmPath + wrappedSymbol, and grc20's validSymbol is
+     `[A-Za-z0-9_-]`. The list page does write the raw slug, and that is safe by
+     kourtv2's `mustSlug`: `[a-z0-9-]`, 1..11 chars, no markdown metacharacter, and
+     the slug only ever lands inside `**...**` where a leading hyphen cannot open a
+     list. `Enable` gates on `kourtv2.Exists`, so no slug reaches Render without
+     passing that charset. The dependency is transitive and pinned — by kourtv2's
+     TestSlugCharsetIsWhatMakesTheRawRenderSafe, not by anything in ccwrap.
+  3. **Both OriginSend sites use IsUserCall().** kourtv1/buy.gno:29 and
+     kourtv2/buy.gno:34, each with a comment naming the exact hazard: IsUser() would
+     accept a `maketx run` ephemeral realm that can consume the origin-send envelope
+     first. Nothing to fix.
+  4. **Every code -> doc section citation resolves but one.** 17 distinct
+     `DOC.md §X` citations across the realm; all resolve except the one below.
+
+**THE ONE FINDING.** `realm/r/kourtv2/court.gno:604` cites `MODERATION.md §2/§13.5`
+for "court-count floods are storage-deposit-priced". MODERATION.md has no §13.5:
+§13 (Owner flags) contains only §13.8 and §13.9, and the document's sole other
+occurrence of "13.5" is itself a dangling self-citation at line 969. §2 resolves, so
+the fix is to drop the second half or point it somewhere real. NOT FIXED IN THIS
+INCREMENT: court.gno is one of fifteen files another session has uncommitted right
+now, and editing it would collide. Recorded for whoever holds that file next.
+
+**AND A NUMBER I SHOULD NOT HAVE BELIEVED: 86 of 248.** That was the first count of
+dangling citations, and most of it was the instrument:
+
+  - `§512`, `§230`, `§2258`, `§169` are STATUTES — DMCA, CDA, 18 U.S.C. — not
+    internal sections. A checker that reads every `§` as a cross-reference will
+    always report a document about takedown law as broken.
+  - Bare `§5` inside ASSOCIATIONS.md and SUPERSEDES.md refers to a PARENT document,
+    not to itself. "A doc's bare § refers to its own sections" is false for addenda.
+  - Section numbering is PER DOCUMENT, and the repo root holds ~20 more docs than
+    docs/ does: `### 7.4` is defined in IMPLEMENTATION.md and again in LOSERLOCK.md,
+    `### 13.5` in GAMETHEORY.md. So a bare `§7.4` — cited 13 times by the code and 6
+    times inside MODERATION.md, which never defines it — is not necessarily broken.
+    It is unqualified, and which document it means cannot be settled mechanically.
+
+So no guard is proposed here. A citation checker for these docs needs a resolution
+convention first, and inventing one is a decision about the owner's documentation
+practice, not a fix. check-citations.py deliberately covers only govern's citations
+into the gno tree, where file+anchor makes the question decidable — the reason it
+stops there is now measured rather than assumed.
