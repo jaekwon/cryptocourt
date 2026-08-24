@@ -182,11 +182,21 @@ func TestGuards(t *testing.T) {
 	id := l.OpenClaim()
 	l.MintSet(id, alice, 10)
 
+	// THE SETUP IS OUTSIDE THE CLOSURE, and that is the whole point. shouldPanic
+	// asserts only that SOMETHING panicked — its label is a description, never
+	// matched against the recovered value — so every statement inside the closure
+	// is a way for this assertion to be satisfied by the wrong failure. Measured
+	// on this very test: with Resolve patched to panic unconditionally, the old
+	// four-statement-setup version still reported PASS.
+	//
+	// Hoisted, a setup that breaks fails the test where it breaks, and the closure
+	// holds only the call whose refusal is being asserted. The other four
+	// assertions below were already one call each.
+	l2 := newBinary()
+	i2 := l2.OpenClaim()
+	l2.MintSet(i2, alice, 1)
+	l2.Resolve(i2, YES)
 	shouldPanic(t, "mint on resolved", func() {
-		l2 := newBinary()
-		i2 := l2.OpenClaim()
-		l2.MintSet(i2, alice, 1)
-		l2.Resolve(i2, YES)
 		l2.MintSet(i2, alice, 1)
 	})
 	shouldPanic(t, "redeem-winning while open", func() {
