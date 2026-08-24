@@ -3518,3 +3518,40 @@ Four checked, each with the instrument confirmed:
 That is the pattern this repo gets right and which the session has been testing
 for: the most consequential documented property is the one carrying the most
 rows, and the rows cover a failure mode the prose did not think to name.
+
+## A throttle bypass I was sure of, and the column name that made me sure
+
+**THE HYPOTHESIS.** internal/chat/store.go's automatic limits — the minimum
+interval, the per-window count, the cross-court duplicate check — all key on
+`ip_hash`. `net_hash` sits in the same row and is used by exactly one thing, the
+manual ban. A residential IPv6 host is delegated a whole /64 and SLAAC rotates
+addresses inside it by default, so per-address limits are theatre: 2^64 free keys.
+That reads like a defence keyed on the wrong identifier, and the codebase already
+stores the right one.
+
+**IT IS WRONG, and the measurement is two lines of clientip.go.**
+
+    Hash(a)    = HMAC over Prefix(a).String()      /32 IPv4, /64 IPv6  -> ip_hash
+    HashNet(a) = HMAC over NetPrefix(a).String()   /24 IPv4, /48 IPv6  -> net_hash
+
+`ip_hash` is not the address. It is the /64 for IPv6, so every address a host can
+rotate through inside its delegation lands on ONE key and every automatic limit
+already binds at exactly the granularity I claimed was missing. And `net_hash` is
+not a finer key held in reserve, it is a BROADER one — /48, an ISP-level
+aggregate — which is why only the manual ban uses it. CHAT.md gives the reason:
+an automatic remedy at that width "punished bystanders", and the same file records
+the /64 choice ("a host is normally delegated the whole thing") and asserts the
+sharing so it cannot be mistaken for a collapse.
+
+**WHAT MADE THE MISREADING EASY, and it is the only durable thing here: the column
+is called ip_hash.** A reader auditing the throttle queries sees `WHERE ip_hash=?`
+and concludes per-address, which is what I did. The answer is one grep away —
+Hash() takes Prefix(a) and says so — and CHAT.md spends a page on it, including a
+past bug where IPv4-mapped addresses took the /64 branch and collapsed every IPv4
+client onto ::/64.
+
+**NO COMMENT ADDED, deliberately.** A third copy of the rule at the schema or the
+queries is the "one rule in two places is how the second copy comes to disagree
+with the first" hazard that moderation.gno's own pendingOpenedAt comment argues
+against — and the two copies that exist are the function itself and a document
+that explains why. What was missing was my grep, not their comment.
