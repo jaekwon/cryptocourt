@@ -3333,3 +3333,63 @@ the five expressions contains a character esc touches, and `&` becoming `&amp;` 
 correct in an HTML attribute rather than a change. Not applied in this increment:
 web/index.html is 5.4k lines shared with another session, and selftest was mid-run
 on the tree. Queued rather than dropped.
+
+## The Go service, and auditing the gap record itself — five negatives and three instrument corrections
+
+**THE GO SIDE, never swept before.**
+
+  1. **All 53 SQL sites are parameterised.** No query is built by Sprintf or
+     concatenation, and the instrument was checked against two fabricated
+     positives (`fmt.Sprintf("SELECT … id=%s", id)` and `"DELETE … u=" + u`)
+     before its zero was believed.
+  2. **The IP hashes are keyed, not plain digests.** Hash, HashNet and
+     PublicSuffix all run hmac-sha256 under a key from crypto/rand persisted in
+     the store. That matters concretely: an unkeyed hash of an IPv4 address is
+     reversible by brute force over 2^32, which is minutes of CPU.
+  3. **PublicSuffix rotates as advertised.** server.go passes raw `Now().Unix()`
+     into a parameter called dayUnix, which reads like a bug; the function floors
+     it — `dayUnix/86400` — and mixes in the court, so the tag is per-court and
+     per-day.
+  4. **And its own strongest claim holds.** The suffix comment says it is "a
+     nuisance defence, not an identity system, and nothing may be built on top of
+     it". Nothing is: suffix is inserted, selected and rendered, and every
+     throttle, per-court limit and duplicate check keys on ip_hash or net_hash
+     instead. The client also re-validates it against `^[0-9a-f]{1,16}$` before
+     rendering.
+
+**THEN THE GAP RECORD ITSELF, which is the part worth keeping.** One `why` in this
+file has already been found FALSE this session — the stakeOpenDelayBlocks row
+claimed every fixture reaches staking through matureOI, and matureOI stakes on its
+first iteration. So the record is a legitimate audit target. Two questions asked of
+all 1,280 rows:
+
+  - **Does anything verify a "covered elsewhere" claim?** Yes, at three levels:
+    check-elsewhere.py asks whether the path resolves, whether `make check` RUNS
+    it, and whether the harness ASSERTS the property — its header records that six
+    of seven rows once named txtar scripts the routine never ran. Four rows make a
+    genuine external-coverage claim and all four carry the machine-checked
+    `elsewhere` field.
+  - **Do the tests the record names exist?** 38 distinct names cited across the
+    two corpus files; all 38 resolve.
+
+**THREE INSTRUMENT CORRECTIONS, and every one would have been a false report.**
+
+    "PullSenior … covered"        my regex read test coverage; the `why` is
+                                  talking about a VARIABLE named `covered`
+                                  ("covered is monotone in cumAccrual")
+    TestClockFabricated           not a test — an exported realm function,
+                                  testclock.gno:340, matched because it starts
+                                  with "Test"
+    TestDisapproving              a prose ELLIPSIS for
+                                  TestDisapprovingAnAssociationBurnsTheBondAnd
+                                  DropsTheEdge, not a rotted name
+
+**WHAT IS LEFT UNVERIFIED IN THE RECORD, stated so it is not mistaken for
+"checked".** The rows claiming INVALIDITY or UNREACHABILITY — that the mutation
+cannot change behaviour — are held by argument, not by any checker. Nothing
+machine-verifies them, and that is the class the false stakeOpenDelayBlocks `why`
+came from. Spot-checked StakedSize: its own `why` already records the JOINT
+ablation ("dropping it TOGETHER with weakening stakeIdxMine to `>=` fails
+TestNoReadAnswersForANonAddress"), both named tests exist, and re-running what is
+already recorded is not a measurement. That is where the next real yield is, one
+row at a time.
