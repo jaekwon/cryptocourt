@@ -183,6 +183,7 @@ BUY = "realm/r/kourtv2/buy.gno"
 STAKE = "realm/r/kourtv2/stake.gno"
 COURT = "realm/r/kourtv2/court.gno"
 CLOCKF = "realm/r/kourtv2/clock.gno"
+TCTEST = "realm/r/kourtv2/testclock_test.gno"
 TWAP = "realm/p/twap/twap.gno"
 TCLOCK = "realm/r/kourtv2/testclock.gno"
 SEEDED = "gnoland/testdata/kourtv2_usedrealm_seeded.txtar"
@@ -1134,6 +1135,20 @@ control("a court built on a clockless ledger", COURT,
         "grc20votes.NewLedgerWithClock(name, courtSymbol(slug), coinDecimals, epochBlocks, realmClock{})",
         "grc20votes.NewLedger(name, courtSymbol(slug), coinDecimals, epochBlocks)",
         "use NewLedgerWithClock", argv=["python3", HSHIM])
+# The latch is a package GLOBAL and the suite pairs every arming with a deferred
+# reset, in comment as well as in code — but nothing enforced the pairing, so the
+# 21st test would have leaked an armed clock and frozen heightNow() for everything
+# after it. The symptom lands far away: a test deriving state from the RAW chain
+# height then writes into heightNow()'s future and checkpoint panics with "the
+# clock went backwards", in a test that did nothing wrong. Measured that panic on
+# an ad-hoc probe before this arm existed.
+control("a test that arms the clock and leaves it armed", TCTEST,
+        "\tdefer resetTestClock(alice) // the latch is global; do not leak an armed clock\n"
+        "\ttcArmed, tcBase, tcFloor = true, testingTime(), testingTime()\n"
+        "\ttcHeightBase, tcHeightFloor = testingHeight(), testingHeight() // a fresh scenario chain",
+        "\ttcArmed, tcBase, tcFloor = true, testingTime(), testingTime()\n"
+        "\ttcHeightBase, tcHeightFloor = testingHeight(), testingHeight()",
+        "never defers resetTestClock", argv=["python3", HSHIM])
 # And it must fail CLOSED if its own anchor goes away, rather than scanning
 # clean because heightNow() no longer reads anything.
 control("a shim that no longer reads the chain", CLOCKF,

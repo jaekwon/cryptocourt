@@ -38,6 +38,15 @@ PURE_ALLOWED = {("grc20votes", "grc20votes.gno"): 1}
 RAW = re.compile(r"runtime\.ChainHeight\s*\(")
 # An alias defeats a literal match: `rt "chain/runtime"` then `rt.ChainHeight()`.
 ALIAS = re.compile(r'^\s*(\w+)\s+"chain/runtime"\s*$', re.M)
+# The latch is a package GLOBAL, so a test that arms it and returns leaves every
+# later test reading a FROZEN height while the real chain keeps advancing. A test
+# that then derives state from the raw chain height writes into heightNow()'s
+# future, and the next production write goes backwards — checkpoint panics with
+# "the clock went backwards". The suite already pairs every arming with a
+# `defer resetTestClock(...)` and says why in a comment; this makes the 21st one
+# fail here instead of somewhere unrelated.
+ARMS = re.compile(r'\btcArmed\s*,?[^=\n]*=\s*true')
+DISARMS = re.compile(r'defer\s+resetTestClock')
 
 
 def main():
@@ -107,20 +116,51 @@ def main():
                                       "REAL height while this realm reads fabricated; "
                                       "use NewLedgerWithClock"))
 
+    # --- the test clock's latch must be restored by whoever armed it --------
+    armings = 0
+    for f in sorted(REALM.glob("*_test.gno")):
+        text = f.read_text(encoding="utf-8")
+        code = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        code = re.sub(r"^\s*//.*$", "", code, flags=re.M)
+        for m in re.finditer(r"func (Test\w+)\([^)]*\)\s*\{", code):
+            i = m.end()
+            depth = 1
+            while i < len(code) and depth:
+                if code[i] == "{":
+                    depth += 1
+                elif code[i] == "}":
+                    depth -= 1
+                i += 1
+            body = code[m.end():i]
+            if not ARMS.search(body):
+                continue
+            armings += 1
+            if not DISARMS.search(body):
+                offenders.append((f"{f.name}:{m.group(1)}",
+                                  "arms the test clock and never defers "
+                                  "resetTestClock — the latch is a global"))
+
     if offenders:
-        print(f"check-height-shim: {len(offenders)} height read(s) bypass heightNow():",
-              file=sys.stderr)
+        print(f"check-height-shim: {len(offenders)} problem(s) — reads that "
+              f"bypass heightNow(), or a test clock left armed:", file=sys.stderr)
         for name, why in offenders:
             print(f"  {name}: {why}", file=sys.stderr)
-        print("\n  Use heightNow(). A raw runtime.ChainHeight() ignores the test\n"
-              "  clock's height skew, so on a seeded chain that one read sees a\n"
-              "  different height from every other read in the same transaction.",
+        print("\n  For a raw read: use heightNow(). runtime.ChainHeight() ignores the\n"
+              "  test clock's height skew, so on a seeded chain that one read sees a\n"
+              "  different height from every other read in the same transaction.\n"
+              "\n  For an armed latch: add `defer resetTestClock(...)`. tcArmed is a\n"
+              "  package global, so leaving it set freezes heightNow() for every test\n"
+              "  that runs after yours while the real chain keeps advancing — and a\n"
+              "  test deriving state from the raw height then writes into heightNow()'s\n"
+              "  future, which surfaces as checkpoint's \"the clock went backwards\"\n"
+              "  somewhere unrelated to the test that actually broke it.",
               file=sys.stderr)
         return 1
 
     print(f"check-height-shim: {scanned} realm files and the pure packages — every "
           f"height read goes through heightNow() ({shim_sites} raw read(s), all inside "
-          f"the shim), no alias evasion, no clockless ledger.")
+          f"the shim), no alias evasion, no clockless ledger, and all "
+          f"{armings} test(s) that arm the clock disarm it again.")
     return 0
 
 
