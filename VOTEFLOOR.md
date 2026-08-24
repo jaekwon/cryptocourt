@@ -3555,3 +3555,41 @@ queries is the "one rule in two places is how the second copy comes to disagree
 with the first" hazard that moderation.gno's own pendingOpenedAt comment argues
 against — and the two copies that exist are the function itself and a document
 that explains why. What was missing was my grep, not their comment.
+
+## There are FIVE realms, and check-storage still cannot see the two with no filetest
+
+**MY OWN CLAIM FROM THREE ITERATIONS AGO WAS WRONG BY ENUMERATION.** When ccwrap
+got its read filetest I wrote that all four realms were then covered — govern,
+kourtv2, ccwrap, and kourtv1 frozen. There is a fifth: realm/r/offerer, a demo
+realm that offers a `greeting` kind to govern. I had enumerated realms from
+check-storage's TARGETS list plus memory instead of from the directory, which is
+the same mistake as trusting a sweep's silence: the list I checked against was the
+list that was already wrong.
+
+    realm      filetests   in TARGETS
+    govern         3           yes
+    kourtv2        3           yes
+    ccwrap         1           yes   (added this session)
+    kourtv1        0           no
+    offerer        0           no
+
+**AND THE BLIND SPOT I NAMED IS STILL OPEN.** check-storage's coverage check fires
+on a realm that HAS a filetest with no budget entry. A realm with ZERO filetests is
+not in that set, so kourtv1 and offerer are invisible to it exactly as ccwrap was —
+adding ccwrap's filetest closed one instance and left the class alone.
+
+**NO FILETEST FOR OFFERER, and that is a decision rather than an omission.** Its
+entire exported read surface is `Greeted() (int, string)`, which returns two
+package-level scalars and cannot allocate. kourtv1 is frozen. Neither earns the
+ccwrap treatment, which was warranted by six exported reads and two render routes.
+
+**WHAT THE CLASS FIX LOOKS LIKE**, and it is small: every realm/r/* must appear in
+TARGETS or in an explicit EXEMPT map with a reason, so a NEW realm fails the guard
+until somebody either budgets it or writes down why it needs no budget. That is
+strictly better than my ccwrap fix, which taught the guard nothing.
+
+**NOT APPLIED IN THIS INCREMENT, for a specific reason: check-storage.py is itself
+a selftest plant target** — `control("a budget nobody can meet", STORE, ...)` —
+and a selftest run is in flight, so the file on disk may be holding a planted
+mutation right now. Editing a file while the harness is rewriting it is how you
+commit somebody's plant, or fix a defect that was never there.
