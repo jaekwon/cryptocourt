@@ -3,7 +3,7 @@
  "court": "covid",
  "chain": "dev",
  "note": "local curation \u2014 held in a browser, recorded on no chain",
- "desc": "A docket on the origins and handling of COVID-19. Folders and relations are curation held in this browser; the chain stores neither.",
+ "desc": "A docket on the origins and handling of COVID-19. The folders and the argument graph are ON CHAIN now; this file carries the same shape for demo mode, which has no chain to read, plus the one relation the chain cannot hold: claim-to-claim containment.",
  "folders": [
   {
    "name": "Origins",

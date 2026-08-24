@@ -12,16 +12,25 @@ overlay's own cleanCuration rules rather than described.
 TWO ARTIFACTS, AND THE CHAIN CAN ONLY HOLD ONE OF THEM. This was the first thing
 worth finding out and it shapes the whole file:
 
-  * the realm's `folder` struct has an id, a name, a description and a list of
-    claim ids. No parent. **On-chain folders are flat** — there is no such thing
-    as a subfolder on this chain.
-  * relations between claims are not on the chain at all. The overlay says so on
-    every screen that draws them: "the chain stores no relations".
+  * the realm's `folder` struct had an id, a name, a description and a list of
+    claim ids, and NO PARENT — on-chain folders were flat, and a subfolder did
+    not exist on this chain.
+  * relations between claims were not on the chain at all. The overlay said so on
+    every screen that drew one: "the chain stores no relations".
 
-So "many folders and subfolders with rich relations" is not one seeding job, it
-is two: the claims, the stakes, the answers and the flat case files go on the
-chain; the TREE and the RELATIONS are local curation — a JSON file the reader
-imports into their own browser, held in localStorage and written to no chain.
+**BOTH OF THOSE ARE NOW FALSE, and this file used to be built around them.**
+`folder.parent` shipped with `CreateFolderIn`/`MoveFolder`/`OrderFolders`
+(maxFolderDepth 4, maxFolders 100), and §5's argument edge shipped as this
+realm's ASSOCIATION (`AddAssociation`, and the bond that prices a stranger's).
+So the tree and the argument graph go ON CHAIN here, out of the same table that
+used to write them to a browser file.
+
+What is still curation, and it is now one thing rather than two: claim-to-claim
+CONTAINMENT (`part`). §5 allows a containment parent to be a *section* only, §6
+defers sections, and folders are the containment this realm chose — so a
+claim→claim `part` edge is the one shape §5 forbids, and it stays in the file the
+reader keeps. The curation file is still written in full, because demo mode has
+no chain to read and needs a tree of its own.
 
 Both come out of ONE table below. The scenario knows each claim's id because ids
 are `c.nextID`, per court, sequential from 1 — so the curation it writes cannot
@@ -276,134 +285,133 @@ KEEP = {"lab20", "lab23", "lab25", "market",
 # them, so browsing is done by walking the tree.
 #
 # `path` is the curation tree, up to three levels (the schema allows four).
-# `case` is the flat on-chain folder, which is all the chain can hold.
 # `cast` is (yes-lead, no-lead, yes-second, no-second) — the shape's four slots.
 # `arc`: open | yes | no | dispute | dead, as before.
 D = [
   # ---------------------------------------------------------------- origins
-  dict(key="lab20", on="2020-02-05", arc="dead", case=None, shape=reversal,
+  dict(key="lab20", on="2020-02-05", arc="dead", shape=reversal,
        path=("Origins", "Laboratory hypothesis", "The 2020 question"),
        cast=("biosafety", "virology", "skeptic", "epi"),
        body='What would settle this: a documented incident, or an official finding of one.\n\nNot asking whether such research was funded, or whether it was risky — those are separate claims on this docket. Only whether THIS virus reached people that way.',
        title="SARS-CoV-2 entered the human population through a laboratory-associated incident."),
-  dict(key="furin", on="2020-06-10", arc="dead", case=None, shape=tug,
+  dict(key="furin", on="2020-06-10", arc="dead", shape=tug,
        path=("Origins", "Laboratory hypothesis", "Sequence features"),
        cast=("genomics", "virology", "biosafety", "epi"),
        title="The furin cleavage site in SARS-CoV-2 has no close analogue in the sampled sarbecovirus record."),
-  dict(key="lab23", on="2023-04-10", arc="dead", case=None, shape=tug,
+  dict(key="lab23", on="2023-04-10", arc="dead", shape=tug,
        path=("Origins", "Laboratory hypothesis", "After the agency assessments"),
        cast=("biosafety", "virology", "oversight", "epi"),
        body='The same question as the 2020 filing, re-put after the agency assessments. Settles on a finding by a body with subpoena power, or a published determination the relevant experts do not contest.\n\nDeliberately asks about the balance of evidence PUBLIC IN 2023, not the eventual truth: a claim whose answer depends on documents nobody has is unanswerable, and this docket already has two that died that way.',
        title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2023."),
-  dict(key="lab25", on="2025-03-20", arc="open", case=None, shape=sparse,
+  dict(key="lab25", on="2025-03-20", arc="open", shape=sparse,
        path=("Origins", "Laboratory hypothesis", "After the agency assessments"),
        cast=("biosafety", "virology", "genomics", "epi"),
        body='Put again on the 2025 assessments. Same settlement standard as the 2023 filing.\n\nThe intelligence community is itself split — some elements assess a laboratory origin as more likely, others natural spillover, at low to moderate confidence either way. That split is why this is open rather than answered.',
        title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2025."),
-  dict(key="host", on="2021-03-15", arc="dead", case=None, shape=capitulate,
+  dict(key="host", on="2021-03-15", arc="dead", shape=capitulate,
        path=("Origins", "Natural spillover", "Intermediate host"),
        cast=("epi", "genomics", "virology", "biosafety"),
        title="An intermediate host animal for SARS-CoV-2 has been identified in the published record."),
-  dict(key="market", on="2021-06-07", arc="dead", case=None, shape=drift,
+  dict(key="market", on="2021-06-07", arc="dead", shape=drift,
        path=("Origins", "Natural spillover", "The market cluster"),
        cast=("epi", "biosafety", "genomics", "skeptic"),
        body='Settles on the published epidemiological record of the earliest confirmed cases.\n\nAsks about the earliest KNOWN cluster, which is a claim about the record and not about where the outbreak began — early cases may have gone undetected, and this claim does not assert they did not.',
        title="The earliest known cluster of COVID-19 cases centred on the Huanan Seafood Market."),
-  dict(key="raccoon", on="2023-03-20", arc="no", case=None, shape=short_flip,
+  dict(key="raccoon", on="2023-03-20", arc="no", shape=short_flip,
        path=("Origins", "Natural spillover", "The market cluster"),
        cast=("epi", "genomics", "trader", "virology"),
        title="Market environmental samples establish that an infected animal was the source of the outbreak."),
   # --------------------------------------------------------- document trail
-  dict(key="gof", on="2020-04-20", arc="yes", case="Document trail", shape=sparse,
+  dict(key="gof", on="2020-04-20", arc="yes", shape=sparse,
        path=("The document trail", "Grants and funding", "The WIV subawards"),
        cast=("foia", "skeptic", "journo", "trader"),
        body='Settles on the grant record: award documents, subaward agreements, progress reports.\n\nA matter of record, not of judgement. Not asking whether the work was wise, whether it was gain-of-function under any particular definition, or whether it caused anything — only whether the money went there.',
        title="US federal grants funded coronavirus research at the Wuhan Institute of Virology before 2020."),
-  dict(key="reports", on="2021-09-10", arc="yes", case="Document trail", shape=short_grind,
+  dict(key="reports", on="2021-09-10", arc="yes", shape=short_grind,
        path=("The document trail", "Grants and funding", "Reporting compliance"),
        cast=("foia", "trader", "oversight", "skeptic"),
        title="Required progress reports for at least one federal coronavirus grant were filed late."),
-  dict(key="ehasusp", on="2024-05-20", arc="yes", case="Document trail", shape=short,
+  dict(key="ehasusp", on="2024-05-20", arc="yes", shape=short,
        path=("The document trail", "Grants and funding", "Reporting compliance"),
        cast=("oversight", "skeptic", "journo", "trader"),
        title="HHS suspended EcoHealth Alliance's federal funding in May 2024."),
-  dict(key="drafts", on="2022-01-25", arc="yes", case="Document trail", shape=sparse,
+  dict(key="drafts", on="2022-01-25", arc="yes", shape=sparse,
        path=("The document trail", "Correspondence", "Released under subpoena"),
        cast=("foia", "trader", "journo", "skeptic"),
        body='Settles on the released documents themselves.\n\nAsks only whether the correspondence was released under subpoena. What it SAYS, and what that implies, are other claims.',
        title="Drafting correspondence for the 2020 Proximal Origin paper was released under subpoena."),
-  dict(key="foiagap", on="2022-06-15", arc="dispute", case="Document trail", shape=sparse,
+  dict(key="foiagap", on="2022-06-15", arc="dispute", shape=sparse,
        path=("The document trail", "FOIA and subpoena", "Withholdings"),
        cast=("foia", "skeptic", "journo", "trader"),
        body="Settles on a court ruling, an inspector-general finding, or an agency's own concession that an exemption was misapplied.\n\nNot asking whether the withholding was intentional. An improper one found on review is enough.",
        title="Records released under FOIA were withheld in part on grounds later found improper."),
   # ------------------------------------------------------------ public health
-  dict(key="masks", on="2020-08-12", arc="dead", case=None, shape=tug,
+  dict(key="masks", on="2020-08-12", arc="dead", shape=tug,
        path=("Public health measures", "Non-pharmaceutical", "Masking"),
        cast=("epi", "skeptic", "clinician", "statistician"),
        body='Settles on the randomised and observational literature as it stood before 2021, read together.\n\nScoped to the settings studied and to that period on purpose. It is not a claim about mandates, about later variants, or about any particular mask.',
        title="Community masking reduced SARS-CoV-2 transmission in the settings studied before 2021."),
-  dict(key="distance", on="2020-09-20", arc="dead", case=None, shape=capitulate,
+  dict(key="distance", on="2020-09-20", arc="dead", shape=capitulate,
        path=("Public health measures", "Non-pharmaceutical", "Distancing rules"),
        cast=("clinician", "epi", "skeptic", "statistician"),
        title="The two-metre distancing rule was set from evidence specific to SARS-CoV-2."),
-  dict(key="schools", on="2021-02-10", arc="dead", case=None, shape=late,
+  dict(key="schools", on="2021-02-10", arc="dead", shape=late,
        path=("Public health measures", "Schools", "Learning loss"),
        cast=("teacher", "epi", "statistician", "clinician"),
        body='Settles on standardised assessment data for the affected cohorts against their own pre-2020 trend.\n\nAsks about measured learning loss, not about whether closures were justified — a cost can be real and still be worth paying, and this court does not price that.',
        title="Extended school closures produced measurable learning loss in the cohorts studied."),
-  dict(key="borders", on="2020-05-18", arc="no", case=None, shape=short_grind,
+  dict(key="borders", on="2020-05-18", arc="no", shape=short_grind,
        path=("Public health measures", "Borders and travel", "Closures"),
        cast=("trader", "epi", "skeptic", "modeller"),
        title="Border closures announced in early 2020 prevented sustained local transmission where applied."),
   # ---------------------------------------------------- vaccines and therapeutics
-  dict(key="vaxsevere", on="2021-10-04", arc="yes", case=None, shape=sparse,
+  dict(key="vaxsevere", on="2021-10-04", arc="yes", shape=sparse,
        path=("Vaccines and therapeutics", "Efficacy and waning", "Severe outcomes"),
        cast=("clinician", "skeptic", "epi", "trader"),
        body='Settles on the trial endpoints and the early observational cohorts.\n\nScoped to hospitalisation risk in the period studied. Not a claim about transmission, about durability, or about any later variant.',
        title="Vaccination substantially reduced hospitalisation risk in the trial and early observational data."),
-  dict(key="vaxtrans", on="2021-08-16", arc="no", case=None, shape=short_flip,
+  dict(key="vaxtrans", on="2021-08-16", arc="no", shape=short_flip,
        path=("Vaccines and therapeutics", "Efficacy and waning", "Transmission"),
        cast=("trader", "clinician", "skeptic", "epi"),
        title="The initial vaccine rollout prevented onward transmission as durably as it prevented severe disease."),
-  dict(key="myo", on="2021-12-06", arc="yes", case=None, shape=sparse,
+  dict(key="myo", on="2021-12-06", arc="yes", shape=sparse,
        path=("Vaccines and therapeutics", "Safety signals", "Myocarditis"),
        cast=("vaxsafety", "trader", "clinician", "skeptic"),
        body='Settles on the published post-authorisation surveillance findings.\n\nAsks whether a signal was IDENTIFIED, which is a claim about what surveillance found. Its magnitude, and how it weighs against the benefit, are not in scope.',
        title="A myocarditis signal in young males was identified in post-authorisation surveillance."),
-  dict(key="vaers", on="2022-03-14", arc="dispute", case=None, shape=short_grind,
+  dict(key="vaers", on="2022-03-14", arc="dispute", shape=short_grind,
        path=("Vaccines and therapeutics", "Safety signals", "Surveillance quality"),
        cast=("vaxsafety", "clinician", "skeptic", "statistician"),
        title="Passive surveillance systems under-reported adverse events by more than an order of magnitude."),
-  dict(key="ivermectin", on="2021-07-12", arc="dead", case=None, shape=reversal,
+  dict(key="ivermectin", on="2021-07-12", arc="dead", shape=reversal,
        path=("Vaccines and therapeutics", "Repurposed drugs", "Ivermectin"),
        cast=("skeptic", "clinician", "trader", "statistician"),
        title="Ivermectin reduced COVID-19 mortality in the randomised trials completed by 2021."),
   # ------------------------------------------- institutions and accountability
-  dict(key="testimony", on="2024-06-10", arc="open", case=None, shape=sparse,
+  dict(key="testimony", on="2024-06-10", arc="open", shape=sparse,
        path=("Institutions and accountability", "Testimony", "Gain-of-function funding"),
        cast=("oversight", "virology", "journo", "trader"),
        body="Settles on a tribunal's finding, or on a concession. The referral itself is a separate claim on this docket.\n\nFramed as what a tribunal WOULD find because no charge has been brought. An unadjudicated allegation is precisely the thing a market on claims of fact exists to price, and pricing one is not asserting it.",
        title="A tribunal applying the ordinary standard would find that congressional testimony on gain-of-function funding was materially false."),
-  dict(key="referral", on="2023-07-17", arc="yes", case="Document trail", shape=short_flip,
+  dict(key="referral", on="2023-07-17", arc="yes", shape=short_flip,
        path=("Institutions and accountability", "Referrals and sanctions", "The 2023 referral"),
        cast=("oversight", "trader", "journo", "skeptic"),
        title="A criminal referral concerning pandemic-origins testimony was sent to the Department of Justice in 2023."),
   # ---------------------------------------------------------- data and modelling
-  dict(key="excess", on="2022-04-11", arc="dead", case=None, shape=drift,
+  dict(key="excess", on="2022-04-11", arc="dead", shape=drift,
        path=("Data and modelling", "Excess mortality", "The 2020-21 gap"),
        cast=("statistician", "skeptic", "epi", "modeller"),
        body='Settles on the excess-mortality estimates for 2020-2021 against reported COVID-19 deaths.\n\nAsks only whether the gap exists. What it is attributable to is a separate claim.',
        title="Global excess deaths for 2020–2021 exceeded the reported COVID-19 death count."),
-  dict(key="models", on="2021-01-18", arc="dead", case=None, shape=reversal,
+  dict(key="models", on="2021-01-18", arc="dead", shape=reversal,
        path=("Data and modelling", "Model performance", "Interval coverage"),
        cast=("modeller", "statistician", "epi", "skeptic"),
        title="Published epidemic forecasts for 2020 stayed within their own stated prediction intervals."),
-  dict(key="testpos", on="2022-02-07", arc="dispute", case=None, shape=short_lopsided,
+  dict(key="testpos", on="2022-02-07", arc="dispute", shape=short_lopsided,
        path=("Data and modelling", "Case and test data", "Prevalence tracking"),
        cast=("epi", "statistician", "trader", "modeller"),
        title="Reported case counts in 2021 tracked infection prevalence closely enough to guide policy."),
-  dict(key="seroprev", on="2025-04-02", arc="open", case=None, shape=short_grind,
+  dict(key="seroprev", on="2025-04-02", arc="open", shape=short_grind,
        path=("Data and modelling", "Case and test data", "Retrospective serology"),
        cast=("statistician", "modeller", "epi", "trader"),
        title="Retrospective serology will place first-wave infection prevalence above the contemporaneous estimate."),
@@ -558,11 +566,87 @@ for name, funds, _ in ACTORS:
     s.buy(accounts[name], SLUG, int(funds * 0.35))
 s.expect("CoinSupply", [SLUG], r"int64")
 
-s.note("one flat case file on the chain — CreateFolder is moderator-only and the "
-       "struct has no parent, so the TREE is curation and only this is chain")
-s.folder(DEPLOYER, SLUG, "Document trail",
-         "Claims resting on released grant records, correspondence and audits.")
-CASE_FOLDER = 1
+# ------------------------------------------------------- the filing system
+#
+# THE WHOLE TREE, ON CHAIN. Six roots, eleven headings under them, twelve leaves,
+# built from the same `path` tuples the curation file uses — so the two can never
+# disagree about the shape of the docket, which is the failure the old split
+# invited.
+#
+# Parents strictly before children, and not by sorting: ensure_folder recurses up
+# the path and creates what is missing, so a parentID is a folder the chain has
+# already acknowledged. `mustNestable` would refuse otherwise, and it counts
+# depth against maxFolderDepth = 4 — this tree is three, with room for one more.
+#
+# The ids are TRACKED rather than read back. CreateFolder/CreateFolderIn return
+# the id, but a scenario step is a broadcast and not a value, so the plan cannot
+# capture it. folderSeq increments by one per create and starts at 0, so counting
+# creates in this process gives the same numbers the realm assigns. Any drift
+# would show up immediately as an AddToFolder into the wrong folder — which is
+# why every claim's placement is asserted at the end.
+ROOT_DESC = {
+    "Origins": "Where the virus came from. Two hypotheses, filed as separate "
+               "claims so neither is settled by the other losing.",
+    "The document trail": "Claims that rest on released grant records, "
+                          "correspondence and audits — the paper, not the "
+                          "inference from it.",
+    "Public health measures": "What the interventions did, asked one measure and "
+                              "one outcome at a time.",
+    "Vaccines and therapeutics": "Efficacy, waning and safety signals, kept "
+                                 "apart because they settle on different records.",
+    "Institutions and accountability": "What officials and bodies said, and "
+                                       "under what obligation they said it.",
+    "Data and modelling": "Claims about the numbers themselves, where the "
+                          "measurement is the thing in dispute.",
+}
+
+s.note("the filing system on chain: CreateFolder for a root, CreateFolderIn for "
+       "a child, parents first — moderator-only, single-signer, no bond")
+FOLDER_ID = {}
+_folder_seq = 0
+
+
+def ensure_folder(path):
+    """The id of this path's folder, creating it and any missing ancestor."""
+    global _folder_seq
+    if path in FOLDER_ID:
+        return FOLDER_ID[path]
+    parent = ensure_folder(path[:-1]) if len(path) > 1 else 0
+    desc = ROOT_DESC.get(path[0], "") if len(path) == 1 else ""
+    if parent:
+        s.call(DEPLOYER, "CreateFolderIn", [SLUG, str(parent), path[-1], desc])
+    else:
+        s.folder(DEPLOYER, SLUG, path[-1], desc)
+    _folder_seq += 1
+    FOLDER_ID[path] = _folder_seq
+    return _folder_seq
+
+
+for _c in D:
+    ensure_folder(_c["path"])
+
+# A FOLDER ABOUT ONE PERSON, and it is a cross-cut rather than a sixth branch of
+# the tree. Four of this docket's claims turn on what NIAID funded, what its
+# director's office wrote, and what was said about it under oath — and they are
+# filed in three different places, because that is where the EVIDENCE lives (a
+# subaward is a grant record, a draft is correspondence, testimony is testimony).
+# Reading them together needs a folder that crosses those branches, which is
+# exactly what AddToFolder allows: it checks membership within one folder only, so
+# a claim may sit in several.
+#
+# NAMED FOR THE RECORD AND NOT FOR THE PERSON. Every claim in it is about a
+# document or a proceeding, with a stated settlement condition; the folder is a
+# reading order, and it asserts nothing the claims do not.
+FAUCI = ("Institutions and accountability", "NIAID and its director")
+ensure_folder(FAUCI[:1])
+FOLDER_ID[FAUCI] = None  # created below, so the description is not the default ""
+s.call(DEPLOYER, "CreateFolderIn",
+       [SLUG, str(FOLDER_ID[FAUCI[:1]]), FAUCI[1],
+        "Claims turning on what NIAID funded, what its director's office wrote, "
+        "and what was said about it under oath. Filed elsewhere by evidence type."])
+_folder_seq += 1
+FOLDER_ID[FAUCI] = _folder_seq
+FAUCI_CLAIMS = ["gof", "drafts", "foiagap", "testimony"]
 
 def unit(n):
     """Whole coin, in the realm's smallest unit."""
@@ -628,8 +712,9 @@ for iso, _, kind, cid, c in sorted(events, key=lambda e: (e[0], e[1], e[3])):
     if kind == "open":
         s.note(f"#{cid} {c['key']} — {c['arc']}, {len(MOVES[c['key']])} moves")
         s.claim(accounts[MOVES[c["key"]][0][1]], SLUG, c["title"], c.get("body"))
-        if c["case"]:
-            s.folder_add(DEPLOYER, SLUG, CASE_FOLDER, cid)
+        s.folder_add(DEPLOYER, SLUG, FOLDER_ID[c["path"]], cid)
+        if c["key"] in FAUCI_CLAIMS:
+            s.folder_add(DEPLOYER, SLUG, FOLDER_ID[FAUCI], cid)
         for off, who, side, amt in MOVES[c["key"]]:
             if off == 0:
                 s.stake(accounts[who], SLUG, cid, side, unit(amt))
@@ -654,6 +739,90 @@ for iso, _, kind, cid, c in sorted(events, key=lambda e: (e[0], e[1], e[3])):
 
 goto(END, "the court as a reader finds it")
 s.expect("ClaimCount", [SLUG], r"int64")
+
+# ---------------------------------------------- the argument graph, on chain
+#
+# §5's ARGUMENT EDGE, which this realm calls an ASSOCIATION. Filed last, after
+# every claim exists, because AddAssociation refuses an edge whose either end is
+# missing — and filing them as the claims appeared would need the graph sorted
+# into calendar order for no gain.
+#
+# WHO SIGNS EACH ONE IS THE POINT, and it is the whole bond design in eleven
+# transactions:
+#
+#   * the asserting claim's OWN AUTHOR pays nothing. That is most of this graph,
+#     because "my claim #7 bears on your claim #3" is normally said by the person
+#     who filed #7.
+#   * a MODERATOR pays nothing either. One edge here is filed by the court's own
+#     moderator, which is what curation looks like.
+#   * a STRANGER posts a refundable bond. Three do: one returned by a moderator
+#     who agreed, one BURNED by a moderator who did not, and one nobody judged.
+#
+# THE THIRD ONE'S WINDOW IS ALREADY CLOSED, AND NO BACK-DATED FIXTURE CAN DO
+# BETTER. A bond's window is fourteen days of BLOCK TIME from the write
+# (clock.gno: a deadline a user plans around gates on time, not height). These
+# associations are written at the fabricated present — 2025-06-01 — and then
+# SealTestClock hands the chain back to its real clock, which is well past
+# 2025-06-15. So the moment the seal lands, the unjudged bond is reclaimable and
+# `ClaimAssociationBond` succeeds rather than refusing.
+#
+# That is worth stating because the first version of this comment claimed the
+# third bond was "still HELD because nobody has looked yet", and a probe against
+# the seeded node disproved it in one transaction. A PENDING bond needs a write
+# at real time: scenarios/assoc_demo.py never arms the clock, so its bonds have
+# live windows, and the demo note there says so.
+STANCE = {"supports": "supports", "contradicts": "contests"}
+author_of = {c["key"]: MOVES[c["key"]][0][1] for c in D}
+
+# The three edges filed by somebody with no claim of their own at the FROM end.
+# `epi` and `oversight` are participants in this docket who did not file the
+# claim they are connecting, which is exactly the case the bond prices.
+BONDED = {("gof", "lab23"): "epi", ("market", "lab25"): "oversight",
+          ("drafts", "lab23"): "epi"}
+
+s.note("associations: the claim's own author pays nothing, a stranger posts a bond")
+for a, b, kind, stance in REL:
+    if kind != "bears":
+        continue
+    fro, to = ids[a], ids[b]
+    if (a, b) in BONDED:
+        who = BONDED[(a, b)]
+        s.note(f"#{fro} -> #{to}: filed by {who}, who wrote neither — 1 CC bonded")
+        s.call(accounts[who], "AddAssociation",
+               [SLUG, str(fro), str(to), STANCE[stance]])
+    elif a == "excess":
+        # One by the court's moderator, to show the other free case.
+        s.call(DEPLOYER, "AddAssociation", [SLUG, str(fro), str(to), STANCE[stance]])
+    else:
+        s.call(accounts[author_of[a]], "AddAssociation",
+               [SLUG, str(fro), str(to), STANCE[stance]])
+
+s.note("a moderator judges two of the three bonds and leaves the third pending")
+s.call(DEPLOYER, "ApproveAssociation",
+       [SLUG, str(ids["gof"]), str(ids["lab23"])])
+s.call(DEPLOYER, "DisapproveAssociation",
+       [SLUG, str(ids["market"]), str(ids["lab25"])])
+# drafts -> lab23 is deliberately left unjudged, which on this fixture means its
+# author may reclaim the bond immediately once the clock is sealed — see the note
+# above on why a back-dated docket cannot hold an open window. The rule it stands
+# for is the important half: unjudged means approved, never forfeit.
+
+s.note("re-filings, on chain too — the realm checks the older claim really died")
+for a, b, kind, _ in REL:
+    if kind == "supersedes":
+        s.call(accounts[author_of[a]], "SupersedeClaim",
+               [SLUG, str(ids[a]), str(ids[b])])
+
+# ------------------------------------------------------------ what it built
+#
+# Asserted, not described. A folder id tracked in this process rather than read
+# back from the chain is a guess until something checks it, and these reads are
+# the check: the tree's shape, one leaf's contents, the cross-cut folder, and the
+# graph around the claim the most edges point at.
+s.expect("FolderTree", [SLUG], r"1:0:-")
+s.expect("FolderDesc", [SLUG, FOLDER_ID[FAUCI]], r"NIAID")
+s.expect("ClaimAssociations", [SLUG, ids["lab23"]], r"in:")
+s.expect("AssociationBond", [SLUG], r"1000000")
 
 # ------------------------------------------------------------- the curation
 #
@@ -688,9 +857,10 @@ CURATION.write_text(json.dumps({
     "court": SLUG,
     "chain": "dev",
     "note": "local curation — held in a browser, recorded on no chain",
-    "desc": ("A docket on the origins and handling of COVID-19. Folders and "
-             "relations are curation held in this browser; the chain stores "
-             "neither."),
+    "desc": ("A docket on the origins and handling of COVID-19. The folders and "
+             "the argument graph are ON CHAIN now; this file carries the same "
+             "shape for demo mode, which has no chain to read, plus the one "
+             "relation the chain cannot hold: claim-to-claim containment."),
     "folders": tree(),
     "relations": relations,
 }, indent=1) + "\n", encoding="utf-8")

@@ -36,6 +36,14 @@ to needing it.
 
     scripts/seed-node.sh scenarios/assoc_demo.py
 
+THIS ONE NEVER ARMS THE CLOCK, and that is what makes it the fixture where a
+PENDING bond can be seen. A bond's window is fourteen days of block time from the
+write, so a back-dated docket cannot hold one open: scenarios/covid_demo.py writes
+its associations at a fabricated 2025 and then seals, which hands the chain back
+to a real clock already past every window. Here the writes happen now, so an
+unjudged bond is genuinely pending and `ClaimAssociationBond` refuses with "the
+moderation window on that bond has not closed yet".
+
 Not a CI scenario: it is a fixture to point a browser at.
 """
 
