@@ -114,6 +114,21 @@ TARGETS = [
 ]
 
 
+# EVERY realm/r/* must be budgeted above or exempted HERE, with the reason in the
+# open. The coverage check below catches a realm whose FILETEST carries no budget —
+# and a realm with NO FILETEST AT ALL was invisible to it, which is how ccwrap sat
+# unwatched with six exported reads and two render routes. Fixing ccwrap by writing
+# it a filetest closed one instance and taught this guard nothing; the enumeration
+# that found it was also wrong, because it read this list instead of the directory
+# and missed realm/r/offerer entirely. So the directory is the authority now, and a
+# new realm fails here until somebody either budgets it or writes down why not.
+EXEMPT = {
+    "kourtv1": "behaviourally frozen — V1 takes no new coverage by owner decision",
+    "offerer": "a demo realm offering one kind to govern; its whole exported read "
+               "surface is Greeted(), two package scalars that cannot allocate",
+}
+
+
 def realms_with_filetests():
     """Every realm/r/* that has filetests, so an unbudgeted one cannot hide."""
     out = set()
@@ -156,6 +171,18 @@ def main():
     for d in sorted(realms_with_filetests() - covered):
         print(f"UNWATCHED {os.path.relpath(d, REPO)} has filetests and no TARGETS "
               f"entry — its cost is unbudgeted. Add one.")
+        bad += 1
+
+    # And every realm is accounted for one way or the other. A realm with no
+    # filetest never reaches the loop above, so without this a new one is watched
+    # by nothing and says nothing about it.
+    rdir = os.path.join(REPO, "realm", "r")
+    for name in sorted(os.listdir(rdir)):
+        d = os.path.join(rdir, name)
+        if not os.path.isdir(d) or d in covered or name in EXEMPT:
+            continue
+        print(f"UNBUDGETED realm/r/{name} has no TARGETS entry and no EXEMPT "
+              f"reason. Give it a filetest and a budget, or exempt it and say why.")
         bad += 1
 
     # ONE private GNOROOT for the whole run, and therefore NO LOCK. This runner

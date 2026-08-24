@@ -1367,6 +1367,16 @@ else:
     control("a filetest nobody budgeted for", STORE,
             '"z_use_filetest.gno": None,\n', "", "UNKNOWN",
             argv=["python3", STORE])
+    # And the realm nobody budgeted OR exempted. The arm above catches a filetest
+    # with no budget; a realm with NO FILETEST never reached that check at all,
+    # which is how ccwrap sat unwatched — and the enumeration that found ccwrap read
+    # the TARGETS list instead of the directory and missed offerer as well. The
+    # directory is the authority now, so this arm removes an EXEMPT reason rather
+    # than a budget: the realm still exists, and nothing accounts for it.
+    control("a realm nobody budgeted or exempted", STORE,
+            '    "offerer": "a demo realm offering one kind to govern; its whole exported read "\n'
+            '               "surface is Greeted(), two package scalars that cannot allocate",\n',
+            "", "UNBUDGETED", argv=["python3", STORE])
 
     print("\ncheck-docnumbers")
     # The bootstrap table in doc.gno against the values init installs. Broken
