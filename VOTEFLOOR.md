@@ -3240,3 +3240,47 @@ convention first, and inventing one is a decision about the owner's documentatio
 practice, not a fix. check-citations.py deliberately covers only govern's citations
 into the gno tree, where file+anchor makes the question decidable — the reason it
 stops there is now measured rather than assumed.
+
+## I6 holds: no event carries user text — and one comment says it may
+
+**THE CLAIM.** moderation.gno's event block states it flatly: events carry act
+metadata and a category/act code only, "NEVER reason/annotation/title text (I6):
+events are unpurgeable history, so leaking user text through one would defeat
+purge." That is the strongest kind of claim to audit — absolute, and with a
+consequence that cannot be undone on chain. **Nothing in scripts/ enforces it**;
+there is no event guard.
+
+**SWEPT: ALL ELEVEN EMIT SITES IN KOURTV2, and the invariant holds.** Every
+payload is IDs, addresses, numbers, or a bounded code. The two that had to be
+traced rather than read:
+
+  - `metaExecuted` emits `p.verb` and `p.court` from a parsed proposal title,
+    which is user input. It is safe because parseModTitle closes the set: a
+    six-case switch with `default: return p`, `p.verb` assigned only after it,
+    and p.court checked against `[a-z0-9-]` before p.valid is set.
+  - `emitPurge` emits the category code, which IS caller-supplied and bounded by
+    LENGTH ONLY. Its own comment already says so, and already records that an
+    earlier comment calling it "a statutory category enum, not user text" was
+    wrong. A category code is not reason/annotation/title text, so the section
+    header stays accurate. That comment is the model: it states the nuance
+    instead of the reassuring version.
+
+**AND ONE COMMENT GRANTS A PERMISSION THE CODE DOES NOT TAKE.** claim.gno's
+ClaimOpened comment reads "No user text beyond the title, which is the claim's
+whole public content" — but the emit carries court, claim, author and seeded, and
+NO title. The code is tighter than its comment. That matters more than a typo
+would, because the comment reads as prior sanction: an editor adding the title
+later would believe the design already permits it, and events are unpurgeable, so
+the title would survive the purge that exists to remove exactly that text.
+Recorded, not yet fixed — claim.gno is in another session's uncommitted working
+set, and a selftest was rewriting the tree while this was found, so ownership of a
+working-tree edit could not be attributed. Read-only from a --depth 1 clone at
+34559ca for that reason.
+
+**AND A DECISION, NOT A DEFERRAL: applyMetaVerb's switch has no `default`.** Six
+cases, no fallthrough panic, so an unrecognised verb would silently apply nothing
+while the appeal was already marked executed. It is unreachable — every path
+there requires p.valid, which parseModTitle sets only for the six — and a
+defensive panic on an unreachable branch is precisely what this corpus cannot
+measure: the mutation that removes it changes no behaviour, so it would be INVALID
+rather than a survivor, and the row would be noise. Left alone deliberately.
