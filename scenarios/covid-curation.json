@@ -7,190 +7,52 @@
  "folders": [
   {
    "name": "Origins",
+   "claims": [
+    1,
+    11,
+    13,
+    5
+   ],
+   "folders": []
+  },
+  {
+   "name": "NIAID and its director",
    "claims": [],
    "folders": [
     {
-     "name": "Laboratory hypothesis",
-     "claims": [],
-     "folders": [
-      {
-       "name": "The 2020 question",
-       "claims": [
-        1
-       ],
-       "folders": []
-      },
-      {
-       "name": "After the agency assessments",
-       "claims": [
-        11,
-        13
-       ],
-       "folders": []
-      }
-     ]
+     "name": "The WIV subawards",
+     "claims": [
+      2
+     ],
+     "folders": []
     },
     {
-     "name": "Natural spillover",
-     "claims": [],
-     "folders": [
-      {
-       "name": "The market cluster",
-       "claims": [
-        5
-       ],
-       "folders": []
-      }
-     ]
+     "name": "Proximal Origin correspondence",
+     "claims": [
+      8
+     ],
+     "folders": []
+    },
+    {
+     "name": "Testimony and withholdings",
+     "claims": [
+      10,
+      12
+     ],
+     "folders": []
     }
    ]
   },
   {
-   "name": "The document trail",
-   "claims": [],
-   "folders": [
-    {
-     "name": "Grants and funding",
-     "claims": [],
-     "folders": [
-      {
-       "name": "The WIV subawards",
-       "claims": [
-        2
-       ],
-       "folders": []
-      }
-     ]
-    },
-    {
-     "name": "Correspondence",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Released under subpoena",
-       "claims": [
-        8
-       ],
-       "folders": []
-      }
-     ]
-    },
-    {
-     "name": "FOIA and subpoena",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Withholdings",
-       "claims": [
-        10
-       ],
-       "folders": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "name": "Public health measures",
-   "claims": [],
-   "folders": [
-    {
-     "name": "Non-pharmaceutical",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Masking",
-       "claims": [
-        3
-       ],
-       "folders": []
-      }
-     ]
-    },
-    {
-     "name": "Schools",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Learning loss",
-       "claims": [
-        4
-       ],
-       "folders": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "name": "Vaccines and therapeutics",
-   "claims": [],
-   "folders": [
-    {
-     "name": "Efficacy and waning",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Severe outcomes",
-       "claims": [
-        6
-       ],
-       "folders": []
-      }
-     ]
-    },
-    {
-     "name": "Safety signals",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Myocarditis",
-       "claims": [
-        7
-       ],
-       "folders": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "name": "Institutions and accountability",
-   "claims": [],
-   "folders": [
-    {
-     "name": "Testimony",
-     "claims": [],
-     "folders": [
-      {
-       "name": "Gain-of-function funding",
-       "claims": [
-        12
-       ],
-       "folders": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "name": "Data and modelling",
-   "claims": [],
-   "folders": [
-    {
-     "name": "Excess mortality",
-     "claims": [],
-     "folders": [
-      {
-       "name": "The 2020-21 gap",
-       "claims": [
-        9
-       ],
-       "folders": []
-      }
-     ]
-    }
-   ]
+   "name": "Measures and outcomes",
+   "claims": [
+    3,
+    4,
+    6,
+    7,
+    9
+   ],
+   "folders": []
   }
  ],
  "relations": [
