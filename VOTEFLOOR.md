@@ -3428,3 +3428,51 @@ That is the shape to look for when a claim rests on a layer: not "is the claim
 true" but "is the thing that makes it true also held". Same finding as crumbs'
 href leaning on the router's charset — the difference is that this one has a guard
 underneath it and that one did not.
+
+## check-isolation is the guard nobody runs, and 18 targeted runs of it
+
+**IT IS NOT IN `make check`** — the target list is fmt vet gotest anchors
+collisions rendertext paths guards controls staleguards demo-physics nodelegate
+scenarios-check web-test height-shim realm-test, and isolation-test is not among
+them. Deliberately: the sweep runs each suite ONCE PER TEST, which is roughly 780
+runs, and its own header says it is its own target for that reason. The
+consequence is that it only ever runs when somebody remembers, and drift
+accumulates in between — this session's two new subsystems landed without it.
+
+**WHAT IT CATCHES, in its own words: not a test that breaks, but one that quietly
+reports on the wrong thing.** A rules test needing a kind some neighbour always
+registered; a history test asserting a holder had nothing at epoch 1, true only
+because neighbours had pushed the clock past it.
+
+**A HYPOTHESIS INSTEAD OF A SWEEP.** The full pass is about three hours, and two
+long background runs have already been reaped on this machine today. So the subset
+was chosen by the shape the header describes — tests that READ GLOBAL SINGLETON
+STATE THEY DID NOT CREATE:
+
+    SIG = metaSlug | mustCourt("meta") | CourtCount() | DirectoryAdmin()
+                   | ensureGlobalDAO()
+    44 of the kourtv2 tests match, out of ~400.
+
+That is the reproducible part of this note: it turns "run everything, three hours"
+into "run these forty-four, half an hour", and the regex is the whole instrument.
+
+**RUN: 18 OF THEM, ALL CLEAN.**
+
+    6   this session's own fixtures — deposit floor, re-set window, both trim
+        rides, the meta budget pin, the OI ring
+    7   the whole association subsystem, committed hours earlier and never
+        isolation-checked
+    5   the meta and franchise tests, which was the sharpest hypothesis and the
+        one I expected to break: they read meta's accrual clock and curve cap,
+        and meta's state ACCUMULATES across the suite — measured at 90_486_461
+        from last position against 100_000_000 from first, which is what forced
+        the budget pin into a first-sorting file. If anything depended on where
+        the clock had got to, it should have been these. Nothing did.
+
+**AND THE ONE THAT WAS ORDER-DEPENDENT BY DESIGN PASSES ALONE TOO**, which is
+worth stating because it looks like a contradiction:
+TestTheMetaCourtsWeeklyBudgetIsTheCalibratedValue needs to run FIRST to see the
+virgin budget — and run entirely alone it is first, so it passes. Isolation and
+first-position are the same thing for that test. What would break it is a new test
+file sorting ahead of it inside a full suite run, which isolation cannot see and
+its own failure message names instead.
