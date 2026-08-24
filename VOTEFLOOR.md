@@ -4073,3 +4073,39 @@ in the file as a RECORD of what cannot be measured rather than as a claim that w
 measured. The target does not overclaim either: it prints "N row(s), M skipped as
 slow" and then asserts only over the N. That is the distinction the whole file exists
 to keep, applied to itself.
+
+## Every counted claim in the docs and the guard headers, and the one that was wrong
+
+**THE INSTRUMENT EARNED ITS RUN.** Last iteration found CHAT.md understating a gated
+fixture count — NINE where the tree has FIFTEEN — in the one passage whose job is to
+warn a reader not to trust a green run. Prose does not rot; NUMBERS do. So the same
+question was put to every counted claim in the repo: docs and guard docstrings,
+`\d+ (guard|row|fixture|harness|realm|package|call site|arm|control)s?`.
+
+**ONE REAL HIT, AND IT WAS ALREADY THE ONE FOUND.** Everything else is a count that
+cannot rot, in three distinct ways worth telling apart:
+
+    DATED EXPLICITLY   check-height-shim: "There were 65 call sites across 15 files
+                       WHEN THIS WAS WRITTEN." Honest, and the phrase is what makes
+                       it honest.
+    A TRANSCRIPT       IMPLEMENTATION.md §7.8 quotes a run: "check-guards-armed: 15
+                       committed guards ... rc=0". Live it is 30 now — and
+                       "correcting" it would falsify the record of what was observed
+                       that day. A quoted output is evidence, not a claim.
+    ILLUSTRATIVE       check-mutant-collisions: '"1199 rows" should mean 1199
+                       measurements, not 1188 measurements and 11 echoes'. The
+                       numbers tie to the eleven duplicate pairs the paragraph above
+                       describes — 1199 - 11 = 1188 — so the arithmetic dates them
+                       without a phrase.
+
+**AND THE INSTRUMENT'S OWN NOISE IS WORTH RECORDING**, since the next person will
+reach for the same grep: it flagged "041 rows" and "000 rows", which are the tails of
+"1,041" and "10,000" caught by a pattern that does not know about thousands
+separators. Two of fourteen hits were that.
+
+**THE DISTINCTION THAT MATTERS, stated so the sweep can be repeated without
+re-deriving it: a count is stale only when it is CURRENT-TENSE about the tree.**
+"Nine fixtures need OLLAMA_LIVE=1" is a claim about now and was wrong by six. "There
+were 65 call sites when this was written", a quoted transcript, and a worked example
+are all immune — and flagging them would be the vandalism of a record rather than a
+correction to it.
