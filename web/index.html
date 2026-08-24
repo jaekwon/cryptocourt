@@ -3118,6 +3118,70 @@ async function chainAssociations(slug, id){
   return rows;
 }
 
+/* THE SAME EDGES, COURT-WIDE AND MAP-SHAPED.
+   chainAssociations above answers for ONE claim and labels each row by
+   direction, because a claim page says "contradicted by this" in prose. A map
+   wants the opposite: one canonical row per edge in the {from,to,type,stance}
+   shape curation already uses, so mapLayout never has to care which side of the
+   overlay a relation came from.
+
+   WHAT THIS COSTS, because it is a new cost CLASS and not a doubling. In live
+   mode the map is three queries whatever the docket's size — courtStats, one
+   qrender for the whole docket, one FolderTree walk. There is no court-wide
+   association read in the realm (ClaimAssociations takes a claimID), so this
+   pays TWO queries per drawn claim: 2N, or about a hundred on a fifty-claim
+   window. Chunked eight at a time through inChunks, the shape the holdings views
+   already use. If that turns out to be felt, the fix is a court-wide read with
+   its own row cap, not a bigger chunk size.
+
+   ONLY THE OUT HALF IS KEPT, and that is what makes the result a set rather than
+   a doubled list: the realm returns every edge twice, once as `out` on its
+   from-claim and once as `in` on its to-claim. Reading both halves of every
+   claim would draw every line on top of itself. `of:` versus `by:` on
+   ClaimSupersedes is the same argument — `by:` is the reverse view of an edge
+   some other claim's `of:` already reported. */
+async function chainMapRelations(slug, ids){
+  if(!isLive() || !ids || !ids.length) return [];
+  const per = await inChunks(ids, 8, async id => {
+    const [raw, sup] = await Promise.all([
+      one(`ClaimAssociations(${gstr(slug)},${id})`).then(unesc).catch(()=>null),
+      one(`ClaimSupersedes(${gstr(slug)},${id})`).then(unesc).catch(()=>null),
+    ]);
+    const out = [];
+    if(typeof raw === "string" && raw.indexOf("out:") === 0){
+      for(const part of raw.split(";in:")[0].slice(4).split(",")){
+        const bits = part.split(":");
+        if(bits.length !== 2) continue;
+        const to = parseInt(bits[0], 10);
+        if(!Number.isInteger(to) || to < 1) continue;
+        out.push({from:id, to, type:"bears",
+                  stance: bits[1] === "c" ? "contradicts" : "supports", chain:true});
+      }
+    }
+    if(typeof sup === "string" && sup.indexOf("of:") === 0){
+      const of = parseInt(sup.split(";by:")[0].slice(3), 10);
+      if(Number.isInteger(of) && of > 0) out.push({from:id, to:of, type:"supersedes", chain:true});
+    }
+    return out;
+  });
+  return per.flat();
+}
+
+/* One row per (from, to, type), CHAIN FIRST. The chain wins a tie because it is
+   the record: a curation file that still carries an edge the moderators have
+   since filed should not draw a second line beside the real one. Curation keeps
+   everything the chain cannot hold — claim-to-claim containment above all. */
+function mergeRelations(chainRels, curRels){
+  const seen = new Set(), out = [];
+  for(const r of (chainRels||[]).concat(curRels||[])){
+    const k = r.from+">"+r.to+":"+r.type;
+    if(seen.has(k)) continue;
+    seen.add(k);
+    out.push(r);
+  }
+  return out;
+}
+
 function curationFor(slug){
   const rawS = store.get(curKey(slug));
   if(rawS){
@@ -3708,21 +3772,32 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     folders:filterFolders(f.folders)}));
   const curFolders = cur? filterFolders(cur.folders) : [];
   const curRels = cur? cur.relations.filter(r=>validIds.has(r.from)&&validIds.has(r.to)) : [];
-  const data = {folders:curFolders, all:parsed.map(cl=>cl.id), claims, relations:curRels,
+  // The chain's own relations, drawn beside curation's rather than instead of
+  // them. Both ends must be in the drawn window, the same rule curRels follows:
+  // an edge to a claim off the page has nowhere to land.
+  const chainRels = (await chainMapRelations(slug, [...validIds]).catch(()=>[]))
+    .filter(r=>validIds.has(r.from)&&validIds.has(r.to));
+  const data = {folders:curFolders, all:parsed.map(cl=>cl.id), claims,
+    relations:mergeRelations(chainRels, curRels),
     looseName: demo? "(no folder)" : "docket — newest "+parsed.length,
     linkFolders: !!cur};
   const total = demo? data.all.length : (cs.claims!=null? cs.claims : parsed.length+(parsed.more||0));
   const countLine = demo
     ? `${data.all.length} claims, ${data.all.length} shown`
     : `newest ${parsed.length} of ${fmtN(total)} shown — older claims live on the docket pages`;
+  const chainRelNote = chainRels.length
+    ? `${chainRels.length} relation${chainRels.length===1?"":"s"} read from the chain`
+    : "no relations on chain";
   const honesty = cur && cur.source==="local"
     ? (demo? "your local curation overrides the sample — held in this browser, recorded nowhere"
-           : CUR_LABEL+(chainF&&chainF.folders.length?` — it overrides the chain's ${chainF.folders.length} folder${chainF.folders.length===1?"":"s"}`:"")+"; no relations are recorded on chain")
+           : CUR_LABEL+(chainF&&chainF.folders.length?` — it overrides the chain's ${chainF.folders.length} folder${chainF.folders.length===1?"":"s"}`:"")+"; "+chainRelNote)
     : cur && cur.source==="chain"
-    ? `folders read from the chain — moderator curation, zero economic weight${cur.capped?` (first ${CHAIN_FOLDER_CAP} of ${fmtN(cur.count)})`:""}; no relations are recorded on chain`
+    ? `folders read from the chain — moderator curation, zero economic weight${cur.capped?` (first ${CHAIN_FOLDER_CAP} of ${fmtN(cur.count)})`:""}; ${chainRelNote}`
     : demo
-    ? "sample curation — the chain stores folders; relations are overlay curation, recorded nowhere"
-    : "this court's moderators have filed no folders; no relations are recorded on chain — the map shows the docket alone";
+    ? "sample curation — demo mode reads no chain at all; on a live court the map draws the chain's own relations too"
+    : chainRels.length
+    ? `this court's moderators have filed no folders; ${chainRelNote}, drawn over the flat docket`
+    : "this court's moderators have filed no folders and no relations are on chain — the map shows the docket alone";
   const legendDots = `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot g"/></svg> settled</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> settling</span>
