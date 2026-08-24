@@ -537,6 +537,18 @@ type Court struct {
 	// amount (stepped down like every other budget) instead of S_live × bps.
 	// Only the meta court uses it — see metaWeeklyBudget (§13.8).
 	absBudget int64
+
+	// assocBond: this court's override of the realm's default association bond,
+	// or 0 for "use the realm default" (argument.gno).
+	//
+	// ZERO IS UNSET, NOT FREE, and that is the whole reason for the sentinel.
+	// Every court that predates this field carries the int64 zero value, so a
+	// zero meaning "this court charges nothing" would silently unprice the
+	// existing docket — the same "zero on pre-upgrade reads as absent" shape
+	// `desc` above and claimState.openedAtTime use, which is what lets this ship
+	// with no migration and no version field. A court that wants association to
+	// be as good as free sets 1.
+	assocBond int64
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.

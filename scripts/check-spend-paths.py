@@ -106,7 +106,15 @@ SPEND_PATHS = {
     ("stake.gno", "Stake"): "TestLockedStakeCannotBeSpentTwice",
     ("lock.gno", "TransferCC"): "TestStakedCoinCannotBeTransferred",
     ("lock.gno", "TransferFromCC"): "TestAnAllowanceDoesNotOutrankALock",
+    ("argument.gno", "AddArgument"): "TestLockedStakeCannotBeSpentTwice",
 }
+
+# The test lock.gno's header names: "there is a test that stakes a whole balance
+# and then tries to bond it ... If a new spend path is ever added, it belongs in
+# that test too." The refusal below quoted this by name and the name did not
+# exist, so the message crashed with a NameError instead of printing — found by
+# adding the first new spend path since it was written.
+CENSUS_TEST = "TestLockedStakeCannotBeSpentTwice"
 
 FUNC = re.compile(r"^func (?:\([^)]*\) )?([A-Za-z_]\w*)\(")
 

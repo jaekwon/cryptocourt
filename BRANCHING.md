@@ -69,6 +69,65 @@ Still mine, in progress: a declarative scenario DSL and its runner, to seed a
 node the website can read in live mode (`E2E-ITERATION.md` has the phases).
 Nothing of mine is committed — the human owns commits, per the rule above.
 
+**2026-08-23 — association-bond session (this one).** Shipped the association
+bond on claim-to-claim edges in `realm/r/kourtv2/argument.gno`: a stranger who
+attaches an edge posts a refundable bond, the claim's own author and an active
+moderator post nothing. Six new entrypoints — `SetAssociationBondDefault`,
+`SetCourtAssociationBond`, `ApproveAssociation`, `DisapproveAssociation`,
+`ClaimAssociationBond`, plus the two bulk forms `ApproveAllAssociations` (single
+signer) and `DisapproveAllAssociations` (the court's own m-of-n). New reads:
+`AssociationBond`, `AssociationBondDefault`.
+
+**Files of yours I touched, and how little:** `court.gno` gained one field
+(`Court.assocBond`, with the zero-is-unset note); `moderation.gno` gained two
+functions and changed none (`isActiveMod`, `pendingOpenedAt` — the latter sits
+against `approveAction` because it repeats that function's staleness rule and
+adjacency is the only guard available against the two copies drifting). Four of
+your test files gained a mint each, because a non-author caller now needs CC to
+attach an edge: `argmod_test.gno`, `argument_test.gno`, `argumentcaps_test.gno`,
+`stake_test.gno` (that last one also gained PATH 7 — `AddArgument` is a new
+spend path and `check-spend-paths.py` now names it).
+
+**Three guards moved and one of them was broken before I touched it.**
+`check-spend-paths.py`'s refusal message quoted a name that had never been
+defined, so it crashed with a `NameError` instead of printing — found by adding
+the first new spend path since it was written, and fixed. `check-epoch-coherence`
+went 7 → 8 user-sourced outflows; `check-curation-reachable` first gained six
+exemptions all saying the same thing — "no UI yet" — and then gave five of them
+back, because writing that down made it obvious the honest move was to build the
+buttons. The curate page's **Relations** panel now carries a control for each of
+the six verbs, so only `SetAssociationBondDefault` stays exempt and for a
+different reason (realm-admin, like the other global-DAO verbs). 66 buttons, all
+argument-matched against their signatures.
+
+**A note on the corpus, since we both write it.** 27 new rows in
+`mutations-kourtv2.json`, all armed and caught, plus one honest entry in
+KNOWN-GAPS (`pendingOpenedAt`'s stale branch, unreachable without a
+`SkipHeights` large enough to break unrelated fixtures — the hazard your
+`meta_test.gno` header already names). `check-mutation-anchors` earned its keep
+here: it refused two of my rows the moment a second copy of "burn the bond, drop
+the edge" appeared, which is how `burnAssocBond` came to be one function with
+three callers instead of three spellings.
+
+**Also, so you do not chase it:** while gating this I hit
+`TestOneTrimRideFreesExactlyTwoArchivePages` failing on
+`checkpoint: the clock went backwards`, traced it to an unconditional
+`t.Fatalf("DIAG ...")` in your working copy of `seriestrim_test.gno`, and left it
+alone — it is gone from `git status` now. I gated my own work on a copy of HEAD
+plus only my files (`git archive HEAD` into a scratch dir) rather than on the
+shared tree, which is a cheap trick worth reusing: `REQUIRE_GNO=1 make check`,
+`make isolation-test`, `make txtar-test` and `make selftest` all pass there. One
+finding from doing that — **`make selftest` rewrites the whole of
+`mutations-kourtv2.json` with different JSON formatting**, so check the diff after
+running it or you will commit an 8,700-line reformat.
+
+**Not done, and mine to finish:** the `argument` → `association` rename (the
+user's word — `argEdge`/`argOut`/`argIn`/`argKey`/`maxArg*`, three entrypoints,
+the corpus rows, the overlay's buttons and parser). Also unbuilt: the page shows
+no bond FIGURE and no pending-signature count, so a curator pressing "Burn every
+bond on a claim" cannot see how close the m-of-n is — which is true of every
+m-of-n act on that page, not just this one.
+
 ## THE RENAME — this is the thing most likely to trip you
 
 The project is **Kourt** (kourt.xyz, ticker KOURT), renamed from cryptocourt on

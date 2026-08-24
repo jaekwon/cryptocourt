@@ -402,7 +402,12 @@ COIN_OUT = re.compile(r"^(?!\s*//).*\b" + RECV + r"\.coin\.(?:Transfer|TransferF
 # would start counting as a holder outflow.
 ESCROW_SRC = re.compile(RECV + r"\.coin\.(?:Transfer|Burn)\(" + RECV + r"\.escrow")
 GATE = re.compile(r"must(?:Spendable|Stakable)\(")
-COIN_OUT_N = 7  # see the audit above
+COIN_OUT_N = 8  # see the audit above
+# 7 -> 8: argument.gno's association bond. AddArgument moves a stranger's CC into
+# the escrow, so it is a user-sourced outflow like every claim deposit and answer
+# bond, and it is gated by mustSpendable on the line above the move. The count is
+# the arm's whole content — a new outflow that forgot its gate would land here as
+# a 9th, which is what this number is for.
 
 # ARM 13 — every mint is accounted, and there are exactly three of them.
 #

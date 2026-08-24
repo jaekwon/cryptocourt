@@ -426,6 +426,15 @@ func requireActiveMod(cm *courtMod, who address) {
 	}
 }
 
+// isActiveMod answers what requireActiveMod refuses, without the panic: it is
+// for the paths that PRICE a caller rather than stop them. A suspended set's
+// member is deliberately not active here — a suspension leaves a set able only
+// to clear its own bits, so while it holds, its members are strangers to
+// everything else and pay a stranger's bond.
+func isActiveMod(cm *courtMod, who address) bool {
+	return !cm.suspended && cm.members.Has(who.String())
+}
+
 // requireEdgeRemover gates removal of a claim-to-claim edge: its author may
 // always take it back, and so may an active moderator of the court.
 //
@@ -573,6 +582,37 @@ func approveAction(pending *bptree.BPTree, key string, who address, reason strin
 	}
 	pending.Set(key, a)
 	return false, ""
+}
+
+// pendingOpenedAt is the height an OPEN m-of-n proposal started at, or 0 when
+// there is none — either because nobody has signed yet or because the one on
+// file has gone stale and approveAction is about to replace it.
+//
+// IT SITS HERE, TOUCHING approveAction, BECAUSE IT REPEATS THAT FUNCTION'S
+// STALENESS RULE. One rule in two places is how the second copy comes to
+// disagree with the first, and the cheapest available guard against it is
+// adjacency: the two `openedAt+pendingTTLBlocks` tests are eight lines apart and
+// a reader changing either sees the other. Returning it from approveAction would
+// be better still and was rejected on cost — eleven callers and their corpus
+// rows would move for one of them.
+//
+// WHAT NEEDS IT: a bulk act must consent to a FIXED set. DisapproveAllAssociations
+// burns money, and between the first signature and the m-th a stranger may post
+// an honest bond that no moderator has ever looked at. Bounding the burn to
+// edges that predate the proposal is what keeps "unjudged means approved" true
+// for them, and it is also what stops the mirror attack — a griefer who could
+// invalidate the proposal by adding one edge a day would stall the remedy
+// forever.
+func pendingOpenedAt(pending *bptree.BPTree, key string) int64 {
+	v := pending.Get(key)
+	if v == nil {
+		return 0
+	}
+	a := v.(*approval)
+	if heightNow() >= a.openedAt+pendingTTLBlocks {
+		return 0
+	}
+	return a.openedAt
 }
 
 // ---- court-moderator hide / unhide (m-of-n) -------------------------------

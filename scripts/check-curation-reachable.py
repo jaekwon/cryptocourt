@@ -62,6 +62,14 @@ EXEMPT = {
                  "entrypoint with a body — and a body is optional, so the P form "
                  "covers every call the plain one made. It stays in the realm "
                  "because every filetest, txtar and scenario in the tree uses it.",
+    "SetAssociationBondDefault": "a REALM-ADMIN act, not a curator's: it sets the "
+                 "default every court inherits, and belongs with the global DAO "
+                 "verbs this guard's header already calls a legitimate gap. It is "
+                 "the ONE association verb still exempt — the other six shipped "
+                 "exempt with the note \"no UI yet\" and the curate page's "
+                 "Relations panel now has a control for each, so their exemptions "
+                 "came back out. That is the shape this list is supposed to have: "
+                 "an entry, then a button, then no entry.",
 }
 
 ENTRY = re.compile(r"^func ([A-Z]\w*)\(cur realm", re.M)

@@ -6937,8 +6937,8 @@
   "pkg": "kourtv2",
   "file": "argument.gno",
   "label": "AddArgument: the source claim need not exist",
-  "find": "\tmustClaim(c, from)\n\tmustClaim(c, to)",
-  "replace": "\tmustClaim(c, to)"
+  "find": "\tf := mustClaim(c, from)\n\tmustClaim(c, to)",
+  "replace": "\tmustClaim(c, to)\n\tf := &claimState{}"
  },
  {
   "pkg": "kourtv2",
@@ -8607,6 +8607,142 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: a claim's own author is charged the association bond too",
+  "find": "\tif f.author != who && !isActiveMod(ensureMod(c), who) {",
+  "replace": "\t_ = f\n\tif !isActiveMod(ensureMod(c), who) {",
+  "why": "Nobody accountable pays: the asserting claim's author already has a deposited claim behind their name. Caught by TestAnAuthorAndAModeratorPayNoAssociationBond, which asserts on the BALANCE rather than on the absence of a panic \u2014 \"it did not refuse me\" would also pass if the bond were zero."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: a moderator is charged the association bond too",
+  "find": "\tif f.author != who && !isActiveMod(ensureMod(c), who) {",
+  "replace": "\tif f.author != who {",
+  "why": "The other half of the same exemption, proved on a second court so the moderator is somebody who authored neither claim."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: a stranger is charged nothing, so association is free again",
+  "find": "\t\tbond = assocBondFor(c)",
+  "replace": "\t\tbond = 0",
+  "why": "The whole feature, unpriced. Caught twice: TestAnUnjudgedAssociationBondComesBackAfterTheWindow asserts the balance fell by the bond, and TestDisapproving... finds no bond to burn."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the bond is taken without sizing it against the caller's locks",
+  "find": "\t\tmustSpendable(c, who, bond)\n\t\tc.coin.Transfer(who, c.escrow, bond)",
+  "replace": "\t\tc.coin.Transfer(who, c.escrow, bond)",
+  "why": "lock.gno's invariant: staked CC stays in the holder's balance, so only the realm can refuse a second commitment of the same coins, and a path that does not ask leaves the realm owing CC it can settle only by MINTING. Caught by PATH 7 of TestLockedStakeCannotBeSpentTwice, and this path is registered in check-spend-paths.py."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: the edge records no bond, so nothing can ever be returned or burned",
+  "find": "\te := &argEdge{stance: st, author: who, at: heightNow(), bond: bond}",
+  "replace": "\te := &argEdge{stance: st, author: who, at: heightNow()}",
+  "why": "`bond > 0` IS the pending state \u2014 drop the field and the money is in the escrow with nothing recording whose it was. Caught by TestDisapproving..., which finds no bond to burn."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "AddArgument: a bonded edge gets no window, so its author may take it back at once",
+  "find": "\t\te.bondUntil = nowTime() + assocBondWindowSecs",
+  "replace": "\t\te.bondUntil = nowTime()",
+  "why": "A bond reclaimable immediately is not a bond. Caught by the too-early arm of TestAnUnjudgedAssociationBondComesBackAfterTheWindow."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "assocBondFor: a court's override is ignored and every court runs on the default",
+  "find": "\tif c.assocBond > 0 {\n\t\treturn c.assocBond\n\t}",
+  "replace": "\tif false {\n\t\treturn c.assocBond\n\t}",
+  "why": "One of the two places, silently dead. Caught by TestTheAssociationBondIsSetInTwoPlaces."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "assocBondFor: a court that set no override charges nothing",
+  "find": "\treturn assocBondDefault\n}",
+  "replace": "\treturn 0\n}",
+  "why": "The other direction: the default stops applying and every court that never set an override is free. Caught by the same test's opening assertion."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "SetAssociationBondDefault: anybody may reprice every court in the realm",
+  "find": "\tif cur.Previous().Address() != d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin sets the default association bond\")",
+  "replace": "\t_ = d\n\tif false {\n\t\tpanic(\"kourtv2: only the global DAO admin sets the default association bond\")",
+  "why": "Realm-wide authority. Caught by TestTheAssociationBondIsSetInTwoPlaces, which has a stranger try both setters."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "SetCourtAssociationBond: anybody may reprice a court they do not moderate",
+  "find": "\trequireActiveMod(ensureMod(c), who)\n\tif amount < 0 {\n\t\tpanic(\"kourtv2: an association bond cannot be negative\")\n\t}\n\tc.assocBond = amount",
+  "replace": "\t_ = who\n\tif amount < 0 {\n\t\tpanic(\"kourtv2: an association bond cannot be negative\")\n\t}\n\tc.assocBond = amount",
+  "why": "A stranger who can set the bond to 0 has removed the price before spamming, which is the attack. Caught by the same test."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ApproveAssociation: anybody may release a stranger's bond",
+  "find": "\trequireActiveMod(ensureMod(c), who)\n\te := mustArgEdge(c, from, to)\n\tif e.bond <= 0 {\n\t\tpanic(\"kourtv2: no bond is held on that edge\")\n\t}\n\treleaseAssocBond(c, e)",
+  "replace": "\t_ = who\n\te := mustArgEdge(c, from, to)\n\tif e.bond <= 0 {\n\t\tpanic(\"kourtv2: no bond is held on that edge\")\n\t}\n\treleaseAssocBond(c, e)",
+  "why": "Approval a bonded party can grant themselves is decorative. Caught by TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge, which arms both verbs against a stranger."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "burnAssocBond: the bond is refunded to the griefer instead of burned",
+  "find": "\tamt := e.bond\n\te.bond = 0\n\tc.coin.Burn(c.escrow, amt)\n}",
+  "replace": "\tamt := e.bond\n\te.bond = 0\n\tc.coin.Transfer(c.escrow, e.author, amt)\n}",
+  "why": "The burn is the only thing a disapproval costs a griefer; a refund makes it indistinguishable from RemoveArgument. ONE ROW FOR THREE CALLERS now that the money half is factored out \u2014 the single disapprove, the bulk burn, and a moderator's removal all route here. Caught by the TotalSupply assertion in TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge, which is why that test asserts on supply and not on the escrow: a refund empties the escrow too."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "DisapproveAssociation: the bond is burned but the edge survives",
+  "find": "\t\tpanic(\"kourtv2: no bond is held on that edge; remove it instead\")\n\t}\n\tburnAssocBond(c, e)\n\tdropArgEdge(c, from, to)",
+  "replace": "\t\tpanic(\"kourtv2: no bond is held on that edge; remove it instead\")\n\t}\n\tburnAssocBond(c, e)",
+  "why": "Half the verb: the junk stays on the page and the poster is out the money. Anchored through the panic line above because the bulk burn spells the same two calls \u2014 which is the ambiguity that made burnAssocBond one function. Caught by the ClaimArguments assertion after the burn."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ClaimAssociationBond: anybody may draw a bond they did not post",
+  "find": "\tif e.author != who {\n\t\tpanic(\"kourtv2: only the edge's author may take its bond back\")\n\t}",
+  "replace": "\t_ = who\n\tif false {\n\t\tpanic(\"kourtv2: only the edge's author may take its bond back\")\n\t}",
+  "why": "Free money for whoever calls first. Caught by TestAnUnjudgedAssociationBondComesBackAfterTheWindow, which tries it as a third party once the window has closed."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ClaimAssociationBond: the author draws the bond back before the window closes",
+  "find": "\tif nowTime() < e.bondUntil {\n\t\tpanic(\"kourtv2: the moderation window on that bond has not closed yet\")\n\t}",
+  "replace": "\tif false {\n\t\tpanic(\"kourtv2: the moderation window on that bond has not closed yet\")\n\t}",
+  "why": "The window is the moderator's chance to look; skip it and the bond never binds. Caught by the too-early arm of the same test."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "releaseAssocBond: the bond is not zeroed, so a refund can be drawn twice",
+  "find": "\tamt := e.bond\n\te.bond = 0\n\tc.coin.Transfer(c.escrow, e.author, amt)",
+  "replace": "\tamt := e.bond\n\tc.coin.Transfer(c.escrow, e.author, amt)",
+  "why": "Zeroing is what makes `bond > 0` the pending state with no second flag to disagree with it \u2014 unzeroed, the escrow pays out until it is empty. Caught by the draw-twice arm of the same test."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "DisapproveAssociation: anybody may burn a stranger's bond and delete the edge",
+  "find": "\trequireActiveMod(ensureMod(c), who)\n\te := mustArgEdge(c, from, to)\n\tif e.bond <= 0 {\n\t\tpanic(\"kourtv2: no bond is held on that edge; remove it instead\")",
+  "replace": "\t_ = who\n\te := mustArgEdge(c, from, to)\n\tif e.bond <= 0 {\n\t\tpanic(\"kourtv2: no bond is held on that edge; remove it instead\")",
+  "why": "The griefing the bond prices, one level up: a stranger who can disapprove burns other people's bonds for sport. Caught by TestDisapprovingAnAssociationBurnsTheBondAndDropsTheEdge, which arms both verbs against a stranger and then asserts the supply did not move."
+ },
+ {
+  "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "PARAM reSetWindowBlocks halved (the moderator re-set window)",
   "find": "\treSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day",
@@ -8660,5 +8796,85 @@
   "label": "PARAM twapBuckets doubled (the OI ring covers two weeks)",
   "find": "const twapBuckets = 168 // a week of hourly buckets, as V1",
   "replace": "const twapBuckets = 336 // a week of hourly buckets, as V1"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ApproveAllAssociations: anybody may settle a claim's bonds",
+  "find": "\trequireActiveMod(ensureMod(c), who)\n\tmustClaim(c, claimID)\n\touts, ins := pendingIncident(c, claimID)",
+  "replace": "\t_ = who\n\tmustClaim(c, claimID)\n\touts, ins := pendingIncident(c, claimID)",
+  "why": "Caught by TestTheMassAssociationVerbsAreModeratorsOnly."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ApproveAllAssociations: only the inbound half is swept, so outbound bonds are stranded",
+  "find": "\tfor _, to := range outs {\n\t\treleaseAssocBond(c, mustArgEdge(c, claimID, to))\n\t\tn++\n\t}",
+  "replace": "\tfor _, to := range outs {\n\t\t_ = to\n\t}",
+  "why": "Both caps are griefing vectors: AddArgument's `from` is any claim in the court, so a stranger fills a claim's 32 outbound slots as readily as its 64 inbound ones. Caught by TestApprovingAllAssociationsSettlesBothDirectionsAtOnce, which is shaped around exactly this \u2014 one bonded edge in each direction."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "ApproveAllAssociations: only the outbound half is swept, so inbound bonds are stranded",
+  "find": "\tfor _, from := range ins {\n\t\treleaseAssocBond(c, mustArgEdge(c, from, claimID))\n\t\tn++\n\t}",
+  "replace": "\tfor _, from := range ins {\n\t\t_ = from\n\t}",
+  "why": "The other direction of the same defect, and the reason the fixture attaches an edge each way."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "DisapproveAllAssociations: one signature burns without waiting for the court's m",
+  "find": "\tif !fire {\n\t\treturn 0\n\t}",
+  "replace": "\t_ = fire\n\tif false {\n\t\treturn 0\n\t}",
+  "why": "Ninety-six bonds is a different act from one, which is the whole reason this verb is m-of-n where the single-edge disapprove is not. Caught by TestTheBulkBurnTakesTwoSignaturesAndSparesWhatArrivedMidVote, whose first assertion is that one signature of two burns nothing."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "DisapproveAllAssociations: the burn takes bonds posted after the vote opened",
+  "find": "\tif e.bond <= 0 || e.at > opened {\n\t\treturn 0\n\t}",
+  "replace": "\tif e.bond <= 0 {\n\t\treturn 0\n\t}",
+  "why": "A bond posted between the first signature and the m-th has been judged by nobody, so taking it breaks \"unjudged means approved\" \u2014 the rule the whole refundable design rests on. Caught by the mid-vote edge in TestTheBulkBurnTakesTwoSignaturesAndSparesWhatArrivedMidVote."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "DisapproveAllAssociations: the proposal's open height is never read, so the bound is always now",
+  "find": "\topened := pendingOpenedAt(cm.pending, key)",
+  "replace": "\topened := int64(0)",
+  "why": "The same defect by a different route: with opened==0 the fallback stamps heightNow(), so every pending bond including the mid-vote one is in range. Caught by the same test."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "DisapproveAllAssociations: anybody may open and drive the bulk burn",
+  "find": "\trequireActiveMod(cm, who)\n\tcheckReason(reason)\n\tmustClaim(c, claimID)",
+  "replace": "\tcheckReason(reason)\n\tmustClaim(c, claimID)",
+  "why": "Caught by TestTheMassAssociationVerbsAreModeratorsOnly."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "burnIfOlder: the edge is dropped but its bond is never burned",
+  "find": "\tburnAssocBond(c, e)\n\tdropArgEdge(c, from, to)\n\treturn 1",
+  "replace": "\tdropArgEdge(c, from, to)\n\treturn 1",
+  "why": "The bulk burn's own half of the money. Caught by the TotalSupply assertion in TestTheBulkBurnTakesTwoSignaturesAndSparesWhatArrivedMidVote."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "burnIfOlder: the bond is burned but the edge survives",
+  "find": "\tburnAssocBond(c, e)\n\tdropArgEdge(c, from, to)\n\treturn 1",
+  "replace": "\tburnAssocBond(c, e)\n\treturn 1",
+  "why": "The bulk verb burns ninety-six bonds and leaves every edge on the page. Caught by the two ClaimArguments assertions after the second signature fires."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "argument.gno",
+  "label": "pendingIncident: a settled edge is swept again as though it still held a bond",
+  "find": "\t\tif e := v.(*argEdge); e.bond > 0 {\n\t\t\touts = append(outs, claimIDFromKey(key[8:]))\n\t\t}",
+  "replace": "\t\touts = append(outs, claimIDFromKey(key[8:]))",
+  "why": "`bond > 0` IS the pending state; ignore it and the sweep counts edges it did not settle. Caught by the second sweep in TestApprovingAllAssociationsSettlesBothDirectionsAtOnce, which must find nothing left."
  }
 ]

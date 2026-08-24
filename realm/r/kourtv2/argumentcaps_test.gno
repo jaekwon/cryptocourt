@@ -98,7 +98,11 @@ func TestTheArgumentCapsBindAtTheirStatedNumbers(cur realm, t *testing.T) {
 		c.argIn.Set(argKey(ids[2], from), e)
 		c.argOut.Set(argKey(from, ids[2]), e)
 	}
+	// bob authored neither endpoint, so he posts the association bond on each
+	// attempt that gets far enough to spend. Fund both tries; the second is
+	// refused by the inbound cap before it costs him anything.
 	bob := testutils.TestAddress("argc-bob")
+	c.coin.Mint(bob, AssociationBond("argc")*2)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	AddArgument(cross(cur), "argc", ids[1], ids[2], "supports")
 	// A FOURTH claim as the source, and the reason is worth a line: ids[0] now

@@ -49,13 +49,370 @@ const (
 	maxArgInPerAuthor = 4
 )
 
+// ---- the association bond ------------------------------------------------
+//
+// WHY A BOND, AND ONLY FOR STRANGERS. COURTS_STRUCTURE.md §5 opens this edge to
+// "anybody, any time, no mechanical effect", and the note above says why that is
+// not already a free griefing vector: filling one claim's inbound slots takes
+// sixteen addresses, each paying its own storage deposit. The judgement here is
+// that a storage deposit is too cheap to deter somebody who WANTS those slots
+// full, and too blunt to tell a stranger's counter-evidence from a flood.
+//
+// THE REFUND IS THE POINT, and it is what keeps this on the right side of §5. A
+// bond that is never returned is a price on speech — exactly what "no mechanical
+// effect" was protecting, and what AddArgument's own note calls pricing out the
+// counter-evidence this edge exists to carry. A bond returned once a moderator
+// agrees the edge was worth attaching costs an honest contributor nothing but
+// the wait, and costs a griefer everything.
+//
+// Nobody accountable pays it: the asserting claim's own author has already put a
+// deposited claim behind their name, and a moderator is answerable by election.
+//
+// TWO PLACES, deliberately. The realm admin sets the default so a new court is
+// never unpriced; a court's own moderators may override it, because a small
+// trusted docket should not need a realm upgrade to make association free, and a
+// court under attack should not have to wait for one to make it dear.
+const assocBondDefaultInit = int64(1_000_000) // 1 CC, the flagMinCC scale
+
+var assocBondDefault = assocBondDefaultInit
+
+// assocBondFor resolves the two places: this court's override, else the realm
+// default. Court.assocBond says why zero there means unset rather than free.
+func assocBondFor(c *Court) int64 {
+	if c.assocBond > 0 {
+		return c.assocBond
+	}
+	return assocBondDefault
+}
+
+// SetAssociationBondDefault sets the realm-wide default every court inherits.
+func SetAssociationBondDefault(cur realm, amount int64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	d := ensureGlobalDAO()
+	if cur.Previous().Address() != d.admin {
+		panic("kourtv2: only the global DAO admin sets the default association bond")
+	}
+	if amount < 0 {
+		panic("kourtv2: an association bond cannot be negative")
+	}
+	assocBondDefault = amount
+}
+
+// SetCourtAssociationBond overrides the default for one court; 0 clears the
+// override and returns the court to the realm default.
+func SetCourtAssociationBond(cur realm, courtSlug string, amount int64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	// An ACTIVE moderator: repricing association is not one of the de-escalatory
+	// acts a suspended set may still take.
+	requireActiveMod(ensureMod(c), who)
+	if amount < 0 {
+		panic("kourtv2: an association bond cannot be negative")
+	}
+	c.assocBond = amount
+}
+
+// AssociationBond is what a stranger must post to attach an edge in this court.
+func AssociationBond(courtSlug string) int64 { return assocBondFor(mustCourt(courtSlug)) }
+
+// AssociationBondDefault is the realm-wide default, for a page that wants to say
+// which of the two places a court's figure came from.
+func AssociationBondDefault() int64 { return assocBondDefault }
+
+// assocBondWindowSecs is how long a bond waits on a moderator before its author
+// may take it back.
+//
+// UNJUDGED MEANS APPROVED, and the direction is the whole design. The other way
+// round — burn what nobody judged — makes moderator inactivity a confiscation
+// engine, and a court with one absent moderator would quietly keep every
+// stranger's CC. Two weeks is long enough for a moderator who is paying any
+// attention and short enough that an honest contributor is not out of pocket for
+// a quarter waiting on one who is not.
+const assocBondWindowSecs = int64(14 * 86400)
+
+// mustArgEdge is the lookup every association verb starts with. Both the nil
+// tree and the missing key answer the caller the same way, because the
+// difference between "this court has no edges" and "this pair has none" is not
+// a distinction the caller can act on.
+func mustArgEdge(c *Court, from, to uint64) *argEdge {
+	if c.argOut == nil {
+		panic("kourtv2: no such argument edge")
+	}
+	v := c.argOut.Get(argKey(from, to))
+	if v == nil {
+		panic("kourtv2: no such argument edge")
+	}
+	return v.(*argEdge)
+}
+
+// dropArgEdge clears BOTH indexes, or the edge survives in one direction and the
+// two reads disagree about whether it exists.
+func dropArgEdge(c *Court, from, to uint64) {
+	c.argOut.Remove(argKey(from, to))
+	c.argIn.Remove(argKey(to, from))
+}
+
+// burnAssocBond destroys a held bond and zeroes it, so nothing can be burned
+// twice. The exact mirror of releaseAssocBond, and deliberately shaped like it:
+// both move the money and neither touches the edge.
+//
+// THREE CALLERS AND IT DOES NOT DROP THE EDGE, because they disagree about
+// dropping and only about that: DisapproveAssociation and the bulk burn drop as
+// part of the judgement, while RemoveArgument drops every edge it is given,
+// bonded or not, so a drop in here would be a second one. Writing the burn out
+// three times was the first shape, and check-mutation-anchors refused it — two
+// corpus rows had become ambiguous across the copies. That is the guard doing
+// its job: a second spelling of one rule is how one copy comes to forget to
+// zero the field, and an unzeroed bond can be burned again.
+func burnAssocBond(c *Court, e *argEdge) {
+	amt := e.bond
+	e.bond = 0
+	c.coin.Burn(c.escrow, amt)
+}
+
+// releaseAssocBond returns a held bond to the edge's author and zeroes it, so
+// nothing can be released twice.
+func releaseAssocBond(c *Court, e *argEdge) {
+	if e.bond <= 0 {
+		return
+	}
+	amt := e.bond
+	e.bond = 0
+	c.coin.Transfer(c.escrow, e.author, amt)
+}
+
+// ApproveAssociation returns a stranger's bond: a moderator has judged the edge
+// worth carrying. The edge stays either way — approval is about the money, not
+// about the assertion, which anybody may make (§5).
+func ApproveAssociation(cur realm, courtSlug string, from, to uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	requireActiveMod(ensureMod(c), who)
+	e := mustArgEdge(c, from, to)
+	if e.bond <= 0 {
+		panic("kourtv2: no bond is held on that edge")
+	}
+	releaseAssocBond(c, e)
+}
+
+// DisapproveAssociation burns the bond and drops the edge.
+//
+// SINGLE-SIGNER, matching removal: a moderator can already delete any edge
+// outright, so the judgement this adds is over money the griefer chose to put at
+// risk, not over the record. The MASS form is the one that takes m-of-n.
+func DisapproveAssociation(cur realm, courtSlug string, from, to uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	requireActiveMod(ensureMod(c), who)
+	e := mustArgEdge(c, from, to)
+	if e.bond <= 0 {
+		panic("kourtv2: no bond is held on that edge; remove it instead")
+	}
+	burnAssocBond(c, e)
+	dropArgEdge(c, from, to)
+}
+
+// ClaimAssociationBond lets the author take back a bond no moderator judged
+// inside the window. The edge stays; only the money moves.
+func ClaimAssociationBond(cur realm, courtSlug string, from, to uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	e := mustArgEdge(c, from, to)
+	if e.bond <= 0 {
+		panic("kourtv2: no bond is held on that edge")
+	}
+	if e.author != who {
+		panic("kourtv2: only the edge's author may take its bond back")
+	}
+	if nowTime() < e.bondUntil {
+		panic("kourtv2: the moderation window on that bond has not closed yet")
+	}
+	releaseAssocBond(c, e)
+}
+
+// pendingIncident collects every edge incident to one claim that still holds a
+// bond, as two lists of the OTHER endpoint: outs are the `to` of edges this claim
+// asserts, ins are the `from` of edges asserted about it.
+//
+// BOTH DIRECTIONS, because both caps are griefing vectors. A stranger may fill a
+// claim's 32 outbound slots as readily as its 64 inbound ones — AddArgument's
+// `from` is any claim in the court, not the caller's own — so "clear the junk off
+// this claim" is not true if it clears half of it.
+//
+// COLLECTED BEFORE ANYTHING IS SETTLED, and that is not tidiness: the disapprove
+// path REMOVES keys from the very trees this walks, and mutating a bptree
+// mid-iteration is undefined. The two slices are bounded by maxArgOut and
+// maxArgIn, which is what makes the mass verbs cost no more than the caps the
+// write path already enforces.
+func pendingIncident(c *Court, claimID uint64) ([]uint64, []uint64) {
+	outs, ins := []uint64{}, []uint64{}
+	if c.argOut == nil {
+		return outs, ins
+	}
+	p := beClaimKey(claimID)
+	c.argOut.Iterate(p, "", func(key string, v any) bool {
+		if !strings.HasPrefix(key, p) {
+			return true
+		}
+		if e := v.(*argEdge); e.bond > 0 {
+			outs = append(outs, claimIDFromKey(key[8:]))
+		}
+		return false
+	})
+	c.argIn.Iterate(p, "", func(key string, v any) bool {
+		if !strings.HasPrefix(key, p) {
+			return true
+		}
+		if e := v.(*argEdge); e.bond > 0 {
+			ins = append(ins, claimIDFromKey(key[8:]))
+		}
+		return false
+	})
+	return outs, ins
+}
+
+// ApproveAllAssociations settles every bond held on an edge incident to one
+// claim, in one transaction: a moderator has read the claim's page and judged
+// what is on it worth carrying. Returns how many bonds it returned.
+//
+// SINGLE-SIGNER, like the individual approve, and the reason does not carry over
+// to its mirror: this verb only ever gives money BACK. A captured moderator using
+// it refunds griefers, which costs the court nothing it ever had — the bonds were
+// never the court's — and takes away no other remedy: the edges can still be
+// removed, hidden, or struck one at a time.
+//
+// PER CLAIM, not per court, and that is what makes it bounded. The griefing this
+// answers IS per claim — ARGUMENT_EDGES.md names the inbound cap itself as the
+// vector — and a claim's incident edges are bounded by maxArgOut+maxArgIn exactly.
+// A per-court sweep would cost O(edges in the docket): a transaction that gets
+// more expensive as the court succeeds and one day cannot be sent at all. Court
+// scope would need a third index holding only bonded edges; that is the design if
+// it is ever wanted, and it is not free, so it waits for a court that needs it.
+func ApproveAllAssociations(cur realm, courtSlug string, claimID uint64) int {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	requireActiveMod(ensureMod(c), who)
+	mustClaim(c, claimID)
+	outs, ins := pendingIncident(c, claimID)
+	n := 0
+	for _, to := range outs {
+		releaseAssocBond(c, mustArgEdge(c, claimID, to))
+		n++
+	}
+	for _, from := range ins {
+		releaseAssocBond(c, mustArgEdge(c, from, claimID))
+		n++
+	}
+	return n
+}
+
+// DisapproveAllAssociations burns every bond incident to one claim and drops
+// those edges. Returns how many it burned — 0 while the m-of-n is still short.
+//
+// M-OF-N, unlike its mirror, and unlike the single-edge disapprove. Both of those
+// exceptions have the same reason: how much of somebody else's money one
+// signature may destroy. One edge is one bond a griefer chose to risk, and a
+// moderator who can already delete that edge outright is deciding about money the
+// poster put up against exactly this judgement. Ninety-six at once is a different
+// act — it is most of a claim page's contested state, and a single captured or
+// careless key should not be able to empty it. The court's own m for hide/unhide
+// is the right threshold because it is the same question: what may this set do
+// that one of its members may not.
+//
+// THE BURN IS BOUNDED TO EDGES THAT PREDATE THE PROPOSAL, via pendingOpenedAt.
+// Its comment carries the reasoning; the short version is that a bond posted
+// between the first signature and the m-th has been judged by nobody, and
+// "unjudged means approved" has to survive a bulk verb or it is not a rule.
+func DisapproveAllAssociations(cur realm, courtSlug string, claimID uint64, reason string) int {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := ensureMod(c)
+	requireActiveMod(cm, who)
+	checkReason(reason)
+	mustClaim(c, claimID)
+
+	key := "assocburn:" + strconv.FormatUint(claimID, 10)
+	// Read BEFORE this signature joins, or a set of one always reads its own
+	// height and the bound means nothing.
+	opened := pendingOpenedAt(cm.pending, key)
+	fire, _ := approveAction(cm.pending, key, who, reason, cm.m)
+	if !fire {
+		return 0
+	}
+	if opened == 0 {
+		opened = heightNow() // this call both opened and fired it
+	}
+
+	outs, ins := pendingIncident(c, claimID)
+	n := 0
+	for _, to := range outs {
+		n += burnIfOlder(c, claimID, to, opened)
+	}
+	for _, from := range ins {
+		n += burnIfOlder(c, from, claimID, opened)
+	}
+	return n
+}
+
+// burnIfOlder burns one edge's bond and drops the edge, but only if the edge was
+// written at or before `opened`. Returns 1 if it did.
+func burnIfOlder(c *Court, from, to uint64, opened int64) int {
+	e := mustArgEdge(c, from, to)
+	if e.bond <= 0 || e.at > opened {
+		return 0
+	}
+	burnAssocBond(c, e)
+	dropArgEdge(c, from, to)
+	return 1
+}
+
 // argEdge is ONE object held in TWO indexes. argOut and argIn store the same
 // pointer, so a stance cannot desync from itself and removal has to clear both
 // or the edge survives in one direction — which is what the removal test pins.
 type argEdge struct {
+	// bond is the CC this edge's author posted and has not got back: held in
+	// c.escrow while no moderator has judged it, and zeroed the moment it moves
+	// either way. So `bond > 0` IS the pending state and there is no second
+	// flag to disagree with it — a refund or a burn cannot happen twice because
+	// the second attempt finds nothing to move.
+	bond int64
+	// bondUntil is when the author may take an unjudged bond back, in UNIX
+	// SECONDS rather than blocks. clock.gno's ruling: a deadline a user plans
+	// around gates on block time, because a height only means a date if the
+	// chain's pace never changes. Bonds only exist on edges written after this
+	// field did, so unlike the claim deadlines there is no height fallback to
+	// keep — every bonded edge has a real stamp.
+	bondUntil int64
+
 	stance int8
 	author address
-	at     int64 // height, for the record; nothing gates on it
+	// at is the height the edge was written. This said "for the record; nothing
+	// gates on it", and DisapproveAllAssociations changed that: the bulk burn
+	// settles only edges at or below the height its m-of-n proposal opened, so
+	// this field is what keeps a bond posted mid-vote out of a burn nobody
+	// consented to. Height and not time, deliberately — it is compared against
+	// approval.openedAt, which is a height, and the two must be the same clock.
+	at int64
 }
 
 // ensureArgs allocates the two indexes. WRITE PATHS ONLY — it is named in
@@ -87,9 +444,19 @@ func argTextGone(c *Court, id uint64) bool {
 }
 
 // AddArgument records that claim `from` bears on claim `to`, with a stance.
-// ANYBODY, at any time (§5) — the write's own storage deposit is the price, and
-// a bond on speech-shaped state would price out the counter-evidence this exists
-// to carry.
+// ANYBODY, at any time (§5) — and that is still true, which is the only reason
+// what follows is allowed to charge for it.
+//
+// This comment used to end "the write's own storage deposit is the price, and a
+// bond on speech-shaped state would price out the counter-evidence this exists
+// to carry." The objection was right and it is why the bond is REFUNDABLE rather
+// than a fee: a stranger who attaches an edge worth carrying gets every coin
+// back, either when a moderator agrees or by default when none looks inside the
+// window. What the deposit alone could not price was the griefer who attaches
+// four bad edges to every claim in a docket and makes the graph unreadable for
+// everybody — storage is cheap enough that spamming it was rational. So the
+// price falls on being WRONG, not on speaking, and nobody already accountable
+// pays it at all. See the note above assocBondDefaultInit.
 func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -111,8 +478,18 @@ func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 	// Both endpoints must exist IN THIS COURT. Cross-court edges would put a
 	// second court's id in the key and split one object's moderation authority
 	// between two moderator sets.
-	mustClaim(c, from)
+	f := mustClaim(c, from)
 	mustClaim(c, to)
+
+	// WHO DOES NOT PAY. The asserting claim's own author already has a deposited
+	// claim behind their name, and an active moderator is answerable by election.
+	// Everybody else posts a refundable bond — see the note above the constant.
+	// Resolved here but SPENT below, after every refusal has had its chance: a
+	// call that is going to panic must not have moved money first.
+	bond := int64(0)
+	if f.author != who && !isActiveMod(ensureMod(c), who) {
+		bond = assocBondFor(c)
+	}
 
 	ensureArgs(c)
 	k := argKey(from, to)
@@ -153,7 +530,16 @@ func AddArgument(cur realm, courtSlug string, from, to uint64, stance string) {
 			" argument edges on that claim")
 	}
 
-	e := &argEdge{stance: st, author: who, at: heightNow()}
+	// Every refusal above has fired, so this is the first line that can cost the
+	// caller anything.
+	if bond > 0 {
+		mustSpendable(c, who, bond)
+		c.coin.Transfer(who, c.escrow, bond)
+	}
+	e := &argEdge{stance: st, author: who, at: heightNow(), bond: bond}
+	if bond > 0 {
+		e.bondUntil = nowTime() + assocBondWindowSecs
+	}
 	c.argOut.Set(k, e)
 	c.argIn.Set(argKey(to, from), e)
 }
@@ -178,10 +564,19 @@ func RemoveArgument(cur realm, courtSlug string, from, to uint64) {
 	}
 	e := v.(*argEdge)
 	requireEdgeRemover(c, e.author, who)
-	// BOTH indexes, or the edge survives in one direction and the two reads
-	// disagree about whether it exists.
-	c.argOut.Remove(argKey(from, to))
-	c.argIn.Remove(argKey(to, from))
+	// A HELD BOND FOLLOWS WHOEVER REMOVED THE EDGE. An author withdrawing their
+	// own assertion takes their bond with them — they are not being judged. A
+	// moderator removing it HAS judged it, which is the same act as
+	// DisapproveAssociation, so it burns; otherwise removal would be the cheap
+	// way around the burn and the bond would deter nothing.
+	if e.bond > 0 {
+		if e.author == who {
+			releaseAssocBond(c, e)
+		} else {
+			burnAssocBond(c, e)
+		}
+	}
+	dropArgEdge(c, from, to)
 }
 
 // ClaimArguments is every edge incident to one claim, packed:

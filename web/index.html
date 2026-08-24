@@ -3581,7 +3581,13 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Order folders","OrderFolders",{courtSlug:slug,parentID:0,ids:"3,1,2"},"","every sibling under that heading, once each")}
          ${btn("Move a claim within a folder","MoveItemInFolder",{courtSlug:slug,folderID:1,claimID:1,to:0},"","0 is first")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Relations</h4><div class="actions">
-         ${btn("Argue one claim bears on another","AddArgument",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — supports or contests")}
+         ${btn("Argue one claim bears on another","AddArgument",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — free for the claim's author or a moderator, a refundable bond for everybody else")}
+         ${btn("Approve an association","ApproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — returns the bond, the edge stays")}
+         ${btn("Disapprove an association","DisapproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — burns the bond and drops the edge")}
+         ${btn("Take back an unjudged bond","ClaimAssociationBond",{courtSlug:slug,from:1,to:2},"","the edge's author, once the 14-day window has closed")}
+         ${btn("Settle every bond on a claim","ApproveAllAssociations",{courtSlug:slug,claimID:1},"","a moderator, single-signer — every bond goes back")}
+         ${btn("Burn every bond on a claim","DisapproveAllAssociations",{courtSlug:slug,claimID:1,reason:"Why this claim was cleared"},"","m of n moderators — spares anything bonded after the vote opened")}
+         ${btn("Set this court's association bond","SetCourtAssociationBond",{courtSlug:slug,amount:1000000},"","a moderator — 0 restores the realm default")}
          ${btn("Withdraw an argument edge","RemoveArgument",{courtSlug:slug,from:1,to:2},"","its author, or a moderator")}
          ${btn("Record a re-filing","SupersedeClaim",{courtSlug:slug,from:2,to:1},"","the newer claim's author, or a moderator — the older one must have died unanswered")}
          ${btn("Withdraw a re-filing","RemoveSupersede",{courtSlug:slug,from:2},"","its author, or a moderator")}</div></div>

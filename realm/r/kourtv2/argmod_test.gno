@@ -31,14 +31,16 @@ import (
 func TestAModeratorRemovesAnEdgeOnACourtWithNoModerationHistory(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("amod-a")
 	bob := testutils.TestAddress("amod-b")
-	testCourt(cur, "amod", alice, 50_000_000_000)
+	c := testCourt(cur, "amod", alice, 50_000_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	one := OpenClaim(cross(cur), "amod", "the first claim")
 	testing.SetRealm(testing.NewUserRealm(alice))
 	two := OpenClaim(cross(cur), "amod", "the second claim")
 
-	// Anybody may ADD one (§5), so bob's edge is bob's to own.
+	// Anybody may still ADD one (§5) — bob just posts the association bond,
+	// because he authored neither claim and moderates nothing. Fund him for it.
+	c.coin.Mint(bob, 10_000_000)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	AddArgument(cross(cur), "amod", one, two, "contests")
 	uassert.True(t, strings.Contains(ClaimArguments("amod", one), "out:2:c"))

@@ -77,14 +77,32 @@ func TestRemoveArgumentAuthority(cur realm, t *testing.T) {
 	uassert.Equal(t, "out:;in:", ClaimArguments("arg3", ids[0]))
 }
 
-// ANYBODY MAY ADD (§5), which is the point — a stranger's counter-evidence is
-// the thing an argument graph is for, and pricing it behind a bond would defeat
-// it. The write's own storage deposit is the only toll.
+// ANYBODY MAY STILL ADD (§5), which is the point — a stranger's counter-evidence
+// is the thing an argument graph is for. What changed is that a stranger posts a
+// REFUNDABLE bond for the privilege, and the refund is what keeps this on §5's
+// side of the line: the toll is on griefing, not on speaking. A bond that never
+// came back would be the priced-out counter-evidence the old note warned of.
+//
+// Asserted in both directions here: the edge lands, and the money is HELD rather
+// than taken — a stranger is out the bond until somebody judges, and no further.
 func TestAnybodyMayAddAnArgument(cur realm, t *testing.T) {
-	_, ids := argFixture(cur, t, "arg4", 2)
+	alice, ids := argFixture(cur, t, "arg4", 2)
+	c := mustCourt("arg4")
 	stranger := testutils.TestAddress("arg4-s")
+	bond := AssociationBond("arg4")
+	c.coin.Mint(stranger, bond*3)
+	before := c.coin.BalanceOf(stranger)
+
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	AddArgument(cross(cur), "arg4", ids[1], ids[0], "contests")
+	uassert.True(t, strings.Contains(ClaimArguments("arg4", ids[0]), "in:2:c"))
+	uassert.Equal(t, before-bond, c.coin.BalanceOf(stranger))
+
+	// And it comes back when a moderator agrees it was worth carrying. The court
+	// creator moderates by default, so alice is the judge here.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ApproveAssociation(cross(cur), "arg4", ids[1], ids[0])
+	uassert.Equal(t, before, c.coin.BalanceOf(stranger))
 	uassert.True(t, strings.Contains(ClaimArguments("arg4", ids[0]), "in:2:c"))
 }
 
@@ -135,10 +153,18 @@ func TestArgumentRefusals(cur realm, t *testing.T) {
 // THE ANTI-SYBIL TERM. The inbound cap bounds a claim page's render, and the
 // per-author cap is what stops one address filling that bound on its own — which
 // is what makes the inbound cap a bound rather than a griefing vector.
+// And the bond is the term that makes the SYBIL route cost something too: the
+// cap stops one address at four, and sixteen addresses can still reach the
+// inbound bound — but each of the sixteen now posts CC to do it, refundable only
+// if a moderator agrees the edge was worth carrying.
 func TestArgumentPerAuthorInboundCap(cur realm, t *testing.T) {
 	_, ids := argFixture(cur, t, "arg7", maxArgInPerAuthor+2)
+	c := mustCourt("arg7")
 	spammer := testutils.TestAddress("arg7-x")
 	target := ids[0]
+	// Neither authored a claim here, so both pay per edge.
+	c.coin.Mint(spammer, AssociationBond("arg7")*int64(maxArgInPerAuthor+2))
+	c.coin.Mint(testutils.TestAddress("arg7-y"), AssociationBond("arg7")*2)
 	for i := 1; i <= maxArgInPerAuthor; i++ {
 		testing.SetRealm(testing.NewUserRealm(spammer))
 		AddArgument(cross(cur), "arg7", ids[i], target, "contests")

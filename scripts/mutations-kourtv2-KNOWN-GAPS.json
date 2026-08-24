@@ -204,5 +204,13 @@
   "find": "\t\thadSlash := cs.pendingSlash > 0\n\t\tresolveQualityRide(c, cs)",
   "replace": "\t\tresolveQualityRide(c, cs)\n\t\thadSlash := cs.pendingSlash > 0",
   "why": "SURVIVES, and the comment's stated harm is NOT what happens. dispute.gno captures hadSlash before resolveQualityRide and says running both on one tally \"would settle the slash in the very call that levied it - burned with no window and no Q5 challenge\". It would not: on a JUST-LEVIED slash counterUsed is false, so disposeSlashOnRide takes its !cs.counterUsed case and REARMS rather than settles. The only state that differs is lastFlagEventAt, which originateSlash does not set and rearmSlashWindow does - read by crystallize.gno as the 24h quiet window after the last flag event, so the mutation delays Crystallize by up to a day on the levying-ride path. NOT PROMOTED TO A CAUGHT ROW because Crystallize also requires pendingSlash == 0, and every route to that restamps lastFlagEventAt again, so the difference is plausibly masked before it can be observed - which leaves it undecided between survivor and INVALID, and that is stated rather than guessed. A first attempt replaced `if hadSlash` with a fresh read instead of reordering; that leaves hadSlash declared-and-unused, which gno reports as a TEST error not a build error, so an ad-hoc probe scored it CAUGHT while mutate correctly called it INVALID. For an ordering claim the mutation must reorder."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "pendingOpenedAt: a stale proposal still bounds the burn",
+  "find": "\tif heightNow() >= a.openedAt+pendingTTLBlocks {\n\t\treturn 0\n\t}",
+  "replace": "\tif false {\n\t\treturn 0\n\t}",
+  "why": "SURVIVES, and knowingly. approveAction discards a proposal older than pendingTTLBlocks and opens a fresh one; this function repeats that test so the burn bound comes from the LIVE proposal rather than a dead one. Nothing exercises the stale branch: it needs a signature, then a wait of flagCooldownBlocks, then a second signature, and the mid-vote-bond test already carries the coverage that matters. Recorded rather than fixed with a SkipHeights that large — the global height is shared across this package and a jump of that size has broken unrelated fixtures here before."
  }
 ]
