@@ -3393,3 +3393,38 @@ ablation ("dropping it TOGETHER with weakening stakeIdxMine to `>=` fails
 TestNoReadAnswersForANonAddress"), both named tests exist, and re-running what is
 already recorded is not a measurement. That is where the next real yield is, one
 row at a time.
+
+## A claim that was TRUE, and the layer that makes it true
+
+The lockVote gap row says its mutation is invalid because "all three lockVote call
+sites refuse a non-positive weight first". Three things were measured rather than
+re-read, and the middle one refuted my own hypothesis.
+
+**THE COUNT STILL HOLDS: exactly three call sites** — dispute.gno, modvote.gno,
+quality.gno — after two new subsystems (association, standing) landed next door.
+Call-site counts are the part of a claim like this that rots when code is added,
+so it is the part worth re-measuring rather than trusting.
+
+**BUT THE THIRD SITE DOES NOT GUARD WHAT IT PASSES, and I expected that to break
+the claim.** modvote and quality both test `w <= 0` on the very value they hand to
+lockVote. dispute guards `held := voteCap(c, who)` and then passes `dw`, read back
+from the governor after VoteWithCap — a different number, and `min` of two things
+where only one had been checked. So a zero `dw` with a positive `held` looked
+possible.
+
+**IT IS NOT, and the reason is in another package.** p/governor's castVote panics
+on `w <= 0` — "no voting power at that epoch" — and only then takes
+`if cap > 0 && cap < w { w = cap }`, so the recorded weight is min of two positive
+numbers. dw > 0 is guaranteed. The claim is true; it is TRANSITIVE, and the `why`
+now says so.
+
+**AND THE LAYER IS PINNED**, which is the part that makes leaning on it legitimate:
+the main corpus carries `castVote: a zero-weight address may vote` (`if w <= 0` ->
+`if w < 0`), caught. So the chain is closed end to end — kourtv2's row is invalid
+BECAUSE of a governor guard, and that guard has its own caught row. If it ever
+left the corpus, this row would quietly become a live survivor with money attached.
+
+That is the shape to look for when a claim rests on a layer: not "is the claim
+true" but "is the thing that makes it true also held". Same finding as crumbs'
+href leaning on the router's charset — the difference is that this one has a guard
+underneath it and that one did not.
