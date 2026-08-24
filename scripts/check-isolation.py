@@ -173,15 +173,27 @@ def main():
 
     alone = [(rel, t, out) for rel, t, out in bad if (rel, t) not in red]
     broken = [(rel, t, out) for rel, t, out in bad if (rel, t) in red]
+    # THE EXCERPT DROPS GAS LINES, and until it did this printed nothing useful.
+    # `gno test -v` emits one "--- GAS:" line per crossing call, and they come
+    # FIRST — measured on a single-test run of this realm, the first four lines of
+    # output were four gas numbers and nothing else. So a flat four-line slice, on
+    # the tool BRANCHING.md sends people to for "the real error", showed four
+    # integers and hid the uassert message three lines below them. The same defect
+    # bit twice in one programme: a scratch runner kept a last-4000-characters
+    # window that these very lines flooded.
+    def excerpt(out, n=8):
+        keep = [l for l in out if not l.lstrip().startswith("--- GAS:")]
+        return (keep or out)[:n]
+
     for rel, t, out in broken:
         print(f"BROKEN  {t} ({os.path.basename(rel)}) fails alone AND with its "
               f"package — an ordinary failure, not an isolation problem")
-        for line in out[:4]:
+        for line in excerpt(out):
             print(f"        {line}")
     for rel, t, out in alone:
         print(f"ALONE   {t} ({os.path.basename(rel)}) fails when it is the only "
               f"test that runs, but passes with its package")
-        for line in out[:4]:
+        for line in excerpt(out):
             print(f"        {line}")
     unattributed = [(rel, out) for rel, out in rered
                     if not any(rl == rel for rl, _ in red)]
@@ -189,7 +201,7 @@ def main():
         print(f"SUITE   {os.path.basename(rel)} fails as a whole with no single "
               f"test to blame — the package dies before any test's own marker "
               f"prints. A slug collision or a package-level panic looks like this.")
-        for line in out[:4]:
+        for line in excerpt(out):
             print(f"        {line}")
     for rel, t in never:
         print(f"NEVER   {t} ({os.path.basename(rel)}) was selected by no test — "
