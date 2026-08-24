@@ -4109,3 +4109,40 @@ re-deriving it: a count is stale only when it is CURRENT-TENSE about the tree.**
 were 65 call sites when this was written", a quoted transcript, and a worked example
 are all immune — and flagging them would be the vandalism of a record rather than a
 correction to it.
+
+## The anti-flash-loan invariant, end to end — the exemplar of the shape this session hunted
+
+**THE CLAIM, in govern's doc.gno**, and it is the strongest kind: not "we are careful"
+but "the structure makes it impossible". OpenZeppelin "tells you to read at clock()-1
+and trusts you to, whereas a transaction here cannot outlive its block, a block cannot
+outlive its epoch, and PastVotes refuses the epoch it is in."
+
+**THE GUARD.** grc20votes' PastVotes opens with `l.mustBeSealed(at)`:
+
+    if at == 0 || at >= l.Epoch() {
+        panic("grc20votes: that epoch has not been sealed yet")
+    }
+
+**THE PINS — one per arm, both CAUGHT in the main corpus:**
+
+    mustBeSealed: the CURRENT epoch is readable (the anti-flash-loan invariant)
+        if at == 0 || at >= l.Epoch()  ->  if at == 0 || at > l.Epoch()
+    mustBeSealed: epoch zero is readable
+        if at == 0 || at >= l.Epoch()  ->  if at >= l.Epoch()
+
+That is ABLATE EACH ARM SEPARATELY, applied by the row author rather than asked for
+by a reviewer: two mutations, one per operand of the `||`, each with its own row and
+its own catch. A single row over that line would have left one arm free.
+
+**WHY THIS ONE IS WORTH RECORDING AS A NULL.** Every finding this session came from
+the gap between a claim and what holds it: a `why` that argued instead of measuring,
+a comment granting permission the code refuses, a constant restated where nothing
+compares it. This is the same structure with nothing missing — claim, mechanism,
+and a pin per arm — on the voting path this file is NAMED for, where the recorded
+attack was renting weight and selling it ("vote-then-sell at 599x the quorum floor").
+
+**AND MY OWN GREP NEARLY HID IT.** Reading PastVotes with a filter of
+`func|panic|if|return` dropped `l.mustBeSealed(at)` — the one line that answers the
+question — and the function looked like it had no guard at all. Seventh time today a
+filter has nearly produced a false finding, and the same lesson each time: the
+instrument decides what you are allowed to see.
