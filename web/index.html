@@ -673,16 +673,28 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mnode-a.dim{opacity:.35}
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
 .mapsvg.far .mtitle{display:none}
-.mfold{fill:none; stroke:var(--line-2)}
-.mfold.pseudo{stroke-dasharray:4 3; stroke:var(--muted)}
-.mhdr{fill:var(--accent-wash)} .mhdr-t{fill:var(--accent-2); font-weight:600}
+/* A folder is a NODE now, not a box drawn round its contents — the radial map
+   hangs claims off it instead of nesting them inside. The court is the same
+   shape one step up: filled, heavier, at the centre. */
+.mfold{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1}
+.mfold.pseudo{fill:none; stroke-dasharray:4 3; stroke:var(--muted)}
+.mhdr-t{fill:var(--accent-2); font-weight:600}
+.mcourt{fill:var(--accent); stroke:var(--accent-2); stroke-width:1.5}
+.mcourt-t{fill:var(--surface); font-weight:700}
 .medge{fill:none; stroke:var(--ink-2); stroke-width:1.2}
+/* Containment is the skeleton: quiet, and quieter still one level out, so the
+   eye reads court → folder → claim without the spokes competing with the
+   associations drawn across them. */
+.medge.spoke{stroke:var(--line-2); stroke-width:1.4}
+.medge.spoke.toclaim{stroke-width:1}
+.medge.spoke.also{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 4}
 .medge.part{stroke:var(--ink); stroke-width:2}
 .medge.bears.yes{stroke:var(--yes); stroke-dasharray:5 4; stroke-width:1.6}
 .medge.bears.no{stroke:var(--contra); stroke-dasharray:5 4; stroke-width:1.6}
 .medge.sup{stroke:var(--muted); stroke-dasharray:2 3; stroke-width:1.6}
 .medge.dim,.marrow.dim{opacity:.35}
 .marrow{fill:var(--ink)}
+.marrow.light{fill:var(--ink-2)}
 .mdot.g{fill:var(--good); stroke:var(--good)}
 .mdot.e{fill:var(--escrow); stroke:var(--escrow)}
 .mdot.ed{fill:var(--escrow-wash); stroke:var(--escrow); stroke-dasharray:2 2}
@@ -3322,120 +3334,202 @@ function foldersFor(slug, chainF){
 }
 
 /* ============================ the map ================================
-   A dedicated, interactive view of the court's structure. Folder containment
-   takes POSITION (disjoint boxes — a partition drawn as one); part-of keeps
-   PRIMACY as the heaviest edge and orders claims within a folder; bears/
-   supersedes are lighter cross-links. The layout is deterministic (pure
-   cumulative sums — same input, same bytes) and overlap-free BY CONSTRUCTION;
-   map_test.js re-verifies the generated SVG geometrically (nodes, labels,
-   edge crossings) on every change. No stake sizing, no amounts anywhere:
-   a node is an id, a phase, and the verbatim sentence (§7.4). */
+   RADIAL, and the previous layout is why. That one drew folders as nested BOXES
+   with claims as rows inside them, which is an org chart: it reads as a
+   hierarchy of rectangles, the court itself appears nowhere, and every relation
+   is routed through channel lanes and a horizontal bus so no line ever crosses
+   anything. Legible, and wrong about the subject — a docket is a court with
+   structure hanging off it, not a table of contents.
+
+   So: the COURT is one node at the centre, folders sit around it, a folder's
+   claims sit around the folder, and an association is a direct chord between two
+   claims rather than a detour around the furniture.
+
+   OVERLAP-FREE BY CONSTRUCTION, still, which is the whole reason the angles are
+   solved rather than eyeballed:
+
+     * every node is CENTRED in an angular wedge, and wedges are disjoint —
+       siblings partition their parent's, and a parent's is at least the sum of
+       its children's;
+     * a wedge of angle a at radius r spans a chord of 2r·sin(a/2), and each node
+       asks for the angle that makes that chord cover its own DIAGONAL. The
+       diagonal is the conservative bound: an axis-aligned rect's tangential
+       extent is w|sin θ| + h|cos θ|, never more than √(w²+h²);
+     * rings are spaced by the two rings' widest node plus a clearance, so nodes
+       at adjacent depths cannot meet either;
+     * a containment spoke joins ADJACENT rings only, so it passes through no
+       ring that could hold a third node.
+
+   The one thing NOT guaranteed is a chord missing every node it does not end on.
+   A direct line between two claims cannot promise that, and pretending
+   otherwise is what produced the bus in the first place. Chords are drawn UNDER
+   the nodes so a crossing reads as passing behind. map_test.js verifies
+   everything above geometrically and exempts exactly that.
+
+   Deterministic: pure arithmetic and a two-pass solve, same input same bytes. No
+   stake sizing, no amounts anywhere — a node is an id, a phase, and the verbatim
+   sentence (§7.4). */
 const MAPK = {
-  node: { titles:{w:240,h:64}, ids:{w:64,h:28} },
-  vgap:12, hgap:12, cgap:16, padMin:16, headerH:28, fgap:56,
-  busGap:24, track:10, laneP:5, margin:24, tpad:8,
-  fs:{header:13, id:12, title:11}, charW:0.62, maxTitleLines:2, colRows:8,
+  // Three sizes, because this map is about structure: a folder needs its name, a
+  // claim needs a gist, the court needs to read as the thing the rest hangs off.
+  // The claim box is narrower than the old grid's 240 — at map zoom a title is a
+  // gist, and the claim page holds the sentence.
+  node:  { titles:{w:176,h:52}, ids:{w:64,h:28} },  // a claim
+  fnode: { titles:{w:140,h:42}, ids:{w:104,h:26} }, // a folder
+  cnode: { titles:{w:190,h:54}, ids:{w:132,h:38} }, // the court, at the centre
+  sep:22,          // clearance every pair of nodes keeps, tangentially and radially
+  seedR:120,       // the innermost ring's floor, before the fit solve
+  margin:36, tpad:8,
+  base:-Math.PI/2, // the first wedge opens at twelve o'clock
+  // How far a node may sit off its wedge's centre line. WITHOUT THIS a folder
+  // with one child draws that child on its own ray, and a chain of them —
+  // Origins → Natural spillover → The market cluster → #5, which this docket has
+  // six of — renders as a straight thread out from the middle. That is the
+  // starburst look, and it is what "not exactly radially" was asking to avoid.
+  // Kept inside the wedge's own SLACK so the disjointness proof is untouched: a
+  // node that cannot move without leaving its wedge does not move.
+  twist:0.11,
+  fs:{header:12, id:12, title:11, court:14}, charW:0.62, maxTitleLines:2,
 };
-function mapWrapTitle(title, innerW){
-  const budget = Math.floor(innerW/(MAPK.fs.title*MAPK.charW));
+/* maxLines is a PARAMETER because the box that holds the text decides it. In ids
+   mode a folder node is 26px tall and two lines of 12px text do not fit — the
+   second one lands outside its own box, which is the one thing check B exists to
+   catch, and it caught it. */
+function mapWrapTitle(title, innerW, fs, maxLines){
+  const size = fs||MAPK.fs.title, cap = Math.max(1, maxLines||MAPK.maxTitleLines);
+  const budget = Math.floor(innerW/(size*MAPK.charW));
   const words = String(title).split(/\s+/); const lines=[]; let cur="";
   for(const w of words){
     const t = cur? cur+" "+w : w;
     if(t.length<=budget) cur=t;
-    else { if(cur) lines.push(cur); cur=w.slice(0,budget); if(lines.length+1>=MAPK.maxTitleLines) break; }
+    else { if(cur) lines.push(cur); cur=w.slice(0,budget); if(lines.length+1>=cap) break; }
   }
-  if(cur && lines.length<MAPK.maxTitleLines) lines.push(cur);
+  if(cur && lines.length<cap) lines.push(cur);
   if(lines.join(" ").length < String(title).length && lines.length)
     lines[lines.length-1] = lines[lines.length-1].slice(0, Math.max(1,budget-1))+"…";
   return lines;
 }
-function mapLayout(data, mode){
-  const N = MAPK.node[mode], K = MAPK;
-  const parentOf = {};
-  for(const r of (data.relations||[])) if(r.type==="part") parentOf[r.from]=r.to;
+function mapSize(kind, mode){
+  return kind==="claim"? MAPK.node[mode] : kind==="folder"? MAPK.fnode[mode] : MAPK.cnode[mode];
+}
+/* Where the centre-to-centre line leaves a's box: half-extent in each axis,
+   whichever side it reaches first. Written out because a chord that starts at a
+   centre is drawn under its own node and appears to start nowhere. */
+function mapClip(a, b){
+  const dx=b.cx-a.cx, dy=b.cy-a.cy;
+  if(!dx && !dy) return [a.cx, a.cy];
+  const t=Math.min(dx? (a.w/2)/Math.abs(dx) : Infinity, dy? (a.h/2)/Math.abs(dy) : Infinity);
+  return [Math.round((a.cx+dx*t)*10)/10, Math.round((a.cy+dy*t)*10)/10];
+}
+/* One node per entity, one spoke per containment fact.
+   FIRST-WINS ON A CLAIM, and the second folder gets a spoke rather than nothing.
+   A claim may be filed in several folders, the map draws it once, and a
+   cross-cutting folder — one whose claims all live elsewhere by evidence type —
+   would otherwise render as an empty box. `alsoIn` collects those memberships so
+   the layout can draw the lighter "also filed here" line to the node's single
+   drawing. Claims this dataset does not carry are dropped rather than drawn as a
+   hole. */
+function mapTree(data, mode){
   const inFolder = new Set();
   (function walk(fs){ for(const f of fs||[]){ (f.claims||[]).forEach(c=>inFolder.add(c)); walk(f.folders); } })(data.folders);
   const loose = data.all.filter(id=>!inFolder.has(id));
-  const tops = (data.folders||[]).concat(loose.length? [{name:data.looseName||"(no folder)", claims:loose, folders:[], pseudo:true}]:[]);
-  const orderClaims = cs => [...cs].sort((a,b)=>{
-    const ka = parentOf[a]!==undefined? [0,parentOf[a],a]:[1,0,a];
-    const kb = parentOf[b]!==undefined? [0,parentOf[b],b]:[1,0,b];
-    return ka[0]-kb[0]||ka[1]-kb[1]||ka[2]-kb[2];
-  });
-  // lane demand per (top column, side) → folder pad holds every channel lane
-  const topIdxOf = {};
-  tops.forEach((f,i)=>(function mark(g){ (g.claims||[]).forEach(c=>topIdxOf[c]=i); (g.folders||[]).forEach(mark); })(f));
-  const laneCount = {}; const laneKey=(col,side)=>col+":"+side;
-  for(const r of (data.relations||[])){
-    const a=topIdxOf[r.from], b=topIdxOf[r.to];
-    if(a===b) laneCount[laneKey(a,"right")]=(laneCount[laneKey(a,"right")]||0)+1;
-    else if(a<b){ laneCount[laneKey(a,"right")]=(laneCount[laneKey(a,"right")]||0)+1; laneCount[laneKey(b,"left")]=(laneCount[laneKey(b,"left")]||0)+1; }
-    else { laneCount[laneKey(a,"left")]=(laneCount[laneKey(a,"left")]||0)+1; laneCount[laneKey(b,"right")]=(laneCount[laneKey(b,"right")]||0)+1; }
-  }
-  const maxLanes = Math.max(1, ...Object.values(laneCount), 1);
-  const pad = Math.max(K.padMin, 6+(maxLanes-1)*K.laneP+4);
-  // measure + place: cumulative sums only. Wide folders wrap into columns of
-  // colRows; edges attach to a node's outer side, so multi-column folders are
-  // for the edge-free live box — the harness enforces this if data evolves.
-  const nodes=[], folders=[];
-  function measure(f){
-    const nc=(f.claims||[]).length;
-    const cols = Math.max(1, Math.ceil(nc/K.colRows));
-    const rows = nc? Math.min(nc, K.colRows) : 0;
-    const hClaims = rows? rows*N.h+(rows-1)*K.vgap : 0;
-    const wClaims = nc? cols*N.w+(cols-1)*K.hgap : 0;
-    const kids=(f.folders||[]).map(measure);
-    const wIn=Math.max(wClaims, N.w, ...kids.map(k=>k.w), 0);
-    const hKids=kids.reduce((sum,k)=>sum+k.h,0)+(kids.length? kids.length*K.cgap:0);
-    return {f, kids, cols, w:wIn+2*pad, h:K.headerH+pad+hClaims+hKids+pad, hClaims};
-  }
-  function place(m, x, y, top, path){
-    const fr={name:m.f.name, x, y, w:m.w, h:m.h, headerH:K.headerH, pseudo:!!m.f.pseudo, top, path,
-      count:(function cnt(g){ return (g.claims||[]).length+(g.folders||[]).reduce((a,q)=>a+cnt(q),0); })(m.f)};
-    folders.push(fr);
-    const ordered = orderClaims(m.f.claims||[]);
-    ordered.forEach((id,k)=>{
-      const col=Math.floor(k/K.colRows), row=k%K.colRows;
-      nodes.push({id, x:x+pad+col*(N.w+K.hgap), y:y+K.headerH+pad+row*(N.h+K.vgap), w:N.w, h:N.h, top});
-    });
-    let cy = y+K.headerH+pad+m.hClaims+(ordered.length? K.cgap:0);
-    m.kids.forEach((k,i)=>{ place(k, x+pad, cy, top, path==null? null : path+"."+i); cy+=k.h+K.cgap; });
-    return fr;
-  }
-  let x=K.margin; const topRects=[];
-  tops.forEach((f,i)=>{
-    const m=measure(f);
-    topRects.push(place(m, x, K.margin, i, f.pseudo? null : (f.path!=null? String(f.path) : String(i))));
-    x+=m.w+K.fgap;
-  });
-  const nodeById=Object.fromEntries(nodes.map(n=>[n.id,n]));
-  const maxBottom=topRects.length? Math.max(...topRects.map(f=>f.y+f.h)) : K.margin;
-  const busY0=maxBottom+K.busGap;
-  const laneUsed={}; const takeLane=k=>(laneUsed[k]=(laneUsed[k]??-1)+1);
-  const chX=(col,side,lane)=> side==="right"
-    ? topRects[col].x+topRects[col].w-pad+4+lane*K.laneP
-    : topRects[col].x+pad-4-lane*K.laneP;
-  let trackI=0;
-  const edges=(data.relations||[]).map(r=>{
-    const F=nodeById[r.from], T=nodeById[r.to];
-    if(!F||!T) return null;
-    const a=F.top, b=T.top, fcy=F.y+F.h/2, tcy=T.y+T.h/2;
-    let pts;
-    if(a===b){
-      const cx0=chX(a,"right",takeLane(laneKey(a,"right")));
-      pts=[[F.x+F.w,fcy],[cx0,fcy],[cx0,tcy],[T.x+T.w,tcy]];
-    }else{
-      const dir=a<b, sA=dir?"right":"left", sB=dir?"left":"right";
-      const cA=chX(a,sA,takeLane(laneKey(a,sA)));
-      const cB=chX(b,sB,takeLane(laneKey(b,sB)));
-      const busY=busY0+(trackI++)*K.track;
-      pts=[[dir?F.x+F.w:F.x,fcy],[cA,fcy],[cA,busY],[cB,busY],[cB,tcy],[dir?T.x:T.x+T.w,tcy]];
+  const drawn = new Set(), alsoIn = [];
+  const folderNode = (f, path) => {
+    const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[],
+      count:(function cnt(g){ return (g.claims||[]).length+(g.folders||[]).reduce((a,q)=>a+cnt(q),0); })(f)};
+    for(const id of (f.claims||[])){
+      if(!data.claims[id]) continue;
+      if(drawn.has(id)) alsoIn.push({folder:node, id});
+      else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[]}); }
     }
-    return {...r, pts};
+    (f.folders||[]).forEach((g,i)=>node.kids.push(folderNode(g, path==null? null : path+"."+i)));
+    return node;
+  };
+  const tops = (data.folders||[]).map((f,i)=>folderNode(f, f.path!=null? String(f.path) : String(i)));
+  if(loose.length) tops.push(folderNode({name:data.looseName||"(no folder)", claims:loose, folders:[], pseudo:true}, null));
+  return {root:{kind:"court", name:data.courtName||"this court", kids:tops}, alsoIn};
+}
+function mapLayout(data, mode){
+  const K = MAPK, {root, alsoIn} = mapTree(data, mode);
+  // Depth census: how many rings, and the widest node on each — which is what
+  // sets the radial clearance from one ring to the next.
+  const wide = [];
+  (function census(n, d){
+    const s = mapSize(n.kind, mode);
+    wide[d] = Math.max(wide[d]||0, s.w, s.h);
+    n.kids.forEach(k=>census(k, d+1));
+  })(root, 0);
+  const maxD = wide.length-1;
+  const baseR = [0];
+  if(maxD >= 1) baseR[1] = Math.max(K.seedR, (wide[0]+wide[1])/2 + K.sep);
+  for(let d=2; d<=maxD; d++) baseR[d] = baseR[d-1] + (wide[d-1]+wide[d])/2 + K.sep;
+  /* THE FIT SOLVE, two passes and no loop. A node asks for the larger of what
+     its own box needs at its radius and what its children need together.
+     Scaling every radius by s shrinks the first term and leaves the second a sum
+     of shrinking terms, so one rescale by s = total/2π brings the total inside a
+     full turn — and a fixed number of passes cannot fail to terminate. */
+  const solve = (R) => {
+    const walk = (n, d) => {
+      const s = mapSize(n.kind, mode);
+      const own = d===0 || !R[d] ? 0
+        : 2*Math.asin(Math.min(1, (Math.hypot(s.w, s.h)+K.sep)/(2*R[d])));
+      const kids = n.kids.reduce((t,k)=>t+walk(k, d+1), 0);
+      return (n._a = Math.max(own, kids));
+    };
+    return walk(root, 0);
+  };
+  let R = baseR.slice();
+  const first = solve(R);
+  if(first > 2*Math.PI){ R = R.map(v=>v*(first/(2*Math.PI))); solve(R); }
+  // Place, and record a spoke from every parent box to every child box.
+  const nodes=[], folders=[], spokes=[];
+  let court=null;
+  (function place(n, a0, a1, d){
+    const sz=mapSize(n.kind, mode);
+    // Off-centre by at most half the wedge's spare angle, alternating by depth.
+    const own = d===0 || !R[d] ? 0 : 2*Math.asin(Math.min(1, (Math.hypot(sz.w,sz.h)+K.sep)/(2*R[d])));
+    const slack = Math.max(0, (a1-a0) - own);
+    const mid=(a0+a1)/2 + (d%2? 1:-1)*Math.min(slack/2, K.twist);
+    const cx=R[d]*Math.cos(mid), cy=R[d]*Math.sin(mid);
+    const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
+    n._box = box;
+    if(n.kind==="court"){ court={...box, name:n.name}; }
+    else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name, count:n.count, pseudo:n.pseudo, path:n.path})); }
+    else { nodes.push(Object.assign(box, {kind:"claim", id:n.id})); }
+    const tot = n.kids.reduce((t,k)=>t+k._a, 0);
+    let a=a0;
+    for(const k of n.kids){
+      const share = tot>0? (a1-a0)*k._a/tot : (a1-a0)/Math.max(1, n.kids.length);
+      const kb = place(k, a, a+share, d+1);
+      spokes.push({from:box, to:kb, kind:k.kind});
+      a += share;
+    }
+    return box;
+  })(root, K.base, K.base+2*Math.PI, 0);
+  const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  // The cross-cut memberships, drawn to the one node the claim actually has.
+  for(const a of alsoIn){ const t=byId[a.id]; if(a.folder._box && t) spokes.push({from:a.folder._box, to:t, kind:"also"}); }
+  const edges=(data.relations||[]).map(r=>{
+    const F=byId[r.from], T=byId[r.to];
+    return (F&&T)? {...r, pts:[mapClip(F,T), mapClip(T,F)]} : null;
   }).filter(Boolean);
-  const totalW=topRects.length? x-K.fgap+K.margin : 2*K.margin+MAPK.node[mode].w;
-  const totalH=(trackI? busY0+(trackI-1)*K.track : maxBottom)+K.margin;
-  return {nodes, folders, edges, pad, viewBox:[0,0,totalW,totalH], mode};
+  // One origin shift so the whole drawing sits inside a positive viewBox.
+  const all=[court, ...folders, ...nodes];
+  const minX=Math.min(...all.map(b=>b.x)), minY=Math.min(...all.map(b=>b.y));
+  const maxX=Math.max(...all.map(b=>b.x+b.w)), maxY=Math.max(...all.map(b=>b.y+b.h));
+  const ox=Math.round(K.margin-minX), oy=Math.round(K.margin-minY);
+  const mv=b=>Object.assign({}, b, {x:Math.round((b.x+ox)*10)/10, y:Math.round((b.y+oy)*10)/10,
+    cx:Math.round((b.cx+ox)*10)/10, cy:Math.round((b.cy+oy)*10)/10});
+  return {
+    court: mv(court),
+    folders: folders.map(mv),
+    nodes: nodes.map(mv),
+    spokes: spokes.map(s=>({kind:s.kind, pts:[mapClip(s.from,s.to), mapClip(s.to,s.from)]
+      .map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
+    edges: edges.map(e=>Object.assign({}, e, {pts:e.pts.map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
+    viewBox:[0,0,Math.round(maxX-minX+2*K.margin), Math.round(maxY-minY+2*K.margin)],
+    mode,
+  };
 }
 function mapDotClass(short){
   // seven phases, pill-family tokens; text is the primary signal, the dot a
@@ -3451,43 +3545,73 @@ function mapDotClass(short){
 function mapSvg(L, data, slug){
   const K=MAPK, [vx,vy,vw,vh]=L.viewBox, out=[];
   const est=(t,fs)=>Math.round(t.length*fs*K.charW*10)/10;
-  out.push(`<svg xmlns="http://www.w3.org/2000/svg" class="mapsvg" viewBox="${vx} ${vy} ${vw} ${vh}" tabindex="0" role="img" aria-label="Map of ${esc(slug)} — folders and claims; every node is a link.">`);
-  L.folders.forEach((f,i)=>{
-    out.push(`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" data-fid="${i}"/>`);
-    const hdr=`<rect class="mhdr" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.headerH}" data-fid="${i}"/>`;
-    const budget=Math.floor((f.w-2*K.tpad)/(K.fs.header*K.charW));
-    const label=`${f.name} · ${f.count}`;
-    const nm=label.length>budget? label.slice(0,Math.max(1,budget-1))+"…" : label;
-    const txt=`<text class="mtext mhdr-t" x="${f.x+K.tpad}" y="${f.y+19}" font-size="${K.fs.header}" textLength="${Math.min(est(nm,K.fs.header), f.w-2*K.tpad)}" lengthAdjust="spacingAndGlyphs" data-owner="h${i}">${esc(nm)}</text>`;
-    if(!f.pseudo && f.path!=null && data.linkFolders) out.push(`<a href="#/c/${esc(slug)}/f/${f.path}">${hdr}${txt}</a>`);
-    else out.push(hdr+txt);
-  });
+  const clip=(t,px,fs)=>{ const b=Math.floor(px/(fs*K.charW)); return t.length>b? t.slice(0,Math.max(1,b-1))+"…" : t; };
+  const label=(t,box,fs,y,cls,owner)=>{
+    const nm=clip(t, box.w-2*K.tpad, fs);
+    return `<text class="mtext ${cls}" x="${box.x+K.tpad}" y="${y}" font-size="${fs}" `
+      + `textLength="${Math.min(est(nm,fs), box.w-2*K.tpad)}" lengthAdjust="spacingAndGlyphs" `
+      + `data-owner="${owner}">${esc(nm)}</text>`;
+  };
+  out.push(`<svg xmlns="http://www.w3.org/2000/svg" class="mapsvg" viewBox="${vx} ${vy} ${vw} ${vh}" tabindex="0" role="img" aria-label="Map of ${esc(slug)} — the court at the centre, folders around it, claims around their folder; every node is a link.">`);
+  // UNDER EVERYTHING: containment spokes, then association chords. Order is the
+  // z-order, and it is the whole reason a chord may cross a node it does not end
+  // on — it passes behind, which reads as depth rather than as a collision.
+  L.spokes.forEach((s,i)=>
+    out.push(`<polyline class="medge spoke ${s.kind==="claim"?"toclaim":"tofolder"}" points="${s.pts.map(q=>q.join(",")).join(" ")}" data-s="${i}"/>`));
   L.edges.forEach((e,i)=>{
     const cls = e.type==="part"? "part" : e.type==="supersedes"? "sup" : "bears "+(e.stance==="supports"?"yes":"no");
     out.push(`<polyline class="medge ${cls}" points="${e.pts.map(q=>q.join(",")).join(" ")}" data-e="${i}" data-from="${e.from}" data-to="${e.to}"/>`);
-    if(e.type==="part"){
-      const n=e.pts.length, [ex,ey]=e.pts[n-1], [px,py]=e.pts[n-2];
-      const dx=Math.sign(ex-px), dy=Math.sign(ey-py);
-      const a = dx!==0
-        ? `${ex},${ey} ${ex-6*dx},${ey-3.5} ${ex-6*dx},${ey+3.5}`
-        : `${ex},${ey} ${ex-3.5},${ey-6*dy} ${ex+3.5},${ey-6*dy}`;
-      out.push(`<polygon class="marrow" points="${a}" data-e="${i}"/>`);
-    }
+    const [px,py]=e.pts[0], [ex,ey]=e.pts[1], len=Math.hypot(ex-px,ey-py)||1;
+    const ux=(ex-px)/len, uy=(ey-py)/len, nx=-uy, ny=ux;
+    out.push(`<polygon class="marrow${e.type==="part"?"":" light"}" points="${
+      [[ex,ey],[ex-7*ux+3.5*nx, ey-7*uy+3.5*ny],[ex-7*ux-3.5*nx, ey-7*uy-3.5*ny]]
+        .map(q=>q.map(v=>Math.round(v*10)/10).join(",")).join(" ")}" data-e="${i}"/>`);
+  });
+  // The court: the centre node, and the only one that is not a link — you are
+  // already on this court.
+  /* Two lines, centred, and the count is the first thing dropped. Appending
+     "· 4" to a name that already fills both lines pushed the wrap one word over
+     and the ellipsis then ate the name to spell a bare "·…" — a label that
+     spends its last characters on punctuation. So: try it with the count, and if
+     that truncates, say the name properly and let the folder page carry the
+     number. */
+  const wrapFit=(name, count, box, fs, cls, owner)=>{
+    const withN = count!=null? `${name} · ${count}` : name;
+    const a = mapWrapTitle(withN, box.w-2*K.tpad, fs, fitLines(box, fs));
+    // Two ways the count costs more than it is worth: it pushes the wrap over and
+    // the name gets an ellipsis, or it lands on a line of its own — "Learning
+    // loss ·" above a bare "1", which reads as a broken label rather than a
+    // count. Either way the name wins and the folder page carries the number.
+    const orphan = a.length>1 && !/[A-Za-z]/.test(a[a.length-1]);
+    return wrapMid((a.join(" ").length >= withN.length && !orphan)? withN : name, box, fs, cls, owner);
+  };
+  const fitLines=(box, fs)=>Math.max(1, Math.floor((box.h-6)/(fs+2)));
+  const wrapMid=(txt, box, fs, cls, owner)=>{
+    const lines=mapWrapTitle(txt, box.w-2*K.tpad, fs, fitLines(box, fs));
+    const y0=box.y+box.h/2 - (lines.length-1)*(fs+2)/2 + fs*0.36;
+    return lines.map((ln,i)=>label(ln, box, fs, Math.round((y0+i*(fs+2))*10)/10, cls, owner)).join("");
+  };
+  const c=L.court;
+  out.push(`<rect class="mcourt" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6"/>`);
+  out.push(wrapMid(c.name, c, K.fs.court, "mcourt-t", "t0"));
+  L.folders.forEach((f,i)=>{
+    const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
+      + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
+    if(!f.pseudo && f.path!=null && data.linkFolders) out.push(`<a href="#/c/${esc(slug)}/f/${f.path}">${tag}</a>`);
+    else out.push(tag);
   });
   for(const n of L.nodes){
-    const c=data.claims[n.id]; if(!c) continue;
-    const pc=phaseClass(c.statusText);
+    const cl=data.claims[n.id]; if(!cl) continue;
+    const pc=phaseClass(cl.statusText);
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
     out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
     out.push(`<circle class="mdot ${mapDotClass(pc.short)}" cx="${n.x+n.w-12}" cy="${n.y+14}" r="4" data-owner="c${n.id}"/>`);
-    const l1=`#${n.id} · ${pc.short}`;
-    const innerW=n.w-2*K.tpad-14;
-    out.push(`<text class="mtext" x="${n.x+K.tpad}" y="${n.y+16}" font-size="${K.fs.id}" textLength="${Math.min(est(l1,K.fs.id), innerW)}" lengthAdjust="spacingAndGlyphs" data-owner="c${n.id}">${esc(l1)}</text>`);
+    out.push(label(`#${n.id} · ${pc.short}`, {x:n.x, w:n.w-14}, K.fs.id, n.y+16, "", "c"+n.id));
     if(L.mode==="titles"){
-      mapWrapTitle(c.title, n.w-2*K.tpad).forEach((ln,i)=>
-        out.push(`<text class="mtext mtitle" x="${n.x+K.tpad}" y="${n.y+34+i*14}" font-size="${K.fs.title}" textLength="${Math.min(est(ln,K.fs.title), n.w-2*K.tpad)}" lengthAdjust="spacingAndGlyphs" data-owner="c${n.id}">${esc(ln)}</text>`));
+      mapWrapTitle(cl.title, n.w-2*K.tpad).forEach((ln,i)=>
+        out.push(label(ln, n, K.fs.title, n.y+34+i*14, "mtitle", "c"+n.id)));
     }
-    out.push(`<title>#${n.id} · ${esc(pc.short)} — ${esc(c.title)}</title></a>`);
+    out.push(`<title>#${n.id} · ${esc(pc.short)} — ${esc(cl.title)}</title></a>`);
   }
   out.push(`</svg>`);
   return out.join("\n");
@@ -3764,11 +3888,15 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   // curation (sample or local) supplies folders+relations; ids the current
   // chain/dataset doesn't carry are held out, never drawn
   const validIds = new Set(parsed.map(cl=>cl.id));
-  // first-wins across folders too: chain folders may share a claim, and the
-  // map draws ONE node per claim (folder containment is drawn as a partition)
-  const seenIds = new Set();
+  // FIRST-WINS MOVED INTO mapTree, and the reason is the cross-cut folder. A
+  // claim may sit in several folders — AddToFolder checks membership within one
+  // folder only — and the map still draws ONE node per claim, so a folder whose
+  // every claim is filed elsewhere by evidence type used to render empty. It now
+  // gets a lighter "also filed here" spoke to the node's one drawing, which is
+  // the whole point of a cross-cut: it is a reading order, not a second copy.
+  // Dropping the membership here would throw away the fact the spoke needs.
   const filterFolders = fs => (fs||[]).map(f=>({name:f.name, path:f.path, fid:f.fid, chain:f.chain,
-    claims:(f.claims||[]).filter(id=>{ if(!validIds.has(id)||seenIds.has(id)) return false; seenIds.add(id); return true; }),
+    claims:(f.claims||[]).filter(id=>validIds.has(id)),
     folders:filterFolders(f.folders)}));
   const curFolders = cur? filterFolders(cur.folders) : [];
   const curRels = cur? cur.relations.filter(r=>validIds.has(r.from)&&validIds.has(r.to)) : [];
@@ -3777,7 +3905,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   // an edge to a claim off the page has nowhere to land.
   const chainRels = (await chainMapRelations(slug, [...validIds]).catch(()=>[]))
     .filter(r=>validIds.has(r.from)&&validIds.has(r.to));
-  const data = {folders:curFolders, all:parsed.map(cl=>cl.id), claims,
+  const data = {folders:curFolders, all:parsed.map(cl=>cl.id), claims, courtName:cs.name,
     relations:mergeRelations(chainRels, curRels),
     looseName: demo? "(no folder)" : "docket — newest "+parsed.length,
     linkFolders: !!cur};

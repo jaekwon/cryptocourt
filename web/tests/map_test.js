@@ -1,10 +1,29 @@
 // C1 harness: extract mapLayout/mapSvg from the LIVE file, render, and
-// geometrically verify the generated SVG (the owner's legibility mandate):
-// A node pairs disjoint (≥4u), B text-in-owner, C text pairs disjoint,
-// D folders nested-or-disjoint, E claims inside folders, F dots clear,
-// G edges cross no non-endpoint node and no header, H distinct lanes/tracks,
-// I everything in the viewBox — per text mode, demo + live shapes, plus a
-// NEGATIVE control and a §7.4 string sweep.
+// geometrically verify the generated SVG (the owner's legibility mandate).
+//
+// THE MAP WENT RADIAL, so the invariants moved with it. What the old set checked
+// was a grid: folders were nested BOXES, claims were rows inside them, and every
+// edge was routed through channel lanes and a horizontal bus so no line crossed
+// anything. Three of its nine checks were about that machinery — folders
+// nested-or-disjoint, claims inside folders, distinct lanes and bus tracks — and
+// none of them means anything now that a folder is a node with claims hung around
+// it. They are replaced by the two things the new layout actually promises:
+//
+//   A  every node pair — court, folder, claim alike — disjoint by ≥4u
+//   B  each label inside the node that owns it
+//   C  no two labels overlap
+//   E  every folder and claim is REACHED by a containment spoke (connectivity,
+//      which is what "claims inside folders" was really asserting)
+//   F  a phase dot sits inside its claim and clear of that claim's text
+//   G  a SPOKE crosses no node it does not end on. Chords are exempt BY DESIGN:
+//      a direct line between two claims cannot promise that, chords are drawn
+//      under the nodes for exactly that reason, and a check that demanded it
+//      would re-invent the bus.
+//   I  everything inside the viewBox
+//
+// G also needed a real segment/rect test. The old one returned `true` for any
+// segment that was not axis-aligned — fine when every edge was orthogonal, and
+// useless here, where it would have reported every spoke as hitting every node.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 function slice(from, to){
@@ -22,13 +41,10 @@ function buildCode(patch){
   code += slice('function esc(', '\n');
   code += slice('function fmtN(', 'function ugnot(');
   code += 'var NOW='+global.NOW+';\n';
-  // Round 28 split the literal: DEMO_CHAIN (generated) + DEMO_OVERLAY
-// (hand-written: desc, nested folders, relations, voteEndsAt), joined by
-// mergeDemo. Build the merged object the way the page does.
-code += slice('const DEMO_OVERLAY = {', '/* ===== BEGIN GENERATED').replace('const DEMO_OVERLAY = {','var DEMO_OVERLAY = {') + '\n';
-code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const DEMO_CHAIN = {','var DEMO_CHAIN = {') + '\n';
-code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
-code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
+  code += slice('const DEMO_OVERLAY = {', '/* ===== BEGIN GENERATED').replace('const DEMO_OVERLAY = {','var DEMO_OVERLAY = {') + '\n';
+  code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const DEMO_CHAIN = {','var DEMO_CHAIN = {') + '\n';
+  code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
+  code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
   code += slice('function statusText(', '\n/* =');
   code += slice('function phaseClass(', 'function docketRow');
   code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
@@ -38,71 +54,82 @@ code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 eval(buildCode());
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
-const estW=(t,fs_)=>t.length*fs_*0.62;
 
 function parseSVG(svg){
-  const rects=[], texts=[], circles=[], polys=[];
-  for(const m of svg.matchAll(/<rect class="(mnode|mfold[^"]*|mhdr)" x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)"(?: data-(?:id|fid)="(\d+)")?/g))
+  const rects=[], texts=[], circles=[], spokes=[], chords=[];
+  for(const m of svg.matchAll(/<rect class="(mnode|mfold[^"]*|mcourt)" x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)"(?: rx="[\d.]+")?(?: data-(?:id|fid)="(\d+)")?/g))
     rects.push({cls:m[1].split(" ")[0], x:+m[2], y:+m[3], w:+m[4], h:+m[5], ref:m[6]});
-  for(const m of svg.matchAll(/<text class="mtext[^"]*" x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)" textLength="([\d.]+)"[^>]*data-owner="(\w+)">([^<]*)<\/text>/g)){
+  for(const m of svg.matchAll(/<text class="mtext ?[^"]*" x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)" textLength="([\d.]+)"[^>]*data-owner="(\w+)">([^<]*)<\/text>/g)){
     const fs_=+m[3];
     texts.push({x:+m[1], y:+m[2]-0.8*fs_, w:+m[4], h:1.05*fs_, owner:m[5], s:m[6]});
   }
   for(const m of svg.matchAll(/<circle class="mdot ([a-z]+)" cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)" data-owner="(\w+)"/g))
     circles.push({cls:m[1], x:+m[2]-+m[4], y:+m[3]-+m[4], w:2*+m[4], h:2*+m[4], owner:m[5]});
-  for(const m of svg.matchAll(/<polyline class="medge ([^"]+)" points="([^"]+)" data-e="(\d+)" data-from="(\d+)" data-to="(\d+)"/g))
-    polys.push({cls:m[1], pts:m[2].split(" ").map(p=>p.split(",").map(Number)), from:m[4], to:m[5]});
+  for(const m of svg.matchAll(/<polyline class="medge spoke ([a-z]+)" points="([^"]+)" data-s="(\d+)"/g))
+    spokes.push({kind:m[1], pts:m[2].split(" ").map(p=>p.split(",").map(Number))});
+  for(const m of svg.matchAll(/<polyline class="medge ((?!spoke)[^"]+)" points="([^"]+)" data-e="(\d+)" data-from="(\d+)" data-to="(\d+)"/g))
+    chords.push({cls:m[1], pts:m[2].split(" ").map(p=>p.split(",").map(Number)), from:m[4], to:m[5]});
   const vb = svg.match(/viewBox="([-\d. ]+)"/)[1].split(" ").map(Number);
-  return {rects, texts, circles, polys, vb};
+  return {rects, texts, circles, spokes, chords, vb};
 }
 const disjoint=(a,b,g=0)=>a.x+a.w+g<=b.x||b.x+b.w+g<=a.x||a.y+a.h+g<=b.y||b.y+b.h+g<=a.y;
-const inside=(a,b)=>a.x>=b.x&&a.y>=b.y&&a.x+a.w<=b.x+b.w&&a.y+a.h<=b.y+b.h;
-function segHitsRect(p,q,r){
-  const [x1,y1]=p,[x2,y2]=q;
-  if(y1===y2) return y1>r.y&&y1<r.y+r.h&&Math.max(x1,x2)>r.x&&Math.min(x1,x2)<r.x+r.w;
-  if(x1===x2) return x1>r.x&&x1<r.x+r.w&&Math.max(y1,y2)>r.y&&Math.min(y1,y2)<r.y+r.h;
-  return true;
+const inside=(a,b)=>a.x>=b.x-0.51&&a.y>=b.y-0.51&&a.x+a.w<=b.x+b.w+0.51&&a.y+a.h<=b.y+b.h+0.51;
+// Liang-Barsky: does the OPEN segment pass through the rect's interior? Shrunk by
+// a hair so a spoke that merely lands on a border is not a crossing.
+function segHitsRect(p,q,r,pad=1){
+  const x0=r.x+pad, y0=r.y+pad, x1=r.x+r.w-pad, y1=r.y+r.h-pad;
+  if(x1<=x0||y1<=y0) return false;
+  let t0=0, t1=1;
+  const dx=q[0]-p[0], dy=q[1]-p[1];
+  for(const [num,den] of [[x0-p[0],dx],[p[0]-x1,-dx],[y0-p[1],dy],[p[1]-y1,-dy]]){
+    if(den===0){ if(num>0) return false; continue; }
+    const t=num/den;
+    if(den<0){ if(t>t1) return false; if(t>t0) t0=t; }
+    else { if(t<t0) return false; if(t<t1) t1=t; }
+  }
+  return t1>t0;
 }
 function verify(svg, label){
   const P=parseSVG(svg);
   const claims=P.rects.filter(r=>r.cls==="mnode");
   const folders=P.rects.filter(r=>r.cls==="mfold");
-  const hdrs=P.rects.filter(r=>r.cls==="mhdr");
+  const courts=P.rects.filter(r=>r.cls==="mcourt");
+  const boxes=[...claims,...folders,...courts];
   const fails=[]; let minGap=Infinity;
-  for(let i=0;i<claims.length;i++) for(let j=i+1;j<claims.length;j++){
-    if(!disjoint(claims[i],claims[j],4)) fails.push(`A #${claims[i].ref}/#${claims[j].ref}`);
-    const gx=Math.max(claims[j].x-(claims[i].x+claims[i].w), claims[i].x-(claims[j].x+claims[j].w));
-    const gy=Math.max(claims[j].y-(claims[i].y+claims[i].h), claims[i].y-(claims[j].y+claims[j].h));
+  for(let i=0;i<boxes.length;i++) for(let j=i+1;j<boxes.length;j++){
+    if(!disjoint(boxes[i],boxes[j],4)) fails.push(`A ${boxes[i].cls}${boxes[i].ref||""}/${boxes[j].cls}${boxes[j].ref||""}`);
+    const gx=Math.max(boxes[j].x-(boxes[i].x+boxes[i].w), boxes[i].x-(boxes[j].x+boxes[j].w));
+    const gy=Math.max(boxes[j].y-(boxes[i].y+boxes[i].h), boxes[i].y-(boxes[j].y+boxes[j].h));
     minGap=Math.min(minGap, Math.max(gx,gy));
   }
-  const ownerRect=t=>t.owner[0]==="c"? claims.find(r=>r.ref===t.owner.slice(1)) : hdrs[+t.owner.slice(1)];
+  const ownerRect=t=>t.owner[0]==="c"? claims.find(r=>r.ref===t.owner.slice(1))
+    : t.owner[0]==="h"? folders[+t.owner.slice(1)] : courts[0];
   for(const t of P.texts){ const o=ownerRect(t); if(!o||!inside(t,o)) fails.push(`B ${t.owner} "${t.s}"`); }
   for(let i=0;i<P.texts.length;i++) for(let j=i+1;j<P.texts.length;j++)
     if(!disjoint(P.texts[i],P.texts[j])) fails.push(`C ${P.texts[i].owner}/${P.texts[j].owner}`);
-  for(let i=0;i<folders.length;i++) for(let j=i+1;j<folders.length;j++){
-    const a=folders[i],b=folders[j];
-    if(!disjoint(a,b)&&!inside(a,b)&&!inside(b,a)) fails.push(`D ${a.ref}/${b.ref}`);
-  }
-  for(const c of claims) if(!folders.some(f=>inside(c,f))) fails.push(`E #${c.ref}`);
+  // E: reachability. Every folder and claim must be an endpoint of some spoke, or
+  // it is drawn floating with nothing saying where it belongs.
+  const ends=new Set();
+  for(const s of P.spokes) for(const pt of [s.pts[0], s.pts[s.pts.length-1]])
+    for(const b of boxes) if(pt[0]>=b.x-1&&pt[0]<=b.x+b.w+1&&pt[1]>=b.y-1&&pt[1]<=b.y+b.h+1) ends.add(b);
+  for(const b of [...claims,...folders]) if(!ends.has(b)) fails.push(`E ${b.cls}${b.ref||""} unreached`);
   for(const d of P.circles){
     const o=claims.find(r=>r.ref===d.owner.slice(1));
     if(!o||!inside(d,o)) fails.push(`F dot ${d.owner}`);
     for(const t of P.texts) if(t.owner===d.owner && !disjoint(d,t)) fails.push(`F dot/text ${d.owner}`);
   }
-  for(const e of P.polys){
-    const skip=new Set([e.from,e.to]);
-    for(let s2=0;s2+1<e.pts.length;s2++){
-      for(const c of claims) if(!skip.has(c.ref)&&segHitsRect(e.pts[s2],e.pts[s2+1],c)) fails.push(`G e${e.from}->${e.to} x #${c.ref}`);
-      for(const h of hdrs) if(segHitsRect(e.pts[s2],e.pts[s2+1],h)) fails.push(`G e${e.from}->${e.to} x hdr`);
-    }
+  // G: spokes only. A spoke's endpoints sit on the two boxes it joins, so a box
+  // it merely touches at an endpoint is not a crossing — hence the endpoint test
+  // before the interior test.
+  for(const s of P.spokes){
+    const touches=b=>[s.pts[0],s.pts[s.pts.length-1]].some(pt=>
+      pt[0]>=b.x-1&&pt[0]<=b.x+b.w+1&&pt[1]>=b.y-1&&pt[1]<=b.y+b.h+1);
+    for(let k=0;k+1<s.pts.length;k++)
+      for(const b of boxes) if(!touches(b)&&segHitsRect(s.pts[k],s.pts[k+1],b)) fails.push(`G spoke x ${b.cls}${b.ref||""}`);
   }
-  const busYs=P.polys.filter(p=>p.pts.length===6).map(p=>p.pts[2][1]);
-  if(new Set(busYs).size!==busYs.length) fails.push("H bus");
-  const vxs=P.polys.flatMap(p=>p.pts.length===6? [p.pts[1][0],p.pts[3][0]] : [p.pts[1][0]]);
-  if(new Set(vxs).size!==vxs.length) fails.push("H lane");
   const [bx,by,bw,bh]=P.vb;
   for(const r of [...P.rects,...P.texts,...P.circles]) if(!inside(r,{x:bx,y:by,w:bw,h:bh})) fails.push("I overflow");
-  console.log(`  [${label}] nodes=${claims.length} folders=${folders.length} edges=${P.polys.length} minGap=${isFinite(minGap)?minGap.toFixed(0):"-"} vb=${bw}x${bh} -> ${fails.length?"FAIL":"PASS"}`);
+  console.log(`  [${label}] claims=${claims.length} folders=${folders.length} chords=${P.chords.length} spokes=${P.spokes.length} minGap=${isFinite(minGap)?minGap.toFixed(0):"-"} vb=${bw}x${bh} -> ${fails.length?"FAIL":"PASS"}`);
   fails.slice(0,6).forEach(f=>console.log("    !!",f));
   return fails.length===0;
 }
@@ -110,7 +137,7 @@ function verify(svg, label){
 // demo orem, both modes
 const c0=DEMO.courts.orem;
 const claimsMap={}; c0.claims.forEach(id=>{ const d=DEMO.claims["orem/"+id]; claimsMap[id]={title:d.title, statusText:statusText(d)}; });
-const demoData={folders:c0.folders, all:c0.claims, claims:claimsMap, relations:DEMO.relations.orem, linkFolders:true};
+const demoData={folders:c0.folders, all:c0.claims, claims:claimsMap, relations:DEMO.relations.orem, linkFolders:true, courtName:"Orem Truth Court"};
 let allpass=true; const svgs={};
 for(const mode of ["titles","ids"]){
   const L=mapLayout(demoData,mode); const svg=mapSvg(L,demoData,"orem");
@@ -119,35 +146,79 @@ for(const mode of ["titles","ids"]){
 }
 ok("A-I pass on demo orem (both modes)", allpass);
 
-// live shape: 50 claims, one pseudo box, no relations (multi-column wrap)
+// live shape: 50 claims in one pseudo folder, no relations — the widest ring the
+// solve has to fit, and the case where the fit rescale actually fires.
 const liveClaims={}; const liveAll=[];
 for(let i=1;i<=50;i++){ liveAll.push(i); liveClaims[i]={title:`Synthetic documentary claim number ${i} with a longer wrapping title.`, statusText: i%7===0?"settled — every stake withdraws 1×": i%5===0?"disputed — a sealed vote is deciding":"open — stake YES or NO"}; }
-const liveData={folders:[], all:liveAll, claims:liveClaims, relations:[], looseName:"docket — newest 50"};
+const liveData={folders:[], all:liveAll, claims:liveClaims, relations:[], looseName:"docket — newest 50", courtName:"Orem Truth Court"};
 let livepass=true;
 for(const mode of ["titles","ids"]){
   const L=mapLayout(liveData,mode); const svg=mapSvg(L,liveData,"orem");
   livepass=verify(svg,"live50/"+mode)&&livepass;
 }
-ok("A-I pass on live 50-claim box (both modes)", livepass);
+ok("A-I pass on live 50-claim ring (both modes)", livepass);
+
+// a DEEP tree with cross-cut membership: the covid shape, which is what turned
+// the org chart into a complaint. Three folder levels, six roots, one folder
+// whose every claim is filed elsewhere.
+{
+  const T=(n,kids,claims)=>({name:n, claims:claims||[], folders:kids||[]});
+  const deep=[
+   T("Origins",[T("Laboratory hypothesis",[T("The 2020 question",[],[1]),T("After the agency assessments",[],[11,13])]),
+                T("Natural spillover",[T("The market cluster",[],[5])])]),
+   T("The document trail",[T("Grants and funding",[T("The WIV subawards",[],[2])]),
+                           T("Correspondence",[T("Released under subpoena",[],[8])]),
+                           T("FOIA and subpoena",[T("Withholdings",[],[10])])]),
+   T("Institutions and accountability",[T("Testimony",[T("Gain-of-function funding",[],[12])]),
+                                        T("NIAID and its director",[],[2,8,10,12])]),
+  ];
+  const dc={}; [1,2,5,8,10,11,12,13].forEach(i=>dc[i]={title:"A claim of fact stated as one sentence, number "+i+".", statusText:"open — stake YES or NO"});
+  const dd={folders:deep, all:[1,2,5,8,10,11,12,13], claims:dc, courtName:"COVID-19 Origins & Response Court", linkFolders:true,
+    relations:[{from:2,to:11,type:"bears",stance:"supports"},{from:5,to:11,type:"bears",stance:"contradicts"},
+               {from:8,to:12,type:"bears",stance:"supports"},{from:13,to:11,type:"supersedes"}]};
+  let dp=true;
+  for(const mode of ["titles","ids"]){ const L=mapLayout(dd,mode); dp=verify(mapSvg(L,dd,"covid"),"covid/"+mode)&&dp; }
+  ok("A-I pass on a three-level tree with a cross-cut folder", dp);
+  // The cross-cut's own promise: it holds four claims that are all drawn
+  // elsewhere, so it must still be joined to each of them.
+  const L=mapLayout(dd,"ids");
+  ok("a claim is drawn once even when two folders hold it", L.nodes.length===8);
+  ok("the cross-cut folder is still joined to its four claims",
+     L.spokes.filter(s=>s.kind==="also").length===4);
+}
 
 // determinism: same input → same bytes
 ok("deterministic bytes", mapSvg(mapLayout(demoData,"titles"),demoData,"orem")===svgs.titles);
 
-// NEGATIVE control: corrupt vgap → harness must FAIL
+// the court is the centre, and it is one node
+ok("exactly one court node, and it is not a link",
+   (svgs.titles.match(/class="mcourt"/g)||[]).length===1 && !/<a[^>]*>\s*<rect class="mcourt"/.test(svgs.titles));
+{
+  const L=mapLayout(demoData,"titles");
+  const cx=L.court.cx, cy=L.court.cy;
+  const far=L.nodes.concat(L.folders).map(b=>Math.hypot(b.cx-cx,b.cy-cy));
+  ok("every folder and claim sits outside the court", Math.min(...far) > L.court.w/2);
+  // claims hang off folders, so they are the outer ring
+  const fr=L.folders.map(b=>Math.hypot(b.cx-cx,b.cy-cy));
+  const nr=L.nodes.map(b=>Math.hypot(b.cx-cx,b.cy-cy));
+  ok("claims sit further out than the shallowest folders", Math.max(...nr) > Math.max(...fr)*0.9);
+}
+
+// NEGATIVE control: collapse the clearance → the harness must FAIL
 {
   const badNS={};
-  const badCode = buildCode(c=>c.replace("vgap:12,","vgap:-20,"));
+  const badCode = buildCode(c=>c.replace("sep:22,","sep:-90,"));
   const f=new Function("g", badCode + "; g.mapLayout=mapLayout; g.mapSvg=mapSvg;");
   f(badNS);
   const Lb=badNS.mapLayout(demoData,"titles"); const svgB=badNS.mapSvg(Lb,demoData,"orem");
   const silent=[]; const orig=console.log; console.log=(...a)=>silent.push(a.join(" "));
   const badPass=verify(svgB,"negative");
   console.log=orig;
-  ok("negative control detected (corrupt vgap fails)", badPass===false);
+  ok("negative control detected (collapsed clearance fails)", badPass===false);
 }
 
 // §7.4 sweep of the generated map output
-ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|redeem|profit/i.test(svgs.titles.replace(/aria-label="[^"]*"/,'')));
+ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|redeem|profit/i.test(svgs.titles.replace(/aria-label="[^"]*"/,'').replace(/<title>[\s\S]*?<\/title>/g,'')));
 // dot classes agree with statusPill families for every orem claim
 {
   let agree=true;
@@ -160,10 +231,8 @@ ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|r
   }
   ok("dot classes agree with phaseClass on all 11 claims", agree);
 }
-// every node is a link; folder headers link (demo)
 ok("nodes are links", (svgs.titles.match(/<a href="#\/c\/orem\/\d+"/g)||[]).length===11);
-ok("folder headers link to folder pages", svgs.titles.includes('href="#/c/orem/f/0"'));
-// map chrome strings exist in the source (route-level, not extractable)
+ok("folder nodes link to folder pages", svgs.titles.includes('href="#/c/orem/f/0"'));
 ok("count line present in source", src.includes("${data.all.length} claims, ${data.all.length} shown"));
 ok("live honesty lines present (chain-read + no-folders)", src.includes("folders read from the chain — moderator curation") && src.includes("this court's moderators have filed no folders"));
 ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slider"].every(id=>src.includes(id)));

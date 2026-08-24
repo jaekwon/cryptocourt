@@ -71,6 +71,9 @@ code += slice('function folderCount(', 'function folderRowHtml');
 code += slice('function folderRowHtml(', 'function isDone');
 code += 'function safeInline(x){ return esc(String(x)); }\n';
 code += 'const ICN_FOLDER="<svg/>";\n';
+// F1 asks mapLayout directly now, so the map's own code has to be here.
+code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
+code += 'function phaseClass(t){ return {short:"open"}; }\n';
 eval(code);
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
@@ -137,7 +140,22 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
 
   // D1 critic fixes
-  ok("F1: map data build has first-wins across folders", src.includes("first-wins across folders too"));
+  //
+  // F1 WAS A GREP for the comment above the map's dedup, and the radial layout
+  // moved that dedup out of the view and into mapTree — so the grep failed while
+  // the property held. Same lesson F5 below already records: ask the code, do not
+  // pattern-match its prose. A claim in two folders is drawn ONCE, and the second
+  // folder gets an "also filed here" spoke instead of a second copy.
+  {
+    const two = [{name:"By evidence", claims:[7], folders:[]},
+                 {name:"Cross-cut", claims:[7], folders:[]}];
+    const d = {folders:two, all:[7], claims:{7:{title:"One claim, filed twice.", statusText:"open — stake YES or NO"}},
+               relations:[], courtName:"Orem Truth Court"};
+    const L = mapLayout(d, "ids");
+    ok("F1: a claim in two folders is drawn once", L.nodes.length===1);
+    ok("F1: and the second folder is joined to it anyway",
+       L.spokes.filter(s=>s.kind==="also").length===1);
+  }
   ok("F2: folder page resolves only this page's ids", src.includes("resolve\n  // only THIS PAGE's out-of-window ids") || src.includes("only THIS PAGE's out-of-window ids"));
   ok("F3: no id re-sort on chain members", !src.includes("members.concat(got).sort((a,b)=>b.id-a.id)"));
   // F5 was a grep for the guard's exact spelling, which reformatting broke while
