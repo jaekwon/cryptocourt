@@ -8883,5 +8883,12 @@
   "label": "recordPools: the trim rides on every call, not once per epoch",
   "find": "\tif hE > cs.histTrimmedTo {",
   "replace": "\tif hE >= cs.histTrimmedTo {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: a zero share is enqueued instead of returning nothing",
+  "find": "\tif share <= 0 {\n\t\treturn 0\n\t}",
+  "replace": "\tif share < 0 {\n\t\treturn 0\n\t}"
  }
 ]
