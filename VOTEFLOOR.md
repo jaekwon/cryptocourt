@@ -3139,3 +3139,49 @@ and the fix is one line rather than a carve-out. Flagged for panels 2 and 3.
    knife-edge fixture?
 5. Does the carrot still pay the weight that was tallied?
 6. What breaks, exhaustively.
+
+## The drift pass after the six constant closures, and a grep that nearly reported eight survivors
+
+**210 ROWS, 210 CAUGHT, NOTHING ELSE.** Run from a `--depth 1` clone pinned at
+653fe50, in seven batches of 30 at 5 shards. Zero survivors, zero `[timed out]`,
+zero `[invalid]`, zero `[bad anchor]`, zero `[unclassified]`.
+
+**THE SET, and why it is not the one I first computed.** Baseline is f0eb2f1, the
+commit the last full pass observed at 1215 rows. Against HEAD's 1254:
+
+    DELTA  rows added since          54   association.gno 41, court.gno 5,
+                                          moderation.gno 2, stakeseries.gno 2,
+                                          claim.gno 2, supersede.gno 1, ccwrap 1
+    DRIFT  target file changed      156   moderation.gno 67, court.gno 51,
+                                          folders.gno 28, supersede.gno 10
+
+The first attempt computed this against the WORKING TREE's corpus while diffing
+COMMITTED source, which pulled in 28 uncommitted association rows whose target code
+was not in HEAD — all 28 would have reported INVALID for no reason at all. A corpus
+and a source tree have to be read at the same commit or the pass measures neither.
+
+**AND THE FIRST ATTEMPT'S DRIFT SET WAS A PROXY I INVENTED.** By the recorded
+definition there was NO drift at that point: no committed source file had changed,
+because the other session's edits were all uncommitted. I substituted "rows in the
+four files my new tests exercise" — 160 of them — on the argument that three of the
+new fixtures shift ambient state for everything after them (a 400-hour skip, a
+241_920-block skip, and a file deliberately named to sort first). That is a real
+vector and worth covering, but it is not the same claim, and it was labelled as
+mine rather than as the recorded pass. Two commits later the rename refactor made
+the genuine drift set large, and this pass covers it instead.
+
+**A GREP THAT NEARLY REPORTED EIGHT SURVIVORS.** The independent count ran
+`grep -ciE SURVIVED` over the log and returned 8. There were none: the flag is
+case-INSENSITIVE and the harness's own summary sentence is "0 not caught (survived,
+invalid, or never applied)", so every summary line matched itself. The same count
+also read 240 rows against 210 staged, because a batch that outran the foreground
+timeout kept its `tee` and was then appended a second time. Both numbers were an
+instrument reporting on itself — the third time in this file's history that a
+sweep's own output had to be verified before its verdict was believed. Counting
+distinct verdict lines against the rows actually staged gives 210 and 210.
+
+**WHAT IS STILL UNOBSERVED.** The other 1,044 rows have not been re-run since
+f0eb2f1's full pass. Their target files have not changed and no rows were added to
+them, so that pass still speaks for them — with the residual that a TEST file
+change can move a catcher without touching the mutated source, which is the one
+thing only a full pass settles.
