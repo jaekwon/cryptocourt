@@ -3616,3 +3616,49 @@ another session's rename refactor. A planted mutation lands as a MODIFICATION, s
 capturing one would have shown up as a deletion paired with an insertion — which is
 why `cat >>` was safe here by construction rather than by luck. Editing an existing
 line in a plant-target file while the harness runs would not be.
+
+## The txtar scenarios: 110 of 119 assertions are bare OK!, and that is the design
+
+**THE NUMBER THAT LOOKED LIKE A FINDING.** scn_covid.txtar carries 119 assertions
+and 110 of them are a bare `stdout 'OK!'` — 92% checking only that a transaction did
+not abort. A file with 119 assertions reads thorough; nine of them look at an
+outcome. Census across all 13:
+
+    scn_covid       119 asserts, 110 bare OK!      kourtv2_moderation  59 / 14
+    scn_dispute      27 / 21                       kourtv2_money       55 / 7
+    scn_smoke        30 / 15                       kourtv2_testclock   28 / 8
+    scn_crystal      18 / 13                       kourtv1_market      23 / 9
+
+**IT IS A SMOKE PROPERTY BY CONSTRUCTION, and the scenarios say so** — "five years
+of docket, on the real calendar". Each OK! is a `call` step, so it catches an abort,
+a panic, a gas failure or an invariant trip at that step; 110 of them in sequence is
+a real integrity claim about a five-year timeline, and the nine `expect`s are where
+outcomes are read. The DSL has outcome verbs and they are GUARDED, which is what
+settles it:
+
+  - `expect` refuses a transaction: "an expect on it would broadcast one while
+    pretending to query."
+  - `expect_refuse` refuses a READ, and enforces it against the realm's actual
+    read surface via _realm_reads(): `! gnokey maketx call` on a read fails because
+    it is not a crossing function, "so the assertion would pass without the realm
+    ever refusing anything." That is check-abort-assertions' lesson, implemented one
+    layer out.
+  - `note()` refuses a newline, because `note("x\nstdout 'INJECTED'")` once emitted
+    its tail as a LIVE assertion.
+
+**AND THE GENERATED-FILE HAZARD IS GUARDED THREE WAYS.** scenarios-check
+regenerates every CI scenario and cmp's it against the committed txtar; refuses a
+scn_*.txtar with no source .py ("it runs in txtar-test with no source"); and refuses
+one whose scenario has been marked CI = False. It is in `make check`.
+
+    clean tree                    rc=0  "every generated txtar matches its scenario."
+    a note's text edited          FAIL  "scn_covid.txtar is stale - run 'make scenarios'"
+    restored                      rc=0
+
+**MY FIRST PROBE OF THAT WAS A NON-RESULT AND IS RECORDED AS ONE.** I renamed an
+actor (virology -> virologyX) expecting a stale txtar; the run came back rc=2 with no
+stale line, because the rename broke the GENERATOR — covid-curation.json names that
+actor — so I had measured its error handling, not the staleness arm. Editing a
+note's text changes the output without breaking generation, and then the arm fires.
+A probe that fails for a different reason than the one you are testing is not a
+weaker result, it is no result.
