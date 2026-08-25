@@ -3976,11 +3976,22 @@ function mapLayout(data, mode){
    The title is shown whole here. The node draws two wrapped lines and an
    ellipsis; this is the one place a reader can see the claim as it was filed
    without leaving the map. */
-function mapSelCard(id, data, slug){
+function mapSelCard(id, data, slug, L){
   const c = data.claims[id];
   if(!c) return "";
   const pc = phaseClass(c.statusText);
-  const rel = (data.relations||[]);
+  /* THE CHORDS THE MAP ACTUALLY DREW, and this counted every relation in the
+     data. mapLayout drops a chord whose other end is not on the map — a claim
+     that was purged, or redacted, or simply past the docket window a live court
+     was read over — so the card could report "asserts: 1 contradicts" beside a
+     map with no chord on it at all, while its own fallback line said "no
+     relations DRAWN ON THIS MAP". The distinction was in the copy the whole time
+     and not in the tally.
+     Counting L.edges instead makes the card read the drawing rather than the
+     data behind it, which is what it claims to describe. Without a layout there
+     is no way to know what was drawn, so it says nothing rather than something
+     unverified — the same fail-closed rule the folder reads use. */
+  const rel = (L && L.edges) ? L.edges : [];
   const out = rel.filter(r=>r.from===id), inn = rel.filter(r=>r.to===id);
   const tally = rs => {
     const n = {supports:0, contradicts:0, supersedes:0, part:0};
@@ -4659,7 +4670,7 @@ function mountMap(slug, data, focusId){
       return;
     }
     if(!panel) return;
-    if(selClaim!=null){ dim(selClaim); panel.innerHTML = mapSelCard(selClaim, data, slug); }
+    if(selClaim!=null){ dim(selClaim); panel.innerHTML = mapSelCard(selClaim, data, slug, L); }
     else { const f = L.folders[selFold]; dimFolder(f||{}); panel.innerHTML = mapFolderCard(f, data, slug); }
     const x = document.getElementById("msel-x");
     if(x) x.addEventListener("click", ()=>{ select(null); });

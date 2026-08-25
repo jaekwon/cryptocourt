@@ -218,13 +218,25 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
 {
   global.safeInline = x => esc(String(x));
   eval(slice('function mapSelCard(', 'function mapDotClass'));
-  const d = {claims:{7:{title:"A claim of fact, stated once, at length enough to be cut on a node.",
-                        statusText:"open — stake YES or NO"}},
+  /* THE CARD DESCRIBES THE DRAWING, so the fixture has to be one. This was a
+     bare claims dict holding only #7, with relations pointing at 5, 6, 8 and 9 —
+     claims on no map anywhere — and it asserted that the card counted them. It
+     was pinning the defect: mapLayout drops a chord whose other end is missing,
+     so the card reported relations beside a map that drew none, under its own
+     fallback line reading "no relations DRAWN ON THIS MAP". Both halves are
+     checked now, and the neighbours are really on the map. */
+  const ids7 = [5,6,7,8,9];
+  const d = {folders:[], all:ids7,
+             claims:Object.fromEntries(ids7.map(i => [i, {
+               title: i===7 ? "A claim of fact, stated once, at length enough to be cut on a node."
+                            : "Neighbouring claim "+i+".",
+               statusText:"open — stake YES or NO"}])),
              relations:[{from:7,to:9,type:"bears",stance:"supports"},
                         {from:7,to:8,type:"bears",stance:"contradicts"},
                         {from:5,to:7,type:"bears",stance:"contradicts"},
-                        {from:6,to:7,type:"supersedes"}]};
-  const html = mapSelCard(7, d, "covid");
+                        {from:6,to:7,type:"supersedes"}],
+             courtName:"C", linkFolders:true};
+  const html = mapSelCard(7, d, "covid", mapLayout(d, "titles"));
   ok("the card names the claim", html.includes("#7"));
   // The node shows two wrapped lines and an ellipsis; the card is the one place
   // the sentence appears whole without leaving the map.
@@ -233,6 +245,16 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("it tallies what the claim asserts", /asserts:[^<]*1 supports/.test(html) && /asserts:[^<]*1 contradicts/.test(html));
   ok("and what is asserted about it", /asserted about it:[^<]*1 contradicts/.test(html)
      && /asserted about it:[^<]*1 supersedes/.test(html));
+  {
+    // The other half: a relation whose other end is not on this map. A claim can
+    // be purged, redacted, or simply past the docket window a live court was read
+    // over, and mapLayout draws no chord for it — so the card must not report one.
+    const gone = Object.assign({}, d,
+      {relations:[{from:7, to:404, type:"bears", stance:"contradicts"}]});
+    const h2 = mapSelCard(7, gone, "covid", mapLayout(gone, "titles"));
+    ok("a relation to a claim that is not on the map is not reported as drawn",
+       /no relations drawn on this map/.test(h2) && !/asserts:/.test(h2));
+  }
   ok("the claim page is offered, not taken", html.includes('href="#/c/covid/7"')
      && html.includes("Open claim page"));
   ok("and the selection can be cleared", html.includes('id="msel-x"'));
