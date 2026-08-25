@@ -4083,7 +4083,15 @@ function mapSvg(L, data, slug){
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
     out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
     out.push(`<circle class="mdot ${mapDotClass(pc.short)}" cx="${n.x+n.w-12}" cy="${n.y+14}" r="4" data-owner="c${n.id}"/>`);
-    out.push(label(`#${n.id} · ${pc.short}`, {x:n.x, w:n.w-14}, K.fs.id, n.y+16, "", "c"+n.id));
+    /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
+       bought an ellipsis and nothing else. An ids box is 64 wide, less 14 for
+       the dot and 16 for padding — about six characters — and "#8 · settled" is
+       twelve, so every claim on the zoomed-out map read "#8 …". The ellipsis is
+       a promise that there is more of the text, and for an id there is not; the
+       phase it stood for is already on the node as the dot's colour, which is
+       what the legend is for, and in full in the tooltip. */
+    out.push(label(L.mode==="titles" ? `#${n.id} · ${pc.short}` : `#${n.id}`,
+                   {x:n.x, w:n.w-14}, K.fs.id, n.y+16, "", "c"+n.id));
     if(L.mode==="titles"){
       mapWrapTitle(cl.title, n.w-2*K.tpad).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+34+i*14, "mtitle", "c"+n.id)));

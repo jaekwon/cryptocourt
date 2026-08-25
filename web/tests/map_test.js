@@ -478,6 +478,32 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
        F.folders.every(f => f.w < F.court.w));
   }
 
+  /* AN ELLIPSIS IS A PROMISE THAT THERE IS MORE OF THE TEXT, and on an id there
+     is not. The zoomed-out map asked each claim box for "#8 · settled" in a
+     64-wide box less 14 for the dot and 16 for padding — about six characters —
+     so every claim on it read "#8 …". The phase those four characters stood for
+     is on the node already, as the colour of the dot the legend explains, and in
+     full in the tooltip. In ids mode the id is the whole label. */
+  {
+    const d4 = {folders:[{name:"F", claims:[1,2], folders:[], path:"0"}], all:[1,2],
+                claims:{1:{title:"A claim.", statusText:"settled — every stake withdraws"},
+                        2:{title:"Another.", statusText:"open — stake YES or NO"}},
+                relations:[], courtName:"C", linkFolders:true};
+    const heads = mode => {
+      const svg = mapSvg(mapLayout(d4, mode), d4, "s");
+      // the claim's HEADER label: owned by the claim, and not the title line
+      return [...svg.matchAll(/<text class="mtext "[^>]*data-owner="c(\d+)"[^>]*>([^<]*)</g)]
+        .map(m => m[2]);
+    };
+    const ids = heads("ids");
+    ok("ids mode labels a claim with its id and nothing else",
+       ids.length === 2 && ids.every(t => /^#\d+$/.test(t.trim())));
+    ok("...so no claim on the zoomed-out map promises text it does not show",
+       ids.every(t => t.indexOf("…") < 0));
+    ok("but titles mode still says the phase, where there is room for it",
+       heads("titles").every(t => /settled|open/.test(t)));
+  }
+
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
      was widened to hold more of a title. That was the wrong property and it is
      worth saying why rather than just relaxing it: area conflates two things,
