@@ -3442,18 +3442,30 @@ const MAPK = {
   // every claim, which cut every title at two short lines and spent the same
   // space on "Another" as on a forty-word finding — the boxes were sized to the
   // grid the layout used to be.
-  // 230 IS MEASURED, AND IT IS THE KNEE OF THE CURVE. The covid docket's titles
-  // run 70 to 139 characters, median 107. Rendered and counted at three widths:
+  // WIDTH AND THE LINE CAP ARE ONE KNOB, and measuring width alone found the
+  // wrong answer. This note used to say 230 was the knee of the curve, from a
+  // sweep of width at a fixed four-line cap: 206 cut 12 of 19 titles, 230 cut 5,
+  // 250 cut 4 for another eight per cent of drawing. Every number was right and
+  // the conclusion was still wrong, because a NARROWER box allowed another line
+  // fits more of the title in LESS circumference. A node costs its ring
+  // w|sin t| + h|cos t|, so trading 24px of width for 28px of height is nearly
+  // free there, while the width it gives back comes off every ring.
+  // The covid docket's titles run 70 to 139 characters, median 107. Rendered and
+  // counted over the pair rather than over width alone:
   //
-  //     206   12 of 19 cut, 88 chars shown, graph 1819x1698
-  //     230    5 of 19 cut, 102 chars shown, graph 2000x1852   <-- here
-  //     250    4 of 19 cut, 104 chars shown, graph 2155x1985
+  //     w=230 cap=4    5 of 19 cut, 102 chars, graph 1842x1844, mean r 776
+  //     w=182 cap=6    3 of 19 cut, 104 chars, graph 1588x1623, mean r 690
+  //     w=194 cap=6    2 of 19 cut, 105 chars, graph 1652x1666, mean r 713
+  //     w=206 cap=6    0 of 19 cut, 107 chars, graph 1728x1737, mean r 743  <--
+  //     w=218 cap=5    1 of 19 cut, 106 chars, graph 1786x1793, mean r 759
   //
-  // 250 buys ONE more whole title for another eight per cent of drawing, and the
-  // owner's other standing complaint is that the nodes sit too far apart — so
-  // past 230 this trades the second complaint against the first. The width grows
-  // without the height, deliberately: height is what pushes the rings apart.
-  node:  { titles:{w:230,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
+  // 206x6 is not a compromise between the owner's two complaints — it beats the
+  // old setting on both. Every title on this docket shows whole where five were
+  // cut, and the drawing is six per cent smaller with every claim 33px nearer
+  // the court. Below 206 the graph keeps shrinking and titles start being cut
+  // again, which is the trade the old note described; it just begins further in
+  // than a four-line box could ever reach.
+  node:  { titles:{w:206,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
   fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder
   // THE COURT IS THE BIGGEST THING ON THE MAP, which it was not: at 190x54 it
@@ -3473,7 +3485,11 @@ const MAPK = {
   // Kept inside the wedge's own SLACK so the disjointness proof is untouched: a
   // node that cannot move without leaving its wedge does not move.
   twist:0.11,
-  fs:{header:12, id:12, title:11, court:14}, charW:0.62, maxTitleLines:4,
+  // maxTitleLines is a CAP, not a height: a box is as tall as its own title
+  // needs and no taller, so raising this costs a short claim nothing. It is the
+  // other half of the width measurement above — six lines of a 206 box holds 162
+  // characters, which covers this docket's longest title at 139.
+  fs:{header:12, id:12, title:11, court:14}, charW:0.62, maxTitleLines:6,
 };
 /* maxLines is a PARAMETER because the box that holds the text decides it. In ids
    mode a folder node is 26px tall and two lines of 12px text do not fit — the

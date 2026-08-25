@@ -330,30 +330,54 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("rings still increase outward", D2.rings.every((r,i)=> i===0 || r > D2.rings[i-1]));
 
   /* A SPARSE SUBTREE IS NOT EXILED BY A CROWDED ONE THAT SHARES ITS DEPTH.
-     Radius is a property of a sibling group, not of a depth. `deep` is built for
-     this: A1 holds seven claims and B1 holds two, and under one-radius-per-depth
-     B1's two were flung to A1's ring because a ring can only be as tight as its
-     worst wedge. On the real covid docket that cost 392px — "The iPhone texts"
-     sat at 1040 with three claims because "Gain-of-function funding" needed it.
+     Radius is a property of a sibling group, not of a depth: under one radius per
+     ring, a ring can only be as tight as its worst wedge, so two claims got flung
+     out to wherever twenty needed to be. On the real covid docket that cost
+     392px — "The iPhone texts" sat at r=1040 with three claims because
+     "Gain-of-function funding" happened to share its depth.
      Groups may move independently because angular sectors are DISJOINT: two
      boxes in non-overlapping sectors cannot touch at any pair of radii, and the
      only pair that can collide is a parent and its own descendant, which the
      clearance term bounds from the parent's real radius.
-     ONE ASSERTION, AND TWO MORE I WROTE AND THREW AWAY. The other two were "a
+     THE FIXTURE IS ITS OWN, AND IT HAS TO BE NESTED AND LOPSIDED. `deep` was
+     used first and quietly stopped discriminating when the claim box was
+     re-proportioned: with taller boxes the CLEARANCE term dominates both groups
+     and they land within 4px of each other, so the assertion passed on both the
+     right and the wrong layout. Measured over candidate shapes, and worth
+     recording because it says where this effect lives:
+
+       A=7  B=2 nested   per-group 592/592     no separation at all
+       A=14 B=2 nested   per-group 655/643     12px, still not a guard
+       A=20 B=1 nested   per-group 900/600     300px  <-- this one
+       A=14 B=2 flat     per-group 581/581     no separation
+       A=20 B=2 flat     per-group 792/792     no separation
+
+     FLAT DOCKETS NEVER SEPARATE, which is not a defect in the fixture but the
+     shape of the thing: a folder's angular share is already proportional to how
+     many leaves it carries, so at one level down every group needs the same
+     radius and per-depth is accidentally correct. The win only exists BELOW a
+     subfolder, where a group inherits an angular share sized for its parent's
+     whole subtree — which is exactly where the covid docket lost its 392px.
+     ONE ASSERTION, AND TWO MORE I WROTE AND THREW AWAY. The others were "a
      sibling group sits on one arc" and "a claim sits outside its folder". Both
      are true and neither could be armed: breaking the code they describe — per
      node wedge bounds for the first, clearance measured from the ring instead of
      from the parent for the second — left them green, because the overlap and
-     containment invariants above already fail on those mutations, and on this
-     fixture clearance dominates the wedge bound so scattering siblings changes
-     nothing. An assertion no mutation can turn red guards nothing; it just reads
-     as though it does. */
+     containment invariants above already fail on those mutations. An assertion no
+     mutation can turn red guards nothing; it just reads as though it does. */
   {
-    const r = b => Math.hypot(b.cx - D2.court.cx, b.cy - D2.court.cy);
-    const rOf = ids => ids.map(i => r(D2.nodes.find(n => n.id === i)));
-    const A1 = rOf([1,2,3,4,5,6,7]), B1 = rOf([8,9]);
-    ok("a two-claim group comes in closer than its seven-claim sibling group",
-       Math.max(...B1) < Math.min(...A1) - 1);
+    const sub = (name, ids) => ({name, claims:[], path:name,
+                                 folders:[{name:name+"1", claims:ids, folders:[]}]});
+    const many = [...Array(20).keys()].map(i => i+1), one = [21];
+    const lop = {folders:[sub("A", many), sub("B", one)], all:[...many, ...one],
+                 claims:Object.fromEntries([...many, ...one].map(i => [i,
+                   {title:long, statusText:"open"}])),
+                 relations:[], courtName:"C", linkFolders:true};
+    const P = mapLayout(lop, "titles");
+    const r = id => { const n = P.nodes.find(x => x.id === id);
+                      return Math.hypot(n.cx - P.court.cx, n.cy - P.court.cy); };
+    ok("a one-claim group comes in close, not out to where twenty claims need to be",
+       r(21) < Math.min(...many.map(r)) - 100);
   }
 
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
