@@ -4279,7 +4279,18 @@ function mountMap(slug, data, focusId){
     const keep=neighborsOf(id);
     box.querySelectorAll(".mnode-a").forEach(a=>a.classList.toggle("dim", !keep.has(parseInt(a.dataset.id,10))));
     box.querySelectorAll(".medge,.marrow").forEach(e=>{
+      /* SPOKES ARE .medge TOO, and this line did not know it. When the map was a
+         grid every .medge was a relation and carried data-from/data-to; the
+         radial layout added containment spokes with the same class and a data-s
+         instead, so the lookup below found nothing and dereferenced null. dim()
+         threw, paint() abandoned before it wrote the panel, and the symptom was a
+         folder card that would not go away and a claim card that never came —
+         because dimFolder happens not to touch dataset, so folders worked and
+         claims did not. Structure dims wholesale; only relations are asked which
+         claims they join. */
+      if(e.dataset.e === undefined){ e.classList.add("dim"); return; }
       const p=box.querySelector(`.medge[data-e="${e.dataset.e}"]`);
+      if(!p){ e.classList.add("dim"); return; }
       const from=parseInt(p.dataset.from,10), to=parseInt(p.dataset.to,10);
       e.classList.toggle("dim", !(from===id||to===id));
     });
@@ -4337,7 +4348,23 @@ function mountMap(slug, data, focusId){
     panel.querySelectorAll(".mapsel-c").forEach(b=>
       b.addEventListener("click", ()=>select({kind:"claim", id:parseInt(b.dataset.go,10)})));
   }
-  function select(next){ sel=next; paint(); }
+  /* CENTRE ON WHAT WAS SELECTED. Picking a node in the outer ring used to leave
+     it wherever it happened to sit — often at the edge, sometimes half off — and
+     the reader then had to pan to look at the thing they had just chosen. The
+     zoom is left alone: changing it as well moves everything else under the
+     pointer, and the reader asked for this node, not for a different view. */
+  function centreOn(next){
+    if(!next) return;
+    const b = next.kind==="claim" ? L.nodes.find(n=>n.id===next.id) : L.folders[next.fid];
+    if(!b) return;
+    cx = b.cx; cy = b.cy;
+    // At least far enough in for the titles to be above the LOD line, or
+    // centring on a claim shows a box with its sentence hidden.
+    const el = svgEl(), px = el && el.clientWidth;
+    if(px) z = Math.min(8, Math.max(z, 9*fit.w/(MAPK.fs.title*px)));
+    schedule();
+  }
+  function select(next){ sel=next; paint(); centreOn(next); }
   box.addEventListener("click", ev=>{
     if(ev.defaultPrevented) return;
     if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button!==0) return; // let the link work
