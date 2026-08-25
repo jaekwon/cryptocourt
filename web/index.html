@@ -3420,14 +3420,25 @@ const MAPK = {
   // every claim, which cut every title at two short lines and spent the same
   // space on "Another" as on a forty-word finding — the boxes were sized to the
   // grid the layout used to be.
-  node:  { titles:{w:206,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
+  // 230 IS MEASURED, AND IT IS THE KNEE OF THE CURVE. The covid docket's titles
+  // run 70 to 139 characters, median 107. Rendered and counted at three widths:
+  //
+  //     206   12 of 19 cut, 88 chars shown, graph 1819x1698
+  //     230    5 of 19 cut, 102 chars shown, graph 2000x1852   <-- here
+  //     250    4 of 19 cut, 104 chars shown, graph 2155x1985
+  //
+  // 250 buys ONE more whole title for another eight per cent of drawing, and the
+  // owner's other standing complaint is that the nodes sit too far apart — so
+  // past 230 this trades the second complaint against the first. The width grows
+  // without the height, deliberately: height is what pushes the rings apart.
+  node:  { titles:{w:230,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
   fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder
   // THE COURT IS THE BIGGEST THING ON THE MAP, which it was not: at 190x54 it
   // was smaller than the 206x86 claim boxes around it, so the node the whole
   // drawing is built around read as one more box that happened to be blue. It is
   // one node and it can afford the room.
-  cnode: { titles:{w:238,h:76}, ids:{w:150,h:46} }, // the court, at the centre
+  cnode: { titles:{w:260,h:76}, ids:{w:150,h:46} }, // the court, at the centre
   sep:22,          // clearance every pair of nodes keeps, tangentially and radially
   seedR:120,       // the innermost ring's floor, before the fit solve
   margin:36, tpad:8,

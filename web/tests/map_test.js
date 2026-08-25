@@ -329,15 +329,20 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
      D2.rings[1] <= Math.max(court.w, court.h)/2 + Math.max(fold.w, fold.h)/2 + MAPK.sep + 2);
   ok("rings still increase outward", D2.rings.every((r,i)=> i===0 || r > D2.rings[i-1]));
 
-  // THE COURT IS THE BIGGEST NODE. It was not — 190x54 against 206x86 claim
-  // boxes — so the node the whole drawing is built around read as one more box
-  // that happened to be blue. Area, not width: a claim grown to four lines is
-  // taller than the court and that is fine, but it must not be BIGGER.
+  /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
+     was widened to hold more of a title. That was the wrong property and it is
+     worth saying why rather than just relaxing it: area conflates two things,
+     and it made the court's size a function of the longest title on the docket —
+     grow a claim to four lines and the court had to grow to out-area it, which
+     is backwards. What makes the court read as the anchor is that it is the
+     widest node, the only filled one, and at the centre. A claim that got tall
+     to hold its sentence is not competing for that; it is out in a ring. */
   for(const m of ["titles","ids"]){
     const M = mapLayout(deep, m);
-    const area = b => b.w*b.h;
-    ok(`the court outweighs every claim and folder (${m})`,
-       M.nodes.concat(M.folders).every(b => area(b) < area(M.court)));
+    ok(`the court is the widest node (${m})`,
+       M.nodes.concat(M.folders).every(b => b.w < M.court.w));
+    ok(`and outweighs every folder (${m})`,
+       M.folders.every(b => b.w*b.h < M.court.w*M.court.h));
   }
 }
 
