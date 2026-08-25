@@ -502,6 +502,25 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
        ids.every(t => t.indexOf("…") < 0));
     ok("but titles mode still says the phase, where there is room for it",
        heads("titles").every(t => /settled|open/.test(t)));
+
+    /* AND THE COURT KEEPS ITS OWN NAME. The zoomed-out map called a 32-character
+       court "COVID-19 Origins &..." — the one node the whole drawing hangs off,
+       cut off, in the view you use to see the whole drawing. It grows downward
+       to fit, and that is FREE: the court is at the origin, so what ring 1 must
+       clear is max(w, h), and while the height stays under the width nothing
+       moves. Both fixtures' ids viewBoxes are unchanged to the pixel. */
+    const longName = {folders:[], all:[1], claims:{1:{title:"A.", statusText:"open"}},
+                      relations:[], courtName:"COVID-19 Origins & Response Court",
+                      linkFolders:true};
+    for(const m of ["ids","titles"]){
+      const L4 = mapLayout(longName, m), c = L4.court;
+      const cap = Math.max(1, Math.floor((c.h-6)/(MAPK.fs.court+2)));
+      const drawn = mapWrapTitle(c.name, c.w - 2*MAPK.tpad, MAPK.fs.court, cap).join(" ");
+      ok(`the court's whole name fits its box (${m})`,
+         drawn.indexOf("…") < 0 && drawn.length >= c.name.length);
+      ok(`...and it grew downward only, so ring 1 did not pay for it (${m})`,
+         c.h <= c.w);
+    }
   }
 
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
