@@ -4089,11 +4089,21 @@ function mapSvg(L, data, slug){
   out.push(`<rect class="mcourt" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6"/>`);
   out.push(wrapMid(c.name, c, K.fs.court, "mcourt-t", "t0"));
   L.folders.forEach((f,i)=>{
+    /* A FOLDER SAYS ITS WHOLE NAME ON HOVER, which every claim already did and
+       no folder did. A box is sized to hold its label, but a label can outrun any
+       box — names run to 200 characters on chain — and in ids mode the box is 112
+       wide whatever the name, so the zoomed-out map showed "Vaccine…",
+       "Proximal…", "Gain-of-fun…" with no way to resolve them short of changing
+       mode. The tooltip carries the name and the count whether or not the drawn
+       label had room for either, and costs the layout nothing. */
+    const tip=`<title>${esc(f.name)}${f.count!=null?` · ${f.count}`:""}</title>`;
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
       + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
     if(!f.pseudo && f.path!=null && data.linkFolders)
-      out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}</a>`);
-    else out.push(tag);
+      out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}${tip}</a>`);
+    // Not a link, so it needs a group of its own: an SVG <title> describes the
+    // element it is a child of, and loose in the root it would describe the map.
+    else out.push(`<g data-fid="${i}">${tag}${tip}</g>`);
   });
   for(const n of L.nodes){
     const cl=data.claims[n.id]; if(!cl) continue;

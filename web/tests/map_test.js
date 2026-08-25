@@ -521,6 +521,24 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
       ok(`...and it grew downward only, so ring 1 did not pay for it (${m})`,
          c.h <= c.w);
     }
+
+    /* A FOLDER SAYS ITS WHOLE NAME ON HOVER. Every claim already did and no
+       folder did. A box can be sized to its label — folders are, now — but a
+       label can outrun any box: names run to 200 characters on chain, and in ids
+       mode the box is 112 wide whatever the name. So the zoomed-out map showed
+       "Vaccine…", "Proximal…", "Gain-of-fun…" and offered no way to resolve them
+       short of changing mode. The tooltip costs the layout nothing. */
+    const d5 = {folders:[{name:"Gain-of-function funding", claims:[1], folders:[], path:"0"}],
+                all:[1], claims:{1:{title:"A.", statusText:"open"}},
+                relations:[], courtName:"C", linkFolders:true};
+    for(const m of ["ids","titles"])
+      ok(`a folder carries its whole name and count in a tooltip (${m})`,
+         mapSvg(mapLayout(d5, m), d5, "s")
+           .includes("<title>Gain-of-function funding · 1</title>"));
+    const drawn = [...mapSvg(mapLayout(d5, "ids"), d5, "s")
+      .matchAll(/class="mtext mhdr-t"[^>]*>([^<]*)</g)].map(x => x[1]).join(" ");
+    ok("...and it is doing work: at that size the drawn label is cut",
+       drawn.indexOf("…") >= 0);
   }
 
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
