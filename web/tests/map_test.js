@@ -498,6 +498,33 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
        survives(box(wide)));
     ok("and the court is still the widest node, whatever a folder is called",
        F.folders.every(f => f.w < F.court.w));
+
+    /* THE SIZER AND THE RENDERER AGREE ON HOW MANY LINES A BOX HOLDS. The rule
+       was stated three times — mapSvg derived the cap from the box, mapFolderSize
+       hardcoded 2 because that is what a 44px folder box happens to allow, and
+       mapCourtSize wrote the inverse out longhand — and all three agreed by
+       coincidence rather than construction.
+       IT ONLY SHOWS WHEN THE BOX HEIGHT MOVES, which is why this assertion has to
+       move it. Give a folder box room for three lines and a sizer that knows it
+       can pick a narrower box; a sizer still assuming two cannot, and charges the
+       difference to every ring. Measured on the real case: raising fnode's height
+       to 60 widened "Gain-of-function funding · 3" from 116 to 140 for nothing. */
+    ok("the line cap and the height that holds it are inverses",
+       [1,2,3,4,5].every(n =>
+         mapFitLines({h: mapFitHeight(n, MAPK.fs.header)}, MAPK.fs.header) === n));
+    {
+      const saved = MAPK.fnode.titles.h, fsH = MAPK.fs.header;
+      const label = "alpha beta gamma delta epsilon zeta";
+      let w3, w2;
+      try {
+        MAPK.fnode.titles.h = mapFitHeight(3, fsH);
+        w3 = mapFolderSize(label, null, "titles").w;
+        MAPK.fnode.titles.h = mapFitHeight(2, fsH);
+        w2 = mapFolderSize(label, null, "titles").w;
+      } finally { MAPK.fnode.titles.h = saved; }
+      ok("a box with room for a third line is sized narrower, not the same",
+         w3 < w2);
+    }
   }
 
   /* AN ELLIPSIS IS A PROMISE THAT THERE IS MORE OF THE TEXT, and on an id there

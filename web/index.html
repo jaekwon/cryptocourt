@@ -3575,6 +3575,21 @@ function mapWrapHolds(lines, text){
   const t = lines.join(" ");
   return t.indexOf("…") < 0 && t.length >= String(text).length;
 }
+/* HOW MANY LINES A BOX HOLDS, AND THE HEIGHT THAT HOLDS N — one pair, so the
+   thing that SIZES a box and the thing that DRAWS in it cannot disagree. They
+   were three separate statements of the same rule: mapSvg derived the cap from
+   the box, mapFolderSize hardcoded 2 because that is what a 44px folder box
+   happens to allow, and mapCourtSize wrote the inverse out longhand. All three
+   agreed, by coincidence rather than construction. Raise fnode's height to 60 and
+   the renderer draws three lines while the sizer still sizes for two — measured,
+   it widens "Gain-of-function funding · 3" from 116 to 140 for nothing, and every
+   ring pays for it. The two are inverses: mapFitLines(mapFitHeight(n)) === n. */
+// Declarations, not const arrows: the harnesses eval slices of this file, and a
+// const does not escape an eval's scope while a function declaration does. It is
+// why every other map function is written this way and why the tests rewrite
+// `const MAPK` to `var MAPK` on the way in.
+function mapFitLines(box, fs){ return Math.max(1, Math.floor((box.h - 6)/(fs + 2))); }
+function mapFitHeight(lines, fs){ return lines*(fs + 2) + 6; }
 /* THE COURT'S NAME FITS BY GROWING DOWNWARD, AND THE RINGS DO NOT PAY FOR IT.
    The court sits at the origin, so what ring 1 has to clear is max(w, h) — its
    longer side, because a child may lie in any direction. While the height stays
@@ -3589,14 +3604,15 @@ function mapCourtSize(name, mode){
   const base = MAPK.cnode[mode], fs = MAPK.fs.court;
   const lines = mapWrapTitle(String(name || ""), base.w - 2*MAPK.tpad, fs, 4);
   // wrapMid derives its own cap from the box height, so the height IS the cap.
-  return {w: base.w, h: Math.max(base.h, Math.min(base.w, lines.length*(fs+2) + 6))};
+  return {w: base.w, h: Math.max(base.h, Math.min(base.w, mapFitHeight(lines.length, fs)))};
 }
 function mapFolderSize(name, count, mode){
   const base = MAPK.fnode[mode];
   if(mode !== "titles") return base;
   const label = count != null ? `${name} · ${count}` : String(name || "");
   const holds = w => {
-    const lines = mapWrapTitle(label, w - 2*MAPK.tpad, MAPK.fs.header, 2);
+    const lines = mapWrapTitle(label, w - 2*MAPK.tpad, MAPK.fs.header,
+                                mapFitLines(base, MAPK.fs.header));
     // The same two failures wrapFit weighs at draw time: an ellipsis, or a last
     // line carrying the "· 3" and no word — which reads as a broken label.
     return mapWrapHolds(lines, label)
@@ -4112,7 +4128,7 @@ function mapSvg(L, data, slug){
      number. */
   const wrapFit=(name, count, box, fs, cls, owner)=>{
     const withN = count!=null? `${name} · ${count}` : name;
-    const a = mapWrapTitle(withN, box.w-2*K.tpad, fs, fitLines(box, fs));
+    const a = mapWrapTitle(withN, box.w-2*K.tpad, fs, mapFitLines(box, fs));
     // Two ways the count costs more than it is worth: it pushes the wrap over and
     // the name gets an ellipsis, or it lands on a line of its own — "Learning
     // loss ·" above a bare "1", which reads as a broken label rather than a
@@ -4120,9 +4136,8 @@ function mapSvg(L, data, slug){
     const orphan = a.length>1 && !/[A-Za-z]/.test(a[a.length-1]);
     return wrapMid((mapWrapHolds(a, withN) && !orphan)? withN : name, box, fs, cls, owner);
   };
-  const fitLines=(box, fs)=>Math.max(1, Math.floor((box.h-6)/(fs+2)));
   const wrapMid=(txt, box, fs, cls, owner)=>{
-    const lines=mapWrapTitle(txt, box.w-2*K.tpad, fs, fitLines(box, fs));
+    const lines=mapWrapTitle(txt, box.w-2*K.tpad, fs, mapFitLines(box, fs));
     const y0=box.y+box.h/2 - (lines.length-1)*(fs+2)/2 + fs*0.36;
     return lines.map((ln,i)=>label(ln, box, fs, Math.round((y0+i*(fs+2))*10)/10, cls, owner)).join("");
   };
