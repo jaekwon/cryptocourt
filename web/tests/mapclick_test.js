@@ -268,6 +268,27 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
   }
 }
 
+/* A RELATION ON A CLAIM'S CARD IS A WAY THERE, not a number. The card tallied
+   "asserts: 1 contradicts" and stopped, naming a count rather than a claim. The
+   rows are the same `.mapsel-c` buttons a folder card uses, so the handler that
+   already binds them needed nothing — but "the handler already binds them" is
+   exactly the sort of claim that turned out to be false for the map's own
+   bucket, so it is clicked here rather than asserted from the source. */
+{
+  mount();
+  claimA(1).click();
+  const row = panel.querySelector('.mapsel-c');
+  ok("a claim's card offers its relation as something to select", !!row);
+  ok("...naming the claim at the other end, not this one",
+     !!row && row.dataset.go === "3");
+  if(row){
+    row.click();
+    ok("...and selecting it moves the card to that claim",
+       /#3/.test(panel.innerHTML) && /Open claim page/.test(panel.innerHTML));
+    ok("...and marks it on the map", claimA(3).classList.contains("selected"));
+  }
+}
+
 /* THE LEGEND KEY FOLLOWS THE DRAWING. A claim filed in two folders is drawn
    once and gets a muted dashed spoke to the other folder — which looks like a
    relation and is not one, so it needs a key. It needs one only when there IS

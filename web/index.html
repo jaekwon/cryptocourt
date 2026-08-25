@@ -4028,6 +4028,32 @@ function mapSelCard(id, data, slug, L){
     return Object.entries(n).filter(([,v])=>v).map(([k,v])=>`${v} ${k}`).join(", ");
   };
   const o = tally(out), i = tally(inn);
+  // Read from the other claim's side: this claim supports #9, so on #9's row it
+  // is "supported by this". `part` inverts to containment rather than a passive.
+  const INVERSE = {supports:"supported by this", contradicts:"contradicted by this",
+                   supersedes:"superseded by this", "is part of":"contains this"};
+  const word = r => r.type==="bears" ? (r.stance==="supports"?"supports":"contradicts")
+              : r.type==="supersedes" ? "supersedes" : r.type==="part" ? "is part of" : r.type;
+  const near = out.concat(inn);
+  const showRel = near.slice(0, 8);
+  const relRows = showRel.length
+    ? `<ul class="mapsel-l">` + showRel.map(r => {
+        const other = r.from===id ? r.to : r.from, oc = data.claims[other];
+        /* The row leads with the OTHER claim's id, so the phrase describes that
+           claim's relation to this one and reads on from it: "#8 contradicts
+           this", "#11 contradicted by this". Written the other way first — "this
+           contradicts" after the id — and "#11 this contradicts" is a garden
+           path, since the reader has already taken #11 as the subject. */
+        const phrase = r.from===id ? (INVERSE[word(r)] || word(r)+" — from this")
+                                   : word(r)+" this";
+        const t = oc ? oc.title : "";
+        return `<li><button type="button" class="mapsel-c" data-go="${other}">`
+          + `<span class="mono">#${other}</span> <span class="muted">${esc(phrase)}</span> `
+          + `${safeInline(t.length>44? t.slice(0,43)+"…" : t)}</button></li>`;
+      }).join("") + `</ul>`
+      + (near.length>showRel.length
+         ? `<p class="small muted">…and ${near.length-showRel.length} more</p>` : "")
+    : "";
   return `<div class="mapsel-h"><span class="mono">#${id}</span>`
     + `<span class="pill ${esc(pc.cls||"")}">${esc(pc.short)}</span>`
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
@@ -4035,6 +4061,15 @@ function mapSelCard(id, data, slug, L){
     + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
     + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
     + (!o && !i? `<p class="small muted">no relations drawn on this map</p>` : "")
+    /* AND EACH ONE IS REACHABLE. The tally said "asserts: 1 contradicts" and
+       stopped there — it named a count, not a claim, and gave no way to get to
+       whichever claim it meant. A folder card has listed its claims as
+       selectable rows from the start, so the map can be walked folder → claim →
+       card without a page load; the association half of the graph could be
+       counted and not followed, which is a strange thing to draw a line for.
+       Same `.mapsel-c` rows, so the handler that already binds them needs
+       nothing. Capped like the folder's, because a card is not a docket. */
+    + relRows
     + `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/${id}">Open claim page →</a></div>`;
 }
 /* The same courtesy for a folder: say what is in it, then offer the page.

@@ -255,6 +255,28 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
     ok("a relation to a claim that is not on the map is not reported as drawn",
        /no relations drawn on this map/.test(h2) && !/asserts:/.test(h2));
   }
+  /* AND EACH RELATION IS REACHABLE, not merely counted. The tally said "asserts:
+     1 contradicts" and stopped — a count, not a claim, with no way to get to
+     whichever one it meant. A folder card has listed its claims as selectable
+     rows from the start, so the map can be walked folder → claim → card without
+     a page load; the association half of the same graph could be counted and not
+     followed, which is a strange thing to draw a line for.
+     The row leads with the OTHER claim's id, so its phrase describes that claim's
+     relation to this one: "#8 contradicts this" coming in, "#11 contradicted by
+     this" going out. Phrased the other way round — "this contradicts" after the
+     id — "#11 this contradicts" is a garden path, because the reader has already
+     taken #11 as the subject. */
+  {
+    const rows = [...html.matchAll(/data-go="(\d+)"[^>]*>(.*?)<\/button>/g)]
+      .map(m => [+m[1], m[2].replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()]);
+    ok("every drawn relation gets a row you can select", rows.length === 4);
+    ok("...an outgoing one reads from the other claim's side",
+       rows.some(([i2,t]) => i2===9 && /^#9 supported by this/.test(t)));
+    ok("...and an incoming one reads the other way round",
+       rows.some(([i2,t]) => i2===5 && /^#5 contradicts this/.test(t)));
+    ok("...and each row carries the other claim, not this one",
+       rows.every(([i2]) => i2 !== 7));
+  }
   ok("the claim page is offered, not taken", html.includes('href="#/c/covid/7"')
      && html.includes("Open claim page"));
   ok("and the selection can be cleared", html.includes('id="msel-x"'));
