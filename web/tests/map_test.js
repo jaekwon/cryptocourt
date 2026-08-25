@@ -280,6 +280,22 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("clicking a listed claim selects it rather than navigating",
      /\.mapsel-c[\s\S]{0,200}select\(\{kind:"claim"/.test(mount));
   ok("a selected folder dims to its own subtree", /function dimFolder/.test(mount));
+
+  /* THE CARD MUST NOT COVER THE MAP. It did: absolutely positioned at top-right
+     with a z-index, which made every node under it unclickable — clicking a claim
+     in that corner while a card was open did nothing at all, and the card sat
+     there looking as though it had ignored the input. It had not; the click never
+     reached the SVG. This is a CSS property and so is asked of the stylesheet,
+     which is the weakest check here and the reason the bug survived review. */
+  const css = slice('.maphold{', '@media (max-width:860px)');
+  ok("the card has its own column rather than floating over the map",
+     /\.maphold\{[^}]*grid-template-columns/.test(css) && !/\.mapsel\{[^}]*position:absolute/.test(css));
+  ok("and the column is reserved, so selecting cannot resize the map",
+     !/\.mapsel\[hidden\]|display:none/.test(css));
+  ok("the empty column explains that the map is interactive",
+     /mapsel-hint/.test(mount) && /Click a claim/.test(mount));
+  ok("and it is painted at mount, not only after the first click",
+     /put\(\);\s*paint\(\);/.test(mount));
 }
 
 // determinism: same input → same bytes

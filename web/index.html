@@ -675,13 +675,20 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mfold-a:hover .mfold,.mfold-a:focus .mfold{stroke-width:2}
 .mfold-a.selected .mfold{stroke:var(--accent-2); stroke-width:3}
 .mnode-a.dim{opacity:.35}
-/* The card sits OVER the map rather than under it: the map box is a fixed height
-   with its own pan and zoom, and pushing it down on every click would move the
-   thing you just clicked out from under the pointer. */
-.maphold{position:relative}
-.mapsel{position:absolute; right:12px; top:12px; width:min(320px, calc(100% - 24px));
-  background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
-  box-shadow:0 6px 24px rgba(0,0,0,.14); padding:12px 14px; z-index:2}
+/* THE CARD GETS ITS OWN COLUMN, and does not float over the map. It did float,
+   at top-right with a z-index, and that made the nodes underneath unclickable —
+   on a map with anything in its top-right corner, selecting one of those claims
+   was impossible while a card was open, and the card that WAS open just sat
+   there looking like it had ignored the click. It had not; the click never
+   reached the map.
+   The column is reserved whether or not anything is selected, so opening a card
+   cannot resize the map and move the thing you were aiming at. Empty, it holds
+   the hint that the map is interactive at all. */
+.maphold{display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:12px; align-items:stretch}
+.mapsel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  padding:12px 14px; overflow-y:auto; max-height:clamp(420px,62vh,640px)}
+.mapsel-hint{color:var(--muted); font-size:12px; line-height:1.5}
+@media (max-width:860px){ .maphold{grid-template-columns:minmax(0,1fr)} }
 .mapsel-h{display:flex; align-items:center; gap:8px; margin-bottom:6px}
 .mapsel-h .mono{font-weight:600}
 .mapsel-x{margin-left:auto; background:none; border:0; cursor:pointer; font-size:18px;
@@ -696,7 +703,7 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
   font:inherit; font-size:12px; color:var(--ink-2); padding:3px 4px; border-radius:4px}
 .mapsel-c:hover,.mapsel-c:focus{background:var(--inset); color:var(--ink)}
 .mapsel-c .mono{color:var(--accent-2)}
-@media (max-width:640px){ .mapsel{right:8px; left:8px; width:auto} }
+
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
 .mapsvg.far .mtitle{display:none}
 /* A folder is a NODE now, not a box drawn round its contents — the radial map
@@ -4069,7 +4076,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
          <input type="range" id="mz-slider" min="-1" max="3" step="0.01" value="0" aria-label="zoom level">
        </div>
        <div class="maphold"><div class="mapwrap" id="mapbox"></div>
-         <div class="mapsel" id="mapsel" hidden></div></div>
+         <div class="mapsel" id="mapsel"></div></div>
        <p class="small muted" style="margin:8px 0 0">scroll to zoom, drag to pan, click a claim to open it · full titles appear as you zoom in</p>
        <div class="mlegend">${legendEdges}${legendDots}
          <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" class="mfold"/></svg> folder</span></div>`;
@@ -4194,11 +4201,19 @@ function mountMap(slug, data, focusId){
       a.classList.toggle("selected", parseInt(a.dataset.id,10)===selClaim));
     box.querySelectorAll(".mfold-a").forEach(a=>
       a.classList.toggle("selected", parseInt(a.dataset.fid,10)===selFold));
-    if(!sel){ undim(); if(panel){ panel.hidden=true; panel.innerHTML=""; } return; }
+    if(!sel){
+      undim();
+      // The empty state is an affordance, not a blank: the map gave no sign it
+      // was interactive, which is what made "click the node" the only discovered
+      // gesture and going straight to the page the only outcome.
+      if(panel) panel.innerHTML = `<p class="mapsel-hint">Click a claim to see what `
+        + `it asserts and what is asserted about it, or a folder to see what is `
+        + `filed in it. Nothing here leaves the map until you ask it to.</p>`;
+      return;
+    }
     if(!panel) return;
     if(selClaim!=null){ dim(selClaim); panel.innerHTML = mapSelCard(selClaim, data, slug); }
     else { const f = L.folders[selFold]; dimFolder(f||{}); panel.innerHTML = mapFolderCard(f, data, slug); }
-    panel.hidden = false;
     const x = document.getElementById("msel-x");
     if(x) x.addEventListener("click", ()=>{ select(null); });
     // A claim named on a folder card selects it, so the map is browsable in
@@ -4253,6 +4268,7 @@ function mountMap(slug, data, focusId){
   bind("mt-titles", ()=>setMode("titles"));
   bind("mt-ids", ()=>setMode("ids"));
   put();
+  paint();   // the empty card, so the column is never a bare box
   if(focusId!=null){ const n = L.nodes.find(x=>x.id===focusId);
     if(n){ cx=n.x+n.w/2; cy=n.y+n.h/2;
       // land zoomed so titles clear the LOD line (enter<7px, leave>8.5px)
