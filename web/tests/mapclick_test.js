@@ -230,5 +230,43 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
   global.VIEWPORT = 660;
 }
 
+/* THE MAP'S OWN BUCKET WAS INERT, and the card for it had been written. When
+   some claims are filed and others are not, the map draws a pseudo folder for
+   the leftovers, and mapFolderCard has a branch that says "the map's own bucket
+   — the court has filed no folder for these" instead of offering a folder page.
+   That branch could not run. The click handler selects on `.mfold-a`, which is
+   the class on the ANCHOR a folder gets when it has a page to link to — and the
+   pseudo folder has no page, so it was never wrapped in one. A visible box, on a
+   map whose whole point is that you can click things, that did nothing.
+   It is worth a DOM test rather than a grep for the same reason the rest of this
+   file exists: every assertion about the card's contents passed, because the
+   card's code was right. Nothing reached it. */
+{
+  const mixed = {
+    folders:[{name:"Filed", claims:[1], folders:[], path:"0"}],
+    all:[1,2],
+    claims:{1:{title:"A filed claim.",   statusText:"open — stake YES or NO"},
+            2:{title:"An unfiled claim.", statusText:"open — stake YES or NO"}},
+    relations:[], courtName:"Test Court", linkFolders:true,
+  };
+  box = new El("div", {id:"mapbox"});
+  panel = new El("div", {id:"mapsel"});
+  byId.mapbox = box; byId.mapsel = panel;
+  mountMap("covid", mixed, null);
+
+  // fid 1 is the pseudo folder: the real one is 0, the bucket is appended after.
+  const bucket = box.querySelector('g[data-fid="1"]')
+              || box.querySelector('a[data-fid="1"]');
+  ok("the map draws a bucket for the claims in no folder", !!bucket);
+  if(bucket){
+    bucket.click();
+    ok("clicking the bucket opens a card, like any other folder",
+       /mapsel-h/.test(panel.innerHTML) && !/Click a claim/.test(panel.innerHTML));
+    ok("...and that card is the bucket's own, not a folder page offer",
+       /own bucket/.test(panel.innerHTML) && !/Open folder page/.test(panel.innerHTML));
+    ok("...and it lists what is in it", /#2/.test(panel.innerHTML));
+  }
+}
+
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);

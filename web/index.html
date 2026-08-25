@@ -4101,9 +4101,16 @@ function mapSvg(L, data, slug){
       + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
     if(!f.pseudo && f.path!=null && data.linkFolders)
       out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}${tip}</a>`);
-    // Not a link, so it needs a group of its own: an SVG <title> describes the
-    // element it is a child of, and loose in the root it would describe the map.
-    else out.push(`<g data-fid="${i}">${tag}${tip}</g>`);
+    /* Not a link, so it needs a group of its own — an SVG <title> describes the
+       element it is a child of, and loose in the root it would describe the map.
+       IT CARRIES .mfold-a ANYWAY, because that class is what the click handler
+       selects on, and having a page to link to is not the same question as being
+       able to click a box. The map's own bucket is drawn whenever some claims are
+       filed and some are not, mapFolderCard has a branch written for it — "the
+       map's own bucket — the court has filed no folder for these" — and that
+       branch could never run, because the only folder the handler could see was
+       one with a page. A visible box on an interactive map that did nothing. */
+    else out.push(`<g class="mfold-a" data-fid="${i}">${tag}${tip}</g>`);
   });
   for(const n of L.nodes){
     const cl=data.claims[n.id]; if(!cl) continue;
