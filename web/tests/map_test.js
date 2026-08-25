@@ -564,6 +564,32 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
        spokeCls.filter(c => c === "also").length === 1);
     ok("...and the claim is not shown hanging off both folders alike",
        spokeCls.filter(c => c === "tofolder").length === 2);
+
+    /* AND THE FOLDER STILL SAYS IT HOLDS THAT CLAIM. Same defect one layer up:
+       the card read its list off `f.claims`, which is what the folder got to
+       DRAW, not what is filed in it. With 3, 4 and 5 filed under B and 3 drawn
+       under A, B's card said "3 claims in all; 2 filed here directly" and listed
+       two — contradicting itself, with no subfolder to account for the third,
+       and giving no way to reach a claim from a folder that holds it. Where a
+       claim is drawn is a fact about the drawing; what a folder holds is a fact
+       about the docket, and the card is about the folder. */
+    const shared = {folders:[{name:"A", claims:[1,2,3], folders:[], path:"0"},
+                             {name:"B", claims:[3,4,5], folders:[], path:"1"}],
+                    all:[1,2,3,4,5],
+                    claims:Object.fromEntries([1,2,3,4,5].map(i =>
+                      [i, {title:"Claim "+i+".", statusText:"open"}])),
+                    relations:[], courtName:"C", linkFolders:true};
+    const L6 = mapLayout(shared, "titles");
+    const fB = L6.folders.find(f => f.name === "B");
+    const card = mapFolderCard(fB, shared, "s");
+    const listed = [...card.matchAll(/data-go="(\d+)"/g)].map(m => +m[1]);
+    ok("a folder lists every claim filed in it, not only the ones drawn in it",
+       listed.join(",") === "3,4,5");
+    ok("...so its count line agrees with its own list",
+       /3 filed here directly/.test(card));
+    ok("...while the claim is still DRAWN once, under the first folder holding it",
+       fB.claims.join(",") === "4,5"
+       && L6.folders.find(f => f.name === "A").claims.includes(3));
   }
 
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box

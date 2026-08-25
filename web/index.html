@@ -3631,7 +3631,9 @@ function mapTree(data, mode){
       count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
       if(!data.claims[id]) continue;
-      if(drawn.has(id)) alsoIn.push({folder:node, id});
+      // Filed here AND drawn somewhere else. The spoke records it on the map;
+      // `also` records it on the folder, so the folder can still say so.
+      if(drawn.has(id)){ alsoIn.push({folder:node, id}); (node.also = node.also || []).push(id); }
       else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[],
              size:mapClaimSize((data.claims[id]||{}).title, mode)}); }
     }
@@ -3924,6 +3926,7 @@ function mapLayout(data, mode){
     else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name,
       count:n.count, pseudo:n.pseudo, path:n.path,
       claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
+      also:n.also||[],
       subs:n.kids.filter(k=>k.kind==="folder").length})); }
     else { nodes.push(Object.assign(box, {kind:"claim", id:n.id})); }
     const tot = n.kids.reduce((t,k)=>t+k._a, 0);
@@ -4005,7 +4008,15 @@ function mapSelCard(id, data, slug){
    rather than a dead link. */
 function mapFolderCard(f, data, slug){
   if(!f) return "";
-  const ids = (f.claims||[]);
+  /* EVERYTHING FILED HERE, not everything drawn here, and those differ. A claim
+     may be filed in more than one folder; the map draws it once, under the first
+     folder that carries it, and `f.claims` is what a folder got to DRAW. Reading
+     the card off that made a folder disown a claim it holds: with 3, 4 and 5
+     filed under Fauci and 3 drawn under Origins, Fauci's card said "3 claims in
+     all; 2 filed here directly" and listed two of them — contradicting itself,
+     with no subfolder to account for the third. Where a claim is drawn is a fact
+     about the drawing; what a folder holds is a fact about the docket. */
+  const ids = (f.claims||[]).concat(f.also||[]).sort((a,b)=>a-b);
   const shown = ids.slice(0, 12);
   const rows = shown.map(id=>{
     const c = data.claims[id];
