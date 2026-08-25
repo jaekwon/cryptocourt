@@ -399,6 +399,37 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
        arcs.length === 2 && arcs[0] < arcs[1] * 0.8);
   }
 
+  /* "(no folder)" IS A CONTRAST, AND A COURT WITH NO FOLDERS HAS NOTHING TO
+     CONTRAST WITH. Every loose claim used to be wrapped in a pseudo folder
+     unconditionally, so a court nobody had curated — a new one, which is every
+     court at some point — drew its whole docket inside a box labelled "(no
+     folder)". That box contained everything, said nothing, and cost a ring: the
+     claims became depth 2 and were pushed outside a container whose only content
+     was the word "no". Two claims sat 342 from the court where 258 is the
+     clearance; measured across sizes it is -84 on every docket small enough for
+     the clearance to bind, and 15-20% off the drawing.
+     BOTH DIRECTIONS ARE PINNED HERE, because the fix is easy to over-apply. The
+     node earns its place the moment ONE claim is filed somewhere, since then
+     "outside every folder" is a real thing to be. */
+  {
+    const T = t => ({title:t, statusText:"open"});
+    const bare = {folders:[], all:[1,2], claims:{1:T("One."), 2:T("Two.")},
+                  relations:[], courtName:"C", linkFolders:true};
+    const B = mapLayout(bare, "titles");
+    ok("a court with no folders draws no folder", B.folders.length === 0);
+    ok("...and hangs its claims straight off the court",
+       B.nodes.length === 2 && B.nodes.every(n => n.depth === 1));
+
+    const mixed = {folders:[{name:"F", claims:[1], folders:[], path:"0"}], all:[1,2],
+                   claims:{1:T("Filed."), 2:T("Loose.")},
+                   relations:[], courtName:"C", linkFolders:true};
+    const M = mapLayout(mixed, "titles");
+    ok("but a court with one folder still names what sits outside it",
+       M.folders.some(f => f.pseudo));
+    ok("...and puts the loose claim inside that, not on the court",
+       (M.nodes.find(n => n.id === 2) || {}).depth === 2);
+  }
+
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
      was widened to hold more of a title. That was the wrong property and it is
      worth saying why rather than just relaxing it: area conflates two things,

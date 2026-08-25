@@ -3581,7 +3581,23 @@ function mapTree(data, mode){
     return node;
   };
   const tops = (data.folders||[]).map((f,i)=>folderNode(f, f.path!=null? String(f.path) : String(i)));
-  if(loose.length) tops.push(folderNode({name:data.looseName||"(no folder)", claims:loose, folders:[], pseudo:true}, null));
+  /* "(no folder)" ONLY MEANS SOMETHING WHEN THERE IS A FOLDER. On a court that
+     has none — a new one, or any docket nobody has curated — every claim is
+     loose, and wrapping the whole docket in a node labelled "(no folder)" says
+     nothing at all while costing a ring: the claims become depth 2 and sit
+     outside a container that contains everything. Two claims came out at r=341
+     from the court where 255 was the clearance, behind a box whose only content
+     was the word "no". With no folders to be outside of, claims hang off the
+     court directly — which is also the picture the map is meant to be. */
+  if(loose.length){
+    if(tops.length)
+      tops.push(folderNode({name:data.looseName||"(no folder)", claims:loose, folders:[], pseudo:true}, null));
+    else for(const id of loose){
+      if(!data.claims[id] || drawn.has(id)) continue;
+      drawn.add(id);
+      tops.push({kind:"claim", id, kids:[], size:mapClaimSize((data.claims[id]||{}).title, mode)});
+    }
+  }
   return {root:{kind:"court", name:data.courtName||"this court", kids:tops}, alsoIn};
 }
 function mapLayout(data, mode){
