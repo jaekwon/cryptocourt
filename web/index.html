@@ -3416,7 +3416,12 @@ const MAPK = {
   // claim needs a gist, the court needs to read as the thing the rest hangs off.
   // The claim box is narrower than the old grid's 240 — at map zoom a title is a
   // gist, and the claim page holds the sentence.
-  node:  { titles:{w:176,h:52}, ids:{w:64,h:28} },  // a claim
+  // A claim box is as tall as its own sentence needs. It was a fixed 176x52 for
+  // every claim, which cut every title at two short lines and spent the same
+  // space on "Another" as on a forty-word finding — the boxes were sized to the
+  // grid the layout used to be.
+  node:  { titles:{w:206,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
+  head:22, lineH:14,   // the id line, and each title line under it
   fnode: { titles:{w:152,h:42}, ids:{w:104,h:26} }, // a folder
   cnode: { titles:{w:190,h:54}, ids:{w:132,h:38} }, // the court, at the centre
   sep:22,          // clearance every pair of nodes keeps, tangentially and radially
@@ -3431,7 +3436,7 @@ const MAPK = {
   // Kept inside the wedge's own SLACK so the disjointness proof is untouched: a
   // node that cannot move without leaving its wedge does not move.
   twist:0.11,
-  fs:{header:12, id:12, title:11, court:14}, charW:0.62, maxTitleLines:2,
+  fs:{header:12, id:12, title:11, court:14}, charW:0.62, maxTitleLines:4,
 };
 /* maxLines is a PARAMETER because the box that holds the text decides it. In ids
    mode a folder node is 26px tall and two lines of 12px text do not fit — the
@@ -3462,8 +3467,18 @@ function mapWrapTitle(title, innerW, fs, maxLines){
     lines[lines.length-1] = lines[lines.length-1].slice(0, Math.max(1,budget-1))+"…";
   return lines;
 }
-function mapSize(kind, mode){
-  return kind==="claim"? MAPK.node[mode] : kind==="folder"? MAPK.fnode[mode] : MAPK.cnode[mode];
+/* The box a node needs. Claims carry their own, measured from their title when
+   the tree is built; folders and the court keep a fixed one, because a folder
+   name is short and the court appears once. */
+function mapSize(n, mode){
+  if(n.size) return n.size;
+  return n.kind==="claim"? MAPK.node[mode] : n.kind==="folder"? MAPK.fnode[mode] : MAPK.cnode[mode];
+}
+function mapClaimSize(title, mode){
+  const base = MAPK.node[mode];
+  if(mode!=="titles") return base;
+  const lines = mapWrapTitle(String(title||""), base.w-2*MAPK.tpad, MAPK.fs.title, MAPK.maxTitleLines);
+  return {w:base.w, h:Math.max(base.h, MAPK.head + lines.length*MAPK.lineH + MAPK.tpad)};
 }
 /* Where the centre-to-centre line leaves a's box: half-extent in each axis,
    whichever side it reaches first. Written out because a chord that starts at a
@@ -3493,7 +3508,8 @@ function mapTree(data, mode){
     for(const id of (f.claims||[])){
       if(!data.claims[id]) continue;
       if(drawn.has(id)) alsoIn.push({folder:node, id});
-      else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[]}); }
+      else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[],
+             size:mapClaimSize((data.claims[id]||{}).title, mode)}); }
     }
     (f.folders||[]).forEach((g,i)=>node.kids.push(folderNode(g, path==null? null : path+"."+i)));
     return node;
@@ -3504,45 +3520,129 @@ function mapTree(data, mode){
 }
 function mapLayout(data, mode){
   const K = MAPK, {root, alsoIn} = mapTree(data, mode);
-  // Depth census: how many rings, and the widest node on each — which is what
-  // sets the radial clearance from one ring to the next.
-  const wide = [];
-  (function census(n, d){
-    const s = mapSize(n.kind, mode);
-    wide[d] = Math.max(wide[d]||0, s.w, s.h);
-    n.kids.forEach(k=>census(k, d+1));
-  })(root, 0);
-  const maxD = wide.length-1;
-  const baseR = [0];
-  if(maxD >= 1) baseR[1] = Math.max(K.seedR, (wide[0]+wide[1])/2 + K.sep);
-  for(let d=2; d<=maxD; d++) baseR[d] = baseR[d-1] + (wide[d-1]+wide[d])/2 + K.sep;
-  /* THE FIT SOLVE, two passes and no loop. A node asks for the larger of what
-     its own box needs at its radius and what its children need together.
-     Scaling every radius by s shrinks the first term and leaves the second a sum
-     of shrinking terms, so one rescale by s = total/2π brings the total inside a
-     full turn — and a fixed number of passes cannot fail to terminate. */
-  const solve = (R) => {
+  /* SPACING IS SOLVED TWICE, and the second pass is where the air comes out.
+     A rect at polar angle t occupies w|sin t| + h|cos t| along the ring and
+     w|cos t| + h|sin t| out from the centre. Neither is known until the node has
+     an angle, and the angle depends on the spacing — so the first pass uses the
+     DIAGONAL, which bounds both and is what a node would need if it sat at the
+     worst angle for it. That is safe and it is loose: a claim box at twelve
+     o'clock was being given room for its width when only its height was in the
+     way, and the whole drawing carried that slack in every ring.
+     Pass two knows each node's angle, so it asks for what the node actually
+     occupies there. Needs only shrink, so every wedge still covers its node and
+     the proof from pass one carries. */
+  const tangential = (sz, t) => Math.abs(sz.w*Math.sin(t)) + Math.abs(sz.h*Math.cos(t)) + K.sep;
+  const radial     = (sz, t) => Math.abs(sz.w*Math.cos(t)) + Math.abs(sz.h*Math.sin(t));
+  const depths = [];
+  (function census(n, d){ (depths[d] = depths[d]||[]).push(n); n.kids.forEach(k=>census(k, d+1)); })(root, 0);
+  const maxD = depths.length-1;
+  const ringsFrom = ext => {
+    const R = [0];
+    if(maxD >= 1) R[1] = Math.max(K.seedR, (ext[0]+ext[1])/2 + K.sep);
+    for(let d=2; d<=maxD; d++) R[d] = R[d-1] + (ext[d-1]+ext[d])/2 + K.sep;
+    return R;
+  };
+  /* THE FIT SOLVE. A node asks for the larger of what its own box needs at its
+     radius and what its children need together. Scaling every radius by s
+     shrinks the first term and leaves the second a sum of shrinking terms, so
+     one rescale by s = total/2π brings the total inside a full turn — a fixed
+     number of passes, never a loop that might not terminate. */
+  const solve = (R, need) => {
     const walk = (n, d) => {
-      const s = mapSize(n.kind, mode);
       const own = d===0 || !R[d] ? 0
-        : 2*Math.asin(Math.min(1, (Math.hypot(s.w, s.h)+K.sep)/(2*R[d])));
+        : 2*Math.asin(Math.min(1, need(n, d)/(2*R[d])));
       const kids = n.kids.reduce((t,k)=>t+walk(k, d+1), 0);
       return (n._a = Math.max(own, kids));
     };
     return walk(root, 0);
   };
-  let R = baseR.slice();
-  const first = solve(R);
-  if(first > 2*Math.PI){ R = R.map(v=>v*(first/(2*Math.PI))); solve(R); }
+  const fit = (R, need) => {
+    const total = solve(R, need);
+    if(total > 2*Math.PI){ R = R.map(v=>v*(total/(2*Math.PI))); solve(R, need); }
+    return R;
+  };
+  // Angles only — no output — so pass two has something to measure against.
+  const sweep = (R) => {
+    (function walk(n, a0, a1, d){
+      const own = d===0 || !R[d] ? 0 : 2*Math.asin(Math.min(1, (n._need||0)/(2*R[d])));
+      const slack = Math.max(0, (a1-a0) - own);
+      n._mid = (a0+a1)/2 + (d%2? 1:-1)*Math.min(slack/2, K.twist);
+      n._span = a1-a0;
+      const tot = n.kids.reduce((t,k)=>t+k._a, 0);
+      let a=a0;
+      for(const k of n.kids){
+        const share = tot>0? (a1-a0)*k._a/tot : (a1-a0)/Math.max(1, n.kids.length);
+        walk(k, a, a+share, d+1); a += share;
+      }
+    })(root, K.base, K.base+2*Math.PI, 0);
+  };
+  // Pass 1: the diagonal, which needs no angle.
+  const diag = n => { const sz=mapSize(n, mode); return Math.hypot(sz.w, sz.h)+K.sep; };
+  depths.forEach(g=>g.forEach(n=>n._need = diag(n)));
+  let R = fit(ringsFrom(depths.map(g=>Math.max(...g.map(n=>{const z=mapSize(n,mode); return Math.max(z.w,z.h);})))),
+              n => n._need);
+  sweep(R);
+  /* Pass 2: what each node actually occupies at the angle pass 1 gave it —
+     AND THEN CHECKED, because that angle is not the one it ends up at. Tighter
+     needs give a tighter solve, which re-allocates the wedges, which moves the
+     angles the needs were measured at. Usually a little; sometimes past the
+     point where a node still fits its own wedge, and the harness caught exactly
+     that on the demo court at minGap = -14.
+     So pass 2 is an OPTIMISATION WITH A PROOF OBLIGATION: keep it only if every
+     node's final wedge still spans its true extent at its final angle. If not,
+     fall back to the diagonal, which bounds the extent at every angle and so
+     cannot be invalidated by a node moving. */
+  const diagRings = () => depths.map(g=>Math.max(...g.map(n=>{const z=mapSize(n,mode); return Math.max(z.w,z.h);})));
+  const holds = RR => depths.every((g,d)=> d===0 ||
+    g.every(n => n._span*RR[d] + 1e-6 >= tangential(mapSize(n, mode), n._mid)));
+  depths.forEach(g=>g.forEach(n=>n._need = tangential(mapSize(n, mode), n._mid)));
+  const R2 = fit(ringsFrom(depths.map(g=>Math.max(...g.map(n=>radial(mapSize(n, mode), n._mid))))),
+                 n => n._need);
+  sweep(R2);
+  if(holds(R2)) R = R2;
+  else { depths.forEach(g=>g.forEach(n=>n._need = diag(n))); R = fit(ringsFrom(diagRings()), n=>n._need); sweep(R); }
+  /* COMPACT THE RINGS RADIALLY, WITHOUT TOUCHING A SINGLE ANGLE — which is the
+     whole trick, and two wrong versions came before it.
+     `fit` multiplies EVERY radius when the total angle overflows a turn, but the
+     overflow is nearly always the outermost ring: that is where the claims are
+     and there are most of them. Ring 1 gets pushed out by a factor nothing on
+     ring 1 asked for, and the map opens with a hole in the middle exactly where
+     the reader is looking. Measured on the covid docket: rings at 0, 303, 619,
+     977 where ring 1's own contents needed 193.
+     THE FIRST TWO ATTEMPTS BOTH RE-SOLVED, and that is what made them fail. Any
+     change to a radius changes the angle allocation, which moves every node,
+     which invalidates the extents the radii were computed from — 15 nodes ended
+     up in wedges too small for them, and the whole thing fell back.
+     Sizing a ring from Σneed/2π was wrong for a second reason worth writing down:
+     it assumes the ring packs evenly around a full turn, and the tree does not
+     allow that. Origins' seven claims share Origins' third of the circle, not a
+     seventh of the whole ring.
+     So: keep the angles EXACTLY as solved, and move each ring in until the first
+     of two things stops it — the clearance from the ring inside it, or the node
+     on it whose own wedge would stop covering it. A wedge's ANGLE does not change
+     when its radius does, so nothing can be invalidated by this and there is
+     nothing to verify. */
+  {
+    const ext = depths.map((g, d) => d === 0
+      // The court sits at the origin, so its clearance applies in whatever
+      // direction a child happens to lie. Its extent at its own nominal angle
+      // means nothing here; the bound over all directions is its longer side.
+      ? Math.max(...g.map(n=>{ const z=mapSize(n, mode); return Math.max(z.w, z.h); }))
+      : Math.max(...g.map(n=>radial(mapSize(n, mode), n._mid))));
+    const tight = [0];
+    for(let d=1; d<=maxD; d++){
+      const clearance = tight[d-1] + (ext[d-1]+ext[d])/2 + K.sep;
+      const wedges = Math.max(...depths[d].map(n =>
+        n._span > 0 ? tangential(mapSize(n, mode), n._mid)/n._span : 0));
+      tight[d] = Math.max(K.seedR, clearance, wedges);
+    }
+    R = tight;
+  }
   // Place, and record a spoke from every parent box to every child box.
   const nodes=[], folders=[], spokes=[];
   let court=null;
   (function place(n, a0, a1, d){
-    const sz=mapSize(n.kind, mode);
-    // Off-centre by at most half the wedge's spare angle, alternating by depth.
-    const own = d===0 || !R[d] ? 0 : 2*Math.asin(Math.min(1, (Math.hypot(sz.w,sz.h)+K.sep)/(2*R[d])));
-    const slack = Math.max(0, (a1-a0) - own);
-    const mid=(a0+a1)/2 + (d%2? 1:-1)*Math.min(slack/2, K.twist);
+    const sz=mapSize(n, mode), mid=n._mid;
     const cx=R[d]*Math.cos(mid), cy=R[d]*Math.sin(mid);
     const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
     n._box = box;
@@ -3584,6 +3684,7 @@ function mapLayout(data, mode){
       .map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
     edges: edges.map(e=>Object.assign({}, e, {pts:e.pts.map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
     viewBox:[0,0,Math.round(maxX-minX+2*K.margin), Math.round(maxY-minY+2*K.margin)],
+    rings:R.map(v=>Math.round(v)),   // for map-preview and the harness: which ring sits where
     mode,
   };
 }
@@ -4260,7 +4361,7 @@ function mountMap(slug, data, focusId){
     if(m===mode) return;
     const rx=cx/fit.w, ry=cy/fit.h;
     mode=m; L=mapLayout(data,mode); fit={w:L.viewBox[2], h:L.viewBox[3]};
-    cx=rx*fit.w; cy=ry*fit.h;
+    cx=rx*fit.w; cy=ry*fit.h;   // hold the reader's position across the relayout
     document.getElementById("mt-titles").setAttribute("aria-pressed", String(m==="titles"));
     document.getElementById("mt-ids").setAttribute("aria-pressed", String(m==="ids"));
     put();
@@ -4269,6 +4370,37 @@ function mountMap(slug, data, focusId){
   bind("mt-ids", ()=>setMode("ids"));
   put();
   paint();   // the empty card, so the column is never a bare box
+  /* LAND ON THE COURT, NOT ON EVERYTHING. The map opened at fit — the whole
+     graph in a 640px box — which on a real docket makes every node a few pixels
+     tall, drops the titles below the LOD line, and presents the reader with a
+     diagram of a diagram. The first ring is what the map is ABOUT: the court and
+     what hangs directly off it. So open framed on that, and leave the outer
+     rings as something to pan to. `fit` is still one button away and still means
+     everything. */
+  function frameCore(){
+    // RING 1, and two rings was tried and rejected: on a nested docket ring 2
+    // holds every claim of every flat folder, so framing it came out at 1.24x —
+    // the fitted view with a border, which is the thing this replaces. One ring
+    // is the court and what hangs directly off it; ring 2 shows at the edges and
+    // is what you pan to.
+    const core = [L.court].concat(L.folders.filter(f=>f.depth<=1), L.nodes.filter(n=>n.depth<=1));
+    if(!core.length) return;
+    // CENTRED ON THE COURT, not on the bounding box of the first ring. Those are
+    // different points whenever the ring is uneven — three folders at 120° apart
+    // put their box's centre off the court by most of a folder's width, and the
+    // node the map is built around then sits off to one side of the opening view.
+    const pad = 48;
+    cx = L.court.cx; cy = L.court.cy;
+    const reach = core.reduce((m,b)=>Math.max(m,
+      Math.abs(b.x-cx), Math.abs(b.x+b.w-cx)), 0) + pad;
+    const reachY = core.reduce((m,b)=>Math.max(m,
+      Math.abs(b.y-cy), Math.abs(b.y+b.h-cy)), 0) + pad;
+    const x0=cx-reach, x1=cx+reach, y0=cy-reachY, y1=cy+reachY;
+    // z is how many times INTO the fitted view we are, so showing a width w
+    // means fit.w/z = w. Never below 1: a core wider than the whole graph would
+    // otherwise zoom out past fit and reintroduce the thing this fixes.
+    z = Math.min(8, Math.max(1, Math.min(fit.w/(x1-x0), fit.h/(y1-y0))));
+  }
   if(focusId!=null){ const n = L.nodes.find(x=>x.id===focusId);
     if(n){ cx=n.x+n.w/2; cy=n.y+n.h/2;
       // land zoomed so titles clear the LOD line (enter<7px, leave>8.5px)
@@ -4277,6 +4409,7 @@ function mountMap(slug, data, focusId){
       apply();
       const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.focus({preventScroll:true});
     } }
+  else { frameCore(); apply(); }
 }
 
 /* Folder page — chain folders live at their stable fid; local/demo trees use dot-paths. */

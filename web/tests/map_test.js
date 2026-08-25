@@ -298,6 +298,38 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
      /put\(\);\s*paint\(\);/.test(mount));
 }
 
+// NODES SIZED TO THEIR OWN TEXT, and rings compacted radially.
+{
+  const short = "Short.", long = "A tribunal applying the ordinary standard would find that "
+    + "congressional testimony misled the committee about what was funded and when.";
+  const d = {folders:[{name:"F", claims:[1,2], folders:[], path:"0"}], all:[1,2],
+             claims:{1:{title:short, statusText:"open"}, 2:{title:long, statusText:"open"}},
+             relations:[], courtName:"C", linkFolders:true};
+  const L = mapLayout(d, "titles");
+  const h = Object.fromEntries(L.nodes.map(n=>[n.id, n.h]));
+  ok("a short claim gets a short box", h[1] < h[2]);
+  ok("and a long one grows to hold more of its sentence", h[2] >= h[1] + MAPK.lineH);
+  ok("no box is shorter than the floor", Math.min(h[1], h[2]) >= MAPK.node.titles.h);
+  ok("ids mode keeps one fixed size", (()=>{ const I=mapLayout(d,"ids");
+     return new Set(I.nodes.map(n=>n.h)).size===1; })());
+
+  /* RING 1 SITS AT ITS OWN MINIMUM, not at whatever the outermost ring's
+     overflow scaled it to. The uniform fit put the covid docket's rings at
+     0/303/619/977 when ring 1's contents needed 193 — a hole in the middle of
+     the drawing exactly where the reader looks. Compaction moves rings only;
+     angles are untouched, which is why nothing it does can invalidate a wedge. */
+  const deep = {folders:[{name:"A", claims:[], folders:[{name:"A1", claims:[1,2,3,4,5,6,7], folders:[]}], path:"0"},
+                         {name:"B", claims:[], folders:[{name:"B1", claims:[8,9], folders:[]}], path:"1"}],
+                all:[1,2,3,4,5,6,7,8,9],
+                claims:Object.fromEntries([1,2,3,4,5,6,7,8,9].map(i=>[i,{title:long, statusText:"open"}])),
+                relations:[], courtName:"C", linkFolders:true};
+  const D2 = mapLayout(deep, "titles");
+  const court = MAPK.cnode.titles, fold = MAPK.fnode.titles;
+  ok("ring 1 clears the court and no more",
+     D2.rings[1] <= Math.max(court.w, court.h)/2 + Math.max(fold.w, fold.h)/2 + MAPK.sep + 2);
+  ok("rings still increase outward", D2.rings.every((r,i)=> i===0 || r > D2.rings[i-1]));
+}
+
 // determinism: same input → same bytes
 ok("deterministic bytes", mapSvg(mapLayout(demoData,"titles"),demoData,"orem")===svgs.titles);
 

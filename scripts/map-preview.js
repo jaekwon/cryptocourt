@@ -149,6 +149,26 @@ const CSS = `<style>
 
 const data = DEMO ? fromDemo() : fromChain();
 const L = mapLayout(data, MODE);
-fs.writeFileSync(OUT, mapSvg(L, data, SLUG).replace(">", ">" + CSS));
+let svg = mapSvg(L, data, SLUG).replace(">", ">" + CSS);
+let note = "";
+// --frame core renders what the page OPENS on rather than the whole graph. The
+// two are not the same picture and the difference is the point: a map that looks
+// fine fitted can still open on something unreadable, which is what it did.
+if(arg("--frame", "") === "core"){
+  const core = [L.court].concat(L.folders.filter(f => f.depth <= 1),
+                                L.nodes.filter(n => n.depth <= 1));
+  const pad = 48, cx = L.court.cx, cy = L.court.cy;
+  const rx = core.reduce((m,b) => Math.max(m, Math.abs(b.x-cx), Math.abs(b.x+b.w-cx)), 0) + pad;
+  const ry = core.reduce((m,b) => Math.max(m, Math.abs(b.y-cy), Math.abs(b.y+b.h-cy)), 0) + pad;
+  const x0 = cx-rx, x1 = cx+rx, y0 = cy-ry, y1 = cy+ry;
+  svg = svg.replace(/viewBox="[^"]+"/,
+    `viewBox="${Math.round(x0)} ${Math.round(y0)} ${Math.round(x1-x0)} ${Math.round(y1-y0)}"`);
+  note = ` — framed on the court and ring 1: ${Math.round(x1-x0)}x${Math.round(y1-y0)}`
+       + ` (${(L.viewBox[2]/(x1-x0)).toFixed(2)}x into the fitted view)`;
+}
+fs.writeFileSync(OUT, svg);
+const heights = [...new Set(L.nodes.map(n => n.h))].sort((a,b) => a-b);
 console.log(`${OUT}: ${L.viewBox[2]}x${L.viewBox[3]}, ${L.folders.length} folder(s), `
-  + `${L.nodes.length} claim(s), ${L.spokes.length} spoke(s), ${L.edges.length} chord(s)`);
+  + `${L.nodes.length} claim(s), ${L.spokes.length} spoke(s), ${L.edges.length} chord(s)`
+  + `, claim heights ${heights.join("/")}`
+  + `, rings ${(L.rings||[]).join("->")}${note}`);
