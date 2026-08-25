@@ -430,6 +430,54 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
        (M.nodes.find(n => n.id === 2) || {}).depth === 2);
   }
 
+  /* A FOLDER IS AS WIDE AS ITS OWN LABEL — the other half of "nodes are not
+     sized to their text", which claims got and folders did not. Every folder was
+     164 wide whether it read "Fauci · 9" or "Gain-of-function funding · 3", and
+     a folder's width is charged to its whole ring.
+     THE FIT TEST ITSELF WAS WRONG, and this is the assertion that matters most
+     here. `wrapFit` decided whether a label survived its box by asking whether
+     the wrapped lines were still as long as the label — and mapWrapTitle appends
+     an ellipsis when it truncates, which puts back almost exactly the length it
+     removed. "Gain-of-functio funding · 3…" and "Gain-of-function funding · 3"
+     are both 28 characters, so a cut label tested as a whole one. It never fired
+     while every folder was a fixed 164 and every label happened to fit; allowing
+     narrower boxes surfaced it immediately, which is the usual way a constant
+     stops covering the case it was chosen for. */
+  {
+    const fold = (name, id) => ({name, claims:[id], folders:[], path:name});
+    const wide = "Gain-of-function funding", thin = "Fauci";
+    const d3 = {folders:[fold(thin,1), fold(wide,2)], all:[1,2],
+                claims:{1:{title:"A.",statusText:"open"}, 2:{title:"B.",statusText:"open"}},
+                relations:[], courtName:"C", linkFolders:true};
+    const F = mapLayout(d3, "titles");
+    const box = nm => F.folders.find(f => f.name === nm);
+    ok("a short-named folder gets a narrower box than a long-named one",
+       box(thin).w < box(wide).w);
+    ok("and neither is the old fixed width for both",
+       box(thin).w !== box(wide).w);
+
+    /* The OBSERVABLE, stated here rather than borrowed from the page. The first
+       version of this called mapWrapHolds — the function the bug was in — so
+       breaking it left the check green: the test asked the suspect whether the
+       suspect was lying. What is actually being asserted is that the drawn label
+       contains no ellipsis and is no shorter than the label it stands for, which
+       is a fact about the picture and belongs in the test in those terms. */
+    const survives = f => {
+      const label = `${f.name} · ${f.count}`;
+      const lines = mapWrapTitle(label, f.w - 2*MAPK.tpad, MAPK.fs.header,
+                                 Math.max(1, Math.floor((f.h-6)/(MAPK.fs.header+2))));
+      const drawn = lines.join(" ");
+      const orphan = lines.length > 1 && !/[A-Za-z]/.test(lines[lines.length-1]);
+      return drawn.indexOf("…") < 0 && drawn.length >= label.length && !orphan;
+    };
+    ok("every folder box holds its whole label, count included",
+       F.folders.every(survives));
+    ok("...including the long one, which is the case the box was widened for",
+       survives(box(wide)));
+    ok("and the court is still the widest node, whatever a folder is called",
+       F.folders.every(f => f.w < F.court.w));
+  }
+
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
      was widened to hold more of a title. That was the wrong property and it is
      worth saying why rather than just relaxing it: area conflates two things,

@@ -3467,7 +3467,11 @@ const MAPK = {
   // than a four-line box could ever reach.
   node:  { titles:{w:206,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
-  fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder
+  fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder; w is a fallback
+  // The range mapFolderSize searches, in 12px steps. The floor is a box that
+  // still reads as a container next to a 206 claim; the ceiling stays under the
+  // court's 260 so the court is still the widest node on the map.
+  fnodeW: [116, 236],
   // THE COURT IS THE BIGGEST THING ON THE MAP, which it was not: at 190x54 it
   // was smaller than the 206x86 claim boxes around it, so the node the whole
   // drawing is built around read as one more box that happened to be blue. It is
@@ -3540,6 +3544,43 @@ function mapSize(n, mode){
   if(n.size) return n.size;
   return n.kind==="claim"? MAPK.node[mode] : n.kind==="folder"? MAPK.fnode[mode] : MAPK.cnode[mode];
 }
+/* A FOLDER IS AS WIDE AS ITS OWN LABEL, which is the other half of "nodes are
+   not sized to their text". Claims got this and folders did not: every one was
+   164 wide whether it said "Fauci · 9" or "Gain-of-function funding · 3". Too
+   wide is not free — a folder's width is what its ring has to make room for, and
+   it is charged to the whole ring — and too narrow costs the label its count,
+   which is the one number a folder box is carrying.
+   Two lines, and the width is the smallest that holds the label whole at that
+   cap. Capped below the court's own width, because the court reads as the anchor
+   by being the widest thing on the map and a long folder name is not a reason to
+   take that away from it. */
+/* DID THE WRAP ACTUALLY HOLD THE TEXT, and "is it still as long" cannot answer
+   that. mapWrapTitle appends an ellipsis when it truncates, and that character
+   puts back very nearly the length it just removed — so the obvious test,
+   `lines.join(" ").length >= text.length`, reports a cut label as a whole one.
+   It read true for "Gain-of-functio funding · 3…" against "Gain-of-function
+   funding · 3", both 28 characters. Latent for as long as folder boxes were a
+   fixed 164 and every label happened to fit; it surfaced the moment boxes were
+   allowed to be narrower, which is the usual way a constant stops covering. */
+function mapWrapHolds(lines, text){
+  const t = lines.join(" ");
+  return t.indexOf("…") < 0 && t.length >= String(text).length;
+}
+function mapFolderSize(name, count, mode){
+  const base = MAPK.fnode[mode];
+  if(mode !== "titles") return base;
+  const label = count != null ? `${name} · ${count}` : String(name || "");
+  const holds = w => {
+    const lines = mapWrapTitle(label, w - 2*MAPK.tpad, MAPK.fs.header, 2);
+    // The same two failures wrapFit weighs at draw time: an ellipsis, or a last
+    // line carrying the "· 3" and no word — which reads as a broken label.
+    return mapWrapHolds(lines, label)
+        && !(lines.length > 1 && !/[A-Za-z]/.test(lines[lines.length-1]));
+  };
+  for(let w = MAPK.fnodeW[0]; w <= MAPK.fnodeW[1]; w += 12)
+    if(holds(w)) return {w, h: base.h};
+  return {w: MAPK.fnodeW[1], h: base.h};   // nothing holds it; wrapFit will trim
+}
 function mapClaimSize(title, mode){
   const base = MAPK.node[mode];
   if(mode!=="titles") return base;
@@ -3569,8 +3610,9 @@ function mapTree(data, mode){
   const loose = data.all.filter(id=>!inFolder.has(id));
   const drawn = new Set(), alsoIn = [];
   const folderNode = (f, path) => {
+    const count = (function cnt(g){ return (g.claims||[]).length+(g.folders||[]).reduce((a,q)=>a+cnt(q),0); })(f);
     const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[],
-      count:(function cnt(g){ return (g.claims||[]).length+(g.folders||[]).reduce((a,q)=>a+cnt(q),0); })(f)};
+      count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
       if(!data.claims[id]) continue;
       if(drawn.has(id)) alsoIn.push({folder:node, id});
@@ -4017,7 +4059,7 @@ function mapSvg(L, data, slug){
     // loss ·" above a bare "1", which reads as a broken label rather than a
     // count. Either way the name wins and the folder page carries the number.
     const orphan = a.length>1 && !/[A-Za-z]/.test(a[a.length-1]);
-    return wrapMid((a.join(" ").length >= withN.length && !orphan)? withN : name, box, fs, cls, owner);
+    return wrapMid((mapWrapHolds(a, withN) && !orphan)? withN : name, box, fs, cls, owner);
   };
   const fitLines=(box, fs)=>Math.max(1, Math.floor((box.h-6)/(fs+2)));
   const wrapMid=(txt, box, fs, cls, owner)=>{
