@@ -3540,10 +3540,19 @@ function mapWrapTitle(title, innerW, fs, maxLines){
 /* The box a node needs. Claims carry their own, measured from their title when
    the tree is built; folders and the court keep a fixed one, because a folder
    name is short and the court appears once. */
-function mapSize(n, mode){
-  if(n.size) return n.size;
-  return n.kind==="claim"? MAPK.node[mode] : n.kind==="folder"? MAPK.fnode[mode] : MAPK.cnode[mode];
-}
+/* THE SIZE THE NODE WAS BUILT WITH, and that is now the whole of it. mapTree
+   gives every node its own — a claim from its title, a folder from its label,
+   the court from its name — so this is a lookup.
+   It used to end with a fallback naming MAPK.node/fnode/cnode directly, which
+   was unreachable across every shape tried (six dockets, both modes, including
+   empty courts and empty folders) and, worse, WRONG if it had ever run: those
+   are the BASE sizes, so a claim would have come back at the 52px floor rather
+   than the height its sentence needs, and a folder at a fixed 164 rather than
+   the width its label needs. A second statement of a rule, kept for safety,
+   that had quietly stopped agreeing with the first. Nothing here needs it: if a
+   node ever reaches this without a size the drawing fails loudly on the spot,
+   which is the honest outcome and how it would be found. */
+function mapSize(n){ return n.size; }
 /* A FOLDER IS AS WIDE AS ITS OWN LABEL, which is the other half of "nodes are
    not sized to their text". Claims got this and folders did not: every one was
    164 wide whether it said "Fauci · 9" or "Gain-of-function funding · 3". Too
@@ -3722,7 +3731,7 @@ function mapLayout(data, mode){
     })(root, K.base, K.base+2*Math.PI, 0);
   };
   // Pass 1: the diagonal, which needs no angle.
-  const diag = n => { const sz=mapSize(n, mode); return Math.hypot(sz.w, sz.h)+K.sep; };
+  const diag = n => { const sz=mapSize(n); return Math.hypot(sz.w, sz.h)+K.sep; };
   depths.forEach(g=>g.forEach(n=>n._need = diag(n)));
   let R = fit(ringsFrom(depths.map(g=>Math.max(...g.map(n=>{const z=mapSize(n,mode); return Math.max(z.w,z.h);})))),
               n => n._need);
@@ -3739,9 +3748,9 @@ function mapLayout(data, mode){
      cannot be invalidated by a node moving. */
   const diagRings = () => depths.map(g=>Math.max(...g.map(n=>{const z=mapSize(n,mode); return Math.max(z.w,z.h);})));
   const holds = RR => depths.every((g,d)=> d===0 ||
-    g.every(n => n._span*RR[d] + 1e-6 >= tangential(mapSize(n, mode), n._mid)));
-  depths.forEach(g=>g.forEach(n=>n._need = tangential(mapSize(n, mode), n._mid)));
-  const R2 = fit(ringsFrom(depths.map(g=>Math.max(...g.map(n=>radial(mapSize(n, mode), n._mid))))),
+    g.every(n => n._span*RR[d] + 1e-6 >= tangential(mapSize(n), n._mid)));
+  depths.forEach(g=>g.forEach(n=>n._need = tangential(mapSize(n), n._mid)));
+  const R2 = fit(ringsFrom(depths.map(g=>Math.max(...g.map(n=>radial(mapSize(n), n._mid))))),
                  n => n._need);
   sweep(R2);
   if(holds(R2)) R = R2;
@@ -3786,14 +3795,14 @@ function mapLayout(data, mode){
       // The court sits at the origin, so its clearance applies in whatever
       // direction a child happens to lie. Its extent at its own nominal angle
       // means nothing here; the bound over all directions is its longer side.
-      ? (z => Math.max(z.w, z.h))(mapSize(n, mode))
-      : radial(mapSize(n, mode), n._mid);
+      ? (z => Math.max(z.w, z.h))(mapSize(n))
+      : radial(mapSize(n), n._mid);
     root._r = 0;
     (function pull(n, d){
       if(!n.kids.length) return;
       const kids = n.kids.slice().sort((a,b) => a._mid - b._mid);
-      const tan = k => tangential(mapSize(k, mode), k._mid);
-      const rad = k => radial(mapSize(k, mode), k._mid);
+      const tan = k => tangential(mapSize(k), k._mid);
+      const rad = k => radial(mapSize(k), k._mid);
       const clearFor = ext => Math.max(K.seedR,
         n._r + (rextent(n, d) + ext)/2 + K.sep);
       // ONE ARC: every kid inside its own wedge, which is the bound that makes
@@ -3918,7 +3927,7 @@ function mapLayout(data, mode){
   const nodes=[], folders=[], spokes=[];
   let court=null;
   (function place(n, a0, a1, d){
-    const sz=mapSize(n, mode), mid=n._mid;
+    const sz=mapSize(n), mid=n._mid;
     const cx=n._r*Math.cos(mid), cy=n._r*Math.sin(mid);
     const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
     n._box = box;
