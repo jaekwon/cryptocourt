@@ -56,6 +56,19 @@ const lineOf = needle => src.slice(0, src.indexOf(needle)).split("\n").length;
        /background(-color)?\s*:/.test(r.body));
 }
 
+/* `hidden` HAS TO BEAT THE RULE THAT LAYS THE LEGEND OUT. `.mlegend span` sets
+   display:inline-flex, and a class selector beats the user agent's
+   [hidden]{display:none} — so marking a legend key hidden does nothing at all
+   unless the sheet says so itself. The key in question explains the dashed spoke
+   drawn for a claim filed in two folders, and it must not sit there explaining a
+   line the map did not draw. */
+{
+  const lays = /\.mlegend\s+span\s*\{[^}]*display\s*:/.test(bare_css);
+  ok("the legend lays its keys out with display, which is what makes this needed", lays);
+  ok("...so the sheet hides a marked key itself, rather than trusting [hidden]",
+     /\.mlegend\s+span\[hidden\]\s*\{[^}]*display\s*:\s*none/.test(bare_css));
+}
+
 /* And the instance, named, because it is the one the owner hit. */
 {
   const m = /\.mapfull\{([^}]*)\}/.exec(bare_css);

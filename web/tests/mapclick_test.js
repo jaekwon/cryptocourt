@@ -268,5 +268,36 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
   }
 }
 
+/* THE LEGEND KEY FOLLOWS THE DRAWING. A claim filed in two folders is drawn
+   once and gets a muted dashed spoke to the other folder — which looks like a
+   relation and is not one, so it needs a key. It needs one only when there IS
+   one: an entry explaining a line nobody drew is the same lie the other way
+   round. The answer comes from the layout rather than from a second pass over
+   the data, so it cannot disagree with what was drawn. */
+{
+  byId["mlg-also"] = new El("span", {id:"mlg-also"});
+  const claims2 = {1:{title:"Filed once.",  statusText:"open — stake YES or NO"},
+                   2:{title:"Filed twice.", statusText:"open — stake YES or NO"}};
+
+  const single = {folders:[{name:"A", claims:[1,2], folders:[], path:"0"}],
+                  all:[1,2], claims:claims2, relations:[],
+                  courtName:"Test Court", linkFolders:true};
+  box = new El("div", {id:"mapbox"}); panel = new El("div", {id:"mapsel"});
+  byId.mapbox = box; byId.mapsel = panel;
+  mountMap("covid", single, null);
+  ok("the 'also filed here' key stays hidden when no claim is filed twice",
+     byId["mlg-also"].hidden === true);
+
+  const twice = {folders:[{name:"A", claims:[1,2], folders:[], path:"0"},
+                          {name:"B", claims:[2],   folders:[], path:"1"}],
+                 all:[1,2], claims:claims2, relations:[],
+                 courtName:"Test Court", linkFolders:true};
+  box = new El("div", {id:"mapbox"}); panel = new El("div", {id:"mapsel"});
+  byId.mapbox = box; byId.mapsel = panel;
+  mountMap("covid", twice, null);
+  ok("...and appears once a claim is filed in two folders",
+     byId["mlg-also"].hidden === false);
+}
+
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);
