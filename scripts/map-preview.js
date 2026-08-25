@@ -157,7 +157,18 @@ const CSS = `<style>
  .mdot.vd{fill:#cfc9bd} .mdot.vf{fill:none;stroke:#c0392b;stroke-dasharray:2 2}
 </style>`;
 
-const data = DEMO ? fromDemo() : fromChain();
+/* --dump/--data: a court's shape, cached to a file.
+   Reading the covid docket off a node is ~80 sequential gnokey queries, which is
+   slow enough that it discourages the one thing this tool exists for — rendering
+   twice and comparing. It also makes every comparison depend on the node still
+   being up and still holding the same docket, so two renders taken minutes apart
+   are not necessarily of the same court. Caching the shape fixes both: fetch
+   once, then render as many layout variants as you like against bytes that
+   cannot drift under you. */
+const DUMP = arg("--dump", ""), DATAF = arg("--data", "");
+const data = DATAF ? JSON.parse(fs.readFileSync(DATAF, "utf8"))
+           : DEMO  ? fromDemo() : fromChain();
+if(DUMP){ fs.writeFileSync(DUMP, JSON.stringify(data, null, 1)); console.log("wrote " + DUMP); }
 const L = mapLayout(data, MODE);
 let svg = mapSvg(L, data, SLUG).replace(">", ">" + CSS);
 let note = "";

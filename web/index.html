@@ -3647,33 +3647,49 @@ function mapLayout(data, mode){
      it assumes the ring packs evenly around a full turn, and the tree does not
      allow that. Origins' seven claims share Origins' third of the circle, not a
      seventh of the whole ring.
-     So: keep the angles EXACTLY as solved, and move each ring in until the first
-     of two things stops it — the clearance from the ring inside it, or the node
-     on it whose own wedge would stop covering it. A wedge's ANGLE does not change
-     when its radius does, so nothing can be invalidated by this and there is
-     nothing to verify. */
+     So: keep the angles EXACTLY as solved, and move each group in until the first
+     of two things stops it — the clearance from its parent, or the node in it
+     whose own wedge would stop covering it. A wedge's ANGLE does not change when
+     its radius does, so nothing can be invalidated by this and there is nothing
+     to verify.
+     RADIUS BELONGS TO A SIBLING GROUP, NOT TO A DEPTH, and that is the second
+     thing this got wrong. One radius per depth means every node on a ring pays
+     for the most crowded wedge on it: Origins' seven claims set ring 2, and
+     "Vaccine safety claims" — which has three — was flung out to the same 664
+     because it happened to share a depth with them. The covid map opened on a
+     court, six small folders, and a 429px annulus of nothing before the first
+     claim.
+     Sibling groups are safe to move independently because ANGULAR SECTORS ARE
+     DISJOINT. Two boxes in non-overlapping sectors cannot touch at any pair of
+     radii, and every group's sector is nested inside its parent's, so the only
+     pair that can collide is a parent and its own descendant — which is exactly
+     what the clearance term bounds, from the parent's REAL radius rather than
+     its ring's. Siblings still share one radius, so a group still reads as an arc
+     around its parent rather than a scatter. */
   {
-    const ext = depths.map((g, d) => d === 0
+    const rextent = (n, d) => d === 0
       // The court sits at the origin, so its clearance applies in whatever
       // direction a child happens to lie. Its extent at its own nominal angle
       // means nothing here; the bound over all directions is its longer side.
-      ? Math.max(...g.map(n=>{ const z=mapSize(n, mode); return Math.max(z.w, z.h); }))
-      : Math.max(...g.map(n=>radial(mapSize(n, mode), n._mid))));
-    const tight = [0];
-    for(let d=1; d<=maxD; d++){
-      const clearance = tight[d-1] + (ext[d-1]+ext[d])/2 + K.sep;
-      const wedges = Math.max(...depths[d].map(n =>
-        n._span > 0 ? tangential(mapSize(n, mode), n._mid)/n._span : 0));
-      tight[d] = Math.max(K.seedR, clearance, wedges);
-    }
-    R = tight;
+      ? (z => Math.max(z.w, z.h))(mapSize(n, mode))
+      : radial(mapSize(n, mode), n._mid);
+    root._r = 0;
+    (function pull(n, d){
+      if(!n.kids.length) return;
+      const kext = Math.max(...n.kids.map(k => radial(mapSize(k, mode), k._mid)));
+      const clearance = n._r + (rextent(n, d) + kext)/2 + K.sep;
+      const wedges = Math.max(...n.kids.map(k =>
+        k._span > 0 ? tangential(mapSize(k, mode), k._mid)/k._span : 0));
+      const r = Math.max(K.seedR, clearance, wedges);
+      for(const k of n.kids){ k._r = r; pull(k, d+1); }
+    })(root, 0);
   }
   // Place, and record a spoke from every parent box to every child box.
   const nodes=[], folders=[], spokes=[];
   let court=null;
   (function place(n, a0, a1, d){
     const sz=mapSize(n, mode), mid=n._mid;
-    const cx=R[d]*Math.cos(mid), cy=R[d]*Math.sin(mid);
+    const cx=n._r*Math.cos(mid), cy=n._r*Math.sin(mid);
     const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
     n._box = box;
     if(n.kind==="court"){ court={...box, name:n.name}; }
@@ -3714,7 +3730,10 @@ function mapLayout(data, mode){
       .map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
     edges: edges.map(e=>Object.assign({}, e, {pts:e.pts.map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
     viewBox:[0,0,Math.round(maxX-minX+2*K.margin), Math.round(maxY-minY+2*K.margin)],
-    rings:R.map(v=>Math.round(v)),   // for map-preview and the harness: which ring sits where
+    // Radius is per sibling group now, so a "ring" is a summary rather than a
+    // fact: the FARTHEST group at each depth. Depth 1 is still exact — every
+    // depth-1 node is a child of the court, which is one group.
+    rings:depths.map(g=>Math.round(Math.max(...g.map(n=>n._r)))),
     mode,
   };
 }

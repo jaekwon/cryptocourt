@@ -329,6 +329,33 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
      D2.rings[1] <= Math.max(court.w, court.h)/2 + Math.max(fold.w, fold.h)/2 + MAPK.sep + 2);
   ok("rings still increase outward", D2.rings.every((r,i)=> i===0 || r > D2.rings[i-1]));
 
+  /* A SPARSE SUBTREE IS NOT EXILED BY A CROWDED ONE THAT SHARES ITS DEPTH.
+     Radius is a property of a sibling group, not of a depth. `deep` is built for
+     this: A1 holds seven claims and B1 holds two, and under one-radius-per-depth
+     B1's two were flung to A1's ring because a ring can only be as tight as its
+     worst wedge. On the real covid docket that cost 392px — "The iPhone texts"
+     sat at 1040 with three claims because "Gain-of-function funding" needed it.
+     Groups may move independently because angular sectors are DISJOINT: two
+     boxes in non-overlapping sectors cannot touch at any pair of radii, and the
+     only pair that can collide is a parent and its own descendant, which the
+     clearance term bounds from the parent's real radius.
+     ONE ASSERTION, AND TWO MORE I WROTE AND THREW AWAY. The other two were "a
+     sibling group sits on one arc" and "a claim sits outside its folder". Both
+     are true and neither could be armed: breaking the code they describe — per
+     node wedge bounds for the first, clearance measured from the ring instead of
+     from the parent for the second — left them green, because the overlap and
+     containment invariants above already fail on those mutations, and on this
+     fixture clearance dominates the wedge bound so scattering siblings changes
+     nothing. An assertion no mutation can turn red guards nothing; it just reads
+     as though it does. */
+  {
+    const r = b => Math.hypot(b.cx - D2.court.cx, b.cy - D2.court.cy);
+    const rOf = ids => ids.map(i => r(D2.nodes.find(n => n.id === i)));
+    const A1 = rOf([1,2,3,4,5,6,7]), B1 = rOf([8,9]);
+    ok("a two-claim group comes in closer than its seven-claim sibling group",
+       Math.max(...B1) < Math.min(...A1) - 1);
+  }
+
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
      was widened to hold more of a title. That was the wrong property and it is
      worth saying why rather than just relaxing it: area conflates two things,
