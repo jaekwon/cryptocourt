@@ -689,7 +689,14 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    column, so the bar and the legend take what they need and the map takes the
    rest — no fixed heights, which is what let the old 640px box be a picture of a
    map rather than one. */
-.mapfull{position:fixed; inset:0; z-index:40; background:var(--bg);
+/* --paper, and it was --bg, which this stylesheet has never defined. An unknown
+   custom property is not an error in CSS: the declaration is simply dropped, so
+   a fixed, full-viewport panel meant to cover the page rendered COMPLETELY
+   TRANSPARENT. The claim page stayed visible underneath and the map's own bar
+   drew over it — reported as "curate, close are superimposed on top of Stake on
+   claim... basically the background is too visible". Nothing in the harness
+   looked at whether a var() resolves; css_test.js does now. */
+.mapfull{position:fixed; inset:0; z-index:40; background:var(--paper);
   display:flex; flex-direction:column; gap:8px; padding:10px clamp(10px,2vw,20px) 12px}
 .mapbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; min-height:34px}
 .mapbar-t{font-weight:600}
