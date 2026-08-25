@@ -100,7 +100,7 @@ CI = False
 
 SLUG = "covid"
 BASE = "2020-01-15"
-END = "2025-06-01"
+END = "2026-12-15"   # the iPhone-text claims are filed in August 2026
 EPOCH_BLOCKS = 720       # the twap bucket width, and the height a calendar step moves
 TWAP_BUCKETS = 3         # answerWindow / epochBlocks: distinct buckets needed to answer
 # Beside the scenario, not in web/: the web root is what deploy.sh ships, and
@@ -276,184 +276,178 @@ def short_grind(a, b, c, d):
 # dates with movement, across every claim. 27 claims x ~12 moves is 331, so the
 # docket is FIFTEEN claims — which is also the "too many items" complaint, and the
 # two constraints happen to want the same thing. The tree keeps its depth.
-KEEP = {"lab20", "lab23", "lab25", "market",
-        "gof", "drafts", "foiagap",
-        "masks", "schools",
-        "vaxsevere", "myo",
-        "testimony", "excess"}
+KEEP = {"lab23", "defuse", "furin", "bioweapon", "yanrep", "baric", "baricout",
+        "gof", "p3co", "perjury", "prompted", "divergence", "lancet",
+        "mctext", "concealed", "nochain", "misc82", "denom", "miscrisk"}
 
 # ----------------------------------------------------------------- the docket
 #
-# Three levels deep. The first version
-# had 38 claims in 24 folders two deep, which read as a long list with some
-# headings — the opposite of a filing system. Fewer records, more places to put
-# them, so browsing is done by walking the tree.
+# NOT A DOCKET OF TRUE CLAIMS, and that is the whole point. A court seeded only
+# with things that are so demonstrates nothing: the product is a mechanism for
+# REVEALING which claims hold, and a fixture where every claim settles YES shows
+# a mechanism with nothing to do. So the claims here are the ones that actually
+# circulate — compiled from 345 posts in ~/gopath/src/github.com/jaekwon/covid,
+# with counts, citations and my own assessment in CLAIMS.md beside them — and
+# their `arc` is what the record says happens to each one:
 #
-# `path` is the curation tree, up to three levels (the schema allows four).
-# `cast` is (yes-lead, no-lead, yes-second, no-second) — the shape's four slots.
-# `arc`: open | yes | no | dispute | dead, as before.
+#   yes      the evidence carried it
+#   no       it was answered against — the false ones live here, and watching
+#            them settle NO is the demonstration
+#   dispute  answered, then challenged; a sealed vote is still running
+#   dead     nobody could answer it inside twelve weeks, so it closed unresolved
+#            — which is the honest outcome for a question the evidence cannot
+#            yet reach, and there is no shame in it
+#
+# COUNTER-CLAIMS ARE CLAIMS. Four entries below (`yanrep`, `baricout`, `nochain`,
+# `denom`) are mine rather than the corpus's: each states the specific fact that
+# undercuts a popular claim, and each is filed as its own proposition to be
+# staked and answered like any other. That is how a court disagrees — not by
+# refusing the first claim a hearing, but by filing the one that beats it. The
+# association edges in REL point each counter at what it contests.
+#
+# Every title is a statement of fact with a settlement condition in its body.
+# That test is what admits "a laboratory origin is more likely" and excludes
+# "it was a cover-up": motive does not settle, and a claim that cannot settle
+# only clogs the docket.
 D = [
-  # ---------------------------------------------------------------- origins
-  dict(key="lab20", on="2020-02-05", arc="dead", shape=reversal,
-       path=("Origins",),
-       cast=("biosafety", "virology", "skeptic", "epi"),
-       body='What would settle this: a documented incident, or an official finding of one.\n\nNot asking whether such research was funded, or whether it was risky — those are separate claims on this docket. Only whether THIS virus reached people that way.',
-       title="SARS-CoV-2 entered the human population through a laboratory-associated incident."),
-  dict(key="furin", on="2020-06-10", arc="dead", shape=tug,
-       path=("Origins",),
-       cast=("genomics", "virology", "biosafety", "epi"),
-       title="The furin cleavage site in SARS-CoV-2 has no close analogue in the sampled sarbecovirus record."),
+  # ------------------------------------------------------------------ origins
   dict(key="lab23", on="2023-04-10", arc="dead", shape=tug,
        path=("Origins",),
        cast=("biosafety", "virology", "oversight", "epi"),
-       body='The same question as the 2020 filing, re-put after the agency assessments. Settles on a finding by a body with subpoena power, or a published determination the relevant experts do not contest.\n\nDeliberately asks about the balance of evidence PUBLIC IN 2023, not the eventual truth: a claim whose answer depends on documents nobody has is unanswerable, and this docket already has two that died that way.',
+       body='Settles on a finding by a body with subpoena power, or a published determination the relevant experts do not contest.\n\nDeliberately asks about the balance of evidence PUBLIC IN 2023, not the eventual truth: a claim whose answer depends on documents nobody has is unanswerable, and this docket already carries two that died that way.',
        title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2023."),
-  dict(key="lab25", on="2025-03-20", arc="open", shape=sparse,
+  dict(key="defuse", on="2021-09-22", arc="yes", shape=sparse,
        path=("Origins",),
-       cast=("biosafety", "virology", "genomics", "epi"),
-       body='Put again on the 2025 assessments. Same settlement standard as the 2023 filing.\n\nThe intelligence community is itself split — some elements assess a laboratory origin as more likely, others natural spillover, at low to moderate confidence either way. That split is why this is open rather than answered.',
-       title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2025."),
-  dict(key="host", on="2021-03-15", arc="dead", shape=capitulate,
+       cast=("foia", "virology", "journo", "epi"),
+       body='Settles on the document. DRASTIC published the 2018 DARPA proposal in September 2021; the text either describes the insertion or it does not.\n\nAsks ONLY what the proposal says. Whether the work was carried out is a different claim, and DARPA did not fund this one.',
+       title="The 2018 DEFUSE proposal describes inserting a furin cleavage site into a SARS-related bat coronavirus."),
+  dict(key="furin", on="2020-06-10", arc="dead", shape=tug,
        path=("Origins",),
-       cast=("epi", "genomics", "virology", "biosafety"),
-       title="An intermediate host animal for SARS-CoV-2 has been identified in the published record."),
-  dict(key="market", on="2021-06-07", arc="dead", shape=drift,
+       cast=("genomics", "virology", "biosafety", "epi"),
+       body='Settles on an identified natural progenitor carrying the motif, or on documentary evidence of insertion. Neither exists, which is why this one is expected to close unanswered.',
+       title="The furin cleavage site in SARS-CoV-2 has no close analogue in the sampled sarbecovirus record."),
+  dict(key="bioweapon", on="2020-09-15", arc="no", shape=short_grind,
        path=("Origins",),
-       cast=("epi", "biosafety", "genomics", "skeptic"),
-       body='Settles on the published epidemiological record of the earliest confirmed cases.\n\nAsks about the earliest KNOWN cluster, which is a claim about the record and not about where the outbreak began — early cases may have gone undetected, and this claim does not assert they did not.',
-       title="The earliest known cluster of COVID-19 cases centred on the Huanan Seafood Market."),
-  dict(key="raccoon", on="2023-03-20", arc="no", shape=short_flip,
+       cast=("skeptic", "genomics", "trader", "virology"),
+       body='Settles on evidence of deliberate design and deliberate release. The published case rests on the Yan Li-Meng reports; no review has sustained them.\n\nFiled because it is one of the most circulated claims about this pandemic, and a docket that will not hear the popular claim is not a court.',
+       title="SARS-CoV-2 was deliberately engineered and released as a Chinese state bioweapon."),
+  dict(key="yanrep", on="2020-10-05", arc="yes", shape=sparse,
        path=("Origins",),
-       cast=("epi", "genomics", "trader", "virology"),
-       title="Market environmental samples establish that an infected animal was the source of the outbreak."),
-  # --------------------------------------------------------- document trail
-  dict(key="gof", on="2020-04-20", arc="yes", shape=sparse,
-       path=("NIAID and its director", "The WIV subawards"),
-       cast=("foia", "skeptic", "journo", "trader"),
-       body='Settles on the grant record: award documents, subaward agreements, progress reports.\n\nA matter of record, not of judgement. Not asking whether the work was wise, whether it was gain-of-function under any particular definition, or whether it caused anything — only whether the money went there.',
-       title="US federal grants funded coronavirus research at the Wuhan Institute of Virology before 2020."),
-  dict(key="reports", on="2021-09-10", arc="yes", shape=short_grind,
-       path=("NIAID and its director", "The WIV subawards"),
-       cast=("foia", "trader", "oversight", "skeptic"),
-       title="Required progress reports for at least one federal coronavirus grant were filed late."),
-  dict(key="ehasusp", on="2024-05-20", arc="yes", shape=short,
-       path=("NIAID and its director", "The WIV subawards"),
-       cast=("oversight", "skeptic", "journo", "trader"),
-       title="HHS suspended EcoHealth Alliance's federal funding in May 2024."),
-  dict(key="drafts", on="2022-01-25", arc="yes", shape=sparse,
-       path=("NIAID and its director", "Proximal Origin correspondence"),
-       cast=("foia", "trader", "journo", "skeptic"),
-       body='Settles on the released documents themselves.\n\nAsks only whether the correspondence was released under subpoena. What it SAYS, and what that implies, are other claims.',
-       title="Drafting correspondence for the 2020 Proximal Origin paper was released under subpoena."),
-  dict(key="foiagap", on="2022-06-15", arc="dispute", shape=sparse,
-       path=("NIAID and its director", "Testimony and withholdings"),
-       cast=("foia", "skeptic", "journo", "trader"),
-       body="Settles on a court ruling, an inspector-general finding, or an agency's own concession that an exemption was misapplied.\n\nNot asking whether the withholding was intentional. An improper one found on review is enough.",
-       title="Records released under FOIA were withheld in part on grounds later found improper."),
-  # ------------------------------------------------------------ public health
-  dict(key="masks", on="2020-08-12", arc="dead", shape=tug,
-       path=("Measures and outcomes",),
-       cast=("epi", "skeptic", "clinician", "statistician"),
-       body='Settles on the randomised and observational literature as it stood before 2021, read together.\n\nScoped to the settings studied and to that period on purpose. It is not a claim about mandates, about later variants, or about any particular mask.',
-       title="Community masking reduced SARS-CoV-2 transmission in the settings studied before 2021."),
-  dict(key="distance", on="2020-09-20", arc="dead", shape=capitulate,
-       path=("Measures and outcomes",),
-       cast=("clinician", "epi", "skeptic", "statistician"),
-       title="The two-metre distancing rule was set from evidence specific to SARS-CoV-2."),
-  dict(key="schools", on="2021-02-10", arc="dead", shape=late,
-       path=("Measures and outcomes",),
-       cast=("teacher", "epi", "statistician", "clinician"),
-       body='Settles on standardised assessment data for the affected cohorts against their own pre-2020 trend.\n\nAsks about measured learning loss, not about whether closures were justified — a cost can be real and still be worth paying, and this court does not price that.',
-       title="Extended school closures produced measurable learning loss in the cohorts studied."),
-  dict(key="borders", on="2020-05-18", arc="no", shape=short_grind,
-       path=("Measures and outcomes",),
-       cast=("trader", "epi", "skeptic", "modeller"),
-       title="Border closures announced in early 2020 prevented sustained local transmission where applied."),
-  # ---------------------------------------------------- vaccines and therapeutics
-  dict(key="vaxsevere", on="2021-10-04", arc="yes", shape=sparse,
-       path=("Measures and outcomes",),
-       cast=("clinician", "skeptic", "epi", "trader"),
-       body='Settles on the trial endpoints and the early observational cohorts.\n\nScoped to hospitalisation risk in the period studied. Not a claim about transmission, about durability, or about any later variant.',
-       title="Vaccination substantially reduced hospitalisation risk in the trial and early observational data."),
-  dict(key="vaxtrans", on="2021-08-16", arc="no", shape=short_flip,
-       path=("Measures and outcomes",),
-       cast=("trader", "clinician", "skeptic", "epi"),
-       title="The initial vaccine rollout prevented onward transmission as durably as it prevented severe disease."),
-  dict(key="myo", on="2021-12-06", arc="yes", shape=sparse,
-       path=("Measures and outcomes",),
-       cast=("vaxsafety", "trader", "clinician", "skeptic"),
-       body='Settles on the published post-authorisation surveillance findings.\n\nAsks whether a signal was IDENTIFIED, which is a claim about what surveillance found. Its magnitude, and how it weighs against the benefit, are not in scope.',
-       title="A myocarditis signal in young males was identified in post-authorisation surveillance."),
-  dict(key="vaers", on="2022-03-14", arc="dispute", shape=short_grind,
-       path=("Measures and outcomes",),
+       cast=("genomics", "skeptic", "virology", "trader"),
+       body='Settles on the citation record: every published version of the bioweapon claim traces to the two Zenodo preprints, and on whether any peer-reviewed venue has sustained them.\n\nFiled against the claim above rather than in place of it.',
+       title="Every published version of the bioweapon claim traces to the Yan Li-Meng preprints, which no peer review has sustained."),
+  dict(key="baric", on="2022-03-12", arc="no", shape=short_grind,
+       path=("Origins",),
+       cast=("biosafety", "virology", "journo", "genomics"),
+       body='Settles on documentary or sequence evidence tying a construct made at that laboratory to SARS-CoV-2. Raised as a question by Sachs and others; nobody has evidenced it.',
+       title="Ralph Baric's laboratory constructed the virus that became SARS-CoV-2."),
+  dict(key="baricout", on="2024-05-20", arc="yes", shape=sparse,
+       path=("Origins",),
+       cast=("foia", "oversight", "journo", "virology"),
+       body="Settles on the authors' own testimony to congressional investigators, which is on the record.\n\nFiled because it cuts against the claim above from the same body of evidence that is usually cited FOR it: the party closest to the construction work was kept off the paper, deliberately, and said so.",
+       title="Ralph Baric was excluded from the Proximal Origin author list on the ground that he was too close to the Wuhan Institute of Virology."),
+
+  # ------------------------------------------- Fauci / gain-of-function funding
+  dict(key="gof", on="2021-05-11", arc="yes", shape=sparse,
+       path=("Fauci", "Gain-of-function funding"),
+       cast=("journo", "foia", "oversight", "virology"),
+       body='Settles on the grant record: the subawards from EcoHealth Alliance to the Wuhan Institute of Virology, and the NIH acknowledgements of them.',
+       title="US federal grants funded coronavirus research at the Wuhan Institute of Virology."),
+  dict(key="p3co", on="2021-10-20", arc="dispute", shape=short_grind,
+       path=("Fauci", "Gain-of-function funding"),
+       cast=("biosafety", "virology", "oversight", "epi"),
+       body='Settles on a determination by HHS or another authorised body that the funded work did or did not meet the P3CO definition.\n\nThe sharpest claim in this folder, because it is the one thing everybody is actually arguing about: nobody disputes that the money reached the work. NIH conceded in 2021 that a limited experiment met some criteria while rejecting the label.',
+       title="The NIAID-funded work at the Wuhan Institute of Virology met the federal P3CO definition of gain-of-function research."),
+  dict(key="perjury", on="2026-06-22", arc="dispute", shape=short_grind,
+       path=("Fauci", "Gain-of-function funding"),
+       cast=("oversight", "virology", "skeptic", "foia"),
+       body='Settles on a perjury referral producing a finding, or an authoritative determination by a body with subpoena power. An accusation attached to a document release is not a finding.',
+       title="Testimony given to Congress in 2024 denying participation in intelligence discussions about Wuhan research was false."),
+
+  # ------------------------------------------------- Fauci / Proximal Origin
+  dict(key="prompted", on="2023-07-11", arc="dispute", shape=short_grind,
+       path=("Fauci", "Proximal Origin"),
+       cast=("foia", "virology", "oversight", "epi"),
+       body='Settles on the correspondence together with sworn testimony from the participants. The 1 February 2020 teleconference and the drafting timeline are documented; whether they amount to prompting is what is contested.',
+       title="The Proximal Origin paper was drafted at the prompting of the director of NIAID."),
+  dict(key="divergence", on="2023-01-15", arc="yes", shape=sparse,
+       path=("Fauci", "Proximal Origin"),
+       cast=("foia", "genomics", "journo", "virology"),
+       body='Settles on the released correspondence, which is public and unredacted.\n\nThe best-evidenced claim in this folder, and the one the corpus most often garbles into something larger.',
+       title="The Proximal Origin authors privately assessed the genome as showing engineered features in the week they drafted the paper rejecting that."),
+  dict(key="lancet", on="2021-06-21", arc="yes", shape=sparse,
+       path=("Fauci", "Proximal Origin"),
+       cast=("journo", "foia", "epi", "oversight"),
+       body="Settles on the statement's own published correction and the signatory record.",
+       title="The organiser of the February 2020 Lancet statement concealed his institute's funding relationship with the Wuhan Institute of Virology."),
+
+  # -------------------------------------------------- Fauci / the iPhone texts
+  dict(key="mctext", on="2026-08-11", arc="yes", shape=sparse,
+       path=("Fauci", "The iPhone texts"),
+       cast=("foia", "vaxsafety", "clinician", "oversight"),
+       body='Settles on the message itself, released 10 August 2026 from a government device produced to a Senate subcommittee.\n\nAsks only whether the message says what it is quoted as saying. What follows from it is the two claims after this one.',
+       title="In January 2021 the director of NIAID privately raised first-trimester miscarriage as a theoretical risk of the second vaccine dose."),
+  dict(key="concealed", on="2026-08-12", arc="no", shape=short_grind,
+       path=("Fauci", "The iPhone texts"),
+       cast=("oversight", "clinician", "skeptic", "vaxsafety"),
+       body='Settles on comparing the private chain with the public statements over the same period.\n\nThe same message chain, one day later, weighs risks against benefits and records ten thousand vaccinated pregnancies with no signal — so the private position and the public one have to be compared whole, not by their first line.',
+       title="The January 2021 miscarriage concern was withheld from the public while the same officials recommended vaccination in pregnancy."),
+  dict(key="nochain", on="2026-08-13", arc="yes", shape=sparse,
+       path=("Fauci", "The iPhone texts"),
+       cast=("foia", "clinician", "vaxsafety", "oversight"),
+       body='Settles on the same released chain that carries the quoted line.\n\nFiled because a quotation with its reply removed is a different claim from the quotation, and the docket should hold both.',
+       title="The same message chain records, one day later, more than ten thousand vaccinated pregnancies with no adverse signal."),
+
+  # ----------------------------------------------------- vaccine safety claims
+  dict(key="misc82", on="2021-06-01", arc="no", shape=short_grind,
+       path=("Vaccine safety claims",),
        cast=("vaxsafety", "clinician", "skeptic", "statistician"),
-       title="Passive surveillance systems under-reported adverse events by more than an order of magnitude."),
-  dict(key="ivermectin", on="2021-07-12", arc="dead", shape=reversal,
-       path=("Measures and outcomes",),
-       cast=("skeptic", "clinician", "trader", "statistician"),
-       title="Ivermectin reduced COVID-19 mortality in the randomised trials completed by 2021."),
-  # ------------------------------------------- institutions and accountability
-  dict(key="testimony", on="2024-06-10", arc="open", shape=sparse,
-       path=("NIAID and its director", "Testimony and withholdings"),
-       cast=("oversight", "virology", "journo", "trader"),
-       body="Settles on a tribunal's finding, or on a concession. The referral itself is a separate claim on this docket.\n\nFramed as what a tribunal WOULD find because no charge has been brought. An unadjudicated allegation is precisely the thing a market on claims of fact exists to price, and pricing one is not asserting it.",
-       title="A tribunal applying the ordinary standard would find that congressional testimony on gain-of-function funding was materially false."),
-  dict(key="referral", on="2023-07-17", arc="yes", shape=short_flip,
-       path=("NIAID and its director", "Testimony and withholdings"),
-       cast=("oversight", "trader", "journo", "skeptic"),
-       title="A criminal referral concerning pandemic-origins testimony was sent to the Department of Justice in 2023."),
-  # ---------------------------------------------------------- data and modelling
-  dict(key="excess", on="2022-04-11", arc="dead", shape=drift,
-       path=("Measures and outcomes",),
-       cast=("statistician", "skeptic", "epi", "modeller"),
-       body='Settles on the excess-mortality estimates for 2020-2021 against reported COVID-19 deaths.\n\nAsks only whether the gap exists. What it is attributable to is a separate claim.',
-       title="Global excess deaths for 2020–2021 exceeded the reported COVID-19 death count."),
-  dict(key="models", on="2021-01-18", arc="dead", shape=reversal,
-       path=("Measures and outcomes",),
-       cast=("modeller", "statistician", "epi", "skeptic"),
-       title="Published epidemic forecasts for 2020 stayed within their own stated prediction intervals."),
-  dict(key="testpos", on="2022-02-07", arc="dispute", shape=short_lopsided,
-       path=("Measures and outcomes",),
-       cast=("epi", "statistician", "trader", "modeller"),
-       title="Reported case counts in 2021 tracked infection prevalence closely enough to guide policy."),
-  dict(key="seroprev", on="2025-04-02", arc="open", shape=short_grind,
-       path=("Measures and outcomes",),
-       cast=("statistician", "modeller", "epi", "trader"),
-       title="Retrospective serology will place first-wave infection prevalence above the contemporaneous estimate."),
+       body='Settles on the arithmetic in the source table.\n\nOne of the most-repeated numbers of the pandemic and one of the easiest to check, which is why it is here: a docket that cannot dispose of a checkable false number is not worth running.',
+       title="Vaccination in the first or second trimester was followed by miscarriage in 82% of completed pregnancies."),
+  dict(key="denom", on="2021-06-15", arc="yes", shape=sparse,
+       path=("Vaccine safety claims",),
+       cast=("statistician", "vaxsafety", "clinician", "modeller"),
+       body='Settles on the published table: 104 losses against a denominator of 127 counts only those vaccinated in the first or second trimester, most of whom had not finished their pregnancies.',
+       title="The 82% figure divides completed-pregnancy losses by a denominator that excludes pregnancies still ongoing."),
+  dict(key="miscrisk", on="2021-08-10", arc="no", shape=short_grind,
+       path=("Vaccine safety claims",),
+       cast=("vaxsafety", "clinician", "statistician", "modeller"),
+       body='Settles on cohort data against a population baseline. The final CDC analysis reports 10.79% across 12,097 vaccinated pregnancies, with no elevated risk week by week to twenty weeks; baseline is roughly 10 to 20%.',
+       title="COVID-19 vaccination during pregnancy increases the risk of miscarriage."),
 ]
 
 # ------------------------------------------------------------------ relations
+#
+# THE COUNTER-CLAIMS ARE THE INTERESTING EDGES. Four of these run from a claim I
+# filed to the popular claim it undercuts, and they are `contradicts` on purpose:
+# the court's own record should show that the thing beating a claim is another
+# CLAIM, staked and answered, not an editorial note. `supports` edges run the
+# other way — a document claim propping up the inference drawn from it.
+#
+# `supersedes` is the docket's own history: a claim re-filed after an earlier one
+# died unanswered. The realm verifies it rather than taking the filer's word.
 REL = [
-  ("gof", "lab20", "part", None),
-  ("furin", "lab23", "part", None),
-  ("host", "lab23", "bears", "supports"),
-  ("market", "lab23", "bears", "contradicts"),
-  ("raccoon", "lab25", "bears", "contradicts"),
-  ("drafts", "lab23", "bears", "supports"),
-  ("gof", "lab23", "bears", "supports"),
-  ("gof", "lab25", "bears", "supports"),
-  ("furin", "lab25", "bears", "supports"),
-  ("market", "lab25", "bears", "contradicts"),
-  ("lab23", "lab20", "supersedes", None),
-  ("lab25", "lab23", "supersedes", None),
-  ("gof", "testimony", "bears", "supports"),
-  ("drafts", "testimony", "bears", "supports"),
-  ("reports", "testimony", "bears", "supports"),
-  ("ehasusp", "reports", "bears", "supports"),
-  ("foiagap", "drafts", "bears", "supports"),
-  ("referral", "testimony", "part", None),
-  ("distance", "masks", "bears", "contradicts"),
-  ("schools", "masks", "bears", "supports"),
-  ("myo", "vaxsevere", "bears", "contradicts"),
-  ("vaers", "myo", "bears", "supports"),
-  ("vaxtrans", "vaxsevere", "bears", "contradicts"),
-  ("ivermectin", "vaxsevere", "bears", "contradicts"),
-  ("testpos", "models", "bears", "contradicts"),
-  ("excess", "testpos", "bears", "contradicts"),
-  ("seroprev", "excess", "bears", "supports"),
-  ("excess", "masks", "bears", "supports"),
-  ("models", "borders", "bears", "contradicts"),
-  ("testpos", "excess", "part", None),
+  # counter-claims, each pointed at what it contests
+  ("yanrep",   "bioweapon",  "bears", "contradicts"),
+  ("baricout", "baric",      "bears", "contradicts"),
+  ("nochain",  "concealed",  "bears", "contradicts"),
+  ("denom",    "misc82",     "bears", "contradicts"),
+  # the documentary claims that prop up the inferences drawn from them
+  ("defuse",   "furin",      "bears", "supports"),
+  ("defuse",   "lab23",      "bears", "supports"),
+  ("gof",      "p3co",       "bears", "supports"),
+  ("gof",      "lab23",      "bears", "supports"),
+  ("divergence", "prompted", "bears", "supports"),
+  ("lancet",   "prompted",   "bears", "supports"),
+  ("mctext",   "concealed",  "bears", "supports"),
+  ("divergence", "perjury",  "bears", "supports"),
+  # and the ones that cut across
+  ("baricout", "prompted",   "bears", "supports"),
+  ("miscrisk", "concealed",  "bears", "contradicts"),
+  ("denom",    "miscrisk",   "bears", "contradicts"),
+  ("furin",    "bioweapon",  "bears", "supports"),
+  # a re-filing: the 2023 question put again is not the 2020 one
+  ("lab23",    "furin",      "bears", "supports"),
 ]
 
 D = [c for c in D if c["key"] in KEEP]
@@ -613,22 +607,45 @@ s.expect("CoinSupply", [SLUG], r"int64")
 # reading order, and it asserts nothing its claims do not.
 FOLDER_DESC = {
     ("Origins",):
-        "Where the virus came from. The hypotheses are separate claims, so "
-        "neither is settled by the other losing.",
-    ("NIAID and its director",):
-        "Claims turning on what the institute funded, what its director's office "
-        "wrote, and what was said about it under oath. Sorted below by the kind "
-        "of record each one settles on.",
-    ("NIAID and its director", "The WIV subawards"):
-        "Grant records: who was funded, through whom, for what work.",
-    ("NIAID and its director", "Proximal Origin correspondence"):
-        "Drafting correspondence around the 2020 paper, released under subpoena.",
-    ("NIAID and its director", "Testimony and withholdings"):
-        "What was said to Congress, and what was kept back from FOIA.",
-    ("Measures and outcomes",):
-        "What the interventions did and what the numbers showed — one measure, "
-        "one outcome, one claim at a time.",
+        "Where the virus came from, and who built what. Each hypothesis is its own "
+        "claim, so none is settled by another one losing.",
+    ("Fauci",):
+        "What NIAID funded under his direction, what his office wrote, and what he "
+        "said in private and in public. Sorted below by the kind of record each "
+        "claim settles on.",
+    ("Fauci", "Gain-of-function funding"):
+        "The grant record, and the definitional fight over what it was.",
+    ("Fauci", "Proximal Origin"):
+        "The 2020 paper: who prompted it, what its authors thought while writing "
+        "it, and who else was organising at the same time.",
+    ("Fauci", "The iPhone texts"):
+        "34,000 messages off a government device, released August 2026 — and the "
+        "claims made about them, which are not all the same claim.",
+    ("Vaccine safety claims",):
+        "What the shots did in pregnancy. Two of these are false and are here to be "
+        "answered — the only way a docket disposes of a number.",
 }
+
+
+# SHAPE AND ARC HAVE TO AGREE, and nothing said so until a seed run died 400
+# transactions in with "staking is frozen — this claim has an answer". An answer
+# lands on day 22 and freezes staking; `reversal` and `tug` keep trading to day
+# 74 and 76. They are DEAD-CLAIM shapes — the long argument nobody ever resolves —
+# and pairing one with an answered arc files a stake into a frozen claim.
+for _c in D:
+    _mx = max(off for off, _w, _s2, _a in MOVES[_c["key"]])
+    if _c["arc"] != "dead" and _mx > 22:
+        raise ValueError(
+            f"{_c['key']}: arc {_c['arc']!r} is answered on day 22 but its shape "
+            f"trades to day {_mx}. Use sparse or short_grind for answered claims, "
+            f"reversal or tug only for arc='dead'.")
+
+for _pth, _dsc in FOLDER_DESC.items():
+    if len(_dsc) > 200 or not (1 <= len(_pth[-1]) <= 200):
+        raise ValueError(f"{_pth[-1]!r}: name {len(_pth[-1])} chars, description "
+                         f"{len(_dsc)} — the realm caps both at 200 and refuses the "
+                         f"CreateFolder outright, which a seed run learns 400 "
+                         f"transactions in.")
 
 s.note("the filing system on chain: CreateFolder for a root, CreateFolderIn for "
        "a child, parents first — moderator-only, single-signer, no bond")
@@ -654,7 +671,7 @@ def ensure_folder(path):
 
 for _c in D:
     ensure_folder(_c["path"])
-FAUCI = ("NIAID and its director",)
+FAUCI = ("Fauci",)
 
 def unit(n):
     """Whole coin, in the realm's smallest unit."""
@@ -783,8 +800,8 @@ author_of = {c["key"]: MOVES[c["key"]][0][1] for c in D}
 # The three edges filed by somebody with no claim of their own at the FROM end.
 # `epi` and `oversight` are participants in this docket who did not file the
 # claim they are connecting, which is exactly the case the bond prices.
-BONDED = {("gof", "lab23"): "epi", ("market", "lab25"): "oversight",
-          ("drafts", "lab23"): "epi"}
+BONDED = {("defuse", "lab23"): "epi", ("furin", "bioweapon"): "oversight",
+          ("gof", "lab23"): "epi"}
 
 s.note("associations: the claim's own author pays nothing, a stranger posts a bond")
 for a, b, kind, stance in REL:
@@ -804,11 +821,15 @@ for a, b, kind, stance in REL:
                [SLUG, str(fro), str(to), STANCE[stance]])
 
 s.note("a moderator judges two of the three bonds and leaves the third pending")
+# Approved: a document claim propping up an inference is what the bond is for.
 s.call(DEPLOYER, "ApproveAssociation",
-       [SLUG, str(ids["gof"]), str(ids["lab23"])])
+       [SLUG, str(ids["defuse"]), str(ids["lab23"])])
+# Disapproved and BURNED: "the furin site is unusual, therefore bioweapon" is the
+# leap this docket exists to price. The claims both stand; the EDGE between them
+# is what a moderator struck.
 s.call(DEPLOYER, "DisapproveAssociation",
-       [SLUG, str(ids["market"]), str(ids["lab25"])])
-# drafts -> lab23 is deliberately left unjudged, which on this fixture means its
+       [SLUG, str(ids["furin"]), str(ids["bioweapon"])])
+# gof -> lab23 is deliberately left unjudged, which on this fixture means its
 # author may reclaim the bond immediately once the clock is sealed — see the note
 # above on why a back-dated docket cannot hold an open window. The rule it stands
 # for is the important half: unjudged means approved, never forfeit.
@@ -834,11 +855,11 @@ for a, b, kind, _ in REL:
 # The full comma sequence pins the shape without needing them.
 s.expect("FolderTree", [SLUG], r"1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,6:0:-")
 s.expect("FolderCount", [SLUG], r"6")
-s.expect("FolderName", [SLUG, FOLDER_ID[FAUCI]], r"NIAID and its director")
+s.expect("FolderName", [SLUG, FOLDER_ID[FAUCI]], r"Fauci")
 # The description, and it is asserted on a phrase from its END: a folder desc is
 # capped at 200 characters, so a check on the first few words would pass on a
 # string the realm had silently truncated.
-s.expect("FolderDesc", [SLUG, FOLDER_ID[FAUCI]], r"kind of record each one settles on")
+s.expect("FolderDesc", [SLUG, FOLDER_ID[FAUCI]], r"kind of record each claim settles on")
 s.expect("ClaimAssociations", [SLUG, ids["lab23"]], r"in:")
 s.expect("AssociationBond", [SLUG], r"1000000")
 

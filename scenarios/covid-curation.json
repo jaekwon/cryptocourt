@@ -8,132 +8,159 @@
   {
    "name": "Origins",
    "claims": [
-    1,
-    11,
     13,
-    5
+    9,
+    1,
+    2,
+    3,
+    11,
+    15
    ],
    "folders": []
   },
   {
-   "name": "NIAID and its director",
+   "name": "Fauci",
    "claims": [],
    "folders": [
     {
-     "name": "The WIV subawards",
+     "name": "Gain-of-function funding",
      "claims": [
-      2
-     ],
-     "folders": []
-    },
-    {
-     "name": "Proximal Origin correspondence",
-     "claims": [
-      8
-     ],
-     "folders": []
-    },
-    {
-     "name": "Testimony and withholdings",
-     "claims": [
+      4,
       10,
-      12
+      16
+     ],
+     "folders": []
+    },
+    {
+     "name": "Proximal Origin",
+     "claims": [
+      14,
+      12,
+      7
+     ],
+     "folders": []
+    },
+    {
+     "name": "The iPhone texts",
+     "claims": [
+      17,
+      18,
+      19
      ],
      "folders": []
     }
    ]
   },
   {
-   "name": "Measures and outcomes",
+   "name": "Vaccine safety claims",
    "claims": [
-    3,
-    4,
+    5,
     6,
-    7,
-    9
+    8
    ],
    "folders": []
   }
  ],
  "relations": [
   {
-   "from": 2,
-   "to": 1,
-   "type": "part"
+   "from": 3,
+   "to": 2,
+   "type": "bears",
+   "stance": "contradicts"
   },
   {
-   "from": 5,
+   "from": 15,
    "to": 11,
    "type": "bears",
    "stance": "contradicts"
   },
   {
-   "from": 8,
-   "to": 11,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 2,
-   "to": 11,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 2,
-   "to": 13,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 5,
-   "to": 13,
+   "from": 19,
+   "to": 18,
    "type": "bears",
    "stance": "contradicts"
   },
   {
-   "from": 11,
-   "to": 1,
-   "type": "supersedes"
-  },
-  {
-   "from": 13,
-   "to": 11,
-   "type": "supersedes"
-  },
-  {
-   "from": 2,
-   "to": 12,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 8,
-   "to": 12,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 10,
-   "to": 8,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 4,
-   "to": 3,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 7,
-   "to": 6,
+   "from": 6,
+   "to": 5,
    "type": "bears",
    "stance": "contradicts"
   },
   {
    "from": 9,
-   "to": 3,
+   "to": 1,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 9,
+   "to": 13,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 4,
+   "to": 10,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 4,
+   "to": 13,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 12,
+   "to": 14,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 7,
+   "to": 14,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 17,
+   "to": 18,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 12,
+   "to": 16,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 15,
+   "to": 14,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 8,
+   "to": 18,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
+   "from": 6,
+   "to": 8,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
+   "from": 1,
+   "to": 2,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 13,
+   "to": 1,
    "type": "bears",
    "stance": "supports"
   }
