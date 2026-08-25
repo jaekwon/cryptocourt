@@ -395,6 +395,22 @@ ok("folder nodes link to folder pages", svgs.titles.includes('href="#/c/orem/f/0
 ok("count line present in source", src.includes("${data.all.length} claims, ${data.all.length} shown"));
 ok("live honesty lines present (chain-read + no-folders)", src.includes("folders read from the chain — moderator curation") && src.includes("this court's moderators have filed no folders"));
 ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slider"].every(id=>src.includes(id)));
+/* FULL SCREEN NEEDS A WAY OUT, and more than one: a fixed overlay with no visible
+   exit is a trap, and Escape does not count because nothing advertises it. Two
+   links back to the court — the named one on the left, the close on the right —
+   plus curate, which was page furniture on the old map page and got dropped when
+   the furniture moved into the bar. curation_test.js caught that one. */
+{
+  const route = slice("/* THE MAP TAKES THE WHOLE SCREEN.", "  mountMap(slug, data,");
+  ok("the map route is a fixed full-screen layer", /class="mapfull"/.test(route));
+  ok("and the first thing in its bar is the way back",
+     route.indexOf("mapback") < route.indexOf("mapbar-t"));
+  ok("with a second exit at the other end", /mapbar-x/.test(route)
+     && (route.match(/href="#\/c\/\$\{esc\(slug\)\}"/g)||[]).length >= 2);
+  ok("curate stays reachable from the map", /\/curate">curate/.test(route));
+  ok("the map fills what is left, with no fixed height",
+     /\.maphold\{[^}]*flex:1/.test(src) && !/\.mapwrap svg\{[^}]*height:clamp/.test(src));
+}
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);
