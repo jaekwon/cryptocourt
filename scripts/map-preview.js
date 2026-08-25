@@ -47,6 +47,7 @@ global.esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
 global.phaseClass = t => ({short:
   /settled/.test(t) ? "settled" : /dispute/.test(t) ? "in dispute" :
   /never/.test(t) ? "never answered" : /answered/.test(t) ? "answered" : "open"});
+eval(slice("function unesc(", "\n"));
 eval(slice("const MAPK", "\nfunction mapDotClass").replace("const MAPK", "var MAPK"));
 eval(slice("function mapDotClass", "\n/* The join panel"));
 
@@ -57,8 +58,17 @@ function q(expr){
     if(!l.startsWith("data:")) continue;
     const v = l.slice(6).trim();
     const s = /^\("([\s\S]*)" string\)$/.exec(v);
-    // sanitize.InlineText escapes markdown on the way out; undo it for display.
-    if(s) return s[1].replace(/\\\\-/g,"-").replace(/\\-/g,"-");
+    // TWO LAYERS OF ESCAPING, and undoing only one of them is what this used to
+    // do. gnokey prints a string with its backslashes DOUBLED, and underneath
+    // that the realm's sanitize.InlineText has escaped the markdown specials —
+    // so a title arrives as `COVID\\-19 ... miscarriage\\.` and means
+    // `COVID-19 ... miscarriage.`. A hand-rolled unescape here handled hyphens
+    // and nothing else, which put a stray backslash-dot at the end of half the
+    // titles in every preview I looked at while judging the layout.
+    // The page's own unesc is the second layer; it is sliced in rather than
+    // reimplemented, because a preview that unescapes differently from the page
+    // is a preview of a page that does not exist.
+    if(s) return unesc(s[1].replace(/\\\\/g, "\\"));
     const n = /^\((-?\d+) \w+\)$/.exec(v);
     return n ? n[1] : v;
   }

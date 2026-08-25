@@ -3422,8 +3422,12 @@ const MAPK = {
   // grid the layout used to be.
   node:  { titles:{w:206,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
-  fnode: { titles:{w:152,h:42}, ids:{w:104,h:26} }, // a folder
-  cnode: { titles:{w:190,h:54}, ids:{w:132,h:38} }, // the court, at the centre
+  fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder
+  // THE COURT IS THE BIGGEST THING ON THE MAP, which it was not: at 190x54 it
+  // was smaller than the 206x86 claim boxes around it, so the node the whole
+  // drawing is built around read as one more box that happened to be blue. It is
+  // one node and it can afford the room.
+  cnode: { titles:{w:238,h:76}, ids:{w:150,h:46} }, // the court, at the centre
   sep:22,          // clearance every pair of nodes keeps, tangentially and radially
   seedR:120,       // the innermost ring's floor, before the fit solve
   margin:36, tpad:8,

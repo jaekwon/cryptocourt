@@ -328,6 +328,17 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("ring 1 clears the court and no more",
      D2.rings[1] <= Math.max(court.w, court.h)/2 + Math.max(fold.w, fold.h)/2 + MAPK.sep + 2);
   ok("rings still increase outward", D2.rings.every((r,i)=> i===0 || r > D2.rings[i-1]));
+
+  // THE COURT IS THE BIGGEST NODE. It was not — 190x54 against 206x86 claim
+  // boxes — so the node the whole drawing is built around read as one more box
+  // that happened to be blue. Area, not width: a claim grown to four lines is
+  // taller than the court and that is fine, but it must not be BIGGER.
+  for(const m of ["titles","ids"]){
+    const M = mapLayout(deep, m);
+    const area = b => b.w*b.h;
+    ok(`the court outweighs every claim and folder (${m})`,
+       M.nodes.concat(M.folders).every(b => area(b) < area(M.court)));
+  }
 }
 
 // determinism: same input → same bytes
