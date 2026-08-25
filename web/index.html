@@ -671,6 +671,9 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mnode-a:hover .mnode,.mnode-a:focus .mnode{stroke:var(--accent); stroke-width:2}
 .mnode-a.focused .mnode{stroke:var(--accent); stroke-width:3}
 .mnode-a.selected .mnode{stroke:var(--accent); stroke-width:3; fill:var(--accent-wash)}
+.mfold-a{cursor:pointer}
+.mfold-a:hover .mfold,.mfold-a:focus .mfold{stroke-width:2}
+.mfold-a.selected .mfold{stroke:var(--accent-2); stroke-width:3}
 .mnode-a.dim{opacity:.35}
 /* The card sits OVER the map rather than under it: the map box is a fixed height
    with its own pan and zoom, and pushing it down on every click would move the
@@ -687,6 +690,12 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapsel-t{margin:0 0 8px; font-size:13px; line-height:1.45}
 .mapsel p.small{margin:0 0 4px}
 .mapsel-a{margin-top:10px}
+.mapsel-l{list-style:none; margin:6px 0 0; padding:0; max-height:190px; overflow-y:auto}
+.mapsel-l li{margin:0 0 2px}
+.mapsel-c{display:block; width:100%; text-align:left; background:none; border:0; cursor:pointer;
+  font:inherit; font-size:12px; color:var(--ink-2); padding:3px 4px; border-radius:4px}
+.mapsel-c:hover,.mapsel-c:focus{background:var(--inset); color:var(--ink)}
+.mapsel-c .mono{color:var(--accent-2)}
 @media (max-width:640px){ .mapsel{right:8px; left:8px; width:auto} }
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
 .mapsvg.far .mtitle{display:none}
@@ -3531,7 +3540,10 @@ function mapLayout(data, mode){
     const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
     n._box = box;
     if(n.kind==="court"){ court={...box, name:n.name}; }
-    else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name, count:n.count, pseudo:n.pseudo, path:n.path})); }
+    else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name,
+      count:n.count, pseudo:n.pseudo, path:n.path,
+      claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
+      subs:n.kids.filter(k=>k.kind==="folder").length})); }
     else { nodes.push(Object.assign(box, {kind:"claim", id:n.id})); }
     const tot = n.kids.reduce((t,k)=>t+k._a, 0);
     let a=a0;
@@ -3596,6 +3608,37 @@ function mapSelCard(id, data, slug){
     + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
     + (!o && !i? `<p class="small muted">no relations drawn on this map</p>` : "")
     + `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/${id}">Open claim page →</a></div>`;
+}
+/* The same courtesy for a folder: say what is in it, then offer the page.
+   A folder card lists the claims filed DIRECTLY in it, each one selectable, so
+   the map can be browsed — folder, then its claims, then a claim's own card —
+   without a page load anywhere in the chain. The list is capped because the
+   loose "docket — newest 50" box holds fifty and a card is not a docket page.
+
+   A pseudo folder has no page to offer: it is the map's own bucket for claims
+   nobody has filed, not a folder the court has. It gets a card that says so
+   rather than a dead link. */
+function mapFolderCard(f, data, slug){
+  if(!f) return "";
+  const ids = (f.claims||[]);
+  const shown = ids.slice(0, 12);
+  const rows = shown.map(id=>{
+    const c = data.claims[id];
+    const t = c? c.title : "";
+    return `<li><button type="button" class="mapsel-c" data-go="${id}">`
+      + `<span class="mono">#${id}</span> ${safeInline(t.length>52? t.slice(0,51)+"…" : t)}</button></li>`;
+  }).join("");
+  return `<div class="mapsel-h"><span class="mono">folder</span>`
+    + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
+    + `<p class="mapsel-t">${safeInline(f.name)}</p>`
+    + `<p class="small muted">${f.count} claim${f.count===1?"":"s"} in all`
+    + (f.subs? `, in ${f.subs} subfolder${f.subs===1?"":"s"}` : "")
+    + (ids.length? `; ${ids.length} filed here directly` : "") + `</p>`
+    + (rows? `<ul class="mapsel-l">${rows}</ul>` : "")
+    + (ids.length>shown.length? `<p class="small muted">…and ${ids.length-shown.length} more</p>` : "")
+    + (!f.pseudo && f.path!=null && data.linkFolders
+        ? `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/f/${f.path}">Open folder page →</a></div>`
+        : `<p class="small muted">the map's own bucket — the court has filed no folder for these</p>`);
 }
 function mapDotClass(short){
   // seven phases, pill-family tokens; text is the primary signal, the dot a
@@ -3663,7 +3706,8 @@ function mapSvg(L, data, slug){
   L.folders.forEach((f,i)=>{
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
       + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
-    if(!f.pseudo && f.path!=null && data.linkFolders) out.push(`<a href="#/c/${esc(slug)}/f/${f.path}">${tag}</a>`);
+    if(!f.pseudo && f.path!=null && data.linkFolders)
+      out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}</a>`);
     else out.push(tag);
   });
   for(const n of L.nodes){
@@ -4129,35 +4173,57 @@ function mountMap(slug, data, focusId){
      and the card's link is the next thing in the tab order, so reaching the page
      costs one extra key rather than being unreachable. */
   const panel = document.getElementById("mapsel");
-  let selId = null;
-  function paint(){
+  // A selection is a KIND and a key, because a folder and a claim are both
+  // selectable and their ids are separate numbering. `{kind:"claim", id}` or
+  // `{kind:"folder", fid}`; null for nothing selected.
+  let sel = null;
+  /* A folder's neighbourhood is its own subtree, not a relation graph: keep the
+     folder and the claims filed in it, dim everything else. That is the question
+     a folder answers — what is in here — and it is the same gesture as a claim
+     lighting up what bears on it. */
+  function dimFolder(f){
+    const keep = new Set(f.claims||[]);
     box.querySelectorAll(".mnode-a").forEach(a=>
-      a.classList.toggle("selected", selId!=null && parseInt(a.dataset.id,10)===selId));
-    if(selId==null){ undim(); if(panel){ panel.hidden=true; panel.innerHTML=""; } return; }
-    dim(selId);
+      a.classList.toggle("dim", !keep.has(parseInt(a.dataset.id,10))));
+    box.querySelectorAll(".medge,.marrow").forEach(e=>e.classList.add("dim"));
+  }
+  function paint(){
+    const selClaim = sel && sel.kind==="claim" ? sel.id : null;
+    const selFold = sel && sel.kind==="folder" ? sel.fid : null;
+    box.querySelectorAll(".mnode-a").forEach(a=>
+      a.classList.toggle("selected", parseInt(a.dataset.id,10)===selClaim));
+    box.querySelectorAll(".mfold-a").forEach(a=>
+      a.classList.toggle("selected", parseInt(a.dataset.fid,10)===selFold));
+    if(!sel){ undim(); if(panel){ panel.hidden=true; panel.innerHTML=""; } return; }
     if(!panel) return;
-    panel.innerHTML = mapSelCard(selId, data, slug);
+    if(selClaim!=null){ dim(selClaim); panel.innerHTML = mapSelCard(selClaim, data, slug); }
+    else { const f = L.folders[selFold]; dimFolder(f||{}); panel.innerHTML = mapFolderCard(f, data, slug); }
     panel.hidden = false;
     const x = document.getElementById("msel-x");
     if(x) x.addEventListener("click", ()=>{ select(null); });
+    // A claim named on a folder card selects it, so the map is browsable in
+    // place: folder, its claims, then the claim's own card and its page.
+    panel.querySelectorAll(".mapsel-c").forEach(b=>
+      b.addEventListener("click", ()=>select({kind:"claim", id:parseInt(b.dataset.go,10)})));
   }
-  function select(id){ selId=id; paint(); }
+  function select(next){ sel=next; paint(); }
   box.addEventListener("click", ev=>{
     if(ev.defaultPrevented) return;
     if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button!==0) return; // let the link work
-    const a=ev.target.closest(".mnode-a");
+    const a=ev.target.closest(".mnode-a"), fa=ev.target.closest(".mfold-a");
     // A drag that ends over a node must not select it — the compat click fires
     // on mouseup wherever the pointer landed, so panning across the graph would
     // otherwise pick whatever it stopped on.
     if(dragged){ ev.preventDefault(); return; }
-    if(a){ ev.preventDefault(); select(parseInt(a.dataset.id,10)); }
+    if(a){ ev.preventDefault(); select({kind:"claim", id:parseInt(a.dataset.id,10)}); }
+    else if(fa){ ev.preventDefault(); select({kind:"folder", fid:parseInt(fa.dataset.fid,10)}); }
     else if(!ev.target.closest(".mapsel")) select(null);
   });
   // hover: transient, and it must not fight a selection that is already held
-  box.addEventListener("mouseover", ev=>{ if(selId!=null) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
-  box.addEventListener("mouseout", ev=>{ if(selId!=null) return; if(ev.target.closest(".mnode-a")) undim(); });
-  box.addEventListener("focusin", ev=>{ if(selId!=null) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
-  box.addEventListener("focusout", ()=>{ if(selId==null) undim(); });
+  box.addEventListener("mouseover", ev=>{ if(sel) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
+  box.addEventListener("mouseout", ev=>{ if(sel) return; if(ev.target.closest(".mnode-a")) undim(); });
+  box.addEventListener("focusin", ev=>{ if(sel) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
+  box.addEventListener("focusout", ()=>{ if(!sel) undim(); });
   box.addEventListener("keydown", ev=>{
     const w=fit.w/z, h=fit.h/z;
     if(ev.key==="ArrowLeft"){ cx-=w*0.1; schedule(); ev.preventDefault(); }
@@ -4167,7 +4233,7 @@ function mountMap(slug, data, focusId){
     else if(ev.key==="+"||ev.key==="="){ setZ(z*1.25); ev.preventDefault(); }
     else if(ev.key==="-"){ setZ(z/1.25); ev.preventDefault(); }
     else if(ev.key==="0"){ z=1; cx=fit.w/2; cy=fit.h/2; schedule(); ev.preventDefault(); }
-    else if(ev.key==="Escape" && selId!=null){ select(null); ev.preventDefault(); }
+    else if(ev.key==="Escape" && sel){ select(null); ev.preventDefault(); }
   });
   const bind=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener("click",fn); };
   bind("mz-in", ()=>setZ(z*1.25));

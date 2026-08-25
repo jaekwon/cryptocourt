@@ -242,15 +242,44 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
 
   // Source-level, because these live in the route's listeners.
   const mount = slice('function mountMap(', '/* Folder page');
-  ok("a plain click is intercepted", /ev\.preventDefault\(\);\s*select\(parseInt/.test(mount));
+  ok("a plain click on a claim is intercepted",
+     /ev\.preventDefault\(\);\s*select\(\{kind:"claim"/.test(mount));
+  ok("and a plain click on a FOLDER is too",
+     /ev\.preventDefault\(\);\s*select\(\{kind:"folder"/.test(mount));
   // An <a> that stops behaving like one is worse than a button: modified clicks
   // and middle-click must still open the claim in a tab.
   ok("modified and middle clicks still follow the link",
      /ev\.metaKey\|\|ev\.ctrlKey\|\|ev\.shiftKey\|\|ev\.altKey\|\|ev\.button!==0/.test(mount));
   ok("a drag that ends on a node does not select it", /if\(dragged\)/.test(mount));
   ok("hover does not fight a held selection",
-     (mount.match(/if\(selId!=null\) return;/g)||[]).length >= 3);
+     ["mouseover","mouseout","focusin"].every(evt =>
+        new RegExp(`addEventListener\\("${evt}"[^\\n]*if\\(sel\\) return;`).test(mount)));
   ok("escape clears the selection", /ev\.key==="Escape"/.test(mount));
+
+  // ---- the folder card ----
+  eval(slice('function mapFolderCard(', 'function mapDotClass'));
+  const fd = {claims:{1:{title:"A claim about the record, long enough that the card has to cut it somewhere sensible."},
+                      2:{title:"Another"}}, linkFolders:true};
+  const fc = mapFolderCard({name:"Fauci", count:9, subs:3, claims:[1,2], path:"2"}, fd, "covid");
+  ok("the folder card names the folder", fc.includes("Fauci"));
+  ok("it counts the whole subtree and the subfolders", fc.includes("9 claims in all")
+     && fc.includes("3 subfolders") && fc.includes("2 filed here directly"));
+  ok("it lists the claims filed directly in it", fc.includes('data-go="1"') && fc.includes('data-go="2"'));
+  ok("and offers the folder page rather than taking it",
+     fc.includes('href="#/c/covid/f/2"') && fc.includes("Open folder page"));
+  // The loose bucket is the map's own, not a folder the court filed — a link
+  // there would 404 on a path that does not exist.
+  const pf = mapFolderCard({name:"docket — newest 50", count:50, subs:0, claims:[1], pseudo:true, path:null}, fd, "covid");
+  ok("a pseudo folder offers no page and says why",
+     !pf.includes("Open folder page") && pf.includes("the map's own bucket"));
+  // Fifty claims is a docket page, not a card.
+  const many = mapFolderCard({name:"big", count:40, subs:0, claims:[...Array(40).keys()].map(i=>i+1), path:"1"},
+                             {claims:Object.fromEntries([...Array(40).keys()].map(i=>[i+1,{title:"t"}])), linkFolders:true}, "covid");
+  ok("a long claim list is capped, and says how many it dropped",
+     (many.match(/data-go=/g)||[]).length===12 && many.includes("and 28 more"));
+  ok("clicking a listed claim selects it rather than navigating",
+     /\.mapsel-c[\s\S]{0,200}select\(\{kind:"claim"/.test(mount));
+  ok("a selected folder dims to its own subtree", /function dimFolder/.test(mount));
 }
 
 // determinism: same input → same bytes
