@@ -4050,8 +4050,18 @@ function mapSvg(L, data, slug){
   // UNDER EVERYTHING: containment spokes, then association chords. Order is the
   // z-order, and it is the whole reason a chord may cross a node it does not end
   // on — it passes behind, which reads as depth rather than as a collision.
+  /* THREE KINDS OF SPOKE, and the third was being drawn as the second. A claim
+     may be filed in more than one folder — the chain allows it, and mapTree
+     collects the extra memberships in `alsoIn` and lays a spoke for each with
+     kind "also" — but this line asked only whether the kind was "claim", so
+     "also" fell to the else and came out as a plain containment spoke. Two
+     identical solid lines, each saying the claim hangs off that folder, when only
+     one of them is where the claim is actually drawn. The style meant for it,
+     `.medge.spoke.also` — muted and dashed, which is how a secondary membership
+     should read against a containment — has been in the stylesheet the whole
+     time and never once matched an element. */
   L.spokes.forEach((s,i)=>
-    out.push(`<polyline class="medge spoke ${s.kind==="claim"?"toclaim":"tofolder"}" points="${s.pts.map(q=>q.join(",")).join(" ")}" data-s="${i}"/>`));
+    out.push(`<polyline class="medge spoke ${s.kind==="also"?"also":s.kind==="claim"?"toclaim":"tofolder"}" points="${s.pts.map(q=>q.join(",")).join(" ")}" data-s="${i}"/>`));
   L.edges.forEach((e,i)=>{
     const cls = e.type==="part"? "part" : e.type==="supersedes"? "sup" : "bears "+(e.stance==="supports"?"yes":"no");
     out.push(`<polyline class="medge ${cls}" points="${e.pts.map(q=>q.join(",")).join(" ")}" data-e="${i}" data-from="${e.from}" data-to="${e.to}"/>`);

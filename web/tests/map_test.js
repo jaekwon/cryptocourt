@@ -539,6 +539,31 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
       .matchAll(/class="mtext mhdr-t"[^>]*>([^<]*)</g)].map(x => x[1]).join(" ");
     ok("...and it is doing work: at that size the drawn label is cut",
        drawn.indexOf("…") >= 0);
+
+    /* A CLAIM IN TWO FOLDERS DRAWS ONE CONTAINMENT AND ONE "ALSO". The chain
+       allows a claim to be filed in more than one folder; mapTree collects the
+       extra memberships in `alsoIn` and lays a spoke for each with kind "also".
+       The renderer asked only whether the kind was "claim", so "also" fell to the
+       else and came out as a plain containment spoke: two identical solid lines,
+       each saying the claim hangs off that folder, when only one of them is where
+       the claim is actually drawn. `.medge.spoke.also` — muted and dashed — had
+       been in the stylesheet the whole time and had never matched an element. */
+    const both = {folders:[{name:"A", claims:[1,2], folders:[], path:"0"},
+                           {name:"B", claims:[1,3], folders:[], path:"1"}],
+                  all:[1,2,3],
+                  claims:{1:{title:"In both.", statusText:"open"},
+                          2:{title:"Only A.",  statusText:"open"},
+                          3:{title:"Only B.",  statusText:"open"}},
+                  relations:[], courtName:"C", linkFolders:true};
+    const L5 = mapLayout(both, "titles");
+    ok("a second folder membership lays its own spoke",
+       L5.spokes.filter(s => s.kind === "also").length === 1);
+    const spokeCls = [...mapSvg(L5, both, "s")
+      .matchAll(/class="medge spoke ([a-z ]*)"/g)].map(m => m[1].trim());
+    ok("...and it is DRAWN as one, so the style written for it can match",
+       spokeCls.filter(c => c === "also").length === 1);
+    ok("...and the claim is not shown hanging off both folders alike",
+       spokeCls.filter(c => c === "tofolder").length === 2);
   }
 
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
