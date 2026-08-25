@@ -62,7 +62,7 @@ class El {
   focus(){}
   // A real viewport width, so the level-of-detail line can be exercised: it is
   // what decides whether a claim shows its sentence or only "#17 settled".
-  get clientWidth(){ return this.tag==="svg" ? 660 : 0; }
+  get clientWidth(){ return this.tag==="svg" ? (global.VIEWPORT||660) : 0; }
   getScreenCTM(){ return null; }
   setAttribute(k,v){ this.attrs[k]=v; }
   getAttribute(k){ return this.attrs[k]; }
@@ -200,6 +200,34 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
   })());
   ok("titles stay legible after centring",
      !box.querySelector("svg").classList.contains("far"));
+}
+
+/* THE OPENING ZOOM IS A RENDERED SIZE, NOT A RULE ABOUT THE DRAWING. "Frame the
+   court and ring 1" says nothing about how big that comes out on screen, and the
+   map went from a 640px box to the whole viewport — the same z that showed a
+   claim at 208px in the box showed it at 441px full screen, in 21px type. */
+{
+  const nodeW = MAPK.node.titles.w;
+  const shown = vw => {
+    global.VIEWPORT = vw;
+    mount();
+    const vb = box.querySelector("svg").getAttribute("viewBox").split(" ").map(Number);
+    return nodeW * vw / vb[2];          // rendered width of a claim box, px
+  };
+  const narrow = shown(660), wide = shown(1400), huge = shown(1900);
+  ok("a claim renders at a usable size on a narrow viewport", narrow > 120 && narrow < 340);
+  ok("...and does not balloon when the map goes full screen", wide > 120 && wide < 340);
+  ok("...or on a very wide one", huge > 120 && huge < 340);
+  /* NOT "all three agree" — that was the first version of this check and it
+     asked for something the geometry cannot give. Measured 224/300/300: on a
+     660px viewport the CORE ITSELF is the binding constraint, because no zoom
+     both shows the court with its first ring and renders those nodes at 300px in
+     that width. Showing the ring is the more important half, so the narrow case
+     accepts a smaller node. What must hold is the band, which is what a reader
+     actually feels. */
+  ok("no viewport is zoomed so far in that a node dominates the screen",
+     Math.max(narrow, wide, huge) <= 340);
+  global.VIEWPORT = 660;
 }
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
