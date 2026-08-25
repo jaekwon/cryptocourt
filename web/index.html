@@ -670,7 +670,24 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mnode-a{cursor:pointer}
 .mnode-a:hover .mnode,.mnode-a:focus .mnode{stroke:var(--accent); stroke-width:2}
 .mnode-a.focused .mnode{stroke:var(--accent); stroke-width:3}
+.mnode-a.selected .mnode{stroke:var(--accent); stroke-width:3; fill:var(--accent-wash)}
 .mnode-a.dim{opacity:.35}
+/* The card sits OVER the map rather than under it: the map box is a fixed height
+   with its own pan and zoom, and pushing it down on every click would move the
+   thing you just clicked out from under the pointer. */
+.maphold{position:relative}
+.mapsel{position:absolute; right:12px; top:12px; width:min(320px, calc(100% - 24px));
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  box-shadow:0 6px 24px rgba(0,0,0,.14); padding:12px 14px; z-index:2}
+.mapsel-h{display:flex; align-items:center; gap:8px; margin-bottom:6px}
+.mapsel-h .mono{font-weight:600}
+.mapsel-x{margin-left:auto; background:none; border:0; cursor:pointer; font-size:18px;
+  line-height:1; color:var(--ink-2); padding:0 2px}
+.mapsel-x:hover{color:var(--ink)}
+.mapsel-t{margin:0 0 8px; font-size:13px; line-height:1.45}
+.mapsel p.small{margin:0 0 4px}
+.mapsel-a{margin-top:10px}
+@media (max-width:640px){ .mapsel{right:8px; left:8px; width:auto} }
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
 .mapsvg.far .mtitle{display:none}
 /* A folder is a NODE now, not a box drawn round its contents — the radial map
@@ -3551,6 +3568,35 @@ function mapLayout(data, mode){
     mode,
   };
 }
+/* THE SELECTION CARD. Clicking a node used to leave the map immediately, which
+   made the map a menu rather than a view: every question you could ask of the
+   graph — what does this contest, what rests on it — cost a page load and a trip
+   back. Selecting shows the node's own facts and offers the page as a CHOICE.
+
+   The title is shown whole here. The node draws two wrapped lines and an
+   ellipsis; this is the one place a reader can see the claim as it was filed
+   without leaving the map. */
+function mapSelCard(id, data, slug){
+  const c = data.claims[id];
+  if(!c) return "";
+  const pc = phaseClass(c.statusText);
+  const rel = (data.relations||[]);
+  const out = rel.filter(r=>r.from===id), inn = rel.filter(r=>r.to===id);
+  const tally = rs => {
+    const n = {supports:0, contradicts:0, supersedes:0, part:0};
+    for(const r of rs) n[r.type==="bears" ? (r.stance==="supports"?"supports":"contradicts") : r.type]++;
+    return Object.entries(n).filter(([,v])=>v).map(([k,v])=>`${v} ${k}`).join(", ");
+  };
+  const o = tally(out), i = tally(inn);
+  return `<div class="mapsel-h"><span class="mono">#${id}</span>`
+    + `<span class="pill ${esc(pc.cls||"")}">${esc(pc.short)}</span>`
+    + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
+    + `<p class="mapsel-t">${safeInline(c.title)}</p>`
+    + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
+    + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
+    + (!o && !i? `<p class="small muted">no relations drawn on this map</p>` : "")
+    + `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/${id}">Open claim page →</a></div>`;
+}
 function mapDotClass(short){
   // seven phases, pill-family tokens; text is the primary signal, the dot a
   // second non-hue channel (solid / washed / hollow / dashed)
@@ -3978,7 +4024,8 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
          <button class="pill void" id="mz-fit">fit</button>
          <input type="range" id="mz-slider" min="-1" max="3" step="0.01" value="0" aria-label="zoom level">
        </div>
-       <div class="mapwrap" id="mapbox"></div>
+       <div class="maphold"><div class="mapwrap" id="mapbox"></div>
+         <div class="mapsel" id="mapsel" hidden></div></div>
        <p class="small muted" style="margin:8px 0 0">scroll to zoom, drag to pan, click a claim to open it · full titles appear as you zoom in</p>
        <div class="mlegend">${legendEdges}${legendDots}
          <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" class="mfold"/></svg> folder</span></div>`;
@@ -4030,7 +4077,7 @@ function mountMap(slug, data, focusId){
     ev.preventDefault();
     setZ(z*Math.pow(1.0015, -ev.deltaY), toWorld(ev));
   }, {passive:false});
-  let drag=null;
+  let drag=null, dragged=false;
   box.addEventListener("pointerdown", ev=>{
     const el=svgEl(); if(!el) return;
     let inv=null; try{ const m=el.getScreenCTM(); inv=m&&m.inverse(); }catch(_){}
@@ -4038,6 +4085,7 @@ function mountMap(slug, data, focusId){
     // NO capture yet: capturing on pointerdown retargets the compat click to
     // the box and node links never fire (verified in Chromium). Capture is
     // taken only once movement crosses a drag threshold.
+    dragged=false;
     drag={x:ev.clientX, y:ev.clientY, cx0:cx, cy0:cy, inv, live:false, pid:ev.pointerId};
   });
   box.addEventListener("pointermove", ev=>{
@@ -4045,7 +4093,7 @@ function mountMap(slug, data, focusId){
     if(!(ev.buttons&1)){ drag=null; return; } // the press ended outside the box
     if(!drag.live){
       if(Math.abs(ev.clientX-drag.x)+Math.abs(ev.clientY-drag.y) < 4) return;
-      drag.live=true;
+      drag.live=true; dragged=true;
       try{ box.setPointerCapture(drag.pid); }catch(_){}
     }
     const a=new DOMPoint(drag.x,drag.y).matrixTransform(drag.inv);
@@ -4070,10 +4118,46 @@ function mountMap(slug, data, focusId){
     });
   }
   function undim(){ box.querySelectorAll(".dim").forEach(e=>e.classList.remove("dim")); }
-  box.addEventListener("mouseover", ev=>{ const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
-  box.addEventListener("mouseout", ev=>{ if(ev.target.closest(".mnode-a")) undim(); });
-  box.addEventListener("focusin", ev=>{ const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
-  box.addEventListener("focusout", ()=>undim());
+  /* SELECTION. A plain click SELECTS rather than leaves: it holds the dim, marks
+     the node, and opens a card offering the claim page. The map is a view you can
+     ask questions of, and following a link on the first click made it a menu.
+
+     THE ANCHOR STAYS AN ANCHOR. Only an unmodified primary click is intercepted,
+     so ⌘-click, ctrl-click, shift-click and middle-click still open the claim in a
+     tab the way every other link on the site does — an <a> that has quietly
+     stopped behaving like one is worse than a button. Keyboard Enter selects too,
+     and the card's link is the next thing in the tab order, so reaching the page
+     costs one extra key rather than being unreachable. */
+  const panel = document.getElementById("mapsel");
+  let selId = null;
+  function paint(){
+    box.querySelectorAll(".mnode-a").forEach(a=>
+      a.classList.toggle("selected", selId!=null && parseInt(a.dataset.id,10)===selId));
+    if(selId==null){ undim(); if(panel){ panel.hidden=true; panel.innerHTML=""; } return; }
+    dim(selId);
+    if(!panel) return;
+    panel.innerHTML = mapSelCard(selId, data, slug);
+    panel.hidden = false;
+    const x = document.getElementById("msel-x");
+    if(x) x.addEventListener("click", ()=>{ select(null); });
+  }
+  function select(id){ selId=id; paint(); }
+  box.addEventListener("click", ev=>{
+    if(ev.defaultPrevented) return;
+    if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button!==0) return; // let the link work
+    const a=ev.target.closest(".mnode-a");
+    // A drag that ends over a node must not select it — the compat click fires
+    // on mouseup wherever the pointer landed, so panning across the graph would
+    // otherwise pick whatever it stopped on.
+    if(dragged){ ev.preventDefault(); return; }
+    if(a){ ev.preventDefault(); select(parseInt(a.dataset.id,10)); }
+    else if(!ev.target.closest(".mapsel")) select(null);
+  });
+  // hover: transient, and it must not fight a selection that is already held
+  box.addEventListener("mouseover", ev=>{ if(selId!=null) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
+  box.addEventListener("mouseout", ev=>{ if(selId!=null) return; if(ev.target.closest(".mnode-a")) undim(); });
+  box.addEventListener("focusin", ev=>{ if(selId!=null) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
+  box.addEventListener("focusout", ()=>{ if(selId==null) undim(); });
   box.addEventListener("keydown", ev=>{
     const w=fit.w/z, h=fit.h/z;
     if(ev.key==="ArrowLeft"){ cx-=w*0.1; schedule(); ev.preventDefault(); }
@@ -4083,6 +4167,7 @@ function mountMap(slug, data, focusId){
     else if(ev.key==="+"||ev.key==="="){ setZ(z*1.25); ev.preventDefault(); }
     else if(ev.key==="-"){ setZ(z/1.25); ev.preventDefault(); }
     else if(ev.key==="0"){ z=1; cx=fit.w/2; cy=fit.h/2; schedule(); ev.preventDefault(); }
+    else if(ev.key==="Escape" && selId!=null){ select(null); ev.preventDefault(); }
   });
   const bind=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener("click",fn); };
   bind("mz-in", ()=>setZ(z*1.25));

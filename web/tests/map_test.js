@@ -212,6 +212,47 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
      mapWrapTitle("Public health and its measurement", w, fs_, 1).length===1);
 }
 
+// CLICK SELECTS, IT DOES NOT NAVIGATE. The card is a pure function, so what it
+// says can be asked directly; the interception rule is route code and is checked
+// in source, which is the weaker check and labelled as such.
+{
+  global.safeInline = x => esc(String(x));
+  eval(slice('function mapSelCard(', 'function mapDotClass'));
+  const d = {claims:{7:{title:"A claim of fact, stated once, at length enough to be cut on a node.",
+                        statusText:"open — stake YES or NO"}},
+             relations:[{from:7,to:9,type:"bears",stance:"supports"},
+                        {from:7,to:8,type:"bears",stance:"contradicts"},
+                        {from:5,to:7,type:"bears",stance:"contradicts"},
+                        {from:6,to:7,type:"supersedes"}]};
+  const html = mapSelCard(7, d, "covid");
+  ok("the card names the claim", html.includes("#7"));
+  // The node shows two wrapped lines and an ellipsis; the card is the one place
+  // the sentence appears whole without leaving the map.
+  ok("and shows the title UNTRUNCATED",
+     html.includes("A claim of fact, stated once, at length enough to be cut on a node."));
+  ok("it tallies what the claim asserts", /asserts:[^<]*1 supports/.test(html) && /asserts:[^<]*1 contradicts/.test(html));
+  ok("and what is asserted about it", /asserted about it:[^<]*1 contradicts/.test(html)
+     && /asserted about it:[^<]*1 supersedes/.test(html));
+  ok("the claim page is offered, not taken", html.includes('href="#/c/covid/7"')
+     && html.includes("Open claim page"));
+  ok("and the selection can be cleared", html.includes('id="msel-x"'));
+  ok("a claim with no relations says so",
+     mapSelCard(7, {claims:d.claims, relations:[]}, "covid").includes("no relations drawn"));
+  ok("an unknown id renders nothing", mapSelCard(99, d, "covid")==="");
+
+  // Source-level, because these live in the route's listeners.
+  const mount = slice('function mountMap(', '/* Folder page');
+  ok("a plain click is intercepted", /ev\.preventDefault\(\);\s*select\(parseInt/.test(mount));
+  // An <a> that stops behaving like one is worse than a button: modified clicks
+  // and middle-click must still open the claim in a tab.
+  ok("modified and middle clicks still follow the link",
+     /ev\.metaKey\|\|ev\.ctrlKey\|\|ev\.shiftKey\|\|ev\.altKey\|\|ev\.button!==0/.test(mount));
+  ok("a drag that ends on a node does not select it", /if\(dragged\)/.test(mount));
+  ok("hover does not fight a held selection",
+     (mount.match(/if\(selId!=null\) return;/g)||[]).length >= 3);
+  ok("escape clears the selection", /ev\.key==="Escape"/.test(mount));
+}
+
 // determinism: same input → same bytes
 ok("deterministic bytes", mapSvg(mapLayout(demoData,"titles"),demoData,"orem")===svgs.titles);
 
