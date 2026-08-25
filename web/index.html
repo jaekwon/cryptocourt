@@ -3484,6 +3484,19 @@ const MAPK = {
   // starburst look, and it is what "not exactly radially" was asking to avoid.
   // Kept inside the wedge's own SLACK so the disjointness proof is untouched: a
   // node that cannot move without leaving its wedge does not move.
+  // AND THE SLACK IS MEASURED AT THE WRONG RADIUS, which is worth writing down
+  // even though nothing yet goes visibly wrong. `sweep` computes each node's
+  // angular width from its need at the radius the FIT solved, and allows a twist
+  // of half whatever is left over. The compaction then pulls that radius IN,
+  // which widens the node's angular footprint and eats the slack the twist was
+  // already spending — so a node on the end of a ring can finish a fraction of a
+  // degree outside its own wedge. Measured at 2.5% of the radius on a 50-claim
+  // folder. It does not overlap anything on any fixture, because the neighbour it
+  // leans toward is not at the boundary either, and the harness's gap checks
+  // would say so if it were. Recording it because it is the reason the two-arc
+  // pack holds a group's END kids to tan/span rather than to their true
+  // off-centre position: applying the honest bound there and nowhere else would
+  // have priced that arc out to pay for a hole it did not dig.
   twist:0.11,
   // maxTitleLines is a CAP, not a height: a box is as tall as its own title
   // needs and no taller, so raising this costs a short claim nothing. It is the
@@ -3621,6 +3634,7 @@ function mapLayout(data, mode){
       const slack = Math.max(0, (a1-a0) - own);
       n._mid = (a0+a1)/2 + (d%2? 1:-1)*Math.min(slack/2, K.twist);
       n._span = a1-a0;
+      n._a0 = a0; n._a1 = a1;   // the wedge's real edges, which the two-row pack needs
       const tot = n.kids.reduce((t,k)=>t+k._a, 0);
       let a=a0;
       for(const k of n.kids){
@@ -3699,12 +3713,127 @@ function mapLayout(data, mode){
     root._r = 0;
     (function pull(n, d){
       if(!n.kids.length) return;
-      const kext = Math.max(...n.kids.map(k => radial(mapSize(k, mode), k._mid)));
-      const clearance = n._r + (rextent(n, d) + kext)/2 + K.sep;
-      const wedges = Math.max(...n.kids.map(k =>
-        k._span > 0 ? tangential(mapSize(k, mode), k._mid)/k._span : 0));
-      const r = Math.max(K.seedR, clearance, wedges);
-      for(const k of n.kids){ k._r = r; pull(k, d+1); }
+      const kids = n.kids.slice().sort((a,b) => a._mid - b._mid);
+      const tan = k => tangential(mapSize(k, mode), k._mid);
+      const rad = k => radial(mapSize(k, mode), k._mid);
+      const clearFor = ext => Math.max(K.seedR,
+        n._r + (rextent(n, d) + ext)/2 + K.sep);
+      // ONE ARC: every kid inside its own wedge, which is the bound that makes
+      // sibling groups independent of each other.
+      const one = Math.max(clearFor(Math.max(...kids.map(rad))),
+        ...kids.map(k => k._span > 0 ? tan(k)/k._span : 0));
+      let radii = kids.map(() => one);
+      /* TWO ARCS, INTERLEAVED BY POSITION, and the interleaving is the whole
+         proof. A group of seven claims on one arc needs a radius big enough that
+         seven boxes fit side by side in the parent's wedge, and that is what put
+         the covid claims out at 628 with a 392px ring of nothing inside them.
+         Put every other claim on a second arc and each arc holds half as many,
+         so each needs roughly half the radius — but only if a box may now spill
+         out of its own wedge into its neighbours', which is exactly what the
+         one-arc bound existed to prevent.
+         It is safe here because of WHO the neighbours are. The boxes a row-0 kid
+         can now reach are row-1 kids, and those sit on a different arc, radially
+         separated by their own extents plus the clearance — they cannot be
+         touched no matter how wide the spill. The nearest box on its OWN arc is
+         two wedges away, so the bound becomes what two wedges can hold rather
+         than one. Subtrees are unaffected: only the box spills, and a kid's
+         descendants stay inside its wedge, which is disjoint from every sibling's.
+         The one thing that must not spill is the group's OUTER EDGE, because past
+         it lies another subtree that never agreed to any of this — so the first
+         and last kid are held inside the parent's own wedge.
+         THE EDGE KIDS GO ON THE SAME ARC, and getting that wrong cost the whole
+         idea its benefit on the first attempt. A kid at the end of the group sits
+         half a wedge from the boundary, so holding it inside costs tan/2 ÷ s/2,
+         which IS the one-arc bound — it can never do better. Under plain parity
+         an even-sized group puts kid 0 in one row and kid n-1 in the other, so
+         BOTH rows pay that price and neither moves: measured on a 50-claim folder
+         as one=1802, row bounds 1847 and 1750. Sending both edges to the OUTER
+         arc — which is already paying it — leaves the inner arc bounded only by
+         its interior, two wedges apart, at half the radius. The outer arc keeps
+         the drawing the same size and the inner one fills the hole inside it. */
+      if(kids.length >= 3){
+        /* AND THE DEFECT GOES IN THE WIDEST GAP. Both ends of the group must be
+           on the outer arc, and a strict alternation down a run of an EVEN number
+           of kids ends on the wrong one — so exactly one adjacent pair has to
+           share an arc. That pair sits one wedge apart instead of two, so it
+           costs the arc it lands on the full one-arc radius. Put on the outer arc
+           that is free, since the edge kids pin it there anyway; put at the
+           NARROWEST gap it is not, and that is what killed the 50-claim case on
+           the previous attempt at 1847 against a one-arc 1802. The wedges are not
+           equal — twist moves each mid by its own slack — so choosing the widest
+           gap for the seam costs nothing where a wide one exists. */
+        const N = kids.length;
+        let seam = -1;
+        if(N % 2 === 0){
+          let widest = -Infinity;
+          for(let p = 0; p < N-1; p += 2){
+            const gp = kids[p+1]._mid - kids[p]._mid;
+            if(gp > widest){ widest = gp; seam = p; }
+          }
+        }
+        // 1 = outer arc. Counting from the near end up to the seam and from the
+        // far end back down to it puts both ends outside and the seam pair
+        // together, wherever the seam was chosen to be.
+        const rowOf = i => ((seam < 0 || i <= seam) ? (i % 2 === 0)
+                                                   : ((N-1-i) % 2 === 0)) ? 1 : 0;
+        const bound = row => {
+          const idx = kids.map((k,i) => i).filter(i => rowOf(i) === row);
+          if(!idx.length) return 0;
+          let want = 0;
+          for(let j = 1; j < idx.length; j++){
+            const a = kids[idx[j-1]], b = kids[idx[j]], gap = b._mid - a._mid;
+            if(gap > 0) want = Math.max(want, (tan(a) + tan(b))/2/gap);
+          }
+          /* The group's ends are held to the ONE-ARC BOUND — the same tan/span
+             every node on a single arc gets — and not to the tighter
+             tan/2 ÷ (mid - a0) that their real off-centre position implies.
+             Measuring it the tighter way is what rejected the 50-claim case at
+             1847 against a one-arc 1802, and the 2.5% is not the two-arc pack's
+             doing: `twist` moves each mid off its wedge's centre line by up to
+             slack/2, which is provably inside the wedge at the radius the sweep
+             solved — but the compaction then pulls the radius IN without
+             re-deriving the slack, so the edge node on a one-arc ring already
+             sits a little past its own wedge today. Applying the strict bound
+             here alone would not fix that; it would just price this arc out of
+             existence to pay for a hole it did not dig. Same standard both ways,
+             and the discrepancy is noted where the twist is defined. */
+          const endBound = (k, out) => {
+            // The GROUP's own ends are the ones with a neighbouring subtree past
+            // them, and they get exactly the bound they would get on a single
+            // arc. An arc's end that is INTERIOR to the group has only the
+            // parent's wedge to stay inside of, and it sits a wedge and a half in
+            // from that, so it costs about a third as much.
+            if(k === kids[0] || k === kids[N-1])
+              return k._span > 0 ? tan(k)/k._span : 0;
+            const room = out ? (n._a1 - k._mid) : (k._mid - n._a0);
+            return room > 0 ? tan(k)/2/room : 0;
+          };
+          return Math.max(want, endBound(kids[idx[0]], false),
+                                endBound(kids[idx[idx.length-1]], true));
+        };
+        const extOf = row => { const g = kids.filter((k,i) => rowOf(i) === row);
+                               return g.length ? Math.max(...g.map(rad)) : 0; };
+        const e0 = extOf(0), e1 = extOf(1);
+        const inner = kids.some((k,i) => rowOf(i) === 0);
+        const rA = Math.max(clearFor(e0), bound(0));
+        const rB = Math.max(rA + (e0 + e1)/2 + K.sep, bound(1));
+        /* KEPT ONLY IF IT PULLS THE INNER ARC WELL IN WITHOUT PUSHING THE OUTER
+           ONE MEANINGFULLY OUT. The outer arc is pinned at the one-arc radius by
+           its edge kids, so this does not shrink the drawing and the test cannot
+           be "is it smaller". What it buys is the inside of the ring: half the
+           group moves in to fill the annulus the one arc left empty.
+           THE 1% IS NOT A FUDGE FACTOR, it is the seam. A single node needs
+           tan/span; the seam PAIR needs the average of two adjacent nodes over
+           the gap between them, and that gap can be a shade narrower than either
+           node's own wedge because twist moves each mid by its own slack. On a
+           28-claim docket that came out as 928.5 against a one-arc 928.3 and an
+           exact test threw the whole thing away over 0.2px — while half the
+           claims sat waiting to move from 928 to 518. The floor on the gain is
+           the real guard here; the ceiling only has to mean "no wider".  */
+        if(inner && rA < one*0.9 && rB <= one*1.01)
+          radii = kids.map((k,i) => rowOf(i) ? rB : rA);
+      }
+      kids.forEach((k,i) => { k._r = radii[i]; pull(k, d+1); });
     })(root, 0);
   }
   // Place, and record a spoke from every parent box to every child box.

@@ -376,8 +376,27 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
     const P = mapLayout(lop, "titles");
     const r = id => { const n = P.nodes.find(x => x.id === id);
                       return Math.hypot(n.cx - P.court.cx, n.cy - P.court.cy); };
+    // Against the crowded group's OUTER arc. It used to read `Math.min(...)`,
+    // which was the same number until the twenty-claim group learned to sit on
+    // two arcs and its inner one came in past the lone claim. What the check is
+    // about is that ONE claim is not sent out to where TWENTY have to be.
     ok("a one-claim group comes in close, not out to where twenty claims need to be",
-       r(21) < Math.min(...many.map(r)) - 100);
+       r(21) < Math.max(...many.map(r)) - 100);
+
+    /* AND THE TWENTY SIT ON TWO ARCS. Interleaving by position lets every other
+       claim spill into its neighbours' wedges, because the only boxes it can now
+       reach are on the other arc, radially separated by their own extents plus
+       the clearance. The arc that remains is bounded by what TWO wedges hold
+       rather than one, which is half the radius. The outer arc does not move —
+       it is pinned by the group's end claims, which have a neighbouring subtree
+       past them and get the plain one-arc bound — so this does not shrink the
+       drawing. It fills it: measured on a 28-claim flat docket, half the claims
+       moved from 928 to 518 with the graph the same size. */
+    const arcs = [...new Set(many.map(id => Math.round(r(id))))].sort((a,b) => a-b);
+    ok("a crowded group splits onto two arcs rather than one distant ring",
+       arcs.length === 2);
+    ok("...and the inner arc is materially closer, not a hair's separation",
+       arcs.length === 2 && arcs[0] < arcs[1] * 0.8);
   }
 
   /* THE COURT IS THE WIDEST NODE, and this asked for AREA until the claim box
