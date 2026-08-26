@@ -1688,3 +1688,48 @@ an ordinal belongs. The title goes through `claimTitleFor`, so a redacted or
 purged claim does not leak its text through this route.
 
 **The moderation log promised more than it holds** — §19 above.
+
+## 20. RULING NEEDED — the realm addresses a reader it cannot identify
+
+`Render(path string) string` receives **no caller**. gnoweb serves the same
+bytes to everyone, so the realm has no way to know whether the person reading
+`<slug>/me/<addr>` is the owner of that address. It nonetheless writes in the
+second person:
+
+> **This court's moderators have frozen you out of its boards** until block N.
+>
+> A moderator slash took your standing to zero, and with it the entry pass…
+>
+> You cannot comment here yet. Earn standing below, or buy an entry pass…
+
+Every one of those is a statement about the SUBJECT address, delivered to
+whoever loaded the page. A moderator checking somebody before acting, a
+counterparty checking who they are staking against, or anyone following a link
+is told that *they* are frozen, *their* standing was slashed, *they* may not
+comment.
+
+`renderPositions` had the same shape and is fixed (§19.1), because its two
+offenders were headings — "# Your positions", "## Your CC in this court" — and
+rewriting a heading is not a change of voice.
+
+**Why this is a ruling and not a fix.** The scope is 39 second-person lines
+across four render files, **16 corpus rows** anchored on that text and **18 test
+assertions** that quote it. And the information is not wrong — only the
+addressee is presumed. Tone at that scale is an owner's decision, and there is a
+real argument on both sides:
+
+- **Third person** ("this address cannot comment here yet") is always true, and
+  is the only voice a page with no viewer identity can strictly justify.
+- **Second person** is warmer, and the page is in fact most often reached by its
+  own owner, from the board's "Where you stand" link.
+
+**Not urgent, and here is why.** The page prints the address in a code span
+directly under its heading and above every one of those sentences, so a reader
+who is paying attention already knows whose page it is. The failure is one of
+first impression rather than of fact.
+
+**If the ruling is third person**, the edit is mechanical but wide: the 39 lines,
+then repoint the 16 corpus rows and rewrite the 18 assertions — and note that
+some second-person text is CORRECT and must stay, because it addresses the
+reader rather than the subject: "put your address on the end of this page's
+path" is an instruction to whoever is reading, and true for all of them.
