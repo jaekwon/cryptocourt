@@ -457,14 +457,16 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	cs := mustClaim(c, id)
 
 	b := strings.Builder{}
-	b.WriteString("# Your positions\n\n")
+	b.WriteString("# Positions on this claim\n\n")
 	// Through the SAME text gate as every other surface, with the banner: this
 	// route (…/<slug>/<id>/<addr>, reachable with any address string) was the one
 	// render path that bypassed it, so a purged claim's text stayed publicly
 	// readable and purge — the legal-compliance power — did not actually reach
 	// "every surface".
 	b.WriteString(hideBanner(c, cs))
-	b.WriteString("Claim: " + claimTitleFor(c, cs) + "\n\n")
+	b.WriteString("Claim: [" + claimTitleFor(c, cs) + "](/r/kourt/kourtv2:" + slug +
+		"/" + strconv.FormatUint(id, 10) + ") in [" + courtNameFor(c) +
+		"](/r/kourt/kourtv2:" + slug + ")\n\n")
 	b.WriteString("Address: " + sanitize.InlineText(addrStr) + "\n\n")
 
 	yStake := StakeOf(slug, id, sideYES, who)
@@ -473,7 +475,8 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	nConv := ConvictionOf(slug, id, sideNO, who)
 	b.WriteString("## Stake (live principal, always returns 1×)\n\n")
 	b.WriteString("- YES: " + strconv.FormatInt(yStake, 10) +
-		"   NO: " + strconv.FormatInt(nStake, 10) + " (CC base units)\n")
+		"   NO: " + strconv.FormatInt(nStake, 10) + " (" + qualifiedSymbol(c) +
+		" base units)\n")
 	b.WriteString("- conviction so far — YES: " + strconv.FormatInt(yConv, 10) +
 		"   NO: " + strconv.FormatInt(nConv, 10) + " (the reward weight)\n")
 
@@ -507,9 +510,10 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	bal := c.coin.BalanceOf(who)
 	locked := lockedOf(c, who)
 	voted := voteLockedOf(c, who)
-	b.WriteString("\n## Your CC in this court (all claims)\n\n")
+	b.WriteString("\n## This address's " + qualifiedSymbol(c) +
+		" in this court (all claims)\n\n")
 	b.WriteString("- held: " + strconv.FormatInt(bal, 10) +
-		" (CC base units) — every unit votes, committed or not\n")
+		" — every unit votes, committed or not\n")
 	b.WriteString("- committed as stake: " + strconv.FormatInt(locked, 10) + "\n")
 	b.WriteString("- committed by voting: " + strconv.FormatInt(voted, 10) +
 		" — until each question resolves\n")

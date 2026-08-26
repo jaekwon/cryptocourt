@@ -142,8 +142,31 @@ func TestRenderPositionsPage(cur realm, t *testing.T) {
 
 	// Bob's page: his NO stake and conviction show; staking-open hint.
 	out := Render("rp1/1/" + bob.String())
-	if !strings.Contains(out, "Your positions") || !strings.Contains(out, bob.String()) {
-		t.Fatal("the page must name the address")
+	if !strings.Contains(out, "# Positions on this claim") || !strings.Contains(out, bob.String()) {
+		t.Fatal("the page must name the address, and not address the reader as its owner")
+	}
+	if strings.Contains(out, "Your positions") {
+		t.Fatal("this route renders for ANY address; it must not call them the reader's")
+	}
+	// AND WHICH COURT. Everything below is denominated in that court's coin and
+	// gated by its rules, and the page named only the claim.
+	if !strings.Contains(out, "](/r/kourt/kourtv2:rp1)") {
+		t.Fatal("the positions page must name and link its court")
+	}
+	if !strings.Contains(out, qualifiedSymbol(mustCourt("rp1"))+" base units") {
+		t.Fatal("a stake figure must name the court's own coin, not a generic CC")
+	}
+	if !strings.Contains(out, "## This address's "+qualifiedSymbol(mustCourt("rp1"))+
+		" in this court") {
+		t.Fatal("the wallet heading must name the court's own coin too")
+	}
+	if strings.Contains(out, "Your CC") {
+		t.Fatal("the wallet heading must not be a generic CC addressed to the reader")
+	}
+	// The claim is a LINK, not just a name: this page is where a reader lands
+	// from a bare address and the claim is the thing they will want next.
+	if !strings.Contains(out, "](/r/kourt/kourtv2:rp1/1)") {
+		t.Fatal("the positions page must link the claim, not only name it")
 	}
 	if !strings.Contains(out, "NO: 300000000") {
 		t.Fatalf("bob's live NO stake must show:\n%s", out)

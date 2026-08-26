@@ -319,8 +319,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "7.4: the POSITIONS page renders redeem",
-  "find": "\tb.WriteString(\"Claim: \" + claimTitleFor(c, cs) + \"\\n\\n\")",
-  "replace": "\tb.WriteString(\"Claim: \" + claimTitleFor(c, cs) + \"\\n\\nredeem at par\\n\\n\")"
+  "find": "\tb.WriteString(\"Address: \" + sanitize.InlineText(addrStr) + \"\\n\\n\")",
+  "replace": "\tb.WriteString(\"Address: \" + sanitize.InlineText(addrStr) + \"\\n\\nredeem at par\\n\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -431,7 +431,7 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "positions: the wallet section is not rendered at all",
-  "find": "\tb.WriteString(\"\\n## Your CC in this court (all claims)\\n\\n\")\n",
+  "find": "\tb.WriteString(\"\\n## This address's \" + qualifiedSymbol(c) +\n\t\t\" in this court (all claims)\\n\\n\")\n",
   "replace": ""
  },
  {
@@ -452,8 +452,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "positions: the court-wide scope label is dropped",
-  "find": "\"\\n## Your CC in this court (all claims)\\n\\n\"",
-  "replace": "\"\\n## Your CC\\n\\n\""
+  "find": "\" in this court (all claims)\\n\\n\")",
+  "replace": "\"\\n\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -11151,5 +11151,40 @@
   "label": "v0.58 ux: the mod log stops saying where curation is",
   "find": "\tb.WriteString(\"Curation \u2014 which claims a moderator filed under which heading \u2014 is \" +\n\t\t\"not in this list. The tree it produced is on the [court page](/r/kourt/kourtv2:\" + sanitize.InlineText(slug) + \"); the acts themselves are in \" +\n\t\t\"the chain's event stream.\\n\\n\")",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ux: positions: the page calls a stranger's stake the reader's",
+  "find": "\tb.WriteString(\"# Positions on this claim\\n\\n\")",
+  "replace": "\tb.WriteString(\"# Your positions\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ux: positions: the court goes unnamed",
+  "find": "\") in [\" + courtNameFor(c) +\n\t\t\"](/r/kourt/kourtv2:\" + slug + \")\\n\\n\")",
+  "replace": "\")\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ux: positions: the claim is named but not linked",
+  "find": "\tb.WriteString(\"Claim: [\" + claimTitleFor(c, cs) + \"](/r/kourt/kourtv2:\" + slug +\n\t\t\"/\" + strconv.FormatUint(id, 10) + \") in [\" + courtNameFor(c) +",
+  "replace": "\tb.WriteString(\"Claim: \" + claimTitleFor(c, cs) + \" in [\" + courtNameFor(c) +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ux: positions: a stake figure reverts to a generic CC",
+  "find": "\"   NO: \" + strconv.FormatInt(nStake, 10) + \" (\" + qualifiedSymbol(c) +\n\t\t\" base units)\\n\")",
+  "replace": "\"   NO: \" + strconv.FormatInt(nStake, 10) + \" (CC base units)\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ux: positions: the wallet heading reverts to a generic CC",
+  "find": "\tb.WriteString(\"\\n## This address's \" + qualifiedSymbol(c) +\n\t\t\" in this court (all claims)\\n\\n\")",
+  "replace": "\tb.WriteString(\"\\n## Your CC in this court (all claims)\\n\\n\")"
  }
 ]

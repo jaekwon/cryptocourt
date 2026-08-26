@@ -234,3 +234,30 @@ which context the value lands in — and if the answer is "two at once", an
 escaper is the wrong tool. What made the domain safe in both was the character
 set its validator already enforced. The defence in depth that fits is
 **fail-closed**: re-ask the validator at render and emit nothing if it fails.
+
+## Run check-mutation-anchors immediately after any wording change
+
+A render edit silently orphans every corpus row anchored on the text it
+rewrote, and an orphaned row measures nothing while still being counted.
+
+The positions-page rewrite orphaned **three** rows. Two were found because they
+were about the lines being edited and were obvious to look for; the third —
+`7.4: the POSITIONS page renders redeem`, an invariant that the page never
+prints "redeem at par" — anchored on the `Claim:` line only incidentally, and
+surfaced two gates later.
+
+`scripts/probe.py` does not catch this. It pre-checks the anchors of the rows
+**you hand it**, so a clean probe run says nothing about the 1,500 rows you did
+not. The order that works:
+
+1. edit the source
+2. `python3 scripts/check-mutation-anchors.py` — **before** paying for a probe
+3. repoint whatever it names, keeping each row's intent
+4. probe your own new rows
+5. the twelve targets
+
+**Repoint, do not delete.** An orphaned row is a guard somebody wrote for a
+reason; the reason usually survives the rewording. Prefer re-anchoring onto a
+line the edit did not touch — the redeem row now hangs off `Address:` rather
+than `Claim:`, because the invariant is about the PAGE and not about any one
+line of it, and an anchor that says so is one the next rewrite will not break.
