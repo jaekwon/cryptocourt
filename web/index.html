@@ -4505,6 +4505,32 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   }
   const claims = {};
   parsed.forEach(cl=>{ claims[cl.id]={title:cl.title, statusText:cl.statusText}; });
+  /* THE SIDE IS NOT IN ClaimStatus, so the map asks for it. "settled" says a claim
+     reached its terminal state and not what it decided, and the map is the surface
+     a reader scans first — a settled-NO claim hovered identically to a settled-YES
+     one. The realm's PROVISIONAL line already writes sideName(); its SETTLED line
+     does not, so only that case needs asking.
+     Spliced into statusText rather than carried as a new field, because
+     phaseClass already reads a side out of that string: everything downstream —
+     the tooltip, the pill, the selection panel — inherits it with no further
+     plumbing. And the fetch is CONDITIONAL on the status not already naming a
+     side, so the day the realm names it this loop stops firing on its own instead
+     of becoming a second source of truth to keep in step. */
+  if(isLive()){
+    const noSide = parsed.filter(cl=>/settled/i.test(cl.statusText||"")
+                                   && !/\b(YES|NO)\b/.test(cl.statusText||""));
+    if(noSide.length){
+      const sq = gstr(slug);
+      await inChunks(noSide, 6, async cl=>{
+        const v = await one(`Verdict(${sq},${cl.id})`).catch(()=>null);
+        const c = claims[cl.id];
+        if(v==null || !c) return;                      // a court mid-crystallise answers nothing
+        const side = sideName(Number(v));
+        if(side==="—") return;                         // never write a dash where a side belongs
+        c.statusText = String(c.statusText).replace(/settled/i, m=>m+" "+side);
+      });
+    }
+  }
   // curation (sample or local) supplies folders+relations; ids the current
   // chain/dataset doesn't carry are held out, never drawn
   const validIds = new Set(parsed.map(cl=>cl.id));
