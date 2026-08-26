@@ -100,6 +100,14 @@ TARGETS = [
             # reason, or a second events filetest. Do not raise it to make room
             # without saying which.
             "z_events_filetest.gno": 60_000,
+            # THE SECOND EVENTS FILETEST, which is what the note above said to
+            # do rather than widen the ceiling. The site-domain verbs point every
+            # rendered page in the realm at an outside website and take the
+            # pointer away again; there is no court to log them against, so the
+            # event is the only record there can be. A court plus both verbs cost
+            # 42,853b measured — nearly all of it the court — so 50,000 leaves
+            # room for a third verb without hiding a court that doubled in price.
+            "z_sitedomain_filetest.gno": 50_000,
         },
     },
     {

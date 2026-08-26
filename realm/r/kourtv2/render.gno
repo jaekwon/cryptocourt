@@ -21,7 +21,11 @@ func Render(path string) string {
 	// An armed test clock fabricates every date below. Say so on EVERY page,
 	// first thing: an accessor nobody reads is not a disclosure, and gnoweb
 	// serves this output directly to readers who have no other signal.
-	return testClockBanner() + render(path)
+	// The overlay header sits beside the clock banner and for the same reason: a
+	// disclosure that appears on some pages and not others is one a reader cannot
+	// rely on. Empty when no domain is configured (sitelink.gno), so a realm with
+	// no website renders exactly as it always did.
+	return testClockBanner() + siteBanner(path) + render(path)
 }
 
 // testClockBanner is empty on any ordinary chain.

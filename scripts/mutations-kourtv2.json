@@ -10668,5 +10668,187 @@
   "label": "SetCreditRatesDefault: the realm-wide change emits",
   "find": "\t\t\"act\", \"set-rates-default:\"+creditRatesKey(r),\n",
   "replace": "\t\t\"act\", \"\",\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: SEAT: SetSiteDomain admits everyone EXCEPT the admin",
+  "find": "if cur.Previous().Address() != d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin sets the site domain\")",
+  "replace": "if cur.Previous().Address() == d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin sets the site domain\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: SEAT: ClearSiteDomain admits everyone EXCEPT the admin",
+  "find": "if cur.Previous().Address() != d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin clears the site domain\")",
+  "replace": "if cur.Previous().Address() == d.admin {\n\t\tpanic(\"kourtv2: only the global DAO admin clears the site domain\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: SetSiteDomain stores without validating",
+  "find": "\tmustSiteDomain(domain)\n\tsiteDomain = domain",
+  "replace": "\tsiteDomain = domain"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: ClearSiteDomain does not clear",
+  "find": "\tsiteDomain = \"\"\n\tchain.Emit",
+  "replace": "\tchain.Emit"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: length bound dropped",
+  "find": "if len(d) < 4 || len(d) > maxSiteDomainLen {",
+  "replace": "if false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: upper bound only",
+  "find": "len(d) < 4 || len(d) > maxSiteDomainLen",
+  "replace": "len(d) > maxSiteDomainLen"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: lower bound only",
+  "find": "len(d) < 4 || len(d) > maxSiteDomainLen",
+  "replace": "len(d) < 4"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: a hostname need not contain a dot",
+  "find": "if !strings.Contains(d, \".\") {",
+  "replace": "if false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: leading dot allowed",
+  "find": "if d[0] == '.' || d[0] == '-' ||",
+  "replace": "if d[0] == '-' ||"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: leading hyphen allowed",
+  "find": "d[0] == '.' || d[0] == '-' || d[len(d)-1]",
+  "replace": "d[0] == '.' || d[len(d)-1]"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: trailing dot allowed",
+  "find": "d[len(d)-1] == '.' || d[len(d)-1] == '-'",
+  "replace": "d[len(d)-1] == '-'"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: trailing hyphen allowed",
+  "find": "|| d[len(d)-1] == '-' {",
+  "replace": "{"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: charset dropped (a path becomes storable)",
+  "find": "\t\tok := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-'",
+  "replace": "\t\tok := true\n\t\t_ = c"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: uppercase allowed",
+  "find": "ok := (c >= 'a' && c <= 'z') ||",
+  "replace": "ok := (c >= 'A' && c <= 'z') ||"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: validator: empty label allowed",
+  "find": "if strings.Contains(d, \"..\") {",
+  "replace": "if false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: banner: not fail-closed on a bad stored value",
+  "find": "if siteDomain == \"\" || siteDomainFault(siteDomain) != \"\" {",
+  "replace": "if siteDomain == \"\" {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: banner: printed even with no domain configured",
+  "find": "if siteDomain == \"\" || siteDomainFault(siteDomain) != \"\" {",
+  "replace": "if siteDomainFault(siteDomain) != \"\" && false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: route: directory goes to a court",
+  "find": "\tif path == \"\" || parts[0] == \"\" {\n\t\treturn \"#/\"",
+  "replace": "\tif false {\n\t\treturn \"#/\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: route: a court goes to the directory",
+  "find": "\tif len(parts) == 1 {\n\t\treturn \"#/c/\" + parts[0]",
+  "replace": "\tif len(parts) == 1 {\n\t\treturn \"#/\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: route: /me goes to the court",
+  "find": "\tcase \"me\":\n\t\treturn \"#/me\"",
+  "replace": "\tcase \"me\":\n\t\treturn \"#/c/\" + parts[0]"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: route: /mod goes to the directory",
+  "find": "\tcase \"mod\":\n\t\treturn \"#/c/\" + parts[0]",
+  "replace": "\tcase \"mod\":\n\t\treturn \"#/\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: route: a non-numeric segment is treated as a claim",
+  "find": "\tif _, err := strconv.ParseUint(parts[1], 10, 64); err != nil {\n\t\treturn \"#/c/\" + parts[0]\n\t}\n",
+  "replace": "\tif _, err := strconv.ParseUint(parts[1], 10, 64); err != nil {\n\t\t_ = err\n\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: route: a claim goes to its court, losing the claim",
+  "find": "\treturn \"#/c/\" + parts[0] + \"/\" + parts[1]\n}",
+  "replace": "\treturn \"#/c/\" + parts[0]\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 site-domain: wiring: Render drops the header",
+  "find": "return testClockBanner() + siteBanner(path) + render(path)",
+  "replace": "return testClockBanner() + render(path)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: the set event names the wrong act",
+  "find": "\"act\", \"set-site-domain:\"+domain",
+  "replace": "\"act\", \"set-domain:\"+domain"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 site-domain: the clear event names the wrong act",
+  "find": "\"act\", \"clear-site-domain\"",
+  "replace": "\"act\", \"unset-site-domain\""
  }
 ]

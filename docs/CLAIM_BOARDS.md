@@ -1449,3 +1449,79 @@ because both sides are fractions of supply.
   bound that governs those rows is the anti-farm one above, which is exactly why
   it, and not A19, is what makes `V ≤ 0.10` rather than `≤ 0.20`.
 
+
+## 17. The site domain, and why it is the admin's alone
+
+gnoweb serves this realm's own `Render()` and always will. But most readers
+should be on the overlay, so every rendered page carries one line pointing at
+the same thing over there. `sitelink.gno` holds the value and builds the link.
+
+**One realm-wide value, set by the global DAO admin, and by nobody else.** Not
+the meta court, not a court's moderators, and there is no per-court override.
+This deliberately does *not* take the `ladder`/`creditRates` shape of "realm
+default, court may override": a court that could point its own pages at a domain
+of its choosing could route its readers anywhere while wearing the platform's
+name, and the meta court exists to review claims rather than to own the front
+door. All three refusals are held by test — a moderator, a stranger, and a
+global DAO member who is not the admin — against a control that proves the
+admin's own call lands.
+
+**The realm owns the path.** What is stored is a HOST, never a base URL.
+`sitePath` maps a gnoweb route onto the overlay's own routing, so the link on a
+claim page can only ever point at that same claim. Store a base URL instead and
+an admin could set `evil.example/#/c/other/1?` and every page in the realm would
+deep-link somewhere it does not say it goes. The admin chooses the house; the
+realm still writes the address on the envelope.
+
+Routes the overlay has no page for resolve to the nearest thing it does: a board
+or a single comment goes to its CLAIM, a moderation log to its COURT. That beats
+linking to a route that does not exist, and it stays right after the overlay
+learns to render comments.
+
+### 17.1 The escaper that was the wrong escaper
+
+The first version ran the domain through `sanitize.InlineText` at render "because
+a validator and an escaper failing together is how the interesting bugs happen".
+It was wrong, and the test that caught it was the one asserting a reader sees the
+domain: `InlineText` backslash-escapes `.` and `-`, so `kourt.xyz` became
+`kourt\.xyz` — correct as link *text*, and a broken *destination*.
+
+The lesson is not "don't defend in depth". It is that an escaper defends a
+CONTEXT, and this value goes into two at once. What makes it safe in both is the
+character set the validator already enforces: every byte it permits is inert as
+markdown link text and inert in a link destination. So the banner uses no escaper
+at all, and the defence in depth is **fail-closed** instead —
+`siteBanner` re-asks `siteDomainFault` and prints nothing if the stored value
+does not validate. A value that reaches the variable without passing the setter
+costs a missing header rather than a malformed page. That guard is white-box
+tested by assigning the variable directly, which is the only way it is reachable
+and the exact situation it exists for.
+
+### 17.2 A second events filetest, rather than a wider ceiling
+
+`z_events_filetest.gno` measured 58,874b against a 60,000b ceiling, and its note
+in `scripts/check-storage.py` said what the next act had to choose: a deliberate
+ceiling raise with a reason, or a second events filetest — "do not raise it to
+make room without saying which". This chose the second filetest.
+`z_sitedomain_filetest.gno` costs 42,853b against its own 50,000b ceiling, nearly
+all of it the court it has to start, and the older ceiling keeps meaning exactly
+what it said.
+
+Both events are held by mutation: renaming the act inside `chain.Emit` fails the
+filetest, and restoring it passes. An event nobody asserts is an audit trail
+nobody has checked exists — and these two are the only record there can be that
+a domain was ever set, since a realm-wide act has no court to log against.
+
+### 17.3 The seat mutant that never compiled
+
+The two seat guards were first mutated by replacing the condition with `false`,
+and the probe reported both CAUGHT. Both were INVALID: the mutant orphaned the
+`d := ensureGlobalDAO()` above it, and **gno reports "declared and not used" as a
+TEST error, not a build error** — so a harness keying on `0 build errors` reads
+an unbuildable mutant as a caught one. `check-mutant-collisions.py` flagged the
+same two rows from static analysis, which is what made it visible.
+
+Fixed in both places: the harness now treats `gnoTypeCheckError` as INVALID
+whatever gno files it under, and the corpus rows invert the comparison
+(`!=` → `==`, admitting everyone except the admin) so the mutant compiles and
+the guard is genuinely measured.
