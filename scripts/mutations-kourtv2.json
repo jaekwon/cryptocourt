@@ -10799,8 +10799,8 @@
   "pkg": "kourtv2",
   "file": "sitelink.gno",
   "label": "v0.58 site-domain: route: a court goes to the directory",
-  "find": "\tif len(parts) == 1 {\n\t\treturn \"#/c/\" + parts[0]",
-  "replace": "\tif len(parts) == 1 {\n\t\treturn \"#/\""
+  "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn \"#/\"\n\t\t}\n\t\treturn \"#/c/\" + parts[0]",
+  "replace": "\t\tif parts[0] == helpPath {\n\t\t\treturn \"#/\"\n\t\t}\n\t\treturn \"#/\""
  },
  {
   "pkg": "kourtv2",
@@ -10850,5 +10850,96 @@
   "label": "v0.58 site-domain: the clear event names the wrong act",
   "find": "\"act\", \"clear-site-domain\"",
   "replace": "\"act\", \"unset-site-domain\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: help route not carved (a court can shadow it)",
+  "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn renderHelp()\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: help carve swallows every court",
+  "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn renderHelp()\n\t\t}\n\t\treturn renderCourt(parts[0])",
+  "replace": "\t\tif parts[0] != helpPath {\n\t\t\treturn renderHelp()\n\t\t}\n\t\treturn renderCourt(parts[0])"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: the front page stops linking to help",
+  "find": "\tb.WriteString(helpLink + \"\\n\\n\")\n\tafterHeader := b.Len()",
+  "replace": "\tafterHeader := b.Len()"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: the court page stops linking to help",
+  "find": "\tb.WriteString(helpLink + \"\\n\\n\")\n}",
+  "replace": "}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 help: the board stops linking to help",
+  "find": "\"/me) \u00b7 \" +\n\t\thelpLink + \"\\n\\n\")",
+  "replace": "\"/me)\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: the coin block moves back above the claims",
+  "find": "\twriteCourtCoin(&b, c)\n\tb.WriteString(\"[Moderation log]",
+  "replace": "\tb.WriteString(\"[Moderation log]"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: an empty court loses its coin",
+  "find": "\t\tb.WriteString(\"_No claims yet._\\n\\n\")\n\t\t// Still shown",
+  "replace": "\t\tb.WriteString(\"_No claims yet._\\n\\n\")\n\t\treturn b.String()\n\t\t// Still shown"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: the price gloss goes",
+  "find": "\" ugnot per coin \u2014 buying burns the GNOT, there is no sell side, \" +\n\t\t\"and the price only rises\\n\"",
+  "replace": "\" ugnot per coin\\n\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 help: the reservoir gloss goes",
+  "find": "\" waiting to be earned \u00b7 \"",
+  "replace": "\" \u00b7 \""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help drops the 1x guarantee",
+  "find": "b.WriteString(\"## You cannot lose your stake\\n\\n\")",
+  "replace": "b.WriteString(\"## Stakes\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help drops the comments section",
+  "find": "b.WriteString(\"## Comments are where the argument is\\n\\n\")",
+  "replace": "b.WriteString(\"## Notes\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help drops the entry pass",
+  "find": "you can buy a one-off entry pass by burning a ",
+  "replace": "you can buy a ticket by burning a "
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "v0.58 help: the overlay link sends help to a court that cannot exist",
+  "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn \"#/\"\n\t\t}\n",
+  "replace": ""
  }
 ]

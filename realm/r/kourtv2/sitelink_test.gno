@@ -157,6 +157,9 @@ func TestTheHeaderRoutesEachPageToItsCounterpart(cur realm, t *testing.T) {
 		{"sl3/" + sid + "/board/1", "https://kourt.xyz/#/c/sl3/" + sid},
 		{"sl3/me", "https://kourt.xyz/#/me"},
 		{"sl3/mod", "https://kourt.xyz/#/c/sl3"},
+		// The help page is the realm's own and the overlay has no route for it,
+		// so it goes to the directory rather than to a court that cannot exist.
+		{helpPath, "https://kourt.xyz/#/"},
 		// A malformed claim id is not a claim, so it routes to the court rather
 		// than fabricating a claim link.
 		{"sl3/notanumber", "https://kourt.xyz/#/c/sl3"},

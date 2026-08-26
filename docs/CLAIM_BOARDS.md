@@ -1525,3 +1525,48 @@ Fixed in both places: the harness now treats `gnoTypeCheckError` as INVALID
 whatever gno files it under, and the corpus rows invert the comparison
 (`!=` → `==`, admitting everyone except the admin) so the mutant compiles and
 the guard is genuinely measured.
+
+## 18. The page that explains the thing
+
+Read the front page as a stranger: a one-line lede — "Stake on claims of fact.
+Your principal always returns 1×" — and then a list of court names and coin
+symbols. Nothing on any rendered page said what a court is, what a claim is,
+what staking does, or why the strangest and most important property here is
+true. All of it lived in `docs/` or in the overlay, neither of which a gnoweb
+reader can reach. A realm whose explanation is off-chain is a realm you have to
+be told about before you can use it.
+
+`help.gno` renders it at `/r/kourt/kourtv2:how-it-works`, linked from the
+directory, every court page, and every comment board.
+
+**The 1× guarantee goes first**, because it is the load-bearing surprise. Every
+reader arrives with a model built from prediction markets, where the losing side
+funds the winning one. Leave that model in place and nothing below reads
+correctly — "stake NO" sounds like a bet they can lose.
+
+**The route cannot collide with a court, structurally.** A slug is 1..11
+characters and `how-it-works` is 12, so the two sets are disjoint by
+construction. No entry in `reservedSlugs` has to be maintained, and no court
+registered earlier can shadow it. `reservedSlugs` is for symbols that could
+impersonate an asset in a wallet; a path that is simply too long to be a slug
+needs nothing there. The test asserts `len(helpPath) > maxSlugLen` rather than
+assuming it, because that inequality is what the carve rests on.
+
+### 18.1 The court page led with its plumbing
+
+Four lines of coin accounting — coin, price, supply/emitted, reservoir/senior
+queue owed — sat between the reader and the only thing on the page they came
+for. Read cold, `supply: 5108592379 · emitted: 0` is not an introduction to a
+court; it is the accounting of one, which is what you want *after* deciding to
+care.
+
+The claims now come first and the accounting follows them, with every house term
+glossed in the same sentence it is printed in: `reward reservoir: 0 waiting to be
+earned · 0 already owed to earlier earners`. A number whose name you do not know
+is worse than no number — it reads as something you are failing to understand
+rather than something nobody told you.
+
+Nothing was dropped in the move, and a test asserts each figure is still on the
+page, because a reordering that quietly becomes a deletion is the easy mistake
+here. An empty court still shows its coin: somebody deciding whether to be early
+is exactly who wants the price.

@@ -151,6 +151,12 @@ func sitePath(path string) string {
 		return "#/"
 	}
 	if len(parts) == 1 {
+		// The help page is the realm's own; the overlay has no route for it and
+		// linking to "#/c/how-it-works" would send a reader to a court that
+		// cannot exist. The directory is the nearest true thing.
+		if parts[0] == helpPath {
+			return "#/"
+		}
 		return "#/c/" + parts[0]
 	}
 	switch parts[1] {

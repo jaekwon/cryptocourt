@@ -74,6 +74,13 @@ func render(path string) string {
 	// found"; it is a different line that says so.
 	parts := strings.SplitN(path, "/", 4)
 	if len(parts) == 1 {
+		// The help page, carved before the court arm. It cannot shadow a court:
+		// a slug is at most 11 characters and this path is 12, so the two sets
+		// are disjoint by construction rather than by a reserved word somebody
+		// has to remember to keep reserved (help.gno).
+		if parts[0] == helpPath {
+			return renderHelp()
+		}
 		return renderCourt(parts[0])
 	}
 	// The moderation log is a named sub-route, so it must be carved out BEFORE
@@ -122,6 +129,12 @@ func render(path string) string {
 func renderDirectory() string {
 	b := strings.Builder{}
 	b.WriteString("# " + platformName + "\n\nStake on claims of fact. Your principal always returns 1×.\n\n")
+	// THE WAY IN, on the page every stranger lands on first. Read cold, the
+	// lede above is two pieces of vocabulary ("stake", "principal returns 1×")
+	// and then a list of court names — nothing that says what any of it is. The
+	// explanation existed only in docs/ and in the overlay, neither of which a
+	// gnoweb reader can reach from here.
+	b.WriteString(helpLink + "\n\n")
 	afterHeader := b.Len()
 	writeTier(&b, "Featured", tierFeatured)
 	// The listed tier ranks by cumulative GNOT burned into each court — the one
@@ -200,15 +213,19 @@ func renderCourt(slug string) string {
 	if d := courtDescFor(c); d != "" {
 		b.WriteString(d + "\n\n")
 	}
-	b.WriteString("- coin: " + qualifiedSymbol(c) + " — this court's own coin, not interchangeable with any other court's\n")
-	b.WriteString("- coin price: " + strconv.FormatInt(c.crv.Price(c.minted), 10) + " ugnot per CC unit (one-way; the GNOT is burned)\n")
-	b.WriteString("- supply: " + strconv.FormatInt(c.coin.TotalSupply(), 10) +
-		" · emitted: " + strconv.FormatInt(c.emittedTotal, 10) + "\n")
-	b.WriteString("- reward reservoir: " + strconv.FormatInt(c.reservoirR(), 10) +
-		" · senior queue owed: " + strconv.FormatInt(c.seniorOwed, 10) + "\n\n")
+	// THE CLAIMS FIRST. Four lines of coin plumbing used to sit here, between a
+	// reader and the only thing on this page they arrived for. Read cold,
+	// "supply: 5108592379 · emitted: 0" and "reward reservoir: 0 · senior queue
+	// owed: 0" are not an introduction to a court — they are the accounting of
+	// one, which is a thing you want AFTER you have decided to care. It is all
+	// still here, below the claims, where writeCourtCoin puts it.
 	b.WriteString("## Claims\n\n")
 	if c.nextID == 0 {
-		b.WriteString("_No claims yet._\n")
+		b.WriteString("_No claims yet._\n\n")
+		// Still shown on an empty court: the coin exists from the moment the
+		// court does, and its price is exactly what somebody deciding whether
+		// to be early wants to see.
+		writeCourtCoin(&b, c)
 		return b.String()
 	}
 	// Newest first, bounded to one page (audit N3): a court with thousands of
@@ -236,8 +253,33 @@ func renderCourt(slug string) string {
 	b.WriteString("\n")
 	writeStrip(&b, slug)
 	writePending(&b, slug)
+	writeCourtCoin(&b, c)
 	b.WriteString("[Moderation log](/r/kourt/kourtv2:" + slug + "/mod)\n")
 	return b.String()
+}
+
+// writeCourtCoin is the court's accounting, below the claims rather than above
+// them.
+//
+// EVERY LINE CARRIES ITS OWN GLOSS. These are the realm's four house terms —
+// supply, emitted, reservoir, senior queue — and each was printed as a bare
+// label beside a ten-digit number. A number whose name you do not know is worse
+// than no number: it reads as something you are failing to understand rather
+// than something nobody told you. The gloss is short and in the same sentence,
+// because a legend somewhere else is a legend nobody reads.
+func writeCourtCoin(b *strings.Builder, c *Court) {
+	b.WriteString("## This court's coin\n\n")
+	b.WriteString("- " + qualifiedSymbol(c) +
+		" — this court's own coin, not interchangeable with any other court's\n")
+	b.WriteString("- price: " + strconv.FormatInt(c.crv.Price(c.minted), 10) +
+		" ugnot per coin — buying burns the GNOT, there is no sell side, " +
+		"and the price only rises\n")
+	b.WriteString("- in circulation: " + strconv.FormatInt(c.coin.TotalSupply(), 10) +
+		" · paid out as rewards so far: " + strconv.FormatInt(c.emittedTotal, 10) + "\n")
+	b.WriteString("- reward reservoir: " + strconv.FormatInt(c.reservoirR(), 10) +
+		" waiting to be earned · " + strconv.FormatInt(c.seniorOwed, 10) +
+		" already owed to earlier earners\n\n")
+	b.WriteString(helpLink + "\n\n")
 }
 
 func renderClaim(slug string, id uint64) string {

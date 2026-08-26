@@ -556,7 +556,8 @@ func renderStanding(slug, addrArg string) string {
 		// below. It used to abort here with a grc20votes-internal message.
 		b.WriteString("This court is too new to have a board. Its thresholds are quoted\n" +
 			"against a sealed epoch and it has not completed one yet; comments open\n" +
-			"as soon as it has.\n")
+			"as soon as it has.\n\n")
+		b.WriteString(helpLink + "\n")
 		return b.String()
 	}
 

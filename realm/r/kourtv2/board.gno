@@ -533,9 +533,14 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 
 	// WHO MAY WRITE HERE, first, because it is what a reader wants to know and
 	// nothing on any surface said it. Then the reasons they might not be able to.
+	// A COMMENT IS A DEEP LINK, so this page is a first page as often as it is
+	// a second one: somebody arrives at an argument without having seen the
+	// front page, the court, or the claim. "Standing" and "entry pass" are this
+	// realm's words, and the sentence explaining who may write here uses both.
 	b.WriteString("Anyone with standing in this court — or a one-off entry pass — " +
 		"may comment. Replies go one level deep. " +
-		"[Where you stand](" + "/r/kourt/kourtv2:" + slug + "/me)\n\n")
+		"[Where you stand](" + "/r/kourt/kourtv2:" + slug + "/me) · " +
+		helpLink + "\n\n")
 	if !boardOpen(cs) {
 		b.WriteString("> This claim is settled. Its board is closed to new comments;\n" +
 			"> what is here stays.\n\n")
