@@ -105,7 +105,11 @@ global.isLive = ()=> false;
 global.esc = s => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
   .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 global.safeInline = s => global.esc(s);
-global.phaseClass = t => ({short: /settled/.test(t)?"settled":"open", cls:"void"});
+// THE REAL phaseClass AND statusPill, not a stub. mapSelCard renders the shared
+// pill now, and a stub here would let the card and the pill drift with no harness
+// noticing — which is how the card came to drop the verdict side in the first place.
+eval(slice('function phaseClass(', 'function statusPill('));
+eval(slice('function statusPill(', 'function docketRow('));
 global.fmtN = n => String(n);
 
 eval(slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK'));

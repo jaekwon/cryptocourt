@@ -1398,7 +1398,33 @@ async function listClaims(slug){
       out.pending.push({id, title:unesc(m[1]), seeded:/seeded by a moderator/.test(m[3]||"")});
     }
   }
+  await nameTheSide(slug, out);
   return out;
+}
+/* THE VERDICT SIDE IS NOT IN ClaimStatus, so it is asked for once, here, where
+   every surface's claim data is born. "settled" says a claim reached its terminal
+   state and not what it decided, so a settled-NO row and a settled-YES row read
+   identically — in the docket pill, in the map's node tooltip, in the selection
+   panel, everywhere.
+   Spliced into statusText rather than carried as a field because phaseClass reads
+   the side back out of that string, so nothing downstream needs to know. And the
+   ask is CONDITIONAL on the status not already naming a side: the realm's
+   PROVISIONAL line writes sideName() and its SETTLED line does not, so the day
+   that is fixed this goes quiet by itself instead of becoming a second source of
+   truth. */
+async function nameTheSide(slug, rows){
+  if(!isLive() || !rows || !rows.length) return;
+  const need = rows.filter(r=>/settled/i.test(r.statusText||"")
+                            && !/\b(YES|NO)\b/.test(r.statusText||""));
+  if(!need.length) return;
+  const sq = gstr(slug);
+  await inChunks(need, 6, async r=>{
+    const v = await one(`Verdict(${sq},${r.id})`).catch(()=>null);
+    if(v==null) return;                    // mid-crystallise, or closed without a decision
+    const side = sideName(Number(v));
+    if(side==="—") return;                 // never print a dash where a side belongs
+    r.statusText = String(r.statusText).replace(/settled/i, m=>m+" "+side);
+  });
 }
 /* A deeper docket window (live only). Page 1 is the chain's own newest-50
    render, free; deeper pages materialize ids by real reads — and each id is
@@ -1423,6 +1449,7 @@ async function listClaimsPage(slug, page, total, parsed){
     });
     out.push(...fetched.filter(Boolean));
   }
+  await nameTheSide(slug, out);   // deep pages read ClaimStatus directly, so they need it too
   return out.sort((a,b)=>b.id-a.id);
 }
 async function claimDetail(slug,id){
@@ -4028,7 +4055,6 @@ function mapLayout(data, mode){
 function mapSelCard(id, data, slug, L){
   const c = data.claims[id];
   if(!c) return "";
-  const pc = phaseClass(c.statusText);
   /* THE CHORDS THE MAP ACTUALLY DREW, and this counted every relation in the
      data. mapLayout drops a chord whose other end is not on the map — a claim
      that was purged, or redacted, or simply past the docket window a live court
@@ -4075,7 +4101,9 @@ function mapSelCard(id, data, slug, L){
          ? `<p class="small muted">…and ${near.length-showRel.length} more</p>` : "")
     : "";
   return `<div class="mapsel-h"><span class="mono">#${id}</span>`
-    + `<span class="pill ${esc(pc.cls||"")}">${esc(pc.short)}</span>`
+    + statusPill(c.statusText)   /* ONE pill builder: this card hand-rolled its own and
+                                    so silently dropped the verdict side the day the
+                                    shared one started printing it */
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
     + `<p class="mapsel-t">${safeInline(c.title)}</p>`
     + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
@@ -4525,32 +4553,6 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   }
   const claims = {};
   parsed.forEach(cl=>{ claims[cl.id]={title:cl.title, statusText:cl.statusText}; });
-  /* THE SIDE IS NOT IN ClaimStatus, so the map asks for it. "settled" says a claim
-     reached its terminal state and not what it decided, and the map is the surface
-     a reader scans first — a settled-NO claim hovered identically to a settled-YES
-     one. The realm's PROVISIONAL line already writes sideName(); its SETTLED line
-     does not, so only that case needs asking.
-     Spliced into statusText rather than carried as a new field, because
-     phaseClass already reads a side out of that string: everything downstream —
-     the tooltip, the pill, the selection panel — inherits it with no further
-     plumbing. And the fetch is CONDITIONAL on the status not already naming a
-     side, so the day the realm names it this loop stops firing on its own instead
-     of becoming a second source of truth to keep in step. */
-  if(isLive()){
-    const noSide = parsed.filter(cl=>/settled/i.test(cl.statusText||"")
-                                   && !/\b(YES|NO)\b/.test(cl.statusText||""));
-    if(noSide.length){
-      const sq = gstr(slug);
-      await inChunks(noSide, 6, async cl=>{
-        const v = await one(`Verdict(${sq},${cl.id})`).catch(()=>null);
-        const c = claims[cl.id];
-        if(v==null || !c) return;                      // a court mid-crystallise answers nothing
-        const side = sideName(Number(v));
-        if(side==="—") return;                         // never write a dash where a side belongs
-        c.statusText = String(c.statusText).replace(/settled/i, m=>m+" "+side);
-      });
-    }
-  }
   // curation (sample or local) supplies folders+relations; ids the current
   // chain/dataset doesn't carry are held out, never drawn
   const validIds = new Set(parsed.map(cl=>cl.id));
@@ -5030,7 +5032,7 @@ function phaseClass(statusText){
 }
 function statusPill(statusText){
   const p = phaseClass(statusText);
-  return `<span class="pill ${p.cls}">${esc(p.short)}</span>`;
+  return `<span class="pill ${p.cls}">${esc(p.short)}${p.side? " "+esc(p.side):""}</span>`;
 }
 function docketRow(slug,c,meta){
   // A claim with no series is not always a claim awaiting a live fill: in demo
