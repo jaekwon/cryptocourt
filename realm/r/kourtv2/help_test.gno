@@ -235,3 +235,54 @@ func TestASlashedUserIsQuotedTheUnitToo(cur realm, t *testing.T) {
 		t.Fatal("a slashed user must not read as somebody who never had standing")
 	}
 }
+
+// The help page names the RIGHT currency, and does not repeat the log's
+// false universal.
+//
+// An earlier draft said "Stake GNOT on YES or NO". Staking is in the court's own
+// coin — stake.gno: "Stake backs one side of a claim with CC" — and this is the
+// worst sentence on the surface to get wrong: a reader who believes they are
+// staking GNOT has the model upside down before paragraph two, and every later
+// sentence about 1× and about earning reads against the wrong asset.
+func TestTheHelpPageNamesTheRightCurrency(cur realm, t *testing.T) {
+	page := Render(helpPath)
+
+	// GNOT APPEARS EXACTLY WHERE IT BELONGS — buying the coin — and nowhere near
+	// staking.
+	if strings.Contains(page, "Stake GNOT") {
+		t.Fatal("staking is in the court's coin, not GNOT")
+	}
+	if !strings.Contains(page, "GNOT buys a court's coin") {
+		t.Fatal("the page must say what GNOT is actually for")
+	}
+	if !strings.Contains(page, "that coin is what you stake") {
+		t.Fatal("the page must say what is staked, before it says what staking does")
+	}
+	if !strings.Contains(page, "Stake the court's coin on YES or NO") {
+		t.Fatal("the staking sentence must name the court's coin")
+	}
+	if !strings.Contains(page, "burns GNOT one way") {
+		t.Fatal("the page must still say the purchase is one-way")
+	}
+
+	// COIN AND STANDING ARE DIFFERENT THINGS. The page ran them together as "the
+	// court's coin … is what gives you a voice", which is the one claim the
+	// design exists to falsify: a balance buys nothing but a single pass.
+	if !strings.Contains(page, "separate thing") || !strings.Contains(page, "cannot buy") {
+		t.Fatal("the page must distinguish standing from a coin balance")
+	}
+	if !strings.Contains(page, "not the coin you hold") {
+		t.Fatal("the comments section must say standing is not a balance")
+	}
+
+	// AND IT MUST NOT REPEAT THE LOG'S FALSE UNIVERSAL (§19). Curation emits an
+	// event and writes no row, so "every act is written to the log" is wrong
+	// here too — and worse here, because this is the page read first, where no
+	// empty list contradicts it.
+	if strings.Contains(page, "Every act is written") {
+		t.Fatal("the help page must not promise a log that holds every act")
+	}
+	if !strings.Contains(page, "What they do to a claim or a comment is written") {
+		t.Fatal("the help page must scope the log the way the log itself does")
+	}
+}

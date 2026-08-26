@@ -43,19 +43,37 @@ func renderHelp() string {
 	b.WriteString("# How Kourt works\n\n")
 	b.WriteString("Kourt is a place to put money behind whether a factual claim is " +
 		"true — without being able to lose the money.\n\n")
+	// THE ORDER OF OPERATIONS, before anything else, because every sentence
+	// below depends on knowing which of the two currencies is in play. An
+	// earlier draft of this page said "stake GNOT", which is wrong —
+	// stake.gno's Stake, "Stake backs one side of a claim with CC" — and it is the
+	// worst possible sentence to get wrong, since a reader who believes they are
+	// staking GNOT has the whole model upside down before they reach paragraph
+	// two.
+	b.WriteString("It works in two steps. **GNOT buys a court's coin**, one way; " +
+		"**that coin is what you stake** on the court's claims.\n\n")
 
 	// THE 1× GUARANTEE FIRST, because it is the load-bearing surprise. Every
 	// reader arrives with a mental model built from prediction markets, where
 	// the losing side funds the winning one. Leave that model in place and
 	// nothing below reads correctly: "stake NO" sounds like a bet they can lose.
 	b.WriteString("## You cannot lose your stake\n\n")
-	b.WriteString("Stake GNOT on YES or NO and the stake stays yours. When the claim " +
-		"is answered you withdraw exactly what you put in: 1×, always — whichever " +
-		"side you took, and whichever side turned out to be right. No one's stake " +
+	b.WriteString("Stake the court's coin on YES or NO and the stake stays yours. " +
+		"It is locked where it is, not handed to anybody: when the claim is " +
+		"answered you withdraw exactly what you put in — 1×, always, whichever " +
+		"side you took and whichever side turned out to be right. No one's stake " +
 		"pays anyone else's winnings.\n\n")
-	b.WriteString("Then what is at stake? Being right earns you the court's coin, and " +
-		"being wrong earns you none. That coin is not a payout. It is the record of " +
-		"your judgement on this subject, and it is what gives you a voice here.\n\n")
+	// TWO DIFFERENT THINGS BEING RIGHT EARNS, and the page used to run them
+	// together as "the court's coin … is what gives you a voice". Coin is a
+	// balance and standing is a score; the pass is the only place they touch,
+	// and a reader who thinks a big balance buys a voice has been told the one
+	// thing the design is built to prevent.
+	b.WriteString("Then what is at stake? Being right pays you more of the court's " +
+		"coin, out of the reserve it set aside for exactly that — and being wrong " +
+		"pays you none. Nothing of yours is taken either way.\n\n")
+	b.WriteString("Being right also earns **standing**, which is a separate thing " +
+		"from a balance: a score you cannot buy, and what actually gives you a " +
+		"voice here.\n\n")
 
 	b.WriteString("## A court is a subject\n\n")
 	b.WriteString("A court covers one subject — an epidemic, an election, a company. " +
@@ -79,11 +97,12 @@ func renderHelp() string {
 	b.WriteString("## Comments are where the argument is\n\n")
 	b.WriteString("Every claim has a comment board. A YES/NO number cannot carry a " +
 		"reason, a source, or an objection; the board is where those go.\n\n")
-	b.WriteString("Writing takes standing — the coin you earned by being right in this " +
-		"court. If you have none yet, you can buy a one-off entry pass by burning a " +
-		"little of the court's coin. Standing sets how many comments a day you get, " +
-		"not how loudly they land: nothing is hidden for being new, and nothing is " +
-		"ranked by wealth.\n\n")
+	b.WriteString("Writing takes standing — the score you earned by being right in " +
+		"this court, not the coin you hold. If you have none yet, you can buy a " +
+		"one-off entry pass by burning a little of the court's coin, which is the " +
+		"single place money substitutes for it. Standing sets how many comments a " +
+		"day you get, not how loudly they land: nothing is hidden for being new, " +
+		"and nothing is ranked by wealth.\n\n")
 	// THE BADGE, EXPLAINED WHERE IT IS NOT SHOWN. It appears on the board with
 	// no gloss, and "YES 12000000" beside a stranger's name is either a
 	// disclosure or a scoreboard depending on what the reader assumes it is.
@@ -100,10 +119,10 @@ func renderHelp() string {
 
 	b.WriteString("## Who is in charge\n\n")
 	b.WriteString("Each court elects its own moderators. They answer claims, organise " +
-		"them into folders, and can hide comments. Every act is written to that " +
-		"court's moderation log, which anyone can read without asking. The serious " +
-		"powers need several moderators to agree — one moderator acting alone cannot " +
-		"use them.\n\n")
+		"them into folders, and can hide comments. What they do to a claim or a " +
+		"comment is written to that court's moderation log, which anyone can read " +
+		"without asking. The serious powers need several moderators to agree — one " +
+		"moderator acting alone cannot use them.\n\n")
 
 	b.WriteString("[← all courts](/r/kourt/kourtv2:)\n")
 	return b.String()

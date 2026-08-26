@@ -10932,8 +10932,8 @@
   "pkg": "kourtv2",
   "file": "help.gno",
   "label": "v0.58 help: help drops the entry pass",
-  "find": "you can buy a one-off entry pass by burning a ",
-  "replace": "you can buy a ticket by burning a "
+  "find": "\"one-off entry pass by burning a little of the court's coin, which is the \"",
+  "replace": "\"ticket by burning a little of the court's coin, which is the \""
  },
  {
   "pkg": "kourtv2",
@@ -11186,5 +11186,47 @@
   "label": "v0.58 ux: positions: the wallet heading reverts to a generic CC",
   "find": "\tb.WriteString(\"\\n## This address's \" + qualifiedSymbol(c) +\n\t\t\" in this court (all claims)\\n\\n\")",
   "replace": "\tb.WriteString(\"\\n## Your CC in this court (all claims)\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help says GNOT is staked",
+  "find": "\tb.WriteString(\"Stake the court's coin on YES or NO and the stake stays yours. \" +",
+  "replace": "\tb.WriteString(\"Stake GNOT on YES or NO and the stake stays yours. \" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help drops the two-step order of operations",
+  "find": "\tb.WriteString(\"It works in two steps. **GNOT buys a court's coin**, one way; \" +\n\t\t\"**that coin is what you stake** on the court's claims.\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help merges standing back into the coin balance",
+  "find": "\tb.WriteString(\"Being right also earns **standing**, which is a separate thing \" +\n\t\t\"from a balance: a score you cannot buy, and what actually gives you a \" +\n\t\t\"voice here.\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help says a coin balance is what buys a voice",
+  "find": "\"this court, not the coin you hold. If you have none yet, you can buy a \"",
+  "replace": "\"this court. If you have none yet, you can buy a \""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help repeats the log's false universal",
+  "find": "\"them into folders, and can hide comments. What they do to a claim or a \" +\n\t\t\"comment is written to that court's moderation log, which anyone can read \"",
+  "replace": "\"them into folders, and can hide comments. Every act is written to that \" +\n\t\t\"court's moderation log, which anyone can read \""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: help drops the one-way purchase",
+  "find": "\tb.WriteString(\"- **Buying a court's coin** burns GNOT one way. There is no sell \" +\n\t\t\"side and no redemption; the price only rises as more is bought.\\n\\n\")",
+  "replace": ""
  }
 ]

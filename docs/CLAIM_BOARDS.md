@@ -1733,3 +1733,42 @@ then repoint the 16 corpus rows and rewrite the 18 assertions — and note that
 some second-person text is CORRECT and must stay, because it addresses the
 reader rather than the subject: "put your address on the end of this page's
 path" is an instruction to whoever is reading, and true for all of them.
+
+### 20.1 The help page taught the wrong currency
+
+The page I wrote to explain the system opened its load-bearing section with:
+
+> Stake GNOT on YES or NO and the stake stays yours.
+
+**You stake the court's coin, not GNOT.** `stake.gno`'s `Stake` says so in its
+own first line — "Stake backs one side of a claim with CC" — and GNOT only ever
+buys that coin, one way, through the curve. This is the worst sentence on that
+surface to get wrong: a reader who believes they are staking GNOT has the model
+inverted before paragraph two, and every later sentence about 1× and about
+earning reads against the wrong asset.
+
+Two more errors sat in the same paragraph:
+
+- It said the coin **"is what gives you a voice here."** It is not. **Standing**
+  is, and standing is a score that cannot be bought. Coin and standing touch at
+  exactly one point — the entry pass — and telling a reader a balance buys a
+  voice is the single claim this design exists to falsify.
+- It repeated the moderation log's false universal ("every act is written to
+  that court's moderation log"), which §19 had just corrected on the log itself.
+  Worse here: on the log an empty list contradicts the promise, and on the help
+  page nothing does.
+
+The page now states the order of operations before anything else — GNOT buys a
+court's coin, one way; that coin is what you stake — and separates the two
+things being right earns: more coin out of the reserve, and standing.
+
+**How it happened, because the mechanism matters more than the instance.** The
+page was written from a mental model assembled by reading *render* code, and the
+staking entrypoint was never opened. Render surfaces describe state; they do not
+define it, and a explanation built only from them inherits every ambiguity in
+the descriptions. It surfaced by reading a rendered claim page as a stranger and
+asking what `staked now: 84000000` was denominated in — a question the page
+still does not answer, which is the next thing to fix.
+
+**The rule this earns:** a page that makes a factual claim about what the realm
+does is checked against the entrypoint that does it, not against another page.
