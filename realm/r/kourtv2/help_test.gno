@@ -123,3 +123,35 @@ func TestAnEmptyCourtStillShowsItsCoin(cur realm, t *testing.T) {
 		t.Fatal("an empty court must still show its coin and price")
 	}
 }
+
+// The two "put your address on the end of the path" hints give the WHOLE path.
+//
+// Both elided the court slug — "…/9/<your-address>" and "covid/me/<address>" —
+// which is precisely the half a reader cannot supply from the page they are on.
+// A hint that assumes the convention it is explaining is not a hint.
+func TestThePathHintsAreCompleteEnoughToFollow(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("hp5-mod")
+	poster := testutils.TestAddress("hp5-poster")
+	modFixture(cur, "hp5", mod, poster)
+	testing.SetRealm(testing.NewUserRealm(poster))
+	cid := OpenClaim(cross(cur), "hp5", "A claim to have a position on.")
+
+	claim := Render("hp5/" + strconv.FormatUint(cid, 10))
+	want := "/r/kourt/kourtv2:hp5/" + strconv.FormatUint(cid, 10) + "/<your address>"
+	if !strings.Contains(claim, want) {
+		t.Fatal("the claim page must give the positions path in full")
+	}
+	if strings.Contains(claim, "…/") {
+		t.Fatal("a path hint must not elide the part a reader cannot supply")
+	}
+
+	me := Render("hp5/me")
+	if !strings.Contains(me, "/r/kourt/kourtv2:hp5/me/<address>") {
+		t.Fatal("the standing index must give its path in full")
+	}
+	// AND IT DEFINES ITS OWN JARGON. The three thresholds below it are quoted in
+	// bps and are meaningless without it.
+	if !strings.Contains(me, "hundredth of a percent") {
+		t.Fatal("a page that quotes bps must say what a bp is")
+	}
+}

@@ -180,8 +180,8 @@ func TestRenderPositionsPage(cur realm, t *testing.T) {
 		t.Fatal("the wallet section must say it is court-wide, not claim-scoped")
 	}
 	// The claim page links to the positions route.
-	if !strings.Contains(Render("rp1/1"), "append your address") {
-		t.Fatal("the claim page must hint the positions route")
+	if !strings.Contains(Render("rp1/1"), "/r/kourt/kourtv2:rp1/1/<your address>") {
+		t.Fatal("the claim page must give the positions path in full, not elided")
 	}
 
 	// After answer + settle, the hint flips to withdraw.

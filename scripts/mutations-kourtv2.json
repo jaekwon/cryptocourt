@@ -11039,5 +11039,26 @@
   "label": "v0.58 folders render: the never-buries promise goes unsaid",
   "find": "\tb.WriteString(\"\\n_A folder curates and can never bury: every claim above is \" +\n\t\t\"also on the court's own newest-first list, and nothing is reachable only \" +\n\t\t\"from here._\\n\\n\")",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 path hints: the claim page elides the positions path again",
+  "find": "\"the end of this page's path:_ `/r/kourt/kourtv2:\" + sanitize.InlineText(slug) +\n\t\t\"/\" + strconv.FormatUint(id, 10) + \"/<your address>`\\n\"",
+  "replace": "\"the end of this page's path:_ `\u2026/\" + strconv.FormatUint(id, 10) + \"/<your address>`\\n\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 path hints: the standing index elides its path again",
+  "find": "\"page's path: `/r/kourt/kourtv2:\" + sanitize.InlineText(slug) +\n\t\t\"/me/<address>`\\n\\n\"",
+  "replace": "\"page's path: `\" + sanitize.InlineText(slug) + \"/me/<address>`\\n\\n\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 path hints: bps goes undefined on the page that quotes it",
+  "find": "\tb.WriteString(\"Standing is measured against this court's coin supply, in \" +\n\t\t\"basis points \u2014 one bp is a hundredth of a percent.\\n\\n\")",
+  "replace": ""
  }
 ]

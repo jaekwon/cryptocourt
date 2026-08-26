@@ -671,10 +671,16 @@ func renderStandingIndex(slug string) string {
 	l := ladderFor(c)
 	var b strings.Builder
 	b.WriteString("# Standing in " + courtNameFor(c) + "\n\n")
-	b.WriteString("Append an address to see its standing: `" + sanitize.InlineText(slug) +
+	b.WriteString("To see an address's standing, put it on the end of this " +
+		"page's path: `/r/kourt/kourtv2:" + sanitize.InlineText(slug) +
 		"/me/<address>`\n\n")
 	b.WriteString("An entry pass costs " + strconv.FormatInt(passPriceFor(c), 10) +
 		", burned, once. Standing is earned and cannot be bought.\n\n")
+	// bps IS THE REALM'S WORD, not the reader's. The three thresholds below are
+	// meaningless without it, and a term defined nowhere on the page it is used
+	// on is a term the reader is expected to already know.
+	b.WriteString("Standing is measured against this court's coin supply, in " +
+		"basis points — one bp is a hundredth of a percent.\n\n")
 	b.WriteString("- level 1 at " + strconv.FormatInt(l.t1Bps, 10) + " bps of supply → " +
 		strconv.FormatInt(l.postsEntry, 10) + " comments a day\n")
 	b.WriteString("- level 2 at " + strconv.FormatInt(l.t2Bps, 10) + " bps → " +

@@ -432,8 +432,9 @@ func renderClaim(slug string, id uint64) string {
 				", participation remaining " + strconv.FormatInt(carrot, 10) + "\n")
 		}
 	}
-	b.WriteString("\n_Your positions: append your address to this path (…/" +
-		strconv.FormatUint(id, 10) + "/<your-address>)._\n")
+	b.WriteString("\n_To see your own stake on this claim, put your address on " +
+		"the end of this page's path:_ `/r/kourt/kourtv2:" + sanitize.InlineText(slug) +
+		"/" + strconv.FormatUint(id, 10) + "/<your address>`\n")
 	return b.String()
 }
 
