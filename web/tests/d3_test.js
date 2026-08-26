@@ -102,5 +102,19 @@ ok("delegated dismissal, one key", src.includes('const b = ev.target.closest("[d
 ok("directory strip button joins the delegate", src.includes('id="introdismiss" data-introdismiss'));
 ok("old per-route wiring gone", !src.includes('idm.onclick'));
 
+// PHASE AND SIDE ARE SEPARATE FIELDS, and both halves are asserted because
+// folding them would be silent: mapDotClass switches on `short` with an exact
+// ===, so a `short` of "settling YES" falls through to the open colour while the
+// tooltip still reads correctly. The realm writes the side as sideName() —
+// uppercase — and only the provisional status carries one today.
+ok("phaseClass reads the side off a provisional status",
+   phaseClass("provisional verdict NO — reopenable by a new dispute until block 900").side === "NO");
+ok("phaseClass keeps short free of the side",
+   phaseClass("provisional verdict NO — reopenable until block 900").short === "settling");
+ok("phaseClass reports no side when the status names none",
+   phaseClass("settled — every stake withdraws 1x").side === "");
+ok("a settled status still classes as settled",
+   phaseClass("settled — every stake withdraws 1x").short === "settled");
+
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);
