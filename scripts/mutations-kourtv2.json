@@ -10141,8 +10141,8 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "writeBoardLink: the count reads the index that exists",
-  "find": "\tif cs.boardTop != nil {\n\t\tn = cs.boardTop.Size()\n\t}\n",
-  "replace": ""
+  "find": "\tif cs.board != nil {\n\t\tn = cs.board.Size()\n\t}",
+  "replace": "\tn = cs.board.Size()"
  },
  {
   "pkg": "kourtv2",
@@ -11059,6 +11059,97 @@
   "file": "posting.gno",
   "label": "v0.58 path hints: bps goes undefined on the page that quotes it",
   "find": "\tb.WriteString(\"Standing is measured against this court's coin supply, in \" +\n\t\t\"basis points \u2014 one bp is a hundredth of a percent.\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: comment count drops replies again",
+  "find": "\tn := 0\n\tif cs.board != nil {\n\t\tn = cs.board.Size()\n\t}",
+  "replace": "\tn := 0\n\tif cs.boardTop != nil {\n\t\tn = cs.boardTop.Size()\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: an empty board prints a zero instead of inviting",
+  "find": "\tcase n == 0:\n\t\tb.WriteString(\"[Discuss this claim](\" + link + \") \u2014 no comments yet.\\n\\n\")",
+  "replace": "\tcase n == 0:\n\t\tb.WriteString(\"[0 comments](\" + link + \")\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: one comment reads as plural",
+  "find": "func plural2(n int) string {\n\tif n == 1 {\n\t\treturn \"\"\n\t}",
+  "replace": "func plural2(n int) string {\n\tif n == 0 {\n\t\treturn \"\"\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 ux: the slashed user's new-pass price loses its unit",
+  "find": "strconv.FormatInt(passPriceFor(c), 10) + \" \" + qualifiedSymbol(c) + \".\\n\")",
+  "replace": "strconv.FormatInt(passPriceFor(c), 10) + \".\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 ux: the stranger's pass price loses its unit",
+  "find": "\"pass for \" + strconv.FormatInt(passPriceFor(c), 10) + \" \" +\n\t\t\t\t\tqualifiedSymbol(c) + \" (burned, one-off).\\n\")",
+  "replace": "\"pass for \" + strconv.FormatInt(passPriceFor(c), 10) + \" (burned, one-off).\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 ux: the standing index's pass price loses its unit",
+  "find": "\t\t\" \" + qualifiedSymbol(c) + \", burned, once. Standing is earned and \" +\n\t\t\"cannot be bought.\\n\\n\")",
+  "replace": "\t\t\", burned, once. Standing is earned and cannot be bought.\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 ux: a slashed user is told nothing about the slash",
+  "find": "\t\tif hw > score {\n\t\t\tb.WriteString(\"\\nA moderator slash took your standing to zero",
+  "replace": "\t\tif false {\n\t\t\tb.WriteString(\"\\nA moderator slash took your standing to zero"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: a shared comment loses its claim heading",
+  "find": "\tb.WriteString(\"# \" + claimTitleFor(c, cs) + \"\\n\\n\")\n\tbase := \"/r/kourt/kourtv2:\"",
+  "replace": "\tb.WriteString(\"# Comment \" + strconv.FormatUint(id, 10) + \"\\n\\n\")\n\tbase := \"/r/kourt/kourtv2:\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: a shared comment stops saying which comment it is",
+  "find": "\tb.WriteString(\"Comment \" + strconv.FormatUint(id, 10) + \" on this claim in \" +\n\t\t\"[\" + courtNameFor(c) + \"](/r/kourt/kourtv2:\" + slug + \")\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: a shared comment stops naming its court",
+  "find": "\" on this claim in \" +\n\t\t\"[\" + courtNameFor(c) + \"](/r/kourt/kourtv2:\" + slug + \")\\n\\n\")",
+  "replace": "\" on this claim\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "v0.58 ux: a shared comment links only the board, not the claim",
+  "find": "\tb.WriteString(\"[\u2190 the claim](\" + base + \") \u00b7 [all \" +\n\t\tstrconv.Itoa(cs.board.Size()) + \" comments](\" + base + \"/board)\\n\\n\")",
+  "replace": "\tb.WriteString(\"[\u2190 the board](\" + base + \"/board)\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 ux: the mod log claims every act again",
+  "find": "b.WriteString(\"Every moderation act on this court's CLAIMS and COMMENTS is recorded here:",
+  "replace": "b.WriteString(\"Every moderation act on this court is recorded here:"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 ux: the mod log stops saying where curation is",
+  "find": "\tb.WriteString(\"Curation \u2014 which claims a moderator filed under which heading \u2014 is \" +\n\t\t\"not in this list. The tree it produced is on the [court page](/r/kourt/kourtv2:\" + sanitize.InlineText(slug) + \"); the acts themselves are in \" +\n\t\t\"the chain's event stream.\\n\\n\")",
   "replace": ""
  }
 ]

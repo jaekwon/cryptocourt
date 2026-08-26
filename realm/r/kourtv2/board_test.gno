@@ -1623,3 +1623,127 @@ func TestTheBoardPagesCountsAndCopyAreHeld(cur realm, t *testing.T) {
 		t.Fatal("a missing comment must be named as missing")
 	}
 }
+
+// The count under the link is what the reader will find behind it.
+//
+// It counted cs.boardTop — the pagination index, which holds only rows with no
+// parent — so a board with two threads and two replies advertised "2 comments"
+// and then showed four things. BoardSize, the read a client uses, has always
+// returned every row: the realm was telling a page and an API different numbers
+// about the same board.
+func TestTheCommentCountOnAClaimCountsReplies(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cc1-alice")
+	bob := testutils.TestAddress("cc1-bob")
+	c, id := boardFixture(cur, "cc1", alice)
+	path := "cc1/" + strconv.FormatUint(id, 10)
+
+	// With nothing on it, the claim invites rather than counting.
+	if !strings.Contains(Render(path), "no comments yet") {
+		t.Fatal("an empty board must invite, not print a zero")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	top := PostComment(cross(cur), "cc1", id, 0, "the objection")
+	if !strings.Contains(Render(path), "[1 comment]") {
+		t.Fatal("one comment reads singular")
+	}
+
+	// A REPLY IS A COMMENT. Written by a person, charged against their daily
+	// allowance, hideable, upvotable and purgeable like any other row — and a
+	// line on the page the reader is about to open.
+	c.coin.Mint(bob, 10_000_000_000) // a pass is burned coin; bob starts with none
+	testing.SetRealm(testing.NewUserRealm(bob))
+	BuyCommentPass(cross(cur), "cc1")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	PostComment(cross(cur), "cc1", id, top, "the answer to it")
+
+	page := Render(path)
+	if !strings.Contains(page, "[2 comments]") {
+		t.Fatal("a reply must be counted; the page said otherwise")
+	}
+	// The page and the API agree, which is the invariant rather than the
+	// literal 2 — a test that only checked the literal would pass again the
+	// day one of them drifted.
+	if !strings.Contains(page, "["+strconv.Itoa(BoardSize("cc1", id))+" comments]") {
+		t.Fatal("the rendered count must equal BoardSize")
+	}
+}
+
+// A shared comment link arrives with the thing it is arguing about.
+//
+// This page opened "# Comment 1" over "← the board" and said nothing else — not
+// which claim, not which court. A single row is the most-shared unit in the
+// realm, so a reader arriving cold is the ordinary case rather than the edge
+// one, and they got an opinion with no proposition attached.
+func TestASharedCommentCarriesItsClaimAndCourt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sc1-alice")
+	c, id := boardFixture(cur, "sc1", alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	row := PostComment(cross(cur), "sc1", id, 0, "the objection worth sharing")
+
+	page := Render("sc1/" + strconv.FormatUint(id, 10) + "/board/" +
+		strconv.FormatUint(row, 10))
+
+	// THE CLAIM IS THE HEADING. The comment number is an ordinal and belongs in
+	// the subtitle; the proposition is what the page is about.
+	cs := mustClaim(c, id)
+	if !strings.HasPrefix(page, "# "+claimTitleFor(c, cs)) {
+		t.Fatal("a shared comment must be headed by the claim it argues about")
+	}
+	if !strings.Contains(page, "Comment "+strconv.FormatUint(row, 10)+" on this claim") {
+		t.Fatal("the page must still say which comment it is")
+	}
+	// AND WHICH COURT, linked. A claim title alone does not say whose docket it
+	// is on, and standing, coin and moderators are all per-court.
+	if !strings.Contains(page, "["+courtNameFor(c)+"](/r/kourt/kourtv2:sc1)") {
+		t.Fatal("a shared comment must name and link its court")
+	}
+	// Both ways out: to the claim, and to the rest of the argument.
+	base := "/r/kourt/kourtv2:sc1/" + strconv.FormatUint(id, 10)
+	if !strings.Contains(page, "[← the claim]("+base+")") {
+		t.Fatal("a shared comment must link the claim, not only the board")
+	}
+	if !strings.Contains(page, "comments]("+base+"/board)") {
+		t.Fatal("a shared comment must offer the rest of the board")
+	}
+	// The comment itself is still there — this is context added, not replaced.
+	if !strings.Contains(page, "the objection worth sharing") {
+		t.Fatal("the comment must still render")
+	}
+}
+
+// The moderation log says what it actually covers.
+//
+// It opened "Every moderation act on this court is recorded here", and eleven
+// acts — the ten folder verbs and court-desc — emit a ModAct event and never
+// call appendLog. A court with three folders and five filings read "No
+// moderation acts yet" directly underneath the promise. docs/CLAIM_BOARDS.md
+// §19 records the alternative (log the curation) as a ruling.
+func TestTheModLogSaysWhatItCovers(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("ml1-mod")
+	poster := testutils.TestAddress("ml1-poster")
+	modFixture(cur, "ml1", mod, poster)
+	testing.SetRealm(testing.NewUserRealm(mod))
+	CreateFolder(cross(cur), "ml1", "A heading", "")
+
+	page := Render("ml1/mod")
+	// The curation happened and is genuinely absent, which is the fact the
+	// sentence has to match rather than contradict.
+	if !strings.Contains(page, "No moderation acts yet") {
+		t.Fatal("the fixture must leave the log empty, or this asserts nothing")
+	}
+	if strings.Contains(page, "Every moderation act on this court is recorded here") {
+		t.Fatal("the log must not claim to hold acts it does not hold")
+	}
+	if !strings.Contains(page, "CLAIMS and COMMENTS") {
+		t.Fatal("the log must say which acts it covers")
+	}
+	// AND WHERE THE MISSING ONES ARE. Telling a reader something is absent
+	// without saying where to look leaves them worse off than the false promise.
+	if !strings.Contains(page, "Curation") || !strings.Contains(page, "event stream") {
+		t.Fatal("the log must say where curation is visible instead")
+	}
+	if !strings.Contains(page, "[court page](/r/kourt/kourtv2:ml1)") {
+		t.Fatal("the log must link the court page, where the tree renders")
+	}
+}

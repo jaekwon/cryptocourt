@@ -155,3 +155,83 @@ func TestThePathHintsAreCompleteEnoughToFollow(cur realm, t *testing.T) {
 		t.Fatal("a page that quotes bps must say what a bp is")
 	}
 }
+
+// Every price a reader is invited to pay names its unit.
+//
+// The pass price printed as a bare "190585" in all three places it appears. Each
+// court's coin is its own and interchangeable with nothing — which is the whole
+// design, stated on the court page and in the help page — so a bare number on
+// the one action a new reader is being invited to take is the last place a unit
+// can be left to inference. A reader cannot tell 190585 ugnot from 190585 of a
+// coin they have never heard of.
+func TestEveryPriceNamesItsUnit(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("hp6-mod")
+	stranger := testutils.TestAddress("hp6-stranger")
+	modFixture(cur, "hp6", mod, testutils.TestAddress("hp6-poster"))
+	c := mustCourt("hp6")
+	unit := qualifiedSymbol(c)
+	price := strconv.FormatInt(passPriceFor(c), 10)
+
+	// A stranger at level zero: the invitation they are shown.
+	page := Render("hp6/me/" + stranger.String())
+	if !strings.Contains(page, "You cannot comment here yet") {
+		t.Fatal("a stranger must be told they cannot comment yet")
+	}
+	if !strings.Contains(page, price+" "+unit) {
+		t.Fatal("the pass price on the standing page must name its unit")
+	}
+	// And the index, which quotes the same price to somebody who has not even
+	// given an address.
+	if !strings.Contains(Render("hp6/me"), price+" "+unit) {
+		t.Fatal("the standing index's pass price must name its unit")
+	}
+	// The unit is this court's own coin, not a generic one — the distinction the
+	// realm exists to keep.
+	if !strings.Contains(unit, "HP6") {
+		t.Fatal("the unit must be the court's own symbol")
+	}
+}
+
+// The SLASHED user's page names its unit too — a different branch, and the one
+// where getting it wrong costs the most.
+//
+// A stranger and a slashed user are offered the pass by two different sentences,
+// and only the stranger's was covered: the mutant that stripped the unit from
+// the slashed line survived. This person has already burned a pass once and had
+// it taken, so "buy a new pass for 190585" is a price they are being asked to
+// pay a second time with no unit on it.
+func TestASlashedUserIsQuotedTheUnitToo(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("hp7-mod")
+	poster := testutils.TestAddress("hp7-poster")
+	modFixture(cur, "hp7", mod, poster)
+	c := mustCourt("hp7")
+
+	// Up to the top rung, then all the way down — so highWater exceeds score,
+	// which is what selects the slashed sentence.
+	r := getStanding(c, poster)
+	r.score = levelFloor(c, 3) * 2
+	r.highWater = r.score
+	testing.SetRealm(testing.NewUserRealm(mod))
+	SlashStanding(cross(cur), "hp7", poster, 3, boardCodeAbuse)
+	if postLevel(c, poster) != 0 {
+		t.Fatal("the fixture must leave the poster at level 0")
+	}
+	if r.highWater <= r.score {
+		t.Fatal("the fixture must leave highWater above score, or the slashed " +
+			"sentence is not the one that renders")
+	}
+
+	page := Render("hp7/me/" + poster.String())
+	if !strings.Contains(page, "A moderator slash took your standing to zero") {
+		t.Fatal("a slashed user must be told a slash is why")
+	}
+	if !strings.Contains(page, "buy a new pass for "+
+		strconv.FormatInt(passPriceFor(c), 10)+" "+qualifiedSymbol(c)) {
+		t.Fatal("the slashed user's pass price must name its unit")
+	}
+	// And this is NOT the stranger's sentence — the two branches are distinct,
+	// so a test that matched either would pass against the wrong one.
+	if strings.Contains(page, "You cannot comment here yet") {
+		t.Fatal("a slashed user must not read as somebody who never had standing")
+	}
+}

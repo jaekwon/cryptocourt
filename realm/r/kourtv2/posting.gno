@@ -604,10 +604,11 @@ func renderStanding(slug, addrArg string) string {
 		if frozenUntil == 0 {
 			if hw > score {
 				b.WriteString("You can also earn back from zero, or buy a new pass for " +
-					strconv.FormatInt(passPriceFor(c), 10) + ".\n")
+					strconv.FormatInt(passPriceFor(c), 10) + " " + qualifiedSymbol(c) + ".\n")
 			} else {
 				b.WriteString("\nYou cannot comment here yet. Earn standing below, or buy an entry\n" +
-					"pass for " + strconv.FormatInt(passPriceFor(c), 10) + " (burned, one-off).\n")
+					"pass for " + strconv.FormatInt(passPriceFor(c), 10) + " " +
+					qualifiedSymbol(c) + " (burned, one-off).\n")
 			}
 		}
 	}
@@ -675,7 +676,8 @@ func renderStandingIndex(slug string) string {
 		"page's path: `/r/kourt/kourtv2:" + sanitize.InlineText(slug) +
 		"/me/<address>`\n\n")
 	b.WriteString("An entry pass costs " + strconv.FormatInt(passPriceFor(c), 10) +
-		", burned, once. Standing is earned and cannot be bought.\n\n")
+		" " + qualifiedSymbol(c) + ", burned, once. Standing is earned and " +
+		"cannot be bought.\n\n")
 	// bps IS THE REALM'S WORD, not the reader's. The three thresholds below are
 	// meaningless without it, and a term defined nowhere on the page it is used
 	// on is a term the reader is expected to already know.

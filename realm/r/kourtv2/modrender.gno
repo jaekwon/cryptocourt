@@ -394,7 +394,25 @@ func renderModLog(slug string) string {
 	c := mustCourt(slug)
 	b := strings.Builder{}
 	b.WriteString("# Moderation log — " + courtNameFor(c) + "\n\n")
-	b.WriteString("Every moderation act on this court is recorded here: who acted, what they did, and when. Moderation controls what is listed; it never moves a coin or changes a verdict.\n\n")
+	// WHAT IT ACTUALLY COVERS. This said "every moderation act on this court",
+	// and eleven do not appear: the ten folder verbs and court-desc emit a
+	// ModAct event and never call appendLog. A demo court with three folders and
+	// five filings read "No moderation acts yet" underneath the promise.
+	//
+	// The sentence is narrowed rather than the acts logged, because logging them
+	// changes what this log IS — cm.log is where a board sanction lands precisely
+	// because it has no claim to hang off, and a busy curator would push
+	// sanctions off the first page of a bounded render. Recorded as a ruling in
+	// docs/CLAIM_BOARDS.md §19 so it is a decision and not a default.
+	//
+	// It names where curation IS visible, because §18.2 made the filing tree
+	// renderable: a reader who can now see that somebody organised a contested
+	// docket should be told plainly where the record of that organising is, and
+	// is not.
+	b.WriteString("Every moderation act on this court's CLAIMS and COMMENTS is recorded here: who acted, what they did, and when. Moderation controls what is listed; it never moves a coin or changes a verdict.\n\n")
+	b.WriteString("Curation — which claims a moderator filed under which heading — is " +
+		"not in this list. The tree it produced is on the [court page](/r/kourt/kourtv2:" + sanitize.InlineText(slug) + "); the acts themselves are in " +
+		"the chain's event stream.\n\n")
 	if c.mod == nil {
 		// Lazily created, so there is no object yet — but the set is not empty:
 		// the admin is the 1-of-1 until an act, an appointment or an election

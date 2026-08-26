@@ -678,9 +678,23 @@ func renderBoardRow(slug string, claimID uint64, rowArg string) string {
 	}
 	r := mustBoardRow(cs, id)
 	var b strings.Builder
-	b.WriteString("# Comment " + strconv.FormatUint(id, 10) + "\n\n")
-	b.WriteString("[← the board](/r/kourt/kourtv2:" + slug + "/" +
-		strconv.FormatUint(claimID, 10) + "/board)\n\n")
+	// WHAT THIS COMMENT IS ABOUT. A single row is the most-shared unit here —
+	// somebody quotes an argument and sends the link — and this page opened
+	// "# Comment 1" over "← the board" and said nothing else. A reader arriving
+	// cold got an opinion with no proposition attached: not which claim, not
+	// which court, and no way to find out but to click a link labelled with a
+	// word that tells them nothing either.
+	//
+	// The claim's TITLE is the heading, because that is the thing being argued
+	// about; the comment number is demoted to a subtitle, where an ordinal
+	// belongs. claimTitleFor gates the title the same way the claim's own page
+	// does, so a redacted or purged claim does not leak its text here.
+	b.WriteString("# " + claimTitleFor(c, cs) + "\n\n")
+	base := "/r/kourt/kourtv2:" + slug + "/" + strconv.FormatUint(claimID, 10)
+	b.WriteString("Comment " + strconv.FormatUint(id, 10) + " on this claim in " +
+		"[" + courtNameFor(c) + "](/r/kourt/kourtv2:" + slug + ")\n\n")
+	b.WriteString("[← the claim](" + base + ") · [all " +
+		strconv.Itoa(cs.board.Size()) + " comments](" + base + "/board)\n\n")
 	b.WriteString(renderBoardOne(slug, claimID, cs, r, false))
 	return b.String()
 }
@@ -999,9 +1013,25 @@ func BoardTop(courtSlug string, claimID uint64, offset, count int) string {
 // even at zero, because a board nobody has written on is exactly the one worth
 // inviting somebody to.
 func writeBoardLink(b *strings.Builder, c *Court, cs *claimState, claimID uint64) {
+	// EVERY ROW, not the top-level ones. This counted cs.boardTop, which is the
+	// pagination index and holds only rows with no parent — so a board with
+	// three threads and two replies advertised "3 comments" and then showed
+	// five things to read. The number under a link is a promise about what is
+	// behind it, and a reply is a comment: it is written by a person, it is
+	// counted against their daily allowance, it can be hidden, upvoted and
+	// purged like any other row, and a reader scanning the page counts it.
+	//
+	// cs.board is the tree of all rows, so this also counts the ones that
+	// render as tombstones — hidden, legally withheld, purged. That is right for
+	// the same reason: they occupy a line on the page the reader is about to
+	// open, and a count that skipped them would undershoot again.
+	//
+	// IT ALSO AGREES WITH BoardSize NOW, which has always returned
+	// cs.board.Size(). A client reading the realm and a reader looking at the
+	// realm's own page were being told different numbers for the same board.
 	n := 0
-	if cs.boardTop != nil {
-		n = cs.boardTop.Size()
+	if cs.board != nil {
+		n = cs.board.Size()
 	}
 	link := "/r/kourt/kourtv2:" + c.id + "/" + strconv.FormatUint(claimID, 10) + "/board"
 	switch {

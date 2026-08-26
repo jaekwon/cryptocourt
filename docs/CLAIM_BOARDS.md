@@ -1610,3 +1610,81 @@ landed on the no-such-folder branch, and still said "Not found". And it used a
 court with no folders at all, where `c.mod == nil` short-circuits before the
 missing-folder branch is ever reached. Each refusal is now asserted by its own
 message, against a court that has a real folder.
+
+## 19. RULING NEEDED — the moderation log's universal claim is false
+
+`renderModLog` opens with:
+
+> Every moderation act on this court is recorded here: who acted, what they did,
+> and when.
+
+It is not. **Eleven acts emit a `ModAct` event and write no log row at all:**
+`folder-create` (×2 call sites), `folder-move`, `folder-add`, `folder-remove`,
+`folder-rename`, `folder-retire`, `folder-restore`, `folder-order`,
+`folder-sort`, and `court-desc`. Neither `folders.gno` nor `court.gno` calls
+`appendLog` anywhere. Observed rather than inferred: the demo court had three
+folders created and five claims filed into them, and its log said "No moderation
+acts yet."
+
+This matters more now than it did last week, because §18.2 made the filing tree
+**visible**. A reader can now see that somebody organised a contested docket and
+cannot see who, or when, or that it changed — on the page whose whole purpose is
+to answer exactly that, and which tells them it does.
+
+**The ruling.** Two ways to make the sentence true, and which one is right is a
+product decision, not a rendering one:
+
+- **Log the curation.** `cm.log` already exists — it is the court-level log board
+  sanctions land in, because a sanction is keyed to an address and has no claim
+  to hang off. Folder acts have the same shape, so this is an append and not a
+  new structure. It costs a row of storage per curation act and it widens what
+  `PurgeCourtLogRow` has to be able to reach. It also makes a busy curator able
+  to push sanctions off the log's first page, which is the page bound
+  (`renderPageSize`) doing what it was built to do to the wrong content.
+- **Narrow the sentence.** Say the log covers acts on claims and comments, and
+  that curation is visible as the tree itself plus the chain's event stream.
+  Costs nothing, and leaves "who filed this claim under Fauci, and when"
+  answerable only by an indexer.
+
+I have taken the second, as the smaller and reversible change, and because the
+first alters what the log IS. **It is recorded here so that it is a decision
+rather than a default.** If curation should be logged, the change is an
+`appendLog` in each of the eleven sites and a widened purge test; the sentence
+then goes back to what it said.
+
+### 19.1 Four surfaces a stranger could not follow
+
+Read cold, each of these failed a reader who had not been told something first.
+
+**The comment count undercounted.** `writeBoardLink` counted `cs.boardTop` — the
+pagination index, which holds only rows with no parent — so a board with three
+threads and two replies advertised "3 comments" and then showed five things to
+read. `BoardSize`, the read a client uses, has always returned `cs.board.Size()`:
+the realm was telling a page and an API different numbers about the same board.
+A reply is a comment. It is written by a person, charged against their daily
+allowance, hideable, upvotable and purgeable like any other row, and it occupies
+a line on the page the reader is about to open.
+
+**The pass price had no unit.** All three places that quote it printed a bare
+`190585`. Each court's coin is its own and interchangeable with nothing — the
+fact the court page and the help page both go out of their way to state — which
+makes a bare number on the one action a newcomer is invited to take the last
+place a unit can be left to inference. A reader cannot tell 190585 ugnot from
+190585 of a coin they have never heard of.
+
+The stranger's sentence and the **slashed** user's are different sentences, and
+only the stranger's was covered: the mutant stripping the unit from the slashed
+line survived a full round. That user has already burned a pass once and had it
+taken by a slash, so they are the reader for whom an unlabelled second price
+matters most.
+
+**A shared comment arrived with no proposition.** A single row is the most-shared
+unit in the realm — somebody quotes an argument and sends the link — and the page
+opened `# Comment 1` over `← the board` and said nothing else. Not which claim,
+not which court, and no way to find out but to click a link labelled with a word
+that tells them nothing either. The claim's title is now the heading, because
+that is the thing being argued about, and the comment number is a subtitle where
+an ordinal belongs. The title goes through `claimTitleFor`, so a redacted or
+purged claim does not leak its text through this route.
+
+**The moderation log promised more than it holds** — §19 above.
