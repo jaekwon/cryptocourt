@@ -5045,7 +5045,7 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "Render: an extra path segment is folded into the address instead of refused",
-  "find": "\tparts := strings.SplitN(path, \"/\", 3)",
+  "find": "\tparts := strings.SplitN(path, \"/\", 4)",
   "replace": "\tparts := strings.Split(path, \"/\")"
  },
  {
@@ -5682,8 +5682,8 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "capBonus: the F9 base is the frozen height, not the claim's open life",
-  "find": "\trawAvg := div128(rawHi, rawLo, cs.openBlocks)",
-  "replace": "\trawAvg := div128(rawHi, rawLo, cs.openBlocks+1)"
+  "find": "\treturn div128(rawHi, rawLo, cs.openBlocks)\n",
+  "replace": "\treturn div128(rawHi, rawLo, cs.openBlocks+1)\n"
  },
  {
   "pkg": "kourtv2",
@@ -8890,5 +8890,1783 @@
   "label": "PullCarrot: a zero share is enqueued instead of returning nothing",
   "find": "\tif share <= 0 {\n\t\treturn 0\n\t}",
   "replace": "\tif share < 0 {\n\t\treturn 0\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: the global-DAO gate",
+  "find": "\tif !isGlobalMod(who) {\n\t\tpanic(\"kourtv2: only a global DAO member may globally hide a comment\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalClearRow: the global-DAO gate",
+  "find": "\tif !isGlobalMod(who) {\n\t\tpanic(\"kourtv2: only a global DAO member may clear a global comment hide\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: the global-DAO gate",
+  "find": "\tif !d.members.Has(who.String()) {\n\t\t// Verbatim, and check-epoch-coherence arm 14 requires the exact string: every\n",
+  "replace": "\tif false {\n\t\t// Verbatim, and check-epoch-coherence arm 14 requires the exact string: every\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: the m-of-n threshold",
+  "find": "\tif !fire {\n\t\treturn\n\t}\n\tr.purged = true",
+  "replace": "\t_ = fire\n\tr.purged = true"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: mustCategoryCode",
+  "find": "\tmustCategoryCode(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)\n\tr := mustBoardRow(cs, rowID)\n",
+  "replace": "\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)\n\tr := mustBoardRow(cs, rowID)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: zeroing the bytes",
+  "find": "\tr.purged = true\n\tr.text = \"\" // the bytes, not a flag\n",
+  "replace": "\tr.purged = true\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: leaving the ranked index",
+  "find": "\tscoreIndexDrop(cs, r)\n\tensureClaimMod(c, ensureMod(c), claimID).\n\t\tappendLog(who, boardActCode(\"board-purge\"",
+  "replace": "\tensureClaimMod(c, ensureMod(c), claimID).\n\t\tappendLog(who, boardActCode(\"board-purge\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: the re-set window's m-of-n",
+  "find": "\t\tif !fire {\n\t\t\treturn\n\t\t}\n",
+  "replace": "\t\t_ = fire\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: the window is bounded (not forever)",
+  "find": "now < r.globalClearedAt+reSetWindowBlocks",
+  "replace": "now >= 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: leaving the ranked index",
+  "find": "\tscoreIndexDrop(cs, r)\n\t// The log row is written LAST",
+  "replace": "\t// The log row is written LAST"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalClearRow: the not-hidden refusal",
+  "find": "\tif !r.global {\n\t\tpanic(\"kourtv2: that comment is not globally hidden\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalClearRow: arming the window",
+  "find": "\tr.globalClearedAt = heightNow() // arms the re-set window\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalClearRow: returning to the ranked index",
+  "find": "\tscoreIndexPut(cs, r)\n\tensureClaimMod",
+  "replace": "\tensureClaimMod"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardMark: purge outranks the rest",
+  "find": "\tcase r.purged:\n\t\treturn \"x\"\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardMark: a redaction is not an author hide",
+  "find": "\tcase r.global:\n\t\treturn \"g\"\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTextFor: withholds every non-readable state",
+  "find": "if boardMark(r) != \".\" {",
+  "replace": "if false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTextVisible: the purge notice",
+  "find": "\tif r.purged {\n\t\treturn \"> _Removed. The text is gone from the record; the row remains._\"\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTextVisible: the redaction notice",
+  "find": "\tif r.global {\n\t\treturn \"> _Withheld pending a legal determination._\"\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardOne: the listing shortcut must not swallow a legal notice",
+  "find": "if (r.hiddenByAuthor || r.hiddenByMod) && !r.global && !r.purged && listing {",
+  "replace": "if (r.hiddenByAuthor || r.hiddenByMod) && listing {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "scoreIndexPut: withheld rows enter the ranked index",
+  "find": "if r.parent != 0 || boardMark(r) != \".\" {",
+  "replace": "if r.parent != 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "mustBoardCode: the set is closed",
+  "find": "\tpanic(\"kourtv2: a board moderation code is one of: spam, off-topic, abuse, \" +\n\t\t\"impersonation, illegal-referred\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: the act reaches the moderation log",
+  "find": "\tensureClaimMod(c, ensureMod(c), claimID).\n\t\tappendLog(who, boardActCode(\"board-global-hide\", rowID, categoryCode), \"\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalClearRow: the act reaches the moderation log",
+  "find": "\tensureClaimMod(c, ensureMod(c), claimID).\n\t\tappendLog(who, boardActCode(\"board-global-clear\", rowID, \"\"), \"\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: the act reaches the moderation log",
+  "find": "\tensureClaimMod(c, ensureMod(c), claimID).\n\t\tappendLog(who, boardActCode(\"board-purge\", rowID, votedCode), \"\")\n",
+  "replace": "\t_ = votedCode\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "boardActCode: the log row names WHICH comment",
+  "find": "\tcode := verb + \"#\" + strconv.FormatUint(rowID, 10)\n",
+  "replace": "\tcode := verb\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "boardActCode: the category is on the code, not dropped",
+  "find": "\t\tcode += \":\" + categoryCode\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "speechM: the n cap (a threshold no set can meet)",
+  "find": "\tif m > cm.n {\n\t\tm = cm.n\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "speechM: the floor of 2 (speech looser than money)",
+  "find": "\tif m < 2 {\n\t\tm = 2\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "HideBoardRow: the active-moderator gate",
+  "find": "\trequireActiveMod(cm, who)\n\tmustBoardCode(code)\n\tcs := mustClaim(c, claimID)",
+  "replace": "\tcs := mustClaim(c, claimID)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "HideBoardRow: the speechM threshold",
+  "find": "\t\twho, code, speechM(cm))\n\tif !fire {\n\t\treturn\n\t}\n\tr.hiddenByMod = true",
+  "replace": "\t\twho, code, 1)\n\t_ = fire\n\tr.hiddenByMod = true"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "HideBoardRow: a hidden row leaves the ranked index",
+  "find": "\tr.hiddenByMod = true\n\tscoreIndexDrop(cs, r)\n",
+  "replace": "\tr.hiddenByMod = true\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "UnhideBoardRow: the moderator gate",
+  "find": "\trequireMod(cm, who)\n\tcs := mustClaim(c, claimID)",
+  "replace": "\tcs := mustClaim(c, claimID)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "UnhideBoardRow: an unhidden row returns to the ranked index",
+  "find": "\tr.hiddenByMod = false\n\tscoreIndexPut(cs, r)\n",
+  "replace": "\tr.hiddenByMod = false\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: the level bound (a slash of any size)",
+  "find": "\tif levels < 1 || levels > 3 {\n\t\tpanic(\"kourtv2: a slash is 1, 2 or 3 whole levels\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: the floor at level 0 (a negative score)",
+  "find": "\tif target < 0 {\n\t\ttarget = 0\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: a slash to zero forfeits the pass",
+  "find": "\tif target == 0 {\n\t\tr.passHeld = false\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: a partial slash keeps the pass",
+  "find": "\tif target == 0 {\n\t\tr.passHeld = false\n\t}\n",
+  "replace": "\tr.passHeld = false\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "RestoreStanding: the highWater ceiling (a restore that mints)",
+  "find": "\tr.score = r.highWater\n\tcm.appendCourtLog(actor, \"restore\", \"\")",
+  "replace": "\tr.score = r.highWater * 2\n\tcm.appendCourtLog(actor, \"restore\", \"\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "RestoreStanding: the nothing-to-restore refusal",
+  "find": "\tif r == nil || r.score >= r.highWater {\n\t\tpanic(\"kourtv2: that address has nothing to restore\")\n\t}\n\tfire, _ := approveAction(cm.pending, \"restore:\"",
+  "replace": "\tif r == nil {\n\t\tpanic(\"kourtv2: that address has nothing to restore\")\n\t}\n\tfire, _ := approveAction(cm.pending, \"restore:\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the freezeMaxBlocks ceiling",
+  "find": "\tif blocks < 1 || blocks > freezeMaxBlocks {\n\t\tpanic(\"kourtv2: a board freeze is at most freezeMaxBlocks long\")\n\t}\n\tc := mustCourt(courtSlug)\n\tcm := ensureMod(c)\n\trequireActiveMod(cm, actor)\n\tmustBoardCode(code)\n\tif who == \"\" {",
+  "replace": "\tc := mustCourt(courtSlug)\n\tcm := ensureMod(c)\n\trequireActiveMod(cm, actor)\n\tmustBoardCode(code)\n\tif who == \"\" {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the re-freeze gap",
+  "find": "\tif r := lookupStanding(c, who); r != nil && now < r.frozenGapUntil {",
+  "replace": "\tif r := lookupStanding(c, who); r != nil && false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the epoch stamp (a freeze the backstop cannot clear)",
+  "find": "\tr.frozenEpoch = boardSanctionEpochOf(c)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "UnfreezeBoard: the moderator gate",
+  "find": "\trequireMod(cm, actor)\n\tif !boardFrozen(c, who) {",
+  "replace": "\tif !boardFrozen(c, who) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeClaimBoard: the active-moderator gate",
+  "find": "\trequireActiveMod(cm, actor)\n\tmustBoardCode(code)\n\t_ = mustClaim(c, claimID)",
+  "replace": "\t_ = mustClaim(c, claimID)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "boardFrozen: the lazy expiry (a freeze that never lifts)",
+  "find": "\treturn heightNow() < r.frozenUntil\n}",
+  "replace": "\treturn true\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "boardFrozen: the stale-epoch clear",
+  "find": "\tif r.frozenEpoch != boardSanctionEpochOf(c) {\n\t\treturn false // cleared wholesale; the stamp is stale\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "claimBoardFrozen: the lazy expiry",
+  "find": "\treturn heightNow() < clm.boardFrozenUntil\n}",
+  "replace": "\treturn true\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "claimBoardFrozen: the stale-epoch clear",
+  "find": "\tif clm.boardFrozenEpoch != c.mod.boardSanctionEpoch {\n\t\treturn false\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "mustBoardWritable: the address freeze reaches the write paths",
+  "find": "\tif boardFrozen(c, who) {\n\t\tpanic(\"kourtv2: you are frozen out of this court's boards\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "mustBoardWritable: the claim-board freeze reaches the write paths",
+  "find": "\tif claimBoardFrozen(c, cs.id) {\n\t\tpanic(\"kourtv2: this claim's board is frozen by moderators\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalClearBoardBits: the global-DAO gate",
+  "find": "\tif !isGlobalMod(who) {\n\t\tpanic(\"kourtv2: only a global DAO member may clear board bits (recovery)\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalClearBoardBits: the epoch bump that clears every freeze",
+  "find": "\tcm.boardSanctionEpoch++\n\t// THE COURT'S OWN LOG, not only an event.",
+  "replace": "\t// THE COURT'S OWN LOG, not only an event."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalRestoreStanding: the global-DAO gate",
+  "find": "\tif !isGlobalMod(actor) {\n\t\tpanic(\"kourtv2: only a global DAO member may restore standing (recovery)\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalRestoreStanding: the highWater ceiling",
+  "find": "\tr.score = r.highWater\n\tensureMod(c).appendCourtLog(actor, \"global-restore-standing\", \"\")",
+  "replace": "\tr.score = r.highWater * 2\n\tensureMod(c).appendCourtLog(actor, \"global-restore-standing\", \"\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "ResetModSet: a reset clears the freezes it leaves nobody to lift",
+  "find": "\tcm.boardSanctionEpoch++\n\tcm.setActHeight = heightNow()",
+  "replace": "\tcm.setActHeight = heightNow()"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "levelFloor: level 0 is zero standing",
+  "find": "\tif lv <= 0 {\n\t\treturn 0\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "PurgeCourtLogRow: the global-DAO gate",
+  "find": "\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tmustCategoryCode(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcm := ensureMod(c)",
+  "replace": "\tmustCategoryCode(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcm := ensureMod(c)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "PurgeCourtLogRow: the no-such-row refusal",
+  "find": "\tif idx < 0 {\n\t\tpanic(\"kourtv2: no such court log row\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "PurgeCourtLogRow: the reason leaves state",
+  "find": "\tcm.log[idx].reason = \"\" // gone from state, not merely hidden at render\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "renderModLog: the court-level rows reach the page",
+  "find": "\tfor i := len(cm.log) - 1; i >= 0 && len(rows) < renderPageSize; i-- {",
+  "replace": "\tfor i := len(cm.log) - 1; i >= len(cm.log); i-- {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: the active-moderator gate",
+  "find": "\trequireActiveMod(cm, actor)\n\tmustBoardCode(code)\n\tif who == \"\" {\n\t\tpanic(\"kourtv2: no such address\")\n\t}\n\tfire, voted := approveAction(cm.pending,\n\t\t\"slash:\"",
+  "replace": "\tif who == \"\" {\n\t\tpanic(\"kourtv2: no such address\")\n\t}\n\tfire, voted := approveAction(cm.pending,\n\t\t\"slash:\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: the voted category reaches the log",
+  "find": "cm.appendCourtLog(actor, \"slash:\"+strconv.FormatInt(levels, 10), voted)",
+  "replace": "cm.appendCourtLog(actor, \"slash:\"+strconv.FormatInt(levels, 10)+voted[:0], \"\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the voted category reaches the log",
+  "find": "cm.appendCourtLog(actor, \"freeze:\"+strconv.FormatInt(blocks, 10), voted)",
+  "replace": "cm.appendCourtLog(actor, \"freeze:\"+strconv.FormatInt(blocks, 10)+voted[:0], \"\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "SlashStanding: a sub-rung score still zeroes",
+  "find": "\tif want := levelFloor(c, target); r.score > want {\n\t\tr.score = want\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "PurgeCourtLogRow: the purged bit",
+  "find": "\tcm.log[idx].purged = true\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PurgeModLogRow: the reason leaves state (pre-existing)",
+  "find": "\tclm.log[idx].reason = \"\" // gone from state, not merely hidden at render\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "modActLine: the court and claim logs are distinguishable",
+  "find": "\tline := \"- \" + kind + \" \" + strconv.FormatUint(a.rowID, 10) +",
+  "replace": "\tline := \"- \" + strconv.FormatUint(a.rowID, 10) +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "REGRESSION: HideOwnComment writes the moderator's bit (the shipped bug)",
+  "find": "\tr.hiddenByAuthor = hide\n",
+  "replace": "\tr.hiddenByAuthor, r.hiddenByMod = hide, hide\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "REGRESSION: UnhideBoardRow clears the author's bit too",
+  "find": "\tr.hiddenByMod = false\n\tscoreIndexPut(cs, r)",
+  "replace": "\tr.hiddenByMod, r.hiddenByAuthor = false, false\n\tscoreIndexPut(cs, r)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardMark: a moderator hide is a hide",
+  "find": "\tcase r.hiddenByAuthor || r.hiddenByMod:\n\t\treturn \"h\"\n",
+  "replace": "\tcase r.hiddenByAuthor:\n\t\treturn \"h\"\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardOne: a moderator act is not reported as the author's withdrawal",
+  "find": "\t\tif r.hiddenByMod {\n\t\t\tb.WriteString(\"> _Removed from this listing by this court's moderators. \" +\n\t\t\t\t\"It still reads at its own link._\\n\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\"> _Withdrawn from this listing. It still reads at its own link._\\n\\n\")\n\t\t}\n",
+  "replace": "\t\tb.WriteString(\"> _Withdrawn from this listing. It still reads at its own link._\\n\\n\")\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "REGRESSION: the freeze gap reads frozenUntil, which the undo clears",
+  "find": "\tif r := lookupStanding(c, who); r != nil && now < r.frozenGapUntil {",
+  "replace": "\tif r := lookupStanding(c, who); r != nil && r.frozenUntil != 0 &&\n\t\tnow < r.frozenUntil+freezeGapBlocks {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the gap is stamped at the full ceiling, not the asked length",
+  "find": "\tr.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n",
+  "replace": "\tr.frozenGapUntil = now + blocks + freezeGapBlocks\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the gap stamp exists at all",
+  "find": "\tr.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "REGRESSION: the wire gate hands out raw text (row forgery)",
+  "find": "\treturn escapeWireText(r.text)\n}",
+  "replace": "\treturn r.text\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "escapeWireText: the newline arm",
+  "find": "\t\tcase '\\n':\n\t\t\tb.WriteString(\"\\\\n\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "escapeWireText: the backslash arm (the escape is itself forgeable)",
+  "find": "\t\tcase '\\\\':\n\t\t\tb.WriteString(\"\\\\\\\\\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "escapeWireText: the fast path does not skip a row that needs escaping",
+  "find": "\tif !strings.ContainsAny(s, \"\\\\\\n\\r\") {\n\t\treturn s // the common case allocates nothing\n\t}\n",
+  "replace": "\treturn s\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "REGRESSION: SetCourtLadder is a single-member court-wide throttle",
+  "find": "\tif fire, _ := approveAction(cm.pending, \"setladder:\"+ladderKey(l), who, \"\",\n\t\tspeechM(cm)); !fire {\n\t\treturn\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "REGRESSION: SetCourtCreditRates is a single-member earning cut",
+  "find": "\tif fire, _ := approveAction(cm.pending, \"setrates:\"+creditRatesKey(r), who, \"\",\n\t\tspeechM(cm)); !fire {\n\t\treturn\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "SetCourtLadder: the values are in the action key (two tuples, one threshold)",
+  "find": "\"setladder:\"+ladderKey(l), who, \"\"",
+  "replace": "\"setladder\", who, \"\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "SetCourtCreditRates: the values are in the action key",
+  "find": "\"setrates:\"+creditRatesKey(r), who, \"\"",
+  "replace": "\"setrates\", who, \"\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "SetCourtLadder: the act reaches the court log",
+  "find": "\tcm.appendCourtLog(who, \"setladder:\"+ladderKey(l), \"\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "SetCourtLadder: the log says WHAT was set",
+  "find": "\tcm.appendCourtLog(who, \"setladder:\"+ladderKey(l), \"\")\n",
+  "replace": "\tcm.appendCourtLog(who, \"setladder\", \"\")\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "SetCourtLadder: the active-moderator gate",
+  "find": "\trequireActiveMod(cm, who)\n\tl := ladder{t1Bps, t2Bps, t3Bps, postsEntry, postsT2}",
+  "replace": "\tl := ladder{t1Bps, t2Bps, t3Bps, postsEntry, postsT2}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "ClearCourtLadder: requireMod, so a suspended set can de-escalate",
+  "find": "\trequireMod(cm, who)\n\tif c.ladder == nil {",
+  "replace": "\trequireActiveMod(cm, who)\n\tif c.ladder == nil {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "ClearCourtLadder: the nothing-to-clear refusal",
+  "find": "\tif c.ladder == nil {\n\t\tpanic(\"kourtv2: this court has no ladder override\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "ClearCourtCreditRates: requireMod, so a suspended set can de-escalate",
+  "find": "\trequireMod(cm, who)\n\tif c.creditRates == nil {",
+  "replace": "\trequireActiveMod(cm, who)\n\tif c.creditRates == nil {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "ClearCourtCreditRates: the nothing-to-clear refusal",
+  "find": "\tif c.creditRates == nil {\n\t\tpanic(\"kourtv2: this court has no standing-rate override\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalClearCourtParams: the global-DAO gate",
+  "find": "\tif !isGlobalMod(who) {\n\t\tpanic(\"kourtv2: only a global DAO member may clear court parameters (recovery)\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalClearCourtParams: it clears BOTH overrides",
+  "find": "\tc.ladder, c.creditRates = nil, nil\n",
+  "replace": "\tc.ladder = nil\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalClearCourtParams: the nothing-to-clear refusal",
+  "find": "\tif c.ladder == nil && c.creditRates == nil {\n\t\tpanic(\"kourtv2: this court has no parameter overrides\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "REGRESSION: the claim page does not link its board",
+  "find": "\twriteBoardLink(&b, c, cs, id)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: an empty board still invites a first comment",
+  "find": "\t\tb.WriteString(\"[Discuss this claim](\" + link + \") \u2014 no comments yet.\\n\\n\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: the count, which is the reason to click",
+  "find": "\t\tb.WriteString(\"[\" + strconv.Itoa(n) + \" comment\" + plural2(n) + \"](\" + link +",
+  "replace": "\t\tb.WriteString(\"[comments](\" + link +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "REGRESSION: replies are never rendered (write-only second level)",
+  "find": "\t\twriteBoardReplies(&b, slug, claimID, cs, r.id)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardReplies: a reply's own text reaches the page",
+  "find": "\t\t\tfor _, line := range strings.Split(boardTextVisible(r), \"\\n\") {\n\t\t\t\tb.WriteString(\"> \" + line + \"\\n\")\n\t\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardReplies: a withheld reply is not shown",
+  "find": "\t\tif m := boardMark(r); m != \".\" {\n\t\t\tb.WriteString(\"> _Not shown._\\n\\n\")\n\t\t} else {",
+  "replace": "\t\tif false {\n\t\t\tb.WriteString(\"> _Not shown._\\n\\n\")\n\t\t} else {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardReplies: the shown-replies bound",
+  "find": "\t\treturn n >= maxBoardRepliesShown\n\t})\n\tif total > n {",
+  "replace": "\t\treturn false\n\t})\n\tif total > n {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "REGRESSION: an address freeze is never displayed",
+  "find": "\tif frozenUntil != 0 {\n\t\tb.WriteString(\"> **This court's moderators have frozen you out of its boards**\\n\" +",
+  "replace": "\tif false {\n\t\tb.WriteString(\"> **This court's moderators have frozen you out of its boards**\\n\" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "REGRESSION: a claim-board freeze is never displayed",
+  "find": "\tif until := claimBoardFrozenAt(c, claimID); until != 0 {",
+  "replace": "\tif until := int64(0); until != 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "renderStanding: a frozen address is not invited to buy a pass",
+  "find": "\t\tif frozenUntil == 0 {\n\t\t\tif hw > score {",
+  "replace": "\t\tif true {\n\t\t\tif hw > score {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "renderStanding: a slashed address is told the pass is forfeit",
+  "find": "\t\tif hw > score {\n\t\t\tb.WriteString(\"\\nA moderator slash took your standing to zero, and with it the\\n\" +\n\t\t\t\t\"entry pass if you held one \u2014 the burn is not refunded. A successor\\n\" +\n\t\t\t\t\"set, or the platform, can restore up to the high-water mark below.\\n\")\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "REGRESSION: the mod page states m-of-n where board acts fire at speechM",
+  "find": "\t\tif sm := speechM(cm); sm != cm.m {",
+  "replace": "\t\tif sm := speechM(cm); false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the parties are not rendered twice",
+  "find": "\t\t\t\tif seen[r.id] {\n\t\t\t\t\treturn false // reserved above; a slot is not a second copy\n\t\t\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: Newest does not re-render the parties",
+  "find": "\t\tif seen[r.id] {\n\t\t\treturn false\n\t\t}\n\t\tb.WriteString(renderBoardOne(slug, claimID, cs, r, true))\n\t\tshown++",
+  "replace": "\t\tb.WriteString(renderBoardOne(slug, claimID, cs, r, true))\n\t\tshown++"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the two orderings link to each other",
+  "find": "\t\tb.WriteString(\" \u00b7 [Top](\" + base + \"/board/top) \u00b7 **Newest**\")",
+  "replace": "\t\tb.WriteString(\" \u00b7 **Newest**\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "Render: /board/top is the ranked view, not a row id",
+  "find": "\t\t\tif parts[3] == \"top\" {\n\t\t\t\treturn renderBoardTop(parts[0], id)\n\t\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeClaimBoard: the re-freeze gap",
+  "find": "\tif prev := lookupClaimMod(cm, claimID); prev != nil && now < prev.boardFrozenGapUntil {\n\t\tpanic(\"kourtv2: this board was frozen too recently; the ceiling is not a formality\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeClaimBoard: the gap is stamped at the full ceiling",
+  "find": "\tclm.boardFrozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n",
+  "replace": "\tclm.boardFrozenGapUntil = now + blocks + freezeGapBlocks\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardOne: a comment cites the block it landed in",
+  "find": "\t\t\" \u00b7 block \" + strconv.FormatInt(r.at, 10) + \"\\n\\n\")",
+  "replace": "\t\t\"\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "renderStanding: the breakdown names only what was earned",
+  "find": "\t\tif r.from[i] == 0 {\n\t\t\tcontinue\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "renderStanding: the breakdown reaches the page at all",
+  "find": "\twriteStandingFrom(&b, c, who)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "ensureBoard: the unused indexes are not allocated eagerly",
+  "find": "\t\tcs.board = bptree.NewBPTree32()\n\t\tcs.boardTop = bptree.NewBPTree32()\n\t\tcs.boardWrote = bptree.NewBPTree32()\n",
+  "replace": "\t\tcs.board = bptree.NewBPTree32()\n\t\tcs.boardTop = bptree.NewBPTree32()\n\t\tcs.boardWrote = bptree.NewBPTree32()\n\t\tcs.boardKids = bptree.NewBPTree32()\n\t\tcs.boardVoted = bptree.NewBPTree32()\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "ensureKids: the replies index appears on the first reply",
+  "find": "\tif cs.boardKids == nil {\n\t\tcs.boardKids = bptree.NewBPTree32()\n\t}\n\treturn cs.boardKids",
+  "replace": "\treturn cs.boardKids"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "ensureVoted: the vote index appears on the first upvote",
+  "find": "\tif cs.boardVoted == nil {\n\t\tcs.boardVoted = bptree.NewBPTree32()\n\t}\n\treturn cs.boardVoted",
+  "replace": "\treturn cs.boardVoted"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTop holds the row, not a placeholder",
+  "find": "\t\tcs.boardTop.Set(k, r)",
+  "replace": "\t\tcs.boardTop.Set(k, true)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardScore holds the row, not a placeholder",
+  "find": "\tensureScoreIdx(cs).Set(r.scoreKey, r)",
+  "replace": "\tensureScoreIdx(cs).Set(r.scoreKey, true)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the global-DAO gate",
+  "find": "\tif !d.members.Has(who.String()) {\n\t\tpanic(\"kourtv2: only a global DAO member may purge\")\n\t}\n\tmustCategoryCode(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)",
+  "replace": "\tmustCategoryCode(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: mustCategoryCode",
+  "find": "\tmustCategoryCode(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)\n\tcm := ensureMod(c)",
+  "replace": "\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)\n\tcm := ensureMod(c)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the m-of-n on the ORDER",
+  "find": "\t\tif !fire {\n\t\t\treturn fromRowID\n\t\t}\n",
+  "replace": "\t\t_ = fire\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the order is recorded before the last batch",
+  "find": "\t\tclm.boardPurgeAll = true\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the order reaches the moderation log",
+  "find": "\t\tclm.appendLog(who, boardActCode(\"board-purge-all\", 0, categoryCode), \"\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the batch bound (a batch that cannot fit a tx)",
+  "find": "\t\tif n >= maxBatchRows {\n\t\t\tnext = r.id // where the next call resumes; nothing is skipped\n\t\t\treturn true\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the cursor, so nothing between batches is skipped",
+  "find": "\t\t\tnext = r.id // where the next call resumes; nothing is skipped\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: it zeroes the bytes",
+  "find": "\t\tr.text = \"\" // the bytes, not a flag\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: purged rows leave the ranked index",
+  "find": "\t\tscoreIndexDrop(cs, r)\n\t\tn++",
+  "replace": "\t\tn++"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the completion is not re-voted",
+  "find": "\tif clm == nil || !clm.boardPurgeAll {",
+  "replace": "\tif true {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: the bound counts work, not visits (done is unreachable)",
+  "find": "\t\tif r.purged {\n\t\t\treturn false\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditStanding: the category is validated before the row is allocated",
+  "find": "\tif amount <= 0 || who == \"\" || cat < 0 || cat >= standingCatN {\n\t\treturn\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditStanding: a zero or negative credit is a no-op",
+  "find": "\tif amount <= 0 || who == \"\" || cat < 0 || cat >= standingCatN {",
+  "replace": "\tif who == \"\" || cat < 0 || cat >= standingCatN {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditStanding: highWater tracks the max, not the latest",
+  "find": "\tif r.score > r.highWater {\n\t\tr.highWater = r.score\n\t}\n",
+  "replace": "\tr.highWater = r.score\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditStanding: highWater rises with earnings at all",
+  "find": "\tif r.score > r.highWater {\n\t\tr.highWater = r.score\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditStanding: the subtotal follows the score",
+  "find": "\tr.from[cat] = satAdd(r.from[cat], amount)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "satAdd: it saturates rather than wrapping on a settlement path",
+  "find": "\tif b > 0 && a > maxInt64-b {\n\t\treturn maxInt64\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "scaleBps: the bps clamp (mulDiv128's panic arm reaches Crystallize)",
+  "find": "\tif bps > 10_000 {\n\t\tbps = 10_000\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "scaleBps: a non-positive base or rate pays nothing",
+  "find": "\tif base <= 0 || bps <= 0 {\n\t\treturn 0\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditFlagSlash: the base is what the act destroyed, not the bond",
+  "find": "func creditFlagSlash(c *Court, who address, burned int64) {\n\tcreditStanding(c, who, scaleBps(burned, creditRatesFor(c).flag), standingCatFlag)",
+  "replace": "func creditFlagSlash(c *Court, who address, burned int64) {\n\tcreditStanding(c, who, creditRatesFor(c).flag, standingCatFlag)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditDisputeResolved: an overturn pays overturnBy, never the current disputer",
+  "find": "creditStanding(c, cs.overturnBy, scaleBps(cs.overturnBond, creditRatesFor(c).dispute), standingCatDispute)",
+  "replace": "creditStanding(c, cs.disputer, scaleBps(cs.overturnBond, creditRatesFor(c).dispute), standingCatDispute)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditDisputeResolved: each side on its OWN bond (2.5x the risk)",
+  "find": "creditStanding(c, cs.overturnBy, scaleBps(cs.overturnBond, creditRatesFor(c).dispute), standingCatDispute)",
+  "replace": "creditStanding(c, cs.overturnBy, scaleBps(cs.answerBond0, creditRatesFor(c).dispute), standingCatDispute)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditDisputeResolved: an uphold needs credEligible",
+  "find": "\tif cs.credEligible {\n\t\tcreditStanding(c, cs.answerer,",
+  "replace": "\tif true {\n\t\tcreditStanding(c, cs.answerer,"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditAuthorHigh: a seeded claim earns its author nothing (I5)",
+  "find": "\tif cs.seeded || tier != tierHighX {",
+  "replace": "\tif tier != tierHighX {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditAuthorHigh: HIGH only, not any adjudicated tier",
+  "find": "\tif cs.seeded || tier != tierHighX {",
+  "replace": "\tif cs.seeded || tier < tierMidX {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditAuthorHigh: an author with no winning position earns nothing",
+  "find": "\tif v == nil {\n\t\treturn\n\t}\n\tp := v.(*stakePos)",
+  "replace": "\tp := v.(*stakePos)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditAuthorHigh: accrue first, or the figure is ~7.9x understated",
+  "find": "\taccrue(c, cs, p, int(cs.provisional))\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditWinConviction: the LOW tier pays nothing",
+  "find": "\tif cs.tier < tierMidX {\n\t\treturn\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditWinConviction: an unadjudicated claim pays the half rate",
+  "find": "\tif !cs.slotConsumed {\n\t\tbps = bps * r.unadjudicated / 10_000\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditWinConviction: the base is the position's time-averaged stake",
+  "find": "scaleBps(timeAvgStake(cs, p.rawHi, p.rawLo), bps)",
+  "replace": "scaleBps(p.stake, bps)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "creditRatesFor: a court override is honoured",
+  "find": "func creditRatesFor(c *Court) creditRates {",
+  "replace": "func creditRatesFor(c *Court) creditRates {\n\treturn creditRatesDefault\n\t//"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "bucketAt: the cap is unconditional, so a slash lowers the rate in the same block",
+  "find": "\tif tokens > rate {\n\t\ttokens = rate\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "bucketAt: the cap sits OUTSIDE the gain branch (a banked burst survives a slash)",
+  "find": "\t\tstamp += gain * secsPerDay / rate\n\t}\n\tif tokens > rate {\n\t\ttokens = rate\n\t}\n",
+  "replace": "\t\tstamp += gain * secsPerDay / rate\n\t\tif tokens > rate {\n\t\t\ttokens = rate\n\t\t}\n\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "bucketAt: the first-ever poster starts full, not empty",
+  "find": "\tif lastRefill == 0 { // first ever post: start full, not empty\n\t\treturn rate, now\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "bucketAt: the stamp keeps the remainder (rate becomes poll-frequency dependent)",
+  "find": "\t\tstamp += gain * secsPerDay / rate\n",
+  "replace": "\t\tstamp = now\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "passPriceFor: the lid is the \u00a716 relation",
+  "find": "\tif lid := sup * ladderFor(c).t3Bps / 10_000 / passPriceOfT3; p > lid {\n\t\tp = lid\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "boardSupply: the ONE sealed read (burn in-block to cross a rung)",
+  "find": "\treturn c.coin.PastTotal(c.coin.Epoch() - 1), true\n",
+  "replace": "\treturn c.coin.TotalSupply(), true\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "postLevel: the pass floors at 1 and does not cap there",
+  "find": "\tif r := lookupStanding(c, who); r != nil && r.passHeld {\n\t\treturn 1\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustSpendPost: the allowance is actually spent",
+  "find": "\tr.tokens--\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustSpendPost: an exhausted allowance refuses",
+  "find": "\tif refill(c, who, r) < 1 {",
+  "replace": "\tif false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "refill: the level, not a fixed rate",
+  "find": "\trate := postsPerDayAt(ladderFor(c), postLevel(c, who))",
+  "replace": "\trate := ladderFor(c).postsEntry"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustLadder: t3Bps <= 10_000 (the only bound on three raw multiplies)",
+  "find": "l.t2Bps < l.t3Bps && l.t3Bps <= 10_000)",
+  "replace": "l.t2Bps < l.t3Bps)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustLadder: the strictly-increasing thresholds",
+  "find": "\tif !(0 < l.t1Bps && l.t1Bps < l.t2Bps && l.t2Bps < l.t3Bps && l.t3Bps <= 10_000) {\n\t\tpanic(\"kourtv2: the ladder must be strictly increasing within 0..10000 bps\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustLadder: the \u00a716 floor on t3",
+  "find": "\tif l.t3Bps < passPriceOfT3*passPriceBps {\n",
+  "replace": "\tif false {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustLadder: the strictly-increasing rates",
+  "find": "\tif !(0 < l.postsEntry && l.postsEntry < l.postsT2 && l.postsT2 < l.postsT3()) {\n\t\tpanic(\"kourtv2: the posting rates must be strictly increasing\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "passPriceFor: the young-court floor",
+  "find": "\tif p < passPriceMinCC {\n\t\tp = passPriceMinCC\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "REGRESSION: passPriceFor panics on a court with no sealed epoch",
+  "find": "\tsup, sealed := boardSupply(c)\n\tif !sealed {\n\t\treturn 0\n\t}\n\tp := sup * passPriceBps / 10_000",
+  "replace": "\tsup := c.coin.PastTotal(c.coin.Epoch() - 1)\n\tp := sup * passPriceBps / 10_000"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "boardSupply: the sealed test is Epoch() >= 2, not >= 1",
+  "find": "\tif c.coin.Epoch() < 2 {",
+  "replace": "\tif c.coin.Epoch() < 1 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "BuyCommentPass: the unsealed refusal names the real reason",
+  "find": "\t\tif _, sealed := boardSupply(c); !sealed {\n\t\t\tpanic(\"kourtv2: this court has not completed a sealed epoch yet; its board is not open\")\n\t\t}\n\t\tpanic(\"kourtv2: this court cannot price a pass yet \u2014 it has no supply\")",
+  "replace": "\t\tpanic(\"kourtv2: this court cannot price a pass yet \u2014 it has no supply\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustSpendPost: the unsealed refusal does not advise an impossible purchase",
+  "find": "\t\tif _, sealed := boardSupply(c); !sealed {\n\t\t\tpanic(\"kourtv2: this court has not completed a sealed epoch yet; its board is not open\")\n\t\t}\n\t\tpanic(\"kourtv2: you cannot post in this court yet \u2014 earn standing, or buy an entry pass\")",
+  "replace": "\t\tpanic(\"kourtv2: you cannot post in this court yet \u2014 earn standing, or buy an entry pass\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "renderStanding: a fresh court renders instead of aborting",
+  "find": "\tif !sealed {\n\t\t// The page renders rather than panicking, and says the true thing: this",
+  "replace": "\t_ = sealed\n\tif false {\n\t\t// The page renders rather than panicking, and says the true thing: this"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "REGRESSION: postLevel panics on a court with no sealed epoch",
+  "find": "\tsup, sealed := boardSupply(c)\n\tif !sealed {\n\t\t// NOT \"level 0 because you have no standing\"",
+  "replace": "\tsup, sealed := boardSupply(c)\n\t_ = sealed\n\tif false {\n\t\t// NOT \"level 0 because you have no standing\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "levelFloor: the rungs follow the sealed supply",
+  "find": "\tsup, _ := boardSupply(c)\n\tswitch lv {",
+  "replace": "\tsup := int64(1)\n\tswitch lv {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardNewest: answers on a claim with no board",
+  "find": "\tif cs.boardTop == nil || count <= 0 {\n\t\treturn \"\"\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardTop: answers on a claim with no board",
+  "find": "\tif cs.boardScore == nil || count <= 0 {\n\t\treturn \"\"\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardReplies: answers when no replies index exists",
+  "find": "\tif cs.boardKids == nil {\n\t\treturn \"\"\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardReplyCount: answers when no replies index exists",
+  "find": "\tif cs.boardKids == nil {\n\t\treturn 0\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HasUpvoted: answers when no vote index exists",
+  "find": "\tif cs.boardVoted == nil {\n\t\treturn false\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the empty-board page",
+  "find": "\tif cs.boardTop == nil || cs.boardTop.Size() == 0 {\n\t\tb.WriteString(\"_No comments yet._\\n\")\n\t\treturn b.String()\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "mustBoardRow: a named row that is not there is refused, not allocated",
+  "find": "\tif cs.board == nil {\n\t\tpanic(\"kourtv2: no such comment\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: the count reads the index that exists",
+  "find": "\tif cs.boardTop != nil {\n\t\tn = cs.boardTop.Size()\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardReplies: the count IS the nil guard",
+  "find": "\tn, total := 0, boardReplyCount(cs, parent)\n\tif total == 0 {\n\t\treturn\n\t}\n",
+  "replace": "\tn, total := 0, boardReplyCount(cs, parent)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "UnhideBoardRow: the speechM threshold",
+  "find": "\t\twho, \"\", speechM(cm))\n\tif !fire {\n\t\treturn\n\t}\n\t// The MODERATOR's bit only.",
+  "replace": "\t\twho, \"\", 1)\n\t_ = fire\n\t// The MODERATOR's bit only."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the byte cap on comment text",
+  "find": "\tif len(text) > maxBoardTextLen {\n",
+  "replace": "\tif false {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: an empty comment is refused after trimming",
+  "find": "\ttext = strings.TrimSpace(text)\n\tif text == \"\" {\n\t\tpanic(\"kourtv2: a comment needs text\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the depth-one parent check",
+  "find": "\t\tif p.parent != 0 {\n",
+  "replace": "\t\tif p.id == 0 {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the parent must exist",
+  "find": "\t\tp := mustBoardRow(cs, parentRow)\n",
+  "replace": "\t\tp := &boardRow{}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the per-author cap",
+  "find": "\tif boardWroteBy(cs, who) >= maxBoardRowsPerAuthor {\n",
+  "replace": "\tif false {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the per-claim cap",
+  "find": "\tif cs.board != nil && cs.board.Size() >= maxBoardRowsPerClaim {\n",
+  "replace": "\tif false {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the author counter advances",
+  "find": "\tcs.boardWrote.Set(string(who), boardWroteBy(cs, who)+1)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the settled-claim gate",
+  "find": "\tif !boardOpen(cs) {\n\t\tpanic(\"kourtv2: this claim is settled; its board is closed to new comments\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the purged-court gate",
+  "find": "\tif courtIsPurged(c) {\n\t\tpanic(\"kourtv2: this court is purged; it takes no new content\")\n\t}\n\tcs := mustClaim(c, claimID)\n\tif !boardOpen(cs) {\n\t\tpanic(\"kourtv2: this claim is settled; its board is closed to new comments\")\n\t}",
+  "replace": "\tcs := mustClaim(c, claimID)\n\tif !boardOpen(cs) {\n\t\tpanic(\"kourtv2: this claim is settled; its board is closed to new comments\")\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "PostComment: the row id advances (two comments, two ids)",
+  "find": "\tcs.boardNextID++\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: replies are not ranked",
+  "find": "\tif r.parent != 0 {\n\t\tpanic(\"kourtv2: only top-level comments are ranked; a reply is read under its parent\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: no self-vote",
+  "find": "\tif r.author == who {\n\t\tpanic(\"kourtv2: you cannot upvote your own comment\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: once per address per row",
+  "find": "\tif cs.boardVoted != nil && cs.boardVoted.Has(vk) {\n\t\tpanic(\"kourtv2: you have already upvoted that comment\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: an upvote needs standing, not a pass",
+  "find": "\tif w <= 0 {\n",
+  "replace": "\tif w < 0 {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: the weight is the voter's standing, not a constant",
+  "find": "\t\tw = sr.score\n",
+  "replace": "\t\tw = 1\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: the vote is recorded, so it cannot be cast twice",
+  "find": "\tensureVoted(cs).Set(vk, true)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: the score index is re-keyed, not left stale",
+  "find": "\tscoreIndexDrop(cs, r)\n\tr.score = satAdd(r.score, w)\n\tscoreIndexPut(cs, r)\n",
+  "replace": "\tr.score = satAdd(r.score, w)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: the vote key separates rows",
+  "find": "\tvk := beClaimKey(rowID) + string(who)\n",
+  "replace": "\tvk := string(who)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: the settled-claim gate",
+  "find": "\tif !boardOpen(cs) {\n\t\tpanic(\"kourtv2: this claim is settled; its board is closed\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: the freeze reaches voting",
+  "find": "\tmustBoardWritable(c, cs, who)\n\tr := mustBoardRow(cs, rowID)",
+  "replace": "\tr := mustBoardRow(cs, rowID)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: a vote draws on the posting allowance",
+  "find": "\tmustSpendPost(c, who)\n\n\tensureBoard(cs)\n\tensureVoted(cs).Set(vk, true)",
+  "replace": "\n\tensureBoard(cs)\n\tensureVoted(cs).Set(vk, true)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: a purged row takes no votes (a charge for nothing)",
+  "find": "\tif r.purged {\n\t\tpanic(\"kourtv2: that comment was destroyed on legal grounds; it takes no votes\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "UpvoteComment: a HIDDEN row still banks score (the reversible case)",
+  "find": "\tif r.purged {\n\t\tpanic(\"kourtv2: that comment was destroyed on legal grounds; it takes no votes\")\n\t}\n",
+  "replace": "\tif boardMark(r) != \".\" {\n\t\tpanic(\"kourtv2: that comment was destroyed on legal grounds; it takes no votes\")\n\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HideOwnComment: only the author",
+  "find": "\tif r.author != who {\n",
+  "replace": "\tif who == \"\" {\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HideOwnComment: hiding leaves the ranked index",
+  "find": "\tif hide {\n\t\tscoreIndexDrop(cs, r)\n\t} else {\n\t\tscoreIndexPut(cs, r)\n\t}",
+  "replace": "\tif hide {\n\t} else {\n\t\tscoreIndexPut(cs, r)\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HideOwnComment: unhiding returns to the ranked index",
+  "find": "\tif hide {\n\t\tscoreIndexDrop(cs, r)\n\t} else {\n\t\tscoreIndexPut(cs, r)\n\t}",
+  "replace": "\tif hide {\n\t\tscoreIndexDrop(cs, r)\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HideOwnComment: the bit follows the argument",
+  "find": "\tr.hiddenByAuthor = hide\n",
+  "replace": "\tr.hiddenByAuthor = true\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HideOwnComment: the row must exist",
+  "find": "\tr := mustBoardRow(cs, rowID)\n\tif r.author != who {",
+  "replace": "\tr := &boardRow{author: who}\n\tif r.author != who {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "HideOwnComment: hiding cannot free a slot under the per-author cap",
+  "find": "\tr.hiddenByAuthor = hide\n",
+  "replace": "\tr.hiddenByAuthor = hide\n\tif hide {\n\t\tcs.boardWrote.Set(string(who), boardWroteBy(cs, who)-1)\n\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTextVisible: sanitize.Block, not BlockRich (the doc-spoof markers)",
+  "find": "\treturn sanitize.Block(r.text)\n",
+  "replace": "\treturn sanitize.BlockRich(r.text)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTextVisible: sanitize at all",
+  "find": "\treturn sanitize.Block(r.text)\n",
+  "replace": "\treturn r.text\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardTextVisible: InlineText would fold a multi-line comment",
+  "find": "\treturn sanitize.Block(r.text)\n",
+  "replace": "\treturn sanitize.InlineText(r.text)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardScoreKey: the score is the primary sort",
+  "find": "\treturn beInv(score) + beInv(int64(rowID))\n",
+  "replace": "\treturn beInv(int64(rowID))\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardScoreKey: the row id breaks ties, or equal scores collide to one key",
+  "find": "\treturn beInv(score) + beInv(int64(rowID))\n",
+  "replace": "\treturn beInv(score)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardScoreKey: DESCENDING, not ascending (worst-first Top)",
+  "find": "\treturn beInv(score) + beInv(int64(rowID))\n",
+  "replace": "\treturn beClaimKey(uint64(score)) + beInv(int64(rowID))\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardScoreKey: ties break NEWEST first (cold start reads as Newest)",
+  "find": "\treturn beInv(score) + beInv(int64(rowID))\n",
+  "replace": "\treturn beInv(score) + beClaimKey(rowID)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardTop: the page size is clamped",
+  "find": "\tif count > maxBoardRepliesShown*8 {\n\t\tcount = maxBoardRepliesShown * 8\n\t}\n\tvar b strings.Builder\n\tcs.boardScore.IterateByOffset",
+  "replace": "\tvar b strings.Builder\n\tcs.boardScore.IterateByOffset"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardNewest: the page size is clamped",
+  "find": "\tif count > maxBoardRepliesShown*8 {\n\t\tcount = maxBoardRepliesShown * 8\n\t}\n\tvar b strings.Builder\n\tcs.boardTop.ReverseIterateByOffset",
+  "replace": "\tvar b strings.Builder\n\tcs.boardTop.ReverseIterateByOffset"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardNewest: the reply count is field 3",
+  "find": "\t\t\tstrconv.Itoa(boardReplyCount(cs, r.id)) + \"|\")\n",
+  "replace": "\t\t\t\"0|\")\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardNewest: a withheld row keeps the field count (mark, empty text)",
+  "find": "\t\t\tb.WriteString(m + \"|\\n\")\n\t\t\treturn false\n",
+  "replace": "\t\t\tb.WriteString(m + \"\\n\")\n\t\t\treturn false\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardTop: field 3 is the score the ordering uses",
+  "find": "\t\t\tstrconv.FormatInt(r.score, 10) + \"|.|\" + boardTextFor(r) + \"\\n\")",
+  "replace": "\t\t\t\"0|.|\" + boardTextFor(r) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardReplies: a withheld reply keeps the field count",
+  "find": "\t\t\tb.WriteString(m + \"|\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\".|\" + boardTextFor(r) + \"\\n\")",
+  "replace": "\t\t\tb.WriteString(m + \"\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\".|\" + boardTextFor(r) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "PostsPerDay: derived from the level, not a constant",
+  "find": "\treturn postsPerDayAt(ladderFor(c), postLevel(c, who))\n",
+  "replace": "\treturn ladderFor(c).postsEntry\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "PostsAvailable: it reads bucketAt and does not reimplement it",
+  "find": "\tavail, _ := bucketAt(r.tokens, r.lastRefill, postsPerDayAt(ladderFor(c), postLevel(c, who)), nowTime())\n\treturn avail\n",
+  "replace": "\treturn r.tokens\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardSize: it reports the row count",
+  "find": "\treturn cs.board.Size()\n",
+  "replace": "\treturn 0\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "CommentsWrittenBy: it reports the author's row count",
+  "find": "\treturn boardWroteBy(mustClaim(mustCourt(courtSlug), claimID), who)\n",
+  "replace": "\treturn 0\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "Standing: it reports the score",
+  "find": "\t\treturn r.score\n\t}\n\treturn 0\n}",
+  "replace": "\t\treturn 0\n\t}\n\treturn 0\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardBadges: the claim's author is marked as such",
+  "find": "\tif who == cs.author {\n\t\tout = append(out, \"author\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardBadges: the answerer is marked, and only once frozen",
+  "find": "\tif cs.frozenAt != 0 && who == cs.answerer {\n\t\tout = append(out, \"answerer\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardBadges: the answerer badge waits for the freeze",
+  "find": "\tif cs.frozenAt != 0 && who == cs.answerer {",
+  "replace": "\tif who == cs.answerer {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardBadges: a staker's SIDE is named",
+  "find": "\t\t\t\tname := \"YES\"\n\t\t\t\tif side == sideNO {\n\t\t\t\t\tname = \"NO\"\n\t\t\t\t}\n",
+  "replace": "\t\t\t\tname := \"YES\"\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardBadges: a staker's AMOUNT is named",
+  "find": "out = append(out, name+\" \"+strconv.FormatInt(p.stake, 10))",
+  "replace": "out = append(out, name)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardBadges: a zero position earns no badge",
+  "find": "\t\t\tif p := v.(*stakePos); p.stake > 0 {",
+  "replace": "\t\t\tif p := v.(*stakePos); true {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the older-comments tail counts what was not shown",
+  "find": "\tif rest := cs.boardTop.Size() - shown - len(seen); rest > 0 {",
+  "replace": "\tif rest := 0; rest > 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the ranked page says when nothing else is upvoted",
+  "find": "\t\tif shown == 0 {\n\t\t\tb.WriteString(\"_Nothing else upvoted yet \u2014 [Newest](\" + base +\n\t\t\t\t\"/board) is the fuller view._\\n\")\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the who-may-write line",
+  "find": "\tb.WriteString(\"Anyone with standing in this court \u2014 or a one-off entry pass \u2014 \" +",
+  "replace": "\tb.WriteString(\"\" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardRow: a non-numeric comment id is refused as that",
+  "find": "\t\treturn \"## Not found\\nA comment id must be a number.\"\n",
+  "replace": "\t\treturn \"## Not found\\nNo comment by that id on this claim.\"\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "renderModLog: the suspension line does not promise a masking",
+  "find": "\t\t\tb.WriteString(\"- **suspended** \u2014 they cannot take new moderation acts. \" +\n\t\t\t\t\"The hides and freezes already in place stand until cleared, and \" +\n\t\t\t\t\"any member may still lift their own\\n\")\n",
+  "replace": "\t\t\tb.WriteString(\"- **suspended** \u2014 their hides are masked and they cannot act\\n\")\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "boardFrozen: a suspended set's freeze is not lifted by the suspension",
+  "find": "\tif r.frozenEpoch != boardSanctionEpochOf(c) {\n\t\treturn false // cleared wholesale; the stamp is stale\n\t}\n",
+  "replace": "\tif r.frozenEpoch != boardSanctionEpochOf(c) || c.mod.suspended {\n\t\treturn false // cleared wholesale; the stamp is stale\n\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRow: a second purge is a no-op, not a fresh act",
+  "find": "\tif r.purged {\n\t\t// Already destroyed; a second purge is a no-op, not an error",
+  "replace": "\tif false {\n\t\t// Already destroyed; a second purge is a no-op, not an error"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: a destroyed row cannot be redacted",
+  "find": "\t\tpanic(\"kourtv2: that comment was already destroyed; there is nothing to withhold\")\n\t}\n\tnow := heightNow()",
+  "replace": "\t}\n\tnow := heightNow()"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the board says when its CLAIM is under a legal act",
+  "find": "\tif TextRedacted(c.id, claimID) {\n\t\tb.WriteString(\"> **The claim itself is withheld or removed on legal grounds.**\\n\" +\n\t\t\t\"> These comments are a separate record and are not covered by that act.\\n\\n\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "postLevel: the rungs are what a split lands on",
+  "find": "\tcase s >= sup*l.t2Bps/10_000:\n\t\treturn 2\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "BuyCommentPass: the price is BURNED, not transferred",
+  "find": "\tc.coin.Burn(who, price)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "passPriceFor: the price a splitter pays per entry rung",
+  "find": "\tp := sup * passPriceBps / 10_000\n",
+  "replace": "\tp := int64(0)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "renderStanding: the page says the bar is a share of supply, not a fixed number",
+  "find": "\tb.WriteString(\"\\nEach rung is a **share of this court's supply**, not a fixed \" +\n\t\t\"number, so the bar rises as the court grows. Standing itself is never \" +\n\t\t\"taken except by a logged moderator slash \u2014 but a score that does not \" +\n\t\t\"move can still fall below a rung it used to clear.\\n\")\n\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "postLevel: the rung is a share of the SEALED supply, so the bar moves",
+  "find": "\tcase s >= sup*l.t3Bps/10_000:\n\t\treturn 3\n",
+  "replace": "\tcase s >= l.t3Bps:\n\t\treturn 3\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalHideRow: no boardOpen gate \u2014 a notice outlives the claim",
+  "find": "\tcheckReason(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)",
+  "replace": "\tcheckReason(categoryCode)\n\tc := mustCourt(courtSlug)\n\tcs := mustClaim(c, claimID)\n\tif !boardOpen(cs) {\n\t\tpanic(\"kourtv2: settled\")\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "PurgeBoardRange: no boardOpen gate \u2014 an order outlives the claim",
+  "find": "\tcs := mustClaim(c, claimID)\n\tcm := ensureMod(c)",
+  "replace": "\tcs := mustClaim(c, claimID)\n\tif !boardOpen(cs) {\n\t\tpanic(\"kourtv2: settled\")\n\t}\n\tcm := ensureMod(c)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalClearBoardBits: the reversal is on the court's record",
+  "find": "\tcm.appendCourtLog(who, \"global-clear-board-bits\", \"\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "GlobalRestoreStanding: the reversal is on the court's record",
+  "find": "\tensureMod(c).appendCourtLog(actor, \"global-restore-standing\", \"\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "SetLadderDefault: the realm-wide change emits",
+  "find": "\t\t\"act\", \"set-ladder-default:\"+ladderKey(l),\n",
+  "replace": "\t\t\"act\", \"\",\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "standing.gno",
+  "label": "SetCreditRatesDefault: the realm-wide change emits",
+  "find": "\t\t\"act\", \"set-rates-default:\"+creditRatesKey(r),\n",
+  "replace": "\t\t\"act\", \"\",\n"
  }
 ]

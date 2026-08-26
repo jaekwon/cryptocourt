@@ -402,12 +402,22 @@ COIN_OUT = re.compile(r"^(?!\s*//).*\b" + RECV + r"\.coin\.(?:Transfer|TransferF
 # would start counting as a holder outflow.
 ESCROW_SRC = re.compile(RECV + r"\.coin\.(?:Transfer|Burn)\(" + RECV + r"\.escrow")
 GATE = re.compile(r"must(?:Spendable|Stakable)\(")
-COIN_OUT_N = 8  # see the audit above
+COIN_OUT_N = 9  # see the audit above
 # 7 -> 8: association.gno's association bond. AddAssociation moves a stranger's CC into
 # the escrow, so it is a user-sourced outflow like every claim deposit and answer
 # bond, and it is gated by mustSpendable on the line above the move. The count is
 # the arm's whole content — a new outflow that forgot its gate would land here as
 # a 9th, which is what this number is for.
+#
+# 8 -> 9: posting.gno's BuyCommentPass, and it is a different KIND from the eight
+# before it. Every one of those moves a holder's coin INTO the escrow, where the
+# realm can later burn or return it; this one burns from the holder's balance
+# directly and nothing is ever held. That is deliberate — an escrowed pass would
+# put a refund decision in a moderator's hands and would park CC where votableAt
+# nets it out of the quorum bar — but it means the sentence lock.gno's spendable()
+# carried for this whole realm's life, "nothing burns a user's balance", is now
+# false and was corrected in the same commit. Gated by mustSpendable on the line
+# above the burn, like the rest.
 
 # ARM 13 — every mint is accounted, and there are exactly three of them.
 #
@@ -462,7 +472,56 @@ MINT_N = 3  # see the audit above
 PURGE_VERB = re.compile(r"^func (Purge\w*)\(cur realm", re.M)
 PURGE_AUTH = 'panic("kourtv2: only a global DAO member may purge")'
 PURGE_CODE = "mustCategoryCode("
-PURGE_VERBS_N = 4  # PurgeClaim, PurgeCourt, PurgeModLogRow, PurgeFolder
+PURGE_VERBS_N = 7  # PurgeClaim, PurgeCourt, PurgeModLogRow, PurgeFolder,
+#                    PurgeBoardRow, PurgeCourtLogRow, PurgeBoardRange
+
+# Arm 16: the purged-court gate, and WHICH side of the line each reader is on.
+#
+# courtIsPurged used to carry a comment naming its two readers. By the time
+# anyone looked there were five, so the enumeration was guarding nothing. The
+# rule it stood for is a predicate: read the gate on a path that BEGINS a
+# commitment, never on one that settles or releases a commitment already made.
+# A gate on a release path is how a purged court strands an answered claim's
+# stakers — the exact failure MODERATION.md §2 forbids.
+#
+# The allowlist is therefore ENTRY VERBS ONLY. Adding a reader means adding a
+# name here, which is the moment to say which side of the line it is on.
+# Arm 17: S1, the constitutional separation between the money lane and the
+# comment lane.
+#
+# CLAIM_BOARDS.md S1: "no money path reads board, standing, level, pass, vote or
+# freeze state". The coupling is one-way and one-way only — money paths WRITE to
+# the standing ledger through four named credit hooks, and read nothing back. That
+# is what keeps a settlement independent of a claim's comment section: if a payout
+# could read a level or a vote, a flooded board would move money, and S5's "a
+# claim settles identically to the same claim with no bits set" would be false.
+#
+# It held on inspection and nothing enforced it, which for a one-way coupling is
+# the whole risk: the first read looks harmless at the call site and is invisible
+# from the other side. The money lane is derived rather than declared — any file
+# that calls coin.Transfer/Mint/Burn — so a new money file inherits the rule
+# instead of having to be remembered.
+BOARD_LANE = {"board.gno", "boardlegal.gno", "boardmod.gno", "posting.gno",
+              "standing.gno"}
+MONEY_MOVE = re.compile(r"\bcoin\.(Transfer|Mint|Burn)\(")
+# Reading any of these from a money path is the violation. The four credit hooks
+# are deliberately absent: they are WRITES, and the permitted direction.
+BOARD_READS = re.compile(
+    r"\b(lookupStanding|getStanding|postLevel|levelFloor|passHeld|boardFrozen|"
+    r"claimBoardFrozen|boardSupply|boardMark|boardWroteBy|mustBoardWritable|"
+    r"mustSpendPost|boardOpen|PostsAvailable|HoldsPass)\b")
+CREDIT_HOOKS = re.compile(
+    r"\b(creditFlagSlash|creditDisputeResolved|creditAuthorHigh|creditWinConviction)\(")
+CREDIT_HOOK_CALLS_N = 4
+
+PURGED_GATE = re.compile(r"courtIsPurged\(c\)")
+PURGED_GATE_ENTRY = {
+    "OpenClaim", "OpenClaimP", "OpenClaimSeeded",  # a new claim
+    "PostComment", "UpvoteComment",                # a new board row
+}
+PURGED_GATE_N = 5
+# CourtPurged, the render/test read, spells it courtIsPurged(mustCourt(...)) and
+# so is not counted. Deliberate: it decides nothing, it reports.
 
 # ARM 15 — the entitlement queue has exactly one placement site, and one writer each
 # for the two cursors that position it.
@@ -706,7 +765,7 @@ def main() -> int:
     arm4 = {"weight_fn": 0, "cap_fn": 0, "floor": 0,
             "stakers_rm": 0, "locked_read": 0, "stateWriter": 0,
             "verdict_w": 0, "closed_w": 0, "stakable": 0, "coin_out": 0,
-            "lockvote": 0, "mint": 0, "purge": 0,
+            "lockvote": 0, "mint": 0, "purge": 0, "purged_gate": 0, "credit_hooks": 0,
             "ent_new": 0, "ent_tail": 0, "ent_junior": 0}
     # The three arm-15 keys share the ent_ prefix and deliberately avoid the _w
     # suffix: the tag selector reads `key.endswith("_w")` as "a claim-terminal
@@ -812,6 +871,35 @@ def main() -> int:
                                         f"is a legal removal nobody authorised or "
                                         f"nobody can audit")
 
+                # Arm 17, per file: a money path reads no board or standing state.
+                if p.name not in BOARD_LANE and MONEY_MOVE.search(src):
+                    for m in BOARD_READS.finditer(src):
+                        line = src[:m.start()].count("\n") + 1
+                        hits.append(f"[money-reads-board] {pkg}/{p.name}:{line} "
+                                    f"calls {m.group(1)} from a file that moves "
+                                    f"coin. S1 makes the coupling one-way: money "
+                                    f"WRITES to the standing ledger through the "
+                                    f"four credit hooks and reads nothing back, "
+                                    f"which is what keeps a settlement independent "
+                                    f"of a claim's comment section")
+                arm4["credit_hooks"] += len(CREDIT_HOOKS.findall(src)) if p.name not in BOARD_LANE else 0
+
+                # Arm 16, per file: every purged-court gate sits on an entry verb.
+                for m in PURGED_GATE.finditer(src):
+                    arm4["purged_gate"] += 1
+                    head = src.rfind("\nfunc ", 0, m.start())
+                    fn = "?" if head == -1 else re.match(
+                        r"\nfunc (?:\([^)]*\) )?(\w+)", src[head:]).group(1)
+                    if fn not in PURGED_GATE_ENTRY:
+                        hits.append(f"[purged-gate-on-a-release-path] "
+                                    f"{pkg}/{p.name}:{fn} reads courtIsPurged. That "
+                                    f"gate belongs on paths that BEGIN a commitment, "
+                                    f"never on one that settles or releases a "
+                                    f"commitment already made: a purged court must "
+                                    f"stop taking new business without stranding "
+                                    f"money already in it. If this really is an "
+                                    f"entry verb, add it to PURGED_GATE_ENTRY")
+
                 # Arm 15, per file: one placement site, one writer per cursor.
                 arm4["ent_new"] += len(ENT_NEW.findall(src))
                 arm4["ent_tail"] += len(TAIL_W.findall(src))
@@ -909,6 +997,8 @@ def main() -> int:
         ("lockvote", LOCKVOTE_CALLS_N, "vote-lock site(s)"),
         ("mint", MINT_N, "mint site(s)"),
         ("purge", PURGE_VERBS_N, "purge verb(s)"),
+        ("purged_gate", PURGED_GATE_N, "purged-court gate read(s)"),
+        ("credit_hooks", CREDIT_HOOK_CALLS_N, "money-to-standing credit hook call(s)"),
         ("ent_new", ENT_NEW_N, "entitlement placement site(s)"),
         ("ent_tail", TAIL_W_N, "reservedTail writer(s)"),
         ("ent_junior", JUNIOR_W_N, "juniorReserved writer(s)"),
@@ -1005,6 +1095,8 @@ def main() -> int:
           f"{arm4['lockvote']} self-only vote-lock site(s), "
           f"{arm4['mint']} accounted mint site(s), "
           f"{arm4['purge']} doubly-gated purge verb(s), "
+          f"{arm4['purged_gate']} purged-court gate(s) all on entry verbs, "
+          f"{arm4['credit_hooks']} money-to-standing write(s) and no reads back, "
           f"{arm4['ent_new']} entitlement placement site(s), "
           f"one quality-question definition, {len(trims)} stake-series trim(s) and "
           f"no coin-archive trim, release clause in "

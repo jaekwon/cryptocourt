@@ -41,6 +41,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,6 +56,34 @@ import repolock
 import mutate  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+# A short-variable declaration, at any indent, capturing the names on the left.
+DECL = re.compile(r"^[\t ]*([A-Za-z_][\w, ]*?)\s*:=", re.M)
+
+
+def unused_after(mutated, at):
+    """The first name the mutation orphaned, or None.
+
+    Scoped to the ENCLOSING FUNCTION of the mutation site, and only to `:=`
+    declarations, because those are the ones a deleted statement orphans. A name
+    used anywhere else in the same function — including inside a closure — counts
+    as used, so the test is deliberately conservative: it under-reports rather
+    than blocking a legitimate row. Every one of the ten INVALID rows that
+    prompted it is caught by exactly this rule.
+    """
+    head = mutated.rfind("\nfunc ", 0, at)
+    if head == -1:
+        return None
+    tail = mutated.find("\n}\n", head)
+    body = mutated[head:tail if tail != -1 else len(mutated)]
+    for m in DECL.finditer(body):
+        for name in (n.strip() for n in m.group(1).split(",")):
+            if not name or name == "_" or not name.isidentifier():
+                continue
+            if len(re.findall(r"\b%s\b" % re.escape(name), body)) == 1:
+                return name
+    return None
 
 
 def main():
@@ -134,6 +163,25 @@ def main():
             first = (pr.stderr.strip().split("\n") or [""])[0]
             unappliable.append((corpus, label, "its mutant does not PARSE: %s"
                                 % first.split(":", 1)[-1].strip()[:80]))
+            continue
+
+        # AND IT MUST TYPE-CHECK, which parsing does not cover and which is the
+        # hole that actually bit. gofmt above answers "is this Go?"; it does not
+        # answer "would the compiler accept it?", and Go's loudest difference
+        # between those two is the UNUSED VARIABLE. Delete an
+        # `if !fire { return }` and `fire` is still declared, still parses, and
+        # will not build.
+        #
+        # That is not hypothetical: TEN rows in this corpus were reported CAUGHT
+        # by a hand-rolled probe that read a non-zero exit code as coverage, and
+        # mutate-parallel — which classifies build errors separately — showed all
+        # ten as INVALID. Two of the ten, once rebuilt so they compiled, turned
+        # out to be genuine survivors guarding a single-key comment purge and a
+        # single-moderator hide. A row that cannot build is not a weak test, it
+        # is no test, and until now nothing in `make check` could tell.
+        if bad := unused_after(mutated, src.index(r["find"])):
+            unappliable.append((corpus, label, "its mutant leaves %r declared and "
+                                "unused, so it never compiles and tests nothing" % bad))
             continue
 
         blob = r["file"] + "\0" + mutated

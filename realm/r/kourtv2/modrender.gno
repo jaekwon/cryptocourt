@@ -361,6 +361,32 @@ func writeAppeal(b *strings.Builder, c *Court, cs *claimState) {
 
 // ---- the moderation log route (<slug>/mod) --------------------------------
 
+// modActLine formats one log row, and is the ONLY place a log row becomes text.
+//
+// ONE COPY, TWO LOGS. The court-level log (boardmod.gno) and the per-claim log
+// render identically apart from the label, and the second copy of these four
+// lines immediately made two existing mutation-corpus anchors ambiguous — the
+// corpus caught the duplication before a divergence could. `kind` is the only
+// difference, because the two logs have SEPARATE row-id sequences and each has
+// its own purge verb, so a reader has to be able to tell which id they are
+// looking at.
+//
+// The row id is PRINTED because it is the handle PurgeModLogRow and
+// PurgeCourtLogRow take (I11). A power addressed by an id nobody can see is a
+// power nobody can use.
+func modActLine(a modAct, kind string) string {
+	line := "- " + kind + " " + strconv.FormatUint(a.rowID, 10) +
+		" · height " + strconv.FormatInt(a.height, 10) + " · " +
+		sanitize.InlineText(a.code) + " · by " + sanitize.InlineText(a.actor.String())
+	switch {
+	case a.purged:
+		line += " — _[reason removed on legal grounds]_"
+	case a.reason != "":
+		line += " — " + sanitize.InlineText(a.reason)
+	}
+	return line
+}
+
 func renderModLog(slug string) string {
 	if !Exists(slug) {
 		return "## Not found\nNo court by that slug."
@@ -389,8 +415,29 @@ func renderModLog(slug string) string {
 	} else {
 		b.WriteString("- " + strconv.Itoa(cm.m) + " of " + strconv.Itoa(cm.n) +
 			" must agree for a moderation act\n")
+		// AND THE BOARD THRESHOLD, WHICH IS NOT THE SAME NUMBER. Board acts fire
+		// at speechM = min(n, max(2, m)), so a 1-of-3 set needs two approvals to
+		// touch anyone's speech. This page printed only `m of n` and therefore
+		// stated the wrong rule for every court where the two differ; SpeechThreshold
+		// existed with no caller at all.
+		if sm := speechM(cm); sm != cm.m {
+			b.WriteString("- " + strconv.Itoa(sm) + " of " + strconv.Itoa(cm.n) +
+				" for a **board** act — hiding a comment, slashing standing, " +
+				"freezing an address — because speech takes a wider agreement " +
+				"than the set's own threshold\n")
+		}
 		if cm.suspended {
-			b.WriteString("- **suspended** — their hides are masked and they cannot act\n")
+			// WHAT SUSPENSION ACTUALLY DOES. This line used to say "their hides
+			// are masked and they cannot act". The second half is true; the first
+			// is not, and no visibility predicate in the realm consults
+			// cm.suspended — HiddenFromListing is `court || meta || global` and
+			// boardMark reads the row's own bits. A page that promises a masking
+			// the code does not perform tells a reader their content is back when
+			// it is not. §7.4 asks for the masking; docs/CLAIM_BOARDS.md carries
+			// the ruling on whether to build it.
+			b.WriteString("- **suspended** — they cannot take new moderation acts. " +
+				"The hides and freezes already in place stand until cleared, and " +
+				"any member may still lift their own\n")
 		}
 		if cm.installedByMeta {
 			b.WriteString("- seated by the review court; may not seed claims until a local election\n")
@@ -470,27 +517,33 @@ func renderModLog(slug string) string {
 	rows := []string{}
 	visited := 0
 	truncated := false
+	// THE COURT-LEVEL LOG FIRST, and newest-first within it. A board sanction is
+	// keyed to an ADDRESS, so it has no claim to hang off and lands in cm.log
+	// (boardmod.gno). It is read first because those are the acts a reader is
+	// least likely to find any other way: a claim's own page shows its hides, but
+	// nothing shows a slash except this list.
+	//
+	// Rows are labelled "court row" because the two logs have SEPARATE
+	// sequences — a court row and a claim row may share a number, and
+	// PurgeCourtLogRow and PurgeModLogRow are different verbs.
+	for i := len(cm.log) - 1; i >= 0 && len(rows) < renderPageSize; i-- {
+		rows = append(rows, modActLine(cm.log[i], "court row"))
+	}
+	if len(rows) >= renderPageSize {
+		truncated = true
+	}
 	cm.claims.ReverseIterate("", "", func(_ string, v any) bool {
+		if len(rows) >= renderPageSize {
+			truncated = true
+			return true
+		}
 		clm, ok := v.(*claimMod)
 		if !ok {
 			return false
 		}
 		visited++
 		for i := len(clm.log) - 1; i >= 0; i-- {
-			a := clm.log[i]
-			// The row id is PRINTED because it is the handle PurgeModLogRow
-			// takes (I11). A power addressed by an id nobody can see is a
-			// power nobody can use.
-			line := "- row " + strconv.FormatUint(a.rowID, 10) +
-				" · height " + strconv.FormatInt(a.height, 10) + " · " +
-				sanitize.InlineText(a.code) + " · by " + sanitize.InlineText(a.actor.String())
-			switch {
-			case a.purged:
-				line += " — _[reason removed on legal grounds]_"
-			case a.reason != "":
-				line += " — " + sanitize.InlineText(a.reason)
-			}
-			rows = append(rows, line)
+			rows = append(rows, modActLine(clm.log[i], "row"))
 			if len(rows) >= renderPageSize {
 				truncated = true
 				return true

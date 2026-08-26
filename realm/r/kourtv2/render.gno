@@ -63,7 +63,12 @@ func render(path string) string {
 	if path == "" {
 		return renderDirectory()
 	}
-	parts := strings.SplitN(path, "/", 3)
+	// FOUR, not three. The cap used to be the thing that refused a fourth
+	// segment — it folded into the address argument and IsValid() rejected it —
+	// and the board's per-row deep link needs a fourth, so the refusal moved to
+	// an explicit arm below. `<slug>/<id>/<addr>/extra` still renders "Not
+	// found"; it is a different line that says so.
+	parts := strings.SplitN(path, "/", 4)
 	if len(parts) == 1 {
 		return renderCourt(parts[0])
 	}
@@ -72,9 +77,37 @@ func render(path string) string {
 	if parts[1] == "mod" {
 		return renderModLog(parts[0])
 	}
+	// The standing page carves at the same position and for the same reason. A
+	// slug is [a-z0-9-]{1,11} so a court MAY be called "me", but that occupies
+	// parts[0]; and a claim id is numeric, so "me" can never be mistaken for one.
+	if parts[1] == "me" {
+		if len(parts) == 3 {
+			return renderStanding(parts[0], parts[2])
+		}
+		return renderStandingIndex(parts[0])
+	}
 	id, err := strconv.ParseUint(parts[1], 10, 64)
 	if err != nil {
 		return "## Not found\nA claim id must be a number."
+	}
+	// The board: a page at three segments, one row at four. Carved BEFORE the
+	// positions arm, and deliberately without touching that arm's text — two
+	// mutation rows anchor on it verbatim, and an edit there would leave them
+	// measuring nothing.
+	if len(parts) >= 3 && parts[2] == "board" {
+		if len(parts) == 4 {
+			// "top" is the ranked VIEW of the same board, carved before the
+			// numeric parse for the reason "mod" and "me" are: a row id is
+			// numeric, so a word can never be mistaken for one.
+			if parts[3] == "top" {
+				return renderBoardTop(parts[0], id)
+			}
+			return renderBoardRow(parts[0], id, parts[3])
+		}
+		return renderBoardPage(parts[0], id)
+	}
+	if len(parts) == 4 {
+		return "## Not found\nThat is not a page."
 	}
 	if len(parts) == 3 {
 		return renderPositions(parts[0], id, parts[2])
@@ -226,6 +259,10 @@ func renderClaim(slug string, id uint64) string {
 		b.WriteString(body)
 	}
 	b.WriteString(hideBanner(c, cs))
+	// THE BOARD, LINKED FROM THE CLAIM. It had no link from anywhere: the route
+	// existed and the only way to reach it was to type the URL, so every comment
+	// ever written was on a page nobody could navigate to.
+	writeBoardLink(&b, c, cs, id)
 	writeAppeal(&b, c, cs)
 	if cs.seeded {
 		b.WriteString("_Seeded by a moderator to start this court; the author earns nothing from it._\n\n")

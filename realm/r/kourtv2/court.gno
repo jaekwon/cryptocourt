@@ -549,6 +549,26 @@ type Court struct {
 	// with no migration and no version field. A court that wants association to
 	// be as good as free sets 1.
 	assocBond int64
+
+	// ladder overrides the realm-default posting ladder for this court, or nil to
+	// inherit (posting.gno). A pointer for the reason creditRates is one.
+	ladder *ladder
+
+	// creditRates overrides the realm-default earning rates for this court, or
+	// nil to inherit (standing.gno). A POINTER and not a value, because for a
+	// five-tuple "all zero" is a court that deliberately zeroed its board and
+	// must not read as "unset" — the sentinel assocBond can afford with one int.
+	creditRates *creditRates
+
+	// standings is the participation record (standing.gno): addr -> *standingRow.
+	// Created eagerly with the others rather than lazily, because its writers sit
+	// on money paths at lifecycle transitions — a lazily-built tree would give
+	// each of those a second branch that has to agree with the write path, which
+	// is the shape `locked` is eager to avoid.
+	//
+	// NOT `records`, and the two must never be merged. `records` is adjudicated
+	// and no moderator can touch it; this one is slashable for abuse.
+	standings *bptree.BPTree
 }
 
 // courts is the directory: slug -> *Court, lexicographic by slug.
@@ -624,6 +644,7 @@ func startCourt(admin, escrowAddr address, slug, name string, delay int64) strin
 		claims:         bptree.NewBPTree32(),
 		queue:          bptree.NewBPTree32(),
 		records:        bptree.NewBPTree32(),
+		standings:      bptree.NewBPTree32(),
 		locked:         bptree.NewBPTree32(),
 		voteLocks:      bptree.NewBPTree32(),
 		stakeIdx:       bptree.NewBPTree32(),

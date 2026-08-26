@@ -310,6 +310,17 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		if burned > 0 {
 			c.coin.Burn(c.escrow, burned)
 			cs.answerBond = 0
+			// STAMP THE WINNER HERE, INSIDE THE FORFEITURE, and not below with
+			// the rest of the round bookkeeping. The credit is for causing a
+			// forfeiture, so it belongs to the round that caused one — and only
+			// the first overturn ever does: it zeroes answerBond, so a second
+			// overturn burns nothing, returns its own bond whole, mints no comp,
+			// and would otherwise re-stamp this field at zero net cost and take
+			// the credit from the address that actually won. Both halves are
+			// captured together because they answer one question: who won, and
+			// with how much of their own capital.
+			cs.overturnBy = cs.disputer
+			cs.overturnBond = posted
 		}
 		if posted > 0 {
 			c.coin.Transfer(c.escrow, cs.disputer, posted)
@@ -607,6 +618,12 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	} else if cs.decidedRounds > 0 && cs.credEligible {
 		creditUpheld(c, cs.answerer) // contested-and-upheld: the hard point
 	}
+	// Standing rides the SAME predicate one ledger over (standing.gno), and
+	// deliberately so — an uphold earns only when it was credEligible, because
+	// otherwise ~20% of a dispute bond buys standing on any trivially-true claim,
+	// which is the M2-1 finding this branch already encodes for the record.
+	// The two ledgers stay separate: this one is slashable, the record is not.
+	creditDisputeResolved(c, cs)
 	releasePriority(c, cs.answerer, claimID)
 }
 

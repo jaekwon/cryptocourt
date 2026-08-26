@@ -281,6 +281,11 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 		{"periodBlocks", periodBlocks, 120_960, "one week — the emission accounting period"},
 		{"epochBlocks", epochBlocks, 720, "the checkpoint epoch"},
 		{"curveDenom", curveDenom, 1_000_000_000, "the curve's reciprocal slope"},
+		{"standingFlagBps", standingFlagBps, 10_000, "a settled slash credits standing at par with what it destroyed"},
+		{"standingDisputeBps", standingDisputeBps, 10_000, "and a decided dispute at par with the winner's own posted bond"},
+		{"standingAuthorHighBps", standingAuthorHighBps, 2_000, "authoring a HIGH claim credits 5% of what was on the question"},
+		{"standingConvictionBps", standingConvictionBps, 1_000, "winning conviction credits 10% — the smallest row, because it is the one anyone can repeat"},
+		{"standingUnadjudicatedBps", standingUnadjudicatedBps, 5_000, "an UNDISPUTED claim's winners earn half of that: a dispute is partly noise, so requiring one would punish a staker for not being attacked"},
 	} {
 		if k.got != k.want {
 			t.Errorf("%s is %d, the design says %d (%s) — if this change is deliberate, "+
@@ -294,6 +299,40 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 		t.Errorf("the P7 split must exhaust D: %d+%d+%d+%d",
 			splitWinners, splitAuthor, splitAnswerer, splitCarrot)
 	}
+	// standing.gno's own ordering claim — "policing >= authorship > staking" — which is
+	// what stops standing becoming a yield on holding rather than a record of work. A
+	// table of values does not cover it, and each row's base differs, so this is the
+	// only place the ORDER itself is asserted.
+	if standingFlagBps < standingAuthorHighBps || standingDisputeBps < standingAuthorHighBps {
+		t.Errorf("policing must credit at least as much as authorship: flag %d, dispute %d, author %d",
+			standingFlagBps, standingDisputeBps, standingAuthorHighBps)
+	}
+	// NOT ASSERTED, AND THE REASON IS THE FINDING: standing.gno claims the
+	// ordering runs "policing >= authorship > staking", and in raw bps it does
+	// not — authorship is 500 and staking is 1000. Today that is not yet a defect,
+	// because the two rows read DIFFERENT bases (authorship scales on the claim's
+	// X-bar, staking on a conviction integral), so their bps are not comparable
+	// and the effective ordering can still hold.
+	//
+	// It becomes a defect the moment both move onto the earner's own
+	// time-averaged stake, which is the correction docs/CLAIM_BOARDS.md records
+	// as owed: on one shared base, 500 against 1000 means authorship pays HALF
+	// what staking pays, inverting the one ordering the file says must not move —
+	// and authorship is the strictly harder gate (two-thirds at the full bar,
+	// seeded excluded) so it should pay more, not less.
+	//
+	// So this assertion is deliberately absent rather than forgotten, and the
+	// re-basing may not land without moving standingAuthorHighBps above
+	// standingConvictionBps in the same commit. That is a calibration change and
+	// therefore an owner call, which is why it is recorded and not made here.
+	// An undisputed stand is worth something and worth LESS. Both halves matter: at
+	// 10000 the slotConsumed distinction would be decorative, at 0 the row would pay
+	// nothing on the path most claims take.
+	if standingUnadjudicatedBps <= 0 || standingUnadjudicatedBps >= 10_000 {
+		t.Errorf("the unadjudicated rate must be a real fraction, not 0 or par: %d",
+			standingUnadjudicatedBps)
+	}
+
 	// court.gno's own claim beside slashXBps: "bounty 2% <= 80% x 4.5%". The flag bond is
 	// the bounty's own arm, so the slash floor must cover it at the comp ratio.
 	if flagBondXBps*10000 > slashXBps*compOfBurnBps {

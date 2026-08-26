@@ -107,6 +107,7 @@ SPEND_PATHS = {
     ("lock.gno", "TransferCC"): "TestStakedCoinCannotBeTransferred",
     ("lock.gno", "TransferFromCC"): "TestAnAllowanceDoesNotOutrankALock",
     ("association.gno", "AddAssociation"): "TestLockedStakeCannotBeSpentTwice",
+    ("posting.gno", "BuyCommentPass"): "TestAPassCannotBeBoughtWithCommittedCoin",
 }
 
 # The test lock.gno's header names: "there is a test that stakes a whole balance

@@ -290,6 +290,30 @@ control("a second writer of the proposal state", f"{GOVERNORDIR}/governor.gno",
         "func (g *Governor) setState(p *proposal, st int8, reason string) {",
         "proposal-state writer(s), expected 1",
         argv=["python3", EPOCHCOH])
+# ARM 17: S1, the one-way coupling between money and the comment lane. The plant
+# is the first read — a settlement asking what level the author has — because that
+# is exactly how a one-way coupling stops being one: it looks harmless at the call
+# site and is invisible from the other side. If a payout could read a level or a
+# vote, a flooded board would move money and S5 would be false.
+control("a money path reading board state", f"{KOURTV2}/crystallize.gno",
+        "\tcreditAuthorHigh(c, cs, cs.tier)",
+        "\tif postLevel(c, cs.author) > 0 {\n\t\tcreditAuthorHigh(c, cs, cs.tier)\n\t}",
+        "money-reads-board",
+        argv=["python3", EPOCHCOH])
+# ARM 16, and its plant is the failure the arm exists for. courtIsPurged used to
+# document its own readers in a comment, which had already drifted from two to
+# five. The rule is a predicate — the gate belongs on paths that BEGIN a
+# commitment — and Unstake is the canonical release path: gating it means a
+# purged court strands an answered claim's stakers, which MODERATION.md §2
+# forbids outright.
+control("the purged-court gate on a release path", f"{KOURTV2}/stake.gno",
+        "func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64) {\n"
+        "\tif !cur.IsCurrent() {",
+        "func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64) {\n"
+        "\tif courtIsPurged(c) {\n\t\tpanic(\"selftest\")\n\t}\n"
+        "\tif !cur.IsCurrent() {",
+        "purged-gate-on-a-release-path",
+        argv=["python3", EPOCHCOH])
 control("a second reader of the lock tree", f"{KOURTV2}/lock.gno",
         "\tc.locked.Set(string(who), l-amount)",
         "\tc.locked.Get(string(who))",
@@ -549,7 +573,7 @@ control("a purge verb with no authority gate", f"{KOURTV2}/folders.gno",
 control("the purge verb pattern drifting off the code", EPOCHCOH,
         r'PURGE_VERB = re.compile(r"^func (Purge\w*)\(cur realm", re.M)',
         r'PURGE_VERB = re.compile(r"^func (PurgeNOPE\w*)\(cur realm", re.M)',
-        "0 purge verb(s), expected 4",
+        "0 purge verb(s), expected 7",
         argv=["python3", EPOCHCOH])
 
 # ARM 15, the entitlement-queue census. enqueueSenior's tiling invariant — seniors and
@@ -911,6 +935,41 @@ try:
         failures.append(_unp)
 finally:
     shutil.move(_bk3, MUTS)
+
+# THE FOURTH FAILURE MODE, and the one that actually cost something: a row whose
+# mutant PARSES and does not COMPILE. Go's loudest difference between those two is
+# the unused variable — delete an `if !fire { return }` and `fire` is still
+# declared, still parses, and never builds.
+#
+# Ten rows sat in this corpus that way. A hand-rolled probe read the non-zero exit
+# of a build failure as coverage and reported all ten CAUGHT; mutate-parallel, which
+# classifies build errors separately, showed them INVALID. Two of the ten, once
+# rebuilt so they compiled, were genuine SURVIVORS — one guarding a single-key
+# comment purge, the other a single-moderator hide. Nothing in `make check` could
+# see any of it. This arm is why it can now.
+_unb = "a row whose mutant parses but cannot build"
+_bk4 = MUTS + ".selftest-backup"
+shutil.copy(MUTS, _bk4)
+try:
+    _corpus4 = json.load(open(_bk4))
+    # Spelled out rather than derived from the corpus, for the same reason the
+    # parse plant above is: it must not quietly become buildable.
+    _orph = {"pkg": "kourtv2", "file": "boardlegal.gno",
+             "label": "SELFTEST orphaned-variable row",
+             "find": "\tif !fire {\n\t\treturn\n\t}\n\tr.purged = true",
+             "replace": "\tr.purged = true"}
+    with open(MUTS, "w") as _fh4:
+        json.dump([_orph] + _corpus4, _fh4, indent=2, ensure_ascii=False)
+        _fh4.write("\n")
+    _r4 = subprocess.run(["python3", COLLISIONS], capture_output=True, text=True)
+    _out4 = _r4.stdout + _r4.stderr
+    if _r4.returncode != 0 and "declared and unused" in _out4:
+        print(f"  {_unb:<44} fires")
+    else:
+        print(f"  {_unb:<44} SILENT — exit {_r4.returncode} on an unbuildable row")
+        failures.append(_unb)
+finally:
+    shutil.move(_bk4, MUTS)
 
 print("\ncheck-control-anchors")
 # The other half of check-guards-armed's division of labour: that one says

@@ -222,6 +222,19 @@ type courtMod struct {
 	claims  *bptree.BPTree // claimID (be64) -> *claimMod
 	pending *bptree.BPTree // actionKey -> *approval
 
+	// boardSanctionEpoch is what makes every board freeze in the court clearable
+	// in ONE write (boardmod.gno). A freeze records the epoch it was set under
+	// and is live only while the two still match, so the recovery verb bumps this
+	// instead of walking a tree of unknown size on the remedy path — which §7.5
+	// of docs/CLAIM_BOARDS.md refuses everywhere else for the same reason.
+	boardSanctionEpoch int64
+
+	// The COURT-level act log. claimMod's log is keyed to a claim and a board
+	// sanction is keyed to an ADDRESS, so slashes, freezes and their undos have
+	// no claim to hang off. They land here, and renderModLog reads both.
+	log    []modAct
+	logSeq uint64
+
 	folders   *bptree.BPTree // folderID (be64) -> *folder (folders.gno)
 	folderSeq uint64
 
@@ -249,6 +262,28 @@ type claimMod struct {
 
 	purged    bool   // claim title tombstoned (global purge)
 	tombstone string // the category code shown in place of text
+
+	// One claim's board, closed by a moderator act and auto-expiring
+	// (boardmod.gno). The CLAIM stays fully live — answers, stakes, votes and the
+	// verdict are untouched; only comments stop. Expiry is lazy, and the epoch
+	// stamp is what lets the global recovery verb clear it in one write.
+	boardFrozenUntil int64
+	boardFrozenEpoch int64
+	// The re-freeze gap, for the same reason an address freeze has one: without
+	// it freezeMaxBlocks bounds nothing, because the set re-freezes in the next
+	// block. This verb shipped with the ceiling and without the gap — so the one
+	// freeze that could be held at a 100% duty cycle was the one aimed at a whole
+	// claim's board rather than at one person. Neither the undo nor the sanction
+	// epoch clears it; see standing.gno's frozenGapUntil.
+	boardFrozenGapUntil int64
+
+	// boardPurgeAll: the global DAO has decided this claim's whole board goes.
+	// The DECISION is voted once; the mechanical completion is not re-voted,
+	// because a purge that needed m-of-n per 64-row batch would make a 500-row
+	// board eight coordinated votes under a 72-hour clock. Any global DAO member
+	// may advance the cursor once the flag is set, and the flag also makes the
+	// order self-evident at render before the last batch has run.
+	boardPurgeAll bool
 
 	// There were once three more stamps here — courtActByOthers, metaActByOthers
 	// and globalActHeight — carrying a per-claim "a third party already acted"
@@ -531,6 +566,22 @@ func (clm *claimMod) appendLog(actor address, code, reason string) uint64 {
 		height: heightNow(),
 	})
 	return clm.logSeq
+}
+
+// appendCourtLog records an act that belongs to the COURT rather than to a
+// claim, and returns its rowID. Row ids are drawn from a separate sequence, so a
+// court row and a claim row may share a number — PurgeCourtLogRow and
+// PurgeModLogRow are different verbs and each addresses only its own log.
+func (cm *courtMod) appendCourtLog(actor address, code, reason string) uint64 {
+	cm.logSeq++
+	cm.log = append(cm.log, modAct{
+		rowID:  cm.logSeq,
+		actor:  actor,
+		code:   code,
+		reason: reason,
+		height: heightNow(),
+	})
+	return cm.logSeq
 }
 
 // approveAction records who's approval for key and returns (fire, reason). When
@@ -872,6 +923,12 @@ func ResetModSet(cur realm, courtSlug string) {
 	cm.m = 1                                    // n==0 means nobody is a member, so nothing can act
 	clearPendingOnMembershipChange(&cm.pending) // stale approvals die with the set
 	cm.suspended = false
+	// AND EVERY LIVE BOARD FREEZE DIES WITH THE SET. A reset takes n to 0, so
+	// nobody is left who could unfreeze — and a freeze that outlives the set that
+	// imposed it is a sanction with no author, unliftable until it expires. One
+	// integer clears them all (boardmod.gno's sanction epoch); the alternative is
+	// an unbounded walk on the remedy path.
+	cm.boardSanctionEpoch++
 	cm.setActHeight = heightNow()
 	emitGlobalAct(c.id, 0, "reset-mod-set", who)
 }
@@ -902,9 +959,22 @@ func PurgeCourt(cur realm, courtSlug string, categoryCode string) {
 	emitPurge(c.id, 0, code, who)
 }
 
-// courtIsPurged is the OpenClaim gate (MODERATION.md §2 build guardrail: this
-// is read ONLY by OpenClaim/OpenClaimSeeded, never by PostAnswer/Stake/withdraw,
-// so no answered claim's stakers can ever strand).
+// courtIsPurged is the entry gate (MODERATION.md §2 build guardrail).
+//
+// A PREDICATE, NOT A LIST. This comment used to enumerate its two readers, and
+// the list had already drifted to five before anyone noticed — which is how an
+// enumeration guards nothing. The rule it was standing in for:
+//
+//	read it on a path that BEGINS a commitment; never on one that settles or
+//	releases a commitment already made.
+//
+// So OpenClaim, OpenClaimP, OpenClaimSeeded, PostComment and UpvoteComment read
+// it, and PostAnswer, Stake, every withdraw and every settlement path do not. A
+// purged court must stop accepting new business without stranding money already
+// in it, and a gate on a release path is exactly how the second half breaks.
+// check-epoch-coherence.py arm 16 holds the census — the count AND the
+// enclosing-function allowlist — so the next reader added has to say which side
+// of the line it is on.
 func courtIsPurged(c *Court) bool {
 	return c.mod != nil && c.mod.courtPurged
 }

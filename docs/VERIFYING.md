@@ -39,9 +39,45 @@ failure. Three things have to hold, and none of them is automatic:
 - **A harness that exits before the thing it is measuring.** A client process
   that closes its socket on the way out makes a shutdown look prompt for the
   wrong reason. Hold the connection open across the event.
+- **A mutant that does not COMPILE, scored as a catch.** This one cost ten rows.
+  Go refuses an unused variable, so deleting an `if !fire { return }` leaves
+  `fire` declared, still parsing, and unbuildable. The suite exits non-zero — and
+  a harness that reads only the exit code calls that CAUGHT. Ten corpus rows were
+  "verified" that way; `mutate-parallel`, which classifies build errors
+  separately, reported all ten INVALID. Rebuilt so they compiled, **two were
+  genuine survivors** — one let a single key permanently destroy a comment, the
+  other let a single moderator hide one. `check-mutant-collisions` now refuses a
+  row whose mutant orphans a variable, so `make check` catches it without a suite
+  having to run. If you write a probe harness, its verdicts are
+  CAUGHT / SURVIVED / **INVALID** / ANCHOR-FAIL, and conflating any two of the
+  four is how a corpus fills with rows that measure nothing.
+- **A threshold tested only where it equals one.** `speechM`-of-n and the global
+  DAO's `purgeM` both default to 1 on a fresh fixture, so the first call always
+  fires and deleting the threshold entirely leaves the suite green. Any m-of-n
+  guard needs a fixture with m above 1, or it is untested by construction.
 - **A survey that missed.** `grep 'resume'` finds no test named
   `TestResumeRestoresLiveGuest`. Use `-i`, and treat an empty survey as a reason
   to ask a second differently-shaped question rather than as an answer.
+
+## Restoring shared state in a test
+
+`testing.SetRealm` does **not** take effect inside ANY closure — deferred or
+otherwise. A `post := func(text string) { testing.SetRealm(...); Verb(cross(cur), ...) }`
+helper looks obviously right and every call inside it arrives as *nobody*: the
+caller identity belongs to the test frame, not the closure's. Six escape
+assertions failed at "level 0, cannot post" before this was understood. Set the
+realm in the test body, one statement before the crossing call.
+
+The deferred case is the same limitation with a worse symptom: the defer
+runs as whatever caller the body last set, so a restore that needs the admin is
+refused, and the defer's own panic replaces the real failure. A deferred cleanup
+here protects nothing and hides the diagnosis.
+
+Restore inline instead, positioned after the last call that needs the changed
+state and **before** any assertion that can `t.Fatal`. Package state — the global
+DAO's `purgeM`, its membership, a court's mod set — is shared by every test in
+the package, and leaving it changed has already taken down five tests in other
+files whose only fault was running later.
 
 ## Before writing a file
 

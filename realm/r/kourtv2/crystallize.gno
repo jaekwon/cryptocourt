@@ -170,6 +170,14 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	if cs.seeded {
 		cs.drawAuthor = 0
 	}
+	// The author's STANDING credit (standing.gno) lands here rather than at the
+	// AuthorBonus pull, so it does not depend on the author ever bothering to
+	// draw. HIGH only — a default MID is what an unlooked-at claim gets, and
+	// crediting that is the author-mill's habitat (PLAN §3.4 F1). Seeded claims
+	// earn zero, which is I5 applied to the record instead of to the money: the
+	// addresses that can seed are the ones that will hold the board's moderator
+	// powers, so without this gate seeding is a standing faucet for the set.
+	creditAuthorHigh(c, cs, cs.tier)
 
 	// The carrot: 7 points of the MID-weight gross, tier-invariant (paid even
 	// at low — F2), senior-lane, per-voter clamped at pull (P2). 128-bit: midGross
@@ -260,6 +268,21 @@ func WithdrawBonus(cur realm, courtSlug string, claimID uint64, side int) int64 
 	p.bonusPaid = true
 
 	convCC := convToCC(p.convHi, p.convLo)
+	// Standing for winning conviction (standing.gno): linear and uncapped, taken
+	// from the SAME convCC the draw is computed from so the two can never
+	// disagree about what was held.
+	//
+	// BEFORE THE CAP is the placement that matters: capBonus is concave, and a
+	// concave credit pays a split position more than a whole one — the lesson
+	// the carrot's own P2 per-voter clamp note records a few lines above.
+	//
+	// Before the early return below is NOT load-bearing, and an earlier version
+	// of this comment implied it was. That return fires only when convCC <= 0 or
+	// the winning pool is empty, the second cannot happen while the first does
+	// not (the pool integral contains this position's), and a zero credit is
+	// refused downstream anyway — so either side of it behaves identically. It
+	// reads better here; it defends nothing here.
+	creditWinConviction(c, cs, who, p)
 	if convCC <= 0 || cs.winPoolConvCC <= 0 {
 		return 0
 	}
@@ -336,8 +359,30 @@ func AnswererBonus(cur realm, courtSlug string, claimID uint64) int64 {
 
 // capBonus applies the F9 cap: (tier/2) × time-averaged stake, where the
 // average is the raw ∫stake·dt over the claim's open life. Floors.
+// timeAvgStake is a position's raw integral divided by the claim's open blocks —
+// the F9/Q7 cap base, and now also the base the author and conviction STANDING
+// rows are scaled on (standing.gno §2.2).
+//
+// EXTRACTED RATHER THAN COPIED, because the second caller arrived and the divide
+// was folded inside capBonus together with the (tier/2) multiply. Two spellings
+// of one quantity is how the two come to disagree.
+//
+// AND IT CLAMPS WHERE div128 PANICS. div128 aborts on `hi >= den`, which is fine
+// where it has always run — inside the pull functions, where a panic strands one
+// address. The standing credits run inside Crystallize, where the same panic
+// would strand the whole claim's draw: the exact blast-radius widening satAdd
+// and scaleBps exist to prevent on these paths. Unreachable at real magnitudes;
+// clamped anyway, because "unreachable" is what every one of those guards was
+// also told about itself.
+func timeAvgStake(cs *claimState, rawHi, rawLo uint64) int64 {
+	if cs.openBlocks <= 0 || rawHi >= uint64(cs.openBlocks) {
+		return 0
+	}
+	return div128(rawHi, rawLo, cs.openBlocks)
+}
+
 func capBonus(cs *claimState, gross int64, rawHi, rawLo uint64) int64 {
-	rawAvg := div128(rawHi, rawLo, cs.openBlocks)
+	rawAvg := timeAvgStake(cs, rawHi, rawLo)
 	bound := mustMul(cs.tier, rawAvg) / 2
 	if gross > bound {
 		gross = bound

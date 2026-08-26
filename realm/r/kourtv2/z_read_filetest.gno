@@ -81,9 +81,40 @@ func main(cur realm) {
 	// The strips, and the franchise ledger.
 	println("strip size:        ", kourtv2.DirectoryStripSize())
 	println("stranger franchise:", kourtv2.FranchiseOf(stranger))
+	// The standing reads, exercised on an address that has NEVER participated —
+	// which is the case that would allocate if the read ever reached the
+	// allocating accessor instead of its non-allocating twin. This filetest is
+	// budgeted to write nothing, so that regression shows up here as a byte
+	// count rather than as a green suite.
+	println("stranger standing:", kourtv2.Standing("meta", stranger))
+	println("stranger breakdown:", kourtv2.StandingBreakdown("meta", stranger))
+	// The rate read, on a court that has never overridden — so it exercises the
+	// inherit branch, which is the one that would allocate if the resolver ever
+	// reached for an ensure* helper to materialise a default.
+	println("meta rates:", kourtv2.CreditRates("meta"))
 
 	// And the pages a reader actually meets. Render is the biggest read
 	// surface in the realm and the one most likely to settle something.
+	// THE BOARD LANE. Nineteen exported reads landed with the comment board and
+	// none of them was in this file — so the STATIC purity census covered them
+	// (check-read-purity greps for allocator names) and the DYNAMIC one did not.
+	// The defect this file exists for is a read that lazily allocates, and the
+	// board lane is where lazy allocation actually lives now: ensureKids,
+	// ensureScoreIdx and ensureVoted were introduced deliberately, so a read
+	// reaching one of them is a live possibility rather than a hypothetical.
+	println("board codes:       ", kourtv2.BoardCodes() != "")
+	// 0, and correctly: the meta court has no courtMod object until something
+	// moderates it, and SpeechThreshold answers for that rather than allocating
+	// one to find out. Allocating here is exactly the defect this file catches.
+	println("meta speech thresh:", kourtv2.SpeechThreshold("meta"))
+	println("meta ladder:       ", kourtv2.Ladder("meta") != "")
+	println("meta pass price:   ", kourtv2.PassPrice("meta"))
+	println("stranger has pass: ", kourtv2.HoldsPass("meta", stranger))
+	println("stranger level:    ", kourtv2.PostLevel("meta", stranger))
+	println("stranger per day:  ", kourtv2.PostsPerDay("meta", stranger))
+	println("stranger available:", kourtv2.PostsAvailable("meta", stranger))
+	println("stranger frozen:   ", kourtv2.BoardFrozenUntil("meta", stranger))
+
 	println("front page renders:", len(kourtv2.Render("")) > 0)
 	println("court page renders:", len(kourtv2.Render("meta")) > 0)
 }
@@ -115,5 +146,17 @@ func main(cur realm) {
 // supply raw/esc/vot: 0 0 0
 // strip size:         0
 // stranger franchise: 0
+// stranger standing: 0
+// stranger breakdown: score:0;highwater:0;flag:0;dispute:0;author:0;conviction:0
+// meta rates: flag:10000;dispute:10000;author:2000;conviction:1000;unadjudicated:5000;inherited:1
+// board codes:        true
+// meta speech thresh: 0
+// meta ladder:        true
+// meta pass price:    0
+// stranger has pass:  false
+// stranger level:     0
+// stranger per day:   0
+// stranger available: 0
+// stranger frozen:    0
 // front page renders: true
 // court page renders: true

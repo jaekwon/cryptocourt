@@ -92,6 +92,35 @@ BODY_CALLERS = {
     ("modrender.gno", "claimBodyQuoted"): "sanitize.Blockquote",
 }
 
+# A FOURTH FAMILY, and the one this check was blind to. A board comment is
+# attacker-controlled multi-line text, arriving in far greater volume than titles
+# or bodies and on the same money-bearing pages — and `r.text` matched none of the
+# three regexes above, so the whole surface could have reached markdown unescaped
+# with this check reporting green.
+#
+# boardTextVisible is the display gate and applies sanitize.Block (the STRICT
+# variant, which escapes the doc-spoof markers BlockRich preserves). boardTextFor
+# is the WIRE gate: it returns raw text to a client that sanitises for its own
+# context, exactly as claimBodyVisible does, so it is listed as a raw reader
+# rather than required to escape.
+BOARD_TEXT_READERS = {
+    ("board.gno", "boardTextVisible"): "sanitize.Block",
+    ("board.gno", "boardTextFor"): None,   # the wire read: raw by contract
+
+    # PurgeBoardRow does not read the text, it DESTROYS it (`r.text = ""`). It is
+    # listed rather than excluded by a smarter regex because an assignment-only
+    # exemption would also excuse a real read on the right-hand side, and because
+    # a census that names the one verb allowed to touch these bytes outside the
+    # two gates is worth more than one that cannot see it at all.
+    ("boardlegal.gno", "PurgeBoardRow"): None,
+
+    # PurgeBoardRange is the batched form of the same destruction — same
+    # `r.text = ""`, up to maxBatchRows at a time. Listed for the reason its
+    # single-row twin is: an assignment-only exemption in the regex would also
+    # excuse a real read on the right-hand side.
+    ("boardlegal.gno", "PurgeBoardRange"): None,
+}
+
 # ---------------------------------------------------------------- foreign --
 #
 # THE SCOPE ABOVE IS kourtv2 ONLY, AND THAT IS WHERE THE HOLE WAS. CourtName is
@@ -153,6 +182,7 @@ def main():
     repolock.refuse_if_held("check-render-text")
 
     bad, seen_title, seen_body, seen_court = [], set(), set(), set()
+    seen_board = set()
     for path in sorted(REALM.glob("*.gno")):
         if path.name.endswith("_test.gno"):
             continue
@@ -171,6 +201,20 @@ def main():
                     bad.append("%s/%s reads the court's raw name or description and is "
                                "not in COURT_TEXT_READERS. If it DISPLAYS the field it "
                                "must go through courtNameFor or courtDescFor." % key)
+            if re.search(r"\br\.text\b", body):
+                seen_board.add(key)
+                if key not in BOARD_TEXT_READERS:
+                    bad.append("%s/%s reads a board comment's raw text and is not in "
+                               "BOARD_TEXT_READERS. If it DISPLAYS the comment it must "
+                               "go through boardTextVisible; if it hands it to a client "
+                               "that sanitises for its own context, add it here with "
+                               "that reason." % key)
+                else:
+                    want = BOARD_TEXT_READERS[key]
+                    if want is not None and want not in body:
+                        bad.append("%s/%s is the board display gate but does not apply "
+                                   "%s — raw comment text reaches the page"
+                                   % (key + (want,)))
             if "claimBodyVisible(" in body and fn != "claimBodyVisible":
                 seen_body.add(key)
                 want = BODY_CALLERS.get(key)
@@ -188,6 +232,9 @@ def main():
     for key in sorted(set(COURT_TEXT_READERS) - seen_court):
         bad.append("%s/%s is in COURT_TEXT_READERS but no longer reads c.name or "
                    "c.desc — the gate moved or the entry is stale" % key)
+    for key in sorted(set(BOARD_TEXT_READERS) - seen_board):
+        bad.append("%s/%s is in BOARD_TEXT_READERS but no longer reads a comment's raw "
+                   "text — the gate moved or the entry is stale" % key)
     for key in sorted(set(BODY_CALLERS) - seen_body):
         bad.append("%s/%s is in BODY_CALLERS but no longer calls claimBodyVisible — "
                    "the gate moved or the entry is stale" % key)
@@ -228,10 +275,10 @@ def main():
         bad.append("%s/%s/%s is in FOREIGN_NAME_DISPLAY but no longer writes a token "
                    "name — the gate moved or the entry is stale" % key)
 
-    if not seen_title or not seen_body:
-        print("check-render-text: found no title readers or no body callers at all, "
-              "so this check is measuring nothing. The gates were renamed.",
-              file=sys.stderr)
+    if not seen_title or not seen_body or not seen_board:
+        print("check-render-text: found no title readers, no body callers, or no board "
+              "text readers at all, so this check is measuring nothing. The gates were "
+              "renamed.", file=sys.stderr)
         return 1
 
     if bad:
@@ -245,10 +292,11 @@ def main():
               "realm.", file=sys.stderr)
         return 1
 
-    print("check-render-text: %d title reader(s), %d court-text reader(s) and %d body "
-          "caller(s) in kourtv2, plus %d foreign reader(s) of its raw text and %d "
-          "foreign token-name display(s) — each routed through its own gate."
-          % (len(seen_title), len(seen_court), len(seen_body),
+    print("check-render-text: %d title reader(s), %d court-text reader(s), %d body "
+          "caller(s) and %d board-text reader(s) in kourtv2, plus %d foreign reader(s) "
+          "of its raw text and %d foreign token-name display(s) — each routed through "
+          "its own gate."
+          % (len(seen_title), len(seen_court), len(seen_body), len(seen_board),
              len(seen_fread), len(seen_fshow)))
     return 0
 

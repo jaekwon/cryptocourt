@@ -4,8 +4,10 @@ being asked a question.
 
 `mustModRead` exists precisely to state this rule: it is the READ-ONLY
 counterpart of `ensureMod`, so a query that needs a court's moderation state
-panics when there is none instead of creating one. Three helpers in kourtv2
-allocate and persist: `ensureMod`, `ensureGlobalDAO` and `ensureClaimMod`. None
+panics when there is none instead of creating one. Nine helpers in kourtv2 allocate
+and persist, and the list is in ALLOCATORS below rather than here so it cannot
+drift from what the check enforces — this sentence said "three" long after there
+were more, which is the same rot the census exists to catch one level down. None
 of them belongs on a read path.
 
 WHY IT MATTERS, in the order the harm arrives:
@@ -63,8 +65,14 @@ REALM = ROOT / "realm" / "r" / "kourtv2"
 # because it CALLS ensureMod, so a read reaching it would allocate while naming
 # none of the words above. The scan is textual, so an allocator behind one hop
 # has to be named or the hop is a hole. It was added the moment that hop was.
+# getStanding and getRecord are the same shape as getPos: each allocates its row
+# and Sets it on first access, and each has a deliberate non-allocating twin
+# (lookupStanding, and AnswerRecord's own inline lookup) that reads may use.
+# getRecord had been unlisted since it was written — the split was held by
+# discipline alone, and a read reaching it would have reported green.
 ALLOCATORS = ("ensureMod", "ensureGlobalDAO", "ensureClaimMod", "getPos", "ensureAssocs",
-              "ensureSup", "requireEdgeRemover")
+              "ensureSup", "requireEdgeRemover", "getStanding", "getRecord", "ensureBoard",
+              "ensureKids", "ensureScoreIdx", "ensureVoted")
 
 # An exported TOP-LEVEL declaration: `func Name(`. A receiver is not matched on
 # purpose — see the module docstring on dispute.gno's Do.

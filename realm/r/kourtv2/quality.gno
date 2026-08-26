@@ -521,6 +521,12 @@ func ResolveFlag(cur realm, courtSlug string, claimID uint64) {
 		originateSlash(c, cs, now, cs.flagger)
 		// The dust bounty pays now against the dust burns; the slash's share
 		// of the bounty waits for the window (exactly-once, per component).
+		//
+		// NO STANDING CREDIT HERE. This branch only RESERVES the slash, and
+		// ResolveCounter can still rescue it — a credit paid at reservation
+		// would survive a repudiation the money lane reverses. It rides
+		// settleSlash instead, beside the bounty top-up, so the record settles
+		// on the same event, for the same beneficiary, against the same burns.
 	} else {
 		cs.tierFinal = true
 	}
@@ -1009,6 +1015,12 @@ func settleSlash(c *Court, cs *claimState) {
 		if topUp := bountyFor(bond, cs.dustBurns+slash) - bountyFor(bond, cs.dustBurns); topUp > 0 {
 			enqueueSenior(c, cs.slashFlagger, topUp, "bounty")
 		}
+		// The standing credit settles HERE, on both counts the bounty settles
+		// on: the beneficiary recorded at origination, and what ACTUALLY
+		// burned. Not flagBondFor — that base is free to inflate, because an
+		// inconclusive-LOW returns the bond whole while still advancing
+		// flagCycles, so two costless cycles would have quadrupled the credit.
+		creditFlagSlash(c, cs.slashFlagger, cs.dustBurns+slash)
 	}
 	cs.slashFlagger = ""
 	cs.tierFinal = true

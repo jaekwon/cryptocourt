@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
+	uassert "gno.land/p/nt/uassert/v0"
 )
 
 // approveAction IS THE WHOLE m-of-n MACHINE — every moderation act and every global
@@ -223,5 +224,55 @@ func TestTheReasonRecordedIsTheOneTheProposalOpenedWith(cur realm, t *testing.T)
 	}
 	if strings.Contains(page, "FIREDWITH") {
 		t.Error("the last signer's own text must not become the statutory code")
+	}
+}
+
+// UNHIDING IS AN AUTHORITY ACT, AND ONLY THE CODE SAID SO. `requireMod(cm, who)`
+// in UnhideItem was deletable with the whole suite green — measured — because
+// every test that touches UnhideItem calls it AS a moderator: modauth uses it to
+// exercise the m-of-n arithmetic above, moderation_test for the suspension
+// carve-out and the reason cap. Correct code, undefended.
+//
+// What an unguarded UnhideItem costs is the hide itself: it is the primary
+// moderation act, and if any address can reverse one then a court's set can hide
+// nothing that the hidden party cannot immediately un-hide.
+//
+// Note the gate is requireMod and NOT requireActiveMod, deliberately — clearing
+// your own bit survives suspension — so this pins "a moderator, active or not"
+// and must keep passing for a suspended set. moderation_test's suspension case
+// covers the other half.
+func TestUnhidingTakesAModeratorAndNotMerelyAnAddress(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("auth9-creator")
+	m1 := testutils.TestAddress("auth9-m1")
+	stranger := testutils.TestAddress("auth9-stranger")
+	testCourt(cur, "auth9", creator, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(creator))
+	id := OpenClaim(cross(cur), "auth9", "a claim a stranger must not unhide")
+	testing.SetRealm(testing.NewUserRealm(creator))
+	AppointMods(cross(cur), "auth9", 1, m1)
+
+	testing.SetRealm(testing.NewUserRealm(m1))
+	HideItem(cross(cur), "auth9", id, "off-topic")
+	if !HiddenFromListing("auth9", id) {
+		t.Fatal("setup: the moderator's hide must land")
+	}
+
+	// The claim's own author is not a moderator either, and has the strongest
+	// motive of anyone to reverse a hide of their own claim.
+	for _, who := range []address{stranger, creator} {
+		testing.SetRealm(testing.NewUserRealm(who))
+		uassert.AbortsContains(t, cur, "not a moderator", func() {
+			UnhideItem(cross(cur), "auth9", id, "let me out")
+		})
+	}
+	if !HiddenFromListing("auth9", id) {
+		t.Fatal("a refused unhide must leave the bit set")
+	}
+
+	// And the moderator still can, so the refusal is about authority.
+	testing.SetRealm(testing.NewUserRealm(m1))
+	UnhideItem(cross(cur), "auth9", id, "reconsidered")
+	if HiddenFromListing("auth9", id) {
+		t.Fatal("the moderator's unhide must land")
 	}
 }

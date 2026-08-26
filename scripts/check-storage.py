@@ -90,6 +90,15 @@ TARGETS = [
             # fourth verb without hiding a court that got twice as expensive to
             # start. This is the only filetest here allowed to write at all, and
             # the two above stay at None precisely so that stays visible.
+            #
+            # HEADROOM IS NEARLY GONE. The comment audit (D14) added the two
+            # realm-wide default setters here, because a filetest's Events:
+            # directive is the only facility that can observe chain.Emit and those
+            # two verbs move the floor under every court in silence otherwise.
+            # Measured 58,874b against the 60,000 ceiling — about 1.1kb left. The
+            # next act added here needs either a deliberate ceiling raise, with a
+            # reason, or a second events filetest. Do not raise it to make room
+            # without saying which.
             "z_events_filetest.gno": 60_000,
         },
     },

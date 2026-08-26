@@ -57,6 +57,17 @@ type claimState struct {
 	// burns, not against params (a seeded claim burns nothing, and the params
 	// base would silently under-pay the flagger). See strips.gno / quality.gno.
 	dustBurns int64
+	// The board (board.gno). Four indexes, nil until the first comment: every
+	// read tests for nil rather than calling ensure*, because a query carries no
+	// storage deposit and a lazily-initialising read is unpaid state growth.
+	board      *bptree.BPTree // be(rowID)            -> *boardRow
+	boardTop   *bptree.BPTree // be(rowID)            -> true (top-level only)
+	boardKids  *bptree.BPTree // be(parent)|be(rowID) -> true
+	boardWrote *bptree.BPTree // string(addr)         -> int64
+	boardScore *bptree.BPTree // beInv(score)|beInv(rowID) -> rowID (visible top-level only)
+	boardVoted *bptree.BPTree // be(rowID)|string(addr)    -> true (one vote per address)
+	boardNextID uint64
+
 	// Policing-surface membership (strips.gno, MODERATION.md §5.3). Render-layer
 	// only: no money path reads them; they make index entry/exit idempotent.
 	inStrip   bool
@@ -134,8 +145,28 @@ type claimState struct {
 	round         int64
 	failedRounds  int64
 	decidedRounds int64
+	// disputer is the CURRENT round's disputer and is overwritten by every
+	// OpenDispute. Read it only for this round's bond dispositions — never to
+	// attribute an earlier round's outcome. See overturnBy.
 	disputer      address
 	disputeBond   int64
+	// overturnBy is who won the overturn, recorded AT the round that won it
+	// rather than read back from `disputer` afterwards — the same discipline
+	// slashFlagger uses, and for the same reason.
+	//
+	// THE BUG THIS FIELD EXISTS TO PREVENT, because it was live and measured: a
+	// failed reopen does NOT reset `provisional` (only the first resolution
+	// does), so after an overturn a stranger could open a second round, let it
+	// fail quorum for half a bond, and become `cs.disputer` — collecting the
+	// standing credit for an overturn they did not win and denying it to the
+	// address that did. Attribution has to be stamped when the thing happens.
+	overturnBy address
+	// overturnBond is that winner's OWN posted bond, captured at the same
+	// instant. The dispute credit scales each party on their own risk, and the
+	// disputer's is min(20%·X̄, 40%·answerBond0) — the answer arm always binds,
+	// so scaling them on answerBond0 instead paid them 2.5x what they staked.
+	// cs.disputeBond cannot be read back later; it is zeroed on disposal.
+	overturnBond int64
 	proposalID    int64
 	provisional   int8
 	escrowUntil   int64

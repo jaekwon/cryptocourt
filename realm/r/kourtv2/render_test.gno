@@ -785,9 +785,12 @@ func TestAnOpenCounterReVoteIsAnnounced(cur realm, t *testing.T) {
 // Render's path handling: the shapes it accepts and the ones it must refuse.
 //
 // Three legs were unheld. The TRIM is what makes a leading slash work at all, and
-// without it every "/slug" link lands on "no court by that slug". SplitN's cap of
-// three is what keeps a fourth segment from being folded into the address instead
-// of refused. And a non-numeric id has to be refused as one rather than falling
+// without it every "/slug" link lands on "no court by that slug". A FOURTH
+// SEGMENT has to be refused rather than folded into the address — that used to be
+// SplitN's cap of three doing the work, and since the board's per-row deep link
+// needs a fourth segment the cap is four and an explicit arm refuses the shapes
+// that are not a board row. The assertion below is unchanged and the reason under
+// it is not. And a non-numeric id has to be refused as one rather than falling
 // through as id zero.
 func TestRenderAcceptsAndRefusesEveryPathShape(cur realm, t *testing.T) {
 	who := testutils.TestAddress("rp-a")
@@ -807,9 +810,24 @@ func TestRenderAcceptsAndRefusesEveryPathShape(cur realm, t *testing.T) {
 	if got := Render("rps1/notanumber"); !strings.Contains(got, "must be a number") {
 		t.Errorf("a non-numeric id renders %q", got)
 	}
-	// A fourth segment is refused rather than folded into the address.
+	// A fourth segment that is not a board row is refused. It is no longer the
+	// SplitN cap that does this — see the note above the function.
 	if got := Render("rps1/" + sid + "/" + who.String() + "/extra"); !strings.Contains(got, "Not found") {
 		t.Errorf("a fourth path segment rendered a page:\n%s", got)
+	}
+	// AND A FIFTH, which is a different guard now. The SplitN cap is what folds
+	// everything past the fourth segment INTO parts[3], so the arm above sees
+	// one over-long argument and refuses it. Unbound the split and a five-segment
+	// path falls past every length arm to renderClaim — the claim page served for
+	// a URL nobody wrote, with the tail silently ignored. That mutant survived
+	// until this line existed.
+	for _, p := range []string{
+		"rps1/" + sid + "/" + who.String() + "/extra/more",
+		"rps1/" + sid + "/board/1/extra",
+	} {
+		if got := Render(p); !strings.Contains(got, "Not found") {
+			t.Errorf("a five-segment path %q rendered a page:\n%s", p, got)
+		}
 	}
 }
 

@@ -33,6 +33,14 @@ func main(cur realm) {
 	kourtv2.RestoreFolder(cross(cur), "evt", id)
 	println("folder:", id)
 	println("retired:", kourtv2.FolderRetired("evt", id))
+	// THE TWO REALM-WIDE DEFAULT SETTERS, which emitted nothing at all until the
+	// authority-matrix audit (D14). They move the floor under EVERY court at once,
+	// so they are the widest acts in the board lane — and there is no single court
+	// to log them against, which makes the event the only record there can be. An
+	// event nobody asserts is an audit trail nobody has checked exists, which is
+	// the sentence this filetest was written for.
+	kourtv2.SetLadderDefault(cross(cur), 5, 25, 100, 3, 10)
+	kourtv2.SetCreditRatesDefault(cross(cur), 10000, 10000, 2000, 1000, 5000)
 }
 
 // Output:
@@ -107,6 +115,58 @@ func main(cur realm) {
 //       {
 //         "key": "act",
 //         "value": "folder-restore"
+//       },
+//       {
+//         "key": "by",
+//         "value": "g1cg7y89t6k2sry4ga32qe7j782wsyq8vdycwach"
+//       },
+//       {
+//         "key": "height",
+//         "value": "123"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/kourt/kourtv2"
+//   },
+//   {
+//     "type": "GlobalAct",
+//     "attrs": [
+//       {
+//         "key": "court",
+//         "value": "*"
+//       },
+//       {
+//         "key": "claim",
+//         "value": "0"
+//       },
+//       {
+//         "key": "act",
+//         "value": "set-ladder-default:5:25:100:3:10"
+//       },
+//       {
+//         "key": "by",
+//         "value": "g1cg7y89t6k2sry4ga32qe7j782wsyq8vdycwach"
+//       },
+//       {
+//         "key": "height",
+//         "value": "123"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/kourt/kourtv2"
+//   },
+//   {
+//     "type": "GlobalAct",
+//     "attrs": [
+//       {
+//         "key": "court",
+//         "value": "*"
+//       },
+//       {
+//         "key": "claim",
+//         "value": "0"
+//       },
+//       {
+//         "key": "act",
+//         "value": "set-rates-default:10000:10000:2000:1000:5000"
 //       },
 //       {
 //         "key": "by",
