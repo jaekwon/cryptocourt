@@ -97,7 +97,14 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	cs.provisional = int8(sideNO)
 
 	cs.verdictAt, cs.route, cs.tier = 100, "vote", tierMidX
-	mustContain("settled", "settled — every stake withdraws 1×")
+	// THE SETTLED LINE NAMES THE SIDE, and both values are checked for the same
+	// reason the provisional arm above checks both: it reads provisional through
+	// sideName, and an arm exercised on one value leaves the other free to render
+	// "settled —". provisional is still sideNO from the arm above.
+	mustContain("settled", "settled NO — every stake withdraws 1×")
+	cs.provisional = int8(sideYES)
+	mustContain("settled YES", "settled YES — every stake withdraws 1×")
+	cs.provisional = int8(sideNO)
 	mustContain("settled", "verdict: NO — vote")
 	mustContain("settled", "quality: mid (default")
 	mustContain("settled", "flag slot open — bond")
@@ -906,4 +913,45 @@ func TestTheWalletPanelSeparatesTheTwoGates(cur realm, t *testing.T) {
 			"free-to-dispose %d != held %d — the locks OVERLAP, so this is a max "+
 			"and not a sum", staked, voted, free2, bal)
 	}
+}
+
+// TestBothSettleRoutesNameTheVerdictSide drives a claim to a verdict on EACH of
+// the two real routes and reads the status back, because claimStatus's settled
+// line renders sideName(cs.provisional) and the arm above it sets that field by
+// hand. Crafted state proves the sentence is formatted; it cannot prove the
+// routes fill the field in. If a future terminal path sets verdictAt and forgets
+// provisional, the status silently reads "settled —" and nothing else notices —
+// sideName has no error value, and every other assertion about a settled claim
+// is about its money.
+//
+// The status is checked AGAINST Verdict(), not against a literal side, so the
+// test states the property that matters — the one-line status and the read agree
+// about what was decided — on whichever side the route happens to produce.
+func TestBothSettleRoutesNameTheVerdictSide(cur realm, t *testing.T) {
+	check := func(route, slug string, id uint64) {
+		st := ClaimStatus(slug, id)
+		want := "settled " + sideName(Verdict(slug, id))
+		if !strings.HasPrefix(st, want) {
+			t.Fatalf("%s route: status %q does not start with %q", route, st, want)
+		}
+		// The shape of the bug this closes, named directly: the em-dash clause
+		// following "settled" with no side in between.
+		if strings.HasPrefix(st, "settled —") {
+			t.Fatalf("%s route: the settled status names no side: %q", route, st)
+		}
+	}
+
+	alice := testutils.TestAddress("vsd-alice")
+	bob := testutils.TestAddress("vsd-bob")
+
+	c := testCourt(cur, "vsd1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	check("undisputed", "vsd1", settledClaim(cur, c, "vsd1", alice, bob))
+
+	c2 := testCourt(cur, "vsd2", alice, 50_000_000_000)
+	c2.coin.Mint(bob, 10_000_000_000)
+	id2 := parkedClaim(cur, c2, "vsd2", alice, bob)
+	testing.SetRealm(testing.NewUserRealm(bob)) // a participant: Finalize is theirs first
+	Finalize(cross(cur), "vsd2", id2)
+	check("vote", "vsd2", id2)
 }

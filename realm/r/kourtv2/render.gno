@@ -592,7 +592,20 @@ func claimStatus(cs *claimState) string {
 	case cs.provClose:
 		return "closed without a decision — three dispute rounds failed quorum; everyone withdraws 1×, deposit and fee refunded"
 	case cs.verdictAt != 0:
-		return "settled — every stake withdraws 1×"
+		// NAMING THE SIDE IS THE WHOLE POINT OF A VERDICT. This line said only
+		// "settled" for a long time, so a settled-YES claim and a settled-NO claim
+		// read identically on every client that shows a one-line status — while the
+		// PROVISIONAL case two branches down has always named its side. The overlay
+		// had to ask Verdict() per settled claim to recover what the status already
+		// knew.
+		//
+		// provisional IS the verdict here, and this reads it under exactly the guard
+		// Verdict() uses: verdictAt != 0 and not provClose, which the case above
+		// already took. It cannot be -1 in this branch — settle-undisputed writes
+		// provisional = answer beside verdictAt, and Finalize's only route in
+		// requires escrowUntil, which is written after a resolution has set
+		// provisional. TestBothSettleRoutesNameTheVerdictSide pins both.
+		return "settled " + sideName(int(cs.provisional)) + " — every stake withdraws 1×"
 	case cs.disputeOpen:
 		return "disputed — a sealed vote is deciding; principal is never withheld"
 	case cs.provisional >= 0:

@@ -5136,8 +5136,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "claimStatus: a SETTLED claim reads as provisional",
-  "find": "\tcase cs.verdictAt != 0:\n\t\treturn \"settled \u2014 every stake withdraws 1\u00d7\"",
-  "replace": "\tcase cs.verdictAt < 0:\n\t\treturn \"settled \u2014 every stake withdraws 1\u00d7\""
+  "find": "\tcase cs.verdictAt != 0:\n",
+  "replace": "\tcase cs.verdictAt < 0:\n"
  },
  {
   "pkg": "kourtv2",
