@@ -107,6 +107,16 @@ ok("old per-route wiring gone", !src.includes('idm.onclick'));
 // ===, so a `short` of "settling YES" falls through to the open colour while the
 // tooltip still reads correctly. The realm writes the side as sideName() —
 // uppercase — and only the provisional status carries one today.
+// A ROUTE CHANGE MUST ANIMATE, and all three parts are asserted because any one
+// of them alone is silent: the keyframes without the call plays nothing, the call
+// without the class-restart plays nothing on a repeat route, and neither shows up
+// as a failure anywhere else. The reduced-motion opt-out is separate because the
+// global rule above it kills transitions, not animations.
+ok("render calls viewEnter at its paint point", /paintedSeq=seq; viewEnter\(\)/.test(src));
+ok("viewEnter restarts the animation", /classList\.remove\("vin"\)[\s\S]{0,80}offsetWidth/.test(src));
+ok("the enter animation exists", /#main\.vin\{animation:vin /.test(src));
+ok("reduced motion opts out of it", /prefers-reduced-motion:reduce\)\{#main\.vin\{animation:none\}/.test(src));
+
 ok("phaseClass reads the side off a provisional status",
    phaseClass("provisional verdict NO — reopenable by a new dispute until block 900").side === "NO");
 ok("phaseClass keeps short free of the side",

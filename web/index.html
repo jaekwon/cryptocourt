@@ -930,6 +930,15 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .intro b{color:var(--accent-2)}
 .intro .btn-row{margin-top:10px;display:flex;gap:14px;align-items:center}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* A ROUTE CHANGE SHOULD READ AS MOVEMENT. Clicking a claim on the map replaced the
+   whole view in a single frame with nothing to say the click had landed — and the
+   map and the claim page share a layout and a crumb strip, so the swap looked like
+   a redraw rather than an arrival. 140ms is picked to be FELT and not waited for.
+   The reduced-motion rule above kills transitions and not animations, so this opts
+   out on its own line. */
+@keyframes vin{from{opacity:.5; transform:translateY(5px)} to{opacity:1; transform:none}}
+#main.vin{animation:vin .14s ease-out both}
+@media(prefers-reduced-motion:reduce){#main.vin{animation:none}}
 </style>
 </head>
 <body>
@@ -1828,6 +1837,16 @@ function reflectWallet(){
 
 /* ============================ router =================================== */
 const main = document.getElementById("main");
+/* Restart the enter animation even when the route did not change class — the
+   class has to come OFF and a layout be read before it goes back on, or a repeat
+   navigation (same route, new id) plays nothing and the click reads as ignored,
+   which is the complaint this exists for. */
+function viewEnter(){
+  if(!main) return;
+  main.classList.remove("vin");
+  void main.offsetWidth;
+  main.classList.add("vin");
+}
 const routes = [];
 function on(re, fn){ routes.push([re,fn]); }
 let renderSeq = 0, paintedSeq = 0;
@@ -1944,7 +1963,7 @@ async function render(){
   for(const [re,fn] of routes){
     const m = hash.match(re);
     if(m){ try{ await fn(...m.slice(1)); }catch(e){ errorView(e); }
-      if(seq===renderSeq){ paintedSeq=seq; return; }
+      if(seq===renderSeq){ paintedSeq=seq; viewEnter(); return; }
       // Stale. If the newer render is still in flight it will paint over us —
       // do nothing. Only if it already painted (we clobbered it) redraw once.
       if(paintedSeq>seq) return render();
@@ -1952,6 +1971,7 @@ async function render(){
   }
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"No such page"}]) + notFound("No such page.");
   paintedSeq = seq;
+  viewEnter();
 }
 function setNav(hash){
   const k = hash==="/"||hash.startsWith("/c")||hash.startsWith("/raw")?"dir": hash.startsWith("/me")?"me":
