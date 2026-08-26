@@ -210,3 +210,27 @@ comment reads as coverage.
 If a mutation proves a line is not load-bearing, either delete the line or write
 down what it actually does. `minter.gno` does the second: an unreachable check
 kept on purpose, with the reason it cannot be reached stated where it sits.
+
+## sanitize.InlineText escapes `.` and `-`, and it has cost twice
+
+`markdown.EscapeInline`'s set is `\ * _ [ ] ( ) ~ > - + . ! \` # < &`. The dot
+and the hyphen are in it. So `InlineText("kourt.xyz")` is `kourt\.xyz`, and a
+claim titled "…a filed thing." renders as `…a filed thing\.`.
+
+Both failures this caused looked like the code was broken when it was not:
+
+**In an assertion.** A test matched a folder page against the claim title it had
+just filed, trailing period included, and failed — with the title plainly on the
+page. Matching on punctuation asserts the escaper's behaviour, not the page's.
+Assert on the words.
+
+**In a link destination.** The site-domain banner ran the host through
+`InlineText` "for defence in depth" and emitted
+`[Read this on kourt\.xyz](https://kourt\.xyz/#/…)`. Correct as link TEXT,
+broken as a DESTINATION.
+
+The general rule: **an escaper defends a context.** Before reaching for one, ask
+which context the value lands in — and if the answer is "two at once", an
+escaper is the wrong tool. What made the domain safe in both was the character
+set its validator already enforced. The defence in depth that fits is
+**fail-closed**: re-ask the validator at render and emit nothing if it fails.

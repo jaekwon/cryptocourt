@@ -10941,5 +10941,103 @@
   "label": "v0.58 help: the overlay link sends help to a court that cannot exist",
   "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn \"#/\"\n\t\t}\n",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: the folder route is not carved (a folder id reads as a claim)",
+  "find": "\tif parts[1] == \"folder\" {\n\t\tif len(parts) != 3 {",
+  "replace": "\tif false {\n\t\tif len(parts) != 3 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: the folder route accepts a fourth segment",
+  "find": "\t\tif len(parts) != 3 {\n\t\t\treturn \"## Not found\\nA folder is /<court>/folder/<id>.\"\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a non-numeric folder id is accepted",
+  "find": "\t\tfid, ferr := strconv.ParseUint(parts[2], 10, 64)\n\t\tif ferr != nil {\n\t\t\treturn \"## Not found\\nA folder id must be a number.\"\n\t\t}\n",
+  "replace": "\t\tfid, _ := strconv.ParseUint(parts[2], 10, 64)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a folder that does not exist renders as one",
+  "find": "\tv := c.mod.folders.Get(beClaimKey(fid))\n\tif v == nil {\n\t\treturn \"## Not found\\nNo folder by that id.\"\n\t}\n",
+  "replace": "\tv := c.mod.folders.Get(beClaimKey(fid))\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: the court page stops listing its folders",
+  "find": "\twriteFolderIndex(&b, c, slug)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: the index links nothing (names without hrefs)",
+  "find": "\t\tb.WriteString(\"[\" + sanitize.InlineText(f.name) + \"](/r/kourt/kourtv2:\" +\n\t\t\tslug + \"/folder/\" + strconv.FormatUint(f.id, 10) + \")\")",
+  "replace": "\t\tb.WriteString(sanitize.InlineText(f.name))"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: nested headings crowd onto the court's index line",
+  "find": "\t\tif f.parent != 0 || f.retired || f.purged {",
+  "replace": "\t\tif f.retired || f.purged {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a retired heading is still advertised",
+  "find": "\t\tif f.parent != 0 || f.retired || f.purged {",
+  "replace": "\t\tif f.parent != 0 || f.purged {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a retired folder's page stops saying so",
+  "find": "\t\tb.WriteString(\"> This heading was retired by a moderator. It is kept so \" +\n\t\t\t\"links to it still resolve.\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a folder page loses its children",
+  "find": "\t\tif k.parent != f.id || k.retired || k.purged {",
+  "replace": "\t\tif true {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a folder page loses the claims filed in it",
+  "find": "\tfor _, id := range f.items {",
+  "replace": "\tfor _, id := range []uint64{} {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: an empty folder renders a blank list",
+  "find": "\tif filed == 0 {\n\t\tb.WriteString(\"_Nothing filed here yet._\\n\")\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: a nested folder loses its breadcrumb",
+  "find": "\tfor up, n := f.parent, 0; up != 0 && n <= maxFolders; n++ {",
+  "replace": "\tfor up, n := uint64(0), 0; up != 0 && n <= maxFolders; n++ {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 folders render: the never-buries promise goes unsaid",
+  "find": "\tb.WriteString(\"\\n_A folder curates and can never bury: every claim above is \" +\n\t\t\"also on the court's own newest-first list, and nothing is reachable only \" +\n\t\t\"from here._\\n\\n\")",
+  "replace": ""
  }
 ]

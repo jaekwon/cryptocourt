@@ -1570,3 +1570,43 @@ Nothing was dropped in the move, and a test asserts each figure is still on the
 page, because a reordering that quietly becomes a deletion is the easy mistake
 here. An empty court still shows its coin: somebody deciding whether to be early
 is exactly who wants the price.
+
+### 18.2 Folders rendered nowhere
+
+`folders.gno` has seven moderator verbs, a nesting model with ordering, a
+purge lane with statutory category codes, an events filetest and its own
+mutation rows. No page in this realm ever drew one. A court's moderators could
+build an entire filing tree and a gnoweb reader could not see that it existed —
+the same defect the comment board had, where the route worked and nothing linked
+to it. Both are the same failure: a feature that is written to, gated, tested,
+and unreachable by anybody not running the overlay.
+
+The court page now carries **one line** — `Filed under: Document trail · Fauci`
+— rather than a section, because the filing tree is navigation *into* the claims
+and putting a section there would recreate the problem §18.1 moved the coin block
+out of the way to fix. Root headings only; retired and purged ones are skipped,
+since a retired heading is one a moderator struck from the tree and a purged
+one's name was erased rather than flagged.
+
+`<court>/folder/<id>` draws the heading, its description, the headings under it,
+the claims filed in it, and a breadcrumb up. Every claim uses the court's own
+status wording — a reader who learned what "open — stake YES or NO" means on one
+page should not meet a synonym on another.
+
+**A retired folder still resolves**, saying it was retired, instead of 404ing:
+the row survives so links do not rot, and a 404 would make "retired" and "never
+existed" look identical. **A purged folder renders a tombstone** naming the
+category, the posture a purged claim's own page already takes.
+
+**The page says the promise out loud** — "a folder curates and can never bury:
+every claim above is also on the court's own newest-first list, and nothing is
+reachable only from here". A reader looking at somebody else's organisation of a
+contested subject is entitled to know it is not the only way in.
+
+Two of the fourteen mutation rows survived at first, and both were the test's
+fault rather than the code's. The route test asserted the string "Not found",
+which all four refusals share — so deleting the id parse left `fid` at zero,
+landed on the no-such-folder branch, and still said "Not found". And it used a
+court with no folders at all, where `c.mod == nil` short-circuits before the
+missing-folder branch is ever reached. Each refusal is now asserted by its own
+message, against a court that has a real folder.

@@ -16,6 +16,7 @@ import (
 //	""                    the directory
 //	"<slug>"              one court
 //	"<slug>/<id>"         one claim
+//	"<slug>/folder/<fid>" one folder
 //	"<slug>/<id>/<addr>"  one address's positions on a claim ("your page")
 func Render(path string) string {
 	// An armed test clock fabricates every date below. Say so on EVERY page,
@@ -91,6 +92,22 @@ func render(path string) string {
 	// The standing page carves at the same position and for the same reason. A
 	// slug is [a-z0-9-]{1,11} so a court MAY be called "me", but that occupies
 	// parts[0]; and a claim id is numeric, so "me" can never be mistaken for one.
+	// FOLDERS, which rendered NOWHERE. A court's moderators can build a whole
+	// filing tree — seven verbs, an events filetest, its own mutation rows — and
+	// no page in this realm ever drew one. Same defect the board had: a feature
+	// that exists, is written to, and is unreachable by anybody who is not
+	// running the overlay. Carved here for the reason "mod" and "me" are carved
+	// here: a folder id is numeric, so the word can never be taken for a claim.
+	if parts[1] == "folder" {
+		if len(parts) != 3 {
+			return "## Not found\nA folder is /<court>/folder/<id>."
+		}
+		fid, ferr := strconv.ParseUint(parts[2], 10, 64)
+		if ferr != nil {
+			return "## Not found\nA folder id must be a number."
+		}
+		return renderFolderPage(parts[0], fid)
+	}
 	if parts[1] == "me" {
 		if len(parts) == 3 {
 			return renderStanding(parts[0], parts[2])
@@ -213,6 +230,11 @@ func renderCourt(slug string) string {
 	if d := courtDescFor(c); d != "" {
 		b.WriteString(d + "\n\n")
 	}
+	// The filing tree, as ONE LINE of links rather than a section. It is
+	// navigation — a way INTO the claims — so it belongs above them; and it is
+	// one line so that putting it there does not re-create the thing the coin
+	// block was moved out of the way for.
+	writeFolderIndex(&b, c, slug)
 	// THE CLAIMS FIRST. Four lines of coin plumbing used to sit here, between a
 	// reader and the only thing on this page they arrived for. Read cold,
 	// "supply: 5108592379 · emitted: 0" and "reward reservoir: 0 · senior queue
@@ -601,4 +623,128 @@ func pad2(v int64) string {
 		return "0" + strconv.FormatInt(v, 10)
 	}
 	return strconv.FormatInt(v, 10)
+}
+
+// writeFolderIndex is the court's root folders, on one line, or nothing at all.
+//
+// Retired and purged headings are skipped: a retired folder is one a moderator
+// struck from the tree, and a purged one has had its name erased rather than
+// flagged, so there is no name to print. Both still occupy an id — the overlay
+// walks 1..FolderCount and calls that contiguity load-bearing — which is why
+// this filters on the rows instead of on the count.
+func writeFolderIndex(b *strings.Builder, c *Court, slug string) {
+	if c.mod == nil {
+		return
+	}
+	shown := 0
+	for _, f := range c.mod.folderRows() {
+		if f.parent != 0 || f.retired || f.purged {
+			continue
+		}
+		if shown == 0 {
+			b.WriteString("Filed under: ")
+		} else {
+			b.WriteString(" · ")
+		}
+		b.WriteString("[" + sanitize.InlineText(f.name) + "](/r/kourt/kourtv2:" +
+			slug + "/folder/" + strconv.FormatUint(f.id, 10) + ")")
+		shown++
+	}
+	if shown > 0 {
+		b.WriteString("\n\n")
+	}
+}
+
+// renderFolderPage draws one heading: what is under it, and what is filed in it.
+//
+// A FOLDER CURATES AND CAN NEVER BURY — that is the founding promise of this
+// module, and it is why this page is safe to render at all. Every claim here is
+// also on the court's flat newest-first docket; nothing is reachable only
+// through a folder, so a moderator cannot use the filing tree to make a claim
+// hard to find. The page says so, because a reader looking at somebody else's
+// organisation of a contested subject is entitled to know it is not the only way
+// in.
+func renderFolderPage(slug string, fid uint64) string {
+	if !Exists(slug) {
+		return "## Not found\nNo court by that slug."
+	}
+	c := mustCourt(slug)
+	if c.mod == nil {
+		return "## Not found\nThis court has no folders."
+	}
+	v := c.mod.folders.Get(beClaimKey(fid))
+	if v == nil {
+		return "## Not found\nNo folder by that id."
+	}
+	f := v.(*folder)
+	base := "/r/kourt/kourtv2:" + slug
+	var b strings.Builder
+	// A PURGED HEADING STILL RENDERS, as a tombstone naming the authority — the
+	// same posture a purged claim's own page takes. A page that 404s instead
+	// would make a purge indistinguishable from a folder that never existed.
+	if f.purged {
+		b.WriteString("# [purged:" + sanitize.InlineText(f.code) + "]\n\n")
+		b.WriteString("_This heading was purged by the global DAO. Its name and " +
+			"description were erased, not hidden._\n\n")
+		b.WriteString("[← " + courtNameFor(c) + "](" + base + ")\n")
+		return b.String()
+	}
+	b.WriteString("# " + sanitize.InlineText(f.name) + "\n\n")
+	// The breadcrumb walks up, so a nested heading says where it sits rather
+	// than stranding a reader who arrived by deep link.
+	b.WriteString("[← " + courtNameFor(c) + "](" + base + ")")
+	for up, n := f.parent, 0; up != 0 && n <= maxFolders; n++ {
+		pv := c.mod.folders.Get(beClaimKey(up))
+		if pv == nil {
+			break
+		}
+		pf := pv.(*folder)
+		b.WriteString(" · [" + sanitize.InlineText(pf.name) + "](" + base +
+			"/folder/" + strconv.FormatUint(pf.id, 10) + ")")
+		up = pf.parent
+	}
+	b.WriteString("\n\n")
+	if f.retired {
+		b.WriteString("> This heading was retired by a moderator. It is kept so " +
+			"links to it still resolve.\n\n")
+	}
+	if f.desc != "" {
+		b.WriteString(sanitize.Block(f.desc) + "\n")
+	}
+
+	kids := 0
+	for _, k := range c.mod.folderRows() {
+		if k.parent != f.id || k.retired || k.purged {
+			continue
+		}
+		if kids == 0 {
+			b.WriteString("## Under this heading\n\n")
+		}
+		kids++
+		b.WriteString("- [" + sanitize.InlineText(k.name) + "](" + base + "/folder/" +
+			strconv.FormatUint(k.id, 10) + ")\n")
+	}
+	if kids > 0 {
+		b.WriteString("\n")
+	}
+
+	b.WriteString("## Claims filed here\n\n")
+	filed := 0
+	for _, id := range f.items {
+		if id == 0 || id > c.nextID {
+			continue
+		}
+		cs := mustClaim(c, id)
+		filed++
+		b.WriteString("- [" + claimTitleFor(c, cs) + "](" + base + "/" +
+			strconv.FormatUint(id, 10) + ") — " + claimStatus(cs) + "\n")
+	}
+	if filed == 0 {
+		b.WriteString("_Nothing filed here yet._\n")
+	}
+	b.WriteString("\n_A folder curates and can never bury: every claim above is " +
+		"also on the court's own newest-first list, and nothing is reachable only " +
+		"from here._\n\n")
+	b.WriteString(helpLink + "\n")
+	return b.String()
 }
