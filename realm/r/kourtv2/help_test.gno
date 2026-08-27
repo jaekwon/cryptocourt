@@ -483,3 +483,64 @@ func TestAnUnratedClaimDoesNotReadAsRatedLow(cur realm, t *testing.T) {
 		t.Fatal("a finalised tier must not invite a challenge")
 	}
 }
+
+// A delisted court is told it was delisted.
+//
+// A global DAO member may set a court to tierHidden, which removes it from the
+// directory and from every listing read. A hidden CLAIM gets one of four
+// banners naming the authority that hid it; a hidden COURT got nothing, so its
+// creator and its holders watched it vanish from the front page with no page
+// anywhere saying it had been an act rather than a fault.
+func TestADelistedCourtSaysSo(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("hp11-mod")
+	poster := testutils.TestAddress("hp11-poster")
+	modFixture(cur, "hp11", mod, poster)
+	c := mustCourt("hp11")
+
+	// Listed: no banner, and it appears in the directory.
+	if c.tier != tierListed {
+		t.Fatal("a new court must start listed, or this test asserts nothing")
+	}
+	if strings.Contains(Render("hp11"), "Delisted") {
+		t.Fatal("a listed court must carry no delisting banner")
+	}
+	if !inTier("hp11", tierListed) {
+		t.Fatal("a listed court must be in the listed tier")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(ensureGlobalDAO().admin))
+	SetTier(cross(cur), "hp11", int(tierHidden))
+
+	// GONE FROM EVERY LISTING, which is the fact that needs explaining.
+	if inTier("hp11", tierListed) {
+		t.Fatal("a delisted court must leave the listed tier")
+	}
+	page := Render("hp11")
+	if !strings.Contains(page, "Delisted by the global DAO") {
+		t.Fatalf("a delisted court must say who delisted it:\n%s", page)
+	}
+	// AND THAT NOTHING ELSE CHANGED. Without it a holder reads a delisting as a
+	// freeze on their money, which it is not.
+	if !strings.Contains(page, "still stake, answer, settle and pay out") {
+		t.Fatal("the banner must say the lifecycle is unaffected")
+	}
+	// Still reachable, and still renders its claims — the banner is a
+	// disclosure, not a tombstone.
+	if !strings.Contains(page, "## Claims") {
+		t.Fatal("a delisted court must still render normally below the banner")
+	}
+}
+
+// inTier asks the listing index directly. Render("") is capped at
+// renderPageSize, so asking the PAGE whether a court is listed answers a
+// different question — one whose answer depends on how many courts the package
+// happens to hold, which is why the first version of this test passed alone and
+// failed in company.
+func inTier(slug string, tier uint8) bool {
+	for _, s := range ListByTier(int(tier)) {
+		if s == slug {
+			return true
+		}
+	}
+	return false
+}

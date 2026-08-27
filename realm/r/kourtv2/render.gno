@@ -237,6 +237,21 @@ func renderCourt(slug string) string {
 	c := mustCourt(slug)
 	b := strings.Builder{}
 	b.WriteString("# " + courtNameFor(c) + "\n\n")
+	// DELISTED, SAID OUT LOUD. A global DAO member may set a court to
+	// tierHidden, which removes it from the directory and from every listing
+	// read — and no page said so. A hidden CLAIM gets one of four banners naming
+	// the authority that hid it; a hidden COURT got silence, so its creator and
+	// its holders watched it disappear from the front page with nothing anywhere
+	// to tell them it had been an act rather than a bug.
+	//
+	// The wording follows the claim's meta banner, because the situation is the
+	// same one: listed nowhere, reachable here, lifecycle untouched. That last
+	// part matters most — a delisted court still settles its claims and pays out.
+	if c.tier == tierHidden {
+		b.WriteString("> **Delisted by the global DAO.** This court appears in no " +
+			"listing and is reachable only by direct link. Nothing else changes: " +
+			"its claims still stake, answer, settle and pay out as usual.\n\n")
+	}
 	if d := courtDescFor(c); d != "" {
 		b.WriteString(d + "\n\n")
 	}

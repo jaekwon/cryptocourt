@@ -1936,3 +1936,42 @@ rows anchored on the flag-slot line and were repointed with their intent intact.
 coincides with a meaningful state will render as that state. `tierLowX = 0` is
 the one found here; the same shape is worth looking for wherever a render reads
 an enum that state does not always initialise.
+
+### 22.2 The sweep the zero-value lesson earned
+
+§22 fixed one field. The lesson generalises — *a zero value that coincides with a
+meaningful state will render as that state* — so the right follow-up was to ask
+which other enums in this realm have a meaningful zero, rather than to wait for
+the next instance.
+
+Two answers, and neither was a second bug:
+
+**`cs.provisional` was already guarded**, and its comment names the hazard
+exactly: `provisional: -1, // int8 zero is sideYES — the sentinel must be
+explicit`. The author knew this class and defended against it there; `tier` went
+through the same net unprotected. That is worth stating plainly, because it means
+the failure was not ignorance of the pattern but an incomplete application of it.
+
+**`tierHidden = 0`, and a court's tier IS set explicitly at creation**
+(`tier: tierListed`), so no court renders as hidden by accident.
+
+But asking the question surfaced a different gap. `SetTier` lets a global DAO
+member move a court to `tierHidden`, which removes it from the directory and from
+every listing read — **and no page said so**. A hidden CLAIM gets one of four
+banners naming the authority that hid it. A hidden COURT got silence: its creator
+and its holders watch it disappear from the front page with nothing anywhere to
+distinguish a deliberate act from a fault.
+
+The court page now carries the equivalent banner, worded after the claim's meta
+case because the situation is the same one — listed nowhere, reachable here,
+lifecycle untouched. The last clause is the one that matters to a holder: a
+delisted court still stakes, answers, settles and pays out, and without saying so
+a delisting reads as a freeze on their money.
+
+**Two test bugs of mine on the way, both the same shape — an assertion matching
+more than it meant.** `modFixture` bootstraps a court named `<slug>+"z"`, so
+`"…:hp11"` is a prefix of `"…:hp11z"` and a bare `Contains` matched the
+neighbour. And asking `Render("")` whether a court is listed asks a page capped
+at `renderPageSize`, so the test passed alone and failed in company, where the
+package holds more courts than fit. It asks `ListByTier` now — the listing fact
+itself, uncapped.

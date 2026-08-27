@@ -11494,5 +11494,26 @@
   "label": "v0.58 record: the answerer's record loses its meaning",
   "find": "\t\tb.WriteString(\"- the answerer has been challenged and upheld \" +\n\t\t\tstrconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) +\n\t\t\t\" time(s) in this court \u2014 answers nobody contested do not count\\n\")",
   "replace": "\t\tb.WriteString(\"- answerer's difficulty record (this court): \" +\n\t\t\tstrconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 delist: a delisted court says nothing",
+  "find": "\tif c.tier == tierHidden {\n\t\tb.WriteString(\"> **Delisted by the global DAO.**",
+  "replace": "\tif false {\n\t\tb.WriteString(\"> **Delisted by the global DAO.**"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 delist: every court claims to be delisted",
+  "find": "\tif c.tier == tierHidden {",
+  "replace": "\tif c.tier != tierHidden {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 delist: the banner stops saying the lifecycle is unaffected",
+  "find": "\t\t\t\"listing and is reachable only by direct link. Nothing else changes: \" +\n\t\t\t\"its claims still stake, answer, settle and pay out as usual.\\n\\n\")",
+  "replace": "\t\t\t\"listing.\\n\\n\")"
  }
 ]
