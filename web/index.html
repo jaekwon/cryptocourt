@@ -4671,7 +4671,7 @@ function mountMap(slug, data, focusId){
     if(key) key.hidden = !L.spokes.some(s => s.kind === "also");
   }
   let fit={w:L.viewBox[2], h:L.viewBox[3]};
-  let z=1, cx=fit.w/2, cy=fit.h/2, raf=0;
+  let z=1, cx=fit.w/2, cy=fit.h/2, raf=0, tween=0, tweenFrames=0;
   const svgEl=()=>box.querySelector("svg");
   let far=false;
   function lod(){
@@ -4688,7 +4688,43 @@ function mountMap(slug, data, focusId){
     const sl=document.getElementById("mz-slider"); if(sl) sl.value=Math.log2(z);
     lod();
   }
-  const schedule=()=>{ if(!raf) raf=requestAnimationFrame(()=>{ raf=0; apply(); }); };
+  /* EVERY USER-DRIVEN VIEW CHANGE CANCELS A GLIDE, and this is the one place it
+     can be done once: drag, wheel, the arrow keys, fit and the zoom buttons all
+     land here. A reader who grabs the map mid-flight is overruling it, and a
+     glide that kept running would drag the view out from under them. */
+  const schedule=()=>{ stopTween(); if(!raf) raf=requestAnimationFrame(()=>{ raf=0; apply(); }); };
+  function stopTween(){ if(tween) cancelAnimationFrame(tween); tween=0; }
+  /* A GLIDE, NOT A JUMP. centreOn used to assign cx/cy/z and paint the next
+     frame, so selecting a node in the outer ring teleported the whole graph and
+     the reader lost track of where they had been — the motion IS the explanation
+     of what just happened.
+     THE ZOOM INTERPOLATES GEOMETRICALLY. Scale reads logarithmically, so a linear
+     ramp from 1 to 4 spends most of its time already zoomed in and lands with a
+     lurch; z0*(tz/z0)^e keeps the apparent rate even.
+     THE FRAME CAP IS NOT DECORATION. A host that runs requestAnimationFrame
+     synchronously — the map's own test harness does — would otherwise recurse
+     once per iteration until the wall clock ran out, thousands deep. Capped, that
+     host completes the glide in 120 nested calls and lands exactly on target; a
+     real browser needs about 13 frames and never reaches it. */
+  function glideTo(tx, ty, tz){
+    stopTween();
+    const still = Math.abs(tx-cx)<0.5 && Math.abs(ty-cy)<0.5 && Math.abs(Math.log2(tz/z))<0.01;
+    const reduce = typeof matchMedia==="function"
+                && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if(still || reduce){ cx=tx; cy=ty; z=tz; schedule(); return; }
+    const clock = ()=> typeof performance==="object" && performance.now? performance.now() : 0;
+    const x0=cx, y0=cy, z0=z, t0=clock(), MS=220;
+    tweenFrames=0;
+    const step=()=>{
+      let k=Math.min(1, (clock()-t0)/MS);
+      if(++tweenFrames>=120) k=1;
+      const e=1-Math.pow(1-k,3);            // ease-out: fastest at the start
+      cx=x0+(tx-x0)*e; cy=y0+(ty-y0)*e; z=z0*Math.pow(tz/z0, e);
+      apply();
+      tween = k<1? requestAnimationFrame(step) : 0;
+    };
+    tween=requestAnimationFrame(step);
+  }
   function put(){ box.innerHTML = mapSvg(L, data, slug);
     if(focusId!=null){ const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.classList.add("focused"); }
     apply(); }
@@ -4823,12 +4859,12 @@ function mountMap(slug, data, focusId){
     if(!next) return;
     const b = next.kind==="claim" ? L.nodes.find(n=>n.id===next.id) : L.folders[next.fid];
     if(!b) return;
-    cx = b.cx; cy = b.cy;
     // At least far enough in for the titles to be above the LOD line, or
     // centring on a claim shows a box with its sentence hidden.
     const el = svgEl(), px = el && el.clientWidth;
-    if(px) z = Math.min(8, Math.max(z, 9*fit.w/(MAPK.fs.title*px)));
-    schedule();
+    let tz = z;
+    if(px) tz = Math.min(8, Math.max(z, 9*fit.w/(MAPK.fs.title*px)));
+    glideTo(b.cx, b.cy, tz);
   }
   function select(next){ sel=next; paint(); centreOn(next); }
   box.addEventListener("click", ev=>{

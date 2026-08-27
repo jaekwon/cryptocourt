@@ -206,6 +206,35 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
      !box.querySelector("svg").classList.contains("far"));
 }
 
+/* THE VIEW GLIDES, IT DOES NOT TELEPORT. centreOn used to assign cx/cy/z and
+   paint the next frame, so selecting a node in the outer ring replaced the whole
+   drawing between one frame and the next — "jarring", and worse than cosmetic:
+   the motion is what tells a reader that the thing they clicked is the thing now
+   in the middle. Landing on target was already asserted above; these arms say it
+   ARRIVES rather than appears.
+   The rAF stub here is synchronous, so the whole flight happens inside click() —
+   which is also the case the frame cap in glideTo exists for. */
+{
+  mount();
+  const svg = box.querySelector("svg");
+  const seen = [], set = svg.setAttribute.bind(svg);
+  svg.setAttribute = (k,v)=>{ if(k==="viewBox") seen.push(v); return set(k,v); };
+  claimA(3).click();
+  const mid = v => { const a=v.split(" ").map(Number); return [a[0]+a[2]/2, a[1]+a[3]/2]; };
+  const L3 = mapLayout(data,"titles"), n3 = L3.nodes.find(x=>x.id===3);
+  ok("the view is stepped over many frames, not written once", seen.length > 3);
+  ok("and the steps are distinct views", new Set(seen).size >= 3);
+  ok("the first step has not arrived yet",
+     Math.abs(mid(seen[0])[0]-n3.cx) > 0.5 || Math.abs(mid(seen[0])[1]-n3.cy) > 0.5);
+  ok("the last step lands exactly on the node", (()=>{
+     const [mx,my]=mid(seen[seen.length-1]);
+     return Math.abs(mx-n3.cx)<0.001 && Math.abs(my-n3.cy)<0.001; })());
+  ok("a glide never outlives the reader taking over",
+     /const schedule=\(\)=>\{ stopTween\(\);/.test(src));
+  ok("reduced motion gets the jump instead",
+     /if\(still \|\| reduce\)\{ cx=tx; cy=ty; z=tz; schedule\(\); return; \}/.test(src));
+}
+
 /* THE OPENING ZOOM IS A RENDERED SIZE, NOT A RULE ABOUT THE DRAWING. "Frame the
    court and ring 1" says nothing about how big that comes out on screen, and the
    map went from a 640px box to the whole viewport — the same z that showed a
