@@ -943,7 +943,13 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
    The reduced-motion rule above kills transitions and not animations, so this opts
    out on its own line. */
 @keyframes vin{from{opacity:.5; transform:translateY(5px)} to{opacity:1; transform:none}}
-#main.vin{animation:vin .14s ease-out both}
+/* backwards, NOT both. A forwards fill keeps the animation's final transform
+   applied for ever, and an element with a transform applied is the containing
+   block for any position:fixed descendant — so #main, not the viewport, would go
+   on defining where a fixed child sits long after the 140ms was over. The final
+   keyframe is the element's resting state anyway, so filling forwards bought
+   nothing and cost that. */
+#main.vin{animation:vin .14s ease-out backwards}
 @media(prefers-reduced-motion:reduce){#main.vin{animation:none}}
 </style>
 </head>
@@ -1876,6 +1882,15 @@ const main = document.getElementById("main");
    which is the complaint this exists for. */
 function viewEnter(){
   if(!main) return;
+  /* A FULL-SCREEN VIEW IS NEVER ANIMATED, because animating it is what makes it
+     stop being full screen. The map renders a .mapfull pinned to inset:0, and a
+     position:fixed element resolves against the nearest TRANSFORMED ancestor
+     rather than the viewport — so the moment #main takes a transform, a map that
+     covered the screen collapses into #main's column. Reported as "the map used
+     to be bigger when you click on map, now it's the small map again".
+     Cheap to check and it reads as nothing missing: a view that already fills the
+     screen has no edge to slide in from. */
+  if(main.querySelector(".mapfull")) return;
   main.classList.remove("vin");
   void main.offsetWidth;
   main.classList.add("vin");

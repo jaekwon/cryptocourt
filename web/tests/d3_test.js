@@ -117,6 +117,28 @@ ok("viewEnter restarts the animation", /classList\.remove\("vin"\)[\s\S]{0,80}of
 ok("the enter animation exists", /#main\.vin\{animation:vin /.test(src));
 ok("reduced motion opts out of it", /prefers-reduced-motion:reduce\)\{#main\.vin\{animation:none\}/.test(src));
 
+/* AND IT MUST NOT BREAK THE FULL-SCREEN MAP, which is what it did. A
+   position:fixed element resolves against the nearest TRANSFORMED ancestor
+   instead of the viewport, so #main taking a transform collapsed .mapfull —
+   pinned to inset:0 — into #main's column. Every arm above is a grep of the
+   source and every one of them stayed green through it, which is the reason this
+   one calls the function.
+   The forwards fill is the other half: it kept the animation's transform applied
+   after the run, so the collapse outlived the 140ms rather than flashing. */
+ok("the enter animation does not fill forwards",
+   /#main\.vin\{animation:vin [^}]*\bbackwards\}/.test(src) && !/animation:vin [^}]*\bboth\}/.test(src));
+eval(slice('function viewEnter(', '\nconst routes'));
+{
+  const fake = hasFull => { const added=[]; return { added, offsetWidth:0,
+    querySelector: sel => (sel===".mapfull" && hasFull) ? {} : null,
+    classList:{ add:c=>added.push(c), remove:()=>{} } }; };
+  const ordinary = fake(false); global.main = ordinary; viewEnter();
+  ok("an ordinary view gets the enter animation", ordinary.added.includes("vin"));
+  const full = fake(true); global.main = full; viewEnter();
+  ok("a full-screen view does not, or it stops being full screen",
+     !full.added.includes("vin"));
+}
+
 ok("phaseClass reads the side off a provisional status",
    phaseClass("provisional verdict NO — reopenable by a new dispute until block 900").side === "NO");
 ok("phaseClass keeps short free of the side",
