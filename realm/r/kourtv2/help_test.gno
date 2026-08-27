@@ -349,7 +349,7 @@ func TestTheClaimPageNumbersNameTheirCoin(cur realm, t *testing.T) {
 		"- still unwithdrawn: 5000000 " + unit,
 		"(bond 7000 " + unit + ")",
 		"- disputing this answer now costs ",
-		"- flag slot open — bond ",
+		"- anyone may challenge that rating once, by posting a bond of ",
 	} {
 		if !strings.Contains(answered, want) {
 			t.Fatalf("an answered claim must render %q:\n%s", want, answered)
@@ -426,5 +426,60 @@ func TestTheHelpPageQuotesTheRealStatusWords(cur realm, t *testing.T) {
 	// whether to look wants to know a settled claim says which way it went.
 	if !strings.Contains(page, "settled YES") || !strings.Contains(page, "settled NO") {
 		t.Fatal("the help page must say a settled claim names its side")
+	}
+}
+
+// UNRATED IS NOT LOW, and the difference is the difference between being paid
+// and not.
+//
+// cs.tier is the ZERO VALUE — which is tierLowX — until a settle or a finalize
+// writes mid, so every answered-but-unsettled claim rendered "quality: low".
+// And the tier is a payout multiplier: crystallize computes tier × midGross,
+// and low is 0. The page therefore told the answerer and every staker that the
+// claim currently pays nothing, when its outcome absent a flag vote is mid.
+func TestAnUnratedClaimDoesNotReadAsRatedLow(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("hp10-alice")
+	c, id := boardFixture(cur, "hp10", alice)
+	cs := mustClaim(c, id)
+	path := "hp10/" + strconv.FormatUint(id, 10)
+
+	// Answered and not yet settled: tier is untouched, so it is the zero value.
+	cs.frozenAt, cs.answer = 100, int8(sideYES)
+	if cs.tier != tierLowX || cs.slotConsumed || cs.tierFinal {
+		t.Fatal("the fixture must leave the tier at its untouched zero")
+	}
+	page := Render(path)
+	if strings.Contains(page, "quality: low") {
+		t.Fatalf("an unrated claim must not be reported as rated low:\n%s", page)
+	}
+	if !strings.Contains(page, "not yet rated — mid unless a quality vote lowers it") {
+		t.Fatalf("an unrated claim must say so, and say what it defaults to:\n%s", page)
+	}
+	// WHAT THE RATING IS FOR. Without it, "low" reads as an editorial opinion of
+	// the claim rather than as the reward multiplier it is.
+	if !strings.Contains(page, "**low pays nothing**") {
+		t.Fatal("the page must say the rating decides what the claim pays")
+	}
+
+	// A GENUINE LOW STILL READS AS LOW. The two are distinguishable because
+	// quality.gno lands a voted tier and sets slotConsumed in the same block —
+	// so low-and-unconsumed is the only shape that means "never rated".
+	cs.slotConsumed = true
+	voted := Render(path)
+	if !strings.Contains(voted, "quality: low (not final") {
+		t.Fatalf("a voted low must still read as low:\n%s", voted)
+	}
+	if strings.Contains(voted, "not yet rated") {
+		t.Fatal("a voted low must not read as unrated")
+	}
+
+	// And a finalised tier says final, not "can still change".
+	cs.tier, cs.tierFinal = tierHighX, true
+	final := Render(path)
+	if !strings.Contains(final, "quality: high (final)") {
+		t.Fatal("a finalised tier must say final")
+	}
+	if strings.Contains(final, "can still change") {
+		t.Fatal("a finalised tier must not invite a challenge")
 	}
 }

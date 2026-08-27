@@ -106,8 +106,8 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	mustContain("settled YES", "settled YES — every stake withdraws 1×")
 	cs.provisional = int8(sideNO)
 	mustContain("settled", "verdict: NO — vote")
-	mustContain("settled", "quality: mid (default")
-	mustContain("settled", "flag slot open — bond")
+	mustContain("settled", "quality: mid (not final")
+	mustContain("settled", "anyone may challenge that rating once")
 	cs.tier, cs.tierFinal = tierHighX, true
 	mustContain("quality", "quality: high (final)")
 	cs.flagOpen = true
@@ -259,7 +259,7 @@ func TestRenderShowsAnswererRecord(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "rr1", id, sideYES)
 	out := Render("rr1/1")
-	if !strings.Contains(out, "answerer's difficulty record (this court): 0") {
+	if !strings.Contains(out, "has been challenged and upheld 0 time(s) in this court") {
 		t.Fatalf("the answerer record line must render:\n%s", out)
 	}
 	// Gate is cold (0 qualified < coldStart) → no priority line yet.
@@ -707,8 +707,8 @@ func TestAnEscrowedSlashIsAnnounced(cur realm, t *testing.T) {
 	if !strings.Contains(page, "slash is escrowed") {
 		t.Errorf("the page does not mention the escrowed slash:\n%s", page)
 	}
-	if strings.Contains(page, "flag slot open") {
-		t.Errorf("the page offers a flag slot while a slash is escrowed:\n%s", page)
+	if strings.Contains(page, "anyone may challenge that rating") {
+		t.Errorf("the page offers a quality challenge while a slash is escrowed:\n%s", page)
 	}
 }
 

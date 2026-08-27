@@ -2839,8 +2839,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "7.4: a PRE-crystallize-only branch renders backing",
-  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")",
-  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")"
+  "find": "\t\t\tb.WriteString(\"- anyone may challenge that rating once, by posting a \" +\n\t\t\t\t\"bond of \" + strconv.FormatInt(flagBondFor(cs), 10) + \" \" +\n\t\t\t\tqualifiedSymbol(c) + \" and calling a vote on it\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- backing per unit shown; anyone may challenge that rating once, by posting a \" +\n\t\t\t\t\"bond of \" + strconv.FormatInt(flagBondFor(cs), 10) + \" \" +\n\t\t\t\tqualifiedSymbol(c) + \" and calling a vote on it\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -11254,8 +11254,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "v0.58 units: claim: the flag bond reverts to a generic CC",
-  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")",
-  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
+  "find": "\t\t\tb.WriteString(\"- anyone may challenge that rating once, by posting a \" +\n\t\t\t\t\"bond of \" + strconv.FormatInt(flagBondFor(cs), 10) + \" \" +\n\t\t\t\tqualifiedSymbol(c) + \" and calling a vote on it\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- anyone may challenge that rating once, by posting a \" +\n\t\t\t\t\"bond of \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" CC units and calling a vote on it\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -11445,5 +11445,54 @@
   "label": "v0.58 appeal: an unknown verb is given an invented meaning",
   "find": "\treturn \"an action this page does not recognise\"",
   "replace": "\treturn \"a routine administrative action\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 quality: an unrated claim is reported as rated low again",
+  "find": "\t\tcase cs.tier == tierLowX && !cs.slotConsumed:\n\t\t\tq = \"quality: not yet rated \u2014 mid unless a quality vote lowers it\"",
+  "replace": "\t\tcase false:\n\t\t\tq = \"quality: not yet rated \u2014 mid unless a quality vote lowers it\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 quality: a VOTED low is hidden behind 'not yet rated'",
+  "find": "\t\tcase cs.tier == tierLowX && !cs.slotConsumed:",
+  "replace": "\t\tcase cs.tier == tierLowX:"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 quality: a final tier still invites a challenge",
+  "find": "\t\tcase cs.tierFinal:\n\t\t\tq = \"quality: \" + tierName(cs.tier) + \" (final)\"",
+  "replace": "\t\tcase false:\n\t\t\tq = \"quality: \" + tierName(cs.tier) + \" (final)\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 quality: what the rating pays goes unsaid",
+  "find": "\t\tb.WriteString(\"- the rating sets what this claim pays: **low pays \" +\n\t\t\t\"nothing**, mid pays the full amount, high pays double\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 quality: 'low pays nothing' is softened",
+  "find": "\"- the rating sets what this claim pays: **low pays \" +\n\t\t\t\"nothing**, mid pays the full amount, high pays double\\n\"",
+  "replace": "\"- the rating sets what this claim pays\\n\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 flag: the challenge is described as a 'slot' again",
+  "find": "\t\t\tb.WriteString(\"- anyone may challenge that rating once, by posting a \" +\n\t\t\t\t\"bond of \" + strconv.FormatInt(flagBondFor(cs), 10) + \" \" +\n\t\t\t\tqualifiedSymbol(c) + \" and calling a vote on it\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 record: the answerer's record loses its meaning",
+  "find": "\t\tb.WriteString(\"- the answerer has been challenged and upheld \" +\n\t\t\tstrconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) +\n\t\t\t\" time(s) in this court \u2014 answers nobody contested do not count\\n\")",
+  "replace": "\t\tb.WriteString(\"- answerer's difficulty record (this court): \" +\n\t\t\tstrconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) + \"\\n\")"
  }
 ]

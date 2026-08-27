@@ -1890,3 +1890,49 @@ had a moderation act has `c.mod == nil`, so `renderModLog` takes an early return
 "how to open one" text on the ballot page itself. A court with no moderator set
 is precisely the one where both matter most. Both now sit on paths that always
 run.
+
+## 22. An unrated claim was reported as rated LOW
+
+`cs.tier`'s zero value **is** `tierLowX`. Nothing writes mid until a settle or a
+finalize does, so every answered-but-unsettled claim rendered:
+
+> - quality: low (default; the flag lane may re-vote it)
+
+And the tier is a **payout multiplier** — `crystallize` computes
+`want := mustMul(cs.tier, midGross)`, with low/mid/high at 0/1/2. So low pays
+**nothing**, and the page was telling the answerer and every staker that this
+claim currently pays nothing, when its outcome absent a flag vote is mid: full
+pay. The word "default" made it worse by reading as "low is the default value"
+when it meant "this rating is not settled yet".
+
+**A genuine low is distinguishable.** `quality.gno` lands a voted tier and sets
+`slotConsumed` in the same block, so `tier == low && !slotConsumed` can only be
+the untouched zero. The page now has three cases — final, voted, and never
+rated — instead of two.
+
+**And it says what the rating is for**, which no surface did: low pays nothing,
+mid the full amount, high double. Without that, "low" reads as an editorial
+opinion of the claim rather than as the difference between being paid and not.
+
+### 22.1 Two more terms a stranger could not act on
+
+`- flag slot open — bond 1266666 KOURT:COVID` is two pieces of house vocabulary
+and a price, and says neither what flagging is nor what the bond buys. It now
+reads: *anyone may challenge that rating once, by posting a bond of N and
+calling a vote on it.*
+
+`- answerer's difficulty record (this court): 0` is a bare integer with no scale.
+The code knew what it counted — contested-and-upheld answers only, so a high
+number is hard-won signal rather than volume — and the page did not say. It now
+reads: *the answerer has been challenged and upheld 0 time(s) in this court —
+answers nobody contested do not count.*
+
+Seven rows, all CAUGHT, including one that hides a voted low behind "not yet
+rated" and one that merely softens "low pays nothing". Four existing
+`render_test` assertions quoted the old wording and were updated; two corpus
+rows anchored on the flag-slot line and were repointed with their intent intact.
+
+**The general lesson, which is worth more than this instance:** a zero value that
+coincides with a meaningful state will render as that state. `tierLowX = 0` is
+the one found here; the same shape is worth looking for wherever a render reads
+an enum that state does not always initialise.

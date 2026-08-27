@@ -393,8 +393,9 @@ func renderClaim(slug string, id uint64) string {
 		// The answerer's track record — contested-and-upheld answers only, so a
 		// high number is hard-won signal, not volume (P13). If the court's
 		// priority gate is armed, a record ≥ threshold earns a 24h head start.
-		b.WriteString("- answerer's difficulty record (this court): " +
-			strconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) + "\n")
+		b.WriteString("- the answerer has been challenged and upheld " +
+			strconv.FormatInt(int64(AnswerRecord(slug, cs.answerer)), 10) +
+			" time(s) in this court — answers nobody contested do not count\n")
 		if PriorityGateActive(slug) {
 			b.WriteString("- answer priority is live here — a record of " +
 				strconv.FormatInt(int64(priorityNetRecord), 10) +
@@ -421,13 +422,38 @@ func renderClaim(slug string, id uint64) string {
 			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")
 		}
 		// Quality: the tier and the flag slot. The tally itself stays sealed.
-		q := "quality: " + tierName(cs.tier)
-		if cs.tierFinal {
-			q += " (final)"
-		} else {
-			q += " (default; the flag lane may re-vote it)"
+		//
+		// UNRATED IS NOT LOW, and printing it as low was expensive. cs.tier is
+		// the ZERO VALUE — which is tierLowX — until a settle or a finalize
+		// writes mid, so every answered-but-unsettled claim rendered
+		// "quality: low". And the tier is a payout MULTIPLIER: crystallize
+		// computes `want = tier × midGross`, and tierLowX is 0. So the page told
+		// the answerer and every staker that the claim currently pays NOTHING,
+		// when its actual outcome absent a flag vote is mid — full pay.
+		//
+		// A genuine low is distinguishable: quality.gno lands a voted tier and
+		// sets slotConsumed in the same block, so low-and-unconsumed can only be
+		// the untouched zero.
+		//
+		// "default" was also the wrong word for the unfinalised case: it reads as
+		// "low is the default" when it means "this rating is not settled yet".
+		var q string
+		switch {
+		case cs.tierFinal:
+			q = "quality: " + tierName(cs.tier) + " (final)"
+		case cs.tier == tierLowX && !cs.slotConsumed:
+			q = "quality: not yet rated — mid unless a quality vote lowers it"
+		default:
+			q = "quality: " + tierName(cs.tier) +
+				" (not final; a quality vote can still change it)"
 		}
 		b.WriteString("- " + q + "\n")
+		// WHAT THE RATING IS FOR, which no surface said. A reader who does not
+		// know the tier multiplies the reward reads "low" as an editorial
+		// opinion of the claim rather than as the difference between being paid
+		// and not.
+		b.WriteString("- the rating sets what this claim pays: **low pays " +
+			"nothing**, mid pays the full amount, high pays double\n")
 		switch {
 		case cs.flagOpen:
 			b.WriteString("- flag vote open — the tally is sealed until it closes\n")
@@ -436,8 +462,9 @@ func renderClaim(slug string, id uint64) string {
 		case cs.pendingSlash > 0:
 			b.WriteString("- a slash is escrowed in its counter-flag window\n")
 		case !cs.crystallized && !cs.slotConsumed && !cs.provClose:
-			b.WriteString("- flag slot open — bond " + strconv.FormatInt(flagBondFor(cs), 10) +
-				" " + qualifiedSymbol(c) + "\n")
+			b.WriteString("- anyone may challenge that rating once, by posting a " +
+				"bond of " + strconv.FormatInt(flagBondFor(cs), 10) + " " +
+				qualifiedSymbol(c) + " and calling a vote on it\n")
 		}
 		if cs.crystallized {
 			w, a, ans, carrot := cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
