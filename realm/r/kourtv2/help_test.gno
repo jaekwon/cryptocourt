@@ -190,6 +190,15 @@ func TestEveryPriceNamesItsUnit(cur realm, t *testing.T) {
 	if !strings.Contains(unit, "HP6") {
 		t.Fatal("the unit must be the court's own symbol")
 	}
+	// THE "NEVER EARNED" LINE, whose whole job is to let a reader check things
+	// off a list — which they cannot do for a coin the page never names. It went
+	// untested and a mutant reverting it to a bare "CC" survived.
+	if !strings.Contains(page, "buying "+unit+", or buying the pass") {
+		t.Fatal("the never-earned list must name the coin it says does not count")
+	}
+	if strings.Contains(page, "buying CC") {
+		t.Fatal("the standing page must not quote a generic CC")
+	}
 }
 
 // The SLASHED user's page names its unit too — a different branch, and the one
@@ -284,5 +293,138 @@ func TestTheHelpPageNamesTheRightCurrency(cur realm, t *testing.T) {
 	}
 	if !strings.Contains(page, "What they do to a claim or a comment is written") {
 		t.Fatal("the help page must scope the log the way the log itself does")
+	}
+}
+
+// The claim page's own numbers say what they count.
+//
+// "staked now: 84000000" was the first figure on the first page most readers
+// see, and nothing anywhere on it said what 84000000 was. It could have been
+// ugnot, GNOT, or a coin they had never heard of — and the answer, the court's
+// own coin, is the fact the whole design turns on. Asking that question about a
+// rendered page is what surfaced the help page teaching the wrong currency
+// (§20.1), so the gap was load-bearing twice over.
+func TestTheClaimPageNumbersNameTheirCoin(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("hp8-alice")
+	bob := testutils.TestAddress("hp8-bob")
+	c, id := boardFixture(cur, "hp8", alice)
+	unit := qualifiedSymbol(c)
+	path := "hp8/" + strconv.FormatUint(id, 10)
+
+	c.coin.Mint(bob, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	Stake(cross(cur), "hp8", id, sideYES, 4_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "hp8", id, sideNO, 1_000_000)
+
+	page := Render(path)
+	if !strings.Contains(page, "- staked now: 5000000 "+unit+" (YES 4000000 / NO 1000000)") {
+		t.Fatalf("the live stake line must name the court's coin:\n%s", page)
+	}
+	// NOT A GENERIC "CC". qualifiedSymbol exists because a bare symbol lets one
+	// court's coin read as another's, or as the platform's.
+	if strings.Contains(page, "CC units") {
+		t.Fatal("a claim page must not quote a generic CC")
+	}
+	// And the unit is this court's, not some other court's.
+	if !strings.Contains(unit, "HP8") {
+		t.Fatal("the unit must be this court's own symbol")
+	}
+
+	// EVERY OTHER BRANCH OF THIS PAGE, because an open claim renders one of
+	// them. Four mutants survived a version of this test that stopped above:
+	// the answered figures, the unwithdrawn line, the flag bond and the reward
+	// pools are all on paths a live open claim never takes, so stripping their
+	// units cost nothing a test could see. The fields are set directly, the way
+	// the claimStatus test drives the same lifecycle.
+	cs := mustClaim(c, id)
+	cs.frozenAt = 100
+	cs.answer = int8(sideNO)
+	cs.answerBond0 = 7000
+	cs.yesStakeAtFreeze = 4_000_000
+	cs.noStakeAtFreeze = 1_000_000
+	answered := Render(path)
+	for _, want := range []string{
+		"- staked when answered: 5000000 " + unit + " (YES 4000000 / NO 1000000)",
+		"- still unwithdrawn: 5000000 " + unit,
+		"(bond 7000 " + unit + ")",
+		"- disputing this answer now costs ",
+		"- flag slot open — bond ",
+	} {
+		if !strings.Contains(answered, want) {
+			t.Fatalf("an answered claim must render %q:\n%s", want, answered)
+		}
+	}
+	// The two bond lines and the flag bond all name the coin.
+	if strings.Count(answered, unit) < 5 {
+		t.Fatalf("every figure on an answered claim names the coin:\n%s", answered)
+	}
+	if strings.Contains(answered, "CC units") {
+		t.Fatal("an answered claim must not quote a generic CC")
+	}
+
+	// CRYSTALLIZED, which is a different branch again — and mutually exclusive
+	// with the flag slot, since the switch takes only one arm.
+	cs.crystallized = true
+	cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool = 11, 22, 33, 44
+	done := Render(path)
+	if !strings.Contains(done, "- rewards crystallized — pools ("+unit+"): accuracy 11") {
+		t.Fatalf("the reward pools must name the coin:\n%s", done)
+	}
+	if strings.Contains(done, "CC units") {
+		t.Fatal("a crystallized claim must not quote a generic CC")
+	}
+}
+
+// The help page's three endings are the ones claimStatus actually prints.
+//
+// The page says it quotes them "verbatim as the claim list prints them, so a
+// reader who saw 'disputed' on a court page finds the same word here rather
+// than a synonym they have to guess is the same thing" — and nothing tied the
+// two, so they drifted the first time claimStatus changed. It learned to name
+// the winning side ("settled YES — every stake withdraws 1×") and the help page
+// went on saying "settled — answered", which is the exact failure the promise
+// was about.
+//
+// Substring rather than equality, because claimStatus interpolates a side and a
+// block height that a help page has no business quoting. What is pinned is that
+// the phrase a reader carries away from here appears in what they will actually
+// see.
+func TestTheHelpPageQuotesTheRealStatusWords(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("hp9-alice")
+	c, id := boardFixture(cur, "hp9", alice)
+	cs := mustClaim(c, id)
+	page := Render(helpPath)
+
+	for _, tc := range []struct {
+		name  string
+		set   func()
+		help  string
+	}{
+		{"settled", func() {
+			cs.verdictAt, cs.provisional = 100, int8(sideYES)
+		}, "every stake withdraws 1×"},
+		{"disputed", func() {
+			cs.verdictAt, cs.disputeOpen = 0, true
+		}, "a sealed vote is deciding; principal is never withheld"},
+		{"closed", func() {
+			cs.disputeOpen, cs.closed = false, true
+		}, "never answered; every stake exited 1×, the deposit refunded"},
+	} {
+		tc.set()
+		real := claimStatus(cs)
+		if !strings.Contains(page, tc.help) {
+			t.Fatalf("the help page must list the %s ending", tc.name)
+		}
+		if !strings.Contains(real, tc.help) {
+			t.Fatalf("the help page's %s wording is not what claimStatus prints:\n"+
+				"  help: %q\n  real: %q", tc.name, tc.help, real)
+		}
+	}
+
+	// And the side is named, since claimStatus names it and a reader deciding
+	// whether to look wants to know a settled claim says which way it went.
+	if !strings.Contains(page, "settled YES") || !strings.Contains(page, "settled NO") {
+		t.Fatal("the help page must say a settled claim names its side")
 	}
 }

@@ -17,6 +17,7 @@ import (
 //	"<slug>"              one court
 //	"<slug>/<id>"         one claim
 //	"<slug>/folder/<fid>" one folder
+//	"<slug>/election"     the moderator ballot
 //	"<slug>/<id>/<addr>"  one address's positions on a claim ("your page")
 func Render(path string) string {
 	// An armed test clock fabricates every date below. Say so on EVERY page,
@@ -98,6 +99,15 @@ func render(path string) string {
 	// that exists, is written to, and is unreachable by anybody who is not
 	// running the overlay. Carved here for the reason "mod" and "me" are carved
 	// here: a folder id is numeric, so the word can never be taken for a claim.
+	// THE BALLOT, which rendered nowhere at all — fourteen entrypoints and no
+	// page (docs §21). Carved beside "mod" and "me" for the same reason: a claim
+	// id is numeric, so a word can never be taken for one.
+	if parts[1] == electionPath {
+		if len(parts) != 2 {
+			return "## Not found\nThe ballot is /<court>/election."
+		}
+		return renderElection(parts[0])
+	}
 	if parts[1] == "folder" {
 		if len(parts) != 3 {
 			return "## Not found\nA folder is /<court>/folder/<id>."
@@ -344,18 +354,20 @@ func renderClaim(slug string, id uint64) string {
 	if cs.frozenAt != 0 {
 		fTotal := cs.yesStakeAtFreeze + cs.noStakeAtFreeze
 		b.WriteString("- staked when answered: " + strconv.FormatInt(fTotal, 10) +
-			" (YES " + strconv.FormatInt(cs.yesStakeAtFreeze, 10) +
+			" " + qualifiedSymbol(c) + " (YES " + strconv.FormatInt(cs.yesStakeAtFreeze, 10) +
 			" / NO " + strconv.FormatInt(cs.noStakeAtFreeze, 10) + ")\n")
 		if fTotal > 0 {
 			b.WriteString("- lean when answered: " + pct(cs.yesStakeAtFreeze, fTotal) + " YES\n")
 		}
 		if live := cs.yesStake + cs.noStake; live > 0 {
-			b.WriteString("- still unwithdrawn: " + strconv.FormatInt(live, 10) + "\n")
+			b.WriteString("- still unwithdrawn: " + strconv.FormatInt(live, 10) +
+				" " + qualifiedSymbol(c) + "\n")
 		}
 	} else {
 		total := cs.yesStake + cs.noStake
 		b.WriteString("- staked now: " + strconv.FormatInt(total, 10) +
-			" (YES " + strconv.FormatInt(cs.yesStake, 10) + " / NO " + strconv.FormatInt(cs.noStake, 10) + ")\n")
+			" " + qualifiedSymbol(c) + " (YES " + strconv.FormatInt(cs.yesStake, 10) +
+			" / NO " + strconv.FormatInt(cs.noStake, 10) + ")\n")
 		if total > 0 {
 			b.WriteString("- instantaneous: " + pct(cs.yesStake, total) + " YES\n")
 		}
@@ -377,7 +389,7 @@ func renderClaim(slug string, id uint64) string {
 	if cs.frozenAt != 0 {
 		b.WriteString("\n## Resolution\n\n")
 		b.WriteString("- answer: " + sideName(int(cs.answer)) + " (bond " +
-			strconv.FormatInt(cs.answerBond0, 10) + " CC units)\n")
+			strconv.FormatInt(cs.answerBond0, 10) + " " + qualifiedSymbol(c) + ")\n")
 		// The answerer's track record — contested-and-upheld answers only, so a
 		// high number is hard-won signal, not volume (P13). If the court's
 		// priority gate is armed, a record ≥ threshold earns a 24h head start.
@@ -402,7 +414,8 @@ func renderClaim(slug string, id uint64) string {
 			// user can weigh it without simulating the bond formula themselves.
 			// The bond doubles each failed round (reflected as rounds accrue).
 			b.WriteString("- disputing this answer now costs " +
-				strconv.FormatInt(cs.disputeBond0(), 10) + " CC units (doubles per failed round)\n")
+				strconv.FormatInt(cs.disputeBond0(), 10) + " " + qualifiedSymbol(c) +
+				" (doubles per failed round)\n")
 		}
 		if cs.verdictAt != 0 && !cs.provClose {
 			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")
@@ -423,11 +436,13 @@ func renderClaim(slug string, id uint64) string {
 		case cs.pendingSlash > 0:
 			b.WriteString("- a slash is escrowed in its counter-flag window\n")
 		case !cs.crystallized && !cs.slotConsumed && !cs.provClose:
-			b.WriteString("- flag slot open — bond " + strconv.FormatInt(flagBondFor(cs), 10) + " CC units\n")
+			b.WriteString("- flag slot open — bond " + strconv.FormatInt(flagBondFor(cs), 10) +
+				" " + qualifiedSymbol(c) + "\n")
 		}
 		if cs.crystallized {
 			w, a, ans, carrot := cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
-			b.WriteString("- rewards crystallized — pools (CC units): accuracy " + strconv.FormatInt(w, 10) +
+			b.WriteString("- rewards crystallized — pools (" + qualifiedSymbol(c) +
+				"): accuracy " + strconv.FormatInt(w, 10) +
 				", author " + strconv.FormatInt(a, 10) + ", answerer " + strconv.FormatInt(ans, 10) +
 				", participation remaining " + strconv.FormatInt(carrot, 10) + "\n")
 		}

@@ -1772,3 +1772,121 @@ still does not answer, which is the next thing to fix.
 
 **The rule this earns:** a page that makes a factual claim about what the realm
 does is checked against the entrypoint that does it, not against another page.
+
+### 20.2 Units: the sweep that missed, and the test that only rendered one branch
+
+Every money figure on a human-facing page now names the court's coin through
+`qualifiedSymbol`. Eight of them did not: the live stake, the answered stake,
+the unwithdrawn remainder, the answer bond, the dispute bond, the flag bond, the
+reward pools, and the "never earned" list's "buying CC".
+
+`staked now: 84000000` was the first number on the first page most readers see,
+and nothing on it said what 84000000 counted. Asking that question is what
+surfaced §20.1 — the help page teaching the wrong currency — so the gap was
+load-bearing twice.
+
+**A sweep that misses is worse than no sweep**, because it reads as coverage.
+The first pass scanned for a `WriteString` and a `FormatInt` **on the same
+line**, which multi-line concatenations escape — and three of the eight were
+exactly that shape. It also found, and correctly left alone, the two categories
+that must NOT carry units: the `qeval` wire formats (`BoardNewest`,
+`StandingBreakdown`, `FolderTree`, the association and supersede edge lists),
+which a client parses, and the ids and counts, where no unit applies.
+
+**Four mutants survived the first round because the test rendered only an OPEN
+claim.** The answered figures, the flag bond and the reward pools are on
+lifecycle branches a live open claim never takes, so stripping their units cost
+nothing a test could see. The test now drives all four states by setting
+`claimState` fields directly, the way `TestRenderLifecycleLines` already did.
+A page with a `switch` over its subject's state needs a case per arm; asserting
+against one arm and calling the page covered is how a whole branch goes unheld.
+
+And one existing assertion **hard-coded `CC units`**, which pinned the defect
+rather than the behaviour. It now derives the unit from
+`qualifiedSymbol(mustCourt(slug))`, so it follows the rule instead of a literal.
+
+## 21. Elections render nowhere — the third instance of one pattern
+
+`modvote.gno` exports five election verbs — `RegisterModCandidate`,
+`OpenElection`, `NominateCandidate`, `ApproveCandidate`, `ApproveRetain`,
+`ResolveElection` — and nine reads: `ElectionOpen`, `ElectionWindows`,
+`ElectionFloorOf`, `ElectionBondOf`, `ElectionTally`, `CandidateMembers`,
+`CandidateThreshold`, `ElectionCooldownUntil`, plus the candidate registry.
+
+**No render path shows any of it.** A court's holders cannot learn from any page
+in this realm that an election is open, who is standing, what the tally is, what
+the bond costs, or when the window shuts. The help page tells them "each court
+elects its own moderators" — a promise with no surface.
+
+This is the **third** instance of one pattern: the comment board had a working
+route and no link (§18-era), the filing tree had seven verbs and no page
+(§18.2), and elections have fourteen entrypoints and no page. In every case the
+writes were gated, tested and mutation-covered, and the read side existed —
+what was missing was only the rendering. The realm's tests prove the machinery
+works; nothing proved anybody could see it.
+
+`ElectionTally`'s own doc comment says it "exposes a line's approving weight and
+retain's, **for render**" — a read written for a surface never built.
+
+### 21.1 The hazard the surface must respect
+
+`ElectionFloorOf` carries a warning that an election page has to honour, and it
+is worth quoting because it inverts the obvious design:
+
+> `install` requires `e.turnout >= e.floor`, and below it nothing installs and
+> the CURRENT moderator set stands. So an over-read of achievable turnout —
+> mobilising to what looks like the bar and falling short — hands the election
+> to the incumbents by apathy.
+
+The floor is 5% of `votable`, and `votable` nets out only the court escrow: coin
+at a wrapper's address counts toward the pool and **no key can vote it**. So a
+page that prints the floor beside the pool invites a coalition to reason about a
+share of a pool part of which cannot turn out. Whatever the surface says about
+the bar, it must not let a reader infer that reaching it is easier than it is —
+and the direction of the error matters, because falling short is not a neutral
+outcome but a win for the incumbents.
+
+The same comment notes this is currently harmless — "nothing renders this today"
+— which stops being true the moment the surface exists.
+
+### 21.2 The ballot page
+
+`/<court>/election`, linked from every court's moderation log.
+
+**It renders whether or not a ballot is open.** "None is open" is the state a
+holder is usually in and the one they can act from, so a page that 404s there
+would tell somebody looking for their remedy that the remedy does not exist. The
+closed state names the seats held now, the cooldown deadline if there is one, and
+the two calls that open a ballot — `RegisterModCandidate` then `OpenElection` —
+because the failure otherwise is a panic with no page to explain it.
+
+**The phase is derived, not left to arithmetic.** Nominating in the vote window
+or voting during nomination both panic, and a reader handed three block numbers
+has to work out which is which.
+
+**Retain is a line on the ballot**, listed beside the challengers rather than
+under them: it is what wins if nobody clears the bar, so it belongs in the list a
+reader is comparing.
+
+**The turnout bar carries its warning.** Two facts a reader can get wrong in the
+incumbents' favour, both printed rather than left to be derived, because the
+error has a direction: falling short is *the same outcome as a vote to retain*,
+and the bar's pool includes coin no key can vote, so the share of castable weight
+actually needed is larger than the bar looks.
+
+Sixteen rows, all CAUGHT — two of them ablating the hazard copy specifically.
+
+**One INVALID first, and a new instance of an old trap.** Deleting the member
+loop orphaned the `sanitize` **import** — `InlineText` is used nowhere else in
+the file — so the mutant never compiled. Previous instances of this orphaned a
+*variable*; an import is the same failure through a different door, and the
+harness's "did not build ≠ CAUGHT" rule caught it either way. The row now keeps
+the call alive inside a loop that writes nothing, which preserves the intent
+exactly.
+
+**And a lazily-created `courtMod` bit the first draft.** A court that has never
+had a moderation act has `c.mod == nil`, so `renderModLog` takes an early return
+— and the link to this page had been put in the branch below it, along with the
+"how to open one" text on the ballot page itself. A court with no moderator set
+is precisely the one where both matter most. Both now sit on paths that always
+run.

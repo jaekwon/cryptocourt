@@ -410,6 +410,8 @@ func renderModLog(slug string) string {
 	// docket should be told plainly where the record of that organising is, and
 	// is not.
 	b.WriteString("Every moderation act on this court's CLAIMS and COMMENTS is recorded here: who acted, what they did, and when. Moderation controls what is listed; it never moves a coin or changes a verdict.\n\n")
+	b.WriteString("[Who holds these seats, and how to challenge them](/r/kourt/kourtv2:" +
+		sanitize.InlineText(slug) + "/election)\n\n")
 	b.WriteString("Curation — which claims a moderator filed under which heading — is " +
 		"not in this list. The tree it produced is on the [court page](/r/kourt/kourtv2:" + sanitize.InlineText(slug) + "); the acts themselves are in " +
 		"the chain's event stream.\n\n")

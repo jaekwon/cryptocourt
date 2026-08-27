@@ -90,9 +90,10 @@ func renderHelp() string {
 	// saw "disputed" on a court page finds the same word here rather than a
 	// synonym they have to guess is the same thing.
 	b.WriteString("Every claim ends one of three ways:\n\n")
-	b.WriteString("- **settled** — answered; every stake withdraws 1×\n")
+	b.WriteString("- **settled YES** or **settled NO** — answered, and the page " +
+		"says which way; every stake withdraws 1×\n")
 	b.WriteString("- **disputed** — a sealed vote is deciding; principal is never withheld\n")
-	b.WriteString("- **closed** — never answered; every stake exits 1×, the deposit refunded\n\n")
+	b.WriteString("- **closed** — never answered; every stake exited 1×, the deposit refunded\n\n")
 
 	b.WriteString("## Comments are where the argument is\n\n")
 	b.WriteString("Every claim has a comment board. A YES/NO number cannot carry a " +

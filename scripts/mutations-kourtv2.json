@@ -2839,8 +2839,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "7.4: a PRE-crystallize-only branch renders backing",
-  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")",
-  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
+  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 backing per unit shown; bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -11227,6 +11227,174 @@
   "file": "help.gno",
   "label": "v0.58 help: help drops the one-way purchase",
   "find": "\tb.WriteString(\"- **Buying a court's coin** burns GNOT one way. There is no sell \" +\n\t\t\"side and no redemption; the price only rises as more is bought.\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the live stake figure loses its coin",
+  "find": "\t\tb.WriteString(\"- staked now: \" + strconv.FormatInt(total, 10) +\n\t\t\t\" \" + qualifiedSymbol(c) + \" (YES \"",
+  "replace": "\t\tb.WriteString(\"- staked now: \" + strconv.FormatInt(total, 10) +\n\t\t\t\" (YES \""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the answered stake figure loses its coin",
+  "find": "\t\tb.WriteString(\"- staked when answered: \" + strconv.FormatInt(fTotal, 10) +\n\t\t\t\" \" + qualifiedSymbol(c) + \" (YES \"",
+  "replace": "\t\tb.WriteString(\"- staked when answered: \" + strconv.FormatInt(fTotal, 10) +\n\t\t\t\" (YES \""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the unwithdrawn figure loses its coin",
+  "find": "\t\t\tb.WriteString(\"- still unwithdrawn: \" + strconv.FormatInt(live, 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- still unwithdrawn: \" + strconv.FormatInt(live, 10) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the flag bond reverts to a generic CC",
+  "find": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) +\n\t\t\t\t\" \" + qualifiedSymbol(c) + \"\\n\")",
+  "replace": "\t\t\tb.WriteString(\"- flag slot open \u2014 bond \" + strconv.FormatInt(flagBondFor(cs), 10) + \" CC units\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the reward pools revert to a generic CC",
+  "find": "\t\t\tb.WriteString(\"- rewards crystallized \u2014 pools (\" + qualifiedSymbol(c) +\n\t\t\t\t\"): accuracy \" + strconv.FormatInt(w, 10) +",
+  "replace": "\t\t\tb.WriteString(\"- rewards crystallized \u2014 pools (CC units): accuracy \" + strconv.FormatInt(w, 10) +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the answer bond reverts to a generic CC",
+  "find": "strconv.FormatInt(cs.answerBond0, 10) + \" \" + qualifiedSymbol(c) + \")\\n\")",
+  "replace": "strconv.FormatInt(cs.answerBond0, 10) + \" CC units)\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 units: claim: the dispute bond reverts to a generic CC",
+  "find": "strconv.FormatInt(cs.disputeBond0(), 10) + \" \" + qualifiedSymbol(c) +\n\t\t\t\t\" (doubles per failed round)\\n\")",
+  "replace": "strconv.FormatInt(cs.disputeBond0(), 10) + \" CC units (doubles per failed round)\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "v0.58 units: standing: 'buying CC' stays generic",
+  "find": "\tb.WriteString(\"Never earned: commenting, being upvoted, buying \" +\n\t\tqualifiedSymbol(c) + \", or buying the pass.\\n\")",
+  "replace": "\tb.WriteString(\"Never earned: commenting, being upvoted, buying CC, or buying the pass.\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ballot: ballot: the route is not carved",
+  "find": "\tif parts[1] == electionPath {\n\t\tif len(parts) != 2 {\n\t\t\treturn \"## Not found\\nThe ballot is /<court>/election.\"\n\t\t}\n\t\treturn renderElection(parts[0])\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 ballot: ballot: the route accepts a deeper path",
+  "find": "\t\tif len(parts) != 2 {\n\t\t\treturn \"## Not found\\nThe ballot is /<court>/election.\"\n\t\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 ballot: ballot: nothing links it",
+  "find": "\tb.WriteString(\"[Who holds these seats, and how to challenge them](/r/kourt/kourtv2:\" +\n\t\tsanitize.InlineText(slug) + \"/election)\\n\\n\")\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: an unknown court renders a ballot",
+  "find": "\tif !Exists(slug) {\n\t\treturn \"## Not found\\nNo court by that slug.\"\n\t}\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: the powers of a moderator go unsaid",
+  "find": "\tb.WriteString(\"A court's moderators answer claims, curate its folders, and can \" +\n\t\t\"hide a claim, hide a comment, slash somebody's standing, or freeze an \" +\n\t\t\"address out of the boards. **This ballot is the only way the court's \" +\n\t\t\"holders replace them.**\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: a closed ballot 404s instead of explaining",
+  "find": "\tif cm == nil || cm.election == nil || cm.election.resolved {\n\t\twriteNoElection(&b, c, cm)",
+  "replace": "\tif cm == nil || cm.election == nil || cm.election.resolved {\n\t\treturn \"## Not found\\nNo election.\"\n\t\twriteNoElection(&b, c, cm)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: how to open one goes unsaid",
+  "find": "\tb.WriteString(\"Opening one takes two calls: `RegisterModCandidate` records a \" +\n\t\t\"proposed set of moderators and returns its id, and `OpenElection` puts \" +\n\t\t\"that id on a ballot. Any holder may do both.\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: the phase is not derived",
+  "find": "\tcase now < e.nominateEnd:\n\t\tb.WriteString(\"**Nominating.**",
+  "replace": "\tcase false:\n\t\tb.WriteString(\"**Nominating.**"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: the voting phase is never announced",
+  "find": "\tcase now < e.voteEnd:\n\t\tb.WriteString(\"**Voting.**",
+  "replace": "\tcase false:\n\t\tb.WriteString(\"**Voting.**"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: candidate members go unlisted",
+  "find": "\t\t\tfor _, m := range cand.members {\n\t\t\t\tb.WriteString(\"  - `\" + sanitize.InlineText(m.String()) + \"`\\n\")\n\t\t\t}\n",
+  "replace": "\t\t\tfor _, m := range cand.members {\n\t\t\t\t_ = sanitize.InlineText(m.String())\n\t\t\t}\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: retain is not on the ballot",
+  "find": "\tb.WriteString(\"- **keep the current moderators** \u2014 \" +\n\t\tstrconv.FormatInt(e.retainW, 10) + \" \" + qualifiedSymbol(c) + \" approving\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: pinned weights go unsaid",
+  "find": "\tb.WriteString(\"- weights are pinned at the epoch the ballot opened, so buying \" +\n\t\t\"coin now does not add voting weight to it\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: HAZARD: falling short is presented as a draw",
+  "find": "\tb.WriteString(\"> **Falling short is not a draw.** If the ballot closes with less \" +\n\t\t\"than the bar cast, nothing is installed and the current moderators keep \" +\n\t\t\"their seats \u2014 the same outcome as a vote to retain them.\\n>\\n\" +",
+  "replace": "\tb.WriteString(\"> If the ballot closes with less than the bar cast, nothing is installed.\\n>\\n\" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: HAZARD: the unvotable-coin warning goes",
+  "find": "\t\t\"> And the bar is a share of this court's coin **including coin that \" +\n\t\t\"cannot vote**: it nets out only the court's own escrow, so coin held at \" +\n\t\t\"a wrapper's address counts toward the pool the bar was measured against \" +\n\t\t\"while no key can cast it. The share of actually-castable weight you need \" +\n\t\t\"is therefore larger than the bar looks.\\n\\n\")",
+  "replace": "\t\t\"\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: the shortfall is not quoted",
+  "find": "\t\tb.WriteString(\"- still needed: **\" + strconv.FormatInt(e.floor-e.turnout, 10) +\n\t\t\t\" \" + qualifiedSymbol(c) + \"**\\n\\n\")",
+  "replace": "\t\tb.WriteString(\"- the bar is not yet cleared\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "electionrender.gno",
+  "label": "v0.58 ballot: ballot: the bar itself is not quoted",
+  "find": "\tb.WriteString(\"- the bar: **\" + strconv.FormatInt(e.floor, 10) + \" \" +\n\t\tqualifiedSymbol(c) + \"**, fixed when the ballot opened\\n\")",
   "replace": ""
  }
 ]

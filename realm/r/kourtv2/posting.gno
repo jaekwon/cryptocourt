@@ -654,7 +654,8 @@ func renderStanding(slug, addrArg string) string {
 	b.WriteString("- **prevailing in a dispute** — an uphold against real opposition, or an overturn\n")
 	b.WriteString("- authoring a claim the court rated **HIGH** — seeded claims earn nothing\n")
 	b.WriteString("- **winning conviction** on a resolved claim; half where nobody disputed it\n\n")
-	b.WriteString("Never earned: commenting, being upvoted, buying CC, or buying the pass.\n")
+	b.WriteString("Never earned: commenting, being upvoted, buying " +
+		qualifiedSymbol(c) + ", or buying the pass.\n")
 	b.WriteString("Standing does not decay. A moderator may slash it for abuse; the\n")
 	b.WriteString("high-water mark above is what a successor set can restore.\n")
 
