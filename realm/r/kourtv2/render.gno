@@ -355,6 +355,7 @@ func renderClaim(slug string, id uint64) string {
 	// THE BOARD, LINKED FROM THE CLAIM. It had no link from anywhere: the route
 	// existed and the only way to reach it was to type the URL, so every comment
 	// ever written was on a page nobody could navigate to.
+	writeRelations(&b, c, id)
 	writeBoardLink(&b, c, cs, id)
 	writeAppeal(&b, c, cs)
 	if cs.seeded {

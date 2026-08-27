@@ -2021,3 +2021,58 @@ Eight rows, all CAUGHT — including two that do not delete the stake-is-safe li
 but merely **soften** it ("your stake is usually safe"). A hedge is the more
 likely regression than a deletion, and the more damaging one, since it reads as
 having been said.
+
+## 24. A claim's relations rendered nowhere — the fourth instance
+
+`association.gno` and `supersede.gno` export about fifteen entrypoints between
+them, and **no human-facing page drew a single edge**. The overlay renders them;
+gnoweb did not, so the two surfaces disagreed about what a claim even is.
+
+This is the fourth time this exact shape has turned up: the comment board (a
+working route nothing linked to), the filing tree (§18.2, seven verbs and no
+page), the ballot (§21, fourteen entrypoints and no page), and now this. In
+every case the writes were gated, tested and mutation-covered, the read side
+existed, and only the rendering was missing. **The suite proved the machinery
+worked; nothing proved anybody could see it.**
+
+**Supersedes is the one that costs something.** An argument edge is a view
+somebody holds — anyone may add one and the chain checks nothing, because there
+is nothing to check. A supersede edge is a statement about the docket's own
+history that the chain verifies: this claim's question died unanswered and was
+re-filed as another. A reader sitting on the dead one, with coin staked, had no
+way to learn that the live version of their question is somewhere else. That is
+not a missing feature; it is a reader left on a page the docket has moved past.
+
+So the redirection goes **above the claim's own signal**, where the hide banner
+goes and for the same reason: it changes whether the page below is worth reading.
+The re-filing claim names what it re-files, quietly — that is context, not a
+redirection.
+
+The argument graph sits lower, says both directions in words (an edge this claim
+asserts is not the same fact as one somebody pointed at it), and says plainly
+that the court does not rule on any of them.
+
+### 24.1 The assertion that could never fail
+
+Two rows survived: the `assocTextGone` gates, which are the ones whose failure
+undoes a purge. The first cause was that the test never put a withheld claim in
+a relation at all. The second is worth writing down.
+
+With the gate removed the page renders:
+
+	- supports [[text withheld]](/r/kourt/kourtv2:rel4/2)
+
+`claimTitleFor` gates the TITLE independently, so the text never leaks — **the id
+leaks, as a link.** The assertion looked for `"/rel4/2)"`, and the route is
+`/r/kourt/kourtv2:<slug>/<id>`: a **colon** before the slug, not a slash. The
+needle could not match any page, so the check was unfalsifiable and the mutant
+walked past it.
+
+That is the failure mode worth naming: a `Contains` assertion built from a
+remembered URL shape rather than a real rendered one asserts nothing, and looks
+exactly like an assertion that holds. The mutant is what told the difference —
+and only after being made to print the page it produced.
+
+Ten rows, all CAUGHT. One was INVALID first: deleting the re-files line orphaned
+its `cs`, the same did-not-build trap through the same door as §21.2's orphaned
+import.

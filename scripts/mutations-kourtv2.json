@@ -11571,5 +11571,75 @@
   "label": "v0.58 help: the stake-is-safe reassurance goes",
   "find": "\tb.WriteString(\"**Your stake is never at risk in either.** A bond is separate \" +\n\t\t\"money you choose to put up; the coin you staked on the claim still \" +\n\t\t\"comes back 1\u00d7, whatever the challenge decides.\\n\\n\")",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 relations: nothing is wired into the claim page",
+  "find": "\twriteRelations(&b, c, id)\n",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: a superseded claim is not told",
+  "find": "\t\t\t\tb.WriteString(\"> **This question was asked again.** It died here \" +\n\t\t\t\t\t\"without an answer and was re-filed as:\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: the replacement is named but not linked",
+  "find": "\t\t\tb.WriteString(\">\\n> - [\" + claimTitleFor(c, cs) + \"](\" + base +\n\t\t\t\tstrconv.FormatUint(from, 10) + \") \u2014 \" + claimStatus(cs) + \"\\n\")",
+  "replace": "\t\t\tb.WriteString(\">\\n> - \" + claimTitleFor(c, cs) + \" \u2014 \" + claimStatus(cs) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: the re-filing claim stops naming what it re-files",
+  "find": "\t\t\t\tb.WriteString(\"_Re-files [\" + claimTitleFor(c, cs) + \"](\" + base +\n\t\t\t\t\tstrconv.FormatUint(e.to, 10) + \"), which died unanswered._\\n\\n\")",
+  "replace": "\t\t\t\t_ = cs\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: the argument graph goes undrawn",
+  "find": "\tb.WriteString(\"## Related claims\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: the opinion disclaimer goes",
+  "find": "\tb.WriteString(\"_Anyone may draw these links, and the court does not rule on \" +\n\t\t\"them \u2014 they are what readers have asserted, not findings._\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: the two directions are conflated",
+  "find": "\t\tif !outgoing {\n\t\t\tverb += \" it\"\n\t\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: supports and contests are swapped",
+  "find": "\t\tverb := \"supports\"\n\t\tif e.stance == assocContests {\n\t\t\tverb = \"contests\"\n\t\t}",
+  "replace": "\t\tverb := \"contests\"\n\t\tif e.stance == assocContests {\n\t\t\tverb = \"supports\"\n\t\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: a withheld claim is surfaced by the side door",
+  "find": "\t\tif other == 0 || other > c.nextID || assocTextGone(c, other) {",
+  "replace": "\t\tif other == 0 || other > c.nextID {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "relrender.gno",
+  "label": "v0.58 relations: a withheld claim is surfaced through supersedes",
+  "find": "\t\t\tif from == 0 || from > c.nextID || assocTextGone(c, from) {",
+  "replace": "\t\t\tif from == 0 || from > c.nextID {"
  }
 ]
