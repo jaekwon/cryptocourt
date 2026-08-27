@@ -721,6 +721,12 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
   line-height:1; color:var(--ink-2); padding:0 2px}
 .mapsel-x:hover{color:var(--ink)}
 .mapsel-t{margin:0 0 8px; font-size:13px; line-height:1.45}
+.mapsel-d{margin:0 0 8px; font-size:12px; line-height:1.5; color:var(--ink-2)}
+/* The claim page's own body renderer, at the panel's scale. 15.5px serif in a
+   column this narrow runs about six words to the line, which reads as a stack of
+   fragments rather than as prose; the panel already scrolls, so length is fine. */
+.mapsel .claimbody{margin:0 0 10px; max-width:none}
+.mapsel .claimbody p{font-size:12.5px; line-height:1.55; margin:0 0 7px}
 .mapsel p.small{margin:0 0 4px}
 .mapsel-a{margin-top:10px}
 .mapsel-l{list-style:none; margin:6px 0 0; padding:0; max-height:190px; overflow-y:auto}
@@ -3703,7 +3709,11 @@ function mapTree(data, mode){
   const drawn = new Set(), alsoIn = [];
   const folderNode = (f, path) => {
     const count = (function cnt(g){ return (g.claims||[]).length+(g.folders||[]).reduce((a,q)=>a+cnt(q),0); })(f);
-    const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[],
+    // fid rides along so the card can ask the chain for the folder's own
+    // description. It is the CHAIN's folder id, not the drawing's index — the
+    // index is what the SVG uses in data-fid — and it is undefined for a
+    // curation folder, which has no description to ask for.
+    const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[], fid:f.fid,
       count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
       if(!data.claims[id]) continue;
@@ -4000,7 +4010,7 @@ function mapLayout(data, mode){
     n._box = box;
     if(n.kind==="court"){ court={...box, name:n.name}; }
     else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name,
-      count:n.count, pseudo:n.pseudo, path:n.path,
+      count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid,
       claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
       also:n.also||[],
       subs:n.kids.filter(k=>k.kind==="folder").length})); }
@@ -4106,6 +4116,15 @@ function mapSelCard(id, data, slug, L){
                                     shared one started printing it */
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
     + `<p class="mapsel-t">${safeInline(c.title)}</p>`
+    /* THE CLAIM'S OWN STATEMENT OF WHAT IT MEANS, which is the thing a reader
+       opened the card to read. The card showed a title they had already read on
+       the node, then relations and a link off the map — so the body, the one part
+       that says what would settle this and what is out of view, was the only thing
+       the map could not show you. Same renderer as the claim page: escaped, split
+       on blank lines, never re-interpreted as markup.
+       Absent until the read lands (mountMap fetches it on selection), and absent
+       for good in demo mode, where the sample carries no bodies. */
+    + claimBody(c)
     + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
     + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
     + (!o && !i? `<p class="small muted">no relations drawn on this map</p>` : "")
@@ -4150,6 +4169,10 @@ function mapFolderCard(f, data, slug){
   return `<div class="mapsel-h"><span class="mono">folder</span>`
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
     + `<p class="mapsel-t">${safeInline(f.name)}</p>`
+    // The moderators' own words for what belongs in here — the one thing that
+    // distinguishes a filing decision from an arbitrary grouping. Chain folders
+    // only: a curation folder has no description field to show.
+    + (f.desc? `<p class="mapsel-d">${safeInline(f.desc)}</p>` : "")
     + `<p class="small muted">${f.count} claim${f.count===1?"":"s"} in all`
     + (f.subs? `, in ${f.subs} subfolder${f.subs===1?"":"s"}` : "")
     + (ids.length? `; ${ids.length} filed here directly` : "") + `</p>`
@@ -4866,7 +4889,46 @@ function mountMap(slug, data, focusId){
     if(px) tz = Math.min(8, Math.max(z, 9*fit.w/(MAPK.fs.title*px)));
     glideTo(b.cx, b.cy, tz);
   }
-  function select(next){ sel=next; paint(); centreOn(next); }
+  /* THE CARD'S TEXT IS READ WHEN THE CARD IS OPENED, not for the whole docket
+     when the map loads. A body is paragraphs and a docket can be fifty claims, so
+     reading them all up front would hold the drawing back for text nobody has
+     asked to see; one read per node opened is paid by the reader who wants it.
+     TWO CACHES, AND THEY COVER DIFFERENT CASES — neither is redundant, and no
+     single-mutation test can tell them apart, so each has its own arm in
+     mapclick_test.js. `asked` dedups reads still IN FLIGHT: two clicks on the same
+     node before the answer lands would otherwise fire two reads, since the body is
+     not on the data yet. The `typeof` check dedups across a REMOUNT — the titles/ids
+     toggle rebuilds the map, and `asked` goes with it while the body stays on the
+     data. It also keeps an empty answer, so a claim with no body is asked about
+     once and not on every click.
+     The repaint is skipped when the selection has moved on — a saving, not a
+     correctness guard: paint() renders whatever `sel` names, so an unguarded
+     repaint would draw the CURRENT card again rather than the wrong one. */
+  const asked = new Set();
+  async function fetchText(next){
+    if(!isLive() || !next) return;
+    const key = next.kind==="claim" ? "c"+next.id : "f"+next.fid;
+    if(asked.has(key)) return;
+    const same = () => sel && ((sel.kind==="claim" && "c"+sel.id===key)
+                            || (sel.kind==="folder" && "f"+sel.fid===key));
+    const sq = gstr(slug);
+    if(next.kind==="claim"){
+      const c = data.claims[next.id];
+      if(!c || typeof c.body === "string") return;
+      asked.add(key);
+      // A realm deployed before bodies existed has no ClaimBody. Empty is the
+      // same answer as "this claim has no body", and never an error on the map.
+      c.body = await one(`ClaimBody(${sq},${next.id})`).then(unesc).catch(()=>"");
+      if(c.body && same()) paint();
+    } else {
+      const f = L.folders[next.fid];
+      if(!f || f.fid==null || typeof f.desc === "string") return;
+      asked.add(key);
+      f.desc = await one(`FolderDesc(${sq},${f.fid})`).then(unesc).catch(()=>"");
+      if(f.desc && same()) paint();
+    }
+  }
+  function select(next){ sel=next; paint(); fetchText(next); centreOn(next); }
   box.addEventListener("click", ev=>{
     if(ev.defaultPrevented) return;
     if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button!==0) return; // let the link work

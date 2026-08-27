@@ -47,6 +47,8 @@ function buildCode(patch){
   code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
   code += slice('function statusText(', '\n/* =');
   code += slice('function phaseClass(', 'function docketRow');
+  // the real body renderer: mapSelCard shows a claim's body now
+  code += slice('function claimBody(', '/* ===');
   code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
   if(patch) code = patch(code);
   return code;

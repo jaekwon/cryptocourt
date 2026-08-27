@@ -96,6 +96,13 @@ global.document = {
   addEventListener: ()=>{},
   createElement: t => new El(t, {}),
 };
+// A default read stub. Nothing above should reach the chain — demo mode never
+// does — and if something starts to, the arms below say so rather than the
+// harness dying on an undefined global.
+global.STRAY_READS = [];
+global.one = expr => { global.STRAY_READS.push(expr); return Promise.resolve(""); };
+global.gstr = x => JSON.stringify(String(x));
+global.unesc = x => x;
 global.requestAnimationFrame = fn => { fn(); return 0; };
 global.cancelAnimationFrame = ()=>{};
 global.DOMPoint = class { constructor(x,y){ this.x=x; this.y=y; }
@@ -110,6 +117,8 @@ global.safeInline = s => global.esc(s);
 // noticing — which is how the card came to drop the verdict side in the first place.
 eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
+// ...and the real body renderer, for the same reason: the card renders it.
+eval(slice('function claimBody(', '/* ==='));
 global.fmtN = n => String(n);
 
 eval(slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK'));
@@ -119,7 +128,9 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
 // ---- a court with two folders and three claims ---------------------------
 const data = {
-  folders:[{name:"Fauci", claims:[1,2], folders:[], path:"0"},
+  // Fauci carries a chain folder id, Origins does not — one of each, because a
+  // curation folder has no description on the chain to ask for and must not ask.
+  folders:[{name:"Fauci", claims:[1,2], folders:[], path:"0", fid:7},
            {name:"Origins", claims:[3], folders:[], path:"1"}],
   all:[1,2,3],
   claims:{1:{title:"A claim about the record.", statusText:"settled — every stake withdraws"},
@@ -353,5 +364,106 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
      byId["mlg-also"].hidden === false);
 }
 
-console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
-process.exit(fail?1:0);
+/* THE CARD'S TEXT, AND THE THREE WAYS FETCHING IT ON DEMAND GOES WRONG: reading
+   in demo mode where there is no chain, re-reading text already held, and landing
+   a slow answer in whatever card happens to be open by then. The reads are stubbed
+   as promises this harness resolves BY HAND, so the last one is a real out-of-order
+   arrival and not a simulation of one.
+   Async, hence the tail moved in here — the rest of the file is synchronous. */
+(async () => {
+  const settle = () => new Promise(r=>setImmediate(r));
+  // demo first: there is no chain to ask, and the card must not pretend otherwise
+  mount();
+  claimA(1).click();
+  await settle();
+  ok("demo mode reads nothing for the card", global.STRAY_READS.length === 0);
+  ok("and shows no body block", !/claimbody/.test(panel.innerHTML));
+
+  global.isLive = ()=> true;
+  const gate = [];
+  global.one = expr => new Promise(res => gate.push({expr, res}));
+  const answer = (re, text) => { const g = gate.find(x=>re.test(x.expr)); if(g) g.res(text); return !!g; };
+
+  mount();
+  claimA(1).click();
+  await settle();
+  ok("a claim card asks for its body", gate.some(g=>/ClaimBody\("covid",1\)/.test(g.expr)));
+  ok("and asks for exactly one thing", gate.length === 1);
+  ok("the card is painted before the read lands", /A claim about the record/.test(panel.innerHTML));
+  answer(/ClaimBody/, "Settles on the released chain.\n\nFiled because <b>quotation</b> matters.");
+  await settle();
+  ok("the body appears when the read lands", /class="claimbody"/.test(panel.innerHTML));
+  ok("...split into its paragraphs", (panel.innerHTML.match(/<p>/g)||[]).length >= 2);
+  ok("...and escaped, never re-interpreted as markup",
+     /&lt;b&gt;quotation&lt;\/b&gt;/.test(panel.innerHTML) && !/<b>quotation<\/b>/.test(panel.innerHTML));
+
+  const before = gate.length;
+  claimA(2).click(); claimA(1).click();          // away and back
+  await settle();
+  ok("a body already held is not read again",
+     gate.filter(g=>/ClaimBody\("covid",1\)/.test(g.expr)).length === 1);
+  ok("...while a new claim is", gate.length > before);
+
+  // THE TWO CACHES COVER DIFFERENT CASES, so they get an arm each — ablating
+  // either alone otherwise reveals nothing, because the other still holds.
+  // In flight: clicked twice before the answer lands, still one read.
+  mount();
+  delete data.claims[2].body;
+  gate.length = 0;
+  claimA(2).click();
+  claimA(1).click();
+  claimA(2).click();
+  await settle();
+  ok("a read still in flight is not issued twice",
+     gate.filter(g=>/ClaimBody\("covid",2\)/.test(g.expr)).length === 1);
+  answer(/ClaimBody\("covid",2\)/, "");
+  await settle();
+  // Across a remount — the titles/ids toggle rebuilds the map and `asked` with
+  // it — an empty answer is still an answer and must not be re-asked.
+  mount();
+  gate.length = 0;
+  claimA(2).click();
+  await settle();
+  ok("and a remount does not re-ask what the data already holds", gate.length === 0);
+
+  // the race the guard exists for: #1 answered only after #3 is the open card
+  mount();
+  // Both bodies must be UNREAD or there is no race to observe: claim 1's was
+  // cached by the arms above, so the reads would never be issued and the arm
+  // would pass on an empty stage.
+  delete data.claims[1].body; delete data.claims[3].body;
+  gate.length = 0;
+  claimA(1).click();
+  await settle();
+  claimA(3).click();
+  await settle();
+  ok("both reads are genuinely outstanding", gate.length === 2);
+  answer(/ClaimBody\("covid",1\)/, "The body of claim one.");
+  answer(/ClaimBody\("covid",3\)/, "The body of claim three.");
+  await settle();
+  ok("a late read lands in its own card, not the open one",
+     /body of claim three/i.test(panel.innerHTML) && !/body of claim one/i.test(panel.innerHTML));
+
+  // folders: the moderators' words for what belongs in here
+  mount();
+  gate.length = 0;
+  folderA().click();
+  await settle();
+  ok("a folder card asks the chain for its description",
+     gate.some(g=>/FolderDesc\("covid",7\)/.test(g.expr)));
+  answer(/FolderDesc/, "What NIAID funded, and what his office wrote.");
+  await settle();
+  ok("and shows it once it lands", /mapsel-d/.test(panel.innerHTML)
+     && /What NIAID funded/.test(panel.innerHTML));
+
+  // the pair: a curation folder has no chain id, so there is nothing to ask
+  mount();
+  gate.length = 0;
+  box.querySelector('.mfold-a[data-fid="1"]').click();
+  await settle();
+  ok("a folder with no chain id asks nothing", gate.length === 0);
+  ok("...and its card simply has no description", !/mapsel-d/.test(panel.innerHTML));
+
+  console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
+  process.exit(fail?1:0);
+})();
