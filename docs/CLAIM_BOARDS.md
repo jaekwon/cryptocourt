@@ -1975,3 +1975,49 @@ neighbour. And asking `Render("")` whether a court is listed asks a page capped
 at `renderPageSize`, so the test passed alone and failed in company, where the
 package holds more courts than fit. It asks `ListByTier` now — the listing fact
 itself, uncapped.
+
+## 23. The dispute lane quoted a price and stopped
+
+The claim page said what a dispute **costs** and never what winning or losing
+does with the money:
+
+> - disputing this answer now costs 1519999 KOURT:COVID (doubles per failed round)
+
+A price with no outcome attached is not something a reader can decide on.
+`dispute.gno`'s own header carries the whole doctrine — *forfeitures burn,
+compensation mints, no value ever moves between adversaries* — and none of it
+had reached a surface. The block now says:
+
+- win and the answerer's bond burns and you are compensated, up to twice your
+  own bond; lose and yours burns instead
+- nothing passes between the two of you: a forfeit is burned, a compensation is
+  newly issued
+- a quorum-less round burns **half** your bond and returns half; three of them
+  close the claim undecided, every stake out at 1×, deposit and fee refunded
+- **your stake is not at risk either way** — only the bond is
+
+That last line is the one that decides whether a reader can weigh any of the
+rest, and it is also why the help page needed a section rather than a sentence.
+
+### 23.1 Two things you can actually lose
+
+Every other thing the help page says is about a stake that always comes back.
+That is exactly what makes a bond dangerous to leave unexplained: **a reader who
+has absorbed "you cannot lose your stake" will meet a bond and assume the same
+protection covers it.**
+
+So the page now carries a section naming the only two actions here that risk
+money, both of them challenges — challenging an **answer** (a dispute) and
+challenging a **rating** (a quality flag) — placed before the costs section and
+ending on the asymmetry stated as plainly as the warning: a bond is separate
+money you choose to put up, and the coin you staked still comes back 1×,
+whatever the challenge decides.
+
+This also closes the "no page anywhere says what flagging is FOR" gap: §22.1
+made the claim page's flag line actionable, and this says what the action is
+*for* before a reader ever reaches a claim.
+
+Eight rows, all CAUGHT — including two that do not delete the stake-is-safe line
+but merely **soften** it ("your stake is usually safe"). A hedge is the more
+likely regression than a deletion, and the more damaging one, since it reads as
+having been said.

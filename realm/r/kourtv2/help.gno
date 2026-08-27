@@ -111,6 +111,23 @@ func renderHelp() string {
 		"says so — which side, and how much. The board deliberately does *not* order " +
 		"by it. You are told, and you decide what it is worth.\n\n")
 
+	b.WriteString("## Two things you can actually lose\n\n")
+	b.WriteString("Everything above is about a stake that always comes back. " +
+		"There are exactly two actions here that risk money, and both are " +
+		"challenges — you are putting up a **bond** to say the court got " +
+		"something wrong.\n\n")
+	b.WriteString("- **Challenging an answer.** If you think a claim was answered " +
+		"the wrong way, you can dispute it by posting a bond. Win and the " +
+		"answerer's bond is burned and you are compensated; lose and yours is " +
+		"burned instead. Nothing passes between you — a forfeit is destroyed, a " +
+		"compensation is newly issued.\n")
+	b.WriteString("- **Challenging a rating.** Every answered claim gets rated " +
+		"low, mid or high, and that rating decides what it pays. Anyone may " +
+		"challenge the rating once, also by posting a bond, which calls a vote " +
+		"on it.\n\n")
+	b.WriteString("**Your stake is never at risk in either.** A bond is separate " +
+		"money you choose to put up; the coin you staked on the claim still " +
+		"comes back 1×, whatever the challenge decides.\n\n")
 	b.WriteString("## What things cost\n\n")
 	b.WriteString("- **Staking** costs only the stake, which you get back.\n")
 	b.WriteString("- **Opening a claim** takes a deposit, refunded when the claim is " +

@@ -429,9 +429,21 @@ func renderClaim(slug string, id uint64) string {
 			// Disputable: show what contesting the answer costs right now, so a
 			// user can weigh it without simulating the bond formula themselves.
 			// The bond doubles each failed round (reflected as rounds accrue).
-			b.WriteString("- disputing this answer now costs " +
+			b.WriteString("- disputing this answer costs a bond of " +
 				strconv.FormatInt(cs.disputeBond0(), 10) + " " + qualifiedSymbol(c) +
-				" (doubles per failed round)\n")
+				", doubling for each round that fails to reach a quorum\n")
+			b.WriteString("  - win and the answerer's bond is burned and you are " +
+				"compensated, up to twice your own bond; lose and yours burns " +
+				"instead. Nothing passes between the two of you — a forfeit is " +
+				"burned, a compensation is newly issued\n")
+			b.WriteString("  - if the round draws no quorum, half your bond burns " +
+				"and half returns; three such rounds close the claim undecided, " +
+				"with every stake out at 1× and the deposit and fee refunded\n")
+			// THE SENTENCE THAT MATTERS MOST, and the one the 1× guarantee makes
+			// true: a dispute risks the BOND and never the stake. Without it a
+			// reader weighing a dispute has to assume their position is exposed.
+			b.WriteString("  - **your stake is not at risk either way** — only the " +
+				"bond is\n")
 		}
 		if cs.verdictAt != 0 && !cs.provClose {
 			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")

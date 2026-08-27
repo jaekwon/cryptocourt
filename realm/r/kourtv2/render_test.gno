@@ -70,7 +70,7 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	cs.xBarFrozen = 1_000_000 // so the dispute-bond quote is positive
 	mustContain("answered", "settles undisputed")
 	mustContain("answered", "answer: NO (bond 777 "+qualifiedSymbol(mustCourt("rl1"))+")")
-	mustContain("answered", "disputing this answer now costs")
+	mustContain("answered", "disputing this answer costs a bond of")
 
 	cs.disputeOpen, cs.round = true, 1
 	mustContain("disputed", "sealed vote")

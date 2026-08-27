@@ -348,7 +348,7 @@ func TestTheClaimPageNumbersNameTheirCoin(cur realm, t *testing.T) {
 		"- staked when answered: 5000000 " + unit + " (YES 4000000 / NO 1000000)",
 		"- still unwithdrawn: 5000000 " + unit,
 		"(bond 7000 " + unit + ")",
-		"- disputing this answer now costs ",
+		"- disputing this answer costs a bond of ",
 		"- anyone may challenge that rating once, by posting a bond of ",
 	} {
 		if !strings.Contains(answered, want) {
@@ -543,4 +543,62 @@ func inTier(slug string, tier uint8) bool {
 		}
 	}
 	return false
+}
+
+// The two money-at-risk actions are explained before a reader meets them.
+//
+// Everything else on the help page is about a stake that cannot be lost, which
+// is precisely what makes a bond dangerous to leave unexplained: a reader who
+// has absorbed "you cannot lose your stake" will meet a bond and assume the
+// same protection covers it. It does not, and the page now says so on both
+// surfaces — here in general, and on the claim page with the live figure.
+func TestTheHelpPageExplainsWhatCanActuallyBeLost(cur realm, t *testing.T) {
+	page := Render(helpPath)
+	for _, must := range []string{
+		"Two things you can actually lose",
+		"Challenging an answer",
+		"Challenging a rating",
+		// The doctrine, in words: nothing passes between adversaries.
+		"a forfeit is destroyed, a compensation is newly issued",
+		// And the reassurance that is actually true, stated as strongly as the
+		// warning, because the asymmetry is the point.
+		"**Your stake is never at risk in either.**",
+	} {
+		if !strings.Contains(page, must) {
+			t.Fatalf("the help page must explain: %q", must)
+		}
+	}
+}
+
+// The claim page says what a dispute costs AND what it does.
+//
+// It quoted a price and stopped: a reader was told what a dispute costs and not
+// what winning or losing does with the money. dispute.gno's own header carries
+// the doctrine — forfeitures burn, compensation mints, nothing moves between
+// adversaries — and none of it reached any surface.
+func TestTheClaimPageSaysWhatADisputeDoesNotJustItsPrice(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("hp12-alice")
+	c, id := boardFixture(cur, "hp12", alice)
+	cs := mustClaim(c, id)
+	cs.frozenAt, cs.answer, cs.answerBond0 = 100, int8(sideNO), 5000
+	cs.xBarFrozen = 1_000_000 // so the bond quote is positive
+
+	page := Render("hp12/" + strconv.FormatUint(id, 10))
+	if !strings.Contains(page, "disputing this answer costs a bond of") {
+		t.Fatalf("the price must still render:\n%s", page)
+	}
+	for _, must := range []string{
+		"win and the answerer's bond is burned and you are compensated",
+		"lose and yours burns instead",
+		"a forfeit is burned, a compensation is newly issued",
+		// The quorum-less path, which is neither a win nor a loss and costs half.
+		"half your bond burns",
+		"three such rounds close the claim undecided",
+		// The sentence that decides whether a reader can weigh any of it.
+		"**your stake is not at risk either way**",
+	} {
+		if !strings.Contains(page, must) {
+			t.Fatalf("the dispute block must say %q:\n%s", must, page)
+		}
+	}
 }

@@ -11275,8 +11275,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "v0.58 units: claim: the dispute bond reverts to a generic CC",
-  "find": "strconv.FormatInt(cs.disputeBond0(), 10) + \" \" + qualifiedSymbol(c) +\n\t\t\t\t\" (doubles per failed round)\\n\")",
-  "replace": "strconv.FormatInt(cs.disputeBond0(), 10) + \" CC units (doubles per failed round)\\n\")"
+  "find": "strconv.FormatInt(cs.disputeBond0(), 10) + \" \" + qualifiedSymbol(c) +\n\t\t\t\t\", doubling for each round that fails to reach a quorum\\n\")",
+  "replace": "strconv.FormatInt(cs.disputeBond0(), 10) +\n\t\t\t\t\" CC units, doubling for each round that fails to reach a quorum\\n\")"
  },
  {
   "pkg": "kourtv2",
@@ -11515,5 +11515,61 @@
   "label": "v0.58 delist: the banner stops saying the lifecycle is unaffected",
   "find": "\t\t\t\"listing and is reachable only by direct link. Nothing else changes: \" +\n\t\t\t\"its claims still stake, answer, settle and pay out as usual.\\n\\n\")",
   "replace": "\t\t\t\"listing.\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 dispute: the outcome goes unsaid, only the price shows",
+  "find": "\t\t\tb.WriteString(\"  - win and the answerer's bond is burned and you are \" +\n\t\t\t\t\"compensated, up to twice your own bond; lose and yours burns \" +\n\t\t\t\t\"instead. Nothing passes between the two of you \u2014 a forfeit is \" +\n\t\t\t\t\"burned, a compensation is newly issued\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 dispute: the burn/mint doctrine is dropped",
+  "find": "\"instead. Nothing passes between the two of you \u2014 a forfeit is \" +\n\t\t\t\t\"burned, a compensation is newly issued\\n\"",
+  "replace": "\"instead.\\n\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 dispute: the quorum-less half-burn goes unsaid",
+  "find": "\t\t\tb.WriteString(\"  - if the round draws no quorum, half your bond burns \" +\n\t\t\t\t\"and half returns; three such rounds close the claim undecided, \" +\n\t\t\t\t\"with every stake out at 1\u00d7 and the deposit and fee refunded\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 dispute: the stake-is-safe line goes",
+  "find": "\t\t\tb.WriteString(\"  - **your stake is not at risk either way** \u2014 only the \" +\n\t\t\t\t\"bond is\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 dispute: the stake-is-safe line is softened to a maybe",
+  "find": "\"  - **your stake is not at risk either way** \u2014 only the \" +\n\t\t\t\t\"bond is\\n\"",
+  "replace": "\"  - your stake is usually safe\\n\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: the two losable things go unlisted",
+  "find": "\tb.WriteString(\"## Two things you can actually lose\\n\\n\")",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: challenging a RATING goes unmentioned",
+  "find": "\tb.WriteString(\"- **Challenging a rating.** Every answered claim gets rated \" +",
+  "replace": "\tb.WriteString(\"- (nothing else)\" + \"\" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "help.gno",
+  "label": "v0.58 help: the stake-is-safe reassurance goes",
+  "find": "\tb.WriteString(\"**Your stake is never at risk in either.** A bond is separate \" +\n\t\t\"money you choose to put up; the coin you staked on the claim still \" +\n\t\t\"comes back 1\u00d7, whatever the challenge decides.\\n\\n\")",
+  "replace": ""
  }
 ]
