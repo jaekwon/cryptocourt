@@ -93,6 +93,21 @@ const run = async (rows, v, mode) => {
   ok("the pill adds nothing when there is no side", />settled</.test(statusPill(SETTLED)));
   ok("the side does not disturb the pill's phase class", /class="pill good"/.test(pill));
 
+  // 6b. THE SIDE IS READ FROM THE DECIDING WORD, NOT FROM ANYWHERE IN THE TEXT.
+  //     The realm's OPEN status is "open — stake YES or NO; unstake freely until
+  //     an answer posts" — it names both sides because it is inviting you to pick
+  //     one. A bare /\b(YES|NO)\b/ matched that, and every open claim grew a
+  //     verdict it had never been given, in demo mode too, where the sentence is
+  //     word-for-word the same. Caught by the map-node arm in map_test.js.
+  ok("an open status carries no side",
+     phaseClass("open — stake YES or NO; unstake freely until an answer posts").side === "");
+  ok("and its pill says only open",
+     statusPill("open — stake YES or NO; unstake freely").includes(">open<"));
+  ok("a settled status still yields its side",
+     phaseClass("settled NO — every stake withdraws 1×").side === "NO");
+  ok("a provisional verdict still yields its side",
+     phaseClass("provisional verdict YES — reopenable by a new dispute").side === "YES");
+
   // 7. THE MAP'S SELECTION CARD, which is the pill a reader meets on the map
   //    page. It hand-rolled its own `<span class="pill">` from phaseClass and so
   //    kept dropping the side after the shared builder learned to print it —

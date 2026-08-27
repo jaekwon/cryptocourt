@@ -4268,17 +4268,24 @@ function mapSvg(L, data, slug){
        a promise that there is more of the text, and for an id there is not; the
        phase it stood for is already on the node as the dot's colour, which is
        what the legend is for, and in full in the tooltip. */
-    out.push(label(L.mode==="titles" ? `#${n.id} · ${pc.short}` : `#${n.id}`,
+    /* AND IN TITLES MODE THE LABEL CARRIES THE SIDE, because "settled" is the
+       phase and not the decision — the node is the surface a reader scans first,
+       and it read the same for a claim that settled YES as for one that settled
+       NO. The budget was measured, not guessed: clip() fits box.w-2*tpad, so a
+       206 box gives 192-16=176px at 12px x charW 0.62 = 23 characters.
+       "#18 · settled NO" is 16, and the longest this docket can produce —
+       "#1234567 · settled YES" — is 22. Past that clip() ellipsizes, which is
+       what it already did for a long id. */
+    out.push(label(L.mode==="titles" ? `#${n.id} · ${pc.short}${pc.side? " "+pc.side : ""}` : `#${n.id}`,
                    {x:n.x, w:n.w-14}, K.fs.id, n.y+16, "", "c"+n.id));
     if(L.mode==="titles"){
       mapWrapTitle(cl.title, n.w-2*K.tpad).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+34+i*14, "mtitle", "c"+n.id)));
     }
-    /* THE SIDE BELONGS IN THE TOOLTIP. "#8 · settled" says a claim reached its
-       terminal state and not what it decided, so a settled-NO claim reads
-       identically to a settled-YES one — on the surface a reader scans first. The
-       node label cannot carry it (an ids box is about six characters, which is why
-       the phase was removed from it), and the dot encodes phase only. */
+    /* THE TOOLTIP CARRIES THE SIDE TOO, and in ids mode it is the only thing that
+       does. An ids box fits four characters — the id and nothing else — and the
+       dot encodes phase, never the decision, so a settled-NO node and a
+       settled-YES node are identical there until you hover. */
     out.push(`<title>#${n.id} · ${esc(pc.short)}${pc.side? " "+esc(pc.side):""} — ${esc(cl.title)}</title></a>`);
   }
   out.push(`</svg>`);
@@ -5021,7 +5028,13 @@ function phaseClass(statusText){
   // short with an exact `===`, so folding "YES" into it silently drops a settled
   // claim to the open colour. The realm writes the side as sideName() — uppercase
   // YES or NO — so it is read off the ORIGINAL text, not the lowercased copy.
-  const side=(/\b(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
+  // AND IT MUST FOLLOW THE WORD THAT DECIDES. `\b(YES|NO)\b` anywhere in the text
+  // also matched the OPEN status — "open — stake YES or NO; unstake freely" — so
+  // every open claim on the map and in the docket grew a side nobody had given it,
+  // in demo mode as well, where that sentence is identical. The two forms that
+  // carry a decision are the realm's "settled X" and "provisional verdict X"; the
+  // match is anchored to them, and anything else has no side.
+  const side=(/(?:settled|verdict)\s+(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
   const st=(statusText||"").toLowerCase(); let cls="void", short="open";
   if(/^closed|provclose/.test(st)){cls="void";short=/never answered/.test(st)?"never answered":"no decision";}
   else if(/settled/.test(st)){cls="good";short="settled";}

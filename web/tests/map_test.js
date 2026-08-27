@@ -746,5 +746,32 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      /\.maphold\{[^}]*flex:1/.test(src) && !/\.mapwrap svg\{[^}]*height:clamp/.test(src));
 }
 
+// THE NODE ITSELF NAMES THE SIDE. "settled" is the phase, not the decision, so a
+// settled-YES node and a settled-NO node drew the same label — on the surface a
+// reader scans before hovering anything or clicking anything. The tooltip and the
+// selection card were fixed first and neither is what the eye lands on.
+//
+// Ids mode is asserted as the PAIR: its box fits four characters, so the id is the
+// whole label there and the side must NOT be forced in. The no-ellipsis arm is the
+// one that would catch the budget being wrong rather than the text being absent —
+// clip() truncates silently, so a label that no longer fits still renders.
+{
+  const st = t => t + " — every stake withdraws 1×";
+  const d = {folders:[{name:"F", claims:[1,2,3], folders:[], path:"0"}], all:[1,2,3],
+             claims:{1:{title:"Settled against.", statusText:st("settled NO")},
+                     2:{title:"Settled for.",     statusText:st("settled YES")},
+                     3:{title:"Still open.",      statusText:"open — stake YES or NO"}},
+             relations:[], courtName:"C", linkFolders:true};
+  const idLines = mode => [...mapSvg(mapLayout(d,mode), d, "covid")
+    .matchAll(/<text[^>]*>(#\d+[^<]*)<\/text>/g)].map(m=>m[1]);
+  const T = idLines("titles"), I = idLines("ids");
+  ok("a settled-NO node says so on the node", T.includes("#1 · settled NO"));
+  ok("a settled-YES node says so on the node", T.includes("#2 · settled YES"));
+  ok("an open node gains no side", T.includes("#3 · open"));
+  ok("the label still fits — nothing was ellipsized", T.every(t=>!t.includes("\u2026")));
+  ok("ids mode is the id alone", I.includes("#1") && I.includes("#2"));
+  ok("and carries no side it has no room for", !I.some(t=>/YES|NO/.test(t)));
+}
+
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);
