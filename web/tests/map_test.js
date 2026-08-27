@@ -792,10 +792,41 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      return dotOf(mapSvg(mapLayout(u,"titles"), u, "covid"), 1) === "gu"; })());
   ok("...and that is not the never-answered dot either", /\.mdot\.gu\{/.test(src)
      && !/\.mdot\.gu\{fill:var\(--void\)/.test(src));
-  ok("a settled-NO node says so on the node", T.includes("#1 · settled NO"));
-  ok("a settled-YES node says so on the node", T.includes("#2 · settled YES"));
-  ok("an open node gains no side", T.includes("#3 · open"));
-  ok("the label still fits — nothing was ellipsized", T.every(t=>!t.includes("\u2026")));
+  /* THE NODE READS "#2 <title>" WITH THE VERDICT ON ITS OWN RIGHT-ADJUSTED LINE.
+     The id line used to spend a whole row on "#2 · settled YES" — the phase, which
+     the dot already carries — and pushed the title underneath it. */
+  const textsOf = svg => [...svg.matchAll(
+    /<text class="mtext ([a-z]*)"[^>]*x="([\d.]+)"[^>]*y="([\d.]+)"[^>]*data-owner="c(\d+)">([^<]*)<\/text>/g)]
+    .map(m=>({cls:m[1], x:+m[2], y:+m[3], id:+m[4], t:m[5]}));
+  const TT = textsOf(svgT);
+  const rowOf = (id,cls) => TT.filter(t=>t.id===id && t.cls===cls);
+  ok("the id heads its own element", rowOf(1,"mid").map(t=>t.t).includes("#1"));
+  ok("the title sits on the id's line, after it", (()=>{
+     const id1=rowOf(1,"mid")[0], t1=rowOf(1,"mtitle")[0];
+     return id1 && t1 && t1.y===id1.y && t1.x > id1.x; })());
+  ok("the id is not a .mtitle, so a zoomed-out map is still labelled",
+     rowOf(1,"mid").length===1 && !rowOf(1,"mtitle").some(t=>t.t.startsWith("#")));
+  ok("a settled-NO node states its verdict",
+     rowOf(1,"mverdict").map(t=>t.t).includes("verdict: NO"));
+  ok("a settled-YES node states its verdict",
+     rowOf(2,"mverdict").map(t=>t.t).includes("verdict: YES"));
+  ok("an open node says open, and claims no verdict",
+     rowOf(3,"mverdict").map(t=>t.t).join("")==="open");
+  ok("the verdict line is right-adjusted, below the title", (()=>{
+     const v=rowOf(1,"mverdict")[0], id1=rowOf(1,"mid")[0];
+     return v && v.y > id1.y && /text-anchor="end"/.test(
+       svgT.slice(svgT.indexOf('>verdict: NO<')-260, svgT.indexOf('>verdict: NO<'))); })());
+  /* THE ID IS SLICED OFF LINE 0 to draw it separately, which assumes line 0 starts
+     with it. mapWrapTitle guarantees that — "#1" always fits alone, so a first word
+     too long to join it pushes the WORD down, never the id — but the assumption is
+     silent and a corrupted slice would eat characters rather than fail. */
+  ok("a title whose first word cannot share the line keeps both", (()=>{
+     const u = JSON.parse(JSON.stringify(d));
+     u.claims[1].title = "Pneumonoultramicroscopicsilicovolcanoconiosis notwithstanding.";
+     const t2 = textsOf(mapSvg(mapLayout(u,"titles"), u, "covid")).filter(x=>x.id===1);
+     return t2.some(x=>x.cls==="mid" && x.t==="#1")
+         && t2.some(x=>x.cls==="mtitle" && /Pneumonoultra/.test(x.t)); })());
+  ok("nothing was ellipsized", TT.every(t=>!t.t.includes("\u2026")));
   ok("ids mode is the id alone", I.includes("#1") && I.includes("#2"));
   ok("and carries no side it has no room for", !I.some(t=>/YES|NO/.test(t)));
 }

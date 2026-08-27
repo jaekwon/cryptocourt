@@ -740,6 +740,10 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapsel-c .mono{color:var(--accent-2)}
 
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
+/* The id heads the title and the verdict closes the node. Both survive the
+   level-of-detail rule below, which hides only .mtitle. */
+.mid{fill:var(--ink); font-weight:600}
+.mverdict{fill:var(--ink-2); font-weight:600}
 .mapsvg.far .mtitle{display:none}
 /* A folder is a NODE now, not a box drawn round its contents — the radial map
    hangs claims off it instead of nesting them inside. The court is the same
@@ -3751,7 +3755,7 @@ function mapTree(data, mode){
       // `also` records it on the folder, so the folder can still say so.
       if(drawn.has(id)){ alsoIn.push({folder:node, id}); (node.also = node.also || []).push(id); }
       else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[],
-             size:mapClaimSize((data.claims[id]||{}).title, mode)}); }
+             size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode)}); }
     }
     (f.folders||[]).forEach((g,i)=>node.kids.push(folderNode(g, path==null? null : path+"."+i)));
     return node;
@@ -3771,7 +3775,7 @@ function mapTree(data, mode){
     else for(const id of loose){
       if(!data.claims[id] || drawn.has(id)) continue;
       drawn.add(id);
-      tops.push({kind:"claim", id, kids:[], size:mapClaimSize((data.claims[id]||{}).title, mode)});
+      tops.push({kind:"claim", id, kids:[], size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode)});
     }
   }
   const courtName = data.courtName||"this court";
@@ -4229,11 +4233,21 @@ function mapSvg(L, data, slug){
   const K=MAPK, [vx,vy,vw,vh]=L.viewBox, out=[];
   const est=(t,fs)=>Math.round(t.length*fs*K.charW*10)/10;
   const clip=(t,px,fs)=>{ const b=Math.floor(px/(fs*K.charW)); return t.length>b? t.slice(0,Math.max(1,b-1))+"…" : t; };
-  const label=(t,box,fs,y,cls,owner)=>{
-    const nm=clip(t, box.w-2*K.tpad, fs);
-    return `<text class="mtext ${cls}" x="${box.x+K.tpad}" y="${y}" font-size="${fs}" `
-      + `textLength="${Math.min(est(nm,fs), box.w-2*K.tpad)}" lengthAdjust="spacingAndGlyphs" `
+  const label=(t,box,fs,y,cls,owner,dx)=>{
+    const off=dx||0, room=box.w-2*K.tpad-off;
+    const nm=clip(t, room, fs);
+    return `<text class="mtext ${cls}" x="${box.x+K.tpad+off}" y="${y}" font-size="${fs}" `
+      + `textLength="${Math.min(est(nm,fs), room)}" lengthAdjust="spacingAndGlyphs" `
       + `data-owner="${owner}">${esc(nm)}</text>`;
+  };
+  /* Right-adjusted, for the verdict line. textLength with lengthAdjust makes the
+     rendered width exactly est(), which is also what the left-offset arm above
+     relies on to place the title after the id without measuring the DOM. */
+  const rlabel=(t,box,fs,y,cls,owner)=>{
+    const nm=clip(t, box.w-2*K.tpad, fs);
+    return `<text class="mtext ${cls}" x="${box.x+box.w-K.tpad}" y="${y}" font-size="${fs}" `
+      + `text-anchor="end" textLength="${Math.min(est(nm,fs), box.w-2*K.tpad)}" `
+      + `lengthAdjust="spacingAndGlyphs" data-owner="${owner}">${esc(nm)}</text>`;
   };
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" class="mapsvg" viewBox="${vx} ${vy} ${vw} ${vh}" tabindex="0" role="img" aria-label="Map of ${esc(slug)} — the court at the centre, folders around it, claims around their folder; every node is a link.">`);
   // UNDER EVERYTHING: containment spokes, then association chords. Order is the
@@ -4313,29 +4327,46 @@ function mapSvg(L, data, slug){
   for(const n of L.nodes){
     const cl=data.claims[n.id]; if(!cl) continue;
     const pc=phaseClass(cl.statusText);
+    const dot=(cx,cy)=>`<circle class="mdot ${mapDotClass(pc.short, pc.side)}" cx="${cx}" cy="${cy}" r="4" data-owner="c${n.id}"/>`;
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
     out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
-    out.push(`<circle class="mdot ${mapDotClass(pc.short, pc.side)}" cx="${n.x+n.w-12}" cy="${n.y+14}" r="4" data-owner="c${n.id}"/>`);
-    /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
-       bought an ellipsis and nothing else. An ids box is 64 wide, less 14 for
-       the dot and 16 for padding — about six characters — and "#8 · settled" is
-       twelve, so every claim on the zoomed-out map read "#8 …". The ellipsis is
-       a promise that there is more of the text, and for an id there is not; the
-       phase it stood for is already on the node as the dot's colour, which is
-       what the legend is for, and in full in the tooltip. */
-    /* AND IN TITLES MODE THE LABEL CARRIES THE SIDE, because "settled" is the
-       phase and not the decision — the node is the surface a reader scans first,
-       and it read the same for a claim that settled YES as for one that settled
-       NO. The budget was measured, not guessed: clip() fits box.w-2*tpad, so a
-       206 box gives 192-16=176px at 12px x charW 0.62 = 23 characters.
-       "#18 · settled NO" is 16, and the longest this docket can produce —
-       "#1234567 · settled YES" — is 22. Past that clip() ellipsizes, which is
-       what it already did for a long id. */
-    out.push(label(L.mode==="titles" ? `#${n.id} · ${pc.short}${pc.side? " "+pc.side : ""}` : `#${n.id}`,
-                   {x:n.x, w:n.w-14}, K.fs.id, n.y+16, "", "c"+n.id));
     if(L.mode==="titles"){
-      mapWrapTitle(cl.title, n.w-2*K.tpad).forEach((ln,i)=>
-        out.push(label(ln, n, K.fs.title, n.y+34+i*14, "mtitle", "c"+n.id)));
+      /* "#2 <title>", then the verdict on its own right-adjusted line. The id
+         line used to spend a whole row on "#2 · settled YES" — the phase, which
+         the dot already carries — while the title started underneath it. The id
+         now heads the title, and the row it used to occupy says what the court
+         actually decided.
+         THE ID IS DRAWN SEPARATELY, not as part of the wrapped string, because
+         `.mapsvg.far .mtitle{display:none}` hides titles when the map is zoomed
+         out. Folded into the title it would vanish with them and a far view would
+         be unlabelled boxes; kept apart it survives, and so does the verdict —
+         which is a better zoomed-out reading than "#8 · settled" ever was.
+         It is still WRAPPED as one string, so the break points account for the id
+         and no word is lost between the two elements. */
+      const idTxt=`#${n.id}`;
+      const lines=mapWrapTitle(`${idTxt} ${cl.title}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines);
+      const rest=(lines[0]||idTxt).slice(idTxt.length).replace(/^ /,"");
+      out.push(label(idTxt, n, K.fs.title, n.y+16, "mid", "c"+n.id));
+      if(rest) out.push(label(rest, n, K.fs.title, n.y+16, "mtitle", "c"+n.id,
+                              est(idTxt+" ", K.fs.title)));
+      lines.slice(1).forEach((ln,i)=>
+        out.push(label(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "mtitle", "c"+n.id)));
+      /* The dot rides the verdict row rather than the top-right corner: it is the
+         verdict's colour now, so it belongs beside the verdict, and moving it
+         hands the whole first line back to the title instead of reserving 14px of
+         it for a mark that sat on a different subject. */
+      const vy=n.y+16+lines.length*K.lineH;
+      out.push(dot(n.x+K.tpad+4, vy-4));
+      out.push(rlabel(pc.short==="settled" ? (pc.side? "verdict: "+pc.side : "settled") : pc.short,
+                      n, K.fs.id, vy, "mverdict", "c"+n.id));
+    } else {
+      /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
+         bought an ellipsis and nothing else. An ids box is 64 wide, less 14 for
+         the dot and 16 for padding — about six characters — and "#8 · settled" is
+         twelve, so every claim on the zoomed-out map read "#8 …". The phase it
+         stood for is on the node as the dot's colour, and in full in the tooltip. */
+      out.push(dot(n.x+n.w-12, n.y+14));
+      out.push(label(`#${n.id}`, {x:n.x, w:n.w-14}, K.fs.id, n.y+16, "", "c"+n.id));
     }
     /* THE TOOLTIP CARRIES THE SIDE TOO, and in ids mode it is the only thing that
        does. An ids box fits four characters — the id and nothing else — and the
