@@ -11396,5 +11396,54 @@
   "label": "v0.58 ballot: ballot: the bar itself is not quoted",
   "find": "\tb.WriteString(\"- the bar: **\" + strconv.FormatInt(e.floor, 10) + \" \" +\n\t\tqualifiedSymbol(c) + \"**, fixed when the ballot opened\\n\")",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: the verb is shown as a bare code again",
+  "find": "\tb.WriteString(\"- action: **\" + sanitize.InlineText(verb) + \"** \u2014 \" +\n\t\tappealVerbGloss(verb) + \"\\n\")",
+  "replace": "\tb.WriteString(\"- action: **\" + sanitize.InlineText(verb) + \"**\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: what silence does goes unsaid",
+  "find": "\tif verbIsAggressive(verb) {\n\t\tb.WriteString(\"- this is an **aggressive** act: it can only carry on a \" +\n\t\t\t\"contested vote that real opposition turned out for. Silence \" +\n\t\t\t\"defeats it.\\n\")\n\t} else {\n\t\tb.WriteString(\"- this is a **restorative** act: it undoes a restriction, so \" +\n\t\t\t\"it can carry undisputed. Silence lets it through.\\n\")\n\t}",
+  "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: the two silence branches are swapped",
+  "find": "\tif verbIsAggressive(verb) {\n\t\tb.WriteString(\"- this is an **aggressive** act:",
+  "replace": "\tif !verbIsAggressive(verb) {\n\t\tb.WriteString(\"- this is an **aggressive** act:"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: setmods and suspend share a description",
+  "find": "\tcase verbSuspend:\n\t\treturn \"disarms a court's moderator set \u2014 they can take no further act\"",
+  "replace": "\tcase verbSuspend:\n\t\treturn \"installs a moderator set on that court, replacing whoever holds \" +\n\t\t\t\"the seats now\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: hide loses 'over its court's head'",
+  "find": "\tcase verbHide:\n\t\treturn \"hides a claim across the platform, over its court's head\"",
+  "replace": "\tcase verbHide:\n\t\treturn \"hides a claim\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: unsuspend hides that it re-applies masked hides",
+  "find": "\t\treturn \"re-arms a suspended moderator set, and re-applies the hides that \" +\n\t\t\t\"were masked while it was disarmed\"",
+  "replace": "\t\treturn \"re-arms a suspended moderator set\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "v0.58 appeal: an unknown verb is given an invented meaning",
+  "find": "\treturn \"an action this page does not recognise\"",
+  "replace": "\treturn \"a routine administrative action\""
  }
 ]

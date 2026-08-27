@@ -331,8 +331,23 @@ func writeAppeal(b *strings.Builder, c *Court, cs *claimState) {
 		return
 	}
 	b.WriteString("## Review request\n\n")
-	b.WriteString("- action: **" + sanitize.InlineText(verb) + "**\n")
+	b.WriteString("- action: **" + sanitize.InlineText(verb) + "** — " +
+		appealVerbGloss(verb) + "\n")
 	b.WriteString("- court: " + sanitize.InlineText(court) + "\n")
+	// WHAT SILENCE DOES, which is the opposite thing for the two kinds of verb
+	// and was on no surface. A restorative verb may carry on the undisputed
+	// route, so a voter who does nothing lets it through; an aggressive one is
+	// refused unless a quorate round decided it against real opposition, so a
+	// voter who does nothing blocks it. Reading only the verb code, a voter
+	// cannot tell which of those their abstention is.
+	if verbIsAggressive(verb) {
+		b.WriteString("- this is an **aggressive** act: it can only carry on a " +
+			"contested vote that real opposition turned out for. Silence " +
+			"defeats it.\n")
+	} else {
+		b.WriteString("- this is a **restorative** act: it undoes a restriction, so " +
+			"it can carry undisputed. Silence lets it through.\n")
+	}
 	if verb == verbSetmods {
 		b.WriteString("- installs candidate set #" + strconv.FormatUint(target, 10) + ":\n")
 		if !Exists(court) {
@@ -595,4 +610,36 @@ func renderModLog(slug string) string {
 			" claims; older acts are not shown._\n")
 	}
 	return b.String()
+}
+
+// appealVerbGloss says in words what a review verb does.
+//
+// The page showed the bare code — "action: **setmods**" — on the surface where
+// the review court's heaviest acts are approved: seating moderators on somebody
+// else's court, disarming a set, hiding a claim platform-wide. A voter asked to
+// approve an act named only by its code is being asked to approve a word.
+//
+// The wording comes from the constants' own comments in meta.gno, so there is
+// one description of each verb and not two that can disagree.
+func appealVerbGloss(verb string) string {
+	switch verb {
+	case verbUnhide:
+		return "un-hides a claim its own court's moderators hid"
+	case verbClear:
+		return "clears a hide the review court itself placed"
+	case verbHide:
+		return "hides a claim across the platform, over its court's head"
+	case verbSuspend:
+		return "disarms a court's moderator set — they can take no further act"
+	case verbUnsuspend:
+		return "re-arms a suspended moderator set, and re-applies the hides that " +
+			"were masked while it was disarmed"
+	case verbSetmods:
+		return "installs a moderator set on that court, replacing whoever holds " +
+			"the seats now"
+	}
+	// Not reachable through AppealParse, which validates the verb — but a render
+	// that invents a description for an unknown verb would be worse than one
+	// that admits it does not know.
+	return "an action this page does not recognise"
 }
