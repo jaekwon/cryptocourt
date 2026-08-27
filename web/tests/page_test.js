@@ -28,6 +28,8 @@ code += slice('const DEMO_OVERLAY = {', '/* ===== BEGIN GENERATED').replace('con
 code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const DEMO_CHAIN = {','var DEMO_CHAIN = {') + '\n';
 code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
+// statusText names the verdict side now, so it needs sideName.
+code += slice('const sideName =', '\n').replace('const sideName =','var sideName =') + '\n';
 code += slice('function statusText(', '\n/* =');
 code += 'function claimSeries(){ return [50,50,50]; }\n';
 code += slice('const PAGE_N', 'function errorView').replace('const PAGE_N','var PAGE_N');

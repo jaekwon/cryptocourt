@@ -91,7 +91,16 @@ const run = async (rows, v, mode) => {
   const pill = statusPill("settled NO — every stake withdraws 1×");
   ok("the pill prints the side", />settled NO</.test(pill));
   ok("the pill adds nothing when there is no side", />settled</.test(statusPill(SETTLED)));
-  ok("the side does not disturb the pill's phase class", /class="pill good"/.test(pill));
+  /* THE PILL TAKES THE VERDICT'S COLOUR. This arm used to assert `pill good` on a
+     settled-NO pill — it was pinning the bug. --good and --yes are the same green
+     and .pill.good is drawn with --yes-wash and the YES glow, so a claim that
+     decided NO was announced in the palette of YES. Reported as "it's confusing
+     that there should be a green dot when the verdict is NO". */
+  ok("a settled-NO pill takes the NO palette", /class="pill verdict-no"/.test(pill));
+  ok("a settled-YES pill keeps the yes palette",
+     /class="pill good"/.test(statusPill("settled YES — every stake withdraws 1×")));
+  ok("a settled claim of unknown side claims neither",
+     /class="pill decided"/.test(statusPill(SETTLED)));
 
   // 6b. THE SIDE IS READ FROM THE DECIDING WORD, NOT FROM ANYWHERE IN THE TEXT.
   //     The realm's OPEN status is "open — stake YES or NO; unstake freely until

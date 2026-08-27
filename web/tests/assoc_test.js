@@ -105,7 +105,10 @@ ok("live: section absent", associationSection("orem",9,demoLookup)==="");
 CFG.mode='demo';
 
 // ---- status pills in rows reflect phases ----
-ok("#9 rows: #4 settled pill, #3 in-dispute pill", h9.includes(">settled<") && h9.includes(">in dispute<"));
+// #4's answer was NO and its verdict YES — a dispute that overturned the answer —
+// so "settled YES" also pins the precedence: the pill follows the VERDICT.
+ok("#9 rows: #4 settled pill, #3 in-dispute pill",
+   h9.includes(">settled YES<") && h9.includes(">in dispute<"));
 
 // ---- resolution ladder ----
 const d2 = Object.assign({id:2}, DEMO.claims["orem/2"], {answered:true});

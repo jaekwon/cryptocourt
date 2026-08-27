@@ -45,6 +45,8 @@ function buildCode(patch){
   code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const DEMO_CHAIN = {','var DEMO_CHAIN = {') + '\n';
   code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
   code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
+  // statusText names the verdict side now, so it needs sideName.
+  code += slice('const sideName =', '\n').replace('const sideName =','var sideName =') + '\n';
   code += slice('function statusText(', '\n/* =');
   code += slice('function phaseClass(', 'function docketRow');
   // the real body renderer: mapSelCard shows a claim's body now
@@ -721,7 +723,12 @@ ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|r
     const pc=phaseClass(claimsMap[id].statusText);
     const m=svgs.titles.match(new RegExp(`<circle class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`));
     const dot=m&&m[1];
-    const wantFamily={settled:"g","in dispute":"e",settling:"ed",answered:"o","no decision":"vd","never answered":"vf",open:"v"}[pc.short];
+    // settled splits by verdict: the dot must not show the YES green on a claim
+    // that decided NO. Spelled out here rather than calling mapDotClass, so this
+    // stays an independent expectation and not the function compared to itself.
+    const wantFamily = pc.short==="settled"
+      ? (pc.side==="YES" ? "g" : pc.side==="NO" ? "gn" : "gu")
+      : {"in dispute":"e",settling:"ed",answered:"o","no decision":"vd","never answered":"vf",open:"v"}[pc.short];
     if(dot!==wantFamily) { agree=false; console.log("  dot mismatch #"+id, dot, "want", wantFamily); }
   }
   ok("dot classes agree with phaseClass on all 11 claims", agree);
@@ -764,9 +771,27 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
                      2:{title:"Settled for.",     statusText:st("settled YES")},
                      3:{title:"Still open.",      statusText:"open — stake YES or NO"}},
              relations:[], courtName:"C", linkFolders:true};
-  const idLines = mode => [...mapSvg(mapLayout(d,mode), d, "covid")
-    .matchAll(/<text[^>]*>(#\d+[^<]*)<\/text>/g)].map(m=>m[1]);
+  const svgOf = mode => mapSvg(mapLayout(d,mode), d, "covid");
+  const idLines = mode => [...svgOf(mode).matchAll(/<text[^>]*>(#\d+[^<]*)<\/text>/g)].map(m=>m[1]);
   const T = idLines("titles"), I = idLines("ids");
+
+  /* THE DOT IS THE VERDICT'S COLOUR TOO, and this fixture is the only one that can
+     say so: the demo docket has no settled-NO claim, so the agreement check further
+     down passes whatever the settled branch returns. --good and --yes are the same
+     green, so before this a court that ruled NO got the YES colour. */
+  const dotOf = (svg,id) =>
+    (new RegExp(`<circle class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`).exec(svg)||[])[1];
+  const svgT = svgOf("titles");
+  ok("a settled-NO node is not drawn in the YES colour", dotOf(svgT,1) === "gn");
+  ok("a settled-YES node keeps it", dotOf(svgT,2) === "g");
+  ok("the two settled dots differ", dotOf(svgT,1) !== dotOf(svgT,2));
+  ok("an open node is unaffected", dotOf(svgT,3) === "v");
+  ok("a settled claim of unknown side claims neither colour", (()=>{
+     const u = JSON.parse(JSON.stringify(d));
+     u.claims[1].statusText = "settled — every stake withdraws 1×";
+     return dotOf(mapSvg(mapLayout(u,"titles"), u, "covid"), 1) === "gu"; })());
+  ok("...and that is not the never-answered dot either", /\.mdot\.gu\{/.test(src)
+     && !/\.mdot\.gu\{fill:var\(--void\)/.test(src));
   ok("a settled-NO node says so on the node", T.includes("#1 · settled NO"));
   ok("a settled-YES node says so on the node", T.includes("#2 · settled YES"));
   ok("an open node gains no side", T.includes("#3 · open"));

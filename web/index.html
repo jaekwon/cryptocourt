@@ -292,6 +292,9 @@ a.card:hover{border-color:var(--line-2)}
 .pill.contra{background:var(--contra-wash); color:var(--contra); border-color:var(--contra)}
 .pill.open{background:var(--escrow-wash); color:var(--escrow); border-color:var(--escrow)}
 .pill.good{background:var(--yes-wash); color:var(--good); border-color:var(--good)}
+.pill.verdict-no{background:var(--no-wash); color:var(--no); border-color:var(--no);
+  box-shadow:var(--glow-n)}
+.pill.decided{background:var(--void-wash); color:var(--ink-2); border-color:var(--void)}
 
 /* docket list */
 .docket{border:1px solid var(--rule); border-radius:0; overflow:hidden; background:transparent}
@@ -761,6 +764,10 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .marrow{fill:var(--ink)}
 .marrow.light{fill:var(--ink-2)}
 .mdot.g{fill:var(--good); stroke:var(--good)}
+.mdot.gn{fill:var(--no); stroke:var(--no)}
+/* decided, side unknown: neither palette, and distinct from the grey
+   --void of "never answered" so the two do not read alike. */
+.mdot.gu{fill:var(--ink-2); stroke:var(--ink-2)}
 .mdot.e{fill:var(--escrow); stroke:var(--escrow)}
 .mdot.ed{fill:var(--escrow-wash); stroke:var(--escrow); stroke-dasharray:2 2}
 .mdot.o{fill:var(--escrow-wash); stroke:var(--escrow)}
@@ -1533,7 +1540,15 @@ const rawRender = pth => isLive() ? qrender(pth) : demoRender(pth);
 function statusText(d){
   if(d.phase==="closed") return "closed — never answered; stakes were never frozen (unstake freely), the deposit refunded, the fee burned";
   if(d.phase==="provClose") return "closed without a decision — everyone withdraws 1×, deposit and fee refunded";
-  if(d.phase==="settled") return "settled — every stake withdraws 1×";
+  // Names the side, as the realm's own claimStatus does. Without it the sample's
+  // settled claims carry no verdict, and the map's dot — which now takes its
+  // colour from the verdict — would have nothing to read. The dash sideName()
+  // returns for an unknown side is never printed: "settled —" reads as a missing
+  // word, and the phase pill beside it already refuses the same way.
+  if(d.phase==="settled"){
+    const sn = sideName(d.verdict!=null? d.verdict : d.answer);
+    return "settled" + (sn==="—" ? "" : " "+sn) + " — every stake withdraws 1×";
+  }
   if(d.phase==="disputed") return "disputed — a sealed vote is deciding; principal is never withheld";
   if(d.phase==="provisional") return "provisional verdict — reopenable by a new dispute; the losing side may withdraw 1× now";
   if(d.phase==="answered") return "answered — staking frozen; disputable, then it settles undisputed";
@@ -4197,10 +4212,12 @@ function mapFolderCard(f, data, slug){
         ? `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/f/${f.path}">Open folder page →</a></div>`
         : `<p class="small muted">the map's own bucket — the court has filed no folder for these</p>`);
 }
-function mapDotClass(short){
+function mapDotClass(short, side){
   // seven phases, pill-family tokens; text is the primary signal, the dot a
   // second non-hue channel (solid / washed / hollow / dashed)
-  if(short==="settled") return "g";
+  // SETTLED SPLITS BY VERDICT — see phaseClass. On a zoomed-out map the dot is the
+  // only mark a node carries, so it must not say YES about a claim that said NO.
+  if(short==="settled") return side==="YES" ? "g" : side==="NO" ? "gn" : "gu";
   if(short==="in dispute") return "e";
   if(short==="settling") return "ed";
   if(short==="answered") return "o";
@@ -4298,7 +4315,7 @@ function mapSvg(L, data, slug){
     const pc=phaseClass(cl.statusText);
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
     out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
-    out.push(`<circle class="mdot ${mapDotClass(pc.short)}" cx="${n.x+n.w-12}" cy="${n.y+14}" r="4" data-owner="c${n.id}"/>`);
+    out.push(`<circle class="mdot ${mapDotClass(pc.short, pc.side)}" cx="${n.x+n.w-12}" cy="${n.y+14}" r="4" data-owner="c${n.id}"/>`);
     /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
        bought an ellipsis and nothing else. An ids box is 64 wide, less 14 for
        the dot and 16 for padding — about six characters — and "#8 · settled" is
@@ -4639,7 +4656,8 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     : chainRels.length
     ? `this court's moderators have filed no folders; ${chainRelNote}, drawn over the flat docket`
     : "this court's moderators have filed no folders and no relations are on chain — the map shows the docket alone";
-  const legendDots = `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot g"/></svg> settled</span>
+  const legendDots = `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot g"/></svg> settled YES</span>
+      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot gn"/></svg> settled NO</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> settling</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot o"/></svg> answered</span>
@@ -5150,7 +5168,17 @@ function phaseClass(statusText){
   const side=(/(?:settled|verdict)\s+(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
   const st=(statusText||"").toLowerCase(); let cls="void", short="open";
   if(/^closed|provclose/.test(st)){cls="void";short=/never answered/.test(st)?"never answered":"no decision";}
-  else if(/settled/.test(st)){cls="good";short="settled";}
+  else if(/settled/.test(st)){
+    /* THE SETTLED COLOUR IS THE VERDICT'S, not a verdict-free "good". --good and
+       --yes are the SAME green (#1c6551), and .pill.good is drawn with --yes-wash
+       and the YES glow — so every settled claim was painted in the palette of the
+       side that wins, including the ones that decided NO. The interface was
+       announcing a NO verdict in the colour of YES.
+       An unknown side gets neither: the claim is decided and which way is not
+       known here, so it says that rather than guessing green. */
+    cls = side==="YES" ? "good" : side==="NO" ? "verdict-no" : "decided";
+    short="settled";
+  }
   else if(/provisional/.test(st)){cls="escrow";short="settling";}
   else if(/answered/.test(st)){cls="open";short="answered";}
   else if(/disput/.test(st)){cls="escrow";short="in dispute";}
