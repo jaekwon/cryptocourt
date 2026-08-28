@@ -436,7 +436,15 @@ gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -arg
 stdout 'OK!'
 
 
-# --- eleven claims: three resolved, five expired unanswered, three open 
+# --- the undisputed answer settles — the docket's first final verdict --
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func SettleUndisputed -args 'covid' -args '2' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test arbiter
+stdout 'OK!'
+
+gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.ClaimStatus(\"covid\",2)"'
+stdout 'settled YES'
+
+
+# --- eleven claims: one settled, one provisional, one answered and disputable, five expired unanswered, three open 
 gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.ClaimCount(\"covid\")"'
 stdout '11'
 

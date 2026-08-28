@@ -325,7 +325,24 @@ s.stake(trader, "covid", TEST25, NO, 26_000_000)
 s.stake(skeptic, "covid", TEST25, NO, 8_000_000)
 
 goto("2025-03-07", "the docket as it stands")
-s.note("eleven claims: three resolved, five expired unanswered, three open")
+
+# THE UNDISPUTED ANSWER SETTLES, and until this line no claim in any scenario
+# ever reached the terminal state. The docket ran open -> answered -> (dispute)
+# -> provisional and stopped, so "settled" was a state the demo could not show —
+# which is exactly the state the verdict-side work is about. A settled-YES node
+# and a settled-NO node look identical unless the side is named, and neither
+# existed here to look at.
+#
+# FUNDING is the one that can: it was answered in 2020 and nobody disputed it,
+# so its settle deadline is long past by the docket's own clock.
+s.note("the undisputed answer settles — the docket's first final verdict")
+s.settle(arbiter, "covid", FUNDING)
+s.expect("ClaimStatus", ["covid", FUNDING], r"settled YES")
+
+# "three resolved" was loose: two of the three were answered or provisional and
+# still movable. One is final now, and the count says which is which.
+s.note("eleven claims: one settled, one provisional, one answered and "
+       "disputable, five expired unanswered, three open")
 s.expect("ClaimCount", ["covid"], r"11")
 
 s.note("seal the clock: the fabricated calendar is on the realm's record forever")
