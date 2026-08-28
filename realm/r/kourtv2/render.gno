@@ -687,7 +687,8 @@ func claimStatus(cs *claimState) string {
 			" — reopenable by a new dispute until block " + strconv.FormatInt(cs.escrowUntil, 10) +
 			"; the side it is against may withdraw 1× now"
 	case cs.frozenAt != 0:
-		return "answered — staking frozen; disputable until block " +
+		return "answered " + sideName(int(cs.answer)) +
+			" — staking frozen; disputable until block " +
 			strconv.FormatInt(cs.answerHeight+settleDelay, 10) + ", then it settles undisputed"
 	default:
 		return "open — stake YES or NO; unstake freely until an answer posts"

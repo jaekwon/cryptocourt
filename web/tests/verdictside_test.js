@@ -153,6 +153,25 @@ const run = async (rows, v, mode) => {
   ok("mapDotClass followed the rename, or every provisional dot falls through",
      /if\(short==="provisional"\) return "ed";/.test(src));
 
+  // ONE RUNG EARLIER. "answered" told a reader what happened to the claim and
+  // nothing about where it stands — and carried no side at all, because the
+  // realm's answered line did not name one and the regex only looked for
+  // settled|verdict. Both halves are fixed: the realm names it, and the label
+  // says the thing that is actually true — one person put this forward and
+  // staked a bond, and it is not the court's finding yet.
+  ok("the answered side is now parsed",
+     phaseClass("answered NO — staking frozen; disputable until block 90").side === "NO");
+  ok("the open status still grows no side",
+     phaseClass("open — stake YES or NO; unstake freely until an answer posts").side === "");
+  ok("the phase is proposed, not answered",
+     phaseClass("answered YES — staking frozen").short === "proposed");
+  ok("the map node labels a proposed side too",
+     /pc\.short==="proposed" \? \(pc\.side\? "proposed: "\+pc\.side/.test(src));
+  ok("mapDotClass followed this rename as well",
+     /if\(short==="proposed"\) return "o";/.test(src));
+  ok("the demo mirror names the side, as the realm does",
+     /d\.phase==="answered"\) return "answered "\+sideName\(d\.answer\)/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

@@ -728,7 +728,7 @@ ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|r
     // stays an independent expectation and not the function compared to itself.
     const wantFamily = pc.short==="settled"
       ? (pc.side==="YES" ? "g" : pc.side==="NO" ? "gn" : "gu")
-      : {"in dispute":"e",provisional:"ed",answered:"o","no decision":"vd","never answered":"vf",open:"v"}[pc.short];
+      : {"in dispute":"e",provisional:"ed",proposed:"o","no decision":"vd","never answered":"vf",open:"v"}[pc.short];
     if(dot!==wantFamily) { agree=false; console.log("  dot mismatch #"+id, dot, "want", wantFamily); }
   }
   ok("dot classes agree with phaseClass on all 11 claims", agree);

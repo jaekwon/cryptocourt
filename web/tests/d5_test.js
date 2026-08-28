@@ -35,9 +35,9 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
 // clockLine table
 ok("disputed = sealed line, mode/height-blind", clockLine(null,"in dispute",null,null)==="a sealed vote is deciding — no close height is published" && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding — no close height is published");
-ok("answered ahead", clockLine(100,"answered",200,null).startsWith("settles undisputed at ≈block 200 — in ") && clockLine(100,"answered",200,null).endsWith(" unless disputed"));
-ok("answered past", clockLine(300,"answered",200,null)==="the settle window has passed — anyone may settle it now");
-ok("answered, no height read", clockLine(null,"answered",200,null)==="settles undisputed at ≈block 200");
+ok("proposed ahead", clockLine(100,"proposed",200,null).startsWith("settles undisputed at ≈block 200 — in ") && clockLine(100,"proposed",200,null).endsWith(" unless disputed"));
+ok("proposed past", clockLine(300,"proposed",200,null)==="the settle window has passed — anyone may settle it now");
+ok("proposed, no height read", clockLine(null,"proposed",200,null)==="settles undisputed at ≈block 200");
 ok("provisional ahead", clockLine(100,"provisional",null,150).startsWith("reopenable until ≈block 150 — in "));
 ok("provisional past", clockLine(200,"provisional",null,150)==="the reopen window has closed — finalizable");
 ok("open/settled rows get no clock", clockLine(100,"open",null,null)==="" && clockLine(100,"settled",null,null)==="");

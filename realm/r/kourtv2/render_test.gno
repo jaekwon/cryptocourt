@@ -639,9 +639,9 @@ func TestTheClaimStatusNamesEveryPhase(cur realm, t *testing.T) {
 	if got := claimStatus(cs); !strings.Contains(got, "open — stake") {
 		t.Errorf("a fresh claim reads %q", got)
 	}
-	cs.frozenAt, cs.answerHeight = 100, 100
-	if got := claimStatus(cs); !strings.Contains(got, "answered — staking frozen") {
-		t.Errorf("an answered claim reads %q", got)
+	cs.frozenAt, cs.answerHeight, cs.answer = 100, 100, int8(sideNO)
+	if got := claimStatus(cs); !strings.Contains(got, "answered NO — staking frozen") {
+		t.Errorf("an answered claim must name the side it was answered, got %q", got)
 	}
 	cs.provisional, cs.escrowUntil = sideYES, 500
 	if got := claimStatus(cs); !strings.Contains(got, "provisional verdict YES") {

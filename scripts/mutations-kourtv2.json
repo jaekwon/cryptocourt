@@ -11641,5 +11641,19 @@
   "label": "v0.58 relations: a withheld claim is surfaced through supersedes",
   "find": "\t\t\tif from == 0 || from > c.nextID || assocTextGone(c, from) {",
   "replace": "\t\t\tif from == 0 || from > c.nextID {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 answered: the status stops naming its side",
+  "find": "\t\treturn \"answered \" + sideName(int(cs.answer)) +\n\t\t\t\" \u2014 staking frozen; disputable until block \" +",
+  "replace": "\t\treturn \"answered\" +\n\t\t\t\" \u2014 staking frozen; disputable until block \" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "v0.58 answered: the side is hardcoded YES",
+  "find": "\t\treturn \"answered \" + sideName(int(cs.answer)) +",
+  "replace": "\t\treturn \"answered \" + sideName(sideYES) +"
  }
 ]

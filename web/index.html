@@ -1555,7 +1555,7 @@ function statusText(d){
   }
   if(d.phase==="disputed") return "disputed — a sealed vote is deciding; principal is never withheld";
   if(d.phase==="provisional") return "provisional verdict — reopenable by a new dispute; the losing side may withdraw 1× now";
-  if(d.phase==="answered") return "answered — staking frozen; disputable, then it settles undisputed";
+  if(d.phase==="answered") return "answered "+sideName(d.answer)+" — staking frozen; disputable, then it settles undisputed";
   return "open — stake YES or NO; unstake freely until an answer posts";
 }
 
@@ -1652,7 +1652,7 @@ function modBanner(mPurged, mRedacted, mHidden, slug){
 function clockLine(nowH, phaseShort, settleAt, escrowUntil){
   if(phaseShort==="in dispute")
     return "a sealed vote is deciding — no close height is published";
-  if(phaseShort==="answered" && settleAt)
+  if(phaseShort==="proposed" && settleAt)
     return nowH!=null? (settleAt>nowH? `settles undisputed at ≈block ${fmtN(settleAt)} — in ${wall(nowH,settleAt)} unless disputed`
                                      : "the settle window has passed — anyone may settle it now")
                      : `settles undisputed at ≈block ${fmtN(settleAt)}`;
@@ -2604,11 +2604,11 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
       try{
         if(renderSeq!==seq0) return;
         const pcShort = phaseClass(cl.statusText).short;
-        if(pcShort==="answered" || pcShort==="provisional"){
-          const q = pcShort==="answered"? `SettleDeadline(${s2},${cl.id})` : `EscrowUntil(${s2},${cl.id})`;
+        if(pcShort==="proposed" || pcShort==="provisional"){
+          const q = pcShort==="proposed"? `SettleDeadline(${s2},${cl.id})` : `EscrowUntil(${s2},${cl.id})`;
           one(q).then(h=>{
             if(renderSeq!==seq0) return;
-            const txt = clockLine(nowHq, pcShort, pcShort==="answered"? h:null, pcShort==="provisional"? h:null);
+            const txt = clockLine(nowHq, pcShort, pcShort==="proposed"? h:null, pcShort==="provisional"? h:null);
             const ce = document.getElementById(`clk-${slug}-${cl.id}`);
             if(ce && txt) ce.textContent = txt;
           }).catch(()=>{});
@@ -4224,7 +4224,7 @@ function mapDotClass(short, side){
   if(short==="settled") return side==="YES" ? "g" : side==="NO" ? "gn" : "gu";
   if(short==="in dispute") return "e";
   if(short==="provisional") return "ed";
-  if(short==="answered") return "o";
+  if(short==="proposed") return "o";
   if(short==="no decision") return "vd";
   if(short==="never answered") return "vf";
   return "v"; // open
@@ -4359,6 +4359,7 @@ function mapSvg(L, data, slug){
       out.push(dot(n.x+K.tpad+4, vy-4));
       out.push(rlabel(pc.short==="settled" ? (pc.side? "verdict: "+pc.side : "settled")
                     : pc.short==="provisional" ? (pc.side? "provisional: "+pc.side : "provisional")
+                    : pc.short==="proposed" ? (pc.side? "proposed: "+pc.side : "proposed")
                     : pc.short,
                       n, K.fs.id, vy, "mverdict", "c"+n.id));
     } else {
@@ -5198,7 +5199,7 @@ function phaseClass(statusText){
   // in demo mode as well, where that sentence is identical. The two forms that
   // carry a decision are the realm's "settled X" and "provisional verdict X"; the
   // match is anchored to them, and anything else has no side.
-  const side=(/(?:settled|verdict)\s+(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
+  const side=(/(?:settled|verdict|answered)\s+(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
   const st=(statusText||"").toLowerCase(); let cls="void", short="open";
   if(/^closed|provclose/.test(st)){cls="void";short=/never answered/.test(st)?"never answered":"no decision";}
   else if(/settled/.test(st)){
@@ -5213,7 +5214,7 @@ function phaseClass(statusText){
     short="settled";
   }
   else if(/provisional/.test(st)){cls="escrow";short="provisional";}
-  else if(/answered/.test(st)){cls="open";short="answered";}
+  else if(/answered/.test(st)){cls="open";short="proposed";}
   else if(/disput/.test(st)){cls="escrow";short="in dispute";}
   return {cls, short, side};
 }
