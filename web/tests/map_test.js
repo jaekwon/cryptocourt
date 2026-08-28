@@ -806,10 +806,13 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      return id1 && t1 && t1.y===id1.y && t1.x > id1.x; })());
   ok("the id is not a .mtitle, so a zoomed-out map is still labelled",
      rowOf(1,"mid").length===1 && !rowOf(1,"mtitle").some(t=>t.t.startsWith("#")));
+  // The node reads "<phase>: <side>" for every phase that has a side — the
+  // same shape as the pill. It used to say "verdict: NO" here while its own
+  // pill said "settled NO".
   ok("a settled-NO node states its verdict",
-     rowOf(1,"mverdict").map(t=>t.t).includes("verdict: NO"));
+     rowOf(1,"mverdict").map(t=>t.t).includes("settled: NO"));
   ok("a settled-YES node states its verdict",
-     rowOf(2,"mverdict").map(t=>t.t).includes("verdict: YES"));
+     rowOf(2,"mverdict").map(t=>t.t).includes("settled: YES"));
   ok("an open node says open, and claims no verdict",
      rowOf(3,"mverdict").map(t=>t.t).join("")==="open");
   ok("the verdict line is right-adjusted, below the title", (()=>{

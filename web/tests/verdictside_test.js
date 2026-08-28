@@ -148,8 +148,6 @@ const run = async (rows, v, mode) => {
      phaseClass("provisional verdict YES - reopenable until block 900").short === "provisional");
   ok("nothing still says settling",
      !/short="settling"/.test(src) && !/short===\"settling\"/.test(src));
-  ok("the map node labels a provisional side, as it does a settled one",
-     /pc\.short==="provisional" \? \(pc\.side\? "provisional: "\+pc\.side/.test(src));
   ok("mapDotClass followed the rename, or every provisional dot falls through",
      /if\(short==="provisional"\) return "ed";/.test(src));
 
@@ -165,8 +163,6 @@ const run = async (rows, v, mode) => {
      phaseClass("open — stake YES or NO; unstake freely until an answer posts").side === "");
   ok("the phase is proposed, not answered",
      phaseClass("answered YES — staking frozen").short === "proposed");
-  ok("the map node labels a proposed side too",
-     /pc\.short==="proposed" \? \(pc\.side\? "proposed: "\+pc\.side/.test(src));
   ok("mapDotClass followed this rename as well",
      /if\(short==="proposed"\) return "o";/.test(src));
   ok("the demo mirror names the side, as the realm does",
@@ -177,6 +173,21 @@ const run = async (rows, v, mode) => {
   // and reading as a typo.
   ok("a missing answer omits the side instead of printing a dash",
      /: ""/.test(slice('d.phase==="answered"', 'settles undisputed')));
+
+  // ONE RULE FOR THE NODE LABEL, not a case per phase. Each special case was
+  // added the day its phase got a side, so settled kept saying "verdict: YES"
+  // on the node while its pill said "settled YES" — the same node/pill split
+  // that was fixed for provisional and never carried across. A rule cannot be
+  // forgotten for a fourth phase the way a case can.
+  ok("the node labels every sided phase the same way",
+     /rlabel\(pc\.side\? pc\.short\+": "\+pc\.side : pc\.short,/.test(src));
+  ok("no per-phase special case is left to drift",
+     !/"verdict: "\+pc\.side/.test(src) && !/pc\.short==="provisional" \?/.test(src));
+  // And the node now agrees with the pill, which is the defect itself: both
+  // read <phase> then <side>, for every phase that has one.
+  ok("node and pill agree on settled",
+     phaseClass("settled NO — every stake withdraws 1×").short === "settled" &&
+     phaseClass("settled NO — every stake withdraws 1×").side === "NO");
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

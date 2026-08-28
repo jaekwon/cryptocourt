@@ -4360,10 +4360,7 @@ function mapSvg(L, data, slug){
          it for a mark that sat on a different subject. */
       const vy=n.y+16+lines.length*K.lineH;
       out.push(dot(n.x+K.tpad+4, vy-4));
-      out.push(rlabel(pc.short==="settled" ? (pc.side? "verdict: "+pc.side : "settled")
-                    : pc.short==="provisional" ? (pc.side? "provisional: "+pc.side : "provisional")
-                    : pc.short==="proposed" ? (pc.side? "proposed: "+pc.side : "proposed")
-                    : pc.short,
+      out.push(rlabel(pc.side? pc.short+": "+pc.side : pc.short,
                       n, K.fs.id, vy, "mverdict", "c"+n.id));
     } else {
       /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
