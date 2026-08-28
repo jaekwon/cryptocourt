@@ -6,13 +6,13 @@
 // quality tier. Real money (GNOT) enters once through the curve and is BURNED;
 // no real money ever exits, and no value ever moves between adversaries
 // ("forfeitures burn; compensation mints").
-//
+package kourtv2
+
 // This file is the backbone: Court and Params, the frozen realm constants and
 // their deploy-checked invariants, the directory, and StartCourt. Mechanics land
 // in sibling files (buy, stake, claim, answer, session, dispute, emission,
 // quality, records, render). PLAN.md (v0.32, design-converged) is the spec; the
 // V1 realm at realm/r/kourtv1 is untouched and remains the audited reference.
-package kourtv2
 
 import (
 	"strings"

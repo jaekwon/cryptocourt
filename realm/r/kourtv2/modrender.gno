@@ -17,6 +17,7 @@
 // so ranking on it needs no gameable activity/vote score. Creation-newest-first
 // is the alternative. Both read monotone secondary indexes and are paginated,
 // so page cost never grows with the court count.
+
 package kourtv2
 
 import (

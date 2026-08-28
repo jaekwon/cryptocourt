@@ -12,6 +12,7 @@
 // `OpenElection` at all, given that registering a candidate set costs ~0.4 CC
 // net and would clear your own sanction. Shipping either reading now would bake
 // in a capture path. What ships is the half that does not depend on the answer.
+
 package kourtv2
 
 import "strconv"

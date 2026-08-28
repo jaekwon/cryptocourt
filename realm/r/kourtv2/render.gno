@@ -2,6 +2,7 @@
 // no "backing" anywhere (burned GNOT backs nothing), sealed tallies once votes
 // exist, absolute CC figures only — never percentages of return, never the
 // inflation ceiling (§7.4). Every user string passes the sanitizer.
+
 package kourtv2
 
 import (

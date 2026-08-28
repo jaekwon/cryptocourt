@@ -34,6 +34,7 @@
 // anything less would let a dust flag's 7-day vote blockade the 72h dispute
 // window — the verdict lane always outranks the quality lane. A dispute does NOT
 // void a RESERVED slash: opening a round is not adjudicating one.
+
 package kourtv2
 
 import (

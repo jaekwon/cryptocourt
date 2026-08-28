@@ -1,6 +1,7 @@
 // Buy: the one-way bonding curve, V2 disposition — the GNOT is BURNED (PLAN
 // §3.7). No treasury exists, nothing ever redeems, and no "backing" figure is
 // read or rendered: CC is participation, not a claim on assets.
+
 package kourtv2
 
 import (

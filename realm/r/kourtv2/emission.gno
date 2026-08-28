@@ -17,6 +17,7 @@
 //
 // The R_max pause (ceiling-not-floor): accrual stops while the junior pool is
 // full AND every senior is covered; the skipped budget is forgone forever.
+
 package kourtv2
 
 import (

@@ -19,6 +19,7 @@
 // the two claims ask the same question — and since dead claims are produced
 // constantly, nearly every one of them is an eligible `to` for any given `from`.
 // The caller picks one out of hundreds, and that choice is the whole assertion.
+
 package kourtv2
 
 import (

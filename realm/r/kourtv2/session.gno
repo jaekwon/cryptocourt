@@ -5,6 +5,7 @@
 // still be quality-flagged — quality ≠ verdict — but the verdict itself is
 // final; V2 has no reopen of undisputed verdicts through this path: contesting
 // happens by DISPUTING before the delay lapses).
+
 package kourtv2
 
 // SettleUndisputed records the answer as the final verdict once the 72h delay

@@ -15,6 +15,7 @@
 // supply for the same reason — quorumSupplyBps, electionFloor, supplyFloor — and
 // this one reads the same sealed epoch they do, because live supply is griefable
 // in the same block.
+
 package kourtv2
 
 import (

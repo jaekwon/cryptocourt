@@ -11,6 +11,7 @@
 // instantly reversible — so the m-of-n ceremony would only tax routine curation
 // for no security gain (the round-7 R3 rationale is about bounding damage, and
 // there is none to bound). Suspension still refuses folder writes.
+
 package kourtv2
 
 import (

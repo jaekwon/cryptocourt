@@ -4,6 +4,7 @@
 // (staker, side) in 128 bits — rate-weighted (V2-8), so no rate snapshot exists
 // anywhere and step-downs cannot be raced; capital-conserving (unstake stops
 // accrual, history is kept, restake resumes, nothing resets — F9).
+
 package kourtv2
 
 import (

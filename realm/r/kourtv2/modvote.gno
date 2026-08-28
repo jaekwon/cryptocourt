@@ -21,6 +21,7 @@
 // picks the earliest-nominated candidate within the margin of the max. A
 // single-pass running argmax gets the tie-break wrong and would let a whale
 // install a late one-address-swapped DECOY of an honest set.
+
 package kourtv2
 
 import (

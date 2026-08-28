@@ -20,6 +20,7 @@
 // Every write here is called BY the money path (PostAnswer, Crystallize,
 // provCloseClaim, CloseDeadClaim) and therefore must never panic: a
 // moderation-side invariant may not block a lifecycle transition (§2).
+
 package kourtv2
 
 import bptree "gno.land/p/nt/bptree/v0"

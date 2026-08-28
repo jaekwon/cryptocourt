@@ -1,5 +1,6 @@
 // Claims: an immutable statement of fact, a refundable deposit, a conditionally
 // refundable fee, and two stake pools. No shares exist — see stake.gno.
+
 package kourtv2
 
 import (

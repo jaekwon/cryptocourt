@@ -15,6 +15,7 @@
 // could impersonate an asset in a wallet; a route that is simply too long to be
 // a slug needs no entry there and cannot be shadowed by an older court that
 // registered the name first.
+
 package kourtv2
 
 import "strings"

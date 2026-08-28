@@ -16,6 +16,7 @@
 // The guard set is the expensive part. Three independent adversarial vets shaped
 // it, and every guard below exists because a specific attack got through
 // without it — the comments name them.
+
 package kourtv2
 
 import (

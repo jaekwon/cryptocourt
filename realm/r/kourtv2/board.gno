@@ -38,6 +38,7 @@
 // about its own index: the alternative is O(rows) on every write, and "measured,
 // that tax is ~57 bytes on a write that already costs ~604k gas" is the trade
 // this realm has already made once and found worth making.
+
 package kourtv2
 
 import (

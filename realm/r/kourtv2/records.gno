@@ -7,6 +7,7 @@
 // off court-wide until priorityColdStartN addresses qualify (no launch-wide
 // latency tax), and limited to ONE active priority claim per address at a time
 // (no flywheel blanketing).
+
 package kourtv2
 
 // answerRecord is one address's standing in one court.

@@ -33,6 +33,7 @@
 // about the docket (`claimState.closed` is the realm's own record that a claim
 // died without an answer), so it wants a verifying entrypoint rather than a
 // second copy of this one.
+
 package kourtv2
 
 import (

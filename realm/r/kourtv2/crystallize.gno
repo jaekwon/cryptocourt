@@ -6,6 +6,7 @@
 // scale-then-cap at ITS OWN pull. Cap-cut and rounding dust stays reserved
 // and unminted — economically a burn, always on the conservative side of the
 // 20% ceiling.
+
 package kourtv2
 
 import (

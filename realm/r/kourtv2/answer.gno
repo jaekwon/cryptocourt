@@ -4,6 +4,7 @@
 // audited argument, unchanged). The answer freezes staking, pins the era
 // integral (H1), and snapshots X̄frozen — the single base every later
 // %-of-X̄ quantity (bonds, slash, flag bond) reads (P6).
+
 package kourtv2
 
 // answerWindow: the trailing window answerability reads. V1's audited 3-hour

@@ -24,6 +24,7 @@
 // answer bond is burned only by the round that decides against it and returned
 // only at VERDICT_FINAL. Answer records move ONCE, at Finalize, from the final
 // verdict (P13) — intermediate rounds never churn the record.
+
 package kourtv2
 
 import (
