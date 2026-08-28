@@ -1555,7 +1555,10 @@ function statusText(d){
   }
   if(d.phase==="disputed") return "disputed — a sealed vote is deciding; principal is never withheld";
   if(d.phase==="provisional") return "provisional verdict — reopenable by a new dispute; the losing side may withdraw 1× now";
-  if(d.phase==="answered") return "answered "+sideName(d.answer)+" — staking frozen; disputable, then it settles undisputed";
+  if(d.phase==="answered"){
+    const sd = (d.answer===0||d.answer===1)? " "+sideName(d.answer) : "";
+    return "answered"+sd+" — staking frozen; disputable, then it settles undisputed";
+  }
   return "open — stake YES or NO; unstake freely until an answer posts";
 }
 

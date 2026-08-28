@@ -170,7 +170,13 @@ const run = async (rows, v, mode) => {
   ok("mapDotClass followed this rename as well",
      /if\(short==="proposed"\) return "o";/.test(src));
   ok("the demo mirror names the side, as the realm does",
-     /d\.phase==="answered"\) return "answered "\+sideName\(d\.answer\)/.test(src));
+     /\(d\.answer===0\|\|d\.answer===1\)\? " "\+sideName\(d\.answer\)/.test(src));
+  // AND OMITS IT RATHER THAN PRINTING A DASH. sideName(undefined) is "—", so an
+  // unguarded mirror emitted "answered — — staking frozen" for the one demo row
+  // in phase "answered" with no answer field — unmatchable by the side regex,
+  // and reading as a typo.
+  ok("a missing answer omits the side instead of printing a dash",
+     /: ""/.test(slice('d.phase==="answered"', 'settles undisputed')));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
