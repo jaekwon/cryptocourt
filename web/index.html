@@ -1656,7 +1656,7 @@ function clockLine(nowH, phaseShort, settleAt, escrowUntil){
     return nowH!=null? (settleAt>nowH? `settles undisputed at ≈block ${fmtN(settleAt)} — in ${wall(nowH,settleAt)} unless disputed`
                                      : "the settle window has passed — anyone may settle it now")
                      : `settles undisputed at ≈block ${fmtN(settleAt)}`;
-  if(phaseShort==="settling" && escrowUntil)
+  if(phaseShort==="provisional" && escrowUntil)
     return nowH!=null? (escrowUntil>nowH? `reopenable until ≈block ${fmtN(escrowUntil)} — in ${wall(nowH,escrowUntil)}`
                                         : "the reopen window has closed — finalizable")
                      : `reopenable until ≈block ${fmtN(escrowUntil)}`;
@@ -2604,11 +2604,11 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
       try{
         if(renderSeq!==seq0) return;
         const pcShort = phaseClass(cl.statusText).short;
-        if(pcShort==="answered" || pcShort==="settling"){
+        if(pcShort==="answered" || pcShort==="provisional"){
           const q = pcShort==="answered"? `SettleDeadline(${s2},${cl.id})` : `EscrowUntil(${s2},${cl.id})`;
           one(q).then(h=>{
             if(renderSeq!==seq0) return;
-            const txt = clockLine(nowHq, pcShort, pcShort==="answered"? h:null, pcShort==="settling"? h:null);
+            const txt = clockLine(nowHq, pcShort, pcShort==="answered"? h:null, pcShort==="provisional"? h:null);
             const ce = document.getElementById(`clk-${slug}-${cl.id}`);
             if(ce && txt) ce.textContent = txt;
           }).catch(()=>{});
@@ -4223,7 +4223,7 @@ function mapDotClass(short, side){
   // only mark a node carries, so it must not say YES about a claim that said NO.
   if(short==="settled") return side==="YES" ? "g" : side==="NO" ? "gn" : "gu";
   if(short==="in dispute") return "e";
-  if(short==="settling") return "ed";
+  if(short==="provisional") return "ed";
   if(short==="answered") return "o";
   if(short==="no decision") return "vd";
   if(short==="never answered") return "vf";
@@ -4357,7 +4357,9 @@ function mapSvg(L, data, slug){
          it for a mark that sat on a different subject. */
       const vy=n.y+16+lines.length*K.lineH;
       out.push(dot(n.x+K.tpad+4, vy-4));
-      out.push(rlabel(pc.short==="settled" ? (pc.side? "verdict: "+pc.side : "settled") : pc.short,
+      out.push(rlabel(pc.short==="settled" ? (pc.side? "verdict: "+pc.side : "settled")
+                    : pc.short==="provisional" ? (pc.side? "provisional: "+pc.side : "provisional")
+                    : pc.short,
                       n, K.fs.id, vy, "mverdict", "c"+n.id));
     } else {
       /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
@@ -4690,7 +4692,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   const legendDots = `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot g"/></svg> settled YES</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot gn"/></svg> settled NO</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> settling</span>
+      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> provisional</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot o"/></svg> answered</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot v"/></svg> open</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot vd"/></svg> no decision</span>
@@ -5210,7 +5212,7 @@ function phaseClass(statusText){
     cls = side==="YES" ? "good" : side==="NO" ? "verdict-no" : "decided";
     short="settled";
   }
-  else if(/provisional/.test(st)){cls="escrow";short="settling";}
+  else if(/provisional/.test(st)){cls="escrow";short="provisional";}
   else if(/answered/.test(st)){cls="open";short="answered";}
   else if(/disput/.test(st)){cls="escrow";short="in dispute";}
   return {cls, short, side};

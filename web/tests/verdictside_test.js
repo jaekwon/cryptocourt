@@ -133,6 +133,26 @@ const run = async (rows, v, mode) => {
   ok("the deep docket page names it too",
      /await nameTheSide\(slug, out\);[^\n]*\n\s*return out\.sort/.test(src));
 
+  // THE NODE AND THE PILL MUST AGREE, which they did not. The map's node label
+  // special-cased only "settled" to show a side and printed the bare phase
+  // otherwise, while the pill always appends one — so a provisional claim read
+  // "settling" on the map and "settling YES" in the panel beside it, for the
+  // same claim, at the same moment.
+  //
+  // AND THE PHASE WORD IS NOT "settling". A provisional verdict is decided and
+  // reopenable — the losing side may already withdraw 1x — so a word that reads
+  // as "on its way to YES" overclaims finality, while "leaning" would underclaim
+  // it into mere sentiment, which is what this product already calls a lean (the
+  // claim page's "instantaneous: 64% YES"). The realm's own word is provisional.
+  ok("the provisional phase is not called settling",
+     phaseClass("provisional verdict YES - reopenable until block 900").short === "provisional");
+  ok("nothing still says settling",
+     !/short="settling"/.test(src) && !/short===\"settling\"/.test(src));
+  ok("the map node labels a provisional side, as it does a settled one",
+     /pc\.short==="provisional" \? \(pc\.side\? "provisional: "\+pc\.side/.test(src));
+  ok("mapDotClass followed the rename, or every provisional dot falls through",
+     /if\(short==="provisional"\) return "ed";/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

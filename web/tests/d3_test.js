@@ -106,7 +106,7 @@ ok("old per-route wiring gone", !src.includes('idm.onclick'));
 
 // PHASE AND SIDE ARE SEPARATE FIELDS, and both halves are asserted because
 // folding them would be silent: mapDotClass switches on `short` with an exact
-// ===, so a `short` of "settling YES" falls through to the open colour while the
+// ===, so a `short` of "provisional YES" falls through to the open colour while the
 // tooltip still reads correctly. The realm writes the side as sideName() —
 // uppercase — and only the provisional status carries one today.
 // A ROUTE CHANGE MUST ANIMATE, and all three parts are asserted because any one
@@ -144,7 +144,7 @@ eval(slice('function viewEnter(', '\nconst routes'));
 ok("phaseClass reads the side off a provisional status",
    phaseClass("provisional verdict NO — reopenable by a new dispute until block 900").side === "NO");
 ok("phaseClass keeps short free of the side",
-   phaseClass("provisional verdict NO — reopenable until block 900").short === "settling");
+   phaseClass("provisional verdict NO — reopenable until block 900").short === "provisional");
 ok("phaseClass reports no side when the status names none",
    phaseClass("settled — every stake withdraws 1x").side === "");
 ok("a settled status still classes as settled",
