@@ -6412,7 +6412,7 @@ on(/^\/raw\/([a-z0-9-]+)(?:\/(\d+|mod))?$/, async (slug,id)=>{
   const md = await rawRender(path);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:id==="mod"? "Moderation log":"Chain render"}])
     + `<h1 class="page-h">As the chain serves it</h1>
-       <p class="page-sub">Exactly what the chain serves for <code>${esc(path)}</code> — plain markdown, nothing added. Everything you need to act is here; the pretty version only rearranges it.</p>
+       <p class="page-sub">Plain markdown for <code>${esc(path)}</code>, with nothing added and nothing left out. The ordinary pages show these same facts in a friendlier layout — this view is here so you can check them against the source.</p>
        <div class="rawblock">${esc(md||"(empty)")}</div>`;
 });
 
