@@ -1,0 +1,47 @@
+# gnoweb: the realm's own pages, and the surface a wallet signs from.
+#
+# WHY IT IS HERE AT ALL. Every action button in the overlay links out to a $help
+# page — tx() builds CFG.gnoweb + "/r/kourt/kourtv2$help&func=…" — so without a
+# gnoweb of our own those links point at gno.land, which does not carry this
+# realm. This is also the page that renders Render() output for readers who never
+# load the overlay.
+#
+# -help-remote IS NOT COSMETIC. It becomes <meta name="gnoconnect:rpc"> on the
+# help page, which is how a wallet learns where to send the transaction. Left to
+# its default it takes the node's listener address VERBATIM — "tcp://127.0.0.1:26657"
+# — and no browser extension can open a tcp:// URL. It must be the public https
+# RPC, and the chain id must match what the wallet is asked to sign for.
+[Unit]
+Description=Kourt gnoweb (realm pages and tx links)
+Documentation=https://github.com/jaekwon/cryptocourt-mod/blob/main/deploy/README.md
+After=network-online.target kourtnode.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kourt
+Group=kourt
+Environment=GNOROOT=/opt/kourt/gnoroot
+ExecStart=/opt/kourt/bin/gnoweb \
+    -bind 127.0.0.1:8888 \
+    -remote http://127.0.0.1:26657 \
+    -help-remote https://rpc.kourt.xyz \
+    -chainid kourt-1 \
+    -faucet-url https://faucet.kourt.xyz
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

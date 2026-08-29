@@ -9,6 +9,7 @@ Three things exist and only two of them are deployed from here.
 | the realm | `realm/r/kourtv2` | a gno chain — `chain.sh`, at genesis, not `deploy.sh` |
 | **the chain** | a persistent `gnoland` node | `/var/lib/kourt/chain`, under systemd |
 | **the faucet** | `gnofaucet`, hCaptcha-gated | `faucet.kourt.xyz`, under systemd |
+| **gnoweb** | the realm's own pages | `gnoweb.kourt.xyz`, under systemd |
 
 The overlay reads whichever chain you point it at, so shipping the page and
 deploying the realm are separate acts with separate blast radii. That is the
@@ -58,6 +59,15 @@ printf %s '<hcaptcha-secret>' > /var/lib/kourt/secret/captcha.secret
 chmod 600 /var/lib/kourt/secret/captcha.secret
 systemctl start kourtfaucet
 ```
+
+**gnoweb is deployed too, and it is not optional.** Every action button in the
+overlay links out to a `$help` page — `tx()` builds
+`CFG.gnoweb + "/r/kourt/kourtv2$help&func=…"` — so without one of our own those
+links point at gno.land, which does not carry this realm. It also gets
+`-help-remote https://rpc.kourt.xyz`, which becomes the `gnoconnect:rpc` meta a
+wallet reads: left at its default it is the node's listener **verbatim**,
+`tcp://127.0.0.1:26657`, which no browser extension can open. And `-faucet-url`
+registers `gnoweb.kourt.xyz/faucet` as a 302 to the faucet.
 
 A grant is **100 GNOT**. The mnemonic reaches the process as a systemd
 `LoadCredential`, never as a flag: `-mnemonic "<24 words>"` would put the

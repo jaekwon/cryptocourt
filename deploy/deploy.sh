@@ -124,7 +124,7 @@ SITE_CHAINID="${SITE_CHAINID:-kourt-1}"
 # CFG.gnoweb + "/r/kourt/kourtv2$help&func=…". There is no gnoweb on this host,
 # so the honest default is the repo's — and that points at gno.land, which does
 # NOT carry this realm. Say so rather than stamping a link that 404s quietly.
-SITE_GNOWEB="${SITE_GNOWEB:-}"
+SITE_GNOWEB="${SITE_GNOWEB:-https://gnoweb.kourt.xyz}"
 python3 - "$STAMPED" <<PYEOF
 import re, sys
 src = open("web/index.html", encoding="utf-8").read()

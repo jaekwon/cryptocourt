@@ -22,7 +22,7 @@ HOST="${1:?usage: certs.sh user@host [domain ...]}"
 shift || true
 DOMAINS=("$@")
 if [ ${#DOMAINS[@]} -eq 0 ]; then
-    DOMAINS=(rpc.kourt.xyz faucet.kourt.xyz)
+    DOMAINS=(rpc.kourt.xyz faucet.kourt.xyz gnoweb.kourt.xyz)
 fi
 EMAIL="${EMAIL:-}"
 

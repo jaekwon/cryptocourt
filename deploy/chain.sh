@@ -47,6 +47,7 @@ echo "==> building linux binaries"
 ( cd "$GNOROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/gnokey"  ./gno.land/cmd/gnokey )
 ( cd "$GNOROOT/contribs/gnogenesis" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/gnogenesis" . )
 ( cd "$GNOROOT/contribs/gnofaucet"  && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/gnofaucet"  . )
+( cd "$GNOROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/gnoweb"    ./gno.land/cmd/gnoweb )
 # gnogenesis also runs HERE, on this machine, to build the genesis from the
 # packages in this repo. Build a host copy alongside the linux one.
 ( cd "$GNOROOT/contribs/gnogenesis" && go build -o "$WORK/gnogenesis-host" . )
@@ -64,11 +65,11 @@ tar -C "$GNOROOT" -czf "$WORK/stdlibs.tgz" gnovm/stdlibs
 
 echo "==> phase 1: server-side secrets"
 "${SCP[@]}" "$WORK/gnoland" "$WORK/gnokey" "$WORK/gnogenesis" "$WORK/gnofaucet" \
-    "$WORK/stdlibs.tgz" "$HOST:/tmp/"
+    "$WORK/gnoweb" "$WORK/stdlibs.tgz" "$HOST:/tmp/"
 PUBLIC=$("${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" \
   RESET="$RESET" 'bash -seu' <<'REMOTE'
 mkdir -p "$APPDIR/bin" "$CHAINDIR/data/secrets" "$STATEDIR/secret"
-for b in gnoland gnokey gnogenesis gnofaucet; do
+for b in gnoland gnokey gnogenesis gnofaucet gnoweb; do
     install -m 0755 "/tmp/$b" "$APPDIR/bin/$b"; rm -f "/tmp/$b"
 done
 
@@ -160,13 +161,14 @@ EOF
 
 echo "==> shipping genesis and units"
 "${SCP[@]}" "$WORK/genesis.json" "$HOST:$CHAINDIR/genesis.json"
-"${SCP[@]}" deploy/kourtnode.service deploy/kourtfaucet.service "$HOST:/tmp/"
+"${SCP[@]}" deploy/kourtnode.service deploy/kourtfaucet.service deploy/kourtweb.service "$HOST:/tmp/"
 "${SCP[@]}" deploy/nginx-chain.conf "$HOST:/tmp/nginx-chain.conf"
 
 "${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" 'bash -seu' <<'REMOTE'
 chown -R kourt:kourt "$CHAINDIR"
 install -m 0644 /tmp/kourtnode.service   /etc/systemd/system/kourtnode.service
 install -m 0644 /tmp/kourtfaucet.service /etc/systemd/system/kourtfaucet.service
+install -m 0644 /tmp/kourtweb.service    /etc/systemd/system/kourtweb.service
 # NEVER CLOBBER CERTBOT'S EDITS. `certbot --nginx` rewrites this very file to add
 # the :443 server, the certificate paths and the 80->443 redirect. Re-running
 # chain.sh with a plain install would put the HTTP-only version back and take TLS
@@ -179,7 +181,7 @@ else
     install -m 0644 /tmp/nginx-chain.conf /etc/nginx/sites-available/kourt-chain
 fi
 ln -sf /etc/nginx/sites-available/kourt-chain /etc/nginx/sites-enabled/kourt-chain
-rm -f /tmp/kourtnode.service /tmp/kourtfaucet.service /tmp/nginx-chain.conf
+rm -f /tmp/kourtnode.service /tmp/kourtfaucet.service /tmp/kourtweb.service /tmp/nginx-chain.conf
 
 # The faucet will not start without an hCaptcha secret, and starting it without
 # one produces a unit that flaps. Say so once, here, instead.
@@ -203,6 +205,12 @@ for i in $(seq 1 60); do
 done
 curl -sf http://127.0.0.1:26657/status >/dev/null 2>&1 || {
     journalctl -u kourtnode -n 40 --no-pager; exit 5; }
+
+# gnoweb only reads the node, so it needs no secret and can start unconditionally.
+systemctl enable kourtweb >/dev/null 2>&1
+systemctl restart kourtweb
+sleep 2
+systemctl is-active --quiet kourtweb || { journalctl -u kourtweb -n 20 --no-pager; exit 7; }
 
 if [ "$FAUCET_READY" = yes ]; then
     systemctl enable kourtfaucet >/dev/null 2>&1
