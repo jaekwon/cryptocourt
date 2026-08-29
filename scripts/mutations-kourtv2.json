@@ -11662,5 +11662,47 @@
   "label": "BoardNewest: every comment is dated block 0",
   "find": "\t\t\tstrconv.Itoa(boardReplyCount(cs, r.id)) + \"|\")\n\t\tif m := boardMark(r); m != \".\" {\n\t\t\tb.WriteString(m + \"|\" + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t\treturn false\n\t\t}\n\t\tb.WriteString(\".|\" + strconv.FormatInt(r.at, 10) + \"|\" + boardTextFor(r) + \"\\n\")",
   "replace": "\t\t\tstrconv.Itoa(boardReplyCount(cs, r.id)) + \"|\")\n\t\tif m := boardMark(r); m != \".\" {\n\t\t\tb.WriteString(m + \"|\" + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t\treturn false\n\t\t}\n\t\tb.WriteString(\".|0|\" + boardTextFor(r) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardPartyRows: a lone row is labelled the author whoever wrote it",
+  "find": "\t\trole := \"answerer\"\n\t\tif r.author == cs.author {\n\t\t\trole = \"author\"\n\t\t}\n",
+  "replace": "\t\trole := \"author\"\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardPartyRows: a withdrawn party row is dropped, not tombstoned",
+  "find": "\t\tb.WriteString(strconv.FormatUint(r.id, 10) + \"|\" + r.author.String() + \"|\" + role + \"|\")\n",
+  "replace": "\t\tif boardMark(r) != \".\" {\n\t\t\tcontinue\n\t\t}\n\t\tb.WriteString(strconv.FormatUint(r.id, 10) + \"|\" + r.author.String() + \"|\" + role + \"|\")\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardPartyRows: a claim with no board reaches for a nil tree",
+  "find": "\tif cs.boardTop == nil {\n\t\treturn \"\"\n\t}\n\tvar b strings.Builder\n\tfor _, r := range boardPartyRows(cs) {",
+  "replace": "\tvar b strings.Builder\n\tfor _, r := range boardPartyRows(cs) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardPartyRows: every party comment is dated block 0",
+  "find": "\t\t\tcontinue\n\t\t}\n\t\tb.WriteString(\".|\" + strconv.FormatInt(r.at, 10) + \"|\" + boardTextFor(r) + \"\\n\")\n",
+  "replace": "\t\t\tcontinue\n\t\t}\n\t\tb.WriteString(\".|\" + \"0\" + \"|\" + boardTextFor(r) + \"\\n\")\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardTop: every comment is dated block 0",
+  "find": "\t\t\tstrconv.FormatInt(r.score, 10) + \"|.|\" + strconv.FormatInt(r.at, 10) +\n\t\t\t\"|\" + boardTextFor(r) + \"\\n\")",
+  "replace": "\t\t\tstrconv.FormatInt(r.score, 10) + \"|.|\" + \"0\" +\n\t\t\t\"|\" + boardTextFor(r) + \"\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardPartyRows: the answerer holds a slot before the claim freezes",
+  "find": "\tif cs.frozenAt != 0 && cs.answerer != \"\" && cs.answerer != cs.author {",
+  "replace": "\tif cs.answerer != \"\" && cs.answerer != cs.author {"
  }
 ]

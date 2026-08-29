@@ -496,6 +496,111 @@ func TestThePartiesHoldAReservedSlot(cur realm, t *testing.T) {
 	}
 }
 
+// BoardPartyRows is the reserved slot served to a client that renders its own
+// board, and every arm here is a way the same two rows go wrong on the wire.
+func TestAPartyRowNamesWhichPartyItIs(cur realm, t *testing.T) {
+	c, id, alice, bob, carol := topFixture(cur, t, "cpr")
+	cs := mustClaim(c, id)
+	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
+	for _, w := range []address{bob, carol} {
+		getStanding(c, w).score = sup * ladderFor(c).t3Bps / 10_000
+	}
+
+	// alice is the author. She comments once, then bob buries her under the cap.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	aliceRow := PostComment(cross(cur), "cpr", id, 0, "what I meant by the claim")
+	for i := 0; i < maxBoardRowsPerAuthor; i++ {
+		testing.SetRealm(testing.NewUserRealm(bob))
+		PostComment(cross(cur), "cpr", id, 0, "noise")
+	}
+
+	rows := strings.Split(strings.TrimRight(BoardPartyRows("cpr", id), "\n"), "\n")
+	if len(rows) != 1 {
+		t.Fatalf("only the author has commented, so there is one row: %q", rows)
+	}
+	f := strings.SplitN(rows[0], "|", 6)
+	if len(f) != 6 {
+		t.Fatalf("BoardPartyRows must publish 6 fields, got %d: %q", len(f), rows[0])
+	}
+	if f[0] != strconv.FormatUint(aliceRow, 10) || f[1] != alice.String() {
+		t.Fatalf("BoardPartyRows field order changed: %q", rows[0])
+	}
+	if f[2] != "author" {
+		t.Fatalf("field 3 is the role: %q", rows[0])
+	}
+	if f[3] != "." || f[5] != "what I meant by the claim" {
+		t.Fatalf("mark/text positions changed: %q", rows[0])
+	}
+	if n, err := strconv.ParseInt(f[4], 10, 64); err != nil || n <= 0 {
+		t.Fatalf("field 5 is the block height: %q", rows[0])
+	}
+
+	// THE BURIAL THE READ EXISTS FOR, measured rather than asserted: a client
+	// scanning a page of BoardNewest for the author's address does not find it.
+	// Same mechanism as the count clamp — BoardNewest serves a bounded page of a
+	// 512-row board — at a size a test can afford. Without this the whole read is
+	// a convenience over a scan the client could have done itself.
+	if strings.Contains(BoardNewest("cpr", id, 0, 5), "what I meant by the claim") {
+		t.Fatal("the fixture must actually bury the author's row, or the read proves nothing")
+	}
+
+	// THE ANSWERER WAITS FOR THE FREEZE. Set with the claim still live, the
+	// answerer's comment is not a party row: an unfrozen answer is not one the
+	// realm names as an answer anywhere else. Asserting this while cs.answerer is
+	// still empty would prove nothing — no row matches either way, and a mutant
+	// that dropped the frozenAt half of the gate would read identically.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	carolRow := PostComment(cross(cur), "cpr", id, 0, "it is the denominator the WHO published")
+	cs.answerer = carol
+	if strings.Contains(BoardPartyRows("cpr", id), "answerer") {
+		t.Fatal("an answer that is not frozen earns no reserved slot")
+	}
+	cs.frozenAt = heightNow()
+	rows = strings.Split(strings.TrimRight(BoardPartyRows("cpr", id), "\n"), "\n")
+	if len(rows) != 2 {
+		t.Fatalf("both parties have commented now: %q", rows)
+	}
+	if !strings.HasPrefix(rows[1], strconv.FormatUint(carolRow, 10)+"|"+carol.String()+"|answerer|") {
+		t.Fatalf("the answerer's row must name the answerer: %q", rows[1])
+	}
+
+	// A PINNED ROW CAN BE A TOMBSTONE. The reserved slot is not filtered on its
+	// mark, so the author's newest comment may be one she withdrew. It keeps its
+	// place, its role and its field count, and arrives with empty text — a client
+	// that renders the badge and then trusts the text prints a name over nothing.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideOwnComment(cross(cur), "cpr", id, aliceRow, true)
+	hidden := strings.Split(strings.TrimRight(BoardPartyRows("cpr", id), "\n"), "\n")[0]
+	hf := strings.SplitN(hidden, "|", 6)
+	if len(hf) != 6 || hf[2] != "author" || hf[3] != "h" || hf[5] != "" {
+		t.Fatalf("a withdrawn party row keeps its place, role and arity: %q", hidden)
+	}
+}
+
+// THE CASE THE ROLE FIELD EXISTS FOR, and the reason it is packed rather than
+// derived from position: a claim whose author never commented returns ONE row,
+// and it is the ANSWERER'S. A client reading roles off the ordering prints the
+// author's name over the answerer's argument — the same mistake it makes reading
+// BoardReplies at BoardNewest's arity.
+func TestALonePartyRowIsNotAssumedToBeTheAuthors(cur realm, t *testing.T) {
+	c, id, _, bob, _ := topFixture(cur, t, "cps")
+	cs := mustClaim(c, id)
+	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
+	getStanding(c, bob).score = sup * ladderFor(c).t3Bps / 10_000
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	bobRow := PostComment(cross(cur), "cps", id, 0, "the only comment on this claim")
+	cs.answerer, cs.frozenAt = bob, heightNow()
+
+	only := strings.TrimRight(BoardPartyRows("cps", id), "\n")
+	if strings.Contains(only, "\n") {
+		t.Fatalf("the author never commented, so there is one row: %q", only)
+	}
+	if !strings.HasPrefix(only, strconv.FormatUint(bobRow, 10)+"|"+bob.String()+"|answerer|") {
+		t.Fatalf("a lone party row must name its own role, not the first one: %q", only)
+	}
+}
+
 // scoreIndexPut's guard is unreachable through its current callers — PostComment
 // only puts top-level rows, and HideOwnComment only puts after clearing the bit —
 // so no lifecycle test can drive it. That makes it look like a permanent gap and
@@ -822,6 +927,12 @@ func TestEveryBoardReadAnswersOnAClaimWithNoBoard(cur realm, t *testing.T) {
 	}
 	if BoardReplies("nb", id, 1) != "" {
 		t.Fatal("replies to a row that does not exist are none, not a panic")
+	}
+	// The parties read is the one that would NOT answer without its own nil
+	// guard: boardPartyRows iterates boardTop unconditionally, and the render
+	// reaches it only past its own empty-board early return.
+	if BoardPartyRows("nb", id) != "" {
+		t.Fatal("a claim with no board has no party rows, and must not panic finding out")
 	}
 	if BoardSize("nb", id) != 0 {
 		t.Fatal("an absent board has size 0")
@@ -1420,17 +1531,26 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 		t.Fatal("the fixture must produce a non-zero score before asserting on it")
 	}
 
-	// --- BoardTop: same five, with the score where the reply count was.
+	// --- BoardTop: same six, with the score where the reply count was.
 	tl := strings.Split(strings.TrimRight(BoardTop("d7w", id, 0, 5), "\n"), "\n")[0]
-	tf := strings.SplitN(tl, "|", 5)
-	if len(tf) != 5 || tf[0] != strconv.FormatUint(top, 10) || tf[3] != "." {
+	tf := strings.SplitN(tl, "|", 6)
+	if len(tf) != 6 || tf[0] != strconv.FormatUint(top, 10) || tf[3] != "." {
 		t.Fatalf("BoardTop contract changed: %q", tl)
 	}
 	if tf[2] != strconv.FormatInt(CommentScore("d7w", id, top), 10) {
 		t.Fatalf("BoardTop field 3 must be the score the ordering uses: %q", tl)
 	}
+	// Split at 5 rather than 6 and field 5 reads "at|text": the length check and
+	// the mark check both still pass, and the height goes unasserted on this
+	// ordering while looking asserted on the other two.
+	if n, err := strconv.ParseInt(tf[4], 10, 64); err != nil || n <= 0 {
+		t.Fatalf("BoardTop field 5 is the block height: %q", tl)
+	}
+	if tf[5] != "a|b|c pipes in the text" {
+		t.Fatalf("BoardTop must recover text containing pipes too: %q", tf[5])
+	}
 
-	// --- BoardReplies: four fields, mark third, text last.
+	// --- BoardReplies: five fields, mark third, height fourth, text last.
 	rl := strings.Split(strings.TrimRight(BoardReplies("d7w", id, top), "\n"), "\n")[0]
 	rf := strings.SplitN(rl, "|", 5)
 	if len(rf) != 5 || rf[0] != strconv.FormatUint(reply, 10) || rf[1] != bob.String() {

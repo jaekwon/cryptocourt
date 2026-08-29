@@ -453,6 +453,74 @@ func BoardReplies(courtSlug string, claimID uint64, parent uint64) string {
 	return b.String()
 }
 
+// BoardPartyRows is the claim's author and its answerer, each with their newest
+// top-level comment — the same two rows the realm's own board page pins above
+// both orderings, served to clients that render their own. Packed:
+//
+//	<id>|<author>|<role>|<mark>|<at>|<text>
+//
+// ROLE STANDS WHERE BoardNewest CARRIES A REPLY COUNT and BoardTop carries a
+// score: field 3 is always what THIS ordering knows about the row. It is spelled
+// out — `author` or `answerer` — and it is packed rather than left to the client
+// to derive, because the two rows are order-dependent only while both exist. An
+// author who has not commented yields a single row that is the ANSWERER'S, and a
+// client that assumed "the first row is the author" would put the wrong name on
+// somebody's argument. That is the mistake a client already makes reading
+// BoardReplies at BoardNewest's arity, and the fix is the same one: say it on
+// the wire rather than leaving it to be inferred.
+//
+// IT SHARES boardPartyRows WITH THE RENDER, so this read and the realm's own
+// page cannot come to disagree about who the parties are.
+//
+// WHY IT EXISTS AT ALL, when a client could scan BoardNewest for the two
+// addresses it already holds: BoardNewest clamps count to 64 and a claim holds
+// up to maxBoardRowsPerClaim rows, so a party who commented FIRST and was buried
+// under later volume is off page one and silently omitted. That is precisely the
+// burial the reserved slot exists to prevent, so the client-side scan fails on
+// the one case the block is for.
+//
+// TOP-LEVEL ONLY, because boardTop holds parents: a party who has only ever
+// REPLIED gets no row here. That is the render's semantics too and deliberately
+// so — a reply pinned away from the thread it answers is an argument with its
+// question removed.
+//
+// THE PINNED ROW IS NOT FILTERED ON ITS MARK. A party's newest comment may be
+// hidden, withheld or purged, and it arrives with the mark set and EMPTY TEXT
+// like every other packing here. A client that renders the badge and then trusts
+// the text prints a name over nothing; the mark is how it knows to print the
+// tombstone instead.
+//
+// The answerer's gate is frozenAt != 0 — what HasAnswer reports, not the mere
+// presence of an address, because an unfrozen answer is not one the realm names
+// as an answer anywhere else either.
+func BoardPartyRows(courtSlug string, claimID uint64) string {
+	cs := mustClaim(mustCourt(courtSlug), claimID)
+	// REQUIRED, not defensive: boardPartyRows iterates boardTop unguarded, and a
+	// claim nobody has commented on has no tree to iterate. The render reaches it
+	// only past its own `boardTop == nil` early return; an exported read has no
+	// such shelter.
+	if cs.boardTop == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range boardPartyRows(cs) {
+		// Derived from the ROW rather than from its position, which is what makes
+		// the single-row case unambiguous. boardPartyRows skips an answerer who is
+		// also the author, so no row can answer to both names.
+		role := "answerer"
+		if r.author == cs.author {
+			role = "author"
+		}
+		b.WriteString(strconv.FormatUint(r.id, 10) + "|" + r.author.String() + "|" + role + "|")
+		if m := boardMark(r); m != "." {
+			b.WriteString(m + "|" + strconv.FormatInt(r.at, 10) + "|\n")
+			continue
+		}
+		b.WriteString(".|" + strconv.FormatInt(r.at, 10) + "|" + boardTextFor(r) + "\n")
+	}
+	return b.String()
+}
+
 // boardTextFor is THE single place a comment's text becomes output, and it is
 // named in check-render-text.py's census for that reason. A comment is
 // attacker-controlled multi-line text on a page people stake money on; every
