@@ -162,6 +162,25 @@ func claimBodyVisible(c *Court, cs *claimState) string {
 	return cs.body
 }
 
+// claimMediaVisible is claimBodyVisible for the evidence a claim carries, and it
+// exists for the same reason: a purged or globally-redacted claim must not answer
+// with the thing the purge was for. Media is the surface most likely to carry
+// exactly that, so a raw accessor here would make the moderation layer decorative
+// in the one place it matters most.
+func claimMediaVisible(c *Court, cs *claimState) []mediaItem {
+	if len(cs.media) == 0 {
+		return nil
+	}
+	if c.mod != nil {
+		if clm := lookupClaimMod(c.mod, cs.id); clm != nil {
+			if clm.purged || clm.global {
+				return nil
+			}
+		}
+	}
+	return cs.media
+}
+
 // claimBodyFor is the body as the ClaimBody read answers it: gated, then
 // sanitize.Block — the STRICT variant, which escapes the doc-spoof markers (ATX
 // headings, blockquote markers, list markers, thematic breaks, setext

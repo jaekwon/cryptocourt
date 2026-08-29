@@ -39,6 +39,12 @@ type claimState struct {
 	// inside the polish window where the TITLE can still be corrected. A claim
 	// filed with a bad body is a claim to close and re-file.
 	body   string
+	// Evidence the claim carries: a sha256 the author committed to and the
+	// places the bytes may be found. media.gno holds the shape and the reasons;
+	// docs/CLAIM_MEDIA.md holds the design. Fixed at creation like the body, and
+	// for the body's reason — an author who could re-point an image could reframe
+	// the claim after watching the market. A moderator can tombstone a slot.
+	media  []mediaItem
 	author address
 
 	deposit  int64 // refundable anti-spam deposit (escrowed)
@@ -340,6 +346,39 @@ func OpenClaimSeeded(cur realm, courtSlug, title string) uint64 {
 }
 
 // openClaim is the shared creation core. A seeded claim waives deposit+fee.
+// OpenClaimPM posts a claim with a body AND media. Additive for OpenClaimP's
+// reason, restated because it keeps being the right one: OpenClaim is called by
+// every committed filetest, txtar and scenario in the tree, and widening a
+// signature breaks all of them for a field most callers will not want.
+//
+// There is deliberately no OpenClaimSeededPM, following the same rule that
+// refused OpenClaimSeededP. Attaching evidence on another author's behalf is a
+// different act from filing it, and it should not ride in as a quiet parameter
+// on an existing waiver path.
+//
+// The media argument's format is documented on parseMediaArg. A fault in it
+// panics rather than dropping the item, because a claim is filed once and cannot
+// be amended: silently discarding evidence would be discovered by the author
+// only after they had paid the deposit for a claim they can no longer fix.
+func OpenClaimPM(cur realm, courtSlug, title, body, media string) uint64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	if courtIsPurged(c) {
+		panic("kourtv2: this court is purged; no new claims may be opened")
+	}
+	// Parsed BEFORE the claim is opened, so a malformed media argument is
+	// refused before the deposit moves. A panic would revert either way; doing
+	// the cheap check first means the escrow transfer is never work thrown away.
+	items := parseMediaArg(media)
+	id := openClaim(c, cur.Previous().Address(), title, body, false)
+	if len(items) > 0 {
+		mustClaim(c, id).media = items
+	}
+	return id
+}
+
 func openClaim(c *Court, who address, title, body string, seeded bool) uint64 {
 	if len(title) == 0 || len(title) > 200 {
 		panic("kourtv2: a claim title is 1..200 characters")
@@ -484,6 +523,19 @@ func ClaimBody(courtSlug string, claimID uint64) string {
 	c := mustCourt(courtSlug)
 	return claimBodyFor(c, mustClaim(c, claimID))
 }
+// ClaimMedia answers with the claim's evidence as one line of JSON, through the
+// same moderation gate the title and the body go through — for the reason stated
+// on ClaimBody, which applies here with more force: media is the likeliest thing
+// a purge is FOR, so a read that returned cs.media directly would defeat the
+// legal-compliance power with a single qeval.
+//
+// One line, because the overlay's qeval parser splits raw output on newlines
+// before it matches a typed value. See encodeMedia.
+func ClaimMedia(courtSlug string, claimID uint64) string {
+	c := mustCourt(courtSlug)
+	return encodeMedia(claimMediaVisible(c, mustClaim(c, claimID)))
+}
+
 func ClaimAuthor(courtSlug string, claimID uint64) address {
 	return mustClaim(mustCourt(courtSlug), claimID).author
 }

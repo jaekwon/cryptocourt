@@ -472,8 +472,14 @@ MINT_N = 3  # see the audit above
 PURGE_VERB = re.compile(r"^func (Purge\w*)\(cur realm", re.M)
 PURGE_AUTH = 'panic("kourtv2: only a global DAO member may purge")'
 PURGE_CODE = "mustCategoryCode("
-PURGE_VERBS_N = 7  # PurgeClaim, PurgeCourt, PurgeModLogRow, PurgeFolder,
-#                    PurgeBoardRow, PurgeCourtLogRow, PurgeBoardRange
+PURGE_VERBS_N = 8  # PurgeClaim, PurgeCourt, PurgeModLogRow, PurgeFolder,
+#                    PurgeBoardRow, PurgeCourtLogRow, PurgeBoardRange,
+#                    PurgeClaimMedia — the eighth, and it carries both gates for
+#                    the reason the others do: a claim's evidence is the surface
+#                    a statutory removal is most likely to be ABOUT, so it needs
+#                    the same threshold and the same category code as the text.
+#                    It removes the court's pointer, not the bytes; the archive
+#                    takes those down separately (docs/CLAIM_MEDIA.md §3.2).
 
 # Arm 16: the purged-court gate, and WHICH side of the line each reader is on.
 #
@@ -516,10 +522,10 @@ CREDIT_HOOK_CALLS_N = 4
 
 PURGED_GATE = re.compile(r"courtIsPurged\(c\)")
 PURGED_GATE_ENTRY = {
-    "OpenClaim", "OpenClaimP", "OpenClaimSeeded",  # a new claim
+    "OpenClaim", "OpenClaimP", "OpenClaimPM", "OpenClaimSeeded",  # a new claim
     "PostComment", "UpvoteComment",                # a new board row
 }
-PURGED_GATE_N = 5
+PURGED_GATE_N = 6  # +1: OpenClaimPM, a claim opened with media
 # CourtPurged, the render/test read, spells it courtIsPurged(mustCourt(...)) and
 # so is not counted. Deliberate: it decides nothing, it reports.
 
