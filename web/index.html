@@ -913,6 +913,22 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .boardkids .boardrow{padding:8px 0}
 @media(max-width:560px){ .boardkids{margin-left:6px; padding-left:10px} }
 
+/* the composer. It sits BELOW the list, so it is set off by a rule rather than
+   a box: a reader scrolling to the end should meet it, not be interrupted by it.
+   The state line above the box is the part that matters — most first-time
+   readers cannot post, and the reason is more use to them than the textarea. */
+.composer{margin:22px 0 0; padding:16px 0 0; border-top:1px solid var(--line-2)}
+.composer-why{margin:0 0 10px; color:var(--ink-2)}
+.composer-lab{display:block; font-size:.9em; color:var(--muted); margin:0 0 4px}
+.composer-text{width:100%; box-sizing:border-box; padding:9px 10px; resize:vertical;
+  font:inherit; color:var(--ink); background:var(--inset);
+  border:1px solid var(--line-2); border-radius:6px}
+.composer-text:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+.composer-foot{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:8px 0 0}
+.composer-count{color:var(--muted); font-size:.9em; font-variant-numeric:tabular-nums}
+.composer-post[disabled]{opacity:.5; cursor:not-allowed}
+.composer-note{margin:10px 0 0; color:var(--muted); font-size:.9em}
+
 /* mobile */
 @media(max-width:820px){
   body{grid-template-columns:1fr}
@@ -1123,6 +1139,11 @@ const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", J
 
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
 const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
+// The comment cap, in BYTES — maxBoardTextLen. Pinned by check-web-constants
+// because the composer's counter is the only warning a writer gets before the
+// chain refuses the transaction, and a counter that disagrees with the realm is
+// worse than none: it lets somebody finish writing and then lose it at signing.
+const MAX_COMMENT_BYTES = 2000;
 
 /* ============================ gno RPC client ============================= */
 /* abci_query(vm/qeval|vm/qrender) over JSON-RPC. data is amino base64; the reply
@@ -2076,6 +2097,15 @@ function btn(label, func, args, cls, sub, send, gate){
     + `</span>`;
 }
 
+/* SHELL-QUOTED, and it has to be now that a comment body is one of these
+   arguments. `--args "` + value + `"` was fine while every argument was a slug,
+   an id or an amount; a comment is up to 2000 bytes of anything a stranger
+   typed, and one apostrophe or quote turned the pasted command into a different
+   command. Single quotes with the '\'' idiom are exact — nothing inside them is
+   interpreted, newlines included — so what a reader pastes is what the Sign
+   button would have signed. */
+const shq = s => "'" + String(s).replace(/'/g, `'\\''`) + "'";
+
 /* The same action as a gnokey command, for people at a terminal. One --args per
    argument; --send only where the function takes payment (Buy). The fee shape
    follows the documented floor: 10M gas at the genesis price costs exactly
@@ -2084,7 +2114,7 @@ function cliCmd(func, args, send){
   let c = (CFG.mode==="demo"? "# demo data — these entities exist on no chain; switch Source to a live node first\n" : "")
         + (func==="Buy"? "# one-way: the GNOT is burned; no sell-back\n" : "")
         + "gnokey maketx call \\\n  --pkgpath \"" + PKG + "\" --func \"" + func + "\"";
-  for(const k of Object.keys(args||{})) c += " \\\n  --args \"" + String(args[k]) + "\"";
+  for(const k of Object.keys(args||{})) c += " \\\n  --args " + shq(args[k]);
   if(func==="Buy") c += " \\\n  --send " + (send||"AMOUNTugnot");
   c += " \\\n  --gas-fee 10000ugnot --gas-wanted 10000000 --broadcast" +
        " \\\n  --chainid \"" + (CFG.chainid||"dev") + "\" --remote \"" + CFG.rpc + "\" YOURKEY";
@@ -2142,6 +2172,55 @@ async function adenaConnect(){
   }
 }
 function adenaDisconnect(){ delete CFG.addr; saveCfg(); reflectWallet(); render(); }
+/* THE CONFIRMATION FOR AUTHORED TEXT — a native <dialog>, because prompt()
+   cannot hold what this is confirming, and the point of confirming is that a
+   person sees it.
+
+   It shows every argument as it will be signed, the body in full, and its size
+   in BYTES against the realm's cap — bytes because maxBoardTextLen is bytes and
+   one emoji is four of them. A counter that measured characters would let
+   somebody write 2000 of them and have the chain refuse the transaction for a
+   reason the page never showed.
+
+   Escape and the backdrop both fire `close`, and both mean no. */
+function confirmAuthored(func, args, bodyKey){
+  return new Promise(resolve => {
+    const dlg = document.createElement("dialog");
+    dlg.className = "helper";
+    const rows = Object.keys(args).map(k => {
+      const v = String(args[k]);
+      if(k !== bodyKey)
+        return `<p class="small"><b>${esc(k)}</b> <span class="mono">${esc(v)}</span></p>`;
+      const n = commentBytes(v);
+      return `<h4>${esc(k)}</h4><pre class="cliblock mono">${esc(v)}</pre>`
+        + `<p class="small" style="color:${n > MAX_COMMENT_BYTES ? "var(--contra)" : "var(--muted)"}">`
+        + `${fmtN(n)} of ${fmtN(MAX_COMMENT_BYTES)} bytes`
+        + (n > MAX_COMMENT_BYTES ? " — the chain will refuse this." : "") + `</p>`;
+    }).join("");
+    dlg.innerHTML = `<div class="hd"><h3>Sign ${esc(func)}</h3>
+        <button type="button" class="pill void" data-cancel>close</button></div>
+      <div class="bd">${rows}
+        <p class="small muted">This is what will be signed. A comment cannot be edited or deleted
+          afterwards — you may withdraw it from the list, and it still reads at its own link.</p>
+        <div class="actions"><button type="button" class="btn" data-go>Sign it</button>
+          <button type="button" class="copybtn" data-cancel>Cancel</button></div></div>`;
+    document.body.appendChild(dlg);
+    let settled = false;
+    const done = v => {
+      if(settled) return;            // data-go closes the dialog, which fires
+      settled = true;                // `close`, which would resolve false after
+      try{ dlg.close(); }catch(_){}  // it had already resolved true.
+      dlg.remove(); resolve(v);
+    };
+    dlg.addEventListener("click", ev => {
+      if(ev.target.closest("[data-go]")) done(true);
+      else if(ev.target.closest("[data-cancel]")) done(false);
+    });
+    dlg.addEventListener("close", () => done(false));
+    dlg.showModal();
+  });
+}
+
 async function adenaSign(func, args, el){
   const a = window.adena;
   if(!a){ adenaAbsent(); return; }
@@ -2163,12 +2242,28 @@ async function adenaSign(func, args, el){
     // Every argument is confirmed before signing: several buttons carry
     // placeholder text (a claim title, a court name) that must never be
     // signed as-is.
+    //
+    // ONE EXCEPTION, ONE BUTTON WIDE. The invariant above defends against
+    // PLACEHOLDER text — prefilled values a human has to actually look at. A
+    // composer textarea has none: its contents are authored by construction, and
+    // a 2000-byte multi-line comment cannot be typed into a single-line prompt at
+    // all. So a control marked data-authored is confirmed as a whole, in a dialog
+    // that can hold what it is confirming. Every other button keeps its prompt.
     const keys = Object.keys(args||{});
     const vals = [];
-    for(const k of keys){
-      const v = window.prompt(func+" — "+k+":", String(args[k]));
-      if(v===null){ note("Cancelled — nothing was signed."); return; }
-      vals.push(v.trim());
+    if(el.dataset.authored){
+      if(!await confirmAuthored(func, args||{}, el.dataset.bodykey || "text")){
+        note("Cancelled — nothing was signed."); return; }
+      // NOT trimmed here: the dialog showed these exact bytes, and signing
+      // something other than what was shown is the failure this path exists to
+      // avoid. The composer trims before it builds the arguments.
+      for(const k of keys) vals.push(String(args[k]));
+    } else {
+      for(const k of keys){
+        const v = window.prompt(func+" — "+k+":", String(args[k]));
+        if(v===null){ note("Cancelled — nothing was signed."); return; }
+        vals.push(v.trim());
+      }
     }
     let send = "";
     if(func==="Buy"){
@@ -2203,6 +2298,38 @@ document.addEventListener("click",(ev)=>{
   const t = ev.target.closest(".signbtn"); if(!t) return;
   let args = {}; try{ args = JSON.parse(t.dataset.args||"{}"); }catch(_){}
   adenaSign(t.dataset.func, args, t);
+});
+
+/* The composer's two handlers. The counter is in BYTES so it agrees with the cap
+   the chain enforces, and the button is disabled on exactly the two conditions
+   the realm refuses on: nothing written, or more than maxBoardTextLen. */
+document.addEventListener("input", (ev)=>{
+  const ta = ev.target.closest(".composer-text"); if(!ta) return;
+  const n = commentBytes(ta.value.trim());
+  const box = ta.closest(".composer");
+  const lab = box && box.querySelector(".composer-count");
+  const btn = box && box.querySelector(".composer-post");
+  if(lab){
+    lab.textContent = fmtN(n) + " of " + fmtN(MAX_COMMENT_BYTES) + " bytes";
+    lab.style.color = n > MAX_COMMENT_BYTES ? "var(--contra)" : "";
+  }
+  if(btn) btn.disabled = !(n > 0 && n <= MAX_COMMENT_BYTES);
+});
+document.addEventListener("click", (ev)=>{
+  const b = ev.target.closest(".composer-post"); if(!b) return;
+  const box = b.closest(".composer");
+  const ta = box && box.querySelector(".composer-text"); if(!ta) return;
+  // TRIMMED HERE, before the arguments exist, so the confirmation shows the
+  // exact bytes that get signed. Trimming afterwards would sign something other
+  // than what a person was shown and agreed to.
+  const text = ta.value.trim(), n = commentBytes(text);
+  if(!(n > 0 && n <= MAX_COMMENT_BYTES)) return;
+  adenaSign("PostComment", {
+    courtSlug: ta.dataset.slug,
+    claimID:   ta.dataset.claim,
+    parentRow: ta.dataset.parent || "0",
+    text
+  }, b);
 });
 
 function reflectWallet(){
@@ -5945,6 +6072,117 @@ async function claimTitleOf(slug, id){
   return await one(`ClaimTitle(${gstr(slug)},${id})`).then(unesc).catch(()=>null);
 }
 
+
+/* ===================== the composer: who may write, and why ==============
+   EVERY BRANCH IS A DIFFERENT PERSON TURNED AWAY FOR A DIFFERENT REASON, and
+   getting one wrong tells somebody a false thing about their own account. Pure,
+   so each branch is a test rather than a screenshot.
+
+   TWO TRAPS LIVE IN HERE, both from reading posting.gno rather than guessing:
+
+   1. PassPrice == 0 HAS TWO CAUSES and the price alone cannot separate them. A
+      court that has not sealed an epoch has no price yet; a court with zero
+      supply also has none, AND `postLevel` evaluates `s >= sup*t1Bps/10_000` as
+      `0 >= 0` and hands EVERY address level 3. Opposite situations, identical
+      price. PostLevel is what tells them apart.
+
+   2. "PostsAvailable == 0 means you are out for today" MISFIRES. PostsAvailable
+      returns 0 for an address with no standing row AT ALL — and in a zero-supply
+      court that address is simultaneously level 3, so a first-time visitor would
+      be told they had used posts they never had. In that court the allowance is
+      not readable from here, so this says so instead of asserting. The realm
+      creates the row on the first write and decides at signing.
+
+   A person is never told they have spent something they have not. */
+function composerState(st){
+  const at = h => "block " + fmtN(h);
+  if(!st.boardOpen)
+    return {can:false, why:"This claim has a verdict, so its board is closed. The comments stay readable."};
+  if(st.claimFrozenUntil > st.now)
+    return {can:false, why:"The court has paused this board until " + at(st.claimFrozenUntil) + "."};
+  if(!st.addr)
+    return {can:false, why:"Connect a wallet to comment.", connect:true};
+  if(st.frozenUntil > st.now)
+    return {can:false, why:"Your posting in this court is paused until " + at(st.frozenUntil) + "."};
+  if(!(st.level > 0))
+    return st.passPrice > 0
+      ? {can:false, why:"You need standing in this court, or an entry pass.", buy:st.passPrice}
+      : {can:false, why:"This court has not sealed an epoch yet, so an entry pass has no price to quote. "
+                      + "Earn standing, or come back once it has."};
+  if(st.posts > 0)
+    return {can:true, why:"You can post " + st.posts + " more " + (st.posts === 1 ? "comment" : "comments") + " today."};
+  if(st.supply === 0)
+    return {can:true, why:"This court has no supply yet, so a daily allowance cannot be read here. "
+                       + "The court decides when you sign."};
+  return {can:false, why:"You have used today's " + st.perDay + " " + (st.perDay === 1 ? "comment" : "comments") + "."};
+}
+
+/* The box. `parent` is 0 for a new comment; the realm enforces depth one, so a
+   reply to a reply is not offered. */
+function composerHtml(slug, id, state, parent){
+  const head = `<p class="composer-why">${esc(state.why)}</p>`;
+  const extra = state.connect
+    ? `<p class="composer-why"><button type="button" class="btn" data-walletconnect>Connect Adena</button></p>`
+    : state.buy
+      ? `<p class="composer-why">An entry pass costs ${esc(cc(state.buy, slug))}, burned. `
+        + `<a href="#/c/${esc(slug)}">Buy one from the court page</a>.</p>`
+      : "";
+  if(!state.can) return `<section class="composer">${head}${extra}</section>`;
+  return `<section class="composer">${head}
+    <label class="composer-lab" for="composer-text">Your comment</label>
+    <textarea id="composer-text" class="composer-text" rows="5" maxlength="${MAX_COMMENT_BYTES}"
+      data-slug="${esc(slug)}" data-claim="${esc(String(id))}" data-parent="${esc(String(parent || 0))}"
+      placeholder="What does the record actually say?"></textarea>
+    <div class="composer-foot">
+      <span class="composer-count" id="composer-count">0 of ${fmtN(MAX_COMMENT_BYTES)} bytes</span>
+      <button type="button" class="btn composer-post" data-authored="1" disabled>Review and sign</button>
+    </div>
+    <p class="composer-note">Comments cannot be edited or deleted. You may withdraw one from the
+      list; it still reads at its own link.</p></section>`;
+}
+
+/* BYTES, NOT CHARACTERS, because the realm's cap is bytes (maxBoardTextLen) and
+   one emoji is four of them. A counter that measured characters would let
+   somebody write 2000 characters, watch it turn red at nothing, and have the
+   transaction refused by the chain for a reason the page never showed. */
+const commentBytes = s => new TextEncoder().encode(String(s == null ? "" : s)).length;
+
+/* ---- the reads behind it ---- */
+async function composerReads(slug, id){
+  const s = gstr(slug), a = CFG.addr;
+  const base = {addr:a, now:0, boardOpen:true, claimFrozenUntil:0, frozenUntil:0,
+                level:0, posts:0, perDay:0, passPrice:0, supply:null};
+  if(!isLive()){
+    // The sample answers what it can and no more: a demo board is open or not,
+    // and no wallet is connected to it.
+    const b = demoBoard(slug, id);
+    return Object.assign(base, {addr:null, boardOpen: b ? b.open !== false : await boardOpenOf(slug, id)});
+  }
+  const [now, open, claimFrozen] = await Promise.all([
+    chainHeight().then(h => h || 0).catch(()=>0),
+    boardOpenOf(slug, id).catch(()=>true),
+    one(`ClaimBoardFrozenUntil(${s},${id})`).catch(()=>0)]);
+  Object.assign(base, {now, boardOpen:open, claimFrozenUntil:claimFrozen});
+  if(!a) return base;
+  const [frozen, level, posts, perDay] = await Promise.all([
+    one(`BoardFrozenUntil(${s},${gstr(a)})`).catch(()=>0),
+    one(`PostLevel(${s},${gstr(a)})`).catch(()=>0),
+    one(`PostsAvailable(${s},${gstr(a)})`).catch(()=>0),
+    one(`PostsPerDay(${s},${gstr(a)})`).catch(()=>0)]);
+  Object.assign(base, {frozenUntil:frozen, level, posts, perDay});
+  // CONDITIONAL, both of them: a price only matters when there is no level to
+  // spend, and the supply only when the allowance reads zero at a level above
+  // zero — which is the one case the two zero-causes are indistinguishable in.
+  if(!(level > 0)) base.passPrice = await one(`PassPrice(${s})`).catch(()=>0);
+  else if(!(posts > 0)) base.supply = await one(`CoinSupply(${s})`).catch(()=>null);
+  return base;
+}
+async function fillComposer(slug, id, parent){
+  const slot = document.getElementById("composer"); if(!slot) return;
+  try{ slot.innerHTML = composerHtml(slug, id, composerState(await composerReads(slug, id)), parent || 0); }
+  catch(_){ /* an unreadable court leaves the board readable; it just cannot be written to here */ }
+}
+
 const BOARD_PAGE = 25;
 
 async function boardView(slug, idS, ranked){
@@ -5977,7 +6215,9 @@ async function boardView(slug, idS, ranked){
   if(!(n > 0)){
     main.innerHTML = head + `<div class="empty"><p>${open
       ? "No comments yet. The first one is worth writing."
-      : "No comments were written while this board was open."}</p></div>`;
+      : "No comments were written while this board was open."}</p></div>`
+      + `<div id="composer"></div>`;
+    fillComposer(slug, id, 0);
     return;
   }
 
@@ -6011,7 +6251,13 @@ async function boardView(slug, idS, ranked){
           : `<a href="#/raw/${esc(slug)}/${id}">the chain's own page</a> serves the rest.`)
       + `</p>`
     : "";
-  main.innerHTML = head + `<section class="boardlist">` + body + tail + `</section>`;
+  // BELOW THE LIST, and only on Newest. A reader arrived to read; the box that
+  // asks them to write belongs after what they came for. The ranked page is a
+  // view of the same board — two composers on two routes for one board would be
+  // two places to lose a draft.
+  main.innerHTML = head + `<section class="boardlist">` + body + tail + `</section>`
+    + (ranked ? "" : `<div id="composer"></div>`);
+  if(!ranked) fillComposer(slug, id, 0);
 }
 on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board$/,      async (slug,id)=> boardView(slug, id, false));
 on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board\/top$/, async (slug,id)=> boardView(slug, id, true));

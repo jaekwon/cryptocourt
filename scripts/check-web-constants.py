@@ -36,6 +36,12 @@ WEB = os.path.join(REPO, "web", "index.html")
 # web symbol -> (realm file, the constant's name there)
 MIRRORS = {
     "WEEK": ("realm/r/kourtv2/court.gno", "periodBlocks"),
+    # The composer's byte counter. Same argument as WEEK's, one step worse: this
+    # number is not passed into a read, it is shown to somebody who is still
+    # typing. If it drifts above the realm's, they finish a comment and lose it
+    # at signing; below, they are stopped from writing something that would have
+    # been accepted. Either way the page is the only warning they get.
+    "MAX_COMMENT_BYTES": ("realm/r/kourtv2/board.gno", "maxBoardTextLen"),
 }
 
 
