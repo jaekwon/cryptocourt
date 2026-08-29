@@ -1357,9 +1357,13 @@ func TestBothOrderingsClampThePageTheyWillServe(cur realm, t *testing.T) {
 //
 // The contract, stated once here so it is testable rather than inferred:
 //
-//	BoardNewest   id | author | replyCount | mark | text     (5 fields)
-//	BoardTop      id | author | score      | mark | text     (5 fields)
-//	BoardReplies  id | author | mark       | text            (4 fields)
+//	BoardNewest   id | author | replyCount | mark | at | text   (6 fields)
+//	BoardTop      id | author | score      | mark | at | text   (6 fields)
+//	BoardReplies  id | author | mark       | at   | text        (5 fields)
+//
+// `at` is the block height the row landed. It sits BEFORE the text so text stays
+// last; it was added because no exported read carried it, leaving a client able
+// to order by recency and unable to date a single row.
 //
 // TEXT IS ALWAYS LAST and MARK ALWAYS SECOND-TO-LAST. That ordering is what lets
 // text carry a pipe unescaped: a bounded split (SplitN with the field count)
@@ -1386,9 +1390,9 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 
 	// --- BoardNewest: five fields, text last, and the pipes survive whole.
 	line := strings.Split(strings.TrimRight(BoardNewest("d7w", id, 0, 5), "\n"), "\n")[0]
-	f := strings.SplitN(line, "|", 5)
-	if len(f) != 5 {
-		t.Fatalf("BoardNewest must publish 5 fields, got %d: %q", len(f), line)
+	f := strings.SplitN(line, "|", 6)
+	if len(f) != 6 {
+		t.Fatalf("BoardNewest must publish 6 fields, got %d: %q", len(f), line)
 	}
 	if f[0] != strconv.FormatUint(top, 10) || f[1] != alice.String() {
 		t.Fatalf("BoardNewest field order changed: %q", line)
@@ -1399,8 +1403,13 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 	if f[3] != "." {
 		t.Fatalf("BoardNewest field 4 is the mark: %q", line)
 	}
-	if f[4] != "a|b|c pipes in the text" {
-		t.Fatalf("a bounded split must recover text containing pipes: %q", f[4])
+	// The height is a real number, not an empty field nobody filled: a row cannot
+	// have landed at block 0, so this fails if `at` is ever packed unset.
+	if n, err := strconv.ParseInt(f[4], 10, 64); err != nil || n <= 0 {
+		t.Fatalf("BoardNewest field 5 is the block height: %q", line)
+	}
+	if f[5] != "a|b|c pipes in the text" {
+		t.Fatalf("a bounded split must recover text containing pipes: %q", f[5])
 	}
 
 	// A REAL SCORE FIRST. Asserting field 3 while every score is 0 proves nothing:
@@ -1423,11 +1432,16 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 
 	// --- BoardReplies: four fields, mark third, text last.
 	rl := strings.Split(strings.TrimRight(BoardReplies("d7w", id, top), "\n"), "\n")[0]
-	rf := strings.SplitN(rl, "|", 4)
-	if len(rf) != 4 || rf[0] != strconv.FormatUint(reply, 10) || rf[1] != bob.String() {
+	rf := strings.SplitN(rl, "|", 5)
+	if len(rf) != 5 || rf[0] != strconv.FormatUint(reply, 10) || rf[1] != bob.String() {
 		t.Fatalf("BoardReplies contract changed: %q", rl)
 	}
-	if rf[2] != "." || rf[3] != "a reply|with|pipes" {
+	// A reply carries no reply count, so its mark sits one field left of where
+	// BoardNewest puts one — and `at` sits between the mark and the text here too.
+	if n, err := strconv.ParseInt(rf[3], 10, 64); err != nil || n <= 0 {
+		t.Fatalf("BoardReplies field 4 is the block height: %q", rl)
+	}
+	if rf[2] != "." || rf[4] != "a reply|with|pipes" {
 		t.Fatalf("BoardReplies mark/text positions changed: %q", rl)
 	}
 
@@ -1447,9 +1461,9 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 	// is a separate writer from the two orderings and drifts on its own.
 	testing.SetRealm(testing.NewUserRealm(bob))
 	HideOwnComment(cross(cur), "d7w", id, reply, true)
-	hr := strings.SplitN(strings.Split(strings.TrimRight(BoardReplies("d7w", id, top), "\n"), "\n")[0], "|", 4)
-	if len(hr) != 4 || hr[2] != "h" || hr[3] != "" {
-		t.Fatalf("a withheld reply must keep 4 fields with an empty text field: %q", hr)
+	hr := strings.SplitN(strings.Split(strings.TrimRight(BoardReplies("d7w", id, top), "\n"), "\n")[0], "|", 5)
+	if len(hr) != 5 || hr[2] != "h" || hr[4] != "" {
+		t.Fatalf("a withheld reply must keep 5 fields with an empty text field: %q", hr)
 	}
 	testing.SetRealm(testing.NewUserRealm(bob))
 	HideOwnComment(cross(cur), "d7w", id, reply, false)
@@ -1458,7 +1472,7 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 	// field present but empty so the field count never moves.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	HideOwnComment(cross(cur), "d7w", id, top, true)
-	if f := strings.SplitN(strings.Split(BoardNewest("d7w", id, 0, 5), "\n")[0], "|", 5); f[3] != "h" || f[4] != "" {
+	if f := strings.SplitN(strings.Split(BoardNewest("d7w", id, 0, 5), "\n")[0], "|", 6); f[3] != "h" || f[5] != "" {
 		t.Fatalf("a hidden row must read mark h with empty text: %q", f)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -1467,14 +1481,14 @@ func TestTheWireContractIsFixed(cur realm, t *testing.T) {
 	dadmin := ensureGlobalDAO().admin
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	GlobalHideRow(cross(cur), "d7w", id, top, "dmca")
-	if f := strings.SplitN(strings.Split(BoardNewest("d7w", id, 0, 5), "\n")[0], "|", 5); f[3] != "g" || f[4] != "" {
+	if f := strings.SplitN(strings.Split(BoardNewest("d7w", id, 0, 5), "\n")[0], "|", 6); f[3] != "g" || f[5] != "" {
 		t.Fatalf("a redacted row must read mark g with empty text: %q", f)
 	}
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	GlobalClearRow(cross(cur), "d7w", id, top)
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	PurgeBoardRow(cross(cur), "d7w", id, top, "csam")
-	if f := strings.SplitN(strings.Split(BoardNewest("d7w", id, 0, 5), "\n")[0], "|", 5); f[3] != "x" || f[4] != "" {
+	if f := strings.SplitN(strings.Split(BoardNewest("d7w", id, 0, 5), "\n")[0], "|", 6); f[3] != "x" || f[5] != "" {
 		t.Fatalf("a purged row must read mark x with empty text: %q", f)
 	}
 	// And BoardRowState agrees with the wire, which is the whole point of it.

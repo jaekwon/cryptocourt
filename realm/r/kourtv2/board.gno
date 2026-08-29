@@ -343,7 +343,12 @@ func CommentsWrittenBy(courtSlug string, claimID uint64, who address) int64 {
 // BoardNewest is one page of top-level comments, newest first, packed one row
 // per line:
 //
-//	<id>|<author>|<replies>|<h|.>|<text>
+//	<id>|<author>|<replies>|<mark>|<at>|<text>
+//
+// `at` is the block height the comment landed. It is rendered on the row's own
+// page and was carried by NO exported read, so a client could offer "newest
+// first" and be unable to date a single row — half a citation, on a claim whose
+// market moves under it.
 //
 // NEWEST-FIRST IS THE ORDERING THAT CARRIES THE GUARANTEE. It is append-only, so
 // a prefix of it is stable across reads and an offset a client held from an
@@ -370,10 +375,10 @@ func BoardNewest(courtSlug string, claimID uint64, offset, count int) string {
 		b.WriteString(strconv.FormatUint(r.id, 10) + "|" + r.author.String() + "|" +
 			strconv.Itoa(boardReplyCount(cs, r.id)) + "|")
 		if m := boardMark(r); m != "." {
-			b.WriteString(m + "|\n")
+			b.WriteString(m + "|" + strconv.FormatInt(r.at, 10) + "|\n")
 			return false
 		}
-		b.WriteString(".|" + boardTextFor(r) + "\n")
+		b.WriteString(".|" + strconv.FormatInt(r.at, 10) + "|" + boardTextFor(r) + "\n")
 		return false
 	})
 	return b.String()
@@ -416,7 +421,13 @@ func boardReplyCount(cs *claimState, parent uint64) int {
 func boardKeyMine(pre, k string) bool { return len(k) == len(pre)+8 }
 
 // BoardReplies is one parent's direct replies, oldest first — a reply thread
-// reads in order, unlike the top-level list.
+// reads in order, unlike the top-level list. Packed:
+//
+//	<id>|<author>|<mark>|<at>|<text>
+//
+// FOUR FIELDS BEFORE THE TEXT, not five: a reply carries no reply count of its
+// own, because depth stops at one. A client that reuses BoardNewest's arity here
+// reads this row's MARK as a reply count.
 func BoardReplies(courtSlug string, claimID uint64, parent uint64) string {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	if cs.boardKids == nil {
@@ -432,9 +443,9 @@ func BoardReplies(courtSlug string, claimID uint64, parent uint64) string {
 		r := v.(*boardRow)
 		b.WriteString(strconv.FormatUint(r.id, 10) + "|" + r.author.String() + "|")
 		if m := boardMark(r); m != "." {
-			b.WriteString(m + "|\n")
+			b.WriteString(m + "|" + strconv.FormatInt(r.at, 10) + "|\n")
 		} else {
-			b.WriteString(".|" + boardTextFor(r) + "\n")
+			b.WriteString(".|" + strconv.FormatInt(r.at, 10) + "|" + boardTextFor(r) + "\n")
 		}
 		n++
 		return n >= maxBoardRepliesShown
@@ -984,8 +995,12 @@ func CommentScore(courtSlug string, claimID uint64, rowID uint64) int64 {
 	return mustBoardRow(mustClaim(mustCourt(courtSlug), claimID), rowID).score
 }
 
-// BoardTop is one page of top-level comments, best first, packed as BoardNewest
-// is with the score in place of the reply count.
+// BoardTop is one page of top-level comments, best first:
+//
+//	<id>|<author>|<score>|<mark>|<at>|<text>
+//
+// The SCORE stands where BoardNewest carries a reply count, and the mark is
+// always "." — so the two orderings are the same arity and NOT the same fields.
 //
 // No hidden rows appear, because none are in the index — see scoreIndexPut.
 func BoardTop(courtSlug string, claimID uint64, offset, count int) string {
@@ -1000,7 +1015,8 @@ func BoardTop(courtSlug string, claimID uint64, offset, count int) string {
 	cs.boardScore.IterateByOffset(offset, count, func(_ string, v any) bool {
 		r := v.(*boardRow)
 		b.WriteString(strconv.FormatUint(r.id, 10) + "|" + r.author.String() + "|" +
-			strconv.FormatInt(r.score, 10) + "|.|" + boardTextFor(r) + "\n")
+			strconv.FormatInt(r.score, 10) + "|.|" + strconv.FormatInt(r.at, 10) +
+			"|" + boardTextFor(r) + "\n")
 		return false
 	})
 	return b.String()

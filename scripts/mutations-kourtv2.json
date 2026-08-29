@@ -10435,22 +10435,22 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "BoardNewest: a withheld row keeps the field count (mark, empty text)",
-  "find": "\t\t\tb.WriteString(m + \"|\\n\")\n\t\t\treturn false\n",
-  "replace": "\t\t\tb.WriteString(m + \"\\n\")\n\t\t\treturn false\n"
+  "find": "\t\t\tb.WriteString(m + \"|\" + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t\treturn false\n",
+  "replace": "\t\t\tb.WriteString(m + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t\treturn false\n"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "BoardTop: field 3 is the score the ordering uses",
-  "find": "\t\t\tstrconv.FormatInt(r.score, 10) + \"|.|\" + boardTextFor(r) + \"\\n\")",
-  "replace": "\t\t\t\"0|.|\" + boardTextFor(r) + \"\\n\")"
+  "find": "\t\t\tstrconv.FormatInt(r.score, 10) + \"|.|\" + strconv.FormatInt(r.at, 10) +\n\t\t\t\"|\" + boardTextFor(r) + \"\\n\")",
+  "replace": "\t\t\t\"0\" + \"|.|\" + strconv.FormatInt(r.at, 10) +\n\t\t\t\"|\" + boardTextFor(r) + \"\\n\")"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "BoardReplies: a withheld reply keeps the field count",
-  "find": "\t\t\tb.WriteString(m + \"|\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\".|\" + boardTextFor(r) + \"\\n\")",
-  "replace": "\t\t\tb.WriteString(m + \"\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\".|\" + boardTextFor(r) + \"\\n\")"
+  "find": "\t\t\tb.WriteString(m + \"|\" + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\".|\" + strconv.FormatInt(r.at, 10) + \"|\" + boardTextFor(r) + \"\\n\")\n\t\t}",
+  "replace": "\t\t\tb.WriteString(m + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t} else {\n\t\t\tb.WriteString(\".|\" + strconv.FormatInt(r.at, 10) + \"|\" + boardTextFor(r) + \"\\n\")\n\t\t}"
  },
  {
   "pkg": "kourtv2",
@@ -11655,5 +11655,12 @@
   "label": "v0.58 answered: the side is hardcoded YES",
   "find": "\t\treturn \"answered \" + sideName(int(cs.answer)) +",
   "replace": "\t\treturn \"answered \" + sideName(sideYES) +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "BoardNewest: every comment is dated block 0",
+  "find": "\t\t\tstrconv.Itoa(boardReplyCount(cs, r.id)) + \"|\")\n\t\tif m := boardMark(r); m != \".\" {\n\t\t\tb.WriteString(m + \"|\" + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t\treturn false\n\t\t}\n\t\tb.WriteString(\".|\" + strconv.FormatInt(r.at, 10) + \"|\" + boardTextFor(r) + \"\\n\")",
+  "replace": "\t\t\tstrconv.Itoa(boardReplyCount(cs, r.id)) + \"|\")\n\t\tif m := boardMark(r); m != \".\" {\n\t\t\tb.WriteString(m + \"|\" + strconv.FormatInt(r.at, 10) + \"|\\n\")\n\t\t\treturn false\n\t\t}\n\t\tb.WriteString(\".|0|\" + boardTextFor(r) + \"\\n\")"
  }
 ]
