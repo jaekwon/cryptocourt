@@ -1144,14 +1144,23 @@ const tup = async expr => parseTyped(await qeval(expr));
 const gstr = s => JSON.stringify(String(s));   // gno string literal
 
 /* ======================== the comment board's wire ======================= */
-/* THREE PACKINGS, NOT ONE, and board_test.gno states the contract:
+/* FOUR PACKINGS, NOT ONE, and board_test.gno states the contract:
  *
- *     BoardNewest   id | author | replyCount | mark | text     (5 fields)
- *     BoardTop      id | author | score      | mark | text     (5 fields)
- *     BoardReplies  id | author | mark       | text            (4 fields)
+ *     BoardNewest     id | author | replyCount | mark | at | text   (6 fields)
+ *     BoardTop        id | author | score      | mark | at | text   (6 fields)
+ *     BoardPartyRows  id | author | role       | mark | at | text   (6 fields)
+ *     BoardReplies    id | author | mark       | at   | text        (5 fields)
  *
  * A shared parser reads a reply's MARK as its reply count. The field count is
  * the argument, and each caller passes its own.
+ *
+ * `at` is the block the comment landed in. It sits BEFORE the text on every
+ * packing because the text is the field that may contain an unescaped pipe, and
+ * last is the only position a bounded split recovers whole.
+ *
+ * `role` is spelled out — `author` or `answerer` — and must be READ, never
+ * inferred from position: the realm returns one party row when only one party
+ * has commented, and it may be either of them.
  *
  * The mark alphabet is ". h g x" — and `h` is the DISJUNCTION of hidden-by-author
  * and hidden-by-moderator (boardMark, board.gno). The chain does not tell a
@@ -1217,6 +1226,27 @@ function boardRows(out, n, names){
     return row;
   }).filter(Boolean);
 }
+/* THE TYPED WRAPPER, REMOVED WITHOUT parseTyped — which is the whole point of
+   this function existing rather than the board calling one().
+
+   qeval answers `("…" string)`, and parseTyped's handling of the quoted body is
+   `try JSON.parse, catch → raw.slice(1,-1)`. That fallback is not a degraded
+   result, it is a WRONG one: it leaves every escape literal, INCLUDING the \n
+   that separates rows. strconv.Quote emits \a, \v and \xNN for bytes JSON
+   refuses, so one comment containing one such byte collapses the entire board
+   into a single garbage row — for every reader, not just its author. Comment
+   text is attacker-controlled up to 2000 bytes, so that is a choice somebody
+   makes, not an accident somebody has.
+
+   So: unwrap the type, hand the STILL-QUOTED body to goUnquote, which decodes
+   Go's escapes properly. Anything the wrapper does not match is passed through
+   quoted-or-not for goUnquote to judge. */
+function boardUnwrap(out){
+  const s = String(out == null ? "" : out).trim();
+  const m = s.match(/^\((.*)\s+string\)$/s);
+  return goUnquote(m ? m[1] : s);
+}
+
 /* FOUR PACKINGS, THREE ARITIES, AND THEY ARE NOT INTERCHANGEABLE. Field 3 is
    always what THAT ordering knows about the row — a reply count, a score, or a
    role — so a line read at the wrong arity does not fail, it MIS-READS: a reply's
@@ -1228,6 +1258,29 @@ const boardNewestRows  = out => boardRows(out, 6, ["id","author","replies","mark
 const boardTopRows     = out => boardRows(out, 6, ["id","author","score","mark","at","text"]);
 const boardReplyRows   = out => boardRows(out, 5, ["id","author","mark","at","text"]);
 const boardPartyRows   = out => boardRows(out, 6, ["id","author","role","mark","at","text"]);
+
+/* THE FOUR READS. qeval() DIRECTLY — not one(), not tup(). Both route through
+   parseTyped, whose fallback is the hazard boardUnwrap and goUnquote exist to
+   avoid; a board that read through one() would be defended by a parser it never
+   reaches.
+
+   These quote their own slug, which the other reads in this file do not — they
+   take a pre-quoted `s`. The deviation is deliberate: a reader that quotes its
+   own argument cannot be called wrongly, and a court slug is chain data that
+   arrives in the URL. gstr is JSON.stringify, so a slug carrying a quote becomes
+   a gno string literal instead of an expression.
+
+   Each ordering gets its OWN reader bound to its own arity, so there is no
+   shared entry point through which a caller can pass the wrong field count. */
+const boardWire = async expr => boardUnwrap(await qeval(expr));
+const readBoardNewest  = (slug, id, off, n) =>
+  boardWire(`BoardNewest(${gstr(slug)},${id},${off},${n})`).then(boardNewestRows);
+const readBoardTop     = (slug, id, off, n) =>
+  boardWire(`BoardTop(${gstr(slug)},${id},${off},${n})`).then(boardTopRows);
+const readBoardReplies = (slug, id, parent) =>
+  boardWire(`BoardReplies(${gstr(slug)},${id},${parent})`).then(boardReplyRows);
+const readBoardParties = (slug, id) =>
+  boardWire(`BoardPartyRows(${gstr(slug)},${id})`).then(boardPartyRows);
 
 /* ============================ demo dataset ============================== */
 /* A faithful sample so every screen and state renders offline, in the realm's

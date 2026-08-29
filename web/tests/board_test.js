@@ -8,11 +8,17 @@
 // break a parser: pipes, newlines, forged escapes, and bytes that Go's quoting
 // escapes in a form JSON refuses.
 //
-// Three of the four cases below were found by reading board.gno rather than by
-// imagination, and each one silently corrupts a page rather than failing loudly:
-// a truncated split eats the end of a sentence, a naive unescape re-forges an
-// escape the realm made unforgeable, and a JSON.parse fallback turns one bad
+// The hazards here were found by reading board.gno rather than by imagination,
+// and every one silently corrupts a page rather than failing loudly: a truncated
+// split eats the end of a sentence, a naive unescape re-forges an escape the
+// realm made unforgeable, a line read at the wrong arity welds a block height
+// onto the front of somebody's argument, and a JSON.parse fallback turns one bad
 // comment into a whole board of garbage.
+//
+// The last two blocks test the READ path — boardUnwrap and the four readers —
+// and the parseTyped case is written as a comparison rather than an assertion:
+// it runs the shipped alternative against the same input and shows it collapsing
+// the board, so the defence is measured against what it replaced.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
 function slice(from, to){
@@ -22,6 +28,15 @@ function slice(from, to){
 }
 eval(slice('function wireFields(', '\nconst boardNewestRows'));
 eval(slice('const boardNewestRows', '\n\n').replace(/^const /gm, 'var '));
+// parseTyped is pulled in NOT to test it but to demonstrate against it: the last
+// block below shows what the board would read if it went through one().
+eval(slice('function parseTyped(', '\nconst one ='));
+// The readers, with the RPC stubbed. Declaring these before the eval so the
+// arrow functions it defines can close over them.
+let LASTEXPR = null, QREPLY = '';
+const qeval = async e => { LASTEXPR = e; return QREPLY; };
+const gstr  = s => JSON.stringify(String(s));
+eval(slice('const boardWire', '\n\n/* =').replace(/^const /gm, 'var '));
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
@@ -117,5 +132,56 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      boardNewestRows('1|a|0|.|9|x\n\n2|b|0|.|10|y').length === 2);
 }
 
-console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
-process.exit(fail?1:0);
+// ---- the typed wrapper, and the path it exists to avoid -------------------
+// qeval answers `("…" string)`. parseTyped's fallback for a body JSON refuses is
+// raw.slice(1,-1) — every escape LEFT LITERAL, including the \n between rows.
+// This is not a degraded read, it is a wrong one, and it is reachable by writing
+// a comment: strconv.Quote emits \x07 for a byte JSON will not take.
+{
+  const hostile = '("5|g1a|0|.|77|bell\\x07here\\n6|g1b|0|.|78|second row" string)';
+  ok("the wrapper is removed and the body decoded",
+     boardUnwrap('("hello" string)') === "hello");
+  ok("an empty result is an empty string, not the word undefined",
+     boardUnwrap("") === "" && boardUnwrap(null) === "");
+  // MEASURED AGAINST THE REAL ALTERNATIVE, not asserted about it.
+  ok("parseTyped would collapse this board into ONE row",
+     parseTyped(hostile)[0].split("\n").length === 1);
+  ok("boardUnwrap recovers both rows", boardUnwrap(hostile).split("\n").length === 2);
+  ok("...and the bell byte survives as a byte", boardUnwrap(hostile).includes("\x07"));
+  const rows = boardNewestRows(boardUnwrap(hostile));
+  ok("...so both rows parse, with the right authors",
+     rows.length === 2 && rows[0].author === "g1a" && rows[1].author === "g1b");
+}
+
+// ---- the readers ----------------------------------------------------------
+(async () => {
+  // Each reader quotes its OWN slug. A court slug arrives in the URL, so a slug
+  // carrying a quote must become a gno string literal, never an expression.
+  QREPLY = '("9|g1xyz|h|4102|withheld" string)';
+  const reps = await readBoardReplies('cov"id', 7, 3);
+  ok("readBoardReplies quotes the slug it was handed",
+     LASTEXPR === 'BoardReplies("cov\\"id",7,3)');
+  ok("...and reads it at the 5-field arity", reps.length === 1 && reps[0].mark === "h" && reps[0].at === 4102);
+
+  QREPLY = '("4|g1abc|answerer|.|91|the denominator the WHO published" string)';
+  const parties = await readBoardParties("covid", 7);
+  ok("readBoardParties names the realm read", LASTEXPR === 'BoardPartyRows("covid",7)');
+  ok("...and returns a ROLE, not a reply count", parties[0].role === "answerer");
+
+  QREPLY = '("7|g1abc|3|.|88560|the ratio is 4|3 by their own table" string)';
+  // DISTINCTIVE offset and count on purpose. With 0 and 25 this assertion
+  // survived an ablation that hardcoded `,0,25)` — the fixture's arguments
+  // happened to BE the mutant's constants, so paging looked held and was not.
+  const newest = await readBoardNewest("covid", 7, 50, 3);
+  ok("readBoardNewest passes offset and count through",
+     LASTEXPR === 'BoardNewest("covid",7,50,3)');
+  ok("...and the pipe in the text still survives the round trip",
+     newest[0].text === "the ratio is 4|3 by their own table");
+
+  QREPLY = '("4|g1abc|4712|.|91|ranked row" string)';
+  const top = await readBoardTop("covid", 7, 50, 3);
+  ok("readBoardTop reads field 3 as a score", LASTEXPR === 'BoardTop("covid",7,50,3)' && top[0].score === "4712");
+
+  console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
+  process.exit(fail?1:0);
+})();
