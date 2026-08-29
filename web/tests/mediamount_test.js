@@ -101,6 +101,17 @@ const settle = () => new Promise(r => setTimeout(r, 0));
   });
   ok("a good pasted link is adopted", composer.count() === 2);
 
+  // A PASTED VIDEO IS FILED AS A VIDEO. It has no hash either way, but the
+  // reader is told which kind of thing it is, and only a <video> will play it.
+  panel.el.fire("paste", {
+    preventDefault(){}, clipboardData: {files: [], getData: () => "https://i.imgur.com/a.mp4"},
+  });
+  ok("a pasted video is filed as one", composer.items[composer.count()-1].kind === "vid");
+  ok("...and the panel says it cannot be checked later",
+     /cannot check it later/.test(byClass(root, "medianote")[0].text),
+     byClass(root, "medianote")[0].text);
+  composer.remove(composer.items[composer.count()-1].id);
+
   // A drop is the same path, and the panel shows it is a target.
   panel.el.fire("dragover", {preventDefault(){}});
   ok("a drag over the panel is visible", panel.el.classList.contains("over"));

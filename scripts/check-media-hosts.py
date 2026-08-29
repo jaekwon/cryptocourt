@@ -86,6 +86,23 @@ def main():
             "there that the browser then refuses to load, with no signal to "
             "either side" % missing)
 
+    # media-src has to carry the same hosts as img-src. The realm validates a
+    # video exhibit's URL against the SAME allowlist, so a host the chain will
+    # store and the browser will not play means an exhibit that is filed and
+    # unwatchable — with no signal to either side, which is this guard's whole
+    # subject.
+    msrc = re.search(r"media-src([^;]*)", policy)
+    if not msrc:
+        problems.append(
+            "  no media-src in nginx.conf: it falls back to default-src 'self', "
+            "so a video exhibit is filed and cannot be played")
+    else:
+        vmissing = sorted(want - set(re.findall(r"https://(\S+)", msrc.group(1))))
+        if vmissing:
+            problems.append(
+                "  the page's media-src is missing %s — the realm would store a "
+                "video there that the browser then refuses to play" % vmissing)
+
     # connect-src has to be SET. Without it the directive falls back to
     # default-src 'self', and the node this page reads lives on another origin,
     # so every chain read is refused by the page's own policy. That was true in

@@ -737,8 +737,15 @@ function mediaMount(root, composer, opts) {
     const text = data.getData ? data.getData("text") : "";
     if (text && /^https?:\/\//.test(text.trim())) {
       ev.preventDefault();
-      const r = composer.addLink(text.trim());
-      say(r.error || "");
+      const url = text.trim();
+      // A pasted link that names a video file is filed as a video: it has no
+      // hash either way, but the reader is told which kind of thing it is, and
+      // a <video> is what will actually play it.
+      const kind = /\.(mp4|webm|ogg|ogv|mov|m4v)(\?|#|$)/i.test(url) ? "vid" : "img";
+      const r = composer.addLink(url, kind);
+      say(r.error || (kind === "vid"
+        ? "Added as a video. The court keeps no copy and cannot check it later."
+        : ""));
     }
   });
 
