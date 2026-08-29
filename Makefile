@@ -1,5 +1,5 @@
 .PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions rendertext paths guards controls staleguards \ web-constants
-	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup
+	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup chain certs
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
 #
@@ -179,6 +179,26 @@ setup:
 deploy:
 	@test -n "$(HOST)" || { echo 'usage: make deploy HOST=user@host'; exit 2; }
 	./deploy/deploy.sh $(HOST)
+
+# The CHAIN, which deploy.sh deliberately does not touch: a persistent gnoland
+# node with the realm deployed at genesis, plus the faucet. GNOROOT is required —
+# the genesis needs the p/nt packages out of a gno checkout.
+#
+#   make chain HOST=root@kourt.xyz GNOROOT=~/gopath/src/github.com/gnolang/gno
+#   make chain HOST=root@kourt.xyz RESET=--reset      # replace an existing chain
+chain:
+	@test -n "$(HOST)" || { echo 'usage: make chain HOST=user@host GNOROOT=...'; exit 2; }
+	@test -n "$(GNOROOT)" || { echo 'chain: set GNOROOT to a gno checkout'; exit 2; }
+	GNOROOT=$(GNOROOT) OWNER_ADDR=$(OWNER_ADDR) ./deploy/chain.sh $(HOST) $(RESET)
+
+# TLS for the chain's names. Separate from `chain` because certbot needs DNS to
+# have propagated and the :80 block to be serving, and because it is the step
+# most likely to need a second attempt.
+#
+#   make certs HOST=root@kourt.xyz EMAIL=you@example.com
+certs:
+	@test -n "$(HOST)" || { echo 'usage: make certs HOST=user@host [EMAIL=you@example.com]'; exit 2; }
+	EMAIL=$(EMAIL) ./deploy/certs.sh $(HOST) $(DOMAINS)
 
 # Regenerate the chain-true half of the demo dataset from a seeded node. NOT part
 # of `check`: it needs a running chain, and `check` must not. Seed one first with

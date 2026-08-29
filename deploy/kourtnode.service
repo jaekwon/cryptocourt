@@ -1,0 +1,48 @@
+# The chain itself: a single-validator gnoland node whose state PERSISTS, unlike
+# the gnodev in scripts/seed-node.sh, which holds its chain in memory and loses it
+# on every restart. The realm and its dependency closure are deployed at GENESIS —
+# no fee, no storage deposit, and no deploy key that has to stay online.
+#
+# Restart=on-failure and NOT always: a node that dies because its genesis and its
+# data directory disagree will die again on every retry, and a restart loop hides
+# that behind a service that looks like it is running.
+[Unit]
+Description=Kourt chain (gnoland, single validator)
+Documentation=https://github.com/jaekwon/cryptocourt-mod/blob/main/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kourt
+Group=kourt
+WorkingDirectory=/var/lib/kourt/chain
+# -skip-genesis-sig-verification: the genesis txs are signed by the deployer key
+# on the machine that BUILT the genesis, which is not this one. The chain still
+# verifies every transaction after genesis.
+ExecStart=/opt/kourt/bin/gnoland start \
+    -genesis /var/lib/kourt/chain/genesis.json \
+    -data-dir /var/lib/kourt/chain/data \
+    -chainid kourt-1 \
+    -skip-genesis-sig-verification
+Restart=on-failure
+RestartSec=5
+# The chain takes a while to replay its genesis packages on a cold start; a short
+# timeout here reads as a failed boot and restarts a node that was fine.
+TimeoutStartSec=300
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/kourt/chain
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

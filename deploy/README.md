@@ -6,7 +6,9 @@ Three things exist and only two of them are deployed from here.
 |---|---|---|
 | **the overlay** | `web/index.html`, one self-contained static file | a webroot, `/var/www/kourt` |
 | **the chat** | `cmd/kourtchat`, a Go service with a SQLite database | `/opt/kourt`, under systemd |
-| the realm | `realm/r/kourtv2` | a gno chain, with `gnokey` — **not** from this script |
+| the realm | `realm/r/kourtv2` | a gno chain — `chain.sh`, at genesis, not `deploy.sh` |
+| **the chain** | a persistent `gnoland` node | `/var/lib/kourt/chain`, under systemd |
+| **the faucet** | `gnofaucet`, hCaptcha-gated | `faucet.kourt.xyz`, under systemd |
 
 The overlay reads whichever chain you point it at, so shipping the page and
 deploying the realm are separate acts with separate blast radii. That is the
@@ -18,6 +20,58 @@ in it can be served by the realm's own `Render`.
 storing, throttling and enforcing keep working whether or not the scanner is
 running — which is why the chat is at home on an ordinary VPS beside the static
 file, and why its unit orders itself against nothing.
+
+## The chain, once
+
+`deploy.sh` ships the website. The chain is a separate act with a separate blast
+radius, and its own script:
+
+```sh
+make chain HOST=root@kourt.xyz GNOROOT=~/gopath/src/github.com/gnolang/gno \
+     OWNER_ADDR=g1youraddress...
+make certs HOST=root@kourt.xyz EMAIL=you@example.com
+```
+
+**Two phases, and the order is forced.** The genesis has to name the validator's
+public key and premine the faucet's address — but neither secret should be born
+on a laptop and travel over the wire. So the server generates them first, the
+script reads back only the public halves, builds the genesis locally where the
+packages are, and ships that. The validator private key and the faucet mnemonic
+never leave the box.
+
+**The realm is deployed AT GENESIS**, with its whole dependency closure — ten
+packages, ~1.08MB of prod source. No fee, no storage deposit, and no deploy key
+that has to stay online afterwards. `scripts/genesis-pkgs.py` computes the
+closure because `gnogenesis` sorts packages per invocation and cannot see what is
+already in the genesis file, so they must all be handed over at once.
+
+**It refuses to replace a live chain.** A fresh genesis against an existing data
+directory is a node that will not start, so a second run stops unless you pass
+`RESET=--reset`, which drops the chain and its state.
+
+**The faucet stays stopped until it has a captcha secret.** `gnofaucet serve`
+has exactly two modes, `captcha` and `github`, and both require credentials —
+there is no anonymous mode. Put the hCaptcha secret in place and start it:
+
+```sh
+printf %s '<hcaptcha-secret>' > /var/lib/kourt/secret/captcha.secret
+chmod 600 /var/lib/kourt/secret/captcha.secret
+systemctl start kourtfaucet
+```
+
+A grant is **100 GNOT**. The mnemonic reaches the process as a systemd
+`LoadCredential`, never as a flag: `-mnemonic "<24 words>"` would put the
+faucet's entire wallet in the process table. Gas is pinned at 2,000,000 because
+the tool's own default of 100,000 fails every transfer with `transaction failed
+initial validation, out of gas error`.
+
+**certbot owns the TLS half**, which is why `nginx-chain.conf` ships HTTP-only —
+`nginx -t` refuses an `ssl` listener with no certificate, so a hand-written :443
+block stops nginx from starting and certbot can then never reach :80 to prove the
+domain. `certs.sh` issues one certificate per name rather than one SAN
+certificate for both, so a name whose DNS is not ready costs only itself. Once
+certbot has edited the site config, `chain.sh` detects the certificate and leaves
+the file alone rather than reverting TLS on the next run.
 
 ## Every deploy
 

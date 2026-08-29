@@ -83,6 +83,21 @@ while IFS="	" read -r name bal; do
 done <"$WORK/accounts"
 DEPLOYER_ADDR="$(addr deployer)"
 
+# A WALLET'S OWN ADDRESS, premined so a browser extension can sign against this
+# chain without importing one of the scenario keys. The keys above live in a temp
+# keyring that dies with the node, so they are useless to Adena; this is the only
+# way to drive the realm from a wallet you already have.
+#   EXTRA_PREMINE="g1... g1..." sh scripts/seed-node.sh scenarios/covid.py
+# Not a scenario actor: it holds coin and nothing else, and the realm's deployer
+# (the only address that may drive the test clock) is still `deployer`.
+for a in ${EXTRA_PREMINE:-}; do
+	case "$a" in
+	g1*) PREMINE="$PREMINE -add-account $a=10000000000000ugnot"
+	     echo "  (extra) $a" ;;
+	*)   echo "seed-node: EXTRA_PREMINE entry is not an address: $a" >&2; exit 2 ;;
+	esac
+done
+
 # 2. The node. -empty-blocks=false so height tracks transactions and not
 #    wall-clock, which is what makes the scenario's block counts mean anything.
 #    The package dirs are named individually: `realm/` holds no gno files of its
@@ -121,6 +136,7 @@ gnodev local \
 	-chain-id "$CHAINID" \
 	-node-rpc-listener "127.0.0.1:$RPC_PORT" \
 	-web-listener "127.0.0.1:$WEB_PORT" \
+	-web-help-remote "http://127.0.0.1:$RPC_PORT" \
 	-deploy-key "$DEPLOYER_ADDR" \
 	-home "$KEYDIR" \
 	-no-watch -empty-blocks=false -interactive=false \

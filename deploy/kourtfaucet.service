@@ -1,0 +1,55 @@
+# The faucet: gnofaucet, hCaptcha-gated, funding new accounts from a premined
+# address of its own.
+#
+# THE MNEMONIC IS A SYSTEMD CREDENTIAL, not a flag and not a file the process
+# reads by path. `gnofaucet -mnemonic "<24 words>"` would put the faucet's whole
+# wallet in the process table for every user on the box to read; LoadCredential
+# hands it to this process alone, and the file stays root-owned at 0600. The
+# ExecStart wrapper reads it back out of $CREDENTIALS_DIRECTORY.
+#
+# GAS IS PINNED, and the defaults do not work. gnofaucet defaults to
+# -gas-wanted 100000, which fails every transfer with "transaction failed initial
+# validation, out of gas error" — measured on this chain before these values were
+# chosen. 2,000,000 succeeds with room to spare.
+[Unit]
+Description=Kourt faucet (gnofaucet, hCaptcha)
+Documentation=https://github.com/jaekwon/cryptocourt-mod/blob/main/deploy/README.md
+After=network-online.target kourtnode.service
+Wants=network-online.target
+# Not Requires=: the faucet coming up before the chain is fine, it retries. A hard
+# dependency would take the faucet down with every chain restart for no gain.
+After=kourtnode.service
+
+[Service]
+Type=simple
+User=kourt
+Group=kourt
+LoadCredential=mnemonic:/var/lib/kourt/secret/faucet.mnemonic
+LoadCredential=captcha:/var/lib/kourt/secret/captcha.secret
+ExecStart=/bin/sh -c '/opt/kourt/bin/gnofaucet serve captcha \
+    -chain-id kourt-1 \
+    -remote http://127.0.0.1:26657 \
+    -listen-address 127.0.0.1:5050 \
+    -mnemonic "$(cat "$CREDENTIALS_DIRECTORY"/mnemonic)" \
+    -captcha-secret "$(cat "$CREDENTIALS_DIRECTORY"/captcha)" \
+    -max-send-amount 100000000ugnot \
+    -gas-wanted 2000000 \
+    -gas-fee 2000000ugnot \
+    -trusted-proxy-count 1'
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
