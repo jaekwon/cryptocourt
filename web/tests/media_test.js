@@ -110,8 +110,60 @@ ok("a video may not carry one",
 ok("an image without one is refused",
    M.mediaItemFault(Object.assign({}, img, {sha256: ""}), "") !== "");
 
-// ---- the fingerprint -----------------------------------------------------
+// ---- intake: never say "too big" -----------------------------------------
+// A 12MP phone photo must become something fileable without anyone learning
+// that a cap exists.
+const big = M.mediaFitWithin(4032, 3024, M.MEDIA_MAX_EDGE);
+ok("a large photo is scaled to the long edge", big.w === M.MEDIA_MAX_EDGE, JSON.stringify(big));
+ok("...keeping its aspect ratio", Math.abs(big.w / big.h - 4032 / 3024) < 0.01);
+const tall = M.mediaFitWithin(1000, 4000, M.MEDIA_MAX_EDGE);
+ok("a tall image is scaled by its height", tall.h === M.MEDIA_MAX_EDGE);
+// UPSCALING WOULD SPEND BYTES INVENTING DETAIL. A 200x100 screenshot must stay
+// 200x100, or a tiny image costs more than the memo it shows.
+const small = M.mediaFitWithin(200, 100, M.MEDIA_MAX_EDGE);
+ok("a small image is left alone", small.w === 200 && small.h === 100, JSON.stringify(small));
+ok("a degenerate size does not divide by zero",
+   JSON.stringify(M.mediaFitWithin(0, 0, M.MEDIA_MAX_EDGE)) === '{"w":0,"h":0}');
+
+// ---- the archive is not trusted about what it received -------------------
 (async () => {
+  const bytes = new TextEncoder().encode("some image bytes");
+  const mine = await M.mediaDigest(bytes);
+
+  const honest = async () => ({ok: true, json: async () => ({sha256: mine})});
+  const got = await M.mediaUpload(bytes, "image/webp", {fetch: honest, base: "https://k"});
+  ok("an honest archive yields the item's link", got.url === "https://k/m/" + mine);
+
+  // A MISMATCH MUST BE REFUSED, NOT ADOPTED. If the archive names a different
+  // digest, the bytes that arrived are not the bytes we hashed — filing that
+  // hash would commit the author to an image nobody has.
+  const liar = async () => ({ok: true, json: async () => ({sha256: "f".repeat(64)})});
+  let refused = false;
+  try { await M.mediaUpload(bytes, "image/webp", {fetch: liar, base: ""}); }
+  catch (_) { refused = true; }
+  ok("an archive that answers with another digest is refused", refused);
+
+  const down = async () => ({ok: false, status: 503, json: async () => ({})});
+  let failed = false;
+  try { await M.mediaUpload(bytes, "image/webp", {fetch: down, base: ""}); }
+  catch (_) { failed = true; }
+  ok("an archive that is down is an error, not a silent success", failed);
+
+  // Promotion is best-effort: the claim is already on chain, so a failure here
+  // costs availability rather than the record.
+  ok("a failed promotion is not an exception",
+     await M.mediaClaimed("covid", 7, {fetch: async () => { throw new Error("nope"); }}) === 0);
+  ok("a successful promotion reports the count",
+     await M.mediaClaimed("covid", 7, {
+       fetch: async () => ({ok: true, json: async () => ({promoted: 3})}),
+     }) === 3);
+
+  // A flaky upload must not cost somebody their claim: the hash and the original
+  // link are what the chain records, and the archive copy is durability.
+  ok("an exhibit whose copy failed is still fileable", M.mediaFileable({state: "failed"}));
+  ok("an exhibit still uploading is not", !M.mediaFileable({state: "uploading"}));
+
+// ---- the fingerprint -----------------------------------------------------
   const digest = await M.mediaDigest(new TextEncoder().encode("kourt"));
   ok("a digest is 64 lowercase hex", /^[0-9a-f]{64}$/.test(digest));
   ok("the archive address is derived from it",

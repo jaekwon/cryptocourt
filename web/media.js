@@ -188,12 +188,102 @@ async function mediaDigest(bytes) {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+/* ---- intake -------------------------------------------------------------
+ *
+ * THE RULE THIS SECTION EXISTS FOR: a person filing evidence should never meet
+ * a technical concept. Not "sha256", not "256 KiB", not "unsupported format".
+ * A 12-megapixel phone photo becomes a 90 KB WebP and the cap it would have
+ * violated is never mentioned, because the machine's problem was the machine's
+ * to solve. Only a file that survives all of that and is still impossible gets
+ * a message, and then it names the file and the reason.
+ */
+
+/* The size to draw at: never larger than maxEdge, and NEVER LARGER THAN THE
+ * ORIGINAL. Upscaling a small screenshot would spend bytes inventing detail
+ * that was never there, and make a 200-byte image cost more than the memo it
+ * shows. */
+function mediaFitWithin(w, h, maxEdge) {
+  if (!(w > 0 && h > 0)) return {w: 0, h: 0};
+  const scale = Math.min(1, maxEdge / Math.max(w, h));
+  return {w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale))};
+}
+
+const MEDIA_MAX_EDGE = 1600;
+
+/* mediaUpload sends bytes to the archive and returns the item fields.
+ *
+ * IT CHECKS THE ARCHIVE'S ANSWER. The digest is computed here first, and if the
+ * server names a different one the upload is refused rather than adopted: a
+ * mismatch means the bytes that arrived are not the bytes we hashed, and filing
+ * that hash would commit the author to an image nobody has. The archive is a
+ * mirror, never an authority — including about what it just received.
+ *
+ * `fetchFn` and `base` are injected so this is testable without a network. */
+async function mediaUpload(bytes, mime, opts) {
+  const o = opts || {};
+  const fetchFn = o.fetch || (typeof fetch !== "undefined" ? fetch : null);
+  const base = o.base || "";
+  const mine = o.sha256 || await mediaDigest(bytes);
+  if (!fetchFn) throw new Error("no way to reach the archive");
+
+  const res = await fetchFn(base + "/m", {
+    method: "POST", headers: {"Content-Type": mime}, body: bytes,
+  });
+  if (!res.ok) throw new Error("the archive would not take that image (" + res.status + ")");
+  const body = await res.json();
+  if (body.sha256 !== mine) {
+    throw new Error("the archive stored something other than what was sent");
+  }
+  return {sha256: mine, url: base + "/m/" + mine};
+}
+
+/* mediaClaimed tells the archive a claim now references these bytes, which is
+ * what turns an hour-long staging into permanent storage. Best-effort by
+ * design: the claim is already on chain, and a failure here costs availability
+ * rather than the record. */
+async function mediaClaimed(court, claimID, opts) {
+  const o = opts || {};
+  const fetchFn = o.fetch || (typeof fetch !== "undefined" ? fetch : null);
+  if (!fetchFn) return 0;
+  try {
+    const res = await fetchFn(
+      (o.base || "") + "/m/claimed?court=" + encodeURIComponent(court) +
+      "&claim=" + encodeURIComponent(String(claimID)), {method: "POST"});
+    if (!res.ok) return 0;
+    const body = await res.json();
+    return body.promoted || 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+/* The states an exhibit passes through, and the words the person sees. Plain
+ * language on purpose: "making a copy on kourt.xyz" tells someone what is
+ * happening to their file; "uploading blob" tells them what the program is
+ * doing to itself. */
+const MEDIA_STATES = {
+  shrinking: "resizing…",
+  hashing: "fingerprinting…",
+  uploading: "making a copy on kourt.xyz…",
+  ready: "",
+  failed: "no copy yet — it will still be filed",
+};
+
+/* An exhibit is FILEABLE even when its copy failed. The hash and the original
+ * link are what the chain records; the archive copy is durability, not validity,
+ * and blocking a filing on it would let a flaky upload cost somebody their
+ * claim. */
+function mediaFileable(item) {
+  return !!item && (item.state === "ready" || item.state === "failed");
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     MEDIA_MAX_ITEMS, MEDIA_MAX_MIRRORS, MEDIA_MAX_URL, MEDIA_MAX_CAPTION,
     MEDIA_MAX_BYTES, MEDIA_TYPES,
     mediaHostAllowed, mediaHostOf, mediaMirrorFault, mediaCaptionFault,
     mediaItemFault, mediaFault, mediaArgLine, mediaArg, mediaArchiveURL,
-    mediaDigest,
+    mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
+    MEDIA_STATES, mediaFileable,
   };
 }
