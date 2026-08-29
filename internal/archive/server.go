@@ -1,0 +1,152 @@
+package archive
+
+import (
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+)
+
+var digestRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+type Server struct {
+	store *Store
+	log   *log.Logger
+	// clientIP maps a request to the address rate limits are counted against.
+	// Injected because the deployment sits behind nginx, where RemoteAddr is the
+	// proxy for every request and would make one bucket for the whole internet.
+	clientIP func(*http.Request) string
+	limiter  *limiter
+}
+
+func NewServer(store *Store, lg *log.Logger, clientIP func(*http.Request) string) *Server {
+	if clientIP == nil {
+		clientIP = func(r *http.Request) string { return r.RemoteAddr }
+	}
+	return &Server{store: store, log: lg, clientIP: clientIP, limiter: newLimiter()}
+}
+
+func (s *Server) Routes(mux *http.ServeMux) {
+	mux.HandleFunc("/m/", s.blob)
+	mux.HandleFunc("/m", s.upload)
+}
+
+// blob serves bytes by digest.
+//
+// The URL is derivable from the hash alone, which is what lets a client — and
+// the realm's own markdown — reach the archive without anything being stored on
+// chain to point at it.
+func (s *Server) blob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	sum := strings.TrimPrefix(r.URL.Path, "/m/")
+	if !digestRe.MatchString(sum) {
+		http.NotFound(w, r)
+		return
+	}
+	mime, body, err := s.store.Get(r.Context(), sum)
+	if err != nil {
+		// A blocked blob and an absent one answer identically: a takedown that
+		// announced itself would be a lookup oracle for what has been taken down.
+		http.NotFound(w, r)
+		return
+	}
+
+	h := w.Header()
+	h.Set("Content-Type", mime)
+	// The name is the content, so the bytes at this URL can never change and the
+	// answer is cacheable forever.
+	h.Set("Cache-Control", "public, max-age=31536000, immutable")
+	h.Set("ETag", `"`+sum+`"`)
+	// NEVER LET THE BROWSER GUESS. The type is one of five raster formats and the
+	// bytes came from a stranger; sniffing is how "image" becomes "document".
+	h.Set("X-Content-Type-Options", "nosniff")
+	// Belt and braces for the same reason SVG is refused at the door: even if a
+	// type ever slipped through, nothing here may fetch, script or frame.
+	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	// Any client may verify these bytes against the hash — that is the whole
+	// point of publishing them — so the read is deliberately open.
+	h.Set("Access-Control-Allow-Origin", "*")
+	// The realm's markdown points every gnoweb reader here, so their referrer
+	// would otherwise say which claim they are reading.
+	h.Set("Referrer-Policy", "no-referrer")
+
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if _, err := w.Write(body); err != nil && s.log != nil {
+		s.log.Printf("archive: writing %s: %v", sum, err)
+	}
+}
+
+// upload stages bytes and answers with their digest.
+//
+// It does NOT accept a digest from the caller. The archive hashes what it
+// received, so bytes can never sit at an address that does not describe them.
+func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST, OPTIONS")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ip := s.clientIP(r)
+	if !s.limiter.allow(ip, time.Now()) {
+		http.Error(w, "too many uploads; try again shortly", http.StatusTooManyRequests)
+		return
+	}
+
+	mime := strings.TrimSpace(strings.SplitN(r.Header.Get("Content-Type"), ";", 2)[0])
+	if !MIMEServable(mime) {
+		// Named rather than generic: the composer converts everything to WebP, so
+		// a caller seeing this is a script or a mistake, and both are helped by
+		// being told which types exist.
+		http.Error(w, "unsupported type: send image/png, image/jpeg, image/webp, "+
+			"image/gif or image/avif", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	// MaxBytes+1 so an oversized body is REFUSED rather than silently truncated
+	// into a different image with a different hash than the uploader computed.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxBytes+1))
+	if err != nil {
+		http.Error(w, "could not read the upload", http.StatusBadRequest)
+		return
+	}
+	if len(body) > MaxBytes {
+		http.Error(w, "that image is too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+
+	sum, err := s.store.Put(r.Context(), mime, body)
+	if err != nil {
+		if s.log != nil {
+			s.log.Printf("archive: put from %s: %v", ip, err)
+		}
+		http.Error(w, "could not store the upload", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// The URL is returned as well as the digest so the composer never has to
+	// build it, and so this stays the one place that knows the shape.
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"sha256": sum,
+		"url":    "/m/" + sum,
+	})
+}
