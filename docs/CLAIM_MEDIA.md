@@ -33,7 +33,8 @@
 > | archive: mounted in kourtchat, `/m` routed, CSP and deploy updated | built |
 > | overlay: rules mirrored, intake, composer, panel, placement | built |
 > | overlay: map card strip, node badges, lightbox with verification | built |
-> | **archive: the classifier (§3.2)** | **not built** |
+> | archive: the classifier — queue, auto-block, human undo | built |
+> | **archive: a vision backend for it (Ollama)** | **not built** |
 > | drafts in `localStorage` (§2.5) | not built |
 > | video as a second tier (§7) | not built |
 >

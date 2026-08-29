@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -485,5 +486,144 @@ func TestTheCursorDoesNotRescanOrSkip(t *testing.T) {
 		if _, _, err := st.Get(ctx, sum); err != nil {
 			t.Fatalf("a claim referenced %s and it was swept anyway", sum[:8])
 		}
+	}
+}
+
+type fakeEye struct {
+	v    ImageVerdict
+	err  error
+	seen int
+}
+
+func (f *fakeEye) ClassifyImage(ctx context.Context, mime string, body []byte) (ImageVerdict, error) {
+	f.seen++
+	return f.v, f.err
+}
+
+func TestAModelThatCannotAnswerLeavesTheEvidenceServing(t *testing.T) {
+	// THE CHOICE THIS PINS. Fail-closed would mean an Ollama outage silently
+	// withdrawing every exhibit in every court — a worse failure than the one it
+	// protects against, and one nobody would notice until a reader complained.
+	// internal/scan settled the same question for text: an unreadable verdict
+	// carries no more weight than a clean one.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
+	if err := st.Promote(ctx, sum); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	eye := &fakeEye{err: errors.New("ollama is not running")}
+	if n, err := st.ReviewPass(ctx, eye, 10); err != nil || n != 0 {
+		t.Fatalf("a failing model blocked %d (err %v)", n, err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != nil {
+		t.Fatal("an image must keep serving when the model cannot answer")
+	}
+	// It records nothing, so the next pass tries again: the outage delays a
+	// judgement rather than making one.
+	left, _ := st.Unreviewed(ctx, 10)
+	if len(left) != 1 {
+		t.Fatalf("the blob should still be waiting for a verdict, got %d", len(left))
+	}
+
+	// With no classifier at all, the same: this service does not require a model
+	// in order to serve a court's evidence.
+	if n, err := st.ReviewPass(ctx, nil, 10); err != nil || n != 0 {
+		t.Fatalf("no classifier blocked %d (err %v)", n, err)
+	}
+}
+
+func TestOnlyTheSeriousAndTheSureAreBlockedWithoutAPerson(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		name  string
+		v     ImageVerdict
+		block bool
+	}{
+		{"clean", ImageVerdict{Label: "clean", Confidence: 0.99}, false},
+		// A model that dislikes an image for any other reason gets a person, not
+		// a veto: being wrong here costs a court a piece of evidence with nobody
+		// told.
+		{"serious but unsure", ImageVerdict{Label: AutoBlockLabel, Confidence: 0.5}, false},
+		{"sure but not serious", ImageVerdict{Label: "rude", Confidence: 0.99}, false},
+		{"serious and sure", ImageVerdict{Label: AutoBlockLabel, Confidence: 0.95}, true},
+	} {
+		body := append([]byte(tc.name), pngBody...)
+		sum, err := st.Put(ctx, "image/png", body, "")
+		if err != nil {
+			t.Fatalf("%s: put: %v", tc.name, err)
+		}
+		did, err := st.Review(ctx, sum, tc.v)
+		if err != nil {
+			t.Fatalf("%s: review: %v", tc.name, err)
+		}
+		if did != tc.block {
+			t.Fatalf("%s: blocked=%v, want %v", tc.name, did, tc.block)
+		}
+		_, _, gerr := st.Get(ctx, sum)
+		if tc.block && gerr != ErrNotFound {
+			t.Fatalf("%s: a blocked image still served", tc.name)
+		}
+		if !tc.block && gerr != nil {
+			t.Fatalf("%s: an image nobody blocked stopped serving", tc.name)
+		}
+	}
+}
+
+func TestEveryAutomaticRefusalHasAHumanUndo(t *testing.T) {
+	// This is what makes auto-blocking survivable at all: a model's mistake is
+	// reversible by a person, and the reversal leaves a record of having
+	// happened.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
+	if _, err := st.Review(ctx, sum, ImageVerdict{Label: AutoBlockLabel, Confidence: 0.99,
+		Why: "the model's prose, stored and never parsed for instructions"}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != ErrNotFound {
+		t.Fatal("the fixture should have blocked it")
+	}
+	pending, _ := st.PendingReview(ctx, 10)
+	if len(pending) != 1 {
+		t.Fatalf("a blocked image must reach an operator's queue, got %d", len(pending))
+	}
+	if err := st.Clear(ctx, sum); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != nil {
+		t.Fatal("a person overruling the model must restore the image")
+	}
+	if p, _ := st.PendingReview(ctx, 10); len(p) != 0 {
+		t.Fatal("a cleared review must leave the queue")
+	}
+}
+
+func TestOnlyPromotedBytesAreWorthJudging(t *testing.T) {
+	// Classifying bytes that are about to expire is work spent on something
+	// nobody claimed — and on a public endpoint, work anybody can ask for.
+	st := testStore(t)
+	ctx := context.Background()
+	staged, _ := st.Put(ctx, "image/png", pngBody, "")
+	kept, _ := st.Put(ctx, "image/webp", append([]byte("kept"), pngBody...), "")
+	if err := st.Promote(ctx, kept); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	todo, err := st.Unreviewed(ctx, 10)
+	if err != nil {
+		t.Fatalf("unreviewed: %v", err)
+	}
+	if len(todo) != 1 || todo[0] != kept {
+		t.Fatalf("only promoted bytes are judged, got %v (staged was %s)", todo, staged[:8])
+	}
+	eye := &fakeEye{v: ImageVerdict{Label: "clean", Confidence: 0.9}}
+	if _, err := st.ReviewPass(ctx, eye, 10); err != nil {
+		t.Fatalf("pass: %v", err)
+	}
+	if eye.seen != 1 {
+		t.Fatalf("the model was shown %d blobs, want 1", eye.seen)
 	}
 }

@@ -103,6 +103,9 @@ func NewStore(db *sql.DB) (*Store, error) {
 	if err := ensureColumn(db, "blobs", "court", "TEXT"); err != nil {
 		return nil, fmt.Errorf("archive court column: %w", err)
 	}
+	if err := ensureClassifySchema(db); err != nil {
+		return nil, fmt.Errorf("archive review schema: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 
