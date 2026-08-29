@@ -2013,6 +2013,39 @@ function claimBody(d){
   return `<div class="claimbody">${paras.map(p=>`<p>${esc(p)}</p>`).join("")}</div>`;
 }
 
+/* THE EVIDENCE, ON THE CARD AND ON THE CLAIM. A strip rather than a grid: seven
+   does not divide evenly, and the box is RESERVED from the stored dimensions
+   because .mapsel is tuned closely enough that an image arriving after paint
+   would resize the card mid-glide.
+
+   Guarded on typeof like every other call into media.js, so a missing file costs
+   the exhibits and not the card. */
+function claimExhibits(c){
+  if(typeof mediaCardItems !== "function") return "";
+  const items = mediaCardItems((c && c.media) || [], CFG.site || "");
+  if(!items.length) return "";
+  return `<div class="mapsel-ex" role="list">` + items.map(x => {
+    const cap = x.caption ? `<span class="ex-cap">${safeInline(x.caption)}</span>` : "";
+    /* An exhibit with nothing to show KEEPS ITS PLACE and says why. A gap that
+       silently renumbered the rest would leave every later exhibit meaning
+       something different than it did a moment ago, in the middle of an argument
+       about which one shows what. */
+    if(!x.src) return `<figure class="ex ex-gone" role="listitem">`
+      + `<span class="ex-n">${esc(x.label)}</span>`
+      + `<span class="ex-note">${esc(x.note)}</span>${cap}</figure>`;
+    /* referrerpolicy: the host serving this must not learn which claim the
+       reader is looking at. loading=lazy: a card off screen costs nothing. */
+    const ratio = (x.w && x.h) ? ` style="aspect-ratio:${x.w}/${x.h}"` : "";
+    return `<figure class="ex" role="listitem">`
+      + `<img class="ex-img" src="${esc(x.src)}" alt="${safeInline(x.caption || ("exhibit " + x.label))}"`
+      + ` loading="lazy" referrerpolicy="no-referrer"${ratio}>`
+      + `<span class="ex-n">${esc(x.label)}</span>${cap}`
+      + (x.note? `<span class="ex-note">${esc(x.note)}</span>` : "")
+      + `</figure>`;
+  }).join("") + `</div>`;
+}
+
+
 /* ============================ tx links ================================== */
 /* Every action is a gnoweb $help link with arguments pre-filled — the overlay is
    optional: the transaction is the realm's, signed in the user's own wallet.
@@ -4586,6 +4619,7 @@ function mapSelCard(id, data, slug, L){
        Absent until the read lands (mountMap fetches it on selection), and absent
        for good in demo mode, where the sample carries no bodies. */
     + claimBody(c)
+    + claimExhibits(c)
     + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
     + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
     + (!o && !i? `<p class="small muted">no relations drawn on this map</p>` : "")

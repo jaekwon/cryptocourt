@@ -119,6 +119,9 @@ eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
 // ...and the real body renderer, for the same reason: the card renders it.
 eval(slice('function claimBody(', '/* ==='));
+// claimExhibits lives inside that same region deliberately: the card renders a
+// claim's statement and its evidence together, so a harness that has one and
+// not the other is testing half a card.
 global.fmtN = n => String(n);
 
 eval(slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK'));
