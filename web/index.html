@@ -1282,6 +1282,84 @@ const readBoardReplies = (slug, id, parent) =>
 const readBoardParties = (slug, id) =>
   boardWire(`BoardPartyRows(${gstr(slug)},${id})`).then(boardPartyRows);
 
+/* ONE SOURCE SWITCH, and the sample carries WIRE STRINGS rather than row
+   objects. A second row shape would be a second thing to keep in step with the
+   realm, and the sample is the only fixture that exercises this parser with a
+   browser attached — so it should go through it, not around it. */
+const demoBoard = (slug, id) => (DEMO.claims[slug+"/"+id]||{}).board || null;
+async function boardSize(slug, id){
+  if(!isLive()){ const b = demoBoard(slug, id); return b ? (b.size||0) : 0; }
+  // one() is correct HERE, and only here: BoardSize returns an int64. The
+  // parseTyped hazard the four readers above avoid is specific to quoted
+  // strings, so routing a count through boardUnwrap would be cargo cult.
+  return await one(`BoardSize(${gstr(slug)},${id})`);
+}
+async function boardOpenOf(slug, id){
+  if(!isLive()){
+    const b = demoBoard(slug, id);
+    if(b && b.open != null) return b.open;
+    // MOST SAMPLE CLAIMS CARRY NO BOARD, and that is the common live case too —
+    // an empty board, not an absent feature. Falling back to "closed" would have
+    // hidden the invitation on nearly every offline page. The rule mirrors the
+    // realm's: boardOpen is `verdictAt == 0 && !closed` (board.gno:196), which
+    // is settled and provClose (a verdict exists) plus a closed claim. An
+    // answered, disputed or provisional claim still takes comments.
+    const d = DEMO.claims[slug+"/"+id];
+    return !!d && d.phase !== "settled" && d.phase !== "provClose" && d.phase !== "closed";
+  }
+  return await one(`BoardOpen(${gstr(slug)},${id})`);
+}
+async function boardParties(slug, id){
+  if(!isLive()){ const b = demoBoard(slug, id); return boardPartyRows((b && b.parties) || ""); }
+  return await readBoardParties(slug, id);
+}
+
+/* THE CHIP SAYS A FACT, NOT A COUNT. "5 comments" tells a reader nothing about
+   whether it is worth opening; "the author and the answerer have replied" is the
+   reason to click, and the count is the size of what is behind it.
+
+   ONE LABEL FOR THE COUNT on every branch. An earlier draft said "5 comments"
+   beside a party line and "5 comments and replies" without one, which reads as
+   two different numbers of two different things — it is one number, and it is
+   the one the realm's own page prints (board.gno:writeBoardLink counts every
+   row, replies included).
+
+   NOTHING AT ALL for a claim that is settled with no comments, which is the call
+   the realm makes on its own page: an empty board is worth an invitation only
+   while somebody can still accept it.
+
+   Pure so it can be tested without a DOM — the caller does the reads. */
+function boardChipLabel(n, open, parties){
+  if(!(n > 0)) return open ? "discuss this claim" : "";
+  const roles = new Set((parties||[]).map(r => r.role));
+  const who = roles.has("author") && roles.has("answerer") ? "the author and the answerer have replied"
+            : roles.has("author")   ? "the author has replied"
+            : roles.has("answerer") ? "the answerer has replied"
+            : "";
+  return (who ? who + " · " : "") + n + (n === 1 ? " comment" : " comments");
+}
+function boardChip(slug, id, n, open, parties){
+  const label = boardChipLabel(n, open, parties);
+  if(!label) return "";
+  return `<a class="tlink" href="#/c/${esc(slug)}/${id}/board">${esc(label)}`
+       + `<span aria-hidden="true">→</span></a>`;
+}
+
+/* BoardSize FIRST AND ALONE. A claim nobody has commented on needs one read: the
+   chip has nothing to say about which party replied when neither did, and a
+   party scan on every claim page would be a read per view bought for nothing.
+   BoardOpen is paid only on the empty branch, where it decides between an
+   invitation and silence. */
+async function fillBoardChip(slug, id){
+  const slot = document.getElementById("boardchip");
+  if(!slot) return;
+  try{
+    const n = await boardSize(slug, id);
+    if(!(n > 0)){ slot.innerHTML = boardChip(slug, id, 0, await boardOpenOf(slug, id), []); return; }
+    slot.innerHTML = boardChip(slug, id, n, true, await boardParties(slug, id).catch(()=>[]));
+  }catch(_){ /* an unreadable board leaves the tagrow as it was, never a broken chip */ }
+}
+
 /* ============================ demo dataset ============================== */
 /* A faithful sample so every screen and state renders offline, in the realm's
    own units (CC base units, 6 decimals) — stakes and conviction, not shares. */
@@ -1353,6 +1431,13 @@ const DEMO_CHAIN = {
     "orem/1":{ timeline:"opened:1786036800:4596480;now:1787054400:4800000", title:"The county certified 12,412 mail ballots on Nov 6, 2025.",
       yesStake:41_000_000, noStake:12_000_000, convYes:439774, convNo:128714, trailYes:74,
       author:"g1oremfiler0000000000000000000000000000", phase:"open",
+      // board: WIRE STRINGS, read by the same parser the chain feeds, so the
+      // sample cannot drift into a shape the realm does not emit. `size` counts
+      // every row — replies included — because BoardSize does.
+      board:{ size:4, open:true,
+        parties:"7|g1oremfiler0000000000000000000000000000|author|.|4799200|The 12,412 figure is the certified count, not the returned count — the difference is the 214 cured ballots.",
+        newest:"9|g1clerkwatch000000000000000000000000000|0|.|4799600|The canvass PDF lists 12,412 under certified, table 3.\n8|g1skeptic00000000000000000000000000000000|1|.|4799400|Which document is the source? The press release says 12,198.\n7|g1oremfiler0000000000000000000000000000|0|.|4799200|The 12,412 figure is the certified count, not the returned count — the difference is the 214 cured ballots.",
+        replies:{ "8":"10|g1oremfiler0000000000000000000000000000|.|4799500|The press release predates the cure deadline." } },
       // seriesH/seriesD: raw ClaimSeries samples in the chain's own grammar —
       // parseStakeSeries() input, NOT the docket row's 3-ratio triple. The
       // last row of each MUST equal the pools above.
@@ -1362,6 +1447,10 @@ const DEMO_CHAIN = {
     "orem/2":{ timeline:"opened:1786604400:4710000;answered:1786840200:4757160;settle:1787099400:4809000;now:1787054400:4800000", title:"SpaceX Starship Flight 12 reached orbital velocity.",
       yesStake:130_000_000, noStake:9_000_000, convYes:323114, convNo:22369, trailYes:93,
       author:"g1oremfiler0000000000000000000000000000", phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
+      board:{ size:4, open:true,
+        parties:"12|g1oremfiler0000000000000000000000000000|author|.|4798100|Orbital velocity is what the claim says — not orbit. The FAA telemetry has it at 27,050 km/h.\n11|g1answerkeeper00000000000000000000000000|answerer|.|4798400|The bond is on NO because the profile was suborbital by design; velocity alone is not the test the claim states.",
+        newest:"13|g1rangewatch000000000000000000000000000|0|h|4798600|\n12|g1oremfiler0000000000000000000000000000|1|.|4798100|Orbital velocity is what the claim says — not orbit. The FAA telemetry has it at 27,050 km/h.\n11|g1answerkeeper00000000000000000000000000|0|.|4798400|The bond is on NO because the profile was suborbital by design; velocity alone is not the test the claim states.",
+        replies:{ "12":"14|g1answerkeeper00000000000000000000000000|.|4798500|Then the claim needs the altitude too, and it does not have it." } },
       seriesH:"hourly,720,6667,0;6546:20000000:6000000,6560:45000000:7000000,6572:60000000:8000000,6584:80000000:8000000,6595:99000000:9000000,6603:118000000:9000000,6607:130000000:9000000",
       seriesD:"daily,17280,278,0;272:20000000:6000000,274:99000000:9000000,276:130000000:9000000",
       answerBond:70_000_000, record:2, settleAt:NOW+9_000, disputeBondNext:28_000_000 },
@@ -5502,7 +5591,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + claimBody(d)
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
-        <span class="tacts">${polish}${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
+        <span class="tacts">${polish}<span id="boardchip"></span>${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
         <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
     + modBanner(mPurged, mRedacted, mHidden, slug)
@@ -5514,6 +5603,9 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
     + associationSection(slug,id,assocLookup,chainAssocs);
+  // Unconditional: the board is the one action on this page that needs no
+  // address, and the sample answers it offline like everything else here.
+  fillBoardChip(slug, id);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button
