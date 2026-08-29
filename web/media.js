@@ -402,6 +402,39 @@ function mediaNewComposer(opts) {
   };
 }
 
+/* Whether the gnoweb $help link can still carry this claim.
+ *
+ * MEASURED, NOT GUESSED. The page offers every action three ways — a $help
+ * link, a CLI command and a one-click sign — and only the link has a length
+ * limit. A typical claim is nowhere near it: seven exhibits with two mirrors
+ * each encode to about 2.8 KB, which every browser and proxy accepts. The worst
+ * case the validator permits — seven exhibits with four 300-character mirrors —
+ * encodes to about 10.3 KB, and nginx's default header buffer is 8 KB, so that
+ * request is refused before gnoweb ever sees it.
+ *
+ * The limit here is deliberately well under 8192: the media argument is only
+ * part of the request line, which also carries the realm path, the function
+ * name, the title and the body. Leaving room means the cutoff is reached by
+ * this check, which can explain itself, rather than by a proxy returning 414 to
+ * somebody who has just written a claim.
+ *
+ * An earlier draft of docs/CLAIM_MEDIA.md said this affordance simply could not
+ * survive media. That was a guess and it was wrong — most claims are fine, and
+ * disabling the link for all of them would have removed a working path for the
+ * sake of a rare one. */
+const MEDIA_HELP_LINK_BUDGET = 6000;
+
+function mediaHelpLinkFits(arg) {
+  return encodeURIComponent(arg || "").length <= MEDIA_HELP_LINK_BUDGET;
+}
+
+/* What to say when it does not fit. Never a dead link and never silence: the
+ * two paths that still work are named, because "this does not work" without
+ * "this does" is the shape of every unhelpful error. */
+const MEDIA_HELP_LINK_TOO_LONG =
+  "Too many links on these exhibits for the gnoweb form. Sign with Adena, or " +
+  "use the command line — both carry the whole claim.";
+
 /* mediaReview is the last look before a signature, and it exists because of an
  * owner ruling: a caption is claim text, so it takes the body's rule whole —
  * fixed at creation, no editor, not even in the polish window where a TITLE can
@@ -446,5 +479,6 @@ if (typeof module !== "undefined" && module.exports) {
     mediaItemFault, mediaFault, mediaArgLine, mediaArg, mediaArchiveURL,
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
+    mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
   };
 }

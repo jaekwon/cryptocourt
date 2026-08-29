@@ -251,6 +251,33 @@ ok("a degenerate size does not divide by zero",
   ok("it warns that a copy is missing", rv.warnings.some(w => /no copy/.test(w)));
   ok("it warns a video cannot be vouched for", rv.warnings.some(w => /cannot vouch/.test(w)));
 
+  // ---- the one affordance with a length limit ----------------------------
+  // Measured against nginx's 8 KB default header buffer, not guessed. A typical
+  // claim fits; the worst case the validator permits does not, and a request
+  // refused by a proxy tells the person nothing.
+  const twoMirror = {
+    kind: "img", sha256: "a".repeat(64), mime: "image/webp", w: 1600, h: 1200,
+    bytes: 250000, caption: "x".repeat(M.MEDIA_MAX_CAPTION),
+    mirrors: ["https://kourt.xyz/m/" + "a".repeat(64), "https://i.imgur.com/b.webp"],
+  };
+  const maxURL = "https://i.imgur.com/" + "b".repeat(M.MEDIA_MAX_URL - 25) + ".webp";
+  const fourMirror = Object.assign({}, twoMirror, {mirrors: [maxURL, maxURL, maxURL, maxURL]});
+
+  ok("a typical seven-exhibit claim still fits the gnoweb form",
+     M.mediaHelpLinkFits(M.mediaArg(Array(7).fill(twoMirror))),
+     String(encodeURIComponent(M.mediaArg(Array(7).fill(twoMirror))).length));
+  ok("the worst case the validator permits does not",
+     !M.mediaHelpLinkFits(M.mediaArg(Array(7).fill(fourMirror))));
+  ok("no media always fits", M.mediaHelpLinkFits(""));
+  // "This does not work" without "this does" is the shape of every unhelpful
+  // error, so the message names the two paths that still carry the claim.
+  ok("the refusal names what still works",
+     /Adena/.test(M.MEDIA_HELP_LINK_TOO_LONG) && /command line/.test(M.MEDIA_HELP_LINK_TOO_LONG));
+  // The budget must stay under nginx's default buffer with room for the rest of
+  // the request line — the path, the function, the title and the body.
+  ok("the budget leaves room for the rest of the request",
+     M.MEDIA_HELP_LINK_BUDGET < 8192 * 0.8, String(M.MEDIA_HELP_LINK_BUDGET));
+
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 })();

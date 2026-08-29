@@ -148,12 +148,23 @@ must keep it:
 
 - **✍ Sign** — the primary path, arguments built from composer state.
 - **CLI** — the `gnokey maketx` command, media argument included verbatim.
-- **gnoweb `$help` link** — ⚠︎ **the one that may not survive.** Seven items of
-  hash-plus-mirrors will produce a query string in the multi-kilobyte range, past
-  what some browsers and proxies accept. If it overflows, the honest move is to
-  disable that affordance for media-bearing claims with a one-line reason, not to
-  emit a link that fails opaquely — the same silent-failure class this project
-  has already been bitten by twice.
+- **gnoweb `$help` link** — the one with a length limit, though **less of a
+  problem than v0.2 guessed.** Measured: seven exhibits with two mirrors each
+  encode to ~2.8 KB, which every browser and proxy accepts. The worst case the
+  validator permits — seven exhibits with four 300-character mirrors — encodes to
+  ~10.3 KB, and nginx's default header buffer is 8 KB, so *that* request is
+  refused before gnoweb ever sees it.
+
+  So the link is offered normally and withdrawn only when it would actually
+  overflow, at a budget well under 8 KB so the cutoff is reached by a check that
+  can explain itself rather than by a proxy returning 414 to somebody who has
+  just written a claim. The refusal names the two paths that still carry the
+  whole claim — Adena and the command line — because "this does not work"
+  without "this does" is the shape of every unhelpful error.
+
+  v0.2 said this affordance simply could not survive media and should be
+  disabled for every media-bearing claim. That was a guess, and it would have
+  removed a working path for the sake of a rare one.
 
 ### 2.7 Cost, shown before signing
 
