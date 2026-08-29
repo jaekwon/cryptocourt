@@ -157,9 +157,12 @@ must keep it:
 
 ### 2.7 Cost, shown before signing
 
-The composer shows the storage-deposit delta before the signature — roughly 150
-bytes an item. Small, but a court that surprises people with costs is a court
-people stop using.
+The composer shows the storage-deposit delta before the signature. An item is
+about 200 bytes typically and up to ~1.4 KB at the cap of four 300-character
+mirrors, so a full seven-item claim ranges from roughly 1.4 KB to 9.7 KB — a
+fifth of a GNOT at worst, refundable. Small either way, but a court that
+surprises people with costs is a court people stop using, and the figure shown
+must be the real one rather than the typical one.
 
 ---
 
@@ -288,20 +291,28 @@ costs the client one `JSON.parse`.
 
 Captions therefore reject raw newlines at validation — which they should anyway.
 
-**Validator** `mediaItemFault(...) string`, with `mustMediaItem` panicking on a
-non-empty fault. The split is `siteDomainFault`'s and for its reason: the render
+**Validator** `mediaItemFault(...) string`, reached through
+`parseMediaFault`, with `parseMediaArg` panicking on a non-empty fault. The split is `siteDomainFault`'s and for its reason: the render
 path must ask the same question without being able to abort a page. **A bad
 stored value costs the item, never the claim underneath it.**
 
 - `sha256` is exactly 64 lowercase hex characters
 - every mirror is `https://`, host on the allowlist, length ≤ 300
-- ⚠︎ mirror charset excludes whitespace, `\`, `"`, `'`, `<`, `>`, `(`, `)` and
-  controls. **The parentheses are not stylistic**: the URL is emitted into a
+- ⚠︎ mirror charset excludes whitespace, `\`, `"`, `'`, `<`, `>`, `(`, `)`,
+  `` ` ``, `,`, `|` and controls. The last two are the wire separators: a mirror
+  carrying one would turn one field into two, or one item into two. **The parentheses are not stylistic**: the URL is emitted into a
   markdown destination `![alt](url)`, and a `)` inside closes it early and spills
   the remainder into the page. Same class as the `kourt\.xyz` escape that broke
   the site link — a string put through the wrong text machinery. Validate
   fail-closed, emit raw, and never reach for `sanitize.InlineText` on a URL.
 - `w`, `h`, `bytes` positive and within bounds
+- the host is whatever precedes the first `/`, `?` or `#` — so a fragment cannot
+  smuggle a trusted-looking name past the check, and a query following the host
+  directly is not read as part of it
+- **no file-extension rule.** One was considered and refused: the archive serves
+  at `/m/<sha256>`, which has no extension, so requiring one would reject the
+  copy kourt.xyz keeps of every image. The declared `mime` is author-supplied
+  and equally unauthoritative; a non-image in an `<img>` simply fails to load
 - caption ≤ 120 chars, single line
 
 **Host allowlist** mirrors gnoweb's `cspImgHost`, plus `kourt.xyz`. Drift is the

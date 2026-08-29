@@ -166,9 +166,17 @@ func mirrorFault(u string) string {
 	if !strings.HasPrefix(u, scheme) {
 		return "a mirror is https — plain http is blocked as mixed content"
 	}
+	// The authority ends at the FIRST of '/', '?' or '#'. Cutting only at '/'
+	// would read "i.imgur.com?v=2" as the host and refuse a URL whose query
+	// follows the host directly — fail-closed, but refused for a reason nobody
+	// could act on. Cutting at all three also keeps a fragment from smuggling a
+	// trusted-looking name past the check: in "https://evil.com/#i.imgur.com"
+	// the host is and stays evil.com.
 	host := u[len(scheme):]
-	if i := strings.IndexByte(host, '/'); i >= 0 {
-		host = host[:i]
+	for _, sep := range []byte{'/', '?', '#'} {
+		if i := strings.IndexByte(host, sep); i >= 0 {
+			host = host[:i]
+		}
 	}
 	if host == "" {
 		return "a mirror needs a host"

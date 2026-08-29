@@ -39,6 +39,15 @@ func TestAMirrorMustBeSomethingTheBrowserWillLoad(cur realm, t *testing.T) {
 		// two, or one item into two.
 		{"https://i.imgur.com/a,b.webp", "may not contain"},
 		{"https://i.imgur.com/a|b.webp", "may not contain"},
+		// A host with credentials, a port, or a lookalike suffix is refused —
+		// each of these reads as an allowed host to a careless parser.
+		{"https://i.imgur.com@evil.example.com/a.webp", "will not load"},
+		{"https://i.imgur.com:8080/a.webp", "will not load"},
+		{"https://i.imgur.com.evil.example.com/a.webp", "will not load"},
+		// A FRAGMENT MUST NOT SMUGGLE A TRUSTED NAME PAST THE CHECK: the host
+		// here is evil.example.com and nothing after the # can change that.
+		{"https://evil.example.com/#i.imgur.com", "will not load"},
+		{"https://evil.example.com?x=i.imgur.com", "will not load"},
 	} {
 		got := mirrorFault(tc.url)
 		if got == "" || !strings.Contains(got, tc.want) {
@@ -47,10 +56,21 @@ func TestAMirrorMustBeSomethingTheBrowserWillLoad(cur realm, t *testing.T) {
 		}
 	}
 
-	// THE CONTROL. Without it every arm above would pass against a validator
-	// that refused literally everything.
-	if got := mirrorFault(okMirror); got != "" {
-		t.Fatalf("a good mirror was refused: %q", got)
+	// THE CONTROLS. Without these every arm above would pass against a validator
+	// that refused literally everything — and the second one is the case the
+	// authority parse exists for: a query directly after the host, with no path.
+	for _, ok := range []string{
+		okMirror,
+		"https://i.imgur.com?v=2",
+		"https://i.imgur.com/a.webp?v=2#top",
+		// The archive's own address, which carries NO file extension — a rule
+		// requiring one would have refused the copy kourt.xyz keeps of every
+		// image.
+		"https://i.imgur.com/" + okHash,
+	} {
+		if got := mirrorFault(ok); got != "" {
+			t.Fatalf("a good mirror was refused: %q -> %q", ok, got)
+		}
 	}
 }
 
