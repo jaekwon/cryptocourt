@@ -33,6 +33,10 @@ CHAINDIR="$STATEDIR/chain"
 FAUCET_PREMINE="${FAUCET_PREMINE:-5000000000000}"
 OWNER_ADDR="${OWNER_ADDR:-}"          # optional: an address to premine for yourself
 OWNER_PREMINE="${OWNER_PREMINE:-1000000000000}"
+# gnoweb's loopback port. NOT 8888: that is gnodev's default, and on a host that
+# runs anything else it is likely already taken — which is exactly how the first
+# deploy failed, inside systemd, with "bind: address already in use".
+GNOWEB_PORT="${GNOWEB_PORT:-8899}"
 
 cd "$(dirname "$0")/.."
 REPO="$PWD"
@@ -176,12 +180,17 @@ fi
 
 echo "==> shipping units and vhosts"
 [ -n "$CONFIG_ONLY" ] || "${SCP[@]}" "$WORK/genesis.json" "$HOST:$CHAINDIR/genesis.json"
-"${SCP[@]}" deploy/kourtnode.service deploy/kourtfaucet.service deploy/kourtweb.service "$HOST:/tmp/"
-"${SCP[@]}" deploy/nginx-zones.conf deploy/nginx-rpc.conf deploy/nginx-faucet.conf \
-    deploy/nginx-gnoweb.conf "$HOST:/tmp/"
+"${SCP[@]}" deploy/kourtnode.service deploy/kourtfaucet.service "$HOST:/tmp/"
+# The unit and the vhost have to agree on the port, so both are rendered here
+# from the same variable rather than edited in two places.
+sed "s/__GNOWEB_PORT__/$GNOWEB_PORT/" deploy/kourtweb.service  > "$WORK/kourtweb.service"
+sed "s/__GNOWEB_PORT__/$GNOWEB_PORT/" deploy/nginx-gnoweb.conf > "$WORK/nginx-gnoweb.conf"
+"${SCP[@]}" "$WORK/kourtweb.service" "$HOST:/tmp/kourtweb.service"
+"${SCP[@]}" "$WORK/nginx-gnoweb.conf" "$HOST:/tmp/nginx-gnoweb.conf"
+"${SCP[@]}" deploy/nginx-zones.conf deploy/nginx-rpc.conf deploy/nginx-faucet.conf "$HOST:/tmp/"
 
 "${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" \
-  CONFIG_ONLY="$CONFIG_ONLY" 'bash -seu' <<'REMOTE'
+  CONFIG_ONLY="$CONFIG_ONLY" GNOWEB_PORT="$GNOWEB_PORT" 'bash -seu' <<'REMOTE'
 chown -R kourt:kourt "$CHAINDIR"
 install -m 0644 /tmp/kourtnode.service   /etc/systemd/system/kourtnode.service
 install -m 0644 /tmp/kourtfaucet.service /etc/systemd/system/kourtfaucet.service
@@ -220,6 +229,18 @@ if [ ! -s "$STATEDIR/secret/captcha.secret" ]; then
     FAUCET_READY=no
 else
     FAUCET_READY=yes
+fi
+
+# A PORT CHECK THAT NAMES THE OCCUPANT. Without it the only symptom is a unit
+# that flaps and a stack trace in the journal, which says the port is taken but
+# not by what — and on a shared host that is the whole question.
+if ss -ltn 2>/dev/null | grep -q "127.0.0.1:$GNOWEB_PORT " ; then
+    holder=$(ss -ltnp 2>/dev/null | grep "127.0.0.1:$GNOWEB_PORT " | sed 's/.*users:(("\([^"]*\)".*/\1/' | head -1)
+    if ! systemctl is-active --quiet kourtweb; then
+        echo "REFUSE: 127.0.0.1:$GNOWEB_PORT is already held by ${holder:-another process}." >&2
+        echo "        Re-run with a free port, e.g. GNOWEB_PORT=8901 make chain ... --config-only" >&2
+        exit 8
+    fi
 fi
 
 systemctl daemon-reload

@@ -17,13 +17,17 @@ Documentation=https://github.com/jaekwon/cryptocourt-mod/blob/main/deploy/README
 After=network-online.target kourtnode.service
 Wants=network-online.target
 
+# The listen port is substituted at install time by chain.sh (GNOWEB_PORT).
+# 8888 was the original default, copied from gnodev, and it collided with another
+# service already on the host — a shared box is exactly where a well-known port
+# is least available.
 [Service]
 Type=simple
 User=kourt
 Group=kourt
 Environment=GNOROOT=/opt/kourt/gnoroot
 ExecStart=/opt/kourt/bin/gnoweb \
-    -bind 127.0.0.1:8888 \
+    -bind 127.0.0.1:__GNOWEB_PORT__ \
     -remote http://127.0.0.1:26657 \
     -help-remote https://rpc.kourt.xyz \
     -chainid kourt-1 \
