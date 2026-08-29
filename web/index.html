@@ -939,6 +939,16 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .composer-post[disabled]{opacity:.5; cursor:not-allowed}
 .composer-note{margin:10px 0 0; color:var(--muted); font-size:.9em}
 
+/* the parties' preview on the claim page. Two lines, one each, clipped — it is a
+   pointer to an argument, not the argument. Sized down from body text so it
+   reads as a quotation of somewhere else rather than as this page's own words. */
+.bpreview{margin:-6px 0 16px; font-size:.94em}
+.bpreview-row{display:flex; flex-wrap:wrap; align-items:baseline; gap:7px; margin:0 0 4px}
+.bpreview-row .mono{color:var(--muted)}
+.bpreview-row .pill{font-size:.85em}
+.bpreview-row a{color:var(--ink-2); text-decoration:none; border-bottom:1px solid var(--line-2)}
+.bpreview-row a:hover,.bpreview-row a:focus-visible{color:var(--ink); border-bottom-color:var(--accent)}
+
 /* mobile */
 @media(max-width:820px){
   body{grid-template-columns:1fr}
@@ -1412,13 +1422,54 @@ function boardChip(slug, id, n, open, parties){
    party scan on every claim page would be a read per view bought for nothing.
    BoardOpen is paid only on the empty branch, where it decides between an
    invitation and silence. */
+/* THE PARTIES' OWN WORDS, on the page where the stakes are.
+
+   The chip says THAT the author and the answerer have replied. This says WHAT
+   they said, which is the difference between a count and an argument:
+
+       g1orem…0000  author     The 12,412 figure is the certified count, not…
+       g1ansr…7c21  answerer   It is the denominator the WHO published…
+
+   IT COSTS NOTHING EXTRA. fillBoardChip already fetches the party rows to decide
+   the chip's wording and throws their text away; this renders what it already
+   holds. No read is added to any claim page.
+
+   NO STAKE BADGE, deliberately, and this is a departure from the design that
+   asked for `· YES 40,000` on each row. Two reasons, both from the realm:
+   boardBadges emits BOTH sides for an address staked each way and this row shape
+   has no slot for that, and the amount would cost a position read per party on
+   every claim view. The side is already on this page, in the stake bar, at full
+   size. The ROLE is the identity that makes these two lines an argument rather
+   than two opinions, and the role is free.
+
+   A WITHHELD PARTY ROW IS SKIPPED rather than previewed as a tombstone: this is
+   a preview of what was said, and a row with nothing to show has nothing to
+   preview. The board page still lists it, marked, where it belongs. */
+const clipText = (s, n) => {
+  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
+};
+function boardPreviewHtml(slug, id, parties){
+  const rows = (parties || []).filter(r => !BOARD_TOMB[r.mark] && String(r.text || "").trim());
+  if(!rows.length) return "";
+  return `<section class="bpreview">` + rows.map(r =>
+      `<p class="bpreview-row"><span class="mono">${shortAddr(r.author)}</span>`
+    + ` <span class="pill">${esc(r.role)}</span> `
+    + `<a href="#/c/${esc(slug)}/${id}/board">${esc(clipText(r.text, 150))}</a></p>`).join("")
+    + `</section>`;
+}
+
 async function fillBoardChip(slug, id){
   const slot = document.getElementById("boardchip");
   if(!slot) return;
   try{
     const n = await boardSize(slug, id);
     if(!(n > 0)){ slot.innerHTML = boardChip(slug, id, 0, await boardOpenOf(slug, id), []); return; }
-    slot.innerHTML = boardChip(slug, id, n, true, await boardParties(slug, id).catch(()=>[]));
+    const parties = await boardParties(slug, id).catch(()=>[]);
+    slot.innerHTML = boardChip(slug, id, n, true, parties);
+    // The same rows, twice used and fetched once.
+    const pv = document.getElementById("boardpreview");
+    if(pv) pv.innerHTML = boardPreviewHtml(slug, id, parties);
   }catch(_){ /* an unreadable board leaves the tagrow as it was, never a broken chip */ }
 }
 
@@ -6002,6 +6053,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         <span class="tacts">${polish}<span id="boardchip"></span>${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
         <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
+    + `<div id="boardpreview"></div>`
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">

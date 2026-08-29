@@ -16,8 +16,11 @@ function slice(from, to){
   const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
   return src.slice(a, b);
 }
-const esc = s => String(s).replace(/[&<>"']/g, c =>
-  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// esc and shortAddr come from the FILE, not from a local copy: a re-typed
+// escaper that is kinder than the real one would let an escaping assertion pass
+// against a function the page never calls.
+eval(slice('function esc(s){', '\n/* undo the realm'));
+eval(slice('function shortAddr(', '\nfunction wall('));
 eval(slice('function wireFields(', '\nconst boardNewestRows'));
 eval(slice('const boardNewestRows', '\n\n').replace(/^const /gm, 'var '));
 eval(slice('function boardChipLabel(', '\n/* BoardSize FIRST'));
@@ -124,6 +127,41 @@ const party = role => ({role});
      two.some(r => r.mark === "h" && r.text === ""));
 }
 
+// ---- the parties' own words ----------------------------------------------
+// The chip says THAT they replied; this says WHAT they said. It renders from the
+// rows fillBoardChip has already fetched, so it costs no read.
+{
+  eval(slice('const BOARD_TOMB = {', '\nconst gnowebRow').replace(/^const /gm, 'var '));
+  eval(slice('const clipText =', '\nasync function fillBoardChip').replace(/^const /gm, 'var '));
+  const P = (role, text, o) => Object.assign({id:7, author:"g1abcdefghijklmnop", role, mark:".",
+                                              at:4799200, text}, o||{});
+  const two = boardPreviewHtml("covid", 3, [P("author","The 12,412 figure is the certified count."),
+                                            P("answerer","It is the denominator the WHO published.", {id:8})]);
+  ok("both parties are previewed", (two.match(/bpreview-row/g)||[]).length === 2);
+  ok("...each named by role, which is what makes them an argument",
+     /class="pill">author</.test(two) && /class="pill">answerer</.test(two));
+  ok("...and each links to the board", (two.match(/#\/c\/covid\/3\/board/g)||[]).length === 2);
+
+  // A withheld row has nothing to preview. The board page still lists it, marked.
+  const held = boardPreviewHtml("covid", 3, [P("author","", {mark:"h"}), P("answerer","said something", {id:8})]);
+  ok("a withheld party row is skipped, not previewed as a tombstone",
+     (held.match(/bpreview-row/g)||[]).length === 1 && held.includes("said something"));
+  ok("no showable rows renders nothing at all",
+     boardPreviewHtml("covid", 3, [P("author","", {mark:"x"})]) === ""
+     && boardPreviewHtml("covid", 3, []) === "");
+
+  // Long text is clipped to one line, and the clipping is on a copy.
+  const long = "x".repeat(400);
+  const clipped = boardPreviewHtml("covid", 3, [P("author", long)]);
+  ok("a long comment is clipped rather than pasted whole",
+     clipped.includes("…") && clipped.length < long.length);
+  ok("newlines are flattened, so a multi-line comment stays one line",
+     clipText("a\n\nb   c") === "a b c");
+  // Text is chain data on a page anyone can link to.
+  ok("the preview escapes like everything else",
+     !boardPreviewHtml("covid", 3, [P("author", "<img src=x>")]).includes("<img src=x"));
+}
+
 // ---- the wiring -----------------------------------------------------------
 // A pure function with no caller is the failure this feature has already had
 // TWICE: the wire parser shipped unused in two separate commits before anything
@@ -132,6 +170,20 @@ const party = role => ({role});
 {
   ok("the tagrow carries a slot for the chip",
      /<span id="boardchip"><\/span>/.test(src));
+  // The preview needs its own two links checked, and separately: deleting either
+  // the slot or the fill leaves the other in place and passed until these lines
+  // existed. Every pure function in this file had a caller; neither wiring
+  // assertion existed to say so.
+  ok("the claim page carries a slot for the parties' preview",
+     /<div id="boardpreview"><\/div>/.test(src));
+  ok("...and fillBoardChip fills it from the rows it already has",
+     /if\(pv\) pv\.innerHTML = boardPreviewHtml\(slug, id, parties\);/.test(src));
+  // Scoped to fillBoardChip, not the whole file: boardView fetches the party
+  // rows too, for its in-place badges, so a file-wide count is 2 and says
+  // nothing about whether the preview added a read.
+  ok("...fetched ONCE and used twice, so the preview costs no extra read",
+     (slice('async function fillBoardChip', '\n}\n')
+        .match(/await boardParties\(slug, id\)/g) || []).length === 1);
   ok("fillBoardChip writes into that slot",
      /getElementById\("boardchip"\)/.test(src));
   ok("...and the claim route calls it",
