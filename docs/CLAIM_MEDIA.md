@@ -35,7 +35,7 @@
 > | overlay: map card strip, node badges, lightbox with verification | built |
 > | archive: the classifier — queue, auto-block, human undo | built |
 > | **archive: a vision backend for it (Ollama)** | **not built** |
-> | drafts in `localStorage` (§2.5) | not built |
+> | drafts in `localStorage` (§2.5) | built |
 > | video as a second tier (§7) | not built |
 >
 > Two things are worth knowing before trusting any of it. `mountCompose` needs a

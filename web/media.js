@@ -400,8 +400,18 @@ function mediaNewComposer(opts) {
   function fault() { return mediaFault(items.filter(mediaFileable), o.siteDomain); }
   function busy() { return items.some(x => !mediaFileable(x) && x.state !== "broken"); }
 
+  /* Put a restored draft's exhibits back. `seq` advances past them so a new
+     exhibit added afterwards cannot take an id one of these already has. */
+  function seed(restored) {
+    for (const it of restored || []) {
+      items.push(it);
+      seq = Math.max(seq, Math.abs(it.id || 0));
+    }
+    o.onChange && o.onChange(items);
+  }
+
   return {
-    items, add, addLink, remove, restore, move, setCaption,
+    items, add, addLink, remove, restore, move, setCaption, seed,
     argument, fault, busy,
     count: () => items.length,
   };
@@ -744,6 +754,82 @@ function mediaMount(root, composer, opts) {
   return {draw, say, el: drop};
 }
 
+/* ---- drafts -------------------------------------------------------------
+ *
+ * NOTHING IS LOST. A closed tab, a rejected signature, a broadcast that failed:
+ * reopening restores the claim with its exhibits intact. This is cheap to build
+ * and expensive to omit — the work being protected is somebody writing out what
+ * they believe and why, and losing it is the kind of thing people do not come
+ * back from.
+ *
+ * The bytes are already safe: they were uploaded and are addressed by hash, so a
+ * draft only has to remember the ADDRESS. That is also why a draft is small
+ * enough to keep in localStorage without thinking about it.
+ */
+
+const MEDIA_DRAFT_PREFIX = "kourt.draft.";
+
+function mediaDraftKey(court) { return MEDIA_DRAFT_PREFIX + (court || ""); }
+
+/* What is worth writing down. Not `preview`: a blob: URL is dead the moment the
+ * page unloads, and storing one would restore an exhibit whose thumbnail is a
+ * broken image. Not `state` either — it is re-derived on load from what the item
+ * actually has, which is the only honest source after a reload. */
+function mediaDraftOf(title, body, items) {
+  return {
+    v: 1, title: title || "", body: body || "",
+    items: (items || []).filter(mediaFileable).map(it => ({
+      kind: it.kind, sha256: it.sha256 || "", mime: it.mime || "",
+      w: it.w || 0, h: it.h || 0, bytes: it.bytes || 0,
+      caption: it.caption || "", mirrors: it.mirrors || [],
+      linkOnly: !!it.linkOnly,
+    })),
+  };
+}
+
+function mediaSaveDraft(store, court, title, body, items) {
+  if (!store) return false;
+  const d = mediaDraftOf(title, body, items);
+  // An empty draft is a deletion. Leaving one behind would greet the next
+  // person to open the composer with a blank form they have to dismiss.
+  if (!d.title && !d.body && !d.items.length) return mediaClearDraft(store, court);
+  try {
+    store.setItem(mediaDraftKey(court), JSON.stringify(d));
+    return true;
+  } catch (_) {
+    // A full or disabled store is not a reason to lose the composer; the draft
+    // is a convenience and must never be load-bearing.
+    return false;
+  }
+}
+
+function mediaLoadDraft(store, court) {
+  if (!store) return null;
+  let raw = null;
+  try { raw = store.getItem(mediaDraftKey(court)); } catch (_) { return null; }
+  if (!raw) return null;
+  let d;
+  try { d = JSON.parse(raw); } catch (_) { return null; }
+  if (!d || d.v !== 1 || !Array.isArray(d.items)) return null;
+  return {
+    title: String(d.title || ""), body: String(d.body || ""),
+    items: d.items.map((it, i) => Object.assign({}, it, {
+      id: -(i + 1),                       // negative: never collides with a live id
+      // The preview is whatever can be SHOWN now. The archive copy survived the
+      // reload even though the blob: URL did not.
+      preview: (it.mirrors || [])[0] || "",
+      // Re-derived rather than restored: an item with somewhere to be found is
+      // ready, and one without is a failed copy the person can retry.
+      state: (it.mirrors || []).length ? "ready" : "failed",
+    })),
+  };
+}
+
+function mediaClearDraft(store, court) {
+  if (!store) return false;
+  try { store.removeItem(mediaDraftKey(court)); return true; } catch (_) { return false; }
+}
+
 /* ---- the lightbox -------------------------------------------------------
  *
  * Full size, one exhibit at a time, and THE ONE PLACE THAT SAYS WHETHER THE
@@ -848,5 +934,6 @@ if (typeof module !== "undefined" && module.exports) {
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
     mediaMount, mediaEl, mediaParse, mediaSrc, mediaNodeThumb,
     mediaCardItems, mediaVerify, MEDIA_VERDICTS, mediaLightbox,
+    mediaSaveDraft, mediaLoadDraft, mediaClearDraft, mediaDraftKey, mediaDraftOf,
   };
 }

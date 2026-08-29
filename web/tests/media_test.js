@@ -355,6 +355,71 @@ ok("a degenerate size does not divide by zero",
   ok("the altered verdict is impossible to miss",
      M.MEDIA_VERDICTS.altered.length > 20 && /NO LONGER MATCHES/.test(M.MEDIA_VERDICTS.altered));
 
+  // ---- drafts ------------------------------------------------------------
+  // The work being protected is somebody writing out what they believe and why.
+  // Losing it is the kind of thing people do not come back from.
+  function fakeStore() {
+    const m = new Map();
+    return {getItem: k => (m.has(k) ? m.get(k) : null),
+            setItem: (k, v) => m.set(k, String(v)),
+            removeItem: k => m.delete(k), size: () => m.size};
+  }
+
+  const live = [
+    {id: 1, kind: "img", sha256: "a".repeat(64), mime: "image/webp", w: 8, h: 6,
+     bytes: 12, caption: "the memo", mirrors: ["https://kourt.xyz/m/" + "a".repeat(64)],
+     preview: "blob:gone-on-reload", state: "ready"},
+    {id: 2, kind: "img", sha256: "b".repeat(64), mime: "image/webp", w: 8, h: 6,
+     bytes: 12, caption: "", mirrors: [], preview: "blob:also-gone", state: "failed"},
+    {id: 3, kind: "img", state: "uploading"},   // not fileable yet
+  ];
+
+  let store = fakeStore();
+  M.mediaSaveDraft(store, "covid", "a title", "a body", live);
+  const back = M.mediaLoadDraft(store, "covid");
+  ok("a draft comes back", !!back && back.title === "a title" && back.body === "a body");
+  // An exhibit still uploading has nothing worth remembering: its bytes may
+  // never have reached the archive.
+  ok("only fileable exhibits are kept", back.items.length === 2);
+
+  // A blob: URL is DEAD after a reload. Storing one would restore an exhibit
+  // whose thumbnail is a broken image; the archive copy survived and is what
+  // can actually be shown.
+  ok("the preview is the archive copy, not the dead blob URL",
+     back.items[0].preview === "https://kourt.xyz/m/" + "a".repeat(64));
+  ok("an exhibit with nowhere to be found has no preview", back.items[1].preview === "");
+  // State is re-derived, because after a reload the only honest source is what
+  // the item actually has.
+  ok("an exhibit with a copy is ready", back.items[0].state === "ready");
+  ok("...and one without is a failed copy to retry", back.items[1].state === "failed");
+  ok("restored ids cannot collide with live ones", back.items.every(i => i.id < 0));
+  ok("a restored exhibit is fileable", back.items.every(M.mediaFileable));
+
+  // Drafts are per court: writing one must not overwrite another court's.
+  M.mediaSaveDraft(store, "other", "elsewhere", "", []);
+  ok("drafts are kept per court", M.mediaLoadDraft(store, "covid").title === "a title");
+
+  // AN EMPTY DRAFT IS A DELETION. Leaving one behind greets the next person
+  // with a blank form they have to dismiss.
+  M.mediaSaveDraft(store, "covid", "", "", []);
+  ok("emptying the composer clears the draft", M.mediaLoadDraft(store, "covid") === null);
+  M.mediaClearDraft(store, "other");
+  ok("clearing removes it", M.mediaLoadDraft(store, "other") === null);
+
+  // A draft is a convenience and must never be load-bearing.
+  const broken = {getItem: () => { throw new Error("blocked"); },
+                  setItem: () => { throw new Error("full"); }, removeItem: () => {}};
+  ok("a storage that refuses to write does not throw",
+     M.mediaSaveDraft(broken, "covid", "t", "b", live) === false);
+  ok("a storage that refuses to read yields no draft",
+     M.mediaLoadDraft(broken, "covid") === null);
+  ok("no storage at all is fine", M.mediaLoadDraft(null, "covid") === null);
+  store = fakeStore();
+  store.setItem(M.mediaDraftKey("covid"), "{not json");
+  ok("a corrupt draft is ignored rather than thrown", M.mediaLoadDraft(store, "covid") === null);
+  store.setItem(M.mediaDraftKey("covid"), JSON.stringify({v: 99, items: []}));
+  ok("a draft from a future version is ignored", M.mediaLoadDraft(store, "covid") === null);
+
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 })();

@@ -2131,6 +2131,9 @@ function claimBody(d){
    enough because one card is open at a time; the map's selection card and the
    claim page never coexist. */
 var LAST_EXHIBITS = [];
+/* The court whose composer is open, so a confirmed broadcast clears the right
+   draft and only that one. */
+var COMPOSE_DRAFT_COURT = "";
 function claimExhibits(c){
   if(typeof mediaCardItems !== "function") return "";
   const items = mediaCardItems((c && c.media) || [], CFG.site || "");
@@ -2374,7 +2377,17 @@ async function adenaSign(func, args, el){
     const res = await a.DoContract({messages:[{type:"/vm.m_call", value:{
       caller: CFG.addr, send, pkg_path: PKG, func, args: vals
     }}]});
-    if(res.code===0){ note("Sent. tx "+String(res.data&&res.data.hash||"").slice(0,12)+"…", true); setTimeout(render, 7000); }
+    if(res.code===0){
+      note("Sent. tx "+String(res.data&&res.data.hash||"").slice(0,12)+"…", true);
+      /* THE DRAFT CLEARS ONLY HERE. A rejected signature, a wallet on the wrong
+         chain, a closed prompt — every one of those must leave the work exactly
+         where it was, because the alternative is somebody losing what they had
+         written to a mis-click. */
+      if(func==="OpenClaimPM" && COMPOSE_DRAFT_COURT && typeof mediaClearDraft==="function"){
+        mediaClearDraft(window.localStorage, COMPOSE_DRAFT_COURT);
+      }
+      setTimeout(render, 7000);
+    }
     else if(res.code===4000){ note("Rejected in the wallet."); }
     else if(res.code===3001){ note("Adena's active account is not "+shortAddr(CFG.addr)+" — switch accounts in Adena or reconnect."); }
     else note("Adena: "+(res.message||("code "+res.code)));
@@ -2529,6 +2542,11 @@ function mountCompose(host, slug){
     el.appendChild(title); el.appendChild(body); el.appendChild(media);
     el.appendChild(warn); el.appendChild(actions);
 
+    // A DRAFT SURVIVES A CLOSED TAB. The bytes are already safe — uploaded and
+    // addressed by hash — so this only has to remember the addresses.
+    const draft = mediaLoadDraft(window.localStorage, slug);
+    if(draft){ title.value = draft.title; body.value = draft.body; }
+
     composer = mediaNewComposer({
       siteDomain: CFG.site || "",
       previewURL: f => URL.createObjectURL(f),
@@ -2536,12 +2554,17 @@ function mountCompose(host, slug){
       onChange: () => { mounted && mounted.draw(); refresh(); },
     });
     const mounted = mediaMount(media, composer, {doc: document});
+    if(draft && draft.items.length) composer.seed(draft.items);
+    // Named so the sign handler can clear it once a broadcast is confirmed, and
+    // only then: a rejected signature must leave the work exactly where it was.
+    COMPOSE_DRAFT_COURT = slug;
 
     title.addEventListener("input", refresh);
     body.addEventListener("input", refresh);
     refresh();
 
     function refresh(){
+      mediaSaveDraft(window.localStorage, slug, title.value, body.value, composer.items);
       const arg = composer.argument();
       const fault = composer.fault();
       const args = {courtSlug: slug, title: title.value || "", body: body.value || "",
