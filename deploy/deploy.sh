@@ -104,9 +104,51 @@ for f in $LOCAL_SCRIPTS; do
 	chat.js
 	LIST
 done
-LOCAL_SHA=$(shasum -a 256 web/index.html | cut -d' ' -f1)
+say "stamping the overlay's chain config"
+# THE SHIPPED PAGE MUST NOT OPEN IN DEMO. web/index.html defaults to
+# {mode:"demo", rpc:"http://127.0.0.1:26657", chainid:"dev"} because that is the
+# right default for a file:// copy on a laptop — and exactly the wrong one for a
+# public site, where it means every visitor sees sample data and a loopback RPC
+# they cannot reach. The repo keeps the demo default; the DEPLOYED copy is
+# stamped with this chain, so what a reader gets is fixed at deploy time rather
+# than left to a settings panel they have to find.
+#
+# Stamped on a COPY. Editing web/index.html in place would leave the working tree
+# dirty with deployment values and put them in the next commit.
+STAMPED="$(mktemp -t kourt-index).html"
+trap 'rm -f "$STAMPED" /tmp/kourtchat-linux' EXIT
+SITE_MODE="${SITE_MODE:-live}"
+SITE_RPC="${SITE_RPC:-https://rpc.kourt.xyz}"
+SITE_CHAINID="${SITE_CHAINID:-kourt-1}"
+# gnoweb is where every action button sends a reader to sign: tx() builds
+# CFG.gnoweb + "/r/kourt/kourtv2$help&func=…". There is no gnoweb on this host,
+# so the honest default is the repo's — and that points at gno.land, which does
+# NOT carry this realm. Say so rather than stamping a link that 404s quietly.
+SITE_GNOWEB="${SITE_GNOWEB:-}"
+python3 - "$STAMPED" <<PYEOF
+import re, sys
+src = open("web/index.html", encoding="utf-8").read()
+cfg = {"mode": "$SITE_MODE", "rpc": "$SITE_RPC", "chainid": "$SITE_CHAINID"}
+gnoweb = "$SITE_GNOWEB"
+pat = re.compile(r'const CFG_DEFAULTS = \{[^}]*\};')
+if len(pat.findall(src)) != 1:
+    sys.exit("deploy: expected exactly one CFG_DEFAULTS line to stamp")
+old = pat.search(src).group(0)
+keep = re.search(r'gnoweb:"([^"]*)"', old).group(1)
+line = ('const CFG_DEFAULTS = {mode:"%s", rpc:"%s", gnoweb:"%s", chainid:"%s"};'
+        % (cfg["mode"], cfg["rpc"], gnoweb or keep, cfg["chainid"]))
+open(sys.argv[1], "w", encoding="utf-8").write(pat.sub(lambda _: line, src, count=1))
+print("    " + line)
+PYEOF
+grep -q "mode:\"$SITE_MODE\"" "$STAMPED" || { echo "deploy: the stamp did not apply" >&2; exit 1; }
+if [ -z "$SITE_GNOWEB" ]; then
+	echo "    NOTE: gnoweb left at the repo default — action buttons link to a chain"
+	echo "          that does not carry this realm. Set SITE_GNOWEB= to fix."
+fi
+
+LOCAL_SHA=$(shasum -a 256 "$STAMPED" | cut -d' ' -f1)
 CHAT_SHA=$(shasum -a 256 web/chat.js | cut -d' ' -f1)
-echo "    index.html  sha ${LOCAL_SHA:0:16}…  $(wc -c < web/index.html | tr -d ' ') bytes"
+echo "    index.html  sha ${LOCAL_SHA:0:16}…  $(wc -c < "$STAMPED" | tr -d ' ') bytes"
 echo "    chat.js     sha ${CHAT_SHA:0:16}…  $(wc -c < web/chat.js | tr -d ' ') bytes"
 
 say "building kourtchat for linux/amd64"
@@ -137,7 +179,7 @@ say "uploading"
 # and a half-written index.html served to a reader is a broken page — a rename
 # within the same filesystem is atomic, so nobody sees either.
 "${SCP[@]}" /tmp/kourtchat-linux "$HOST:$APPDIR/kourtchat.new"
-"${SCP[@]}" web/index.html "$HOST:$WEBROOT/index.html.new"
+"${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html.new"
 "${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js.new"
 "${SCP[@]}" deploy/kourtchat.service "$HOST:/tmp/kourtchat.service"
 
