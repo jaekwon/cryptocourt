@@ -226,7 +226,12 @@ async function mediaUpload(bytes, mime, opts) {
   const mine = o.sha256 || await mediaDigest(bytes);
   if (!fetchFn) throw new Error("no way to reach the archive");
 
-  const res = await fetchFn(base + "/m", {
+  // The court is a HINT, and it is what makes the archive's backfill work: if
+  // this tab closes before the claim is broadcast, nothing ever calls
+  // /m/claimed, and the court is the only thread back to these bytes. It grants
+  // no access — a wrong one just means they rely on /m/claimed as before.
+  const q = o.court ? "?court=" + encodeURIComponent(o.court) : "";
+  const res = await fetchFn(base + "/m" + q, {
     method: "POST", headers: {"Content-Type": mime}, body: bytes,
   });
   if (!res.ok) throw new Error("the archive would not take that image (" + res.status + ")");

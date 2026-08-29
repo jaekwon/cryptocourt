@@ -143,6 +143,20 @@ ok("a degenerate size does not divide by zero",
   catch (_) { refused = true; }
   ok("an archive that answers with another digest is refused", refused);
 
+  // THE COURT HINT MUST REACH THE ARCHIVE. Without it backfill has no thread
+  // back to these bytes, and a tab closed before broadcast loses them — which
+  // is the whole reason backfill exists.
+  let seen = "";
+  await M.mediaUpload(bytes, "image/webp", {
+    court: "covid", base: "",
+    fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
+  });
+  ok("the upload carries the court", /\/m\?court=covid$/.test(seen), seen);
+  await M.mediaUpload(bytes, "image/webp", {
+    base: "", fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
+  });
+  ok("...and omits it cleanly when there is none", seen === "/m", seen);
+
   const down = async () => ({ok: false, status: 503, json: async () => ({})});
   let failed = false;
   try { await M.mediaUpload(bytes, "image/webp", {fetch: down, base: ""}); }

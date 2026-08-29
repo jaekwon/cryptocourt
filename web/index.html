@@ -2175,6 +2175,141 @@ function reflectWallet(){
   else lab.textContent = "Connect Adena";
 }
 
+/* ======================= the claim composer ============================= */
+/* The browser glue the composer's core deliberately does not contain: a canvas,
+   a network, and the page's own action machinery. media.js holds every rule and
+   is exercised by two standalone harnesses; this is the part that can only run
+   in a browser, which is exactly why it lives on this side of the line.
+
+   Collapsed until asked for. Most people reading a court are not filing, and a
+   drop zone open on every court page would be furniture. */
+function mountCompose(host, slug){
+  if(!host) return;
+  const wrap = document.createElement("div");
+  wrap.className = "composewrap";
+  const open = document.createElement("button");
+  open.type = "button"; open.className = "btn composeopen";
+  open.textContent = "Open a claim with evidence";
+  wrap.appendChild(open);
+  host.appendChild(wrap);
+
+  let panel = null, composer = null;
+  open.addEventListener("click", () => {
+    if(panel){ panel.remove(); panel = null; composer = null; open.textContent = "Open a claim with evidence"; return; }
+    open.textContent = "Close";
+    panel = document.createElement("div");
+    panel.className = "composepanel";
+    wrap.appendChild(panel);
+    build(panel);
+  });
+
+  /* Resize and re-encode. THE PERSON IS TOLD NOTHING ABOUT THIS: a 12-megapixel
+     photo becomes a small WebP and the cap it would have violated is never
+     mentioned. createImageBitmap and canvas are both old enough to rely on, and
+     a browser without them fails this one file rather than the page. */
+  async function prepare(file){
+    const bmp = await createImageBitmap(file);
+    const fit = mediaFitWithin(bmp.width, bmp.height, MEDIA_MAX_EDGE);
+    const canvas = document.createElement("canvas");
+    canvas.width = fit.w; canvas.height = fit.h;
+    canvas.getContext("2d").drawImage(bmp, 0, 0, fit.w, fit.h);
+    // Quality steps down until it fits. Stopping at the first size under the cap
+    // spends the fewest bytes that still show what the exhibit shows.
+    for(const q of [0.82, 0.7, 0.6, 0.5]){
+      const blob = await new Promise(r => canvas.toBlob(r, "image/webp", q));
+      if(!blob) break;
+      if(blob.size <= MEDIA_MAX_BYTES){
+        return {mime:"image/webp", w:fit.w, h:fit.h,
+                bytes:new Uint8Array(await blob.arrayBuffer())};
+      }
+    }
+    throw new Error("that image will not compress small enough");
+  }
+
+  function archiveBase(){
+    // Same origin as the page. The archive is served from /m by the same nginx
+    // that serves this file, so there is nothing to configure and nothing to
+    // get wrong in a second place.
+    return "";
+  }
+
+  async function upload(bytes, mime, sha256){
+    // `court` is what lets the archive keep these bytes if this tab closes
+    // before the claim is broadcast — nothing would call /m/claimed then, and
+    // the court is the only thread back to them.
+    return mediaUpload(bytes, mime, {base: archiveBase(), sha256, court: slug});
+  }
+
+  function build(el){
+    const title = document.createElement("input");
+    title.type = "text"; title.className = "composetitle"; title.maxLength = 200;
+    title.placeholder = "Your claim of fact";
+    title.setAttribute("aria-label", "Claim title");
+
+    const body = document.createElement("textarea");
+    body.className = "composebody"; body.rows = 4; body.maxLength = 2000;
+    body.placeholder = "What would settle it — the evidence in view, and what this is NOT asking";
+    body.setAttribute("aria-label", "Claim body");
+
+    const media = document.createElement("div");
+    const actions = document.createElement("div");
+    actions.className = "actions"; actions.style.marginTop = "10px";
+    const warn = document.createElement("p");
+    warn.className = "medianote"; warn.setAttribute("role", "status");
+
+    el.appendChild(title); el.appendChild(body); el.appendChild(media);
+    el.appendChild(warn); el.appendChild(actions);
+
+    composer = mediaNewComposer({
+      siteDomain: CFG.site || "",
+      previewURL: f => URL.createObjectURL(f),
+      prepare, upload,
+      onChange: () => { mounted && mounted.draw(); refresh(); },
+    });
+    const mounted = mediaMount(media, composer, {doc: document});
+
+    title.addEventListener("input", refresh);
+    body.addEventListener("input", refresh);
+    refresh();
+
+    function refresh(){
+      const arg = composer.argument();
+      const fault = composer.fault();
+      const args = {courtSlug: slug, title: title.value || "", body: body.value || "",
+                    media: arg};
+      actions.innerHTML = "";
+
+      // THE THREE AFFORDANCES, kept whole. The gnoweb link is offered normally
+      // and withdrawn only when the request would actually overflow — measured,
+      // not guessed — and it says which paths still carry the whole claim.
+      const canLink = mediaHelpLinkFits(arg);
+      actions.innerHTML = btn(
+        arg ? "File this claim with its evidence" : "File this claim",
+        "OpenClaimPM", args, "", composer.count()
+          ? `${composer.count()} exhibit${composer.count()===1?"":"s"}` : "no evidence attached");
+      if(!canLink){
+        const a = actions.querySelector("a.btn");
+        if(a){ a.removeAttribute("href"); a.setAttribute("aria-disabled","true"); }
+      }
+
+      const bits = [];
+      if(fault) bits.push(fault);
+      if(!canLink) bits.push(MEDIA_HELP_LINK_TOO_LONG);
+      if(composer.busy()) bits.push("Still copying an exhibit — you can file now, or wait for the copy.");
+      if(!title.value.trim()) bits.push("A claim needs a title.");
+      warn.textContent = bits.join("  ");
+
+      // The sign path reads data-args at click time, so keeping the attribute
+      // current is the whole integration — no second code path to drift.
+      const sign = actions.querySelector(".signbtn");
+      if(sign){
+        sign.dataset.args = JSON.stringify(args);
+        sign.disabled = !!fault || !title.value.trim();
+      }
+    }
+  }
+}
+
 /* ============================ router =================================== */
 const main = document.getElementById("main");
 /* Restart the enter animation even when the route did not change class — the
@@ -2866,6 +3001,13 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   // Chat sits at the foot of the court, below the docket. Guarded on typeof so a
   // missing chat.js leaves the court page whole instead of throwing halfway
   // through a paint, which would take the docket with it.
+  // The claim composer, beside the docket. Guarded on typeof for the reason
+  // chat is: a missing media.js must leave the court page whole rather than
+  // throw halfway through a paint and take the docket with it. Without it the
+  // "Open a claim" link above still works — it just cannot carry evidence.
+  if(typeof mediaMount === "function" && CFG.mode !== "demo"){
+    mountCompose(document.getElementById("courtcompose"), slug);
+  }
   if(typeof mountChat === "function"){
     if(CHATSTOP) CHATSTOP();
     // Resolved here rather than written into CFG: persisting the origin would
@@ -4738,7 +4880,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + (pager||"")
     + qBarHtml("title or #id", idleCap)
     + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket <span class="count">${openWin}</span></div>`
-    + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div>`
+    + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
     + `</section>`
