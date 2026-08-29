@@ -292,6 +292,69 @@ ok("a degenerate size does not divide by zero",
   ok("the budget leaves room for the rest of the request",
      M.MEDIA_HELP_LINK_BUDGET < 8192 * 0.8, String(M.MEDIA_HELP_LINK_BUDGET));
 
+})();
+
+// ---- reading a claim's evidence back -------------------------------------
+(async () => {
+  const SITE = "kourt.xyz";
+  const hash = "d".repeat(64);
+  const img = {kind: "img", sha256: hash, mime: "image/webp", w: 800, h: 600,
+               bytes: 12, caption: "the memo",
+               mirrors: ["https://i.imgur.com/a.webp"]};
+
+  ok("a realm with no media reads as none", M.mediaParse("").length === 0);
+  ok("garbage reads as none, never as a broken map", M.mediaParse("{not json").length === 0);
+  ok("a real payload parses", M.mediaParse(JSON.stringify([img])).length === 1);
+
+  // THE MAP MUST NEVER FAN OUT TO FILER-CHOSEN HOSTS. Fifty nodes on one draw
+  // is fifty readers' addresses sent wherever an attacker liked.
+  ok("a node thumbnail uses the archive", M.mediaNodeThumb([img], SITE) === "https://kourt.xyz/m/" + hash);
+  ok("a node thumbnail NEVER uses a mirror", M.mediaNodeThumb([img], "") === "");
+  ok("a purged exhibit is not a thumbnail", M.mediaNodeThumb([{purged: true, kind: "img", sha256: hash}], SITE) === "");
+  ok("a video is never a thumbnail", M.mediaNodeThumb([{kind: "vid", mirrors: ["https://i.imgur.com/v.webp"]}], SITE) === "");
+  // The first exhibit with something to show wins, skipping ones that have not.
+  ok("the first showable exhibit wins",
+     M.mediaNodeThumb([{kind: "vid", mirrors: []}, img], SITE).endsWith(hash));
+
+  // A card is one image the reader asked for, so a mirror is worth it there.
+  const card = M.mediaCardItems([img, {purged: true, kind: "img"},
+                                 {kind: "vid", caption: "hearing", mirrors: ["https://i.imgur.com/v.webp"]}], "");
+  ok("a card falls back to a mirror", card[0].src === "https://i.imgur.com/a.webp");
+  ok("every card exhibit is numbered", card.map(c => c.label).join("|") === "1 of 3|2 of 3|3 of 3");
+  ok("a purged exhibit keeps its place and says so", card[1].note === "taken down" && !card[1].src);
+  ok("a video says it is not verified", /not verified/.test(card[2].note));
+
+  // ---- verification ------------------------------------------------------
+  const bytes = new TextEncoder().encode("kourt-bytes");
+  const real = await M.mediaDigest(bytes);
+  const item = {kind: "img", sha256: real, bytes: bytes.length};
+  const serve = b => async () => ({ok: true, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)});
+
+  ok("matching bytes verify", await M.mediaVerify(item, "/m/x", {fetch: serve(bytes)}) === "matches");
+  const other = new TextEncoder().encode("swapped-bytes!");
+  ok("swapped bytes are reported as altered",
+     await M.mediaVerify(item, "/m/x", {fetch: serve(other)}) === "altered");
+  ok("a host that will not answer is unavailable",
+     await M.mediaVerify(item, "/m/x", {fetch: async () => { throw new Error("no"); }}) === "unavailable");
+  ok("a video cannot be verified and says so",
+     await M.mediaVerify({kind: "vid"}, "https://x", {fetch: serve(bytes)}) === "unverifiable");
+  // A HOSTILE MIRROR IS REFUSED BEFORE ITS BODY IS READ. The hash would catch
+  // the bytes anyway, so this cannot change a verdict — it exists so reaching
+  // that verdict does not mean pulling a hundred megabytes into memory. Pinned
+  // by counting whether the body was ever touched.
+  let read = false;
+  const huge = {
+    ok: true,
+    headers: {get: h => (h === "content-length" ? "99999999" : null)},
+    arrayBuffer: async () => { read = true; return new ArrayBuffer(8); },
+  };
+  ok("a mirror declaring more than it filed is refused",
+     await M.mediaVerify(item, "/m/x", {fetch: async () => huge}) === "altered");
+  ok("...without reading its body", !read);
+  // The altered verdict is the whole feature: it must be a sentence, not a mark.
+  ok("the altered verdict is impossible to miss",
+     M.MEDIA_VERDICTS.altered.length > 20 && /NO LONGER MATCHES/.test(M.MEDIA_VERDICTS.altered));
+
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 })();

@@ -476,6 +476,114 @@ function mediaReview(items) {
   };
 }
 
+/* ---- reading a claim's evidence back ------------------------------------ */
+
+/* ClaimMedia answers with one line of JSON. A realm deployed before media
+ * existed answers with nothing at all, and a map that fails whole because of a
+ * missing optional field would be the worse bug. */
+function mediaParse(raw) {
+  try {
+    const v = JSON.parse(raw || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/* Where to fetch an exhibit's bytes.
+ *
+ * THE ARCHIVE FIRST, ALWAYS, and on the map ONLY the archive. A listed mirror is
+ * a URL the FILER chose, and every viewer's browser fetches it: on a map draw
+ * that is fifty nodes fanning out to hosts an attacker picked, carrying fifty
+ * readers' addresses. The archive is a host we operate and cache.
+ *
+ * A card may fall back to a mirror because it is one image, chosen by the
+ * reader, and being able to see the evidence at all is worth more there. A node
+ * thumbnail may not: nobody asked for it, and there are fifty.
+ */
+function mediaSrc(item, siteDomain, allowMirrors) {
+  if (!item || item.purged) return "";
+  if (item.kind !== "vid" && item.sha256 && siteDomain) {
+    return mediaArchiveURL(siteDomain, item.sha256);
+  }
+  if (!allowMirrors) return "";
+  const mirrors = item.mirrors || [];
+  for (const u of mirrors) {
+    if (!mediaMirrorFault(u, siteDomain)) return u;
+  }
+  return "";
+}
+
+/* The one image a map node shows: the first exhibit that is an image and has an
+ * archive copy to point at. Never a mirror — see mediaSrc. */
+function mediaNodeThumb(items, siteDomain) {
+  for (const it of items || []) {
+    const src = mediaSrc(it, siteDomain, false);
+    if (src) return src;
+  }
+  return "";
+}
+
+/* What the selection card shows: every exhibit, in order, each with the number
+ * a reader and a moderator both refer to it by, and a reason when there is
+ * nothing to show. A gap that silently renumbered the rest would leave every
+ * later exhibit meaning something different than it did yesterday. */
+function mediaCardItems(items, siteDomain) {
+  const list = items || [];
+  return list.map((it, i) => {
+    const label = `${i + 1} of ${list.length}`;
+    if (it.purged) return {n: i + 1, label, src: "", note: "taken down"};
+    if (it.kind === "vid") {
+      return {n: i + 1, label, src: "", video: mediaSrc(it, siteDomain, true),
+              caption: it.caption || "", note: "video — linked, not verified"};
+    }
+    const src = mediaSrc(it, siteDomain, true);
+    return {n: i + 1, label, src, caption: it.caption || "",
+            w: it.w || 0, h: it.h || 0,
+            note: src ? "" : "not currently available"};
+  });
+}
+
+/* Verification, and the three things it can say.
+ *
+ * ONLY THIS PAGE CAN DO THIS. gnoweb's CSP is connect-src 'self' and its own
+ * node, so it cannot fetch third-party bytes and cannot check anything. That is
+ * the division of labour: gnoweb renders, kourt.xyz attests. */
+async function mediaVerify(item, src, opts) {
+  const o = opts || {};
+  const fetchFn = o.fetch || (typeof fetch !== "undefined" ? fetch : null);
+  if (!item || item.kind === "vid" || !item.sha256) return "unverifiable";
+  if (!src || !fetchFn) return "unavailable";
+  try {
+    const res = await fetchFn(src, {referrerPolicy: "no-referrer"});
+    if (!res.ok) return "unavailable";
+
+    // REFUSE BEFORE READING, not after. The hash already catches bytes that are
+    // not the filed ones, so this check can never change a verdict — its whole
+    // job is to avoid pulling a hundred megabytes into memory to reach that
+    // conclusion. An earlier version compared lengths AFTER arrayBuffer(), which
+    // is the same check written where it protects nothing; an ablation caught
+    // it by not failing.
+    const declared = res.headers && res.headers.get && res.headers.get("content-length");
+    if (item.bytes && declared && Number(declared) > item.bytes) return "altered";
+
+    const buf = await res.arrayBuffer();
+    if (item.bytes && buf.byteLength > item.bytes) return "altered";
+    return (await mediaDigest(new Uint8Array(buf))) === item.sha256 ? "matches" : "altered";
+  } catch (_) {
+    return "unavailable";
+  }
+}
+
+/* The words for each verdict. "altered" is the whole feature and must be
+ * impossible to miss — it is a sentence, not a badge to decode. */
+const MEDIA_VERDICTS = {
+  matches: "matches what was filed",
+  altered: "THIS NO LONGER MATCHES WHAT WAS FILED",
+  unavailable: "not currently available",
+  unverifiable: "linked — the court keeps no copy and cannot check it",
+};
+
 /* ---- drawing it ---------------------------------------------------------
  *
  * Deliberately small: create, append, listen, set text. No innerHTML anywhere
@@ -645,6 +753,7 @@ if (typeof module !== "undefined" && module.exports) {
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
-    mediaMount, mediaEl,
+    mediaMount, mediaEl, mediaParse, mediaSrc, mediaNodeThumb,
+    mediaCardItems, mediaVerify, MEDIA_VERDICTS,
   };
 }

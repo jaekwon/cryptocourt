@@ -1766,7 +1766,7 @@ async function claimDetail(slug,id){
       provisional: ph==="provisional"? (d.provisional!=null? d.provisional:0) : -1,
       closed: ph==="closed"}; }
   const s=gstr(slug), i=id;
-  const [title,status,pools,pconv,toi,tyes,answered,disputeOpen,settled,provClose,provisional,closed,body] = await Promise.all([
+  const [title,status,pools,pconv,toi,tyes,answered,disputeOpen,settled,provClose,provisional,closed,body,mediaRaw] = await Promise.all([
     one(`ClaimTitle(${s},${i})`).then(unesc), one(`ClaimStatus(${s},${i})`), tup(`StakePools(${s},${i})`),
     tup(`PoolConviction(${s},${i})`), tup(`TrailingOI(${s},${i},${WEEK})`), tup(`TrailingYes(${s},${i},${WEEK})`),
     one(`HasAnswer(${s},${i})`), one(`DisputeOpen(${s},${i})`), one(`Settled(${s},${i})`),
@@ -1774,8 +1774,11 @@ async function claimDetail(slug,id){
     // A realm deployed before bodies existed has no ClaimBody, and a claim page
     // that fails whole because of a missing optional field would be the worse
     // bug. Empty is the same answer as "this claim has no body".
-    one(`ClaimBody(${s},${i})`).then(unesc).catch(()=>"")]);
-  const d = {id, title, body, statusText:status, yesStake:pools[0], noStake:pools[1],
+    one(`ClaimBody(${s},${i})`).then(unesc).catch(()=>""),
+    // Same tolerance, same reason: a realm deployed before media existed has no
+    // ClaimMedia, and "[]" is the same answer as "this claim carries none".
+    one(`ClaimMedia(${s},${i})`).then(unesc).catch(()=>"[]")]);
+  const d = {id, title, body, media: (typeof mediaParse==="function"? mediaParse(mediaRaw) : []), statusText:status, yesStake:pools[0], noStake:pools[1],
     convYes:pconv[0], convNo:pconv[1], trailOImature:toi[1], trailOI:toi[0], trailYesMature:tyes[1], trailYesAvg:tyes[0],
     answered, disputeOpen, settled, provClose, provisional, closed};
   if(answered){
