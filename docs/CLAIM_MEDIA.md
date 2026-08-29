@@ -38,11 +38,15 @@
 > | drafts in `localStorage` (§2.5) | built |
 > | video as a second tier (§7) | built |
 >
-> Two things are worth knowing before trusting any of it. `mountCompose` needs a
+> One thing is worth knowing before trusting any of it: `mountCompose` needs a
 > real canvas and `createImageBitmap`, so the resize path is the one piece no
-> harness covers and it has never run against a real image. And nothing has been
-> exercised against a live chain end to end — every layer is tested, the seams
-> between them are not.
+> harness covers and it has never run against a real image.
+>
+> The chain-side seam IS now exercised end to end —
+> `gnoland/testdata/kourtv2_media.txtar` files a claim carrying evidence against
+> a real node and asks it the questions the page asks. What remains untested is
+> the browser half: the composer's canvas work, and the archive serving bytes to
+> a page that verifies them.
 
 ---
 

@@ -157,7 +157,12 @@ gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem"
 # publicly readable at a URL nobody thought to check.
 gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:orem/1/${TEST1}"
 ! stdout 'Is the sky blue\?'
-stdout 'Your positions'
+# The heading is "Positions on this claim", not "Your positions": this route
+# renders for ANY address, so calling them the reader's was wrong and was
+# changed. The assertion here kept the old wording and had been failing ever
+# since — what it is FOR is that the page still renders after a purge, so it is
+# repointed rather than dropped.
+stdout 'Positions on this claim'
 
 # A purge removes TEXT and nothing else: the lifecycle read still answers.
 gnokey query vm/qeval --data "gno.land/r/kourt/kourtv2.ClaimClosed(\"orem\", 1)"
