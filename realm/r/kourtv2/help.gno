@@ -87,14 +87,22 @@ func renderHelp() string {
 	b.WriteString("A claim is a sentence that is either true or false, written so it " +
 		"can actually be answered. You stake YES or NO, and you can move your stake " +
 		"freely until an answer posts.\n\n")
-	// The three endings verbatim as the claim list prints them, so a reader who
-	// saw "disputed" on a court page finds the same word here rather than a
-	// synonym they have to guess is the same thing.
-	b.WriteString("Every claim ends one of three ways:\n\n")
+	// Verbatim as claimStatus prints them, so a reader who saw a word on a court
+	// page finds the same word here rather than a synonym they have to guess is
+	// the same thing.
+	//
+	// NOT "three ways", and not a list of ENDINGS. It said both, and was wrong
+	// twice: "disputed" is a state a claim passes THROUGH — claimStatus reaches
+	// it mid-life and it resolves — while "closed without a decision", which is
+	// a real ending, was missing entirely. A reader landing on that status found
+	// a state this page said could not exist.
+	b.WriteString("A claim's page always says where it stands. The wordings you will see:\n\n")
 	b.WriteString("- **settled YES** or **settled NO** — answered, and the page " +
 		"says which way; every stake withdraws 1×\n")
 	b.WriteString("- **disputed** — a sealed vote is deciding; principal is never withheld\n")
-	b.WriteString("- **closed** — never answered; every stake exited 1×, the deposit refunded\n\n")
+	b.WriteString("- **closed** — never answered; every stake exited 1×, the deposit refunded\n")
+	b.WriteString("- **closed without a decision** — three dispute rounds failed quorum; " +
+		"everyone withdraws 1×, deposit and fee refunded\n\n")
 
 	b.WriteString("## Comments are where the argument is\n\n")
 	b.WriteString("Every claim has a comment board. A YES/NO number cannot carry a " +

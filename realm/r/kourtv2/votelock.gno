@@ -398,44 +398,25 @@ func PruneVoteLocks(cur realm, courtSlug string, who address) int {
 	return pruneVoteLocks(mustCourt(courtSlug), who)
 }
 
-// CommitmentsOf is ONE read for everything a holder is committed to in this court.
+// CommitmentsOf is one read for everything `who` is committed to in this court.
 //
-//	"stake:<n>;vote:<n>;free:<n>" plus one ";q:<kind>:<id>:<sub>:<amount>" per open
-//	vote commitment, in the house format ClaimTimeline established.
+//	"stake:<n>;vote:<n>;free:<n>" plus one ";q:<kind>:<id>:<sub>:<amount>" per
+//	open vote commitment, in the house format ClaimTimeline established.
 //
-// WHY THIS COSTS NO NEW STORAGE, which is the whole reason it can exist. A holder's
-// vote commitments are ALREADY an address index: c.voteLocks is keyed
-// addr|kind|id|sub, so one holder's rows are a contiguous range and this is the same
-// scan voteLockedOf already does. c.locked is already addr -> int64. So nothing is
-// added to any write path — no new tree, no storage deposit on a vote, no write gas
-// on a stake — and the read is O(that holder's own rows), measured at ~19k gas per
-// open row, and self-limiting: the vote that would add a row costs more than a
-// transfer at the same row count.
+// stake is the stake lock, vote is the vote lock, free is what may actually
+// leave the balance — the same figure DisposableOf returns and the one every
+// transfer, bond and deposit is checked against.
 //
-// WHAT IT SAVES is query FAN-OUT, not chain work. A client assembling this per claim
-// pays four reads per claim id — the me-page's positionOf probe does exactly that —
-// while this is one read per court however many claims the holder is in.
+// THE q ROWS MAY SUM TO MORE THAN `vote`, AND THAT IS NOT A BUG. `vote` is the
+// MAX across open rows, not the sum: the locks overlap, because one pile of coin
+// honours many commitments at once. Adding the q rows up produces a number the
+// court does not enforce. `free` is the enforced figure.
 //
-// STAKE POSITIONS ARE NOT ENUMERATED HERE, and they are no longer unenumerable: the
-// asymmetry is real — cs.stakers is keyed addr|side on EACH claim, so it is claim-first
-// and listing one holder's positions by walking claims is O(all claims) — but that is
-// what stakeindex.gno now answers, from its own address-first index. This function keeps
-// to the two lock TOTALS because they are what constrain a holder's next action;
-// StakedPage answers where their money is. An earlier version of this paragraph argued
-// the index should not exist at all, on the grounds that it "taxes every stake with
-// storage for the benefit of a page". Measured, that tax is ~57 bytes and ~36k gas on a
-// write that already costs ~604k, and the page it bought could not otherwise answer a
-// holder's own position on a claim older than the client's scan window. The argument was
-// right about the cost and wrong about the trade.
+// Only OPEN commitments are listed; a question that has resolved leaves no row.
+// Stake positions are not listed here — StakedPage answers where a holder's
+// money is, this answers what constrains their next move.
 //
-// THE ROWS MAY SUM TO MORE THAN `vote`, AND THAT IS NOT A BUG. `vote` is the MAX
-// across open rows, because the locks overlap — one pile of coin honours many
-// commitments, which is the whole point of taking the max rather than the sum. A
-// consumer that adds the q rows up gets a number the realm does not enforce. `free`
-// is the enforced figure and comes straight from disposable(), which is also why this
-// calls disposable() rather than recomputing the max to save a second tree walk: a
-// query is charged to nobody, and a second copy of that arithmetic here is exactly
-// the drift this design keeps having to correct.
+// Refused only on a court that does not exist. Costs about 19k gas per open row.
 func CommitmentsOf(courtSlug string, who address) string {
 	c := mustCourt(courtSlug)
 	out := "stake:" + itoa(lockedOf(c, who)) +

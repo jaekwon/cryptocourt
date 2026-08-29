@@ -203,24 +203,25 @@ func BoardRowState(courtSlug string, claimID uint64, rowID uint64) string {
 // halfway and leaves nobody able to say which rows went.
 const maxBatchRows = 64
 
-// PurgeBoardRange destroys a claim's whole board, up to maxBatchRows at a time.
+// PurgeBoardRange destroys the text of a claim's whole comment board, in batches
+// of up to 64 rows per call. Irreversible: the bytes are zeroed, not flagged.
+// Each row's id, author and height survive, so the record still shows that a
+// comment was there and who wrote it.
 //
-// WHY A RANGE VERB EXISTS AT ALL. §7.5 refuses a reclaim crank — hidden rows
-// persist, because deleting them on a timer would delete the evidence a
-// successor set needs, and because the chain refunds the storage deposit to
-// whoever frees the state, which makes a permissionless deletion crank a
-// standing bounty for censorship. The consequence carried forward was that a
-// whole-court purge is vacuous for a board (it stops new rows, it does not touch
-// the existing ones) while the existing set is reachable only one row at a time.
-// A hosting-is-offence order against a 400-row board cannot be answered in 400
-// transactions inside 72 hours.
+// Global DAO members only. categoryCode is the statutory ground for the order.
 //
-// THE DECISION IS VOTED ONCE, THE COMPLETION IS NOT. The first call takes
-// d.purgeM; it sets boardPurgeAll and then any global DAO member advances the
-// cursor. m-of-n per batch would turn a 500-row board into eight coordinated
-// votes against a clock, and the second vote decides nothing the first did not.
+// TWO PHASES. The ORDER is agreed once, at the DAO's purge threshold: calls
+// before the threshold is met register a signature and change nothing. Once it
+// fires, the order is recorded — BoardPurgeOrdered reports it immediately — and
+// from then on any single global DAO member may advance the cursor to finish the
+// job, without a fresh agreement per batch.
 //
-// Returns the row id to resume from, or 0 when the board is done.
+// fromRowID is where this batch starts; pass 0 for the first. RETURNS the row id
+// to resume from, or 0 when the board is done. While the threshold is still
+// short it returns `fromRowID` unchanged — nothing has happened yet.
+//
+// Refused when the court or claim does not exist, the caller is not a global DAO
+// member, or categoryCode is not a recognised category.
 func PurgeBoardRange(cur realm, courtSlug string, claimID, fromRowID uint64, categoryCode string) uint64 {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

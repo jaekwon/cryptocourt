@@ -386,7 +386,7 @@ func renderClaim(slug string, id uint64) string {
 			" " + qualifiedSymbol(c) + " (YES " + strconv.FormatInt(cs.yesStake, 10) +
 			" / NO " + strconv.FormatInt(cs.noStake, 10) + ")\n")
 		if total > 0 {
-			b.WriteString("- instantaneous: " + pct(cs.yesStake, total) + " YES\n")
+			b.WriteString("- right now: " + pct(cs.yesStake, total) + " YES\n")
 		}
 	}
 	h := heightNow()
@@ -400,7 +400,7 @@ func renderClaim(slug string, id uint64) string {
 	if yc+nc > 0 {
 		// The conviction-weighted lifetime ratio — the series a manipulator can
 		// move only by paying capital-time (F9).
-		b.WriteString("- lifetime conviction: " + pct(yc, yc+nc) + " YES\n")
+		b.WriteString("- lifetime, weighted by how long each stake was held: " + pct(yc, yc+nc) + " YES\n")
 	}
 	b.WriteString("\n## Status\n\n" + claimStatus(cs) + "\n")
 	if cs.frozenAt != 0 {
@@ -544,7 +544,7 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	nStake := StakeOf(slug, id, sideNO, who)
 	yConv := ConvictionOf(slug, id, sideYES, who)
 	nConv := ConvictionOf(slug, id, sideNO, who)
-	b.WriteString("## Stake (live principal, always returns 1×)\n\n")
+	b.WriteString("## Stake (what you have in, and always get back)\n\n")
 	b.WriteString("- YES: " + strconv.FormatInt(yStake, 10) +
 		"   NO: " + strconv.FormatInt(nStake, 10) + " (" + qualifiedSymbol(c) +
 		" base units)\n")
@@ -604,7 +604,7 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 		b.WriteString("- roles: " + roles + "\n")
 	}
 	if rec := AnswerRecord(slug, who); rec > 0 {
-		b.WriteString("- difficulty record (this court): " + strconv.FormatInt(int64(rec), 10) + "\n")
+		b.WriteString("- answers challenged and upheld in this court: " + strconv.FormatInt(int64(rec), 10) + "\n")
 	}
 
 	// Lifecycle hints — what to do next. No amounts (the pulls compute those).

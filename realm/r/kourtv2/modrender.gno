@@ -259,7 +259,7 @@ func hideBanner(c *Court, cs *claimState) string {
 		return "> **Removed on legal grounds** (" + sanitize.InlineText(clm.tombstone) +
 			"). The claim's lifecycle is unaffected: stakes, verdict and refunds proceed.\n\n"
 	case clm.global:
-		return "> **Text withheld pending review.** IDs, state, deadlines and balances still render, so you can always act on a position.\n\n"
+		return "> **Text withheld pending review.** The claim's id, its state, its deadlines and every balance are still shown, so you can always act on a position.\n\n"
 	case clm.meta:
 		return "> **Hidden by the review court.** Listed nowhere, reachable here; the lifecycle is unaffected.\n\n"
 	case clm.court:
@@ -281,7 +281,7 @@ func writeStrip(b *strings.Builder, slug string) {
 	for _, id := range ids {
 		cs := mustClaim(c, id)
 		b.WriteString("- [" + claimTitleFor(c, cs) + "](/r/kourt/kourtv2:" + slug + "/" +
-			strconv.FormatUint(id, 10) + ") — settles at height " +
+			strconv.FormatUint(id, 10) + ") — settles at block " +
 			strconv.FormatInt(cs.answerHeight+settleDelay, 10) + "\n")
 	}
 	if n > len(ids) {
@@ -392,7 +392,7 @@ func writeAppeal(b *strings.Builder, c *Court, cs *claimState) {
 // power nobody can use.
 func modActLine(a modAct, kind string) string {
 	line := "- " + kind + " " + strconv.FormatUint(a.rowID, 10) +
-		" · height " + strconv.FormatInt(a.height, 10) + " · " +
+		" · block " + strconv.FormatInt(a.height, 10) + " · " +
 		sanitize.InlineText(a.code) + " · by " + sanitize.InlineText(a.actor.String())
 	switch {
 	case a.purged:
@@ -518,7 +518,7 @@ func renderModLog(slug string) string {
 					// and a future key that carries a reason or a name would make
 					// it exploitable with no failing test.
 					"- "+sanitize.InlineCode(key)+" — "+strconv.Itoa(a.approvers.Size())+
-						" of "+strconv.Itoa(cm.m)+" approved, expires at height "+
+						" of "+strconv.Itoa(cm.m)+" approved, expires at block "+
 						strconv.FormatInt(deadline, 10))
 			}
 		}

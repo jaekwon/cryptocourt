@@ -213,48 +213,26 @@ func SpendableOf(courtSlug string, who address) int64 {
 	return spendable(mustCourt(courtSlug), who)
 }
 
-// TransferCC moves court coin between two holders of the same court.
+// TransferCC moves court coin from the caller to another holder of the same
+// court. courtSlug names the court, `to` is the recipient, `amount` is in CC
+// base units.
 //
-// COURT COINS ARE TRANSFERABLE (owner decision, 2026-08-20). They were soulbound
-// in V1 and V2 from the start — mint-only, escrow-only, burn-only, with a one-way
-// curve and no exit — and MODERATION.md had recorded transferability as an open
-// owner call the whole time. This closes it in favour of transferable.
+// ONLY UNCOMMITTED COIN MOVES. The ceiling is DisposableOf(courtSlug, caller):
+// the balance less whichever claim on it is larger, the stake lock or the vote
+// lock. Coin behind a live stake, an answer bond, a dispute bond, a flag bond,
+// a claim deposit, an election bond, or a vote still in flight cannot be sold
+// out from under the commitment it is backing. LockedOf, VoteLockedOf and
+// CommitmentsOf say which lock binds and by how much.
 //
-// GATED ON disposable(), WHICH IS THE WHOLE SAFETY ARGUMENT. The gate is
-// mustSpendable, and despite its name that function tests disposable() — the
-// balance less the LARGER of the stake lock and the vote lock — so committed
-// capital cannot be sold out from under the thing it is committed to: a live
-// stake, an answer bond, a dispute bond, a flag bond, a claim deposit, an
-// election bond, or a vote in flight. Without this gate a staker could sell the
-// coins backing a position and keep both the proceeds and the position — the same
-// double-commit hazard mustSpendable exists to prevent, from the other direction.
+// Refused when the court does not exist, `amount` is zero or negative, `to` is
+// the caller, either end is the court escrow — the court's own account, never a
+// transfer endpoint in either direction — or `amount` exceeds DisposableOf.
 //
-// This paragraph named spendable() (stake-only) until it was checked, which
-// UNDERSTATED its own gate by the whole of a vote commitment. AllowanceCC's doc
-// thirty lines below carries the same correction, made earlier; this one was
-// missed because the sentence reads as true either way.
-//
-// WHAT THIS DOES NOT MAKE TRANSFERABLE:
-//
-//   - REPUTATION. answerRecord is keyed by address, has no Remove, and no path
-//     assigns one address's record to another. That property stands on its own
-//     and is not a side effect of the coin having been soulbound. It is now
-//     enforced by check-nontransferable.py, which was inverted in the same commit
-//     to forbid reputation-moving entrypoints instead of coin-moving ones.
-//   - A CLAIM POSITION. stakePos is keyed (address, side) and only Stake, Unstake
-//     and the settlement withdrawal move `stake`. Selling coin does not carry
-//     conviction, which accrues to whoever held the position over time.
-//   - GNOT. The curve stays one-way and its payment stays burned. This adds a
-//     SECONDARY market between holders, not a redemption; no treasury appears and
-//     no real money exits.
-//
-// Known and accepted, recorded rather than hidden: several safety bars in this
-// realm are denominated in % of court supply (the quorum floor, both quality
-// bars, the credential bar, the election floor, the supplyFloor lid). Their
-// prices were set when the only way to acquire supply was the curve, which burns
-// GNOT at a monotonically rising price. A secondary market can clear below that,
-// so those bars may be cheaper to reach than when they were calibrated. The
-// owner has taken that trade deliberately.
+// WHAT A TRANSFER DOES NOT CARRY. Reputation stays with the address that earned
+// it. A claim position stays too: conviction accrues to whoever held the stake
+// over time, so buying coin buys no position. And this is a market between
+// holders, not a redemption — no GNOT is paid out, the curve stays one-way, and
+// its payment stays burned.
 func TransferCC(cur realm, courtSlug string, to address, amount int64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -278,26 +256,24 @@ func TransferCC(cur realm, courtSlug string, to address, amount int64) {
 	c.coin.Transfer(from, to, amount)
 }
 
-// ApproveCC lets a spender move some of the caller's court coin.
+// ApproveCC lets `spender` move up to `amount` of the caller's coin in this
+// court, through TransferFromCC. `amount` is in CC base units.
 //
-// This exists for one reason: to make the coin integrable by things this realm
-// does not import and must not have to trust. A DEX pool, an escrow, a wrapper —
-// each needs to pull coin from a user who has agreed to it, and approve /
-// transferFrom is the interface every one of them already speaks. Exposing that
-// pair is what lets `r/kourt/ccwrap` exist as a separate, untrusted realm rather
-// than as a privileged hole in this one. Nothing here is granted any authority:
-// an approved spender can do strictly less than the owner could do themselves
-// with TransferCC.
+// SETS the allowance, it does not add to it: the new figure replaces whatever
+// was there, and 0 revokes.
 //
-// DELIBERATELY NOT GATED ON spendable(). An allowance grants nothing until it is
-// spent, and gating here would be both useless and wrong — useless because the
-// balance can change freely between approve and spend, so an approve-time check
-// proves nothing about spend time; wrong because approving future coin is a
-// normal thing to do. The gate belongs at the spend, and TransferFromCC has it.
+// APPROVING RESERVES NOTHING AND LOCKS NOTHING. There is no balance check here.
+// The gate is at the spend: TransferFromCC caps the move at DisposableOf(owner)
+// as it stands at that moment. So an allowance may exceed what the owner can
+// actually move, and the spend then simply fails. Read a granted allowance as a
+// ceiling, never as available capital — AllowanceCC returns that ceiling.
 //
-// The consequence, stated so nobody reads a granted allowance as available
-// capital: an allowance can exceed spendable(), in which case the spend simply
-// fails. Approving does not reserve, and does not lock.
+// A spender can do strictly less than the owner could do with TransferCC. No
+// authority is granted, only permission to move coin the owner could have moved
+// themselves.
+//
+// Refused when the court does not exist, `amount` is negative, `spender` is not
+// a valid address, or either the caller or `spender` is the court escrow.
 func ApproveCC(cur realm, courtSlug string, spender address, amount int64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

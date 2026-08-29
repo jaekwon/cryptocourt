@@ -333,23 +333,24 @@ func ApproveAllAssociations(cur realm, courtSlug string, claimID uint64) int {
 	return n
 }
 
-// DisapproveAllAssociations burns every bond incident to one claim and drops
-// those edges. Returns how many it burned — 0 while the m-of-n is still short.
+// DisapproveAllAssociations judges every bonded association edge touching one
+// claim at once: the bonds are BURNED and the edges dropped. Returns how many
+// were burned, and 0 while the threshold is still short.
 //
-// M-OF-N, unlike its mirror, and unlike the single-edge disapprove. Both of those
-// exceptions have the same reason: how much of somebody else's money one
-// signature may destroy. One edge is one bond a griefer chose to risk, and a
-// moderator who can already delete that edge outright is deciding about money the
-// poster put up against exactly this judgement. Ninety-six at once is a different
-// act — it is most of a claim page's contested state, and a single captured or
-// careless key should not be able to empty it. The court's own m for hide/unhide
-// is the right threshold because it is the same question: what may this set do
-// that one of its members may not.
+// reason is recorded on the moderation log and is required.
 //
-// THE BURN IS BOUNDED TO EDGES THAT PREDATE THE PROPOSAL, via pendingOpenedAt.
-// Its comment carries the reasoning; the short version is that a bond posted
-// between the first signature and the m-th has been judged by nobody, and
-// "unjudged means approved" has to survive a bulk verb or it is not a rule.
+// SEVERAL MODERATORS MUST AGREE, at the court's moderation threshold — unlike
+// approving in bulk and unlike disapproving one edge, both of which are
+// single-signer. The difference is how much of other people's money one
+// signature may destroy: a claim can carry up to 96 incident edges, and emptying
+// them all is most of a page's contested state.
+//
+// ONLY EDGES THAT PREDATE THE PROPOSAL ARE BURNED. A bond posted between the
+// first signature and the one that fires it has been judged by nobody, so it
+// survives and its edge stays.
+//
+// Refused when the court or claim does not exist, the caller is not an active
+// moderator, or the reason is missing or too long.
 func DisapproveAllAssociations(cur realm, courtSlug string, claimID uint64, reason string) int {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -454,19 +455,23 @@ func assocTextGone(c *Court, id uint64) bool {
 }
 
 // AddAssociation records that claim `from` bears on claim `to`, with a stance.
-// ANYBODY, at any time (§5) — and that is still true, which is the only reason
-// what follows is allowed to charge for it.
+// stance is "supports" or "contests". Both claims must be in the named court.
 //
-// This comment used to end "the write's own storage deposit is the price, and a
-// bond on speech-shaped state would price out the counter-evidence this exists
-// to carry." The objection was right and it is why the bond is REFUNDABLE rather
-// than a fee: a stranger who attaches an edge worth carrying gets every coin
-// back, either when a moderator agrees or by default when none looks inside the
-// window. What the deposit alone could not price was the griefer who attaches
-// four bad edges to every claim in a docket and makes the graph unreadable for
-// everybody — storage is cheap enough that spamming it was rational. So the
-// price falls on being WRONG, not on speaking, and nobody already accountable
-// pays it at all. See the note above assocBondDefaultInit.
+// ANYBODY MAY ASSERT AN EDGE. Most callers post a REFUNDABLE BOND first, held in
+// the court escrow: it comes back in full if a moderator approves the edge, or
+// by default if none looks at it inside the bond window. It is burned only if a
+// moderator disapproves. Two callers pay nothing — the author of `from`, who
+// already has a deposit behind their name, and an active court moderator.
+// AssociationBond(courtSlug) quotes the amount.
+//
+// The price falls on being WRONG, not on speaking.
+//
+// Refused when the court does not exist, `from` equals `to`, either claim does
+// not exist in that court, the stance is not one of the two words, that exact
+// edge already exists (remove it to change its stance), `from` already asserts
+// 32 associations, `to` already carries 64, the caller already holds 4 on `to`,
+// or the caller's DisposableOf is short of the bond. Nothing is charged until
+// every one of those has passed.
 func AddAssociation(cur realm, courtSlug string, from, to uint64, stance string) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

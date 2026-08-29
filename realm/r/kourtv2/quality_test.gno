@@ -52,9 +52,9 @@ func TestFlagInconclusiveReopensAndDoubles(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "kourtv2: a flag vote is already open", func() {
 		OpenFlag(cross(cur), "qf1", id)
 	})
-	// Participants cannot vote their own claim's quality (Q2).
+	// Participants cannot vote their own claim's quality.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "participants cannot vote", func() {
+	uassert.AbortsContains(t, cur, "cannot vote on its quality rating", func() {
 		VoteQuality(cross(cur), "qf1", id, qualityLow)
 	})
 	// A dust-weight low: directionally backed, below the demotion bar.
@@ -1761,7 +1761,7 @@ func TestQ2BarsAStakerFromVotingQuality(cur realm, t *testing.T) {
 	// claim's quality epoch. Both sides, since isParticipant checks each.
 	for _, who := range []address{noSide, yesSide} {
 		testing.SetRealm(testing.NewUserRealm(who))
-		uassert.AbortsContains(t, cur, "participants cannot vote its quality (Q2)",
+		uassert.AbortsContains(t, cur, "cannot vote on its quality rating",
 			func() {
 				VoteQuality(cross(cur), "q2s", id, qualityMid)
 			})

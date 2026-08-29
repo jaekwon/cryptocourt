@@ -160,24 +160,26 @@ func SetLadderDefault(cur realm, t1Bps, t2Bps, t3Bps, postsEntry, postsT2 int64)
 	)
 }
 
-// SetCourtLadder overrides the ladder for one court.
+// SetCourtLadder overrides the posting ladder for one court, replacing the
+// default. ClearCourtLadder puts it back.
 //
-// speechM-of-n, LOGGED, AND REVERSIBLE BY THE GLOBAL DAO — because this is the
-// most powerful speech verb in the realm, not the least.
+// t1Bps, t2Bps and t3Bps are the standing thresholds for posting levels 1, 2 and
+// 3, in basis points of the court's sealed supply. postsEntry and postsT2 are
+// posts per day at the entry rung and at level 2; the level-3 rate is derived
+// from postsEntry and is not settable.
 //
-// It shipped as `requireActiveMod` alone: membership, not suspended, and nothing
-// else. So any single member of any set could call
-// SetCourtLadder(slug, 9998, 9999, 10000, 1, 2) — which mustLadder accepts, being
-// strictly increasing and within its bounds — and every address below 99.98% of
-// supply drops to level 0. That is a permanent, court-wide, unlogged speech
-// throttle with no recovery path, sitting twenty lines from FreezeBoard, which
-// silences ONE address for twelve hours and was given m-of-n, a ceiling, a gap, a
-// log row, an event and an O(1) backstop. The blast radius ran the wrong way
-// round the authority.
+// SEVERAL MODERATORS MUST AGREE, at the court's speech threshold, because this
+// is the widest speech lever there is: one bad set of numbers throttles every
+// poster in the court at once. The proposed VALUES are part of what is agreed,
+// so two moderators proposing different ladders do not accumulate toward one
+// threshold. The call returns without effect until the threshold is met. It is
+// logged, evented, and the global DAO can undo it with GlobalClearCourtParams.
 //
-// The per-court override itself stays: it is an owner ruling (§15) that these are
-// global defaults a court may override. What was missing was the authority, not
-// the lever.
+// Refused when the court does not exist, the caller is not an active moderator,
+// the three thresholds are not strictly increasing within 1..10000 bps, the two
+// rates are not strictly increasing, or t3Bps drops below 100x the pass price —
+// which would make a unit of standing worth more than the flag lane's burn can
+// cover.
 func SetCourtLadder(cur realm, courtSlug string, t1Bps, t2Bps, t3Bps, postsEntry, postsT2 int64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -373,25 +375,21 @@ func PostsPerDay(courtSlug string, who address) int64 {
 
 // ---- the entry pass: the one coin movement in this lane -------------------
 
-// BuyCommentPass burns the caller's own CC once and floors their posting level
-// at the entry rung.
+// BuyCommentPass burns the caller's own CC and floors their posting level in
+// this court at the entry rung, so they may post without first earning standing.
+// Returns the price burned, in CC base units.
 //
-// THE ONLY COIN MOVEMENT IN THE WHOLE LANE, and it is the poster's own coin, by
-// their own act, destroyed. Nothing is escrowed, so no moderator ever holds it
-// and no refund path exists to be judged; nothing is transferred, so no
-// moderator can be paid for finding spam. That is what keeps
-// moderation.gno's claim — a fully captured moderator is harmless to funds —
-// true of this lane too.
+// The price is what PassPrice(courtSlug) quotes at the moment of the call. The
+// coin is DESTROYED, not escrowed and not paid to anyone: no moderator ever
+// holds it, and there is no refund path.
 //
-// mustSpendable AND THEN Burn ON THE ADJACENT LINE, deliberately: ARM 7 of
-// check-epoch-coherence.py requires a spend guard within three lines above any
-// non-escrow-sourced coin movement, and every prose reason belongs above the
-// guard rather than between it and the burn.
+// One pass per address per court, and it never expires. It only sets a floor —
+// standing earned later still lifts the poster above the entry rung.
 //
-// It is the FIRST path in this realm to burn from a user's balance rather than
-// from the escrow. lock.gno's spendable() carries a comment saying nothing does;
-// that comment is corrected in the same change, because a stale claim about a
-// defence is worse than none.
+// Refused when: the court does not exist; the caller already holds a pass here;
+// the court has not completed a sealed epoch, so no price can be quoted and its
+// board is not open at all; the court has no supply to take a fraction of; or
+// the caller's DisposableOf is short of the price.
 func BuyCommentPass(cur realm, courtSlug string) int64 {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

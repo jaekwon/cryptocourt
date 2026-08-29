@@ -552,29 +552,27 @@ func MoveItemInFolder(cur realm, courtSlug string, folderID, claimID uint64, to 
 	emitModAct(c.id, claimID, "folder-order", who)
 }
 
-// OrderFolders places every folder under one heading, in the order given: a
-// comma-separated list of ids, assigned 1..n. parentID 0 is the root headings.
+// OrderFolders sets the display order of every folder under one heading.
 //
-// THE WHOLE SIBLING LIST, NOT ONE FOLDER, and the alternative is worth naming
-// because it was the first design. A per-folder setter makes reordering eight
-// headings eight transactions, each leaving a tree a reader can see mid-shuffle,
-// and "insert between" needs a renumber the moment two neighbours are adjacent
-// integers. One list is one transaction and idempotent.
+// parentID is the heading; 0 means the root headings. ids is a comma-separated
+// list of folder ids, and the folders are placed in that order, 1..n. Sending
+// the list again with a different order is how you reorder; the call is
+// idempotent and nothing is written unless the whole list validates.
 //
-// The list must be EXACTLY the sibling set — no omissions, no strangers, no
-// duplicates. Allowing a subset reads as the kinder rule and is not: the
-// unlisted keep ord 0, which sorts last, so ordering three of five silently
-// demotes the other two, and the call's effect depends on state the caller may
-// not have read. Ignoring unknown ids is worse still, since a typo becomes a
-// silent no-op on the folder the curator meant.
+// THE LIST MUST BE EXACTLY THE SIBLING SET — every folder under that heading,
+// each exactly once, and nothing else. A subset is refused rather than accepted
+// as a partial order: unlisted folders would keep ord 0 and sort last, so
+// ordering three of five would silently demote the other two. An unknown id is
+// refused rather than ignored, so a typo cannot become a silent no-op.
 //
 // Retired and purged siblings are IN the set. Their rows survive, they still
-// appear in FolderTree behind their flags, and a restored folder that had been
-// excluded would come back wherever it happened to fall.
+// appear in FolderTree behind their flags, and one left out would come back
+// wherever it happened to fall.
 //
-// Moderator-gated, single-signer, like CreateFolder and RenameFolder: additive
-// and reversible acts are 1-of-n here, and a wrong order is fixed by sending the
-// right one. Bounded by maxFolders in both directions — the walk, and the parse.
+// An active court moderator, single-signer. Refused when the court does not
+// exist, the caller is not an active moderator, the heading does not exist, the
+// heading holds no folders, `ids` is longer than a list of folder ids could be,
+// an entry is not a number, an id is not under that heading, or an id repeats.
 func OrderFolders(cur realm, courtSlug string, parentID uint64, ids string) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -644,32 +642,27 @@ func OrderFolders(cur realm, courtSlug string, parentID uint64, ids string) {
 	emitModAct(c.id, 0, "folder-sort", who)
 }
 
-// FolderTree is every folder's SHAPE in one read: "id:parent:flags" per folder,
-// comma separated, in DISPLAY order — the id-order spine it has always emitted,
-// with each sibling group permuted into the curator's order (OrderFolders) among
-// the slots that group already held, never-ordered folders last within their
-// group. A court nobody has ordered therefore reads EXACTLY as it always did,
-// ids ascending, nested or not. flags is "r" retired, "p" purged, "rp" both,
-// "-" neither.
+// FolderTree is a court's whole folder structure in one read: "id:parent:flags"
+// per folder, comma separated, in display order.
 //
-// Order travels in the ROW ORDER rather than in a new field, which costs a
-// client nothing: the overlay's nestChainFolders already appends children as it
-// meets them, so it renders the curator's order without parsing anything new.
+// parent is 0 for a root heading. flags is "r" retired, "p" purged, "rp" both,
+// "-" neither. Children follow the parent they belong to, and each sibling group
+// sits in the order a curator gave it with OrderFolders; folders nobody has
+// ordered come last within their group, ids ascending. A court nobody has
+// ordered reads in plain id order.
 //
-// STRUCTURE ONLY, AND THAT IS THE POINT. A client assembling the tree otherwise
-// needs FolderParent + FolderRetired + FolderPurged per folder — three round
-// trips each, 300 for a court at the cap, to learn something that fits in about
-// a kilobyte. Names and descriptions stay one read per folder because they are
-// unbounded-ish user text that a client only needs for the folders it actually
-// draws, and because splicing them into a delimited string would mean escaping
-// user text into a format this realm would then have to keep escaping correctly
-// for ever.
+// STRUCTURE ONLY. Names and descriptions are one read each — FolderName,
+// FolderDesc — because they are user text a client only needs for the folders it
+// actually draws. A purged folder's flags say so, so a client knows to expect a
+// tombstone rather than a name.
 //
-// Bounded by maxFolders, so this read cannot grow past ~1.2KB whatever anybody
-// writes. No moderation gate: the shape of a court's filing system is not
-// secret, and the two things that ARE gated — a purged folder's name and its
-// description — are gated in the reads that return them. The flags say a row is
-// purged so a client knows to expect a tombstone rather than a name.
+// Ungated: a court's filing structure is not secret. The two things that ARE
+// gated, a purged folder's name and description, are gated in the reads that
+// return them.
+//
+// Bounded at 100 folders, so the answer cannot exceed about a kilobyte whatever
+// anybody writes. Returns the empty string for a court that has no folders yet.
+// Refused only on a court that does not exist.
 func FolderTree(courtSlug string) string {
 	c := mustCourt(courtSlug)
 	if c.mod == nil {

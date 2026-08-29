@@ -16,26 +16,20 @@ const (
 // an authority in its own right — see SetTier.
 var directoryAdmin address
 
-// SetTier promotes or hides a court among the three tiers. GLOBAL DAO, not the
-// bare directoryAdmin (MODERATION.md §3.2, and the file-by-file plan's
-// "directoryAdmin→global-DAO migration").
+// SetTier moves a court between the three directory tiers: 0 hidden, 1 listed,
+// 2 featured. Hidden courts are kept off the front page; featured ones are
+// promoted on it.
 //
-// Tier is moderation: hiding a court from the front page is the first power the
-// global DAO was described as having. Leaving it on a single address meant the
-// realm had two unrelated moderation authorities, one of them a lone key with
-// no m-of-n, no membership management and no way to hand over — while the DAO
-// beside it had all three. The DAO's founding member IS directoryAdmin, so this
-// widens who may act without changing who can act today.
+// Any member of the global DAO, single key — a tier change moves no money,
+// removes no text, and is undone by one call in the other direction. Setting a
+// court to the tier it already holds writes nothing and records nothing.
 //
-// Single-key like GlobalHide rather than m-of-n like purge: a tier change moves
-// nothing, removes no text, and is reversible in one call, so speed is worth
-// more than ceremony. Purge is m-of-n because it is irreversible.
+// Emits a court-level event carrying the tier CODE only, never any court text,
+// because events cannot be purged. There is no moderation-log row: the log is
+// per-claim and this is court-level.
 //
-// EVENTED, per I6 — every act emits, and the event carries the tier CODE only,
-// never user text, because events are unpurgeable history. There is no log row:
-// the moderation log is per-claim by construction and a tier change is
-// court-level, exactly like suspension, which emits with claim id 0 for the
-// same reason.
+// Refused when the court does not exist, the caller is not a global DAO member,
+// or `tier` is outside 0..2.
 func SetTier(cur realm, courtSlug string, tier int) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

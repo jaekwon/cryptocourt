@@ -1422,7 +1422,10 @@ async function listClaims(slug){
       if(f){ out.stripMore = parseInt(f[1],10); continue; }
       const m=line.match(reBare); if(!m) continue;
       const id=parseInt(m[2],10); if(seenS.has(id)) continue; seenS.add(id);
-      const dm = (m[3]||"").match(/settles at height\s+(\d+)/);
+      // BOTH WORDS, because the realm and this page ship separately: a node may be
+      // running either wording, and a parser that knows only the new one silently
+      // loses every deadline on an older chain.
+      const dm = (m[3]||"").match(/settles at (?:height|block)\s+(\d+)/);
       out.strip.push({id, title:unesc(m[1]), deadline: dm? parseInt(dm[1],10):null});
     } else if(sec==="pending"){
       const f = line.match(/…and\s+(\d+)\s+more/);
@@ -4480,7 +4483,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       const byId = {}; (allRows||claims).forEach(c2=>{ byId[c2.id]=c2; });
       const srow = r => `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at height ${fmtN(r.deadline)}</span>`:""}</span>
+        <span><span class="t">${safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}</span>
         ${byId[r.id]? statusPill(byId[r.id].statusText) : ""}</a>`;
       const prow = r => `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
@@ -7067,7 +7070,7 @@ function demoRender(path){
     const dsp = demoStrips(parts[0]);
     if(dsp.strip.length){
       o+=`\n## Needs review\n\nClaims that are answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the lists above still appears here while it can still be flagged.\n\n`;
-      for(const r of dsp.strip) o+=`- [${r.title}](/r/kourt/kourtv2:${parts[0]}/${r.id})${r.deadline!=null?` — settles at height ${r.deadline}`:""}\n`;
+      for(const r of dsp.strip) o+=`- [${r.title}](/r/kourt/kourtv2:${parts[0]}/${r.id})${r.deadline!=null?` — settles at block ${r.deadline}`:""}\n`;
     }
     if(dsp.pending.length){
       o+=`\n## Awaiting an answer\n\nSeeded and appeal claims that no one has answered yet.\n\n`;

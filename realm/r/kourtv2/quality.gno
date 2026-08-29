@@ -221,7 +221,7 @@ func VoteQuality(cur realm, courtSlug string, claimID uint64, bucket int) {
 		panic("kourtv2: the dispute vote has closed; resolve the round")
 	}
 	if isParticipant(cs, who) {
-		panic("kourtv2: the claim's participants cannot vote its quality (Q2)")
+		panic("kourtv2: you have a position on this claim — its author, its answerer and anyone who staked on it cannot vote on its quality rating")
 	}
 	// Weighed at the claim's quality epoch (Q1), pinned at PostAnswer, and then
 	// FLOORED by what the voter still holds. Two halves, and neither works alone:

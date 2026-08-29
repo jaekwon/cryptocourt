@@ -274,7 +274,7 @@ func TestPendingProposalsRenderWithoutTheirReason(cur realm, t *testing.T) {
 	if !strings.Contains(page, "1 of 2 approved") {
 		t.Fatal("the tally so far must render")
 	}
-	if !strings.Contains(page, "expires at height") {
+	if !strings.Contains(page, "expires at block") {
 		t.Fatal("the deadline must render — an unseen 7-day clock is a trap")
 	}
 	if strings.Contains(page, "SECRETSMEAR") {

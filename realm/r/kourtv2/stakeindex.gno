@@ -175,30 +175,22 @@ func StakedSize(courtSlug string, who address) int {
 	return stakeIdxCount(mustCourt(courtSlug), who)
 }
 
-// StakedPage lists this holder's positions in the stable order described on stakeRow —
-// bucket by claim id, then arrival within a bucket.
+// StakedPage lists one holder's stake positions in this court, oldest claim
+// first and, within a claim, in the order they were opened:
 //
 //	"c:<claimID>:<side>:<liveStake>:<convictionCC>;c:…"
 //
-// side is 0 for YES and 1 for NO, matching sideYES/sideNO. liveStake is what is staked
-// NOW, which is zero for a position withdrawn in full — the entry is still listed
-// because its conviction may still be owed, and the fifth field is that conviction.
+// side is 0 for YES, 1 for NO. liveStake is what is staked right now, and it is
+// ZERO for a position withdrawn in full — the entry is still listed because its
+// conviction may still be owed, and the last field is that conviction, in CC
+// draw-base units, the same figure ConvictionOf returns.
 //
-// CONVICTION RIDES ALONG because leaving it out cost the CLIENT more than carrying it
-// costs the chain. Measured on the me-page before this: one StakedPage plus one
-// StakedSize, and then FOUR reads per claim through positionOf (two StakeOf, two
-// ConvictionOf), each re-doing the court, claim and position lookups this walk has
-// already done — and two of those four re-read the liveStake this page had already
-// handed over. Here the marginal cost is arithmetic on a claimState and a stakePos
-// already in hand, with the court-level half of it hoisted out of the loop.
+// offset and limit page through the list; limit is capped at 200, and a limit of
+// zero or less means that cap. Read StakedSize alongside it to tell a partial
+// page from a complete one.
 //
-// The figure is ConvictionOf's, from the same helper, so the two cannot drift: a
-// transient settle against a preview of the era integral, capped at the freeze pin, in
-// CC draw-base units.
-//
-// Read with StakedSize to tell a partial page from a complete one. limit is clamped to
-// stakePageMax; a limit of zero or less means "the cap".
-//
+// Returns the empty string for an invalid address or for a holder with no
+// positions in the range. Refused only on a court that does not exist.
 func StakedPage(courtSlug string, who address, offset, limit int) string {
 	if !who.IsValid() {
 		return ""

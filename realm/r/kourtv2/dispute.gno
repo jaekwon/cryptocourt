@@ -628,42 +628,26 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	releasePriority(c, cs.answerer, claimID)
 }
 
-// VotableSupply reports a court's raw supply, its escrowed weight, and the
-// difference, at the last sealed epoch.
+// VotableSupply reports a court's coin supply at the last sealed epoch, split
+// three ways: raw is the whole supply, escrowed is the weight sitting in the
+// court escrow, and votable is raw minus escrowed — the base every percentage
+// bar in this court is quoted against.
 //
-// `votable` IS NOT THE WEIGHT THAT CAN ACTUALLY VOTE, and this comment said it was.
-// It nets out the court escrow and nothing else. Coin parked at a wrapper's address
-// — ccwrap's vault, so that the court coin can trade — sits INSIDE this figure while
-// no key can vote it: that realm exposes Enable, Wrap and Unwrap and no ballot. So
-// the castable total is `votable` minus whatever the wrapper holds, and the gap is
-// exactly the vault balance. Measured, on a court with 90% of one holder's coin
-// wrapped: votable unchanged at 9,380,831,518 while the castable total was
-// 1,330,986,800.
+// VOTABLE IS AN UPPER BOUND ON WHAT CAN ACTUALLY VOTE, not the figure itself.
+// It nets out the court escrow and nothing else. Coin parked at a wrapper's
+// address is inside `votable` while no key can vote it, so the castable total is
+// `votable` minus whatever the wrapper holds. A client that knows the wrapper
+// can subtract CoinBalanceOf(courtSlug, wrapperAddress) itself; this court does
+// not, deliberately, so that no safety bar here depends on that package being
+// correct. r/kourt/ccwrap caps its vault at 35% of votable, so the overstatement
+// is bounded at 35% while that cap holds.
 //
-// That matters more here than in a reader whose name is merely loose, because the
-// paragraph below says this ratio is how a court tells consensus from paralysis. A
-// heavily wrapped court reads HEALTHIER on this number than it is — the failure
-// direction the reader exists to detect.
+// Read it as the health of a court's dispute lane: a court where escrowed is
+// most of raw has little weight left to vote on the claims that weight is staked
+// against, and that reads from outside as apathy rather than as a fault.
 //
-// BOUNDED, not open-ended: ccwrap caps its vault at 35% of votable (maxWrapBps),
-// derived so that a claim staking a third of the court still has the other two thirds
-// able to vote on it. So the overstatement is at most 35% while that cap holds, and
-// the cap is checked at Wrap and not maintained afterwards — see ccwrap.gno.
-//
-// NOT netted here, deliberately. kourtv2 would have to know the wrapper's address,
-// making every safety bar in every court depend on that package being correct, and
-// ccwrap's own header opens by promising the opposite. A client that knows the
-// wrapper can subtract CoinBalanceOf(slug, wrapperAddress) itself.
-//
-// This exists because the ratio it exposes is the one number that says whether
-// a court's dispute lane is alive, and it was previously unobservable: escrow's
-// ADDRESS is readable but its share never was. The failure it makes visible
-// reads from outside as apathy rather than as a bug — every claim settling
-// undisputed, no slash ever firing, no claim ever reaching HIGH — so a court
-// that cannot watch this ratio cannot tell consensus from paralysis.
-//
-// Non-allocating, and it answers 0,0,0 before the first epoch seals rather than
-// panicking, matching what the bars themselves do at that point.
+// Answers 0, 0, 0 before the first epoch seals rather than refusing. Refused
+// only on a court that does not exist.
 func VotableSupply(courtSlug string) (raw, escrowed, votable int64) {
 	c := mustCourt(courtSlug)
 	at := c.coin.Epoch()
@@ -680,23 +664,20 @@ func VotableSupply(courtSlug string) (raw, escrowed, votable int64) {
 	return raw, escrowed, votable
 }
 
-// QuorumFloorOf quotes the turnout a dispute on this claim must reach.
-// ElectionFloorOf has existed since the election lane shipped; the verdict and
-// quality lanes had no equivalent, so their bars could go underwater unseen.
+// QuorumFloorOf quotes the turnout a dispute on this claim must reach for the
+// vote to decide anything, in CC base units.
 //
-// WHILE A DISPUTE IS OPEN THIS RETURNS THE PINNED BAR, not a fresh computation,
-// and the distinction is not cosmetic. quorumFloor reads the live sealed epoch
-// for its votable/3 arm, while ResolveDispute enforces c.gov.QuorumFloor(pid) —
-// the value frozen into the proposal at OpenDispute. Measured on a court where
-// the third arm binds, the two were 7.5x apart (66,666,666 quoted against
-// 500,000,000 enforced), and web/index.html renders this figure during an open
-// dispute.
+// WHILE A DISPUTE IS OPEN THIS IS THE BAR THAT WILL ACTUALLY BE ENFORCED — the
+// figure frozen into that round when it opened, not a fresh computation. With no
+// dispute open it quotes what a dispute opened now would face, which moves with
+// supply and can be several times smaller. Mobilise against the number this
+// returns while the round is live.
 //
-// The direction of harm is the one that matters: an UNDER-quoted bar sends a
-// coalition to mobilise short of quorum, the round fails for turnout, and
-// dispute.gno's own failed-quorum branch then leaves provisional = answer. So a
-// wrong quote hands the claim to the answerer by apathy — the exact S1 failure
-// mode, arriving through the read surface rather than through the bar.
+// The bar exists to stop a thin round deciding a claim, and missing it is not
+// neutral: a dispute that fails for turnout leaves the provisional verdict equal
+// to the ANSWER, so falling short hands the claim to the answerer.
+//
+// Refused when the court or the claim does not exist.
 func QuorumFloorOf(courtSlug string, claimID uint64) int64 {
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
