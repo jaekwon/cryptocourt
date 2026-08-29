@@ -744,6 +744,99 @@ function mediaMount(root, composer, opts) {
   return {draw, say, el: drop};
 }
 
+/* ---- the lightbox -------------------------------------------------------
+ *
+ * Full size, one exhibit at a time, and THE ONE PLACE THAT SAYS WHETHER THE
+ * BYTES ARE THE FILED ONES. gnoweb cannot: its CSP forbids fetching a
+ * third-party image at all, so it renders and stays silent. This page can, so
+ * this page must — an overlay that could check and did not would be worse than
+ * one that never offered.
+ */
+function mediaLightbox(items, start, opts) {
+  const o = opts || {};
+  const doc = o.doc || (typeof document !== "undefined" ? document : null);
+  const host = o.host || (doc && doc.body);
+  if (!doc || !host || !items || !items.length) return null;
+
+  let at = Math.max(0, Math.min(start | 0, items.length - 1));
+  const restore = o.activeElement || (doc.activeElement || null);
+
+  const box = mediaEl(doc, "div", {class: "lbox", role: "dialog", "aria-modal": "true",
+    "aria-label": "Exhibit", tabindex: "-1"});
+  const fig = mediaEl(doc, "figure", {class: "lbox-fig"});
+  const img = mediaEl(doc, "img", {class: "lbox-img", alt: "", referrerpolicy: "no-referrer"});
+  const cap = mediaEl(doc, "figcaption", {class: "lbox-cap"});
+  const num = mediaEl(doc, "span", {class: "lbox-n"});
+  const verdict = mediaEl(doc, "p", {class: "lbox-v", role: "status"});
+  const prev = mediaEl(doc, "button", {type: "button", class: "lbox-prev",
+    "aria-label": "Previous exhibit"}, "‹");
+  const next = mediaEl(doc, "button", {type: "button", class: "lbox-next",
+    "aria-label": "Next exhibit"}, "›");
+  const shut = mediaEl(doc, "button", {type: "button", class: "lbox-x",
+    "aria-label": "Close"}, "×");
+
+  fig.appendChild(img); fig.appendChild(num); fig.appendChild(cap); fig.appendChild(verdict);
+  box.appendChild(shut); box.appendChild(prev); box.appendChild(fig); box.appendChild(next);
+  host.appendChild(box);
+
+  let token = 0;
+  function show() {
+    const it = items[at] || {};
+    const src = mediaSrc(it, o.siteDomain, true);
+    img.setAttribute("src", src || "");
+    // The caption is the alt text: an exhibit labelled "the email header" is
+    // better to a screen reader than "exhibit 2 of 5", and it is what the
+    // author wrote for exactly this purpose.
+    img.setAttribute("alt", it.caption || `exhibit ${at + 1} of ${items.length}`);
+    num.textContent = `${at + 1} of ${items.length}`;
+    cap.textContent = it.caption || "";
+    prev.disabled = at === 0;
+    next.disabled = at === items.length - 1;
+
+    // Checking is asynchronous and the reader may move on before it lands, so
+    // every check carries a token and a stale one is dropped. Without this a
+    // slow verdict for exhibit 2 can arrive over exhibit 3 and label the wrong
+    // image as altered, which is the worst thing this feature could do.
+    const mine = ++token;
+    verdict.textContent = "checking…";
+    verdict.setAttribute("class", "lbox-v");
+    mediaVerify(it, src, o).then(v => {
+      if (mine !== token) return;
+      verdict.textContent = MEDIA_VERDICTS[v] || "";
+      verdict.setAttribute("class", "lbox-v lbox-" + v);
+    });
+  }
+
+  function go(d) { const n = at + d; if (n >= 0 && n < items.length) { at = n; show(); } }
+  function close() {
+    token++;                       // any verdict still in flight is now stale
+    if (box.remove) box.remove();
+    if (doc.removeEventListener) doc.removeEventListener("keydown", onKey);
+    // Focus goes back where it came from, or a reader who opened this from the
+    // keyboard is returned to the top of the document.
+    if (restore && restore.focus) restore.focus();
+    if (o.onClose) o.onClose();
+  }
+  function onKey(ev) {
+    if (ev.key === "Escape") { ev.preventDefault(); close(); }
+    else if (ev.key === "ArrowLeft") go(-1);
+    else if (ev.key === "ArrowRight") go(1);
+  }
+
+  prev.addEventListener("click", () => go(-1));
+  next.addEventListener("click", () => go(1));
+  shut.addEventListener("click", close);
+  // Only the backdrop closes. A click on the picture is how somebody looks at
+  // the picture, and closing on it would make the thing they came for the thing
+  // that dismisses it.
+  box.addEventListener("click", ev => { if (ev.target === box) close(); });
+  if (doc.addEventListener) doc.addEventListener("keydown", onKey);
+  if (box.focus) box.focus();
+
+  show();
+  return {el: box, close, go, at: () => at};
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     MEDIA_MAX_ITEMS, MEDIA_MAX_MIRRORS, MEDIA_MAX_URL, MEDIA_MAX_CAPTION,
@@ -754,6 +847,6 @@ if (typeof module !== "undefined" && module.exports) {
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
     mediaMount, mediaEl, mediaParse, mediaSrc, mediaNodeThumb,
-    mediaCardItems, mediaVerify, MEDIA_VERDICTS,
+    mediaCardItems, mediaVerify, MEDIA_VERDICTS, mediaLightbox,
   };
 }

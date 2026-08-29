@@ -30,6 +30,8 @@ class El {
     };
   }
   setAttribute(k, v) { this.attrs[k] = String(v); }
+  remove() { if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this); }
+  focus() { this.focused = true; }
   getAttribute(k) { return this.attrs[k]; }
   appendChild(c) { this.children.push(c); c.parent = this; return c; }
   addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); }
@@ -145,6 +147,113 @@ const settle = () => new Promise(r => setTimeout(r, 0));
   panel.draw();
   ok("an unreadable file explains itself", /could not read that file/.test(root.text));
   ok("...naming the reason", /not an image/.test(root.text));
+
+})();
+
+// ---- the lightbox --------------------------------------------------------
+(async () => {
+  const bytes = new TextEncoder().encode("real bytes");
+  // The hash must be the DIGEST OF THESE BYTES. Writing a placeholder made the
+  // "matches" arm report altered — and had the assertion been the other way
+  // round it would have passed for entirely the wrong reason.
+  const hash = await M.mediaDigest(bytes);
+
+  function open(over) {
+    const host = new El("div");
+    const keys = [];
+    const d = {
+      createElement: t => new El(t),
+      body: host,
+      activeElement: null,
+      addEventListener: (t, fn) => keys.push(fn),
+      removeEventListener: () => keys.length = 0,
+    };
+    const items = over && over.items || [
+      {kind: "img", sha256: hash, bytes: bytes.length, caption: "the memo",
+       mirrors: ["https://i.imgur.com/a.webp"]},
+      {kind: "img", sha256: "b".repeat(64), bytes: 4, caption: "", mirrors: ["https://i.imgur.com/b.webp"]},
+      {kind: "vid", caption: "hearing", mirrors: ["https://i.imgur.com/v.webp"]},
+    ];
+    const lb = M.mediaLightbox(items, (over && over.start) || 0, Object.assign({
+      doc: d, host, siteDomain: "",
+      fetch: async () => ({ok: true, headers: {get: () => null},
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)}),
+    }, over || {}));
+    return {host, lb, keys, items};
+  }
+  const settle = () => new Promise(r => setTimeout(r, 0));
+
+  let {host, lb, keys} = open();
+  ok("the lightbox opens on the exhibit that was clicked", lb.at() === 0);
+  ok("...and says which of how many", /1 of 3/.test(host.text));
+  ok("the caption is the alt text, not a number",
+     byClass(host, "lbox-img")[0].attrs.alt === "the memo");
+  ok("it is a modal dialog to a screen reader",
+     byClass(host, "lbox")[0].attrs["aria-modal"] === "true");
+
+  await settle(); await settle();
+  ok("a matching exhibit is reported as matching",
+     /matches what was filed/.test(byClass(host, "lbox-v")[0].text),
+     byClass(host, "lbox-v")[0].text);
+
+  // Arrow keys and buttons walk the gallery, and it does not run off either end.
+  keys[0]({key: "ArrowRight", preventDefault(){}});
+  ok("the right arrow advances", lb.at() === 1);
+  keys[0]({key: "ArrowLeft", preventDefault(){}});
+  keys[0]({key: "ArrowLeft", preventDefault(){}});
+  ok("...and the first exhibit is the first", lb.at() === 0);
+  ok("the previous button is disabled there", byClass(host, "lbox-prev")[0].disabled === true);
+
+  // A VIDEO CANNOT BE CHECKED AND MUST SAY SO, or the verdict on the exhibits
+  // that CAN be checked stops meaning anything.
+  ({host, lb, keys} = open({start: 2}));
+  await settle(); await settle();
+  ok("a video says it cannot be checked",
+     /cannot check it/.test(byClass(host, "lbox-v")[0].text), byClass(host, "lbox-v")[0].text);
+
+  // ALTERED IS THE WHOLE FEATURE and must be impossible to miss.
+  ({host, lb, keys} = open({
+    fetch: async () => ({ok: true, headers: {get: () => null},
+      arrayBuffer: async () => new TextEncoder().encode("swapped!").buffer}),
+  }));
+  await settle(); await settle();
+  ok("swapped bytes are announced loudly",
+     /NO LONGER MATCHES/.test(byClass(host, "lbox-v")[0].text));
+  ok("...and the verdict is on the element for styling",
+     byClass(host, "lbox-v")[0].attrs.class.includes("lbox-altered"));
+
+  // A SLOW VERDICT MUST NOT LAND ON THE WRONG EXHIBIT. This is the worst thing
+  // this feature could do: label an untouched image as altered because a check
+  // for the previous one arrived late.
+  const held = [];
+  ({host, lb, keys} = open({
+    fetch: () => new Promise(r => held.push(() => r({ok: true, headers: {get: () => null},
+      arrayBuffer: async () => new TextEncoder().encode("swapped!").buffer}))),
+  }));
+  keys[0]({key: "ArrowRight", preventDefault(){}});   // move on before it lands
+  held[0]();                                          // the FIRST exhibit's check returns late
+  await settle(); await settle();
+  ok("a stale verdict is dropped rather than shown on the next exhibit",
+     !/NO LONGER MATCHES/.test(byClass(host, "lbox-v")[0].text),
+     byClass(host, "lbox-v")[0].text);
+
+  // ONLY THE BACKDROP CLOSES. A click on the picture is how somebody looks at
+  // the picture; closing on it would make the thing they came for the thing
+  // that dismisses it. Ablating this changed no test until now.
+  ({host, lb, keys} = open());
+  const lbox = byClass(host, "lbox")[0];
+  lbox.fire("click", {target: byClass(host, "lbox-img")[0]});
+  ok("clicking the picture does not close it", host.children.length === 1);
+  lbox.fire("click", {target: lbox});
+  ok("clicking the backdrop does", host.children.length === 0);
+
+  // Escape closes, and focus goes back where it came from.
+  let focused = false;
+  const opener = {focus: () => { focused = true; }};
+  ({host, lb, keys} = open({activeElement: opener}));
+  keys[0]({key: "Escape", preventDefault(){}});
+  ok("escape closes it", host.children.length === 0);
+  ok("...and focus returns to whatever opened it", focused);
 
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);

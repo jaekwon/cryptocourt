@@ -668,6 +668,29 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    compete with the thing the node exists to say. It brightens with the node the
    reader has selected, which is the moment the picture is worth looking at. */
 .mthumb{opacity:.62}
+/* The lightbox. Dark enough that the exhibit is the only thing lit, because the
+   reader opened it to look at one picture. */
+.lbox{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  background:rgba(8,8,10,.92); padding:24px; gap:8px}
+.lbox-fig{margin:0; max-width:min(1100px,92vw); text-align:center}
+.lbox-img{max-width:100%; max-height:78vh; margin:0 auto; border-radius:4px}
+.lbox-n{display:block; margin-top:10px; font-size:12px; color:var(--muted)}
+.lbox-cap{margin-top:4px; font-size:13.5px; color:var(--ink-2)}
+.lbox-x,.lbox-prev,.lbox-next{background:none; border:0; color:var(--ink-2); cursor:pointer;
+  font-size:26px; line-height:1; padding:8px}
+.lbox-x{position:absolute; top:10px; right:14px; font-size:22px}
+.lbox-prev:disabled,.lbox-next:disabled{opacity:.25; cursor:default}
+/* THE VERDICT. "matches" is quiet — it is the expected answer and a reader who
+   ignores it loses nothing. "altered" is the whole feature and is styled to be
+   impossible to skim past: a reader who misses it is worse off than one who
+   never opened the exhibit at all. */
+.lbox-v{margin-top:8px; font-size:12.5px; color:var(--muted)}
+.lbox-matches{color:var(--good)}
+.lbox-altered{color:#fff; background:#a1201e; padding:8px 12px; border-radius:3px;
+  font-size:14px; font-weight:600; letter-spacing:.02em}
+.lbox-unavailable,.lbox-unverifiable{color:var(--muted); font-style:italic}
+.ex{cursor:zoom-in}
+.ex:focus{outline:2px solid var(--accent); outline-offset:2px}
 .mnode-a:hover .mthumb,.mnode-a:focus .mthumb,.mnode-a.sel .mthumb{opacity:1}
 /* Hidden when the map is zoomed far enough out that titles go too: a 6px smear
    of colour is noise, not information, and `.mapsvg.far .mtitle{display:none}`
@@ -2102,10 +2125,20 @@ function claimBody(d){
 
    Guarded on typeof like every other call into media.js, so a missing file costs
    the exhibits and not the card. */
+/* The exhibits the last card drew, held for the click handler rather than
+   re-derived from the DOM: the lightbox needs the ITEMS — hashes, byte counts,
+   kinds — and an <img> src cannot be checked against anything. One variable is
+   enough because one card is open at a time; the map's selection card and the
+   claim page never coexist. */
+var LAST_EXHIBITS = [];
 function claimExhibits(c){
   if(typeof mediaCardItems !== "function") return "";
   const items = mediaCardItems((c && c.media) || [], CFG.site || "");
   if(!items.length) return "";
+  /* Parked for the click handler rather than re-derived from the DOM: the
+     lightbox needs the ITEMS (hashes, byte counts, kinds), and an <img> src is
+     not enough to check anything against. */
+  LAST_EXHIBITS = (c && c.media) || [];
   return `<div class="mapsel-ex" role="list">` + items.map(x => {
     const cap = x.caption ? `<span class="ex-cap">${safeInline(x.caption)}</span>` : "";
     /* An exhibit with nothing to show KEEPS ITS PLACE and says why. A gap that
@@ -2118,7 +2151,8 @@ function claimExhibits(c){
     /* referrerpolicy: the host serving this must not learn which claim the
        reader is looking at. loading=lazy: a card off screen costs nothing. */
     const ratio = (x.w && x.h) ? ` style="aspect-ratio:${x.w}/${x.h}"` : "";
-    return `<figure class="ex" role="listitem">`
+    return `<figure class="ex" role="listitem" data-ex="${x.n - 1}" tabindex="0"`
+      + ` aria-label="Open exhibit ${esc(x.label)} full size">`
       + `<img class="ex-img" src="${esc(x.src)}" alt="${safeInline(x.caption || ("exhibit " + x.label))}"`
       + ` loading="lazy" referrerpolicy="no-referrer"${ratio}>`
       + `<span class="ex-n">${esc(x.label)}</span>${cap}`
@@ -2356,6 +2390,17 @@ document.addEventListener("click",(ev)=>{
   if(na){ ev.preventDefault(); let n=na.parentElement.querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); na.parentElement.appendChild(n); }
     n.textContent="Tick the acknowledgement first — buying is permanent."; return; }
+  /* AN EXHIBIT OPENS FULL SIZE, and full size is the only place the overlay can
+     say whether the bytes are the ones that were filed — gnoweb's CSP forbids
+     the fetch, so it renders and stays silent. Delegated because the card is
+     rebuilt on every selection. */
+  const ex = ev.target.closest("[data-ex]");
+  if(ex && typeof mediaLightbox === "function" && LAST_EXHIBITS.length){
+    ev.preventDefault();
+    mediaLightbox(LAST_EXHIBITS, parseInt(ex.dataset.ex, 10) || 0,
+      {siteDomain: CFG.site || "", activeElement: ex});
+    return;
+  }
   const t = ev.target.closest(".signbtn"); if(!t) return;
   let args = {}; try{ args = JSON.parse(t.dataset.args||"{}"); }catch(_){}
   adenaSign(t.dataset.func, args, t);
