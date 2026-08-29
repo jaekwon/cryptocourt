@@ -88,7 +88,16 @@ ok("export→import idempotent", JSON.stringify(c1)===JSON.stringify(c2));
 
 // label strings + curate-page copy present in source
 ok("CUR_LABEL exact", src.includes('const CUR_LABEL = "your local curation — held in this browser, not on any chain"'));
-ok("on-chain section copy", src.includes("no deposit, no bond; hide/unhide gathers signatures") || src.includes("the realm refuses non-moderators at signing"));
+/* THE FACTS, NOT THE SENTENCE. This pinned two exact phrases, so rewording the
+   section for readers broke it while every fact it cared about survived. The
+   moderator section must still say (a) these calls cost gas and no bond, and
+   (b) a non-moderator is refused — however that ends up being phrased. */
+ok("moderator section states the cost", /no deposit, no bond/.test(src));
+ok("moderator section states who is refused",
+   /refuses the transaction|refuses non-moderators/.test(src));
+ok("...and cites no internal design document",
+   !/(COURTS_STRUCTURE|MODERATION|PLAN)\.md[^"]{0,40}§/.test(
+     src.slice(src.indexOf("Moderator actions"), src.indexOf("Moderator actions")+2000)));
 ok("local section copy", src.includes("Nothing here writes to any chain"));
 ok("map local captions", src.includes("your local curation overrides the sample — held in this browser, recorded nowhere") && src.includes("it overrides the chain's ${chainF.folders.length} folder"));
 ok("no bulk sync button", !/sync to chain|publish curation/i.test(src));
