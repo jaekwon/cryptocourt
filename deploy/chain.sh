@@ -53,14 +53,32 @@ echo "==> building linux binaries"
 ( cd "$GNOROOT" && go build -o "$WORK/gnokey-host" ./gno.land/cmd/gnokey )
 ls -l "$WORK" | awk '{print "    " $9, $5}' | grep -v '^    $'
 
+# THE NODE READS THE GO STDLIBS OFF DISK AT CHAIN INIT, from
+# $GNOROOT/gnovm/stdlibs — 253 .gno files it loads before the first block. The
+# binary only GUESSES that path when GNOROOT is unset, and its last-resort guess
+# is the build machine's own source tree, which is why a node built here and run
+# there dies in loadStdlib with a path like /Users/<you>/gopath/... in the stack.
+# So the stdlibs travel with the binary and the unit sets GNOROOT explicitly.
+echo "==> packing the stdlibs ($(du -sh "$GNOROOT/gnovm/stdlibs" | cut -f1))"
+tar -C "$GNOROOT" -czf "$WORK/stdlibs.tgz" gnovm/stdlibs
+
 echo "==> phase 1: server-side secrets"
-"${SCP[@]}" "$WORK/gnoland" "$WORK/gnokey" "$WORK/gnogenesis" "$WORK/gnofaucet" "$HOST:/tmp/"
+"${SCP[@]}" "$WORK/gnoland" "$WORK/gnokey" "$WORK/gnogenesis" "$WORK/gnofaucet" \
+    "$WORK/stdlibs.tgz" "$HOST:/tmp/"
 PUBLIC=$("${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" \
   RESET="$RESET" 'bash -seu' <<'REMOTE'
 mkdir -p "$APPDIR/bin" "$CHAINDIR/data/secrets" "$STATEDIR/secret"
 for b in gnoland gnokey gnogenesis gnofaucet; do
     install -m 0755 "/tmp/$b" "$APPDIR/bin/$b"; rm -f "/tmp/$b"
 done
+
+# Unpacked fresh every run: these must match the binaries they were built beside,
+# and a stale stdlib tree against a newer gnoland is a chain that fails at init
+# for reasons that read as corruption.
+rm -rf "$APPDIR/gnoroot/gnovm/stdlibs"
+mkdir -p "$APPDIR/gnoroot"
+tar -C "$APPDIR/gnoroot" -xzf /tmp/stdlibs.tgz && rm -f /tmp/stdlibs.tgz
+test -d "$APPDIR/gnoroot/gnovm/stdlibs" || { echo "stdlibs did not unpack" >&2; exit 5; }
 
 # A live chain is not silently replaced. A fresh genesis over an existing data
 # directory produces a node that refuses to start, which is a worse outcome than

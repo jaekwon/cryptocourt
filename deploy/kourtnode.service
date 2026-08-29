@@ -17,6 +17,12 @@ Type=simple
 User=kourt
 Group=kourt
 WorkingDirectory=/var/lib/kourt/chain
+# WITHOUT THIS THE NODE DIES AT INIT. gnoland loads the Go stdlibs from
+# $GNOROOT/gnovm/stdlibs before the first block; with GNOROOT unset it falls back
+# to guessing, and its last guess is the path of the machine that BUILT it — so
+# the failure is a panic in loadStdlib naming a directory that exists only on a
+# developer's laptop. chain.sh ships that tree here.
+Environment=GNOROOT=/opt/kourt/gnoroot
 # -skip-genesis-sig-verification: the genesis txs are signed by the deployer key
 # on the machine that BUILT the genesis, which is not this one. The chain still
 # verifies every transaction after genesis.
