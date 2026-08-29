@@ -81,18 +81,20 @@ for D in "${DOMAINS[@]}"; do
     # burn a rate-limit slot to fix a problem issuance cannot fix.
     HAVE_CERT=no; HAVE_INSTALL=no
     "${SSH[@]}" "$HOST" "certbot certificates 2>/dev/null | grep -q 'Domains:.*\\b$D\\b'" && HAVE_CERT=yes
-    # ASK THE SERVER TO SERVE IT, rather than inferring from files. The previous
-    # test grepped sites-enabled for a block naming $D and piped that into
-    # `xargs -r grep -l ssl_certificate` — and it reported "installed" for every
-    # name, always: `grep -r` does not follow the symlinks sites-enabled is made
-    # of, so the first grep matched nothing, and `xargs -r` with empty input runs
-    # nothing and EXITS 0. A test that could not fail reported TLS as fine while
-    # nothing at all answered on 443.
+    # ASK THE SERVER TO SERVE THIS NAME'S CERTIFICATE, and do not pass -k.
     #
-    # --resolve pins the name to loopback, so this asks THIS host for THIS
-    # certificate without depending on public DNS; -k because the question is
-    # whether a TLS vhost exists, not whether the chain validates.
-    TLSCODE=$("${SSH[@]}" "$HOST" "curl -sk -o /dev/null -m 8 -w '%{http_code}' --resolve '$D:443:127.0.0.1' 'https://$D/' 2>/dev/null" || true)
+    # Two earlier versions of this test both reported "installed" for names that
+    # served nothing, for different reasons:
+    #   1. grep -rl over sites-enabled piped to `xargs -r` — grep -r does not
+    #      follow symlinks, xargs -r on empty input exits 0, so it always passed.
+    #   2. curl -sk --resolve … — with NO :443 block for this name, nginx answers
+    #      from the DEFAULT TLS server (the apex vhost) and hands back the wrong
+    #      certificate. -k ignores exactly that, so a status code came back and
+    #      the test passed again.
+    # Without -k, a wrong certificate is a failure, which is the actual question:
+    # is a certificate FOR THIS NAME being served? --resolve keeps it local, so
+    # the answer does not depend on public DNS or a firewall.
+    TLSCODE=$("${SSH[@]}" "$HOST" "curl -s -o /dev/null -m 8 -w '%{http_code}' --resolve '$D:443:127.0.0.1' 'https://$D/' 2>/dev/null" || true)
     { [ -n "$TLSCODE" ] && [ "$TLSCODE" != "000" ]; } && HAVE_INSTALL=yes || true
 
     if [ "$HAVE_CERT" = yes ] && [ "$HAVE_INSTALL" = yes ]; then
