@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaekwon/kourt/internal/archive"
 	"github.com/jaekwon/kourt/internal/chat"
 	"github.com/jaekwon/kourt/internal/geo"
 	"path/filepath"
@@ -140,6 +141,11 @@ func main() {
 		secretFile   = flag.String("secret-file", "", "path to the IP hashing key; defaults to a row in the database")
 		healthDetail = flag.Bool("health-detail", false,
 			"serve backlog and scanner timing on the public health endpoint (helps an attacker time one)")
+		archiveRPC = flag.String("archive-rpc", "",
+			"gno RPC endpoint the media archive asks whether a claim references a "+
+				"blob; empty disables promotion, so every upload expires")
+		archiveRealm = flag.String("archive-realm", "gno.land/r/kourt/kourtv2",
+			"realm the media archive reads claim media from")
 		appealTo = flag.String("appeal-to", "",
 			"where a punished person should complain; the panel stays silent about appeals if unset")
 		geoLoc    = flag.String("geo-locations", "", "MaxMind GeoLite2-Country-Locations-en.csv")
@@ -231,14 +237,63 @@ func main() {
 	}
 	lg.Printf("listening on %s, chains %v, proxy=%v", *addr, keys(names), *behindProxy)
 
+	// THE MEDIA ARCHIVE. kourt.xyz's own copy of the images filed with a claim,
+	// content-addressed, in this same database — see internal/archive.
+	mux := srv.Routes()
+	astore, err := archive.NewStore(store.Writer())
+	if err != nil {
+		lg.Fatal(err)
+	}
+	// The deployment sits behind nginx, so RemoteAddr is the proxy for every
+	// request and would make one rate-limit bucket for the whole internet. The
+	// bucket key is HASHED with the same key the chat uses, so an in-memory
+	// limiter never holds a raw address.
+	archiveClient := func(r *http.Request) string {
+		a, err := policy.ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"))
+		if err != nil {
+			return r.RemoteAddr
+		}
+		return hasher.Hash(a)
+	}
+	asrv := archive.NewServer(astore, lg, archiveClient)
+	if *archiveRPC != "" {
+		asrv = asrv.WithChain(&archive.Chain{RPC: *archiveRPC, PkgPath: *archiveRealm})
+	} else {
+		// Said out loud, because the failure is silent otherwise: with no chain
+		// to ask, nothing is ever promoted and every upload expires within the
+		// hour. That is the safe direction — an archive that cannot check what
+		// is referenced must forget rather than become free permanent storage —
+		// but an operator who did not mean it would otherwise only discover it
+		// when a reader reported a missing image.
+		lg.Printf("no --archive-rpc: media uploads will EXPIRE after %s, "+
+			"because nothing can confirm a claim references them", archive.StageTTL)
+	}
+	asrv.Routes(mux)
+	go sweepArchive(astore, lg)
+
 	server := &http.Server{
 		Addr:              *addr,
-		Handler:           srv.Routes(),
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
 	}
 	lg.Fatal(server.ListenAndServe())
+}
+
+// sweepArchive deletes staged media nobody claimed. It runs for the life of the
+// process: the TTL is only a promise until something enforces it.
+func sweepArchive(st *archive.Store, lg *log.Logger) {
+	for {
+		n, err := st.SweepStaged(context.Background(), time.Now())
+		switch {
+		case err != nil:
+			lg.Printf("archive sweep: %v", err)
+		case n > 0:
+			lg.Printf("archive: swept %d unclaimed upload(s)", n)
+		}
+		time.Sleep(10 * time.Minute)
+	}
 }
 
 func keys(m map[string]bool) []string {

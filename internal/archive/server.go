@@ -6,11 +6,17 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
-var digestRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+var (
+	digestRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// The realm's own court-slug shape, so a malformed one is refused here
+	// rather than travelling into a chain query.
+	courtRe = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+)
 
 type Server struct {
 	store *Store
@@ -20,6 +26,7 @@ type Server struct {
 	// proxy for every request and would make one bucket for the whole internet.
 	clientIP func(*http.Request) string
 	limiter  *limiter
+	chain    *Chain
 }
 
 func NewServer(store *Store, lg *log.Logger, clientIP func(*http.Request) string) *Server {
@@ -29,9 +36,87 @@ func NewServer(store *Store, lg *log.Logger, clientIP func(*http.Request) string
 	return &Server{store: store, log: lg, clientIP: clientIP, limiter: newLimiter()}
 }
 
+// Chain, when set, lets the archive verify that a claim really references a
+// blob before keeping it. Without one nothing is ever promoted and every upload
+// expires, which is the safe direction to fail: the archive forgets rather than
+// becoming free storage.
+func (s *Server) WithChain(c *Chain) *Server {
+	s.chain = c
+	return s
+}
+
 func (s *Server) Routes(mux *http.ServeMux) {
+	mux.HandleFunc("/m/claimed", s.claimed)
 	mux.HandleFunc("/m/", s.blob)
 	mux.HandleFunc("/m", s.upload)
+}
+
+// claimed promotes every blob a claim references, after asking the chain.
+//
+// The composer calls this once its transaction is broadcast, so bytes uploaded
+// seconds earlier stop being temporary. It needs no authentication and takes no
+// claim of its own: the CHAIN decides what is referenced, and the worst a
+// stranger can do by calling it for someone else's claim is make that claim's
+// evidence permanent, which is what filing it already asked for.
+//
+// A court and claim that reference nothing promote nothing. There is no path
+// here that keeps bytes no claim points at.
+func (s *Server) claimed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST, OPTIONS")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.chain == nil {
+		http.Error(w, "this archive cannot reach a chain", http.StatusServiceUnavailable)
+		return
+	}
+	// Every call costs an outbound query, so it is metered like an upload —
+	// otherwise it is a way to make this service hammer the node for free.
+	if !s.limiter.allow(s.clientIP(r), time.Now()) {
+		http.Error(w, "too many requests; try again shortly", http.StatusTooManyRequests)
+		return
+	}
+
+	court := r.URL.Query().Get("court")
+	if !courtRe.MatchString(court) {
+		http.Error(w, "bad court", http.StatusBadRequest)
+		return
+	}
+	claimID, err := strconv.ParseUint(r.URL.Query().Get("claim"), 10, 64)
+	if err != nil || claimID == 0 {
+		http.Error(w, "bad claim id", http.StatusBadRequest)
+		return
+	}
+
+	hashes, err := s.chain.ClaimHashes(r.Context(), court, claimID)
+	if err != nil {
+		if s.log != nil {
+			s.log.Printf("archive: claim %s/%d: %v", court, claimID, err)
+		}
+		http.Error(w, "could not read that claim", http.StatusBadGateway)
+		return
+	}
+	promoted := 0
+	for _, h := range hashes {
+		if err := s.store.Promote(r.Context(), h); err != nil {
+			if s.log != nil {
+				s.log.Printf("archive: promoting %s: %v", h, err)
+			}
+			continue
+		}
+		promoted++
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_ = json.NewEncoder(w).Encode(map[string]int{"promoted": promoted})
 }
 
 // blob serves bytes by digest.

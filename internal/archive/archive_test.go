@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -278,5 +279,110 @@ func TestOneClientCannotFillTheStagingArea(t *testing.T) {
 	// And the bucket refills.
 	if !l.allow("ip", now.Add(uploadRefill+time.Second)) {
 		t.Fatal("the bucket must refill over time")
+	}
+}
+
+// fakeNode answers abci_query the way a gno node does: the payload is base64 in
+// response.Data, and qeval wraps a string result as `("..." string)`.
+func fakeNode(t *testing.T, mediaJSON string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		quoted, err := json.Marshal(mediaJSON)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		payload := "(" + string(quoted) + " string)"
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0", "id": "archive",
+			"result": map[string]any{"response": map[string]any{
+				"Data": base64.StdEncoding.EncodeToString([]byte(payload)),
+			}},
+		})
+	}))
+}
+
+func TestOnlyTheChainDecidesWhatIsWorthKeeping(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+
+	claimed, _ := st.Put(ctx, "image/png", pngBody)
+	stray, _ := st.Put(ctx, "image/webp", append([]byte("stray"), pngBody...))
+	purged, _ := st.Put(ctx, "image/gif", append([]byte("purged"), pngBody...))
+
+	// The claim references `claimed`, and carries a purged slot whose bytes must
+	// NOT be bought permanent storage — the court has withdrawn its pointer.
+	node := fakeNode(t, `[{"kind":"img","sha256":"`+claimed+`","mirrors":[]},`+
+		`{"kind":"img","purged":true,"sha256":"`+purged+`"}]`)
+	defer node.Close()
+
+	srv := NewServer(st, nil, func(r *http.Request) string { return "c" }).
+		WithChain(&Chain{RPC: node.URL, PkgPath: "gno.land/r/kourt/kourtv2", HTTP: node.Client()})
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/m/claimed?court=covid&claim=7", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("promote returned %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// After the TTL: exactly the claimed blob survives.
+	if _, err := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, _, err := st.Get(ctx, claimed); err != nil {
+		t.Fatal("bytes a claim references must be kept")
+	}
+	if _, _, err := st.Get(ctx, stray); err != ErrNotFound {
+		t.Fatal("bytes no claim references must expire — that is the whole mechanism")
+	}
+	if _, _, err := st.Get(ctx, purged); err != ErrNotFound {
+		t.Fatal("a purged slot must not buy its bytes permanent storage")
+	}
+}
+
+func TestWithoutAChainNothingIsKept(t *testing.T) {
+	// FAIL-CLOSED MEANS FORGET, NOT KEEP. An archive that cannot reach a chain
+	// cannot know what is referenced, and the safe answer is to let everything
+	// expire rather than to become free permanent storage by default.
+	st := testStore(t)
+	srv := NewServer(st, nil, func(r *http.Request) string { return "c" })
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/m/claimed?court=covid&claim=1", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("promote without a chain returned %d, want 503", rec.Code)
+	}
+
+	sum, _ := st.Put(context.Background(), "image/png", pngBody)
+	if _, err := st.SweepStaged(context.Background(), time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, _, err := st.Get(context.Background(), sum); err != ErrNotFound {
+		t.Fatal("with no chain to consult, uploads must expire")
+	}
+}
+
+func TestAMalformedClaimNeverReachesTheNode(t *testing.T) {
+	st := testStore(t)
+	node := fakeNode(t, "[]")
+	defer node.Close()
+	srv := NewServer(st, nil, func(r *http.Request) string { return "c" }).
+		WithChain(&Chain{RPC: node.URL, PkgPath: "p", HTTP: node.Client()})
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	for _, q := range []string{
+		"?court=&claim=1", "?court=Covid&claim=1", "?court=a/b&claim=1",
+		"?court=covid&claim=0", "?court=covid&claim=x", "?court=covid",
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/m/claimed"+q, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%q returned %d, want 400", q, rec.Code)
+		}
 	}
 }

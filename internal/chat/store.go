@@ -384,6 +384,14 @@ func diagnosePath(path string) string {
 	return ""
 }
 
+// Writer exposes the write handle so a sibling package can keep its own tables
+// in THIS database rather than beside it.
+//
+// deploy.sh documents this file as the service's whole memory and the one thing
+// to back up. A second store next to it would quietly make that false, and the
+// first anyone would learn of it is a restore that came back missing something.
+func (s *Store) Writer() *sql.DB { return s.w }
+
 func (s *Store) Close() error {
 	err := s.w.Close()
 	if err2 := s.r.Close(); err == nil {
