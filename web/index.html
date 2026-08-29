@@ -1143,6 +1143,83 @@ const one = async expr => parseTyped(await qeval(expr))[0];
 const tup = async expr => parseTyped(await qeval(expr));
 const gstr = s => JSON.stringify(String(s));   // gno string literal
 
+/* ======================== the comment board's wire ======================= */
+/* THREE PACKINGS, NOT ONE, and board_test.gno states the contract:
+ *
+ *     BoardNewest   id | author | replyCount | mark | text     (5 fields)
+ *     BoardTop      id | author | score      | mark | text     (5 fields)
+ *     BoardReplies  id | author | mark       | text            (4 fields)
+ *
+ * A shared parser reads a reply's MARK as its reply count. The field count is
+ * the argument, and each caller passes its own.
+ *
+ * The mark alphabet is ". h g x" — and `h` is the DISJUNCTION of hidden-by-author
+ * and hidden-by-moderator (boardMark, board.gno). The chain does not tell a
+ * client which, deliberately, so no caller may say which. */
+
+/* JS split with a limit TRUNCATES; Go's SplitN joins the remainder, and comment
+   text legitimately contains pipes. Split whole, keep the first n-1, rejoin the
+   tail — anything else silently eats the end of somebody's sentence. */
+function wireFields(line, n){
+  const p = String(line).split("|");
+  if(p.length < n) return null;            // malformed: drop the row, never guess
+  return p.slice(0, n-1).concat(p.slice(n-1).join("|"));
+}
+
+/* ONE LEFT-TO-RIGHT PASS. escapeWireText escapes the BACKSLASH FIRST precisely so
+   the escape cannot be forged: an author who types a literal backslash-n gets
+   \\n on the wire, and a naive .replace(/\\n/g,"\n") turns their two characters
+   into a real newline — re-forging what the realm went to trouble to prevent. */
+function unwire(s){
+  return String(s).replace(/\\(.)/g, (_, c) => c === "n" ? "\n" : c === "r" ? "\r" : c);
+}
+
+/* A Go quoted string, decoded properly. qeval hands back strconv.Quote output,
+   which is NOT JSON: it can carry \a, \v and \xNN, and parseTyped's fallback for
+   those is raw.slice(1,-1) — every escape left literal, INCLUDING the \n that
+   separates rows. One comment containing such a byte would collapse a whole
+   board into a single garbage row for every reader, so the board decodes for
+   itself rather than trusting that path. */
+function goUnquote(raw){
+  const s = String(raw);
+  if(!/^".*"$/s.test(s)) return s;
+  try { return JSON.parse(s); } catch(_) {}
+  const b = s.slice(1, -1);
+  let out = "";
+  for(let i = 0; i < b.length; i++){
+    if(b[i] !== "\\"){ out += b[i]; continue; }
+    const c = b[++i];
+    if(c === "n") out += "\n";
+    else if(c === "r") out += "\r";
+    else if(c === "t") out += "\t";
+    else if(c === "a") out += "\x07";
+    else if(c === "b") out += "\b";
+    else if(c === "f") out += "\f";
+    else if(c === "v") out += "\v";
+    else if(c === "x"){ out += String.fromCharCode(parseInt(b.substr(i+1, 2), 16) || 0); i += 2; }
+    else if(c === "u"){ out += String.fromCharCode(parseInt(b.substr(i+1, 4), 16) || 0); i += 4; }
+    else out += c;                          // \\ and \" land here, as themselves
+  }
+  return out;
+}
+
+/* Rows, already unescaped. `text` is still UNSANITISED — the realm sanitises on
+   its own render path only, and board_test.gno asserts the wire must not — so
+   every field goes through esc() at the point it is written into HTML. */
+function boardRows(out, n, names){
+  return String(out || "").split("\n").filter(Boolean).map(line => {
+    const f = wireFields(line, n);
+    if(!f) return null;
+    const row = {};
+    names.forEach((k, i) => { row[k] = k === "text" ? unwire(f[i]) : f[i]; });
+    row.id = parseInt(row.id, 10);
+    return row;
+  }).filter(Boolean);
+}
+const boardNewestRows  = out => boardRows(out, 5, ["id","author","replies","mark","text"]);
+const boardTopRows     = out => boardRows(out, 5, ["id","author","score","mark","text"]);
+const boardReplyRows   = out => boardRows(out, 4, ["id","author","mark","text"]);
+
 /* ============================ demo dataset ============================== */
 /* A faithful sample so every screen and state renders offline, in the realm's
    own units (CC base units, 6 decimals) — stakes and conviction, not shares. */
