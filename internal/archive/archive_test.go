@@ -627,3 +627,85 @@ func TestOnlyPromotedBytesAreWorthJudging(t *testing.T) {
 		t.Fatalf("the model was shown %d blobs, want 1", eye.seen)
 	}
 }
+
+func TestTheEyeSendsAnImageAndTakesOnlyAClosedSetBack(t *testing.T) {
+	var got eyeReq
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]string{
+			"content": `{"verdict":"explicit","confidence":88,"why":"a photograph"}`}})
+	}))
+	defer srv.Close()
+
+	eye := NewOllamaEye(srv.URL, "vision")
+	eye.HTTP = srv.Client()
+	v, err := eye.ClassifyImage(context.Background(), "image/png", pngBody)
+	if err != nil {
+		t.Fatalf("classify: %v", err)
+	}
+
+	// The bytes ride as base64 in `images`, which is what makes this a vision
+	// call rather than a text one.
+	if len(got.Messages) != 2 || len(got.Messages[1].Images) != 1 {
+		t.Fatalf("the image must be sent with the request: %+v", got.Messages)
+	}
+	if got.Messages[1].Images[0] != base64.StdEncoding.EncodeToString(pngBody) {
+		t.Fatal("the image sent was not the image asked about")
+	}
+	// A path that can withdraw evidence must not be a dice roll.
+	if got.Options["temperature"] != float64(0) {
+		t.Fatalf("temperature must be 0, got %v", got.Options["temperature"])
+	}
+	// The enum is enforced at the SAMPLER: an invented label cannot be emitted,
+	// which is stronger than rejecting it afterwards.
+	sch, _ := json.Marshal(got.Format)
+	for _, want := range []string{eyeClean, eyeIllegal, eyeExplicit, eyeViolent} {
+		if !strings.Contains(string(sch), want) {
+			t.Fatalf("the schema must pin %q: %s", want, sch)
+		}
+	}
+	if strings.Contains(string(sch), "block") || strings.Contains(string(sch), "delete") {
+		t.Fatal("the model has no vocabulary for a consequence and must not be given one")
+	}
+
+	// A model answering on 0-100 is not a reason to throw its judgement away.
+	if v.Label != eyeExplicit || v.Confidence != 0.88 {
+		t.Fatalf("got %+v, want explicit at 0.88", v)
+	}
+	// ...and this label is not the one that acts alone.
+	if v.Label == AutoBlockLabel {
+		t.Fatal("explicit must not be the auto-block label")
+	}
+}
+
+func TestEveryUnusableAnswerIsAnErrorSoItIsTriedAgain(t *testing.T) {
+	// A stored "unknown" would mark the image REVIEWED and it would never be
+	// looked at again. Returning an error instead means ReviewPass records
+	// nothing and the next pass retries — an outage delays a judgement rather
+	// than making one.
+	for _, body := range []string{
+		`{"message":{"content":"not json at all"}}`,
+		`{"message":{"content":"{}"}}`,
+		`{"message":{"content":""}}`,
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+		eye := NewOllamaEye(srv.URL, "vision")
+		eye.HTTP = srv.Client()
+		v, err := eye.ClassifyImage(context.Background(), "image/png", pngBody)
+		srv.Close()
+		if err == nil {
+			t.Fatalf("%s: an unusable answer must be an error, got %+v", body, v)
+		}
+		if v.Label == AutoBlockLabel {
+			t.Fatalf("%s: a broken answer must never block", body)
+		}
+	}
+
+	// A type the store would never hold does not get sent to a model at all.
+	eye := NewOllamaEye("http://127.0.0.1:1", "vision")
+	if _, err := eye.ClassifyImage(context.Background(), "image/svg+xml", pngBody); err == nil {
+		t.Fatal("an unservable type must be refused before it reaches the model")
+	}
+}

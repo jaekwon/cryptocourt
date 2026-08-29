@@ -146,6 +146,11 @@ func main() {
 				"blob; empty disables promotion, so every upload expires")
 		archiveRealm = flag.String("archive-realm", "gno.land/r/kourt/kourtv2",
 			"realm the media archive reads claim media from")
+		archiveEye = flag.String("archive-vision", "",
+			"Ollama base URL for looking at filed images; empty means no model "+
+				"looks at them and nothing is ever blocked automatically")
+		archiveEyeModel = flag.String("archive-vision-model", "llava",
+			"vision model the archive asks about filed images")
 		appealTo = flag.String("appeal-to", "",
 			"where a punished person should complain; the panel stays silent about appeals if unset")
 		geoLoc    = flag.String("geo-locations", "", "MaxMind GeoLite2-Country-Locations-en.csv")
@@ -269,11 +274,25 @@ func main() {
 			"because nothing can confirm a claim references them", archive.StageTTL)
 	}
 	asrv.Routes(mux)
+	// The classifier sorts a queue for a person; it is not a gate. With no
+	// --archive-vision nothing looks at filed images and nothing is ever blocked
+	// automatically, which is a defensible way to run this and a bad one to
+	// discover by accident — so it is said out loud either way.
+	var eye archive.ImageClassifier
+	if *archiveEye != "" {
+		eye = archive.NewOllamaEye(*archiveEye, *archiveEyeModel)
+		lg.Printf("archive: %s will look at filed images; only %q above %.2f is "+
+			"blocked without a person", *archiveEyeModel, archive.AutoBlockLabel,
+			archive.AutoBlockConfidence)
+	} else {
+		lg.Printf("no --archive-vision: nothing looks at filed images, and the " +
+			"archive blocks nothing automatically")
+	}
 	var backfillChain archive.ClaimCounter
 	if *archiveRPC != "" {
 		backfillChain = &archive.Chain{RPC: *archiveRPC, PkgPath: *archiveRealm}
 	}
-	go sweepArchive(astore, backfillChain, lg)
+	go sweepArchive(astore, backfillChain, eye, lg)
 
 	server := &http.Server{
 		Addr:              *addr,
@@ -287,7 +306,8 @@ func main() {
 
 // sweepArchive deletes staged media nobody claimed. It runs for the life of the
 // process: the TTL is only a promise until something enforces it.
-func sweepArchive(st *archive.Store, chain archive.ClaimCounter, lg *log.Logger) {
+func sweepArchive(st *archive.Store, chain archive.ClaimCounter,
+	eye archive.ImageClassifier, lg *log.Logger) {
 	for {
 		// BACKFILL FIRST, THEN SWEEP. A claim filed fifty-nine minutes ago must
 		// be seen before the bytes it points at would be deleted — and it may
@@ -299,6 +319,13 @@ func sweepArchive(st *archive.Store, chain archive.ClaimCounter, lg *log.Logger)
 			} else if kept > 0 {
 				lg.Printf("archive: kept %d upload(s) a claim references", kept)
 			}
+		}
+		// After backfill and before the sweep: only promoted bytes are worth
+		// judging, and they are promoted a moment ago.
+		if blocked, err := st.ReviewPass(context.Background(), eye, 20); err != nil {
+			lg.Printf("archive review: %v", err)
+		} else if blocked > 0 {
+			lg.Printf("archive: blocked %d image(s) pending review", blocked)
 		}
 		n, err := st.SweepStaged(context.Background(), time.Now())
 		switch {

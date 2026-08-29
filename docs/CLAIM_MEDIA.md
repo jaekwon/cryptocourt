@@ -1,6 +1,6 @@
 # CLAIM_MEDIA — evidence a claim carries, and proof it hasn't changed
 
-> **v0.5 — mostly built. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
+> **v0.6 — built. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
 > media items. The chain stores a **sha256 and a list of mirrors**, never the
 > bytes. kourt.xyz keeps its own copy of every image at an address derived from
 > that hash, so no third party can take a claim's evidence away.
@@ -34,7 +34,7 @@
 > | overlay: rules mirrored, intake, composer, panel, placement | built |
 > | overlay: map card strip, node badges, lightbox with verification | built |
 > | archive: the classifier — queue, auto-block, human undo | built |
-> | **archive: a vision backend for it (Ollama)** | **not built** |
+> | archive: a vision backend for it (Ollama) | built |
 > | drafts in `localStorage` (§2.5) | built |
 > | video as a second tier (§7) | built |
 >
