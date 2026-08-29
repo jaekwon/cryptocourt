@@ -16,8 +16,14 @@
 # is a node that will not start, so replacing the chain is an explicit --reset.
 set -euo pipefail
 
-HOST="${1:?usage: chain.sh user@host [--reset]}"
+HOST="${1:?usage: chain.sh user@host [--reset|--config-only]}"
 RESET="${2:-}"
+# --config-only ships the units and the nginx vhosts and nothing else. Adding a
+# name, or fixing a unit, must not require RESET — and RESET destroys the chain.
+# Without this mode the refusal that protects a live chain also locks out every
+# subsequent config change, which is how the gnoweb vhost failed to arrive.
+CONFIG_ONLY=""
+[ "$RESET" = "--config-only" ] && { CONFIG_ONLY=1; RESET=""; }
 CHAINID="${CHAINID:-kourt-1}"
 APPDIR="${APPDIR:-/opt/kourt}"
 STATEDIR="${STATEDIR:-/var/lib/kourt}"
@@ -30,8 +36,12 @@ OWNER_PREMINE="${OWNER_PREMINE:-1000000000000}"
 
 cd "$(dirname "$0")/.."
 REPO="$PWD"
-: "${GNOROOT:?set GNOROOT to a gno checkout (needs examples/ for p/nt packages)}"
-[ -d "$GNOROOT/examples" ] || { echo "chain.sh: no examples/ under GNOROOT"; exit 2; }
+# Only the full run needs a gno checkout: --config-only ships files that are all
+# in this repo, so demanding GNOROOT there would be a requirement with no use.
+if [ -z "$CONFIG_ONLY" ]; then
+    : "${GNOROOT:?set GNOROOT to a gno checkout (needs examples/ for p/nt packages)}"
+    [ -d "$GNOROOT/examples" ] || { echo "chain.sh: no examples/ under GNOROOT"; exit 2; }
+fi
 
 CTL="${TMPDIR:-/tmp}/kourt-chain-$$"
 SSH=(ssh -o ControlMaster=auto -o ControlPath="$CTL" -o ControlPersist=180)
@@ -41,6 +51,7 @@ trap 'ssh -o ControlPath="$CTL" -O exit "$HOST" >/dev/null 2>&1 || true' EXIT
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"; ssh -o ControlPath="$CTL" -O exit "$HOST" >/dev/null 2>&1 || true' EXIT
 
+if [ -z "$CONFIG_ONLY" ]; then
 echo "==> building linux binaries"
 # CGO_ENABLED=0 so they run on any distro, matching deploy.sh's kourtchat build.
 ( cd "$GNOROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/gnoland" ./gno.land/cmd/gnoland )
@@ -159,29 +170,46 @@ fi
 kourt-genesis
 EOF
 
-echo "==> shipping genesis and units"
-"${SCP[@]}" "$WORK/genesis.json" "$HOST:$CHAINDIR/genesis.json"
-"${SCP[@]}" deploy/kourtnode.service deploy/kourtfaucet.service deploy/kourtweb.service "$HOST:/tmp/"
-"${SCP[@]}" deploy/nginx-chain.conf "$HOST:/tmp/nginx-chain.conf"
+else
+    echo "==> config only: units and nginx, chain untouched"
+fi
 
-"${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" 'bash -seu' <<'REMOTE'
+echo "==> shipping units and vhosts"
+[ -n "$CONFIG_ONLY" ] || "${SCP[@]}" "$WORK/genesis.json" "$HOST:$CHAINDIR/genesis.json"
+"${SCP[@]}" deploy/kourtnode.service deploy/kourtfaucet.service deploy/kourtweb.service "$HOST:/tmp/"
+"${SCP[@]}" deploy/nginx-zones.conf deploy/nginx-rpc.conf deploy/nginx-faucet.conf \
+    deploy/nginx-gnoweb.conf "$HOST:/tmp/"
+
+"${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" \
+  CONFIG_ONLY="$CONFIG_ONLY" 'bash -seu' <<'REMOTE'
 chown -R kourt:kourt "$CHAINDIR"
 install -m 0644 /tmp/kourtnode.service   /etc/systemd/system/kourtnode.service
 install -m 0644 /tmp/kourtfaucet.service /etc/systemd/system/kourtfaucet.service
 install -m 0644 /tmp/kourtweb.service    /etc/systemd/system/kourtweb.service
-# NEVER CLOBBER CERTBOT'S EDITS. `certbot --nginx` rewrites this very file to add
-# the :443 server, the certificate paths and the 80->443 redirect. Re-running
-# chain.sh with a plain install would put the HTTP-only version back and take TLS
-# down silently — the site would still answer, on port 80, and nothing would say
-# why. If the installed copy has a certificate in it, leave it alone and say so.
-if grep -q ssl_certificate /etc/nginx/sites-available/kourt-chain 2>/dev/null; then
-    echo "    nginx: kourt-chain carries certbot's TLS edits — left untouched"
-    echo "           (delete it and re-run ./deploy/certs.sh to rebuild from the repo copy)"
-else
-    install -m 0644 /tmp/nginx-chain.conf /etc/nginx/sites-available/kourt-chain
+install -m 0644 /tmp/nginx-zones.conf /etc/nginx/conf.d/kourt-zones.conf
+# ONE FILE PER NAME, and each is left alone once certbot has edited it. certbot
+# --nginx rewrites the file holding a server block to add its :443 listener; a
+# plain reinstall would put the HTTP-only version back and drop TLS silently,
+# while refusing to touch a COMBINED file made it impossible to add a new name at
+# all. Per-name files give both: TLS is preserved, new names still arrive.
+for n in rpc faucet gnoweb; do
+    dst="/etc/nginx/sites-available/kourt-$n"
+    if grep -q ssl_certificate "$dst" 2>/dev/null; then
+        echo "    nginx: kourt-$n carries certbot's TLS edits — left untouched"
+    else
+        install -m 0644 "/tmp/nginx-$n.conf" "$dst"
+        echo "    nginx: kourt-$n installed"
+    fi
+    ln -sf "$dst" "/etc/nginx/sites-enabled/kourt-$n"
+    rm -f "/tmp/nginx-$n.conf"
+done
+# The old combined site, if a previous run installed one: its names now live in
+# the per-name files, and leaving it enabled would declare each server_name twice.
+if [ -e /etc/nginx/sites-enabled/kourt-chain ]; then
+    rm -f /etc/nginx/sites-enabled/kourt-chain
+    echo "    nginx: retired the combined kourt-chain site"
 fi
-ln -sf /etc/nginx/sites-available/kourt-chain /etc/nginx/sites-enabled/kourt-chain
-rm -f /tmp/kourtnode.service /tmp/kourtfaucet.service /tmp/kourtweb.service /tmp/nginx-chain.conf
+rm -f /tmp/kourtnode.service /tmp/kourtfaucet.service /tmp/kourtweb.service /tmp/nginx-zones.conf
 
 # The faucet will not start without an hCaptcha secret, and starting it without
 # one produces a unit that flaps. Say so once, here, instead.
@@ -196,7 +224,12 @@ fi
 
 systemctl daemon-reload
 systemctl enable kourtnode >/dev/null 2>&1
-systemctl restart kourtnode
+if [ -n "${CONFIG_ONLY:-}" ]; then
+    # A running chain is not restarted for a vhost change.
+    systemctl is-active --quiet kourtnode || systemctl start kourtnode
+else
+    systemctl restart kourtnode
+fi
 
 echo "==> waiting for the chain"
 for i in $(seq 1 60); do

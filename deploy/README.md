@@ -75,6 +75,16 @@ faucet's entire wallet in the process table. Gas is pinned at 2,000,000 because
 the tool's own default of 100,000 fails every transfer with `transaction failed
 initial validation, out of gas error`.
 
+**Changing a unit or a vhost does not touch the chain:**
+
+```sh
+make chain HOST=root@kourt.xyz RESET=--config-only
+```
+
+`--reset` destroys the chain, and the refusal that protects a live chain would
+otherwise lock out every later config change — which is how the gnoweb vhost
+failed to arrive on the first attempt.
+
 **certbot owns the TLS half**, which is why `nginx-chain.conf` ships HTTP-only —
 `nginx -t` refuses an `ssl` listener with no certificate, so a hand-written :443
 block stops nginx from starting and certbot can then never reach :80 to prove the

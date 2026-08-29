@@ -42,8 +42,10 @@ echo "==> preflight"
 # certbot error into a sentence that names the actual cause.
 "${SSH[@]}" "$HOST" 'command -v certbot >/dev/null' || {
     echo "certs.sh: certbot is not installed on $HOST — run ./deploy/setup.sh first" >&2; exit 2; }
-"${SSH[@]}" "$HOST" 'test -e /etc/nginx/sites-enabled/kourt-chain' || {
-    echo "certs.sh: the kourt-chain nginx site is not enabled — run ./deploy/chain.sh first" >&2; exit 2; }
+"${SSH[@]}" "$HOST" 'ls /etc/nginx/sites-enabled/kourt-rpc /etc/nginx/sites-enabled/kourt-faucet \
+    /etc/nginx/sites-enabled/kourt-gnoweb >/dev/null 2>&1' || {
+    echo "certs.sh: the kourt vhosts are not all enabled — run:" >&2
+    echo "    ./deploy/chain.sh $HOST --config-only" >&2; exit 2; }
 "${SSH[@]}" "$HOST" 'nginx -t' >/dev/null 2>&1 || {
     echo "certs.sh: nginx config is invalid on $HOST; fix that before issuing certificates" >&2
     "${SSH[@]}" "$HOST" 'nginx -t' || true; exit 2; }
@@ -69,8 +71,31 @@ for D in "${DOMAINS[@]}"; do
         echo "    note: $D resolves to $RESOLVED, host reports $SERVER_IP — continuing"
     fi
 
-    if "${SSH[@]}" "$HOST" "certbot certificates 2>/dev/null | grep -q 'Domains:.*\\b$D\\b'"; then
-        echo "    certificate already present"
+    # ISSUED IS NOT INSTALLED, and conflating the two is why faucet.kourt.xyz
+    # reported "already present" while answering nothing on 443. certbot can
+    # obtain a certificate and then fail to deploy it — "Could not automatically
+    # find a matching server block" — leaving a valid cert on disk and no TLS
+    # listener. So check for the certificate AND for an nginx block that
+    # references one for this name; when the first holds and the second does not,
+    # install the existing cert rather than requesting a new one, which would
+    # burn a rate-limit slot to fix a problem issuance cannot fix.
+    HAVE_CERT=no; HAVE_INSTALL=no
+    "${SSH[@]}" "$HOST" "certbot certificates 2>/dev/null | grep -q 'Domains:.*\\b$D\\b'" && HAVE_CERT=yes
+    "${SSH[@]}" "$HOST" "grep -rl 'server_name .*\\b$D\\b' /etc/nginx/sites-enabled/ 2>/dev/null \
+        | xargs -r grep -l ssl_certificate >/dev/null 2>&1" && HAVE_INSTALL=yes
+
+    if [ "$HAVE_CERT" = yes ] && [ "$HAVE_INSTALL" = yes ]; then
+        echo "    certificate present and installed"
+        continue
+    fi
+    if [ "$HAVE_CERT" = yes ]; then
+        echo "    certificate exists but is not installed — installing it"
+        if "${SSH[@]}" -t "$HOST" "certbot install --cert-name '$D' --nginx --non-interactive --redirect"; then
+            echo "    installed"
+        else
+            echo "    FAILED to install $D — is there a server_name block for it?" >&2
+            rc=1
+        fi
         continue
     fi
 
@@ -94,7 +119,11 @@ for D in "${DOMAINS[@]}"; do
     # From HERE, not from the server: a certificate that only validates against
     # the machine's own loopback is not a certificate a browser will accept, and
     # the overlay reads these names from other people's browsers.
-    code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://$D/" 2>/dev/null || echo 000)
+    # NOT `$(curl ... || echo 000)`: on failure curl still prints its own "000"
+    # and then the echo appends another, so the variable reads "000000" and the
+    # case below matches nothing. Capture, then default only if empty.
+    code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://$D/" 2>/dev/null) || true
+    [ -n "$code" ] || code=000
     case "$D:$code" in
         *:000) echo "    $D  no answer over https"; rc=1 ;;
         *)     echo "    $D  https $code" ;;

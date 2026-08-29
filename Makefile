@@ -1,4 +1,4 @@
-.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions rendertext paths guards controls staleguards \ web-constants
+.PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions rendertext paths guards controls staleguards \ web-constants \
 	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup chain certs
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
@@ -188,7 +188,8 @@ deploy:
 #   make chain HOST=root@kourt.xyz RESET=--reset      # replace an existing chain
 chain:
 	@test -n "$(HOST)" || { echo 'usage: make chain HOST=user@host GNOROOT=...'; exit 2; }
-	@test -n "$(GNOROOT)" || { echo 'chain: set GNOROOT to a gno checkout'; exit 2; }
+	@test -n "$(GNOROOT)$(findstring --config-only,$(RESET))" || \
+		{ echo 'chain: set GNOROOT to a gno checkout'; exit 2; }
 	GNOROOT=$(GNOROOT) OWNER_ADDR=$(OWNER_ADDR) ./deploy/chain.sh $(HOST) $(RESET)
 
 # TLS for the chain's names. Separate from `chain` because certbot needs DNS to
