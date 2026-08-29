@@ -984,7 +984,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   <div class="foot">
     <div class="node">
       <div class="row"><span class="dot" id="dot"></span> <b id="nodelab">Demo data</b></div>
-      <a class="small" id="gwrealm" target="_blank" rel="noopener" style="display:none; margin:2px 0 4px" title="the chain's own view — every screen here can be served by the realm's Render">⚖ this realm on gnoweb →</a>
+      <a class="small" id="gwrealm" target="_blank" rel="noopener" style="display:none; margin:2px 0 4px" title="the chain's own view — every screen here can be served by the court itself">⚖ this court on the chain →</a>
       <label for="modesel">Source</label>
       <select id="modesel">
         <option value="demo">Demo (offline sample)</option>
@@ -2400,7 +2400,7 @@ function errorView(e){
     <h2 class="page-h">Could not read the node</h2>
     <div class="notice refuse" style="margin-top:16px"><span class="g">⚠</span>
     <div><b>${esc(e.message||e)}</b><br><span class="small muted">The live source is set to <code>${esc(CFG.rpc)}</code>.
-    Check the node is reachable and has the kourtv2 realm deployed, or switch the Source back to Demo in the left rail.</span></div></div>`;
+    Check the node is reachable and is running a Kourt court, or switch the Source back to Demo in the left rail.</span></div></div>`;
 }
 function notFound(msg){ return `<div class="empty"><div class="g">◌</div><p class="page-h" style="font-size:15px;font-weight:600;margin:0 0 6px">${esc(msg)}</p><p><a class="btn" href="#/">Back to the directory</a></p></div>`; }
 const crumbs = parts => {
@@ -2473,7 +2473,7 @@ on(/^\/$/, async ()=>{
   const hiddenLine = hiddenN==null
     ? "the hidden-court count did not read — whether courts are hidden is unknown right now; reload to retry."
     : hiddenN>0? `${fmtN(hiddenN)} court${hiddenN===1?"":"s"} hidden by moderation — hidden from the listing, not from access: a direct link still opens the court.`
-    : dirTotFailed? "the hidden-court count read zero, but the listed total did not read — completeness is not certified."
+    : dirTotFailed? "no courts appear to be hidden, but the total count did not load — so this list may be incomplete."
     : "no courts are hidden by moderation — this register is complete.";
   const statsStrip = `<section><div class="grid stats">
       <div class="stat"><div class="k">courts listed</div><div class="v tnum">${dirTotFailed? "—" : fmtN(listedTotal)}</div><div class="sub">${dirTotFailed? "the count did not read — reload to retry" : "on the public register — ranked by GNOT burned"}</div></div>
@@ -2490,7 +2490,7 @@ on(/^\/$/, async ()=>{
     + `<div class="lead-row"><div><h1 class="page-h">Courts of record</h1>
        <p class="page-sub">Each court runs its own coin and its own docket of claims of fact. Stake on YES or NO; your staked coin always returns 1×, and conviction — stake × time held — earns the reward when the verdict goes your way. Pick the court whose judgment you trust.</p></div>
        ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary")}
-       ${btn("Start a court with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one epoch before staking opens, so an author can fix the wording")}</div>`
+       ${btn("Start a court with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one hour before staking opens, so an author can fix the wording")}</div>`
     + statsStrip
     + `<div id="qscope">`
     + qBarHtml("court name or orem/7", qCaption({mode:"idle", demo:!isLive(), kind:"court names", loaded:(page===1?featured.length:0)+listed.length, total:listedTotal+(page===1?featured.length:0)}))
@@ -2759,7 +2759,7 @@ function parseGnot(v){
 }
 function buyRowsHtml(q, price, slug){
   if(!q) return `<div class="line"><span class="l">You receive</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
-  if(q.units<=0n) return `<div class="line"><span class="l">You receive</span><span class="r">0 <small>too small to mint — the realm refuses it and your GNOT never leaves</small></span></div>`;
+  if(q.units<=0n) return `<div class="line"><span class="l">You receive</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
   const pct = q.share*100;
   return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`
     + `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
@@ -2883,7 +2883,7 @@ function voteHelpModal(slug, d){
       <p>The reason is simple: if you could watch a running total, the best move would be to wait and copy whoever voted with the most weight. The result would then be one voter's opinion, repeated. So the count is left un-summed until the vote closes. <b>Sealed means un-summed, not secret.</b></p>
       <h4>Who can vote</h4>
       <p>Anyone holding ${SYM}, this court's own token. Your weight is your balance as it stood at the last hourly snapshot before this round opened — so buying more coin now adds nothing to this vote.</p>
-      <p>Three people are shut out: whoever wrote the claim, whoever answered it, and anyone who staked on it. Holding ${SYM} on one side of the outcome disqualifies you from judging it, and the realm refuses their vote at signing, whatever this page shows.</p>
+      <p>Three people are shut out: whoever wrote the claim, whoever answered it, and anyone who staked on it. Holding ${SYM} on one side of the outcome disqualifies you from judging it, and the court refuses their vote at signing, whatever this page shows.</p>
       <h4>Where the tokens go</h4>
       <p><b>Nothing moves from one side to the other.</b> There is no pot to win here, so there is nothing to steer. ${SYM} that is forfeited is burned, and ${SYM} that is owed is newly minted — the two never touch.</p>
       <ul>
@@ -2941,7 +2941,7 @@ async function fillVoteEligibility(slug, id, d){
       : d.answerer===CFG.addr? "answered"
       : (p && (p.yes||p.no||p.cy||p.cn))? "staked" : null;
     el.textContent = why? ` You may not vote here — you ${why} this claim.`
-      : " No stake, answer, or authorship is visible for this address — but the realm has the final say at signing; staker records persist even after full withdrawal.";
+      : " No stake, answer, or authorship is visible for this address — but the court has the final say at signing; staker records persist even after full withdrawal.";
   }catch(_){}
 }
 /* ---------------- the vote lock's disclosure ----------------
@@ -3064,7 +3064,7 @@ function commitmentsTicket(com, slug){
     + (com.q.length>1? ` <small>the largest of ${com.q.length} open commitments, not their total — one pile of coin honours all of them</small>`:"")
     + `</span></div>`
     + `<div class="line"><span class="l">committed as stake</span><span class="r tnum">${cc(com.stake,slug)}</span></div>`
-    + `<div class="line"><span class="l">free to bond, deposit or transfer</span><span class="r tnum">${cc(com.free,slug)} <small>the figure the realm enforces</small></span></div>`
+    + `<div class="line"><span class="l">free to bond, deposit or transfer</span><span class="r tnum">${cc(com.free,slug)} <small>the figure the court enforces</small></span></div>`
     + rows + `</div>`;
 }
 
@@ -3172,7 +3172,7 @@ function cleanCuration(raw, slug, validIds){
   if(typeof raw!=="object"||raw===null||Array.isArray(raw)){ return {errs:["not a JSON object"], warn, cur:null}; }
   if(raw.kourtCuration!==CURATION_V) errs.push("kourtCuration must be "+CURATION_V);
   if(raw.court!==slug) errs.push(`court must be "${slug}" (got ${JSON.stringify(raw.court)})`);
-  if(raw.chain!=null && raw.chain!==out.chain) warn.push(`chain "${raw.chain}" ≠ current "${out.chain}" — claim ids are chain-relative`);
+  if(raw.chain!=null && raw.chain!==out.chain) warn.push(`this file was made on chain "${raw.chain}", you are on "${out.chain}" — the claim numbers may point at different claims`);
   if(raw.desc!=null){
     if(typeof raw.desc!=="string") errs.push("desc must be a string");
     else if(raw.desc.length>240) errs.push("desc over 240 chars");
@@ -4507,7 +4507,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + joinPanel(slug, s)
     + courtRecordPanel(slug, s)
     + `<div class="panel"><h4>Senior queue</h4>
-        <p class="small" style="margin:0 0 10px">Earned payouts (comps, bounties, voter rewards) are pulled, not pushed — bring your queue ticket.</p>
+        <p class="small" style="margin:0 0 10px">Earned payouts (make-goods, bounties, voter rewards) are not sent to you — you claim them, using your ticket number.</p>
         <div class="actions">${btn("Pull senior payout","PullSenior",{courtSlug:slug,seq:1},"","seq = your queue ticket")}</div>
        </div>`
     + fourThings()
@@ -4551,21 +4551,21 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Disapprove an association","DisapproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — burns the bond and drops the edge")}
          ${btn("Take back an unjudged bond","ClaimAssociationBond",{courtSlug:slug,from:1,to:2},"","the edge's author, once the 14-day window has closed")}
          ${btn("Settle every bond on a claim","ApproveAllAssociations",{courtSlug:slug,claimID:1},"","a moderator, single-signer — every bond goes back")}
-         ${btn("Burn every bond on a claim","DisapproveAllAssociations",{courtSlug:slug,claimID:1,reason:"Why this claim was cleared"},"","m of n moderators — spares anything bonded after the vote opened")}
-         ${btn("Set this court's association bond","SetCourtAssociationBond",{courtSlug:slug,amount:1000000},"","a moderator — 0 restores the realm default")}
+         ${btn("Burn every bond on a claim","DisapproveAllAssociations",{courtSlug:slug,claimID:1,reason:"Why this claim was cleared"},"","several moderators must agree — spares anything bonded after the vote opened")}
+         ${btn("Set this court's association bond","SetCourtAssociationBond",{courtSlug:slug,amount:1000000},"","a moderator — 0 restores this court's default")}
          ${btn("Withdraw an association","RemoveAssociation",{courtSlug:slug,from:1,to:2},"","its author, or a moderator")}
          ${btn("Record a re-filing","SupersedeClaim",{courtSlug:slug,from:2,to:1},"","the newer claim's author, or a moderator — the older one must have died unanswered")}
          ${btn("Withdraw a re-filing","RemoveSupersede",{courtSlug:slug,from:2},"","its author, or a moderator")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Docket</h4><div class="actions">
          ${btn("Open a seeded claim","OpenClaimSeeded",{courtSlug:slug,title:"Your claim of fact"},"","deposit and fee waived")}
-         ${btn("Hide from listing","HideItem",{courtSlug:slug,claimID:1,reason:"Why this is hidden"},"","m of n moderators")}
-         ${btn("Unhide","UnhideItem",{courtSlug:slug,claimID:1,reason:"Why this returns"},"","m of n moderators")}</div></div>
+         ${btn("Hide from listing","HideItem",{courtSlug:slug,claimID:1,reason:"Why this is hidden"},"","several moderators must agree")}
+         ${btn("Unhide","UnhideItem",{courtSlug:slug,claimID:1,reason:"Why this returns"},"","several moderators must agree")}</div></div>
        <div class="panel" style="margin-top:14px"><h4>Court</h4><div class="actions">
          ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}
          ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}</div></div>
       </section>`
     + `<section style="margin-top:22px"><div class="sec-h">Local curation <span class="count">anyone — this browser only</span></div>
-       <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and associations are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. To put these on chain, the realm would need fields it lacks — see the Owner-notes wishlist.</p>
+       <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and associations are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. </p>
        <div class="panel"><h4>Export</h4>
          <p class="small muted" style="margin:0 0 8px">${cur? (cur.source==="local"? "exports your local curation" : "exports the demo sample") : "exports an empty skeleton to start from"}</p>
          <div class="actions"><button class="btn" id="cur-dl"><span class="g">↓</span> Download JSON</button>
@@ -5645,7 +5645,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const srcnote = real
     ? (demo? `sample data — a sample series in the chain's real form (hourly for a week, daily beyond; a flat run means the pools did not change). YES-share of stakes, not a price.`
            : `the chain's own record — hourly points for the last week, daily beyond; a flat run means the pools did not change. YES-share of stakes, not a price.`)
-    : (demo? `sample data — a synthesized shape anchored to the claim’s three real ratios (lifetime conviction · trailing week · now). YES-share of stakes, not a price. This shape is drawn here, not read from the chain — the chain keeps only those three numbers for this claim.` : "");
+    : (demo? `sample data — a synthesized shape anchored to the claim’s three real ratios (lifetime conviction · trailing week · now). YES-share of stakes, not a price. This shape is illustrative — the chain records only those three numbers for this claim.` : "");
   return `<figure class="bigchart"><figcaption><span>${fcap}</span><span>${capR}</span></figcaption>
 <svg viewBox="0 0 640 150" role="img" aria-label="${esc(aria)}">${g}</svg>
 ${srcnote? `<div class="srcnote">${srcnote}</div>`:""}</figure>`;
@@ -5862,7 +5862,7 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${d.crystallized?btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v})
           +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
           +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
-          +btn("Pull voter carrot","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
+          +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
           :btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id})}</div>
       ${d.crystallized && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped below half a flag bond, queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
   } else if(d.phase==="disputed"){
@@ -5892,7 +5892,7 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${(nowH!=null && d.settleAt && d.settleAt<=nowH)? "" : btn("Dispute this answer","OpenDispute",{courtSlug:slug,claimID:id},"no")}
         ${(nowH!=null && d.settleAt && d.settleAt>nowH)? "" : btn("Settle (aged & undisputed)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
   } else {
-    inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Once the trailing total stake clears the answerability floor, an answer may be posted with a bond sized so lying does not pay. Once a court has seasoned answerers, they hold the first day; a young court opens to anyone at once. A claim nobody ever answers dies at its timeout — anyone may close it then. Posting freezes staking; an undisputed answer settles 72 hours later.
+    inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Once the claim's trailing total stake passes this court's minimum, an answer may be posted with a bond sized so lying does not pay. In a court that already has answerers with a track record, they hold the first day; a young court opens to anyone at once. A claim nobody ever answers dies at its timeout — anyone may close it then. Posting freezes staking; an undisputed answer settles 72 hours later.
       <div class="actions" style="margin-top:10px">
         ${btn("Answer YES","PostAnswer",{courtSlug:slug,claimID:id,verdict:0},"yes")}
         ${btn("Answer NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}
@@ -5974,7 +5974,7 @@ function aboutTour(){
 function introStrip(){
   if(store.get("cc.intro")==="1") return "";
   return `<section class="intro" id="intro">
-    <b>New here?</b> Four things before the jargon.
+    <b>New here?</b> Four things worth knowing first.
     A <b>court</b> is a small venue for one topic, and it runs its own coin
     (shown as KOURT:SLUG — each court has its own).
     The <b>coin is voice</b>: minting it burns GNOT (the chain\u2019s native coin) — spent, held by no one — and
@@ -6034,7 +6034,7 @@ async function meView(addr){
   const courts = await allCourtSlugs();
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"Your positions"}])
     + `<h1 class="page-h">Your positions</h1>
-       <p class="page-sub">Render has no idea who is asking, so a court reads holdings by address. Connect Adena in the left rail, or paste an address, to see stakes and accrued conviction. Withdraw from each claim's own page, where the actions match its state.${CFG.mode==="demo"?" (Demo mode shows a sample address.)":""}</p>
+       <p class="page-sub">A court has no way of knowing who is reading, so positions are looked up by address. Connect Adena in the left rail, or paste an address, to see stakes and accrued conviction. Withdraw from each claim's own page, where the actions match its state.${CFG.mode==="demo"?" (Demo mode shows a sample address.)":""}</p>
        <div class="addrbar"><input id="addr" class="mono" value="${esc(addr||"")}" placeholder="g1… address" spellcheck="false" aria-label="your address">
          <button class="btn" id="addrgo">Read positions</button></div>
        <div id="holdings"></div>`;
@@ -6088,7 +6088,7 @@ function claimables(slug, id, d, p, addr, nowH){
     // per-claim hedge rows would be wrong; the caller shows one court-level
     // hedge line instead.
     if(!hasStake && !hasConv && d.author!==addr && d.answerer!==addr && d.route==="vote" && d.draw && d.draw.carrot>0)
-      out.maybe.push({id, label:"may be drawable — the carrot pays voters who voted with the verdict; the realm knows whether that's you. It joins the senior queue: delayed, never scaled", act:["PullCarrot",{courtSlug:slug,claimID:id}]});
+      out.maybe.push({id, label:"may be drawable — the voter reward goes to whoever voted with the verdict, and the court decides whether that is you. It is paid in turn, after earlier awards, at full size", act:["PullCarrot",{courtSlug:slug,claimID:id}]});
   }
   if(d.phase==="provisional" && d.escrowUntil && nowH!=null && d.escrowUntil<=nowH
      && (hasStake||hasConv||d.author===addr||d.answerer===addr))
@@ -6256,12 +6256,12 @@ async function meHoldings(addr,courts){
   const pullSec = pullsNow.length? `<section style="margin-top:14px"><div class="sec-h">You can pull these now <span class="count">${pullsNow.length}</span></div>
       <div class="ticket">${pullsNow.map(r=>`<div class="line"><span class="l tnum"><a href="#/c/${esc(r.slug)}/${r.id}?at=resolution">#${r.id} · ${esc(r.slug)}</a></span><span class="r">${esc(r.label)}</span></div>`).join("")}
       <div class="actions" style="margin-top:8px">${pullsNow.filter(r=>r.act).map(r=>btn(r.act[0]==="WithdrawStake"?"Withdraw #"+r.id: r.act[0]==="Finalize"?"Finalize #"+r.id: r.act[0]+" #"+r.id, r.act[0], r.act[1])).join("")}</div></div></section>` : "";
-  const maybeSec = maybeCourts.length? `<section style="margin-top:14px"><div class="sec-h">Maybe — the realm knows <span class="count">${maybeCourts.length} court${maybeCourts.length>1?"s":""}</span></div>
-      <p class="small muted">${maybeCourts.map(([sl,nm])=>`Voted in a dispute in ${safeInline(nm)}? Deciding-round voters may hold a carrot — the realm knows; pull from the claim's own page.`).join(" ")}</p></section>` : "";
+  const maybeSec = maybeCourts.length? `<section style="margin-top:14px"><div class="sec-h">Maybe — the court decides <span class="count">${maybeCourts.length} court${maybeCourts.length>1?"s":""}</span></div>
+      <p class="small muted">${maybeCourts.map(([sl,nm])=>`Voted in a dispute in ${safeInline(nm)}? Voters in the deciding round may have a reward waiting — the court will tell you when you pull it from the claim's own page.`).join(" ")}</p></section>` : "";
   const strip = `<section><div class="grid stats">
       <div class="stat"><div class="k">open positions</div><div class="v tnum">${posClaims}</div><div class="sub">across ${posCourts} court${posCourts===1?"":"s"} — coins are per-court, never summed</div></div>
       <div class="stat"><div class="k">you can pull now</div><div class="v tnum">${pullsNow.length}</div><div class="sub">principal and earned pools — open each claim</div></div>
-      <div class="stat"><div class="k">maybe — the realm knows</div><div class="v tnum">${maybeCourts.length}</div><div class="sub">voter carrots — a pull costs only gas</div></div>
+      <div class="stat"><div class="k">maybe — the court decides</div><div class="v tnum">${maybeCourts.length}</div><div class="sub">voter carrots — a pull costs only gas</div></div>
       <div class="stat"><div class="k">senior tickets</div><div class="v tnum">${seniorCount}</div><div class="sub">owed payouts — paid as budget accrues${isLive()? " · newest 25 per court checked":""}</div></div>
      </div></section>`;
   const depth0 = isLive()? (parseInt(QP.scan||"",10)||SCAN_DEPTH) : 0;
@@ -6269,7 +6269,7 @@ async function meHoldings(addr,courts){
   const mewarn = mefail? `<p class="small" style="color:var(--no)">${mefail} chain read${mefail>1?"s":""} failed — this view may be incomplete; a pull is never guessed, so rows may be missing. Reload before trusting it.</p>` : "";
   box.innerHTML = (blocks.length||pullsNow.length
     ? strip + pullSec + maybeSec + seniorBlocks.join("") + blocks.join("")
-      + (anyArec? `<p class="small muted" style="margin:8px 0 0">answer record is the realm's own credential: only a contested-and-upheld answer scores, and an overturn resets it to zero.</p>`:"")
+      + (anyArec? `<p class="small muted" style="margin:8px 0 0">answer record is the court's own credential: only a contested-and-upheld answer scores, and an overturn resets it to zero.</p>`:"")
       + ladder
     : `<div class="empty"><div class="g">${mefail?"⚠":"◌"}</div><p>${mefail? "Could not read everything — no conclusions." : `No coin and no positions found for <span class="mono">${shortAddr(addr)}</span>.`}</p><p class="small">${mefail? "" : "Buy a court's coin and stake a claim to begin."}</p></div>`) + mescanNote + mewarn;
 }
@@ -6365,7 +6365,7 @@ async function needsList(addr,courts){
       <span class="rt"><span class="pill void">excluded</span></span></div>`;
   const ballotsSec = (ballots.length||bexcluded.length)
     ? `<div class="sec-h" style="margin-top:14px">Open ballots — courts you hold <span class="count">${ballots.length} · checked ${ballotCourts} court${ballotCourts===1?"":"s"} you hold coin in</span></div>
-       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and no close height is published. Weight is the balance at the sealed hourly epoch before the round opened — buying now adds nothing; the claim's author, answerer, and stakers are excluded — the realm refuses them at signing.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more policeable rows were not checked — the chain's page shows the nearest 50.`:""}</p>
+       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and no close height is published. Weight is the balance at the hourly snapshot before the round opened — buying now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
        ${ballots.length? `<div class="docket">${ballots.map(brow).join("")}</div>`:""}
        ${bexcluded.length? `<div class="sec-h" style="margin-top:10px">You are excluded from these <span class="count">${bexcluded.length}</span></div><div class="docket">${bexcluded.map(exrow).join("")}</div>`:""}`
     : "";
@@ -6409,7 +6409,7 @@ on(/^\/raw\/([a-z0-9-]+)(?:\/(\d+|mod))?$/, async (slug,id)=>{
   const md = await rawRender(path);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:id==="mod"? "Moderation log":"Chain render"}])
     + `<h1 class="page-h">As the chain serves it</h1>
-       <p class="page-sub">Exactly what <code>Render(${esc(gstr(path))})</code> returns — plain markdown, no overlay. Everything you need to act is here; the pretty version only rearranges it.</p>
+       <p class="page-sub">Exactly what the chain serves for <code>${esc(path)}</code> — plain markdown, nothing added. Everything you need to act is here; the pretty version only rearranges it.</p>
        <div class="rawblock">${esc(md||"(empty)")}</div>`;
 });
 
@@ -7038,11 +7038,11 @@ on(/^\/about$/, async ()=>{
     <div class="prose" style="margin-top:16px">
       <p>A <b>court</b> is a self-contained venue for claims of fact. It mints its own coin on a one-way bonding curve — you buy in with GNOT, and the GNOT is <b>burned</b>. There is no treasury and no sell-back; the coin's worth is what it can stake and earn.</p>
       <h2>Claims, and staking</h2>
-      <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small deposit plus a fee. Both return when the claim runs its course; a claim voted junk burns both, and one that dies unanswered burns the fee (the spam price). Then anyone <b>stakes</b> coin on YES or NO. Staking is <b>no-loss</b>: your principal always returns 1×, whichever way the claim resolves. What you earn is a reward proportional to your <b>conviction</b> — stake × time held on the winning side — drawn from newly-minted coin under a hard per-claim cap, so it rewards early, accurate belief and can't be farmed. Unstaking is free until an answer posts; the reward weight you've already earned is kept.</p>
+      <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small deposit plus a fee. Both return when the claim runs its course; a claim voted junk burns both, and one that dies unanswered burns the fee (the spam price). Then anyone <b>stakes</b> coin on YES or NO. Staking is <b>no-loss</b>: your principal always returns 1×, whichever way the claim resolves.</p><p>What you earn is a reward proportional to your <b>conviction</b> — stake × time held on the winning side — drawn from newly-minted coin under a hard per-claim cap, so it rewards early, accurate belief and can't be farmed. Unstaking is free until an answer posts; the reward weight you've already earned is kept.</p>
       <h2>Answers, disputes, and flags</h2>
-      <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later. To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice bought mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so nothing ever moves between adversaries. Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
-      <h2>The overlay is optional</h2>
-      <p>Everything here is read from the realm's own <code>Render</code> and its public reads, and every button is a normal gnoweb transaction signed in your wallet. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore every state offline.</p>
+      <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later.</p><p>To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice bought mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so nothing ever moves between adversaries.</p><p>Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
+      <h2>This page is optional</h2>
+      <p>Everything here is read from the court's own page on the chain and its public data, and every button is an ordinary chain transaction signed in your wallet. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore every state offline.</p>
       ${aboutTour()}
     </div>`;
 });

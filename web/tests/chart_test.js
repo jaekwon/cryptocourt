@@ -68,7 +68,9 @@ ok("P6 records-begin event", h1.includes("records begin"));
 
 // P7: fallbacks byte-compatible
 const noSer=signalChart("orem",7,claims["orem/7"],null,null);
-ok("P7 demo fallback keeps the synthesized note", noSer.includes("This shape is drawn here, not read from the chain"));
+ok("P7 demo fallback keeps the synthesized note",
+   /illustrative|drawn here, not read from the chain/.test(noSer)
+   && /chain (records|keeps) only those three numbers/.test(noSer));
 ok("P7 demo fallback still a polyline", noSer.includes('<polyline class="ln"'));
 LIVE=true;
 const lh=signalChart("orem",2,claims["orem/2"],5000000,null);

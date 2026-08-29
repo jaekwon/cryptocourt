@@ -93,7 +93,11 @@ ok("F4: zero-bond overturn row honest", html0.includes("no bond is left to burn"
 ok("F4: nonzero keeps original wording", html.includes("bond rides on it?") && html.includes("the answer bond burns whole"));
 const srcF = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 ok("F1: voteEndsAt in chart domain candidates", /const cands=\[now, d\.settleAt\|\|null, d\.escrowUntil\|\|null, d\.voteEndsAt\|\|null, ansH\]/.test(srcF));
-ok("F3: eligibility affirmative hedged", srcF.includes("the realm has the final say at signing; staker records persist"));
+// The HEDGE is the point — that a clean-looking eligibility read is not the
+// final word — not which noun carries it. Matched as a pattern so renaming
+// "realm" to "court" for readers does not read as a lost guarantee.
+ok("F3: eligibility affirmative hedged",
+   /the (court|realm) has the final say at signing; staker records persist/.test(srcF));
 
 // ticket rows: label bold on the LEFT, value left-aligned in its own column,
 // with a real gutter (owner report: bold-right, ragged-left, columns touching)

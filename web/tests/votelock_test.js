@@ -124,7 +124,7 @@ const T = commitmentsTicket(C, "orem");
 ok("no read renders no block", commitmentsTicket(null,"orem")==="");
 ok("the ticket names all three totals",
   /committed by voting/.test(T) && /committed as stake/.test(T) && /free to bond, deposit or transfer/.test(T));
-ok("the ticket says the free figure is the enforced one", /the figure the realm enforces/.test(T));
+ok("the ticket says the free figure is the enforced one", /the figure the (court|realm) enforces/.test(T));
 // The trap: two commitments, one pile. Saying "total" would invite the reader to add.
 ok("with several rows the copy denies the sum", /not their total/.test(T));
 ok("with one row it does NOT say that",
