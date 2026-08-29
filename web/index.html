@@ -1481,6 +1481,12 @@ const DEMO_CHAIN = {
       board:{ size:4, open:true,
         parties:"12|g1oremfiler0000000000000000000000000000|author|.|4798100|Orbital velocity is what the claim says — not orbit. The FAA telemetry has it at 27,050 km/h.\n11|g1answerkeeper00000000000000000000000000|answerer|.|4798400|The bond is on NO because the profile was suborbital by design; velocity alone is not the test the claim states.",
         newest:"13|g1rangewatch000000000000000000000000000|0|h|4798600|\n12|g1oremfiler0000000000000000000000000000|1|.|4798100|Orbital velocity is what the claim says — not orbit. The FAA telemetry has it at 27,050 km/h.\n11|g1answerkeeper00000000000000000000000000|0|.|4798400|The bond is on NO because the profile was suborbital by design; velocity alone is not the test the claim states.",
+        // top: the RANKED ordering, and it is not the newest list re-sorted —
+        // BoardTop excludes hidden rows entirely (scoreIndexPut never puts one),
+        // so row 13 is absent here and present above. A sample where the two
+        // orderings were identical would exercise neither the toggle nor the
+        // probe that decides whether to offer it.
+        top:"11|g1answerkeeper00000000000000000000000000|4712|.|4798400|The bond is on NO because the profile was suborbital by design; velocity alone is not the test the claim states.\n12|g1oremfiler0000000000000000000000000000|1900|.|4798100|Orbital velocity is what the claim says — not orbit. The FAA telemetry has it at 27,050 km/h.",
         replies:{ "12":"14|g1answerkeeper00000000000000000000000000|.|4798500|Then the claim needs the altitude too, and it does not have it." } },
       seriesH:"hourly,720,6667,0;6546:20000000:6000000,6560:45000000:7000000,6572:60000000:8000000,6584:80000000:8000000,6595:99000000:9000000,6603:118000000:9000000,6607:130000000:9000000",
       seriesD:"daily,17280,278,0;272:20000000:6000000,274:99000000:9000000,276:130000000:9000000",
@@ -5813,10 +5819,18 @@ async function boardView(slug, idS, ranked){
   const body = rows.map((r, i) => boardRowHtml(slug, id, r, meta(r), role[r.id] || "")
     + (ranked ? "" : boardRepliesHtml(slug, id, r, kids[i]))).join("");
 
-  const shown = rows.length;
+  // COUNT WHAT IS ON THE PAGE, NOT THE TOP-LEVEL ROWS. `n` is BoardSize, which
+  // counts EVERY row — replies and tombstones included — so comparing it against
+  // rows.length made a fully-displayed board announce "3 of 4 shown" while
+  // showing all four. The replies are on the page; they belong in the number
+  // that says how much of the board is.
+  const shown = rows.length + kids.reduce((a, k) => a + k.length, 0);
   const tail = shown < n
     ? `<p class="board-more">${shown} of ${n} shown — `
-      + `<a href="#/raw/${esc(slug)}/${id}" >the chain's own page</a> serves the rest.</p>`
+      + (ranked
+          ? `the ranked ordering holds neither replies nor withheld rows.`
+          : `<a href="#/raw/${esc(slug)}/${id}">the chain's own page</a> serves the rest.`)
+      + `</p>`
     : "";
   main.innerHTML = head + `<section class="boardlist">` + body + tail + `</section>`;
 }
