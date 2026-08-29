@@ -471,6 +471,166 @@ function mediaReview(items) {
   };
 }
 
+/* ---- drawing it ---------------------------------------------------------
+ *
+ * Deliberately small: create, append, listen, set text. No innerHTML anywhere
+ * near a caption or a URL, because every string in this panel came from a person
+ * and one of them is a link the chain will store.
+ */
+
+function mediaEl(doc, tag, attrs, text) {
+  const el = doc.createElement(tag);
+  for (const k of Object.keys(attrs || {})) el.setAttribute(k, attrs[k]);
+  if (text !== undefined && text !== null) el.textContent = String(text);
+  return el;
+}
+
+/* mediaMount draws a composer into `root` and keeps it drawn.
+ *
+ * Every redraw rebuilds the list, which is the right trade at seven rows: the
+ * alternative is a diff whose bugs look like an exhibit refusing to disappear.
+ * The caption input is the exception — it is rebuilt too, so the caller restores
+ * focus through `opts.focus`, and losing a cursor mid-sentence is the one thing
+ * this cannot be allowed to do.
+ */
+function mediaMount(root, composer, opts) {
+  const o = opts || {};
+  const doc = o.doc || (typeof document !== "undefined" ? document : null);
+  if (!doc || !root) return null;
+
+  const drop = mediaEl(doc, "div", {class: "mediadrop", tabindex: "0", role: "group",
+    "aria-label": "Evidence for this claim"});
+  const prompt = mediaEl(doc, "p", {class: "mediahint"},
+    "Drop images here, paste a screenshot, or choose files. " +
+    "The first one is what the map shows.");
+  const pick = mediaEl(doc, "input", {type: "file", accept: MEDIA_TYPES.join(","),
+    multiple: "multiple", class: "mediapick"});
+  const list = mediaEl(doc, "div", {class: "medialist"});
+  const note = mediaEl(doc, "p", {class: "medianote", role: "status"});
+
+  drop.appendChild(prompt);
+  drop.appendChild(pick);
+  drop.appendChild(list);
+  drop.appendChild(note);
+  root.appendChild(drop);
+
+  function say(msg) { note.textContent = msg || ""; }
+
+  function addAll(files) {
+    for (const f of files || []) {
+      const r = composer.add(f);
+      if (r.error) { say(r.error); return; }
+    }
+    say("");
+  }
+
+  function draw() {
+    list.innerHTML = "";
+    const items = composer.items;
+    items.forEach((item, i) => {
+      const row = mediaEl(doc, "figure", {class: "mediaitem", "data-id": String(item.id)});
+
+      if (item.preview) {
+        // No referrer, so a pasted link's host does not learn which claim is
+        // being written before the claim even exists.
+        row.appendChild(mediaEl(doc, "img", {
+          src: item.preview, alt: "", class: "mediathumb",
+          loading: "lazy", referrerpolicy: "no-referrer",
+        }));
+      }
+
+      const cap = mediaEl(doc, "figcaption", {class: "mediacap"});
+      cap.appendChild(mediaEl(doc, "span", {class: "medianum"},
+        `${i + 1} of ${items.length}` + (i === 0 ? " — shown on the map" : "")));
+
+      const input = mediaEl(doc, "input", {
+        type: "text", class: "mediacaption", maxlength: String(MEDIA_MAX_CAPTION),
+        placeholder: "Label this exhibit (optional)", value: item.caption || "",
+        "aria-label": `Caption for exhibit ${i + 1}`,
+      });
+      input.value = item.caption || "";
+      input.addEventListener("input", () => {
+        const fault = composer.setCaption(item.id, input.value);
+        say(fault ? `exhibit ${i + 1}: ${fault}` : "");
+      });
+      cap.appendChild(input);
+
+      // The state in plain words. "making a copy on kourt.xyz" says what is
+      // happening to their file; "uploading blob" says what the program is
+      // doing to itself.
+      const state = MEDIA_STATES[item.state];
+      if (state) cap.appendChild(mediaEl(doc, "span", {class: "mediastate"}, state));
+      if (item.state === "broken") {
+        cap.appendChild(mediaEl(doc, "span", {class: "mediabroken"},
+          "could not read that file — " + (item.error || "unknown reason")));
+      }
+      if (item.linkOnly) {
+        cap.appendChild(mediaEl(doc, "span", {class: "medialink"},
+          "added by link — the court keeps no copy and cannot check it later"));
+      }
+
+      const bar = mediaEl(doc, "div", {class: "mediabar"});
+      const up = mediaEl(doc, "button", {type: "button", class: "mediamove",
+        "aria-label": `Move exhibit ${i + 1} earlier`}, "↑");
+      up.addEventListener("click", () => { composer.move(item.id, -1); });
+      const down = mediaEl(doc, "button", {type: "button", class: "mediamove",
+        "aria-label": `Move exhibit ${i + 1} later`}, "↓");
+      down.addEventListener("click", () => { composer.move(item.id, 1); });
+      const del = mediaEl(doc, "button", {type: "button", class: "mediadel",
+        "aria-label": `Remove exhibit ${i + 1}`}, "×");
+      del.addEventListener("click", () => {
+        const gone = composer.remove(item.id);
+        // An undo, not a confirm. A confirm taxes every correct removal to
+        // prevent a rare wrong one; an undo charges only the mistake.
+        if (gone) {
+          say("Removed. ");
+          const undo = mediaEl(doc, "button", {type: "button", class: "mediaundo"}, "undo");
+          undo.addEventListener("click", () => { composer.restore(gone, i); say(""); });
+          note.appendChild(undo);
+        }
+      });
+      bar.appendChild(up); bar.appendChild(down); bar.appendChild(del);
+      cap.appendChild(bar);
+
+      row.appendChild(cap);
+      list.appendChild(row);
+    });
+
+    const fault = composer.fault();
+    if (fault) say(fault);
+    if (o.onDraw) o.onDraw(items);
+  }
+
+  pick.addEventListener("change", () => addAll(pick.files));
+
+  // Paste anywhere in the panel, not only on a drop target: a screenshot on the
+  // clipboard is the commonest evidence there is, and hunting for the right box
+  // to click first is a step nobody should have to learn.
+  drop.addEventListener("paste", ev => {
+    const data = ev.clipboardData;
+    if (!data) return;
+    const files = [...(data.files || [])];
+    if (files.length) { ev.preventDefault(); addAll(files); return; }
+    const text = data.getData ? data.getData("text") : "";
+    if (text && /^https?:\/\//.test(text.trim())) {
+      ev.preventDefault();
+      const r = composer.addLink(text.trim());
+      say(r.error || "");
+    }
+  });
+
+  drop.addEventListener("dragover", ev => { ev.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", ev => {
+    ev.preventDefault();
+    drop.classList.remove("over");
+    addAll(ev.dataTransfer && ev.dataTransfer.files);
+  });
+
+  draw();
+  return {draw, say, el: drop};
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     MEDIA_MAX_ITEMS, MEDIA_MAX_MIRRORS, MEDIA_MAX_URL, MEDIA_MAX_CAPTION,
@@ -480,5 +640,6 @@ if (typeof module !== "undefined" && module.exports) {
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
+    mediaMount, mediaEl,
   };
 }
