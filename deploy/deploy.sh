@@ -89,7 +89,8 @@ if grep -nE '(src|href)="https?://' web/index.html | grep -v 'rel="noopener"' ; 
 	echo "the overlay references an external URL (above) — it must be self-contained" >&2
 	exit 1
 fi
-# index.html loads exactly one local file — chat.js, the court chat panel. The
+# index.html loads two local files — chat.js, the court chat panel, and
+# media.js, the rules for evidence filed with a claim. The
 # first version of this script shipped index.html ALONE, so the deployed page
 # 404'd on chat.js and the panel could never mount however the service was
 # configured. The check is not "no external URLs" but "every file it asks for is
@@ -102,6 +103,7 @@ for f in $LOCAL_SCRIPTS; do
 	[ -f "web/$f" ] || { echo "the overlay loads web/$f, which does not exist" >&2; exit 1; }
 	grep -qx "$f" <<-LIST || { echo "the overlay loads web/$f, which this script does not ship" >&2; exit 1; }
 	chat.js
+	media.js
 	LIST
 done
 say "stamping the overlay's chain config"
@@ -161,6 +163,7 @@ fi
 
 LOCAL_SHA=$(shasum -a 256 "$STAMPED" | cut -d' ' -f1)
 CHAT_SHA=$(shasum -a 256 web/chat.js | cut -d' ' -f1)
+MEDIA_SHA=$(shasum -a 256 web/media.js | cut -d' ' -f1)
 echo "    index.html  sha ${LOCAL_SHA:0:16}…  $(wc -c < "$STAMPED" | tr -d ' ') bytes"
 echo "    chat.js     sha ${CHAT_SHA:0:16}…  $(wc -c < web/chat.js | tr -d ' ') bytes"
 
@@ -194,6 +197,7 @@ say "uploading"
 "${SCP[@]}" /tmp/kourtchat-linux "$HOST:$APPDIR/kourtchat.new"
 "${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html.new"
 "${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js.new"
+"${SCP[@]}" web/media.js "$HOST:$WEBROOT/media.js.new"
 "${SCP[@]}" deploy/kourtchat.service "$HOST:/tmp/kourtchat.service"
 
 say "installing"
@@ -208,6 +212,8 @@ say "installing"
   # one that breaks.
   mv $WEBROOT/chat.js.new $WEBROOT/chat.js
   chmod 0644 $WEBROOT/chat.js
+  mv $WEBROOT/media.js.new $WEBROOT/media.js
+  chmod 0644 $WEBROOT/media.js
   mv $WEBROOT/index.html.new $WEBROOT/index.html
   chmod 0644 $WEBROOT/index.html
 
@@ -259,7 +265,11 @@ say "verifying"
   if [ \"\$rchat\" != '$CHAT_SHA' ]; then
     echo \"    chat.js on disk does NOT match what was shipped (\$rchat)\"; exit 1
   fi
-  echo \"    site  index.html + chat.js  match\"
+  rmedia=\$(sha256sum $WEBROOT/media.js | cut -d' ' -f1)
+  if [ \"\$rmedia\" != '$MEDIA_SHA' ]; then
+    echo \"    media.js on disk does NOT match what was shipped (\$rmedia)\"; exit 1
+  fi
+  echo \"    site  index.html + chat.js + media.js  match\"
 "
 
 say "deployed"

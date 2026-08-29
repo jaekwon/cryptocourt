@@ -891,6 +891,28 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .tagrow .tname{max-width:14ch}
 }
 
+/* the board: a claim's comments.
+   A ROW IS A QUOTATION UNIT, so the meta line reads as a citation — who, when,
+   which id — and the text below it as prose. Replies are indented against a rule
+   rather than boxed: depth stops at one, so one level of indent is the whole
+   tree and a box would imply there is more. */
+.board-on{color:var(--ink-2); margin:-4px 0 14px}
+.boardlist{margin-top:18px}
+.boardrow{padding:12px 0; border-top:1px solid var(--line)}
+.boardrow:first-child{border-top:0}
+.boardmeta{color:var(--muted); font-size:.9em; margin-bottom:6px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:6px}
+.boardmeta .pill{font-size:.85em}
+.boardrow p{margin:0 0 8px; overflow-wrap:anywhere}
+.boardrow p:last-child{margin-bottom:0}
+/* A tombstone is quieter than text but must not be invisible: it is the reason a
+   row a reader can see the count of has nothing under it. */
+.board-tomb{color:var(--muted); font-style:italic}
+.board-more{color:var(--muted); font-size:.92em; margin:6px 0 0}
+.boardkids{margin:8px 0 0 16px; padding-left:14px; border-left:2px solid var(--line-2)}
+.boardkids .boardrow{padding:8px 0}
+@media(max-width:560px){ .boardkids{margin-left:6px; padding-left:10px} }
+
 /* mobile */
 @media(max-width:820px){
   body{grid-template-columns:1fr}
@@ -1017,12 +1039,21 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 
 <main class="main" id="main"></main>
 
-<!-- The court chat panel. OPTIONAL, and the only file index.html ever loads.
+<!-- The two optional files index.html loads, and the only ones it ever will.
      web/README.md promises this page is self-contained and runs from file://
-     with no dependencies, and that stays true: chat.js missing means no chat
-     panel and nothing else changes, because every call into it is guarded on
-     typeof. Chat is also off until CFG.chat names a service. See CHAT.md. -->
+     with no dependencies, and that stays true: either file missing costs its
+     own feature and nothing else, because every call into both is guarded on
+     typeof.
+
+     chat.js  the court chat panel, off until CFG.chat names a service (CHAT.md)
+     media.js the rules for evidence filed with a claim — what the chain will
+              accept and what the browser will load. Without it the page still
+              READS claims and their exhibits; only composing new ones goes,
+              because refusing a bad exhibit in front of the author is the whole
+              job and guessing at those rules would be worse than not offering
+              the feature. See docs/CLAIM_MEDIA.md. -->
 <script src="chat.js"></script>
+<script src="media.js"></script>
 <script>
 "use strict";
 /* ============================ configuration ============================== */
@@ -5611,6 +5642,186 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
 });
+
+/* ===================== the board: a claim's comments ===================== */
+/* THE ROW IS THE UNIT OF QUOTATION — somebody links to one comment and argues
+   about it — so every row carries its author, the block it landed in and its own
+   link. A citation without a date is half a citation on a claim whose market
+   moves under it, which is why `at` is on the wire at all.
+
+   TEXT IS ESCAPED AND PARAGRAPHED, NEVER INTERPRETED. board_test.gno asserts the
+   realm does NOT sanitise on the wire — sanitising belongs to whoever renders —
+   so re-reading a comment as markdown here would be a second, differently-shaped
+   attack surface on a field any stranger can fill with 2000 bytes. This is the
+   rule claimBody already applies to the claim's own statement. */
+function boardText(s){
+  const paras = String(s == null ? "" : s).split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  if(!paras.length) return `<p class="muted">(empty)</p>`;
+  return paras.map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+}
+
+/* THE MARK ALPHABET, AND WHAT THIS SURFACE MAY SAY ABOUT IT.
+
+   `h` IS A DISJUNCTION — hiddenByAuthor OR hiddenByMod — collapsed by boardMark
+   on purpose, so the wire does not tell a client which. The realm's own page
+   distinguishes them because it can read the two bits; this one cannot, and
+   "withdrawn by its author" printed over a moderator's act is an assertion about
+   a person that would be false half the time. No actor is named here, and no
+   moderation code either, because no exported read returns one.
+
+   The words for `g` and `x` are the realm's own (boardTextVisible), so a reader
+   who checks the chain's page against this one finds the same sentence.
+
+   `h` KEEPS ITS LINK because a hide is a DISCOVERY bit: the row still reads at
+   its own route, and copy that says so while linking nowhere would be a promise
+   this page does not keep. */
+const BOARD_TOMB = {
+  h:"Hidden from this list. It still reads at its own link.",
+  g:"Withheld pending a legal determination.",
+  x:"Removed. The text is gone from the record; the row remains."
+};
+const gnowebRow = (slug, id, row) =>
+  String(CFG.gnoweb || "").replace(/\/$/, "") + "/r/kourt/kourtv2:" + slug + "/" + id + "/board/" + row;
+
+/* One row. `meta` is what the ORDERING knows about it — a reply count on Newest,
+   a score on Top — rendered as the thing it is rather than as a bare number. */
+function boardRowHtml(slug, id, r, meta, role){
+  const tomb = BOARD_TOMB[r.mark];
+  const link = esc(gnowebRow(slug, id, r.id));
+  const body = tomb
+    ? `<p class="board-tomb">${esc(tomb)}${r.mark === "h"
+        ? ` <a href="${link}" rel="noopener">read it</a>` : ""}</p>`
+    : boardText(r.text);
+  return `<article class="boardrow" id="c${esc(String(r.id))}">`
+    + `<div class="boardmeta"><span class="mono">${shortAddr(r.author)}</span>`
+    + (role ? ` <span class="pill">${esc(role)}</span>` : "")
+    + (meta ? ` · ${esc(meta)}` : "")
+    + ` · block ${esc(String(r.at))}`
+    + ` · <a class="mono" href="${link}" rel="noopener">#${esc(String(r.id))}</a></div>`
+    + body + `</article>`;
+}
+
+/* THE CAP IS THE REALM'S, AND THE PAGE SAYS SO RATHER THAN PRETENDING. The realm
+   serves at most maxBoardRepliesShown replies for any parent, while the parent's
+   own reply count is the true one — so a thread with fourteen answers shows eight
+   and would otherwise read as complete. */
+function boardRepliesHtml(slug, id, parent, reps){
+  if(!reps || !reps.length) return "";
+  const total = parseInt(parent.replies, 10);
+  const more = (isFinite(total) && total > reps.length)
+    ? `<p class="board-more">${reps.length} of ${total} replies shown — `
+      + `<a href="${esc(gnowebRow(slug, id, parent.id))}" rel="noopener">the rest are on the row's own page</a>.</p>`
+    : "";
+  return `<div class="boardkids">`
+    + reps.map(r => boardRowHtml(slug, id, r, "", "")).join("") + more + `</div>`;
+}
+
+/* The count and the state, in one line, from the two reads the chip already
+   knows how to make. BoardSize counts EVERY row — replies and tombstones — so
+   this number and the chip's are the same number. */
+function boardStateLine(n, open){
+  const count = n + (n === 1 ? " comment" : " comments");
+  return open
+    ? `${count} · open for comments`
+    : `${count} · closed — this claim has a verdict`;
+}
+
+const boardMetaNewest = r => { const n = parseInt(r.replies, 10);
+  return n > 0 ? n + (n === 1 ? " reply" : " replies") : ""; };
+const boardMetaTop = r => { const n = parseInt(r.score, 10);
+  return isFinite(n) && n > 0 ? "score " + fmtN(n) : ""; };
+
+/* ---- the sources, live and sample, behind one shape ---- */
+async function boardNewestOf(slug, id, off, n){
+  if(!isLive()){ const b = demoBoard(slug, id); return boardNewestRows((b && b.newest) || ""); }
+  return await readBoardNewest(slug, id, off, n);
+}
+async function boardTopOf(slug, id, off, n){
+  if(!isLive()){
+    const b = demoBoard(slug, id);
+    if(b && b.top) return boardTopRows(b.top);
+    // COLD START, REPRODUCED RATHER THAN INVENTED. With nothing upvoted every row
+    // scores zero and ties break on the row id, so Top IS Newest — minus the rows
+    // the score index never holds, because scoreIndexPut refuses hidden ones.
+    return boardNewestRows((b && b.newest) || "").filter(r => r.mark === ".")
+      .map(r => ({id:r.id, author:r.author, score:"0", mark:".", at:r.at, text:r.text}));
+  }
+  return await readBoardTop(slug, id, off, n);
+}
+async function boardRepliesOf(slug, id, parent){
+  if(!isLive()){
+    const b = demoBoard(slug, id);
+    return boardReplyRows((b && b.replies && b.replies[String(parent)]) || "");
+  }
+  return await readBoardReplies(slug, id, parent);
+}
+async function claimTitleOf(slug, id){
+  if(!isLive()){ const d = DEMO.claims[slug+"/"+id]; return d ? d.title : null; }
+  return await one(`ClaimTitle(${gstr(slug)},${id})`).then(unesc).catch(()=>null);
+}
+
+const BOARD_PAGE = 25;
+
+async function boardView(slug, idS, ranked){
+  const id = parseInt(idS, 10);
+  const title = await claimTitleOf(slug, id);
+  const crumb = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},
+    {label:"Claim #"+id, href:"#/c/"+slug+"/"+id},{label:"Comments"}]);
+  if(title == null){ main.innerHTML = crumb + notFound("No claim by that id."); return; }
+
+  const [n, open] = await Promise.all([boardSize(slug, id), boardOpenOf(slug, id)]);
+  // ONE READ DECIDES WHETHER THE RANKED VIEW IS WORTH OFFERING. Cold start puts
+  // every un-upvoted row in the score index at zero, so Top is byte-for-byte
+  // Newest on a board nobody has upvoted — a toggle between two identical pages
+  // is worse than no toggle at all.
+  const probe = n > 0 ? await boardTopOf(slug, id, 0, 1).catch(()=>[]) : [];
+  const rankable = probe.length > 0 && parseInt(probe[0].score, 10) > 0;
+
+  let head = crumb
+    + `<h1 class="page-h">Comments</h1>`
+    + `<p class="board-on">on <a href="#/c/${esc(slug)}/${id}">${safeInline(title)}</a></p>`
+    + `<div class="tagrow"><span class="tfacts">${esc(boardStateLine(n, open))}</span>`
+    + `<span class="tacts">`
+    + (rankable
+        ? (ranked
+            ? `<a class="tlink" href="#/c/${esc(slug)}/${id}/board">newest first<span aria-hidden="true">→</span></a>`
+            : `<a class="tlink" href="#/c/${esc(slug)}/${id}/board/top">best first<span aria-hidden="true">→</span></a>`)
+        : "")
+    + `<a class="tlink" href="#/c/${esc(slug)}/${id}">back to the claim<span aria-hidden="true">→</span></a></span></div>`;
+
+  if(!(n > 0)){
+    main.innerHTML = head + `<div class="empty"><p>${open
+      ? "No comments yet. The first one is worth writing."
+      : "No comments were written while this board was open."}</p></div>`;
+    return;
+  }
+
+  const rows = ranked ? await boardTopOf(slug, id, 0, BOARD_PAGE)
+                      : await boardNewestOf(slug, id, 0, BOARD_PAGE);
+  // The parties are badged IN PLACE rather than pinned above the list: this page
+  // is the list, and a reserved copy at the top is the duplicate the realm's own
+  // render had to grow a `seen` set to stop printing.
+  const parties = await boardParties(slug, id).catch(()=>[]);
+  const role = {}; parties.forEach(r => { role[r.id] = r.role; });
+
+  // Replies only where the ordering says there are some. Top carries no reply
+  // count, so it lists parents alone — the thread reads on the Newest page.
+  const kids = ranked ? [] : await Promise.all(rows.map(r =>
+    parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).catch(()=>[]) : Promise.resolve([])));
+
+  const meta = ranked ? boardMetaTop : boardMetaNewest;
+  const body = rows.map((r, i) => boardRowHtml(slug, id, r, meta(r), role[r.id] || "")
+    + (ranked ? "" : boardRepliesHtml(slug, id, r, kids[i]))).join("");
+
+  const shown = rows.length;
+  const tail = shown < n
+    ? `<p class="board-more">${shown} of ${n} shown — `
+      + `<a href="#/raw/${esc(slug)}/${id}" >the chain's own page</a> serves the rest.</p>`
+    : "";
+  main.innerHTML = head + `<section class="boardlist">` + body + tail + `</section>`;
+}
+on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board$/,      async (slug,id)=> boardView(slug, id, false));
+on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board\/top$/, async (slug,id)=> boardView(slug, id, true));
 
 /* Three ratio series (§3.9): instantaneous stake, trailing week, and the
    lifetime conviction ratio — the one a manipulator can only move by paying

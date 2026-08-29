@@ -28,10 +28,14 @@ Each court page can carry a chat panel at its foot. It is **off unless you turn 
 and it is the only part of this page that talks to anything other than a gno node — so
 it is worth being exact about what it changes:
 
-- **`chat.js` is a second file, and the only one `index.html` ever loads.** Everything
-  above stays true: the page opened on its own, with no `chat.js` beside it, renders
-  every court and claim exactly as before. Every call into the panel is guarded, and a
+- **`chat.js` and `media.js` are the only files `index.html` loads.** Everything
+  above stays true: the page opened on its own, with neither file beside it, renders
+  every court and claim exactly as before. Every call into either is guarded, and a
   browser check renders a court with the file blocked at the network layer to prove it.
+  `media.js` carries the rules for evidence filed with a claim — what the chain will
+  accept, and what the browser will load — so the composer can refuse a bad exhibit in
+  front of the person rather than through an aborted transaction. Without it the page
+  reads claims and their evidence exactly as before; only composing new evidence goes.
 - **Demo mode still makes no network calls.** With no endpoint configured, the panel
   shows a short sample thread rather than hiding, because an empty box would
   misrepresent the feature and guessing an origin would be worse.

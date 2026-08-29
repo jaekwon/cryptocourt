@@ -727,9 +727,19 @@ function mkDoc() {
     ok("the origin is never persisted", page.includes("{cfg: {...CFG, chat: chatBase()}"));
     ok("the settings field says what it will use",
       page.includes('chatin.placeholder = dflt ? dflt + "  (this site)"'));
-    // index.html loads exactly one local file, and the deploy must ship it.
+    // index.html loads a CLOSED SET of local files, and the deploy must ship
+    // every one of them. This was "only chat.js" until claim media needed the
+    // rules the chain enforces to exist in the browser too; the list is spelled
+    // out rather than counted so a third file is a decision somebody makes here,
+    // with a reason, instead of an import that arrives unnoticed.
+    //
+    // deploy/deploy.sh must copy each of these. A file the page loads and the
+    // deploy does not ship is a 404 in production and a working page locally,
+    // which is the failure that is hardest to see before it happens.
+    const ALLOWED = ["chat.js", "media.js"];
     const loads = [...page.matchAll(/<script src="([^"]+)"/g)].map(m => m[1]);
-    ok("index.html loads only chat.js", loads.length === 1 && loads[0] === "chat.js",
+    ok("index.html loads only the files the deploy ships",
+      loads.length === ALLOWED.length && loads.every(f => ALLOWED.includes(f)),
       JSON.stringify(loads));
   }
 
