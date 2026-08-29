@@ -108,6 +108,7 @@ rendertext:
 # queries the wrong window and the page still looks right.
 web-constants:
 	python3 scripts/check-web-constants.py
+	python3 scripts/check-media-hosts.py
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this
 # — cross() is IsCurrent-strict, so a returned frame cannot be handed to an
