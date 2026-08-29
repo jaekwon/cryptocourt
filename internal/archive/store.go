@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS blobs (
   size      INTEGER NOT NULL,
   staged_at INTEGER NOT NULL,
   promoted  INTEGER NOT NULL DEFAULT 0,
-  blocked   INTEGER NOT NULL DEFAULT 0
+  blocked   INTEGER NOT NULL DEFAULT 0,
+  court     TEXT
 );
 CREATE INDEX IF NOT EXISTS blobs_sweep ON blobs (promoted, staged_at);
 `
@@ -94,6 +95,13 @@ type Store struct {
 func NewStore(db *sql.DB) (*Store, error) {
 	if _, err := db.Exec(schema); err != nil {
 		return nil, fmt.Errorf("archive schema: %w", err)
+	}
+	if _, err := db.Exec(backfillSchema); err != nil {
+		return nil, fmt.Errorf("archive backfill schema: %w", err)
+	}
+	// Added after the first release, so an existing database needs it explicitly.
+	if err := ensureColumn(db, "blobs", "court", "TEXT"); err != nil {
+		return nil, fmt.Errorf("archive court column: %w", err)
 	}
 	return &Store{db: db}, nil
 }
@@ -111,7 +119,10 @@ func Digest(body []byte) string {
 // Trusting a submitted digest would let anyone park bytes at an address that
 // does not describe them — which is the single thing content addressing exists
 // to prevent, and the reason a client can believe any mirror.
-func (s *Store) Put(ctx context.Context, mime string, body []byte) (string, error) {
+// court is the slug the upload was composed for, or "" when the caller did not
+// say. It is a HINT for backfill and nothing else: it grants no access, and a
+// wrong one only means the bytes rely on /m/claimed instead.
+func (s *Store) Put(ctx context.Context, mime string, body []byte, court string) (string, error) {
 	if len(body) == 0 {
 		return "", errors.New("archive: empty body")
 	}
@@ -126,10 +137,10 @@ func (s *Store) Put(ctx context.Context, mime string, body []byte) (string, erro
 	// re-uploading a blob must not extend the life of something already expiring,
 	// and must not un-promote something already permanent.
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO blobs (sha256, mime, body, size, staged_at)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO blobs (sha256, mime, body, size, staged_at, court)
+		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(sha256) DO NOTHING`,
-		sum, mime, body, len(body), time.Now().Unix())
+		sum, mime, body, len(body), time.Now().Unix(), court)
 	if err != nil {
 		return "", fmt.Errorf("archive put: %w", err)
 	}

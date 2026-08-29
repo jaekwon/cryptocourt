@@ -40,7 +40,7 @@ func TestTheArchiveNamesBytesByTheirOwnHash(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 
-	sum, err := st.Put(ctx, "image/png", pngBody)
+	sum, err := st.Put(ctx, "image/png", pngBody, "")
 	if err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestSVGIsRefusedBecauseWeServeItFromOurOwnOrigin(t *testing.T) {
 		if MIMEServable(mime) {
 			t.Fatalf("%q must not be servable", mime)
 		}
-		if _, err := st.Put(context.Background(), mime, pngBody); err == nil {
+		if _, err := st.Put(context.Background(), mime, pngBody, ""); err == nil {
 			t.Fatalf("%q was accepted by the store", mime)
 		}
 	}
@@ -85,8 +85,8 @@ func TestUnreferencedBytesExpireAndReferencedOnesDoNot(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 
-	kept, _ := st.Put(ctx, "image/png", pngBody)
-	dropped, _ := st.Put(ctx, "image/webp", append([]byte("other"), pngBody...))
+	kept, _ := st.Put(ctx, "image/png", pngBody, "")
+	dropped, _ := st.Put(ctx, "image/webp", append([]byte("other"), pngBody...), "")
 	if err := st.Promote(ctx, kept); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
@@ -115,12 +115,12 @@ func TestReuploadDoesNotExtendOrUndoAnything(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 
-	sum, _ := st.Put(ctx, "image/png", pngBody)
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
 	if err := st.Promote(ctx, sum); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	// Re-uploading must not un-promote something already permanent...
-	if _, err := st.Put(ctx, "image/png", pngBody); err != nil {
+	if _, err := st.Put(ctx, "image/png", pngBody, ""); err != nil {
 		t.Fatalf("re-put: %v", err)
 	}
 	if n, _ := st.SweepStaged(ctx, time.Now().Add(StageTTL*2)); n != 0 {
@@ -129,8 +129,8 @@ func TestReuploadDoesNotExtendOrUndoAnything(t *testing.T) {
 
 	// ...nor extend the life of something already expiring, which would let a
 	// script keep bytes alive indefinitely by re-posting them.
-	tmp, _ := st.Put(ctx, "image/webp", append([]byte("tmp"), pngBody...))
-	if _, err := st.Put(ctx, "image/webp", append([]byte("tmp"), pngBody...)); err != nil {
+	tmp, _ := st.Put(ctx, "image/webp", append([]byte("tmp"), pngBody...), "")
+	if _, err := st.Put(ctx, "image/webp", append([]byte("tmp"), pngBody...), ""); err != nil {
 		t.Fatalf("re-put staged: %v", err)
 	}
 	if n, _ := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); n != 1 {
@@ -146,7 +146,7 @@ func TestABlockedBlobIsIndistinguishableFromAnAbsentOne(t *testing.T) {
 	// has been taken down.
 	st := testStore(t)
 	ctx := context.Background()
-	sum, _ := st.Put(ctx, "image/png", pngBody)
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
 	if err := st.Block(ctx, sum); err != nil {
 		t.Fatalf("block: %v", err)
 	}
@@ -163,7 +163,7 @@ func newTestServer(t *testing.T) (*Server, *Store) {
 
 func TestTheHandlerServesBytesUncacheablyWrongNever(t *testing.T) {
 	srv, st := newTestServer(t)
-	sum, _ := st.Put(context.Background(), "image/png", pngBody)
+	sum, _ := st.Put(context.Background(), "image/png", pngBody, "")
 
 	mux := http.NewServeMux()
 	srv.Routes(mux)
@@ -306,9 +306,9 @@ func TestOnlyTheChainDecidesWhatIsWorthKeeping(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 
-	claimed, _ := st.Put(ctx, "image/png", pngBody)
-	stray, _ := st.Put(ctx, "image/webp", append([]byte("stray"), pngBody...))
-	purged, _ := st.Put(ctx, "image/gif", append([]byte("purged"), pngBody...))
+	claimed, _ := st.Put(ctx, "image/png", pngBody, "")
+	stray, _ := st.Put(ctx, "image/webp", append([]byte("stray"), pngBody...), "")
+	purged, _ := st.Put(ctx, "image/gif", append([]byte("purged"), pngBody...), "")
 
 	// The claim references `claimed`, and carries a purged slot whose bytes must
 	// NOT be bought permanent storage — the court has withdrawn its pointer.
@@ -357,7 +357,7 @@ func TestWithoutAChainNothingIsKept(t *testing.T) {
 		t.Fatalf("promote without a chain returned %d, want 503", rec.Code)
 	}
 
-	sum, _ := st.Put(context.Background(), "image/png", pngBody)
+	sum, _ := st.Put(context.Background(), "image/png", pngBody, "")
 	if _, err := st.SweepStaged(context.Background(), time.Now().Add(StageTTL+time.Minute)); err != nil {
 		t.Fatalf("sweep: %v", err)
 	}
@@ -383,6 +383,107 @@ func TestAMalformedClaimNeverReachesTheNode(t *testing.T) {
 		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/m/claimed"+q, nil))
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("%q returned %d, want 400", q, rec.Code)
+		}
+	}
+}
+
+// fakeChain answers backfill without a node.
+type fakeChain struct {
+	count  uint64
+	byID   map[uint64][]string
+	counts int // how many times ClaimCount was asked
+}
+
+func (f *fakeChain) ClaimCount(ctx context.Context, court string) (uint64, error) {
+	f.counts++
+	return f.count, nil
+}
+func (f *fakeChain) ClaimHashes(ctx context.Context, court string, id uint64) ([]string, error) {
+	return f.byID[id], nil
+}
+
+func TestAClosedTabDoesNotCostSomebodyTheirEvidence(t *testing.T) {
+	// THE HOLE THIS CLOSES. Promotion used to happen only when the composer
+	// called /m/claimed after broadcasting. Every path that skips that call —
+	// the tab closed, the network dropped, the claim filed from the CLI or from
+	// gnoweb — lost the bytes an hour later even though a valid claim referenced
+	// them. Losing evidence quietly is worse than any missing feature.
+	st := testStore(t)
+	ctx := context.Background()
+
+	filed, _ := st.Put(ctx, "image/png", pngBody, "covid")
+	orphan, _ := st.Put(ctx, "image/webp", append([]byte("orphan"), pngBody...), "covid")
+
+	chain := &fakeChain{count: 3, byID: map[uint64][]string{2: {filed}}}
+	kept, err := st.Backfill(ctx, chain)
+	if err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if kept != 1 {
+		t.Fatalf("backfill kept %d, want the one claim 2 references", kept)
+	}
+
+	if _, err := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, _, err := st.Get(ctx, filed); err != nil {
+		t.Fatal("bytes a filed claim references must survive without any client call")
+	}
+	if _, _, err := st.Get(ctx, orphan); err != ErrNotFound {
+		t.Fatal("bytes no claim references must still expire")
+	}
+}
+
+func TestBackfillCostsNothingWhenThereIsNothingStaged(t *testing.T) {
+	// The steady state is "no uploads waiting", and it must not cost a node
+	// query per court per pass — this loop runs forever.
+	st := testStore(t)
+	ctx := context.Background()
+	chain := &fakeChain{count: 100}
+
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if chain.counts != 0 {
+		t.Fatalf("asked the node %d times with nothing staged", chain.counts)
+	}
+
+	// A blob with NO court hint cannot be found this way and must not make the
+	// worker scan blindly — it relies on /m/claimed instead.
+	if _, err := st.Put(ctx, "image/png", pngBody, ""); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if chain.counts != 0 {
+		t.Fatal("a blob with no court hint must not trigger a scan")
+	}
+}
+
+func TestTheCursorDoesNotRescanOrSkip(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	a, _ := st.Put(ctx, "image/png", pngBody, "covid")
+	chain := &fakeChain{count: 2, byID: map[uint64][]string{2: {a}}}
+
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	// A second blob arrives, and a later claim references it. The cursor must
+	// resume rather than start over.
+	b, _ := st.Put(ctx, "image/webp", append([]byte("second"), pngBody...), "covid")
+	chain.count = 4
+	chain.byID[4] = []string{b}
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("backfill 2: %v", err)
+	}
+	if _, err := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	for _, sum := range []string{a, b} {
+		if _, _, err := st.Get(ctx, sum); err != nil {
+			t.Fatalf("a claim referenced %s and it was swept anyway", sum[:8])
 		}
 	}
 }

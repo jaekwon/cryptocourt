@@ -217,7 +217,14 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sum, err := s.store.Put(r.Context(), mime, body)
+	// A court hint lets backfill find these bytes if the composer never gets to
+	// call /m/claimed — a closed tab must not cost somebody their evidence.
+	court := r.URL.Query().Get("court")
+	if court != "" && !courtRe.MatchString(court) {
+		http.Error(w, "bad court", http.StatusBadRequest)
+		return
+	}
+	sum, err := s.store.Put(r.Context(), mime, body, court)
 	if err != nil {
 		if s.log != nil {
 			s.log.Printf("archive: put from %s: %v", ip, err)

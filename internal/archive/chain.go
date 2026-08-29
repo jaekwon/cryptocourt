@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -110,6 +111,21 @@ func (c *Chain) qeval(ctx context.Context, expr string) (string, error) {
 		return "", fmt.Errorf("decoding node reply: %w", err)
 	}
 	return string(raw), nil
+}
+
+// ClaimCount is how many claims a court has ever opened, so backfill knows
+// where the end is.
+func (c *Chain) ClaimCount(ctx context.Context, court string) (uint64, error) {
+	out, err := c.qeval(ctx, fmt.Sprintf("ClaimCount(%q)", court))
+	if err != nil {
+		return 0, err
+	}
+	// qeval answers `(12 uint64)`.
+	var n uint64
+	if _, err := fmt.Sscanf(strings.TrimSpace(out), "(%d", &n); err != nil {
+		return 0, fmt.Errorf("claim count was not a number: %q", out)
+	}
+	return n, nil
 }
 
 // mediaItem is the shape ClaimMedia publishes. Only the hash is read here — the

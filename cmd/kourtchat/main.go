@@ -269,7 +269,11 @@ func main() {
 			"because nothing can confirm a claim references them", archive.StageTTL)
 	}
 	asrv.Routes(mux)
-	go sweepArchive(astore, lg)
+	var backfillChain archive.ClaimCounter
+	if *archiveRPC != "" {
+		backfillChain = &archive.Chain{RPC: *archiveRPC, PkgPath: *archiveRealm}
+	}
+	go sweepArchive(astore, backfillChain, lg)
 
 	server := &http.Server{
 		Addr:              *addr,
@@ -283,8 +287,19 @@ func main() {
 
 // sweepArchive deletes staged media nobody claimed. It runs for the life of the
 // process: the TTL is only a promise until something enforces it.
-func sweepArchive(st *archive.Store, lg *log.Logger) {
+func sweepArchive(st *archive.Store, chain archive.ClaimCounter, lg *log.Logger) {
 	for {
+		// BACKFILL FIRST, THEN SWEEP. A claim filed fifty-nine minutes ago must
+		// be seen before the bytes it points at would be deleted — and it may
+		// have been filed from a tab that closed, from the CLI, or from gnoweb,
+		// none of which ever tell this service anything.
+		if chain != nil {
+			if kept, err := st.Backfill(context.Background(), chain); err != nil {
+				lg.Printf("archive backfill: %v", err)
+			} else if kept > 0 {
+				lg.Printf("archive: kept %d upload(s) a claim references", kept)
+			}
+		}
 		n, err := st.SweepStaged(context.Background(), time.Now())
 		switch {
 		case err != nil:
