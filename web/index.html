@@ -1213,12 +1213,21 @@ function boardRows(out, n, names){
     const row = {};
     names.forEach((k, i) => { row[k] = k === "text" ? unwire(f[i]) : f[i]; });
     row.id = parseInt(row.id, 10);
+    if("at" in row) row.at = parseInt(row.at, 10);
     return row;
   }).filter(Boolean);
 }
-const boardNewestRows  = out => boardRows(out, 5, ["id","author","replies","mark","text"]);
-const boardTopRows     = out => boardRows(out, 5, ["id","author","score","mark","text"]);
-const boardReplyRows   = out => boardRows(out, 4, ["id","author","mark","text"]);
+/* FOUR PACKINGS, THREE ARITIES, AND THEY ARE NOT INTERCHANGEABLE. Field 3 is
+   always what THAT ordering knows about the row — a reply count, a score, or a
+   role — so a line read at the wrong arity does not fail, it MIS-READS: a reply's
+   mark parsed as a reply count, and the text short by a field. `at` is the block
+   the comment landed in, and it sits before the text because the text is what
+   may contain an unescaped pipe: last is the only position a bounded split can
+   recover whole. */
+const boardNewestRows  = out => boardRows(out, 6, ["id","author","replies","mark","at","text"]);
+const boardTopRows     = out => boardRows(out, 6, ["id","author","score","mark","at","text"]);
+const boardReplyRows   = out => boardRows(out, 5, ["id","author","mark","at","text"]);
+const boardPartyRows   = out => boardRows(out, 6, ["id","author","role","mark","at","text"]);
 
 /* ============================ demo dataset ============================== */
 /* A faithful sample so every screen and state renders offline, in the realm's
