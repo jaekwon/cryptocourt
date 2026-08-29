@@ -277,6 +277,167 @@ function mediaFileable(item) {
   return !!item && (item.state === "ready" || item.state === "failed");
 }
 
+/* ---- the composer -------------------------------------------------------
+ *
+ * A LIST OF EXHIBITS AND THE FOUR THINGS A PERSON DOES TO IT: add one, caption
+ * it, reorder them, remove one. Everything else here is bookkeeping in service
+ * of those four staying instant.
+ *
+ * The DOM work and the slow work are separated on purpose. `prepare` (resize and
+ * re-encode, which needs a canvas) and `upload` (which needs a network) are
+ * injected, so this file's behaviour can be exercised by a standalone node
+ * script the way every other harness in web/tests is, and so a browser that
+ * fails at either still gets a composer that works.
+ */
+
+function mediaNewComposer(opts) {
+  const o = opts || {};
+  const items = [];
+  let seq = 0;
+
+  /* An exhibit appears the INSTANT it is dropped, from a local preview, and
+   * every slow step happens to a row that is already on screen. Making somebody
+   * watch a blank panel while a 12-megapixel photo is resized would be the same
+   * wait dressed as a failure. */
+  function add(file) {
+    if (items.length >= MEDIA_MAX_ITEMS) {
+      return {error: `a claim carries at most ${MEDIA_MAX_ITEMS} exhibits`};
+    }
+    const item = {
+      id: ++seq, kind: "img", state: "shrinking", caption: "",
+      mirrors: [], preview: o.previewURL ? o.previewURL(file) : "",
+      name: (file && file.name) || "",
+    };
+    items.push(item);
+    o.onChange && o.onChange(items);
+    run(item, file);
+    return {item};
+  }
+
+  /* A pasted link is adopted as an exhibit, with the original kept as its
+   * mirror. It cannot be fingerprinted here — reading a cross-origin image is
+   * exactly what CORS refuses — so it is filed as a LINK and says so, rather
+   * than pretending to a verification nobody performed. */
+  function addLink(url, kind) {
+    if (items.length >= MEDIA_MAX_ITEMS) {
+      return {error: `a claim carries at most ${MEDIA_MAX_ITEMS} exhibits`};
+    }
+    const fault = mediaMirrorFault(url, o.siteDomain);
+    if (fault) return {error: fault};
+    const item = {
+      id: ++seq, kind: kind === "vid" ? "vid" : "img", state: "ready",
+      caption: "", mirrors: [url], preview: url, linkOnly: true,
+    };
+    items.push(item);
+    o.onChange && o.onChange(items);
+    return {item};
+  }
+
+  async function run(item, file) {
+    try {
+      const prepared = await o.prepare(file);
+      Object.assign(item, {
+        mime: prepared.mime, w: prepared.w, h: prepared.h,
+        bytes: prepared.bytes.length, state: "hashing",
+      });
+      o.onChange && o.onChange(items);
+
+      item.sha256 = await mediaDigest(prepared.bytes);
+      item.state = "uploading";
+      o.onChange && o.onChange(items);
+
+      const up = await o.upload(prepared.bytes, prepared.mime, item.sha256);
+      item.mirrors = [up.url];
+      item.state = "ready";
+    } catch (e) {
+      /* THE COPY FAILED AND THE EXHIBIT SURVIVES. The hash and whatever link it
+       * already has are what the chain records; the archive copy is durability,
+       * not validity. A flaky upload must never cost somebody their claim — it
+       * costs them a warning. */
+      item.state = item.sha256 ? "failed" : "broken";
+      item.error = (e && e.message) || String(e);
+    }
+    o.onChange && o.onChange(items);
+  }
+
+  function remove(id) {
+    const i = items.findIndex(x => x.id === id);
+    if (i < 0) return null;
+    const [gone] = items.splice(i, 1);
+    o.onChange && o.onChange(items);
+    return gone; // returned so the caller can offer an undo rather than a confirm
+  }
+
+  function restore(item, at) {
+    items.splice(Math.max(0, Math.min(at, items.length)), 0, item);
+    o.onChange && o.onChange(items);
+  }
+
+  /* Order is not decoration: the first exhibit is what the map node shows. */
+  function move(id, delta) {
+    const i = items.findIndex(x => x.id === id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= items.length) return false;
+    const t = items[i]; items[i] = items[j]; items[j] = t;
+    o.onChange && o.onChange(items);
+    return true;
+  }
+
+  function setCaption(id, text) {
+    const item = items.find(x => x.id === id);
+    if (!item) return "";
+    item.caption = text;
+    return mediaCaptionFault(text);
+  }
+
+  /* What the chain will be asked to store, and whether it will accept it. */
+  function argument() { return mediaArg(items.filter(mediaFileable)); }
+  function fault() { return mediaFault(items.filter(mediaFileable), o.siteDomain); }
+  function busy() { return items.some(x => !mediaFileable(x) && x.state !== "broken"); }
+
+  return {
+    items, add, addLink, remove, restore, move, setCaption,
+    argument, fault, busy,
+    count: () => items.length,
+  };
+}
+
+/* mediaReview is the last look before a signature, and it exists because of an
+ * owner ruling: a caption is claim text, so it takes the body's rule whole —
+ * fixed at creation, no editor, not even in the polish window where a TITLE can
+ * still be corrected. A typo is permanent and the only remedy is to close the
+ * claim and file it again.
+ *
+ * So this is the ONE place in the composer where friction is correct. Everywhere
+ * else the job is to remove it. */
+function mediaReview(items) {
+  const live = (items || []).filter(mediaFileable);
+  const lines = live.map((it, i) => ({
+    n: i + 1,
+    caption: it.caption || "(no caption)",
+    kind: it.kind === "vid" ? "video link" : "image",
+    verified: it.kind === "img" && !it.linkOnly,
+    copied: (it.mirrors || []).length > 0 && it.state === "ready",
+  }));
+  const warnings = [];
+  if (live.some(x => x.state === "failed")) {
+    warnings.push("Some exhibits have no copy on kourt.xyz yet. They will still " +
+      "be filed, and the copy can be made later.");
+  }
+  if (live.some(x => x.kind === "vid")) {
+    warnings.push("A video is filed as a link. The court keeps no copy and " +
+      "cannot vouch for what it shows later.");
+  }
+  if (live.some(x => x.linkOnly)) {
+    warnings.push("An exhibit added by link has no fingerprint, so nothing can " +
+      "later prove it is the image you filed.");
+  }
+  return {
+    lines, warnings,
+    permanent: "Captions cannot be edited after filing. Read them once more.",
+  };
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     MEDIA_MAX_ITEMS, MEDIA_MAX_MIRRORS, MEDIA_MAX_URL, MEDIA_MAX_CAPTION,
@@ -284,6 +445,6 @@ if (typeof module !== "undefined" && module.exports) {
     mediaHostAllowed, mediaHostOf, mediaMirrorFault, mediaCaptionFault,
     mediaItemFault, mediaFault, mediaArgLine, mediaArg, mediaArchiveURL,
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
-    MEDIA_STATES, mediaFileable,
+    MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
   };
 }

@@ -170,6 +170,87 @@ ok("a degenerate size does not divide by zero",
      M.mediaArchiveURL("kourt.xyz", digest) === "https://kourt.xyz/m/" + digest);
   ok("and there is no address without a site", M.mediaArchiveURL("", digest) === "");
 
+})();
+
+// ---- the composer --------------------------------------------------------
+(async () => {
+  // Injected so the composer's behaviour is testable without a canvas or a
+  // network — and so a browser that fails at either still has a composer.
+  const prepared = new TextEncoder().encode("resized bytes");
+  function newComposer(over) {
+    return M.mediaNewComposer(Object.assign({
+      siteDomain: "kourt.xyz",
+      previewURL: () => "blob:preview",
+      prepare: async () => ({mime: "image/webp", w: 800, h: 600, bytes: prepared}),
+      upload: async (bytes, mime, sum) => ({sha256: sum, url: "https://kourt.xyz/m/" + sum}),
+    }, over || {}));
+  }
+  const settle = () => new Promise(r => setTimeout(r, 0));
+
+  // AN EXHIBIT APPEARS THE INSTANT IT IS DROPPED. Making somebody watch a blank
+  // panel while a 12MP photo is resized is the same wait dressed as a failure.
+  let c = newComposer();
+  const added = c.add({name: "shot.png"});
+  ok("an exhibit exists before any slow work", c.count() === 1 && !!added.item);
+  ok("...with a local preview to show immediately", added.item.preview === "blob:preview");
+  ok("...and it is not yet fileable", !M.mediaFileable(added.item));
+  await settle(); await settle(); await settle();
+  ok("once the copy is made it is ready", c.items[0].state === "ready", c.items[0].state);
+  ok("and the chain would accept it", c.fault() === "", c.fault());
+
+  // A FLAKY UPLOAD MUST NOT COST SOMEBODY THEIR CLAIM.
+  c = newComposer({upload: async () => { throw new Error("archive down"); }});
+  c.add({name: "shot.png"});
+  await settle(); await settle(); await settle();
+  ok("a failed copy leaves the exhibit filed as failed", c.items[0].state === "failed");
+  ok("...and it is still fileable", M.mediaFileable(c.items[0]));
+
+  // An exhibit that never got a fingerprint is NOT fileable: there is nothing
+  // to file, and offering it would put a claim on chain pointing at nothing.
+  c = newComposer({prepare: async () => { throw new Error("cannot read that file"); }});
+  c.add({name: "weird.tiff"});
+  await settle(); await settle();
+  ok("an exhibit that could not be read is not fileable", !M.mediaFileable(c.items[0]));
+
+  // ---- the four things a person does -------------------------------------
+  c = newComposer();
+  const a = c.add({name: "a"}).item, b = c.add({name: "b"}).item;
+  await settle(); await settle(); await settle();
+  ok("order can be changed", c.move(b.id, -1) && c.items[0].id === b.id);
+  ok("...and cannot run off the end", !c.move(c.items[0].id, -1));
+  ok("a caption reports its own fault", c.setCaption(a.id, "x|y") !== "");
+  ok("a good caption does not", c.setCaption(a.id, "the memo") === "");
+  const gone = c.remove(a.id);
+  ok("removing returns the exhibit so it can be undone", !!gone && c.count() === 1);
+  c.restore(gone, 0);
+  ok("...and restoring puts it back where it was", c.items[0].id === a.id && c.count() === 2);
+
+  // The seventh is fine; the eighth is refused with a reason, not silently.
+  c = newComposer();
+  for (let i = 0; i < M.MEDIA_MAX_ITEMS; i++) c.add({name: "x"});
+  ok("seven exhibits are allowed", c.count() === M.MEDIA_MAX_ITEMS);
+  ok("the eighth is refused with a reason", !!c.add({name: "x"}).error);
+
+  // ---- a pasted link -----------------------------------------------------
+  c = newComposer();
+  ok("a bad link is refused", !!c.addLink("http://i.imgur.com/a.webp").error);
+  const link = c.addLink("https://i.imgur.com/a.webp");
+  ok("a good link is adopted", !!link.item && link.item.mirrors.length === 1);
+  // It cannot be fingerprinted — reading a cross-origin image is exactly what
+  // CORS refuses — so it must not pretend to a verification nobody performed.
+  ok("...as a link, with no fingerprint", !link.item.sha256 && link.item.linkOnly);
+
+  // ---- the last look -----------------------------------------------------
+  c = newComposer({upload: async () => { throw new Error("down"); }});
+  c.add({name: "a"});
+  c.addLink("https://i.imgur.com/v.webp", "vid");
+  await settle(); await settle(); await settle();
+  const rv = M.mediaReview(c.items);
+  ok("the review numbers every exhibit", rv.lines.length === 2 && rv.lines[1].n === 2);
+  ok("it says captions are permanent", /cannot be edited/.test(rv.permanent));
+  ok("it warns that a copy is missing", rv.warnings.some(w => /no copy/.test(w)));
+  ok("it warns a video cannot be vouched for", rv.warnings.some(w => /cannot vouch/.test(w)));
+
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 })();
