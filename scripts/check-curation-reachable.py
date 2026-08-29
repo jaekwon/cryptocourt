@@ -62,17 +62,6 @@ EXEMPT = {
                  "entrypoint with a body — and a body is optional, so the P form "
                  "covers every call the plain one made. It stays in the realm "
                  "because every filetest, txtar and scenario in the tree uses it.",
-    "OpenClaimPM": "the chain half of claim media landed before the product half, "
-                 "which is the gap this guard exists to name — and the gap is "
-                 "real, not an oversight. Media cannot be offered by the three "
-                 "affordances the page has: a $help link, a CLI command and a "
-                 "one-click sign all take arguments that already exist, and none "
-                 "of them can accept a dropped file. It needs the composer in "
-                 "docs/CLAIM_MEDIA.md §2, which is the next step. THIS ENTRY "
-                 "COMES OUT WHEN THE COMPOSER LANDS — it is the 'entry, then a "
-                 "button, then no entry' shape this list is supposed to have, "
-                 "and an exemption still here once a person can attach an image "
-                 "is a bug in the list, not a policy.",
     "SetAssociationBondDefault": "a REALM-ADMIN act, not a curator's: it sets the "
                  "default every court inherits, and belongs with the global DAO "
                  "verbs this guard's header already calls a legitimate gap. It is "

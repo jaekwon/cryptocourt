@@ -1,6 +1,6 @@
 # CLAIM_MEDIA — evidence a claim carries, and proof it hasn't changed
 
-> **v0.4 — plan, not built. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
+> **v0.5 — mostly built. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
 > media items. The chain stores a **sha256 and a list of mirrors**, never the
 > bytes. kourt.xyz keeps its own copy of every image at an address derived from
 > that hash, so no third party can take a claim's evidence away.
@@ -18,6 +18,30 @@
 >
 > An earlier design, `r/img` — bytes on-chain behind an AI approval oracle — is
 > recorded in §11 as the road not taken.
+>
+> ---
+>
+> **STATUS.** The header above is the design record and is kept as written; this
+> is where the code actually is.
+>
+> | piece | state |
+> |---|---|
+> | realm: storage, validator, `OpenClaimPM`, `ClaimMedia`, `PurgeClaimMedia` | built |
+> | realm: claim-page render, archive-first, numbered exhibits | built |
+> | realm: `ClaimMediaPage`, one read for a map's worth | built |
+> | archive: store, upload, serve, promotion, sweeper, backfill | built |
+> | archive: mounted in kourtchat, `/m` routed, CSP and deploy updated | built |
+> | overlay: rules mirrored, intake, composer, panel, placement | built |
+> | overlay: map card strip, node badges, lightbox with verification | built |
+> | **archive: the classifier (§3.2)** | **not built** |
+> | drafts in `localStorage` (§2.5) | not built |
+> | video as a second tier (§7) | not built |
+>
+> Two things are worth knowing before trusting any of it. `mountCompose` needs a
+> real canvas and `createImageBitmap`, so the resize path is the one piece no
+> harness covers and it has never run against a real image. And nothing has been
+> exercised against a live chain end to end — every layer is tested, the seams
+> between them are not.
 
 ---
 
