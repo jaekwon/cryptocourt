@@ -326,6 +326,32 @@ would fail to retract the images already pointing at it.
 ⚠︎ **Media does not go into the claim-opened event.** `openClaim` deliberately
 emits "no user text beyond the title", and captions and URLs are user text.
 
+### 5.1 What gnoweb's markdown must point at
+
+⚠︎ **The destination is the ARCHIVE, not a listed mirror** —
+`https://<siteDomain>/m/<sha256>`, derived, falling back to a listed mirror only
+when no site is configured.
+
+This follows from §4.1 and from what gnoweb cannot do. A markdown image has ONE
+destination and no `onerror`, so there is no fallback chain on that surface:
+whichever host is named is the host every reader's browser contacts. Naming a
+filer-chosen URL would make every gnoweb claim page a small amplifier pointed
+wherever the filer liked, at readers who cannot verify what comes back.
+
+The cost is real and worth paying. If the archive lacks the bytes the image is
+broken on gnoweb while kourt.xyz still finds it through a mirror — and a broken
+image on the surface that cannot verify beats a working one that cannot be
+trusted and discloses its readers.
+
+⚠︎ **Number the images.** `PurgeClaimMedia` takes a zero-based `idx` and nothing
+on any page shows which image is which, so a moderator taking down the third
+exhibit would be counting positions in a JSON payload. The caption line carries
+the position ("2 of 5") — which the alt text wants anyway — and the moderator
+view shows the index it would pass.
+
+**Neither is built yet:** `render.gno` does not touch media at all, so the field
+is stored and unreachable on the page. That is the next realm-side step.
+
 ---
 
 ## 6. Moderation

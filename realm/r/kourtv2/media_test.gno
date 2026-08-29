@@ -85,9 +85,16 @@ func TestTheHostAllowlistTracksWhatTheBrowserPermits(cur realm, t *testing.T) {
 	}
 	for _, host := range []string{
 		"", "evil.com", "imgur.com.evil.com", "notgithub.io",
-		// The bare suffix must not pass as a whole host: ".github.io" allowing
-		// "github.io" would hand the allowlist to whoever holds that name.
+		// The registrable suffix is not itself a host we trust.
 		"github.io", "githubusercontent.com",
+		// THE HOST EQUAL TO THE SUFFIX, dot and all. This is the case the length
+		// guard in mediaHostAllowed actually exists for, and the only one that
+		// distinguishes it: HasSuffix("github.io", ".github.io") is already
+		// false because the string is shorter, so dropping `len(host) > len(s)`
+		// changes nothing for the entries above — a mutation probe proved it by
+		// surviving. ".github.io" is the same length as the suffix, matches it,
+		// and is the label a URL like https://.github.io/x would present.
+		".github.io", ".imgur.com", ".githubusercontent.com",
 	} {
 		if mediaHostAllowed(host) {
 			t.Fatalf("%q must not be allowed", host)
