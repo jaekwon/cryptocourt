@@ -177,6 +177,9 @@ RUNJS = "web/tests/browser/run.js"
 CHATALL = "web/tests/browser/chat_all.js"
 WEBPAGE = "web/index.html"
 WEBCONST = "scripts/check-web-constants.py"
+MEDIAHOSTS = "scripts/check-media-hosts.py"
+MEDIAGNO = "realm/r/kourtv2/media.gno"
+NGINXCONF = "deploy/nginx.conf"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
 STALEG = "scripts/check-stale-guards.py"
@@ -1382,6 +1385,26 @@ print("\ncheck-web-constants")
 control("the overlay's mirrored constant drifts", WEBPAGE,
         "const WEEK = 120960;", "const WEEK = 120961;",
         "queries the wrong window", argv=["python3", WEBCONST])
+
+print("\ncheck-media-hosts")
+# The hosts a claim's evidence may live on are written down three times — the
+# realm refuses to STORE a mirror elsewhere, the overlay refuses to OFFER one,
+# and the page's CSP is what the browser actually obeys. Drift between them is
+# invisible in both directions: add a host to the realm and forget the CSP and
+# the author sees a broken image with no error anywhere, because the browser's
+# refusal never reaches the chain. These three arms are one per copy.
+control("the realm allows a host the overlay does not", MEDIAGNO,
+        '"ipfs.io",', '"ipfs.io",\n\t"drifted.example",',
+        "disagree", argv=["python3", MEDIAHOSTS])
+control("the page's CSP drops a host the realm still stores", NGINXCONF,
+        " https://cloudflare-ipfs.com;", ";",
+        "refuses to load", argv=["python3", MEDIAHOSTS])
+# Not a host list at all, but the same guard and the same class of silent
+# failure: without the route, every exhibit on every claim page is a broken
+# image, because the realm's markdown points every reader at /m/<sha256>.
+control("the archive route goes missing", NGINXCONF,
+        "location /m {", "location /gone {",
+        "unreachable", argv=["python3", MEDIAHOSTS])
 
 print("\ncheck-live-reads")
 # This one needs a running node, so its arms are the two refusals it makes

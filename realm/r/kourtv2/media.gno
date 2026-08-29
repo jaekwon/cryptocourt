@@ -90,6 +90,48 @@ func writeClaimMedia(b *strings.Builder, c *Court, cs *claimState) {
 	}
 }
 
+// ClaimMediaPage answers with the evidence of a RUN of claims in one read.
+//
+// WHY A BATCH EXISTS AT ALL. The map draws a node per claim and wants a
+// thumbnail on each, and the overlay has no bulk claim fetch — it issues a read
+// per claim. Asking per claim for media too would mean fifty extra round trips
+// before a fifty-claim map could draw, and the map is deliberately built to
+// paint before its bodies arrive. One read for the page it is drawing keeps
+// that promise.
+//
+// Every item goes through claimMediaVisible, the same gate the single read uses,
+// so a purged claim answers with nothing here exactly as it does there. A batch
+// that skipped the gate would be a way to read past a purge fifty at a time.
+//
+// A claim that does not exist contributes an empty array rather than aborting:
+// the caller is drawing a range, and one hole in it must not cost the page.
+// count is clamped so a caller cannot ask for the whole docket in one read.
+func ClaimMediaPage(courtSlug string, fromID uint64, count int) string {
+	c := mustCourt(courtSlug)
+	if count < 1 {
+		return "[]"
+	}
+	if count > maxMediaPage {
+		count = maxMediaPage
+	}
+	var b strings.Builder
+	b.WriteString("[")
+	for i := 0; i < count; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		id := fromID + uint64(i)
+		v := c.claims.Get(beClaimKey(id))
+		if v == nil {
+			b.WriteString("[]")
+			continue
+		}
+		b.WriteString(encodeMedia(claimMediaVisible(c, v.(*claimState))))
+	}
+	b.WriteString("]")
+	return b.String()
+}
+
 // PurgeClaimMedia destroys one media item on a claim. Global DAO members only,
 // at the purge threshold, with a statutory category — the same gate every other
 // purge verb in this realm carries, including the panic string verbatim, because
@@ -172,6 +214,9 @@ const (
 	// rule. It also bounds what a hostile mirror can stream at a viewer.
 	maxMediaBytes = 262144
 	maxMediaDim   = 20000
+	// One map draw's worth of claims, and a ceiling on what a single read can
+	// cost the node. The overlay pages its docket well below this.
+	maxMediaPage = 64
 )
 
 // mediaKind is spelled rather than inferred. A video item has no hash — a

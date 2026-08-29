@@ -438,3 +438,65 @@ func TestACaptionCannotBreakOutOfTheAltText(cur realm, t *testing.T) {
 		t.Fatalf("the real destination must survive the escaping:\n%s", out)
 	}
 }
+
+func TestOneReadCarriesAWholeMapsWorthOfEvidence(cur realm, t *testing.T) {
+	// WHY THIS EXISTS. The map draws a node per claim and wants a thumbnail on
+	// each, and the overlay has no bulk claim fetch. Asking per claim would mean
+	// fifty extra round trips before a fifty-claim map could draw, and the map is
+	// built to paint before its bodies arrive.
+	alice := testutils.TestAddress("mpg-alice")
+	testCourt(cur, "mpgz", testutils.TestAddress("boot-mpg"), 10_000_000_000)
+	dadmin := DirectoryAdmin()
+	if dadmin == alice {
+		panic("fixture: the subject of the test is the bootstrap DAO member")
+	}
+	postingFixture(cur, "mpg", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	OpenClaimPM(cross(cur), "mpg", "first", "", imgLine("one", okMirror))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	OpenClaim(cross(cur), "mpg", "second, carrying nothing")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id3 := OpenClaimPM(cross(cur), "mpg", "third", "", imgLine("three", okMirror))
+
+	page := ClaimMediaPage("mpg", 1, 4)
+	if strings.Contains(page, "\n") {
+		t.Fatalf("the batch must be one line, like every other read: %q", page)
+	}
+	if !strings.Contains(page, "one") || !strings.Contains(page, "three") {
+		t.Fatalf("both claims' evidence must be in the page: %q", page)
+	}
+
+	// ONE ENTRY PER CLAIM ASKED FOR, IN ORDER, INCLUDING THE GAPS. The caller is
+	// drawing a range, so position i must mean claim fromID+i or the thumbnails
+	// land on the wrong nodes. Claim 2 carries nothing and claim 4 does not
+	// exist; both are empty entries rather than absences.
+	if !strings.HasPrefix(page, "[[") {
+		t.Fatalf("the page is an array of entries: %q", page)
+	}
+	if !strings.Contains(page, "],[],[") {
+		t.Fatalf("a claim carrying nothing must hold its position: %q", page)
+	}
+	if !strings.HasSuffix(page, ",[]]") {
+		t.Fatalf("a claim that does not exist must be a hole, not an abort: %q", page)
+	}
+
+	// THE SAME GATE AS THE SINGLE READ. A batch that skipped it would be a way
+	// to read past a purge sixty-four claims at a time.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeClaim(cross(cur), "mpg", id3, "csam")
+	if strings.Contains(ClaimMediaPage("mpg", 1, 4), "three") {
+		t.Fatal("a purged claim must answer with nothing in the batch too")
+	}
+
+	// The count is clamped so no caller can ask for the whole docket at once.
+	if ClaimMediaPage("mpg", 1, 0) != "[]" {
+		t.Fatal("a zero count reads nothing")
+	}
+	// Clamped, so no caller can ask for the whole docket in one read. Counting
+	// the separators rather than the brackets: an entry with mirrors carries
+	// brackets of its own.
+	if n := strings.Count(ClaimMediaPage("mpg", 1, 9999), "],["); n != maxMediaPage-1 {
+		t.Fatalf("the count must clamp to %d entries, saw %d separators", maxMediaPage, n)
+	}
+}

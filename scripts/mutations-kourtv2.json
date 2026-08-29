@@ -11823,5 +11823,26 @@
   "replace": "\t\t\tcaption = \" — \" + sanitize.InlineText(\"\") + m.caption",
   "label": "writeClaimMedia: a caption may break out of the alt text",
   "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\tif count > maxMediaPage {\n\t\tcount = maxMediaPage\n\t}",
+  "replace": "\tif false {\n\t\tcount = maxMediaPage\n\t}",
+  "label": "ClaimMediaPage: a caller may read the whole docket in one query",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tb.WriteString(encodeMedia(claimMediaVisible(c, v.(*claimState))))",
+  "replace": "\t\tb.WriteString(encodeMedia(v.(*claimState).media))",
+  "label": "ClaimMediaPage: the batch reads past a purge",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tv := c.claims.Get(beClaimKey(id))\n\t\tif v == nil {\n\t\t\tb.WriteString(\"[]\")\n\t\t\tcontinue\n\t\t}",
+  "replace": "\t\tv := c.claims.Get(beClaimKey(id))\n\t\tif v == nil {\n\t\t\tcontinue\n\t\t}",
+  "label": "ClaimMediaPage: a missing claim shifts every later entry",
+  "pkg": "kourtv2"
  }
 ]
