@@ -81,8 +81,19 @@ for D in "${DOMAINS[@]}"; do
     # burn a rate-limit slot to fix a problem issuance cannot fix.
     HAVE_CERT=no; HAVE_INSTALL=no
     "${SSH[@]}" "$HOST" "certbot certificates 2>/dev/null | grep -q 'Domains:.*\\b$D\\b'" && HAVE_CERT=yes
-    "${SSH[@]}" "$HOST" "grep -rl 'server_name .*\\b$D\\b' /etc/nginx/sites-enabled/ 2>/dev/null \
-        | xargs -r grep -l ssl_certificate >/dev/null 2>&1" && HAVE_INSTALL=yes
+    # ASK THE SERVER TO SERVE IT, rather than inferring from files. The previous
+    # test grepped sites-enabled for a block naming $D and piped that into
+    # `xargs -r grep -l ssl_certificate` — and it reported "installed" for every
+    # name, always: `grep -r` does not follow the symlinks sites-enabled is made
+    # of, so the first grep matched nothing, and `xargs -r` with empty input runs
+    # nothing and EXITS 0. A test that could not fail reported TLS as fine while
+    # nothing at all answered on 443.
+    #
+    # --resolve pins the name to loopback, so this asks THIS host for THIS
+    # certificate without depending on public DNS; -k because the question is
+    # whether a TLS vhost exists, not whether the chain validates.
+    TLSCODE=$("${SSH[@]}" "$HOST" "curl -sk -o /dev/null -m 8 -w '%{http_code}' --resolve '$D:443:127.0.0.1' 'https://$D/' 2>/dev/null" || true)
+    { [ -n "$TLSCODE" ] && [ "$TLSCODE" != "000" ]; } && HAVE_INSTALL=yes || true
 
     if [ "$HAVE_CERT" = yes ] && [ "$HAVE_INSTALL" = yes ]; then
         echo "    certificate present and installed"

@@ -215,8 +215,18 @@ done
 # The old combined site, if a previous run installed one: its names now live in
 # the per-name files, and leaving it enabled would declare each server_name twice.
 if [ -e /etc/nginx/sites-enabled/kourt-chain ]; then
+    # THE COMBINED FILE MAY BE THE ONLY THING SERVING TLS. certbot wrote its :443
+    # blocks in there; the per-name files replacing it are HTTP-only until certbot
+    # runs again. Retiring it quietly takes a working site off 443 and leaves the
+    # next run reporting certificates that exist and serve nothing.
+    had_tls=no
+    grep -q ssl_certificate /etc/nginx/sites-available/kourt-chain 2>/dev/null && had_tls=yes
     rm -f /etc/nginx/sites-enabled/kourt-chain
     echo "    nginx: retired the combined kourt-chain site"
+    if [ "$had_tls" = yes ]; then
+        echo "    WARNING: it carried certbot's TLS blocks. The per-name files are"
+        echo "             HTTP-only until you re-run:  ./deploy/certs.sh <host>"
+    fi
 fi
 rm -f /tmp/kourtnode.service /tmp/kourtfaucet.service /tmp/kourtweb.service /tmp/nginx-zones.conf
 
