@@ -325,3 +325,116 @@ func TestOnlyAGlobalDAOMemberTakesDownOneImage(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	PurgeClaimMedia(cross(cur), "mp", id, 0, "csam")
 }
+
+func TestThePageNamesTheArchiveRatherThanTheFilersMirror(cur realm, t *testing.T) {
+	// THE POINT OF THIS TEST. A markdown image has one destination and no
+	// onerror, so whichever host the page names is the host every reader's
+	// browser contacts — and gnoweb's CSP forbids the fetch that would let a
+	// reader verify what came back. Pointing at a URL the FILER chose would make
+	// every claim page a small amplifier aimed wherever they liked.
+	prev := siteDomain
+	defer func() { siteDomain = prev }()
+
+	m := parseMediaArg(imgLine("the memo", okMirror))[0]
+
+	siteDomain = "kourt.xyz"
+	if got := mediaDestination(&m); got != "https://kourt.xyz/m/"+okHash {
+		t.Fatalf("with a site configured the page must point at the archive, got %q", got)
+	}
+
+	// With no archive to point at, a mirror is all there is.
+	siteDomain = ""
+	if got := mediaDestination(&m); got != okMirror {
+		t.Fatalf("with no site configured the mirror is the fallback, got %q", got)
+	}
+
+	// A video has nowhere else to go: the archive does not mirror it.
+	v := parseMediaArg("vid||||||the hearing|" + okMirror)[0]
+	siteDomain = "kourt.xyz"
+	if got := mediaDestination(&v); got != okMirror {
+		t.Fatalf("a video points at its host, got %q", got)
+	}
+}
+
+func TestEveryExhibitIsNumberedAndKeepsItsPlace(cur realm, t *testing.T) {
+	prev := siteDomain
+	defer func() { siteDomain = prev }()
+	siteDomain = "kourt.xyz"
+
+	alice := testutils.TestAddress("mr-alice")
+	testCourt(cur, "mrz", testutils.TestAddress("boot-mr"), 10_000_000_000)
+	dadmin := DirectoryAdmin()
+	if dadmin == alice {
+		panic("fixture: the subject of the test is the bootstrap DAO member")
+	}
+	postingFixture(cur, "mr", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaimPM(cross(cur), "mr", "a claim with exhibits", "",
+		imgLine("the memo", okMirror)+"\n"+
+			imgLine("the reply", okMirror)+"\n"+
+			"vid||||||the hearing|"+okMirror)
+
+	page := Render("mr/1")
+	if !strings.Contains(page, "Evidence filed with this claim") {
+		t.Fatalf("the evidence must be reachable on the claim page:\n%s", page)
+	}
+	for _, want := range []string{"Exhibit 1 of 3", "Exhibit 2 of 3", "Exhibit 3 of 3"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("every exhibit is numbered; missing %q", want)
+		}
+	}
+	// The archive, not the mirror the filer named.
+	if !strings.Contains(page, "https://kourt.xyz/m/"+okHash) {
+		t.Fatalf("the page must point at the archive:\n%s", page)
+	}
+	// A video is LINKED, not verified, and must say so rather than wearing the
+	// same chrome as an exhibit the court can check.
+	if !strings.Contains(page, "cannot vouch for it") {
+		t.Fatalf("a video must be marked as unverified:\n%s", page)
+	}
+	if strings.Contains(page, "![Exhibit 3") {
+		t.Fatal("a video is a link, never an image")
+	}
+
+	// A TAKEN-DOWN EXHIBIT KEEPS ITS PLACE. Renumbering the images around a gap
+	// would leave every later exhibit referring to something else than it did
+	// yesterday, in the middle of an argument about which one shows what.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeClaimMedia(cross(cur), "mr", id, 0, "csam")
+	page = Render("mr/1")
+	if !strings.Contains(page, "Exhibit 1 of 3 was taken down") {
+		t.Fatalf("a purged exhibit keeps its number and says what happened:\n%s", page)
+	}
+	if !strings.Contains(page, "Exhibit 2 of 3") {
+		t.Fatal("the exhibits after a takedown keep the numbers they had")
+	}
+
+	// And the whole section goes when the claim itself is purged.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeClaim(cross(cur), "mr", id, "csam")
+	if strings.Contains(Render("mr/1"), "Evidence filed with this claim") {
+		t.Fatal("a purged claim shows no evidence section")
+	}
+}
+
+func TestACaptionCannotBreakOutOfTheAltText(cur realm, t *testing.T) {
+	// The caption sits inside ![...](...), so a `]` in it would close the alt
+	// text early and let the rest land as page markup. InlineText is the right
+	// tool for text on the same line whose URL must never touch an escaper.
+	prev := siteDomain
+	defer func() { siteDomain = prev }()
+	siteDomain = "kourt.xyz"
+
+	var b strings.Builder
+	cs := &claimState{media: parseMediaArg(imgLine("a](b) [x](evil", okMirror))}
+	writeClaimMedia(&b, &Court{}, cs)
+	out := b.String()
+
+	if strings.Contains(out, "](evil") {
+		t.Fatalf("a caption must not open a second destination:\n%s", out)
+	}
+	if !strings.Contains(out, "https://kourt.xyz/m/"+okHash) {
+		t.Fatalf("the real destination must survive the escaping:\n%s", out)
+	}
+}

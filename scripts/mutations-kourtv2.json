@@ -11781,5 +11781,47 @@
   "replace": "func claimMediaVisible(c *Court, cs *claimState) []mediaItem {\n\tif len(cs.media) == 0 {\n\t\treturn nil\n\t}\n\treturn cs.media",
   "label": "claimMediaVisible: a purged claim still answers with its evidence",
   "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\tif m.kind == mediaKindImage && m.sha256 != \"\" &&\n\t\tsiteDomain != \"\" && siteDomainFault(siteDomain) == \"\" {",
+  "replace": "\tif false {",
+  "label": "mediaDestination: the page points at the filer's mirror, not the archive",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif m.purged {\n\t\t\tb.WriteString(\"_Exhibit \" + pos + \" was taken down._\\n\\n\")\n\t\t\tcontinue\n\t\t}",
+  "replace": "\t\tif m.purged {\n\t\t\tcontinue\n\t\t}",
+  "label": "writeClaimMedia: a taken-down exhibit vanishes and renumbers the rest",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tpos := strconv.Itoa(i+1) + \" of \" + total",
+  "replace": "\t\tpos := strconv.Itoa(i) + \" of \" + total",
+  "label": "writeClaimMedia: the exhibits are numbered from zero",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif m.kind == mediaKindVideo {",
+  "replace": "\t\tif false {",
+  "label": "writeClaimMedia: a video is rendered as an image and looks verified",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\titems := claimMediaVisible(c, cs)",
+  "replace": "\titems := cs.media",
+  "label": "writeClaimMedia: the page shows a purged claim's evidence",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\t\tcaption = \" — \" + sanitize.InlineText(m.caption)",
+  "replace": "\t\t\tcaption = \" — \" + sanitize.InlineText(\"\") + m.caption",
+  "label": "writeClaimMedia: a caption may break out of the alt text",
+  "pkg": "kourtv2"
  }
 ]

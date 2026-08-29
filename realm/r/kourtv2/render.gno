@@ -352,6 +352,11 @@ func renderClaim(slug string, id uint64) string {
 	if body := claimBodyQuoted(c, cs); body != "" {
 		b.WriteString(body)
 	}
+	// The evidence goes with the statement, above the money, for the body's
+	// reason: a reader deciding whether to stake should see what the claim rests
+	// on before the state of the market on it. Gated by claimMediaVisible, so a
+	// purged or globally-redacted claim shows nothing here either.
+	writeClaimMedia(&b, c, cs)
 	b.WriteString(hideBanner(c, cs))
 	// THE BOARD, LINKED FROM THE CLAIM. It had no link from anywhere: the route
 	// existed and the only way to reach it was to type the URL, so every comment

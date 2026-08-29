@@ -3,7 +3,92 @@ package kourtv2
 import (
 	"strconv"
 	"strings"
+
+	sanitize "gno.land/p/nt/markdown/sanitize/v0"
 )
+
+// mediaDestination is the ONE url gnoweb's markdown will point at, and it is the
+// archive's whenever there is an archive to point at.
+//
+// A markdown image has a single destination and no `onerror`, so this surface
+// has no fallback chain: whichever host is named here is the host every reader's
+// browser contacts. Naming a mirror the FILER chose would make every claim page
+// a small amplifier aimed wherever they liked, at readers who — on gnoweb, whose
+// CSP forbids the fetch — cannot verify what comes back either.
+//
+// So: the archive, derived from the hash on the domain the admin configured.
+// The cost is honest. If the archive does not hold the bytes the image is broken
+// here, while kourt.xyz still finds it through a mirror and can prove it matches.
+// A broken image on the surface that cannot verify beats a working one that
+// cannot be trusted and discloses its readers.
+//
+// Video is the exception, and not by preference: the archive does not mirror it,
+// so a video item has nowhere to point but the host that streams it.
+func mediaDestination(m *mediaItem) string {
+	if m.kind == mediaKindImage && m.sha256 != "" &&
+		siteDomain != "" && siteDomainFault(siteDomain) == "" {
+		return "https://" + siteDomain + "/m/" + m.sha256
+	}
+	for _, u := range m.mirrors {
+		// Re-asked here as well as at the item level, so a mirror whose host has
+		// left the allowlist is never the one a page points at.
+		if mirrorFault(u) == "" {
+			return u
+		}
+	}
+	return ""
+}
+
+// writeClaimMedia puts the claim's evidence on the page, under the body.
+//
+// EVERY EXHIBIT IS NUMBERED, AND THE NUMBER IS VISIBLE. PurgeClaimMedia takes a
+// zero-based index, and without a number on the page a moderator taking down the
+// third exhibit would be counting positions in a JSON payload. The reader wants
+// it too: "the second exhibit" is how people argue about evidence.
+//
+// A purged or unavailable exhibit KEEPS ITS PLACE and says what happened. A gap
+// that silently renumbered the images around it would leave every later exhibit
+// referring to something else than it did yesterday, in the middle of an
+// argument about which one shows what.
+func writeClaimMedia(b *strings.Builder, c *Court, cs *claimState) {
+	items := claimMediaVisible(c, cs)
+	if len(items) == 0 {
+		return
+	}
+	total := strconv.Itoa(len(items))
+	b.WriteString("## Evidence filed with this claim\n\n")
+	for i := range items {
+		m := &items[i]
+		pos := strconv.Itoa(i+1) + " of " + total
+		if m.purged {
+			b.WriteString("_Exhibit " + pos + " was taken down._\n\n")
+			continue
+		}
+		dest := mediaDestination(m)
+		if dest == "" {
+			b.WriteString("_Exhibit " + pos + " is not currently available._\n\n")
+			continue
+		}
+		// The caption is author-written, so it goes through InlineText — the
+		// right tool for text, exactly as it is the wrong tool for the URL on the
+		// same line, which is emitted raw because it was validated fail-closed.
+		caption := ""
+		if m.caption != "" {
+			caption = " — " + sanitize.InlineText(m.caption)
+		}
+		if m.kind == mediaKindVideo {
+			// LINKED, NOT VERIFIED, and it has to say so. A streaming host serves
+			// no stable bytes to commit to, so nothing can check this the way an
+			// image is checked; giving it the same chrome as a verified exhibit
+			// would drain the distinction of meaning everywhere it appears.
+			b.WriteString("[▶ Exhibit " + pos + caption + "](" + dest +
+				") _(a link; the court holds no copy and cannot vouch for it)_\n\n")
+			continue
+		}
+		b.WriteString("![Exhibit " + pos + caption + "](" + dest + ")\n\n")
+		b.WriteString("_Exhibit " + pos + caption + "_\n\n")
+	}
+}
 
 // PurgeClaimMedia destroys one media item on a claim. Global DAO members only,
 // at the purge threshold, with a statutory category — the same gate every other
