@@ -4752,12 +4752,17 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
          <span id="mlg-also" hidden><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="medge spoke also"/></svg> also filed here</span>
          <span class="mlegend-h">scroll to zoom · drag to pan · click a node to select it</span></div>
      </div>`;
-  mountMap(slug, data, (mfocus!=null && validIds.has(mfocus))? mfocus : null);
+  // ?ffocus=<path> is a folder, ?focus=<id> a claim. Kept apart because a folder
+  // path ("0.2") and a claim id are different alphabets, and folding them into
+  // one parameter would make "2" ambiguous.
+  const ffocus = (QP.ffocus!=null && /^[0-9]+(\.[0-9]+)*$/.test(String(QP.ffocus).trim()))
+    ? String(QP.ffocus).trim() : null;
+  mountMap(slug, data, (mfocus!=null && validIds.has(mfocus))? mfocus : null, ffocus);
 });
 /* Map interactions: viewBox pan/zoom (one coordinate system), explicit text
    toggle (relayout, center preserved), CSS-only label LOD, hover/focus
    highlighting. Listeners live on the container, surviving innerHTML swaps. */
-function mountMap(slug, data, focusId){
+function mountMap(slug, data, focusId, focusPath){
   const box = document.getElementById("mapbox"); if(!box) return;
   let mode="titles", L=mapLayout(data,mode);
   /* THE KEY FOLLOWS THE DRAWING. A claim filed in two folders is drawn once and
@@ -5102,6 +5107,17 @@ function mountMap(slug, data, focusId){
     }
     z = Math.min(8, Math.max(0.5, zf));
   }
+  /* A FOLDER ARRIVES SELECTED, not just centred. Coming from the folder page the
+     reader has already chosen a folder; showing its box in the middle with no
+     card would drop the thing they navigated for. select() paints the card,
+     dims the rest and glides — the same path a click takes.
+     Matched on PATH, which is what the folder URL carries (#/c/<slug>/f/2), not
+     on the drawing index that data-fid uses: the index is an artefact of layout
+     order and would point at a different folder as soon as the tree changed. */
+  if(focusPath!=null){
+    const fi = L.folders.findIndex(f => String(f.path) === String(focusPath));
+    if(fi >= 0){ select({kind:"folder", fid:fi}); return; }
+  }
   if(focusId!=null){ const n = L.nodes.find(x=>x.id===focusId);
     if(n){ cx=n.x+n.w/2; cy=n.y+n.h/2;
       // land zoomed so titles clear the LOD line (enter<7px, leave>8.5px)
@@ -5190,6 +5206,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},...trail])
     + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span></h1>`
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
+    + `<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">on the map<span aria-hidden="true">→</span></a></p>`
     + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
     + (subs? `<section><div class="sec-h">Subfolders</div><div class="docket">${subs}</div></section>` : "")
     + `<section${subs?' style="margin-top:22px"':""}><div class="sec-h">Claims <span class="count">${(f.claims||[]).length}</span></div>`

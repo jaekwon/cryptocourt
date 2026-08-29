@@ -89,7 +89,14 @@ ok("404s carry a focusable heading", src.includes('<p class="page-h" style="font
 ok("global 404 renders crumbs", src.includes('{label:"No such page"}]) + notFound'));
 ok("chip source visible in text", src.includes('cu.source==="local"? "local":"sample"}</a>'));
 ok("specimen 7 counts both failed rounds", src.includes("after two failed dispute rounds"));
-ok("invalid focus never reaches mountMap", src.includes('mountMap(slug, data, (mfocus!=null && validIds.has(mfocus))? mfocus : null)'));
+// Matched as a PATTERN, not as the whole call: the guard is the property worth
+// pinning, and mountMap grew a fourth argument (the folder focus) without that
+// guard changing at all. An exact-string assertion failed on a change it was
+// never meant to be sensitive to.
+ok("invalid focus never reaches mountMap",
+   /mountMap\(slug, data, \(mfocus!=null && validIds\.has\(mfocus\)\)\? mfocus : null/.test(src));
+ok("and a folder focus is shape-checked before it does",
+   /QP\.ffocus[\s\S]{0,120}test\(String\(QP\.ffocus\)/.test(src));
 ok("miss note tells the window size", src.includes('the map draws the newest ${parsed.length}'));
 ok("demo miss note", src.includes('no claim #${mfocus} in the sample court'));
 ok("ring re-applied inside put()", src.includes('if(focusId!=null){ const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.classList.add("focused"); }'));

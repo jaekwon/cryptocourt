@@ -464,6 +464,39 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
   ok("a folder with no chain id asks nothing", gate.length === 0);
   ok("...and its card simply has no description", !/mapsel-d/.test(panel.innerHTML));
 
+  /* ARRIVING FROM A FOLDER PAGE. #/c/<slug>/map?ffocus=<path> has to land on the
+     folder the reader was already looking at — SELECTED, with its card up, not
+     merely centred: they chose the folder, and its value is what is filed in it.
+     Matched on path, not on the drawing index that data-fid carries, because the
+     index is an artefact of layout order and moves when the tree changes. */
+  {
+    global.isLive = ()=> false;
+    /* PATHS THAT ARE NOT THE INDICES. The shared fixture numbers its folders
+       "0" and "1", which are also their positions in the layout — so matching on
+       the drawing index instead of the path passes by coincidence, and an
+       ablation that broke exactly that moved only one assertion. Here the paths
+       are 4 and 9, so index-matching cannot land on the right folder at all. */
+    const pdata = JSON.parse(JSON.stringify(data));
+    pdata.folders[0].path = "4";   // Fauci,   drawn at index 0
+    pdata.folders[1].path = "9";   // Origins, drawn at index 1
+    const mountF = p => { box = new El("div", {id:"mapbox"}); panel = new El("div", {id:"mapsel"});
+                          byId.mapbox = box; byId.mapsel = panel;
+                          mountMap("covid", pdata, null, p); };
+    mountF("9");
+    ok("a folder focus opens that folder's card", /Origins/.test(panel.innerHTML));
+    ok("...and not the folder sharing that drawing index", !/Fauci/.test(panel.innerHTML));
+
+    mountF("4");
+    ok("a different path opens a different folder", /Fauci/.test(panel.innerHTML));
+
+    mountF("99");
+    ok("an unknown path selects nothing rather than guessing",
+       /Click a claim/.test(panel.innerHTML));
+  }
+  ok("the folder page offers the link", /href="#\/c\/\$\{esc\(slug\)\}\/map\?ffocus=/.test(src));
+  ok("the map route only accepts a folder-path shape",
+     /\^\[0-9\]\+\(\\\.\[0-9\]\+\)\*\$/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();
