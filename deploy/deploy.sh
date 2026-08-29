@@ -137,10 +137,23 @@ old = pat.search(src).group(0)
 keep = re.search(r'gnoweb:"([^"]*)"', old).group(1)
 line = ('const CFG_DEFAULTS = {mode:"%s", rpc:"%s", gnoweb:"%s", chainid:"%s"};'
         % (cfg["mode"], cfg["rpc"], gnoweb or keep, cfg["chainid"]))
-open(sys.argv[1], "w", encoding="utf-8").write(pat.sub(lambda _: line, src, count=1))
+out = pat.sub(lambda _: line, src, count=1)
+
+# The source panel is not shown on a deployed site. It offers mode, RPC, gnoweb,
+# chain id and chat — a way to point this page at another node and then read the
+# answer as though it came from this court. The repo copy keeps it, because
+# choosing a node is what that copy is for.
+lockpat = re.compile(r'^const LOCKED = false;$', re.M)
+if len(lockpat.findall(out)) != 1:
+    sys.exit("deploy: expected exactly one LOCKED line to stamp")
+out = lockpat.sub("const LOCKED = true;", out, count=1)
+
+open(sys.argv[1], "w", encoding="utf-8").write(out)
 print("    " + line)
+print("    const LOCKED = true;   (source panel hidden)")
 PYEOF
 grep -q "mode:\"$SITE_MODE\"" "$STAMPED" || { echo "deploy: the stamp did not apply" >&2; exit 1; }
+grep -q 'const LOCKED = true;' "$STAMPED" || { echo "deploy: the lock did not apply" >&2; exit 1; }
 if [ -z "$SITE_GNOWEB" ]; then
 	echo "    NOTE: gnoweb left at the repo default — action buttons link to a chain"
 	echo "          that does not carry this realm. Set SITE_GNOWEB= to fix."

@@ -150,5 +150,20 @@ ok("phaseClass reports no side when the status names none",
 ok("a settled status still classes as settled",
    phaseClass("settled — every stake withdraws 1x").short === "settled");
 
+/* THE SOURCE PANEL IS A DEPLOY-TIME DECISION. It offers mode, RPC, gnoweb, chain
+   id and chat — which on a public site is a way to point the page at another node
+   and read the answer as though it came from this court. The repo copy keeps it
+   (choosing a node is what that copy is for); deploy.sh stamps LOCKED=true.
+   Hidden, not removed: the settings wiring reads and writes those inputs, and
+   deleting them would leave it querying null on the deployed page. */
+ok("the repo copy ships the panel unlocked", /const LOCKED = false;/.test(src));
+ok("the lock hides the whole source block, not just some fields",
+   /if\(LOCKED\)\{[^}]*querySelector\("\.foot \.node"\)[^}]*hidden = true/.test(src));
+ok("...and hides rather than removes it",
+   !/\.foot \.node[^\n]*\.remove\(\)/.test(src));
+ok("deploy stamps it", (()=>{ const d=require('fs').readFileSync(
+     require('path').join(__dirname,'..','..','deploy','deploy.sh'),'utf8');
+   return /const LOCKED = true;/.test(d) && /the lock did not apply/.test(d); })());
+
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);

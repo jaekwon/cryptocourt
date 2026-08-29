@@ -1028,6 +1028,13 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 /* ============================ configuration ============================== */
 const PKG = "gno.land/r/kourt/kourtv2";
 const CFG_DEFAULTS = {mode:"demo", rpc:"http://127.0.0.1:26657", gnoweb:"https://gno.land", chainid:"dev"};
+/* LOCKED is stamped true by deploy/deploy.sh. A deployed site has one chain and
+   the values above are fixed at deploy time, so the source panel — mode, RPC,
+   gnoweb, chain id, chat — is not a setting a reader should be offered: it is a
+   way to point a production page at somebody else's node and then read the
+   result as if it were this court. In the repo copy it stays on, because
+   choosing a node is exactly what that copy is for. */
+const LOCKED = false;
 /* Config touches hrefs, shell commands, and the wallet: anything that fails
    these shapes falls back to the default rather than flowing downstream. */
 function cleanCfg(c){
@@ -1077,6 +1084,10 @@ const store = {
 let stored = {};
 try{ stored = JSON.parse(store.get("cc.cfg")||"{}"); }catch(_){}
 const CFG = cleanCfg(stored);
+/* HIDDEN, NOT REMOVED. The inputs below are read and written by the settings
+   wiring; deleting them would leave that code querying null on a deployed page,
+   and the failure would land at whatever it touched first rather than here. */
+if(LOCKED){ const nodeBox = document.querySelector(".foot .node"); if(nodeBox) nodeBox.hidden = true; }
 const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", JSON.stringify(CFG)); };
 
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
