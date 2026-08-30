@@ -101,6 +101,46 @@ ok("a bar is refused", M.mediaCaptionFault("a|b") !== "");
 ok("an over-long caption is refused",
    M.mediaCaptionFault("x".repeat(M.MEDIA_MAX_CAPTION + 1)) !== "");
 
+// COUNTED THE SAME WAY ON BOTH SIDES, and for a while they were not. This side
+// counts code points; the realm counted len(s), which is UTF-8 BYTES. An
+// ordinary 82-character Russian caption is 152 bytes, so the composer accepted
+// it and the transaction aborted saying "a caption is at most 120 characters"
+// about a caption of 82 — every non-Latin script hitting the wall at roughly
+// half the stated limit, with a message contradicting what the person could
+// count. Both sides had only ever been compared on "x".repeat(), where a byte
+// and a character are the same thing, which is exactly why it survived.
+const cyrillic = "Протокол заседания городского совета от 12 октября";
+ok("an ordinary non-Latin caption is accepted", M.mediaCaptionFault(cyrillic) === "",
+   `${[...cyrillic].length} chars, ${Buffer.byteLength(cyrillic, "utf8")} bytes`);
+ok("...and it is longer in bytes than in characters, so the two rules differ",
+   Buffer.byteLength(cyrillic, "utf8") > [...cyrillic].length);
+ok("the realm counts characters too, not bytes",
+   /for range s\s*\{\s*n\+\+/.test(gno) && !/len\(s\) > maxCaptionLen/.test(gno));
+ok("a caption of exactly the cap passes, in any script",
+   M.mediaCaptionFault("\u0431".repeat(M.MEDIA_MAX_CAPTION)) === "");
+ok("...and one character past it does not",
+   M.mediaCaptionFault("\u0431".repeat(M.MEDIA_MAX_CAPTION + 1)) !== "");
+
+// THE DIRECTION CONTROLS. A caption is claim text: permanent, unamendable, and
+// printed beside the exhibit number on a page a stranger reads. U+202E reorders
+// what follows it, so the rendered line can disagree with the line the chain
+// stores — which is the one property a record of evidence exists to have. Both
+// sides already said "no control characters" and both checked only the ASCII
+// ones; these are three bytes each, so neither ever saw one.
+for (const [name, ch] of [["RLO", "\u202E"], ["LRO", "\u202D"], ["RLE", "\u202B"],
+                          ["LRE", "\u202A"], ["PDF", "\u202C"], ["LRI", "\u2066"],
+                          ["RLI", "\u2067"], ["FSI", "\u2068"], ["PDI", "\u2069"]]) {
+  ok(`a caption may not carry ${name}`, M.mediaCaptionFault("the memo " + ch + " x") !== "");
+}
+ok("the realm refuses the same range", /0x202A && r <= 0x202E/.test(gno)
+   && /0x2066 && r <= 0x2069/.test(gno));
+// AND ORDINARY RIGHT-TO-LEFT TEXT STILL WORKS. Refusing the marks as well would
+// break honest Arabic and Hebrew captions to prevent nothing: they carry no
+// override power. If this ever fails, the rule got greedy.
+ok("Arabic is not a control character", M.mediaCaptionFault("\u0645\u062d\u0636\u0631 \u0627\u062c\u062a\u0645\u0627\u0639") === "");
+ok("Hebrew with a right-to-left MARK is still fine",
+   M.mediaCaptionFault("\u200F\u05de\u05e1\u05de\u05da \u05e8\u05e9\u05de\u05d9") === "");
+
 // ---- the argument the chain will parse -----------------------------------
 const img = {
   kind: "img", sha256: "b".repeat(64), mime: "image/webp",
@@ -637,7 +677,7 @@ async function section3() {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 159;
+  const EXPECTED = 176;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

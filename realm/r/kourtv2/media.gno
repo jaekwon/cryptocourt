@@ -415,8 +415,36 @@ func mediaHostAllowed(host string) bool {
 // and the separators are refused so one caption can never become two fields or
 // two items.
 func captionFault(s string) string {
-	if len(s) > maxCaptionLen {
+	// COUNTED IN CHARACTERS, NOT BYTES, because that is what the message says and
+	// what the person can count. len(s) is UTF-8 bytes: an ordinary 82-character
+	// Russian caption is 152 of them, so the realm refused it while web/media.js
+	// — which counts code points — waved it through. The result was a claim that
+	// could not be filed, aborting with "a caption is at most 120 characters"
+	// about a caption of 82. Any non-Latin script hit this at roughly half the
+	// stated limit; the two sides had never been compared on a non-ASCII string.
+	n := 0
+	for range s {
+		n++
+	}
+	if n > maxCaptionLen {
 		return "a caption is at most " + strconv.Itoa(maxCaptionLen) + " characters"
+	}
+	// The bidi controls, and only the OVERRIDES, EMBEDDINGS and ISOLATES.
+	//
+	// The rule below already says a caption carries no control characters, and
+	// meant it — but it read bytes, and these are three bytes each, so it never
+	// saw one. A caption is claim text: permanent, unamendable, and printed
+	// beside the exhibit number on a page a stranger reads. U+202E reorders what
+	// follows it, so a filer could make the rendered line disagree with the line
+	// the chain stores, which is the one property this record exists to have.
+	//
+	// The MARKS (U+200E/200F) are deliberately still allowed: ordinary Arabic and
+	// Hebrew need them, and they carry no override power. Refusing those would
+	// break honest captions to stop nothing.
+	for _, r := range s {
+		if (r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069) {
+			return "a caption may not contain text-direction controls"
+		}
 	}
 	for i := 0; i < len(s); i++ {
 		switch s[i] {

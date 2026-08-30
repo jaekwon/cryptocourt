@@ -115,6 +115,20 @@ function mediaCaptionFault(text) {
   }
   if (/[\n\r]/.test(text)) return "a caption is one line";
   if (text.includes("|")) return "a caption cannot contain a vertical bar";
+  /* The bidi OVERRIDES, EMBEDDINGS and ISOLATES, which the realm refuses too.
+   * U+202E reorders everything after it, so a caption could render as text other
+   * than the text the chain stores — beside the exhibit number, on a page a
+   * stranger reads, permanently, since a caption is claim text and cannot be
+   * amended. Both sides said "no control characters" and both checked only the
+   * ASCII ones; these are three bytes each and neither ever saw one.
+   *
+   * The MARKS (U+200E/200F) stay allowed on purpose: ordinary Arabic and Hebrew
+   * use them and they carry no override power. Refusing those would break honest
+   * captions to prevent nothing. Written as escapes rather than the characters
+   * themselves, because a rule made of invisible glyphs cannot be reviewed. */
+  if (/[\u202A-\u202E\u2066-\u2069]/.test(text)) {
+    return "a caption cannot contain text-direction controls";
+  }
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x08\x0b-\x1f]/.test(text)) return "a caption cannot contain control characters";
   return "";

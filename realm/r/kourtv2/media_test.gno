@@ -138,9 +138,48 @@ func TestACaptionIsOneLineOfClaimText(cur realm, t *testing.T) {
 		{strings.Repeat("x", maxCaptionLen+1), "at most"},
 		{"two\nlines", "one line"},
 		{"a|b", "vertical bar"},
+		// THE DIRECTION CONTROLS. The rule below already said a caption carries no
+		// control characters and meant it, but it read BYTES and these are three
+		// bytes each, so it never saw one. U+202E reorders everything after it: a
+		// filer could make the rendered exhibit label disagree with the label the
+		// chain stores, permanently, since a caption is claim text and there is no
+		// editor.
+		{"the memo \u202e gnidnats", "direction"},
+		{"a \u202d b", "direction"},
+		{"a \u2066 b \u2069", "direction"},
 	} {
 		if got := captionFault(tc.in); !strings.Contains(got, tc.want) {
 			t.Fatalf("captionFault(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+
+	// COUNTED IN CHARACTERS, NOT BYTES. This used to be len(s), so an ordinary
+	// 82-character Russian caption — 152 bytes — was refused while web/media.js,
+	// which counts code points, accepted it: the composer waved the claim
+	// through and the transaction aborted saying "at most 120 characters" about a
+	// caption of 82. Every non-Latin script hit the wall at roughly half the
+	// stated limit. The two sides had only ever been compared on ASCII, where a
+	// byte and a character are the same thing.
+	cyrillic := "Протокол заседания городского совета от 12 октября"
+	if got := captionFault(cyrillic); got != "" {
+		t.Fatalf("an ordinary Russian caption was refused: %q", got)
+	}
+	if len(cyrillic) <= len([]rune(cyrillic)) {
+		t.Fatal("this fixture is meant to be longer in bytes than in characters")
+	}
+	if got := captionFault(strings.Repeat("б", maxCaptionLen)); got != "" {
+		t.Fatalf("a caption of exactly the cap was refused: %q", got)
+	}
+	if got := captionFault(strings.Repeat("б", maxCaptionLen+1)); !strings.Contains(got, "at most") {
+		t.Fatalf("one character past the cap was accepted: %q", got)
+	}
+
+	// AND ORDINARY RIGHT-TO-LEFT TEXT STILL WORKS. The marks carry no override
+	// power and honest Arabic and Hebrew use them; refusing those would break
+	// real captions to prevent nothing.
+	for _, ok := range []string{"محضر اجتماع المجلس البلدي", "\u200fמסמך רשמי מהעירייה"} {
+		if got := captionFault(ok); got != "" {
+			t.Fatalf("captionFault(%q) refused right-to-left text: %q", ok, got)
 		}
 	}
 }

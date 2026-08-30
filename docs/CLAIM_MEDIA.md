@@ -115,8 +115,13 @@ Three ways, all first-class:
   in the composer, not only in a drop zone.
 - **Drag and drop**, with the whole composer as the target and a visible state
   when a drag enters the window.
-- **Pick**, including `capture="environment"` on mobile so a phone offers the
-  camera for photographing a document.
+- **Pick.** ⚠︎ **Not** with `capture="environment"`, which this section asked for
+  and the code deliberately omits. `capture` is not a hint that a camera is
+  *available* — on iOS and Android it sends the picker straight to the camera and
+  removes the photo library, so the commonest evidence there is, a screenshot
+  already saved on the phone, becomes unreachable. Without the attribute both
+  platforms offer a chooser with the camera in it, which is the behaviour this
+  line wanted. `multiple` is set, so seven exhibits are one trip.
 
 A fourth, **paste a URL**: fetch it, hash it, adopt it as an item with the
 original URL kept as a mirror. When CORS blocks the fetch — and it often will —
@@ -615,6 +620,14 @@ Recorded because each is easy to make again:
 | 15 | `archiveBase()` returned `""`, leaving the uploaded mirror relative | `mediaMirrorFault` refuses a non-https link, so **no uploaded image could ever be filed** — only pasted ones |
 | 16 | paste bound to the drop zone, a sibling of the title and body | the path §2.1 calls the most important one did nothing from where the cursor actually is — a unit test proved the listener existed, not that anything reached it |
 | 17 | the public read served staged bytes | the classifier only ever queues promoted rows, so `POST /m` published unreviewed images on the court's own domain, CORS-open and cached past the sweep |
+| 18 | the realm capped captions in BYTES, the client in code points | an ordinary 82-character Russian caption is 152 bytes: the composer accepted it and the transaction aborted saying "at most 120 characters" about a caption of 82 — every non-Latin script refused at half the stated limit |
+| 19 | "no control characters" checked only the ASCII ones | Unicode direction overrides are three bytes each, so neither side ever saw one; U+202E in a caption makes the rendered exhibit label disagree with the label the chain stores, permanently |
+
+Rows 18 and 19 are the same oversight twice: a rule stated in characters and
+implemented in bytes. Row 18 refuses honest captions, row 19 accepts hostile
+ones. Both survived because the two sides had only ever been compared on
+`"x".repeat()`, where a byte and a character are the same thing — the fixture
+chose the one input class that cannot tell them apart.
 
 Rows 14 and 15 are the pair worth dwelling on: a server-side mechanism complete
 and correct, its client half quietly not using it, and every unit test on both
