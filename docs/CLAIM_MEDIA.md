@@ -639,6 +639,17 @@ Recorded because each is easy to make again:
 | 20 | backfill returned on the first court it could not answer | the court hint is client-supplied, so `POST /m?court=does-not-exist` once an hour stopped promotion for everybody and the sweep then deleted the bytes honest claims referenced |
 | 21 | the archive accepted 32-character court hints | the realm's slugs are at most 11, so the archive took names no court could have and asked a node about each one |
 | 22 | a pasted image link was filed without a fingerprint | both validators require a sha256 for every image, so the exhibit looked accepted and `composer.fault()` quietly made the claim unsignable — "this image has no fingerprint yet", to someone with no way to make one |
+| 23 | a dropped file whose copy failed kept a hash and no link | `MEDIA_STATES.failed` says "no copy yet — it will still be filed" while `mediaItemFault` refused the set with "this exhibit has no link yet"; the test that should have caught it asserted the mechanism and never `fault()` |
+| 24 | `mediaUpload` adopted whatever address the archive returned | a malformed one became the exhibit's mirror, so a misconfigured service blocked every uploader with a message about a link they never supplied |
+
+**Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
+underneath them is now a test rather than a habit: *a fault may only ever
+describe something the person did.* Too many exhibits, a caption too long, a
+host browsers will not load — theirs to fix, and worth saying. Anything the
+composer produced by itself, including every way its own network calls can fail,
+must leave a set that can be signed. `media_test.js` crosses every intake path
+with every way it can go wrong and asserts exactly that; it found row 24 on its
+first run.
 
 Rows 18 and 19 are the same oversight twice: a rule stated in characters and
 implemented in bytes. Row 18 refuses honest captions, row 19 accepts hostile
