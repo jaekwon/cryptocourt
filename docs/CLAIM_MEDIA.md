@@ -401,6 +401,14 @@ fail separately:
 
 ## 4. Verification, and where it can happen
 
+**And where it is announced.** Both surfaces now say what they can do about it,
+and they say different things because they can do different things. gnoweb
+states that a fingerprint exists and that this page cannot check it, naming the
+one that can. kourt.xyz states that a fingerprint exists and offers to check it,
+because the lightbox does — and the affordance itself says so, for a reader
+going by aria-label alone. Neither is offered for an exhibit with no fingerprint
+behind it: a video, or a purged slot whose hash was destroyed.
+
 The client fetches the bytes, hashes with `crypto.subtle.digest`, compares.
 
 ⚠︎ **Only kourt.xyz can do this.** gnoweb's CSP is
@@ -665,6 +673,7 @@ Recorded because each is easy to make again:
 | 27 | `draw()` and `refresh()` both printed `composer.fault()` | the identical sentence in two `.medianote` paragraphs, with the other warnings glued onto the second copy |
 | 28 | the page scrolled behind an open lightbox | somebody studying an exhibit scrolls, sees nothing move, and closes to find themselves somewhere else in a claim page thousands of pixels tall |
 | 29 | a blob's origin was rewritten on every promotion | hashes are public, so anyone could file a claim quoting somebody else's image and take the row — pointing an operator's "decide about the source" action at a court of their choosing |
+| 30 | the overlay never mentioned verification | the surface that CANNOT check an exhibit announced the promise, and the one that can said nothing — the only hint was an aria-label reading "full size" |
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
