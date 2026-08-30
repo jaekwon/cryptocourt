@@ -355,6 +355,12 @@ stripped, because that prose is printed to a terminal.
 
 ### 3.3 What an operator actually does
 
+**The queue depth is what awaits a person.** An operator's own block writes a
+review row and leaves it uncleared, because `PendingReview` is the only inventory
+of what is blocked and `unblock` takes a hash somebody has to be able to read.
+The COUNT excludes those: it answers "does anything need me", and a number that
+can never return to zero stops being read. The listing reports both.
+
 **The origin is written once.** The queue groups by `filed_court` so a filing's
 seven exhibits read as one incident, which means that field is what an operator
 decides about — and a hash is public, so any stranger can file a claim quoting
@@ -697,6 +703,7 @@ Recorded because each is easy to make again:
 | 36 | ten files became seven exhibits and three silences | the cap message stated the rule and said nothing about the evidence that had just vanished from the form |
 | 37 | a purged slot carried `cursor:zoom-in` with nothing to open | the tombstone that exists so numbering holds also looked like an exhibit you could click |
 | 38 | `restore` would put the same exhibit back twice | two rows sharing an id, the argument carrying that exhibit twice, and `fault()` empty — the panel is one-shot only because clearing the note removes the button |
+| 39 | the queue depth counted an operator's own decisions | once anyone had blocked an image by hand, the figure health publishes could never return to zero, so "nothing is waiting" became unreachable |
 
 **A second axis, after the seven situations: the order things are done in.** The
 composer's `add / remove / restore / move / setCaption / seed / retry` all mutate
