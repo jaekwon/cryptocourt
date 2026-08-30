@@ -1681,9 +1681,12 @@ async function fillBoardChip(slug, id){
 const NOW = 4_800_000; // pretend current block height
 /* ---- the hand-written half: what NO node can answer ----------------------
    desc (the chain stores only a name), nested folders (chain folders are
-   flat), relations (the chain stores none), and voteEndsAt (no read
-   publishes a dispute vote's close height — live mode already says so).
-   These are curation and stay hand-written whatever happens to the rest. */
+   flat), and relations (the chain stores none). These are curation and stay
+   hand-written whatever happens to the rest.
+
+   voteEndsAt WAS in this list and is not any more: DisputeVoteCloses publishes
+   the round's close height now, and live mode reads it. It stays here for the
+   SAMPLE, which has no chain to ask. */
 const DEMO_OVERLAY = {
   courts:{
     orem:{desc:"Claims of fact from Orem's public record — certifications, inspections, filings. The court decides only what it is asked to decide.", folders:[
@@ -2118,6 +2121,15 @@ async function claimDetail(slug,id){
     // the running round's own bar was snapshotted at open and is unexposed;
     // this is the bar a NEW dispute faces today — labeled that way in the UI
     if(disputeOpen) d.quorumFloor = await one(`QuorumFloorOf(${s},${i})`).catch(()=>null);
+    // THE ROUND'S CLOSE, at last read rather than guessed. Until
+    // DisputeVoteCloses existed this was a demo-only field and live mode said
+    // so; every clock on a live claim fell back to "about 7 days after this
+    // round opened", which is the window's length, not the time left in it.
+    // A HEIGHT — the number the governor actually gates on (dispute.gno) —
+    // so everything downstream keeps treating it as one. 0 means no open
+    // round, and 0 is falsy, which is the same "nothing to show" every
+    // consumer already handled.
+    if(disputeOpen) d.voteEndsAt = await one(`DisputeVoteCloses(${s},${i})`).catch(()=>0) || null;
   }
   if(settled && !provClose){ d.verdict = await one(`Verdict(${s},${i})`).catch(()=>-1); d.route = await one(`VerdictRoute(${s},${i})`).catch(()=>""); }
   if(await one(`Crystallized(${s},${i})`).catch(()=>false)){
@@ -4065,7 +4077,13 @@ function voteHelpModal(slug, d){
 function ballotHint(slug, d, nowH){
   if(d.voteEndsAt && nowH!=null && d.voteEndsAt<=nowH)
     return "Voting has closed; Resolve works now.";
-  return !d.voteEndsAt? "Closes about 7 days after this round opened."
+  // "About 7 days after this round opened" was here, and it was the WINDOW'S
+  // LENGTH, not the time left in it — a claim three days into its round read
+  // the same as one three minutes in. DisputeVoteCloses publishes the height
+  // now, so the real countdown is the normal case and this is the read-failed
+  // path: it says the number is missing rather than substituting a guess that
+  // looks like an answer.
+  return !d.voteEndsAt? "The closing time could not be read."
     : (nowH==null)? `Closes at block ${fmtN(d.voteEndsAt)}.`
     : `Closes in ${wall(nowH, d.voteEndsAt)}.`;
 }
@@ -7574,7 +7592,7 @@ function resolutionLadder(d, nowH, tl){
     }).join("");
     let fut2=null;
     if(d.phase==="open") fut2="awaiting an answer — anyone may post one with a bond";
-    else if(d.phase==="disputed" && !d.voteEndsAt) fut2=`round ${(d.round||0)+1} is voting — no close height is published`;
+    else if(d.phase==="disputed" && !d.voteEndsAt) fut2=`round ${(d.round||0)+1} is voting — its close height could not be read`;
     else if(d.phase==="settled") fut2="settled — every stake withdraws 1×";
     else if(d.phase==="provClose") fut2="closed without a decision — everyone 1×";
     else if(d.phase==="closed") fut2="closed — never answered";
@@ -7603,7 +7621,7 @@ function resolutionLadder(d, nowH, tl){
   rows.sort((a,b)=>a[0]-b[0]);
   let fut=null;
   if(d.phase==="open") fut="awaiting an answer — anyone may post one with a bond";
-  else if(d.phase==="disputed" && !d.voteEndsAt) fut=`round ${(d.round||0)+1} is voting — the close height is unexposed, and Resolve refuses until it has passed`;
+  else if(d.phase==="disputed" && !d.voteEndsAt) fut=`round ${(d.round||0)+1} is voting — its close height could not be read, and Resolve refuses until it has passed`;
   else if(d.phase==="settled") fut="settled — every stake withdraws 1×";
   else if(d.phase==="provClose") fut="closed without a decision — everyone 1×";
   else if(d.phase==="closed") fut="closed — never answered";

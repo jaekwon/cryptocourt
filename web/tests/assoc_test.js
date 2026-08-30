@@ -130,7 +130,13 @@ const L3 = resolutionLadder(d3l, NOW);
 ok("ladder #3 (disputed w/ voteEndsAt): vote closes rung", L3.includes("vote closes"));
 const d3n = Object.assign({}, d3l); delete d3n.voteEndsAt;
 const L3n = resolutionLadder(d3n, NOW);
-ok("ladder disputed w/o voteEndsAt: unexposed-close future rung", L3n.includes("close height is unexposed"));
+// NO LONGER "unexposed". DisputeVoteCloses publishes the height, so a missing
+// one means the read failed — and the copy has to say which, because "the chain
+// does not publish this" and "we could not reach the chain" send a reader to
+// different places.
+ok("ladder disputed w/o voteEndsAt: the close is reported unread, not unpublished",
+   L3n.includes("its close height could not be read")
+   && !L3n.includes("unexposed") && !L3n.includes("no close height is published"));
 
 // ---- the dispute rounds, on the timeline where the other events are --------
 // They came off the ballot. The chain stamps a round's opening NOWHERE
@@ -191,6 +197,15 @@ ok("the unexposed-close note names its round too", L3n.includes("round 2 is voti
      L.includes("publishes no stamp for a dispute round"));
   ok("dated ladder: the ticket carries no heading of its own, the section names it",
      !L.includes("<h3>"));
+  // THE DATED BRANCH HAS ITS OWN fut2, and only the legacy one was covered — an
+  // ablation that reverted this branch to "no close height is published" passed
+  // with every other assertion green. Both branches carry the same claim about
+  // the same fact, so both are asserted.
+  const Ln = resolutionLadder(Object.assign({}, D, {voteEndsAt:undefined}), NOW, tl);
+  ok("dated ladder: a missing close is reported unread, not unpublished",
+     Ln.includes("its close height could not be read")
+     && !Ln.includes("no close height is published") && !Ln.includes("unexposed"));
+  ok("dated ladder: ...and it names the round it is about", Ln.includes("round 3 is voting"));
 }
 
 // ---- banned words in all new surfaces ----

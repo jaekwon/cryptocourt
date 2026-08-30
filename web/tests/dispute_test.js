@@ -112,9 +112,24 @@ ok("...and Resolve sits outside that block, being no vote at all",
 // fails for the wrong reason.
 ok("clock: no second copy of the close row on the ballot",
    !html.includes("<span>vote closes</span>"));
-ok("clock: the fallback still says it when there is no height to project from",
+// THE 7-DAY LINE IS GONE. It was the WINDOW'S LENGTH, not the time left in it,
+// so a claim three days into its round read the same as one three minutes in.
+// DisputeVoteCloses publishes the close height now and the client reads it, so
+// this branch means the read failed — and it says so instead of substituting a
+// number that looks like an answer.
+ok("clock: a failed read says so rather than guessing a window",
    ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW)
-     .includes("about 7 days after this round opened"));
+     === "The closing time could not be read.");
+// WHAT RENDERS, not what the file says. A file-wide ban also bans the comment
+// that explains why the line went — the same trap votelock_test hit with
+// SpendableOf, where the guard has to be "nothing CALLS it", not "the string
+// never appears". Every branch is checked, since only one of them carried it.
+ok("...and no branch of the hint substitutes a window length for a countdown",
+   [ballotHint("orem", d, NOW),
+    ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW),
+    ballotHint("orem", d, null),
+    ballotHint("orem", Object.assign({}, d, {voteEndsAt:NOW-1}), NOW)]
+     .every(x => !/7 days|a week/.test(x)));
 // nowH null is a DIFFERENT branch from voteEndsAt absent: the height IS known and
 // merely unprojectable. It must print that height rather than the 7-day guess,
 // which would be an invented date printed over a fact the chain gave.
@@ -170,7 +185,13 @@ CFG.mode='live';
 const dl = Object.assign({}, DEMO.claims["orem/3"]); delete dl.voteEndsAt; delete dl.quorumFloor;
 const htmlL = disputeTicket("orem", 3, dl, 5000000);
 ok("live: no invented deadline",
-   htmlL.includes("about 7 days after this round opened"));
+   htmlL.includes("The closing time could not be read."));
+// The read that made the guess unnecessary. Asserted as the CALL, because a
+// realm function nobody invokes is the failure this feature would otherwise
+// have: the ballot would look identical and always take the read-failed path.
+ok("live: the close height is read from the chain",
+   src.includes('DisputeVoteCloses(${s},${i})')
+   && /disputeOpen\) d\.voteEndsAt = await one/.test(src));
 ok("live: no turnout row without read", !htmlL.includes("turnout bar"));
 // The async fill marks the vote BUTTONS now instead of writing a paragraph, so
 // what has to be present is the block it looks for.

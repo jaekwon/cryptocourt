@@ -846,6 +846,34 @@ func EscrowUntil(courtSlug string, claimID uint64) int64 {
 	return mustClaim(mustCourt(courtSlug), claimID).escrowUntil
 }
 
+// DisputeVoteCloses is the height this claim's open dispute round stops taking
+// votes, or 0 when no round is open.
+//
+// The governor has always known it — Timings(id) returns (opened, closes,
+// ready, expires) and closes is a HEIGHT, set at propose() as
+// `now + rules.VotingBlocks` off the same realmClock every deadline here uses.
+// What was missing is a way to ask kourtv2 for it, so a client showing "voting
+// closes in four days" had nothing to compute from: the overlay carried the
+// close by hand for its sample data and said, in live mode, that no read
+// published one. This is that read.
+//
+// A HEIGHT, NOT A TIME, because that is what the governor gates on: Vote
+// refuses once heightNow() >= closes. Projecting it into a date is the
+// consumer's job and its projection is an estimate — the chain's cadence is
+// not a promise — so this returns the number the court will actually check.
+//
+// 0 rather than a panic on a claim with no open round: a client asks this on
+// every claim page it draws, and "no round is open" is an answer, not an error.
+func DisputeVoteCloses(courtSlug string, claimID uint64) int64 {
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	if !cs.disputeOpen || cs.proposalID == 0 {
+		return 0
+	}
+	_, closes, _, _ := c.gov.Timings(cs.proposalID)
+	return closes
+}
+
 // DisputeBondNext quotes what the NEXT dispute round costs right now — the
 // page's bond quote (0-guard: quotable even before an answer exists).
 func DisputeBondNext(courtSlug string, claimID uint64) int64 {
