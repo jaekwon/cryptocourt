@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -15,9 +16,19 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// A one-pixel PNG, so the tests exercise a real servable type rather than
-// whatever bytes happened to be handy.
-var pngBody = []byte("\x89PNG\r\n\x1a\n" + strings.Repeat("payload", 8))
+// Bodies that really start like the type they claim, because the store now reads
+// the type out of the BYTES rather than trusting the caller's header. Prefixing
+// a tag onto a PNG to make it distinct would break its signature, so distinctness
+// goes in the PAYLOAD and the magic stays intact.
+func pngWith(tag string) []byte {
+	return []byte("\x89PNG\r\n\x1a\n" + tag + strings.Repeat("payload", 8))
+}
+
+func webpWith(tag string) []byte {
+	return []byte("RIFF" + "\x00\x00\x00\x00" + "WEBP" + tag + strings.Repeat("payload", 8))
+}
+
+var pngBody = pngWith("")
 
 func testStore(t *testing.T) *Store {
 	t.Helper()
@@ -87,7 +98,7 @@ func TestUnreferencedBytesExpireAndReferencedOnesDoNot(t *testing.T) {
 	ctx := context.Background()
 
 	kept, _ := st.Put(ctx, "image/png", pngBody, "")
-	dropped, _ := st.Put(ctx, "image/webp", append([]byte("other"), pngBody...), "")
+	dropped, _ := st.Put(ctx, "image/webp", webpWith("other"), "")
 	if err := st.Promote(ctx, kept); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
@@ -130,8 +141,8 @@ func TestReuploadDoesNotExtendOrUndoAnything(t *testing.T) {
 
 	// ...nor extend the life of something already expiring, which would let a
 	// script keep bytes alive indefinitely by re-posting them.
-	tmp, _ := st.Put(ctx, "image/webp", append([]byte("tmp"), pngBody...), "")
-	if _, err := st.Put(ctx, "image/webp", append([]byte("tmp"), pngBody...), ""); err != nil {
+	tmp, _ := st.Put(ctx, "image/webp", webpWith("tmp"), "")
+	if _, err := st.Put(ctx, "image/webp", webpWith("tmp"), ""); err != nil {
 		t.Fatalf("re-put staged: %v", err)
 	}
 	if n, _ := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); n != 1 {
@@ -308,8 +319,8 @@ func TestOnlyTheChainDecidesWhatIsWorthKeeping(t *testing.T) {
 	ctx := context.Background()
 
 	claimed, _ := st.Put(ctx, "image/png", pngBody, "")
-	stray, _ := st.Put(ctx, "image/webp", append([]byte("stray"), pngBody...), "")
-	purged, _ := st.Put(ctx, "image/gif", append([]byte("purged"), pngBody...), "")
+	stray, _ := st.Put(ctx, "image/webp", webpWith("stray"), "")
+	purged, _ := st.Put(ctx, "image/png", pngWith("purged"), "")
 
 	// The claim references `claimed`, and carries a purged slot whose bytes must
 	// NOT be bought permanent storage — the court has withdrawn its pointer.
@@ -413,7 +424,7 @@ func TestAClosedTabDoesNotCostSomebodyTheirEvidence(t *testing.T) {
 	ctx := context.Background()
 
 	filed, _ := st.Put(ctx, "image/png", pngBody, "covid")
-	orphan, _ := st.Put(ctx, "image/webp", append([]byte("orphan"), pngBody...), "covid")
+	orphan, _ := st.Put(ctx, "image/webp", webpWith("orphan"), "covid")
 
 	chain := &fakeChain{count: 3, byID: map[uint64][]string{2: {filed}}}
 	kept, err := st.Backfill(ctx, chain)
@@ -473,7 +484,7 @@ func TestTheCursorDoesNotRescanOrSkip(t *testing.T) {
 	}
 	// A second blob arrives, and a later claim references it. The cursor must
 	// resume rather than start over.
-	b, _ := st.Put(ctx, "image/webp", append([]byte("second"), pngBody...), "covid")
+	b, _ := st.Put(ctx, "image/webp", webpWith("second"), "covid")
 	chain.count = 4
 	chain.byID[4] = []string{b}
 	if _, err := st.Backfill(ctx, chain); err != nil {
@@ -551,7 +562,7 @@ func TestOnlyTheSeriousAndTheSureAreBlockedWithoutAPerson(t *testing.T) {
 		{"sure but not serious", ImageVerdict{Label: "rude", Confidence: 0.99}, false},
 		{"serious and sure", ImageVerdict{Label: AutoBlockLabel, Confidence: 0.95}, true},
 	} {
-		body := append([]byte(tc.name), pngBody...)
+		body := pngWith(tc.name)
 		sum, err := st.Put(ctx, "image/png", body, "")
 		if err != nil {
 			t.Fatalf("%s: put: %v", tc.name, err)
@@ -608,7 +619,7 @@ func TestOnlyPromotedBytesAreWorthJudging(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 	staged, _ := st.Put(ctx, "image/png", pngBody, "")
-	kept, _ := st.Put(ctx, "image/webp", append([]byte("kept"), pngBody...), "")
+	kept, _ := st.Put(ctx, "image/webp", webpWith("kept"), "")
 	if err := st.Promote(ctx, kept); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
@@ -707,5 +718,95 @@ func TestEveryUnusableAnswerIsAnErrorSoItIsTriedAgain(t *testing.T) {
 	eye := NewOllamaEye("http://127.0.0.1:1", "vision")
 	if _, err := eye.ClassifyImage(context.Background(), "image/svg+xml", pngBody); err == nil {
 		t.Fatal("an unservable type must be refused before it reaches the model")
+	}
+}
+
+func TestTheBytesDecideTheType(t *testing.T) {
+	// A caller may label anything image/png. nosniff keeps a BROWSER from acting
+	// on that lie, but "a browser will not execute it" is a smaller promise than
+	// "this archive holds images" — and the thing serving them is a court.
+	st := testStore(t)
+	ctx := context.Background()
+
+	for _, tc := range []struct {
+		mime string
+		body []byte
+		why  string
+	}{
+		{"image/png", []byte("<html><script>alert(1)</script></html>"), "html dressed as a png"},
+		{"image/png", []byte("%PDF-1.7 not an image at all"), "a pdf dressed as a png"},
+		{"image/png", webpWith("x"), "a real image under the wrong label"},
+		{"image/webp", pngWith("x"), "the same, the other way round"},
+		{"image/png", []byte("\x89PN"), "a truncated signature"},
+	} {
+		if _, err := st.Put(ctx, tc.mime, tc.body, ""); err == nil {
+			t.Fatalf("%s was accepted", tc.why)
+		}
+	}
+
+	// The controls: each type stored under its own name.
+	for _, tc := range []struct {
+		mime string
+		body []byte
+	}{
+		{"image/png", pngWith("ok")},
+		{"image/webp", webpWith("ok")},
+	} {
+		if _, err := st.Put(ctx, tc.mime, tc.body, ""); err != nil {
+			t.Fatalf("%s was refused: %v", tc.mime, err)
+		}
+	}
+
+	// And the sniffer knows what it knows.
+	if SniffMIME([]byte("GIF89a....")) != "image/gif" {
+		t.Fatal("a gif must be recognised")
+	}
+	if SniffMIME(nil) != "" || SniffMIME([]byte("nope")) != "" {
+		t.Fatal("unrecognised bytes must sniff to nothing, never to a default")
+	}
+}
+
+func TestBytesSurviveTheRoundTripThroughHTTP(t *testing.T) {
+	// THE ARCHIVE HALF OF THE BROWSER SEAM. Everything else tests the store; this
+	// tests what a page actually gets: upload over HTTP, fetch over HTTP, and the
+	// bytes that come back must hash to what went in — because the page verifies
+	// exactly that, and a single byte lost in the transport would show every
+	// reader "this no longer matches what was filed".
+	srv, _ := newTestServer(t)
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	sent := pngWith("round-trip")
+	req := httptest.NewRequest(http.MethodPost, "/m?court=covid", bytes.NewReader(sent))
+	req.Header.Set("Content-Type", "image/png")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload returned %d: %s", rec.Code, rec.Body.String())
+	}
+	var up map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &up); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	get := httptest.NewRecorder()
+	mux.ServeHTTP(get, httptest.NewRequest(http.MethodGet, up["url"], nil))
+	if get.Code != http.StatusOK {
+		t.Fatalf("fetch returned %d", get.Code)
+	}
+	back := get.Body.Bytes()
+	if !bytes.Equal(back, sent) {
+		t.Fatalf("what came back is not what went in: %d bytes vs %d", len(back), len(sent))
+	}
+	// The check the page performs, performed here.
+	if Digest(back) != up["sha256"] {
+		t.Fatal("the served bytes do not hash to the digest the archive named")
+	}
+	// And the page can only run that check if the read is open to it.
+	if get.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Fatal("a page on another origin must be able to fetch and verify")
+	}
+	if ct := get.Header().Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("served as %q, want the type the bytes actually are", ct)
 	}
 }

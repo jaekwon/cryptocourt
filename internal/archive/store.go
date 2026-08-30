@@ -71,6 +71,33 @@ func MIMEServable(mime string) bool {
 	return ok
 }
 
+// SniffMIME reads the type out of the BYTES, and it exists because the type on
+// the way in is whatever the caller's Content-Type header claimed.
+//
+// nosniff keeps a browser from acting on a lie, but "a browser will not execute
+// it" is a smaller promise than "this archive holds images". Without this, POST
+// /m is a way to park arbitrary bytes on our disk, at our address, under a label
+// that says picture — and the thing serving them is a court.
+//
+// Returns "" for anything it does not recognise, which is refused.
+func SniffMIME(body []byte) string {
+	switch {
+	case len(body) >= 8 && string(body[:8]) == "\x89PNG\r\n\x1a\n":
+		return "image/png"
+	case len(body) >= 3 && body[0] == 0xff && body[1] == 0xd8 && body[2] == 0xff:
+		return "image/jpeg"
+	case len(body) >= 12 && string(body[:4]) == "RIFF" && string(body[8:12]) == "WEBP":
+		return "image/webp"
+	case len(body) >= 6 && (string(body[:6]) == "GIF87a" || string(body[:6]) == "GIF89a"):
+		return "image/gif"
+	// AVIF is an ISO-BMFF box: the major brand sits at bytes 8..12 after "ftyp".
+	case len(body) >= 12 && string(body[4:8]) == "ftyp" &&
+		(string(body[8:12]) == "avif" || string(body[8:12]) == "avis"):
+		return "image/avif"
+	}
+	return ""
+}
+
 const schema = `
 CREATE TABLE IF NOT EXISTS blobs (
   sha256    TEXT PRIMARY KEY,
@@ -134,6 +161,14 @@ func (s *Store) Put(ctx context.Context, mime string, body []byte, court string)
 	}
 	if !MIMEServable(mime) {
 		return "", fmt.Errorf("archive: %q is not a servable image type", mime)
+	}
+	// THE BYTES DECIDE, NOT THE HEADER. A caller may label anything image/png;
+	// only something that actually starts like a PNG is stored as one.
+	if got := SniffMIME(body); got != mime {
+		if got == "" {
+			return "", fmt.Errorf("archive: those bytes are not an image this archive stores")
+		}
+		return "", fmt.Errorf("archive: sent as %q but the bytes are %q", mime, got)
 	}
 	sum := Digest(body)
 	// Idempotent, and deliberately does NOT reset staged_at or clear promoted:
