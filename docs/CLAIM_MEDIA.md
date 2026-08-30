@@ -56,10 +56,22 @@
 > a real node and asks it the questions the page asks.
 >
 > So both halves are now driven against something real, from opposite ends: a
-> node for the chain seam, a browser and a live archive for the client one. What
-> neither reaches is the join between THOSE — a claim filed from the composer and
-> then read back off a chain — which needs a node and a browser in the same test
-> and is the next honest gap to name rather than one to leave implied.
+> node for the chain seam, a browser and a live archive for the client one.
+>
+> **The join between them is covered by transitivity, and the equalities that
+> carry it are now checked.** No test files a claim from a browser and reads it
+> back off a chain — that needs a node and a browser in one test, and the
+> broadcast itself goes through a wallet no harness can drive. What stands in for
+> it is a chain of pinned equalities: `media_test.js` pins the line web/media.js
+> emits, `media_test.gno` pins that the realm's parser takes that exact line, and
+> `kourtv2_media.txtar` files it against a real node and asks the questions the
+> page asks. `check-media-hosts` compares all five holders of that line, so the
+> chain cannot come apart quietly — which it could until row 31, because the
+> txtar held its own hand-typed copy.
+>
+> What remains genuinely unexercised is narrow and worth naming exactly: the
+> signature itself. Everything either side of it is driven against something
+> real.
 
 ---
 
@@ -674,6 +686,7 @@ Recorded because each is easy to make again:
 | 28 | the page scrolled behind an open lightbox | somebody studying an exhibit scrolls, sees nothing move, and closes to find themselves somewhere else in a claim page thousands of pixels tall |
 | 29 | a blob's origin was rewritten on every promotion | hashes are public, so anyone could file a claim quoting somebody else's image and take the row — pointing an operator's "decide about the source" action at a court of their choosing |
 | 30 | the overlay never mentioned verification | the surface that CANNOT check an exhibit announced the promise, and the one that can said nothing — the only hint was an aria-label reading "full size" |
+| 31 | the txtar held its own hand-typed copy of the wire format | the one holder that proves a REAL node accepts what the composer builds was the one nothing compared — a field-order change would have left it proving the old format, green |
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
