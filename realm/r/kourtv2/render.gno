@@ -329,11 +329,7 @@ func renderClaim(slug string, id uint64) string {
 	// purged or globally-redacted claim shows nothing here either.
 	writeClaimMedia(&b, c, cs)
 	b.WriteString(hideBanner(c, cs))
-	// THE BOARD, LINKED FROM THE CLAIM. It had no link from anywhere: the route
-	// existed and the only way to reach it was to type the URL, so every comment
-	// ever written was on a page nobody could navigate to.
 	writeRelations(&b, c, id)
-	writeBoardLink(&b, c, cs, id)
 	writeAppeal(&b, c, cs)
 	if cs.seeded {
 		b.WriteString("_Seeded by a moderator to start this court; the author earns nothing from it._\n\n")
@@ -481,7 +477,17 @@ func renderClaim(slug string, id uint64) string {
 	}
 	b.WriteString("\n_To see your own stake on this claim, put your address on " +
 		"the end of this page's path:_ `/r/kourt/kourtv2:" + sanitize.InlineText(slug) +
-		"/" + strconv.FormatUint(id, 10) + "/<your address>`\n")
+		"/" + strconv.FormatUint(id, 10) + "/<your address>`\n\n")
+	// THE DISCUSSION, LAST. It sat third of five, above the signal and the
+	// resolution — a reader scrolling for the state of the market waded through
+	// other people's arguments to reach it. Comments go after the thing being
+	// discussed, which is where the overlay puts them and where every other
+	// discussion on the web is.
+	//
+	// It also used to be only a LINK, which is the older defect: the board route
+	// existed and the only way to reach it was to type the URL, so every comment
+	// ever written was on a page nobody could navigate to.
+	writeBoardLink(&b, c, cs, id)
 	return b.String()
 }
 

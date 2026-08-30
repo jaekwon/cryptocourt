@@ -11037,8 +11037,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "v0.58 path hints: the claim page elides the positions path again",
-  "find": "\"the end of this page's path:_ `/r/kourt/kourtv2:\" + sanitize.InlineText(slug) +\n\t\t\"/\" + strconv.FormatUint(id, 10) + \"/<your address>`\\n\"",
-  "replace": "\"the end of this page's path:_ `\u2026/\" + strconv.FormatUint(id, 10) + \"/<your address>`\\n\""
+  "find": "\"the end of this page's path:_ `/r/kourt/kourtv2:\" + sanitize.InlineText(slug) +\n\t\t\"/\" + strconv.FormatUint(id, 10) + \"/<your address>`\\n\\n\"",
+  "replace": "\"the end of this page's path:_ `\u2026/\" + strconv.FormatUint(id, 10) + \"/<your address>`\\n\\n\""
  },
  {
   "pkg": "kourtv2",
@@ -12019,5 +12019,12 @@
   "label": "writeBoardLink: a claim showing everything stops stating its count",
   "find": "\tall := \"\"\n\tif shown < n {\n\t\tall = \"all \"\n\t}\n\tb.WriteString(\"\\n[\" + all +",
   "replace": "\tall := \"\"\n\tif shown >= n {\n\t\treturn\n\t}\n\tb.WriteString(\"\\n[\" + all +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "render.gno",
+  "label": "renderClaim: the discussion climbs back above the signal",
+  "find": "\twriteRelations(&b, c, id)\n\twriteAppeal(&b, c, cs)",
+  "replace": "\twriteRelations(&b, c, id)\n\twriteBoardLink(&b, c, cs, id)\n\twriteAppeal(&b, c, cs)"
  }
 ]

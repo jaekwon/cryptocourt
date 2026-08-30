@@ -790,6 +790,12 @@ func TestTheClaimPageShowsItsCommentsInline(cur realm, t *testing.T) {
 	PostComment(cross(cur), "cpi", id, first, "and the answer to it")
 
 	page := Render("cpi/" + sid)
+	// LAST ON THE PAGE. It sat third of five, above the signal and the
+	// resolution, so a reader scrolling for the state of the market waded
+	// through other people's arguments to reach it.
+	if strings.Index(page, "## Comments") < strings.Index(page, "## Resolution") {
+		t.Fatalf("the discussion belongs after the claim, not in the middle of it:\n%s", page)
+	}
 	if !strings.Contains(page, "the first thing anybody said") {
 		t.Fatalf("the claim page must carry the comment, not a link to it:\n%s", page)
 	}
