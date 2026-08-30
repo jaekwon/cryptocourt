@@ -2263,6 +2263,48 @@ function claimExhibits(c){
   }).join("") + `</div>`;
 }
 
+/* AN EXHIBIT THAT WILL NOT LOAD SAYS SO, AND NEVER GOES LOOKING ELSEWHERE.
+   Now that the page knows where the archive is, mediaSrc points every image at
+   it and stops — so this is the first time a failed fetch has a single visible
+   outcome instead of a silent fall-through to the filer's host.
+
+   FALLING BACK TO A MIRROR WOULD UNDO MODERATION. The archive refuses a blocked
+   blob, which is exactly what a takedown looks like from here: 404. An <img>
+   that answered that by trying the filer's imgur link would re-publish the one
+   image an operator destroyed, from the claim's own page, automatically. So a
+   failure is reported and nothing else is attempted — the same reason the map
+   never uses a mirror at all.
+
+   One delegated listener in the CAPTURE phase, because `error` does not bubble
+   and these images are written into innerHTML in two places that re-render. No
+   inline onerror: the CSP would allow one, but this stays out of the markup. */
+document.addEventListener("error", (e) => {
+  const t = e.target;
+  if (!t || !t.classList) return;
+  // A broken glyph inside a map node is worse than no image: the node is 20px
+  // and the alt text has nowhere to go.
+  if (t.classList.contains("mthumb")) { t.remove(); return; }
+  if (!t.classList.contains("ex-img")) return;
+  const fig = t.closest(".ex");
+  if (!fig || fig.dataset.gone) return;
+  fig.dataset.gone = "1";
+  fig.classList.add("ex-gone");
+  // Nothing to zoom into, so the affordances go with the image: the lightbox
+  // finds its exhibit by data-ex, and offering "open full size" for bytes that
+  // are not there is a promise the page cannot keep.
+  fig.classList.remove("ex");
+  fig.removeAttribute("data-ex");
+  fig.removeAttribute("tabindex");
+  fig.removeAttribute("aria-label");
+  t.remove();
+  const note = document.createElement("span");
+  note.className = "ex-note";
+  // The same words mediaCardItems uses when there was no source at all, because
+  // to a reader those are the same situation.
+  note.textContent = "not currently available";
+  fig.appendChild(note);
+}, true);
+
 
 /* ============================ tx links ================================== */
 /* Every action is a gnoweb $help link with arguments pre-filled — the overlay is

@@ -522,9 +522,12 @@ per-claim read, none of which is what got built.
 
 - **Node** — first live item, clipped to a rounded square by a `clipPath` at a
   fixed `width`/`height`, so a filed image cannot influence the map's layout at
-  all. `loading="lazy"`, `referrerpolicy="no-referrer"`, `onerror` removes the
-  element: a broken glyph inside a node is worse than no image. Nodes do **not**
-  verify — fifty hashes on a map draw is not a trade worth making; and they draw
+  all. `loading="lazy"`, `referrerpolicy="no-referrer"`, and a delegated `error`
+  listener removes it: a broken glyph inside a 20px node is worse than no image,
+  and the alt text has nowhere to go. (This section asserted that behaviour
+  before it existed — there was no error handling anywhere in the page until
+  archive-first started working and made a failed fetch the only outcome.) Nodes
+  do **not** verify — fifty hashes on a map draw is not a trade worth making; and they draw
   **only** from the archive, never a mirror, because fifty nodes fanning out to
   filer-chosen hosts is fifty readers' addresses sent wherever the filer liked.
 - **Claim page and map card** — the same vertical list from `claimExhibits`,
@@ -533,6 +536,13 @@ per-claim read, none of which is what got built.
   `d.media` and only the card ever drew it, so evidence appeared on gnoweb and on
   a card you reach by opening the map and clicking the right node, and was
   invisible on the surface every link, share and search result points at.
+- **A failure is reported, and nothing else is tried.** An exhibit whose bytes
+  will not load loses its image and its zoom affordance and says "not currently
+  available", keeping its number and caption so the others do not renumber. It
+  does **not** fall back to a mirror, and that is the point: the archive refuses
+  a BLOCKED blob, which from an `<img>` is indistinguishable from any other 404,
+  so a fallback would re-publish the one image an operator destroyed — from the
+  claim's own page, automatically, for every reader.
 - **The box is reserved, but not on the filer's word.** `w`/`h` set an
   `aspect-ratio` so the page does not jump as each exhibit lands. They are also
   unverified filer input, and the realm bounds each to `maxMediaDim` without

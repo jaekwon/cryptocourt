@@ -173,6 +173,52 @@ if (!BASE) { console.log("usage: compose_upload.js <base-url>"); process.exit(2)
        && !item.argument.includes("\n"),
      JSON.stringify((item.argument || "").slice(0, 120)));
 
+  // --- an exhibit the archive does not have -------------------------------
+  // WHAT A TAKEDOWN LOOKS LIKE FROM THE PAGE. A blocked blob is refused by the
+  // archive, which from an <img> is indistinguishable from any other 404. The
+  // page must say so and must NOT try the filer's mirror, or the one image an
+  // operator destroyed comes straight back from imgur, on the claim's own page,
+  // automatically. Asserted against the real archive with a hash it has never
+  // been given.
+  const gone = await page.evaluate(async () => {
+    const missing = {kind: "img", sha256: "f".repeat(64), mime: "image/webp",
+                     w: 800, h: 600, bytes: 1000, caption: "the memo",
+                     mirrors: ["https://i.imgur.com/abc.webp"]};
+    const div = document.createElement("div");
+    div.innerHTML = claimExhibits({media: [missing]});
+    document.body.appendChild(div);
+    const img = div.querySelector(".ex-img");
+    const tried = img ? img.getAttribute("src") : "";
+    // loading="lazy" means an image far below the fold is never fetched, so it
+    // never fails either — correct for a reader, and something a harness has to
+    // walk to. Scrolled into view rather than dropping the attribute, so what
+    // runs here is what runs for a person.
+    if (img) img.scrollIntoView();
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      const fig = div.querySelector("figure");
+      if (fig && fig.dataset.gone) {
+        return {tried, note: (fig.querySelector(".ex-note") || {}).textContent || "",
+                stillHasImg: !!fig.querySelector(".ex-img"),
+                zoomable: fig.hasAttribute("data-ex") || fig.classList.contains("ex"),
+                text: fig.innerText.replace(/\s+/g, " ").trim()};
+      }
+    }
+    return {tried, note: "(never reported)"};
+  });
+  ok("a missing exhibit was looked for at the archive, not the mirror",
+     gone.tried.includes("/m/" + "f".repeat(64)) && !gone.tried.includes("imgur"),
+     gone.tried);
+  ok("...and says it is not available rather than showing a broken image",
+     /not currently available/.test(gone.note), JSON.stringify(gone.note));
+  ok("...with the image element gone", gone.stillHasImg === false);
+  ok("...and no offer to open bytes that are not there", gone.zoomable === false);
+  ok("...while keeping its number and caption, so the others do not renumber",
+     // case-insensitive: .ex-n is text-transform:uppercase, so innerText
+     // reports what is RENDERED ("1 OF 1"), not what the markup says.
+     /1 of 1/i.test(gone.text || "") && /the memo/.test(gone.text || ""),
+     JSON.stringify(gone.text));
+
   ok("no page errors throughout", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
