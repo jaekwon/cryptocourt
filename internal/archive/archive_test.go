@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -950,5 +951,101 @@ func TestTheModelsProseCannotReachATerminalIntact(t *testing.T) {
 	// one, which a byte cap would not have given it.
 	if n := utf8.RuneCountInString(strings.TrimSuffix(jp, "…")); n != whyMaxRunes {
 		t.Fatalf("got %d runes, want %d — the cap must count characters", n, whyMaxRunes)
+	}
+}
+
+func TestClaimCountReadsWhatANodeActuallyAnswers(t *testing.T) {
+	// THIS PARSE WAS NEVER RUN. Every backfill test uses a fake chain, so the
+	// real one's reading of the node's reply had 0% coverage — and it sits on the
+	// path that keeps evidence alive. If it returns zero where the node said
+	// twelve, backfill walks nothing, promotes nothing, and the bytes expire an
+	// hour later with nobody told.
+	//
+	// The shape is the one a node really sends, taken from the txtar: qeval wraps
+	// a value as ("..." type) and the payload arrives base64 in response.Data.
+	for _, tc := range []struct {
+		payload string
+		want    uint64
+		bad     bool
+	}{
+		{"(12 uint64)", 12, false},
+		{"(0 uint64)", 0, false},
+		{"(4294967296 uint64)", 4294967296, false},
+		{"  (7 uint64)\n", 7, false},
+		{"(\"nope\" string)", 0, true},
+		{"", 0, true},
+		{"garbage", 0, true},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"jsonrpc": "2.0", "id": "archive",
+				"result": map[string]any{"response": map[string]any{
+					"Data": base64.StdEncoding.EncodeToString([]byte(tc.payload)),
+				}},
+			})
+		}))
+		c := &Chain{RPC: srv.URL, PkgPath: "gno.land/r/kourt/kourtv2", HTTP: srv.Client()}
+		got, err := c.ClaimCount(context.Background(), "covid")
+		srv.Close()
+		if tc.bad {
+			if err == nil {
+				t.Fatalf("%q was read as %d, want an error", tc.payload, got)
+			}
+			// An unreadable answer must not read as ZERO: backfill would take
+			// that for "this court has no claims" and stop looking.
+			if got != 0 {
+				t.Fatalf("%q returned %d alongside its error", tc.payload, got)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Fatalf("%q -> (%d, %v), want %d", tc.payload, got, err, tc.want)
+		}
+	}
+
+	// A node that will not answer is an error, never a zero — the cursor must
+	// stay where it was rather than advance past claims nobody read.
+	down := &Chain{RPC: "http://127.0.0.1:1", PkgPath: "p", HTTP: &http.Client{}}
+	if _, err := down.ClaimCount(context.Background(), "covid"); err == nil {
+		t.Fatal("an unreachable node must be an error")
+	}
+}
+
+func TestTheLimiterReclaimsIdleBucketsWithoutEvictingActiveOnes(t *testing.T) {
+	// reapLocked had 0% coverage. It runs only when the map is full, which no
+	// test reached — and it is the path that decides whether a burst from many
+	// addresses evicts the buckets of the clients currently being metered.
+	l := newLimiter()
+	now := time.Now()
+
+	// Fill the map with clients that have just spent a token.
+	for i := 0; i < limiterMaxIPs; i++ {
+		if !l.allow(fmt.Sprintf("ip-%d", i), now) {
+			t.Fatalf("client %d was refused while the map had room", i)
+		}
+	}
+	// A NEW client arriving into a full map of ACTIVE buckets is refused rather
+	// than let through unmetered: this is a burst larger than the service is
+	// sized for, and letting it past is the failure the limiter exists to stop.
+	if l.allow("newcomer", now) {
+		t.Fatal("a full map of active buckets must not admit an unmetered client")
+	}
+
+	// Once those buckets have sat full long enough to be indistinguishable from
+	// a client that never called, they are reclaimed and the newcomer gets in.
+	later := now.Add(uploadRefill*time.Duration(uploadBurst) + time.Minute)
+	if !l.allow("newcomer", later) {
+		t.Fatal("idle buckets must be reclaimed so new clients can be metered")
+	}
+
+	// And a client that is still spending is NOT evicted: it keeps its bucket
+	// and its remaining tokens, or a busy uploader would be handed a fresh
+	// burst every time the map filled.
+	busy := "ip-0"
+	for i := 0; i < uploadBurst; i++ {
+		l.allow(busy, later)
+	}
+	if l.allow(busy, later) {
+		t.Fatal("a spent bucket must not be silently replaced with a full one")
 	}
 }

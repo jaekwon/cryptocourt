@@ -244,16 +244,3 @@ func (s *Store) SweepStaged(ctx context.Context, now time.Time) (int64, error) {
 	}
 	return n, nil
 }
-
-// StagedBytesSince is how much unpromoted data has arrived since a moment, used
-// to cap a single uploader before the sweep would catch up with them.
-func (s *Store) StagedBytesSince(ctx context.Context, since time.Time) (int64, error) {
-	var total sql.NullInt64
-	err := s.db.QueryRowContext(ctx,
-		`SELECT SUM(size) FROM blobs WHERE promoted = 0 AND staged_at >= ?`,
-		since.Unix()).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("archive staged total: %w", err)
-	}
-	return total.Int64, nil
-}

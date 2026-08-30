@@ -72,7 +72,19 @@ func (l *limiter) allow(key string, now time.Time) bool {
 func (l *limiter) reapLocked(now time.Time) {
 	idle := uploadRefill * time.Duration(uploadBurst)
 	for k, b := range l.at {
-		if b.tokens >= uploadBurst && now.Sub(b.last) > idle {
+		// REFILL FIRST, THEN ASK IF IT IS FULL. This compared the STORED token
+		// count, which is only updated inside allow() — so a bucket that had ever
+		// spent a token looked permanently non-full here and could never be
+		// reclaimed, however long it had been idle. The map then filled and
+		// stayed full, and every new client was refused for good: 4096 distinct
+		// uploaders and nobody else could ever upload again.
+		//
+		// Its 0% coverage is what hid it. reapLocked runs only when the map is
+		// full, and no test had ever filled it.
+		if now.Sub(b.last) <= idle {
+			continue
+		}
+		if b.tokens+int(now.Sub(b.last)/uploadRefill) >= uploadBurst {
 			delete(l.at, k)
 		}
 	}
