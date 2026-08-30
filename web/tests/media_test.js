@@ -279,11 +279,16 @@ async function section1() {
   let seen = "";
   await M.mediaUpload(bytes, "image/webp", {
     court: "covid", base: "",
-    fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
+    // The stub answers with a usable address because mediaUpload now refuses one
+    // it could not turn into a filable mirror. The subject here is the REQUEST
+    // url, which base:"" keeps readable.
+    fetch: async (url) => { seen = url;
+      return {ok: true, json: async () => ({sha256: mine, url: "https://k/m/" + mine})}; },
   });
   ok("the upload carries the court", /\/m\?court=covid$/.test(seen), seen);
   await M.mediaUpload(bytes, "image/webp", {
-    base: "", fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
+    base: "", fetch: async (url) => { seen = url;
+      return {ok: true, json: async () => ({sha256: mine, url: "https://k/m/" + mine})}; },
   });
   ok("...and omits it cleanly when there is none", seen === "/m", seen);
   // Encoded on BOTH paths. An ablation of the promotion path's encoding was
@@ -291,7 +296,8 @@ async function section1() {
   // assertion — the same rule tested in one place and assumed in the other.
   await M.mediaUpload(bytes, "image/webp", {
     court: "a b&x=1", base: "",
-    fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
+    fetch: async (url) => { seen = url;
+      return {ok: true, json: async () => ({sha256: mine, url: "https://k/m/" + mine})}; },
   });
   ok("the upload encodes its court too", seen === "/m?court=a%20b%26x%3D1", seen);
 
@@ -842,12 +848,108 @@ async function section4() {
   ok("...and stays a link", it.linkOnly === true && !it.sha256);
 }
 
+
+/* ---- THE INVARIANT THE LAST THREE BUGS ALL BROKE ------------------------
+ *
+ * Three separate defects had one shape: the composer put an exhibit in the list,
+ * showed it as accepted, and then composer.fault() refused the whole set — so
+ * the sign button was withheld for a reason about the machine, phrased as
+ * something the person had failed to provide.
+ *
+ *   - an uploaded image whose mirror came back relative — "a link starts with
+ *     https://"
+ *   - a pasted image link that could not be read — "this image has no
+ *     fingerprint yet"
+ *   - a dropped file whose copy failed — "this exhibit has no link yet"
+ *
+ * Each was found and fixed one at a time. The general rule underneath them is
+ * simple and worth holding directly: A FAULT MAY ONLY EVER DESCRIBE SOMETHING
+ * THE PERSON DID. Too many exhibits, a caption too long, a host nobody can load
+ * — those are theirs to fix and must be said. Anything the composer produced by
+ * itself, including every way its own network calls can fail, must leave a set
+ * that can be signed.
+ *
+ * So: every intake path crossed with every way it can go wrong, asserting only
+ * that. It would have caught all three.
+ */
+async function section5() {
+  const png = new Uint8Array([1, 2, 3, 4, 5]);
+  const okPrepare = async () => ({mime: "image/webp", w: 800, h: 600, bytes: png});
+  const okUpload = async (b, m, sum) => ({sha256: sum, url: "https://kourt.xyz/m/" + sum});
+  const okFetch = async () => ({ok: true, blob: async () => png});
+  const boom = async () => { throw new Error("no"); };
+
+  /* THE ARCHIVE IS STUBBED AT THE NETWORK, not at the function. mountCompose
+     builds its upload out of mediaUpload, so stubbing `upload` here would test
+     an input production cannot produce — and it did, until this was rewritten:
+     two rows failed against a value only the test could create. What varies
+     below is what the SERVICE answers, which is what really varies. */
+  const archive = answer => async (bytes, mime, sum) =>
+    M.mediaUpload(bytes, mime, {
+      // The same host mediaNewComposerFor is configured for. A mirror on any
+      // other host is refused, correctly — an earlier draft of this used a
+      // different one and every row failed with "browsers will not load images
+      // from k here", which is the composer being right about the wrong thing.
+      base: "https://kourt.xyz", sha256: sum,
+      fetch: async () => answer(sum),
+    });
+
+  const outcomes = [
+    ["everything works", {}],
+    ["the file will not decode", {prepare: boom}],
+    ["the host refuses the read", {fetch: boom}],
+    ["the archive is down", {upload: archive(() => ({ok: false, status: 503, json: async () => ({})}))}],
+    ["the archive answers rubbish",
+     {upload: archive(sum => ({ok: true, json: async () => ({sha256: sum, url: "not a url"})}))}],
+    ["the archive answers a relative url",
+     {upload: archive(sum => ({ok: true, json: async () => ({sha256: sum, url: "/m/" + sum})}))}],
+    ["the archive names a different digest",
+     {upload: archive(() => ({ok: true, json: async () => ({sha256: "f".repeat(64)})}))}],
+  ];
+  const intakes = [
+    ["a dropped file", c => c.add({name: "shot.png"})],
+    ["a pasted image link", c => c.addLink("https://i.imgur.com/a.webp", "img")],
+    ["a pasted video link", c => c.addLink("https://i.imgur.com/v.mp4", "vid")],
+  ];
+
+  for (const [what, over] of outcomes) {
+    for (const [how, act] of intakes) {
+      const c = mediaNewComposerFor(Object.assign(
+        {fetch: okFetch, prepare: okPrepare, upload: okUpload}, over));
+      act(c);
+      for (let i = 0; i < 60; i++) {
+        if (c.items.every(x => x.state === "ready" || x.state === "failed" || x.state === "broken")) break;
+        await new Promise(r => setTimeout(r, 5));
+      }
+      ok(`${how}, ${what}: the claim can still be signed`, c.fault() === "",
+         `${JSON.stringify(c.fault())} state=${c.items.map(x => x.state).join(",")}`);
+    }
+  }
+
+  // AND THE OTHER HALF, so the rule above cannot be satisfied by refusing
+  // everything: a fault the PERSON can act on must still be raised.
+  const mine = mediaNewComposerFor({fetch: okFetch, prepare: okPrepare, upload: okUpload});
+  mine.addLink("https://i.imgur.com/a.webp", "img");
+  await new Promise(r => setTimeout(r, 40));
+  ok("a caption too long is still the person's to fix",
+     mine.setCaption(mine.items[0].id, "x".repeat(M.MEDIA_MAX_CAPTION + 1)) !== "");
+  const many = mediaNewComposerFor({fetch: okFetch, prepare: okPrepare, upload: okUpload});
+  let refusedAt = 0;
+  for (let i = 0; i < M.MEDIA_MAX_ITEMS + 1; i++) {
+    const r = many.addLink("https://i.imgur.com/" + i + ".webp", "vid");
+    if (r.error) refusedAt = i;
+  }
+  ok("...and an eighth exhibit is refused when it is added, not at signing",
+     refusedAt === M.MEDIA_MAX_ITEMS, `refused at ${refusedAt}`);
+}
+
 (async () => {
   await section1();
   await section2();
   await section3();
   await section4();
-  const EXPECTED = 199;
+  await section5();
+  const EXPECTED = 222;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

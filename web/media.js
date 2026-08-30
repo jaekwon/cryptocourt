@@ -305,8 +305,31 @@ async function mediaUpload(bytes, mime, opts) {
   // it, and so this stays the one place that knows the shape" — and this built
   // its own anyway, which made two places that had to agree about a path. The
   // fallback covers a service too old to answer with one.
-  const at = typeof body.url === "string" && body.url ? body.url : "/m/" + mine;
-  return {sha256: mine, url: at.startsWith("http") ? at : base + at};
+  //
+  // TRUSTED, BUT CHECKED. That address becomes the exhibit's mirror, and a
+  // mirror has to survive mediaMirrorFault and then the realm's. An archive that
+  // answered with anything malformed therefore blocked the claim — with "that
+  // looks like text rather than a link", said to somebody who never supplied a
+  // link. The composer must never build a set it then refuses; a service
+  // answering oddly is this code's problem, not the filer's.
+  //
+  // So: prefer what the archive said, fall back to the address derived from the
+  // hash, and if neither is a usable https URL, fail the upload outright — which
+  // costs the exhibit and a clear sentence, not the claim.
+  const root = base.replace(/\/+$/, "");
+  const said = typeof body.url === "string" && body.url ? body.url : "";
+  const absolute = u => (!u ? "" : /^https?:\/\//.test(u) ? u
+    : (root ? root + (u[0] === "/" ? u : "/" + u) : ""));
+  for (const candidate of [absolute(said), absolute("/m/" + mine)]) {
+    // Held to the rule a mirror is held to, minus the host allowlist — which
+    // asks whether the FILER may name a host, and this address is ours. What is
+    // left is the well-formedness the realm also insists on: https, no spaces,
+    // none of the characters that break a markdown destination.
+    if (candidate && !mediaMirrorFault(candidate, mediaHostOf(candidate))) {
+      return {sha256: mine, url: candidate};
+    }
+  }
+  throw new Error("the copy has no address a claim could point at");
 }
 
 /* mediaClaimed tells the archive a claim now references these bytes, which is
