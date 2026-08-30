@@ -222,6 +222,34 @@ if (!BASE) { console.log("usage: compose_intake.js <base-url>"); process.exit(2)
   ok("its buttons look like buttons", styled.buttonBordered);
   ok("the warnings render one per line", styled.notePreserves);
 
+  // --- 4b. more files than a claim can hold --------------------------------
+  // Selecting a folder of screenshots hands the composer ten files. Seven become
+  // exhibits and three do not, and the message was "a claim carries at most 7
+  // exhibits" — the rule, with nothing about the three that had just vanished.
+  // In a court, evidence disappearing without a word is the failure this whole
+  // file is written against.
+  const tooMany = await page.evaluate(async () => {
+    const div = window.__mount();
+    const dt = new DataTransfer();
+    for (let i = 0; i < 10; i++) dt.items.add(await window.__file("shot-" + i + ".png"));
+    const input = div.querySelector('input[type="file"]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", {bubbles: true}));
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      if (window.__c.items.length >= 7 && window.__c.items.every(
+            x => x.state === "ready" || x.state === "broken" || x.state === "failed")) break;
+    }
+    return {n: window.__c.items.length,
+            note: div.querySelector(".mediadrop .medianote").textContent,
+            fault: window.__c.fault()};
+  });
+  ok("ten files fill the seven a claim can hold", tooMany.n === 7, String(tooMany.n));
+  ok("...and the three that did not fit are accounted for",
+     /7 added, the last 3 not/.test(tooMany.note), JSON.stringify(tooMany.note));
+  ok("...while the seven that did are filable", tooMany.fault === "",
+     JSON.stringify(tooMany.fault));
+
   // --- 5. a phone ----------------------------------------------------------
   // EVERY RENDER OF THIS PANEL HAD BEEN A DESKTOP ONE. §2.1 talks about phones,
   // and the project measures three phone widths for another surface, but the

@@ -934,10 +934,27 @@ function mediaMount(root, composer, opts) {
 
   function say(msg) { note.textContent = msg || ""; }
 
+  /* SAY WHAT HAPPENED TO THE ONES NOT TAKEN. Selecting a folder of screenshots
+   * hands this ten files; seven become exhibits and three do not, and the
+   * message used to be "a claim carries at most 7 exhibits" — a statement of the
+   * rule, with nothing about the three that had just disappeared.
+   *
+   * They go in the order given, so the ones dropped are the last ones, and a
+   * person who wanted a different seven can remove some and add those. But they
+   * can only do that if they know it happened. */
   function addAll(files) {
-    for (const f of files || []) {
+    const all = [...(files || [])];
+    let added = 0;
+    for (const f of all) {
       const r = composer.add(f);
-      if (r.error) { say(r.error); return; }
+      if (r.error) {
+        const left = all.length - added;
+        say(added
+          ? `${r.error} — ${added} added, the last ${left} not`
+          : r.error);
+        return;
+      }
+      added++;
     }
     say("");
   }

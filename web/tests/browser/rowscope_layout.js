@@ -143,6 +143,40 @@ const MAX_PAGES = 60;
             he: of("מסמך רשמי מהעירייה"),
             en: of("north span rating, 2025 inspection report")};
   });
+  // --- a purged exhibit keeps its place and does not pretend to open ---------
+  // The tombstone exists so the exhibits around it keep their numbers: a
+  // moderator's next call takes an index, and a reader arguing about "the second
+  // exhibit" must still mean the same picture tomorrow. Never rendered in the
+  // overlay until now — and the slot carried `.ex`, which is cursor:zoom-in,
+  // while having no data-ex for the click handler to find.
+  const gone = await page.evaluate(() => {
+    const media = [
+      {kind: "img", sha256: "a".repeat(64), mime: "image/webp", w: 240, h: 160,
+       bytes: 5200, caption: "the memo", mirrors: ["https://x/m/" + "a".repeat(64)]},
+      {kind: "img", purged: true},
+      {kind: "img", sha256: "c".repeat(64), mime: "image/webp", w: 240, h: 160,
+       bytes: 5200, caption: "the reply", mirrors: ["https://x/m/" + "c".repeat(64)]},
+    ];
+    const h = document.createElement("div");
+    h.innerHTML = claimExhibits({media});
+    document.body.appendChild(h);
+    const figs = [...h.querySelectorAll("figure")];
+    const out = {
+      labels: figs.map(f => (f.querySelector(".ex-n") || {}).textContent || ""),
+      tombstone: figs[1] ? figs[1].className : "",
+      zoomable: figs[1] ? getComputedStyle(figs[1]).cursor : "",
+      openable: figs[1] ? figs[1].hasAttribute("data-ex") : null,
+    };
+    h.remove();
+    return out;
+  });
+  ok("a purge does not renumber the exhibits around it",
+     gone.labels.join("/") === "1 of 3/2 of 3/3 of 3", gone.labels.join("/"));
+  ok("...the taken-down slot is marked as gone", /ex-gone/.test(gone.tombstone));
+  ok("...and does not offer to open what is not there",
+     gone.openable === false && gone.zoomable !== "zoom-in",
+     `cursor=${gone.zoomable} data-ex=${gone.openable}`);
+
   ok("an Arabic caption reads right-to-left", bidi.ar === "rtl", bidi.ar);
   ok("...and a Hebrew one", bidi.he === "rtl", bidi.he);
   ok("...while an English one is unaffected", bidi.en === "ltr", bidi.en);
