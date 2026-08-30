@@ -246,6 +246,14 @@ async function section1() {
     base: "", fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
   });
   ok("...and omits it cleanly when there is none", seen === "/m", seen);
+  // Encoded on BOTH paths. An ablation of the promotion path's encoding was
+  // caught while the upload path's was not, because only one of them had an
+  // assertion — the same rule tested in one place and assumed in the other.
+  await M.mediaUpload(bytes, "image/webp", {
+    court: "a b&x=1", base: "",
+    fetch: async (url) => { seen = url; return {ok: true, json: async () => ({sha256: mine})}; },
+  });
+  ok("the upload encodes its court too", seen === "/m?court=a%20b%26x%3D1", seen);
 
   const down = async () => ({ok: false, status: 503, json: async () => ({})});
   let failed = false;
@@ -257,6 +265,25 @@ async function section1() {
   // costs availability rather than the record.
   ok("a failed promotion is not an exception",
      await M.mediaClaimed("covid", 7, {fetch: async () => { throw new Error("nope"); }}) === 0);
+  // THE PROMOTION CALL, PINNED AS A STRING. internal/archive holds this exact
+  // path as clientClaimedPath and its handler parses those parameter names. If
+  // the overlay sent ?slug= or ?id=, promotion would quietly do nothing —
+  // mediaClaimed swallows failures on purpose, because by then the claim is
+  // already on chain — and the bytes would expire with nobody told.
+  let claimedURL = "";
+  await M.mediaClaimed("covid", 7, {
+    base: "https://k",
+    fetch: async (u) => { claimedURL = u; return {ok: true, json: async () => ({promoted: 1})}; },
+  });
+  ok("the promotion call is the one the archive parses",
+     claimedURL === "https://k/m/claimed?court=covid&claim=7", claimedURL);
+  // A court slug is percent-encoded, so an odd one cannot rewrite the query.
+  await M.mediaClaimed("a b&claim=9", 1, {
+    base: "", fetch: async (u) => { claimedURL = u; return {ok: true, json: async () => ({})}; },
+  });
+  ok("a hostile court name cannot forge a second parameter",
+     claimedURL === "/m/claimed?court=a%20b%26claim%3D9&claim=1", claimedURL);
+
   ok("a successful promotion reports the count",
      await M.mediaClaimed("covid", 7, {
        fetch: async () => ({ok: true, json: async () => ({promoted: 3})}),
@@ -556,7 +583,7 @@ async function section3() {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 140;
+  const EXPECTED = 143;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

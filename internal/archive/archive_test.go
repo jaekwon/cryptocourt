@@ -1338,3 +1338,67 @@ func TestTheArchiveReadsWhatTheRealmActuallyWrites(t *testing.T) {
 		t.Fatalf("an empty claim gave (%v, %v)", h, err)
 	}
 }
+
+// clientClaimedPath and clientUploadPath are exactly what web/media.js builds,
+// asserted there as strings. Both are parsed here, so a rename on either side
+// fails on the side that made it.
+//
+// The promotion call is the one that matters most: mediaClaimed swallows
+// failures on purpose — by the time it runs the claim is already on chain, and
+// a hiccup should cost availability rather than the record — so a parameter
+// name the handler does not read would go unnoticed entirely, and the bytes
+// would expire an hour later.
+const clientClaimedPath = "/m/claimed?court=covid&claim=7"
+const clientUploadPath = "/m?court=covid"
+
+func TestTheArchiveParsesTheCallsTheOverlayBuilds(t *testing.T) {
+	st := testStore(t)
+	sum, _ := st.Put(context.Background(), "image/png", pngBody, "covid")
+	node := fakeNode(t, `[{"kind":"img","sha256":"`+sum+`","mirrors":[]}]`)
+	defer node.Close()
+
+	srv := NewServer(st, nil, func(r *http.Request) string { return "c" }).
+		WithChain(&Chain{RPC: node.URL, PkgPath: "p", HTTP: node.Client()})
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, clientClaimedPath, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("the call the overlay builds returned %d: %s", rec.Code, rec.Body.String())
+	}
+	var out map[string]int
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// Promoted ONE — proof the court and claim were both read, not merely
+	// accepted. A handler that ignored the parameters would answer 200 and
+	// promote nothing, which is exactly the silence this pins.
+	if out["promoted"] != 1 {
+		t.Fatalf("promoted %d, want 1 — the parameters were not read", out["promoted"])
+	}
+
+	// And the upload path the overlay builds carries its court into the row
+	// backfill later looks at.
+	body := pngWith("via-client-path")
+	req := httptest.NewRequest(http.MethodPost, clientUploadPath, bytes.NewReader(body))
+	req.Header.Set("Content-Type", "image/png")
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upload returned %d", rec.Code)
+	}
+	courts, err := st.StagedCourts(context.Background())
+	if err != nil {
+		t.Fatalf("staged courts: %v", err)
+	}
+	found := false
+	for _, c := range courts {
+		if c == "covid" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the court hint did not reach the row: %v", courts)
+	}
+}
