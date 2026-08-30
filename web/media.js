@@ -330,6 +330,7 @@ async function mediaClaimed(court, claimID, opts) {
  * happening to their file; "uploading blob" tells them what the program is
  * doing to itself. */
 const MEDIA_STATES = {
+  reading: "reading the link…",
   shrinking: "resizing…",
   hashing: "fingerprinting…",
   uploading: "making a copy on kourt.xyz…",
@@ -383,9 +384,23 @@ function mediaNewComposer(opts) {
   }
 
   /* A pasted link is adopted as an exhibit, with the original kept as its
-   * mirror. It cannot be fingerprinted here — reading a cross-origin image is
-   * exactly what CORS refuses — so it is filed as a LINK and says so, rather
-   * than pretending to a verification nobody performed. */
+   * mirror.
+   *
+   * IT IS WORTH TRYING TO READ IT FIRST. §2.1 asks for exactly that: fetch it,
+   * hash it, adopt it, and say so plainly when the host refuses. The difference
+   * to a reader is the whole feature — a link-only exhibit is one the court
+   * keeps no copy of and can never check again, while a fetched one gets a
+   * fingerprint, an archive copy, and a verdict in the lightbox.
+   *
+   * Plenty of hosts do allow it: i.imgur.com and raw.githubusercontent.com both
+   * send Access-Control-Allow-Origin. Plenty do not, and that is not a failure
+   * to report as one — the exhibit is still filed, exactly as it was before,
+   * and the note says what to do to get a copy.
+   *
+   * No new capability is granted by the fetch: the URL has already passed
+   * mediaMirrorFault, so it is https and on the allowlist, and the bytes end up
+   * where they would have if the person had downloaded the file and dropped it
+   * in themselves. */
   function addLink(url, kind) {
     if (items.length >= MEDIA_MAX_ITEMS) {
       return {error: `a claim carries at most ${MEDIA_MAX_ITEMS} exhibits`};
@@ -398,7 +413,74 @@ function mediaNewComposer(opts) {
     };
     items.push(item);
     o.onChange && o.onChange(items);
+    // A VIDEO IS NEVER FETCHED. There are no stable bytes behind a streaming
+    // URL to commit to, so reading it would produce a fingerprint of one moment
+    // that proves nothing about the next.
+    if (item.kind === "img" && o.prepare && o.upload) adoptLink(item, url);
     return {item};
+  }
+
+  /* Try to turn a link into a real exhibit. Everything here is best-effort: the
+   * item is already in the list and already fileable, and every exit leaves it
+   * at least as good as it was. */
+  async function adoptLink(item, url) {
+    const fetchFn = o.fetch || (typeof fetch !== "undefined" ? fetch : null);
+    if (!fetchFn) return;
+    let prepared;
+    try {
+      item.state = "reading";
+      o.onChange && o.onChange(items);
+      // no-referrer: the host must not learn which claim is being written, and
+      // the claim does not exist yet.
+      const res = await fetchFn(url, {referrerPolicy: "no-referrer", mode: "cors"});
+      if (!res.ok) throw new Error("http " + res.status);
+      const blob = await res.blob();
+      prepared = await o.prepare(blob);
+    } catch (_) {
+      // THE HOST SAID NO, AND THAT ENDS THIS EXHIBIT — which is not what it
+      // looked like before the fetch existed.
+      //
+      // An image link used to be filed the way a video link is: kept, marked
+      // "the court keeps no copy". But the chain does not accept that. The
+      // realm's mediaItemFault requires 64 hex characters of sha256 for every
+      // image, and only a video may go without one — so a pasted image link sat
+      // in the list looking filed while composer.fault() said "exhibit 1: this
+      // image has no fingerprint yet" and the claim could not be signed at all.
+      // A message about a fingerprint, to somebody who has no way to produce
+      // one, about an exhibit they were shown as accepted.
+      //
+      // So it fails here, in the vocabulary the composer already has for a file
+      // it could not read, with the one action that works. The row can be
+      // removed and the rest of the claim is unaffected: mediaFileable excludes
+      // broken, so this blocks nothing.
+      item.linkOnly = false;
+      item.state = "broken";
+      item.error = "that host will not let us read it — download the image and drop it in";
+      o.onChange && o.onChange(items);
+      return;
+    }
+    Object.assign(item, {
+      mime: prepared.mime, w: prepared.w, h: prepared.h,
+      bytes: prepared.bytes.length, state: "hashing", linkOnly: false,
+    });
+    o.onChange && o.onChange(items);
+    item.sha256 = await mediaDigest(prepared.bytes);
+    item.state = "uploading";
+    o.onChange && o.onChange(items);
+    try {
+      const up = await o.upload(prepared.bytes, prepared.mime, item.sha256);
+      // The archive first, the pasted address kept behind it. Order is
+      // preference, not authority — and the original is worth keeping as the
+      // provenance of the exhibit, which is where the filer says they got it.
+      item.mirrors = [up.url, url];
+      item.state = "ready";
+    } catch (_) {
+      // A FINGERPRINT WITHOUT A COPY IS STILL A BETTER EXHIBIT than the link
+      // this started as: it can be checked against the original. Same handling
+      // as a dropped file whose upload failed.
+      item.state = "failed";
+    }
+    o.onChange && o.onChange(items);
   }
 
   async function run(item, file) {
@@ -791,6 +873,9 @@ function mediaMount(root, composer, opts) {
         cap.appendChild(mediaEl(doc, "span", {class: "mediabroken"},
           "could not read that file — " + (item.error || "unknown reason")));
       }
+      // Only a video ends here now. An image link either becomes a real exhibit
+      // or becomes broken, because the chain will not take an image without a
+      // fingerprint — see adoptLink.
       if (item.linkOnly) {
         cap.appendChild(mediaEl(doc, "span", {class: "medialink"},
           "added by link — the court keeps no copy and cannot check it later"));

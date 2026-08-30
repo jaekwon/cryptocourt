@@ -167,11 +167,29 @@ if (!BASE) { console.log("usage: compose_intake.js <base-url>"); process.exit(2)
     const dt = new DataTransfer();
     dt.setData("text", "https://i.imgur.com/abc.webp");
     zone.dispatchEvent(new ClipboardEvent("paste", {clipboardData: dt, bubbles: true, cancelable: true}));
-    await new Promise(r => setTimeout(r, 250));
-    return window.__c.items.map(x => ({kind: x.kind, linkOnly: !!x.linkOnly, mirrors: x.mirrors}));
+    // The composer tries to READ the link so it can fingerprint and copy it.
+    // i.imgur.com is not reachable from this test, so this exercises the
+    // refusal path — which is the one with the history.
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      const x = window.__c.items[0];
+      if (x && (x.state === "ready" || x.state === "broken" || x.state === "failed")) break;
+    }
+    return {items: window.__c.items.map(x => ({kind: x.kind, state: x.state,
+              linkOnly: !!x.linkOnly, sha256: x.sha256, error: x.error})),
+            fault: window.__c.fault(), argument: window.__c.argument()};
   });
-  ok("a link pasted on the drop zone is adopted as a link-only exhibit",
-     urlOnZone.length === 1 && urlOnZone[0].linkOnly === true, JSON.stringify(urlOnZone));
+  ok("a link the page cannot read ends as a broken row, not a filed exhibit",
+     urlOnZone.items.length === 1 && urlOnZone.items[0].state === "broken",
+     JSON.stringify(urlOnZone.items));
+  // THE POINT OF THE WHOLE CHANGE. This used to leave an image exhibit with no
+  // sha256 in the list, which the realm refuses and mediaItemFault reports as
+  // "this image has no fingerprint yet" — so pasting a link nobody could read
+  // silently made the claim unsignable.
+  ok("...and the claim can still be signed", urlOnZone.fault === "",
+     JSON.stringify(urlOnZone.fault));
+  ok("...carrying no exhibit it could not stand behind", urlOnZone.argument === "",
+     JSON.stringify(urlOnZone.argument));
 
   ok("no page errors throughout", errs.length === 0, errs.slice(0, 2).join(" | "));
 

@@ -673,11 +673,107 @@ async function section3() {
 
    The count below is the guard against it happening again: if a section stops
    being awaited, or exits early, the number drops and this says so. */
+
+/* A composer with the browser bits faked. mediaNewComposer takes prepare/upload
+   as options precisely so this is possible without a DOM. */
+function mediaNewComposerFor(opts) {
+  return M.mediaNewComposer(Object.assign({siteDomain: "kourt.xyz"}, opts));
+}
+
+/* ---- a pasted link that the host lets us read ---------------------------
+ *
+ * §2.1's fourth intake path. The difference to a reader is the whole point: a
+ * link-only exhibit is one the court keeps no copy of and can never check
+ * again, and a fetched one has a fingerprint, an archive copy and a verdict in
+ * the lightbox. Plenty of allowed hosts do send the header that permits this
+ * (i.imgur.com, raw.githubusercontent.com) and plenty do not, so all three
+ * outcomes are pinned — including the one where nothing improves.
+ */
+async function section4() {
+  const png = new Uint8Array([1, 2, 3, 4, 5]);
+  const fakePrepare = async () => ({mime: "image/webp", w: 800, h: 600, bytes: png});
+  const settle = async c => {
+    for (let i = 0; i < 50; i++) {
+      if (c.items.every(x => x.state === "ready" || x.state === "failed")) return c.items;
+      await new Promise(r => setTimeout(r, 5));
+    }
+    return c.items;
+  };
+
+  // 1. the host allows it: the link becomes a real exhibit
+  const good = mediaNewComposerFor({
+    fetch: async () => ({ok: true, blob: async () => png}),
+    prepare: fakePrepare,
+    upload: async () => ({sha256: "x", url: "https://kourt.xyz/m/" + "a".repeat(64)}),
+  });
+  good.addLink("https://i.imgur.com/a.webp", "img");
+  let it = (await settle(good))[0];
+  ok("a readable link becomes a fingerprinted exhibit", /^[0-9a-f]{64}$/.test(it.sha256 || ""),
+     JSON.stringify(it.sha256));
+  ok("...no longer marked link-only", it.linkOnly === false);
+  ok("...with the archive first and the original kept behind it",
+     it.mirrors.length === 2 && it.mirrors[0].includes("/m/") &&
+     it.mirrors[1] === "https://i.imgur.com/a.webp", JSON.stringify(it.mirrors));
+  ok("...and it is fileable", M.mediaItemFault(it, "kourt.xyz") === "",
+     M.mediaItemFault(it, "kourt.xyz"));
+
+  // 2. the host refuses: exactly what happened before, plus a sentence with a fix
+  const refused = mediaNewComposerFor({
+    fetch: async () => { throw new TypeError("Failed to fetch"); },
+    prepare: fakePrepare,
+    upload: async () => ({sha256: "x", url: "u"}),
+  });
+  refused.addLink("https://i.imgur.com/b.webp", "img");
+  it = (await settle(refused))[0];
+  // AND THIS IS WHY THE FETCH IS LOAD-BEARING RATHER THAN AN IMPROVEMENT. A
+  // pasted image link used to be kept the way a video link is, marked "the
+  // court keeps no copy" — but the realm requires 64 hex characters of sha256
+  // for every image and lets only a video go without one. So the row sat there
+  // looking filed while composer.fault() said "this image has no fingerprint
+  // yet" and the claim could not be signed at all: a message about a
+  // fingerprint, to somebody with no way to make one, about an exhibit they had
+  // been shown as accepted.
+  ok("a host that refuses ends the exhibit rather than filing an unfilable one",
+     it.state === "broken", it.state);
+  ok("...with no invented fingerprint", !it.sha256);
+  ok("...and the one action that works", /drop it in/.test(it.error || ""),
+     JSON.stringify(it.error));
+  ok("...and it is not a link exhibit, which only a video can be", !it.linkOnly);
+  ok("...and it blocks nothing: a broken row is not fileable", !M.mediaFileable(it));
+
+  // 3. read but not copied — a fingerprint with no archive copy still beats a link
+  const nocopy = mediaNewComposerFor({
+    fetch: async () => ({ok: true, blob: async () => png}),
+    prepare: fakePrepare,
+    upload: async () => { throw new Error("archive down"); },
+  });
+  nocopy.addLink("https://i.imgur.com/c.webp", "img");
+  it = (await settle(nocopy))[0];
+  ok("a failed copy keeps the fingerprint", /^[0-9a-f]{64}$/.test(it.sha256 || ""));
+  ok("...and the original link to check it against",
+     it.mirrors[0] === "https://i.imgur.com/c.webp", JSON.stringify(it.mirrors));
+  ok("...and says the copy is what is missing", it.state === "failed");
+
+  // 4. A VIDEO IS NEVER FETCHED. There are no stable bytes behind a streaming
+  // URL, so a fingerprint of one moment would prove nothing about the next.
+  let asked = false;
+  const vid = mediaNewComposerFor({
+    fetch: async () => { asked = true; return {ok: true, blob: async () => png}; },
+    prepare: fakePrepare,
+    upload: async () => ({sha256: "x", url: "u"}),
+  });
+  vid.addLink("https://i.imgur.com/v.mp4", "vid");
+  it = (await settle(vid))[0];
+  ok("a video link is not fetched", asked === false);
+  ok("...and stays a link", it.linkOnly === true && !it.sha256);
+}
+
 (async () => {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 176;
+  await section4();
+  const EXPECTED = 190;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
