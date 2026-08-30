@@ -223,6 +223,58 @@ const MAX_PAGES = 60;
        JSON.stringify(after));
   }
 
+  // --- an exhibit can be linked to -------------------------------------------
+  // The number is described throughout as the one a reader and a moderator both
+  // refer to — it is why a purge tombstones a slot rather than removing it — and
+  // there was no way to send anybody to one. ?ex=N is one-based, so the address
+  // matches the number printed on the page.
+  //
+  // PLACED AFTER THE LIGHTBOX CHECKS ABOVE, and it has to be. Earlier in the
+  // file it made the scroll check fail with a stack pointing at onKey: an Escape
+  // sent while the router is mid-navigation can be delivered late, and a stray
+  // one landing during a later check closes a lightbox that check has just
+  // opened. This block closes what it opens by clicking, not by pressing a key.
+  await page.evaluate(() => { location.hash = "/c/orem/3?ex=1"; });
+  await new Promise(r => setTimeout(r, 600));
+  const deep = await page.evaluate(() => ({open: !!document.querySelector(".lbox"),
+                                           hash: location.hash}));
+  ok("a link to an exhibit opens it", deep.open, deep.hash);
+  ok("...and the address still says which one", /[?&]ex=1\b/.test(deep.hash), deep.hash);
+  const shut = await page.evaluate(() => {
+    const x = document.querySelector(".lbox-x");
+    if (x) x.click();
+    return {open: !!document.querySelector(".lbox"), hash: location.hash};
+  });
+  ok("...and closing takes it out of the address", !shut.open && !/ex=/.test(shut.hash),
+     shut.hash);
+
+  // Out of range is ignored rather than clamped: a stale link to exhibit 5 of a
+  // claim that now shows three should leave the reader on the claim, not
+  // silently on a different picture.
+  await page.evaluate(() => { location.hash = "/c/orem/3"; });
+  await new Promise(r => setTimeout(r, 300));
+  await page.evaluate(() => { location.hash = "/c/orem/3?ex=9"; });
+  await new Promise(r => setTimeout(r, 600));
+  const far = await page.evaluate(() => ({open: !!document.querySelector(".lbox"),
+                                          page: !!document.querySelector(".exhibits")}));
+  ok("a link past the last exhibit opens nothing", !far.open);
+  ok("...and leaves the claim readable", far.page);
+
+  // And one lightbox at a time: opening a second over the first stacks two
+  // modals, and which one Escape closes then depends on binding order.
+  const stacked = await page.evaluate(async () => {
+    location.hash = "/c/orem/3";
+    await new Promise(r => setTimeout(r, 400));
+    const open = () => { const e = document.querySelector(".exhibits .ex"); if (e) e.click(); };
+    open(); open();
+    const n = document.querySelectorAll(".lbox").length;
+    const x = document.querySelector(".lbox-x"); if (x) x.click();
+    return n;
+  });
+  ok("asking for an exhibit twice leaves one lightbox", stacked === 1, String(stacked));
+  await page.evaluate(() => { location.hash = "/c/orem/3"; });
+  await new Promise(r => setTimeout(r, 500));
+
   console.log(`\ncrawled ${visited} route(s); measured ${rows} row(s)`);
   ok("every label-and-value row landed in a container that styles it",
      bad.length === 0,

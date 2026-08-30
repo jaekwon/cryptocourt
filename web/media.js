@@ -1230,11 +1230,25 @@ function mediaClearDraft(store, court) {
  * this page must — an overlay that could check and did not would be worse than
  * one that never offered.
  */
+/* ONE AT A TIME. Opening a second lightbox over the first stacks two modals:
+ * Escape closes whichever bound its listener last, the scroll lock's save and
+ * restore nest so that unlocking depends on the order they happen to close in,
+ * and the reader is looking at a picture the page has forgotten it is showing.
+ *
+ * Reachable or not by pointer — the open box covers the viewport — this is a
+ * state the module should not be able to hold, the same way the exhibit list
+ * refuses two rows with one id. A second open replaces the first, which is also
+ * what somebody asking for exhibit 3 while looking at exhibit 1 means. */
+let MEDIA_LIGHTBOX = null;
+
 function mediaLightbox(items, start, opts) {
   const o = opts || {};
   const doc = o.doc || (typeof document !== "undefined" ? document : null);
   const host = o.host || (doc && doc.body);
   if (!doc || !host || !items || !items.length) return null;
+  // Whatever was open is closed first, so its listener, its focus restore and
+  // its scroll lock all unwind before this one takes them.
+  if (MEDIA_LIGHTBOX) { try { MEDIA_LIGHTBOX(); } catch (_) {} MEDIA_LIGHTBOX = null; }
 
   let at = Math.max(0, Math.min(start | 0, items.length - 1));
   const restore = o.activeElement || (doc.activeElement || null);
@@ -1276,6 +1290,10 @@ function mediaLightbox(items, start, opts) {
     // slow verdict for exhibit 2 can arrive over exhibit 3 and label the wrong
     // image as altered, which is the worst thing this feature could do.
     const mine = ++token;
+    // Which exhibit is on screen, for a caller that wants to say so — the
+    // overlay puts it in the address bar, so a link always points at the one
+    // being looked at rather than the one that was opened.
+    if (o.onShow) o.onShow(at);
     verdict.textContent = "checking…";
     verdict.setAttribute("class", "lbox-v");
     mediaVerify(it, src, o).then(v => {
@@ -1307,6 +1325,7 @@ function mediaLightbox(items, start, opts) {
   }
 
   function close() {
+    if (MEDIA_LIGHTBOX === close) MEDIA_LIGHTBOX = null;
     token++;                       // any verdict still in flight is now stale
     if (root && root.style) {
       root.style.overflow = hadOverflow || "";
@@ -1333,6 +1352,7 @@ function mediaLightbox(items, start, opts) {
   // that dismisses it.
   box.addEventListener("click", ev => { if (ev.target === box) close(); });
   if (doc.addEventListener) doc.addEventListener("keydown", onKey);
+  MEDIA_LIGHTBOX = close;
   if (box.focus) box.focus();
 
   show();

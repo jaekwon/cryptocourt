@@ -2369,6 +2369,49 @@ function claimExhibits(c){
   }).join("") + `</div>`;
 }
 
+/* AN EXHIBIT YOU CAN LINK TO.
+ *
+ * The number is described throughout as "the number a reader and a moderator
+ * both refer to it by" — it is why a purge tombstones a slot instead of
+ * removing it, so that "the second exhibit" means the same picture tomorrow.
+ * But there was no way to SEND anybody to one. Somebody arguing about exhibit 3
+ * could link to the claim and then write "click the third picture".
+ *
+ * ?ex=N, one-based, so the address matches the number printed on the page. It
+ * rides the hash through replaceState — the same trick ?q uses — so putting it
+ * there does not re-run the router and close the very thing it describes. It
+ * follows the reader through the gallery, so the bar always holds a link to what
+ * is on screen rather than to whatever was opened first, and it is cleared on
+ * close because a closed lightbox is not a thing to link to. */
+function setExParam(n){
+  try{
+    const raw = location.hash.replace(/^#/,"") || "/";
+    const [path, qs] = raw.split("?");
+    const ps = new URLSearchParams(qs || "");
+    if(n) ps.set("ex", String(n)); else ps.delete("ex");
+    const tail = ps.toString()? "?"+ps.toString() : "";
+    history.replaceState(null, "", "#"+path+tail);
+  }catch(_){}
+}
+
+function openExhibit(i, from){
+  if(typeof mediaLightbox !== "function" || !LAST_EXHIBITS.length) return false;
+  if(!(i >= 0 && i < LAST_EXHIBITS.length)) return false;
+  mediaLightbox(LAST_EXHIBITS, i, {siteDomain: siteHost(), activeElement: from,
+    onShow: n => setExParam(n + 1), onClose: () => setExParam(null)});
+  return true;
+}
+
+/* An ?ex= on the way in, once the exhibits are drawn. Out of range is ignored
+   rather than clamped: a stale link to exhibit 5 of a claim that now shows three
+   should leave the reader on the claim, not silently on a different picture. */
+function openExhibitFromURL(){
+  const n = parseInt(QP.ex, 10);
+  if(!(n >= 1)) return;
+  const fig = document.querySelector(`.exhibits [data-ex="${n-1}"]`);
+  openExhibit(n - 1, fig || undefined);
+}
+
 /* WHAT THIS PAGE CAN DO THAT GNOWEB CANNOT, said where the evidence is rather
    than nowhere at all.
 
@@ -2678,8 +2721,7 @@ document.addEventListener("click",(ev)=>{
   const ex = ev.target.closest("[data-ex]");
   if(ex && typeof mediaLightbox === "function" && LAST_EXHIBITS.length){
     ev.preventDefault();
-    mediaLightbox(LAST_EXHIBITS, parseInt(ex.dataset.ex, 10) || 0,
-      {siteDomain: siteHost(), activeElement: ex});
+    openExhibit(parseInt(ex.dataset.ex, 10) || 0, ex);
     return;
   }
   const t = ev.target.closest(".signbtn"); if(!t) return;
@@ -6442,6 +6484,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
+  // ?ex=N opens that exhibit, after the list it indexes into has been drawn.
+  openExhibitFromURL();
 });
 
 /* ===================== the board: a claim's comments ===================== */
