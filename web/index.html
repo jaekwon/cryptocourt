@@ -804,31 +804,62 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    printed as one word, both at the body size, competing with the claim they are
    evidence for. A source-reading test cannot see that; only the picture can. */
 .ex-lede{margin:0 0 8px; font-size:12.5px; line-height:1.5; color:var(--muted)}
-.exhibits{margin:0 0 10px}
-.ex{cursor:zoom-in; margin:0 0 12px}
-.ex-n,.ex-cap,.ex-note{display:block}
-/* The number is how a reader, a moderator and a purge all refer to this one
-   image, so it is a label rather than prose: small, and never louder than the
-   caption it introduces. */
-.ex-n{margin-top:5px; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
-  color:var(--muted)}
-.ex-cap{font-size:12.5px; line-height:1.45; color:var(--ink-2)}
+/* THE GRID. Bounded on purpose: seven exhibits stacked full-width put the ballot
+   about four screens below the title, so the evidence buried the thing a reader
+   came to do. This block is the same height for one exhibit or seven. */
+.exhibits{display:grid; gap:2px; margin:0 0 8px; border-radius:6px; overflow:hidden;
+  border:1px solid var(--line); background:var(--inset)}
+.exhibits[data-n="1"]{grid-template-columns:1fr}
+.exhibits[data-n="2"]{grid-template-columns:1fr 1fr; aspect-ratio:16/9}
+.exhibits[data-n="3"],.exhibits[data-n="4"]{grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr; aspect-ratio:16/9}
+/* Three tiles read as one large and two stacked, which is what a set of three
+   looks like everywhere else. */
+.exhibits[data-n="3"] > :first-child{grid-row:1 / span 2}
+.exhibits .ex,.exhibits .ex-gone{position:relative; margin:0; min-width:0; min-height:0;
+  display:flex; align-items:center; justify-content:center; background:var(--inset)}
+.exhibits .ex{cursor:zoom-in}
+.exhibits .ex:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+/* One tile keeps the image's own shape; two or more are cropped to fill, which
+   is what makes the block a fixed size. There the tile is a way IN — the whole
+   image is in the lightbox, one click away. */
+.exhibits[data-n="1"] .ex-img,.exhibits[data-n="1"] .ex-v{
+  width:auto; max-width:100%; max-height:52vh; object-fit:contain}
+.exhibits:not([data-n="1"]) .ex-img,.exhibits:not([data-n="1"]) .ex-v{
+  width:100%; height:100%; object-fit:cover}
+/* The number is how somebody refers to an exhibit, so it is legible on any
+   picture rather than tinted by one. */
+.ex-n{position:absolute; top:6px; left:6px; z-index:1; font-size:11px;
+  line-height:1; padding:3px 6px; border-radius:3px; color:#fff;
+  background:rgba(17,23,28,.72); letter-spacing:.02em}
+.ex-more{position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; font-size:20px; font-weight:600; color:#fff;
+  background:rgba(17,23,28,.62)}
+.ex-gone{padding:10px 12px; text-align:center}
+/* The captions, kept on the page because they are claim text and the number
+   beside each is how a moderator and a reader refer to one. */
+.ex-caps{list-style:none; margin:0 0 10px; padding:0; display:flex;
+  flex-direction:column; gap:3px; font-size:12.5px; line-height:1.45; color:var(--ink-2)}
+.ex-caps .ex-capn{display:inline-block; min-width:1.4em; color:var(--muted);
+  font-variant-numeric:tabular-nums}
+/* WHAT THE STACKED LAYOUT LEFT BEHIND, removed rather than left to fight the
+   grid above. A second .ex-n later in the file won on cascade and turned the
+   badge into muted uppercase prose; .ex-img carried a border and a 60vh contain
+   that the grid cell now decides; .ex-cap describes markup this renderer no
+   longer emits at all, since captions moved to the list below the grid. Two
+   rules for one element is the defect this file has been bitten by twice.
+
+   A taken-down slot keeps its place, so it keeps a shape to hold. */
+.ex-gone{border:1px dashed var(--line)}
+/* The note is prose inside a caption line, so it stays on that line — as its own
+   block it put "taken down" underneath a bare number. It is still a block on a
+   tombstone TILE, where it is the only thing there. */
 .ex-note{font-size:12px; color:var(--muted); font-style:italic}
-/* A taken-down exhibit keeps its place, so it needs a shape to keep. */
-.ex-gone{border:1px dashed var(--line); border-radius:3px; padding:10px 12px}
-/* The height cap is the SECOND bound on a hostile ratio, and it is here because
-   mediaBoxRatio only governs the box reserved before the bytes land — the image
-   that arrives can be any shape at all, and nothing verified the ones declared.
-   contain rather than cover: cropping an exhibit by default is a court hiding
-   part of the evidence, and the lightbox is one click away for the whole of it. */
-.ex-img{border:1px solid var(--line); border-radius:3px;
-  max-height:60vh; object-fit:contain; object-position:left top}
+.ex-caps .ex-note{display:inline; margin-left:.35em}
 /* A video is not zoomed into a lightbox — it is played where it is. The
    lightbox exists to say whether bytes match what was filed, and a video has no
    hash to check, so opening one there would offer a verdict it cannot give. */
 .ex-vid{cursor:default}
-.ex-v{width:100%; max-height:180px; border-radius:3px; background:#000}
-.ex:focus{outline:2px solid var(--accent); outline-offset:2px}
 .mnode-a:hover .mthumb,.mnode-a:focus .mthumb,.mnode-a.sel .mthumb{opacity:1}
 /* Hidden when the map is zoomed far enough out that titles go too: a 6px smear
    of colour is noise, not information, and `.mapsvg.far .mtitle{display:none}`
@@ -2295,56 +2326,73 @@ function claimExhibits(c){
      lightbox needs the ITEMS (hashes, byte counts, kinds), and an <img> src is
      not enough to check anything against. */
   LAST_EXHIBITS = (c && c.media) || [];
-  return `<div class="exhibits" role="list">` + items.map(x => {
-    /* dir="auto" ON EVERY STRING A FILER WROTE. The page is lang="en", so its
-       block direction is ltr, and an Arabic or Hebrew caption rendered inside it
-       gets its letters in the right order and its SENTENCE in the wrong place:
-       left-aligned, with the trailing punctuation drawn at the end an ltr reader
-       would expect rather than the end the sentence actually has. Measured on
-       the claim page as direction:ltr for a caption that is entirely Arabic.
-       "auto" asks the browser to take the direction from the first strong
-       character, which is exactly the question being asked here. */
-    const cap = x.caption
-      ? `<span class="ex-cap" dir="auto">${safeInline(x.caption)}</span>` : "";
-    /* An exhibit with nothing to show KEEPS ITS PLACE and says why. A gap that
-       silently renumbered the rest would leave every later exhibit meaning
-       something different than it did a moment ago, in the middle of an argument
-       about which one shows what. */
+
+  /* A BOUNDED GRID, not a column (owner ruling, CLAIM_MEDIA §10). Seven exhibits
+     stacked full-width put the ballot about four screens below the title, so the
+     evidence buried the thing a reader came to do. This costs the same height
+     whether a claim carries one exhibit or seven.
+
+     At most four tiles are drawn and the fourth says how many more there are.
+     Nothing is hidden by that: the lightbox holds every exhibit, the caption list
+     below names every exhibit, and clicking the fourth tile opens the gallery at
+     that point so the rest are one arrow away.
+
+     ONE EXHIBIT IS NOT CROPPED. A single tile keeps the image's own shape up to a
+     height cap, because there is no grid to fill and cropping the only piece of
+     evidence on a claim is the court hiding part of it. Two or more are cropped
+     to fill their cell, which is what makes the block a fixed size — and there
+     the tile is a way IN rather than the exhibit itself. */
+  const shown = items.slice(0, 4);
+  const hidden = items.length - shown.length;
+
+  const tiles = shown.map((x, i) => {
+    const last = hidden > 0 && i === shown.length - 1;
+    const more = last ? `<span class="ex-more">+${hidden}</span>` : "";
+    const num = `<span class="ex-n">${esc(String(x.n))}</span>`;
     /* A VIDEO PLAYS HERE AND NOWHERE ELSE. gnoweb's CSP has no media-src, so it
-       shows a link; this page can play it. preload=none is the load-bearing
-       attribute: nothing is fetched from the filer's host until a reader
-       presses play, so the disclosure is the same as following a link and
-       happens only when somebody asks for it. Without it, opening a card would
-       ping that host for every reader who never watched anything. */
+       shows a link; this page can play it. preload=none is load-bearing: nothing
+       is fetched from the filer's host until somebody presses play, so the
+       disclosure is the same as following a link and happens only when asked
+       for. */
     if(x.video) return `<figure class="ex ex-vid" role="listitem">`
       + `<video class="ex-v" src="${esc(x.video)}" controls preload="none"`
-      + ` referrerpolicy="no-referrer" playsinline></video>`
-      + `<span class="ex-n">${esc(x.label)}</span>${cap}`
-      + `<span class="ex-note">${esc(x.note)}</span></figure>`;
-    /* ex-gone WITHOUT ex, because `.ex` is what makes a figure look openable —
-       cursor:zoom-in — and this one carries no data-ex for the click handler to
-       find. It said "click me" and did nothing. The error path already drops
-       `.ex` when an image fails to load; a slot that was never going to have one
-       should not have claimed otherwise in the first place. */
+      + ` referrerpolicy="no-referrer" playsinline></video>${num}${more}</figure>`;
+    /* ex-gone WITHOUT ex, because `.ex` is what makes a tile look openable and
+       this one carries no data-ex for the click handler to find. A slot that was
+       never going to have an image should not claim otherwise. It KEEPS ITS
+       PLACE: a gap that renumbered the rest would leave every later exhibit
+       meaning something different than it did a moment ago. */
     if(!x.src) return `<figure class="ex-gone" role="listitem">`
-      + `<span class="ex-n">${esc(x.label)}</span>`
-      + `<span class="ex-note">${esc(x.note)}</span>${cap}</figure>`;
-    /* referrerpolicy: the host serving this must not learn which claim the
-       reader is looking at. loading=lazy: a card off screen costs nothing. */
-    /* Reserving the box stops the page jumping as each exhibit lands, but w and
-       h are unverified filer input — see mediaBoxRatio, which refuses a ratio
-       outside the range real evidence lives in. */
-    const box = (typeof mediaBoxRatio === "function") ? mediaBoxRatio(x.w, x.h)
-              : ((x.w && x.h) ? x.w + "/" + x.h : "");
+      + `${num}<span class="ex-note">${esc(x.note)}</span>${more}</figure>`;
+    /* Reserved only for a single tile — with two or more the grid cell fixes the
+       box, so there is nothing to jump. See mediaBoxRatio for why the filer's
+       declared ratio is not trusted past 8:1. */
+    const box = (shown.length === 1 && typeof mediaBoxRatio === "function")
+      ? mediaBoxRatio(x.w, x.h) : "";
     const ratio = box ? ` style="aspect-ratio:${esc(box)}"` : "";
+    /* referrerpolicy: the host serving this must not learn which claim is being
+       read. loading=lazy: a tile off screen costs nothing. */
     return `<figure class="ex" role="listitem" data-ex="${x.n - 1}" tabindex="0"`
       + ` aria-label="Open exhibit ${esc(x.label)} full size and check it against what was filed">`
       + `<img class="ex-img" src="${esc(x.src)}" alt="${safeInline(x.caption || ("exhibit " + x.label))}"`
-      + ` loading="lazy" referrerpolicy="no-referrer"${ratio}>`
-      + `<span class="ex-n">${esc(x.label)}</span>${cap}`
-      + (x.note? `<span class="ex-note">${esc(x.note)}</span>` : "")
-      + `</figure>`;
-  }).join("") + `</div>`;
+      + ` loading="lazy" referrerpolicy="no-referrer"${ratio}>${num}${more}</figure>`;
+  }).join("");
+
+  /* THE CAPTIONS STAY ON THE PAGE. They are claim text — fixed at creation, no
+     editor — and the number beside each is how a reader and a moderator refer to
+     one. A grid has no room for them on the tiles, and putting them only in the
+     lightbox would mean a label nobody sees without clicking. Seven lines of
+     text is a cost worth paying; seven full images was not. */
+  const capped = items.filter(x => x.caption || x.note);
+  const caps = capped.length
+    ? `<ol class="ex-caps">` + capped.map(x =>
+        `<li dir="auto"><span class="ex-capn">${esc(String(x.n))}</span>`
+        + `${x.caption ? safeInline(x.caption) : ""}`
+        + `${x.note ? `<span class="ex-note">${esc(x.note)}</span>` : ""}</li>`).join("")
+      + `</ol>`
+    : "";
+
+  return `<div class="exhibits" data-n="${shown.length}" role="list">${tiles}</div>${caps}`;
 }
 
 /* AN EXHIBIT YOU CAN LINK TO.

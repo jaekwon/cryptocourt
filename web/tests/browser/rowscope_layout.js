@@ -135,7 +135,10 @@ const MAX_PAGES = 60;
         mime: "image/webp", w: 240, h: 160, bytes: 5200, caption: text,
         mirrors: ["https://x/m/" + "a".repeat(64)]}]});
       document.body.appendChild(h);
-      const d = getComputedStyle(h.querySelector(".ex-cap")).direction;
+      // The caption lives in the list under the grid now, not on the tile: a
+      // bounded grid has no room for one, and putting it only in the lightbox
+      // would mean a label nobody sees without clicking.
+      const d = getComputedStyle(h.querySelector(".ex-caps li")).direction;
       h.remove();
       return d;
     };
@@ -143,6 +146,37 @@ const MAX_PAGES = 60;
             he: of("מסמך רשמי מהעירייה"),
             en: of("north span rating, 2025 inspection report")};
   });
+  // --- the evidence block is the same size whatever it holds ------------------
+  // The owner ruling (§10): seven exhibits stacked full-width put the ballot
+  // about four screens below the title, so the evidence buried the thing a
+  // reader came to do. A bounded grid costs the same height for one exhibit or
+  // seven, and nothing is hidden by it — the caption list names every exhibit
+  // and the lightbox holds every one.
+  const budget = await page.evaluate(() => {
+    const mk = i => ({kind: "img", sha256: String(i % 10).repeat(64), mime: "image/webp",
+      w: 240, h: 160, bytes: 5200, caption: "page " + (i + 1),
+      mirrors: ["https://x/m/" + String(i % 10).repeat(64)]});
+    const measure = count => {
+      const h = document.createElement("div");
+      h.innerHTML = claimExhibits({media: Array.from({length: count}, (_, i) => mk(i))});
+      document.body.appendChild(h);
+      const g = h.querySelector(".exhibits");
+      const out = {grid: Math.round(g.getBoundingClientRect().height),
+                   tiles: g.querySelectorAll("figure").length,
+                   caps: h.querySelectorAll(".ex-caps li").length,
+                   more: (h.querySelector(".ex-more") || {}).textContent || ""};
+      h.remove();
+      return out;
+    };
+    return {three: measure(3), seven: measure(7)};
+  });
+  ok("seven exhibits take the same room as three", budget.seven.grid === budget.three.grid,
+     `three=${budget.three.grid}px seven=${budget.seven.grid}px`);
+  ok("...drawn as four tiles with the rest counted",
+     budget.seven.tiles === 4 && budget.seven.more === "+3",
+     `tiles=${budget.seven.tiles} more=${budget.seven.more}`);
+  ok("...and every one still named", budget.seven.caps === 7, String(budget.seven.caps));
+
   // --- a purged exhibit keeps its place and does not pretend to open ---------
   // The tombstone exists so the exhibits around it keep their numbers: a
   // moderator's next call takes an index, and a reader arguing about "the second
@@ -162,7 +196,11 @@ const MAX_PAGES = 60;
     document.body.appendChild(h);
     const figs = [...h.querySelectorAll("figure")];
     const out = {
+      // The tile badge is the bare number now — "1 of 3" was prose for a stacked
+      // list and does not fit a 6px chip on a cropped thumbnail. The count still
+      // reads, from the caption list underneath.
       labels: figs.map(f => (f.querySelector(".ex-n") || {}).textContent || ""),
+      caps: [...h.querySelectorAll(".ex-caps .ex-capn")].map(n => n.textContent),
       tombstone: figs[1] ? figs[1].className : "",
       zoomable: figs[1] ? getComputedStyle(figs[1]).cursor : "",
       openable: figs[1] ? figs[1].hasAttribute("data-ex") : null,
@@ -171,7 +209,8 @@ const MAX_PAGES = 60;
     return out;
   });
   ok("a purge does not renumber the exhibits around it",
-     gone.labels.join("/") === "1 of 3/2 of 3/3 of 3", gone.labels.join("/"));
+     gone.labels.join("/") === "1/2/3" && gone.caps.join("/") === "1/2/3",
+     `tiles=${gone.labels.join("/")} captions=${gone.caps.join("/")}`);
   ok("...the taken-down slot is marked as gone", /ex-gone/.test(gone.tombstone));
   ok("...and does not offer to open what is not there",
      gone.openable === false && gone.zoomable !== "zoom-in",

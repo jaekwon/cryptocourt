@@ -218,7 +218,10 @@ if (!BASE) { console.log("usage: compose_upload.js <base-url>"); process.exit(2)
         return {tried, note: (fig.querySelector(".ex-note") || {}).textContent || "",
                 stillHasImg: !!fig.querySelector(".ex-img"),
                 zoomable: fig.hasAttribute("data-ex") || fig.classList.contains("ex"),
-                text: fig.innerText.replace(/\s+/g, " ").trim()};
+                text: fig.innerText.replace(/\s+/g, " ").trim(),
+                // The caption sits in the list under the grid now — a bounded
+                // tile has no room for one — so its survival is checked there.
+                caption: (div.querySelector(".ex-caps li") || {}).textContent || ""};
       }
     }
     return {tried, note: "(never reported)"};
@@ -230,11 +233,10 @@ if (!BASE) { console.log("usage: compose_upload.js <base-url>"); process.exit(2)
      /not currently available/.test(gone.note), JSON.stringify(gone.note));
   ok("...with the image element gone", gone.stillHasImg === false);
   ok("...and no offer to open bytes that are not there", gone.zoomable === false);
-  ok("...while keeping its number and caption, so the others do not renumber",
-     // case-insensitive: .ex-n is text-transform:uppercase, so innerText
-     // reports what is RENDERED ("1 OF 1"), not what the markup says.
-     /1 of 1/i.test(gone.text || "") && /the memo/.test(gone.text || ""),
-     JSON.stringify(gone.text));
+  ok("...while keeping its number, so the others do not renumber",
+     /\b1\b/.test(gone.text || ""), JSON.stringify(gone.text));
+  ok("...and its caption, which is claim text and outlives the picture",
+     /the memo/.test(gone.caption || ""), JSON.stringify(gone.caption));
 
   ok("no page errors throughout", errs.length === 0, errs.slice(0, 2).join(" | "));
 

@@ -627,8 +627,9 @@ per-claim read, none of which is what got built.
   do **not** verify — fifty hashes on a map draw is not a trade worth making; and they draw
   **only** from the archive, never a mirror, because fifty nodes fanning out to
   filer-chosen hosts is fifty readers' addresses sent wherever the filer liked.
-- **Claim page and map card** — the same vertical list from `claimExhibits`,
-  each exhibit numbered `N of M`, directly under the body. The claim page went
+- **Claim page and map card** — the same bounded grid from `claimExhibits`, each
+  tile numbered, at most four with the fourth counting the rest, directly under
+  the body; captions follow as a numbered list. The claim page went
   without this until late: `claimDetail` had always read `ClaimMedia` into
   `d.media` and only the card ever drew it, so evidence appeared on gnoweb and on
   a card you reach by opening the map and clicking the right node, and was
@@ -839,21 +840,28 @@ against believing a green suite about anything a reader sees.
 ## 10. Open owner rulings
 
 1. **Folders** — claims only, or may a folder carry an image?
-2. **How much of the claim page may evidence occupy?** Now that exhibits render
-   there, this is a real trade with a measurement behind it. Seven of the demo's
-   small 240x160 sample already push the Resolution heading down 1,281px — 1.42
-   screens at 1100x900 — and a real 1600px-wide exhibit renders around 470px
-   tall, so seven of those put the ballot roughly four screens below the title.
-
-   Reading the evidence before voting is the right order, and "everything filed
-   with a claim counts as claim text" (ruling 7) argues for showing it whole and
-   inline. Against that: a reader who has already read the claim and wants to act
-   must travel past all of it, every visit. The usual answer is a strip of
-   thumbnails with the lightbox one click away — evidence fully present, nothing
-   hidden, one row instead of four screens — but that trades reading for clicking
-   on the page a court is read on. Recorded rather than quietly fixed.
-
 **Settled by the owner:**
+
+10. **Evidence is a bounded grid, in the shape a reader already knows.** Seven
+    exhibits stacked full-width put the Resolution heading about four screens
+    below the title — measured — so the evidence buried the thing a reader came
+    to do. The block is now the same height whether a claim carries one exhibit
+    or seven: at most four tiles, the fourth saying how many more, in the 1 / 2 /
+    3 / 4 arrangement the same problem is solved with everywhere else.
+
+    **Nothing is hidden by it, which is the condition that made it acceptable in
+    a court.** The lightbox holds every exhibit and the fourth tile opens the
+    gallery at that point, so the rest are one arrow away. The captions stay ON
+    THE PAGE, as a numbered list under the grid: they are claim text, fixed at
+    creation, and the number beside each is how a reader and a moderator refer to
+    one — putting them only in the lightbox would mean a label nobody sees
+    without clicking. Seven lines of text is a cost worth paying; seven full
+    images was not.
+
+    **A single exhibit is not cropped.** There is no grid to fill, and cropping
+    the only piece of evidence on a claim is the court hiding part of it. Two or
+    more are cropped to fill their cell — that is what makes the block a fixed
+    size — and there the tile is a way IN rather than the exhibit itself.
 
 9. **`OpenClaimPM` keeps its name.** The suffix is a realm-wide convention, not a
    media invention: `StartCourtP` and `OpenClaimP` already mean "the same
