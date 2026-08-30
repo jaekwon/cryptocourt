@@ -18,11 +18,15 @@
 const puppeteer = require('puppeteer');
 const PAGE = 'file://' + require('path').join(__dirname, '..', '..', 'index.html');
 
+// THE MAP IS NOT IN THIS LIST ANY MORE. 231549e — "the map takes the whole
+// screen, with two ways back out" — removed its row on purpose, and the
+// assertion that one exists there outlived the row by every commit since. An
+// orphaned assertion is worse than a missing one: it fails for a reason nobody
+// can act on, and a suite with a permanent red in it stops being read at all.
 const ROUTES = [
   {name: "claim",  route: "#/c/orem/1"},
   {name: "court",  route: "#/c/orem"},
   {name: "curate", route: "#/c/orem/curate"},
-  {name: "map",    route: "#/c/orem/map"},
 ];
 
 (async () => {
@@ -128,7 +132,15 @@ const ROUTES = [
       const o = await page.evaluate((n) => {
         const a = document.querySelector('.tname');
         if (n && a) a.textContent = "M".repeat(n);
-        const kept = document.querySelector('.tagrow .tlink');
+        // THE FOLDER CHIP, NAMED BY WHAT IT CONTAINS. This used to take the
+        // first .tlink in the row, which was the folder chip when it was
+        // written and is not any more: the board link ("the author has
+        // replied · N comments") now sits ahead of it, so the assertion read
+        // the provenance marker off an anchor that never had one and failed on
+        // a page where nothing was wrong. .tname IS the folder label — the
+        // thing being truncated two lines up — so the chip around it is the
+        // only element this check ever meant.
+        const kept = a ? a.closest('.tlink') : null;
         return {sw: document.documentElement.scrollWidth, vw: innerWidth,
                 clipped: a ? a.scrollWidth > a.clientWidth + 1 : false,
                 provenance: kept ? /· (sample|local)/.test(kept.textContent) : false};

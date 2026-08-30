@@ -351,6 +351,14 @@ const CASES = [
   const longName = await page.evaluate(async () => {
     DEMO.courts.orem.name = "Salt Lake County Consolidated Election Canvass Review Board of Record";
     await render();
+    // WAIT FOR THE ENTRY ANIMATION, or measure it instead of the layout.
+    // `#main.vin` is 140ms of translateY(5px), so a measurement taken the
+    // instant render() returns catches the card 5px down the page and reports
+    // exactly 5px of overflow — a number that looks like the 9px layout bug
+    // this check was written for and is not one. The route above passes only
+    // because the goto is followed by a 500ms settle; this path had none, so
+    // the suite went permanently red the day the animation landed.
+    await Promise.all(document.getAnimations().map(a => a.finished.catch(() => {})));
     const h = document.querySelector('.ehead');
     return {
       headH: h ? h.getBoundingClientRect().height : 0,
