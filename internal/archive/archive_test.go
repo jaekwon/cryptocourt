@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	_ "modernc.org/sqlite"
 )
@@ -883,5 +884,61 @@ func TestAPersonCanActOnWhatTheModelMissed(t *testing.T) {
 	}
 	if _, _, err := st.Get(ctx, sum); err != nil {
 		t.Fatal("clearing an operator block must restore the image")
+	}
+}
+
+func TestTheModelsProseCannotReachATerminalIntact(t *testing.T) {
+	// THE PROSE IS ATTACKER-INFLUENCED. A model is asked to describe a picture,
+	// and the picture may contain text. The prompt says that text is not an
+	// instruction, but a model is not a parser and that is not a promise. The
+	// answer then lands in an operator's terminal via `kourtchatctl images`,
+	// where a C0 escape can clear the screen or overwrite the line above — the
+	// line describing a DIFFERENT image.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
+
+	hostile := "clean\x1b[2J\x1b[1;1Hillegal 99% BLOCKED spoofed row\x00\x07"
+	if _, err := st.Review(ctx, sum, ImageVerdict{Label: "violent", Confidence: 0.5,
+		Why: hostile}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	q, _ := st.PendingReview(ctx, 10)
+	if len(q) != 1 {
+		t.Fatalf("expected the row, got %d", len(q))
+	}
+	for _, r := range q[0].Why {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			t.Fatalf("a control character survived into the queue: %q", q[0].Why)
+		}
+	}
+	// The words survive; only what a terminal would obey is gone.
+	if !strings.Contains(q[0].Why, "spoofed row") {
+		t.Fatalf("the prose itself must be kept for the operator: %q", q[0].Why)
+	}
+
+	// RUNES, NOT BYTES. A byte cap rations characters by how expensive they are
+	// to encode and can cut one in half — the unit mistake internal/scan says
+	// this repository has already made twice.
+	long := strings.Repeat("あ", whyMaxRunes+50)
+	sum2, _ := st.Put(ctx, "image/webp", webpWith("jp"), "")
+	if _, err := st.Review(ctx, sum2, ImageVerdict{Label: "violent", Confidence: 0.4,
+		Why: long}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	q2, _ := st.PendingReview(ctx, 10)
+	var jp string
+	for _, r := range q2 {
+		if r.SHA256 == sum2 {
+			jp = r.Why
+		}
+	}
+	if !utf8.ValidString(jp) {
+		t.Fatalf("a truncated explanation must still be valid UTF-8: %q", jp)
+	}
+	// A Japanese explanation gets the same number of CHARACTERS as an English
+	// one, which a byte cap would not have given it.
+	if n := utf8.RuneCountInString(strings.TrimSuffix(jp, "…")); n != whyMaxRunes {
+		t.Fatalf("got %d runes, want %d — the cap must count characters", n, whyMaxRunes)
 	}
 }

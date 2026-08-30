@@ -69,13 +69,42 @@ CREATE INDEX IF NOT EXISTS blob_review_queue ON blob_review (cleared_at, confide
 
 // whyMax bounds stored prose, for internal/scan's reason: it is written to a
 // screen an operator reads, and a model that runs away must not fill it.
-const whyMax = 400
+//
+// RUNES, NOT BYTES, and this file had it wrong. internal/scan spells out why at
+// length: a byte cap rations characters by how expensive they are to encode, so
+// a Japanese explanation gets a third of the room an English one does — silently,
+// in the one field whose entire purpose is telling a person why. It can also cut
+// a character in half and store invalid UTF-8. That comment says this repository
+// had already made the same unit mistake twice, in the moniker's limit and the
+// body's. This was the third.
+const whyMaxRunes = 400
 
+// clipWhy bounds the model's prose and strips what a terminal would obey.
+//
+// THE PROSE IS ATTACKER-INFLUENCED. A model is asked to describe a picture, and
+// the picture may contain text; the prompt says that text is not an instruction,
+// but a model is not a parser and this is not a promise. The output then lands
+// in an operator's terminal via `kourtchatctl images`, where a C0 escape can
+// clear the screen, move the cursor, or overwrite the line above — which is the
+// line describing a different image. Nothing here needs a control character, so
+// none survives.
 func clipWhy(s string) string {
-	if len(s) <= whyMax {
-		return s
+	cleaned := make([]rune, 0, len(s))
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\t':
+			cleaned = append(cleaned, ' ') // one line, always
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f):
+			// C0, DEL and C1: dropped rather than replaced, so a run of them
+			// cannot pad the field out of shape either.
+		default:
+			cleaned = append(cleaned, r)
+		}
+		if len(cleaned) >= whyMaxRunes {
+			return string(cleaned) + "…"
+		}
 	}
-	return s[:whyMax] + "…"
+	return string(cleaned)
 }
 
 // Review records a verdict and blocks the blob if — and only if — the model was
