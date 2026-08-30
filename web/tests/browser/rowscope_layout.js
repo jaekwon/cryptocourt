@@ -93,6 +93,33 @@ const MAX_PAGES = 60;
     return !!document.querySelector(".lbox");
   });
   ok("an exhibit opens a lightbox", opened);
+
+  // THE PAGE THAT CAN VERIFY SHOULD SAY SO. The realm's own claim page carries a
+  // sentence about the fingerprint precisely because gnoweb CANNOT check it;
+  // this page can, in the lightbox, and said nothing — the only hint that
+  // verification existed was an aria-label reading "full size". The surface that
+  // cannot verify announced the promise and the surface that can kept quiet.
+  const lede = await page.evaluate(() => {
+    const l = document.querySelector(".ex-lede");
+    const box = document.querySelector(".exhibits");
+    const fig = document.querySelector(".exhibits .ex");
+    return {
+      text: l ? l.textContent : "",
+      first: !!(l && box && (l.compareDocumentPosition(box) & 4)),
+      aria: fig ? fig.getAttribute("aria-label") : "",
+      // and it is offered only where there is something to check
+      vidOnly: typeof claimEvidenceNote === "function"
+        && claimEvidenceNote({media: [{kind: "vid", mirrors: ["x"]}]}) === "",
+      purged: typeof claimEvidenceNote === "function"
+        && claimEvidenceNote({media: [{kind: "img", sha256: "a".repeat(64), purged: true}]}) === "",
+    };
+  });
+  ok("the claim page says its images were fingerprinted",
+     /fingerprinted/.test(lede.text), JSON.stringify(lede.text));
+  ok("...before the images rather than after them", lede.first);
+  ok("...and the affordance says what opening one is for",
+     /check it against what was filed/.test(lede.aria), JSON.stringify(lede.aria));
+  ok("...offered only when something is checkable", lede.vidOnly && lede.purged);
   if (opened) {
     await page.mouse.move(500, 400);
     await page.mouse.wheel({deltaY: 400});

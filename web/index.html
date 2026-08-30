@@ -777,6 +777,7 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    "1 of 1north span rating, 2025 inspection report" — the number and the caption
    printed as one word, both at the body size, competing with the claim they are
    evidence for. A source-reading test cannot see that; only the picture can. */
+.ex-lede{margin:0 0 8px; font-size:12.5px; line-height:1.5; color:var(--muted)}
 .exhibits{margin:0 0 10px}
 .ex{cursor:zoom-in; margin:0 0 12px}
 .ex-n,.ex-cap,.ex-note{display:block}
@@ -2325,13 +2326,34 @@ function claimExhibits(c){
               : ((x.w && x.h) ? x.w + "/" + x.h : "");
     const ratio = box ? ` style="aspect-ratio:${esc(box)}"` : "";
     return `<figure class="ex" role="listitem" data-ex="${x.n - 1}" tabindex="0"`
-      + ` aria-label="Open exhibit ${esc(x.label)} full size">`
+      + ` aria-label="Open exhibit ${esc(x.label)} full size and check it against what was filed">`
       + `<img class="ex-img" src="${esc(x.src)}" alt="${safeInline(x.caption || ("exhibit " + x.label))}"`
       + ` loading="lazy" referrerpolicy="no-referrer"${ratio}>`
       + `<span class="ex-n">${esc(x.label)}</span>${cap}`
       + (x.note? `<span class="ex-note">${esc(x.note)}</span>` : "")
       + `</figure>`;
   }).join("") + `</div>`;
+}
+
+/* WHAT THIS PAGE CAN DO THAT GNOWEB CANNOT, said where the evidence is rather
+   than nowhere at all.
+
+   The realm's own claim page carries a sentence about this — "the court recorded
+   a fingerprint of each image when the claim was filed, so a swap can be
+   detected — but not on this page" — because gnoweb's CSP forbids the fetch that
+   would check it. This page CAN check it, in the lightbox, and said nothing:
+   the only hint that verification exists was an aria-label reading "full size".
+   So the surface that cannot verify announced the promise and the surface that
+   can kept quiet about it.
+
+   Only when there is something checkable to open. A claim carrying one video has
+   no fingerprint behind it, and offering to check would be the overstatement the
+   realm's sentence is carefully written to avoid. */
+function claimEvidenceNote(c){
+  const items = (c && c.media) || [];
+  if(!items.some(i => i && i.kind === "img" && i.sha256 && !i.purged)) return "";
+  return `<p class="ex-lede">Each image was fingerprinted when the claim was filed — `
+       + `open one to check it still matches.</p>`;
 }
 
 /* AN EXHIBIT THAT WILL NOT LOAD SAYS SO, AND NEVER GOES LOOKING ELSEWHERE.
@@ -6352,6 +6374,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        every share and every search result points at. Right after the body,
        because the owner ruling is that everything filed with a claim counts as
        its text; evidence is not an appendix to the statement. */
+    + claimEvidenceNote(d)
     + claimExhibits(d)
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
