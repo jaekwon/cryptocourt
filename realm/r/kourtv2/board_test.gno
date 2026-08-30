@@ -773,6 +773,53 @@ func TestTheBoardOffersAWayToWriteOnIt(cur realm, t *testing.T) {
 	}
 }
 
+// THE CLAIM PAGE SHOWS THE DISCUSSION, not a link to it. A page that said
+// "5 comments →" asked a reader to leave the page they came to read in order to
+// find out whether leaving was worth it.
+func TestTheClaimPageShowsItsCommentsInline(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cpi-alice")
+	c, id := boardFixture(cur, "cpi", alice)
+	sid := strconv.FormatUint(id, 10)
+	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
+	r := getStanding(c, alice)
+	r.score = sup * ladderFor(c).t3Bps / 10_000
+	r.tokens = postsPerDayAt(ladderFor(c), 3)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	first := PostComment(cross(cur), "cpi", id, 0, "the first thing anybody said")
+	PostComment(cross(cur), "cpi", id, first, "and the answer to it")
+
+	page := Render("cpi/" + sid)
+	if !strings.Contains(page, "the first thing anybody said") {
+		t.Fatalf("the claim page must carry the comment, not a link to it:\n%s", page)
+	}
+	if !strings.Contains(page, "and the answer to it") {
+		t.Fatalf("a reply renders under its parent here too:\n%s", page)
+	}
+	// SHOWING BOTH, so it must not claim to be hiding one. `shown` counts the
+	// replies renderBoardOne draws; counting only parents made a page that
+	// showed everything say "all 2 comments".
+	if strings.Contains(page, "all 2 comments") {
+		t.Fatalf("a page showing both comments claims no remainder:\n%s", page)
+	}
+	if !strings.Contains(page, "[2 comments](") {
+		t.Fatalf("the count is a fact about the claim, stated either way:\n%s", page)
+	}
+
+	// BOUNDED. A busy claim does not turn its own page into a forum.
+	for i := 0; i < claimBoardPreview+2; i++ {
+		testing.SetRealm(testing.NewUserRealm(alice))
+		PostComment(cross(cur), "cpi", id, 0, "filler "+strconv.Itoa(i))
+	}
+	busy := Render("cpi/" + sid)
+	if n := strings.Count(busy, "· block "); n > claimBoardPreview+1 {
+		t.Fatalf("the preview must stop at %d rows, drew %d:\n%s", claimBoardPreview, n, busy)
+	}
+	if !strings.Contains(busy, "all 7 comments](") {
+		t.Fatalf("and say how many are behind the link:\n%s", busy)
+	}
+}
+
 // scoreIndexPut's guard is unreachable through its current callers — PostComment
 // only puts top-level rows, and HideOwnComment only puts after clearing the bit —
 // so no lifecycle test can drive it. That makes it look like a permanent gap and
@@ -875,11 +922,14 @@ func TestTheClaimLinksItsBoardAndRepliesRender(cur realm, t *testing.T) {
 
 	// An empty board still invites: that is the one most worth a first comment.
 	claim := Render("wire/" + sid)
-	if !strings.Contains(claim, "/board") {
-		t.Fatalf("the claim page must link its board:\n%s", claim)
+	// An EMPTY board gets the write form, not a link to a page with nothing on
+	// it. The board's reachability is asserted below, where there is something
+	// to reach — that was the original defect, a route only typeable by hand.
+	if !strings.Contains(claim, "[Write the first one](/r/kourt/kourtv2$help") {
+		t.Fatalf("an empty board should invite rather than pretend to be busy:\n%s", claim)
 	}
-	if !strings.Contains(claim, "no comments yet") {
-		t.Fatal("an empty board should say so rather than pretend to be busy")
+	if strings.Contains(claim, "/board)") {
+		t.Fatalf("an empty board is not worth linking to:\n%s", claim)
 	}
 
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -890,6 +940,10 @@ func TestTheClaimLinksItsBoardAndRepliesRender(cur realm, t *testing.T) {
 	// The count is on the claim page, because "Comments" alone cannot tell an
 	// empty board from a busy one and that is the reason to click.
 	claim = Render("wire/" + sid)
+	// AND NOW IT LINKS, because there is a board worth opening.
+	if !strings.Contains(claim, "/board)") {
+		t.Fatalf("a claim with comments must link its board:\n%s", claim)
+	}
 	if !strings.Contains(claim, "2 comments") && !strings.Contains(claim, "1 comment") {
 		t.Fatalf("the claim page must say how many comments there are:\n%s", claim)
 	}
@@ -1132,7 +1186,7 @@ func TestEveryBoardReadAnswersOnAClaimWithNoBoard(cur realm, t *testing.T) {
 	if !strings.Contains(renderBoardTop("nb", id), "No comments yet") {
 		t.Fatal("and so must the ranked view")
 	}
-	if !strings.Contains(Render("nb/"+strconv.FormatUint(id, 10)), "no comments yet") {
+	if !strings.Contains(Render("nb/"+strconv.FormatUint(id, 10)), "[Write the first one]") {
 		t.Fatal("the claim page must invite the first comment")
 	}
 
@@ -1226,13 +1280,22 @@ func TestTheAuthorIsSilencedByAnsweringQuestions(cur realm, t *testing.T) {
 	PostComment(cross(cur), "cap", id, top, "and another question")
 }
 
-// AUDIT D2: the 2,000 cap is BYTES and the refusal says "characters".
+// AUDIT D2, RESOLVED: the cap is CHARACTERS, which is what the refusal says.
 //
-// Not a bug — the same shape as every other length check in this realm — but the
-// effective limit depends on the script you write in, and the message does not
-// say so. A comment in a three-byte-per-rune script is cut off at ~666 of the
-// "2000 characters" it was promised.
-func TestTheCommentCapIsBytesNotCharacters(cur realm, t *testing.T) {
+// This test used to assert the opposite, and was right to: the audit found that
+// every length check in this realm counted BYTES while every message promised
+// characters, called it "not a bug — the same shape as every other length check"
+// because it was consistent, and pinned the behaviour so it could not drift
+// unnoticed. What it recorded was a real cost, in its own words: "a comment in a
+// three-byte-per-rune script is cut off at ~666 of the 2000 characters it was
+// promised."
+//
+// Consistency was the argument for leaving it and is now the argument for fixing
+// it: all nine sites count runes, so the promise is true everywhere rather than
+// false everywhere. The asymmetry this test was written to document — the same
+// number of characters accepted in one script and refused in another — is what
+// it now denies.
+func TestTheCommentCapIsCharactersNotBytes(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("byt-alice")
 	c, id := boardFixture(cur, "byt", alice)
 	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
@@ -1240,19 +1303,25 @@ func TestTheCommentCapIsBytesNotCharacters(cur realm, t *testing.T) {
 	r.score = sup * ladderFor(c).t3Bps / 10_000
 	r.tokens = postsPerDayAt(ladderFor(c), 3)
 
-	// 700 three-byte runes = 2,100 bytes: well under 2,000 characters, over the cap.
+	// 700 three-byte runes: 2,100 BYTES, 700 characters. Over the old cap, well
+	// under the stated one.
 	wide := strings.Repeat("あ", 700)
 	if len(wide) <= maxBoardTextLen {
-		t.Fatal("the fixture must exceed the BYTE cap while under the character count")
+		t.Fatal("the fixture must exceed the byte count, or it proves nothing")
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "at most 2000 characters", func() {
-		PostComment(cross(cur), "byt", id, 0, wide)
-	})
-	// And the same rune count in a one-byte script is accepted, which is the
-	// asymmetry itself.
+	PostComment(cross(cur), "byt", id, 0, wide)
+
+	// The same number of characters in a one-byte script, which was always
+	// accepted. Both are now accepted, and that is the point.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostComment(cross(cur), "byt", id, 0, strings.Repeat("a", 700))
+
+	// The cap still holds, counted the way the message states it.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "at most 2000 characters", func() {
+		PostComment(cross(cur), "byt", id, 0, strings.Repeat("あ", maxBoardTextLen+1))
+	})
 }
 
 // AUDIT D2: a refused comment allocates nothing.
@@ -1961,7 +2030,7 @@ func TestTheCommentCountOnAClaimCountsReplies(cur realm, t *testing.T) {
 	path := "cc1/" + strconv.FormatUint(id, 10)
 
 	// With nothing on it, the claim invites rather than counting.
-	if !strings.Contains(Render(path), "no comments yet") {
+	if !strings.Contains(Render(path), "[Write the first one]") {
 		t.Fatal("an empty board must invite, not print a zero")
 	}
 
@@ -2026,7 +2095,7 @@ func TestASharedCommentCarriesItsClaimAndCourt(cur realm, t *testing.T) {
 	if !strings.Contains(page, "[← the claim]("+base+")") {
 		t.Fatal("a shared comment must link the claim, not only the board")
 	}
-	if !strings.Contains(page, "comments]("+base+"/board)") {
+	if !strings.Contains(page, "]("+base+"/board)") {
 		t.Fatal("a shared comment must offer the rest of the board")
 	}
 	// The comment itself is still there — this is context added, not replaced.

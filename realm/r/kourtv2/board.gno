@@ -1307,12 +1307,57 @@ func writeBoardLink(b *strings.Builder, c *Court, cs *claimState, claimID uint64
 	case n == 0 && !boardOpen(cs):
 		return // a settled claim with no comments has nothing to offer
 	case n == 0:
-		b.WriteString("[Discuss this claim](" + link + ") — no comments yet.\n\n")
-	default:
-		b.WriteString("[" + strconv.Itoa(n) + " comment" + plural2(n) + "](" + link +
-			") · [Top](" + link + "/top)\n\n")
+		b.WriteString("## Comments\n\n[Write the first one](" +
+			boardPostLink(c.id, claimID, 0) + ")\n\n")
+		return
 	}
+	// THE COMMENTS THEMSELVES, not a link to them. A claim page that said
+	// "5 comments →" made a reader leave the page they came to read in order to
+	// find out whether leaving was worth it. The discussion belongs under the
+	// thing being discussed, which is where every other discussion on the web
+	// puts it and where the overlay already put it.
+	//
+	// BOUNDED AT claimBoardPreview TOP-LEVEL ROWS, so a busy claim does not turn
+	// its own page into a forum, and the tail says how many are behind the link
+	// with the real number on it. The parties are NOT pinned here: this is a
+	// preview of the newest, and the reserved slot is a property of the board
+	// page, where the whole list competes for attention.
+	b.WriteString("## Comments\n\n")
+	b.WriteString("[Write a comment](" + boardPostLink(c.id, claimID, 0) + ")\n\n")
+	shown := 0
+	if cs.boardTop != nil {
+		cs.boardTop.ReverseIterateByOffset(0, claimBoardPreview, func(_ string, v any) bool {
+			r := v.(*boardRow)
+			if boardMark(r) != "." {
+				return false // hidden rows are a footnote, not a preview
+			}
+			b.WriteString(renderBoardOne(c.id, claimID, cs, r, true))
+			// THE REPLIES COUNT TOO, because renderBoardOne draws them nested
+			// under this row. Counting only parents while `n` counts every row
+			// made a claim that was showing BOTH its comments announce "all 2" —
+			// the same off-by-a-category the overlay's own tail had, where a
+			// fully-displayed board claimed to be hiding something.
+			shown += 1 + boardReplyCount(cs, r.id)
+			return false
+		})
+	}
+	// THE COUNT IS ALWAYS STATED, whether or not the preview is short of it. It
+	// only read "all 5 comments" while something was hidden behind the link, so
+	// a claim showing everything it had stopped saying how much that was — and
+	// the number is a fact about the claim, not an apology for truncation.
+	all := ""
+	if shown < n {
+		all = "all "
+	}
+	b.WriteString("\n[" + all + strconv.Itoa(n) + " comment" + plural2(n) + "](" + link +
+		") · [Top](" + link + "/top)\n\n")
+	writeHiddenLink(b, c.id, claimID, "/r/kourt/kourtv2:"+c.id+"/"+strconv.FormatUint(claimID, 10))
 }
+
+// How many top-level comments a CLAIM page previews. Three, not the board's
+// twenty-four: this is a page about a claim that happens to have a discussion,
+// and the whole discussion has its own page one link away.
+const claimBoardPreview = 3
 
 func plural2(n int) string {
 	if n == 1 {

@@ -9546,15 +9546,15 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "writeBoardLink: an empty board still invites a first comment",
-  "find": "\t\tb.WriteString(\"[Discuss this claim](\" + link + \") \u2014 no comments yet.\\n\\n\")\n",
-  "replace": ""
+  "find": "\t\tb.WriteString(\"## Comments\\n\\n[Write the first one](\" +\n\t\t\tboardPostLink(c.id, claimID, 0) + \")\\n\\n\")",
+  "replace": "\t\tb.WriteString(\"## Comments\\n\\n\")"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "writeBoardLink: the count, which is the reason to click",
-  "find": "\t\tb.WriteString(\"[\" + strconv.Itoa(n) + \" comment\" + plural2(n) + \"](\" + link +",
-  "replace": "\t\tb.WriteString(\"[comments](\" + link +"
+  "find": "\tb.WriteString(\"\\n[\" + all + strconv.Itoa(n) + \" comment\" + plural2(n) + \"](\" + link +",
+  "replace": "\tb.WriteString(\"\\n[\" + all + \"comments](\" + link +"
  },
  {
   "pkg": "kourtv2",
@@ -11065,7 +11065,7 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "v0.58 ux: an empty board prints a zero instead of inviting",
-  "find": "\tcase n == 0:\n\t\tb.WriteString(\"[Discuss this claim](\" + link + \") \u2014 no comments yet.\\n\\n\")",
+  "find": "\tcase n == 0:\n\t\tb.WriteString(\"## Comments\\n\\n[Write the first one](\" +\n\t\t\tboardPostLink(c.id, claimID, 0) + \")\\n\\n\")",
   "replace": "\tcase n == 0:\n\t\tb.WriteString(\"[0 comments](\" + link + \")\\n\\n\")"
  },
  {
@@ -11991,5 +11991,33 @@
   "label": "writeHiddenLink: the footnote climbs back above the comments",
   "find": "\twriteHiddenLink(&b, slug, claimID, base)\n\treturn b.String()\n}",
   "replace": "\treturn b.String()\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: the claim page links its board instead of showing it",
+  "find": "\t\t\tb.WriteString(renderBoardOne(c.id, claimID, cs, r, true))\n\t\t\t// THE REPLIES COUNT TOO",
+  "replace": "\t\t\t// THE REPLIES COUNT TOO"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: the preview counts parents and calls replies missing",
+  "find": "\t\t\tshown += 1 + boardReplyCount(cs, r.id)",
+  "replace": "\t\t\tshown++"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: the preview is unbounded",
+  "find": "cs.boardTop.ReverseIterateByOffset(0, claimBoardPreview, func(_ string, v any) bool {",
+  "replace": "cs.boardTop.ReverseIterateByOffset(0, 512, func(_ string, v any) bool {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: a claim showing everything stops stating its count",
+  "find": "\tall := \"\"\n\tif shown < n {\n\t\tall = \"all \"\n\t}\n\tb.WriteString(\"\\n[\" + all +",
+  "replace": "\tall := \"\"\n\tif shown >= n {\n\t\treturn\n\t}\n\tb.WriteString(\"\\n[\" + all +"
  }
 ]
