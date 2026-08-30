@@ -693,6 +693,7 @@ Recorded because each is easy to make again:
 | 32 | an http deployment could not file any upload, and was not told why | a mirror must be https on both sides, so a local overlay — a developer's first encounter — broke every exhibit in turn with a message naming the symptom |
 | 33 | the composer had only ever been rendered on a desktop | at 320px its action bar squeezed rather than wrapped — "try the copy again" 54px across and 44px tall, four words stacked into a column, with nothing overflowing to give it away |
 | 34 | the error colour was a literal behind a `var()` fallback, then half-wired | `var(--bad, #c0564f)` hid a token that did not exist; adding it to two of the palette's four blocks left the composer's error text pale salmon on light grey for anyone whose system is dark and who chose light |
+| 35 | no caption carried `dir="auto"` | the page is `lang="en"`, so an Arabic or Hebrew caption got its letters in the right order and its sentence in the wrong place — left-aligned, trailing punctuation at the ltr end |
 
 **The method these last rows came from is worth stating, because it is
 repeatable.** The defects stopped being wrong computations some time ago. Every
@@ -702,7 +703,7 @@ deployment nothing served, a width nothing measured. So the useful question is
 no longer "what does this code do wrong" but "what state can this be in that
 nobody has ever looked at", and then going and looking. Enumerating deployments
 found row 32; enumerating screen sizes found row 33; enumerating themes found
-row 34. The dimensions are ordinary and the list is short — deployment, width,
+row 34; enumerating locales found row 35. The dimensions are ordinary and the list is short — deployment, width,
 theme, locale, exhibit count, exhibit state, claim phase — which is what makes
 it worth writing down rather than rediscovering.
 
