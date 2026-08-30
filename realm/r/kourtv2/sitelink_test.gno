@@ -172,10 +172,21 @@ func TestTheHeaderRoutesEachPageToItsCounterpart(cur realm, t *testing.T) {
 			t.Fatalf("header on %q points at the wrong page; want %q", tc.path, tc.want)
 		}
 	}
-	// It is FIRST — a reader who stops reading after one line still sees it.
+	// IT SITS UNDER THE PAGE'S TITLE, not above it. It used to be the first line
+	// of every page, which put a link to somewhere else ahead of the name of the
+	// thing a reader had just opened; below the heading it reads as the same
+	// page rendered better rather than as an interruption.
 	r := Render("sl3/" + sid)
-	if strings.Index(r, "Read this on") > strings.Index(r, "#") {
-		t.Fatal("the header must precede the page's own heading")
+	if !strings.HasPrefix(r, "# ") {
+		t.Fatalf("the page must still lead with its own title:\n%s", r)
+	}
+	if strings.Index(r, "Read this on") < strings.Index(r, "\n") {
+		t.Fatal("the header must follow the page's own heading, not precede it")
+	}
+	// Still every page though — the placement moved, the rule did not, and a
+	// page with no H1 keeps it at the top rather than losing it.
+	if nf := Render("sl3/notanumber/deeper"); !strings.Contains(nf, "Read this on") {
+		t.Fatalf("a page with no heading must still carry the header:\n%s", nf)
 	}
 
 	testing.SetRealm(testing.NewUserRealm(admin))

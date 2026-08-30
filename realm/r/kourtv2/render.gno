@@ -28,7 +28,7 @@ func Render(path string) string {
 	// disclosure that appears on some pages and not others is one a reader cannot
 	// rely on. Empty when no domain is configured (sitelink.gno), so a realm with
 	// no website renders exactly as it always did.
-	return siteBanner(path) + render(path)
+	return withSiteBanner(render(path), path)
 }
 
 func render(path string) string {

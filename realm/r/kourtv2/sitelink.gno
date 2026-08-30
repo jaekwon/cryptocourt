@@ -174,6 +174,33 @@ func sitePath(path string) string {
 	return "#/c/" + parts[0] + "/" + parts[1]
 }
 
+// withSiteBanner puts the overlay link UNDER the page's title, not above it.
+//
+// It used to be the first line of every page, which put a link to somewhere else
+// ahead of the name of the thing a reader had just opened. Below the heading it
+// reads as what it is — the same page, better rendered — rather than as an
+// interruption before the page has said what it is.
+//
+// STILL EVERY PAGE, OR NONE. The placement moved; the rule did not. A link that
+// appears on some pages and not others is one a reader cannot rely on, so this
+// inserts after the first heading wherever there is one and falls back to the
+// top where there is not (a "## Not found" body, for instance, has no H1).
+func withSiteBanner(body, path string) string {
+	bar := siteBanner(path)
+	if bar == "" {
+		return body
+	}
+	if !strings.HasPrefix(body, "# ") {
+		return bar + body
+	}
+	// The heading runs to its first newline; everything after it is the page.
+	i := strings.Index(body, "\n")
+	if i < 0 {
+		return body + "\n\n" + bar
+	}
+	return body[:i+1] + "\n" + bar + strings.TrimLeft(body[i+1:], "\n")
+}
+
 // siteBanner is the header itself, empty when no domain is configured.
 //
 // It sits beside testClockBanner in Render() for the same reason that one does:

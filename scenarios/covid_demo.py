@@ -559,6 +559,14 @@ s.expect("TestClockActive", [], "true")
 
 accounts = {name: s.account(name, funds) for name, funds, _ in ACTORS}
 
+# THE OVERLAY'S DOMAIN, so every gnoweb page carries a link to its counterpart.
+# Without it siteBanner renders nothing and the two surfaces have no way to reach
+# each other — which is how a seeded node looked until somebody asked where the
+# link was.
+s.note("point every gnoweb page at the overlay")
+s.call(DEPLOYER, "SetSiteDomain", ["kourt.xyz"])
+s.expect("SiteDomain", [], r"kourt\.xyz", final=True)
+
 s.note("the court, and real GNOT burned into its coin by sixteen participants")
 s.court(DEPLOYER, SLUG, "COVID-19 Origins & Response Court")
 for name, funds, _ in ACTORS:

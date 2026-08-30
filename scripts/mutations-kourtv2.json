@@ -12033,5 +12033,12 @@
   "label": "writeBoardLink: a hidden row costs a preview slot",
   "find": "\t\t\tr := v.(*boardRow)\n\t\t\tif boardMark(r) != \".\" {\n\t\t\t\treturn false // hidden rows are a footnote, not a preview\n\t\t\t}",
   "replace": "\t\t\tr := v.(*boardRow)\n\t\t\tif boardMark(r) != \".\" {\n\t\t\t\tdrawn++\n\t\t\t\treturn drawn >= claimBoardPreview\n\t\t\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "sitelink.gno",
+  "label": "withSiteBanner: the overlay link climbs back above the title",
+  "find": "\tif !strings.HasPrefix(body, \"# \") {\n\t\treturn bar + body\n\t}",
+  "replace": "\tif true {\n\t\treturn bar + body\n\t}"
  }
 ]
