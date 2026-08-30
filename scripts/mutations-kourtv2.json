@@ -11865,5 +11865,40 @@
   "replace": "\t\tappendLog(who, \"media-purge:\"+strconv.FormatUint(idx, 10)+\":\"+votedCode, \"\")",
   "label": "PurgeClaimMedia: the log names the exhibit in a shape no other verb uses",
   "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\tif len(m.mirrors) > maxMirrorsPerItem {",
+  "replace": "\tif false && len(m.mirrors) > maxMirrorsPerItem {",
+  "label": "mediaItemFault: an exhibit may list any number of mirrors",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif s[i] < 0x20 && s[i] != '\\t' {",
+  "replace": "\t\tif false && s[i] < 0x20 && s[i] != '\\t' {",
+  "label": "captionFault: a caption may carry control characters",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif line == \"\" {",
+  "replace": "\t\tif false && line == \"\" {",
+  "label": "parseMediaFault: a blank line is a malformed item",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif dest == \"\" {",
+  "replace": "\t\tif false && dest == \"\" {",
+  "label": "writeClaimMedia: an exhibit with nowhere to point renders an empty image",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif m.caption != \"\" {",
+  "replace": "\t\tif false && m.caption != \"\" {",
+  "label": "writeClaimMedia: an uncaptioned exhibit carries an empty caption",
+  "pkg": "kourtv2"
  }
 ]

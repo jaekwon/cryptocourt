@@ -168,6 +168,23 @@ func TestAnImageItemNeedsAHashAndRealDimensions(cur realm, t *testing.T) {
 		}
 	}
 
+	// Gaps a mutation sweep found: a conditional nothing depended on.
+	fourMirrors := okMirror + "," + okMirror + "," + okMirror + "," + okMirror
+	if _, fault := parseMediaFault(imgLine("", fourMirrors)); fault != "" {
+		t.Fatalf("four mirrors is the cap, not one past it: %q", fault)
+	}
+	if _, fault := parseMediaFault(imgLine("", fourMirrors+","+okMirror)); !strings.Contains(fault, "at most 4") {
+		t.Fatalf("a fifth mirror must be refused, got %q", fault)
+	}
+	// A caption may not smuggle a control character onto a page or a terminal.
+	if fault := captionFault("a\x07b"); !strings.Contains(fault, "control") {
+		t.Fatalf("a control character in a caption must be refused, got %q", fault)
+	}
+	// A blank line between items is whitespace, not a malformed item.
+	if got, fault := parseMediaFault(imgLine("", okMirror) + "\n\n" + imgLine("", okMirror)); fault != "" || len(got) != 2 {
+		t.Fatalf("blank lines are skipped: %d items, fault %q", len(got), fault)
+	}
+
 	// THE CONTROLS: one good image, and one good video. Without them every arm
 	// above would pass against a parser that refused everything.
 	if got, fault := parseMediaFault(imgLine("a caption", okMirror)); fault != "" || len(got) != 1 {
@@ -419,6 +436,14 @@ func TestEveryExhibitIsNumberedAndKeepsItsPlace(cur realm, t *testing.T) {
 		t.Fatalf("the alt text must not repeat the visible caption:\n%s", page)
 	}
 
+	// AND THE CAPTION REACHES THE PAGE. Asserting only the numbering left the
+	// caption branch untested: a mutation that dropped captions entirely changed
+	// nothing any test could see, because every exhibit under test was
+	// uncaptioned or checked only for its number.
+	if !strings.Contains(page, "Exhibit 1 of 3 — the memo") {
+		t.Fatalf("an exhibit's caption must reach the reader:\n%s", page)
+	}
+
 	// The archive, not the mirror the filer named.
 	if !strings.Contains(page, "https://kourt.xyz/m/"+okHash) {
 		t.Fatalf("the page must point at the archive:\n%s", page)
@@ -430,6 +455,30 @@ func TestEveryExhibitIsNumberedAndKeepsItsPlace(cur realm, t *testing.T) {
 	}
 	if strings.Contains(page, "![Exhibit 3") {
 		t.Fatal("a video is a link, never an image")
+	}
+
+	// AN EXHIBIT WITH NOWHERE TO POINT SAYS SO, rather than rendering an empty
+	// image tag. Reached when no site is configured and every mirror has left
+	// the allowlist — rare, and exactly when a reader most needs telling.
+	{
+		var nb strings.Builder
+		prevSite := siteDomain
+		siteDomain = ""
+		writeClaimMedia(&nb, &Court{}, &claimState{media: []mediaItem{{
+			kind: mediaKindImage, sha256: okHash, mime: "image/webp",
+			w: 8, h: 6, bytes: 12, mirrors: []string{"https://gone.example/x.webp"},
+		}}})
+		siteDomain = prevSite
+		if !strings.Contains(nb.String(), "not currently available") {
+			t.Fatalf("an exhibit with nowhere to point must say so:\n%s", nb.String())
+		}
+		// And an UNCAPTIONED exhibit still renders, numbered, with no stray
+		// separator left where a caption would have been. Checked on the exhibit
+		// line specifically: the section's own note carries an em dash of its
+		// own, and a whole-page search for one finds that instead.
+		if strings.Contains(nb.String(), "Exhibit 1 of 1 — ") {
+			t.Fatalf("an uncaptioned exhibit must not carry an empty caption:\n%s", nb.String())
+		}
 	}
 
 	// A TAKEN-DOWN EXHIBIT KEEPS ITS PLACE. Renumbering the images around a gap
