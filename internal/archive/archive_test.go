@@ -1802,7 +1802,6 @@ func TestBlockingHidesAndForgettingDestroys(t *testing.T) {
 	}
 }
 
-
 func TestOneBogusCourtHintCannotStopEverybodyElsesPromotion(t *testing.T) {
 	// THE CHEAPEST DENIAL OF SERVICE IN THIS PACKAGE, and it costs one upload.
 	//
@@ -1853,5 +1852,98 @@ func TestOneBogusCourtHintCannotStopEverybodyElsesPromotion(t *testing.T) {
 	}
 	if _, _, err := st.Get(ctx, filed); err != nil {
 		t.Fatalf("the evidence a claim references was swept: %v", err)
+	}
+}
+
+func TestTheOriginOfABlobCannotBeRewrittenByAStranger(t *testing.T) {
+	// THE OPERATOR'S QUEUE IS GROUPED BY ORIGIN, and PendingReview says why in as
+	// many words: a flat worst-first list interleaves one filing's seven exhibits
+	// with everything else, "so the operator reads seven separate incidents
+	// instead of one — and deciding about the source is the action that actually
+	// ends it".
+	//
+	// That makes filed_court the one field an operator acts on. It was
+	// last-writer-wins: every promotion overwrote it, and a blob is addressed by
+	// its HASH, which is public — it is in ClaimMedia's output and in the archive
+	// URL itself. So anyone could file their own claim quoting somebody else's
+	// image and take ownership of the row.
+	//
+	// Both directions hurt. An attacker can point a stranger's evidence at their
+	// own throwaway court so an operator bans the wrong source; or, holding
+	// something that is about to be judged, file a second claim from a burner
+	// court AFTER the first so the "decide about the source" action lands there
+	// instead of on them.
+	//
+	// It is not only adversarial: two honest claims quoting the same document
+	// flipped the attribution back and forth on every pass, so the queue was not
+	// even stable.
+	ctx := context.Background()
+	st := testStore(t)
+
+	sum, err := st.Put(ctx, "image/png", pngWith("someone's evidence"), "realcourt")
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	// The claim that actually filed it.
+	if err := st.PromoteFor(ctx, sum, "realcourt", 7); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	// A stranger files their own claim quoting the same hash. Nothing here is
+	// forged: the chain really does say their claim references it.
+	if err := st.PromoteFor(ctx, sum, "burner", 1); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+
+	// Reviewed, so it reaches the queue an operator reads.
+	if _, err := st.Review(ctx, sum, ImageVerdict{Label: "explicit", Confidence: 0.7, Why: "x"}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	pending, err := st.PendingReview(ctx, 10)
+	if err != nil {
+		t.Fatalf("pending: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("expected one row, got %d", len(pending))
+	}
+	if pending[0].Court != "realcourt" || pending[0].Claim != 7 {
+		t.Fatalf("the operator was shown %s/%d as the origin; a stranger rewrote it",
+			pending[0].Court, pending[0].Claim)
+	}
+
+	// AND THE RE-USE IS STILL A PROMOTION. Refusing to rewrite the origin must
+	// not refuse to keep the bytes: a second claim quoting them is a second
+	// reason not to sweep them.
+	if _, _, err := st.GetServable(ctx, sum); err != nil {
+		t.Fatalf("a re-used blob stopped being served: %v", err)
+	}
+
+	// FIRST-WINS IS NOT WRITE-ONCE-AND-NEVER-AGAIN. The ordinary path promotes
+	// with no attribution at all — Promote() from /m/claimed's older sibling, or
+	// a backfill pass that knows the court but not yet the claim — and the first
+	// caller that HAS an origin must still be able to record it. An empty field
+	// is not an owner.
+	// namedStore, not testStore: testStore names the database after the test, so
+	// a second one inside the same test IS the first one — and PendingReview then
+	// answers with both blobs.
+	blank := namedStore(t, t.Name()+"/unattributed")
+	sum2, err := blank.Put(ctx, "image/png", pngWith("later attribution"), "")
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	if err := blank.Promote(ctx, sum2); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	if err := blank.PromoteFor(ctx, sum2, "realcourt", 3); err != nil {
+		t.Fatalf("promote for: %v", err)
+	}
+	if _, err := blank.Review(ctx, sum2, ImageVerdict{Label: "explicit", Confidence: 0.7, Why: "x"}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	got, err := blank.PendingReview(ctx, 10)
+	if err != nil {
+		t.Fatalf("pending: %v", err)
+	}
+	if len(got) != 1 || got[0].Court != "realcourt" || got[0].Claim != 3 {
+		t.Fatalf("an unattributed blob never got its origin: %+v", got)
 	}
 }

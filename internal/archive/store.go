@@ -259,10 +259,33 @@ func (s *Store) Promote(ctx context.Context, sum string) error {
 // the queue can group, and a person can act on the source instead of on seven
 // symptoms.
 func (s *Store) PromoteFor(ctx context.Context, sum, court string, claimID uint64) error {
+	// THE ORIGIN IS THE FIRST CLAIM TO REFERENCE THESE BYTES, and it is written
+	// once. This used to overwrite on every promotion, which made the one field
+	// an operator acts on settable by the person they would be acting against.
+	//
+	// A blob is addressed by its HASH, and hashes are public — they are in
+	// ClaimMedia's output and in the archive URL. So anyone could file their own
+	// claim quoting somebody else's image and take the row: point a stranger's
+	// evidence at a throwaway court so an operator bans the wrong source, or,
+	// holding something about to be judged, file from a burner court afterwards
+	// so the "decide about the source" action lands there instead. Nothing is
+	// forged in either case — the chain really does say their claim references
+	// it, which is exactly why last-writer-wins was the wrong rule.
+	//
+	// It was not only adversarial: two honest claims quoting the same document
+	// flipped attribution back and forth on every pass, so the queue PendingReview
+	// deliberately groups by origin was not stable between reads.
+	//
+	// A later claim is a RE-USE, not the origin. Nothing is lost by saying so:
+	// blocking is by hash, so acting on the first filing still removes the bytes
+	// from every claim that quotes them.
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE blobs SET promoted = 1,
-		   filed_court = COALESCE(NULLIF(?, ''), filed_court),
-		   filed_claim = CASE WHEN ? > 0 THEN ? ELSE filed_claim END
+		   filed_court = CASE WHEN COALESCE(filed_court, '') = ''
+		                      THEN COALESCE(NULLIF(?, ''), filed_court)
+		                      ELSE filed_court END,
+		   filed_claim = CASE WHEN COALESCE(filed_claim, 0) = 0 AND ? > 0
+		                      THEN ? ELSE filed_claim END
 		 WHERE sha256 = ?`, court, claimID, claimID, sum)
 	if err != nil {
 		return fmt.Errorf("archive promote: %w", err)
