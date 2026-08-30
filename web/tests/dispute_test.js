@@ -40,6 +40,10 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
 const d = Object.assign({}, DEMO.claims["orem/3"]);
 const html = disputeTicket("orem", 3, d, NOW);
+// The round history moved OUT of the ballot and in with the resolution dates,
+// so it is rendered separately here — asserting it against the ballot would now
+// pass only if it had never moved.
+const rounds = disputeRounds("orem", d, NOW);
 
 // THE BALLOT IS THE DECISION; the rules of the court moved into the modal.
 // Quorum, threshold, the locking rule and the token flows were five dense lines
@@ -50,10 +54,31 @@ ok("hint names the answerer, the side and the bond",
    html.includes("answered YES") && html.includes("bonded 80.0 KOURT:OREM on it"));
 ok("uphold line names the side that stays", html.includes("the answer stays YES"));
 ok("overturn line names the side it becomes", html.includes("the answer becomes NO"));
-ok("ladder: spent rounds are struck through and greyed", html.includes('<div class="line spent"><span><s>round 1</s></span>') && html.includes("failed quorum"));
-ok("ladder: the live round is marked", html.includes("<span>\u2713 round 2</span>") && html.includes("voting now"));
-ok("ladder: round 2 voting at 64 KOURT:OREM", html.includes("round 2</span><span class=\"r\">voting now at 64.0 KOURT:OREM"));
-ok("clock: the close reads like the resolution ladder", /vote closes<\/span><span class="r">\u2248 \d+ [A-Z][a-z]{2} \d{4} <small>in 5 days<\/small> <small>\(\u2248block 4,886,400\)<\/small>/.test(html));
+ok("rounds are off the ballot", !html.includes("round 1") && !html.includes("✓ round"));
+ok("spent rounds are struck through and greyed, beside the dates",
+   rounds.includes('<div class="line spent"><span><s>round 1</s></span>') && rounds.includes("failed quorum"));
+ok("...and the current round is marked", rounds.includes("✓ round 2") && rounds.includes("voting now"));
+// The eligibility paragraph left the ballot entirely: the reason only matters to
+// the reader it applies to, and only when they reach for the button.
+ok("eligibility is not a standing paragraph", !html.includes("holder can vote"));
+ok("...the vote buttons are marked for the click-time check",
+   html.includes('id="voteactions"'));
+ok("...and Resolve sits outside that block, being no vote at all",
+   html.indexOf("Resolve (after close)") > html.indexOf('id="voteactions"')
+   && html.split('id="voteactions"')[1].indexOf("</div>") < html.split('id="voteactions"')[1].indexOf("Resolve"));
+ok("ladder: the live round is marked", rounds.includes("<span>\u2713 round 2</span>") && rounds.includes("voting now"));
+ok("ladder: round 2 voting at 64 KOURT:OREM", rounds.includes("round 2</span><span class=\"r\">voting now at 64.0 KOURT:OREM"));
+// The DATED close is the resolution ladder's row now — it always had one, and
+// the ballot was printing a second copy. What is left here is the fallback for
+// a chain that exposes no close height, which is the branch this block owns.
+// The ROW, not the words: the modal legitimately says "until the vote closes",
+// and an assertion that cannot tell prose from a duplicated row is one that
+// fails for the wrong reason.
+ok("clock: no second copy of the close row on the ballot",
+   !html.includes("<span>vote closes</span>"));
+ok("clock: the fallback still says it when there is no height to project from",
+   disputeRounds("orem", Object.assign({}, d, {voteEndsAt:null}), NOW)
+     .includes("about 7 days from the round's opening"));
 // Quorum LEFT the ballot. The rule and the figure are in the modal, where a
 // reader who wants the mechanism can find both — and the ballot no longer
 // spends a row on arithmetic nobody is being asked to do.
@@ -72,8 +97,11 @@ ok("no 'secret ballot'", !/secret ballot/i.test(html));
 // measured is mechanism.
 ok("weight is the pre-round snapshot, said in the modal",
    html.includes("whatever you held at the last hourly snapshot before this round opened"));
-ok("demo exclusion still taught, in one line",
-   html.includes("The sample address staked here, so it cannot vote"));
+// The demo-exclusion note went with the eligibility paragraph. In demo mode
+// every action button is already inert and says "Demo data — actions work on a
+// live node", which is the truer message than a note about staking.
+ok("no eligibility prose survives on the ballot",
+   !html.includes("cannot vote") && !html.includes("holder can vote"));
 ok("abstain button with turnout-only sub", html.includes("> Abstain") && html.includes("counts to turnout only, never to a side"));
 ok("abstain arg choice=abstain", html.includes('"choice":"abstain"') || html.includes("abstain"));
 // The rule is stated ONCE now, in the modal — it was on the ballot and in the
@@ -100,15 +128,20 @@ ok("no exclusion teaching when sample holds no position", !html2.includes("sampl
 CFG.mode='live';
 const dl = Object.assign({}, DEMO.claims["orem/3"]); delete dl.voteEndsAt; delete dl.quorumFloor;
 const htmlL = disputeTicket("orem", 3, dl, 5000000);
-ok("live: no invented deadline", htmlL.includes("the chain exposes no close height to read"));
+ok("live: no invented deadline",
+   disputeRounds("orem", dl, null).includes("the chain exposes no close height to read"));
 ok("live: no turnout row without read", !htmlL.includes("turnout bar"));
-ok("live: eligibility span present for async fill", htmlL.includes('id="voteelig"'));
+// The async fill marks the vote BUTTONS now instead of writing a paragraph, so
+// what has to be present is the block it looks for.
+ok("live: the vote buttons are findable by the async check",
+   htmlL.includes('id="voteactions"'));
 CFG.mode='demo';
 
 // past-close demo: Resolve-works copy
 const d3 = Object.assign({}, DEMO.claims["orem/3"], {voteEndsAt: NOW-100});
 const html3 = disputeTicket("orem", 3, d3, NOW);
-ok("past close: resolve works now", html3.includes("the window has passed — Resolve works now"));
+ok("past close: resolve works now",
+   disputeRounds("orem", d3, NOW).includes("the window has passed — Resolve works now"));
 
 
 // ---- B4 critic fixes ----
@@ -122,12 +155,31 @@ ok("F4: zero-bond overturn row honest", html0.includes("no bond is left to burn"
 ok("F4: nonzero names the bond and who loses it",
    html.includes("bonded 80.0 KOURT:OREM on it") && html.includes("loses their bond"));
 const srcF = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
+
+// THE WIRING, as text, because there is no DOM here. Both of these were absent
+// and both ablations survived: the rounds block rendered correctly and was
+// never placed on the page, and the click gate could be deleted with every
+// assertion still green. A renderer with no caller is the failure this feature
+// has had more than once.
+ok("the resolution section places the rounds beside its dates",
+   srcF.includes("+ disputeRounds(slug, d, nowH)"));
+ok("the click gate turns the mark into a sentence",
+   srcF.includes('closest("[data-voteblocked]")')
+   && /vb\)\{ ev\.preventDefault\(\)/.test(srcF)
+   && srcF.includes('getAttribute("data-voteblocked")'));
 ok("F1: voteEndsAt in chart domain candidates", /const cands=\[now, d\.settleAt\|\|null, d\.escrowUntil\|\|null, d\.voteEndsAt\|\|null, ansH\]/.test(srcF));
 // The HEDGE is the point — that a clean-looking eligibility read is not the
 // final word — not which noun carries it. Matched as a pattern so renaming
 // "realm" to "court" for readers does not read as a lost guarantee.
-ok("F3: eligibility affirmative hedged",
-   /the (court|realm) has the final say at signing; staker records persist/.test(srcF));
+// THE HEDGE MOVED WITH THE CHECK. It used to reassure an eligible reader in a
+// standing paragraph; now the check runs at click time and says nothing at all
+// unless it has a reason, so there is no affirmative left to hedge. What still
+// has to be true is that the page never promises the vote will be accepted —
+// the court decides at signing — so the copy states what it SAW, not what will
+// happen.
+ok("F3: the click-time reason states what was seen, not what will happen",
+   /You cannot vote on this claim: you /.test(srcF)
+   && !/your vote will be (accepted|refused)/i.test(srcF));
 
 // ticket rows: label bold on the LEFT, value left-aligned in its own column,
 // with a real gutter (owner report: bold-right, ragged-left, columns touching)
@@ -151,7 +203,7 @@ ok("plain-English rewrite present",
    html.includes("the best move would be to wait and copy whoever voted with the most weight"));
 ok("§7.4 holds in the new copy", !/backing|redeem|APR|profit|return on/i.test(html) && html.includes("staked KOURT:OREM is never touched"));
 ok("the token is named, not \"money\"", html.includes("KOURT:OREM") && !/\bmoney\b/.test(html));
-ok("canonical display is KOURT:SLUG", html.includes("Any KOURT:OREM holder can vote"));
+ok("canonical display is KOURT:SLUG", html.includes("Anyone holding KOURT:OREM"));
 ok("the word \"money\" appears nowhere in the file", (()=>{ const fs=require("fs");
   return !/\bmoney\b/i.test(fs.readFileSync(require('path').join(__dirname,'..','index.html'),"utf8")); })());
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

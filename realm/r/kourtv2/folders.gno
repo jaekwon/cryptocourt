@@ -80,6 +80,16 @@ type folder struct {
 	// it. items has had curation order since MoveItemInFolder; this is the same
 	// courtesy for the headings themselves.
 	ord int
+	// ONE image, or nil (owner ruling, CLAIM_MEDIA §10). A folder is a heading,
+	// not a claim: it is arguing nothing, so it has nothing to prove and no
+	// numbered exhibits to keep in order. What it has is a face on the map, and
+	// one picture is a face. Seven would be a gallery for a thing that makes no
+	// assertion.
+	//
+	// Same mediaItem the chain already stores for a claim, so the fingerprint,
+	// the mirrors, the archive-first destination and the render-time
+	// revalidation all come along unchanged.
+	image *mediaItem
 }
 
 // folderDepth counts headings above this one. A root is 1. Bounded by maxFolders
@@ -372,6 +382,73 @@ func RenameFolder(cur realm, courtSlug string, folderID uint64, name, desc strin
 // PurgeFolder tombstones a folder's name/description behind a category code
 // (the row-level purge for a §2-inventory folder row). Global DAO, m-of-n. The
 // items list (claim IDs, no user text) is unaffected.
+// SetFolderImage gives a folder its one picture, on the same seat that renames
+// it: a folder's face is curation, and curation is the folder moderator's.
+//
+// The argument is ONE line of the same eight-field format a claim's evidence
+// uses — kind|sha256|mime|w|h|bytes|caption|mirrors — so web/media.js builds it
+// with the same code and this realm parses it with the same parser. A second
+// line is refused rather than truncated: a caller passing two has misunderstood
+// something, and taking the first silently would hide that.
+//
+// An image only. A video is a link the court cannot vouch for, which is a
+// reasonable thing to file as EVIDENCE, where the claim page says so in as many
+// words — and an unreasonable thing to make the face of a heading.
+func SetFolderImage(cur realm, courtSlug string, folderID uint64, media string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := requireFolderMod(c, who)
+	f := cm.mustFolder(folderID)
+	if f.purged {
+		panic("kourtv2: this folder's text was purged and cannot be re-set")
+	}
+	items := parseMediaArg(media)
+	if len(items) != 1 {
+		panic("kourtv2: a folder carries exactly one image")
+	}
+	if items[0].kind != mediaKindImage {
+		panic("kourtv2: a folder's image is an image, not a video link")
+	}
+	f.image = &items[0]
+	emitModAct(c.id, 0, "folder-image", who)
+}
+
+// ClearFolderImage takes it off again. Same seat, and separate from SetFolderImage
+// because "no picture" reached by passing an empty string is a state somebody
+// arrives at by accident.
+func ClearFolderImage(cur realm, courtSlug string, folderID uint64) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := requireFolderMod(c, who)
+	cm.mustFolder(folderID).image = nil
+	emitModAct(c.id, 0, "folder-image-clear", who)
+}
+
+// FolderImage answers with the folder's picture as one line of JSON, or [] — the
+// same shape ClaimMedia uses, so the overlay parses both with one function.
+//
+// A purged folder answers with nothing, exactly as a purged claim does. Nothing
+// here is a second gate: f.image is already nil after a purge, and this reads
+// what is there.
+func FolderImage(courtSlug string, folderID uint64) string {
+	c := mustCourt(courtSlug)
+	cm := c.mod
+	if cm == nil {
+		return "[]"
+	}
+	f := cm.mustFolder(folderID)
+	if f.image == nil {
+		return "[]"
+	}
+	return encodeMedia([]mediaItem{*f.image})
+}
+
 func PurgeFolder(cur realm, courtSlug string, folderID uint64, categoryCode string) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -393,6 +470,10 @@ func PurgeFolder(cur realm, courtSlug string, folderID uint64, categoryCode stri
 	f.code = code
 	f.name = ""
 	f.desc = ""
+	// The image is the folder's text as much as its name is: a picture chosen to
+	// stand for a heading says something, and a purge that left it would leave
+	// the part somebody is most likely to have objected to.
+	f.image = nil
 	emitPurge(c.id, 0, code, who)
 }
 
@@ -645,8 +726,9 @@ func OrderFolders(cur realm, courtSlug string, parentID uint64, ids string) {
 // FolderTree is a court's whole folder structure in one read: "id:parent:flags"
 // per folder, comma separated, in display order.
 //
-// parent is 0 for a root heading. flags is "r" retired, "p" purged, "rp" both,
-// "-" neither. Children follow the parent they belong to, and each sibling group
+// parent is 0 for a root heading. flags is "r" retired, "p" purged, "i" has a
+// picture, in that order, or "-" for none of them. Children follow the parent
+// they belong to, and each sibling group
 // sits in the order a curator gave it with OrderFolders; folders nobody has
 // ordered come last within their group, ids ascending. A court nobody has
 // ordered reads in plain id order.
@@ -680,6 +762,14 @@ func FolderTree(courtSlug string) string {
 		}
 		if f.purged {
 			flags += "p"
+		}
+		// "i" — this folder has a picture, so a client knows to spend the read.
+		// It rides here rather than in a read of its own because the alternative
+		// is one FolderImage per folder on every map draw, a hundred at the cap,
+		// for a field most folders will never set. The flag costs a byte and the
+		// read is paid only where there is something to fetch.
+		if f.image != nil {
+			flags += "i"
 		}
 		if flags == "" {
 			flags = "-"

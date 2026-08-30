@@ -715,7 +715,41 @@ ok("exactly one court node, and it is not a link",
 }
 
 // §7.4 sweep of the generated map output
-ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|redeem|profit/i.test(svgs.titles.replace(/aria-label="[^"]*"/,'').replace(/<title>[\s\S]*?<\/title>/g,'')));
+// The sweep is about words a READER can read, so the folder covers' base64 goes
+// out with the aria-labels and titles: an image's bytes are not prose, and one
+// of them happens to spell "CC" in the middle of a PNG. Only data: URIs are
+// stripped — an http one would be a host, which is a different kind of thing to
+// find in this output and should still trip something.
+const mapProse = svgs.titles
+  .replace(/href="data:[^"]*"/g, 'href="data:"')
+  .replace(/aria-label="[^"]*"/, '')
+  .replace(/<title>[\s\S]*?<\/title>/g, '');
+ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|redeem|profit/i.test(mapProse));
+
+// A FOLDER'S ONE PICTURE IS THE BOX'S FACE (owner ruling, CLAIM_MEDIA §10).
+// The three sample folders carry one; the drawn image must sit exactly on its
+// own box and be clipped to it, or a wide cover bleeds over its neighbours.
+{
+  const faces=[...svgs.titles.matchAll(/<image class="mfimg" href="([^"]*)" x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)"[^>]*clip-path="url\(#(mfi\d+)\)"/g)];
+  ok("each sample folder wears its cover", faces.length===3);
+  ok("every cover is bytes in the page, not a host", faces.every(f=>f[1].startsWith("data:image/")));
+  const boxes=parseSVG(svgs.titles).rects.filter(r=>r.cls==="mfold");
+  ok("a cover sits exactly on a folder box", faces.every(f=>boxes.some(b=>
+    b.x===Number(f[2]) && b.y===Number(f[3]) && b.w===Number(f[4]) && b.h===Number(f[5]))));
+  ok("every cover is clipped, and to its own clip path", faces.every(f=>
+    svgs.titles.includes(`<clipPath id="${f[6]}">`)) && new Set(faces.map(f=>f[6])).size===3);
+  // The label is drawn AFTER the face, so the name is never behind the picture.
+  // SVG has no z-index: paint order is the only thing holding the heading up.
+  // Compared against the label of the SAME folder — mfi<i> pairs with owner
+  // h<i> — because "some later folder's label" is true however this is ordered.
+  ok("the heading is drawn over its face", faces.every(f=>{
+    const own = 'data-owner="h'+f[6].slice(3)+'"';
+    return svgs.titles.includes(own) && svgs.titles.indexOf(f[0]) < svgs.titles.indexOf(own);
+  }));
+  // A folder with no picture draws no image at all — not an empty href, which
+  // browsers resolve against the page and fetch.
+  ok("a folder with no picture draws nothing", !/<image class="mfimg" href=""/.test(svgs.titles));
+}
 // dot classes agree with statusPill families for every orem claim
 {
   let agree=true;

@@ -82,6 +82,52 @@ def exhibit():
     return png(W, H, rows)
 
 
+# The faces the demo's folders wear on the map. A folder is a heading, not a
+# claim — it argues nothing — so these are deliberately ABSTRACT: bands of colour
+# that read as a cover at 164x44 and as nothing in particular up close. The same
+# rule as the exhibit above, for the same reason: a plausible-looking document is
+# a fabricated record, and this is a court.
+COVERS = [
+    ((0x1E, 0x2E, 0x4A), (0x3E, 0x6A, 0x8E), (0xC2, 0x6B, 0x3A)),  # municipal blue
+    ((0x24, 0x3A, 0x30), (0x3F, 0x6B, 0x55), (0xD7, 0xB2, 0x64)),  # infrastructure green
+    ((0x3A, 0x2A, 0x30), (0x6B, 0x45, 0x52), (0xE0, 0x8B, 0x7C)),  # filings plum
+]
+
+
+def cover(n):
+    """One folder face. 164x44 is the drawn size, at about a third opacity behind
+    a heading — so the shapes are BROAD. An earlier version put three small marks
+    on a wash and at that size they read as grime on the box rather than as a
+    picture. Two large fields split by a diagonal and one wide band survive the
+    reduction: what reaches the reader is a clean two-tone tint, different per
+    folder, which is the whole job a face has on a map."""
+    w, h = 328, 88
+    base, mid, mark = COVERS[n % len(COVERS)]
+    # The diagonal's lean, per cover, so the three do not read as one template.
+    slope = (0.9, -1.4, 2.1)[n % 3]
+    edge = (0.34, 0.62, 0.46)[n % 3]
+    rows = []
+    for y in range(h):
+        t = y / (h - 1)
+        cut = (edge + slope * (t - 0.5) * 0.5) * w
+        row = []
+        for x in range(w):
+            if x < cut:
+                # the darker field, with a slight vertical wash for depth
+                row.append(tuple(int(base[i] + (mid[i] - base[i]) * t * 0.55) for i in range(3)))
+            else:
+                row.append(tuple(int(mid[i] + (base[i] - mid[i]) * (1 - t) * 0.30) for i in range(3)))
+        rows.append(row)
+
+    # One band, full width, the accent colour: the only small shape, and it is
+    # small in one dimension only. Kept out of the middle third, because the
+    # heading is drawn there and a band behind it reads as a strikethrough.
+    y0 = int(h * (0.10, 0.82, 0.15)[n % 3])
+    for y in range(y0, min(h, y0 + max(3, h // 14))):
+        rows[y] = [mark] * w
+    return png(w, h, rows)
+
+
 def line():
     body = exhibit()
     uri = "data:image/png;base64," + base64.b64encode(body).decode()
@@ -102,7 +148,20 @@ def main():
             print("make-demo-exhibit: the page carries the bytes but not their sha256 %s"
                   % digest, file=sys.stderr)
             return 1
-        print("make-demo-exhibit: ok (%d bytes, %s)" % (len(body), digest[:12]))
+        for i in range(len(COVERS)):
+            u = "data:image/png;base64," + base64.b64encode(cover(i)).decode()
+            if u not in page:
+                print("make-demo-exhibit: web/index.html does not carry folder cover %d.\n"
+                      "Run scripts/make-demo-exhibit.py --covers and paste it." % i,
+                      file=sys.stderr)
+                return 1
+        print("make-demo-exhibit: ok (%d bytes, %s, +%d folder cover(s))"
+              % (len(body), digest[:12], len(COVERS)))
+        return 0
+    if "--covers" in sys.argv:
+        for i in range(len(COVERS)):
+            c = cover(i)
+            print("cover%d : data:image/png;base64,%s" % (i, base64.b64encode(c).decode()))
         return 0
     print("bytes  : %d" % len(body))
     print("sha256 : %s" % digest)

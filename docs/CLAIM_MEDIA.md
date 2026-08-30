@@ -1,6 +1,6 @@
 # CLAIM_MEDIA — evidence a claim carries, and proof it hasn't changed
 
-> **v0.9 — built, run, and driven end to end in a browser. Supersedes v0.1; two owner rulings settled; griefing pass applied; §8 rewritten from the code after the plan and the build drifted apart.** A claim may carry up to **seven**
+> **v1.0 — built, run, and driven end to end in a browser. Supersedes v0.1; §10 holds no open ruling; griefing pass applied; §8 rewritten from the code after the plan and the build drifted apart.** A claim may carry up to **seven**
 > media items. The chain stores a **sha256 and a list of mirrors**, never the
 > bytes. kourt.xyz keeps its own copy of every image at an address derived from
 > that hash, so no third party can take a claim's evidence away.
@@ -532,8 +532,9 @@ stored value costs the item, never the claim underneath it.**
 - caption ≤ 120 chars, single line
 
 **Host allowlist** mirrors gnoweb's `cspImgHost`, plus `kourt.xyz`. Drift is the
-hazard: if gnoweb narrows its CSP, images silently break. Whether this is a
-`const` or an admin parameter is open (§10).
+hazard: if gnoweb narrows its CSP, images silently break. It is an **admin
+parameter**, not a `const` — `SetMediaHosts` / `ClearMediaHosts` on the
+global-DAO seat, with the shipped list as the default (§10.8).
 
 ⚠︎ **Re-validate on render, not only on write.** Write-time-only validation
 grandfathers every URL stored under an older, wider allowlist, so removing a host
@@ -837,10 +838,41 @@ against believing a green suite about anything a reader sees.
 
 ---
 
-## 10. Open owner rulings
+## 10. Owner rulings
 
-1. **Folders** — claims only, or may a folder carry an image?
-**Settled by the owner:**
+Nothing is open. Everything below was decided by the owner; newest first.
+
+11. **A folder may carry ONE image, and it is the box's face on the map.** A
+    folder is a heading, not a claim: it asserts nothing, so it has nothing to
+    prove and no numbered exhibits to keep in order. One picture is a face;
+    seven would be a gallery hung for something that makes no argument.
+
+    **It is the same `mediaItem` a claim's evidence uses**, so the fingerprint,
+    the mirror list, the archive-first destination and the render-time
+    revalidation all arrive unchanged — `SetFolderImage` takes one line of the
+    eight-field wire format and refuses two rather than taking the first, and
+    refuses a video, which is a link the court cannot vouch for: a fair thing to
+    file as evidence, where the claim page says so, and not a fair thing to make
+    the face of a heading.
+
+    **The seat is the folder moderator's**, the one that already renames it: a
+    folder's face is curation, and curation is a moderator's job. A purge takes
+    the image with the name and the description, because a picture chosen to
+    stand for a heading is the folder's text as much as its name is, and is the
+    part most likely to have been objected to.
+
+    **On the map it is a tint, not a billboard.** A reader scanning the map is
+    looking for a NAME, so the face is drawn under the label at 42% and clipped
+    to the box, lifts on hover or selection, and is dropped entirely when the map
+    is zoomed out far enough that boxes are 112px of label — at that size an
+    image is texture, and texture at fifty boxes is noise. Archive-only, like a
+    claim node's thumbnail and for the same reason: a map draw is fifty boxes at
+    once, and fanning out to filer-chosen hosts would send every reader's address
+    wherever the filer liked.
+
+    **`FolderTree` gained an `i` flag** so the client knows which folders are
+    worth a read. The alternative was one `FolderImage` per folder on every map
+    draw — a hundred at the cap, for a field most folders will never set.
 
 10. **Evidence is a bounded grid, in the shape a reader already knows.** Seven
     exhibits stacked full-width put the Resolution heading about four screens

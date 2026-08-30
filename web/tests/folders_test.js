@@ -8,6 +8,8 @@ function slice(from, to){
   return src.slice(a, b);
 }
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
+// siteHost() reads it, and a folder's picture resolves to https://<host>/m/<sha>.
+global.location = { protocol:"https:", host:"kourt.xyz", origin:"https://kourt.xyz" };
 global.CFG = { mode:'live', chainid:'dev' };
 global.isLive = ()=> CFG.mode==='live';
 const NOWm = src.match(/const NOW\s*=\s*([0-9_]+)/); global.NOW = Number(NOWm[1].replace(/_/g,''));
@@ -37,6 +39,12 @@ global.qeval = async expr => {
     const fid=+expr.match(/,(\d+)\)/)[1];
     if(QSHAPE==="tokens") return `(slice[(${fid} uint64),(${fid+10} uint64)] []uint64)`;
     return `([${fid} ${fid+10}] []uint64)`;
+  }
+  // The shape encodeMedia writes for a folder's one picture: one line of JSON,
+  // one item. FIMG lets a case say the read failed or the realm is too old.
+  if(/FolderImage/.test(expr)){
+    if(global.FIMG === null) throw new Error("no such read");
+    return `("${(global.FIMG || `[{\\"kind\\":\\"img\\",\\"sha256\\":\\"${"a".repeat(64)}\\",\\"mime\\":\\"image/png\\",\\"w\\":328,\\"h\\":88,\\"bytes\\":796,\\"caption\\":\\"\\",\\"mirrors\\":[]}]`)}" string)`;
   }
   throw new Error("unexpected "+expr);
 };
@@ -74,6 +82,13 @@ code += 'const ICN_FOLDER="<svg/>";\n';
 // F1 asks mapLayout directly now, so the map's own code has to be here.
 code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
 code += 'function phaseClass(t){ return {short:"open"}; }\n';
+// A FOLDER'S PICTURE comes back through the same two functions a claim node's
+// thumbnail uses, so the real ones are loaded rather than stubbed: a stub that
+// resolved a mirror, or resolved anything without a sha256, would test the stub
+// and pass while the page leaked every reader's address to a filer-chosen host.
+const M = require(require('path').join(__dirname,'..','media.js'));
+global.mediaParse = M.mediaParse; global.mediaNodeThumb = M.mediaNodeThumb;
+code += slice('function siteHost(', 'const store');
 eval(code);
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
@@ -95,6 +110,37 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   QSHAPE="bare"; const cf2 = await chainFolders("orem");
   ok("bare-bracket shape also parses", JSON.stringify(cf2.folders[0].claims)==="[1,11]");
   QSHAPE="tokens";
+  // ---- a folder's one picture (owner ruling, CLAIM_MEDIA §10.11) ----------
+  // The "i" flag in FolderTree is the whole economy of this feature: without it
+  // a map draw would ask FolderImage per folder, a hundred at the cap, for a
+  // field most folders never set. So the read count is pinned in BOTH
+  // directions — paid where there is a picture, not paid where there is not.
+  global.FCOUNT=3; global.FTREE="1:0:-,2:0:i,3:0:-"; global.FIMG=undefined; CALLS=[];
+  const cfi = await chainFolders("orem");
+  ok("only the flagged folder is asked for a picture",
+     CALLS.filter(e=>/FolderImage/.test(e)).length===1 && /FolderImage\("orem",2\)/.test(CALLS.find(e=>/FolderImage/.test(e))));
+  ok("read count = 2 + 2F + 1 picture", CALLS.length===2+2*3+1);
+  ok("the flagged folder carries an archive URL",
+     cfi.folders[1].img==="https://kourt.xyz/m/"+"a".repeat(64));
+  ok("the unflagged folders carry no picture", cfi.folders[0].img==="" && cfi.folders[2].img==="");
+  // A MIRROR IS NOT GOOD ENOUGH HERE. mediaNodeThumb refuses anything without an
+  // archive copy, because a map draw is fifty boxes fanning out to hosts the
+  // filer picked. An item with mirrors and no sha256 must come back empty.
+  global.FIMG='[{\\"kind\\":\\"img\\",\\"sha256\\":\\"\\",\\"mime\\":\\"image/png\\",\\"w\\":8,\\"h\\":8,\\"bytes\\":9,\\"caption\\":\\"\\",\\"mirrors\\":[\\"https://i.imgur.com/x.png\\"]}]';
+  const cfm = await chainFolders("orem");
+  ok("a mirror-only picture is not drawn on the map", cfm.folders[1].img==="");
+  // A purged slot: encodeMedia keeps the position and drops everything else.
+  global.FIMG='[{\\"kind\\":\\"img\\",\\"purged\\":true}]';
+  const cfp = await chainFolders("orem");
+  ok("a purged picture is not drawn", cfp.folders[1].img==="");
+  // The read itself failing must not take the folder with it — the name and the
+  // claims are the page, and the picture is the decoration.
+  global.FIMG=null;
+  const cff = await chainFolders("orem");
+  ok("a failed picture read still yields the folder",
+     cff.folders[1].name==="[purged:9.2]<img src=x onerror=alert(1)>" && cff.folders[1].img==="" && !cff.folders[1].failed);
+  global.FTREE=undefined; global.FIMG=undefined;
+
   // zero folders = exactly one read
   global.FCOUNT=0; CALLS=[];
   const cf0 = await chainFolders("orem");

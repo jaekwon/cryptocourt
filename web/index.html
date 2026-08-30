@@ -2775,6 +2775,10 @@ document.addEventListener("click",(ev)=>{
   if(d){ let n=d.parentElement.querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); d.parentElement.appendChild(n); }
     n.textContent="Demo data — actions work on a live node. Switch Source in the left rail."; return; }
+  const vb = ev.target.closest("[data-voteblocked]");
+  if(vb){ ev.preventDefault(); let n=vb.closest(".actions").querySelector(".txnote");
+    if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); vb.closest(".actions").appendChild(n); }
+    n.textContent=vb.getAttribute("data-voteblocked"); return; }
   const na = ev.target.closest("[data-needack]");
   if(na){ ev.preventDefault(); let n=na.parentElement.querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); na.parentElement.appendChild(n); }
@@ -4008,24 +4012,33 @@ function voteHelpModal(slug, d){
     </div></dialog>`;
 }
 
-function disputeTicket(slug, id, d, nowH){
+/* THE ROUNDS, WITH THE OTHER DATES. Which round this is, and which ones already
+   failed, is the claim's history — it belongs beside "answered" and "vote
+   closes" in the resolution ladder, not between the question and the buttons.
+   A voter deciding how to vote does not need to know what the bond will cost
+   the NEXT challenger. */
+function disputeRounds(slug, d, nowH){
   const posted = d.disputeBondNext? cc(d.disputeBondNext,slug) : null;
   const k = d.round||0;
-  let ladder="";
-  for(let i=1;i<=k;i++) ladder+=`<div class="line spent"><span><s>round ${i}</s></span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div>`;
-  ladder+=`<div class="line"><span>✓ round ${k+1}</span><span class="r">voting now${posted?` at ${posted}`:""} — the bond doubles each failed round, and the count resets when a round decides</span></div>`;
-  const closeWhen = (()=>{
-    if(!d.voteEndsAt) return null;
-    if(nowH==null) return `≈block ${fmtN(d.voteEndsAt)}`;
-    if(d.voteEndsAt<=nowH) return "the window has passed — Resolve works now";
-    // same words as the resolution ladder: a projected date, then how far off
-    const secs = (d.voteEndsAt-nowH)*BLOCK_SECS;
-    const nowT = Math.floor(Date.now()/1000);
-    return `≈ ${stampDate(nowT+secs,false)} <small>${esc(sinceWords(nowT, nowT+secs))}</small> <small>(≈block ${fmtN(d.voteEndsAt)})</small>`;
-  })();
-  const closes = d.voteEndsAt
-    ? `<div class="line"><span>vote closes</span><span class="r">${closeWhen}</span></div>`
-    : `<div class="line"><span>vote closes</span><span class="r">about 7 days from the round's opening — the chain exposes no close height to read; Resolve simply refuses until it has passed</span></div>`;
+  let out="";
+  for(let i=1;i<=k;i++) out+=`<div class="line spent"><span><s>round ${i}</s></span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div>`;
+  out+=`<div class="line"><span>✓ round ${k+1}</span><span class="r">voting now${posted?` at ${posted}`:""} — the bond doubles each failed round, and the count resets when a round decides</span></div>`;
+  // The ladder above already carries a dated "vote closes" row whenever the
+  // chain gives a height to project from. When it does not, the fact still has
+  // to be said somewhere, and this is the row that is about the round.
+  // Two cases the dated ladder row cannot carry, and both are actionable: a
+  // chain that exposes no close height at all, and a window that has already
+  // passed — the second is the moment Resolve starts working, which is the one
+  // thing somebody looking at a stale-looking ballot wants to know.
+  if(!d.voteEndsAt){
+    out+=`<div class="line"><span>vote closes</span><span class="r">about 7 days from the round's opening — the chain exposes no close height to read; Resolve simply refuses until it has passed</span></div>`;
+  }else if(nowH!=null && d.voteEndsAt<=nowH){
+    out+=`<div class="line"><span>vote closes</span><span class="r">the window has passed — Resolve works now</span></div>`;
+  }
+  return out? `<div class="ticket" style="margin-top:12px">${out}</div>` : "";
+}
+
+function disputeTicket(slug, id, d, nowH){
   // THE MECHANISM IS NOT ON THE BALLOT. Quorum, threshold, what a vote locks
   // and where the coin goes were five dense lines between the question and the
   // buttons — a reader had to get through the rules of the court to reach the
@@ -4033,33 +4046,52 @@ function disputeTicket(slug, id, d, nowH){
   // was already the place for them. What is left here is what somebody deciding
   // needs: the question, the two outcomes, the cost, the clock, and whether
   // they may vote at all.
-  const demoExcluded = CFG.mode==="demo" && (()=>{ const p=DEMO.positions[slug+"/"+id]; return !!(p && (p.yes||p.no||p.cy||p.cn)); })();
   return `<div class="ticket" style="margin-top:12px"><h3>Should this answer be overturned?</h3>
       <div class="hint">${shortAddr(d.answerer)} answered ${sideName(d.answer)}${d.answerBond? ` and bonded ${cc(d.answerBond,slug)} on it` : ` — its bond already burned in an earlier overturned round`}. One vote per address, and you cannot change it.</div>
       <div class="line"><span>uphold</span><span class="r">the answer stays ${sideName(d.answer)}${d.answerBond? `. Whoever challenged it loses their bond` : ``}</span></div>
       <div class="line"><span>overturn</span><span class="r">the answer becomes ${sideName(1-d.answer)}${d.answerBond? `. ${shortAddr(d.answerer)} loses their bond` : ` — no bond is left to burn`}</span></div>
-      ${ladder}${closes}
       ${voteLockLine("verdict","votecommit")}
-      <p class="small muted" style="margin:10px 0 0">Any KOURT:${esc(slug).toUpperCase()} holder can vote — except the person who wrote the claim, the person who answered it, and anyone who staked on it.${demoExcluded? " The sample address staked here, so it cannot vote; the buttons stay to show the transaction's shape.":""}<span id="voteelig"></span></p>
-      <div class="actions" style="margin-top:10px">
+      <div class="actions" id="voteactions" style="margin-top:10px">
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
-        ${btn("Abstain","VoteDispute",{courtSlug:slug,claimID:id,choice:"abstain"},"","counts to turnout only, never to a side")}
+        ${btn("Abstain","VoteDispute",{courtSlug:slug,claimID:id,choice:"abstain"},"","counts to turnout only, never to a side")}</div>
+      <!-- RESOLVE IS NOT A VOTE, so it sits outside the block the eligibility
+           check marks: somebody who staked on this claim may not judge it and may
+           still close the round once the window has passed. -->
+      <div class="actions" style="margin-top:8px">
         ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div>
       <p class="small muted" style="margin:10px 0 0">Nobody can see the count until voting closes. <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></p>
       ${voteHelpModal(slug, d)}`;
 }
+/* WHY YOU CANNOT VOTE, SAID WHEN YOU TRY TO — not as a standing paragraph on a
+   ballot most readers can act on.
+   
+   It used to print two sentences under every ballot: one naming the three
+   excluded roles, and one telling an eligible reader that nothing disqualifying
+   was visible, which is a sentence about nothing. The reason only matters to
+   the person it applies to, and only at the moment they reach for the button.
+   
+   MARKED, NOT DISABLED. The reads are async and arrive after the panel paints,
+   so a disabled button would flicker; and a button that silently does nothing
+   teaches less than one that says why. The click handler below turns the mark
+   into a sentence. */
 async function fillVoteEligibility(slug, id, d){
-  const el=document.getElementById("voteelig"); if(!el || !CFG.addr) return;
+  if(!CFG.addr) return;
+  const box = document.getElementById("voteactions");
+  const btns = box? box.querySelectorAll(".btn, .signbtn") : [];
+  if(!btns.length) return;
   try{
     const [author,p] = await Promise.all([
       one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null),
       positionOf(slug,id,CFG.addr)]);
-    const why = author===CFG.addr? "authored"
-      : d.answerer===CFG.addr? "answered"
-      : (p && (p.yes||p.no||p.cy||p.cn))? "staked" : null;
-    el.textContent = why? ` You may not vote here — you ${why} this claim.`
-      : " No stake, answer, or authorship is visible for this address — but the court has the final say at signing; staker records persist even after full withdrawal.";
+    const why = author===CFG.addr? "wrote this claim"
+      : d.answerer===CFG.addr? "answered it"
+      : (p && (p.yes||p.no||p.cy||p.cn))? "staked on it" : null;
+    if(!why) return;
+    // The court decides at signing, not here — so this says what it saw rather
+    // than promising the transaction would fail.
+    btns.forEach(el => el.setAttribute("data-voteblocked",
+      "You cannot vote on this claim: you " + why + "."));
   }catch(_){}
 }
 /* ---------------- the vote lock's disclosure ----------------
@@ -7479,6 +7511,7 @@ function resolutionSection(slug,id,d,nowH,tl){
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.</div></div>`
+      + disputeRounds(slug, d, nowH)
       + disputeTicket(slug, id, d, nowH);
   } else if(d.phase==="provisional"){
     const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext,slug)+" (it doubles each failed round).":"";

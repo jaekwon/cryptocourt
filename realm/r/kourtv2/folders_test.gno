@@ -463,3 +463,94 @@ func TestFolderTree(cur realm, t *testing.T) {
 	PurgeFolder(cross(cur), "ftree", kid, "CSAM")
 	uassert.Equal(t, "1:0:-,2:1:p,3:0:r", FolderTree("ftree"))
 }
+
+
+// A FOLDER CARRIES ONE IMAGE (owner ruling, CLAIM_MEDIA §10). A folder is a
+// heading, not a claim: it argues nothing, so it has nothing to prove and no
+// numbered exhibits to keep in order. What it has is a face on the map.
+func TestAFolderCarriesOneImage(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fimg-alice")
+	testCourt(cur, "fimg", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	f := CreateFolder(cross(cur), "fimg", "Municipal record", "filings and audits")
+
+	if got := FolderImage("fimg", f); got != "[]" {
+		t.Fatalf("a new folder already has a picture: %q", got)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SetFolderImage(cross(cur), "fimg", f, clientImageLine)
+	got := FolderImage("fimg", f)
+	if !strings.Contains(got, strings.Repeat("1", 64)) {
+		t.Fatalf("the folder's image did not come back: %q", got)
+	}
+	// ONE LINE, like every other media read: the overlay's parseTyped splits raw
+	// output on newlines before it matches a typed value.
+	if strings.Contains(got, "\n") {
+		t.Fatalf("FolderImage must answer on one line: %q", got)
+	}
+
+	// THE FLAG IS HOW A CLIENT KNOWS TO SPEND THE READ. A map draw asks for the
+	// tree once and would otherwise have to ask FolderImage per folder — a
+	// hundred reads at the cap for a field most folders never set.
+	if tree := FolderTree("fimg"); !strings.Contains(tree, ":0:i") {
+		t.Fatalf("FolderTree does not mark the folder as having a picture: %q", tree)
+	}
+
+	// Exactly one. Two is a caller who has misunderstood something, and taking
+	// the first silently would hide that.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "exactly one image", func() {
+		SetFolderImage(cross(cur), "fimg", f, clientImageLine+"\n"+clientImageLine)
+	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "exactly one image", func() {
+		SetFolderImage(cross(cur), "fimg", f, "")
+	})
+	// And an image. A video is a link the court cannot vouch for, which is a fair
+	// thing to file as evidence — where the claim page says so — and not a fair
+	// thing to make the face of a heading.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "not a video link", func() {
+		SetFolderImage(cross(cur), "fimg", f, clientVideoLine)
+	})
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ClearFolderImage(cross(cur), "fimg", f)
+	if got := FolderImage("fimg", f); got != "[]" {
+		t.Fatalf("the picture survived being cleared: %q", got)
+	}
+	if tree := FolderTree("fimg"); strings.Contains(tree, "i") {
+		t.Fatalf("FolderTree still marks a picture that was cleared: %q", tree)
+	}
+}
+
+// A PURGE TAKES THE PICTURE TOO. A folder's image is its text as much as its name
+// is: somebody chose it to stand for a heading, and a purge that left it would
+// leave the part most likely to have been objected to.
+func TestPurgingAFolderTakesItsImage(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fpim-alice")
+	testCourt(cur, "fpim", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	f := CreateFolder(cross(cur), "fpim", "A heading", "with a face")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	SetFolderImage(cross(cur), "fpim", f, clientImageLine)
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeFolder(cross(cur), "fpim", f, "DEFAMATION")
+
+	if !FolderPurged("fpim", f) {
+		t.Fatal("the folder was not purged")
+	}
+	if got := FolderImage("fpim", f); got != "[]" {
+		t.Fatalf("a purged folder still shows its picture: %q", got)
+	}
+	// And it cannot be given a new one, for the same reason its name cannot.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "purged", func() {
+		SetFolderImage(cross(cur), "fpim", f, clientImageLine)
+	})
+}
