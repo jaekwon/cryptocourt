@@ -320,6 +320,22 @@ func TestOnlyAGlobalDAOMemberTakesDownOneImage(cur realm, t *testing.T) {
 		t.Fatalf("the purged item's hash must be gone, the other's kept: %q", out)
 	}
 
+	// THE INDEX IS ON THE PAGE, IN THE SHAPE EVERY OTHER PURGE USES. modActLine
+	// prints the act code straight to the moderation log, and PurgeClaimMedia
+	// takes that index as its handle — a power addressed by an id nobody can see
+	// is a power nobody can use, and an id in a shape nobody recognises is the
+	// same failure one step on.
+	// Asserted in the ESCAPED form the page actually carries. modActLine runs the
+	// code through sanitize.InlineText, which escapes `-` and `#` — they render
+	// back to a reader as written, but a substring match sees the backslashes.
+	// This is the same escaping that once broke the site link by turning
+	// kourt.xyz into kourt\.xyz, and it is worth matching what is on the page
+	// rather than what one expects to be.
+	logPage := Render("mp/mod")
+	if !strings.Contains(logPage, `media\-purge\#0:csam`) {
+		t.Fatalf("the log must name the exhibit by the handle the verb takes:\n%s", logPage)
+	}
+
 	// A repeat is a no-op rather than an error, so it consumes no proposal and
 	// writes no second log row for an act that cannot change anything.
 	testing.SetRealm(testing.NewUserRealm(dadmin))

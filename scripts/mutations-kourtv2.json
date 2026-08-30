@@ -11858,5 +11858,12 @@
   "replace": "\t\tb.WriteString(\"![Exhibit \" + pos + caption + \"](\" + dest + \")\\n\\n\")",
   "label": "writeClaimMedia: the alt text repeats the visible caption",
   "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tappendLog(who, boardActCode(\"media-purge\", idx, votedCode), \"\")",
+  "replace": "\t\tappendLog(who, \"media-purge:\"+strconv.FormatUint(idx, 10)+\":\"+votedCode, \"\")",
+  "label": "PurgeClaimMedia: the log names the exhibit in a shape no other verb uses",
+  "pkg": "kourtv2"
  }
 ]

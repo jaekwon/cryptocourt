@@ -205,8 +205,14 @@ func PurgeClaimMedia(cur realm, courtSlug string, claimID uint64, idx uint64, ca
 	m.mirrors = nil
 	m.caption = ""
 	m.mime = ""
+	// boardActCode's shape, not a second one. Every row-scoped purge in this realm
+	// logs as verb#id:code, and the `#` is what says the number is the HANDLE the
+	// verb takes rather than another code beside it. modActLine prints this
+	// straight to a page a person reads, and the file that prints it states the
+	// rule: a power addressed by an id nobody can see is a power nobody can use.
+	// An id shown in a shape nobody recognises is the same failure, one step on.
 	ensureClaimMod(c, ensureMod(c), claimID).
-		appendLog(who, "media-purge:"+strconv.FormatUint(idx, 10)+":"+votedCode, "")
+		appendLog(who, boardActCode("media-purge", idx, votedCode), "")
 	emitPurge(c.id, claimID, "media-item", who)
 }
 
