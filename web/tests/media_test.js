@@ -369,12 +369,21 @@ async function section2() {
   ok("once the copy is made it is ready", c.items[0].state === "ready", c.items[0].state);
   ok("and the chain would accept it", c.fault() === "", c.fault());
 
-  // A FLAKY UPLOAD MUST NOT COST SOMEBODY THEIR CLAIM.
+  // A FLAKY UPLOAD MUST NOT COST SOMEBODY THEIR CLAIM — and this used to assert
+  // only the mechanism it expected, never the outcome it is named for. It
+  // checked that the item was "failed" and that mediaFileable said yes, and both
+  // were true; it never asked c.fault(), which is what decides whether anything
+  // can be signed. A dropped file's only mirror IS the archive copy, so the
+  // fileable item went into the argument with no link and mediaItemFault refused
+  // the lot: "exhibit 1: this exhibit has no link yet". The claim was blocked by
+  // the very case this header says must never block it.
   c = newComposer({upload: async () => { throw new Error("archive down"); }});
   c.add({name: "shot.png"});
   await settle(); await settle(); await settle();
-  ok("a failed copy leaves the exhibit filed as failed", c.items[0].state === "failed");
-  ok("...and it is still fileable", M.mediaFileable(c.items[0]));
+  ok("a failed copy still lets the claim be signed", c.fault() === "", c.fault());
+  ok("...the exhibit is what is lost, not the claim", c.items[0].state === "broken");
+  ok("...and it says how to get it back",
+     /try adding it again/.test(c.items[0].error || ""), JSON.stringify(c.items[0].error));
 
   // An exhibit that never got a fingerprint is NOT fileable: there is nothing
   // to file, and offering it would put a claim on chain pointing at nothing.
@@ -412,10 +421,19 @@ async function section2() {
   ok("...as a link, with no fingerprint", !link.item.sha256 && link.item.linkOnly);
 
   // ---- the last look -----------------------------------------------------
-  c = newComposer({upload: async () => { throw new Error("down"); }});
-  c.add({name: "a"});
+  // THE "NO COPY YET" WARNING NEEDS AN EXHIBIT THAT REALLY IS STILL FILED.
+  // This used to drop a file and fail its upload, which no longer produces one:
+  // a dropped file's only mirror IS the archive copy, so that case now ends
+  // broken and out of the review entirely. An ADOPTED LINK whose copy failed
+  // keeps the pasted address, so it is filed without a copy — which is the
+  // situation the warning describes, and now the only one that reaches it.
+  c = newComposer({
+    fetch: async () => ({ok: true, blob: async () => prepared}),
+    upload: async () => { throw new Error("down"); },
+  });
+  c.addLink("https://i.imgur.com/a.webp", "img");
   c.addLink("https://i.imgur.com/v.webp", "vid");
-  await settle(); await settle(); await settle();
+  await settle(); await settle(); await settle(); await settle();
   const rv = M.mediaReview(c.items);
   ok("the review numbers every exhibit", rv.lines.length === 2 && rv.lines[1].n === 2);
   ok("it says captions are permanent", /cannot be edited/.test(rv.permanent));
@@ -754,6 +772,62 @@ async function section4() {
      it.mirrors[0] === "https://i.imgur.com/c.webp", JSON.stringify(it.mirrors));
   ok("...and says the copy is what is missing", it.state === "failed");
 
+  // 5. THE ARCHIVE IS DOWN AND A FILE WAS DROPPED IN.
+  //
+  // A dropped file's only mirror is the archive copy, so a failed upload leaves
+  // it with a fingerprint and no link. That used to stay "failed", which is
+  // fileable, so it went into the argument and mediaItemFault refused it with
+  // "this exhibit has no link yet" — while the composer displayed
+  // MEDIA_STATES.failed, "no copy yet — it will still be filed". Promised, then
+  // blocked, by a message about a link nobody had been asked for. The chain
+  // requires a mirror per exhibit and the bytes exist only in the tab, so there
+  // is genuinely nothing to file: it is broken, it blocks nothing, and it says
+  // the two things that work.
+  const noCopy = mediaNewComposerFor({
+    prepare: fakePrepare,
+    upload: async () => { throw new Error("archive down"); },
+  });
+  noCopy.add({name: "photo.png"});
+  it = (await settle(noCopy))[0];
+  ok("a dropped file whose copy fails does not block the claim",
+     noCopy.fault() === "", JSON.stringify(noCopy.fault()));
+  ok("...it is broken rather than filed without a link", it.state === "broken");
+  ok("...and is left out of the argument", noCopy.argument() === "");
+  ok("...saying both things that would work",
+     /try adding it again/.test(it.error || "") && /paste the image's own link/.test(it.error || ""),
+     JSON.stringify(it.error));
+
+  // AND THE STATE THAT PROMISES FILING IS NOW ONLY REACHED WHEN THAT IS TRUE.
+  // An adopted link keeps the pasted address, so a failed copy there really can
+  // still be filed — which is the case "no copy yet — it will still be filed"
+  // was written for, and the only one that now reaches it.
+  const linkNoCopy = mediaNewComposerFor({
+    fetch: async () => ({ok: true, blob: async () => png}),
+    prepare: fakePrepare,
+    upload: async () => { throw new Error("archive down"); },
+  });
+  linkNoCopy.addLink("https://i.imgur.com/d.webp", "img");
+  it = (await settle(linkNoCopy))[0];
+  ok("a link exhibit whose copy fails IS still filed", it.state === "failed" &&
+     M.mediaFileable(it) && linkNoCopy.fault() === "", JSON.stringify(linkNoCopy.fault()));
+  ok("...which is what its state text promises",
+     /it will still be filed/.test(M.MEDIA_STATES[it.state]));
+
+  // Each failure writes its own whole sentence. The renderer used to prefix
+  // every one with "could not read that file", which made a refused link read
+  // "could not read that file — that host will not let us read it — ...".
+  const unreadable = mediaNewComposerFor({
+    prepare: async () => { throw new Error("not an image"); },
+    upload: async () => ({sha256: "x", url: "u"}),
+  });
+  unreadable.add({name: "notes.txt"});
+  it = (await settle(unreadable))[0];
+  ok("a file that will not decode still says so", /could not read that file/.test(it.error || ""),
+     JSON.stringify(it.error));
+  ok("...and no other failure repeats that phrase",
+     !/could not read that file/.test(
+       (await settle(refused))[0].error || ""));
+
   // 4. A VIDEO IS NEVER FETCHED. There are no stable bytes behind a streaming
   // URL, so a fingerprint of one moment would prove nothing about the next.
   let asked = false;
@@ -773,7 +847,7 @@ async function section4() {
   await section2();
   await section3();
   await section4();
-  const EXPECTED = 190;
+  const EXPECTED = 199;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

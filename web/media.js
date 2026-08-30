@@ -516,12 +516,28 @@ function mediaNewComposer(opts) {
       item.mirrors = [up.url];
       item.state = "ready";
     } catch (e) {
-      /* THE COPY FAILED AND THE EXHIBIT SURVIVES. The hash and whatever link it
-       * already has are what the chain records; the archive copy is durability,
-       * not validity. A flaky upload must never cost somebody their claim — it
-       * costs them a warning. */
-      item.state = item.sha256 ? "failed" : "broken";
-      item.error = (e && e.message) || String(e);
+      /* THE COPY FAILED, AND WHETHER THE EXHIBIT SURVIVES DEPENDS ON WHETHER IT
+       * HAS A LINK — which, for a file dropped in from a disk, it does not.
+       *
+       * This said `item.sha256 ? "failed" : "broken"`, and the comment beside it
+       * said a flaky upload must never cost somebody their claim. It cost them
+       * the whole claim. A dropped file's only mirror is the archive copy, so a
+       * failed upload leaves mirrors empty; "failed" is fileable, so the item
+       * went into the argument, and mediaItemFault refused it with "this exhibit
+       * has no link yet" — while MEDIA_STATES.failed told the person, in as many
+       * words, "no copy yet — it will still be filed". Promised, then blocked,
+       * by a message about a link they were never asked for.
+       *
+       * The chain requires at least one mirror per exhibit and the bytes exist
+       * only in this tab, so there is genuinely nothing to file. That makes it
+       * broken — excluded from fileable, blocking nothing else — and says the
+       * two things that actually work. */
+      const hasLink = (item.mirrors || []).length > 0;
+      item.state = item.sha256 && hasLink ? "failed" : "broken";
+      item.error = item.sha256
+        ? "the copy did not go through, so there is no link to file this under — " +
+          "try adding it again, or paste the image's own link"
+        : "could not read that file — " + ((e && e.message) || String(e));
     }
     o.onChange && o.onChange(items);
   }
@@ -886,8 +902,16 @@ function mediaMount(root, composer, opts) {
       const state = MEDIA_STATES[item.state];
       if (state) cap.appendChild(mediaEl(doc, "span", {class: "mediastate"}, state));
       if (item.state === "broken") {
+        // THE WHOLE SENTENCE COMES FROM THE FAILURE, not a prefix from here.
+        // This used to paste "could not read that file — " in front of every
+        // reason, which was right for a file that would not decode and wrong for
+        // the other two: it made a refused link read "could not read that file —
+        // that host will not let us read it — download the image and drop it
+        // in", and would have said the same about an upload that failed. Each
+        // site now writes its own sentence, including the one that still starts
+        // that way.
         cap.appendChild(mediaEl(doc, "span", {class: "mediabroken"},
-          "could not read that file — " + (item.error || "unknown reason")));
+          item.error || "could not read that file"));
       }
       // Only a video ends here now. An image link either becomes a real exhibit
       // or becomes broken, because the chain will not take an image without a
