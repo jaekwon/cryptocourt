@@ -51,11 +51,15 @@
 > Its first run found two bugs that between them made this whole design inert,
 > and both had been invisible to every other harness — see §9 rows 14 and 15.
 >
-> The chain-side seam IS now exercised end to end —
+> The chain-side seam is exercised end to end too —
 > `gnoland/testdata/kourtv2_media.txtar` files a claim carrying evidence against
-> a real node and asks it the questions the page asks. What remains untested is
-> the browser half: the composer's canvas work, and the archive serving bytes to
-> a page that verifies them.
+> a real node and asks it the questions the page asks.
+>
+> So both halves are now driven against something real, from opposite ends: a
+> node for the chain seam, a browser and a live archive for the client one. What
+> neither reaches is the join between THOSE — a claim filed from the composer and
+> then read back off a chain — which needs a node and a browser in the same test
+> and is the next honest gap to name rather than one to leave implied.
 
 ---
 
