@@ -718,7 +718,13 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .ex-note{font-size:12px; color:var(--muted); font-style:italic}
 /* A taken-down exhibit keeps its place, so it needs a shape to keep. */
 .ex-gone{border:1px dashed var(--line); border-radius:3px; padding:10px 12px}
-.ex-img{border:1px solid var(--line); border-radius:3px}
+/* The height cap is the SECOND bound on a hostile ratio, and it is here because
+   mediaBoxRatio only governs the box reserved before the bytes land — the image
+   that arrives can be any shape at all, and nothing verified the ones declared.
+   contain rather than cover: cropping an exhibit by default is a court hiding
+   part of the evidence, and the lightbox is one click away for the whole of it. */
+.ex-img{border:1px solid var(--line); border-radius:3px;
+  max-height:60vh; object-fit:contain; object-position:left top}
 /* A video is not zoomed into a lightbox — it is played where it is. The
    lightbox exists to say whether bytes match what was filed, and a video has no
    hash to check, so opening one there would offer a verdict it cannot give. */
@@ -2219,7 +2225,12 @@ function claimExhibits(c){
       + `<span class="ex-note">${esc(x.note)}</span>${cap}</figure>`;
     /* referrerpolicy: the host serving this must not learn which claim the
        reader is looking at. loading=lazy: a card off screen costs nothing. */
-    const ratio = (x.w && x.h) ? ` style="aspect-ratio:${x.w}/${x.h}"` : "";
+    /* Reserving the box stops the page jumping as each exhibit lands, but w and
+       h are unverified filer input — see mediaBoxRatio, which refuses a ratio
+       outside the range real evidence lives in. */
+    const box = (typeof mediaBoxRatio === "function") ? mediaBoxRatio(x.w, x.h)
+              : ((x.w && x.h) ? x.w + "/" + x.h : "");
+    const ratio = box ? ` style="aspect-ratio:${esc(box)}"` : "";
     return `<figure class="ex" role="listitem" data-ex="${x.n - 1}" tabindex="0"`
       + ` aria-label="Open exhibit ${esc(x.label)} full size">`
       + `<img class="ex-img" src="${esc(x.src)}" alt="${safeInline(x.caption || ("exhibit " + x.label))}"`

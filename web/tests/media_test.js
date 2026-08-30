@@ -482,6 +482,30 @@ async function section3() {
   ok("a purged exhibit shows nothing even carrying bytes",
      M.mediaSrc({...inline, purged: true}, "", false) === "");
 
+  // A DECLARED RATIO IS ATTACKER INPUT. w and h are numbers the filer put in the
+  // transaction and nothing verifies them against the image; the realm bounds
+  // each to maxMediaDim and says nothing about the ratio between them. Declaring
+  // 1x20000 reserved a box measured in a browser at 40,000px tall and 2px wide,
+  // and media is fixed at creation — so the claim page stayed that way until a
+  // global-DAO purge, a takedown built for illegal content spent on a layout
+  // attack.
+  ok("an ordinary document reserves its own box", M.mediaBoxRatio(240, 160) === "240/160");
+  ok("a portrait exhibit reserves its own box", M.mediaBoxRatio(600, 900) === "600/900");
+  // THE CASE THE CAP MUST NOT BREAK. A screenshot of a long chat log genuinely is
+  // many times taller than it is wide; refusing it would trade a rare attack for
+  // a jumping page on ordinary evidence.
+  ok("a long screenshot is still ordinary evidence", M.mediaBoxRatio(800, 6000) === "800/6000");
+  ok("a ratio past the limit reserves nothing", M.mediaBoxRatio(1, 20000) === "");
+  ok("...in either direction", M.mediaBoxRatio(20000, 1) === "");
+  ok("...and the limit itself is allowed",
+     M.mediaBoxRatio(100, 100 * M.MEDIA_BOX_LIMIT) !== "");
+  ok("...while one step past it is not",
+     M.mediaBoxRatio(100, 100 * M.MEDIA_BOX_LIMIT + 1) === "");
+  // Zero and absent were already refused; pinned so the guard above cannot be
+  // rewritten into one that divides by zero.
+  ok("an undeclared size reserves nothing", M.mediaBoxRatio(0, 0) === "");
+  ok("...and a half-declared one does not either", M.mediaBoxRatio(800, 0) === "");
+
   // A card is one image the reader asked for, so a mirror is worth it there.
   const card = M.mediaCardItems([img, {purged: true, kind: "img"},
                                  {kind: "vid", caption: "hearing", mirrors: ["https://i.imgur.com/v.webp"]}], "");
@@ -613,7 +637,7 @@ async function section3() {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 150;
+  const EXPECTED = 159;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

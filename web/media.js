@@ -595,6 +595,27 @@ function mediaNodeThumb(items, siteDomain) {
   return "";
 }
 
+/* A DECLARED RATIO IS ATTACKER INPUT, and it is used to reserve a box before the
+ * bytes arrive. w and h are numbers the filer put in the transaction; nothing
+ * verifies them against the image, and the realm bounds each to maxMediaDim
+ * without bounding the RATIO between them. Declaring 1x20000 reserved a box
+ * measured at 40,000px tall and 2px wide — seven of those on one claim, and the
+ * page is a quarter of a million pixels of nothing. Media is fixed at creation,
+ * so it would stay that way until a global-DAO purge: a takedown built for
+ * illegal content, spent on a layout attack.
+ *
+ * Dropping the ratio entirely would be the safe answer and the wrong one — the
+ * reservation is what stops the page jumping as each exhibit lands. So it is
+ * honoured inside the range real evidence lives in and refused outside it. Eight
+ * is deliberately generous: a long screenshot of a chat log genuinely is many
+ * times taller than it is wide, and that is ordinary evidence, not an attack. */
+const MEDIA_BOX_LIMIT = 8;
+function mediaBoxRatio(w, h) {
+  if (!(w > 0) || !(h > 0)) return "";
+  if (h / w > MEDIA_BOX_LIMIT || w / h > MEDIA_BOX_LIMIT) return "";
+  return w + "/" + h;
+}
+
 /* What the selection card shows: every exhibit, in order, each with the number
  * a reader and a moderator both refer to it by, and a reason when there is
  * nothing to show. A gap that silently renumbered the rest would leave every
@@ -1006,7 +1027,7 @@ if (typeof module !== "undefined" && module.exports) {
     mediaHostAllowed, mediaHostOf, mediaMirrorFault, mediaCaptionFault,
     mediaItemFault, mediaFault, mediaArgLine, mediaArg, mediaArchiveURL,
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
-    mediaEncodeUnder, MEDIA_QUALITIES,
+    mediaEncodeUnder, MEDIA_QUALITIES, mediaBoxRatio, MEDIA_BOX_LIMIT,
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
     mediaMount, mediaEl, mediaParse, mediaSrc, mediaNodeThumb,
