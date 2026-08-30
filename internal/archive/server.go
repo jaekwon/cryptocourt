@@ -88,6 +88,8 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"staged": st.Staged, "promoted": st.Promoted, "blocked": st.Blocked,
 		"pending_review": st.Pending, "swept_at": st.SweptAt,
+		"backfilled_at": st.BackfilledAt, "reviewed_at": st.ReviewedAt,
+		"chain_seen_at": st.ChainSeenAt,
 		// Said outright rather than left to be inferred from a zero.
 		"sweeping":  st.SweptAt > 0,
 		"promoting": s.chain != nil,

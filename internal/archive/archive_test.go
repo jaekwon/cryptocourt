@@ -32,9 +32,19 @@ func webpWith(tag string) []byte {
 
 var pngBody = pngWith("")
 
+// NAMED AFTER THE TEST, so two calls inside one test share a database. That is
+// usually what is wanted and once was not: a fixture meaning to be empty came
+// back holding the blob the same test had already stored, and the failure read
+// as a bug in the code under test. namedStore is for the case that needs its
+// own.
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	db, err := sql.Open("sqlite", "file:"+t.Name()+"?mode=memory&cache=shared")
+	return namedStore(t, t.Name())
+}
+
+func namedStore(t *testing.T, name string) *Store {
+	t.Helper()
+	db, err := sql.Open("sqlite", "file:"+name+"?mode=memory&cache=shared")
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -1470,4 +1480,88 @@ func TestHealthCanTellASweepFromASilence(t *testing.T) {
 		t.Fatal("...and must not have deleted anything")
 	}
 	_ = staged
+}
+
+func TestABackfillThatFailsEveryPassDoesNotLookLikeOneThatRuns(t *testing.T) {
+	// THE WORST FAILURE TO LEAVE INVISIBLE. If backfill stops, nothing else in
+	// this service changes: the sweep keeps running and stamping, `promoting`
+	// still reads true because a chain is configured, and filed evidence expires
+	// an hour after upload because nothing promoted it. Only a stamp separates
+	// "walked and found nothing new" — the usual pass — from "has not completed
+	// since Tuesday".
+	st := testStore(t)
+	ctx := context.Background()
+	if _, err := st.Put(ctx, "image/png", pngBody, "covid"); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+
+	// A node that answers but errors.
+	broken := &errChain{count: 5, failFrom: 1}
+	if _, err := st.Backfill(ctx, broken); err == nil {
+		t.Fatal("the fixture must fail")
+	}
+	if s, _ := st.Stats(ctx); s.BackfilledAt != 0 {
+		t.Fatalf("a failing backfill stamped itself as complete: %+v", s)
+	}
+	// ...while the sweep keeps stamping, which is exactly how a broken backfill
+	// hides behind a healthy-looking service.
+	if _, err := st.SweepStaged(ctx, time.Now()); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	s, _ := st.Stats(ctx)
+	if s.SweptAt == 0 {
+		t.Fatal("the sweep must stamp")
+	}
+	if s.BackfilledAt != 0 {
+		t.Fatalf("the sweep's stamp must not stand in for backfill's: %+v", s)
+	}
+	// A NODE THAT WAS ASKED AND ERRORED MUST NOT COUNT AS SEEN. This is the arm
+	// that distinguishes stamping on a successful answer from stamping on any
+	// attempt — the empty-store case below cannot, because it never asks.
+	if s.ChainSeenAt != 0 {
+		t.Fatalf("an unreachable node was recorded as having answered: %+v", s)
+	}
+
+	// When the node recovers, a COMPLETE pass stamps — including one that
+	// promotes nothing, since finding nothing new is the normal case.
+	broken.failFrom = 0
+	if _, err := st.Backfill(ctx, broken); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if s, _ := st.Stats(ctx); s.BackfilledAt == 0 {
+		t.Fatalf("a completed pass must stamp even when it kept nothing: %+v", s)
+	}
+
+	// A PASS THAT ASKED NOTHING MUST NOT VOUCH FOR THE NODE. This is the false
+	// reassurance the chain stamp exists for, and it was observed on a live
+	// service: an unreachable node still showed a recent backfilled_at, because
+	// the pass had nothing staged and so never asked.
+	empty := namedStore(t, t.Name()+"-empty")
+	if _, err := empty.Backfill(ctx, &errChain{count: 3, failFrom: 1}); err != nil {
+		t.Fatalf("a pass with nothing staged must succeed: %v", err)
+	}
+	es, _ := empty.Stats(ctx)
+	if es.BackfilledAt == 0 {
+		t.Fatal("the pass completed and must say so")
+	}
+	if es.ChainSeenAt != 0 {
+		t.Fatalf("...but it asked the node nothing, so it cannot vouch for it: %+v", es)
+	}
+	// And when a pass DOES reach the node, that is recorded on its own.
+	if s, _ := st.Stats(ctx); s.ChainSeenAt == 0 {
+		t.Fatalf("a pass that read a claim count must record the node answered: %+v", s)
+	}
+
+	// The review pass is stamped the same way, and separately: a model that has
+	// stopped is milder — images serve unreviewed rather than disappearing — but
+	// it is still worth being able to see.
+	if s, _ := st.Stats(ctx); s.ReviewedAt != 0 {
+		t.Fatal("nothing has reviewed yet")
+	}
+	if _, err := st.ReviewPass(ctx, &fakeEye{v: ImageVerdict{Label: "clean", Confidence: 1}}, 5); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	if s, _ := st.Stats(ctx); s.ReviewedAt == 0 {
+		t.Fatalf("a review pass must stamp: %+v", s)
+	}
 }

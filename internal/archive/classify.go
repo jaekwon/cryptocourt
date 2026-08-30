@@ -286,6 +286,9 @@ func (s *Store) ReviewPass(ctx context.Context, c ImageClassifier, limit int) (i
 			blocked++
 		}
 	}
+	if err := s.Stamp(ctx, "review", time.Now()); err != nil {
+		return blocked, err
+	}
 	return blocked, nil
 }
 

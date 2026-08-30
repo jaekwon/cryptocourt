@@ -246,6 +246,35 @@ type Stats struct {
 	Blocked  int64 `json:"blocked"`
 	Pending  int64 `json:"pending_review"`
 	SweptAt  int64 `json:"swept_at"`
+	// BackfilledAt is the worst failure in this service to leave invisible. If
+	// backfill stops — a node that answers but errors, a cursor query that fails
+	// — nothing else changes: the sweep keeps running, `promoting` still reads
+	// true because a chain is configured, and filed evidence expires an hour
+	// after upload because nothing promoted it. A stamp is the only thing that
+	// separates "walked and found nothing new", which is the usual pass, from
+	// "has not completed since Tuesday".
+	BackfilledAt int64 `json:"backfilled_at"`
+	// ReviewedAt is milder: if the model stops, images serve unreviewed rather
+	// than disappearing. Worth seeing, not worth alarming about.
+	ReviewedAt int64 `json:"reviewed_at"`
+	// ChainSeenAt is when the node last ANSWERED. BackfilledAt only says a pass
+	// finished, and a pass with nothing staged finishes without asking anything
+	// — so the two must be separate or an idle archive looks like a healthy one
+	// while its node is unreachable.
+	ChainSeenAt int64 `json:"chain_seen_at"`
+}
+
+// Stamp records that an unattended pass completed. The name of the pass is the
+// key, so a new one cannot silently share another's timestamp.
+func (s *Store) Stamp(ctx context.Context, what string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO archive_meta (k, v) VALUES (?, ?)
+		 ON CONFLICT(k) DO UPDATE SET v = excluded.v`,
+		what+"_at", strconv.FormatInt(at.Unix(), 10))
+	if err != nil {
+		return fmt.Errorf("archive stamp %s: %w", what, err)
+	}
+	return nil
 }
 
 func (s *Store) Stats(ctx context.Context) (Stats, error) {
@@ -256,12 +285,19 @@ func (s *Store) Stats(ctx context.Context) (Stats, error) {
 		  (SELECT COUNT(*) FROM blobs WHERE promoted = 1),
 		  (SELECT COUNT(*) FROM blobs WHERE blocked = 1),
 		  (SELECT COUNT(*) FROM blob_review WHERE cleared_at IS NULL AND label != 'clean'),
-		  COALESCE((SELECT v FROM archive_meta WHERE k = 'swept_at'), '0')`)
-	var swept string
-	if err := row.Scan(&st.Staged, &st.Promoted, &st.Blocked, &st.Pending, &swept); err != nil {
+		  COALESCE((SELECT v FROM archive_meta WHERE k = 'swept_at'), '0'),
+		  COALESCE((SELECT v FROM archive_meta WHERE k = 'backfill_at'), '0'),
+		  COALESCE((SELECT v FROM archive_meta WHERE k = 'review_at'), '0'),
+		  COALESCE((SELECT v FROM archive_meta WHERE k = 'chain_at'), '0')`)
+	var swept, filled, reviewed, chainSeen string
+	if err := row.Scan(&st.Staged, &st.Promoted, &st.Blocked, &st.Pending,
+		&swept, &filled, &reviewed, &chainSeen); err != nil {
 		return st, fmt.Errorf("archive stats: %w", err)
 	}
 	st.SweptAt, _ = strconv.ParseInt(swept, 10, 64)
+	st.BackfilledAt, _ = strconv.ParseInt(filled, 10, 64)
+	st.ReviewedAt, _ = strconv.ParseInt(reviewed, 10, 64)
+	st.ChainSeenAt, _ = strconv.ParseInt(chainSeen, 10, 64)
 	return st, nil
 }
 

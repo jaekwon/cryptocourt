@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // BACKFILL EXISTS BECAUSE THE CLIENT CANNOT BE THE ONLY WITNESS.
@@ -117,6 +118,17 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 			return kept, fmt.Errorf("archive cursor %s: %w", court, err)
 		}
 		total, err := chain.ClaimCount(ctx, court)
+		if err == nil {
+			// THE NODE ANSWERED. Stamped separately from the pass, because a pass
+			// with nothing staged completes without asking anything — so a fresh
+			// backfilled_at proves the loop is alive and says NOTHING about
+			// whether the chain is reachable. Observed on a live service: an
+			// unreachable node still showed a recent backfill, which is a false
+			// reassurance in exactly the place an operator would look.
+			if serr := s.Stamp(ctx, "chain", time.Now()); serr != nil {
+				return kept, serr
+			}
+		}
 		if err != nil {
 			// A node that will not answer is a reason to try again later, never a
 			// reason to advance the cursor past claims nobody has read.
@@ -142,6 +154,13 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 		if err := s.setCursor(ctx, court, last); err != nil {
 			return kept, err
 		}
+	}
+	// Stamped only on a COMPLETE pass. Every early return above is an error, and
+	// stamping those would make a backfill that fails every time look like one
+	// that runs every time — which is the exact confusion this stamp exists to
+	// prevent.
+	if err := s.Stamp(ctx, "backfill", time.Now()); err != nil {
+		return kept, err
 	}
 	return kept, nil
 }
