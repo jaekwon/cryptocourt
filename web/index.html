@@ -48,7 +48,7 @@ img,svg{display:block;max-width:100%}
   --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
   --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec;
-  --good:#1c6551;
+  --good:#1c6551; --bad:#a3281c;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05);
   --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   /* NEON, OFF. Every glow in this file is a token, so the light theme turns
@@ -79,7 +79,7 @@ img,svg{display:block;max-width:100%}
     --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
     --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
     --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b;
-    --good:#6fc0a5;
+    --good:#6fc0a5; --bad:#e5847a;
     --shadow-sm:0 1px 2px rgba(0,0,0,.3);
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
     /* NEON, ON — and kept to the things that carry information: the traces on
@@ -118,7 +118,7 @@ img,svg{display:block;max-width:100%}
   --ink:#16202a; --ink-2:#4a5b68; --muted:#56646f; --line:#dbe3e8; --line-2:#c8d2d9;
   --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
   --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
-  --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec; --good:#1c6551;
+  --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec; --good:#1c6551; --bad:#a3281c;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
   --trace:none; --edge:transparent;
@@ -131,7 +131,7 @@ img,svg{display:block;max-width:100%}
   --ink:#e6edf2; --ink-2:#a3b2bd; --muted:#8a99a4; --line:#212b33; --line-2:#2b3843;
   --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
   --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
-  --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b; --good:#6fc0a5;
+  --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b; --good:#6fc0a5; --bad:#e5847a;
   --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
   --glow-a:0 0 8px rgba(154,168,238,.55), 0 0 22px rgba(154,168,238,.22);
   --glow-y:0 0 8px rgba(111,192,165,.60), 0 0 22px rgba(111,192,165,.26);
@@ -755,7 +755,11 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mediacaption:focus{outline:2px solid var(--accent); outline-offset:1px}
 .mediastate{font-size:12px; color:var(--muted); font-style:italic}
 /* The two that report a problem carry weight; the rest of the row does not. */
-.mediabroken{font-size:12.5px; line-height:1.45; color:var(--bad, #c0564f)}
+/* --bad, not a literal with a fallback. This said var(--bad, #c0564f) because I
+   was unsure the token existed — it did not, so both themes got the same
+   hard-coded red, and css_test says in its own comment that a fallback is
+   exactly what it does not check. --good had no partner; now it does. */
+.mediabroken{font-size:12.5px; line-height:1.45; color:var(--bad)}
 .medialink{font-size:12.5px; line-height:1.45; color:var(--muted)}
 /* WRAPS RATHER THAN SQUEEZES. At 320px the row's second column has room for
    three glyph buttons and not for a four-word label beside them, and flex's

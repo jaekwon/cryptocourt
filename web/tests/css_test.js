@@ -79,5 +79,50 @@ const lineOf = needle => src.slice(0, src.indexOf(needle)).split("\n").length;
     console.log(`   (.mapfull is at index.html:${lineOf(".mapfull{")})`);
 }
 
+/* ---- CHOOSING LIGHT MUST UNDO EVERY DARK VALUE -------------------------
+ *
+ * The palette is declared in four places: :root, @media(prefers-color-scheme
+ * :dark), :root[data-theme=light] and :root[data-theme=dark]. A reader whose
+ * system is dark and who picks light gets the media query's values unless the
+ * light block re-declares them — so a token added to the media query and not to
+ * :root[data-theme=light] keeps its DARK value on a light page, and only a
+ * render in that combination shows it.
+ *
+ * That is how --bad arrived: added to :root and the media query, missed in both
+ * data-theme blocks, and the composer's error text came out pale salmon on light
+ * grey. --good had been declared in all four all along, which is the pattern.
+ */
+function propsIn(block) {
+  const i = bare_css.indexOf(block);
+  if (i < 0) return null;
+  const body = bare_css.slice(i + block.length, bare_css.indexOf("}", i));
+  return new Set([...body.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(m => m[1]));
+}
+const mediaDark = (() => {
+  const i = bare_css.indexOf("@media (prefers-color-scheme:dark){");
+  if (i < 0) return null;
+  // the block runs to the nested :root's closing brace
+  const body = bare_css.slice(i, bare_css.indexOf("\n  }", i));
+  return new Set([...body.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(m => m[1]));
+})();
+const themeLight = propsIn(":root[data-theme=light]{");
+const themeDark = propsIn(":root[data-theme=dark]{");
+ok("the four palette blocks are all present",
+   !!(mediaDark && themeLight && themeDark));
+if (mediaDark && themeLight && themeDark) {
+  const unLightable = [...mediaDark].filter(v => !themeLight.has(v));
+  ok("every token the dark media query sets is re-set by the light theme"
+     + (unLightable.length ? ` — ${unLightable.join(", ")}` : ""),
+     unLightable.length === 0);
+  // And the two explicit themes must offer the same vocabulary, or a rule
+  // written against one resolves to nothing in the other.
+  const onlyLight = [...themeLight].filter(v => !themeDark.has(v));
+  const onlyDark = [...themeDark].filter(v => !themeLight.has(v));
+  ok("the two explicit themes declare the same tokens"
+     + (onlyLight.length || onlyDark.length
+        ? ` — light-only: ${onlyLight.join(",") || "none"}; dark-only: ${onlyDark.join(",") || "none"}` : ""),
+     onlyLight.length === 0 && onlyDark.length === 0);
+}
+
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);
