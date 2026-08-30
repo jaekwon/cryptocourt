@@ -696,6 +696,15 @@ Recorded because each is easy to make again:
 | 35 | no caption carried `dir="auto"` | the page is `lang="en"`, so an Arabic or Hebrew caption got its letters in the right order and its sentence in the wrong place — left-aligned, trailing punctuation at the ltr end |
 | 36 | ten files became seven exhibits and three silences | the cap message stated the rule and said nothing about the evidence that had just vanished from the form |
 | 37 | a purged slot carried `cursor:zoom-in` with nothing to open | the tombstone that exists so numbering holds also looked like an exhibit you could click |
+| 38 | `restore` would put the same exhibit back twice | two rows sharing an id, the argument carrying that exhibit twice, and `fault()` empty — the panel is one-shot only because clearing the note removes the button |
+
+**A second axis, after the seven situations: the order things are done in.** The
+composer's `add / remove / restore / move / setCaption / seed / retry` all mutate
+a list the others address by id, so sequences are where a stateful bug would
+live. A battery of them is pinned in `media_test.js` and all but one held. Row 38
+is not reachable by clicking today — but it is one DOM detail away from
+reachable, and a model that cannot represent the broken state is worth more than
+a panel that happens not to ask for it.
 
 **The method these last rows came from is worth stating, because it is
 repeatable.** The defects stopped being wrong computations some time ago. Every
