@@ -641,6 +641,15 @@ per-claim read, none of which is what got built.
   that actually arrives. See §9 row 12 for what that cost before it was there.
 - **Lightbox** — gallery with next/prev, count, caption, and the verification
   line. Esc and backdrop close, focus trapped and restored, arrow keys navigate.
+  One at a time: a second open replaces the first rather than stacking. The page
+  behind it does not scroll.
+- **An exhibit has an address.** `?ex=N` on the claim route opens that exhibit,
+  one-based so it matches the number on the page, and it follows the reader
+  through the gallery via `replaceState` so the bar always points at what is on
+  screen. The number was always described as the thing people refer to; this is
+  what makes it something they can send. Out of range opens nothing — a stale
+  link to exhibit 5 of a claim that now shows three leaves the reader on the
+  claim rather than on a different picture.
 
 **The map's read is batched.** `ClaimMediaPage(court, fromID, count)` answers for
 a run of claims in one qeval, with a missing claim as an empty hole rather than
@@ -704,6 +713,7 @@ Recorded because each is easy to make again:
 | 37 | a purged slot carried `cursor:zoom-in` with nothing to open | the tombstone that exists so numbering holds also looked like an exhibit you could click |
 | 38 | `restore` would put the same exhibit back twice | two rows sharing an id, the argument carrying that exhibit twice, and `fault()` empty — the panel is one-shot only because clearing the note removes the button |
 | 39 | the queue depth counted an operator's own decisions | once anyone had blocked an image by hand, the figure health publishes could never return to zero, so "nothing is waiting" became unreachable |
+| 40 | opening an exhibit while one was open stacked two lightboxes | Escape then closed whichever bound its listener last, and the scroll lock unlocked or did not depending on the order they closed in |
 
 **A second axis, after the seven situations: the order things are done in.** The
 composer's `add / remove / restore / move / setCaption / seed / retry` all mutate
