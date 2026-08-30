@@ -284,6 +284,40 @@ if (!BASE) { console.log("usage: compose_intake.js <base-url>"); process.exit(2)
   }
   await page.setViewport({width: 1280, height: 900});
 
+  // --- 5b. the last look before a signature ---------------------------------
+  // mediaReview has existed since the composer was written, with its own tests,
+  // and nothing called it — so the one piece of friction the design asks for was
+  // the one piece missing. Its comment says why: a caption is claim text, fixed
+  // at creation, with no editor even in the polish window where a title can
+  // still be corrected. A typo is permanent and the remedy is to close the claim
+  // and file it again.
+  const look = await page.evaluate(async () => {
+    const div = window.__mount();
+    window.__c.seed([
+      {id: -1, kind: "img", state: "ready", sha256: "a".repeat(64), mime: "image/webp",
+       w: 240, h: 160, bytes: 5200, caption: "north span rating",
+       mirrors: ["https://i.imgur.com/a.webp"], preview: ""},
+      {id: -2, kind: "vid", state: "ready", caption: "the hearing", linkOnly: true,
+       mirrors: ["https://i.imgur.com/v.mp4"], preview: ""},
+      {id: -3, kind: "img", state: "broken", caption: "never made it",
+       mirrors: [], preview: "", error: "the copy did not go through"},
+    ]);
+    await new Promise(r => setTimeout(r, 200));
+    const box = div.querySelector(".composereview");
+    return {head: (box.querySelector(".reviewhead") || {}).textContent || "",
+            items: [...box.querySelectorAll(".reviewlist li")].map(l => l.textContent),
+            warns: [...box.querySelectorAll(".reviewwarn")].map(w => w.textContent),
+            styled: getComputedStyle(box).borderTopStyle};
+  });
+  ok("the composer asks for a last look at the captions",
+     /cannot be edited after filing/.test(look.head), JSON.stringify(look.head));
+  ok("...listing what is actually going to be filed", look.items.length === 2,
+     JSON.stringify(look.items));
+  ok("...and not the exhibit that is not", !look.items.join(" ").includes("never made it"));
+  ok("...naming what cannot be vouched for",
+     look.warns.some(w => /cannot vouch/.test(w)), JSON.stringify(look.warns));
+  ok("...and it is styled, not raw markup", look.styled !== "none", look.styled);
+
   // --- 6. a draft survives a real reload ------------------------------------
   // §2.5 is the promise that stands between a person and losing a composed
   // claim, and it had only ever been exercised in memory: mediaSaveDraft and

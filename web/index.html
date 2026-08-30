@@ -736,6 +736,14 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    work A claim needs a title." is two pieces of advice welded into nonsense. */
 .medianote{margin:0; font-size:12.5px; line-height:1.5; color:var(--ink-2);
   min-height:1em; white-space:pre-line}
+/* The last look. Set apart from the exhibit rows above it, because it is a
+   different act: those are things to change, this is a thing to read. */
+.composereview:not(:empty){border-top:1px solid var(--line); padding-top:10px;
+  display:flex; flex-direction:column; gap:6px}
+.reviewhead{margin:0; font-size:12.5px; font-weight:600; color:var(--ink)}
+.reviewlist{margin:0; padding-left:18px; font-size:12.5px; line-height:1.6;
+  color:var(--ink-2)}
+.reviewwarn{margin:0; font-size:12.5px; line-height:1.5; color:var(--muted)}
 
 /* One exhibit: the thumbnail small and fixed, everything about it beside it,
    so seven of them stay a list rather than seven screens. */
@@ -2880,13 +2888,22 @@ function mountCompose(host, slug){
     body.setAttribute("aria-label", "Claim body");
 
     const media = document.createElement("div");
+    /* THE LAST LOOK BEFORE A SIGNATURE. mediaReview has existed since the
+       composer was written, with its own tests, and nothing ever called it —
+       so the one piece of friction the design asks for was the one piece
+       missing. Its comment says why: a caption is claim text, fixed at
+       creation, with no editor even in the polish window where a title can
+       still be corrected. A typo is permanent and the only remedy is to close
+       the claim and file it again. */
+    const review = document.createElement("div");
+    review.className = "composereview";
     const actions = document.createElement("div");
     actions.className = "actions"; actions.style.marginTop = "10px";
     const warn = document.createElement("p");
     warn.className = "medianote"; warn.setAttribute("role", "status");
 
     el.appendChild(title); el.appendChild(body); el.appendChild(media);
-    el.appendChild(warn); el.appendChild(actions);
+    el.appendChild(review); el.appendChild(warn); el.appendChild(actions);
 
     // A DRAFT SURVIVES A CLOSED TAB. The bytes are already safe — uploaded and
     // addressed by hash — so this only has to remember the addresses.
@@ -2931,6 +2948,37 @@ function mountCompose(host, slug){
       if(!canLink){
         const a = actions.querySelector("a.btn");
         if(a){ a.removeAttribute("href"); a.setAttribute("aria-disabled","true"); }
+      }
+
+      /* Rebuilt each time rather than patched: it is a summary of the list, and
+         the list changes under it. textContent throughout — every string here
+         except the headings came from the person, and one of them is a caption
+         the chain will store. */
+      review.textContent = "";
+      if(typeof mediaReview === "function"){
+        const rv = mediaReview(composer.items);
+        if(rv.lines.length){
+          const h = document.createElement("p");
+          h.className = "reviewhead"; h.textContent = rv.permanent;
+          review.appendChild(h);
+          const ul = document.createElement("ul");
+          ul.className = "reviewlist";
+          for(const l of rv.lines){
+            const li = document.createElement("li");
+            const marks = [];
+            if(!l.copied) marks.push("no copy yet");
+            if(!l.verified) marks.push("no fingerprint");
+            li.textContent = `${l.n}. ${l.kind} — ${l.caption}`
+                           + (marks.length? ` · ${marks.join(" · ")}` : "");
+            ul.appendChild(li);
+          }
+          review.appendChild(ul);
+          for(const w of rv.warnings){
+            const p = document.createElement("p");
+            p.className = "reviewwarn"; p.textContent = w;
+            review.appendChild(p);
+          }
+        }
       }
 
       const bits = [];
