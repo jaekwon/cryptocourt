@@ -233,7 +233,7 @@ code,.mono{font-family:var(--mono)}
    onto them: a claim title wearing a neon box for no reason the reader can
    explain. Whatever :focus-visible grows, these must cancel all of it. */
 .page-h:focus,.page-h:focus-visible{outline:none; box-shadow:none}
-#resolution:focus,#resolution:focus-visible{outline:none; box-shadow:none}
+#timeline:focus,#timeline:focus-visible{outline:none; box-shadow:none}
 .page-h{font-family:var(--serif); font-size:clamp(26px,3.4vw,36px); font-weight:600; letter-spacing:-.015em; line-height:1.08; text-wrap:balance; overflow-wrap:anywhere}
 .page-sub{color:var(--ink-2); margin-top:8px; max-width:66ch}
 .lead-row{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap}
@@ -3169,7 +3169,7 @@ function setNav(hash){
             hash.startsWith("/needs")?"needs": hash.startsWith("/about")?"about":"";
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on", a.dataset.k===k));
 }
-const AT_OK = new Set(["resolution"]); // ?at= allowlist — QP is user text, never a selector
+const AT_OK = new Set(["timeline"]); // ?at= allowlist — QP is user text, never a selector
 const atTarget = () => (QP.at && AT_OK.has(QP.at))? document.getElementById(QP.at) : null;
 window.addEventListener("hashchange", async ()=>{
   await render();
@@ -4051,23 +4051,23 @@ function voteHelpModal(slug, d){
    costs no bond at all; it locks coin you keep. Printing a challenger's price
    beside the word "voting" tells a voter they must pay to vote, which is
    false, so it is not carried forward in shorter form. */
+/* THE CLOCK, AND NOTHING ELSE. The round moved to the timeline, where the
+   claim's other events are. "One vote per address, and you cannot change it"
+   moved to the click: it is a rule about a mistake, and it only means anything
+   to somebody who has already made the vote it would undo — everybody else was
+   reading a warning that did not apply to them. fillVoteEligibility says it,
+   from a read that knows whether this address actually voted.
+
+   Four close states, and the two with no date are the actionable ones: a chain
+   that publishes no close height, and a window that has already passed — the
+   second is the moment Resolve starts working. The timeline's dated "vote
+   closes" row can carry neither. */
 function ballotHint(slug, d, nowH){
-  // Four close states. The two with no date to show are the actionable ones: a
-  // chain that publishes no close height, and a window that has already passed
-  // — the second is the moment Resolve starts working, which is what somebody
-  // looking at a stale-looking ballot wants to know. The ladder's own dated
-  // "vote closes" row can carry neither.
-  const k = (d.round||0)+1;
-  // Said first and alone, because the voting rule is noise to somebody who can
-  // no longer vote — and because "Round 3 — voting has closed — Resolve works
-  // now" puts two em-dashes in one short sentence, which is how it read when
-  // this branch was folded into the join below.
   if(d.voteEndsAt && nowH!=null && d.voteEndsAt<=nowH)
-    return `Round ${k} — voting has closed; Resolve works now.`;
-  const close = !d.voteEndsAt? "closes about 7 days after it opened"
-    : (nowH==null)? `closes at block ${fmtN(d.voteEndsAt)}`
-    : `closes in ${wall(nowH, d.voteEndsAt)}`;
-  return `Round ${k} — ${close}. One vote per address, and you cannot change it.`;
+    return "Voting has closed; Resolve works now.";
+  return !d.voteEndsAt? "Closes about 7 days after this round opened."
+    : (nowH==null)? `Closes at block ${fmtN(d.voteEndsAt)}.`
+    : `Closes in ${wall(nowH, d.voteEndsAt)}.`;
 }
 
 function disputeTicket(slug, id, d, nowH){
@@ -4109,17 +4109,29 @@ async function fillVoteEligibility(slug, id, d){
   const btns = box? box.querySelectorAll(".btn, .signbtn") : [];
   if(!btns.length) return;
   try{
-    const [author,p] = await Promise.all([
+    const [author,p,com] = await Promise.all([
       one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null),
-      positionOf(slug,id,CFG.addr)]);
-    const why = author===CFG.addr? "wrote this claim"
+      positionOf(slug,id,CFG.addr),
+      one(`CommitmentsOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null)]);
+    // ALREADY VOTED, read rather than remembered. A verdict-lane commitment on
+    // this claim exists only while the round that made it is open —
+    // voteLockOpen (votelock.gno:199) matches on `cs.disputeOpen &&
+    // cs.proposalID == sub`, the SAME round, not merely any dispute — so a `d`
+    // row keyed to this claim means this address voted in THIS round. No new
+    // realm read, and no client-side memory of what was signed.
+    const voted = ((parseCommitments(com)||{q:[]}).q||[])
+      .some(r => r.kind==="d" && r.id===Number(id));
+    // Checked first because it is the one a reader can act on being told: the
+    // other three are permanent, this one ends when the round does.
+    const why = voted? "have already voted in this round, and a vote cannot be changed"
+      : author===CFG.addr? "wrote this claim"
       : d.answerer===CFG.addr? "answered it"
       : (p && (p.yes||p.no||p.cy||p.cn))? "staked on it" : null;
     if(!why) return;
     // The court decides at signing, not here — so this says what it saw rather
     // than promising the transaction would fail.
     btns.forEach(el => el.setAttribute("data-voteblocked",
-      "You cannot vote on this claim: you " + why + "."));
+      (voted? "You " : "You cannot vote on this claim: you ") + why + "."));
   }catch(_){}
 }
 /* ---------------- the vote lock's disclosure ----------------
@@ -7482,9 +7494,11 @@ function verdictBanner(d){
 
 /* Resolution: answer / dispute / settlement, showing the verdict's ROUTE and
    wall-clock timing, and NEVER the live tally while a vote is open. */
-/* Resolution so far — a when/what ladder of this claim's REAL event heights.
+/* The timeline — a when/what ladder of this claim's REAL event heights.
    Both modes show only fields that exist (live: reads; demo: its dataset);
-   no height is ever fabricated, and the derived "answered" rung says so. */
+   no height is ever fabricated, and the derived "answered" rung says so.
+   The dispute ROUNDS are here too, dateless: the chain stamps a round's
+   opening nowhere, so they carry an em-dash rather than a projection. */
 /* ClaimTimeline (clock.gno): "opened:<unix>:<height>;answered:…;settle:…;now:…".
    Past events carry the block's own timestamp — nothing derived, nothing
    estimated. A zero stamp means the claim predates the stamps; then only its
@@ -7528,28 +7542,45 @@ function resolutionLadder(d, nowH, tl){
     R("verdict","verdict"+(d.route?" · "+d.route:""),"the court's conclusion");
     R("settle","settle deadline","an undisputed answer settles here");
     R("reopen","reopen closes","escrow ends; finalizable");
+    // THE ROUNDS ARE EVENTS, so they belong on the timeline with the other
+    // events — but ClaimTimeline (clock.gno:118) publishes no stamp for a
+    // round's opening, so they cannot be dated. They are rendered with an
+    // em-dash in the date column rather than a projected date: a guess printed
+    // in the same type as the chain's own record is worse than no date.
+    //
+    // ONE ROW FOR ALL THE FAILED ROUNDS, not one apiece. With no dates to tell
+    // them apart, N identical rows are N copies of the same sentence.
+    if(d.round) rows.push({t:nowT-0.5, nodate:true,
+      what:`${d.round} failed round${d.round>1?"s":""}`,
+      sub:"quorum was not met — half each disputer's bond burned, half returned"});
     if(d.voteEndsAt && nowH!=null) rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
-      what:"vote closes", sub:"the round's scheduled close", future:true, est:true});
+      what:`vote closes · round ${(d.round||0)+1}`, sub:"the round's scheduled close", future:true, est:true});
     rows.push({t:nowT, h:tl.now.h, what:"now", sub:"", now:true});
     rows.sort((a,b)=>a.t-b.t);
     const body = rows.map(r=>{
       const known = r.t>0;
-      const when = !known? `≈block ${fmtN(r.h)}`
+      const when = r.nodate? "—"
+        : !known? `≈block ${fmtN(r.h)}`
         : r.now? stampDate(r.t,true)
         : (r.future? (r.est?"≈ ":"")+stampDate(r.t,false) : stampDate(r.t,true));
-      const gloss = known && !r.now? sinceWords(nowT, r.t) : "";
-      const title = known? `block ${fmtN(r.h)}${r.est?" — projected from the current pace":""}`
+      // The nodate row's t is a SORT KEY, not a time — glossing it would print
+      // "just now" about rounds that may have run for weeks.
+      const gloss = known && !r.now && !r.nodate? sinceWords(nowT, r.t) : "";
+      const title = r.nodate? "the chain publishes no stamp for a dispute round's opening"
+        : known? `block ${fmtN(r.h)}${r.est?" — projected from the current pace":""}`
         : "this claim predates the chain's date stamps; only its height is recorded";
       return `<div class="ev" title="${esc(title)}">${esc(r.what)}${r.sub?`<small>${esc(r.sub)}</small>`:""}</div>`
         + `<div class="dt" title="${esc(title)}">${esc(when)}${gloss?` <small>${esc(gloss)}</small>`:""}</div>`;
     }).join("");
     let fut2=null;
     if(d.phase==="open") fut2="awaiting an answer — anyone may post one with a bond";
-    else if(d.phase==="disputed" && !d.voteEndsAt) fut2="a sealed vote is deciding — no close height is published";
+    else if(d.phase==="disputed" && !d.voteEndsAt) fut2=`round ${(d.round||0)+1} is voting — no close height is published`;
     else if(d.phase==="settled") fut2="settled — every stake withdraws 1×";
     else if(d.phase==="provClose") fut2="closed without a decision — everyone 1×";
     else if(d.phase==="closed") fut2="closed — never answered";
-    return `<div class="ticket" style="margin-bottom:12px"><h3>Resolution so far</h3>
+    // NO h3. The section heading directly above already says "Timeline"; a
+    // ticket heading here printed the same word twice down the page.
+    return `<div class="ticket" style="margin-bottom:12px">
       <div class="clockrows">${body}${fut2?`<div class="ev">${esc(fut2)}</div><div class="dt">—</div>`:""}</div>
       <p class="small muted" style="margin:10px 0 0">Dates are the chain's own record; hover a row for its block. A date marked ≈ is projected from the current pace.</p></div>`;
   }
@@ -7558,22 +7589,31 @@ function resolutionLadder(d, nowH, tl){
   // claim the old deadline is history that never happened — show it only
   // while it is the operative clock.
   if(d.settleAt && d.phase==="answered") rows.push([d.settleAt, "settle deadline", "an undisputed answer settles here"]);
-  if(d.voteEndsAt) rows.push([d.voteEndsAt, "vote closes", "the round's scheduled close"]);
+  if(d.voteEndsAt) rows.push([d.voteEndsAt, `vote closes · round ${(d.round||0)+1}`, "the round's scheduled close"]);
   if(d.escrowUntil) rows.push([d.escrowUntil, "reopen closes", "escrow ends; finalizable"]);
   if(nowH!=null) rows.push([nowH, "now", "chain height"]);
+  // SORTED INTO PLACE, not appended. Rendered after the body it came out below
+  // "now" and below "vote closes", reading as something still to come — and
+  // failed rounds are the most recent thing that already happened. The height
+  // is a sort key half a block before now, and the 4th field says so: it prints
+  // an em-dash, because the chain stamps a round's opening nowhere.
+  if(d.round) rows.push([(nowH!=null? nowH : 0)-0.5,
+    `${d.round} failed round${d.round>1?"s":""}`,
+    "quorum was not met — half of each disputer's bond burned, half returned", true]);
   rows.sort((a,b)=>a[0]-b[0]);
   let fut=null;
   if(d.phase==="open") fut="awaiting an answer — anyone may post one with a bond";
-  else if(d.phase==="disputed" && !d.voteEndsAt) fut="the vote's close height is unexposed — Resolve refuses until it has passed";
+  else if(d.phase==="disputed" && !d.voteEndsAt) fut=`round ${(d.round||0)+1} is voting — the close height is unexposed, and Resolve refuses until it has passed`;
   else if(d.phase==="settled") fut="settled — every stake withdraws 1×";
   else if(d.phase==="provClose") fut="closed without a decision — everyone 1×";
   else if(d.phase==="closed") fut="closed — never answered";
   if(!rows.length && !fut) return "";
-  const body = rows.map(([h,what,sub])=>{
-    const w = nowH!=null? wall(nowH,h) : null;
-    return `<div class="line"><span class="l tnum">≈block ${fmtN(h)}${w?` <small>${esc(w)}</small>`:""}</span><span class="r">${esc(what)}${sub?` <small>${esc(sub)}</small>`:""}</span></div>`;
+  const body = rows.map(([h,what,sub,nodate])=>{
+    const w = !nodate && nowH!=null? wall(nowH,h) : null;
+    const when = nodate? "—" : `≈block ${fmtN(h)}`;
+    return `<div class="line"><span class="l tnum">${when}${w?` <small>${esc(w)}</small>`:""}</span><span class="r">${esc(what)}${sub?` <small>${esc(sub)}</small>`:""}</span></div>`;
   }).join("");
-  return `<div class="ticket" style="margin-bottom:12px"><h3>Resolution so far</h3>${body}
+  return `<div class="ticket" style="margin-bottom:12px">${body}
       ${fut?`<div class="line"><span class="l tnum">—</span><span class="r">${esc(fut)}</span></div>`:""}</div>`;
 }
 function resolutionSection(slug,id,d,nowH,tl){
@@ -7585,7 +7625,7 @@ function resolutionSection(slug,id,d,nowH,tl){
     // frozen, unstake freely". The two facts it alone carried (deposit
     // refunded, fee burned) now live in the ticket, next to the buttons they
     // describe; the ladder already carries the dates.
-    return `<section id="resolution" tabindex="-1"><div class="sec-h">Resolution</div>${ladder}</section>`;
+    return `<section id="timeline" tabindex="-1"><div class="sec-h">Timeline</div>${ladder}</section>`;
   }
   if(d.phase==="provClose"){
     inner = `<div class="notice void"><span class="g">◌</span><div><b>Closed without a decision.</b>
@@ -7637,7 +7677,7 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${btn("Answer NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}
         ${btn("Close dead claim","CloseDeadClaim",{courtSlug:slug,claimID:id},"","if its timeout passed")}</div></div></div>`;
   }
-  return `<section id="resolution" tabindex="-1"><div class="sec-h">Resolution</div>${ladder}${inner}</section>`;
+  return `<section id="timeline" tabindex="-1"><div class="sec-h">Timeline</div>${ladder}${inner}</section>`;
 }
 
 /* Quality lane — the tier and the flag slot, always sealed while a vote runs. */
@@ -7993,7 +8033,7 @@ async function meHoldings(addr,courts){
     if(mefail===0) store.set(seenKey(addr), JSON.stringify(snapshot)); // never memorize a partial view
   }catch(_){}
   const pullSec = pullsNow.length? `<section style="margin-top:14px"><div class="sec-h">You can pull these now <span class="count">${pullsNow.length}</span></div>
-      <div class="ticket">${pullsNow.map(r=>`<div class="line"><span class="l tnum"><a href="#/c/${esc(r.slug)}/${r.id}?at=resolution">#${r.id} · ${esc(r.slug)}</a></span><span class="r">${esc(r.label)}</span></div>`).join("")}
+      <div class="ticket">${pullsNow.map(r=>`<div class="line"><span class="l tnum"><a href="#/c/${esc(r.slug)}/${r.id}?at=timeline">#${r.id} · ${esc(r.slug)}</a></span><span class="r">${esc(r.label)}</span></div>`).join("")}
       <div class="actions" style="margin-top:8px">${pullsNow.filter(r=>r.act).map(r=>btn(r.act[0]==="WithdrawStake"?"Withdraw #"+r.id: r.act[0]==="Finalize"?"Finalize #"+r.id: r.act[0]+" #"+r.id, r.act[0], r.act[1])).join("")}</div></div></section>` : "";
   const maybeSec = maybeCourts.length? `<section style="margin-top:14px"><div class="sec-h">Maybe — the court decides <span class="count">${maybeCourts.length} court${maybeCourts.length>1?"s":""}</span></div>
       <p class="small muted">${maybeCourts.map(([sl,nm])=>`Voted in a dispute in ${safeInline(nm)}? Voters in the deciding round may have a reward waiting — the court will tell you when you pull it from the claim's own page.`).join(" ")}</p></section>` : "";
@@ -8094,12 +8134,12 @@ async function needsList(addr,courts){
   const warn = failed? `<p class="small" style="color:var(--no)">${failed} chain read${failed>1?"s":""} failed — this view may be incomplete. Reload before trusting it.</p>` : "";
   const brow = r => `<div class="crow" style="cursor:default">
       <span class="id">#${r.id}</span>
-      <span><a class="t" href="#/c/${esc(r.slug)}/${r.id}?at=resolution" style="color:inherit">${safeInline(r.title)}</a>
+      <span><a class="t" href="#/c/${esc(r.slug)}/${r.id}?at=timeline" style="color:inherit">${safeInline(r.title)}</a>
         <span class="m" style="display:block">${safeInline(r.name)} · the ballot — overturn the answer? · a sealed vote is deciding — no close height is published</span></span>
       <span class="rt">${statusPill("disputed")}</span></div>`;
   const exrow = r => `<div class="crow" style="cursor:default">
       <span class="id">#${r.id}</span>
-      <span><a class="t" href="#/c/${esc(r.slug)}/${r.id}?at=resolution" style="color:inherit">${safeInline(r.title)}</a>
+      <span><a class="t" href="#/c/${esc(r.slug)}/${r.id}?at=timeline" style="color:inherit">${safeInline(r.title)}</a>
         <span class="m" style="display:block">${safeInline(r.name)} · you staked this claim — the rest of the court votes</span></span>
       <span class="rt"><span class="pill void">excluded</span></span></div>`;
   const ballotsSec = (ballots.length||bexcluded.length)
@@ -8121,14 +8161,14 @@ async function needsList(addr,courts){
   const against = items.filter(i=>i.against).sort((a,b)=>a.clk.h-b.clk.h);
   const withYou = items.filter(i=>!i.against).sort((a,b)=>a.clk.h-b.clk.h);
   const urgent = against.find(i=>isFinite(i.clk.h) && (nowH==null || i.clk.h>nowH));
-  const urgentBox = urgent? `<div class="notice warn"><span class="g">⚑</span><div><b>Closing soonest:</b> <a href="#/c/${esc(urgent.c.slug)}/${urgent.cl.id}?at=resolution" style="color:inherit;text-decoration:underline">${safeInline(urgent.cl.title)}</a> — ${esc(urgent.clk.txt)}.${urgent.d.disputeBondNext?` A new dispute posts ${cc(urgent.d.disputeBondNext,urgent.c.slug)}.`:""}</div></div>` : "";
+  const urgentBox = urgent? `<div class="notice warn"><span class="g">⚑</span><div><b>Closing soonest:</b> <a href="#/c/${esc(urgent.c.slug)}/${urgent.cl.id}?at=timeline" style="color:inherit;text-decoration:underline">${safeInline(urgent.cl.title)}</a> — ${esc(urgent.clk.txt)}.${urgent.d.disputeBondNext?` A new dispute posts ${cc(urgent.d.disputeBondNext,urgent.c.slug)}.`:""}</div></div>` : "";
   const row = ({c,cl,d,against,clk}) => {
     const canDispute = d.phase==="answered" && (nowH==null || !d.settleAt || d.settleAt>nowH);
     const canSettle = d.phase==="answered" && nowH!=null && d.settleAt && d.settleAt<=nowH;
     const canReopen = d.phase==="provisional" && (nowH==null || !d.escrowUntil || d.escrowUntil>nowH);
     return `<div class="crow" style="cursor:default">
       <span class="id">#${cl.id}</span>
-      <span><a class="t" href="#/c/${esc(c.slug)}/${cl.id}?at=resolution" style="color:inherit">${safeInline(cl.title)}</a>
+      <span><a class="t" href="#/c/${esc(c.slug)}/${cl.id}?at=timeline" style="color:inherit">${safeInline(cl.title)}</a>
         <span class="m" style="display:block">${safeInline(c.name)} · ${d.provisional>=0? "provisional "+sideName(d.provisional) : "answered "+sideName(d.answer)}${clk.txt?` · ${esc(clk.txt)}`:""}</span>
         ${against? `<span class="m" style="display:block">their bond ${cc(d.answerBond,c.slug)}${d.disputeBondNext?` · a new dispute posts ${cc(d.disputeBondNext,c.slug)}`:""}</span>
         <span class="actions" style="margin-top:6px; display:flex">${canDispute||canReopen? btn(d.phase==="provisional"?"Reopen (dispute again)":"Dispute this answer","OpenDispute",{courtSlug:c.slug,claimID:cl.id},"no") : ""}${canSettle? btn("Settle (aged & undisputed)","SettleUndisputed",{courtSlug:c.slug,claimID:cl.id}) : ""}</span>`:""}</span>

@@ -71,15 +71,22 @@ ok("and no inline colour survives in a tagrow link",
    !/class="small" href="[^"]*" style="color:var\(--accent-2\)">(on the map|as the chain|docket|curate|map|moderation)/.test(src));
 
 // ?at plumbing
-ok("AT_OK allowlist", src.includes('const AT_OK = new Set(["resolution"])'));
+// The section was renamed Resolution -> Timeline, and the anchor with it. The
+// allowlist and the links are asserted TOGETHER below: an allowlist naming a
+// section that no longer exists is a deep link that silently lands nowhere.
+ok("AT_OK allowlist", src.includes('const AT_OK = new Set(["timeline"])'));
+ok("no ?at=timeline link survives the rename", !src.includes("at=resolution"));
 ok("atTarget uses getElementById (no selector injection)", src.includes('AT_OK.has(QP.at))? document.getElementById(QP.at) : null'));
 ok("hashchange prefers the at-target", src.includes('const t = atTarget();\n  if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); return; }'));
 ok("hashchange yields to route-landed focus", src.includes('main.contains(document.activeElement)) return;'));
 ok("boot render mirrors the at-scroll", src.includes('render().then(()=>{ const t=atTarget();'));
-ok("resolution anchor on both returns", (src.match(/<section id="resolution" tabindex="-1"><div class="sec-h">Resolution/g)||[]).length===2);
-ok("needs title links carry ?at", src.includes('href="#/c/${esc(c.slug)}/${cl.id}?at=resolution"'));
-ok("urgent box title is a link now", src.includes('${urgent.cl.id}?at=resolution"'));
-ok("me pull rows carry ?at", src.includes('${esc(r.slug)}/${r.id}?at=resolution'));
+ok("timeline anchor on both returns", (src.match(/<section id="timeline" tabindex="-1"><div class="sec-h">Timeline/g)||[]).length===2);
+// The focus-ring rule was written against the old id; a renamed section with an
+// orphaned CSS rule gets a browser outline nobody asked for.
+ok("...and the focus-ring rule followed it", src.includes("#timeline:focus,#timeline:focus-visible"));
+ok("needs title links carry ?at", src.includes('href="#/c/${esc(c.slug)}/${cl.id}?at=timeline"'));
+ok("urgent box title is a link now", src.includes('${urgent.cl.id}?at=timeline"'));
+ok("me pull rows carry ?at", src.includes('${esc(r.slug)}/${r.id}?at=timeline'));
 ok("since-last rows do NOT (phase change lands on top)", src.includes('href="#/c/${esc(sl)}/${esc(id)}">'));
 
 // map focus plumbing

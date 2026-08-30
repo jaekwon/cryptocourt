@@ -45,8 +45,24 @@ const html = disputeTicket("orem", 3, d, NOW);
 // reader had to get through the mechanism to reach the choice. All of it is in
 // the modal now.
 ok("ballot h3", html.includes("Should this answer be overturned?"));
-ok("the hint is one line: which round, and when it shuts",
-   html.includes('<div class="hint">Round 2 — closes in') && html.includes("One vote per address"));
+ok("the hint is one line, and it is the clock",
+   html.includes('<div class="hint">Closes in about'));
+// THE ROUND WENT TO THE TIMELINE, where the claim's other events are. The
+// ballot must not keep a second copy of it — on ANY branch. Asserted against
+// the rendered fixture alone, this passed while the no-close-height branch
+// still said "Round 2": the fixture has a voteEndsAt and never reaches it.
+ok("...with no round number on it, on any branch",
+   !/<div class="hint">[^<]*[Rr]ound \d/.test(html)
+   && [ballotHint("orem", d, NOW),
+       ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW),
+       ballotHint("orem", d, null),
+       ballotHint("orem", Object.assign({}, d, {voteEndsAt:NOW-1}), NOW)]
+        .every(x => !/[Rr]ound \d/.test(x)));
+// "One vote per address, and you cannot change it" is a rule about a mistake:
+// it means something only to somebody who has already cast the vote it would
+// undo. It is said at click time now, from a read, to the address it applies to.
+ok("...and no standing warning about changing a vote",
+   !html.includes("One vote per address"));
 // A hint that runs onto a third sentence about mechanism is the thing this
 // replaced, so the SHAPE is asserted, not just the content — and against every
 // branch, because the longest one is not the branch the fixture happens to take.
@@ -56,16 +72,16 @@ ok("the hint is one line: which round, and when it shuts",
     ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW),
     ballotHint("orem", d, null),
     ballotHint("orem", Object.assign({}, d, {voteEndsAt:NOW-1}), NOW)];
-  ok("...and every branch of it is one line, at most two sentences",
-     all.every(x => x.length < 100 && !x.includes("\n")
-                    && x.trim().split(/\.\s+/).length <= 2));
+  ok("...and every branch of it is one short sentence",
+     all.every(x => x.length < 60 && !x.includes("\n")
+                    && x.trim().split(/\.\s+/).length === 1));
 }
 // The passed-window branch drops the voting rule instead of appending it: it is
 // noise to somebody who can no longer vote, and joining it on made the sentence
 // read "Round 3 — voting has closed — Resolve works now".
 ok("a closed window says only that, and says it without a second dash",
    ballotHint("orem", Object.assign({}, d, {voteEndsAt:NOW-1}), NOW)
-     === "Round 2 — voting has closed; Resolve works now.");
+     === "Voting has closed; Resolve works now.");
 ok("no outcome rows: what overturning does to whose bond is modal copy",
    !html.includes("the answer stays YES") && !html.includes("the answer becomes NO"));
 ok("no vote-lock row on the ballot either",
@@ -98,12 +114,12 @@ ok("clock: no second copy of the close row on the ballot",
    !html.includes("<span>vote closes</span>"));
 ok("clock: the fallback still says it when there is no height to project from",
    ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW)
-     .includes("closes about 7 days after it opened"));
+     .includes("about 7 days after this round opened"));
 // nowH null is a DIFFERENT branch from voteEndsAt absent: the height IS known and
 // merely unprojectable. It must print that height rather than the 7-day guess,
 // which would be an invented date printed over a fact the chain gave.
 ok("clock: a known height with no clock to project it prints the height",
-   ballotHint("orem", d, null).includes("closes at block "));
+   ballotHint("orem", d, null).includes("Closes at block "));
 // Quorum LEFT the ballot. The rule and the figure are in the modal, where a
 // reader who wants the mechanism can find both — and the ballot no longer
 // spends a row on arithmetic nobody is being asked to do.
@@ -154,7 +170,7 @@ CFG.mode='live';
 const dl = Object.assign({}, DEMO.claims["orem/3"]); delete dl.voteEndsAt; delete dl.quorumFloor;
 const htmlL = disputeTicket("orem", 3, dl, 5000000);
 ok("live: no invented deadline",
-   htmlL.includes("closes about 7 days after it opened"));
+   htmlL.includes("about 7 days after this round opened"));
 ok("live: no turnout row without read", !htmlL.includes("turnout bar"));
 // The async fill marks the vote BUTTONS now instead of writing a paragraph, so
 // what has to be present is the block it looks for.
@@ -166,10 +182,10 @@ CFG.mode='demo';
 const d3 = Object.assign({}, DEMO.claims["orem/3"], {voteEndsAt: NOW-100});
 const html3 = disputeTicket("orem", 3, d3, NOW);
 ok("past close: resolve works now",
-   html3.includes("voting has closed; Resolve works now"));
+   html3.includes("Voting has closed; Resolve works now"));
 // ...and it replaces the countdown rather than sitting beside it. A ballot that
 // says both "closes in 2 days" and "voting has closed" is worse than either.
-ok("...instead of a countdown, not beside one", !html3.includes("closes in"));
+ok("...instead of a countdown, not beside one", !/Closes in/.test(html3));
 
 
 // ---- B4 critic fixes ----
@@ -216,6 +232,19 @@ ok("F1: voteEndsAt in chart domain candidates", /const cands=\[now, d\.settleAt\
 ok("F3: the click-time reason states what was seen, not what will happen",
    /You cannot vote on this claim: you /.test(srcF)
    && !/your vote will be (accepted|refused)/i.test(srcF));
+// ALREADY VOTED — the rule that left the ballot has to land somewhere, and this
+// is where. Read from CommitmentsOf rather than remembered client-side: a
+// verdict-lane row exists only while the round that made it is open, which is
+// exactly the window in which "you cannot change it" is true.
+ok("F5: the click-time check reads whether this address already voted",
+   srcF.includes('CommitmentsOf(${gstr(slug)},${gstr(CFG.addr)})')
+   && /r\.kind==="d" && r\.id===Number\(id\)/.test(srcF));
+ok("F5: ...and says the rule that used to sit on every ballot",
+   /have already voted in this round, and a vote cannot be changed/.test(srcF));
+// "You cannot vote on this claim: you have already voted" would be wrong — they
+// could, and did. The sentence has to switch stems, not just its tail.
+ok("F5: ...without telling them they cannot do what they just did",
+   srcF.includes('(voted? "You " : "You cannot vote on this claim: you ")'));
 
 // ticket rows: label bold on the LEFT, value left-aligned in its own column,
 // with a real gutter (owner report: bold-right, ragged-left, columns touching)

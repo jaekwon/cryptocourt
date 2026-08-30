@@ -33,6 +33,8 @@ code += "var store={get:k=>{try{return localStorage.getItem(k)}catch(_){return n
 code += "const demoCourt = slug => Object.hasOwn(DEMO.courts, slug)? DEMO.courts[slug] : null;\n";
 code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var CURATION_V');
 code += slice('function assocRow(', '/* ======================= local curation');
+code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
+code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
 code += slice('function resolutionLadder(', 'function resolutionSection');
 code += slice('function demoCensus(', 'function courtRecordPanel');
 code += slice('function folderCount(', 'function folderMeta');
@@ -129,6 +131,67 @@ ok("ladder #3 (disputed w/ voteEndsAt): vote closes rung", L3.includes("vote clo
 const d3n = Object.assign({}, d3l); delete d3n.voteEndsAt;
 const L3n = resolutionLadder(d3n, NOW);
 ok("ladder disputed w/o voteEndsAt: unexposed-close future rung", L3n.includes("close height is unexposed"));
+
+// ---- the dispute rounds, on the timeline where the other events are --------
+// They came off the ballot. The chain stamps a round's opening NOWHERE
+// (ClaimTimeline, clock.gno:118), so the one thing that must not happen is a
+// date appearing beside one — a guess set in the same type as the chain's own
+// record is worse than an em-dash.
+ok("the live round rides the close row it belongs to", L3.includes("vote closes · round 2"));
+ok("...and the failed ones are counted, not listed one per line",
+   L3.includes("1 failed round") && !L3.includes("2 failed round"));
+// ORDER. Appended after the body it came out below "now" and below "vote
+// closes", reading as something still to come — and a failed round is the most
+// recent thing that already happened. It is sorted in on a key half a block
+// before now, and its date cell is an em-dash, not the sort key rendered.
+// The legacy branch renders "now <small>chain height</small>", NOT ">now<" —
+// that is the dated branch's markup, and searching for it here returned -1,
+// which made the comparison true for the wrong reason.
+ok("...sorted in before now, not appended after the future rows",
+   L3.includes("now <small>chain height")
+   && L3.indexOf("failed round") < L3.indexOf("now <small>chain height")
+   && L3.indexOf("failed round") < L3.indexOf("vote closes"));
+ok("...and its sort key never reaches the page as a height",
+   /class="l tnum">—<\/span><span class="r">1 failed round/.test(L3)
+   && !/≈block 4,799,999|≈block NaN/.test(L3));
+ok("...singular at one, plural above it",
+   resolutionLadder(Object.assign({}, d3l, {round:3}), NOW).includes("3 failed rounds"));
+ok("...and a claim with no failed round says nothing at all",
+   !resolutionLadder(Object.assign({}, d3l, {round:0}), NOW).includes("failed round"));
+ok("the unexposed-close note names its round too", L3n.includes("round 2 is voting"));
+// The em-dash is the assertion. The failed-rounds row must not acquire a height.
+{
+  const row = L3.split("failed round")[0].split('<div class="line">').pop();
+  ok("a round carries an em-dash where every other row carries a height",
+     row.includes(">—<") && !/≈block/.test(row));
+}
+
+// ---- the same rows on the DATED branch ------------------------------------
+// A different code path with its own renderer: the legacy branch above builds
+// [h, what, sub] tuples, this one builds objects and sorts them by timestamp.
+// Asserting only one of them is how the two drift.
+{
+  const T0 = 1750000000, tl = {opened:{t:T0-900000,h:1000}, answered:{t:T0-600000,h:2000},
+                               now:{t:T0,h:4800000}};
+  const D = Object.assign({}, d3l, {round:2, phase:"disputed", voteEndsAt:NOW+70000});
+  const L = resolutionLadder(D, NOW, tl);
+  ok("dated ladder: the close row names the round", L.includes("vote closes · round 3"));
+  ok("dated ladder: the failed rounds are one dateless row",
+     L.includes("2 failed rounds") && L.includes("quorum was not met"));
+  // The row's t is a SORT KEY (nowT - 0.5), not a time. Glossed, sinceWords
+  // renders it as "1 min ago" — a precise, confident lie about rounds that may
+  // have run for weeks. THE DATE CELL IS ASSERTED WHOLE: the first version of
+  // this banned the words "just now" and "minutes ago", neither of which
+  // sinceWords produces, so the ablation that restored the gloss walked past it.
+  ok("dated ladder: the dateless row's date cell is an em-dash and nothing else",
+     /failed rounds<small>[\s\S]*?<\/small><\/div><div class="dt"[^>]*>—<\/div>/.test(L));
+  ok("dated ladder: it sorts before now, not after",
+     L.indexOf("failed rounds") < L.indexOf(">now<"));
+  ok("dated ladder: and it says why it has no date",
+     L.includes("publishes no stamp for a dispute round"));
+  ok("dated ladder: the ticket carries no heading of its own, the section names it",
+     !L.includes("<h3>"));
+}
 
 // ---- banned words in all new surfaces ----
 ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|profit|APR|odds|price/i.test(x)));
