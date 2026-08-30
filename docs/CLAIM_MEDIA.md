@@ -838,9 +838,8 @@ against believing a green suite about anything a reader sees.
 
 ## 10. Open owner rulings
 
-1. **`OpenClaimPM`** as the name, where `P` already means "with body"?
-2. **Folders** — claims only, or may a folder carry an image?
-3. **How much of the claim page may evidence occupy?** Now that exhibits render
+1. **Folders** — claims only, or may a folder carry an image?
+2. **How much of the claim page may evidence occupy?** Now that exhibits render
    there, this is a real trade with a measurement behind it. Seven of the demo's
    small 240x160 sample already push the Resolution heading down 1,281px — 1.42
    screens at 1100x900 — and a real 1600px-wide exhibit renders around 470px
@@ -855,6 +854,22 @@ against believing a green suite about anything a reader sees.
    on the page a court is read on. Recorded rather than quietly fixed.
 
 **Settled by the owner:**
+
+9. **`OpenClaimPM` keeps its name.** The suffix is a realm-wide convention, not a
+   media invention: `StartCourtP` and `OpenClaimP` already mean "the same
+   entrypoint, one more thing said about it", and `OpenClaimP`'s own comment says
+   the `P` follows `StartCourtP`. Renaming only the media one would make evidence
+   the single exception to a scheme used in 38 places across the realm, the
+   guards, two txtars, `scenario.py` and the overlay.
+
+   **The argument against it is real and is not resolved by this.** The suffix is
+   a letter code, it stops being readable at two letters, and there is no room
+   for a third — and the function name is what a filer meets in the wallet at the
+   moment they sign, which sits badly beside §2's rule that a person filing
+   evidence should never meet a technical concept. But that argument indicts
+   `OpenClaimP` and `StartCourtP` exactly as much, so acting on it means renaming
+   all three to self-describing names, which is a realm-wide decision rather than
+   a media one. Recorded here so it is not lost, and left where it belongs.
 
 8. **The host allowlist is an admin parameter.** `SetMediaHosts` and
    `ClearMediaHosts`, on the same seat as `SetSiteDomain`: global-DAO admin,
