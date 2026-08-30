@@ -20,6 +20,10 @@ const MEDIA_MAX_MIRRORS = 4;
 const MEDIA_MAX_URL = 300;
 const MEDIA_MAX_CAPTION = 120;
 const MEDIA_MAX_BYTES = 262144; // 256 KiB, the realm's cap and the archive's
+// How long to wait on a stranger's host when adopting a pasted link. Long
+// enough for a slow CDN and a large photograph, short enough that a host which
+// never answers becomes a broken row rather than a permanent "reading…".
+const MEDIA_FETCH_MS = 20000;
 
 /* The five raster types the archive will store and serve.
  *
@@ -432,7 +436,19 @@ function mediaNewComposer(opts) {
       o.onChange && o.onChange(items);
       // no-referrer: the host must not learn which claim is being written, and
       // the claim does not exist yet.
-      const res = await fetchFn(url, {referrerPolicy: "no-referrer", mode: "cors"});
+      //
+      // BOUNDED, because this is a wait on a stranger's server. Without it a
+      // host that accepts the connection and never answers leaves the row at
+      // "reading the link…" for as long as the composer is open — and while
+      // that blocks nothing (busy() only warns, and an unfinished item is left
+      // out of the argument), an exhibit that never resolves either way is a
+      // question with no answer in front of somebody trying to file. Twenty
+      // seconds, then it is a refusal like any other, with the action that works.
+      const res = await fetchFn(url, {
+        referrerPolicy: "no-referrer", mode: "cors",
+        signal: (typeof AbortSignal !== "undefined" && AbortSignal.timeout)
+          ? AbortSignal.timeout(MEDIA_FETCH_MS) : undefined,
+      });
       if (!res.ok) throw new Error("http " + res.status);
       const blob = await res.blob();
       prepared = await o.prepare(blob);
