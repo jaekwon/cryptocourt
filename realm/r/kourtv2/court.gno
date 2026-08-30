@@ -690,7 +690,7 @@ func SetCourtDesc(cur realm, courtSlug, desc string) {
 }
 
 func mustCourtDesc(desc string) {
-	if len(desc) > maxCourtDescLen {
+	if runeLen(desc) > maxCourtDescLen {
 		panic("kourtv2: a court description is at most 240 characters")
 	}
 	for i := 0; i < len(desc); i++ {
@@ -701,7 +701,7 @@ func mustCourtDesc(desc string) {
 }
 
 func mustCourtName(name string) {
-	if len(name) == 0 || len(name) > maxCourtNameLen {
+	if runeLen(name) == 0 || runeLen(name) > maxCourtNameLen {
 		panic("kourtv2: a court name is 1..100 characters")
 	}
 }

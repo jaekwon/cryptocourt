@@ -533,7 +533,7 @@ func mustCategoryCode(code string) {
 }
 
 func checkReason(reason string) {
-	if len(reason) > maxReasonLen {
+	if runeLen(reason) > maxReasonLen {
 		panic("kourtv2: a moderation reason is at most 200 characters")
 	}
 }

@@ -145,8 +145,15 @@ ok("an ordinary non-Latin caption is accepted", M.mediaCaptionFault(cyrillic) ==
    `${[...cyrillic].length} chars, ${Buffer.byteLength(cyrillic, "utf8")} bytes`);
 ok("...and it is longer in bytes than in characters, so the two rules differ",
    Buffer.byteLength(cyrillic, "utf8") > [...cyrillic].length);
+// The realm counts characters too — through one shared runeLen, since the same
+// mismatch turned out to affect all nine of its text caps, not just this one.
+// claim.gno holds the implementation; media.gno must be calling it.
+const claimGno = fs.readFileSync(
+  path.join(__dirname, "..", "..", "realm", "r", "kourtv2", "claim.gno"), "utf8");
 ok("the realm counts characters too, not bytes",
-   /for range s\s*\{\s*n\+\+/.test(gno) && !/len\(s\) > maxCaptionLen/.test(gno));
+   /runeLen\(s\) > maxCaptionLen/.test(gno) && !/len\(s\) > maxCaptionLen/.test(gno));
+ok("...through one implementation, which counts runes",
+   /func runeLen\(s string\) int \{[\s\S]{0,120}for range s/.test(claimGno));
 ok("a caption of exactly the cap passes, in any script",
    M.mediaCaptionFault("\u0431".repeat(M.MEDIA_MAX_CAPTION)) === "");
 ok("...and one character past it does not",
@@ -1074,7 +1081,7 @@ async function section6() {
   await section4();
   await section5();
   await section6();
-  const EXPECTED = 245;
+  const EXPECTED = 246;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

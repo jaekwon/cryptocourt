@@ -854,3 +854,61 @@ func restoreMediaHosts() {
 	mediaHostsExact = appendAll(nil, defaultMediaHostsExact)
 	mediaHostSuffixes = appendAll(nil, defaultMediaHostSuffixes)
 }
+
+
+// EVERY CAP IN THIS REALM IS STATED IN CHARACTERS, so every cap counts them.
+//
+// They counted bytes. The two agree only for ASCII, so a 200-character Russian
+// claim title — about 370 bytes — was refused with a message saying "at most 200
+// characters", and the surfaces that collect this text count characters too: an
+// <input> maxLength is UTF-16 code units, so the composer accepted exactly what
+// the chain then rejected. Every non-Latin script hit the wall at roughly half
+// the stated limit and nobody writing in English could see it.
+//
+// Checked here at the boundary in a three-byte script, because that is where a
+// byte count and a character count disagree and an ASCII fixture cannot tell
+// them apart — which is precisely why this survived: "x".repeat() was the
+// fixture everywhere.
+func TestEveryTextCapCountsCharacters(cur realm, t *testing.T) {
+	wide := func(n int) string { return strings.Repeat("あ", n) }
+
+	// runeLen is the one implementation; if it is wrong, everything below is.
+	if runeLen(wide(200)) != 200 {
+		t.Fatalf("runeLen counted %d for 200 runes", runeLen(wide(200)))
+	}
+	if len(wide(200)) == runeLen(wide(200)) {
+		t.Fatal("this fixture cannot tell bytes from characters")
+	}
+
+	// The realm's own validators, at the boundary and one past it.
+	for _, tc := range []struct {
+		what string
+		at   int
+		run  func(int)
+	}{
+		{"a court description", maxCourtDescLen, func(n int) { mustCourtDesc(wide(n)) }},
+		{"a court name", maxCourtNameLen, func(n int) { mustCourtName(wide(n)) }},
+		{"a caption", maxCaptionLen, func(n int) {
+			if f := captionFault(wide(n)); f != "" {
+				panic("kourtv2: " + f)
+			}
+		}},
+	} {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("%s of exactly %d characters was refused: %v", tc.what, tc.at, r)
+				}
+			}()
+			tc.run(tc.at)
+		}()
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("%s of %d characters was accepted", tc.what, tc.at+1)
+				}
+			}()
+			tc.run(tc.at + 1)
+		}()
+	}
+}

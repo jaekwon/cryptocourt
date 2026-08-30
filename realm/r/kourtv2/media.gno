@@ -578,11 +578,7 @@ func captionFault(s string) string {
 	// could not be filed, aborting with "a caption is at most 120 characters"
 	// about a caption of 82. Any non-Latin script hit this at roughly half the
 	// stated limit; the two sides had never been compared on a non-ASCII string.
-	n := 0
-	for range s {
-		n++
-	}
-	if n > maxCaptionLen {
+	if runeLen(s) > maxCaptionLen {
 		return "a caption is at most " + strconv.Itoa(maxCaptionLen) + " characters"
 	}
 	// The bidi controls, and only the OVERRIDES, EMBEDDINGS and ISOLATES.

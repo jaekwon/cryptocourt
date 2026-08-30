@@ -632,11 +632,22 @@ reason the comment does not give — this realm is full of verbs that spend and
 then `return` without firing when an m-of-n is short, and a `return` does not
 revert. The ordering is the habit that makes those safe.
 
-**NOTE — the 2,000 cap is BYTES and the refusal says "characters".** A comment in
-a three-byte-per-rune script is cut off at ~666 of the 2,000 it was promised.
-Consistent with every other length check in the realm, so not a defect, but the
-asymmetry is now pinned by `TestTheCommentCapIsBytesNotCharacters` rather than
-left to be rediscovered.
+**RESOLVED — the 2,000 cap counted BYTES while the refusal said "characters".** A
+comment in a three-byte-per-rune script was cut off at ~666 of the 2,000 it was
+promised. This note called it consistent with every other length check in the
+realm and therefore not a defect, and pinned the asymmetry rather than leaving it
+to be rediscovered.
+
+Consistency turned out to be the argument for fixing it rather than for keeping
+it: the same mismatch was found independently on claim media captions, where the
+composer accepted an 82-character Russian caption and the chain refused it as
+"at most 120 characters". All nine sites — claim title and body, board text,
+court name and description, three folder fields and moderation reasons — now
+count runes through one `runeLen`, so the promise is true everywhere instead of
+false everywhere. The change is strictly more permissive, so nothing previously
+valid became invalid; the cost is up to 4x the bytes, which the author already
+pays for in the storage deposit. The test that pinned the old behaviour now
+denies it, under its own name.
 
 **NOTE — `mustBoardWritable` reports the claim-board freeze before the personal
 one.** When both are live the poster is told the wrong thing: the claim freeze

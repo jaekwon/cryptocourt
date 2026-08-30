@@ -248,7 +248,7 @@ func CreateFolder(cur realm, courtSlug, name, desc string) uint64 {
 	if cm.folders.Size() >= maxFolders {
 		panic("kourtv2: this court already has " + strconv.Itoa(maxFolders) + " folders")
 	}
-	if len(name) == 0 || len(name) > maxFolderTextLen || len(desc) > maxFolderTextLen {
+	if runeLen(name) == 0 || runeLen(name) > maxFolderTextLen || runeLen(desc) > maxFolderTextLen {
 		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
 	}
 	cm.folderSeq++
@@ -269,7 +269,7 @@ func CreateFolderIn(cur realm, courtSlug string, parentID uint64, name, desc str
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cm := requireFolderMod(c, who)
-	if len(name) == 0 || len(name) > maxFolderTextLen || len(desc) > maxFolderTextLen {
+	if runeLen(name) == 0 || runeLen(name) > maxFolderTextLen || runeLen(desc) > maxFolderTextLen {
 		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
 	}
 	if cm.folders.Size() >= maxFolders {
@@ -357,7 +357,7 @@ func RenameFolder(cur realm, courtSlug string, folderID uint64, name, desc strin
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cm := requireFolderMod(c, who)
-	if len(name) == 0 || len(name) > maxFolderTextLen || len(desc) > maxFolderTextLen {
+	if runeLen(name) == 0 || runeLen(name) > maxFolderTextLen || runeLen(desc) > maxFolderTextLen {
 		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
 	}
 	f := cm.mustFolder(folderID)

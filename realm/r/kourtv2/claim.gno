@@ -27,6 +27,28 @@ const twapBuckets = 168 // a week of hourly buckets, as V1
 // short of the essay that would make every claim page a wall.
 const maxClaimBodyLen = 2000
 
+// runeLen counts CHARACTERS, which is what every limit in this realm is stated
+// in and what a person can count.
+//
+// len() counts UTF-8 BYTES, and every one of these caps used it. The two agree
+// only for ASCII, so a 200-character Russian claim title — about 370 bytes — was
+// refused with "a title is at most 200 characters", about a title that was 200.
+// The surfaces that collect this text count characters too: an <input> maxLength
+// is UTF-16 code units, so the composer accepted what the chain then rejected.
+// Every non-Latin script hit the wall at roughly half the stated limit, and
+// nobody writing in English could see it.
+//
+// Counting runes is strictly more permissive, so no claim that was valid becomes
+// invalid. The cost is that text can occupy up to four times the bytes, which
+// the author already pays for through the storage deposit.
+func runeLen(s string) int {
+	n := 0
+	for range s {
+		n++
+	}
+	return n
+}
+
 type claimState struct {
 	id     uint64
 	title  string
@@ -380,13 +402,13 @@ func OpenClaimPM(cur realm, courtSlug, title, body, media string) uint64 {
 }
 
 func openClaim(c *Court, who address, title, body string, seeded bool) uint64 {
-	if len(title) == 0 || len(title) > 200 {
+	if runeLen(title) == 0 || runeLen(title) > 200 {
 		panic("kourtv2: a claim title is 1..200 characters")
 	}
 	// Optional: a claim is a title first and the body earns its bytes. The cap is
 	// not arbitrary — every byte is storage the author pays a deposit on, and a
 	// court of record wants the question stated, not an essay attached to it.
-	if len(body) > maxClaimBodyLen {
+	if runeLen(body) > maxClaimBodyLen {
 		panic("kourtv2: a claim body is at most " + strconv.Itoa(maxClaimBodyLen) + " characters")
 	}
 	var dep, fee int64

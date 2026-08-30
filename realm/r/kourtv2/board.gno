@@ -235,7 +235,7 @@ func PostComment(cur realm, courtSlug string, claimID uint64, parentRow uint64, 
 	if text == "" {
 		panic("kourtv2: a comment needs text")
 	}
-	if len(text) > maxBoardTextLen {
+	if runeLen(text) > maxBoardTextLen {
 		panic("kourtv2: a comment is at most " + strconv.Itoa(maxBoardTextLen) + " characters")
 	}
 
