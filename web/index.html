@@ -376,14 +376,12 @@ html.embed body{display:block; min-height:0}
 html.embed .rail, html.embed #nav{display:none !important}
 /* The page banner is a paragraph; an embed is a fixed box. It would overflow,
    so the card carries the short form (.esrc) and this stays out of the way. */
-html.embed #tcbanner{display:none !important}
 /* The frame is the host's; the card is ours. `margin:auto` on the flex child
    centres it on both axes AND, unlike align-items:center, never clips the top of
    a card taller than the frame — a long title must push the iframe into a
    scrollbar, not lose its own first line. */
 html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
   min-height:100vh; display:flex}
-html.embed #tcbanner{grid-column:1; padding:0}
 /* The card is a surface like any other: hairline frame, registration marks at
    the corners, and the head in the same gold as the docket reference it is. */
 .emb{display:flex; flex-direction:column; gap:9px; padding:14px 15px;
@@ -985,11 +983,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 /* Column 2, row 1 — NOT 1/-1. Spanning every column put it under the rail,
    which is sticky and opaque, so the first third of the sentence was invisible.
    Padding matches .main's so the banner lines up with the page beneath it. */
-#tcbanner{grid-column:2; grid-row:1; min-width:0; max-width:1080px;
-  padding:20px clamp(20px,4vw,56px) 0}
-.tcbar{background:var(--contra-wash); color:var(--ink); border:1px solid var(--contra);
-  border-left-width:4px; border-radius:var(--r); padding:11px 16px;
-  font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice{border-radius:var(--r); padding:13px 16px; font-size:13.5px; display:flex; gap:10px; align-items:flex-start}
 .notice.warn{background:var(--escrow-wash); color:var(--ink); border:1px solid var(--escrow); border-left-width:4px}
 .notice.refuse{background:var(--no-wash); border:1px solid var(--no); border-left-width:4px; color:var(--ink)}
@@ -1120,8 +1113,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .bigchart .endS{font-size:18px}
   .bigchart .endL{font-size:26px}
   body{grid-template-rows:none}
-  .rail,.main,#tcbanner{grid-row:auto; grid-column:auto}
-  #tcbanner{padding:16px 20px 0}
+  .rail,.main{grid-row:auto; grid-column:auto}
   .docket a.crow{grid-template-columns:44px minmax(0,1fr) auto}
   .docket a.crow > span:nth-child(2){grid-column:2/4}
   .docket a.crow .id{grid-row:1/3; align-self:start}
@@ -1234,7 +1226,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   </div>
 </aside>
 
-<div id="tcbanner" role="status" hidden></div>
 
 <main class="main" id="main"></main>
 
@@ -3043,50 +3034,11 @@ let QP = {};
    warning that blinks out on navigation is worse than none. Cached per RPC
    endpoint, so it costs one query per node and not one per page.
    Demo mode never shows it — nothing there claims to be a chain. */
-/* CACHE THE PROMISE, NOT JUST THE RESULT.
-   This used to publish the cache KEY (TCFAB_FOR) and a null value before doing
-   the reads, so any second caller arriving while the first was still awaiting
-   the chain got the placeholder — null, meaning "no test clock" — and believed
-   it. That was unreachable while the banner was the only caller. It became
-   reachable the moment an embed asked the same question: render() fires
-   paintTestClockBanner() without awaiting it and then runs the route, so the
-   route's sourceNote() lands squarely inside the banner's in-flight read.
-   Found on a real seeded chain, where the embed card showed no disclosure at all
-   while the clip drawn a second later showed it correctly. Demo mode returns
-   before touching this, so nothing offline could have caught it. */
-let TCFAB = null, TCFAB_FOR = null, TCFAB_P = null;
-function testClockState(){
-  if(!isLive()) return Promise.resolve(null);
-  if(TCFAB_FOR===CFG.rpc && TCFAB_P) return TCFAB_P;
-  TCFAB_FOR = CFG.rpc; TCFAB = null;
-  return TCFAB_P = tcRead();
-}
-async function tcRead(){
-  try{
-    const fab = await one("TestClockFabricated()");
-    if(fab!==true) return TCFAB=null;
-    let secs = null, blocks = null, live = false;
-    try{ secs = await one("TestClockPeakSkew()"); }catch(_){}
-    // The override moves HEIGHT as well as the calendar, and a chain advanced
-    // only in height would otherwise read "moved forward 0 days" — which says
-    // nothing was moved, on a page whose conviction, emission and trailing
-    // averages all came from a block count the scenario supplied. An older
-    // realm has no such read; absent is not zero, so it stays null.
-    try{ blocks = await one("TestHeightPeakSkew()"); }catch(_){}
-    try{ live = (await one("TestClockActive()"))===true; }catch(_){}
-    const num = v => (typeof v==="number" && isFinite(v))? v : null;
-    return TCFAB = {secs: num(secs), blocks: num(blocks), live};
-  }catch(e){
-    // An older realm has no such function. That is not a warning-worthy state:
-    // a node without the entrypoint never had a test clock to arm.
-    return TCFAB=null;
-  }
-}
 /* WHERE AN EMBED'S NUMBERS COME FROM, in one short line.
    The full banner is a paragraph. It is the right size for a page and the wrong
    size for a 400x340 card pasted into somebody's article — measured, it ate the
    top third and pushed the card's only exit link below the fold. So an embed
-   suppresses the banner (see `html.embed #tcbanner`) and carries THIS instead.
+   carries THIS instead of a banner of its own.
    It also covers a case the banner never did: DEMO mode. Demo is the default
    for any reader who has never opened this page, so an embed's default state is
    invented courts with invented stakes — and the one element that admitted it
@@ -3095,31 +3047,10 @@ async function tcRead(){
    one honest case: a live node whose clock was never faked. */
 async function sourceNote(){
   if(!isLive()) return "sample data — these courts exist on no chain";
-  const st = await testClockState();
-  if(st) return "test chain — the dates here were set by hand";
   return null;
 }
-async function paintTestClockBanner(){
-  const el = document.getElementById("tcbanner");
-  if(!el) return;
-  const st = await testClockState();
-  if(!st){ el.hidden = true; el.innerHTML = ""; return; }
-  const days = st.secs!=null? Math.round(st.secs/86400) : null;
-  const parts = [];
-  if(days) parts.push(`${fmtN(days)} day${days===1?"":"s"}`);
-  if(st.blocks) parts.push(`${fmtN(st.blocks)} block${st.blocks===1?"":"s"}`);
-  const moved = parts.length? ` — moved forward ${parts.join(" and ")}` : "";
-  const tail = st.live
-    ? "The clock is still open, so they can move again."
-    : "The clock is sealed, so they are now fixed.";
-  el.innerHTML = `<div class="tcbar"><span class="g">⏱</span><div><b>Test chain — the dates here are fabricated.</b>
-    This node's clock was set by hand${moved}. ${tail} Balances and stakes are real.</div></div>`;
-  el.hidden = false;
-}
-
 async function render(){
   const seq = ++renderSeq;
-  paintTestClockBanner();
   const raw = location.hash.replace(/^#/,"") || "/";
   const qx = raw.indexOf("?");
   const hash = qx<0? raw : raw.slice(0,qx);
@@ -8351,7 +8282,7 @@ function embedTheme(){
    URL is reachable in a top-level tab — "Open frame in new tab" is in the
    default right-click menu of every iframe — and from there "Open on Kourt →"
    navigates the SAME tab with target=_top. The reader then had the whole app
-   with no rail, no nav, and #tcbanner display:none: a navigation dead end and,
+   with no rail and no nav: a navigation dead end and,
    worse, a permanently suppressed test-clock disclosure. `?theme=` was sticky
    the same way, pinning the app to the sharer's palette.
    So the mark is recomputed from the hash on every render. */

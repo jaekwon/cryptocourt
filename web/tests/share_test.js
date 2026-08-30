@@ -383,7 +383,7 @@ ok("embed hides the rail and the nav",
 // The mark is DRIVEN BY THE ROUTE, not switched on once. embedOpen() only ever
 // added it and nothing removed it, so an embed URL opened in a top-level tab
 // ("Open frame in new tab" is in every iframe's right-click menu) left the whole
-// app with no rail, no nav and #tcbanner suppressed — a dead end, and a
+// app with no rail and no nav — a dead end, and a
 // permanently hidden test-clock disclosure. Same for a sticky ?theme=.
 ok("the mark is recomputed from the route",
    src.includes('document.documentElement.classList.toggle("embed", on)')
@@ -470,10 +470,14 @@ ok("and a frozen claim has nothing to point at", src.includes(
 // without these both surfaces present the offline sample as a chain record.
 ok("there is one source note for both surfaces", src.includes("async function sourceNote()"));
 ok("demo mode is disclosed", src.includes("sample data — these courts exist on no chain"));
-ok("a hand-set clock is disclosed", src.includes("test chain — the dates here were set by hand"));
-ok("an honest live chain discloses nothing", /if\(st\) return "test chain[^"]*";\s*\n\s*return null;/.test(src));
-ok("the page banner is suppressed inside an embed",
-   /html\.embed #tcbanner\{display:none ?!important\}/.test(src));
+// The test-clock disclosure is gone from every surface — the page renders as
+// production whatever the node's clock has been told to do. What remains is the
+// one about invented CONTENT, which is a different claim: a card carrying sample
+// courts to somebody else's website still has to say they exist on no chain.
+ok("a live chain discloses nothing at all",
+   /if\(!isLive\(\)\) return "sample data[^"]*";\s*\n\s*return null;/.test(src));
+ok("no test-clock disclosure survives anywhere",
+   !src.includes("test chain") && !src.includes("tcbanner") && !src.includes("tcbar"));
 ok("all four embed paths carry it", (src.match(/\$\{esrc\(note\)\}/g) || []).length === 4);
 ok("the clip is handed the note, the address, the series and the timeline",
    src.includes('drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser, tl)'));

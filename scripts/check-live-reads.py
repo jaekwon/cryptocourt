@@ -66,8 +66,10 @@ PROBES = [
     ("TrailingOI", '("{c}",{i},120960)'), ("TrailingYes", '("{c}",{i},120960)'),
     ("StakeOf", '("{c}",{i},0,"{a}")'), ("ConvictionOf", '("{c}",{i},0,"{a}")'),
     ("PullState", '("{c}",{i},"{a}")'),
-    # clock
-    ("TestClockActive", "()"), ("TestClockFabricated", "()"), ("TestClockPeakSkew", "()"),
+    # The clock reads are gone with the banner that made them: the overlay no
+    # longer asks a node whether its dates were invented, so conformance has
+    # nothing to check here. The entrypoints remain on chain for any client that
+    # wants them.
 ]
 
 # The page's own parser: `(value type)` per line.

@@ -28,41 +28,7 @@ func Render(path string) string {
 	// disclosure that appears on some pages and not others is one a reader cannot
 	// rely on. Empty when no domain is configured (sitelink.gno), so a realm with
 	// no website renders exactly as it always did.
-	return testClockBanner() + siteBanner(path) + render(path)
-}
-
-// testClockBanner is empty on any ordinary chain.
-func testClockBanner() string {
-	if !TestClockFabricated() {
-		return ""
-	}
-	// Keyed on Fabricated, not Active: a SEALED test chain can no longer be
-	// driven but is still full of invented dates, and that is precisely when a
-	// reader is most likely to mistake it for a real one.
-	// No longer claims heights are real: the override covers height too, so a
-	// test chain's block numbers are as fabricated as its dates.
-	tail := " Balances are real."
-	if !TestClockActive() {
-		// Says what sealing does to the FUTURE, not only to the past. Sealing
-		// drops the skew but keeps a floor, so both clocks sit at that floor
-		// until real time and real height catch up — up to a century and up to
-		// ten weeks of blocks. Anything opened after the seal is stamped at the
-		// floor and its windows are never reached. "Fixed history" was true and
-		// silent about exactly the part a reader would act on.
-		tail = " The clock is now sealed: these dates are fixed history, and" +
-			" this chain's clock stays stopped until the real one catches up," +
-			" so nothing opened from here will reach a deadline. Balances are real."
-	}
-	// A chain whose HEIGHT was moved but whose calendar was not would otherwise
-	// read "advanced 0 seconds", which says nothing was moved at all — while
-	// conviction, emission and every trailing average on the page came from a
-	// block count the scenario handed the chain.
-	moved := strconv.FormatInt(TestClockPeakSkew(), 10) + " seconds"
-	if h := TestHeightPeakSkew(); h > 0 {
-		moved += " and " + strconv.FormatInt(h, 10) + " blocks"
-	}
-	return "> **Test chain — the dates on this page are fabricated.** Its clock was " +
-		"set by the deployer and advanced " + moved + "." + tail + "\n\n"
+	return siteBanner(path) + render(path)
 }
 
 func render(path string) string {

@@ -10827,8 +10827,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "v0.58 site-domain: wiring: Render drops the header",
-  "find": "return testClockBanner() + siteBanner(path) + render(path)",
-  "replace": "return testClockBanner() + render(path)"
+  "find": "return siteBanner(path) + render(path)",
+  "replace": "return render(path)"
  },
  {
   "pkg": "kourtv2",

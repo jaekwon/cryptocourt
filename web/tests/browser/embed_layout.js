@@ -385,24 +385,19 @@ const CASES = [
   await page.goto(PAGE + "#/embed/orem/1", {waitUntil: 'domcontentloaded'});
   await page.reload({waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 500));
-  const withBanner = await page.evaluate(() => {
-    const el = document.getElementById("tcbanner");
-    el.innerHTML = `<div class="tcbar"><span class="g">⏱</span><div><b>Test chain — the dates here are fabricated.</b>
-      This node's clock was set by hand — it was moved forward 84 days. The clock is sealed, so they are now
-      fixed. Balances and stakes are real.</div></div>`;
-    el.hidden = false;
+  // The page banner is gone from the product entirely, so there is nothing left
+  // to force into an embed. What this block was really protecting — that an
+  // embed fits its iframe and keeps its exit link on screen — is measured here
+  // without it.
+  const fits = await page.evaluate(() => {
     const link = document.querySelector('.efoot a');
     const lr = link ? link.getBoundingClientRect() : null;
-    return {
-      bannerShown: getComputedStyle(el).display !== "none" && el.getBoundingClientRect().height > 4,
-      scrollH: document.documentElement.scrollHeight, vh: innerHeight,
-      linkVisible: !!lr && lr.bottom <= innerHeight + 1 && lr.top >= -1,
-    };
+    return {scrollH: document.documentElement.scrollHeight, vh: innerHeight,
+            linkVisible: !!lr && lr.bottom <= innerHeight + 1 && lr.top >= -1};
   });
-  ok("the page banner cannot paint inside an embed", !withBanner.bannerShown);
-  ok("an embed does not overflow even when the banner is forced",
-     withBanner.scrollH <= withBanner.vh + 1, `scrollH=${withBanner.scrollH} vh=${withBanner.vh}`);
-  ok("the exit link stays on screen", withBanner.linkVisible);
+  ok("an embed does not overflow its iframe",
+     fits.scrollH <= fits.vh + 1, `scrollH=${fits.scrollH} vh=${fits.vh}`);
+  ok("the exit link stays on screen", fits.linkVisible);
 
   // --- a missing claim is a card, not a blank iframe ------------------------
   await page.setViewport({width: 500, height: 400});
@@ -414,7 +409,7 @@ const CASES = [
             link: !!document.querySelector('.efoot a')};
   });
   ok("a missing claim still renders a card", miss.has);
-  ok("a missing claim still says which source was asked", /no chain|set by hand/.test(miss.text));
+  ok("a missing claim still says which source was asked", /no chain/.test(miss.text));
   ok("and says what is missing", /No claim/.test(miss.text), JSON.stringify(miss.text.slice(0, 60)));
   ok("and still offers the way out", miss.link);
 
