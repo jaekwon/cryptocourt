@@ -10546,13 +10546,6 @@
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "renderBoardIn: the who-may-write line",
-  "find": "\tb.WriteString(\"Anyone with standing in this court \u2014 or a one-off entry pass \u2014 \" +",
-  "replace": "\tb.WriteString(\"\" +"
- },
- {
-  "pkg": "kourtv2",
-  "file": "board.gno",
   "label": "renderBoardRow: a non-numeric comment id is refused as that",
   "find": "\t\treturn \"## Not found\\nA comment id must be a number.\"\n",
   "replace": "\t\treturn \"## Not found\\nNo comment by that id on this claim.\"\n"
@@ -11956,5 +11949,33 @@
   "label": "renderBoardHidden: a purged row is linked to text that is gone",
   "find": "\t\tif m != \"x\" {",
   "replace": "\t\tif true {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardPostLink: every reply form opens at the top level",
+  "find": "\t\t\"&parentRow=\" + strconv.FormatUint(parentRow, 10)",
+  "replace": "\t\t\"&parentRow=0\""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "boardPostLink: the form arrives without this claim's arguments",
+  "find": "\treturn \"/r/kourt/kourtv2$help&func=PostComment\" +\n\t\t\"&courtSlug=\" + slug +",
+  "replace": "\treturn \"/r/kourt/kourtv2$help&func=PostComment\" +\n\t\t\"\" +"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardOne: a closed board still offers a reply",
+  "find": "\t\tif boardOpen(cs) {\n\t\t\tb.WriteString(\"[Reply](\" + boardPostLink(slug, claimID, r.id) + \")\\n\\n\")\n\t\t}",
+  "replace": "\t\tb.WriteString(\"[Reply](\" + boardPostLink(slug, claimID, r.id) + \")\\n\\n\")"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "renderBoardIn: the board offers no way to write on it",
+  "find": "\tb.WriteString(\"[Write a comment](\" + boardPostLink(slug, claimID, 0) + \") \u00b7 \" +",
+  "replace": "\tb.WriteString("
  }
 ]

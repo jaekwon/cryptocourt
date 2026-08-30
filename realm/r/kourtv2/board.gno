@@ -722,6 +722,23 @@ func renderBoardHidden(slug string, claimID uint64) string {
 	return b.String()
 }
 
+// boardPostLink is gnoweb's prefilled transaction form for PostComment.
+//
+// $help IS THE REALM'S OWN ACTION SURFACE and nothing here used it. gnoweb
+// renders a signable form from the query string, so a link is the whole
+// mechanism: no javascript, no wallet integration in the realm, and the
+// arguments a reader would otherwise have to type correctly are already right.
+//
+// parentRow 0 is a new comment; anything else is a reply to that row, which is
+// why every top-level row carries one of these too. Depth stops at one, so a
+// reply row gets no reply link — the realm would refuse it.
+func boardPostLink(slug string, claimID, parentRow uint64) string {
+	return "/r/kourt/kourtv2$help&func=PostComment" +
+		"&courtSlug=" + slug +
+		"&claimID=" + strconv.FormatUint(claimID, 10) +
+		"&parentRow=" + strconv.FormatUint(parentRow, 10)
+}
+
 func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 	c := mustCourt(slug)
 	cs := mustClaim(c, claimID)
@@ -737,15 +754,17 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 	}
 	b.WriteString("\n\n")
 
-	// WHO MAY WRITE HERE, first, because it is what a reader wants to know and
-	// nothing on any surface said it. Then the reasons they might not be able to.
-	// A COMMENT IS A DEEP LINK, so this page is a first page as often as it is
-	// a second one: somebody arrives at an argument without having seen the
-	// front page, the court, or the claim. "Standing" and "entry pass" are this
-	// realm's words, and the sentence explaining who may write here uses both.
-	b.WriteString("Anyone with standing in this court — or a one-off entry pass — " +
-		"may comment. Replies go one level deep. " +
-		"[Where you stand](" + "/r/kourt/kourtv2:" + slug + "/me) · " +
+	// HOW TO WRITE ONE, which no page in this realm said. The overlay builds
+	// $help links for every action it offers; gnoweb readers had none, so the
+	// board was readable and unwritable for anyone not running the overlay —
+	// the same defect the board itself had before it rendered at all.
+	//
+	// The prose that used to sit here ("Anyone with standing in this court — or
+	// a one-off entry pass — may comment") is gone: it explained the rules to
+	// somebody who wanted to write, without telling them where to click, and the
+	// rules are on the standing page that this line already links to.
+	b.WriteString("[Write a comment](" + boardPostLink(slug, claimID, 0) + ") · " +
+		"[Where you stand](/r/kourt/kourtv2:" + slug + "/me) · " +
 		helpLink + "\n\n")
 	if !boardOpen(cs) {
 		b.WriteString("> This claim is settled. Its board is closed to new comments;\n" +
@@ -948,6 +967,15 @@ func renderBoardOne(slug string, claimID uint64, cs *claimState, r *boardRow, li
 	b.WriteString(boardTextVisible(r) + "\n\n")
 	if r.parent == 0 {
 		writeBoardReplies(&b, slug, claimID, cs, r.id)
+		// TOP-LEVEL ONLY. Depth stops at one, so offering a reply link on a reply
+		// would be a form the realm refuses — a button that cannot work is worse
+		// than no button, because it teaches a reader the wrong shape.
+		//
+		// Only while the board is open, for the same reason: a settled claim's
+		// board takes no comments, and PostComment would refuse this too.
+		if boardOpen(cs) {
+			b.WriteString("[Reply](" + boardPostLink(slug, claimID, r.id) + ")\n\n")
+		}
 	}
 	return b.String()
 }

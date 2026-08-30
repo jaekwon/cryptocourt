@@ -723,6 +723,46 @@ func TestTheHiddenCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.T)
 	}
 }
 
+// The action links, which are the only way a gnoweb reader can write anything:
+// the overlay builds its own, and before these the realm's board was readable
+// and unwritable for anybody not running it.
+func TestTheBoardOffersAWayToWriteOnIt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("act-alice")
+	c, id := boardFixture(cur, "act", alice)
+	sid := strconv.FormatUint(id, 10)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	top := PostComment(cross(cur), "act", id, 0, "a comment somebody might answer")
+	reply := PostComment(cross(cur), "act", id, top, "the answer")
+
+	page := renderBoardPage("act", id)
+	// PREFILLED. A form that arrives blank asks a reader to retype a court slug
+	// and a claim id correctly from memory, which is the part they will get
+	// wrong and the part the page already knows.
+	want := "/r/kourt/kourtv2$help&func=PostComment&courtSlug=act&claimID=" + sid
+	if !strings.Contains(page, "[Write a comment]("+want+"&parentRow=0)") {
+		t.Fatalf("the page must offer a prefilled way to comment:\n%s", page)
+	}
+	// A REPLY LINK NAMES ITS PARENT, or every reply on the page would open the
+	// same form and land at the top level.
+	if !strings.Contains(page, "[Reply]("+want+"&parentRow="+strconv.FormatUint(top, 10)+")") {
+		t.Fatalf("a top-level row must offer a reply that names it:\n%s", page)
+	}
+	// AND A REPLY OFFERS NONE. Depth stops at one, so PostComment would refuse
+	// it — a button that cannot work teaches a reader the wrong shape.
+	if strings.Contains(page, "parentRow="+strconv.FormatUint(reply, 10)+")") {
+		t.Fatalf("a reply must not offer a reply of its own:\n%s", page)
+	}
+
+	// NOR DOES A CLOSED BOARD, for the same reason: the realm refuses a comment
+	// on a settled claim, so the form would be a wall with a door painted on it.
+	cs := mustClaim(c, id)
+	cs.verdictAt = heightNow()
+	shut := renderBoardPage("act", id)
+	if strings.Contains(shut, "[Reply](") {
+		t.Fatalf("a closed board offers no reply link:\n%s", shut)
+	}
+}
+
 // scoreIndexPut's guard is unreachable through its current callers — PostComment
 // only puts top-level rows, and HideOwnComment only puts after clearing the bit —
 // so no lifecycle test can drive it. That makes it look like a permanent gap and
@@ -1832,8 +1872,17 @@ func TestTheBoardPagesCountsAndCopyAreHeld(cur realm, t *testing.T) {
 
 	// The invitation line: a reader has to be told who may write here, and it was
 	// deletable.
-	if !strings.Contains(renderBoardPage("d8p", id), "Anyone with standing in this court") {
-		t.Fatal("the page must say who may comment")
+	// HOW to comment, which is what the prose that used to sit here never said.
+	// It explained the rules to somebody who wanted to write and left them with
+	// nowhere to click; gnoweb readers could read the board and not write to it.
+	writeable := renderBoardPage("d8p", id)
+	if !strings.Contains(writeable, "[Write a comment](/r/kourt/kourtv2$help&func=PostComment") {
+		t.Fatalf("the page must offer a way to write one:\n%s", writeable)
+	}
+	// Prefilled with THIS board's arguments, or the form is a blank a reader has
+	// to fill in correctly from memory.
+	if !strings.Contains(writeable, "courtSlug=d8p&claimID="+strconv.FormatUint(id, 10)+"&parentRow=0") {
+		t.Fatalf("the form must arrive prefilled for this claim:\n%s", writeable)
 	}
 	// The ranked view says so when nothing is upvoted, and points at the fuller
 	// view rather than looking empty.
