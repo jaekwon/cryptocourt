@@ -69,6 +69,23 @@ ok("a bar is refused (it separates fields)",
    M.mediaMirrorFault("https://i.imgur.com/a|b.webp", "") !== "");
 ok("http is refused with a reason a person can act on",
    /https/.test(M.mediaMirrorFault("http://i.imgur.com/a.webp", "")));
+// EVERY REFUSAL NAMES ITS OWN CASE. Read together, two of these used to lie: an
+// empty box answered with a character-count rule, and the non-ASCII message
+// said "no spaces" — a case it can never see, because the charset check takes
+// spaces first. A message that describes the wrong problem is worse than a
+// generic one, because it sends somebody looking in the wrong place.
+ok("an empty link says what to do, not how long a link is",
+   /paste the image's link/.test(M.mediaMirrorFault("", "")));
+ok("an over-long link says it is too long",
+   /too long/.test(M.mediaMirrorFault("https://i.imgur.com/" + "x".repeat(320), "")));
+ok("a link with a space is named as text, not as a bad character",
+   /looks like text/.test(M.mediaMirrorFault("https://i.imgur.com/a b.webp", "")));
+ok("a non-Latin character is named as itself",
+   /accented or non-Latin/.test(M.mediaMirrorFault("https://i.imgur.com/caf\u00e9.webp", "")));
+ok("...and each of those is a DIFFERENT message",
+   new Set(["", "https://i.imgur.com/" + "x".repeat(320), "https://i.imgur.com/a b.webp",
+            "https://i.imgur.com/caf\u00e9.webp", "https://i.imgur.com/a).webp"]
+     .map(u => M.mediaMirrorFault(u, ""))).size === 5);
 ok("a good mirror passes", M.mediaMirrorFault("https://i.imgur.com/a.webp", "") === "");
 ok("the archive's own host passes once a site is configured",
    M.mediaMirrorFault("https://kourt.xyz/m/" + "a".repeat(64), "kourt.xyz") === "");

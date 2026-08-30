@@ -75,13 +75,26 @@ function mediaHostOf(url) {
  * inside closes it early and spills the rest onto the page. "," and "|" are the
  * wire separators — one inside a URL would turn one field into two. */
 function mediaMirrorFault(url, siteDomain) {
-  if (!url || url.length > MEDIA_MAX_URL) {
-    return `a link is 1–${MEDIA_MAX_URL} characters`;
+  // Answering an empty box with a character-count rule is the machine talking
+  // about itself. Nothing was pasted; say what to do instead.
+  if (!url) return "paste the image's link, or drop the file in and we will copy it";
+  if (url.length > MEDIA_MAX_URL) {
+    return `that link is too long — over ${MEDIA_MAX_URL} characters`;
   }
-  if (/[\s"'<>()\\,|`]/.test(url)) {
+  if (/\s/.test(url)) {
+    // Almost always a sentence rather than a link: somebody copied the text
+    // around it, or the page put a line break in the middle.
+    return "that looks like text rather than a link — copy the image's address on its own";
+  }
+  if (/["'<>()\\,|`]/.test(url)) {
     return "that link contains a character the court cannot store — try the image's direct URL";
   }
-  if (!/^[\x21-\x7e]+$/.test(url)) return "a link is plain ASCII with no spaces";
+  // Reached only by a character OUTSIDE printable ASCII, because the two checks
+  // above already took the spaces and the punctuation. It used to say "no
+  // spaces", which described a case it can never see.
+  if (!/^[\x21-\x7e]+$/.test(url)) {
+    return "that link has an accented or non-Latin character in it — use the plain address";
+  }
   if (!url.startsWith("https://")) {
     return url.startsWith("http://")
       ? "that link is http, which browsers block on a secure page — use https"
