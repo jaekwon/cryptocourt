@@ -706,11 +706,27 @@ no longer "what does this code do wrong" but "what state can this be in that
 nobody has ever looked at", and then going and looking. Enumerating deployments
 found row 32; enumerating screen sizes found row 33; enumerating themes found
 row 34; enumerating locales found row 35; enumerating exhibit counts at their
-boundary found row 36, and exhibit states found row 37. Six of the seven
-dimensions have now each produced a defect on first render, which is less a
-comment on this feature than on how much a list of situations is worth. The dimensions are ordinary and the list is short — deployment, width,
-theme, locale, exhibit count, exhibit state, claim phase — which is what makes
-it worth writing down rather than rediscovering.
+boundary found row 36, and exhibit states found row 37. Claim phase, the
+seventh, produced nothing: the realm gates media on moderation alone and the
+overlay draws from `d.media`, so evidence renders identically in every phase —
+verified and pinned rather than assumed.
+
+The dimensions are ordinary and the list is short — deployment, width, theme,
+locale, exhibit count, exhibit state, claim phase — which is what makes it worth
+writing down rather than rediscovering. Six defects and one confirmed negative is
+also the right shape for it: a list that only ever finds things is a list nobody
+has finished.
+
+**One ambiguity found this way is recorded rather than fixed.** The claim page's
+media read carries `.catch(()=>"[]")`, and the comment beside it reasons about a
+realm too old to have `ClaimMedia`, where `[]` is the right answer. It is also
+the answer for a transient RPC failure on a claim carrying seven exhibits, and
+the two are indistinguishable at that call site — both arrive as a rejected
+promise. What keeps it honest is that the page OMITS rather than asserts: nothing
+anywhere states that a claim carries no evidence, so a failed read costs a reader
+the exhibits without telling them anything false. That property is pinned.
+Fixing the ambiguity would mean parsing node error strings or retrying every old
+realm twice, both worse than the omission.
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
