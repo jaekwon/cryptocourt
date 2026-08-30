@@ -273,8 +273,8 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "renderBoardOne: the author address is escaped",
-  "find": "b.WriteString(\"---\\n\\n**\" + sanitize.InlineText(r.author.String()) + \"**\")",
-  "replace": "b.WriteString(\"---\\n\\n**\" + r.author.String() + \"**\")",
+  "find": "\tvar b strings.Builder\n\tb.WriteString(\"---\\n\\n**\" + sanitize.InlineText(r.author.String()) + \"**\")\n\tfor _, badge",
+  "replace": "\tvar b strings.Builder\n\tb.WriteString(\"---\\n\\n**\" + r.author.String() + \"**\")\n\tfor _, badge",
   "why": "EQUIVALENT BY THE ADDRESS TYPE. A bech32 address is 'g1' followed by lowercase alphanumerics, so it contains no CommonMark metacharacter and InlineText cannot change it. Every address the board prints comes from cur.Previous().Address() and has passed IsValid(), so no test can distinguish the escape from its absence. Kept rather than deleted: it costs nothing, it is what every other address print in this realm does, and it is the containment if an address value ever reaches a page without having been validated. Note the same is NOT true of the other InlineText calls nearby \u2014 a claim title and a moderation tombstone are free text and their escapes ARE killable."
  },
  {

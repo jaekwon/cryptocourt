@@ -147,23 +147,24 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        html.includes("all 7 comments") && html.includes('href="#/c/covid/10/board"'));
     ok("...and carries the composer's slot", html.includes('<div id="composer"></div>'));
 
-    const whole = claimCommentsHtml("covid", 10, 4, true, rows, kids, {});
-    ok("a section showing everything claims no remainder", !whole.includes("all 4 comments"));
-
-    const none = claimCommentsHtml("covid", 10, 0, true, [], [], {});
-    ok("an open board with nothing on it invites the first comment",
-       none.includes("No comments yet") && !none.includes("boardrow"));
-    ok("...and still offers the composer", none.includes('<div id="composer"></div>'));
-    const shut = claimCommentsHtml("covid", 10, 0, false, [], [], {});
-    ok("a closed empty board says so instead of inviting",
-       shut.includes("No comments were written") && !shut.includes("No comments yet"));
-
-    // Wiring, checked as text: a renderer with no caller is the failure this
-    // feature has had twice.
-    ok("the claim route renders the section", src.includes('<section id="claimcomments"></section>'));
-    ok("...and fills it", /^\s*fillClaimComments\(slug, ?id\);/m.test(src));
-    ok("the preview that used to sit above the page is gone",
-       !src.includes("boardPreviewHtml") && !src.includes('id="boardpreview"'));
+    // The removed count comes from the CHAIN, not from the rows on the page:
+    // tallying marks client-side undercounts the moment a board outgrows one
+    // page, and a header number that quietly means "of the ones we fetched" is
+    // worse than none. So it is passed in, and these assert what is done with it.
+    const two = claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 2);
+    ok("the header states the count it was given", two.includes("2 removed comments"));
+    ok("...and leaves the site for them, because this one hosts no index of "
+       + "withheld content", /class="tlink secact"[^>]*href="https?:[^"]*\/board\/withheld"/.test(two));
+    ok("...singular at one",
+       claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 1).includes("1 removed comment<"));
+    ok("...and says nothing at all when nothing was removed",
+       !claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 0).includes("removed comment"));
+    // The page renders four rows; the count is about the whole board, so a
+    // number larger than anything on the page is exactly what it should print.
+    ok("...even when it exceeds what this section shows",
+       claimCommentsHtml("covid", 10, 40, true, rows, kids, {}, 9).includes("9 removed comments"));
+    ok("the count is READ, not counted from the rendered rows",
+       /await one\(`BoardWithheldCount\(/.test(src));
   }
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

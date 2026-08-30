@@ -1099,6 +1099,14 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .boardkids .boardrow:first-child{border-top:0; padding-top:0}
 .boardkids .boardmeta{font-size:.85em}
 .cmt-empty{margin:14px 0 0; color:var(--ink-2)}
+/* The removed-count, pushed to the far end of the section header. `.sec-h` is a
+   baseline flex row, so margin-left:auto is the whole trick; the type is scaled
+   back to the header's own size rather than the body's. */
+.sec-h .secact{margin-left:auto; font:500 11px/1 var(--mono); letter-spacing:0;
+  text-transform:none; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid var(--line-2); padding-bottom:1px}
+.sec-h .secact:hover,.sec-h .secact:focus-visible{color:var(--accent-2);
+  border-bottom-color:var(--accent)}
 @media(max-width:560px){
   .boardkids{margin-left:0; padding-left:11px}
   .boardmeta a.mono{margin-left:0}
@@ -1557,6 +1565,15 @@ async function boardOpenOf(slug, id){
     return !!d && d.phase !== "settled" && d.phase !== "provClose" && d.phase !== "closed";
   }
   return await one(`BoardOpen(${gstr(slug)},${id})`);
+}
+async function boardWithheldOf(slug, id){
+  if(!isLive()){
+    // The sample carries wire strings, so it counts its own top-level marks —
+    // which is exact here because a demo board is never longer than one page.
+    const b = demoBoard(slug, id);
+    return boardNewestRows((b && b.newest) || "").filter(r => r.mark !== ".").length;
+  }
+  return await one(`BoardWithheldCount(${gstr(slug)},${id})`);
 }
 async function boardParties(slug, id){
   if(!isLive()){ const b = demoBoard(slug, id); return boardPartyRows((b && b.parties) || ""); }
@@ -6776,9 +6793,37 @@ async function fillComposer(slug, id, parent){
    claim and have the answer seen. */
 const CLAIM_COMMENTS = 4;
 
-function claimCommentsHtml(slug, id, n, open, rows, kids, roles){
+/* THE REMOVED COUNT, and where it sends a reader.
+   
+   A tombstone in the list says a row was withheld; this says how many, in one
+   place, before anybody scrolls. It is a LINK because "2 removed comments" that
+   cannot be followed is a claim a reader has to take on trust, which is the
+   opposite of what this realm is for.
+   
+   IT LEAVES THE SITE, deliberately. kourt.xyz does not host an index of
+   withheld content; the chain already serves every one of those rows at its own
+   permalink, because a hide is a discovery bit and not a delete. The chain's
+   page is also strictly better than anything this one could draw: it reads both
+   hide-bits and says WHICH authority acted — "Removed from this listing by this
+   court's moderators" against "Withdrawn from this listing" — where the wire
+   collapses both to `h` on purpose and the overlay must not guess.
+   
+   THE COUNT COMES FROM THE CHAIN, not from the rows on the page. Tallying marks
+   client-side undercounts the moment a board outgrows one page — and a number in
+   a header that quietly means "of the ones we happened to fetch" is worse than
+   no number. BoardWithheldCount walks the claim's top-level index and answers
+   for the whole board; it is a read, so it costs no gas, and the realm takes the
+   walk rather than a counter for the reason boardPartyRows gives one level up. */
+function removedLink(slug, id, k){
+  if(!(k > 0)) return "";
+  return `<a class="tlink secact" rel="noopener" href="${esc(gnowebRow(slug, id, "withheld"))}">`
+    + `${k} removed comment${k === 1 ? "" : "s"}<span aria-hidden="true">↗</span></a>`;
+}
+
+function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld){
   const head = `<div class="sec-h">Comments <span class="count">`
-    + esc(n > 0 ? boardStateLine(n, open) : (open ? "open" : "closed")) + `</span></div>`;
+    + esc(n > 0 ? boardStateLine(n, open) : (open ? "open" : "closed")) + `</span>`
+    + removedLink(slug, id, withheld) + `</div>`;
   if(!(n > 0)){
     return `<section id="claimcomments">${head}<div class="cmt-empty"><p>${open
       ? "No comments yet. The first one is worth writing."
@@ -6809,13 +6854,14 @@ async function fillClaimComments(slug, id){
       fillComposer(slug, id, 0);
       return;
     }
-    const rows = (await boardNewestOf(slug, id, 0, CLAIM_COMMENTS)).slice(0, CLAIM_COMMENTS);
+    const rows = await boardNewestOf(slug, id, 0, CLAIM_COMMENTS);
     const parties = await boardParties(slug, id).catch(()=>[]);
     const roles = {}; parties.forEach(r => { roles[r.id] = r.role; });
     const kids = await Promise.all(rows.map(r =>
       parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).catch(()=>[])
                                   : Promise.resolve([])));
-    slot.outerHTML = claimCommentsHtml(slug, id, n, open, rows, kids, roles);
+    slot.outerHTML = claimCommentsHtml(slug, id, n, open, rows, kids, roles,
+                                       await boardWithheldOf(slug, id).catch(()=>0));
     fillComposer(slug, id, 0);
   }catch(_){ /* an unreadable board leaves the rest of the claim page intact */ }
 }

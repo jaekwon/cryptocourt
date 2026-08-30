@@ -141,6 +141,11 @@ func render(path string) string {
 			if parts[3] == "top" {
 				return renderBoardTop(parts[0], id)
 			}
+			// "withheld" carves here for the same reason "top" does: a row id
+			// is numeric, so a word can never be mistaken for one.
+			if parts[3] == "withheld" {
+				return renderBoardWithheld(parts[0], id)
+			}
 			return renderBoardRow(parts[0], id, parts[3])
 		}
 		return renderBoardPage(parts[0], id)

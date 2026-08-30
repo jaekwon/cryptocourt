@@ -330,6 +330,41 @@ func BoardSize(courtSlug string, claimID uint64) int {
 	return cs.board.Size()
 }
 
+// BoardWithheldCount is how many TOP-LEVEL rows this claim's list is not
+// showing — hidden, legally withheld or purged.
+//
+// TOP-LEVEL ONLY, and that is the whole reason it is not cs.board.Size() minus
+// something. A withheld REPLY is not missing from the list: it sits inside a
+// thread a reader may never open, and counting it would make the number
+// disagree with what the page is actually withholding from view. The list shows
+// parents, so the count is about parents.
+//
+// A SCAN AND NOT A COUNTER, which is the trade boardPartyRows already made and
+// for the same reason one level up. A counter would have to be maintained at
+// every site that changes a mark — HideOwnComment, HideBoardRow, UnhideBoardRow,
+// GlobalHideRow, PurgeBoardRow, PurgeBoardRange, GlobalClearBoardBits — and one
+// missed site drifts silently, forever, with nothing to notice. The walk is
+// bounded by the per-claim row cap and CANNOT disagree with the board it is
+// counting.
+//
+// It costs no gas either way: this is a read, and a read is a query rather than
+// a transaction. A counter would add gas to every hide and purge in order to
+// speed up something nobody pays for.
+func BoardWithheldCount(courtSlug string, claimID uint64) int {
+	cs := mustClaim(mustCourt(courtSlug), claimID)
+	if cs.boardTop == nil {
+		return 0
+	}
+	n := 0
+	cs.boardTop.Iterate("", "", func(_ string, v any) bool {
+		if boardMark(v.(*boardRow)) != "." {
+			n++
+		}
+		return false
+	})
+	return n
+}
+
 // BoardOpen reports whether the claim still takes comments.
 func BoardOpen(courtSlug string, claimID uint64) bool {
 	return boardOpen(mustClaim(mustCourt(courtSlug), claimID))
@@ -594,6 +629,70 @@ func renderBoardPage(slug string, claimID uint64) string {
 // nothing can be pushed off Newest.
 func renderBoardTop(slug string, claimID uint64) string {
 	return renderBoardIn(slug, claimID, true)
+}
+
+// renderBoardWithheld is the page the count links to: the rows this claim's
+// list is not showing, and what happened to each.
+//
+// IT SAYS WHICH AUTHORITY ACTED, which no client can. boardMark collapses
+// hiddenByAuthor and hiddenByMod into one `h` on the wire on purpose, so an
+// overlay reading that wire may not attribute the act — "withdrawn by its
+// author" over a moderator's hide is an assertion about a person that would be
+// false half the time. This page reads the two bits directly, so it can.
+//
+// THE TEXT IS NOT HERE. A page that gathered up everything that was withheld and
+// republished it would undo the withholding, which is the one thing every act in
+// this lane has in common. What it gives is the row's id, its author, when it
+// landed and its own link — a hide is a DISCOVERY bit, so the deep link still
+// serves; a purge is not, and its row says so and leads nowhere.
+func renderBoardWithheld(slug string, claimID uint64) string {
+	c := mustCourt(slug)
+	cs := mustClaim(c, claimID)
+	base := "/r/kourt/kourtv2:" + slug + "/" + strconv.FormatUint(claimID, 10)
+	var b strings.Builder
+	b.WriteString("# Withheld comments on claim " + strconv.FormatUint(claimID, 10) + "\n\n")
+	b.WriteString("[← the comments](" + base + "/board)\n\n")
+	if cs.boardTop == nil {
+		b.WriteString("_Nothing has been withheld here._\n")
+		return b.String()
+	}
+	n := 0
+	cs.boardTop.Iterate("", "", func(_ string, v any) bool {
+		r := v.(*boardRow)
+		m := boardMark(r)
+		if m == "." {
+			return false
+		}
+		n++
+		b.WriteString("---\n\n**" + sanitize.InlineText(r.author.String()) + "**")
+		b.WriteString(" · block " + strconv.FormatInt(r.at, 10))
+		// A purged row has no text to reach, so it gets no link to reach it.
+		if m != "x" {
+			b.WriteString(" · [#" + strconv.FormatUint(r.id, 10) + "](" + base +
+				"/board/" + strconv.FormatUint(r.id, 10) + ")")
+		} else {
+			b.WriteString(" · #" + strconv.FormatUint(r.id, 10))
+		}
+		b.WriteString("\n\n")
+		switch {
+		case r.purged:
+			b.WriteString("> _Removed on legal grounds. The text is gone from the record; " +
+				"the row remains._\n\n")
+		case r.global:
+			b.WriteString("> _Withheld pending a legal determination._\n\n")
+		case r.hiddenByMod:
+			b.WriteString("> _Removed from the listing by this court's moderators. " +
+				"It still reads at its own link._\n\n")
+		default:
+			b.WriteString("> _Withdrawn from the listing by its author. " +
+				"It still reads at its own link._\n\n")
+		}
+		return false
+	})
+	if n == 0 {
+		b.WriteString("_Nothing has been withheld here._\n")
+	}
+	return b.String()
 }
 
 func renderBoardIn(slug string, claimID uint64, ranked bool) string {

@@ -601,6 +601,107 @@ func TestALonePartyRowIsNotAssumedToBeTheAuthors(cur realm, t *testing.T) {
 	}
 }
 
+// The withheld count and the page it links to. Both exist because a client
+// CANNOT compute either: BoardNewest clamps its page, so a client counting marks
+// undercounts a long board, and the wire collapses the two hide bits into one
+// `h`, so no client may say which authority acted.
+func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.T) {
+	c, id, alice, bob, carol := topFixture(cur, t, "cwh")
+	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
+	for _, w := range []address{bob, carol} {
+		getStanding(c, w).score = sup * ladderFor(c).t3Bps / 10_000
+	}
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	keep := PostComment(cross(cur), "cwh", id, 0, "a row that stays")
+	mine := PostComment(cross(cur), "cwh", id, 0, "a row its author withdraws")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	theirs := PostComment(cross(cur), "cwh", id, 0, "a row a moderator removes")
+	// A REPLY, withheld. It is the case the count must NOT include: it is not
+	// missing from the list, it is inside a thread nobody has opened.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	kid := PostComment(cross(cur), "cwh", id, keep, "a reply its author withdraws")
+
+	uassert.Equal(t, 0, BoardWithheldCount("cwh", id))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideOwnComment(cross(cur), "cwh", id, mine, true)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	HideOwnComment(cross(cur), "cwh", id, kid, true)
+	// The reply is hidden and the count has not moved: BoardSize sees four rows,
+	// two of them withheld, and this read reports the ONE the list is short.
+	uassert.Equal(t, 1, BoardWithheldCount("cwh", id))
+	uassert.Equal(t, 4, BoardSize("cwh", id))
+
+	// alice created this court, so she moderates it — the same address that
+	// withdrew her own row above. That is the point: two acts, two authorities,
+	// and the page below has to name them differently even so.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideBoardRow(cross(cur), "cwh", id, theirs, boardCodeOffTopic)
+	uassert.Equal(t, 2, BoardWithheldCount("cwh", id))
+
+	// AND A PURGE, which is the third authority and the one row that must NOT be
+	// linked: a hide is a discovery bit and its deep link still serves, but a
+	// purge destroyed the text, so a link would lead to nothing. Only a global
+	// DAO member may purge, which boardFixture deliberately keeps out of this
+	// court's cast.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	gone := PostComment(cross(cur), "cwh", id, 0, "a row the DAO purges")
+	testing.SetRealm(testing.NewUserRealm(DirectoryAdmin()))
+	PurgeBoardRow(cross(cur), "cwh", id, gone, "dmca")
+	uassert.Equal(t, 3, BoardWithheldCount("cwh", id))
+
+	// The page. It reads the two bits directly, so it may say which authority
+	// acted — the one thing the wire deliberately refuses to carry.
+	page := Render("cwh/" + strconv.FormatUint(id, 10) + "/board/withheld")
+	if !strings.Contains(page, "Withdrawn from the listing by its author") {
+		t.Fatalf("the author's own withdrawal must be named as theirs:\n%s", page)
+	}
+	if !strings.Contains(page, "Removed from the listing by this court's moderators") {
+		t.Fatalf("a moderator's removal must be named as theirs:\n%s", page)
+	}
+	// AND THE TEXT IS NOT REPUBLISHED. A page that gathered up what was withheld
+	// and printed it would undo every act in this lane at once.
+	for _, txt := range []string{"a row its author withdraws", "a row a moderator removes"} {
+		if strings.Contains(page, txt) {
+			t.Fatalf("the withheld page republished %q:\n%s", txt, page)
+		}
+	}
+	// The row that stayed is not on this page either — it is not withheld.
+	if strings.Contains(page, "a row that stays") {
+		t.Fatalf("a visible row has no place on the withheld page:\n%s", page)
+	}
+	// The reply is withheld but NOT listed: this page mirrors the count.
+	if strings.Contains(page, strconv.FormatUint(kid, 10)+"](") {
+		t.Fatalf("a withheld reply is not missing from the list:\n%s", page)
+	}
+	// A hide is a DISCOVERY bit, so both rows keep a link to their own page.
+	if !strings.Contains(page, "/board/"+strconv.FormatUint(mine, 10)+")") {
+		t.Fatalf("a withdrawn row still reads at its own link:\n%s", page)
+	}
+	// A PURGE IS NOT, so its row is named and NOT linked. Asserting only that the
+	// purge copy appears would pass while the row still offered a link to text
+	// that no longer exists.
+	if !strings.Contains(page, "Removed on legal grounds") {
+		t.Fatalf("a purged row must say so:\n%s", page)
+	}
+	if strings.Contains(page, "/board/"+strconv.FormatUint(gone, 10)+")") {
+		t.Fatalf("a purged row must not link to text that is gone:\n%s", page)
+	}
+
+	// An untouched claim answers 0 and says so rather than reaching for a nil tree.
+	alice2 := testutils.TestAddress("cwi-alice")
+	c2 := postingFixture(cur, "cwi", alice2, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice2))
+	id2 := OpenClaim(cross(cur), "cwi", "a claim nobody has commented on")
+	_ = c2
+	uassert.Equal(t, 0, BoardWithheldCount("cwi", id2))
+	if !strings.Contains(Render("cwi/"+strconv.FormatUint(id2, 10)+"/board/withheld"),
+		"Nothing has been withheld here") {
+		t.Fatal("an untouched board says nothing was withheld")
+	}
+}
+
 // scoreIndexPut's guard is unreachable through its current callers — PostComment
 // only puts top-level rows, and HideOwnComment only puts after clearing the bit —
 // so no lifecycle test can drive it. That makes it look like a permanent gap and
