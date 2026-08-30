@@ -1049,3 +1049,120 @@ func TestTheLimiterReclaimsIdleBucketsWithoutEvictingActiveOnes(t *testing.T) {
 		t.Fatal("a spent bucket must not be silently replaced with a full one")
 	}
 }
+
+// errChain fails ClaimCount after a set number of calls, and can fail one
+// specific claim's hashes.
+type errChain struct {
+	count    uint64
+	byID     map[uint64][]string
+	failFrom int // ClaimCount fails on this call number onward (1-based); 0 = never
+	calls    int
+	badID    uint64
+}
+
+func (e *errChain) ClaimCount(ctx context.Context, court string) (uint64, error) {
+	e.calls++
+	if e.failFrom > 0 && e.calls >= e.failFrom {
+		return 0, errors.New("node unreachable")
+	}
+	return e.count, nil
+}
+func (e *errChain) ClaimHashes(ctx context.Context, court string, id uint64) ([]string, error) {
+	if id == e.badID {
+		return nil, errors.New("that claim cannot be read")
+	}
+	return e.byID[id], nil
+}
+
+func TestANodeThatWillNotAnswerDoesNotCostTheClaimsBehindIt(t *testing.T) {
+	// THE FAILURE BACKFILL EXISTS TO PREVENT. If the cursor advanced when the
+	// node errored, those claims would never be walked again — and the bytes
+	// they reference would expire an hour later with nobody told. Silent
+	// evidence loss, produced by an outage rather than an attacker.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "covid")
+
+	chain := &errChain{count: 5, byID: map[uint64][]string{3: {sum}}, failFrom: 1}
+	if _, err := st.Backfill(ctx, chain); err == nil {
+		t.Fatal("a node that will not answer must be reported, not swallowed")
+	}
+	// The cursor must not have moved: the claims were never read.
+	if c, _ := st.cursor(ctx, "covid"); c != 0 {
+		t.Fatalf("the cursor advanced to %d past claims nobody read", c)
+	}
+
+	// When the node comes back, the same claims are walked and the bytes kept.
+	chain.failFrom = 0
+	if kept, err := st.Backfill(ctx, chain); err != nil || kept != 1 {
+		t.Fatalf("after the outage: kept %d, err %v", kept, err)
+	}
+	if _, err := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != nil {
+		t.Fatal("an outage must delay the promotion, never lose it")
+	}
+}
+
+func TestOneUnreadableClaimDoesNotStopTheOnesBehindIt(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	a, _ := st.Put(ctx, "image/png", pngWith("a"), "covid")
+	b, _ := st.Put(ctx, "image/png", pngWith("b"), "covid")
+
+	// Claim 2 cannot be read — purged, or never existed. Claim 3 must still be
+	// walked, or one hole in a docket would strand everything after it.
+	chain := &errChain{count: 3, badID: 2,
+		byID: map[uint64][]string{1: {a}, 3: {b}}}
+	if kept, err := st.Backfill(ctx, chain); err != nil || kept != 2 {
+		t.Fatalf("kept %d, err %v — a hole must not stop the walk", kept, err)
+	}
+}
+
+func TestOnePassWalksABoundedNumberOfClaims(t *testing.T) {
+	// Without the clamp, a court with a hundred thousand claims is walked in one
+	// pass — a sweeper loop that does not come back for hours, and a node asked
+	// a hundred thousand questions in a burst.
+	st := testStore(t)
+	ctx := context.Background()
+	if _, err := st.Put(ctx, "image/png", pngBody, "covid"); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	asked := map[uint64]bool{}
+	chain := &countingChain{count: 100000, asked: asked}
+
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if len(asked) != backfillBatch {
+		t.Fatalf("one pass asked about %d claims, want the batch of %d",
+			len(asked), backfillBatch)
+	}
+	// And the next pass RESUMES rather than starting over, or the tail of a long
+	// docket is never reached at all.
+	if c, _ := st.cursor(ctx, "covid"); c != backfillBatch {
+		t.Fatalf("the cursor is at %d, want %d", c, backfillBatch)
+	}
+	asked2 := map[uint64]bool{}
+	chain.asked = asked2
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("second pass: %v", err)
+	}
+	if asked2[1] {
+		t.Fatal("the second pass re-walked claim 1 instead of resuming")
+	}
+}
+
+type countingChain struct {
+	count uint64
+	asked map[uint64]bool
+}
+
+func (c *countingChain) ClaimCount(ctx context.Context, court string) (uint64, error) {
+	return c.count, nil
+}
+func (c *countingChain) ClaimHashes(ctx context.Context, court string, id uint64) ([]string, error) {
+	c.asked[id] = true
+	return nil, nil
+}
