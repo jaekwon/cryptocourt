@@ -223,6 +223,36 @@ function mediaFitWithin(w, h, maxEdge) {
 
 const MEDIA_MAX_EDGE = 1600;
 
+/* The qualities tried, in order, and the FIRST one that fits wins.
+ *
+ * Descending because the cheapest acceptable answer is the best one: stopping at
+ * the first size under the cap spends the fewest bytes that still show what the
+ * exhibit shows. Trying them ascending, or picking the smallest, would throw
+ * away detail somebody may need to read a document in a photograph.
+ */
+const MEDIA_QUALITIES = [0.82, 0.7, 0.6, 0.5];
+
+/* mediaEncodeUnder is the resize POLICY, separated from the two browser calls
+ * it used to be tangled with.
+ *
+ * `encode(quality)` is whatever produces bytes — canvas.toBlob in a page, a stub
+ * in a test. Extracting it means the loop that decides WHICH attempt to keep is
+ * exercised by the harness, and only createImageBitmap and toBlob themselves
+ * remain untested outside a browser. A policy nobody can test because it sits
+ * next to a primitive nobody can test is two untestable things, not one.
+ */
+async function mediaEncodeUnder(encode, cap, qualities) {
+  const tries = qualities || MEDIA_QUALITIES;
+  for (const q of tries) {
+    const blob = await encode(q);
+    // A browser that cannot encode at all answers null, and trying lower
+    // qualities of nothing is a slower way to fail.
+    if (!blob) break;
+    if (blob.size <= cap) return {blob, quality: q};
+  }
+  throw new Error("that image will not compress small enough");
+}
+
 /* mediaUpload sends bytes to the archive and returns the item fields.
  *
  * IT CHECKS THE ARCHIVE'S ANSWER. The digest is computed here first, and if the
@@ -956,6 +986,7 @@ if (typeof module !== "undefined" && module.exports) {
     mediaHostAllowed, mediaHostOf, mediaMirrorFault, mediaCaptionFault,
     mediaItemFault, mediaFault, mediaArgLine, mediaArg, mediaArchiveURL,
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
+    mediaEncodeUnder, MEDIA_QUALITIES,
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
     mediaMount, mediaEl, mediaParse, mediaSrc, mediaNodeThumb,

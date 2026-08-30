@@ -147,6 +147,42 @@ ok("a degenerate size does not divide by zero",
   const bytes = new TextEncoder().encode("some image bytes");
   const mine = await M.mediaDigest(bytes);
 
+  // ---- the resize policy, without a canvas -------------------------------
+  // THE CHEAPEST ACCEPTABLE ANSWER WINS. Stopping at the first size under the
+  // cap spends the fewest bytes that still show what the exhibit shows; picking
+  // the smallest would throw away detail somebody may need to read a document
+  // in a photograph.
+  const tried = [];
+  const encoder = sizes => q => { tried.push(q); return Promise.resolve({size: sizes[q]}); };
+
+  let enc = await M.mediaEncodeUnder(encoder({0.82: 300, 0.7: 90, 0.6: 40, 0.5: 20}), 100);
+  ok("the first quality that fits is kept", enc.quality === 0.7 && enc.blob.size === 90);
+  ok("...and nothing below it is tried", tried.join(",") === "0.82,0.7", tried.join(","));
+
+  tried.length = 0;
+  enc = await M.mediaEncodeUnder(encoder({0.82: 50, 0.7: 10, 0.6: 5, 0.5: 1}), 100);
+  ok("an image that already fits is not degraded", enc.quality === 0.82);
+  ok("...with exactly one attempt", tried.length === 1);
+
+  // Equal to the cap is under it: a boundary that refused here would reject an
+  // image the archive would have accepted.
+  enc = await M.mediaEncodeUnder(encoder({0.82: 100}), 100, [0.82]);
+  ok("a size exactly at the cap is accepted", enc.quality === 0.82);
+
+  let gaveUp = false;
+  try { await M.mediaEncodeUnder(encoder({0.82: 9e6, 0.7: 9e6, 0.6: 9e6, 0.5: 9e6}), 100); }
+  catch (e) { gaveUp = /compress small enough/.test(e.message); }
+  ok("an image that will never fit says so", gaveUp);
+
+  // A browser that cannot encode at all answers null, and trying lower
+  // qualities of nothing is a slower way to fail.
+  tried.length = 0;
+  let broke = false;
+  try { await M.mediaEncodeUnder(q => { tried.push(q); return Promise.resolve(null); }, 100); }
+  catch (_) { broke = true; }
+  ok("an encoder that returns nothing stops immediately", broke && tried.length === 1,
+     tried.join(","));
+
   const honest = async () => ({ok: true, json: async () => ({sha256: mine})});
   const got = await M.mediaUpload(bytes, "image/webp", {fetch: honest, base: "https://k"});
   ok("an honest archive yields the item's link", got.url === "https://k/m/" + mine);

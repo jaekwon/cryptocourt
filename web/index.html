@@ -2511,17 +2511,12 @@ function mountCompose(host, slug){
     const canvas = document.createElement("canvas");
     canvas.width = fit.w; canvas.height = fit.h;
     canvas.getContext("2d").drawImage(bmp, 0, 0, fit.w, fit.h);
-    // Quality steps down until it fits. Stopping at the first size under the cap
-    // spends the fewest bytes that still show what the exhibit shows.
-    for(const q of [0.82, 0.7, 0.6, 0.5]){
-      const blob = await new Promise(r => canvas.toBlob(r, "image/webp", q));
-      if(!blob) break;
-      if(blob.size <= MEDIA_MAX_BYTES){
-        return {mime:"image/webp", w:fit.w, h:fit.h,
-                bytes:new Uint8Array(await blob.arrayBuffer())};
-      }
-    }
-    throw new Error("that image will not compress small enough");
+    // The policy lives in media.js so a harness can exercise it; only toBlob
+    // itself is browser-only, which is the point of passing it in.
+    const {blob} = await mediaEncodeUnder(
+      q => new Promise(r => canvas.toBlob(r, "image/webp", q)), MEDIA_MAX_BYTES);
+    return {mime:"image/webp", w:fit.w, h:fit.h,
+            bytes:new Uint8Array(await blob.arrayBuffer())};
   }
 
   function archiveBase(){
