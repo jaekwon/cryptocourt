@@ -1335,11 +1335,19 @@ const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", J
 
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
 const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
-// The comment cap, in BYTES — maxBoardTextLen. Pinned by check-web-constants
-// because the composer's counter is the only warning a writer gets before the
-// chain refuses the transaction, and a counter that disagrees with the realm is
-// worse than none: it lets somebody finish writing and then lose it at signing.
-const MAX_COMMENT_BYTES = 2000;
+// The comment cap, in CHARACTERS — maxBoardTextLen, counted with runeLen.
+//
+// IT WAS BYTES, and this counter measured bytes to match. The realm now counts
+// code points everywhere, because every limit in it is STATED in characters and
+// the two agree only for ASCII: a 200-character Russian title was refused with
+// "a title is at most 200 characters", about a title that was exactly 200. The
+// extra bytes are not unpriced — the author pays for them in the storage
+// deposit — so the cap can be what it always claimed to be.
+//
+// Pinned by check-web-constants, which now checks the UNIT as well as the
+// number: 2000 stayed 2000 through that change, so a guard watching only the
+// figure would have stayed green while the two surfaces meant different things.
+const MAX_COMMENT_CHARS = 2000;
 
 /* ============================ gno RPC client ============================= */
 /* abci_query(vm/qeval|vm/qrender) over JSON-RPC. data is amino base64; the reply
@@ -1483,7 +1491,7 @@ function boardRows(out, n, names){
    that separates rows. strconv.Quote emits \a, \v and \xNN for bytes JSON
    refuses, so one comment containing one such byte collapses the entire board
    into a single garbage row — for every reader, not just its author. Comment
-   text is attacker-controlled up to 2000 bytes, so that is a choice somebody
+   text is attacker-controlled up to 2000 characters, so that is a choice somebody
    makes, not an accident somebody has.
 
    So: unwrap the type, hand the STILL-QUOTED body to goUnquote, which decodes
@@ -2485,7 +2493,7 @@ function btn(label, func, args, cls, sub, send, gate){
 
 /* SHELL-QUOTED, and it has to be now that a comment body is one of these
    arguments. `--args "` + value + `"` was fine while every argument was a slug,
-   an id or an amount; a comment is up to 2000 bytes of anything a stranger
+   an id or an amount; a comment is up to 2000 characters of anything a stranger
    typed, and one apostrophe or quote turned the pasted command into a different
    command. Single quotes with the '\'' idiom are exact — nothing inside them is
    interpreted, newlines included — so what a reader pastes is what the Sign
@@ -2577,11 +2585,11 @@ function confirmAuthored(func, args, bodyKey){
       const v = String(args[k]);
       if(k !== bodyKey)
         return `<p class="small"><b>${esc(k)}</b> <span class="mono">${esc(v)}</span></p>`;
-      const n = commentBytes(v);
+      const n = commentChars(v);
       return `<h4>${esc(k)}</h4><pre class="cliblock mono">${esc(v)}</pre>`
-        + `<p class="small" style="color:${n > MAX_COMMENT_BYTES ? "var(--contra)" : "var(--muted)"}">`
-        + `${fmtN(n)} of ${fmtN(MAX_COMMENT_BYTES)} bytes`
-        + (n > MAX_COMMENT_BYTES ? " — the chain will refuse this." : "") + `</p>`;
+        + `<p class="small" style="color:${n > MAX_COMMENT_CHARS ? "var(--contra)" : "var(--muted)"}">`
+        + `${fmtN(n)} of ${fmtN(MAX_COMMENT_CHARS)} characters`
+        + (n > MAX_COMMENT_CHARS ? " — the chain will refuse this." : "") + `</p>`;
     }).join("");
     dlg.innerHTML = `<div class="hd"><h3>Sign ${esc(func)}</h3>
         <button type="button" class="pill void" data-cancel>close</button></div>
@@ -2737,15 +2745,15 @@ document.addEventListener("click",(ev)=>{
    the realm refuses on: nothing written, or more than maxBoardTextLen. */
 document.addEventListener("input", (ev)=>{
   const ta = ev.target.closest(".composer-text"); if(!ta) return;
-  const n = commentBytes(ta.value.trim());
+  const n = commentChars(ta.value.trim());
   const box = ta.closest(".composer");
   const lab = box && box.querySelector(".composer-count");
   const btn = box && box.querySelector(".composer-post");
   if(lab){
-    lab.textContent = fmtN(n) + " of " + fmtN(MAX_COMMENT_BYTES) + " bytes";
-    lab.style.color = n > MAX_COMMENT_BYTES ? "var(--contra)" : "";
+    lab.textContent = fmtN(n) + " of " + fmtN(MAX_COMMENT_CHARS) + " characters";
+    lab.style.color = n > MAX_COMMENT_CHARS ? "var(--contra)" : "";
   }
-  if(btn) btn.disabled = !(n > 0 && n <= MAX_COMMENT_BYTES);
+  if(btn) btn.disabled = !(n > 0 && n <= MAX_COMMENT_CHARS);
 });
 document.addEventListener("click", (ev)=>{
   const b = ev.target.closest(".composer-post"); if(!b) return;
@@ -2754,8 +2762,8 @@ document.addEventListener("click", (ev)=>{
   // TRIMMED HERE, before the arguments exist, so the confirmation shows the
   // exact bytes that get signed. Trimming afterwards would sign something other
   // than what a person was shown and agreed to.
-  const text = ta.value.trim(), n = commentBytes(text);
-  if(!(n > 0 && n <= MAX_COMMENT_BYTES)) return;
+  const text = ta.value.trim(), n = commentChars(text);
+  if(!(n > 0 && n <= MAX_COMMENT_CHARS)) return;
   adenaSign("PostComment", {
     courtSlug: ta.dataset.slug,
     claimID:   ta.dataset.claim,
@@ -6650,22 +6658,25 @@ function composerHtml(slug, id, state, parent){
   if(!state.can) return `<section class="composer">${head}${extra}</section>`;
   return `<section class="composer">${head}
     <label class="composer-lab" for="composer-text">Your comment</label>
-    <textarea id="composer-text" class="composer-text" rows="5" maxlength="${MAX_COMMENT_BYTES}"
+    <textarea id="composer-text" class="composer-text" rows="5" maxlength="${MAX_COMMENT_CHARS}"
       data-slug="${esc(slug)}" data-claim="${esc(String(id))}" data-parent="${esc(String(parent || 0))}"
       placeholder="What does the record actually say?"></textarea>
     <div class="composer-foot">
-      <span class="composer-count" id="composer-count">0 of ${fmtN(MAX_COMMENT_BYTES)} bytes</span>
+      <span class="composer-count" id="composer-count">0 of ${fmtN(MAX_COMMENT_CHARS)} characters</span>
       <button type="button" class="btn composer-post" data-authored="1" disabled>Review and sign</button>
     </div>
     <p class="composer-note">Comments cannot be edited or deleted. You may withdraw one from
       the list; the row and its text stay on chain.</p></section>`;
 }
 
-/* BYTES, NOT CHARACTERS, because the realm's cap is bytes (maxBoardTextLen) and
-   one emoji is four of them. A counter that measured characters would let
-   somebody write 2000 characters, watch it turn red at nothing, and have the
-   transaction refused by the chain for a reason the page never showed. */
-const commentBytes = s => new TextEncoder().encode(String(s == null ? "" : s)).length;
+/* CODE POINTS, matching the realm's runeLen exactly.
+   
+   `String.length` is UTF-16 code UNITS, so an emoji counts twice there and once
+   in Gno — the spread counts code points, which is what `for range s` yields.
+   Getting this wrong in either direction is the same failure: a counter that
+   disagrees with the chain lets somebody finish writing and lose it at signing,
+   or stops them writing something that would have been accepted. */
+const commentChars = s => [...String(s == null ? "" : s)].length;
 
 /* ---- the reads behind it ---- */
 async function composerReads(slug, id){

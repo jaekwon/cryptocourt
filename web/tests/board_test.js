@@ -2,7 +2,7 @@
 // THE COMMENT BOARD'S WIRE, tested against what a hostile author can write.
 //
 // This layer is the whole risk surface of the board feature. Comment text is
-// attacker-controlled, up to 2000 bytes, and board_test.gno asserts the realm
+// attacker-controlled, up to 2000 characters, and board_test.gno asserts the realm
 // must NOT sanitise it on the wire — sanitising belongs to the realm's own
 // render path. So everything here is about surviving text that was chosen to
 // break a parser: pipes, newlines, forged escapes, and bytes that Go's quoting

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// THE BOARD PAGE'S RENDERERS — the surface where 2000 bytes of stranger-written
+// THE BOARD PAGE'S RENDERERS — the surface where 2000 characters of stranger-written
 // text becomes HTML.
 //
 // board_test.gno asserts the realm does NOT sanitise on the wire: sanitising

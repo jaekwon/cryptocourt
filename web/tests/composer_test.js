@@ -27,10 +27,10 @@ eval(slice('function cc(n, slug){', '\nfunction ugnot('));
 eval(slice('function ccSym(', '\n'));
 eval(V(slice('const shq =', '\n\n')));
 eval(slice('function cliCmd(', '\n\n'));
-// MAX_COMMENT_BYTES is read out of the file, never restated: it is pinned to the
+// MAX_COMMENT_CHARS is read out of the file, never restated: it is pinned to the
 // realm's maxBoardTextLen by check-web-constants, and a copy here would be a
 // third place for it to drift.
-const MAX_COMMENT_BYTES = parseInt(src.match(/^const MAX_COMMENT_BYTES = (\d+);/m)[1], 10);
+const MAX_COMMENT_CHARS = parseInt(src.match(/^const MAX_COMMENT_CHARS = (\d+);/m)[1], 10);
 var CFG = {mode:"live", chainid:"kourt-1", rpc:"https://rpc.example.test"};
 var PKG = "gno.land/r/kourt/kourtv2";
 eval(V(slice('function composerState(', '\n/* ---- the reads behind it ---- */')));
@@ -41,8 +41,8 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
 
 // ---- the cap is the realm's ----------------------------------------------
 {
-  ok("the byte cap is declared, and this file reads it rather than restating it",
-     MAX_COMMENT_BYTES === 2000);
+  ok("the character cap is declared, and this file reads it rather than restating it",
+     MAX_COMMENT_CHARS === 2000);
 }
 
 // ---- the gates, most specific first ---------------------------------------
@@ -154,8 +154,10 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
      /<div id="composer"><\/div>`;\s*\n\s*fillComposer\(slug, id, 0\);/.test(src));
   ok("...but not on the ranked view, which would be a second place to lose a draft",
      src.includes('(ranked ? "" : `<div id="composer"></div>`)'));
-  ok("the byte counter measures bytes, not characters",
-     src.includes("new TextEncoder().encode("));
+  // CODE POINTS, matching the realm's runeLen. String.length is UTF-16 code
+  // units, so an emoji counts twice there and once in Gno.
+  ok("the counter measures code points, matching the realm",
+     src.includes("[...String(s == null ? \"\" : s)].length"));
 }
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

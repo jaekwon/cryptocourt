@@ -41,7 +41,23 @@ MIRRORS = {
     # typing. If it drifts above the realm's, they finish a comment and lose it
     # at signing; below, they are stopped from writing something that would have
     # been accepted. Either way the page is the only warning they get.
-    "MAX_COMMENT_BYTES": ("realm/r/kourtv2/board.gno", "maxBoardTextLen"),
+    "MAX_COMMENT_CHARS": ("realm/r/kourtv2/board.gno", "maxBoardTextLen"),
+}
+
+# web symbol -> (the call the realm counts it with, the call the overlay does)
+#
+# THE UNIT, NOT ONLY THE NUMBER. maxBoardTextLen went from bytes to characters
+# and stayed 2000 throughout, so a guard watching the figure alone stayed green
+# while the realm and the composer meant different things by it — the composer
+# would have stopped a writer at 2000 bytes for a cap the chain applies at 2000
+# code points, which for any non-Latin script is roughly half.
+# Plain substrings on both sides, not regexes: the overlay's expression contains
+# quotes and brackets, and an escaping slip in the pattern reads as a real
+# failure. It cost one run here already.
+UNITS = {
+    "MAX_COMMENT_CHARS": ("realm/r/kourtv2/board.gno",
+                          "runeLen(text) > maxBoardTextLen",
+                          "const commentChars = s => [...String(s == null ? \"\" : s)].length;"),
 }
 
 
@@ -80,6 +96,20 @@ def main():
                   f"{name} is {want}. The overlay passes {sym} into realm reads, "
                   f"so a page that disagrees queries the wrong window and still "
                   f"looks right.", file=sys.stderr)
+            bad += 1
+    for sym, (relpath, realm_expr, web_re) in sorted(UNITS.items()):
+        src = open(os.path.join(REPO, relpath), encoding="utf-8").read()
+        if realm_expr not in src:
+            print(f"check-web-constants: {relpath} no longer counts {sym} with "
+                  f"`{realm_expr}`. If the realm changed its UNIT, the overlay's "
+                  f"counter has to change with it — the number staying the same "
+                  f"is exactly why this is checked separately.", file=sys.stderr)
+            bad += 1
+        if web_re not in web:
+            print(f"check-web-constants: the overlay no longer counts {sym} the way "
+                  f"the realm does. Both must count the same thing or a writer is "
+                  f"stopped short of, or past, the cap the chain applies.",
+                  file=sys.stderr)
             bad += 1
     if bad:
         return 1
