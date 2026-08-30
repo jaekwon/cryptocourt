@@ -39,6 +39,8 @@ WHAT THIS FILE REFUSES TO DO.
     emit -simulate skip and are asserted on-chain.
 """
 
+import base64
+import json
 import re
 import shlex
 import pathlib
@@ -47,6 +49,9 @@ import sys
 REALM = "gno.land/r/kourt/kourtv2"
 CHAINID = "tendermint_test"
 GAS = "-gas-fee 1000000ugnot -gas-wanted 200000000"
+# The same ceiling, as a number: the genesis txs-file writes JSON, not flags,
+# and two spellings of one budget is how they drift apart.
+GAS_WANTED = 200_000_000
 DEPLOYER = "test1"  # the key the txtar harness deploys with, hence the deployer
 # Every transaction pays GAS_FEE_UGNOT, including the self-transfers that mine
 # blocks — so a scenario's premine has to cover its own mining or the deployer
@@ -301,6 +306,43 @@ class Scenario:
     def hide(self, who, slug, cid, reason):
         self._call(who, "HideItem", [slug, str(cid), reason])
 
+    # -- the board -------------------------------------------------------
+    # Row ids are `cs.boardNextID++`, per claim, sequential from 1 (board.gno),
+    # so a caller can count them the way this file's callers already count claim
+    # ids. Nothing here returns one: a scenario emits transactions, it does not
+    # read them back.
+
+    def comment_pass(self, who, slug):
+        """BuyCommentPass — the entry rung, bought rather than earned.
+
+        A scenario's actors have CC and usually no STANDING, and standing is what
+        postLevel reads. Without a pass, PostComment refuses at level 0 and the
+        whole board section of a fixture silently produces nothing.
+        """
+        self._call(who, "BuyCommentPass", [slug])
+
+    def comment(self, who, slug, cid, text, parent=0):
+        """PostComment. parent 0 is top-level; depth stops at one."""
+        self._call(who, "PostComment", [slug, str(cid), str(parent), text])
+
+    def upvote(self, who, slug, cid, row):
+        self._call(who, "UpvoteComment", [slug, str(cid), str(row)])
+
+    def withdraw_comment(self, who, slug, cid, row, hide=True):
+        """HideOwnComment — the AUTHOR's own discovery bit, not a delete.
+
+        Distinct from hide_comment below and deliberately not merged with it:
+        they are different acts by different authorities, the realm keeps two
+        bits for exactly that reason, and a fixture that used one for both would
+        make the two tombstones untestable.
+        """
+        self._call(who, "HideOwnComment",
+                   [slug, str(cid), str(row), "true" if hide else "false"])
+
+    def hide_comment(self, who, slug, cid, row, code):
+        """HideBoardRow — a MODERATOR's hide, M-of-N over the speech threshold."""
+        self._call(who, "HideBoardRow", [slug, str(cid), str(row), code])
+
     def call(self, who, func, args, send=None, note=""):
         """The escape hatch: any entrypoint the builder has not learned.
 
@@ -317,7 +359,20 @@ class Scenario:
         self._call(who, func, [str(a) for a in args], send=send, note=note)
 
     # -- assertions ------------------------------------------------------
-    def expect(self, func, args, matches, note=""):
+    def expect(self, func, args, matches, note="", final=False):
+        """Assert a read matches, at THIS POINT in the story.
+
+        `final=True` promises something stronger: that it is still true when the
+        scenario ENDS. The distinction is not pedantry — it is what makes the
+        genesis seed path checkable at all. That path applies every transaction
+        in one block and can only read the state afterwards, so a point-in-time
+        assertion moved to the end silently changes meaning. covid_demo asserts
+        `TestClockActive == false` before arming and `== true` after; neither
+        survives the move, and the first one failing is what surfaced this.
+
+        Default false, so an unmarked assertion is never assumed to be an
+        end-state one. emit_checks reports how many it had to skip.
+        """
         """Assert a READ. The realm's own source decides what counts as one."""
         global REALM_READS
         if REALM_READS is None:
@@ -330,7 +385,8 @@ class Scenario:
                 f"up automatically once it exists in realm/r/kourtv2.")
         self.steps.append({"kind": "expect", "func": func,
                            "args": [_lit(a) for a in args],
-                           "re": _portable_pattern(matches, "expect"), "note": note})
+                           "re": _portable_pattern(matches, "expect"), "note": note,
+                           "final": bool(final)})
 
     def expect_refuse(self, who, func, args, stderr, note=""):
         """Assert that the CHAIN refuses — not merely that the simulator did.
@@ -410,6 +466,8 @@ def _lit(a):
     class this function exists to close. Everything else — apostrophes, $, #,
     spaces — now passes through safely because the token is quoted.
     """
+    if getattr(a, "_is_addr", False):
+        return a          # resolved per-emitter; never quoted as a literal name
     if isinstance(a, bool):
         return "true" if a else "false"
     if isinstance(a, int):
@@ -539,6 +597,188 @@ def emit_accounts(scn):
     return "\n".join(rows) + "\n"
 
 
+class Addr(str):
+    """An account NAME that must be resolved to its ADDRESS by the emitter.
+
+    A bare string in an expect's arguments is a bare string: `s.expect("Standing",
+    [SLUG, accounts[w]], ...)` emitted `Standing("covid","virology")`, and the
+    realm answered 0 — not because the address had no standing, but because
+    "virology" is not an address and matches no row. The assertion could not fail
+    for the reason it was written to check, and it could not pass at all. Both
+    emitters had the bug; it went unnoticed because no expect had taken an
+    address argument before.
+
+    Wrapping the name marks the intent, so an emitter that does not know how to
+    resolve it fails loudly instead of quoting it.
+
+    MARKED BY ATTRIBUTE, NOT BY isinstance. scenario.py runs as `__main__` when
+    invoked as a script, while a scenario's `from scenario import Addr` imports
+    the module a SECOND time — so the class the scenario wraps with is not the
+    class the emitter would test against, and isinstance quietly returns False.
+    The symptom is an unquoted account name in the generated query, which is how
+    this was found.
+    """
+
+    _is_addr = True
+
+
+BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def pubkey_b64(gpub):
+    """The keyring's bech32 `gpub1…` as the base64 amino form genesis JSON wants.
+
+    NEEDED EVEN THOUGH NOTHING VERIFIES IT. A genesis transaction is refused
+    outright for an EMPTY signatures array — "no signatures error", a structural
+    check that runs before verification — so an entry must be present. Measured:
+    a borrowed pubkey from gno.land's own genesis file let all 634 apply, which
+    says the bytes are never read. Writing somebody else's key next to this
+    court's callers would still be a lie in a file people read, so the real one
+    goes in.
+
+    The decode is plain bech32 (BIP-173) minus the checksum, and the compressed
+    secp256k1 key is the last 33 bytes of what comes out — the bytes before it
+    are the amino type prefix for /tm.PubKeySecp256k1, which the JSON names in
+    its own field.
+    """
+    s = gpub.lower()
+    pos = s.rfind("1")
+    if pos < 0:
+        raise ValueError(f"not bech32: {gpub}")
+    vals = [BECH32_CHARSET.find(c) for c in s[pos + 1:]]
+    if -1 in vals:
+        raise ValueError(f"bad bech32 character in {gpub}")
+    acc = bits = 0
+    out = bytearray()
+    for v in vals[:-6]:                      # the last six symbols are the checksum
+        acc = (acc << 5) | v
+        bits += 5
+        while bits >= 8:
+            bits -= 8
+            out.append((acc >> bits) & 0xFF)
+    if len(out) < 33:
+        raise ValueError(f"{gpub} decodes to {len(out)} bytes, too short for a key")
+    return base64.b64encode(bytes(out[-33:])).decode()
+
+
+def emit_txs(scn, addrs):
+    """The same story again, as a gnodev GENESIS TRANSACTIONS FILE.
+
+    WHY THIS EXISTS. emit_plan broadcasts one `gnokey maketx` per step and waits
+    for each to commit. Measured on covid_demo: 636 transactions at 0.365s each,
+    which is 3m52s of a 4m06s run — the seed IS that loop. Almost all of the
+    0.365s is local: keyring decrypt and signature, not the node, which answers a
+    query in 33ms. Broadcasting from several accounts at once does not help; a
+    batch of eight fired together landed NONE while eight sequential landed all
+    eight.
+
+    Genesis transactions skip every one of those costs. gnodev applies a txs-file
+    at startup, and sets SkipGenesisSigVerification (contribs/gnodev/pkg/dev/
+    node.go), so the `caller` field is taken at face value and the signature is
+    never checked — which is why gno.land's own genesis_txs.jsonl ships
+    `"signature":""`. So this emitter signs nothing and spawns no processes: it
+    writes a file.
+
+    WHAT IT GIVES UP, stated plainly because it is the reason emit_plan stays.
+    The plan checks every transaction as it lands and prints the realm's own
+    panic when one fails; that check caught four separate mistakes in one
+    afternoon. Genesis application is bulk, so a failed transaction here does not
+    stop the run. The `expect` assertions are the compensating control and they
+    still run afterwards, against the node, at query speed — so a scenario whose
+    seed silently half-applied is caught by what it then reads back, not by what
+    it wrote.
+
+    REFUSES A SCENARIO IT CANNOT REPRESENT rather than emitting a file that
+    quietly differs: `mine` steps advance real block height, and every genesis
+    transaction lands in the same block. A scenario that mines has to keep the
+    broadcast path. (covid_demo does not mine — it walks the realm's test clock,
+    which is state and therefore a transaction like any other.)
+    """
+    mined = sum(st["n"] for st in scn.steps if st["kind"] == "mine")
+    if mined:
+        raise SystemExit(
+            f"scenario.py: {scn.name} mines {mined} block(s), and every genesis "
+            f"transaction lands in the same block — seed it with --emit plan.")
+    missing = sorted({st["who"] for st in scn.steps if st["kind"] == "call"} - set(addrs))
+    if missing:
+        raise SystemExit(f"scenario.py: no address for {', '.join(missing)} — "
+                         f"the accounts map is stale.")
+    keys = {n: pubkey_b64(gpub) for n, (_, gpub) in addrs.items()}
+    out = []
+    for st in scn.steps:
+        if st["kind"] != "call":
+            continue          # notes are narration; expects are reads; refusals are for tests
+        msg = {"@type": "/vm.m_call",
+               "caller": addrs[st["who"]][0],
+               "send": str(st.get("send") or ""),
+               "pkg_path": REALM,
+               "func": st["func"],
+               "args": [str(a) for a in st["args"]]}
+        out.append(json.dumps({"tx": {
+            "msg": [msg],
+            "fee": {"gas_wanted": str(GAS_WANTED), "gas_fee": f"{GAS_FEE_UGNOT}ugnot"},
+            # ONE SIGNATURE ENTRY, with an EMPTY signature string. An empty
+            # ARRAY is refused structurally ("no signatures error") before
+            # verification is ever reached — which is why gno.land's own
+            # genesis_txs.jsonl carries a pub_key and `"signature":""` rather
+            # than nothing at all.
+            "signatures": [{"pub_key": {"@type": "/tm.PubKeySecp256k1",
+                                        "value": keys[st["who"]]},
+                            "signature": ""}],
+            "memo": ""}}, separators=(",", ":")))
+    return "\n".join(out) + "\n"
+
+
+def emit_checks(scn, addrs=None):
+    """The assertions alone, for the genesis path.
+
+    emit_plan interleaves writes and reads in one script. With the writes moved
+    into genesis, the reads have to run after the node is up — and they are the
+    ONLY check that the seed applied, so they are not optional there.
+    """
+    L = ["#!/bin/sh",
+         f"# GENERATED from scenarios/{scn.name}.py by scripts/scenario.py — do not edit.",
+         "#",
+         "# The scenario's assertions, run against a node seeded from a genesis",
+         "# txs-file. Genesis application is bulk and does not stop on a failed",
+         "# transaction, so these reads are what proves the seed landed.",
+         "set -eu",
+         'REMOTE="${REMOTE:-http://127.0.0.1:26657}"',
+         'q() { gnokey query vm/qeval -remote "$REMOTE" --data "$1"; }',
+         "say() { printf '  %s\\n' \"$1\"; }",
+         ""]
+    total = sum(1 for st in scn.steps if st["kind"] == "expect")
+    kept = sum(1 for st in scn.steps if st["kind"] == "expect" and st.get("final"))
+    if kept < total:
+        L.append(f"say {shlex.quote(f'{kept} of {total} assertions are end-state and re-checked here; the other {total - kept} are point-in-time and only the broadcast path can make them')}")
+    for st in scn.steps:
+        if st["kind"] == "note":
+            L.append("say " + shlex.quote(st["text"]))
+        elif st["kind"] == "expect" and st.get("final"):
+            parts = []
+            for a in st["args"]:
+                if getattr(a, "_is_addr", False):
+                    if not addrs or a not in addrs:
+                        raise SystemExit(f"scenario.py: expect names account {a!r}, "
+                                         f"which the accounts map does not carry.")
+                    parts.append('"' + addrs[a][0] + '"')
+                else:
+                    parts.append(str(a))
+            inner = ",".join(parts).replace('\\"', '"')
+            expr = f"{REALM}.{st['func']}({inner})"
+            # PRINTS WHAT IT GOT, not only what it wanted. "Standing did not
+            # match" names the expectation and leaves the actual value — the one
+            # fact that identifies which account and how far off — unsaid, so
+            # every diagnosis needs another run.
+            L.append(f"got=$(q {shlex.quote(expr)} 2>&1 | tr -d '\\n')")
+            L.append(f"case \"$got\" in *) printf '%s' \"$got\" | grep -Eq "
+                     f"{shlex.quote(st['re'])} || {{ printf 'seed: %s(%s) is %s, wanted %s\\n' "
+                     f"{shlex.quote(st['func'])} {shlex.quote(expr)} \"$got\" "
+                     f"{shlex.quote(st['re'])} >&2; exit 1; }};; esac")
+    L.append("")
+    return "\n".join(L)
+
+
 def emit_plan(scn):
     """The same story, as a shell script against a LIVE node.
 
@@ -614,14 +854,27 @@ def emit_plan(scn):
             L.append(" ".join(x for x in [
                 f"tx call -pkgpath {REALM} -func {st['func']}", args, send.strip(), who] if x))
         elif k == "expect":
-            inner = ",".join(st["args"]).replace('\\"', '"')
-            expr = f"{REALM}.{st['func']}({inner})"
-            # BOTH copies of the pattern are quoted. The grep operand always was;
-            # the one in the message was interpolated into a double-quoted shell
-            # string, where `$(...)` EXECUTED and a backtick made the generated
-            # plan unparseable. Same defect round 7 fixed by hand in a ${VAR:?}
-            # default; this was its data-driven twin.
-            L.append(f'q {shlex.quote(expr)} | grep -Eq {shlex.quote(st["re"])} '
+            # An Addr becomes the shell variable the header already defines, so
+            # the query carries a real address instead of an account's name.
+            #
+            # QUOTED IN DOUBLE QUOTES WHEN IT DOES, and that is not cosmetic:
+            # shlex.quote picks SINGLE quotes for anything containing `$`, which
+            # would send the chain the literal text `$VIROLOGY_ADDR`. The realm
+            # answers 0 for an address it has never seen, so the assertion fails
+            # for a reason that has nothing to do with what it checks — the same
+            # silent-zero the Addr sentinel exists to prevent, one layer down.
+            parts = []
+            for a in st["args"]:
+                if getattr(a, "_is_addr", False):
+                    parts.append('"$' + a.upper() + '_ADDR"')
+                else:
+                    parts.append(str(a).replace('\\"', '"'))
+            expr = f"{REALM}.{st['func']}({','.join(parts)})"
+            if "$" in expr:
+                qexpr = '"' + expr.replace('"', '\\"') + '"'
+            else:
+                qexpr = shlex.quote(expr)
+            L.append(f'q {qexpr} | grep -Eq {shlex.quote(st["re"])} '
                      f'|| {{ printf "seed: %s did not match %s\\n" '
                      f'{shlex.quote(st["func"])} {shlex.quote(st["re"])} >&2; exit 1; }}')
         elif k == "refuse":
@@ -701,11 +954,31 @@ def main():
         return 2
 
     kind = flag("--emit", "txtar")
-    emit = {"txtar": emit_txtar, "plan": emit_plan, "accounts": emit_accounts}.get(kind)
-    if emit is None:
-        print(f"--emit {kind}: want one of txtar, plan, accounts", file=sys.stderr)
-        return 2
-    text = emit(scn)
+    if kind in ("txs", "checks"):
+        # The accounts map has to exist FIRST: genesis transactions carry the
+        # caller's address, and the launcher makes fresh random keys every run.
+        amap = flag("--accounts-map")
+        if not amap:
+            print(f"--emit {kind}: needs --accounts-map <file> of "
+                  f"`name<TAB>addr<TAB>gpub` lines", file=sys.stderr)
+            return 2
+        addrs = {}
+        for line in open(amap, encoding="utf-8"):
+            parts = line.split()
+            if len(parts) >= 3:
+                addrs[parts[0]] = (parts[1], parts[2])
+        # The txtar harness's deployer name is not a keyring name.
+        if DEPLOYER not in addrs and "deployer" in addrs:
+            addrs[DEPLOYER] = addrs["deployer"]
+        text = emit_txs(scn, addrs) if kind == "txs" else emit_checks(scn, addrs)
+    else:
+        emit = {"txtar": emit_txtar, "plan": emit_plan,
+                "accounts": emit_accounts, "checks": emit_checks}.get(kind)
+        if emit is None:
+            print(f"--emit {kind}: want one of txtar, plan, txs, checks, accounts",
+                  file=sys.stderr)
+            return 2
+        text = emit(scn)
     out = flag("--out")
     if out:
         open(out, "w", encoding="utf-8").write(text)

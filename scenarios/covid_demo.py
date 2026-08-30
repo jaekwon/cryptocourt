@@ -92,7 +92,7 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "scripts"))
-from scenario import Scenario, YES, NO, DEPLOYER  # noqa: E402
+from scenario import Scenario, Addr, YES, NO, DEPLOYER  # noqa: E402
 
 # Never a txtar. It writes a curation file as a side effect, walks five years of
 # calendar, and exists to be looked at rather than asserted on.
@@ -840,6 +840,206 @@ for a, b, kind, _ in REL:
         s.call(accounts[author_of[a]], "SupersedeClaim",
                [SLUG, str(ids[a]), str(ids[b])])
 
+# ------------------------------------------------------------- the boards
+#
+# COMMENTS, ON THE TWO CLAIMS THAT CAN STILL TAKE THEM. boardOpen is
+# `verdictAt == 0 && !closed`, so every `yes`/`no` claim here settled and closed
+# its board, and every `dead` one was closed outright. The `dispute` arcs are the
+# only claims in this docket that are ANSWERED — so both parties exist — and
+# still open. That is not a limitation of the fixture, it is the rule: a board
+# stops taking comments the moment the claim has a verdict.
+#
+# ROW IDS ARE COUNTED HERE, NOT READ BACK. `cs.boardNextID++` is per claim and
+# sequential from 1 (board.gno), so the same discipline this file already uses
+# for claim ids applies: count them, never hand-write them. `row()` is the
+# counter, and a reply or an upvote that named a hand-written constant would go
+# silently wrong the moment a comment is inserted above it.
+#
+# EVERY COMMENTER BUYS A PASS FIRST. Most of these actors have STAKED, not
+# earned standing, and postLevel reads standing — so without a pass PostComment
+# refuses at level 0 and this whole section would emit transactions that all
+# revert, producing an empty board and a green run.
+# FOUR WITHDRAWALS, AND THEY ARE HERE TO BUY STANDING RATHER THAN COIN.
+#
+# UpvoteComment is weighted by standing and refuses an address with none
+# (board.gno). Nobody in this fixture had any, and the reason is not the ladder
+# or the tier — it is that conviction standing is credited inside WithdrawBonus
+# (crystallize.gno), so a staker earns it by coming back to COLLECT, and this
+# docket never collected. Measured on a seeded node before it was believed:
+# every one of the sixteen actors read `score:0` from StandingBreakdown, and the
+# credit rates were non-zero, so it was not a rounding story.
+#
+# The winners are DERIVED from MOVES, not listed: a winner is an address whose
+# NET position on the side the claim settled is positive. Hand-listing them
+# worked only until somebody edited a stake, at which point the withdrawal would
+# refuse and the upvotes below would fail again.
+#
+# Deliberately only four, on three claims. Every settled claim in this docket has
+# winners who could collect, and having them all do so would change what a dozen
+# claim pages show for the sake of one board.
+_winners = {}
+for _c in D:
+    if _c["arc"] not in ("yes", "no"):
+        continue
+    _win = YES if _c["arc"] == "yes" else NO
+    _net = {}
+    for _off, _w, _side, _amt in MOVES[_c["key"]]:
+        if _side == _win:
+            _net[_w] = _net.get(_w, 0) + _amt
+    for _w, _v in _net.items():
+        if _v > 0:
+            _winners.setdefault(_w, (ids[_c["key"]], _win))
+
+# CRYSTALLIZE FIRST, and it is not a formality: WithdrawBonus refuses with "the
+# draw has not crystallized" until it has run. Once per CLAIM, not once per
+# winner — a second call panics with "already crystallized" — and called by a
+# participant, because Crystallize is participant-only for the first week after
+# the verdict and these winners staked on the claim they are collecting from.
+#
+# It advances three of nineteen claims one step further along their lifecycle,
+# which is a real change to what those pages show. That is the price of a fixture
+# where anybody has standing at all, and three is the fewest that buys it.
+s.note("four winners collect, which is how an address earns standing at all")
+UPVOTERS = ["virology", "genomics", "clinician", "foia"]
+_cryst = set()
+for _w in UPVOTERS:
+    if _w not in _winners:
+        raise ValueError(f"{_w} holds no winning position — the upvotes below cannot work")
+    _cid, _side = _winners[_w]
+    if _cid not in _cryst:
+        s.call(accounts[_w], "Crystallize", [SLUG, str(_cid)])
+        _cryst.add(_cid)
+    s.call(accounts[_w], "WithdrawBonus", [SLUG, str(_cid), str(_side)])
+    # Standing is what the upvote needs, so standing is what is asserted — not
+    # the coin the withdrawal also paid. Pinned to a NONZERO value: `int64`
+    # alone matches every int64 reply this realm can give, including 0.
+    s.expect("Standing", [SLUG, Addr(_w)], r"[(][1-9][0-9]* int64[)]", final=True)
+
+s.note("the boards: comments on the two claims a verdict has not closed")
+
+_row = {}
+def row(cid):
+    """The id the NEXT comment on this claim will get."""
+    _row[cid] = _row.get(cid, 0) + 1
+    return _row[cid]
+
+# A pass each, for everybody who is about to write. Bought once per address:
+# BuyCommentPass panics on a second buy, by design.
+BOARD_ACTORS = ["virology", "epi", "genomics", "foia", "journo", "statistician",
+                "oversight", "clinician", "skeptic", "arbiter2"]
+# The claim's own author is DERIVED, not listed. Naming them by hand here worked
+# only while p3co's first mover happened to be somebody already on the list —
+# change one row of MOVES and the author writes two comments with no pass, both
+# revert, and the parties block loses the half that makes it an argument.
+for _who in ("p3co", "perjury"):
+    if author_of[_who] not in BOARD_ACTORS:
+        BOARD_ACTORS.append(author_of[_who])
+for _who in BOARD_ACTORS:
+    s.comment_pass(accounts[_who], SLUG)
+
+# ---- p3co: both parties argue, and the thread has everything a reader meets --
+P3 = ids["p3co"]
+_author = author_of["p3co"]
+
+r_auth = row(P3)
+s.comment(accounts[_author], SLUG, P3,
+          "The P3CO framework is the standard the claim names, so the question is "
+          "not whether the work was risky but whether it met that definition. The "
+          "2017 guidance is the text to read.")
+r_ansr = row(P3)
+s.comment(accounts["arbiter2"], SLUG, P3,
+          "I answered YES on the reading that the enhanced-transmissibility clause "
+          "is met. The bond is on that reading, not on the wider question.")
+r_skep = row(P3)
+s.comment(accounts["skeptic"], SLUG, P3,
+          "The grant text and the framework use different words for the same "
+          "thing in two places. Which one governs is the whole dispute.")
+
+# Replies. Depth stops at one, so neither of these can itself be answered here.
+s.comment(accounts["epi"], SLUG, P3,
+          "The 2017 guidance also carves out surveillance work, and that carve-out "
+          "is what the department leaned on at the time.", parent=r_auth)
+row(P3)
+s.comment(accounts[_author], SLUG, P3,
+          "Agreed that it is the dispute. The grant text is the later document, "
+          "which is why I filed it that way.", parent=r_skep)
+row(P3)
+
+# An UPVOTED row, so Top is not Newest. Cold start puts every un-upvoted row in
+# the score index at zero and the two orderings are byte-identical; without this
+# the overlay's ranked view would have nothing to rank and would not be offered.
+s.note("upvotes, so the ranked ordering differs from the newest one at all")
+# Cold start puts every un-upvoted row in the score index at zero, so Top is
+# byte-for-byte Newest on a board nobody has upvoted — the overlay probes for a
+# nonzero score before it offers the ranked view at all, and without these the
+# toggle would correctly never appear.
+# Cold start puts every un-upvoted row in the score index at zero, so Top is
+# byte-for-byte Newest on a board nobody has upvoted — the overlay probes for a
+# nonzero score before it offers the ranked view at all, and without these the
+# toggle would correctly never appear.
+for _who in UPVOTERS[:3]:
+    s.upvote(accounts[_who], SLUG, P3, r_ansr)
+s.upvote(accounts[UPVOTERS[3]], SLUG, P3, r_skep)
+s.expect("CommentScore", [SLUG, P3, r_ansr], r"[(][1-9][0-9]* int64[)]", final=True)
+
+
+# ---- the two tombstones, which are different acts by different authorities ---
+# The overlay collapses both to `h` because boardMark does — the wire does not
+# say which, deliberately — so a fixture needs BOTH to prove the page never
+# attributes one to the other.
+r_withdrawn = row(P3)
+s.comment(accounts["journo"], SLUG, P3,
+          "Posting a working link to the grant PDF here; I will replace it if the "
+          "host moves it.")
+s.note("the author withdraws their own row — a discovery bit, not a delete")
+s.withdraw_comment(accounts["journo"], SLUG, P3, r_withdrawn)
+
+r_modhidden = row(P3)
+s.comment(accounts["statistician"], SLUG, P3,
+          "This has nothing to do with the claim and everything to do with a "
+          "different argument three claims over.")
+s.note("and a MODERATOR hides a different row, for a different reason")
+s.hide_comment(DEPLOYER, SLUG, P3, r_modhidden, "off-topic")
+
+# ---- perjury: only ONE party has spoken -------------------------------------
+# The chip's copy branches on which parties replied, and "the answerer has
+# replied" is reachable without the author's — the realm returns one party row
+# and it may be either of them. This claim exercises that branch.
+PJ = ids["perjury"]
+r_pj = row(PJ)
+s.comment(accounts["arbiter2"], SLUG, PJ,
+          "The answer rests on the transcript as published, not on the summary "
+          "that was reported from it.")
+s.comment(accounts["foia"], SLUG, PJ,
+          "The published transcript and the released recording differ in one line, "
+          "and it is the line the claim turns on.", parent=r_pj)
+row(PJ)
+
+# ASSERTED AGAINST THE CHAIN, because every row id above is a number this
+# process COUNTED and never read back. If boardNextID ever stopped being
+# sequential-from-1, the replies would hang off the wrong parents and the hides
+# would land on the wrong rows, and the fixture would look fine.
+#
+# The role patterns are DELIMITED. Bare `author` also matches the word inside
+# somebody's comment text, which is on the same line — the role is field 3, and
+# the pipes are what say so.
+# The count comes from the COUNTER, not from a number typed here. Written by
+# hand it was 9 against a board of 7, and it still passed — `grep -Eq 9`
+# matches any 9 anywhere in the reply, so a wrong count asserted nothing.
+# Pinned to the whole typed value for the same reason.
+s.expect("BoardSize", [SLUG, P3], r"[(]%d int[)]" % _row[P3], final=True)
+s.expect("BoardSize", [SLUG, PJ], r"[(]%d int[)]" % _row[PJ], final=True)
+s.expect("BoardOpen", [SLUG, P3], r"true", final=True)
+s.expect("BoardPartyRows", [SLUG, P3], r"[|]author[|]", final=True)
+s.expect("BoardPartyRows", [SLUG, P3], r"[|]answerer[|]", final=True)
+# perjury: the answerer spoke and the author did not, so ONE row comes back and
+# it is not the author's — the case the role field exists for.
+s.expect("BoardPartyRows", [SLUG, PJ], r"[|]answerer[|]", final=True)
+# Both tombstones, and they are indistinguishable on the wire by design: the
+# mark is `h` for either authority, so this asserts two `h` rows exist rather
+# than which is which.
+s.expect("BoardNewest", [SLUG, P3, 0, 25], r"[|]h[|]", final=True)
+
 # ------------------------------------------------------------ what it built
 #
 # Asserted, not described. A folder id tracked in this process rather than read
@@ -853,15 +1053,15 @@ for a, b, kind, _ in REL:
 # UNANCHORED, and it has to be: an expect greps the whole `gnokey query` output
 # line, which begins `data: ("`, so a pattern anchored with ^ can never match.
 # The full comma sequence pins the shape without needing them.
-s.expect("FolderTree", [SLUG], r"1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,6:0:-")
-s.expect("FolderCount", [SLUG], r"6")
-s.expect("FolderName", [SLUG, FOLDER_ID[FAUCI]], r"Fauci")
+s.expect("FolderTree", [SLUG], r"1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,6:0:-", final=True)
+s.expect("FolderCount", [SLUG], r"6", final=True)
+s.expect("FolderName", [SLUG, FOLDER_ID[FAUCI]], r"Fauci", final=True)
 # The description, and it is asserted on a phrase from its END: a folder desc is
 # capped at 200 characters, so a check on the first few words would pass on a
 # string the realm had silently truncated.
-s.expect("FolderDesc", [SLUG, FOLDER_ID[FAUCI]], r"kind of record each claim settles on")
-s.expect("ClaimAssociations", [SLUG, ids["lab23"]], r"in:")
-s.expect("AssociationBond", [SLUG], r"1000000")
+s.expect("FolderDesc", [SLUG, FOLDER_ID[FAUCI]], r"kind of record each claim settles on", final=True)
+s.expect("ClaimAssociations", [SLUG, ids["lab23"]], r"in:", final=True)
+s.expect("AssociationBond", [SLUG], r"1000000", final=True)
 
 # ------------------------------------------------------------- the curation
 #

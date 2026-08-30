@@ -64,10 +64,33 @@ addr() {
 		sed -n "s/^[0-9]*\. $1 (.*addr: \(g1[a-z0-9]*\).*/\1/p" | head -1
 }
 
-echo "seed-node: generating the plan from $SCN"
-python3 scripts/scenario.py "$SCN" --emit plan --out "$WORK/seed.sh" >/dev/null
+# TWO WAYS TO SEED, and the fast one is the default.
+#
+#   genesis  every transaction goes into a gnodev -txs-file, applied at startup
+#   plan     every transaction is a `gnokey maketx -broadcast`, one at a time
+#
+# MEASURED, on covid_demo: the plan path is 636 transactions at 0.365s each —
+# 3m52s of a 4m06s run. The seed IS that loop. Nearly all of the 0.365s is
+# LOCAL (keyring decrypt and signature), not the node, which answers a query in
+# 33ms; and broadcasting concurrently does not help, because a batch of eight
+# fired at once landed none while eight sequential landed all eight. Genesis
+# application pays none of it: gnodev sets SkipGenesisSigVerification, so the
+# transactions need no signature at all.
+#
+# THE PLAN PATH STAYS, and not for sentiment. It checks every transaction as it
+# lands and prints the realm's own panic when one fails — a check that caught
+# four separate mistakes in one afternoon. Genesis application is bulk and does
+# not stop on a failure, so SEED_MODE=plan is what to reach for when a scenario
+# is being debugged rather than merely served.
+SEED_MODE="${SEED_MODE:-genesis}"
+echo "seed-node: generating the plan from $SCN (mode: $SEED_MODE)"
 python3 scripts/scenario.py "$SCN" --emit accounts >"$WORK/accounts"
-chmod +x "$WORK/seed.sh"
+if [ "$SEED_MODE" = plan ]; then
+	python3 scripts/scenario.py "$SCN" --emit plan --out "$WORK/seed.sh" >/dev/null
+	chmod +x "$WORK/seed.sh"
+fi
+# The genesis path's own files wait for the keyring: both the transactions and
+# the assertions carry real addresses, and the keys are made fresh every run.
 
 # 1. Keys, before the node: gnodev fixes the premine set and the deploy key at
 #    genesis, so the addresses have to exist first.
@@ -114,6 +137,25 @@ done
 #    whichever files you just wrote, and every query answers plausibly and
 #    wrongly. Verified: with -extra-root the node had no clock.gno, no
 #    stakeseries.gno and no testclock.gno.
+# The genesis transactions carry their caller's ADDRESS, and the keys above are
+# fresh every run — so the file is built here, between the keyring and the node.
+TXSFLAG=""
+if [ "$SEED_MODE" != plan ]; then
+	# name, address AND pubkey: a genesis transaction is refused for an empty
+	# signatures array, so each one carries its caller's key with an empty
+	# signature — the shape gno.land's own genesis_txs.jsonl uses.
+	key list 2>/dev/null |
+		sed -n 's/^[0-9]*\. \([a-z0-9]*\) (.*addr: \(g1[a-z0-9]*\) pub: \(gpub1[a-z0-9]*\).*/\1\t\2\t\3/p' \
+		>"$WORK/accounts.map"
+	python3 scripts/scenario.py "$SCN" --emit txs \
+		--accounts-map "$WORK/accounts.map" --out "$WORK/genesis_txs.jsonl" >/dev/null
+	python3 scripts/scenario.py "$SCN" --emit checks \
+		--accounts-map "$WORK/accounts.map" --out "$WORK/checks.sh" >/dev/null
+	chmod +x "$WORK/checks.sh"
+	TXSFLAG="-txs-file $WORK/genesis_txs.jsonl"
+	echo "seed-node: $(wc -l <"$WORK/genesis_txs.jsonl" | tr -d ' ') genesis transactions"
+fi
+
 echo "seed-node: starting gnodev (log: $NODELOG)"
 GNOEX="${GNOROOT:-/Users/jk/gopath/src/github.com/gnolang/gno}/examples/gno.land/p/nt"
 [ -d "$GNOEX" ] || { echo "seed-node: no gno examples at $GNOEX (set GNOROOT)" >&2; exit 2; }
@@ -140,6 +182,7 @@ gnodev local \
 	-deploy-key "$DEPLOYER_ADDR" \
 	-home "$KEYDIR" \
 	-no-watch -empty-blocks=false -interactive=false \
+	$TXSFLAG \
 	$PREMINE >"$NODELOG" 2>&1 &
 NODE_PID=$!
 
@@ -159,8 +202,52 @@ until curl -sf "$REMOTE/status" >/dev/null 2>&1; do
 done
 echo "seed-node: node is up after ${i}s"
 
-# 4. The scenario itself.
-KEYDIR="$KEYDIR" REMOTE="$REMOTE" CHAINID="$CHAINID" PASS="$PASS" sh "$WORK/seed.sh"
+# THE RPC ANSWERING IS NOT THE REALM BEING READY. /status responds as soon as the
+# node serves, but gnodev resolves packages lazily and a query issued in that
+# window comes back vm.InvalidPkgPathError. Measured: one run in five failed an
+# assertion that way, and the message named the assertion rather than the cause,
+# so it read as a state bug — the seed was blamed for economics it had nothing to
+# do with. BoardCodes is the right probe because it needs the PACKAGE and no
+# state, so it works before a court exists as well as after.
+j=0
+until gnokey query vm/qeval -remote "$REMOTE" \
+	--data 'gno.land/r/kourt/kourtv2.BoardCodes()' 2>&1 | grep -q '^data:'; do
+	j=$((j + 1))
+	[ "$j" -gt 60 ] && { echo "seed-node: the realm never became queryable" >&2
+		tail -20 "$NODELOG" >&2; exit 1; }
+	sleep 1
+done
+echo "seed-node: realm queryable after ${j}s"
+
+# 4. The scenario itself — already applied at genesis in the fast path, so all
+#    that is left there is to READ IT BACK. Those reads are the only thing that
+#    proves a bulk-applied seed landed, which is why a genesis run without them
+#    would be faster and worthless.
+if [ "$SEED_MODE" = plan ]; then
+	KEYDIR="$KEYDIR" REMOTE="$REMOTE" CHAINID="$CHAINID" PASS="$PASS" sh "$WORK/seed.sh"
+else
+	# TWO KINDS OF FAILURE, and a bulk seed reports neither unless asked. A
+	# genesis transaction can fail to DELIVER, which logs "unable to deliver
+	# tx"; or it can deliver and then PANIC inside the VM, which logs
+	# success:false. The broadcast path surfaces both for free because gnokey
+	# exits non-zero either way — this path has to go looking.
+	#
+	# EXCLUDING the package type-check line, which is NOT a scenario transaction:
+	# it appears identically on a node started with no txs-file at all, so
+	# counting it would fail every genesis run for a pre-existing condition.
+	# Verified by running gnodev both ways with the same package set.
+	FAILED=$(grep -E 'unable to deliver tx|success:false' "$NODELOG" |
+		grep -vc 'invalid gno package' || true)
+	if [ "${FAILED:-0}" -gt 0 ]; then
+		echo "seed-node: $FAILED genesis transaction(s) did not apply cleanly:" >&2
+		grep -E 'unable to deliver tx|success:false' "$NODELOG" |
+			grep -v 'invalid gno package' |
+			grep -oE 'panic: [^\\"]{0,110}' | sort | uniq -c | sort -rn | head -5 >&2
+		echo "seed-node: re-run with SEED_MODE=plan to see exactly which one." >&2
+		exit 1
+	fi
+	REMOTE="$REMOTE" sh "$WORK/checks.sh"
+fi
 
 cat <<EOF
 
