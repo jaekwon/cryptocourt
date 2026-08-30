@@ -128,6 +128,20 @@ original URL kept as a mirror. When CORS blocks the fetch — and it often will 
 say so in one sentence with the fix ("this host won't let us read the file;
 download it and drop it here") rather than an error code.
 
+⚠︎ **This is not a nicety, and for a while it was not built.** A pasted image
+link was filed the way a video link is — kept, marked "the court keeps no copy"
+— and the chain does not accept that: `mediaItemFault`, on both sides, requires
+64 hex characters of `sha256` for every image and lets only a video go without
+one. So the row sat in the composer looking accepted while `composer.fault()`
+said *"this image has no fingerprint yet"* and the claim could not be signed at
+all.
+
+So the fetch is what makes this path work, and the refusal ends the exhibit
+rather than filing an unfilable one: **broken**, with the action that works.
+`mediaFileable` excludes broken, so it blocks nothing else in the claim. When
+the host does allow it the link becomes a full exhibit — fingerprinted, copied,
+checkable — with the pasted address kept behind the archive's as provenance.
+
 ### 2.2 Never say "too big"
 
 On accept, the browser downscales to a max edge of 1600px and re-encodes to WebP,
@@ -624,6 +638,7 @@ Recorded because each is easy to make again:
 | 19 | "no control characters" checked only the ASCII ones | Unicode direction overrides are three bytes each, so neither side ever saw one; U+202E in a caption makes the rendered exhibit label disagree with the label the chain stores, permanently |
 | 20 | backfill returned on the first court it could not answer | the court hint is client-supplied, so `POST /m?court=does-not-exist` once an hour stopped promotion for everybody and the sweep then deleted the bytes honest claims referenced |
 | 21 | the archive accepted 32-character court hints | the realm's slugs are at most 11, so the archive took names no court could have and asked a node about each one |
+| 22 | a pasted image link was filed without a fingerprint | both validators require a sha256 for every image, so the exhibit looked accepted and `composer.fault()` quietly made the claim unsignable — "this image has no fingerprint yet", to someone with no way to make one |
 
 Rows 18 and 19 are the same oversight twice: a rule stated in characters and
 implemented in bytes. Row 18 refuses honest captions, row 19 accepts hostile
