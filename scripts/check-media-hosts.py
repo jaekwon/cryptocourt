@@ -152,10 +152,38 @@ def main():
         problems.append("  scenario.py builds a video line the realm does not "
                         "parse:\n    got  %s\n    want %s" % (got_vid, want_vid))
     # And the strings above must still be the ones the realm suite holds.
-    realm_test = open(os.path.join(ROOT, "realm", "r", "kourtv2", "media_test.gno")).read()
-    if want_vid not in realm_test:
-        problems.append("  the realm suite no longer pins the video line this "
-                        "guard compares against — one of them has moved")
+    # EVERY PLACE THIS EXACT LINE LIVES, and there are more than the comment
+    # above counted. Each holder is a separate program that has to agree with the
+    # others about eight fields and one separator; each was written to the spec
+    # and checked against the spec, which proves the spec is self-consistent and
+    # nothing about whether they agree with each other.
+    #
+    # The txtar is the one that mattered most and was pinned least. It files a
+    # claim carrying this argument against a REAL node, so it is the proof that
+    # the realm accepts what the composer builds — and it held its own hand-typed
+    # copy. Change the field order, update web/media.js and its suite together,
+    # and the txtar would go on proving the realm accepts the OLD format while
+    # every suite stayed green and the client and the chain had diverged.
+    # Two of the holders build their copy by concatenation rather than writing it
+    # as one literal — the realm suite splits after the hash, the overlay suite
+    # uses "1".repeat(64) — so for those the TAIL is what is compared. Everything
+    # after the hash is where the field order and the separator live, which is
+    # exactly what drift would move.
+    tail = want_img.split("|", 2)[2]
+    holders = [
+        (os.path.join("gnoland", "testdata", "kourtv2_media.txtar"), want_img,
+         "the image line it files against a real node"),
+        (os.path.join("realm", "r", "kourtv2", "media_test.gno"), want_vid,
+         "the video line"),
+        (os.path.join("realm", "r", "kourtv2", "media_test.gno"), tail,
+         "the image line's fields"),
+        (os.path.join("web", "tests", "media_test.js"), tail,
+         "the image line's fields"),
+    ]
+    for rel, want, which in holders:
+        if want not in open(os.path.join(ROOT, rel)).read():
+            problems.append("  %s no longer carries %s:\n    want %s"
+                            % (rel, which, want))
 
     if problems:
         print("check-media-hosts: the three copies of the media host list disagree.",
@@ -165,8 +193,10 @@ def main():
         return 1
 
     print("check-media-hosts: %d host(s) and %d suffix(es) agree across the realm, "
-          "the overlay and the page CSP; /m is routed; scenario.py builds the "
-          "argument the realm parses." % (len(gno_exact), len(gno_suffix)))
+          "the overlay and the page CSP; /m is routed; and the five holders of "
+          "the wire format — media.gno, media.js, scenario.py, the realm suite "
+          "and the txtar — carry the same line."
+          % (len(gno_exact), len(gno_suffix)))
     return 0
 
 
