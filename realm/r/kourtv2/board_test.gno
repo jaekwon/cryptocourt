@@ -674,6 +674,16 @@ func TestTheHiddenCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.T)
 	if !strings.Contains(listing, "3 hidden comments](") {
 		t.Fatalf("the listing must link to them by count:\n%s", listing)
 	}
+	// AT THE FOOT, past everything a reader came for. Above the first comment it
+	// was the third thing on the page — a footnote about what is absent, printed
+	// ahead of what is present.
+	if strings.Index(listing, "3 hidden comments](") < strings.Index(listing, "## The parties") {
+		t.Fatalf("the hidden link belongs after the comments, not before them:\n%s", listing)
+	}
+	// Both orderings carry it, or switching to Top loses the count.
+	if !strings.Contains(renderBoardTop("cwh", id), "3 hidden comments](") {
+		t.Fatal("the ranked view must carry the same footnote")
+	}
 	// THE TEXT IS HERE FOR A HIDE. A hide is a discovery bit — the bytes were
 	// never destroyed and the row's own deep link already serves them — so
 	// withholding them here would hide nothing and only make the record harder

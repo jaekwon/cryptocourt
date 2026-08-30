@@ -807,16 +807,6 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 	// rendered five comment blocks and — because cold start puts every un-upvoted
 	// row in the score index at score 0 — Top and Newest were byte-identical
 	// lists printed back to back on any board with no upvotes.
-	// HIDDEN ROWS LEAVE THE LISTING, collected behind one link instead of left
-	// as a stub apiece. A moderator clearing twenty griefer comments used to
-	// leave twenty notices down the page, each louder than the comment it
-	// replaced — the griefing survived its own removal, in the realm's voice.
-	// The count and the page are the record; this list is for what was said.
-	if k := BoardHiddenCount(slug, claimID); k > 0 {
-		b.WriteString("[" + strconv.Itoa(k) + " hidden comment" + plural2(k) +
-			"](" + base + "/board/hidden)\n\n")
-	}
-
 	seen := map[uint64]bool{}
 	if parties := boardPartyRows(cs); len(parties) > 0 {
 		b.WriteString("## The parties\n\n")
@@ -853,6 +843,9 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 			b.WriteString("_Nothing else upvoted yet — [Newest](" + base +
 				"/board) is the fuller view._\n")
 		}
+		// Both orderings, or a reader who switched to Top would be told the board
+		// holds fewer rows than the other view accounted for.
+		writeHiddenLink(&b, slug, claimID, base)
 		return b.String()
 	}
 
@@ -868,7 +861,23 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 	if rest := cs.boardTop.Size() - shown - len(seen); rest > 0 {
 		b.WriteString("\n_" + strconv.Itoa(rest) + " older comments._\n")
 	}
+	writeHiddenLink(&b, slug, claimID, base)
 	return b.String()
+}
+
+// writeHiddenLink is the footnote for rows this page is not showing.
+//
+// AT THE FOOT, not the head. Hidden rows leave the listing entirely — collected
+// behind one link rather than left as a stub apiece, because a moderator
+// clearing twenty griefer comments used to leave twenty notices, each louder
+// than the comment it replaced. But the link to them is not what a reader came
+// for either, and above the first comment it was the third thing on the page.
+// It is a footnote about what is absent; it belongs after what is present.
+func writeHiddenLink(b *strings.Builder, slug string, claimID uint64, base string) {
+	if k := BoardHiddenCount(slug, claimID); k > 0 {
+		b.WriteString("\n[" + strconv.Itoa(k) + " hidden comment" + plural2(k) +
+			"](" + base + "/board/hidden)\n")
+	}
 }
 
 // boardPartyRows is the newest top-level comment by the claim's author and by

@@ -11977,5 +11977,19 @@
   "label": "renderBoardIn: the board offers no way to write on it",
   "find": "\tb.WriteString(\"[Write a comment](\" + boardPostLink(slug, claimID, 0) + \") \u00b7 \" +",
   "replace": "\tb.WriteString("
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeHiddenLink: the ranked view loses the hidden count",
+  "find": "\t\twriteHiddenLink(&b, slug, claimID, base)\n\t\treturn b.String()",
+  "replace": "\t\treturn b.String()"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeHiddenLink: the footnote climbs back above the comments",
+  "find": "\twriteHiddenLink(&b, slug, claimID, base)\n\treturn b.String()\n}",
+  "replace": "\treturn b.String()\n}"
  }
 ]
