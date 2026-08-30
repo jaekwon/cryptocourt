@@ -120,6 +120,52 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      !painted.includes("<img src=x") && painted.includes("&lt;img"));
   ok("...and the row around it still renders", count(/class="boardrow"/g) === 1);
 
+  // ---- the claim page's own comments section --------------------------
+  // The thread now sits at the FOOT of the claim page, where a discussion
+  // belongs, rather than as a preview above the thing being discussed.
+  {
+    const R = o => Object.assign({id:1, author:"g1abcdefghijklmnop", mark:".",
+                                 at:118803, text:"a comment", replies:"0"}, o);
+    const rows = [R({id:3, replies:"1"}), R({id:2, mark:"h", text:""}), R({id:1})];
+    const kids = [[R({id:9, text:"a reply"})], [], []];
+    const html = claimCommentsHtml("covid", 10, 7, true, rows, kids, {1:"author", 2:"answerer"});
+
+    ok("the section carries the id the claim route renders",
+       html.startsWith('<section id="claimcomments">'));
+    ok("...heads with the same count and state the chip uses",
+       html.includes("7 comments · open for comments"));
+    ok("...renders every row it was given, replies included",
+       (html.match(/class="boardrow"/g)||[]).length === 4);
+    ok("...indents the reply under its parent", html.includes('class="boardkids"'));
+    ok("...badges the parties in place",
+       /class="pill">author</.test(html) && /class="pill">answerer</.test(html));
+    ok("...tombstones the withheld row rather than dropping it",
+       html.includes("Hidden from this list"));
+    // 4 rows on the page against a board of 7 — the tail is the honest
+    // difference, and it points at the paged view rather than growing this one.
+    ok("...links to the rest when it is not showing all of them",
+       html.includes("all 7 comments") && html.includes('href="#/c/covid/10/board"'));
+    ok("...and carries the composer's slot", html.includes('<div id="composer"></div>'));
+
+    const whole = claimCommentsHtml("covid", 10, 4, true, rows, kids, {});
+    ok("a section showing everything claims no remainder", !whole.includes("all 4 comments"));
+
+    const none = claimCommentsHtml("covid", 10, 0, true, [], [], {});
+    ok("an open board with nothing on it invites the first comment",
+       none.includes("No comments yet") && !none.includes("boardrow"));
+    ok("...and still offers the composer", none.includes('<div id="composer"></div>'));
+    const shut = claimCommentsHtml("covid", 10, 0, false, [], [], {});
+    ok("a closed empty board says so instead of inviting",
+       shut.includes("No comments were written") && !shut.includes("No comments yet"));
+
+    // Wiring, checked as text: a renderer with no caller is the failure this
+    // feature has had twice.
+    ok("the claim route renders the section", src.includes('<section id="claimcomments"></section>'));
+    ok("...and fills it", /^\s*fillClaimComments\(slug, ?id\);/m.test(src));
+    ok("the preview that used to sit above the page is gone",
+       !src.includes("boardPreviewHtml") && !src.includes('id="boardpreview"'));
+  }
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })().catch(e => { console.log("FAIL: the harness died —", e.message); process.exit(1); });

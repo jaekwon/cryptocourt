@@ -1065,52 +1065,44 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 }
 
 /* the board: a claim's comments.
-   A ROW IS A QUOTATION UNIT, so the meta line reads as a citation — who, when,
-   which id — and the text below it as prose. Replies are indented against a rule
-   rather than boxed: depth stops at one, so one level of indent is the whole
-   tree and a box would imply there is more. */
+
+   A ROW IS A QUOTATION UNIT — somebody links to one and argues about it — so it
+   reads as a citation with prose under it, not as a chat bubble. The meta line
+   is quiet and the text is not: the words are what somebody came for.
+
+   REPLIES ARE INDENTED AGAINST A RULE, not boxed. Depth stops at one, so a
+   single indent IS the whole tree; a box would imply there is more inside. */
 .board-on{color:var(--ink-2); margin:-4px 0 14px}
-.boardlist{margin-top:18px}
-.boardrow{padding:12px 0; border-top:1px solid var(--line)}
-.boardrow:first-child{border-top:0}
-.boardmeta{color:var(--muted); font-size:.9em; margin-bottom:6px;
-  display:flex; flex-wrap:wrap; align-items:center; gap:6px}
-.boardmeta .pill{font-size:.85em}
-.boardrow p{margin:0 0 8px; overflow-wrap:anywhere}
+.boardlist{margin-top:14px}
+.boardrow{padding:14px 0 15px; border-top:1px solid var(--line)}
+.boardrow:first-child{border-top:0; padding-top:4px}
+.boardmeta{display:flex; flex-wrap:wrap; align-items:baseline; gap:8px;
+  margin:0 0 7px; font-size:.88em; color:var(--muted)}
+/* The address is the row's identity, so it gets the one solid affordance in the
+   line; everything after it is context and stays quiet. */
+.boardmeta .mono{color:var(--ink-2); background:var(--inset);
+  border:1px solid var(--line); border-radius:5px; padding:1px 6px}
+.boardmeta .pill{font-size:.86em}
+.boardmeta a.mono{margin-left:auto; background:none; border:0; padding:0;
+  color:var(--muted); text-decoration:none}
+.boardmeta a.mono:hover,.boardmeta a.mono:focus-visible{color:var(--accent-2)}
+.boardrow p{margin:0 0 9px; overflow-wrap:anywhere; line-height:1.55}
 .boardrow p:last-child{margin-bottom:0}
-/* A tombstone is quieter than text but must not be invisible: it is the reason a
+/* A tombstone is quieter than text and must not be invisible: it is the reason a
    row a reader can see the count of has nothing under it. */
 .board-tomb{color:var(--muted); font-style:italic}
-.board-more{color:var(--muted); font-size:.92em; margin:6px 0 0}
-.boardkids{margin:8px 0 0 16px; padding-left:14px; border-left:2px solid var(--line-2)}
-.boardkids .boardrow{padding:8px 0}
-@media(max-width:560px){ .boardkids{margin-left:6px; padding-left:10px} }
-
-/* the composer. It sits BELOW the list, so it is set off by a rule rather than
-   a box: a reader scrolling to the end should meet it, not be interrupted by it.
-   The state line above the box is the part that matters — most first-time
-   readers cannot post, and the reason is more use to them than the textarea. */
-.composer{margin:22px 0 0; padding:16px 0 0; border-top:1px solid var(--line-2)}
-.composer-why{margin:0 0 10px; color:var(--ink-2)}
-.composer-lab{display:block; font-size:.9em; color:var(--muted); margin:0 0 4px}
-.composer-text{width:100%; box-sizing:border-box; padding:9px 10px; resize:vertical;
-  font:inherit; color:var(--ink); background:var(--inset);
-  border:1px solid var(--line-2); border-radius:6px}
-.composer-text:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
-.composer-foot{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:8px 0 0}
-.composer-count{color:var(--muted); font-size:.9em; font-variant-numeric:tabular-nums}
-.composer-post[disabled]{opacity:.5; cursor:not-allowed}
-.composer-note{margin:10px 0 0; color:var(--muted); font-size:.9em}
-
-/* the parties' preview on the claim page. Two lines, one each, clipped — it is a
-   pointer to an argument, not the argument. Sized down from body text so it
-   reads as a quotation of somewhere else rather than as this page's own words. */
-.bpreview{margin:-6px 0 16px; font-size:.94em}
-.bpreview-row{display:flex; flex-wrap:wrap; align-items:baseline; gap:7px; margin:0 0 4px}
-.bpreview-row .mono{color:var(--muted)}
-.bpreview-row .pill{font-size:.85em}
-.bpreview-row a{color:var(--ink-2); text-decoration:none; border-bottom:1px solid var(--line-2)}
-.bpreview-row a:hover,.bpreview-row a:focus-visible{color:var(--ink); border-bottom-color:var(--accent)}
+.board-tomb a{color:var(--ink-2)}
+.board-more{color:var(--muted); font-size:.92em; margin:12px 0 0}
+.boardkids{margin:11px 0 0 4px; padding-left:15px;
+  border-left:2px solid var(--line-2)}
+.boardkids .boardrow{padding:10px 0; border-top:1px solid var(--line)}
+.boardkids .boardrow:first-child{border-top:0; padding-top:0}
+.boardkids .boardmeta{font-size:.85em}
+.cmt-empty{margin:14px 0 0; color:var(--ink-2)}
+@media(max-width:560px){
+  .boardkids{margin-left:0; padding-left:11px}
+  .boardmeta a.mono{margin-left:0}
+}
 
 /* mobile */
 @media(max-width:820px){
@@ -1607,54 +1599,13 @@ function boardChip(slug, id, n, open, parties){
    party scan on every claim page would be a read per view bought for nothing.
    BoardOpen is paid only on the empty branch, where it decides between an
    invitation and silence. */
-/* THE PARTIES' OWN WORDS, on the page where the stakes are.
-
-   The chip says THAT the author and the answerer have replied. This says WHAT
-   they said, which is the difference between a count and an argument:
-
-       g1orem…0000  author     The 12,412 figure is the certified count, not…
-       g1ansr…7c21  answerer   It is the denominator the WHO published…
-
-   IT COSTS NOTHING EXTRA. fillBoardChip already fetches the party rows to decide
-   the chip's wording and throws their text away; this renders what it already
-   holds. No read is added to any claim page.
-
-   NO STAKE BADGE, deliberately, and this is a departure from the design that
-   asked for `· YES 40,000` on each row. Two reasons, both from the realm:
-   boardBadges emits BOTH sides for an address staked each way and this row shape
-   has no slot for that, and the amount would cost a position read per party on
-   every claim view. The side is already on this page, in the stake bar, at full
-   size. The ROLE is the identity that makes these two lines an argument rather
-   than two opinions, and the role is free.
-
-   A WITHHELD PARTY ROW IS SKIPPED rather than previewed as a tombstone: this is
-   a preview of what was said, and a row with nothing to show has nothing to
-   preview. The board page still lists it, marked, where it belongs. */
-const clipText = (s, n) => {
-  const t = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
-  return t.length > n ? t.slice(0, n - 1) + "…" : t;
-};
-function boardPreviewHtml(slug, id, parties){
-  const rows = (parties || []).filter(r => !BOARD_TOMB[r.mark] && String(r.text || "").trim());
-  if(!rows.length) return "";
-  return `<section class="bpreview">` + rows.map(r =>
-      `<p class="bpreview-row"><span class="mono">${shortAddr(r.author)}</span>`
-    + ` <span class="pill">${esc(r.role)}</span> `
-    + `<a href="#/c/${esc(slug)}/${id}/board">${esc(clipText(r.text, 150))}</a></p>`).join("")
-    + `</section>`;
-}
-
 async function fillBoardChip(slug, id){
   const slot = document.getElementById("boardchip");
   if(!slot) return;
   try{
     const n = await boardSize(slug, id);
     if(!(n > 0)){ slot.innerHTML = boardChip(slug, id, 0, await boardOpenOf(slug, id), []); return; }
-    const parties = await boardParties(slug, id).catch(()=>[]);
-    slot.innerHTML = boardChip(slug, id, n, true, parties);
-    // The same rows, twice used and fetched once.
-    const pv = document.getElementById("boardpreview");
-    if(pv) pv.innerHTML = boardPreviewHtml(slug, id, parties);
+    slot.innerHTML = boardChip(slug, id, n, true, await boardParties(slug, id).catch(()=>[]));
   }catch(_){ /* an unreadable board leaves the tagrow as it was, never a broken chip */ }
 }
 
@@ -6560,7 +6511,6 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         <span class="tacts">${polish}<span id="boardchip"></span>${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
         <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
-    + `<div id="boardpreview"></div>`
     + modBanner(mPurged, mRedacted, mHidden, slug)
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">
@@ -6569,10 +6519,12 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
-    + associationSection(slug,id,assocLookup,chainAssocs);
+    + associationSection(slug,id,assocLookup,chainAssocs)
+    + `<section id="claimcomments"></section>`;
   // Unconditional: the board is the one action on this page that needs no
   // address, and the sample answers it offline like everything else here.
   fillBoardChip(slug, id);
+  fillClaimComments(slug, id);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button
@@ -6807,6 +6759,65 @@ async function fillComposer(slug, id, parent){
   const slot = document.getElementById("composer"); if(!slot) return;
   try{ slot.innerHTML = composerHtml(slug, id, composerState(await composerReads(slug, id)), parent || 0); }
   catch(_){ /* an unreadable court leaves the board readable; it just cannot be written to here */ }
+}
+
+/* THE CLAIM PAGE'S OWN COMMENTS, at the foot of the page.
+   
+   A chip at the top pointing at another route asked a reader to leave the page
+   they came to read in order to find out whether leaving was worth it. The
+   thread belongs where every other discussion on the web puts it: after the
+   thing being discussed. The chip stays as a jump for people who want the full
+   paged view, and the section here is the reading surface.
+
+   BOUNDED, AND HONEST ABOUT THE BOUND. Only CLAIM_COMMENTS top-level rows, so a
+   busy claim does not turn its own page into a forum; the tail says how many are
+   behind the link. The parties keep the reserved slot they have on the board
+   page, for the same reason — being able to answer a question about your own
+   claim and have the answer seen. */
+const CLAIM_COMMENTS = 4;
+
+function claimCommentsHtml(slug, id, n, open, rows, kids, roles){
+  const head = `<div class="sec-h">Comments <span class="count">`
+    + esc(n > 0 ? boardStateLine(n, open) : (open ? "open" : "closed")) + `</span></div>`;
+  if(!(n > 0)){
+    return `<section id="claimcomments">${head}<div class="cmt-empty"><p>${open
+      ? "No comments yet. The first one is worth writing."
+      : "No comments were written while this board was open."}</p></div>`
+      + `<div id="composer"></div></section>`;
+  }
+  const body = rows.map((r, i) =>
+    boardRowHtml(slug, id, r, boardMetaNewest(r), roles[r.id] || "")
+    + boardRepliesHtml(slug, id, r, kids[i])).join("");
+  const shown = rows.length + kids.reduce((a, k) => a + k.length, 0);
+  const tail = shown < n
+    ? `<p class="board-more"><a class="tlink" href="#/c/${esc(slug)}/${id}/board">`
+      + `all ${esc(String(n))} comments<span aria-hidden="true">→</span></a></p>`
+    : "";
+  return `<section id="claimcomments">${head}<div class="boardlist">${body}${tail}</div>`
+    + `<div id="composer"></div></section>`;
+}
+
+/* The reads, and the ordering matters: BoardSize first, so a claim nobody has
+   commented on costs one read and renders an invitation rather than a thread. */
+async function fillClaimComments(slug, id){
+  const slot = document.getElementById("claimcomments");
+  if(!slot) return;
+  try{
+    const [n, open] = await Promise.all([boardSize(slug, id), boardOpenOf(slug, id)]);
+    if(!(n > 0)){
+      slot.outerHTML = claimCommentsHtml(slug, id, 0, open, [], [], {});
+      fillComposer(slug, id, 0);
+      return;
+    }
+    const rows = (await boardNewestOf(slug, id, 0, CLAIM_COMMENTS)).slice(0, CLAIM_COMMENTS);
+    const parties = await boardParties(slug, id).catch(()=>[]);
+    const roles = {}; parties.forEach(r => { roles[r.id] = r.role; });
+    const kids = await Promise.all(rows.map(r =>
+      parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).catch(()=>[])
+                                  : Promise.resolve([])));
+    slot.outerHTML = claimCommentsHtml(slug, id, n, open, rows, kids, roles);
+    fillComposer(slug, id, 0);
+  }catch(_){ /* an unreadable board leaves the rest of the claim page intact */ }
 }
 
 const BOARD_PAGE = 25;
