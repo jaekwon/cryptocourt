@@ -117,26 +117,51 @@ func (s *Store) Clear(ctx context.Context, sum string) error {
 	return nil
 }
 
+// Pending is one row of the queue, as an operator needs to see it.
+//
+// The whole point of storing a label, a confidence and the model's prose is that
+// somebody reads them. This used to return bare hashes: a list of 64-character
+// hex strings, with the reason each was flagged stored one table over and
+// reachable only by a query the caller had to know to write. A queue that cannot
+// say why is a queue nobody works through.
+type Pending struct {
+	SHA256     string
+	Label      string
+	Confidence float64
+	Why        string
+	CheckedAt  int64
+	Blocked    bool
+}
+
 // PendingReview is what an operator has not looked at yet, worst first.
-func (s *Store) PendingReview(ctx context.Context, limit int) ([]string, error) {
+func (s *Store) PendingReview(ctx context.Context, limit int) ([]Pending, error) {
 	if limit < 1 {
 		limit = 50
 	}
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT sha256 FROM blob_review
-		 WHERE cleared_at IS NULL AND label != 'clean'
-		 ORDER BY confidence DESC LIMIT ?`, limit)
+		`SELECT r.sha256, r.label, r.confidence, r.why, r.checked_at,
+		        COALESCE(b.blocked, 0)
+		 FROM blob_review r
+		 LEFT JOIN blobs b ON b.sha256 = r.sha256
+		 WHERE r.cleared_at IS NULL AND r.label != 'clean'
+		 ORDER BY r.confidence DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("archive pending: %w", err)
 	}
 	defer rows.Close()
-	var out []string
+	var out []Pending
 	for rows.Next() {
-		var sum string
-		if err := rows.Scan(&sum); err != nil {
+		var p Pending
+		var blocked int
+		if err := rows.Scan(&p.SHA256, &p.Label, &p.Confidence, &p.Why,
+			&p.CheckedAt, &blocked); err != nil {
 			return nil, err
 		}
-		out = append(out, sum)
+		// Whether the image is ALREADY off the site is the first thing an
+		// operator needs: one of these rows is an emergency and the rest are
+		// reading. Without it every entry looks equally urgent.
+		p.Blocked = blocked != 0
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

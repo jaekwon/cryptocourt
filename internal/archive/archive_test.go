@@ -598,9 +598,28 @@ func TestEveryAutomaticRefusalHasAHumanUndo(t *testing.T) {
 	if _, _, err := st.Get(ctx, sum); err != ErrNotFound {
 		t.Fatal("the fixture should have blocked it")
 	}
-	pending, _ := st.PendingReview(ctx, 10)
+	// THE QUEUE MUST SAY WHY, or nobody works through it. This used to return
+	// bare hashes: 64-character hex strings, with the reason each was flagged
+	// stored one table over and reachable only by a query the caller had to know
+	// to write. A queue that cannot say why is a queue in name only.
+	pending, perr := st.PendingReview(ctx, 10)
+	if perr != nil {
+		t.Fatalf("pending: %v", perr)
+	}
 	if len(pending) != 1 {
 		t.Fatalf("a blocked image must reach an operator's queue, got %d", len(pending))
+	}
+	row := pending[0]
+	if row.SHA256 != sum || row.Label != AutoBlockLabel {
+		t.Fatalf("the row must name the image and the label: %+v", row)
+	}
+	if !strings.Contains(row.Why, "the model's prose") {
+		t.Fatalf("the row must carry the reason it was flagged: %+v", row)
+	}
+	// Whether it is ALREADY off the site is the first thing to know: one row is
+	// an emergency and the rest are reading.
+	if !row.Blocked {
+		t.Fatalf("an auto-blocked image must say so in the queue: %+v", row)
 	}
 	if err := st.Clear(ctx, sum); err != nil {
 		t.Fatalf("clear: %v", err)

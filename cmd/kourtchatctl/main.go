@@ -50,6 +50,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jaekwon/kourt/internal/archive"
 	"github.com/jaekwon/kourt/internal/chat"
 	"math"
 )
@@ -88,6 +89,10 @@ func main() {
 		cmdHash(store, *secretFile, args[1:])
 	case "review":
 		cmdReview(ctx, store, args[1:])
+	case "images":
+		cmdImages(ctx, store, args[1:])
+	case "unblock":
+		cmdUnblock(ctx, store, args[1:])
 	case "dismiss":
 		cmdDismiss(ctx, store, args[1:])
 	case "prune":
@@ -141,6 +146,72 @@ func takesValue(f string) bool {
 	return false // -all, -net are booleans
 }
 
+// cmdImages is the operator's half of the archive's classifier.
+//
+// WHY IT EXISTS. The model stores a label, a confidence and its own prose
+// explicitly so a person can read them, and until this there was no way to. The
+// queue was reachable only from Go, so the reasons were written to a table
+// nobody could open — and a queue nobody can open is a queue nobody works
+// through, which turns the whole "a person decides" design into a claim rather
+// than a practice.
+//
+// BLOCKED IS PRINTED FIRST because one of these rows is an emergency and the
+// rest are reading. An image already off the site needs somebody to agree or
+// disagree today; a flagged one that is still serving can wait.
+func cmdImages(ctx context.Context, store *chat.Store, args []string) {
+	fs := flag.NewFlagSet("images", flag.ExitOnError)
+	n := fs.Int("n", 50, "how many to list")
+	_ = fs.Parse(args)
+
+	ar, err := archive.NewStore(store.Writer())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	rows, err := ar.PendingReview(ctx, *n)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if len(rows) == 0 {
+		fmt.Println("nothing flagged.")
+		return
+	}
+	// THE FULL HASH, ON ITS OWN LINE. A shortened one is prettier and useless:
+	// unblock takes the whole thing, so an operator reading a truncated id has
+	// to go somewhere else to act on what they are looking at. The id shown is
+	// the id the verb takes, or the list is something to admire rather than work
+	// from.
+	for _, r := range rows {
+		state := "still serving"
+		if r.Blocked {
+			state = "BLOCKED"
+		}
+		fmt.Printf("%s\n  %-9s %3.0f%%  %-13s %s\n",
+			r.SHA256, r.Label, r.Confidence*100, state, r.Why)
+	}
+	fmt.Printf("\n%d flagged. `unblock SHA256` overrules the model and serves one again.\n",
+		len(rows))
+}
+
+// cmdUnblock is the human undo that makes automatic blocking survivable at all.
+func cmdUnblock(ctx context.Context, store *chat.Store, args []string) {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "usage: unblock SHA256")
+		os.Exit(2)
+	}
+	ar, err := archive.NewStore(store.Writer())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := ar.Clear(ctx, args[0]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	fmt.Println("serving again, and out of the queue.")
+}
+
 func usage() {
 	fmt.Fprint(os.Stderr, `kourtchatctl -db <path> <command>
 
@@ -154,6 +225,10 @@ func usage() {
   ban HASH|-msg ID [-net] [-why S]
                            a permanent ban, which only a human can issue
   hash ADDR                the address and network hashes for one IP
+  images [-n N]            filed images a model flagged, worst first: what it
+                           said, how sure it was, and whether the image is
+                           already off the site
+  unblock SHA256           overrule the model and serve that image again
   review [-all] [-expand] [-n N]
                            messages the scanner flagged and did NOT act on,
                            grouped by author unless -expand
