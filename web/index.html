@@ -951,11 +951,21 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    hangs claims off it instead of nesting them inside. The court is the same
    shape one step up: filled, heavier, at the centre. */
 .mfold{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1}
-/* Held back so the heading stays the loudest thing in its own box, and lifted
-   when the box is the one being looked at. */
-.mfimg{opacity:.30; pointer-events:none}
-.mfold-a:hover .mfimg,.mfold-a:focus .mfimg,.mfold-a.selected .mfimg{opacity:.52}
+/* HELD BACK ON PURPOSE. The heading has to stay the loudest thing in its own
+   box — a reader is looking for a name, and a picture that wins that contest has
+   made the map worse. So the face is a tint at rest, lifts when the box is the
+   one being looked at, and is dropped entirely when the map is zoomed out far
+   enough that boxes are 112px of label: at that size an image is texture, and
+   texture at fifty boxes is noise. */
+.mfimg{opacity:.42; pointer-events:none}
+.mfold-a:hover .mfimg,.mfold-a:focus .mfimg,.mfold-a.selected .mfimg{opacity:.68}
 .mapsvg.far .mfimg{display:none}
+/* The same picture on the folder's own page, where it is the subject rather
+   than the texture. Capped in height because a folder is a heading: the claims
+   filed under it are what the page is for, and a cover that pushed the first
+   row below the fold would have the picture outranking the record. */
+.folderface{display:block; width:100%; max-height:180px; object-fit:cover;
+  border:1px solid var(--line); border-radius:8px; margin:10px 0 2px; background:var(--surface-2)}
 .mfold.pseudo{fill:none; stroke-dasharray:4 3; stroke:var(--muted)}
 .mhdr-t{fill:var(--accent-2); font-weight:600}
 .mcourt{fill:var(--accent); stroke:var(--accent-2); stroke-width:1.5}
@@ -1676,10 +1686,10 @@ const NOW = 4_800_000; // pretend current block height
 const DEMO_OVERLAY = {
   courts:{
     orem:{desc:"Claims of fact from Orem's public record — certifications, inspections, filings. The court decides only what it is asked to decide.", folders:[
-        {name:"Municipal record", claims:[4,5,10], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACfElEQVR42u3Y51JTURiF4XUlghRpAyShJCGAiogzdAi916hgQ1GxomJF5aK8Ms81JOfHPuu8M88NfHvN+2frWtc4ADPiCQDHsLsnAJhRXWYSgJko7CkAZlSXnQJgRvW5aQBmorBnAJhRfc8sADO63jsHwAxhA45hN/TNAzCjhv4yADNR2AsAzKgxvwDAjBoLiwDMqLG4FIt/xwPBiutGICnUVFyORchhx3UjkBRqGliJRdBhx3QjkBRqKq3EIuiwY7oRSAo1l1ZjEXLYcd0IJIWaB9diEXTYMd0IJIVuDK0DMEPYgGXYwxsAzKjl5iZqFPL/AuukUxT2FmoUdtgMlEZqubWNGgUdNgOlklpvb6NGIYfNOumk1pEd1CjosBkoldQ2sosahRw266ST2u7sATCjttF9AGbUProPwIza7x4AVQv5fyHNu6h97BCoWtBhp3gXdYxVgKqFHHaad1HHvQpQtaDDTvEuGj66AqoWcthp3oWwQdiEDSARYXeOHwEwQ9iAZdgTxwDMqGvyEQAz6pp6DMAMYQOOYXdPPwFgRt0zTwGYUWbmGQAzysyeADCjzNwJADPKzj0HYEbZ+RcAzChbPgVgRrnyKQAzyi28BGBGucVXAMyoZ+k1ADNR2GcAzKh3+QyAGfWuvAFgJgr7LQAz6lt9B8CM+tbeAzBD2IBj2P3rHwCYUf/GRwBmlN84B2BG+c1zAGaU3/oEwIwKW58BmFFh+wsAMyrsXAAwo+LuBQAzUdhfAZhRce8bADMa2P8OwAxhA45hlw5+ADCj0uFPAGaisH8BMKPByiUAMxq8fwnATBT2bwBmNPTgDwAzGnr4F4AZDR9dATDzH3cZLF060/H1AAAAAElFTkSuQmCC",
+        {name:"Municipal record", claims:[4,5,10], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAAC6ElEQVR42u3T+1JVdRzG4d+VaGZaoUkzAtt90MzMDLHIA4rABjZsDlr2d1Yqkge0uqiurDXTNMOoIMLea6/1Xc/Mcwfv+0mHTo3nbOT2L0BfpfzDljeEDfv/vB8APZcODV8ZLBtAwLDlDb0P+/DwRHGMTD8ADi4d/nyiUEanfwUOKAv7agEZBg4U9j/3GkAwwgZhA8IGhA0IG9gp7A9OT5bU6J3fgLdKR05PltrYzO/Aa9KRkcmysyK8GfYPMdgSAoYtb9gW9ui1YMZmHkLFpQ9Hr4U0NvsQKisL+3pgBqaqYY9dD8/MCFvbECDs2o3qqM0+gipIR2s3qqY29whiy8K+WUGGJ3rYZ25WlvkJHPZUxdXmHkMw6Wh9ilr7MUSSPqpP8R9vIFLYt9jOJwgRduMWb6q1N6C8srBv81Zn2htQUsJ+V97zG1A66VhzmndyFIQdte0nUBbpWGuavfMYyhL2Hd6X3yDsoG0vPIHCSsfPzrBvDoSwA+e9CYWShT3LwdUXNqE40vFzs/SKPyHsuHkvbsJgpY+/mKMf6ot/wKAIW9vEDLtNXzkZgwj7fJscuBo5hz1PPuqdp5CP9Mn5efLkc+QS9pfz5K/ReQr9k4W9wEA4H/0M+8ICA9ToPIOey8JeZOAaS8+gh9KnFxYpCHekd2F/1aE4PBJhyxt2Cvtih2JqLD+H/cnCXqKwHJR9hj10cYmCay4/h/eShr5ephScFWFHbfsF7EUWdpdyaXZfwO7S0KUuZeS77Bb2iUtdSsp92Tnsb1YotWZ3C14jbHkTM+xVwmiubEEmnbi8SiStlS1IJy+vEU9r5SVVJmx5EzLsb9cIzMUrG/Y64bVWX1Ip6eT4OhXh7hUK+7Pxu1RHa/UVVSBseRMy7Cv3qCbvFzZhnV17RTzCJmv7T4JJpyZ+hIwYhI28KXjYV3+C7VQhbOLmvf4X5ZWFfR92opCyhj383X3YhUiEjbwpSNjf/wx7dO7u35TCv0ethDaftYjoAAAAAElFTkSuQmCC",
          folders:[{name:"Elections", claims:[1]}]},
-        {name:"Infrastructure",   claims:[3,7,11], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACUElEQVR42u3YaXYUVBSF0TsYCU0AK5VUKqk2ISF9T6KIiIIgCrNzMk7HGsZ7Z+219gjOfd+fVz9MBkCYMgEkhj0dAGFWYW8AYerRbAMIswp7CISpR/MhEKbW5kMgTK0tNoEwtbbcBMLU4+UWEKYe720BYVZhj4Aw9WR/BIQRNkSG/WobCFNPDraBMPX0YAyEqaeHYyDMKuwdIEw9e70DhOk17P/+/dwsr4oGwj7a7VHTYfc5KUlq/Wi3Ry2H3emkJKn140mPmg67z0lJUusnkx41HXafk5Kknp9Me9Ry2J1OSpJ6fjoFwggbEsN+cTYDwgi7Py3/L7hOM2Gfz+lL02E7UBvqxcWcvjQdtgO1oV5eLOhLy2G7TiPq5eWCvjQdtgO1QdjCFnZi2D9eLYEwwobIsK/3gDA1uN6DXrT8v9DUUDW42YdeNB12S0PV4HYfetF02C0NVRu3+9CLlsNuaqjauHsFvWg67JaGquX3B+hFy2E3NZSwIZCwITHs4f0BEKaGD4dAmNp8OATC1OZPr4EwwobEsLd+PgLCCBsiw357BISp0dtjIEyNfjkGwtTo3QkQprbfnQBhavvXUyCMsCEy7PenQJgavz8DwtT4tzMgTI0/nANhaufDORCmdn6/AMIIGxLD3v3jAgizCvsSCFO7Hy+BMDX5eAWEqcmnKyBMTf68BsIIGxLDnn6+BsKswr4BwtT0yw0QpmZfboEwNfvrFghTs693QJiaf70DwtT87zsgzCrsN0CYWvzzBgizCvseCFOLb/dAmFp+fwDC/A9dwAl53ENH0wAAAABJRU5ErkJggg=="},
-        {name:"Filings & audits", claims:[6,8,9], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACQUlEQVR42u3YWXKTVxSF0TMeMMaybElW31jucUeoEEJISEIIYQqZQSaZoaB3q3n92bWq1gBO3V3fy63+swMgTHkCCAx78OwACLMKuwWEqeHzFhBG2JAY9uj5IRCmRnuHQJga77WBMDXZawNhavKiDYSp6YsjIIywITHs2f4xEEbYkBj2fP8YCFOL/Q6w1v///dtY2y+vxcsOsFajw956eZ2+7AJrNTns7ZcLGxLDXh50gbWaHPb2y1dh94C1mh32tsvr7KAHhKmzVg8IU+etEyBMXbROgDB1cdhnpyZ/oliHp+rysM9OTQ7bOjwlbGGTGPZVe8BOTQ7bOjwlbGGTGPZ1e8hOTQ7bOjxVN+0hEKZujoZAmHp1NALCCJsdmvy/YJ2NYd8ej2GLJodtnU2EjbATw747HsMWTQ7bOpvUXWcCWzQ6bANtUPedCWzR5LCts0k9dKZAmHroToEw9didAmFWYc+AMPW6OwPC1OveDAhTP/TmQJh605sDYerNyQIIU1+Xj0AYYYOwge8i7B/7p0CYettfAmHq7WAJhKmfBksgTL0bnAFh6t3wDAhTPw/PgTDChsSw3w/PgTD1fnQBhKlfRhdAmPowugTC1IfxJRCmfh1fAmFWYV8BYeq3yRUQRtiQGPbHyTUQpj5Or4Ew9fv0BghTf0xvgDDChsSw/5y9AsIIGxLD/jS7BcLUp/ktEKb+mt8CYerz/A4IU58Xd0CY+ntxD4QRNiSG/eX0HgizCvsBCFP/nD4AYerr8hEI8w1NLtjoESwDMwAAAABJRU5ErkJggg=="},
+        {name:"Infrastructure",   claims:[3,7,11], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACgklEQVR42u3TZ1KTUQCF4bsYKQoqCSU9oamQBELzH1VALLtzM25HZhwcBmkJKfe7eWaeFZw5b3hVngOyaOlw8yHBOpC1nptPEjZkQ+Gw+XzChqSSvgm7MgdEqIeeb4edA+JROGq+XJio5IAY9CXpm7CrOWCE+tizsCHNpP+FnQeGqXDUGrQwUcsDQzCEnoUNQ0z6uDVkYbKWBwaheNwalTBZnwf6aIQ9CxvSTFrYkFrPwoYX93zSilaYbMwDXSmetCMXphoLwHPE37OwIc2kb8JeXgDulbmehQ0J9nw77EXgr+JpOw1hamURxlzptJ2YML2yCOMpvZ6FzZgnvZW2ML26BGMi+Z6FjZ6FDRlN+mxrPAkbPacY9uu1AqRBz8JG0sIGPWcs7PUCZE7pbJtHCJssKX/Z5jmuwy5C5ITaddhvPhQhWhIVNnpG2Og55bA/lmDkpChsEur5vMMgCBs9pxj2zKcSDI3khhZ2GQZNacJG0gibKFXOO4xQmNkoQ79ULjrEIMxulOHltBRb2BXoWeVihwiF2c0KdEs5wkbSCBs904ewm1V4SOVyhywKb5tV+J82hI2eiS3sVhWuVS93SMZ12DXGWfVyl/QIW88ImwSS/rpL8sK7do1x4OvjFnadhLm4sJE0yYS9VSclPo2w9YywiTPpqz24I7zfbpBFvouw01G72oMnCVvSJBl2p0HMfJTewl4mTt6JsBPq+dsevFCY6ywTA1+kn2H//nUBJEbYIGxA2ICwAWEDD4Wd21ulv+rf92G0hK1nhM39SR9AVEJuf5XeeA8xh71GV+o/DiByIb+/xjO5C9kJ+2CNx3kJwtYzRBH2One4BcJOR+PnZ0jDH8F7olvAx/v1AAAAAElFTkSuQmCC"},
+        {name:"Filings & audits", claims:[6,8,9], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACVElEQVR42u3Ta05TYRSG0W8+yKWlN6C304KUQmkBfyoiCohOwRk4SYciiQkhKtFCac/ZXckawd7vk94294FgkhNAxLBbAyAYYYOwgUKE/a41AIJJOyulX9wC4oTdXCn9yV0gYNgih+BhixyKF3Zrpfw0bgcBw37ovHUA5EdqvSrP1nn7AFis9OP7NyAYYYOwAWEDwgaEDTwWdme1knPv20NgKqm7WikQD4OAYYscgof90EV7CNxL2WolmIvOEJZcytaqgXkwwq6KHIKE3VurLiGPR9gih+KFXePeh84hBCBskRMx7P56jX8yFIQtchC2yGHmYe+u15kJY0LYwV12D2GBhC1yIoa9t1Fnbi67RzAHwhY5McNusHCGyIzDfr3RIFeMEmEH97F7BE8gbIUTMez90hbFYrUIW+QIG5EjbPIbeTZimaVBaYvYPmUjlk0alLdZHhYvbEROYcM+KG+DEoSNyBE2Imf+YQ/LO/A/rrIRRZGGmzswravsmDwTNiKPGPbh5g7MylXvmDy4C7sJL0FdwkbkCJsiu+4d89LSUaUJi6JAYSNypgi7BXmjzOeGPaq0IM+ue2OmJWxELmzIjZvemMek42oLCk3Gfw27DWHc9MfcETYijxj2uNqG8IQNIo8QdgeW1uf+JKQ0rnWAO6HCntQ6wG+EDSIXNoh8DmGf1LrAEwgbgrvtT3IlndS7wAzd7k4WLp3Wu8ALETaEj/xkbu7CzoA5e/Gwz+oZsEDChuC+7J7MRDprZEAOPSvsN40ekHPCBpELGyJGLmwI4uve6b2fkkvezpzQ2ckAAAAASUVORK5CYII="},
       ]},
     annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court."},
     ledger:{desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it."},
@@ -4537,6 +4547,11 @@ const CUR_LABEL = "your local curation — held in this browser, not on any chai
    folder (counts included) — the import warned about them already */
 function curFilterFolders(folders, validSet){
   return (folders||[]).map(f=>({name:f.name,
+    // img travels: this rebuild is a claim-id filter, and a folder's picture is
+    // not a claim id. Leaving it off was how the map kept the sample's folder
+    // covers and the folder PAGE lost them — the two surfaces read the same
+    // tree through different filters.
+    img:f.img,
     claims:(f.claims||[]).filter(id=>validSet.has(id)),
     folders:curFilterFolders(f.folders, validSet)}));
 }
@@ -4609,16 +4624,29 @@ async function chainFolders(slug){
   }
   const folders = await inChunks(fids, 6, async fid=>{
     try{
-      const [name, itemsRaw] = await Promise.all([
+      const sh0 = shape.get(fid);
+      // A FOLDER'S ONE PICTURE, read only where the tree says there is one. The
+      // "i" flag exists so this is not a third round trip per folder — a hundred
+      // at the cap for a field most folders never set. The read failing takes
+      // the picture and not the folder: the name and the claims are the page.
+      const [name, itemsRaw, imgRaw] = await Promise.all([
         one(`FolderName(${s2},${fid})`),
-        tup(`FolderItems(${s2},${fid})`).then(t=>t[0])]);
+        tup(`FolderItems(${s2},${fid})`).then(t=>t[0]),
+        sh0 && sh0.hasImage ? one(`FolderImage(${s2},${fid})`).then(unesc).catch(()=>null) : null]);
       // ids: prefer per-element "(N uint64)" tokens (their 64s must not leak);
       // fall back to bare digits with any type token stripped first
       const rawS = String(itemsRaw);
       const el = [...rawS.matchAll(/\((\d+)\s+uint64\)/g)].map(m2=>Number(m2[1]));
       const ids = el.length? el : ((rawS.replace(/\[\]uint64|uint64/g,"").match(/\d+/g)||[]).map(Number));
       const sh = shape.get(fid);
-      return {name:String(name), claims:ids, folders:[], fid,
+      // ARCHIVE-ONLY, like a claim node's thumbnail and for the same reason
+      // (media.js mediaSrc): a map draw is fifty boxes at once, and a
+      // filer-chosen mirror would send every reader's address wherever the
+      // filer liked. mediaNodeThumb is what enforces that, so it is called here
+      // rather than the src being assembled by hand.
+      const img = (imgRaw && typeof mediaNodeThumb === "function")
+        ? mediaNodeThumb(mediaParse(imgRaw), siteHost()) : "";
+      return {name:String(name), claims:ids, folders:[], fid, img,
               parent: sh? sh.parent : 0, path:String(fid), chain:true};
     }catch(_){ return {name:"read failed — reload to retry", claims:[], folders:[], fid, path:String(fid), chain:true, failed:true}; }
   });
@@ -6442,6 +6470,14 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, (f.claims||[]).length, "claims", "curated order");
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},...trail])
     + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span></h1>`
+    /* THE FOLDER'S ONE PICTURE, at a size worth looking at. On the map it is a
+       tint under a label, which is right there and not enough anywhere else:
+       this is the page a reader lands on when they follow the folder, and the
+       only surface where the picture is the thing rather than the texture.
+       alt is empty on purpose — the heading above already names the folder, and
+       a heading asserts nothing, so there is no content here for alt to carry
+       that the page does not already say in words. */
+    + (f.img? `<img class="folderface" src="${esc(f.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "")
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
     + `<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">on the map<span aria-hidden="true">→</span></a></p>`
     + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
