@@ -1,6 +1,6 @@
 # CLAIM_MEDIA — evidence a claim carries, and proof it hasn't changed
 
-> **v0.8 — built, run, and looked at in a browser. Supersedes v0.1; two owner rulings settled; griefing pass applied; §8 rewritten from the code after the plan and the build drifted apart.** A claim may carry up to **seven**
+> **v0.9 — built, run, and driven end to end in a browser. Supersedes v0.1; two owner rulings settled; griefing pass applied; §8 rewritten from the code after the plan and the build drifted apart.** A claim may carry up to **seven**
 > media items. The chain stores a **sha256 and a list of mirrors**, never the
 > bytes. kourt.xyz keeps its own copy of every image at an address derived from
 > that hash, so no third party can take a claim's evidence away.
@@ -40,9 +40,16 @@
 > | drafts in `localStorage` (§2.5) | built |
 > | video as a second tier (§7) | built |
 >
-> One thing is worth knowing before trusting any of it: `mountCompose` needs a
-> real canvas and `createImageBitmap`, so the resize path is the one piece no
-> harness covers and it has never run against a real image.
+> **That hole is closed.** `internal/archive/browser_test.go` stands up the real
+> archive and the real page on one TLS origin and drives the real composer with
+> a real 3000x2000 photograph: `createImageBitmap` → `mediaFitWithin` → canvas →
+> `toBlob("image/webp")` → the encode ladder → `mediaDigest` → `POST /m` → the
+> archive stores it → `GET /m/<sha256>` → `mediaVerify` answers `matches`. It
+> came down to 1600x1067 and 206,858 bytes with the aspect held to four decimal
+> places.
+>
+> Its first run found two bugs that between them made this whole design inert,
+> and both had been invisible to every other harness — see §9 rows 14 and 15.
 >
 > The chain-side seam IS now exercised end to end —
 > `gnoland/testdata/kourtv2_media.txtar` files a claim carrying evidence against
@@ -567,6 +574,14 @@ Recorded because each is easy to make again:
 | 11 | every `.line` rule written as `.ticket .line` | the same helper renders as two grid tracks on the ballot and as one run-together word on the quality panel; three tests pinned the rule's text and passed |
 | 12 | the declared `w`/`h` trusted for the reserved box | `1x20000` reserves 40,000px, seven per claim, unfixable until a global-DAO purge — a takedown built for illegal content spent on a layout attack |
 | 13 | the demo sample carried no evidence | a feature that works but is absent from the only build most people run demonstrates itself as missing |
+| 14 | the overlay's site domain read a config key nothing ever set | the archive-first rule off everywhere in the page: no map thumbnails at all, cards falling through to the filer's host, the composer refusing its own upload |
+| 15 | `archiveBase()` returned `""`, leaving the uploaded mirror relative | `mediaMirrorFault` refuses a non-https link, so **no uploaded image could ever be filed** — only pasted ones |
+
+Rows 14 and 15 are the pair worth dwelling on: a server-side mechanism complete
+and correct, its client half quietly not using it, and every unit test on both
+sides passing. The doc already recorded that happening twice during the build.
+It happened twice more, and what caught it was the first harness to run the path
+a person actually takes.
 
 Rows 10–12 were all found the same way: by rendering the page in a browser and
 looking at it. None is visible in the source, and each had passing tests over the
