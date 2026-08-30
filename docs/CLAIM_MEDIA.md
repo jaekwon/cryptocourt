@@ -731,7 +731,16 @@ call between them does not exist.** Nothing fails, because there is no code to
 fail. It is also SEARCHABLE, which is how row 43 was found rather than stumbled
 on: sweep the module's exports for functions with no caller in production. Two
 real hits out of 45; the rest were constants, which a search for `name(` cannot
-see. Nothing fails, because there is no code to fail —
+see.
+
+The same sweep over the archive's 25 exported methods came back clean — only
+`Store.Promote` has no production caller, and that is the unattributed form the
+tests use while production calls `PromoteFor`. So the inverse is worth running
+too: **production code no test exercises.** `/m/claimed` sat at 69% with its 429
+branch at zero, on the guard whose comment reads "otherwise it is a way to make
+this service hammer the node for free" — and on an endpoint the composer only
+began calling once row 42 was fixed. This package has form there: the limiter's
+`reapLocked` bug was hidden by exactly that kind of 0%. Nothing fails, because there is no code to fail —
 the tests exercise two functions that never meet. It also shows how a safety fix
 makes a latent gap bite: serving claimed bytes only was right, and it turned a
 silent ten-minute delay into a visible "not currently available" on a claim
