@@ -1206,6 +1206,28 @@ function defaultChatBase(){
 function chatBase(){
   return (CFG.chat === undefined) ? defaultChatBase() : CFG.chat;
 }
+/* WHERE THE ARCHIVE IS, and it is not a setting.
+
+   Four places asked config for a site domain and every one got undefined: there is
+   no `site` in CFG_DEFAULTS, cleanCfg does not copy one, and no deploy stamps
+   it. That silence turned the archive-first rule — the centre of the whole media
+   design — off in the overlay without a single error. Map nodes drew NO
+   thumbnail, because mediaNodeThumb refuses a mirror and had no archive to point
+   at instead. Cards and the lightbox fell through to a mirror, which is the
+   filer-chosen host this design exists to keep every reader's browser away from.
+   And the composer refused its own upload, because the archive's address is only
+   an allowed mirror once the site is known.
+
+   Derived rather than configured, for the reason archiveBase() already gives:
+   /m is served by the same server that served this file, so the site IS this
+   host and a second place to say so is a second place to get it wrong. Includes
+   the port, which is what mediaHostOf returns too.
+
+   file:// has no host and gets "", which is right — the offline demo has no
+   archive, and its sample exhibit carries its own bytes instead. */
+function siteHost(){
+  return /^https?:$/.test(location.protocol) ? location.host : "";
+}
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(_){} },
@@ -2197,7 +2219,7 @@ var LAST_EXHIBITS = [];
 var COMPOSE_DRAFT_COURT = "";
 function claimExhibits(c){
   if(typeof mediaCardItems !== "function") return "";
-  const items = mediaCardItems((c && c.media) || [], CFG.site || "");
+  const items = mediaCardItems((c && c.media) || [], siteHost());
   if(!items.length) return "";
   /* Parked for the click handler rather than re-derived from the DOM: the
      lightbox needs the ITEMS (hashes, byte counts, kinds), and an <img> src is
@@ -2488,7 +2510,7 @@ document.addEventListener("click",(ev)=>{
   if(ex && typeof mediaLightbox === "function" && LAST_EXHIBITS.length){
     ev.preventDefault();
     mediaLightbox(LAST_EXHIBITS, parseInt(ex.dataset.ex, 10) || 0,
-      {siteDomain: CFG.site || "", activeElement: ex});
+      {siteDomain: siteHost(), activeElement: ex});
     return;
   }
   const t = ev.target.closest(".signbtn"); if(!t) return;
@@ -2584,7 +2606,15 @@ function mountCompose(host, slug){
     // Same origin as the page. The archive is served from /m by the same nginx
     // that serves this file, so there is nothing to configure and nothing to
     // get wrong in a second place.
-    return "";
+    //
+    // IT HAS TO BE ABSOLUTE, and returning "" made it relative. The archive
+    // answers an upload with {"url": "/m/<sha256>"}, mediaUpload prefixes it
+    // with this base, and the result becomes the exhibit's mirror — which then
+    // has to pass mediaMirrorFault, which refuses anything that is not https.
+    // So every uploaded image failed with "a link starts with https://" and the
+    // claim could not be signed at all. The realm would have refused the same
+    // line for the same reason.
+    return siteHost() ? location.origin : "";
   }
 
   async function upload(bytes, mime, sha256){
@@ -2620,7 +2650,7 @@ function mountCompose(host, slug){
     if(draft){ title.value = draft.title; body.value = draft.body; }
 
     composer = mediaNewComposer({
-      siteDomain: CFG.site || "",
+      siteDomain: siteHost(),
       previewURL: f => URL.createObjectURL(f),
       prepare, upload,
       onChange: () => { mounted && mounted.draw(); refresh(); },
@@ -5128,7 +5158,7 @@ function mapSvg(L, data, slug){
        because a listed mirror is a URL the FILER chose and a map draw would
        fan fifty readers' addresses out to hosts an attacker picked. */
     if(typeof mediaNodeThumb === "function" && cl.media){
-      const thumb = mediaNodeThumb(cl.media, CFG.site || "");
+      const thumb = mediaNodeThumb(cl.media, siteHost());
       if(thumb){
         const sz = Math.max(8, Math.min(16, n.h-6));
         const tx = n.x+n.w-sz-3, ty = n.y+3;

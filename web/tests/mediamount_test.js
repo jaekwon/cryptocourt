@@ -272,10 +272,39 @@ async function section2() {
 /* Sequential, and counted, for the reason media_test.js records: concurrent
    IIFEs with one process.exit between them silently skip whatever has not
    finished, and report success for it. */
+/* WHERE THE PAGE THINKS THE ARCHIVE IS. Not testable through media.js, which
+   takes the site domain as an argument and is right either way — the bug was
+   entirely in what index.html passed it.
+
+   Four call sites asked for `CFG.site`, and nothing has ever set one: there is
+   no `site` in CFG_DEFAULTS, cleanCfg does not copy one, and no deploy stamps
+   it. Every one of them silently got undefined, which turned the archive-first
+   rule off in the overlay — map nodes drew no thumbnail at all, cards and the
+   lightbox fell through to the filer's own host, and the composer refused its
+   own upload because the archive is an allowed mirror only once the site is
+   known. Found by internal/archive/browser_test.go, which is skipped wherever
+   puppeteer is absent; hence this cheap pin, which is not.
+
+   Both halves matter. archiveBase() returning "" made the uploaded mirror the
+   relative "/m/<sha256>", which mediaMirrorFault refuses for not being https —
+   so an uploaded image could not be filed at all. */
+function section3() {
+  const page = require("fs").readFileSync(
+    path.join(__dirname, "..", "index.html"), "utf8");
+  ok("the site domain is derived from the origin, not configured",
+     /function siteHost\(\)\{[\s\S]{0,400}location\.host/.test(page));
+  ok("nothing reads a CFG.site that nothing writes", !page.includes("CFG.site"));
+  ok("all four media call sites take the derived host",
+     (page.match(/siteHost\(\)/g) || []).length >= 5);
+  ok("the archive's address is absolute, so its mirror is a valid https link",
+     /return siteHost\(\) \? location\.origin : "";/.test(page));
+}
+
 (async () => {
   await section1();
   await section2();
-  const EXPECTED = 37;
+  section3();
+  const EXPECTED = 41;
   if (ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
