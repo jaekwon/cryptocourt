@@ -14,8 +14,9 @@
 const path = require("path");
 const M = require(path.join(__dirname, "..", "media.js"));
 
-let fails = 0;
+let fails = 0, ran = 0;
 function ok(name, cond, extra) {
+  ran++;
   if (cond) { console.log("ok: " + name); return; }
   fails++; console.log("FAIL " + name + (extra ? "  " + extra : ""));
 }
@@ -72,7 +73,7 @@ function mount(over) {
 
 const settle = () => new Promise(r => setTimeout(r, 0));
 
-(async () => {
+async function section1() {
   // The empty panel must already say what to do. An empty box that explains
   // nothing is the commonest way a feature goes unused.
   let {root, composer, panel} = mount();
@@ -159,10 +160,10 @@ const settle = () => new Promise(r => setTimeout(r, 0));
   ok("an unreadable file explains itself", /could not read that file/.test(root.text));
   ok("...naming the reason", /not an image/.test(root.text));
 
-})();
+}
 
 // ---- the lightbox --------------------------------------------------------
-(async () => {
+async function section2() {
   const bytes = new TextEncoder().encode("real bytes");
   // The hash must be the DIGEST OF THESE BYTES. Writing a placeholder made the
   // "matches" arm report altered — and had the assertion been the other way
@@ -266,6 +267,19 @@ const settle = () => new Promise(r => setTimeout(r, 0));
   ok("escape closes it", host.children.length === 0);
   ok("...and focus returns to whatever opened it", focused);
 
+}
+
+/* Sequential, and counted, for the reason media_test.js records: concurrent
+   IIFEs with one process.exit between them silently skip whatever has not
+   finished, and report success for it. */
+(async () => {
+  await section1();
+  await section2();
+  const EXPECTED = 37;
+  if (ran !== EXPECTED) {
+    fails++;
+    console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
+  }
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 })();

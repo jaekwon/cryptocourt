@@ -14,8 +14,9 @@ const M = require(path.join(__dirname, "..", "media.js"));
 const gno = fs.readFileSync(
   path.join(__dirname, "..", "..", "realm", "r", "kourtv2", "media.gno"), "utf8");
 
-let fails = 0;
+let fails = 0, ran = 0;
 function ok(name, cond, extra) {
+  ran++;
   if (cond) { console.log("ok: " + name); return; }
   fails++; console.log("FAIL " + name + (extra ? "  " + extra : ""));
 }
@@ -143,7 +144,7 @@ ok("a degenerate size does not divide by zero",
    JSON.stringify(M.mediaFitWithin(0, 0, M.MEDIA_MAX_EDGE)) === '{"w":0,"h":0}');
 
 // ---- the archive is not trusted about what it received -------------------
-(async () => {
+async function section1() {
   const bytes = new TextEncoder().encode("some image bytes");
   const mine = await M.mediaDigest(bytes);
 
@@ -255,10 +256,10 @@ ok("a degenerate size does not divide by zero",
      M.mediaArchiveURL("kourt.xyz", digest) === "https://kourt.xyz/m/" + digest);
   ok("and there is no address without a site", M.mediaArchiveURL("", digest) === "");
 
-})();
+}
 
 // ---- the composer --------------------------------------------------------
-(async () => {
+async function section2() {
   // Injected so the composer's behaviour is testable without a canvas or a
   // network — and so a browser that fails at either still has a composer.
   const prepared = new TextEncoder().encode("resized bytes");
@@ -363,10 +364,10 @@ ok("a degenerate size does not divide by zero",
   ok("the budget leaves room for the rest of the request",
      M.MEDIA_HELP_LINK_BUDGET < 8192 * 0.8, String(M.MEDIA_HELP_LINK_BUDGET));
 
-})();
+}
 
 // ---- reading a claim's evidence back -------------------------------------
-(async () => {
+async function section3() {
   const SITE = "kourt.xyz";
   const hash = "d".repeat(64);
   const img = {kind: "img", sha256: hash, mime: "image/webp", w: 800, h: 600,
@@ -491,6 +492,26 @@ ok("a degenerate size does not divide by zero",
   store.setItem(M.mediaDraftKey("covid"), JSON.stringify({v: 99, items: []}));
   ok("a draft from a future version is ignored", M.mediaLoadDraft(store, "covid") === null);
 
+}
+
+/* SEQUENTIAL, AND THIS IS NOT A STYLE CHOICE. These sections used to be three
+   concurrent IIFEs, and the last one called process.exit when it finished —
+   killing the process while the others still had awaits pending. 39 of 132
+   assertions never ran, and the harness printed ALL PASS because `fails` was
+   still zero when it died. A suite that reports success for tests it did not
+   run is worse than one that does not run them.
+
+   The count below is the guard against it happening again: if a section stops
+   being awaited, or exits early, the number drops and this says so. */
+(async () => {
+  await section1();
+  await section2();
+  await section3();
+  const EXPECTED = 132;
+  if (EXPECTED && ran !== EXPECTED) {
+    fails++;
+    console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
+  }
   console.log(fails ? `\n${fails} FAILURES` : "\nALL PASS");
   process.exit(fails ? 1 : 0);
 })();
