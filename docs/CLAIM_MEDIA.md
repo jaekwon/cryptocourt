@@ -168,9 +168,13 @@ dropped → shrinking → hashing → uploading → mirrored ✓
 ```
 
 Each state is a caption under the thumbnail in plain words ("making a copy on
-kourt.xyz…"). A failed upload does **not** block filing: the item keeps its hash
-and whatever mirrors it has, and the composer says the copy can be made later.
-Losing an upload must never lose a draft.
+kourt.xyz…"). A failed upload does **not** block filing, and what that means is exact: an
+exhibit that still has a link is filed without a copy, and one that has none
+— a dropped file, whose only mirror IS the copy — is shown broken and left out,
+so the claim itself is never held up. The **⟳ is real**: the prepared bytes stay
+in memory, so `retry` can try the copy again without asking for the file back.
+That matters most for a pasted screenshot, where the clipboard is often the only
+other copy. Losing an upload must never lose a draft.
 
 ### 2.4 Order, captions, removal
 
@@ -641,6 +645,9 @@ Recorded because each is easy to make again:
 | 22 | a pasted image link was filed without a fingerprint | both validators require a sha256 for every image, so the exhibit looked accepted and `composer.fault()` quietly made the claim unsignable — "this image has no fingerprint yet", to someone with no way to make one |
 | 23 | a dropped file whose copy failed kept a hash and no link | `MEDIA_STATES.failed` says "no copy yet — it will still be filed" while `mediaItemFault` refused the set with "this exhibit has no link yet"; the test that should have caught it asserted the mechanism and never `fault()` |
 | 24 | `mediaUpload` adopted whatever address the archive returned | a malformed one became the exhibit's mirror, so a misconfigured service blocked every uploader with a message about a link they never supplied |
+| 25 | an old draft restored a mirrorless exhibit as fileable | drafts live in `localStorage` indefinitely, so anyone whose upload failed once carried a permanently unsignable draft |
+| 26 | the composer had no CSS at all — eighteen classes, zero rules | the page's first real input surface rendered as browser defaults, and `rowscope_layout` cannot see it because the composer does not mount in demo mode |
+| 27 | `draw()` and `refresh()` both printed `composer.fault()` | the identical sentence in two `.medianote` paragraphs, with the other warnings glued onto the second copy |
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
