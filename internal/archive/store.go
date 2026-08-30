@@ -132,6 +132,11 @@ func NewStore(db *sql.DB) (*Store, error) {
 	if err := ensureColumn(db, "blobs", "court", "TEXT"); err != nil {
 		return nil, fmt.Errorf("archive court column: %w", err)
 	}
+	for _, c := range [][2]string{{"filed_court", "TEXT"}, {"filed_claim", "INTEGER"}} {
+		if err := ensureColumn(db, "blobs", c[0], c[1]); err != nil {
+			return nil, fmt.Errorf("archive %s column: %w", c[0], err)
+		}
+	}
 	if err := ensureClassifySchema(db); err != nil {
 		return nil, fmt.Errorf("archive review schema: %w", err)
 	}
@@ -208,8 +213,25 @@ func (s *Store) Get(ctx context.Context, sum string) (mime string, body []byte, 
 // Promote makes a staged blob permanent. Called when an on-chain claim is seen
 // to reference the digest — that reference is what buys the storage.
 func (s *Store) Promote(ctx context.Context, sum string) error {
+	return s.PromoteFor(ctx, sum, "", 0)
+}
+
+// PromoteFor is Promote, recording WHICH claim bought the storage.
+//
+// THE OPERATOR'S QUEUE NEEDS THIS, and internal/chat explains why about its own:
+// flooding a review queue buries the one entry that matters under decoys, and
+// the answer is not a new punishment but a VIEW that resists it — seventy
+// messages from one address are one row saying seventy. A claim here carries up
+// to seven exhibits, so seven flagged images may be one filing or seven, and a
+// flat list of hashes cannot tell an operator which. With the claim recorded,
+// the queue can group, and a person can act on the source instead of on seven
+// symptoms.
+func (s *Store) PromoteFor(ctx context.Context, sum, court string, claimID uint64) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE blobs SET promoted = 1 WHERE sha256 = ?`, sum)
+		`UPDATE blobs SET promoted = 1,
+		   filed_court = COALESCE(NULLIF(?, ''), filed_court),
+		   filed_claim = CASE WHEN ? > 0 THEN ? ELSE filed_claim END
+		 WHERE sha256 = ?`, court, claimID, claimID, sum)
 	if err != nil {
 		return fmt.Errorf("archive promote: %w", err)
 	}

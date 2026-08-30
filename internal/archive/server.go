@@ -180,7 +180,7 @@ func (s *Server) claimed(w http.ResponseWriter, r *http.Request) {
 	}
 	promoted := 0
 	for _, h := range hashes {
-		if err := s.store.Promote(r.Context(), h); err != nil {
+		if err := s.store.PromoteFor(r.Context(), h, court, claimID); err != nil {
 			if s.log != nil {
 				s.log.Printf("archive: promoting %s: %v", h, err)
 			}

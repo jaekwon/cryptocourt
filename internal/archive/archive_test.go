@@ -1624,3 +1624,62 @@ func TestHealthTellsAStrangerNothingToMeterAgainst(t *testing.T) {
 		t.Fatalf("the operator must still get the numbers: %v", opr)
 	}
 }
+
+func TestAFloodReadsAsOneFilingRatherThanManyIncidents(t *testing.T) {
+	// internal/chat settled this about its own queue: flooding buries the entry
+	// that matters under decoys, and the answer is not a new punishment but a
+	// VIEW that resists it — seventy messages from one address are one row
+	// saying seventy. A claim here carries up to seven exhibits, so a flat
+	// worst-first list interleaves one filing's decoys with everything else and
+	// an operator reads seven incidents instead of one.
+	st := testStore(t)
+	ctx := context.Background()
+
+	// One filing with several flagged exhibits, and one real thing elsewhere.
+	for i, tag := range []string{"a", "b", "c"} {
+		sum, err := st.Put(ctx, "image/png", pngWith(tag), "covid")
+		if err != nil {
+			t.Fatalf("put: %v", err)
+		}
+		if err := st.PromoteFor(ctx, sum, "covid", 12); err != nil {
+			t.Fatalf("promote: %v", err)
+		}
+		// Ascending confidence, so a worst-first sort would scatter them.
+		if _, err := st.Review(ctx, sum, ImageVerdict{Label: "violent",
+			Confidence: 0.4 + float64(i)/10, Why: "decoy " + tag}); err != nil {
+			t.Fatalf("review: %v", err)
+		}
+	}
+	real1, _ := st.Put(ctx, "image/png", pngWith("real"), "origins")
+	if err := st.PromoteFor(ctx, real1, "origins", 3); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	if _, err := st.Review(ctx, real1, ImageVerdict{Label: AutoBlockLabel,
+		Confidence: 0.99, Why: "the one that matters"}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+
+	q, err := st.PendingReview(ctx, 20)
+	if err != nil {
+		t.Fatalf("pending: %v", err)
+	}
+	if len(q) != 4 {
+		t.Fatalf("expected four flagged, got %d", len(q))
+	}
+	// EVERY ROW SAYS WHERE IT CAME FROM. Without this an operator cannot tell a
+	// filing from a coincidence, and cannot reach the source — which is on chain
+	// and is what PurgeClaimMedia takes.
+	for _, r := range q {
+		if r.Court == "" || r.Claim == 0 {
+			t.Fatalf("a queued image with no origin cannot be acted on: %+v", r)
+		}
+	}
+	// The three decoys arrive together rather than interleaved with the one that
+	// matters, even though their confidences straddle nothing in common.
+	if !(q[0].Court == "covid" && q[1].Court == "covid" && q[2].Court == "covid") {
+		t.Fatalf("one filing's exhibits must arrive together: %+v", q)
+	}
+	if q[3].Court != "origins" || q[3].Why != "the one that matters" {
+		t.Fatalf("the other filing must be its own group: %+v", q[3])
+	}
+}

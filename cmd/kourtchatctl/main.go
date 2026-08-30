@@ -184,12 +184,29 @@ func cmdImages(ctx context.Context, store *chat.Store, args []string) {
 	// to go somewhere else to act on what they are looking at. The id shown is
 	// the id the verb takes, or the list is something to admire rather than work
 	// from.
+	// GROUPED BY THE CLAIM THAT FILED THEM. A claim carries up to seven exhibits,
+	// and a flat list reads seven decoys from one filing as seven incidents —
+	// which is how a flood buries the entry that matters. Seeing them as one
+	// block is also the shortest path to the action that ends it, since the
+	// source is on chain and PurgeClaimMedia takes a claim.
+	last := ""
 	for _, r := range rows {
+		origin := "filed by an unknown claim"
+		if r.Court != "" {
+			origin = r.Court
+			if r.Claim > 0 {
+				origin = fmt.Sprintf("%s claim %d", r.Court, r.Claim)
+			}
+		}
+		if origin != last {
+			fmt.Printf("\n%s\n", origin)
+			last = origin
+		}
 		state := "still serving"
 		if r.Blocked {
 			state = "BLOCKED"
 		}
-		fmt.Printf("%s\n  %-9s %3.0f%%  %-13s %s\n",
+		fmt.Printf("  %s\n    %-9s %3.0f%%  %-13s %s\n",
 			r.SHA256, r.Label, r.Confidence*100, state, r.Why)
 	}
 	fmt.Printf("\n%d flagged. `unblock SHA256` overrules the model and serves one again.\n",

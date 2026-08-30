@@ -146,7 +146,7 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 				continue
 			}
 			for _, h := range hashes {
-				if err := s.Promote(ctx, h); err == nil {
+				if err := s.PromoteFor(ctx, h, court, id); err == nil {
 					kept++
 				}
 			}

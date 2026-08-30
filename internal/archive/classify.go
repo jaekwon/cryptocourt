@@ -190,6 +190,13 @@ type Pending struct {
 	Why        string
 	CheckedAt  int64
 	Blocked    bool
+	// Where it came from. A claim carries up to seven exhibits, so seven flagged
+	// images may be one filing or seven — and a list that cannot say which lets
+	// a flood bury the entry that matters. internal/chat states the rule about
+	// its own queue: the answer to flooding is a VIEW that resists it, not a new
+	// punishment.
+	Court string
+	Claim uint64
 }
 
 // PendingReview is what an operator has not looked at yet, worst first.
@@ -197,13 +204,19 @@ func (s *Store) PendingReview(ctx context.Context, limit int) ([]Pending, error)
 	if limit < 1 {
 		limit = 50
 	}
+	// ORDERED BY ORIGIN FIRST, then by how sure the model was. A flat
+	// worst-first list interleaves one filing's seven exhibits with everything
+	// else, so the operator reads seven separate incidents instead of one — and
+	// deciding about the source is the action that actually ends it.
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT r.sha256, r.label, r.confidence, r.why, r.checked_at,
-		        COALESCE(b.blocked, 0)
+		        COALESCE(b.blocked, 0), COALESCE(b.filed_court, ''),
+		        COALESCE(b.filed_claim, 0)
 		 FROM blob_review r
 		 LEFT JOIN blobs b ON b.sha256 = r.sha256
 		 WHERE r.cleared_at IS NULL AND r.label != 'clean'
-		 ORDER BY r.confidence DESC LIMIT ?`, limit)
+		 ORDER BY COALESCE(b.filed_court, '') , COALESCE(b.filed_claim, 0),
+		          r.confidence DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("archive pending: %w", err)
 	}
@@ -213,7 +226,7 @@ func (s *Store) PendingReview(ctx context.Context, limit int) ([]Pending, error)
 		var p Pending
 		var blocked int
 		if err := rows.Scan(&p.SHA256, &p.Label, &p.Confidence, &p.Why,
-			&p.CheckedAt, &blocked); err != nil {
+			&p.CheckedAt, &blocked, &p.Court, &p.Claim); err != nil {
 			return nil, err
 		}
 		// Whether the image is ALREADY off the site is the first thing an
