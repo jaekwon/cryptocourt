@@ -255,13 +255,23 @@ func TestUploadReturnsTheDigestItComputed(t *testing.T) {
 	// An oversized body is REFUSED, never truncated: a truncated image is a
 	// different image with a different hash than the uploader computed, and it
 	// would be stored under that hash as though it were what they sent.
+	//
+	// THE STATUS IS ASSERTED EXACTLY. This used to accept 413 OR 400, and the
+	// service answered 400 with "could not read the upload" — because
+	// MaxBytesReader fails the READ rather than handing back a long body, so the
+	// specific message sat unreachable below it. A test that accepts either
+	// status cannot see that, and this one did not: it was found by posting a
+	// 300 KB file at the running binary.
 	big := strings.Repeat("x", MaxBytes+64)
 	req = httptest.NewRequest(http.MethodPost, "/m", strings.NewReader(big))
 	req.Header.Set("Content-Type", "image/png")
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusRequestEntityTooLarge && rec.Code != http.StatusBadRequest {
-		t.Fatalf("an oversized upload returned %d", rec.Code)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("an oversized upload returned %d, want 413: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "too large") {
+		t.Fatalf("...and must say so in words: %q", rec.Body.String())
 	}
 
 	// And an SVG never gets in through the door.

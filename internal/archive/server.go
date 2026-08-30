@@ -2,6 +2,7 @@ package archive
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -209,10 +210,23 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 	// into a different image with a different hash than the uploader computed.
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxBytes+1))
 	if err != nil {
+		// MaxBytesReader FAILS THE READ; it does not hand back a long body. So
+		// the size check below could never run, and an oversized upload got
+		// "could not read the upload" — a generic answer to a specific and very
+		// common problem, with the useful message sitting unreachable underneath
+		// it. Verified against the running service, not deduced.
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			http.Error(w, "that image is too large — the limit is 256 KB, and the "+
+				"composer shrinks pictures to fit before sending them",
+				http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "could not read the upload", http.StatusBadRequest)
 		return
 	}
 	if len(body) > MaxBytes {
+		// Belt and braces: reached only if MaxBytesReader ever stops erroring.
 		http.Error(w, "that image is too large", http.StatusRequestEntityTooLarge)
 		return
 	}
