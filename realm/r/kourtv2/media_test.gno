@@ -751,3 +751,106 @@ func TestWithNoOverlayThePageStillSaysItCannotCheck(cur realm, t *testing.T) {
 		t.Fatalf("with no site configured there is no surface to name:\n%s", out)
 	}
 }
+
+
+// THE ALLOWLIST IS A PARAMETER (owner ruling, CLAIM_MEDIA §10.1), and the reason
+// it is one is that the list it tracks — gnoweb's cspImgHost — belongs to
+// somebody else. A const cannot be corrected without redeploying the realm.
+func TestMediaHostsAreAdminSettable(cur realm, t *testing.T) {
+	defer restoreMediaHosts()
+
+	if !mediaHostAllowed("i.imgur.com") {
+		t.Fatal("the shipped defaults do not allow imgur")
+	}
+	mediaHostsExact = parseMediaHosts("example.org", false)
+	mediaHostSuffixes = parseMediaHosts(".example.org", true)
+	if mediaHostAllowed("i.imgur.com") {
+		t.Fatal("a host dropped from the list is still allowed")
+	}
+	if !mediaHostAllowed("cdn.example.org") || !mediaHostAllowed("example.org") {
+		t.Fatal("a host added to the list is not allowed")
+	}
+}
+
+// AND REMOVING ONE IS RETROACTIVE, which is what makes this the host kill switch
+// §10.4 asked for. mediaDestination re-asks mirrorFault on every render rather
+// than trusting what passed at write time, so a claim filed while a host was
+// allowed stops pointing at it the moment it is not — no purge, no migration.
+func TestDroppingAHostTakesEffectOnClaimsAlreadyFiled(cur realm, t *testing.T) {
+	defer restoreMediaHosts()
+
+	m := &mediaItem{kind: mediaKindImage, sha256: okHash, mime: "image/webp",
+		w: 800, h: 600, bytes: 1000, mirrors: []string{okMirror}}
+	// With no site domain configured there is no archive to prefer, so the
+	// destination is the mirror itself — which is what makes the change visible.
+	before := siteDomain
+	siteDomain = ""
+	defer func() { siteDomain = before }()
+
+	if got := mediaDestination(m); got != okMirror {
+		t.Fatalf("a filed exhibit did not point at its mirror: %q", got)
+	}
+	mediaHostsExact = parseMediaHosts("example.org", false)
+	mediaHostSuffixes = nil
+	if got := mediaDestination(m); got != "" {
+		t.Fatalf("the page still points at a host the court no longer allows: %q", got)
+	}
+}
+
+func TestAMediaHostListIsRefusedWholeOrNotAtAll(cur realm, t *testing.T) {
+	defer restoreMediaHosts()
+
+	for _, tc := range []struct{ list, want string; suffix bool }{
+		{"imgur.com,BAD.com", "lowercase", false},
+		{"imgur.com,has space.com", "lowercase", false},
+		{"imgur.com,.imgur.com", "does not begin with a dot", false},
+		{"imgur.com,imgur.com", "listed twice", false},
+		{"imgur.com,ex..ample.com", "empty label", false},
+		{"imgur.com,example.com.", "empty label", false},
+		{".imgur.com,imgur.com", "begins with a dot", true},
+		{"imgur.com:443", "lowercase", false},
+		{"https://imgur.com", "lowercase", false},
+	} {
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					t.Fatalf("parseMediaHosts(%q) was accepted", tc.list)
+				}
+				if !strings.Contains(r.(string), tc.want) {
+					t.Fatalf("parseMediaHosts(%q) said %q, want %q", tc.list, r, tc.want)
+				}
+			}()
+			parseMediaHosts(tc.list, tc.suffix)
+		}()
+	}
+	// A whole good list is taken.
+	got := parseMediaHosts("imgur.com, github.com", false)
+	if len(got) != 2 || got[0] != "imgur.com" || got[1] != "github.com" {
+		t.Fatalf("a good list did not parse: %v", got)
+	}
+}
+
+// The overlay reads this to make its own refusals match, so it has to be ONE
+// line: the overlay's parseTyped splits raw output on newlines before it matches
+// a typed value.
+func TestMediaHostsReadsBackAsOneLine(cur realm, t *testing.T) {
+	defer restoreMediaHosts()
+
+	mediaHostsExact = parseMediaHosts("imgur.com,github.com", false)
+	mediaHostSuffixes = parseMediaHosts(".imgur.com", true)
+	got := MediaHosts()
+	if got != "imgur.com,github.com|.imgur.com" {
+		t.Fatalf("MediaHosts() = %q", got)
+	}
+	if strings.Contains(got, "\n") {
+		t.Fatal("MediaHosts must be one line")
+	}
+}
+
+// restoreMediaHosts puts the shipped defaults back, so one test cannot decide
+// what another sees.
+func restoreMediaHosts() {
+	mediaHostsExact = appendAll(nil, defaultMediaHostsExact)
+	mediaHostSuffixes = appendAll(nil, defaultMediaHostSuffixes)
+}

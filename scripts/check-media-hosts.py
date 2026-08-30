@@ -52,7 +52,15 @@ def main():
     js = open(JS).read()
     nginx = open(NGINX).read()
 
-    gno_exact, gno_suffix = go_list(gno, "mediaHostsExact"), go_list(gno, "mediaHostSuffixes")
+    # THE DEFAULTS, not the live lists. The allowlist is an admin parameter now
+    # (owner ruling, CLAIM_MEDIA §10.1), so what a running realm allows is on
+    # chain and can differ from any file. What this guard can still hold — and
+    # what matters — is that the three copies which SHIP agree: the realm's
+    # defaults, the overlay's fallback, and the page's own CSP. A host added on
+    # chain without a matching CSP change is the admin's to get right, and
+    # SetMediaHosts says so in as many words.
+    gno_exact = go_list(gno, "defaultMediaHostsExact")
+    gno_suffix = go_list(gno, "defaultMediaHostSuffixes")
     js_exact = js_list(js, "MEDIA_HOSTS_EXACT")
     js_suffix = js_list(js, "MEDIA_HOST_SUFFIXES")
 

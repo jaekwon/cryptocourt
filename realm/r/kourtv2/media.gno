@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"chain"
 	"strconv"
 	"strings"
 
@@ -356,9 +357,14 @@ func mirrorFault(u string) string {
 //
 // The list tracks gnoweb's `cspImgHost`. Drift is the standing hazard: if gnoweb
 // narrows its policy, claims pointing at a dropped host break, and nothing here
-// will know. Kept a const for v1 — one less governance surface, and promoting it
-// to a SetSiteDomain-shaped parameter later is additive.
-var mediaHostsExact = []string{
+// will know — which is why this is a PARAMETER rather than a constant (owner
+// ruling, CLAIM_MEDIA §10.1). A const cannot be corrected without redeploying
+// the realm, and the list it tracks belongs to somebody else.
+//
+// The defaults below are what ships. They are also what check-media-hosts.py
+// compares against web/media.js and the page's CSP, because they are what a
+// fresh deployment and every offline copy actually use.
+var defaultMediaHostsExact = []string{
 	"gnolang.github.io",
 	"assets.gnoteam.com",
 	"sa.gno.services",
@@ -369,11 +375,161 @@ var mediaHostsExact = []string{
 	"cloudflare-ipfs.com",
 }
 
-var mediaHostSuffixes = []string{
+var defaultMediaHostSuffixes = []string{
 	".imgur.com",
 	".github.io",
 	".githubusercontent.com",
 	".imgflip.com",
+}
+
+// The live lists. Copied rather than aliased so a later Set cannot be observed
+// to have edited the defaults the guard reads.
+var mediaHostsExact = appendAll(nil, defaultMediaHostsExact)
+var mediaHostSuffixes = appendAll(nil, defaultMediaHostSuffixes)
+
+func appendAll(dst, src []string) []string {
+	for _, v := range src {
+		dst = append(dst, v)
+	}
+	return dst
+}
+
+// maxMediaHosts bounds each list. Every entry is checked on every mirror, on
+// every write AND on every render, so an unbounded list is an unbounded cost
+// paid by readers; and a list nobody can read through is not a policy anyone can
+// audit.
+const maxMediaHosts = 32
+
+// mediaHostEntryFault is the shape of one entry. Deliberately narrow: these
+// become part of a Content-Security-Policy comparison, and a host with a scheme,
+// a port, a path or a wildcard in it would compare against something the browser
+// never sees.
+func mediaHostEntryFault(h string, suffix bool) string {
+	if h == "" {
+		return "a host may not be empty"
+	}
+	if len(h) > 100 {
+		return "a host is at most 100 characters"
+	}
+	if suffix && h[0] != '.' {
+		return "a suffix begins with a dot: " + h
+	}
+	if !suffix && h[0] == '.' {
+		return "an exact host does not begin with a dot: " + h
+	}
+	for i := 0; i < len(h); i++ {
+		c := h[i]
+		ok := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-'
+		if !ok {
+			return "a host is lowercase letters, digits, dots and hyphens: " + h
+		}
+	}
+	// ".." would make an empty label, and a trailing dot compares against nothing.
+	if strings.Contains(h, "..") || h[len(h)-1] == '.' {
+		return "a host has no empty label: " + h
+	}
+	return ""
+}
+
+// parseMediaHosts turns one comma-separated list into entries, refusing the
+// whole list if any entry is wrong. Partial acceptance would leave an admin
+// believing they had set something they had not.
+func parseMediaHosts(list string, suffix bool) []string {
+	if strings.TrimSpace(list) == "" {
+		return nil
+	}
+	parts := strings.Split(list, ",")
+	if len(parts) > maxMediaHosts {
+		panic("kourtv2: at most " + strconv.Itoa(maxMediaHosts) + " hosts in a list")
+	}
+	out := []string{}
+	for _, p := range parts {
+		h := strings.TrimSpace(p)
+		if fault := mediaHostEntryFault(h, suffix); fault != "" {
+			panic("kourtv2: " + fault)
+		}
+		for _, seen := range out {
+			if seen == h {
+				panic("kourtv2: " + h + " is listed twice")
+			}
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+// SetMediaHosts replaces the hosts a claim's evidence may be mirrored on. Global
+// DAO admin only, the same seat that sets the site domain.
+//
+// THIS IS ALSO THE HOST KILL SWITCH (§10.4, answered by §10.1). Removing a host
+// takes effect on every existing claim immediately, because mediaDestination
+// re-asks mirrorFault on every render rather than trusting what passed at write
+// time. No purge, no migration: the next read of any claim page stops pointing
+// at that host.
+//
+// WHAT IT CANNOT DO, and an admin must know it: this list is one half of a pair.
+// The other half is the Content-Security-Policy served by gnoweb and by the
+// overlay's own nginx, and neither is on chain. Adding a host here lets the realm
+// STORE a mirror there; whether a browser will LOAD it is still the CSP's
+// decision. Widening this without widening those produces exactly the silent
+// broken image the whole list exists to prevent.
+func SetMediaHosts(cur realm, exact, suffixes string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	d := ensureGlobalDAO()
+	if cur.Previous().Address() != d.admin {
+		panic("kourtv2: only the global DAO admin sets the media hosts")
+	}
+	ex := parseMediaHosts(exact, false)
+	sf := parseMediaHosts(suffixes, true)
+	if len(ex) == 0 && len(sf) == 0 {
+		// Emptying the list is a legitimate act — it stops every mirror the realm
+		// does not host itself — but it is drastic enough to be said out loud
+		// rather than reached by passing two blank strings.
+		panic("kourtv2: to allow no third-party host, call ClearMediaHosts")
+	}
+	mediaHostsExact = ex
+	mediaHostSuffixes = sf
+	chain.Emit(globalActEvent,
+		"court", "*",
+		"claim", "0",
+		"act", "set-media-hosts:"+strconv.Itoa(len(ex))+"+"+strconv.Itoa(len(sf)),
+		"by", cur.Previous().Address().String(),
+		"height", eventHeight(),
+	)
+}
+
+// ClearMediaHosts allows no third-party host at all: only the archive on the
+// configured site domain, which mediaHostAllowed permits without listing. Same
+// seat, and named separately because it is the one setting that cannot be
+// arrived at by accident.
+func ClearMediaHosts(cur realm) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	d := ensureGlobalDAO()
+	if cur.Previous().Address() != d.admin {
+		panic("kourtv2: only the global DAO admin sets the media hosts")
+	}
+	mediaHostsExact = nil
+	mediaHostSuffixes = nil
+	chain.Emit(globalActEvent,
+		"court", "*",
+		"claim", "0",
+		"act", "clear-media-hosts",
+		"by", cur.Previous().Address().String(),
+		"height", eventHeight(),
+	)
+}
+
+// MediaHosts is what the overlay reads so its own refusals match this realm's.
+//
+// ONE LINE, exact and suffixes separated by a bar, each list comma-separated —
+// the overlay's parseTyped splits raw output on newlines before it matches a
+// typed value, so a multi-line answer parses as garbage.
+func MediaHosts() string {
+	return strings.Join(mediaHostsExact, ",") + "|" + strings.Join(mediaHostSuffixes, ",")
 }
 
 // mediaHostAllowed. The overlay's own domain is allowed WITHOUT being listed

@@ -46,6 +46,52 @@ const MEDIA_HOST_SUFFIXES = [
   ".imgur.com", ".github.io", ".githubusercontent.com", ".imgflip.com",
 ];
 
+/* mediaSetHosts adopts the realm's CURRENT allowlist.
+ *
+ * The lists above are the defaults — what ships, and what an offline copy uses.
+ * On chain they are an admin parameter (owner ruling, CLAIM_MEDIA §10.1), so a
+ * running realm can allow more or fewer hosts than any file says. This file
+ * exists to refuse what the chain would refuse; a stale copy breaks that in the
+ * direction that costs the most, since a host REMOVED on chain and still allowed
+ * here means somebody composes a claim, signs it, and the transaction aborts.
+ *
+ * The arrays are edited in place rather than replaced because they are `const`
+ * bindings: every function below closes over these exact objects, so replacing
+ * them is not possible and mutating them is the whole mechanism.
+ *
+ * Anything malformed is ignored entirely rather than partially adopted: half a
+ * policy is not a safer policy, and the defaults are a known-good answer. */
+function mediaSetHosts(exact, suffixes) {
+  const clean = (list, wantDot) => {
+    if (!Array.isArray(list)) return null;
+    const out = [];
+    for (const raw of list) {
+      const h = String(raw || "").trim();
+      if (!h || h.length > 100) return null;
+      if (!/^[a-z0-9.-]+$/.test(h)) return null;
+      if (h.includes("..") || h.endsWith(".")) return null;
+      if (wantDot !== h.startsWith(".")) return null;
+      out.push(h);
+    }
+    return out;
+  };
+  const ex = clean(exact, false), sf = clean(suffixes, true);
+  if (!ex || !sf) return false;
+  MEDIA_HOSTS_EXACT.splice(0, MEDIA_HOSTS_EXACT.length, ...ex);
+  MEDIA_HOST_SUFFIXES.splice(0, MEDIA_HOST_SUFFIXES.length, ...sf);
+  return true;
+}
+
+/* What the realm answers, which is one line: "a,b|.c,.d". Split rather than
+ * JSON because the realm writes it that way, and an empty side is an empty
+ * list rather than a list containing "". */
+function mediaParseHosts(line) {
+  if (typeof line !== "string" || !line.includes("|")) return null;
+  const [ex, sf] = line.split("|", 2);
+  const split = v => (v ? v.split(",").map(x => x.trim()).filter(Boolean) : []);
+  return {exact: split(ex), suffixes: split(sf)};
+}
+
 /* siteDomain is the overlay's own domain, which is also where the archive lives.
  * Passed in rather than read from a global so the rules are testable without a
  * page around them. */
@@ -1364,6 +1410,7 @@ if (typeof module !== "undefined" && module.exports) {
     MEDIA_MAX_ITEMS, MEDIA_MAX_MIRRORS, MEDIA_MAX_URL, MEDIA_MAX_CAPTION,
     MEDIA_MAX_BYTES, MEDIA_TYPES,
     mediaHostAllowed, mediaHostOf, mediaMirrorFault, mediaCaptionFault,
+    mediaSetHosts, mediaParseHosts,
     mediaItemFault, mediaFault, mediaArgLine, mediaArg, mediaArchiveURL,
     mediaDigest, mediaFitWithin, MEDIA_MAX_EDGE, mediaUpload, mediaClaimed,
     mediaEncodeUnder, MEDIA_QUALITIES, mediaBoxRatio, MEDIA_BOX_LIMIT,

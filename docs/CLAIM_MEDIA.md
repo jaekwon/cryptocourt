@@ -838,13 +838,9 @@ against believing a green suite about anything a reader sees.
 
 ## 10. Open owner rulings
 
-1. **Allowlist as `const` or admin parameter.** A parameter mirrors
-   `SetSiteDomain` — global-DAO-admin only, not overridable by meta or a court —
-   and needs no redeploy when gnoweb's CSP moves. A `const` drifts in silence.
-2. **`OpenClaimPM`** as the name, where `P` already means "with body"?
-3. **Folders** — claims only, or may a folder carry an image?
-4. **Host kill switch** — may a moderator retract every image on a host at once?
-5. **How much of the claim page may evidence occupy?** Now that exhibits render
+1. **`OpenClaimPM`** as the name, where `P` already means "with body"?
+2. **Folders** — claims only, or may a folder carry an image?
+3. **How much of the claim page may evidence occupy?** Now that exhibits render
    there, this is a real trade with a measurement behind it. Seven of the demo's
    small 240x160 sample already push the Resolution heading down 1,281px — 1.42
    screens at 1100x900 — and a real 1600px-wide exhibit renders around 470px
@@ -859,6 +855,34 @@ against believing a green suite about anything a reader sees.
    on the page a court is read on. Recorded rather than quietly fixed.
 
 **Settled by the owner:**
+
+8. **The host allowlist is an admin parameter.** `SetMediaHosts` and
+   `ClearMediaHosts`, on the same seat as `SetSiteDomain`: global-DAO admin,
+   not a court, not meta. The defaults still ship in `media.gno` and are what
+   `check-media-hosts.py` compares against `media.js` and the page's CSP,
+   because they are what a fresh deployment and every offline copy use.
+
+   **This answers the host kill switch too, and that is the reason it was one
+   decision rather than two.** Removing a host takes effect on claims already
+   filed, with no purge and no migration, because `mediaDestination` re-asks
+   `mirrorFault` on every render rather than trusting what passed at write time.
+   That re-validation was already built and tested; the parameter is what turns
+   it into a lever.
+
+   Two consequences worth stating, because neither is obvious from the ruling:
+
+   - **The list is one half of a pair.** The other half is the CSP served by
+     gnoweb and by the overlay's nginx, and neither is on chain. Adding a host
+     lets the realm STORE a mirror there; whether a browser will LOAD it is
+     still the CSP's decision, and widening one without the other produces
+     exactly the silent broken image the list exists to prevent. `SetMediaHosts`
+     says so where an admin will read it.
+   - **The overlay reads the live list.** `web/media.js` exists to refuse what
+     the chain would refuse, and a static copy breaks that the moment an admin
+     narrows the list: the composer would offer a host, the person would sign,
+     and the transaction would abort. `mountCompose` reads `MediaHosts()` once
+     and adopts it, falling back to the shipped defaults if the realm is too old
+     to answer or the read fails.
 
 6. **kourt.xyz runs the archive.** It is the project's own service, not a
    delegated one. Two consequences follow and both belong in public documentation

@@ -39,8 +39,12 @@ function gnoList(varName) {
   const end = gno.indexOf("}", start);
   return [...gno.slice(start, end).matchAll(/"([^"]+)"/g)].map(m => m[1]);
 }
-const gnoExact = gnoList("mediaHostsExact");
-const gnoSuffix = gnoList("mediaHostSuffixes");
+// THE DEFAULTS, because the realm's list is an admin parameter now (owner
+// ruling §10.1) and what a running realm allows lives on chain. What these two
+// files can still be held to is the answer they SHIP with — and the overlay
+// reads the live list at mount, so drift is corrected rather than assumed away.
+const gnoExact = gnoList("defaultMediaHostsExact");
+const gnoSuffix = gnoList("defaultMediaHostSuffixes");
 ok("the exact host list matches the realm",
    JSON.stringify(gnoExact.sort()) === JSON.stringify([...M.MEDIA_HOSTS_EXACT || []].sort())
    || gnoExact.every(h => M.mediaHostAllowed(h, "")),
@@ -48,6 +52,33 @@ ok("the exact host list matches the realm",
 ok("every suffix the realm allows is allowed here",
    gnoSuffix.every(s => M.mediaHostAllowed("sub" + s, "")), "gno: " + gnoSuffix.join(","));
 ok("a suffix the realm does NOT list is refused here", !M.mediaHostAllowed("sub.evil.com", ""));
+
+// ---- and the list is the REALM'S, read at runtime ------------------------
+// The allowlist is an admin parameter (owner ruling §10.1), so a running realm
+// can allow fewer hosts than this file shipped with. That direction is the one
+// that costs: a host dropped on chain and still offered here means somebody
+// composes a claim, signs it, and the transaction aborts — which is the exact
+// failure this file exists to prevent.
+const shipped = [...M.MEDIA_HOSTS_EXACT || []];
+ok("what the realm answers parses into two lists",
+   JSON.stringify(M.mediaParseHosts("a.com,b.com|.c.com"))
+     === JSON.stringify({exact: ["a.com", "b.com"], suffixes: [".c.com"]}));
+ok("...an empty side is an empty list, not a list holding \"\"",
+   JSON.stringify(M.mediaParseHosts("a.com|")) === JSON.stringify({exact: ["a.com"], suffixes: []}));
+ok("...and anything that is not that shape is refused",
+   M.mediaParseHosts("no bar here") === null && M.mediaParseHosts(null) === null);
+
+ok("imgur is allowed before the realm says otherwise", M.mediaHostAllowed("i.imgur.com", ""));
+ok("adopting the realm's list is reported", M.mediaSetHosts(["example.org"], [".example.org"]) === true);
+ok("...a host the realm dropped is refused here too", !M.mediaHostAllowed("i.imgur.com", ""));
+ok("...and one it added is allowed", M.mediaHostAllowed("cdn.example.org", ""));
+// Half a policy is not a safer policy: a malformed list leaves the last good one.
+ok("a malformed list is ignored whole", M.mediaSetHosts(["BAD.com"], []) === false);
+ok("...including a suffix with no dot", M.mediaSetHosts(["ok.com"], ["nodot.com"]) === false);
+ok("...leaving what was there", M.mediaHostAllowed("cdn.example.org", ""));
+// Put the shipped list back so the assertions after this see what they expect.
+M.mediaSetHosts(shipped, [".imgur.com", ".github.io", ".githubusercontent.com", ".imgflip.com"]);
+ok("the shipped list can be restored", M.mediaHostAllowed("i.imgur.com", ""));
 
 // ---- the host is what precedes the first / ? # ---------------------------
 ok("a path ends the host", M.mediaHostOf("https://i.imgur.com/a.webp") === "i.imgur.com");
@@ -1043,7 +1074,7 @@ async function section6() {
   await section4();
   await section5();
   await section6();
-  const EXPECTED = 234;
+  const EXPECTED = 245;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

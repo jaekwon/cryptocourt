@@ -2818,6 +2818,18 @@ function reflectWallet(){
    drop zone open on every court page would be furniture. */
 function mountCompose(host, slug){
   if(!host) return;
+  /* THE REALM'S CURRENT ALLOWLIST, not the one this file shipped with. It is an
+     admin parameter now, so a host can be dropped on chain — that is the kill
+     switch §10.4 asked for — and a composer still offering it would let somebody
+     sign a claim the realm then refuses. Read once, applied when it lands, and
+     ignored on failure: a realm too old to answer leaves the defaults, which is
+     what it validates against anyway. */
+  if(isLive() && typeof mediaSetHosts === "function"){
+    one(`MediaHosts()`).then(unesc).then(line => {
+      const got = mediaParseHosts(line);
+      if(got) mediaSetHosts(got.exact, got.suffixes);
+    }).catch(()=>{});
+  }
   const wrap = document.createElement("div");
   wrap.className = "composewrap";
   const open = document.createElement("button");
