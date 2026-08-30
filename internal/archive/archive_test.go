@@ -1281,3 +1281,60 @@ func TestAModelsUnitsAreNormalisedRatherThanTrusted(t *testing.T) {
 		t.Fatalf("a reasonless block must still say who did it: %+v", q)
 	}
 }
+
+// realmPayload is the exact JSON the realm answers ClaimMedia with, captured
+// from a node in gnoland/testdata/kourtv2_media.txtar. realm/r/kourtv2's own
+// suite asserts encodeMedia still produces it, and web/tests/media_test.js holds
+// it too.
+//
+// WHY IT IS A LITERAL HERE. chain.go declares its own mediaItem with its own
+// json tags, and every test above fed it JSON this file wrote — which checks
+// encoding/json, not whether two Go programs agree about a field name. If the
+// realm renamed sha256, this parser would return no hashes, backfill would
+// promote nothing, and every filed image would expire an hour later with nobody
+// told. That is a silent loss of evidence caused by a rename.
+const realmPayload = `[{"kind":"img","sha256":"1111111111111111111111111111111111111111111111111111111111111111",` +
+	`"mime":"image/webp","w":800,"h":600,"bytes":90210,"caption":"the memo",` +
+	`"mirrors":["https://i.imgur.com/abc.webp"]}]`
+
+const realmPayloadPurged = `[{"kind":"img","purged":true},` +
+	`{"kind":"img","sha256":"2222222222222222222222222222222222222222222222222222222222222222",` +
+	`"mime":"image/webp","w":8,"h":6,"bytes":9,"caption":"kept","mirrors":[]}]`
+
+func TestTheArchiveReadsWhatTheRealmActuallyWrites(t *testing.T) {
+	node := fakeNode(t, realmPayload)
+	defer node.Close()
+	c := &Chain{RPC: node.URL, PkgPath: "gno.land/r/kourt/kourtv2", HTTP: node.Client()}
+
+	hashes, err := c.ClaimHashes(context.Background(), "covid", 1)
+	if err != nil {
+		t.Fatalf("the archive cannot read what the realm sends: %v", err)
+	}
+	if len(hashes) != 1 || hashes[0] != strings.Repeat("1", 64) {
+		t.Fatalf("got %v, want the one hash the payload carries", hashes)
+	}
+
+	// A TOMBSTONED SLOT MUST NOT BUY STORAGE. The court has withdrawn its
+	// pointer to those bytes, and reading the marker wrongly would keep them
+	// forever — the one direction where a parsing mistake costs disk instead of
+	// evidence.
+	node2 := fakeNode(t, realmPayloadPurged)
+	defer node2.Close()
+	c2 := &Chain{RPC: node2.URL, PkgPath: "p", HTTP: node2.Client()}
+	h2, err := c2.ClaimHashes(context.Background(), "covid", 1)
+	if err != nil {
+		t.Fatalf("purged payload: %v", err)
+	}
+	if len(h2) != 1 || h2[0] != strings.Repeat("2", 64) {
+		t.Fatalf("got %v, want only the surviving exhibit", h2)
+	}
+
+	// And an empty claim is empty, not an error: the map asks about every claim
+	// it draws, most of which carry nothing.
+	node3 := fakeNode(t, "[]")
+	defer node3.Close()
+	c3 := &Chain{RPC: node3.URL, PkgPath: "p", HTTP: node3.Client()}
+	if h, err := c3.ClaimHashes(context.Background(), "covid", 1); err != nil || len(h) != 0 {
+		t.Fatalf("an empty claim gave (%v, %v)", h, err)
+	}
+}
