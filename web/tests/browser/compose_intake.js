@@ -222,6 +222,40 @@ if (!BASE) { console.log("usage: compose_intake.js <base-url>"); process.exit(2)
   ok("its buttons look like buttons", styled.buttonBordered);
   ok("the warnings render one per line", styled.notePreserves);
 
+  // --- 5. a phone ----------------------------------------------------------
+  // EVERY RENDER OF THIS PANEL HAD BEEN A DESKTOP ONE. §2.1 talks about phones,
+  // and the project measures three phone widths for another surface, but the
+  // composer had only ever been looked at wide. At 320 the action bar squeezed
+  // rather than wrapped: "try the copy again" came out 54px across and 44px tall
+  // with its label stacked into a column, because flex shrinks an item before it
+  // moves it.
+  for (const w of [320, 390]) {
+    await page.setViewport({width: w, height: 900});
+    const narrow = await page.evaluate(async () => {
+      const div = window.__mount();
+      window.__c.seed([{id: -1, kind: "img", state: "broken", sha256: "a".repeat(64),
+        mime: "image/webp", w: 240, h: 160, bytes: 5200, caption: "", mirrors: [],
+        preview: "", prepared: {bytes: new Uint8Array([1]), mime: "image/webp"},
+        error: "the copy did not go through"}]);
+      await new Promise(r => setTimeout(r, 150));
+      const retry = div.querySelector(".mediaretry");
+      const one = retry ? Math.round(retry.getBoundingClientRect().height) : 0;
+      return {
+        scrollW: document.documentElement.scrollWidth, vw: innerWidth,
+        retryH: one,
+        // one line: the button is about as tall as the glyph buttons beside it
+        glyphH: (() => { const g = div.querySelector(".mediamove");
+                         return g ? Math.round(g.getBoundingClientRect().height) : 0; })(),
+      };
+    });
+    ok(`@${w}px the composer does not scroll sideways`,
+       narrow.scrollW <= narrow.vw + 1, `scrollW=${narrow.scrollW} vw=${narrow.vw}`);
+    ok(`@${w}px the retry keeps its label on one line`,
+       narrow.retryH > 0 && narrow.retryH <= narrow.glyphH + 2,
+       `retry=${narrow.retryH} glyph=${narrow.glyphH}`);
+  }
+  await page.setViewport({width: 1280, height: 900});
+
   ok("no page errors throughout", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");

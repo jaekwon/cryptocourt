@@ -757,8 +757,20 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 /* The two that report a problem carry weight; the rest of the row does not. */
 .mediabroken{font-size:12.5px; line-height:1.45; color:var(--bad, #c0564f)}
 .medialink{font-size:12.5px; line-height:1.45; color:var(--muted)}
-.mediabar{display:flex; align-items:center; gap:6px; margin-top:2px}
-.mediamove,.mediadel,.mediaretry,.mediaundo{font:inherit; font-size:12px;
+/* WRAPS RATHER THAN SQUEEZES. At 320px the row's second column has room for
+   three glyph buttons and not for a four-word label beside them, and flex's
+   default is to shrink the item rather than move it: "try the copy again" came
+   out 54px wide and 44px tall, its label stacked into a column. Measured on a
+   phone width, which is the size nothing here had ever been rendered at.
+
+   WHICH RULE HOLDS, honestly: below 420px the media query further down gives the
+   retry its own row, and that alone is enough — ablating `flex:0 0 auto` changes
+   nothing the harness can see, because the button is never asked to share a line
+   there. The no-shrink pair guards the widths in between, which no test
+   enumerates. Kept as defence, not claimed as covered. */
+.mediabar{display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:2px}
+.mediamove,.mediadel,.mediaretry,.mediaundo{flex:0 0 auto; white-space:nowrap;
+  font:inherit; font-size:12px;
   background:none; color:var(--ink-2); border:1px solid var(--line);
   border-radius:3px; padding:3px 7px; cursor:pointer; line-height:1}
 .mediamove,.mediadel{min-width:28px}
@@ -769,6 +781,10 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 /* The retry is the one action here with a consequence, so it reads as a word
    rather than a glyph and sits first. */
 .mediaretry{margin-right:auto}
+/* On a phone the bar wraps, and where it wraps matters: left to itself it broke
+   between ↑ and ↓, splitting the three-glyph group across two lines. The retry
+   takes its own row instead, so move and remove stay together. */
+@media(max-width:420px){ .mediaretry{flex-basis:100%; margin-right:0} }
 @media(pointer:coarse){ .mediamove,.mediadel,.mediaretry,.mediaundo{min-height:32px} }
 
 /* EXHIBITS, and every rule below existed only after a render was looked at.
