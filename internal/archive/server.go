@@ -47,9 +47,51 @@ func (s *Server) WithChain(c *Chain) *Server {
 }
 
 func (s *Server) Routes(mux *http.ServeMux) {
+	mux.HandleFunc("/m/health", s.health)
 	mux.HandleFunc("/m/claimed", s.claimed)
 	mux.HandleFunc("/m/", s.blob)
 	mux.HandleFunc("/m", s.upload)
+}
+
+// health answers whether media is working, and above all whether the SWEEP is
+// still running.
+//
+// The sweep is what keeps this from being free permanent hosting, and it is
+// silent when it finds nothing — which is almost always. Without a timestamp,
+// "swept and found nothing" and "the goroutine died an hour after boot" look
+// identical from outside, and the second is only discovered when the disk
+// fills. Read swept_at, not the counts.
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	st, err := s.store.Stats(r.Context())
+	if err != nil {
+		if s.log != nil {
+			s.log.Printf("archive health: %v", err)
+		}
+		http.Error(w, "could not read archive state", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Never cached: a stale answer about whether a service is alive is worse
+	// than no answer.
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"staged": st.Staged, "promoted": st.Promoted, "blocked": st.Blocked,
+		"pending_review": st.Pending, "swept_at": st.SweptAt,
+		// Said outright rather than left to be inferred from a zero.
+		"sweeping":  st.SweptAt > 0,
+		"promoting": s.chain != nil,
+	})
 }
 
 // claimed promotes every blob a claim references, after asking the chain.

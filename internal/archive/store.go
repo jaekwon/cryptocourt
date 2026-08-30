@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -110,6 +111,7 @@ CREATE TABLE IF NOT EXISTS blobs (
   court     TEXT
 );
 CREATE INDEX IF NOT EXISTS blobs_sweep ON blobs (promoted, staged_at);
+CREATE TABLE IF NOT EXISTS archive_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 `
 
 // Store holds the bytes. It shares the service's database because that database
@@ -229,6 +231,40 @@ func (s *Store) Block(ctx context.Context, sum string) error {
 	return nil
 }
 
+// Stats is what an operator needs to ask whether media is working, and it exists
+// because the sweep is silent when it does nothing.
+//
+// THE TIMESTAMP IS THE POINT. Everything else here is a count; SweptAt is the
+// only field that can say the mechanism holding the whole anti-abuse story is
+// still running. If the sweeper stopped — a panic in a goroutine, a loop that
+// never started, a build that dropped the call — nothing else in this service
+// would report anything wrong until the disk filled. internal/chat carries a
+// scanner_seen_at for exactly this reason, and this is the same idea.
+type Stats struct {
+	Staged   int64 `json:"staged"`
+	Promoted int64 `json:"promoted"`
+	Blocked  int64 `json:"blocked"`
+	Pending  int64 `json:"pending_review"`
+	SweptAt  int64 `json:"swept_at"`
+}
+
+func (s *Store) Stats(ctx context.Context) (Stats, error) {
+	var st Stats
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+		  (SELECT COUNT(*) FROM blobs WHERE promoted = 0),
+		  (SELECT COUNT(*) FROM blobs WHERE promoted = 1),
+		  (SELECT COUNT(*) FROM blobs WHERE blocked = 1),
+		  (SELECT COUNT(*) FROM blob_review WHERE cleared_at IS NULL AND label != 'clean'),
+		  COALESCE((SELECT v FROM archive_meta WHERE k = 'swept_at'), '0')`)
+	var swept string
+	if err := row.Scan(&st.Staged, &st.Promoted, &st.Blocked, &st.Pending, &swept); err != nil {
+		return st, fmt.Errorf("archive stats: %w", err)
+	}
+	st.SweptAt, _ = strconv.ParseInt(swept, 10, 64)
+	return st, nil
+}
+
 // SweepStaged deletes unpromoted bytes older than StageTTL and reports how many
 // went. This is what keeps the endpoint from being free permanent hosting.
 func (s *Store) SweepStaged(ctx context.Context, now time.Time) (int64, error) {
@@ -241,6 +277,15 @@ func (s *Store) SweepStaged(ctx context.Context, now time.Time) (int64, error) {
 	n, err := res.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("archive sweep count: %w", err)
+	}
+	// Recorded even when nothing was deleted, which is the usual case and the
+	// one that matters: "swept and found nothing" and "never swept" must not
+	// look alike to whoever is asking whether this still works.
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO archive_meta (k, v) VALUES ('swept_at', ?)
+		 ON CONFLICT(k) DO UPDATE SET v = excluded.v`,
+		strconv.FormatInt(now.Unix(), 10)); err != nil {
+		return n, fmt.Errorf("archive sweep stamp: %w", err)
 	}
 	return n, nil
 }

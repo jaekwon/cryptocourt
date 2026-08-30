@@ -1402,3 +1402,72 @@ func TestTheArchiveParsesTheCallsTheOverlayBuilds(t *testing.T) {
 		t.Fatalf("the court hint did not reach the row: %v", courts)
 	}
 }
+
+func TestHealthCanTellASweepFromASilence(t *testing.T) {
+	// THE ONE QUESTION THIS ANSWERS. The sweep is what keeps the archive from
+	// being free permanent hosting, and it is silent when it finds nothing —
+	// which is almost always. Without a stamp, "swept and found nothing" and
+	// "the goroutine died an hour after boot" look identical from outside, and
+	// the second is discovered when the disk fills.
+	srv, st := newTestServer(t)
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+	ctx := context.Background()
+
+	read := func() map[string]any {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/m/health", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("health returned %d", rec.Code)
+		}
+		if rec.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("a stale answer about whether a service is alive is worse than none")
+		}
+		var out map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		return out
+	}
+
+	// Before any sweep has run, it says so rather than reporting a healthy zero.
+	if h := read(); h["sweeping"] != false || h["swept_at"].(float64) != 0 {
+		t.Fatalf("a service that has never swept must not look swept: %v", h)
+	}
+	// And it says promotion is off, which is the other way media quietly dies.
+	if read()["promoting"] != false {
+		t.Fatal("an archive with no chain must say it cannot promote")
+	}
+
+	staged, _ := st.Put(ctx, "image/png", pngBody, "covid")
+	kept, _ := st.Put(ctx, "image/webp", webpWith("k"), "covid")
+	if err := st.Promote(ctx, kept); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
+	if err := st.BlockByOperator(ctx, kept, "a face nobody consented to"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+
+	h := read()
+	if h["staged"].(float64) != 1 || h["promoted"].(float64) != 1 || h["blocked"].(float64) != 1 {
+		t.Fatalf("the counts do not describe the store: %v", h)
+	}
+	if h["pending_review"].(float64) != 1 {
+		t.Fatalf("an operator's queue depth must be visible: %v", h)
+	}
+
+	// A SWEEP THAT DELETES NOTHING STILL COUNTS AS A SWEEP. This is the case the
+	// stamp exists for: the usual pass finds nothing, and it must still prove
+	// the loop is alive.
+	if n, err := st.SweepStaged(ctx, time.Now()); err != nil || n != 0 {
+		t.Fatalf("sweep deleted %d (err %v) — nothing was old enough", n, err)
+	}
+	h = read()
+	if h["sweeping"] != true || h["swept_at"].(float64) == 0 {
+		t.Fatalf("a sweep that found nothing must still be recorded: %v", h)
+	}
+	if h["staged"].(float64) != 1 {
+		t.Fatal("...and must not have deleted anything")
+	}
+	_ = staged
+}
