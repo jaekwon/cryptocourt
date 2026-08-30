@@ -777,13 +777,14 @@ func TestTheBoardOffersAWayToWriteOnIt(cur realm, t *testing.T) {
 // "5 comments →" asked a reader to leave the page they came to read in order to
 // find out whether leaving was worth it.
 func TestTheClaimPageShowsItsCommentsInline(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("cpi-alice")
-	c, id := boardFixture(cur, "cpi", alice)
+	c, id, alice, bob, carol := topFixture(cur, t, "cpi")
 	sid := strconv.FormatUint(id, 10)
 	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
-	r := getStanding(c, alice)
-	r.score = sup * ladderFor(c).t3Bps / 10_000
-	r.tokens = postsPerDayAt(ladderFor(c), 3)
+	for _, w := range []address{alice, bob, carol} {
+		r := getStanding(c, w)
+		r.score = sup * ladderFor(c).t3Bps / 10_000
+		r.tokens = postsPerDayAt(ladderFor(c), 3)
+	}
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	first := PostComment(cross(cur), "cpi", id, 0, "the first thing anybody said")
@@ -812,16 +813,39 @@ func TestTheClaimPageShowsItsCommentsInline(cur realm, t *testing.T) {
 		t.Fatalf("the count is a fact about the claim, stated either way:\n%s", page)
 	}
 
-	// BOUNDED. A busy claim does not turn its own page into a forum.
-	for i := 0; i < claimBoardPreview+2; i++ {
-		testing.SetRealm(testing.NewUserRealm(alice))
-		PostComment(cross(cur), "cpi", id, 0, "filler "+strconv.Itoa(i))
+	// A HIDDEN ROW COSTS NO PREVIEW SLOT. The cap was applied to ROWS before the
+	// hidden filter, so hidden rows spent slots on things that never render.
+	//
+	// EXACTLY claimBoardPreview OF THEM, and newer than the visible one, because
+	// that is the smallest fixture where the bug shows: with two, the buggy
+	// version still reached alice's comment and the test passed against it.
+	for i := 0; i < claimBoardPreview; i++ {
+		testing.SetRealm(testing.NewUserRealm(bob))
+		row := PostComment(cross(cur), "cpi", id, 0, "bob hides this one "+strconv.Itoa(i))
+		HideOwnComment(cross(cur), "cpi", id, row, true)
+	}
+	buried := Render("cpi/" + sid)
+	if !strings.Contains(buried, "the first thing anybody said") {
+		t.Fatalf("%d hidden rows must not push the visible one off the preview:\n%s",
+			claimBoardPreview, buried)
+	}
+	if strings.Contains(buried, "bob hides this one") {
+		t.Fatalf("a hidden row is not previewed:\n%s", buried)
+	}
+
+	// BOUNDED. A busy claim does not turn its own page into a forum — and the
+	// fixture needs MORE than claimBoardPreview visible rows, or an unbounded
+	// loop draws the same page a bounded one does.
+	for i := 0; i < claimBoardPreview+1; i++ {
+		testing.SetRealm(testing.NewUserRealm(carol))
+		PostComment(cross(cur), "cpi", id, 0, "carol says "+strconv.Itoa(i))
 	}
 	busy := Render("cpi/" + sid)
-	if n := strings.Count(busy, "· block "); n > claimBoardPreview+1 {
-		t.Fatalf("the preview must stop at %d rows, drew %d:\n%s", claimBoardPreview, n, busy)
+	if n := strings.Count(busy, "carol says "); n != claimBoardPreview {
+		t.Fatalf("the preview must draw exactly %d rows, drew %d:\n%s",
+			claimBoardPreview, n, busy)
 	}
-	if !strings.Contains(busy, "all 7 comments](") {
+	if !strings.Contains(busy, "all 9 comments](") {
 		t.Fatalf("and say how many are behind the link:\n%s", busy)
 	}
 }

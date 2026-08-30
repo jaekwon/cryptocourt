@@ -1324,9 +1324,16 @@ func writeBoardLink(b *strings.Builder, c *Court, cs *claimState, claimID uint64
 	// page, where the whole list competes for attention.
 	b.WriteString("## Comments\n\n")
 	b.WriteString("[Write a comment](" + boardPostLink(c.id, claimID, 0) + ")\n\n")
-	shown := 0
+	shown, drawn := 0, 0
 	if cs.boardTop != nil {
-		cs.boardTop.ReverseIterateByOffset(0, claimBoardPreview, func(_ string, v any) bool {
+		// COUNTED AFTER THE FILTER, not before. ReverseIterateByOffset(0, 3) takes
+		// the newest three ROWS and this loop then discards the hidden ones, so a
+		// claim whose two newest rows were hidden previewed ONE comment while
+		// linking to "all 7" — the slots were spent on rows that never render.
+		// Walking until three have been DRAWN is what the cap was always meant
+		// to say. It stops as soon as it has them, so the common case reads the
+		// same three rows it always did.
+		cs.boardTop.ReverseIterate("", "", func(_ string, v any) bool {
 			r := v.(*boardRow)
 			if boardMark(r) != "." {
 				return false // hidden rows are a footnote, not a preview
@@ -1338,7 +1345,8 @@ func writeBoardLink(b *strings.Builder, c *Court, cs *claimState, claimID uint64
 			// the same off-by-a-category the overlay's own tail had, where a
 			// fully-displayed board claimed to be hiding something.
 			shown += 1 + boardReplyCount(cs, r.id)
-			return false
+			drawn++
+			return drawn >= claimBoardPreview
 		})
 	}
 	// THE COUNT IS ALWAYS STATED, whether or not the preview is short of it. It

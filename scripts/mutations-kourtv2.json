@@ -12010,8 +12010,8 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "writeBoardLink: the preview is unbounded",
-  "find": "cs.boardTop.ReverseIterateByOffset(0, claimBoardPreview, func(_ string, v any) bool {",
-  "replace": "cs.boardTop.ReverseIterateByOffset(0, 512, func(_ string, v any) bool {"
+  "find": "\t\t\tdrawn++\n\t\t\treturn drawn >= claimBoardPreview",
+  "replace": "\t\t\tdrawn++\n\t\t\treturn false"
  },
  {
   "pkg": "kourtv2",
@@ -12026,5 +12026,12 @@
   "label": "renderClaim: the discussion climbs back above the signal",
   "find": "\twriteRelations(&b, c, id)\n\twriteAppeal(&b, c, cs)",
   "replace": "\twriteRelations(&b, c, id)\n\twriteBoardLink(&b, c, cs, id)\n\twriteAppeal(&b, c, cs)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "writeBoardLink: a hidden row costs a preview slot",
+  "find": "\t\t\tr := v.(*boardRow)\n\t\t\tif boardMark(r) != \".\" {\n\t\t\t\treturn false // hidden rows are a footnote, not a preview\n\t\t\t}",
+  "replace": "\t\t\tr := v.(*boardRow)\n\t\t\tif boardMark(r) != \".\" {\n\t\t\t\tdrawn++\n\t\t\t\treturn drawn >= claimBoardPreview\n\t\t\t}"
  }
 ]
