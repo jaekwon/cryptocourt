@@ -1243,8 +1243,32 @@ function mediaLightbox(items, start, opts) {
   }
 
   function go(d) { const n = at + d; if (n >= 0 && n < items.length) { at = n; show(); } }
+
+  /* THE PAGE BEHIND MUST NOT SCROLL. Measured: with the lightbox open, a wheel
+   * took the document to y=400 underneath it. A claim page is thousands of
+   * pixels tall, so somebody studying an exhibit scrolls, sees nothing move,
+   * scrolls further, and closes to find themselves somewhere else entirely —
+   * having lost the claim they were reading.
+   *
+   * The padding compensates for the scrollbar the lock removes; without it the
+   * page jumps sideways by its width on open and back on close. Both values are
+   * restored rather than cleared, so a page that set its own keeps it. */
+  const root = doc.documentElement;
+  const hadOverflow = root && root.style ? root.style.overflow : null;
+  const hadPad = root && root.style ? root.style.paddingRight : null;
+  if (root && root.style) {
+    const view = doc.defaultView;
+    const gap = view && view.innerWidth ? view.innerWidth - root.clientWidth : 0;
+    root.style.overflow = "hidden";
+    if (gap > 0) root.style.paddingRight = gap + "px";
+  }
+
   function close() {
     token++;                       // any verdict still in flight is now stale
+    if (root && root.style) {
+      root.style.overflow = hadOverflow || "";
+      root.style.paddingRight = hadPad || "";
+    }
     if (box.remove) box.remove();
     if (doc.removeEventListener) doc.removeEventListener("keydown", onKey);
     // Focus goes back where it came from, or a reader who opened this from the

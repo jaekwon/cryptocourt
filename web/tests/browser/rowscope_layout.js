@@ -75,6 +75,43 @@ const MAX_PAGES = 60;
     }
   }
 
+  // --- the lightbox holds the page still ------------------------------------
+  // Measured, not assumed: with the lightbox open a wheel took the document to
+  // y=400 underneath it. A claim page is thousands of pixels tall, so somebody
+  // studying an exhibit scrolls, sees nothing move, scrolls again, and closes to
+  // find themselves somewhere else — having lost the claim they were reading.
+  //
+  // Tested with a real wheel rather than scrollBy, because overflow:hidden stops
+  // a user scrolling and does not stop a programmatic scroll: the first version
+  // of this measured nothing about the fix and reported it broken.
+  await page.evaluate(r => { location.hash = r.slice(1); }, "#/c/orem/3");
+  await new Promise(r => setTimeout(r, 500));
+  const opened = await page.evaluate(() => {
+    const ex = document.querySelector(".exhibits .ex");
+    if (!ex) return false;
+    ex.click();
+    return !!document.querySelector(".lbox");
+  });
+  ok("an exhibit opens a lightbox", opened);
+  if (opened) {
+    await page.mouse.move(500, 400);
+    await page.mouse.wheel({deltaY: 400});
+    await new Promise(r => setTimeout(r, 250));
+    const held = await page.evaluate(() => ({y: window.scrollY,
+      overflow: getComputedStyle(document.documentElement).overflow}));
+    ok("the page behind it does not scroll", held.y === 0,
+       `y=${held.y} overflow=${held.overflow}`);
+    await page.keyboard.press("Escape");
+    await new Promise(r => setTimeout(r, 250));
+    const after = await page.evaluate(() => ({
+      open: !!document.querySelector(".lbox"),
+      overflow: document.documentElement.style.overflow,
+      pad: document.documentElement.style.paddingRight}));
+    ok("Escape closes it", !after.open);
+    ok("...and gives the page its scrolling back", !after.overflow && !after.pad,
+       JSON.stringify(after));
+  }
+
   console.log(`\ncrawled ${visited} route(s); measured ${rows} row(s)`);
   ok("every label-and-value row landed in a container that styles it",
      bad.length === 0,
