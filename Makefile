@@ -109,6 +109,7 @@ rendertext:
 web-constants:
 	python3 scripts/check-web-constants.py
 	python3 scripts/check-media-hosts.py
+	python3 scripts/make-demo-exhibit.py --check
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this
 # — cross() is IsCurrent-strict, so a returned frame cannot be handed to an

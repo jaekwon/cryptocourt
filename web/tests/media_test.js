@@ -464,6 +464,24 @@ async function section3() {
   ok("the first showable exhibit wins",
      M.mediaNodeThumb([{kind: "vid", mirrors: []}, img], SITE).endsWith(hash));
 
+  // BYTES IN THE PAGE NEED NO HOST — the offline demo's only way to show an
+  // exhibit, since a real one resolves to the archive and demo mode is promised
+  // to make no network calls. Checked with NO site domain, which is the demo's
+  // own configuration: everything else returns "" there.
+  const inline = {kind: "img", sha256: hash, inline: "data:image/png;base64,AAAA"};
+  ok("carried bytes are the source, with no site to point at",
+     M.mediaSrc(inline, "", false) === "data:image/png;base64,AAAA");
+  ok("...and they win over the archive when both exist",
+     M.mediaSrc(inline, SITE, false) === "data:image/png;base64,AAAA");
+  ok("a node thumbnail draws carried bytes", M.mediaNodeThumb([inline], "") === inline.inline);
+  // The restriction is what keeps "no network calls" true BY CONSTRUCTION rather
+  // than by trusting that nothing on chain can set the field. A data: URI cannot
+  // name a host; anything else can, so anything else is ignored.
+  ok("a non-data inline is refused and cannot smuggle in a host",
+     M.mediaSrc({kind: "img", inline: "https://evil.example/x.png"}, "", true) === "");
+  ok("a purged exhibit shows nothing even carrying bytes",
+     M.mediaSrc({...inline, purged: true}, "", false) === "");
+
   // A card is one image the reader asked for, so a mirror is worth it there.
   const card = M.mediaCardItems([img, {purged: true, kind: "img"},
                                  {kind: "vid", caption: "hearing", mirrors: ["https://i.imgur.com/v.webp"]}], "");
@@ -499,6 +517,18 @@ async function section3() {
   ok("a mirror declaring more than it filed is refused",
      await M.mediaVerify(item, "/m/x", {fetch: async () => huge}) === "altered");
   ok("...without reading its body", !read);
+  // A SAMPLE MUST NOT PASS A CHECK NOBODY PERFORMED. fetch() resolves a data:
+  // URI perfectly well, so the offline demo's exhibit would otherwise hash its
+  // own embedded bytes, agree with its own digest, and print "matches what was
+  // filed" — a verdict about an ARCHIVE, for an exhibit no archive has seen and
+  // no chain has recorded. Served the MATCHING bytes on purpose: without the
+  // guard this assertion reads "matches", so it fails when the guard is removed
+  // rather than passing for the wrong reason.
+  ok("bytes carried in the page are never reported as verified",
+     await M.mediaVerify({...item, inline: "data:image/png;base64,AAAA"}, "/m/x",
+                         {fetch: serve(bytes)}) === "sample");
+  ok("...and the verdict says there was nothing to check it against",
+     /nothing to check it against/.test(M.MEDIA_VERDICTS.sample));
   // The altered verdict is the whole feature: it must be a sentence, not a mark.
   ok("the altered verdict is impossible to miss",
      M.MEDIA_VERDICTS.altered.length > 20 && /NO LONGER MATCHES/.test(M.MEDIA_VERDICTS.altered));
@@ -583,7 +613,7 @@ async function section3() {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 143;
+  const EXPECTED = 150;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

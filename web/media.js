@@ -562,6 +562,18 @@ function mediaParse(raw) {
  */
 function mediaSrc(item, siteDomain, allowMirrors) {
   if (!item || item.purged) return "";
+  // BYTES ALREADY IN HAND NEED NO HOST. Only the offline demo sets this, and it
+  // must: web/README.md promises a page that runs from file:// and makes no
+  // network calls in demo mode, so a sample exhibit pointing at the archive
+  // would break that promise AND draw a broken image off a network.
+  //
+  // Restricted to data: on purpose. Nothing on chain can produce this field —
+  // encodeMedia writes a fixed set and none of it is named inline — but the
+  // restriction means the no-network property holds by construction rather than
+  // by trusting that, since a data: URI cannot name a host.
+  if (typeof item.inline === "string" && item.inline.slice(0, 5) === "data:") {
+    return item.inline;
+  }
   if (item.kind !== "vid" && item.sha256 && siteDomain) {
     return mediaArchiveURL(siteDomain, item.sha256);
   }
@@ -612,6 +624,13 @@ async function mediaVerify(item, src, opts) {
   const o = opts || {};
   const fetchFn = o.fetch || (typeof fetch !== "undefined" ? fetch : null);
   if (!item || item.kind === "vid" || !item.sha256) return "unverifiable";
+  // BYTES THE PAGE HANDED ITSELF CANNOT CHECK THE PAGE. fetch() resolves a data:
+  // URI perfectly well, so without this the sample would hash its own embedded
+  // bytes, agree with its own digest, and print "matches what was filed" — a
+  // verdict about an ARCHIVE, shown for an exhibit no archive has ever seen and
+  // no chain has ever recorded. Passing a check nothing performed is the one
+  // wrong answer this whole panel exists to avoid.
+  if (typeof item.inline === "string") return "sample";
   if (!src || !fetchFn) return "unavailable";
   try {
     const res = await fetchFn(src, {referrerPolicy: "no-referrer"});
@@ -641,6 +660,7 @@ const MEDIA_VERDICTS = {
   altered: "THIS NO LONGER MATCHES WHAT WAS FILED",
   unavailable: "not currently available",
   unverifiable: "linked — the court keeps no copy and cannot check it",
+  sample: "a sample — no court filed this, so there is nothing to check it against",
 };
 
 /* ---- drawing it ---------------------------------------------------------

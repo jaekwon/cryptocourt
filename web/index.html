@@ -688,8 +688,28 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .lbox-matches{color:var(--good)}
 .lbox-altered{color:#fff; background:#a1201e; padding:8px 12px; border-radius:3px;
   font-size:14px; font-weight:600; letter-spacing:.02em}
-.lbox-unavailable,.lbox-unverifiable{color:var(--muted); font-style:italic}
-.ex{cursor:zoom-in}
+/* sample joins the muted set, NOT the green one: it is the absence of a check,
+   and styling it like a passed check is the confusion it exists to prevent. */
+.lbox-unavailable,.lbox-unverifiable,.lbox-sample{color:var(--muted); font-style:italic}
+/* EXHIBITS, and every rule below existed only after a render was looked at.
+   These classes were emitted with NO style at all, which is not a neutral state:
+   .ex-n and .ex-cap are adjacent inline spans, so an exhibit came out reading
+   "1 of 1north span rating, 2025 inspection report" — the number and the caption
+   printed as one word, both at the body size, competing with the claim they are
+   evidence for. A source-reading test cannot see that; only the picture can. */
+.exhibits{margin:0 0 10px}
+.ex{cursor:zoom-in; margin:0 0 12px}
+.ex-n,.ex-cap,.ex-note{display:block}
+/* The number is how a reader, a moderator and a purge all refer to this one
+   image, so it is a label rather than prose: small, and never louder than the
+   caption it introduces. */
+.ex-n{margin-top:5px; font-size:11px; letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted)}
+.ex-cap{font-size:12.5px; line-height:1.45; color:var(--ink-2)}
+.ex-note{font-size:12px; color:var(--muted); font-style:italic}
+/* A taken-down exhibit keeps its place, so it needs a shape to keep. */
+.ex-gone{border:1px dashed var(--line); border-radius:3px; padding:10px 12px}
+.ex-img{border:1px solid var(--line); border-radius:3px}
 /* A video is not zoomed into a lightbox — it is played where it is. The
    lightbox exists to say whether bytes match what was filed, and a video has no
    hash to check, so opening one there would offer a verdict it cannot give. */
@@ -1529,6 +1549,21 @@ const DEMO_OVERLAY = {
     {from:10, to:5, type:"supersedes"},
   ]},
   voteEndsAt:{"orem/3":NOW+86_400, "ledger/3":NOW+70_000},
+  /* THE ONE EXHIBIT THE OFFLINE DEMO SHOWS, on this side of the split on
+     purpose. dump-demo.py rewrites the generated half from a live node; it
+     cannot reach here, and it must not, because these bytes have no chain to be
+     refreshed from. A real exhibit resolves to https://<site>/m/<sha256> — the
+     archive — and the sample cannot: web/README.md promises a page that makes
+     no network calls in demo mode, and off a network that URL draws a broken
+     image where the evidence should be. So the sample carries its own bytes;
+     scripts/make-demo-exhibit.py builds them and --check proves they are still
+     these. mediaVerify answers "sample" for anything carrying them, because
+     hashing bytes the page handed itself would print "matches what was filed"
+     about an archive that has never seen this. Keyed like voteEndsAt above. */
+  media:{"orem/3":[{kind:"img", mime:"image/png", w:240, h:160, bytes:529,
+    sha256:"18ead64d476a7450297dfd11c44b0cb4d54e80293e7a63687d0333fa6b4b0e0b",
+    caption:"north span rating, 2025 inspection report",
+    mirrors:[], purged:false, inline:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACgCAIAAAC9uXYyAAAB2ElEQVR42u3cwQ1FUBBAUXVpRAN2rxwV2KnDQgNWSrCTaIAaEGHmJOcXYHI33h+vWuYJwqjO376tEICgETQIGgQNgkbQBoGgQdAgaBA0ggZBg6BB0CBoBA1Zgy5tw4MUKWhBI2hBC1rQghY0gha0oBG0oBG0oAUtaEH7pxAEDYJG0IJG0CBo+HjQQ9+FpxJBCxpBCxpBCxovhQgaBA2CBkGDoBE0CBoEDYJG0IJG0CBoEDQIGkGbBYIGQYOg4ZWgs3076AtIQQta0IIWtKAFLWhBC1rQggZBg6BB0AjaIBA0CBoEDYJG0CBosMthl8NOiKAFLWhBC1rQgha0oAUtaKccIGgQNIIGQYOgQdAgaAQNggZBg10OuxzuthO0oAUtaEELWtCCFrSgBe2UAwSNoEHQIGgQNIIWNIIGQYOgQdAI+pqx1GFke9770xC0oAUtaEELWtCCFrSgBZ0+aBA0CBoEjaBB0CBoEDQIGkGDoOHnQbvbzt12gha0oAUtaEELWtCCFrSgnXKAoEHQIGgEDYIGQYOgQdAIGgQNdjnsctgJEbSgBS1oQQta0IIWtKAF7ZQDBA2CRtAgaBA0CBoEjaBB0CBoEDSCNggEDYIGQYOgETTECBrCOADm3OY9Kv4QdAAAAABJRU5ErkJggg=="}]},
 };
 /* ===== BEGIN GENERATED DEMO DATA — scripts/dump-demo.py; do not hand-edit ===== */
 const DEMO_CHAIN = {
@@ -1690,9 +1725,15 @@ function mergeDemo(chain, overlay){
   const out = {...chain, courts:{}, relations: overlay.relations, claims:{}};
   for(const [slug,c] of Object.entries(chain.courts))
     out.courts[slug] = {...c, ...(overlay.courts[slug]||{})};
-  for(const [key,d] of Object.entries(chain.claims))
-    out.claims[key] = (overlay.voteEndsAt[key]!=null)
-      ? {...d, voteEndsAt: overlay.voteEndsAt[key]} : d;
+  for(const [key,d] of Object.entries(chain.claims)){
+    let m = d;
+    if(overlay.voteEndsAt[key]!=null) m = {...m, voteEndsAt: overlay.voteEndsAt[key]};
+    /* Evidence joins here rather than in the generated half because the sample's
+       bytes have no chain source — see DEMO_OVERLAY.media. claimDetail's demo
+       branch spreads the claim, so this is all it takes to reach the card. */
+    if(overlay.media && overlay.media[key]) m = {...m, media: overlay.media[key]};
+    out.claims[key] = m;
+  }
   return out;
 }
 const DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);
@@ -2147,7 +2188,7 @@ function claimExhibits(c){
      lightbox needs the ITEMS (hashes, byte counts, kinds), and an <img> src is
      not enough to check anything against. */
   LAST_EXHIBITS = (c && c.media) || [];
-  return `<div class="mapsel-ex" role="list">` + items.map(x => {
+  return `<div class="exhibits" role="list">` + items.map(x => {
     const cap = x.caption ? `<span class="ex-cap">${safeInline(x.caption)}</span>` : "";
     /* An exhibit with nothing to show KEEPS ITS PLACE and says why. A gap that
        silently renumbered the rest would leave every later exhibit meaning
@@ -5404,6 +5445,13 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
      read for the page rather than a read for each node. Failure is silent and
      total: no thumbnails, same map. */
   if(isLive() && typeof mediaParse === "function") await fillMapMedia(slug, parsed, claims);
+  /* The sample's evidence is already in the page, so demo mode needs no read at
+     all — and must not make one. Same field, same shape, so every node and card
+     below cannot tell which branch filled it. */
+  else if(!isLive()) parsed.forEach(cl=>{
+    const m = (DEMO.claims[slug+"/"+cl.id]||{}).media;
+    if(m && m.length) claims[cl.id].media = m;
+  });
   // curation (sample or local) supplies folders+relations; ids the current
   // chain/dataset doesn't carry are held out, never drawn
   const validIds = new Set(parsed.map(cl=>cl.id));
@@ -6127,6 +6175,15 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
     + claimBody(d)
+    /* THE EVIDENCE, ON THE PAGE THE CLAIM ACTUALLY LIVES ON. claimDetail has
+       always read ClaimMedia into d.media — the round trip was already paid —
+       and only the map's selection card ever drew it. So a claim's exhibits
+       appeared on gnoweb's Render() and on a card you reach by opening the map
+       and clicking the right node, and were invisible on the page every link,
+       every share and every search result points at. Right after the body,
+       because the owner ruling is that everything filed with a claim counts as
+       its text; evidence is not an appendix to the statement. */
+    + claimExhibits(d)
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
         <span class="tacts">${polish}<span id="boardchip"></span>${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
