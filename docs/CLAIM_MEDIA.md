@@ -179,7 +179,14 @@ other copy. Losing an upload must never lose a draft.
 ### 2.4 Order, captions, removal
 
 - **Order matters** and the UI must say why: the first item is what the map node
-  shows. Drag to reorder, with keyboard equivalents.
+  shows — the row says so, in as many words, on exhibit one.
+- **Reordering is ↑ / ↓ buttons, and there is no drag.** This section asked for
+  drag "with keyboard equivalents", which puts the accessible path second and
+  the pointer path first. The buttons are one control that works identically
+  with a mouse, a finger and a keyboard, in a list that is at most seven rows
+  long; drag would add a second mechanism, a touch story of its own, and a
+  well-known set of screen-reader problems, to reorder a list that short. The
+  divergence is deliberate — recorded here so it does not read as unbuilt.
 - **Caption** per item, optional, one line, ~120 characters. It is the exhibit
   label *and* the alt text, which is why it is worth the extra untrusted string:
   "Exhibit A — the email header" is better evidence and better accessibility than
@@ -648,6 +655,7 @@ Recorded because each is easy to make again:
 | 25 | an old draft restored a mirrorless exhibit as fileable | drafts live in `localStorage` indefinitely, so anyone whose upload failed once carried a permanently unsignable draft |
 | 26 | the composer had no CSS at all — eighteen classes, zero rules | the page's first real input surface rendered as browser defaults, and `rowscope_layout` cannot see it because the composer does not mount in demo mode |
 | 27 | `draw()` and `refresh()` both printed `composer.fault()` | the identical sentence in two `.medianote` paragraphs, with the other warnings glued onto the second copy |
+| 28 | the page scrolled behind an open lightbox | somebody studying an exhibit scrolls, sees nothing move, and closes to find themselves somewhere else in a claim page thousands of pixels tall |
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
