@@ -177,6 +177,30 @@ const MAX_PAGES = 60;
      gone.openable === false && gone.zoomable !== "zoom-in",
      `cursor=${gone.zoomable} data-ex=${gone.openable}`);
 
+  // --- evidence does not depend on what the claim is doing --------------------
+  // The last dimension on the list, and the only one that produced nothing. The
+  // realm gates media on moderation alone — claimMediaVisible looks at purged and
+  // global, never at a phase — and the overlay draws from d.media, so a claim's
+  // exhibits are the same whether it is open, answered, disputed or long settled.
+  // Verified rather than assumed, and pinned so a phase-shaped branch cannot grow
+  // into the evidence path later.
+  const phases = await page.evaluate(() => {
+    const media = [{kind: "img", sha256: "a".repeat(64), mime: "image/webp", w: 240,
+      h: 160, bytes: 5200, caption: "the memo", mirrors: ["https://x/m/" + "a".repeat(64)]}];
+    const names = ["open", "answered", "disputed", "provisional", "settled", "provClose", "closed"];
+    const drawn = names.map(ph => claimEvidenceNote({phase: ph, media})
+                               + claimExhibits({phase: ph, media}));
+    return {same: drawn.every(d => d === drawn[0]), any: drawn[0].length > 0,
+            // a read that failed yields [] and the page OMITS rather than
+            // asserting the claim carries nothing
+            onFailure: claimEvidenceNote({media: mediaParse("[]")})
+                     + claimExhibits({media: mediaParse("[]")})};
+  });
+  ok("a claim's evidence renders the same in every phase", phases.same);
+  ok("...and there was something to compare", phases.any);
+  ok("a media read that failed omits, rather than reporting no evidence",
+     phases.onFailure === "", JSON.stringify(phases.onFailure));
+
   ok("an Arabic caption reads right-to-left", bidi.ar === "rtl", bidi.ar);
   ok("...and a Hebrew one", bidi.he === "rtl", bidi.he);
   ok("...while an English one is unaffected", bidi.en === "ltr", bidi.en);
