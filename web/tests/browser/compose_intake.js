@@ -191,6 +191,37 @@ if (!BASE) { console.log("usage: compose_intake.js <base-url>"); process.exit(2)
   ok("...carrying no exhibit it could not stand behind", urlOnZone.argument === "",
      JSON.stringify(urlOnZone.argument));
 
+  // --- 4. the panel is styled at all --------------------------------------
+  // Eighteen classes media.js emits had no CSS rule whatsoever until this was
+  // rendered and looked at: no drop zone, a native file button, thumbnails at
+  // full size, and every label welded to the control beside it. rowscope_layout
+  // cannot see any of it — the composer does not mount in demo mode, so the
+  // crawl that measures every other page never reaches this one. Hence a few
+  // computed styles here, where a composer really is mounted.
+  const styled = await page.evaluate(async () => {
+    const div = window.__mount();
+    window.__c.seed([{id: -1, kind: "img", state: "ready", sha256: "a".repeat(64),
+      mime: "image/webp", w: 240, h: 160, bytes: 5200, caption: "a memo",
+      mirrors: ["https://x/m/" + "a".repeat(64)], preview: ""}]);
+    await new Promise(r => setTimeout(r, 120));
+    const g = sel => { const e = div.querySelector(sel); return e ? getComputedStyle(e) : null; };
+    const drop = g(".mediadrop"), row = g(".mediaitem"), num = g(".medianum"),
+          del = g(".mediadel"), note = g(".medianote");
+    return {
+      dropBordered: !!drop && drop.borderStyle !== "none",
+      rowIsGrid: !!row && row.display === "grid",
+      numIsBlock: !!num && num.display !== "inline",
+      buttonBordered: !!del && del.borderStyle !== "none",
+      // the panel's warnings are joined with newlines and must render as lines
+      notePreserves: !!note && /pre-line|pre-wrap/.test(note.whiteSpace),
+    };
+  });
+  ok("the drop zone looks like one", styled.dropBordered);
+  ok("an exhibit row lays out rather than stacking", styled.rowIsGrid);
+  ok("its number is not welded to the caption box", styled.numIsBlock);
+  ok("its buttons look like buttons", styled.buttonBordered);
+  ok("the warnings render one per line", styled.notePreserves);
+
   ok("no page errors throughout", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");

@@ -501,6 +501,7 @@ function mediaNewComposer(opts) {
     Object.assign(item, {
       mime: prepared.mime, w: prepared.w, h: prepared.h,
       bytes: prepared.bytes.length, state: "hashing", linkOnly: false,
+      prepared: {bytes: prepared.bytes, mime: prepared.mime},
     });
     o.onChange && o.onChange(items);
     item.sha256 = await mediaDigest(prepared.bytes);
@@ -528,6 +529,17 @@ function mediaNewComposer(opts) {
       Object.assign(item, {
         mime: prepared.mime, w: prepared.w, h: prepared.h,
         bytes: prepared.bytes.length, state: "hashing",
+        // KEPT SO THE COPY CAN BE TRIED AGAIN. Every failure message here says
+        // "try adding it again", which for a dropped file means finding it on a
+        // disk and for a PASTED SCREENSHOT may mean nothing at all: the
+        // clipboard is often the only copy, and it is gone the moment somebody
+        // copies anything else. §2.5 says nothing is lost; this is what makes
+        // that true across a momentary archive failure.
+        //
+        // In memory only, and never written to a draft — mediaDraftOf lists the
+        // fields it keeps and this is not one, which is right: 7 x 256 KiB has
+        // no business in localStorage.
+        prepared: {bytes: prepared.bytes, mime: prepared.mime},
       });
       o.onChange && o.onChange(items);
 
@@ -610,9 +622,42 @@ function mediaNewComposer(opts) {
     o.onChange && o.onChange(items);
   }
 
+  /* Try the copy again, for an exhibit whose bytes are still in hand.
+   *
+   * The upload is the only step worth retrying: a file that would not decode
+   * will not decode twice, and a host that refused to be read is a decision
+   * about us rather than a hiccup. This is the ⟳ in the state diagram §2.3 has
+   * carried since the design, and without it every failure ended in "add it
+   * again" — advice a pasted screenshot cannot always take. */
+  function canRetry(item) {
+    return !!(item && item.prepared && item.sha256 && o.upload &&
+              (item.state === "broken" || item.state === "failed"));
+  }
+
+  async function retry(id) {
+    const item = items.find(x => x.id === id);
+    if (!canRetry(item)) return false;
+    item.state = "uploading";
+    item.error = undefined;
+    o.onChange && o.onChange(items);
+    try {
+      const up = await o.upload(item.prepared.bytes, item.prepared.mime, item.sha256);
+      // The archive first, anything it already had kept behind it — an adopted
+      // link keeps the address it was pasted from.
+      item.mirrors = [up.url].concat((item.mirrors || []).filter(m => m !== up.url));
+      item.state = "ready";
+    } catch (_) {
+      item.state = (item.mirrors || []).length ? "failed" : "broken";
+      item.error = "the copy did not go through, so there is no link to file this under — " +
+        "try again, or paste the image's own link";
+    }
+    o.onChange && o.onChange(items);
+    return true;
+  }
+
   return {
     items, add, addLink, remove, restore, move, setCaption, seed,
-    argument, fault, busy,
+    argument, fault, busy, retry, canRetry,
     count: () => items.length,
   };
 }
@@ -945,6 +990,14 @@ function mediaMount(root, composer, opts) {
       }
 
       const bar = mediaEl(doc, "div", {class: "mediabar"});
+      // Offered only where it can do something: the bytes are still in hand and
+      // the copy is what failed.
+      if (composer.canRetry(item)) {
+        const again = mediaEl(doc, "button", {type: "button", class: "mediaretry",
+          "aria-label": `Try the copy of exhibit ${i + 1} again`}, "try the copy again");
+        again.addEventListener("click", () => { composer.retry(item.id); });
+        bar.appendChild(again);
+      }
       const up = mediaEl(doc, "button", {type: "button", class: "mediamove",
         "aria-label": `Move exhibit ${i + 1} earlier`}, "↑");
       up.addEventListener("click", () => { composer.move(item.id, -1); });
@@ -971,8 +1024,13 @@ function mediaMount(root, composer, opts) {
       list.appendChild(row);
     });
 
-    const fault = composer.fault();
-    if (fault) say(fault);
+    // THE SET'S FAULT IS NOT SAID HERE. This note is a role="status" for what
+    // just happened to the LIST — an exhibit removed with its undo, a caption
+    // refused, a paste adopted. The fault is about the whole claim and belongs
+    // beside the button that files it, which is where mountCompose already puts
+    // it. Saying it in both places printed the identical sentence twice, one
+    // inside the drop zone and one under it, with the other warnings glued onto
+    // the second copy.
     if (o.onDraw) o.onDraw(items);
   }
 

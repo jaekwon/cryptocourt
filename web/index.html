@@ -700,6 +700,77 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 /* sample joins the muted set, NOT the green one: it is the absence of a check,
    and styling it like a passed check is the confusion it exists to prevent. */
 .lbox-unavailable,.lbox-unverifiable,.lbox-sample{color:var(--muted); font-style:italic}
+/* ---- THE COMPOSER --------------------------------------------------------
+   Eighteen classes, and until this was rendered and looked at, not one of them
+   had a rule. §2 opens by saying media "requires the page's first real input
+   surface, and the quality of that surface IS the quality of this feature" —
+   and the surface was raw browser defaults: no drop zone, a native Choose Files
+   button, thumbnails at full size, and every label welded to the control beside
+   it ("2 of 3" running straight into the caption box).
+
+   rowscope_layout could not have caught it: the composer does not mount in demo
+   mode, so the crawl that measures every other page never reaches it. */
+.composepanel{margin-top:12px; display:flex; flex-direction:column; gap:10px}
+.composetitle,.composebody{width:100%; font:inherit; background:var(--inset);
+  color:var(--ink); border:1px solid var(--line); border-radius:3px; padding:9px 11px}
+.composetitle{font-size:15px; font-weight:600}
+.composebody{font-size:14px; line-height:1.5; resize:vertical; min-height:88px}
+.composetitle:focus,.composebody:focus{outline:2px solid var(--accent); outline-offset:1px}
+
+/* The drop target has to LOOK like one, and say so when a drag is over it —
+   the dragover handler has always added `.over` and nothing has ever drawn it. */
+.mediadrop{border:1px dashed var(--line); border-radius:4px; padding:12px;
+  display:flex; flex-direction:column; gap:10px; transition:border-color .12s, background .12s}
+.mediadrop:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.mediadrop.over{border-color:var(--accent); border-style:solid; background:var(--inset)}
+@media(prefers-reduced-motion:reduce){ .mediadrop{transition:none} }
+.mediahint{margin:0; font-size:12.5px; line-height:1.5; color:var(--muted)}
+.mediapick{font:inherit; font-size:12.5px; color:var(--ink-2)}
+.mediapick::file-selector-button{font:inherit; font-size:12.5px; background:var(--inset);
+  color:var(--ink-2); border:1px solid var(--line); border-radius:3px;
+  padding:5px 10px; margin-right:8px; cursor:pointer}
+.mediapick::file-selector-button:hover{color:var(--ink); border-color:var(--accent)}
+.medialist{display:flex; flex-direction:column; gap:10px}
+/* pre-line, because the panel's warnings are separate sentences joined with a
+   newline: run together on one line they read as one, and "...imgur or GitHub
+   work A claim needs a title." is two pieces of advice welded into nonsense. */
+.medianote{margin:0; font-size:12.5px; line-height:1.5; color:var(--ink-2);
+  min-height:1em; white-space:pre-line}
+
+/* One exhibit: the thumbnail small and fixed, everything about it beside it,
+   so seven of them stay a list rather than seven screens. */
+.mediaitem{margin:0; display:grid; grid-template-columns:72px minmax(0,1fr);
+  gap:10px; align-items:start; padding:9px; border:1px solid var(--line);
+  border-radius:3px; background:var(--surface)}
+.mediathumb{width:72px; height:72px; object-fit:cover; border-radius:2px;
+  border:1px solid var(--line); background:var(--inset)}
+.mediacap{display:flex; flex-direction:column; gap:5px; min-width:0}
+/* A VIDEO ROW HAS NO THUMBNAIL. Without this the caption block lands in the
+   72px track meant for one, and the whole row renders as a column of single
+   words — which is what the first version of this did. */
+.mediaitem > .mediacap:first-child{grid-column:1 / -1}
+.medianum{font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+.mediacaption{width:100%; font:inherit; font-size:13px; background:var(--inset);
+  color:var(--ink); border:1px solid var(--line); border-radius:3px; padding:6px 8px}
+.mediacaption:focus{outline:2px solid var(--accent); outline-offset:1px}
+.mediastate{font-size:12px; color:var(--muted); font-style:italic}
+/* The two that report a problem carry weight; the rest of the row does not. */
+.mediabroken{font-size:12.5px; line-height:1.45; color:var(--bad, #c0564f)}
+.medialink{font-size:12.5px; line-height:1.45; color:var(--muted)}
+.mediabar{display:flex; align-items:center; gap:6px; margin-top:2px}
+.mediamove,.mediadel,.mediaretry,.mediaundo{font:inherit; font-size:12px;
+  background:none; color:var(--ink-2); border:1px solid var(--line);
+  border-radius:3px; padding:3px 7px; cursor:pointer; line-height:1}
+.mediamove,.mediadel{min-width:28px}
+.mediamove:hover,.mediadel:hover,.mediaretry:hover,.mediaundo:hover{
+  color:var(--ink); border-color:var(--accent)}
+.mediamove:focus-visible,.mediadel:focus-visible,.mediaretry:focus-visible,
+.mediaundo:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+/* The retry is the one action here with a consequence, so it reads as a word
+   rather than a glyph and sits first. */
+.mediaretry{margin-right:auto}
+@media(pointer:coarse){ .mediamove,.mediadel,.mediaretry,.mediaundo{min-height:32px} }
+
 /* EXHIBITS, and every rule below existed only after a render was looked at.
    These classes were emitted with NO style at all, which is not a neutral state:
    .ex-n and .ex-cap are adjacent inline spans, so an exhibit came out reading
@@ -2736,7 +2807,10 @@ function mountCompose(host, slug){
       if(!canLink) bits.push(MEDIA_HELP_LINK_TOO_LONG);
       if(composer.busy()) bits.push("Still copying an exhibit — you can file now, or wait for the copy.");
       if(!title.value.trim()) bits.push("A claim needs a title.");
-      warn.textContent = bits.join("  ");
+      // One per line. Joined with spaces they read as a single sentence, and
+      // "...imgur or GitHub work A claim needs a title." is two separate pieces
+      // of advice welded together. textContent still, so nothing here is markup.
+      warn.textContent = bits.join("\n");
 
       // The sign path reads data-args at click time, so keeping the attribute
       // current is the whole integration — no second code path to drift.
