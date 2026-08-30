@@ -260,7 +260,8 @@ func main() {
 		}
 		return hasher.Hash(a)
 	}
-	asrv := archive.NewServer(astore, lg, archiveClient)
+	// Same flag the chat uses: the operator numbers are one decision, not two.
+	asrv := archive.NewServer(astore, lg, archiveClient).WithHealthDetail(*healthDetail)
 	if *archiveRPC != "" {
 		asrv = asrv.WithChain(&archive.Chain{RPC: *archiveRPC, PkgPath: *archiveRealm})
 	} else {

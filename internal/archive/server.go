@@ -28,6 +28,29 @@ type Server struct {
 	clientIP func(*http.Request) string
 	limiter  *limiter
 	chain    *Chain
+	// detail serves the operator's numbers on the public endpoint, and is off
+	// unless an operator turns it on — the rule internal/chat already states for
+	// its own health, and which this endpoint was ignoring.
+	detail bool
+}
+
+// WithHealthDetail publishes the counts and heartbeats on /m/health.
+//
+// OFF BY DEFAULT, AND pending_review IS THE REASON. It is a live count of what
+// the classifier has flagged, on an endpoint anybody can poll — so somebody
+// probing what the model blocks can upload, poll, and read the answer off the
+// counter, one image at a time, without ever filing a claim. That is a free
+// oracle for the one part of this service whose value depends on not being easy
+// to map.
+//
+// The rest is milder but the same class: staged and promoted describe the shape
+// of the archive, and the heartbeats say when each unattended pass last ran.
+// internal/chat gates exactly these and keeps only `enforcing` public, because
+// that one has a reader who needs it and an attacker who can discover it in one
+// post anyway. Nothing here has such a reader.
+func (s *Server) WithHealthDetail(on bool) *Server {
+	s.detail = on
+	return s
 }
 
 func NewServer(store *Store, lg *log.Logger, clientIP func(*http.Request) string) *Server {
@@ -85,15 +108,22 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"staged": st.Staged, "promoted": st.Promoted, "blocked": st.Blocked,
-		"pending_review": st.Pending, "swept_at": st.SweptAt,
-		"backfilled_at": st.BackfilledAt, "reviewed_at": st.ReviewedAt,
-		"chain_seen_at": st.ChainSeenAt,
-		// Said outright rather than left to be inferred from a zero.
-		"sweeping":  st.SweptAt > 0,
-		"promoting": s.chain != nil,
-	})
+	// Public: whether the archive is serving, and nothing an attacker can meter
+	// themselves against. A liveness check needs no numbers.
+	body := map[string]any{"ok": true}
+	if s.detail {
+		body = map[string]any{
+			"ok":     true,
+			"staged": st.Staged, "promoted": st.Promoted, "blocked": st.Blocked,
+			"pending_review": st.Pending, "swept_at": st.SweptAt,
+			"backfilled_at": st.BackfilledAt, "reviewed_at": st.ReviewedAt,
+			"chain_seen_at": st.ChainSeenAt,
+			// Said outright rather than left to be inferred from a zero.
+			"sweeping":  st.SweptAt > 0,
+			"promoting": s.chain != nil,
+		}
+	}
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 // claimed promotes every blob a claim references, after asking the chain.

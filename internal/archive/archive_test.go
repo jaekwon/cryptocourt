@@ -1420,6 +1420,7 @@ func TestHealthCanTellASweepFromASilence(t *testing.T) {
 	// "the goroutine died an hour after boot" look identical from outside, and
 	// the second is discovered when the disk fills.
 	srv, st := newTestServer(t)
+	srv = srv.WithHealthDetail(true)
 	mux := http.NewServeMux()
 	srv.Routes(mux)
 	ctx := context.Background()
@@ -1563,5 +1564,63 @@ func TestABackfillThatFailsEveryPassDoesNotLookLikeOneThatRuns(t *testing.T) {
 	}
 	if s, _ := st.Stats(ctx); s.ReviewedAt == 0 {
 		t.Fatalf("a review pass must stamp: %+v", s)
+	}
+}
+
+func TestHealthTellsAStrangerNothingToMeterAgainst(t *testing.T) {
+	// pending_review IS A LIVE COUNT OF WHAT THE CLASSIFIER FLAGGED, on an
+	// endpoint anybody can poll. Published, it lets somebody probing what the
+	// model blocks upload, poll, and read the answer off the counter — one image
+	// at a time, without ever filing a claim. A free oracle for the one part of
+	// this service whose worth depends on not being easy to map.
+	//
+	// internal/chat settled this policy already: the operator's numbers are
+	// behind -health-detail, and only a field with a reader who needs it stays
+	// public. Nothing here has such a reader.
+	srv, st := newTestServer(t) // detail OFF, as an operator gets it by default
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+	ctx := context.Background()
+
+	sum, _ := st.Put(ctx, "image/png", pngBody, "covid")
+	if err := st.BlockByOperator(ctx, sum, "a face nobody consented to"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	if _, err := st.SweepStaged(ctx, time.Now()); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/m/health", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health returned %d", rec.Code)
+	}
+	var pub map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &pub); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	// It still answers the only question a stranger has a right to ask.
+	if pub["ok"] != true {
+		t.Fatalf("a liveness check must still answer: %v", pub)
+	}
+	for _, secret := range []string{"pending_review", "blocked", "staged", "promoted",
+		"swept_at", "backfilled_at", "reviewed_at", "chain_seen_at", "promoting", "sweeping"} {
+		if _, told := pub[secret]; told {
+			t.Fatalf("%q is published to anyone who asks: %v", secret, pub)
+		}
+	}
+
+	// And an operator who turns it on gets everything, on the same flag the
+	// chat's own numbers use — one decision, not two.
+	on := http.NewServeMux()
+	srv.WithHealthDetail(true).Routes(on)
+	rec = httptest.NewRecorder()
+	on.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/m/health", nil))
+	var opr map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &opr); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if opr["pending_review"].(float64) != 1 || opr["blocked"].(float64) != 1 {
+		t.Fatalf("the operator must still get the numbers: %v", opr)
 	}
 }
