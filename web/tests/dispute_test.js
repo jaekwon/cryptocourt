@@ -29,10 +29,8 @@ code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code += slice('function tx(func', 'document.addEventListener("click"');
 code += slice('const MON=', 'function resolutionLadder(');
+// This slice carries ballotHint too — it sits between the modal and the ticket.
 code += slice('function voteHelpModal(', 'function disputeTicket');
-// disputeTicket now renders the vote-lock disclosure row, so its pure copy
-// helper comes along. See web/tests/votelock_test.js for that row's own asserts.
-code += slice('function voteLockLine(', 'function voteLockFigures(');
 code += slice('function disputeTicket', 'async function fillVoteEligibility');
 eval(code);
 
@@ -40,24 +38,35 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
 const d = Object.assign({}, DEMO.claims["orem/3"]);
 const html = disputeTicket("orem", 3, d, NOW);
-// The round history moved OUT of the ballot and in with the resolution dates,
-// so it is rendered separately here — asserting it against the ballot would now
-// pass only if it had never moved.
-const rounds = disputeRounds("orem", d, NOW);
 
-// THE BALLOT IS THE DECISION; the rules of the court moved into the modal.
-// Quorum, threshold, the locking rule and the token flows were five dense lines
-// between the question and the buttons — a reader had to get through the
-// mechanism to reach the choice.
+// THE BALLOT IS THE QUESTION, ONE LINE OF CLOCK, AND THE BUTTONS. Quorum, the
+// threshold, the locking rule, what each outcome does to whose bond and the
+// token flows were seven dense lines between the question and the buttons — a
+// reader had to get through the mechanism to reach the choice. All of it is in
+// the modal now.
 ok("ballot h3", html.includes("Should this answer be overturned?"));
-ok("hint names the answerer, the side and the bond",
-   html.includes("answered YES") && html.includes("bonded 80.0 KOURT:OREM on it"));
-ok("uphold line names the side that stays", html.includes("the answer stays YES"));
-ok("overturn line names the side it becomes", html.includes("the answer becomes NO"));
-ok("rounds are off the ballot", !html.includes("round 1") && !html.includes("✓ round"));
-ok("spent rounds are struck through and greyed, beside the dates",
-   rounds.includes('<div class="line spent"><span><s>round 1</s></span>') && rounds.includes("failed quorum"));
-ok("...and the current round is marked", rounds.includes("✓ round 2") && rounds.includes("voting now"));
+ok("the hint is one line: which round, and when it shuts",
+   html.includes('<div class="hint">Round 2 — closes in') && html.includes("One vote per address"));
+// A one-line hint that runs onto a second sentence about mechanism is the thing
+// this replaced, so the LENGTH is asserted, not just the content.
+{
+  const h = html.match(/<div class="hint">([^<]*)</)[1];
+  ok("...and it is actually one line", h.length < 90 && !h.includes("\n"));
+}
+ok("no outcome rows: what overturning does to whose bond is modal copy",
+   !html.includes("the answer stays YES") && !html.includes("the answer becomes NO"));
+ok("no vote-lock row on the ballot either",
+   !html.includes("<span>voting locks</span>") && !html.includes('id="votecommit"'));
+// The round HISTORY is gone from the page entirely — the notice above the ballot
+// already says "(after 2 failed rounds)", which is the same fact in fewer words.
+ok("the spent-round ladder is gone from the file",
+   !src.includes("failed quorum — half that round's disputer bond burned")
+   && !src.includes("disputeRounds"));
+// DisputeBondNext quotes what the NEXT DISPUTE costs (dispute.gno:849). The row
+// that carried it said "voting now at 64.0 KOURT:OREM", which tells a voter they
+// must pay to vote. Voting costs no bond, so the figure is not carried forward.
+ok("...and no bond figure sits beside the word voting",
+   !html.includes("voting now at") && !/voting[^.]*KOURT:OREM/.test(html));
 // The eligibility paragraph left the ballot entirely: the reason only matters to
 // the reader it applies to, and only when they reach for the button.
 ok("eligibility is not a standing paragraph", !html.includes("holder can vote"));
@@ -66,19 +75,22 @@ ok("...the vote buttons are marked for the click-time check",
 ok("...and Resolve sits outside that block, being no vote at all",
    html.indexOf("Resolve (after close)") > html.indexOf('id="voteactions"')
    && html.split('id="voteactions"')[1].indexOf("</div>") < html.split('id="voteactions"')[1].indexOf("Resolve"));
-ok("ladder: the live round is marked", rounds.includes("<span>\u2713 round 2</span>") && rounds.includes("voting now"));
-ok("ladder: round 2 voting at 64 KOURT:OREM", rounds.includes("round 2</span><span class=\"r\">voting now at 64.0 KOURT:OREM"));
-// The DATED close is the resolution ladder's row now — it always had one, and
-// the ballot was printing a second copy. What is left here is the fallback for
-// a chain that exposes no close height, which is the branch this block owns.
+// The DATED close is the resolution ladder's row — it always had one, and the
+// ballot was printing a second copy of it as a labelled row. The hint's clock is
+// a phrase inside a sentence, not a second ladder.
 // The ROW, not the words: the modal legitimately says "until the vote closes",
 // and an assertion that cannot tell prose from a duplicated row is one that
 // fails for the wrong reason.
 ok("clock: no second copy of the close row on the ballot",
    !html.includes("<span>vote closes</span>"));
 ok("clock: the fallback still says it when there is no height to project from",
-   disputeRounds("orem", Object.assign({}, d, {voteEndsAt:null}), NOW)
-     .includes("about 7 days from the round's opening"));
+   ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW)
+     .includes("closes about 7 days after it opened"));
+// nowH null is a DIFFERENT branch from voteEndsAt absent: the height IS known and
+// merely unprojectable. It must print that height rather than the 7-day guess,
+// which would be an invented date printed over a fact the chain gave.
+ok("clock: a known height with no clock to project it prints the height",
+   ballotHint("orem", d, null).includes("closes at block "));
 // Quorum LEFT the ballot. The rule and the figure are in the modal, where a
 // reader who wants the mechanism can find both — and the ballot no longer
 // spends a row on arithmetic nobody is being asked to do.
@@ -129,7 +141,7 @@ CFG.mode='live';
 const dl = Object.assign({}, DEMO.claims["orem/3"]); delete dl.voteEndsAt; delete dl.quorumFloor;
 const htmlL = disputeTicket("orem", 3, dl, 5000000);
 ok("live: no invented deadline",
-   disputeRounds("orem", dl, null).includes("the chain exposes no close height to read"));
+   htmlL.includes("closes about 7 days after it opened"));
 ok("live: no turnout row without read", !htmlL.includes("turnout bar"));
 // The async fill marks the vote BUTTONS now instead of writing a paragraph, so
 // what has to be present is the block it looks for.
@@ -141,19 +153,30 @@ CFG.mode='demo';
 const d3 = Object.assign({}, DEMO.claims["orem/3"], {voteEndsAt: NOW-100});
 const html3 = disputeTicket("orem", 3, d3, NOW);
 ok("past close: resolve works now",
-   disputeRounds("orem", d3, NOW).includes("the window has passed — Resolve works now"));
+   html3.includes("voting has closed — Resolve works now"));
+// ...and it replaces the countdown rather than sitting beside it. A ballot that
+// says both "closes in 2 days" and "voting has closed" is worse than either.
+ok("...instead of a countdown, not beside one", !html3.includes("closes in"));
 
 
 // ---- B4 critic fixes ----
 ok("uphold: bond held to finalise + the same payment limits",
    html.includes("The answerer's bond stays held until the claim is finished")
    && html.includes("the same kind of payment on the same limits"));
+// F4 WAS A TRUTHFULNESS FIX ON COPY THAT NO LONGER EXISTS. The outcome rows
+// asserted "whoever challenged it loses their bond" and "the answerer loses
+// their bond", both false once the answer bond had already burned in an earlier
+// overturned round — so the rows grew a zero-bond branch. The rows are gone, and
+// with them the claim: the fix is now structural rather than conditional. What
+// has to hold is that the ballot says NOTHING about anybody's bond at either
+// value, so there is no untruth left to special-case.
 const d0 = Object.assign({}, DEMO.claims["orem/3"], {answerBond:0});
 const html0 = disputeTicket("orem", 3, d0, NOW);
-ok("F4: zero-bond hint honest", html0.includes("its bond already burned in an earlier overturned round"));
-ok("F4: zero-bond overturn row honest", html0.includes("no bond is left to burn"));
-ok("F4: nonzero names the bond and who loses it",
-   html.includes("bonded 80.0 KOURT:OREM on it") && html.includes("loses their bond"));
+const ballotOf = h => h.slice(0, h.indexOf("<dialog"));   // the modal may discuss bonds; the ballot may not
+ok("F4: the ballot claims nothing about a bond at zero", !/bond/i.test(ballotOf(html0)));
+ok("F4: ...nor at 80 KOURT:OREM, so the two read alike", !/bond/i.test(ballotOf(html)));
+ok("F4: and the two ballots differ in nothing at all",
+   ballotOf(html0) === ballotOf(html));
 const srcF = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 
 // THE WIRING, as text, because there is no DOM here. Both of these were absent
@@ -161,8 +184,8 @@ const srcF = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'
 // never placed on the page, and the click gate could be deleted with every
 // assertion still green. A renderer with no caller is the failure this feature
 // has had more than once.
-ok("the resolution section places the rounds beside its dates",
-   srcF.includes("+ disputeRounds(slug, d, nowH)"));
+ok("the ballot actually calls the hint it renders",
+   srcF.includes("${ballotHint(slug, d, nowH)}"));
 ok("the click gate turns the mark into a sentence",
    srcF.includes('closest("[data-voteblocked]")')
    && /vb\)\{ ev\.preventDefault\(\)/.test(srcF)

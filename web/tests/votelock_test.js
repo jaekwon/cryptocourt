@@ -21,53 +21,58 @@ code += slice('function esc(', '\n');
 code += slice('function fmtN(', '\n');
 code += slice('function ccSym(', '\n');
 code += slice('function cc(', 'function ugnot(');
-code += slice('function voteLockLine(', 'async function fillVoteCommitment(');
+code += slice('function qualityLockLine(', 'async function fillVoteCommitment(');
 code += slice('function parseCommitments(', '/* ---------------- the associations');
 eval(code);
 
 let fail = 0;
 function ok(what, cond){ if(cond){ console.log("ok: "+what); } else { fail++; console.log("FAIL: "+what); } }
 
-// ---- the two lanes say different things, and neither says the wrong thing ----
-const V = voteLockLine("verdict", "votecommit");
-const Q = voteLockLine("quality", "qualcommit");
+// ---- the surviving row, and the rule the other lane still owes a reader ----
+// ONE ROW NOW. The dispute ballot was cut back to the question and the buttons,
+// so the verdict lane has no row to render — but the OBLIGATION did not go
+// anywhere, and this harness exists because that obligation was undisclosed for
+// many rounds. So the verdict rule is asserted where it landed rather than
+// deleted along with its row: prose in the modal, figures on the me-page.
+const Q = qualityLockLine();
+// The modal, sliced out so "the ballot no longer says it" and "the modal does"
+// are two different subjects. Asserting both against the whole file would pass
+// on either one alone.
+const MODAL = (() => { const a = src.indexOf('id="help-vote"'); return src.slice(a, src.indexOf("</dialog>", a)); })();
 
-// "resolves" became "ends" when the ballot copy was cut to plain words; the
-// property is that the verdict lane names ITS round and the quality lane does
-// not reuse that rule.
-ok("the verdict lane releases on its round", /until this round ends/.test(V));
-ok("the quality lane does NOT reuse the verdict rule", !/until this round ends/.test(Q));
-ok("the quality lane names the claim ending", /the claim itself ends/.test(Q));
-ok("the quality lane names its own question closing", /when it closes/.test(Q));
+ok("the verdict release rule is in the modal", /locked until this round ends/.test(MODAL));
+ok("...and no row renders it any more",
+  !/voteLockLine/.test(src) && !/id="votecommit"/.test(src));
+// The quality lane must not silently inherit the verdict rule now that it is the
+// only row: its release is a different event, and the two were split on purpose.
+ok("the quality row does NOT reuse the verdict rule", !/until this round ends/.test(Q));
+ok("the quality row names the claim ending", /the claim itself ends/.test(Q));
+ok("the quality row names its own question closing", /when it closes/.test(Q));
 // The phrasing that went stale in three documents. A tally is superseded only by a
 // NEW ROUND, and nothing makes a round open, so this sentence promises a release
 // that may never come.
-ok("neither lane says 'superseded'", !/supersed/i.test(V) && !/supersed/i.test(Q));
+ok("neither surface says 'superseded'", !/supersed/i.test(Q) && !/supersed/i.test(MODAL));
 
 // Staking is the deliberate exemption — mustStakable ignores the vote lock. Copy
-// that says otherwise costs a holder a legitimate action.
-ok("both lanes say the coin can still be staked", /can still be staked/.test(V) && /can still be staked/.test(Q));
-ok("both lanes say it keeps voting", /keeps voting/.test(V) && /keeps voting/.test(Q));
-// WHAT IT CANNOT BACK moved to the modal for the verdict lane. The two POSITIVE
-// facts stay on both — omitting those costs a holder an action they actually
-// have, which is the failure this block exists to prevent; omitting the
-// restriction only sends them one click for it.
-ok("the quality lane still names what it cannot back",
+// that says otherwise costs a holder a legitimate action, which is the failure
+// this block exists to prevent, so BOTH surfaces have to carry it.
+ok("both surfaces say the coin can still be staked",
+  /can still be staked/.test(Q) && /you can still stake it/.test(MODAL));
+ok("both say it keeps voting or stays yours",
+  /keeps voting/.test(Q) && /You keep it, it stays in your balance/.test(MODAL));
+ok("the quality row names what it cannot back",
   /cannot also back a bond, a deposit or a transfer/.test(Q));
-ok("the verdict lane sends that to the modal instead",
-  !/cannot also back/.test(V) && /back a bond, put down a deposit, or send it/.test(src));
+ok("...and the modal names the same restriction for the verdict lane",
+  /back a bond, put down a deposit, or send it/.test(MODAL));
 // Asserted as the POSITIVE claim rather than a banned-word list: the first version
 // of this banned "frozen", which the quality lane uses correctly of the TALLY.
-ok("both lanes say the coin stays in the balance", /stays in your balance/.test(V) && /stays in your balance/.test(Q));
-ok("neither lane says the coin leaves or is locked away", !/leaves your balance|locked away|taken from/i.test(V+Q));
-
-// The lanes weigh at DIFFERENT epochs, so their figures must land in different
-// elements. One span for both is the defect VoteWeightWhy was split in two to fix.
-ok("each lane carries its own span id", /id="votecommit"/.test(V) && /id="qualcommit"/.test(Q));
-ok("the two span ids differ", !/qualcommit/.test(V) && !/votecommit/.test(Q));
+ok("the row says the coin stays in the balance", /stays in your balance/.test(Q));
+ok("neither surface says the coin leaves or is locked away",
+  !/leaves your balance|locked away|taken from/i.test(Q+MODAL));
+ok("the row carries the span its filler writes into", /id="qualcommit"/.test(Q));
 
 // House style: §7.4 keeps trading language off these surfaces.
-ok("no banned words in the disclosure", !/backing|redeem\b|profit|APR|odds|price/i.test(V+Q));
+ok("no banned words in the disclosure", !/backing|redeem\b|profit|APR|odds|price/i.test(Q+MODAL));
 
 // ---- the figures: a missing read prints nothing, never a zero ----
 ok("no figures at all renders nothing", voteLockFigures("orem", null, null, null) === "");
@@ -85,15 +90,17 @@ ok("all three figures can appear together",
   (f => /would commit/.test(f) && /already committed/.test(f) && /free to bond/.test(f))
     (voteLockFigures("orem", 1_000_000, 2_000_000, 3_000_000)));
 
-// ---- the wiring: the row is actually on both panels and fed the right lane ----
-ok("the dispute ballot carries the verdict row",
-  src.includes('${voteLockLine("verdict","votecommit")}'));
-// ONE DEFINITION, TWO LANES. The ballot briefly inlined its own shorter copy,
-// which is how the two panels drift apart — the short wording lives in the
-// shared function instead, chosen by lane.
-ok("the verdict lane is the short one, the quality lane is not", V.length < Q.length);
-ok("the quality panel carries the quality row",
-  src.includes('voteLockLine("quality","qualcommit")'));
+// ---- the wiring: the row is on the panel that has one ----
+ok("the quality panel carries the quality row", src.includes('qualityLockLine()'));
+// The ballot is the question and the buttons. A lock row reappearing there is
+// the regression this asserts, not a style preference: it was removed WITH the
+// outcome rows and the round ladder, and the modal took over its rule.
+// THE CALL, not the row's words: the first version of this looked for "voting
+// locks" inside disputeTicket and an ablation that put `${qualityLockLine()}`
+// straight into the ballot walked past it — the words live in the callee. What
+// dispute_test.js asserts is the rendered ballot; what this asserts is the call.
+ok("the dispute ballot carries no lock row",
+  !/function disputeTicket[\s\S]{0,1400}LockLine\(/.test(src));
 // THE WRAPPER CLASS IS THE ASSERTION, not the div. Every rule for a .line was
 // written as `.ticket .line`, and this panel has no ticket — so the row came out
 // as two bare inline spans reading "what voting commitsCasting commits the
@@ -115,14 +122,17 @@ ok("the filler reads DisposableOf", src.includes('DisposableOf(${gstr(slug)},${g
 ok("nothing in the client CALLS SpendableOf", !/SpendableOf\(/.test(src));
 ok("the filler reads the committed total", src.includes('VoteLockedOf(${gstr(slug)},${gstr(CFG.addr)})'));
 
-// The lanes must not be crossed: ClaimVoteWeightOf returns (verdict, quality).
-ok("the verdict span is fed the verdict weight",
-  src.includes('dv.textContent = voteLockFigures(slug, w? w[0]: null'));
-ok("the quality span is fed the quality weight",
+// THE INDEX IS THE ASSERTION. ClaimVoteWeightOf returns (verdict, quality) and
+// the two weigh at different epochs. With only one row left, w[0] would render a
+// verdict-epoch figure under a quality question and NOTHING on the page would
+// look wrong — the tuple is the only thing that can catch it.
+ok("the quality span is fed the quality weight, index 1",
   src.includes('qv.textContent = voteLockFigures(slug, w? w[1]: null'));
+ok("...and the verdict weight is not read into it",
+  !/textContent = voteLockFigures\(slug, w\? w\[0\]/.test(src));
 
 // A failed read must not break the panel, and demo mode must not query a chain.
-ok("the filler is gated on live mode and an address", src.includes('if((!dv && !qv) || !CFG.addr || !isLive()) return;'));
+ok("the filler is gated on live mode and an address", src.includes('if(!qv || !CFG.addr || !isLive()) return;'));
 ok("every read has its own catch", (src.match(/\.catch\(\(\)=>null\)\]?\),?\n?/g)||[]).length >= 3);
 
 // ---- the me-page: one read per court, and the total is not the sum ----

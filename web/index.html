@@ -575,7 +575,7 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
   position:relative}
 .ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
 .ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
-/* THE SAME ROW, OUTSIDE A TICKET. voteLockLine and the reward-pool row emit a
+/* THE SAME ROW, OUTSIDE A TICKET. qualityLockLine and the reward-pool row emit a
    .line, and every rule for one was written as `.ticket .line` — so on the
    quality panel, which has no ticket, both came out as two bare inline spans:
    "what voting commitsCasting commits the weight you vote with…", label and
@@ -4022,45 +4022,42 @@ function voteHelpModal(slug, d){
     </div></dialog>`;
 }
 
-/* THE ROUNDS, WITH THE OTHER DATES. Which round this is, and which ones already
-   failed, is the claim's history — it belongs beside "answered" and "vote
-   closes" in the resolution ladder, not between the question and the buttons.
-   A voter deciding how to vote does not need to know what the bond will cost
-   the NEXT challenger. */
-function disputeRounds(slug, d, nowH){
-  const posted = d.disputeBondNext? cc(d.disputeBondNext,slug) : null;
-  const k = d.round||0;
-  let out="";
-  for(let i=1;i<=k;i++) out+=`<div class="line spent"><span><s>round ${i}</s></span><span class="r">failed quorum — half that round's disputer bond burned, half returned</span></div>`;
-  out+=`<div class="line"><span>✓ round ${k+1}</span><span class="r">voting now${posted?` at ${posted}`:""} — the bond doubles each failed round, and the count resets when a round decides</span></div>`;
-  // The ladder above already carries a dated "vote closes" row whenever the
-  // chain gives a height to project from. When it does not, the fact still has
-  // to be said somewhere, and this is the row that is about the round.
-  // Two cases the dated ladder row cannot carry, and both are actionable: a
-  // chain that exposes no close height at all, and a window that has already
-  // passed — the second is the moment Resolve starts working, which is the one
-  // thing somebody looking at a stale-looking ballot wants to know.
-  if(!d.voteEndsAt){
-    out+=`<div class="line"><span>vote closes</span><span class="r">about 7 days from the round's opening — the chain exposes no close height to read; Resolve simply refuses until it has passed</span></div>`;
-  }else if(nowH!=null && d.voteEndsAt<=nowH){
-    out+=`<div class="line"><span>vote closes</span><span class="r">the window has passed — Resolve works now</span></div>`;
-  }
-  return out? `<div class="ticket" style="margin-top:12px">${out}</div>` : "";
+/* WHICH ROUND, AND WHEN IT SHUTS — one line, under the question.
+
+   This replaces four ladder rows above the ballot and a paragraph below it. A
+   voter choosing how to vote needs the clock; everything else that was here —
+   quorum, the vote lock, what each outcome does to whose bond — is one click
+   away in "How this vote works", which is where a reader goes when they want
+   the rules rather than the decision.
+
+   THE BOND FIGURE IS GONE ON PURPOSE, not for brevity. The row it came from
+   read "voting now at 0.71 KOURT:COVID", and that number is DisputeBondNext —
+   dispute.gno:849 says it "quotes what the NEXT dispute round costs". Voting
+   costs no bond at all; it locks coin you keep. Printing a challenger's price
+   beside the word "voting" tells a voter they must pay to vote, which is
+   false, so it is not carried forward in shorter form. */
+function ballotHint(slug, d, nowH){
+  // Four close states. The two with no date to show are the actionable ones: a
+  // chain that publishes no close height, and a window that has already passed
+  // — the second is the moment Resolve starts working, which is what somebody
+  // looking at a stale-looking ballot wants to know. The ladder's own dated
+  // "vote closes" row can carry neither.
+  const close = !d.voteEndsAt? "closes about 7 days after it opened"
+    : (nowH==null)? `closes at block ${fmtN(d.voteEndsAt)}`
+    : (d.voteEndsAt<=nowH)? "voting has closed — Resolve works now"
+    : `closes in ${wall(nowH, d.voteEndsAt)}`;
+  return `Round ${(d.round||0)+1} — ${close}. One vote per address, and you cannot change it.`;
 }
 
 function disputeTicket(slug, id, d, nowH){
-  // THE MECHANISM IS NOT ON THE BALLOT. Quorum, threshold, what a vote locks
-  // and where the coin goes were five dense lines between the question and the
-  // buttons — a reader had to get through the rules of the court to reach the
-  // decision. They are all in "How this vote works" now, which is one click and
-  // was already the place for them. What is left here is what somebody deciding
-  // needs: the question, the two outcomes, the cost, the clock, and whether
-  // they may vote at all.
+  // THE MECHANISM IS NOT ON THE BALLOT. Quorum, threshold, what a vote locks,
+  // what each outcome does to whose bond, and where the coin goes were seven
+  // dense lines between the question and the buttons — a reader had to get
+  // through the rules of the court to reach the decision. They are all in "How
+  // this vote works" now, which is one click and was already the place for
+  // them. What is left is the question, the clock, and the buttons.
   return `<div class="ticket" style="margin-top:12px"><h3>Should this answer be overturned?</h3>
-      <div class="hint">${shortAddr(d.answerer)} answered ${sideName(d.answer)}${d.answerBond? ` and bonded ${cc(d.answerBond,slug)} on it` : ` — its bond already burned in an earlier overturned round`}. One vote per address, and you cannot change it.</div>
-      <div class="line"><span>uphold</span><span class="r">the answer stays ${sideName(d.answer)}${d.answerBond? `. Whoever challenged it loses their bond` : ``}</span></div>
-      <div class="line"><span>overturn</span><span class="r">the answer becomes ${sideName(1-d.answer)}${d.answerBond? `. ${shortAddr(d.answerer)} loses their bond` : ` — no bond is left to burn`}</span></div>
-      ${voteLockLine("verdict","votecommit")}
+      <div class="hint">${ballotHint(slug, d, nowH)}</div>
       <div class="actions" id="voteactions" style="margin-top:10px">
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
@@ -4112,33 +4109,33 @@ async function fillVoteEligibility(slug, id, d){
    when they sign — but they lose an expectation, and the overlay is where
    people actually vote. VOTEFLOOR.md carries the finding and the exact reads.
 
-   TWO LANES, TWO RELEASE RULES, and they are not interchangeable. A verdict
-   vote is committed until its round resolves. A quality vote is committed until
-   it can no longer decide anything: its own question closing, or the claim
-   itself ending when the tally has frozen and later rounds keep voting the same
-   running total. Do NOT write "until the tally is superseded" — that was the
-   first version of the rule and it is wrong, because a tally is superseded only
-   by a new round and nothing makes a round open. That sentence went stale in
-   three documents before check-epoch-coherence arm 11 started failing the build
-   over it.
+   ONE LANE ON A PANEL, THE OTHER IN THE MODAL. There are two release rules and
+   they are not interchangeable: a verdict vote is committed until its round
+   resolves, a quality vote until its question can no longer decide anything —
+   its own close, or the claim itself ending when the tally has frozen and later
+   rounds keep voting the same running total. Only the QUALITY rule is rendered
+   as a row: the dispute ballot was cut back to the question and the buttons, so
+   the verdict rule is prose in "How this vote works" ("locked until this round
+   ends") and the figure a holder has committed is on their me-page, in
+   commitmentsTicket, which reads both lanes. If a verdict row is ever wanted
+   again, the rule above is the one to write and the lane split in
+   ClaimVoteWeightOf is why it cannot borrow the quality figure.
+
+   Do NOT write "until the tally is superseded" — that was the first version of
+   the rule and it is wrong, because a tally is superseded only by a new round
+   and nothing makes a round open. That sentence went stale in three documents
+   before check-epoch-coherence arm 11 started failing the build over it.
 
    AND STAKING IS NOT REFUSED. Committed coin stays in the balance, keeps
    voting, and can still be staked — mustStakable ignores the vote lock
    deliberately. Saying "your coin is locked" would be false in the direction
    that costs a holder a legitimate action, so the wording is the realm's own:
    it cannot also back a bond, a deposit or a transfer. */
-function voteLockLine(lane, spanId){
-  const until = lane==="quality"
-    ? "until this quality question can no longer decide anything — when it closes, or when the claim itself ends if the tally has frozen and later rounds keep voting the same running total"
-    : "until this round ends";
-  // SHORT ON THE BALLOT, because the ballot is where somebody decides. What
-  // locking rules OUT — a bond, a deposit, a transfer — is in "How this vote
-  // works"; what it costs them is here, with their own figures.
-  const body = lane === "quality"
-    ? `Casting commits the weight you vote with, ${until}. It stays in your balance and keeps voting, and it can still be staked — but it cannot also back a bond, a deposit or a transfer.`
-    : `the coin you vote with, ${until}. It stays in your balance, it keeps voting, and it can still be staked.`;
+function qualityLockLine(){
+  const until = "until this quality question can no longer decide anything — when it closes, or when the claim itself ends if the tally has frozen and later rounds keep voting the same running total";
   return `<div class="line"><span>voting locks</span><span class="r">`
-    + body + `<span id="${esc(spanId)}"></span></span></div>`;
+    + `Casting commits the weight you vote with, ${until}. It stays in your balance and keeps voting, and it can still be staked — but it cannot also back a bond, a deposit or a transfer.`
+    + `<span id="qualcommit"></span></span></div>`;
 }
 /* The figures, separately, because they arrive from the chain after the panel
    has rendered and every one of them may be unavailable. A missing read prints
@@ -4154,18 +4151,19 @@ function voteLockFigures(slug, would, locked, free){
    limit and SpendableOf is NOT — that one is stake-only and over-promises by
    the whole of a vote commitment. */
 async function fillVoteCommitment(slug, id){
-  const dv=document.getElementById("votecommit"), qv=document.getElementById("qualcommit");
-  if((!dv && !qv) || !CFG.addr || !isLive()) return;
+  const qv=document.getElementById("qualcommit");
+  if(!qv || !CFG.addr || !isLive()) return;
   try{
     const [w, locked, free] = await Promise.all([
       tup(`ClaimVoteWeightOf(${gstr(slug)},${gstr(CFG.addr)},${id})`).catch(()=>null),
       one(`VoteLockedOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null),
       one(`DisposableOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null)]);
-    // The two lanes weigh at DIFFERENT epochs, so their figures are not
-    // interchangeable: crossing them is the exact defect VoteWeightWhy was
-    // split in two to fix.
-    if(dv) dv.textContent = voteLockFigures(slug, w? w[0]: null, locked, free);
-    if(qv) qv.textContent = voteLockFigures(slug, w? w[1]: null, locked, free);
+    // INDEX 1, and the index is the whole assertion. ClaimVoteWeightOf returns
+    // (verdict, quality) and the two weigh at DIFFERENT epochs; w[0] here would
+    // print a verdict-epoch figure under a quality question, which is the exact
+    // defect VoteWeightWhy was split in two to fix. Only one lane renders a row
+    // now, so nothing on the page would look wrong if this read the other one.
+    qv.textContent = voteLockFigures(slug, w? w[1]: null, locked, free);
   }catch(_){}
 }
 /* ---------------- everything one holder is committed to ----------------
@@ -7547,7 +7545,6 @@ function resolutionSection(slug,id,d,nowH,tl){
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.</div></div>`
-      + disputeRounds(slug, d, nowH)
       + disputeTicket(slug, id, d, nowH);
   } else if(d.phase==="provisional"){
     const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext,slug)+" (it doubles each failed round).":"";
@@ -7590,12 +7587,12 @@ function qualitySection(slug,id,d){
         + btn("Vote: mid","VoteQuality",{courtSlug:slug,claimID:id,bucket:1})
         + btn("Vote: high","VoteQuality",{courtSlug:slug,claimID:id,bucket:2},"yes");
   if(d.phase==="disputed"){ line = "While a dispute is running, the same voters also grade the claim — was it worth asking? — on the same ballot, sealed until the vote closes. No separate quality flag can be opened until the dispute ends. Anyone holding KOURT:" + esc(slug).toUpperCase() + " staked on the claim (its author, its answerer, its stakers) is excluded from both questions.";
-    act = voteQ; qlock = voteLockLine("quality","qualcommit"); }
+    act = voteQ; qlock = qualityLockLine(); }
   else if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? The tally is <b>sealed</b> until it closes.";
     act = voteQ + btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id});
-    qlock = voteLockLine("quality","qualcommit"); }
+    qlock = qualityLockLine(); }
   else if(d.counterOpen){ line = "A slash is pending — the answerer may counter-flag to force one re-vote; if the window lapses unchallenged, anyone may close it.";
-    qlock = voteLockLine("quality","qualcommit");
+    qlock = qualityLockLine();
     act = voteQ
         + btn("Counter-flag (answerer)","CounterFlag",{courtSlug:slug,claimID:id})
         + btn("Resolve counter re-vote","ResolveCounter",{courtSlug:slug,claimID:id},"","if a re-vote ran")
