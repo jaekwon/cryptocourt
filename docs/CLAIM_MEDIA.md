@@ -1,6 +1,6 @@
 # CLAIM_MEDIA — evidence a claim carries, and proof it hasn't changed
 
-> **v0.7 — built, and run. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
+> **v0.8 — built, run, and looked at in a browser. Supersedes v0.1; two owner rulings settled; griefing pass applied; §8 rewritten from the code after the plan and the build drifted apart.** A claim may carry up to **seven**
 > media items. The chain stores a **sha256 and a list of mirrors**, never the
 > bytes. kourt.xyz keeps its own copy of every image at an address derived from
 > that hash, so no third party can take a claim's evidence away.
@@ -502,24 +502,49 @@ preserved when it is not has been misled by the product.
 
 ---
 
-## 8. The map
+## 8. Where a reader meets an exhibit
 
-There is no bulk claim fetch: `listClaimsPage` already issues per-claim qevals
-inside one `Promise.all`. `ClaimMedia` joins that batch with `.catch(()=>"")`,
-the tolerance `ClaimBody` already carries for realms predating the field. Honest
-cost: one more read per claim, so a fifty-claim docket is fifty more. If that
-bites, the answer is a batched accessor, not dropping thumbnails.
+Three surfaces, all fed by `claimExhibits` except the node, and this section is
+written from the code rather than from the plan — an earlier version of it
+described a horizontal strip, an `object-fit:cover`, a circular clip and a
+per-claim read, none of which is what got built.
 
-- **Node** — first live item, `clipPath` circle, `loading="lazy"`,
-  `referrerpolicy="no-referrer"`, `onerror` removes the element. A broken glyph
-  inside a node is worse than no image. Nodes do **not** verify — fifty hashes on
-  a map draw is not a trade worth making; verification happens on selection.
-- **Card** — horizontal scroll strip in a reserved aspect box using the stored
-  `w`/`h`, with `object-fit:cover`. The box must be reserved: `.mapsel` is tuned
-  closely enough that an image arriving after paint resizes the card mid-glide.
-  Seven does not grid evenly, which is the second reason for a strip.
+- **Node** — first live item, clipped to a rounded square by a `clipPath` at a
+  fixed `width`/`height`, so a filed image cannot influence the map's layout at
+  all. `loading="lazy"`, `referrerpolicy="no-referrer"`, `onerror` removes the
+  element: a broken glyph inside a node is worse than no image. Nodes do **not**
+  verify — fifty hashes on a map draw is not a trade worth making; and they draw
+  **only** from the archive, never a mirror, because fifty nodes fanning out to
+  filer-chosen hosts is fifty readers' addresses sent wherever the filer liked.
+- **Claim page and map card** — the same vertical list from `claimExhibits`,
+  each exhibit numbered `N of M`, directly under the body. The claim page went
+  without this until late: `claimDetail` had always read `ClaimMedia` into
+  `d.media` and only the card ever drew it, so evidence appeared on gnoweb and on
+  a card you reach by opening the map and clicking the right node, and was
+  invisible on the surface every link, share and search result points at.
+- **The box is reserved, but not on the filer's word.** `w`/`h` set an
+  `aspect-ratio` so the page does not jump as each exhibit lands. They are also
+  unverified filer input, and the realm bounds each to `maxMediaDim` without
+  bounding the ratio: `mediaBoxRatio` therefore honours a ratio up to 8:1 and
+  refuses anything past it, with `max-height:60vh` as a second bound on the image
+  that actually arrives. See §9 row 12 for what that cost before it was there.
 - **Lightbox** — gallery with next/prev, count, caption, and the verification
   line. Esc and backdrop close, focus trapped and restored, arrow keys navigate.
+
+**The map's read is batched.** `ClaimMediaPage(court, fromID, count)` answers for
+a run of claims in one qeval, with a missing claim as an empty hole rather than
+an abort. Asking per claim would be a round trip per node before a fifty-claim
+map could draw. Failure is silent and total: no thumbnails, same map.
+
+**The offline demo carries its own bytes.** `web/README.md` promises a page that
+runs from `file://` and makes no network calls in demo mode, and a real exhibit
+resolves to the archive — so the sample would either break that promise or draw
+a broken image. `DEMO_OVERLAY.media` holds one exhibit as a `data:` URI,
+`mediaSrc` prefers inline bytes over the archive, and the restriction to `data:`
+keeps the no-network property true by construction. `mediaVerify` answers
+`sample` for anything carrying them: `fetch()` resolves a `data:` URI, so
+without that it would hash its own embedded bytes, agree with its own digest,
+and print "matches what was filed" about an archive that has never seen it.
 
 ---
 
@@ -538,6 +563,15 @@ Recorded because each is easy to make again:
 | 7 | a `$help` link carrying seven items | multi-kilobyte query string, fails opaquely |
 | 8 | `POST /m` open and unmetered | free anonymous file host on kourt.xyz's disk, forever |
 | 9 | mirrors fetched in listed order | filer-chosen URLs fetched by every viewer: a DDoS amplifier that also leaks their IPs |
+| 10 | the claim page never drew exhibits | the read was paid for and discarded; evidence visible on gnoweb and the map card, invisible on the page every link points at |
+| 11 | every `.line` rule written as `.ticket .line` | the same helper renders as two grid tracks on the ballot and as one run-together word on the quality panel; three tests pinned the rule's text and passed |
+| 12 | the declared `w`/`h` trusted for the reserved box | `1x20000` reserves 40,000px, seven per claim, unfixable until a global-DAO purge — a takedown built for illegal content spent on a layout attack |
+| 13 | the demo sample carried no evidence | a feature that works but is absent from the only build most people run demonstrates itself as missing |
+
+Rows 10–12 were all found the same way: by rendering the page in a browser and
+looking at it. None is visible in the source, and each had passing tests over the
+exact code that was wrong — which is the argument for `rowscope_layout.js`, and
+against believing a green suite about anything a reader sees.
 
 ---
 
