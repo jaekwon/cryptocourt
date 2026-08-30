@@ -1202,9 +1202,9 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;
   box-shadow:var(--glow-a)}
 .act{display:inline-flex; align-items:flex-start; gap:6px; flex-wrap:wrap; position:relative; max-width:100%; min-width:0}
-.clitog,.copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
+.copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
   border:1px solid var(--line-2); border-radius:var(--r); padding:3px 7px; align-self:center}
-.clitog:hover,.copybtn:hover{color:var(--accent-2); border-color:var(--accent-2)}
+.copybtn:hover{color:var(--accent-2); border-color:var(--accent-2)}
 /* Three theme buttons with no pressed state left the reader guessing which one
    built the snippet on screen. aria-pressed carries it to a screen reader. */
 .copybtn[aria-pressed=true]{color:var(--accent-2); border-color:var(--accent-2);
@@ -1222,9 +1222,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .clipprev img{display:block; width:100%; height:auto}
 #share-dlg h4 .hint{font-weight:400; font-size:10.5px; letter-spacing:.06em;
   font-family:var(--mono); color:var(--muted); margin-left:8px; text-transform:none}
-.signbtn{font-size:11.5px; color:var(--accent-2); border:1px solid var(--accent);
-  border-radius:var(--r); padding:3px 8px; align-self:center; background:var(--accent-wash)}
-.signbtn:hover{filter:brightness(1.05)}
 .txnote{flex-basis:100%; font-size:12px; color:var(--ink-2); margin-top:5px}
 .txnote.ok{color:var(--good)}
 .btn.inert{opacity:.55; cursor:not-allowed}
@@ -2598,19 +2595,35 @@ function btn(label, func, args, cls, sub, send, gate){
   // `send` (Buy only): a concrete "<µGNOT>ugnot" from the receipt input — it
   // prefills the CLI --send and the Adena amount. `gate` marks the one-click
   // paths as needing the acknowledgement tick first (live only).
-  const inner = `<span class="g">↗</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
-  const action = CFG.mode==="demo"
-    ? `<button class="btn ${cls||""} inert" data-inert="1">${inner}</button>`
-    : (gate
-      // no href while gated: a bare <a> can't be middle-clicked or "opened in
-      // new tab" around the acknowledgement — ticking it re-renders with href
-      ? `<a class="btn ${cls||""}" data-needack="1" aria-disabled="true" role="link"${send?` title="attach ${esc(send)} in the form's send field"`:""}>${inner}</a>`
-      : `<a class="btn ${cls||""}"${send?` title="attach ${esc(send)} in the form's send field"`:""} target="_blank" rel="noopener" href="${esc(tx(func,args))}">${inner}</a>`);
-  return `<span class="act">`
-    + action
-    + `<button class="clitog" data-cli="${esc(cliCmd(func,args,send))}" title="Show the command line for this action">CLI</button>`
-    + (CFG.addr && CFG.mode==="live"? `<button class="signbtn"${gate?" disabled":""} data-func="${esc(func)}" data-args="${esc(JSON.stringify(args||{}))}"${send?` data-send="${esc(send)}"`:""} title="Sign and broadcast with Adena">✍ Sign</button>`:"")
-    + `</span>`;
+  // ONE CONTROL, and it is the one with the verb on it. This used to be three:
+  // a gnoweb link carrying the label, a CLI toggle, and — only when a wallet was
+  // already connected — a small "✍ Sign". So the primary action of the page was
+  // a link OFF the page, the one-click path was a secondary button, and a reader
+  // with no wallet saw no sign affordance at all: nothing on the ballot said
+  // signing was possible, let alone how to start.
+  //
+  // DECIDED AT CLICK TIME, not at render time, which is why this is a <button>
+  // with no href. Whether a wallet is connected can change while the panel is on
+  // screen (the rail's Connect does not re-render every open panel), so a
+  // control that committed to gnoweb at render would be wrong by the time it was
+  // pressed. The handler asks window.adena and CFG.addr at the moment of the
+  // click and either signs or opens the help dialog.
+  //
+  // data-cli RIDES THE BUTTON. The command line did not go away with the CLI
+  // toggle — the dialog shows it, copyable, for anyone without a wallet — and
+  // keeping it in the markup means buy_test's --send assertions still see it.
+  const inner = `<span class="g">${CFG.mode==="demo"?"↗":"✍"}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
+  if(CFG.mode==="demo")
+    return `<span class="act"><button class="btn ${cls||""} inert" data-inert="1">${inner}</button></span>`;
+  // NOT `disabled` while gated: a disabled button swallows the click, and the
+  // click is what prints "tick the acknowledgement first". It stays pressable
+  // and the handler refuses, so the refusal can explain itself.
+  return `<span class="act"><button class="btn ${cls||""}" data-act="1"`
+    + (gate? ` data-needack="1" aria-disabled="true"` : "")
+    + ` data-func="${esc(func)}" data-args="${esc(JSON.stringify(args||{}))}"`
+    + ` data-cli="${esc(cliCmd(func,args,send))}" data-tx="${esc(tx(func,args))}"`
+    + (send? ` data-send="${esc(send)}"` : "")
+    + `>${inner}</button></span>`;
 }
 
 /* SHELL-QUOTED, and it has to be now that a comment body is one of these
@@ -2637,27 +2650,87 @@ function cliCmd(func, args, send){
   return c;
 }
 
-/* One delegated handler: any CLI toggle opens a copyable block after its action. */
-document.addEventListener("click", (ev)=>{
-  const t = ev.target.closest(".clitog"); if(!t) return;
-  const open = t.parentElement.querySelector(".cliblock");
-  if(open){ open.remove(); const b=t.parentElement.querySelector(".copybtn"); if(b) b.remove(); return; }
+/* A copyable command block, with the clipboard fallback intact.
+
+   This was a delegated handler behind a "CLI" toggle beside every action — 47
+   buttons' worth of chrome for something most readers never press. The block
+   itself was worth keeping: it is the whole answer for somebody without a
+   wallet extension. So it became a function, and the sign-help dialog is the
+   one place that calls it.
+
+   THE FALLBACK IS THE POINT. navigator.clipboard is undefined on file:// and on
+   any non-secure origin, which is exactly how this page is often opened. When
+   the write fails the text is SELECTED instead, so Ctrl/⌘-C still works, and
+   the button says so rather than silently doing nothing. */
+function cliBlock(cmd){
+  const wrap = document.createElement("div");
   const pre = document.createElement("pre");
   pre.className = "cliblock mono";
-  pre.textContent = t.dataset.cli;
+  pre.textContent = cmd;
   pre.title = "Click to copy";
   const selectPre = ()=>{ const r=document.createRange(); r.selectNodeContents(pre);
     const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); };
-  const copy = ()=> navigator.clipboard? navigator.clipboard.writeText(t.dataset.cli)
+  const copy = ()=> navigator.clipboard? navigator.clipboard.writeText(cmd)
     : Promise.reject(new Error("no-clipboard"));
   pre.onclick = ()=>{ copy().then(()=>{ pre.classList.add("copied"); setTimeout(()=>pre.classList.remove("copied"), 900); }).catch(selectPre); };
   const cb = document.createElement("button");
   cb.type = "button"; cb.className = "copybtn"; cb.textContent = "Copy";
   cb.setAttribute("aria-live","polite");
   cb.onclick = ()=>{ copy().then(()=>{ cb.textContent = "Copied ✓"; setTimeout(()=>{ cb.textContent = "Copy"; }, 1200); }).catch(()=>{ selectPre(); cb.textContent = "Selected — press Ctrl/⌘-C"; setTimeout(()=>{ cb.textContent = "Copy"; }, 2500); }); };
-  t.parentElement.appendChild(pre);
-  t.parentElement.appendChild(cb);
-});
+  wrap.appendChild(pre); wrap.appendChild(cb);
+  return wrap;
+}
+
+/* WHAT TO DO WHEN THE BUTTON CANNOT SIGN — the dialog that replaced a dead end.
+
+   Before this, pressing an action with no wallet connected opened gnoweb in a
+   new tab and said nothing about why, and a reader without the extension had no
+   route at all except a CLI toggle they had to know to press. There are exactly
+   three situations and each one gets the thing it needs:
+
+     wallet present, not connected  -> Connect, and the action retries itself
+     no wallet at all               -> where to get one, incl. the file:// trap
+     neither is what they want      -> gnoweb, and the command line, both here
+
+   THE RETRY IS THE FLOW. Connecting and then having to find the button again is
+   the same dead end one step later, so the dialog re-fires the click it
+   interrupted. */
+function signHelp(el){
+  const func = el.dataset.func || "", cli = el.dataset.cli || "", txurl = el.dataset.tx || "";
+  const hasWallet = !!window.adena;
+  const fileTrap = location.protocol === "file:";
+  const dlg = document.createElement("dialog");
+  dlg.className = "helper";
+  dlg.innerHTML = `<div class="hd"><h3>Sign ${esc(func)}</h3>
+      <button type="button" class="pill void" data-cancel>close</button></div>
+    <div class="bd">
+      ${hasWallet
+        ? `<p>Adena is installed but this page is not connected to it yet. Connect once and the action continues — you will still see the transaction before you approve it.</p>
+           <div class="actions"><button type="button" class="btn" data-connect>Connect Adena</button></div>`
+        : `<p>${fileTrap
+             ? "No wallet found — and extensions do not run on <span class=\"mono\">file://</span> pages at all. Serve this folder (<span class=\"mono\">python3 -m http.server</span>) and reload, then install Adena from adena.app."
+             : "No wallet found. Install the Adena extension from adena.app, then press the button again."}</p>`}
+      <h4>Or do it another way</h4>
+      <p class="small muted">Both of these sign with your own key. Nothing on this page ever holds one.</p>
+      <div class="actions"><a class="btn" target="_blank" rel="noopener" href="${esc(txurl)}">Open in gnoweb</a></div>
+      <div data-cli-slot></div>
+    </div>`;
+  dlg.querySelector("[data-cli-slot]").appendChild(cliBlock(cli));
+  document.body.appendChild(dlg);
+  const close = ()=>{ try{ dlg.close(); }catch(_){} dlg.remove(); };
+  dlg.addEventListener("click", async ev => {
+    if(ev.target.closest("[data-cancel]")) return close();
+    if(ev.target.closest("[data-connect]")){
+      close();
+      await adenaConnect();
+      // Only re-fire if the connect actually took. Clicking again on a failed
+      // connect would reopen this same dialog in a loop.
+      if(CFG.addr) el.click();
+    }
+  });
+  dlg.addEventListener("close", ()=> dlg.remove());
+  dlg.showModal();
+}
 
 /* ============================ Adena wallet ============================= */
 /* Optional. The page works fully without it: every action stays a gnoweb link
@@ -2861,9 +2934,17 @@ document.addEventListener("click",(ev)=>{
     openExhibit(parseInt(ex.dataset.ex, 10) || 0, ex);
     return;
   }
-  const t = ev.target.closest(".signbtn"); if(!t) return;
-  let args = {}; try{ args = JSON.parse(t.dataset.args||"{}"); }catch(_){}
-  adenaSign(t.dataset.func, args, t);
+  /* THE ACTION. Ordered after the three refusals above, because each of them is
+     a reason this click must not become a transaction — demo data, an unticked
+     acknowledgement, an address the court will not accept a vote from. */
+  const act = ev.target.closest("[data-act]"); if(!act) return;
+  let args = {}; try{ args = JSON.parse(act.dataset.args||"{}"); }catch(_){}
+  // BOTH conditions, not either. CFG.addr is remembered in storage and outlives
+  // the extension that produced it, so an address alone does not mean a wallet
+  // is there to sign with — and window.adena alone does not mean this page has
+  // been granted an account.
+  if(CFG.addr && window.adena) adenaSign(act.dataset.func, args, act);
+  else signHelp(act);
 });
 
 /* The composer's two handlers. The counter is in BYTES so it agrees with the cap
@@ -3111,7 +3192,7 @@ function mountCompose(host, slug){
 
       // The sign path reads data-args at click time, so keeping the attribute
       // current is the whole integration — no second code path to drift.
-      const sign = actions.querySelector(".signbtn");
+      const sign = actions.querySelector("[data-act]");
       if(sign){
         sign.dataset.args = JSON.stringify(args);
         sign.disabled = !!fault || !title.value.trim();
@@ -4154,7 +4235,7 @@ function disputeTicket(slug, id, d, nowH){
 async function fillVoteEligibility(slug, id, d){
   if(!CFG.addr) return;
   const box = document.getElementById("voteactions");
-  const btns = box? box.querySelectorAll(".btn, .signbtn") : [];
+  const btns = box? box.querySelectorAll(".btn") : [];
   if(!btns.length) return;
   try{
     const [author,p,com] = await Promise.all([
@@ -5799,10 +5880,10 @@ function recomputeBuy(){
 }
 function refreshBuyActions(){
   const wrap=document.getElementById("buyactions"); if(!wrap||!BUYCTX) return;
-  const hadCli=!!wrap.querySelector(".cliblock");
+  // No CLI block to preserve across a retype any more: the command lives in the
+  // sign-help dialog, which is modal and reads data-cli when it opens, so it is
+  // never stale and never needs re-expanding.
   wrap.innerHTML = buyActionsHtml(BUYCTX.slug, BUYQ);
-  // an open CLI block survives a retype: rebuild it from the fresh data-cli
-  if(hadCli){ const t=wrap.querySelector(".clitog"); if(t) t.click(); }
 }
 document.addEventListener("input", ev=>{ if(ev.target && ev.target.id==="buyamt") recomputeBuy(); });
 document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack") refreshBuyActions(); });

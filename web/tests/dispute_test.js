@@ -168,6 +168,67 @@ ok("weight is the pre-round snapshot, said in the modal",
 ok("no eligibility prose survives on the ballot",
    !html.includes("cannot vote") && !html.includes("holder can vote"));
 ok("abstain button with turnout-only sub", html.includes("> Abstain") && html.includes("counts to turnout only, never to a side"));
+
+// ---- one control per action, and it is the one with the verb on it --------
+// It used to be three: a gnoweb link carrying the label, a "CLI" toggle, and —
+// only when a wallet happened to be connected already — a small "✍ Sign". So
+// the page's primary action was a link OFF the page, and a reader with no
+// wallet saw nothing that said signing was even possible.
+{
+  // A LIVE BALLOT. `html` above is the demo render, where every button is inert
+  // by design — asserting the action markup against it passes for the wrong
+  // reason or not at all. The first version of this block did the latter.
+  const save = CFG.mode; CFG.mode = "live";
+  const L = disputeTicket("orem", 3, d, NOW);
+  CFG.mode = save;
+
+  const one = L.match(/<span class="act">[\s\S]*?<\/span>/g) || [];
+  ok("each action is a single control", one.length >= 3
+     && one.every(a => (a.match(/<button|<a /g)||[]).length === 1));
+  ok("...and it is a button, not a link off the page",
+     !/<span class="act"><a /.test(L) && !L.includes('target="_blank"'));
+  ok("no CLI toggle rides along any more",
+     !L.includes(">CLI<") && !L.includes("clitog") && !html.includes("clitog"));
+  ok("no separate sign button either", !L.includes("signbtn") && !html.includes("signbtn"));
+  // Everything the two removed controls carried still travels, on the button,
+  // for the dialog to use.
+  ok("the button carries what it needs to sign, to link and to quote",
+     /data-act="1"/.test(L) && /data-func="VoteDispute"/.test(L)
+     && /data-args="/.test(L) && /data-cli="/.test(L) && /data-tx="/.test(L));
+  // Demo keeps its own guarantee: inert, and carrying no runnable command for
+  // sample arguments.
+  ok("...and demo stays inert, with nothing runnable on it",
+     html.includes('data-inert="1"') && !html.includes("data-cli") && !html.includes("data-act"));
+}
+// DECIDED AT CLICK TIME. Whether a wallet is connected can change while the
+// panel is on screen, so a control that committed to gnoweb at render would be
+// wrong by the time it was pressed. Both conditions are required: CFG.addr is
+// remembered in storage and outlives the extension that produced it.
+ok("the handler asks the wallet at the moment of the click",
+   src.includes("if(CFG.addr && window.adena) adenaSign(act.dataset.func, args, act);")
+   && src.includes("else signHelp(act);"));
+// The three refusals must come FIRST — each is a reason the click must not
+// become a transaction.
+ok("...after the refusals, not before them",
+   src.indexOf('closest("[data-inert]")') < src.indexOf('closest("[data-act]")')
+   && src.indexOf('closest("[data-voteblocked]")') < src.indexOf('closest("[data-act]")')
+   && src.indexOf('closest("[data-needack]")') < src.indexOf('closest("[data-act]")'));
+// ---- the dialog is a flow, not a dead end ---------------------------------
+ok("no wallet connected opens help rather than a silent new tab",
+   /function signHelp\(el\)/.test(src));
+ok("...offering Connect when the extension is there",
+   src.includes("data-connect") && src.includes("Connect Adena"));
+ok("...and the interrupted action retries itself once connected",
+   /await adenaConnect\(\);[\s\S]{0,300}if\(CFG\.addr\) el\.click\(\);/.test(src));
+// A failed connect must not reopen the same dialog forever.
+ok("...but only if the connect actually took", src.includes("if(CFG.addr) el.click();"));
+ok("...names the file:// trap, where no extension can ever load",
+   src.includes("extensions do not run on") && src.includes("file://"));
+ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
+   src.includes("Open in gnoweb") && src.includes("cliBlock(cli)"));
+ok("the copy fallback survives a page with no clipboard API",
+   /function cliBlock\(cmd\)/.test(src) && src.includes("no-clipboard")
+   && src.includes("Selected — press Ctrl/⌘-C"));
 ok("abstain arg choice=abstain", html.includes('"choice":"abstain"') || html.includes("abstain"));
 // The rule is stated ONCE now, in the modal — it was on the ballot and in the
 // modal, in two different sets of words for the same fact.

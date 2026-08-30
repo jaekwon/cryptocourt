@@ -108,7 +108,13 @@ ok("panel: five labels", ["You send","You receive","Average price you pay","Pric
 ok("panel: ack sentence", html.includes("cannot be sold back to the court"));
 ok("panel: button restates output", /Buy 0\.8\d KOURT:[A-Z]+/.test(html));
 ok("panel: demo sample note", html.includes("Sample data — computed from the demo court"));
-ok("panel: CLI --send concrete", html.includes("--send 100000000ugnot"));
+// DEMO CARRIES NO COMMAND LINE ANY MORE. It used to: the CLI toggle rendered
+// beside every button in every mode, so sample data came with a runnable
+// gnokey line against a real network — the exact trap the inert button was
+// added to prevent, sitting on the control next to it. The command is a live
+// affordance now, in the sign-help dialog, and demo mode has neither.
+ok("panel: demo offers no runnable command for sample data",
+   !html.includes("--send") && !html.includes("gnokey") && !html.includes("data-cli"));
 ok("panel: fineprint worst case", html.includes("private buyer, and there may not be one"));
 ok("panel: demo button inert", html.includes('data-inert="1"'));
 ok("panel: no banned words", !/backing|redeem|profit|APR/i.test(html));
@@ -117,6 +123,13 @@ ok("panel: no banned words", !/backing|redeem|profit|APR/i.test(html));
 CFG.mode = 'live';
 const htmlL = joinPanel("orem", s);
 ok("live: anchor gated until ack", htmlL.includes('data-needack="1"') && htmlL.includes('aria-disabled="true"'));
+// ...and the concrete send moved here with it, which is where it was always
+// true: this is the mode where the amount is a real amount.
+ok("live: CLI --send concrete", htmlL.includes("--send 100000000ugnot"));
+// A gated button must still be PRESSABLE. Disabling it swallows the click, and
+// the click is the only thing that says why it will not go through.
+ok("live: the gate does not disable the button",
+   !/data-needack="1"[^>]*\sdisabled/.test(htmlL));
 ok("live: staleness caveat", htmlL.includes("fewer units than shown, never more"));
 const htmlF = joinPanel("orem", {price:118, supply:118500000000, emitted:8900000, minted:null});
 ok("live fallback: price+supply kv, no computed rows", htmlF.includes("No quote") && !htmlF.includes('id="buyrows"') && htmlF.includes("coin price"));
@@ -129,10 +142,23 @@ ok("F4: parseGnot rejects beyond int64", parseGnot("9223372036854.775808")===nul
 ok("F4: refund row uses exact BigInt digits", buyRowsHtml({x:10n**18n, units:1000000n, cost:10n**18n-9007199254740993n, refund:9007199254740993n, avg:1, priceAfter:1, share:0}, 1).includes("9,007,199,254,740,993"));
 CFG.mode='live';
 const gated = buyActionsHtml("orem", null);
-ok("F2: gated anchor has NO href", gated.includes('data-needack="1"') && !gated.includes('href='));
+// THE PROPERTY, not the old shape. This asserted "an <a> with no href", which
+// was how the gate used to stop a middle-click or open-in-new-tab from routing
+// around the acknowledgement. The control is a <button> now, so that is
+// structural — and "no href" alone would pass on markup with no action at all.
+// What has to hold is that the gated control is a real, pressable action that
+// the handler will refuse.
+ok("F2: the gated action is a button the handler can refuse",
+   /<button class="btn primary"[^>]*data-needack="1"/.test(gated)
+   && /<button class="btn primary"[^>]*data-act="1"/.test(gated)
+   && !gated.includes("href="));
 const htmlF2 = joinPanel("orem", {price:118, supply:118500000000, emitted:8900000, minted:null});
 ok("F3: fallback keeps the ack checkbox", htmlF2.includes('id="buyack"'));
-ok("F3: fallback buy gated until ack (no href)", (()=>{ const m=htmlF2.match(/<a class="btn primary"[^>]*>/); return m && m[0].includes('data-needack') && !m[0].includes('href='); })());
+ok("F3: fallback buy gated until ack", (()=>{
+  const m = htmlF2.match(/<button class="btn primary"[^>]*>/);
+  return m && m[0].includes("data-needack") && m[0].includes("data-act")
+         && !m[0].includes("href=") && !/\sdisabled/.test(m[0]);
+})());
 ok("F3: BUYCTX noquote set", BUYCTX && BUYCTX.noquote===true);
 CFG.mode='demo';
 
