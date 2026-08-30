@@ -957,13 +957,93 @@ async function section5() {
      refusedAt === M.MEDIA_MAX_ITEMS, `refused at ${refusedAt}`);
 }
 
+
+/* ---- SEQUENCES, not situations -----------------------------------------
+ *
+ * The enumeration that found rows 32-37 was about the STATE a surface is in.
+ * This is the other axis: the ORDER things are done in. The composer has
+ * add, remove, restore, move, setCaption, seed and retry, and every one of them
+ * mutates a list other methods address by id.
+ *
+ * Most of it holds. The one that did not is restore: the panel offers an undo
+ * exactly once because say("") wipes the note and the button with it — a fact
+ * about the DOM, not about the list — and restore is a public method. Called
+ * twice with the same removed object it produced two rows sharing an id, the
+ * argument carried the exhibit twice, and fault() was empty, so it would have
+ * been filed that way. remove, setCaption, move and retry all find by id and
+ * would have acted on whichever came first.
+ */
+async function section6() {
+  const png = new Uint8Array([1, 2, 3]);
+  const mk = () => mediaNewComposerFor({
+    prepare: async () => ({mime: "image/webp", w: 800, h: 600, bytes: png}),
+    upload: async (b, m, sum) => ({sha256: sum, url: "https://kourt.xyz/m/" + sum}),
+  });
+  const settle = () => new Promise(r => setTimeout(r, 40));
+
+  let c = mk();
+  c.add({name: "A"}); c.add({name: "B"}); c.add({name: "C"});
+  await settle();
+  const gone = c.remove(c.items[0].id);
+  ok("an undo puts the exhibit back where it was",
+     c.restore(gone, 0) === true && c.items.map(x => x.name).join(",") === "A,B,C",
+     c.items.map(x => x.name).join(","));
+  ok("...and a second undo of the same one is refused", c.restore(gone, 0) === false);
+  ok("...so no two rows share an id",
+     new Set(c.items.map(x => x.id)).size === c.items.length);
+  ok("...and the argument carries each exhibit once",
+     c.argument().split("\n").length === 3, String(c.argument().split("\n").length));
+
+  // A draft is data from disk, so it gets the same rule.
+  const dup = [1, 1].map(id => ({id, kind: "img", state: "ready", sha256: "a".repeat(64),
+    mime: "image/webp", w: 8, h: 6, bytes: 9, caption: "", mirrors: ["https://i.imgur.com/a.webp"]}));
+  const seeded = mediaNewComposerFor({});
+  seeded.seed(dup);
+  ok("a draft cannot seed two rows with one id", seeded.items.length === 1);
+
+  // The rest of the battery, which all held.
+  c = mk(); c.add({name: "A"}); c.add({name: "B"}); await settle();
+  c.move(c.items[1].id, -1);
+  ok("a move reorders the argument, not only the display",
+     c.items.map(x => x.name).join(",") === "B,A");
+
+  c = mk();
+  for (let i = 0; i < M.MEDIA_MAX_ITEMS; i++) c.add({name: "x" + i});
+  await settle();
+  ok("the cap refuses an eighth", !!c.add({name: "over"}).error);
+  c.remove(c.items[0].id);
+  ok("...and a removal makes room again", !c.add({name: "again"}).error);
+
+  c = mk(); c.add({name: "A"}); await settle();
+  c.setCaption(c.items[0].id, "the memo");
+  const g = c.remove(c.items[0].id);
+  c.restore(g, 0);
+  ok("an undo keeps the caption that was typed", c.items[0].caption === "the memo");
+
+  // An exhibit removed while its upload is still running must not come back.
+  let release;
+  const slow = new Promise(r => { release = r; });
+  const c2 = mediaNewComposerFor({
+    prepare: async () => ({mime: "image/webp", w: 8, h: 6, bytes: png}),
+    upload: async (b, m, sum) => { await slow; return {sha256: sum, url: "https://kourt.xyz/m/" + sum}; },
+  });
+  c2.add({name: "slow"});
+  await settle();
+  c2.remove(c2.items[0].id);
+  release();
+  await settle();
+  ok("an exhibit removed mid-upload stays removed",
+     c2.items.length === 0 && c2.fault() === "", JSON.stringify(c2.fault()));
+}
+
 (async () => {
   await section1();
   await section2();
   await section3();
   await section4();
   await section5();
-  const EXPECTED = 224;
+  await section6();
+  const EXPECTED = 234;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

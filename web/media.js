@@ -594,9 +594,19 @@ function mediaNewComposer(opts) {
     return gone; // returned so the caller can offer an undo rather than a confirm
   }
 
+  /* AN EXHIBIT CANNOT BE PUT BACK TWICE. The undo holds the removed object and
+   * the panel happens to offer it once — say("") wipes the note, and the button
+   * with it — but that is a fact about the DOM, and restore is a public method.
+   * Called twice with the same object it produced two rows sharing one id: the
+   * argument carried the exhibit twice, fault() was empty so it would have been
+   * filed that way, and remove/setCaption/move/retry all find by id and would
+   * have acted on whichever came first. The list refuses instead of relying on
+   * the panel to be careful. */
   function restore(item, at) {
+    if (!item || items.some(x => x.id === item.id)) return false;
     items.splice(Math.max(0, Math.min(at, items.length)), 0, item);
     o.onChange && o.onChange(items);
+    return true;
   }
 
   /* Order is not decoration: the first exhibit is what the map node shows. */
@@ -625,6 +635,9 @@ function mediaNewComposer(opts) {
      exhibit added afterwards cannot take an id one of these already has. */
   function seed(restored) {
     for (const it of restored || []) {
+      // Same rule as restore: a stored draft is data from disk, and two rows
+      // sharing an id is a list nothing can address correctly.
+      if (!it || items.some(x => x.id === it.id)) continue;
       items.push(it);
       seq = Math.max(seq, Math.abs(it.id || 0));
     }
