@@ -195,6 +195,45 @@ func TestAnImageItemNeedsAHashAndRealDimensions(cur realm, t *testing.T) {
 	}
 }
 
+// THE EXACT BYTES THE OVERLAY PRODUCES. Every other test here hand-writes an
+// argument to the same spec media.js was written to — which checks that the spec
+// is self-consistent, not that the two sides agree. These strings were taken
+// from web/media.js's mediaArgLine by running it, and pasted verbatim.
+//
+// They differ from the hand-written ones in a way that only luck made harmless:
+// the client emits 0 for a video's width, height and length where the fixtures
+// here leave those fields empty. atoiOr0 accepts both, so it parses — and if it
+// ever stopped, nothing would have noticed until a video exhibit failed to file.
+const clientImageLine = "img|1111111111111111111111111111111111111111111111111111111111111111|" +
+	"image/webp|800|600|90210|the memo|https://i.imgur.com/abc.webp"
+
+const clientVideoLine = "vid|||0|0|0|the hearing|https://i.imgur.com/v.mp4"
+
+func TestTheOverlaysOwnArgumentParses(cur realm, t *testing.T) {
+	got, fault := parseMediaFault(clientImageLine + "\n" + clientVideoLine)
+	if fault != "" {
+		t.Fatalf("the overlay builds an argument this realm refuses: %q", fault)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected both exhibits, got %d", len(got))
+	}
+	if got[0].kind != mediaKindImage || got[0].caption != "the memo" ||
+		got[0].w != 800 || got[0].bytes != 90210 {
+		t.Fatalf("the image did not survive the round trip: %+v", got[0])
+	}
+	// A video's empty numbers must read as zero rather than as a fault, which is
+	// what atoiOr0 is for and what nothing had ever relied on.
+	if got[1].kind != mediaKindVideo || got[1].sha256 != "" ||
+		got[1].w != 0 || got[1].bytes != 0 || got[1].caption != "the hearing" {
+		t.Fatalf("the video did not survive the round trip: %+v", got[1])
+	}
+	// And what comes back out is what a client reads.
+	out := encodeMedia(got)
+	if !strings.Contains(out, "the hearing") || !strings.Contains(out, "the memo") {
+		t.Fatalf("the round trip lost a caption: %s", out)
+	}
+}
+
 func TestAClaimCarriesAtMostSevenItems(cur realm, t *testing.T) {
 	seven := make([]string, 7)
 	for i := range seven {

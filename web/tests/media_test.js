@@ -108,6 +108,24 @@ const img = {
   mirrors: ["https://i.imgur.com/a.webp"],
 };
 ok("an item is eight fields", M.mediaArgLine(img).split("|").length === 8);
+// THE OTHER SIDE HAS THESE EXACT STRINGS. realm/r/kourtv2/media_test.gno holds
+// them as clientImageLine and clientVideoLine and asserts its parser accepts
+// them. Until that existed, both sides were written to the same spec and
+// checked against the spec rather than against each other — which proves the
+// spec is self-consistent and nothing about whether they agree.
+const asFiledImage = M.mediaArgLine({
+  kind: "img", sha256: "1".repeat(64), mime: "image/webp", w: 800, h: 600,
+  bytes: 90210, caption: "the memo", mirrors: ["https://i.imgur.com/abc.webp"]});
+const asFiledVideo = M.mediaArgLine({
+  kind: "vid", caption: "the hearing", mirrors: ["https://i.imgur.com/v.mp4"]});
+ok("the image line is the one the realm test holds",
+   asFiledImage === "img|" + "1".repeat(64) +
+     "|image/webp|800|600|90210|the memo|https://i.imgur.com/abc.webp", asFiledImage);
+// A video carries no hash, type or dimensions, so this line is mostly empty —
+// and the realm reads those blanks as zero. If either side stops agreeing about
+// that, one of these two tests fails.
+ok("the video line is the one the realm test holds",
+   asFiledVideo === "vid|||0|0|0|the hearing|https://i.imgur.com/v.mp4", asFiledVideo);
 ok("the realm expects eight too", /8 fields separated by \|/.test(gno));
 ok("a good item passes", M.mediaItemFault(img, "") === "");
 ok("several items are newline separated", M.mediaArg([img, img]).split("\n").length === 2);
@@ -507,7 +525,7 @@ async function section3() {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 132;
+  const EXPECTED = 134;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
