@@ -226,6 +226,24 @@ ok("...names the file:// trap, where no extension can ever load",
    src.includes("extensions do not run on") && src.includes("file://"));
 ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
    src.includes("Open in gnoweb") && src.includes("cliBlock(cli)"));
+// ---- a refused handshake reports, it does not diagnose --------------------
+// "Could not read Adena's network — unlock the wallet and retry" named ONE
+// cause out of several. A remembered CFG.addr outlives the connection that
+// produced it, so a reinstalled wallet, a revoked permission or another browser
+// profile all land here with the wallet perfectly unlocked — and both
+// conditions the click handler checks are still true, so it cannot tell.
+ok("a refused GetNetwork tries to establish before giving up",
+   /let net = await a\.GetNetwork\(\);[\s\S]{0,400}await a\.AddEstablish\("Kourt"\)/.test(src));
+ok("...and then quotes Adena rather than diagnosing for it",
+   src.includes('note("Adena would not answer: " + (net.message || ("code " + net.code))')
+   && !src.includes("Could not read Adena's network"));
+ok("...naming both live possibilities, not one",
+   src.includes("If it is locked, unlock it; otherwise reconnect"));
+// A user-rejected establish still means the origin is known, so the retry is
+// worth making; only a hard failure keeps the original refusal.
+ok("...and a rejected prompt is not treated as a hard failure",
+   src.includes("est.code===0 || est.code===4001"));
+
 // ---- the second of silence while the wallet wakes -------------------------
 // Adena is an MV3 extension: the first call after it has been idle cold-starts
 // a suspended service worker, roughly a second in which the button looked

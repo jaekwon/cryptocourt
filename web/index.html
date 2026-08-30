@@ -2865,8 +2865,31 @@ async function adenaSign(func, args, el){
   busy(true);
   try{
     const want = CFG.chainid || "dev";
-    const net = await a.GetNetwork();
-    if(net.code!==0){ note("Could not read Adena's network — unlock the wallet and retry."); return; }
+    /* A REFUSED GetNetwork IS NOT PROOF OF A LOCKED WALLET, and this used to say
+       it was: "unlock the wallet and retry" named one cause out of several and
+       sent anybody with a different one down a dead end.
+
+       The likeliest cause is the one this file already warns about two screens
+       up — CFG.addr is remembered in localStorage and outlives the connection
+       that produced it. A wallet reinstalled, a permission revoked, or simply a
+       different browser profile leaves a remembered address, a present
+       window.adena, and an origin Adena will not answer for. Neither of the two
+       conditions the click handler checks can tell that apart, because both are
+       still true.
+
+       So: try to establish once, which is the fix when that is the cause and a
+       no-op when it is not, and then say what Adena SAID rather than what we
+       guessed it meant. Its own code and message are the only evidence here. */
+    let net = await a.GetNetwork();
+    if(net.code!==0){
+      const est = await a.AddEstablish("Kourt").catch(()=>null);
+      net = est && (est.code===0 || est.code===4001) ? await a.GetNetwork() : net;
+    }
+    if(net.code!==0){
+      note("Adena would not answer: " + (net.message || ("code " + net.code))
+         + ". If it is locked, unlock it; otherwise reconnect with the wallet button in the left rail.");
+      return;
+    }
     if(net.data && net.data.chainId && net.data.chainId!==want){
       const sw = await a.SwitchNetwork(want);
       if(sw.code!==0){ note("Adena is on "+net.data.chainId+"; switch it to "+want+" and try again."); return; }
