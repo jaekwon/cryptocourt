@@ -74,7 +74,7 @@ try {
 // Only the pass/fail checks run here. render_snapshot.js is a TOOL: it prints a
 // snapshot rather than asserting, so running it in a gate would prove nothing.
 const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js", "route_crawl.js",
-                "chat_all.js"];
+                "rowscope_layout.js", "chat_all.js"];
 let failed = 0;
 for (const f of CHECKS) {
   const p = path.join(__dirname, f);
