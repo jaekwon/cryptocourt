@@ -252,7 +252,13 @@ async function mediaUpload(bytes, mime, opts) {
   if (body.sha256 !== mine) {
     throw new Error("the archive stored something other than what was sent");
   }
-  return {sha256: mine, url: base + "/m/" + mine};
+  // USE THE ADDRESS THE ARCHIVE GAVE, not one built here. The service returns it
+  // saying in as many words that it does so "so the composer never has to build
+  // it, and so this stays the one place that knows the shape" — and this built
+  // its own anyway, which made two places that had to agree about a path. The
+  // fallback covers a service too old to answer with one.
+  const at = typeof body.url === "string" && body.url ? body.url : "/m/" + mine;
+  return {sha256: mine, url: at.startsWith("http") ? at : base + at};
 }
 
 /* mediaClaimed tells the archive a claim now references these bytes, which is

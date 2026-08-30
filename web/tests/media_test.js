@@ -151,6 +151,24 @@ ok("a degenerate size does not divide by zero",
   const got = await M.mediaUpload(bytes, "image/webp", {fetch: honest, base: "https://k"});
   ok("an honest archive yields the item's link", got.url === "https://k/m/" + mine);
 
+  // THE ADDRESS COMES FROM THE ARCHIVE, not from a second place that has to
+  // agree with it. The service returns one saying in as many words that it does
+  // so "so the composer never has to build it, and so this stays the one place
+  // that knows the shape" — and this built its own anyway. Two places that must
+  // agree about a path is one place too many.
+  const moved = async () => ({ok: true, json: async () => ({sha256: mine, url: "/blobs/" + mine})});
+  const m2 = await M.mediaUpload(bytes, "image/webp", {fetch: moved, base: "https://k"});
+  ok("a moved archive is followed rather than second-guessed",
+     m2.url === "https://k/blobs/" + mine, m2.url);
+  const absolute = async () => ({ok: true, json: async () => ({sha256: mine, url: "https://cdn.example/x"})});
+  ok("an absolute address is used as given",
+     (await M.mediaUpload(bytes, "image/webp", {fetch: absolute, base: "https://k"})).url
+       === "https://cdn.example/x");
+  const silent = async () => ({ok: true, json: async () => ({sha256: mine})});
+  ok("a service too old to answer with one still works",
+     (await M.mediaUpload(bytes, "image/webp", {fetch: silent, base: "https://k"})).url
+       === "https://k/m/" + mine);
+
   // A MISMATCH MUST BE REFUSED, NOT ADOPTED. If the archive names a different
   // digest, the bytes that arrived are not the bytes we hashed — filing that
   // hash would commit the author to an image nobody has.
