@@ -612,15 +612,29 @@ against believing a green suite about anything a reader sees.
 2. **`OpenClaimPM`** as the name, where `P` already means "with body"?
 3. **Folders** — claims only, or may a folder carry an image?
 4. **Host kill switch** — may a moderator retract every image on a host at once?
+5. **How much of the claim page may evidence occupy?** Now that exhibits render
+   there, this is a real trade with a measurement behind it. Seven of the demo's
+   small 240x160 sample already push the Resolution heading down 1,281px — 1.42
+   screens at 1100x900 — and a real 1600px-wide exhibit renders around 470px
+   tall, so seven of those put the ballot roughly four screens below the title.
+
+   Reading the evidence before voting is the right order, and "everything filed
+   with a claim counts as claim text" (ruling 7) argues for showing it whole and
+   inline. Against that: a reader who has already read the claim and wants to act
+   must travel past all of it, every visit. The usual answer is a strip of
+   thumbnails with the lightbox one click away — evidence fully present, nothing
+   hidden, one row instead of four screens — but that trades reading for clicking
+   on the page a court is read on. Recorded rather than quietly fixed.
+
 **Settled by the owner:**
 
-5. **kourt.xyz runs the archive.** It is the project's own service, not a
+6. **kourt.xyz runs the archive.** It is the project's own service, not a
    delegated one. Two consequences follow and both belong in public documentation
    rather than in a later surprise: kourt.xyz carries the hosting obligations for
    everything filed, which is why the classifier lives there (§3); and if the
    service ever stops, **the hash survives and anyone may re-serve the bytes** —
    evidence degrades to unavailable, never to unprovable.
-6. **Everything on a claim counts as claim text.** Captions are claim text, so
+7. **Everything on a claim counts as claim text.** Captions are claim text, so
    they take the body's rule whole: **fixed at creation, no editor**, and subject
    to the same purge and redaction gates. An author who could revise a caption
    could reframe the exhibit after watching the market, which is the attack the
