@@ -113,7 +113,10 @@ None of them can accept a file. Media therefore requires the page's first real
 input surface, and the quality of that surface *is* the quality of this feature.
 
 The governing rule: **a person filing evidence should never meet a technical
-concept.** Not "sha256", not "mirror", not "256 KB", not "unsupported format".
+concept.** Its corollary is that a condition which dooms every exhibit is said
+ONCE, up front, rather than once per exhibit after each has failed — the
+composer checks the deployment (an http page cannot produce an https mirror, so
+nothing it copies is filable) as soon as there is anything at stake. Not "sha256", not "mirror", not "256 KB", not "unsupported format".
 Every one of those is the machine's problem and every one has a fix that can be
 applied silently.
 
@@ -687,6 +690,7 @@ Recorded because each is easy to make again:
 | 29 | a blob's origin was rewritten on every promotion | hashes are public, so anyone could file a claim quoting somebody else's image and take the row — pointing an operator's "decide about the source" action at a court of their choosing |
 | 30 | the overlay never mentioned verification | the surface that CANNOT check an exhibit announced the promise, and the one that can said nothing — the only hint was an aria-label reading "full size" |
 | 31 | the txtar held its own hand-typed copy of the wire format | the one holder that proves a REAL node accepts what the composer builds was the one nothing compared — a field-order change would have left it proving the old format, green |
+| 32 | an http deployment could not file any upload, and was not told why | a mirror must be https on both sides, so a local overlay — a developer's first encounter — broke every exhibit in turn with a message naming the symptom |
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
