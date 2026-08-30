@@ -329,7 +329,16 @@ async function mediaUpload(bytes, mime, opts) {
       return {sha256: mine, url: candidate};
     }
   }
-  throw new Error("the copy has no address a claim could point at");
+  // NAME THE CAUSE WHEN THERE IS ONE TO NAME. Over plain http every candidate
+  // fails the same check for the same reason — a mirror must be https, on this
+  // side and in the realm — and "no address a claim could point at" describes
+  // the symptom to somebody who cannot act on it. A developer running this repo
+  // against a local node meets exactly that, since a local overlay is served
+  // over http.
+  throw new Error(root.slice(0, 7) === "http://"
+    ? "this page is served over http, and a claim only takes https links — " +
+      "serve the site over https, or paste each image's own https link"
+    : "the copy has no address a claim could point at");
 }
 
 /* mediaClaimed tells the archive a claim now references these bytes, which is

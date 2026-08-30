@@ -298,13 +298,28 @@ function section3() {
      (page.match(/siteHost\(\)/g) || []).length >= 5);
   ok("the archive's address is absolute, so its mirror is a valid https link",
      /return siteHost\(\) \? location\.origin : "";/.test(page));
+
+  /* AN HTTP DEPLOYMENT CANNOT FILE AN UPLOAD AT ALL, and it should hear that
+     before the seventh photo rather than after each one breaks. A mirror must be
+     https — here and in the realm — so on a page served over http no copy this
+     composer makes is filable. A local overlay is http, so this is a developer's
+     first encounter with the feature, and the failure they used to meet named
+     the symptom ("the copy has no address a claim could point at") rather than
+     anything they could act on. */
+  ok("an http page warns before every exhibit breaks in turn",
+     /served over http, and the court only takes https links/.test(page));
+  ok("...gated on the protocol and on there being something to lose",
+     /composer\.count\(\) && siteHost\(\) && location\.protocol !== "https:"/.test(page));
+  ok("...and the upload's own error names http as the cause",
+     /a claim only takes https links/.test(
+       require("fs").readFileSync(path.join(__dirname, "..", "media.js"), "utf8")));
 }
 
 (async () => {
   await section1();
   await section2();
   section3();
-  const EXPECTED = 41;
+  const EXPECTED = 44;
   if (ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

@@ -2828,6 +2828,16 @@ function mountCompose(host, slug){
       if(fault) bits.push(fault);
       if(!canLink) bits.push(MEDIA_HELP_LINK_TOO_LONG);
       if(composer.busy()) bits.push("Still copying an exhibit — you can file now, or wait for the copy.");
+      /* SAID BEFORE THE SEVENTH PHOTO, not after. A mirror must be https — here
+         and in the realm — so on a page served over http no copy this composer
+         makes can ever be filed, and every exhibit added will break one after
+         another with the same message. That is the whole point of this file
+         saying no before the chain does; the deployment is just a condition it
+         can check earlier than any exhibit. Local overlays are http, so this is
+         a developer's first encounter with the feature. */
+      if(composer.count() && siteHost() && location.protocol !== "https:")
+        bits.push("This page is served over http, and the court only takes https links — "
+                + "an image copied here cannot be filed. Paste each image's own https link instead.");
       if(!title.value.trim()) bits.push("A claim needs a title.");
       // One per line. Joined with spaces they read as a single sentence, and
       // "...imgur or GitHub work A claim needs a title." is two separate pieces
