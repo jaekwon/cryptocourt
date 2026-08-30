@@ -1,6 +1,6 @@
 # CLAIM_MEDIA — evidence a claim carries, and proof it hasn't changed
 
-> **v0.6 — built. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
+> **v0.7 — built, and run. Supersedes v0.1; two owner rulings settled; griefing pass applied.** A claim may carry up to **seven**
 > media items. The chain stores a **sha256 and a list of mirrors**, never the
 > bytes. kourt.xyz keeps its own copy of every image at an address derived from
 > that hash, so no third party can take a claim's evidence away.
@@ -34,6 +34,8 @@
 > | overlay: rules mirrored, intake, composer, panel, placement | built |
 > | overlay: map card strip, node badges, lightbox with verification | built |
 > | archive: the classifier — queue, auto-block, human undo | built |
+> | archive: operator surface — queue, block, unblock, destroy | built |
+> | archive: health, and heartbeats that fail separately | built |
 > | archive: a vision backend for it (Ollama) | built |
 > | drafts in `localStorage` (§2.5) | built |
 > | video as a second tier (§7) | built |
@@ -256,6 +258,72 @@ runs here — refusing to *serve*, never rewriting the chain. A refused image is
 still filed, still hashed, still verifiable from another mirror. That separation
 is what `r/img` got wrong: it fused a censorship gate to a persistence mechanism,
 so every question about one became a question about the other.
+
+**The model sorts a queue for a person; it is not a gate.** A verdict removes an
+image by itself only at `illegal` and above 0.90 confidence, and every automatic
+refusal has a human undo. A model that times out, answers nonsense, or is not
+running leaves the image *serving* and records nothing, so the next pass tries
+again — failing closed would mean an outage silently withdrawing every exhibit
+in every court, which is worse than the thing it guards against. `internal/scan`
+settled the same question for text: an unreadable verdict carries no more weight
+than a clean one.
+
+The model is asked what an image **is** — clean, explicit, violent, illegal — and
+has no vocabulary for what should happen to it, so an image containing text that
+argues for an outcome cannot reach the part that decides. Its prose is stored for
+a person to read and never parsed for instructions; control characters are
+stripped, because that prose is printed to a terminal.
+
+### 3.3 What an operator actually does
+
+`kourtchatctl` carries the whole surface, beside the `review`/`dismiss` this
+repository already had for chat:
+
+| command | what it does |
+|---|---|
+| `images` | the queue: what was flagged, how sure, and whether it is already off the site |
+| `block SHA256 -why S` | stop serving something the model let through |
+| `unblock SHA256` | overrule the model and serve it again |
+| `forget SHA256 -apply` | **destroy the bytes**; dry run by default |
+
+**Blocking hides; forgetting destroys.** Both exist because they answer different
+questions, and the second is the only one that answers `illegal`. Neither
+unfiles anything: the chain still holds the hash, the claim still records that
+evidence was filed, and another mirror may still serve it. Removing the court's
+pointer is `PurgeClaimMedia`, on chain, by the global DAO — and archive-side
+refusal and chain-side purge stay independent on purpose, so either alone
+suffices and neither can rewrite what was filed.
+
+**The queue groups by the filing that produced it.** A claim carries up to seven
+exhibits, so a flat worst-first list reads one filing's decoys as seven separate
+incidents — which is how a flood buries the entry that matters. `internal/chat`
+reached the same conclusion about its own review queue and states the rule: the
+answer to flooding is a *view* that resists it, not a new punishment. The deposit
+already bounds this here, since seven decoys cost a claim; that makes it a
+smaller problem, not a reason for the queue to be unreadable when somebody pays.
+
+### 3.4 Knowing it still works
+
+`GET /m/health` answers `{"ok":true}` publicly and the numbers only under
+`-health-detail` — the same flag the chat's own numbers use. `pending_review` is
+why: published, it is a live count of what the classifier flagged, so somebody
+probing what the model blocks could upload, poll, and read the answer off the
+counter without ever filing a claim.
+
+Under that flag it carries three heartbeats, and they are separate because they
+fail separately:
+
+- `swept_at` — the TTL sweep, which is what stops this being free hosting. It is
+  silent when it finds nothing, which is almost always, so without a stamp
+  "swept and found nothing" and "the goroutine died after boot" look identical.
+- `backfilled_at` — a completed backfill pass. Stamped only on a complete one:
+  stamping the failures would make a backfill that never works look like one
+  that always does.
+- `chain_seen_at` — when the node last **answered**. Separate because a pass with
+  nothing staged completes without asking anything, so a fresh `backfilled_at`
+  says the loop is alive and nothing about whether the chain is reachable. That
+  was observed on a live service showing a healthy backfill against an
+  unreachable node.
 
 ---
 
