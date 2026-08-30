@@ -101,6 +101,36 @@ func (s *Store) Review(ctx context.Context, sum string, v ImageVerdict) (bool, e
 	return true, nil
 }
 
+// OperatorLabel marks a row a person judged rather than a model. It is not in
+// any enum a model can emit, so the two can never be confused in the queue.
+const OperatorLabel = "operator"
+
+// BlockByOperator is a person acting on what a model MISSED.
+//
+// WITHOUT THIS THE HUMAN IS STRICTLY WEAKER THAN THE MODEL. An operator could
+// undo an automatic block and could do nothing about an image the classifier had
+// waved through — which inverts the whole arrangement, since the classifier is
+// meant to sort a queue for a person rather than to be the only thing with a
+// veto. The undo existed from the start; this is the other half of it, and it
+// was missing.
+//
+// It records a review row so the act is visible in the same queue, labelled as
+// a person's judgement rather than a model's, at full confidence because a
+// person is not guessing.
+func (s *Store) BlockByOperator(ctx context.Context, sum, why string) error {
+	if why == "" {
+		why = "removed by an operator"
+	}
+	if _, err := s.Review(ctx, sum, ImageVerdict{
+		Label: OperatorLabel, Confidence: 1, Why: why,
+	}); err != nil {
+		return err
+	}
+	// Review only blocks at AutoBlockLabel, and a person's label is deliberately
+	// not that one — so the block is made here, explicitly.
+	return s.Block(ctx, sum)
+}
+
 // Clear is a person overruling the model, and it is the reason auto-blocking is
 // survivable: every automatic refusal has a human undo that leaves a record of
 // having been used.

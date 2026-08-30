@@ -91,6 +91,8 @@ func main() {
 		cmdReview(ctx, store, args[1:])
 	case "images":
 		cmdImages(ctx, store, args[1:])
+	case "block":
+		cmdBlockImage(ctx, store, args[1:])
 	case "unblock":
 		cmdUnblock(ctx, store, args[1:])
 	case "dismiss":
@@ -194,10 +196,23 @@ func cmdImages(ctx context.Context, store *chat.Store, args []string) {
 		len(rows))
 }
 
-// cmdUnblock is the human undo that makes automatic blocking survivable at all.
-func cmdUnblock(ctx context.Context, store *chat.Store, args []string) {
-	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: unblock SHA256")
+// cmdBlockImage is the operator acting on what the model MISSED.
+//
+// Its absence made the human strictly weaker than the classifier: an operator
+// could undo an automatic block and could do nothing about an image that had
+// been waved through. A moderation tool where the only judgement that removes
+// anything is the machine's is not the design this archive claims to have.
+func cmdBlockImage(ctx context.Context, store *chat.Store, args []string) {
+	fs := flag.NewFlagSet("block", flag.ExitOnError)
+	why := fs.String("why", "", "what an operator saw, kept for the record")
+	// split() because every other command here takes its flags AFTER the thing
+	// they are about — `ban HASH -why S` — and Go's flag package stops at the
+	// first positional. A command that needed its flags in a different order
+	// from its neighbours would be a trap laid for whoever types fastest.
+	flags, pos := split(args)
+	_ = fs.Parse(flags)
+	if len(pos) != 1 || pos[0] == "" {
+		fmt.Fprintln(os.Stderr, "usage: block SHA256 [-why S] — read the hash from `images`")
 		os.Exit(2)
 	}
 	ar, err := archive.NewStore(store.Writer())
@@ -205,7 +220,31 @@ func cmdUnblock(ctx context.Context, store *chat.Store, args []string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := ar.Clear(ctx, args[0]); err != nil {
+	if err := ar.BlockByOperator(ctx, pos[0], *why); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	// Said plainly, because it is the limit of what this command does: the chain
+	// still holds the hash and the claim still says evidence was filed. Taking
+	// the court's POINTER down is PurgeClaimMedia, on chain, by the global DAO.
+	fmt.Println("no longer served here. The claim still records that it was filed —")
+	fmt.Println("removing the court's pointer to it is PurgeClaimMedia, on chain.")
+}
+
+// cmdUnblock is the human undo that makes automatic blocking survivable at all.
+func cmdUnblock(ctx context.Context, store *chat.Store, args []string) {
+	// Same shape as block, for the same reason.
+	_, pos := split(args)
+	if len(pos) != 1 || pos[0] == "" {
+		fmt.Fprintln(os.Stderr, "usage: unblock SHA256 — read the hash from `images`")
+		os.Exit(2)
+	}
+	ar, err := archive.NewStore(store.Writer())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := ar.Clear(ctx, pos[0]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -228,6 +267,7 @@ func usage() {
   images [-n N]            filed images a model flagged, worst first: what it
                            said, how sure it was, and whether the image is
                            already off the site
+  block SHA256 [-why S]    stop serving an image the model let through
   unblock SHA256           overrule the model and serve that image again
   review [-all] [-expand] [-n N]
                            messages the scanner flagged and did NOT act on,

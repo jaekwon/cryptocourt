@@ -829,3 +829,59 @@ func TestBytesSurviveTheRoundTripThroughHTTP(t *testing.T) {
 		t.Fatalf("served as %q, want the type the bytes actually are", ct)
 	}
 }
+
+func TestAPersonCanActOnWhatTheModelMissed(t *testing.T) {
+	// WITHOUT THIS THE HUMAN IS STRICTLY WEAKER THAN THE MODEL: an operator
+	// could undo an automatic block and could do nothing about an image the
+	// classifier had waved through. That inverts the arrangement this archive
+	// claims to have, where a model sorts a queue and a person decides.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
+
+	// The model saw nothing wrong, so nothing is blocked and nothing is queued.
+	if _, err := st.Review(ctx, sum, ImageVerdict{Label: "clean", Confidence: 0.99}); err != nil {
+		t.Fatalf("review: %v", err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != nil {
+		t.Fatal("a clean verdict must leave the image serving")
+	}
+	if q, _ := st.PendingReview(ctx, 10); len(q) != 0 {
+		t.Fatalf("a clean image must not sit in the queue, got %d", len(q))
+	}
+
+	// A person disagrees.
+	if err := st.BlockByOperator(ctx, sum, "a face nobody consented to publish"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != ErrNotFound {
+		t.Fatal("an operator's block must actually stop it serving")
+	}
+
+	// And the act is visible, labelled as a person's rather than a model's, so
+	// the queue does not read as though the classifier had found it.
+	q, err := st.PendingReview(ctx, 10)
+	if err != nil || len(q) != 1 {
+		t.Fatalf("the block must be visible in the queue: %d rows, err %v", len(q), err)
+	}
+	if q[0].Label != OperatorLabel {
+		t.Fatalf("a person's judgement must not be labelled as a model's: %+v", q[0])
+	}
+	if !strings.Contains(q[0].Why, "consented") || !q[0].Blocked {
+		t.Fatalf("the reason and the state must both be recorded: %+v", q[0])
+	}
+	// A model can never emit this label, so the two can never be confused.
+	for _, l := range []string{eyeClean, eyeIllegal, eyeExplicit, eyeViolent} {
+		if l == OperatorLabel {
+			t.Fatal("the operator label must not be one a model can produce")
+		}
+	}
+
+	// The undo still works on a person's block, not only a model's.
+	if err := st.Clear(ctx, sum); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if _, _, err := st.Get(ctx, sum); err != nil {
+		t.Fatal("clearing an operator block must restore the image")
+	}
+}
