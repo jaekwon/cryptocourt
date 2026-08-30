@@ -91,6 +91,8 @@ func main() {
 		cmdReview(ctx, store, args[1:])
 	case "images":
 		cmdImages(ctx, store, args[1:])
+	case "forget":
+		cmdForget(ctx, store, args[1:])
 	case "block":
 		cmdBlockImage(ctx, store, args[1:])
 	case "unblock":
@@ -206,11 +208,62 @@ func cmdImages(ctx context.Context, store *chat.Store, args []string) {
 		if r.Blocked {
 			state = "BLOCKED"
 		}
+		if r.Gone {
+			state = "destroyed"
+		}
 		fmt.Printf("  %s\n    %-9s %3.0f%%  %-13s %s\n",
 			r.SHA256, r.Label, r.Confidence*100, state, r.Why)
 	}
 	fmt.Printf("\n%d flagged. `unblock SHA256` overrules the model and serves one again.\n",
 		len(rows))
+}
+
+// cmdForget destroys bytes, and follows cmdPrune's shape because it is the same
+// kind of act: dry run by default, an explicit -apply to do it. The repository
+// already decided that irreversible deletion must be asked for twice, and this
+// is more irreversible than pruning old chat.
+func cmdForget(ctx context.Context, store *chat.Store, args []string) {
+	fs := flag.NewFlagSet("forget", flag.ExitOnError)
+	apply := fs.Bool("apply", false, "actually destroy the bytes (default: dry run)")
+	flags, pos := split(args)
+	_ = fs.Parse(flags)
+	if len(pos) != 1 || pos[0] == "" {
+		fmt.Fprintln(os.Stderr, "usage: forget SHA256 [-apply] — read the hash from `images`")
+		os.Exit(2)
+	}
+	ar, err := archive.NewStore(store.Writer())
+	if err != nil {
+		die("%v", err)
+	}
+	if !*apply {
+		// Held, not Get: Get refuses a BLOCKED blob, and blocked ones are exactly
+		// what an operator is asking about here. Asking the wrong question made
+		// the dry run answer "nothing here" while -apply would have destroyed
+		// something.
+		held, err := ar.Held(ctx, pos[0])
+		if err != nil {
+			die("%v", err)
+		}
+		if !held {
+			fmt.Println("nothing here by that hash.")
+			return
+		}
+		fmt.Println("would destroy the bytes held here under that hash.")
+		fmt.Println("re-run with -apply to do it.")
+		return
+	}
+	gone, err := ar.Forget(ctx, pos[0])
+	if err != nil {
+		die("%v", err)
+	}
+	if !gone {
+		fmt.Println("nothing here by that hash.")
+		return
+	}
+	// SAID EVERY TIME, because it is the part somebody will assume wrongly.
+	fmt.Println("destroyed here. The chain still holds the hash and the claim still")
+	fmt.Println("records that evidence was filed; other mirrors may still serve it.")
+	fmt.Println("Removing the court's pointer is PurgeClaimMedia, on chain.")
 }
 
 // cmdBlockImage is the operator acting on what the model MISSED.
@@ -285,6 +338,8 @@ func usage() {
                            said, how sure it was, and whether the image is
                            already off the site
   block SHA256 [-why S]    stop serving an image the model let through
+  forget SHA256 [-apply]   DESTROY an image's bytes here (dry run by default);
+                           blocking hides it, this stops holding it
   unblock SHA256           overrule the model and serve that image again
   review [-all] [-expand] [-n N]
                            messages the scanner flagged and did NOT act on,

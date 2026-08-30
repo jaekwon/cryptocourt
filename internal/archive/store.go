@@ -140,6 +140,11 @@ func NewStore(db *sql.DB) (*Store, error) {
 	if err := ensureClassifySchema(db); err != nil {
 		return nil, fmt.Errorf("archive review schema: %w", err)
 	}
+	for _, c := range [][2]string{{"court", "TEXT"}, {"claim", "INTEGER"}} {
+		if err := ensureColumn(db, "blob_review", c[0], c[1]); err != nil {
+			return nil, fmt.Errorf("archive review %s column: %w", c[0], err)
+		}
+	}
 	return &Store{db: db}, nil
 }
 

@@ -1683,3 +1683,89 @@ func TestAFloodReadsAsOneFilingRatherThanManyIncidents(t *testing.T) {
 		t.Fatalf("the other filing must be its own group: %+v", q[3])
 	}
 }
+
+func TestBlockingHidesAndForgettingDestroys(t *testing.T) {
+	// "We no longer serve it" and "we no longer have it" are different
+	// sentences, and only one of them answers the question the label `illegal`
+	// asks. docs/CLAIM_MEDIA.md §3.2 puts the obligation on this service
+	// precisely because it is the one holding the bytes — an archive that could
+	// only ever hide them would be answering the wrong question.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "covid")
+	if err := st.BlockByOperator(ctx, sum, "a face nobody consented to"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+
+	// Blocked: not served, still HELD. This is the state that looks finished and
+	// is not.
+	if _, _, err := st.Get(ctx, sum); err != ErrNotFound {
+		t.Fatal("a blocked image must not serve")
+	}
+	var held int
+	if err := st.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM blobs WHERE sha256 = ?`, sum).Scan(&held); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if held != 1 {
+		t.Fatal("blocking must not silently destroy — an operator may be overruling a model")
+	}
+
+	gone, err := st.Forget(ctx, sum)
+	if err != nil || !gone {
+		t.Fatalf("forget: %v (gone=%v)", err, gone)
+	}
+	if err := st.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM blobs WHERE sha256 = ?`, sum).Scan(&held); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if held != 0 {
+		t.Fatal("forgetting must actually destroy the bytes")
+	}
+
+	// THE RECORD SURVIVES THE BYTES. An operator looking later needs to see
+	// something was here and was destroyed; by then the model's prose described
+	// bytes nobody can check.
+	q, _ := st.PendingReview(ctx, 10)
+	if len(q) != 1 {
+		t.Fatalf("the review row must outlive the bytes, got %d", len(q))
+	}
+	if q[0].Why != "destroyed by an operator" {
+		t.Fatalf("the row must say what happened: %+v", q[0])
+	}
+	// AND IT MUST NOT READ AS SERVING. The blob row is gone, so a LEFT JOIN
+	// answers blocked=0 — which reported "still serving" for the entries an
+	// operator had acted hardest on, the exact opposite of what happened.
+	if !q[0].Gone || q[0].Blocked {
+		t.Fatalf("a destroyed image must not read as serving: %+v", q[0])
+	}
+	// AND THE ORIGIN OUTLIVES THE BYTES. court and claim live on the blob row,
+	// so destroying it also destroyed the only record of which filing this came
+	// from — leaving "filed by an unknown claim" against the entry an operator
+	// had just acted hardest on, and no way back to the source on chain.
+	if q[0].Court != "covid" {
+		t.Fatalf("the filing that produced it must still be readable: %+v", q[0])
+	}
+
+	// AND THE DRY RUN MUST SEE A BLOCKED BLOB. Get refuses one deliberately, so
+	// asking it "is there anything to destroy" answered no about precisely the
+	// images an operator is asking about.
+	other, _ := st.Put(ctx, "image/webp", webpWith("blocked"), "covid")
+	if err := st.BlockByOperator(ctx, other, "held back"); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	if _, _, err := st.Get(ctx, other); err != ErrNotFound {
+		t.Fatal("the fixture must be blocked")
+	}
+	if held, err := st.Held(ctx, other); err != nil || !held {
+		t.Fatalf("a blocked blob is still HELD: held=%v err=%v", held, err)
+	}
+	if held, _ := st.Held(ctx, strings.Repeat("e", 64)); held {
+		t.Fatal("nothing must not read as held")
+	}
+
+	// Forgetting something that was never here is not an error, and says so.
+	if gone, err := st.Forget(ctx, strings.Repeat("f", 64)); err != nil || gone {
+		t.Fatalf("forgetting nothing: gone=%v err=%v", gone, err)
+	}
+}

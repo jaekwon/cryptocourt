@@ -58,6 +58,8 @@ type ImageClassifier interface {
 const classifySchema = `
 CREATE TABLE IF NOT EXISTS blob_review (
   sha256     TEXT PRIMARY KEY,
+  court      TEXT,
+  claim      INTEGER,
   label      TEXT NOT NULL,
   confidence REAL NOT NULL,
   why        TEXT NOT NULL,
@@ -190,6 +192,11 @@ type Pending struct {
 	Why        string
 	CheckedAt  int64
 	Blocked    bool
+	// Gone is true when the bytes have been destroyed. Without it a forgotten
+	// image reads as "still serving", because the row it was blocked in no
+	// longer exists and a LEFT JOIN answers zero — the queue reporting the
+	// opposite of what happened, on the entries an operator acted hardest on.
+	Gone bool
 	// Where it came from. A claim carries up to seven exhibits, so seven flagged
 	// images may be one filing or seven — and a list that cannot say which lets
 	// a flood bury the entry that matters. internal/chat states the rule about
@@ -197,6 +204,68 @@ type Pending struct {
 	// punishment.
 	Court string
 	Claim uint64
+}
+
+// Held reports whether the bytes are here, blocked or not.
+//
+// Get deliberately refuses a blocked blob — a takedown that announced itself
+// would be a lookup oracle — which makes it the wrong question for an operator
+// asking "is there anything to destroy". Blocked images are exactly the ones
+// they are asking about, and the dry run told them "nothing here" while -apply
+// would have destroyed something.
+func (s *Store) Held(ctx context.Context, sum string) (bool, error) {
+	var n int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM blobs WHERE sha256 = ?`, sum).Scan(&n); err != nil {
+		return false, fmt.Errorf("archive held: %w", err)
+	}
+	return n > 0, nil
+}
+
+// Forget DESTROYS the bytes. Block stops serving them; this stops holding them.
+//
+// THE DIFFERENCE MATTERS MOST FOR THE ONE LABEL THAT CARRIES LEGAL WEIGHT.
+// "We no longer serve it" and "we no longer have it" are different sentences,
+// and docs/CLAIM_MEDIA.md §3.2 puts the obligation here precisely because this
+// is the service that holds the bytes. An archive that could only ever hide
+// them would be answering the wrong question.
+//
+// WHAT IT CANNOT DO, and the caller must say so: the hash stays on chain, the
+// claim still records that evidence was filed, and any other mirror still
+// serves it. Removing the court's pointer is PurgeClaimMedia, on chain, by the
+// global DAO. This is one operator forgetting one thing on one disk.
+//
+// The review row is kept, minus the model's prose: an operator looking later
+// needs to see that something was here and was destroyed, and by then the prose
+// described bytes nobody can check.
+func (s *Store) Forget(ctx context.Context, sum string) (bool, error) {
+	// THE ORIGIN OUTLIVES THE BYTES. court and claim live on the blob row, so
+	// deleting it also deleted the only record of which filing this came from —
+	// and an operator reading the queue afterwards saw "filed by an unknown
+	// claim" about the entry they had just acted hardest on. Copied across
+	// before the delete, because afterwards there is nowhere to read it from.
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE blob_review SET
+		   court = COALESCE((SELECT COALESCE(NULLIF(filed_court, ''), court)
+		                     FROM blobs WHERE sha256 = ?), court),
+		   claim = COALESCE((SELECT filed_claim FROM blobs WHERE sha256 = ?), claim)
+		 WHERE sha256 = ?`, sum, sum, sum); err != nil {
+		return false, fmt.Errorf("archive forget origin: %w", err)
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM blobs WHERE sha256 = ?`, sum)
+	if err != nil {
+		return false, fmt.Errorf("archive forget: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("archive forget count: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE blob_review SET why = 'destroyed by an operator' WHERE sha256 = ?`,
+		sum); err != nil {
+		return n > 0, fmt.Errorf("archive forget note: %w", err)
+	}
+	return n > 0, nil
 }
 
 // PendingReview is what an operator has not looked at yet, worst first.
@@ -210,8 +279,9 @@ func (s *Store) PendingReview(ctx context.Context, limit int) ([]Pending, error)
 	// deciding about the source is the action that actually ends it.
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT r.sha256, r.label, r.confidence, r.why, r.checked_at,
-		        COALESCE(b.blocked, 0), COALESCE(b.filed_court, ''),
-		        COALESCE(b.filed_claim, 0)
+		        COALESCE(b.blocked, 0),
+		        COALESCE(NULLIF(b.filed_court, ''), NULLIF(b.court, ''), r.court, ''),
+		        COALESCE(b.filed_claim, r.claim, 0), (b.sha256 IS NULL)
 		 FROM blob_review r
 		 LEFT JOIN blobs b ON b.sha256 = r.sha256
 		 WHERE r.cleared_at IS NULL AND r.label != 'clean'
@@ -224,15 +294,16 @@ func (s *Store) PendingReview(ctx context.Context, limit int) ([]Pending, error)
 	var out []Pending
 	for rows.Next() {
 		var p Pending
-		var blocked int
+		var blocked, gone int
 		if err := rows.Scan(&p.SHA256, &p.Label, &p.Confidence, &p.Why,
-			&p.CheckedAt, &blocked, &p.Court, &p.Claim); err != nil {
+			&p.CheckedAt, &blocked, &p.Court, &p.Claim, &gone); err != nil {
 			return nil, err
 		}
 		// Whether the image is ALREADY off the site is the first thing an
 		// operator needs: one of these rows is an emergency and the rest are
 		// reading. Without it every entry looks equally urgent.
 		p.Blocked = blocked != 0
+		p.Gone = gone != 0
 		out = append(out, p)
 	}
 	return out, rows.Err()
