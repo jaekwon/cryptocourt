@@ -982,12 +982,22 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    across them. The rank is the other way round. A spoke is where a claim IS; a
    relation is what somebody says about it, and a court's curation has zero
    economic weight either way — but the skeleton is what you navigate by.
-   Trunk, then branch, by weight rather than by colour: the same --ink-2 at two
-   widths reads as one structure at two depths, where two different greys read as
-   two different kinds of line. */
-.medge.spoke{stroke:var(--ink-2); stroke-width:2.4}
-.medge.spoke.toclaim{stroke-width:1.6}
-.medge.spoke.also{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 4}
+   IT IS DRAWN IN --accent, the court's own blue. Grey said "chrome"; the court
+   node is filled with this and every folder box is outlined in it, so a blue
+   spoke reads as the same object continuing — the court's structure reaching
+   out to hold its folders — rather than as a connector that happens to be
+   between them. It also puts the whole skeleton in one hue that no relation
+   uses, so "is this containment or an assertion" is answered by colour before
+   weight is consulted.
+   Trunk, then branch, by weight within that one hue: two widths of one colour
+   read as one structure at two depths, where two colours would read as two
+   different kinds of line. */
+.medge.spoke{stroke:var(--accent); stroke-width:3.2}
+.medge.spoke.toclaim{stroke-width:2.2}
+/* Filed here as well as somewhere else. Same blue, because it IS containment,
+   and dashed and thin because it is the second place rather than the first —
+   the claim is drawn once, at its other folder. */
+.medge.spoke.also{stroke:var(--accent); stroke-width:1.4; stroke-dasharray:3 4}
 /* A relation, not the skeleton. Solid — it is the structural one of the four —
    but no longer the heaviest line in the drawing, and it inherits --ink-2 from
    .medge rather than reaching for the near-black nothing else uses. */
