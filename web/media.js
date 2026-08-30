@@ -1097,8 +1097,21 @@ function mediaLoadDraft(store, court) {
       // reload even though the blob: URL did not.
       preview: (it.mirrors || [])[0] || "",
       // Re-derived rather than restored: an item with somewhere to be found is
-      // ready, and one without is a failed copy the person can retry.
-      state: (it.mirrors || []).length ? "ready" : "failed",
+      // ready, and one without has nothing a claim could point at.
+      //
+      // THAT SECOND CASE USED TO COME BACK "failed", WHICH IS FILEABLE. A draft
+      // written while a mirrorless exhibit still counted as fileable therefore
+      // restores into a claim that cannot be signed — mediaItemFault refuses it
+      // with "this exhibit has no link yet" — and drafts sit in localStorage
+      // indefinitely, so that is not a window that closes. Anyone whose upload
+      // failed once carried an unfilable draft for as long as they kept it.
+      //
+      // Broken says the same thing the live path now says, with the action that
+      // works, and blocks nothing.
+      state: (it.mirrors || []).length ? "ready" : "broken",
+      error: (it.mirrors || []).length ? undefined
+        : "the copy did not go through, so there is no link to file this under — " +
+          "try adding it again, or paste the image's own link",
     })),
   };
 }

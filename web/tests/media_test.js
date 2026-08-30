@@ -657,9 +657,23 @@ async function section3() {
   // State is re-derived, because after a reload the only honest source is what
   // the item actually has.
   ok("an exhibit with a copy is ready", back.items[0].state === "ready");
-  ok("...and one without is a failed copy to retry", back.items[1].state === "failed");
+  // AND ONE WITH NOWHERE TO BE FOUND CANNOT BE FILED, so it must not come back
+  // in a state that says it can. This restored as "failed", which is fileable,
+  // so a draft written while a mirrorless exhibit still counted as fileable
+  // restored into a claim that could not be signed — "this exhibit has no link
+  // yet" — and drafts sit in localStorage indefinitely, so that is not a window
+  // that closes on its own.
+  ok("...and one without comes back broken, not filed", back.items[1].state === "broken");
+  ok("...saying how to get it back",
+     /try adding it again/.test(back.items[1].error || ""), JSON.stringify(back.items[1].error));
   ok("restored ids cannot collide with live ones", back.items.every(i => i.id < 0));
-  ok("a restored exhibit is fileable", back.items.every(M.mediaFileable));
+  ok("the exhibit that has a copy is fileable", M.mediaFileable(back.items[0]));
+  // The property that matters about a restore, rather than the state it picked:
+  // whatever comes back, the claim can still be signed.
+  const restored = M.mediaNewComposer({siteDomain: "kourt.xyz"});
+  restored.seed(back.items);
+  ok("...and a restored draft never blocks the claim", restored.fault() === "",
+     JSON.stringify(restored.fault()));
 
   // Drafts are per court: writing one must not overwrite another court's.
   M.mediaSaveDraft(store, "other", "elsewhere", "", []);
@@ -949,7 +963,7 @@ async function section5() {
   await section3();
   await section4();
   await section5();
-  const EXPECTED = 222;
+  const EXPECTED = 224;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
