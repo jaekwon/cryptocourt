@@ -310,6 +310,22 @@ function section3() {
      /served over http, and the court only takes https links/.test(page));
   ok("...gated on the protocol and on there being something to lose",
      /composer\.count\(\) && siteHost\(\) && location\.protocol !== "https:"/.test(page));
+  /* THE CALL NOBODY MADE. mediaClaimed has four assertions of its own in
+     media_test.js and /m/claimed has its own in Go, and nothing invoked it: the
+     composer uploaded bytes and let them sit until a backfill pass noticed.
+     Both halves tested, the call between them missing, every suite green — and
+     once the archive stopped serving unclaimed bytes, that gap became a 404 on a
+     claim somebody had just filed. */
+  ok("a broadcast claim tells the archive about its bytes",
+     /mediaClaimed\(court, Number\(n\)/.test(page));
+  ok("...only when the claim actually carried some",
+     /args && args\.media && typeof mediaClaimed=="?="?"function"/.test(page)
+     || /args && args\.media && typeof mediaClaimed===\"function\"/.test(page));
+  ok("...and only where there is an archive to tell",
+     /args\.media && typeof mediaClaimed==="function" && siteHost\(\)/.test(page));
+  ok("...with the id read from the chain, since a broadcast returns none",
+     /ClaimCount\(\$\{gstr\(court\)\}\)/.test(page));
+
   ok("...and the upload's own error names http as the cause",
      /a claim only takes https links/.test(
        require("fs").readFileSync(path.join(__dirname, "..", "media.js"), "utf8")));
@@ -319,7 +335,7 @@ function section3() {
   await section1();
   await section2();
   section3();
-  const EXPECTED = 44;
+  const EXPECTED = 48;
   if (ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);

@@ -2703,6 +2703,32 @@ async function adenaSign(func, args, el){
          written to a mis-click. */
       if(func==="OpenClaimPM" && COMPOSE_DRAFT_COURT && typeof mediaClearDraft==="function"){
         mediaClearDraft(window.localStorage, COMPOSE_DRAFT_COURT);
+        /* AND TELL THE ARCHIVE, which nothing did.
+           mediaClaimed has existed since the archive was built and was never
+           called from anywhere: the composer uploaded bytes and then let them
+           sit. backfill.go opens by saying "the client cannot be the only
+           witness", which reads as though there WAS a client witness; there was
+           not, and every uploaded exhibit waited on a backfill pass instead.
+           That is up to ten minutes during which the archive — which now serves
+           claimed bytes only — answers 404 for a claim somebody has just filed.
+           The claim id is the thing that made this awkward: DoContract returns a
+           tx hash, not an id, and the id does not exist until the chain includes
+           the transaction. So it is read afterwards, on the same seven-second
+           beat this handler already waits for a render, and the NEWEST claim in
+           that court is the one just filed.
+           Being wrong about that is harmless by construction: /m/claimed asks the
+           chain which hashes the claim references and promotes only those, so a
+           guess that lands on somebody else's claim promotes nothing, and
+           backfill still covers this the way it always did. */
+        const court = COMPOSE_DRAFT_COURT;
+        if(args && args.media && typeof mediaClaimed==="function" && siteHost()){
+          setTimeout(async ()=>{
+            try{
+              const n = await one(`ClaimCount(${gstr(court)})`);
+              if(n > 0) await mediaClaimed(court, Number(n), {base: location.origin});
+            }catch(_){}
+          }, 7000);
+        }
       }
       setTimeout(render, 7000);
     }
