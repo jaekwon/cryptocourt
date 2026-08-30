@@ -340,6 +340,14 @@ stripped, because that prose is printed to a terminal.
 
 ### 3.3 What an operator actually does
 
+**The origin is written once.** The queue groups by `filed_court` so a filing's
+seven exhibits read as one incident, which means that field is what an operator
+decides about — and a hash is public, so any stranger can file a claim quoting
+someone else's image. It is therefore the FIRST claim to reference the bytes,
+not the last. A later claim is a re-use; nothing is lost by saying so, because
+blocking is by hash and acting on the origin still removes the bytes everywhere
+they are quoted.
+
 `kourtchatctl` carries the whole surface, beside the `review`/`dismiss` this
 repository already had for chat:
 
@@ -656,6 +664,7 @@ Recorded because each is easy to make again:
 | 26 | the composer had no CSS at all — eighteen classes, zero rules | the page's first real input surface rendered as browser defaults, and `rowscope_layout` cannot see it because the composer does not mount in demo mode |
 | 27 | `draw()` and `refresh()` both printed `composer.fault()` | the identical sentence in two `.medianote` paragraphs, with the other warnings glued onto the second copy |
 | 28 | the page scrolled behind an open lightbox | somebody studying an exhibit scrolls, sees nothing move, and closes to find themselves somewhere else in a claim page thousands of pixels tall |
+| 29 | a blob's origin was rewritten on every promotion | hashes are public, so anyone could file a claim quoting somebody else's image and take the row — pointing an operator's "decide about the source" action at a court of their choosing |
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
