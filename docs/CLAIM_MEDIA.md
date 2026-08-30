@@ -691,6 +691,16 @@ Recorded because each is easy to make again:
 | 30 | the overlay never mentioned verification | the surface that CANNOT check an exhibit announced the promise, and the one that can said nothing — the only hint was an aria-label reading "full size" |
 | 31 | the txtar held its own hand-typed copy of the wire format | the one holder that proves a REAL node accepts what the composer builds was the one nothing compared — a field-order change would have left it proving the old format, green |
 | 32 | an http deployment could not file any upload, and was not told why | a mirror must be https on both sides, so a local overlay — a developer's first encounter — broke every exhibit in turn with a message naming the symptom |
+| 33 | the composer had only ever been rendered on a desktop | at 320px its action bar squeezed rather than wrapped — "try the copy again" 54px across and 44px tall, four words stacked into a column, with nothing overflowing to give it away |
+
+**The method these last rows came from is worth stating, because it is
+repeatable.** The defects stopped being wrong computations some time ago. Every
+one since has been a SITUATION NOTHING HAD BEEN RUN IN — a panel nothing
+rendered, a modal nobody scrolled, a wire-format copy nothing compared, a
+deployment nothing served, a width nothing measured. So the useful question is
+no longer "what does this code do wrong" but "what state can this be in that
+nobody has ever looked at", and then going and looking. Enumerating deployments
+found row 32; enumerating screen sizes found row 33.
 
 **Rows 15, 22, 23 and 24 are one defect found four times**, and the rule
 underneath them is now a test rather than a habit: *a fault may only ever
