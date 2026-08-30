@@ -183,7 +183,10 @@ dropped → shrinking → hashing → uploading → mirrored ✓
 ```
 
 Each state is a caption under the thumbnail in plain words ("making a copy on
-kourt.xyz…"). A failed upload does **not** block filing, and what that means is exact: an
+kourt.xyz…"). **The round trip is proved across a real reload** — title, body,
+exhibit, caption, the state re-derived from what the item carries, and the
+restored claim still signable — because a page load is the only event this
+promise exists for, and until then it had only ever been exercised in memory. A failed upload does **not** block filing, and what that means is exact: an
 exhibit that still has a link is filed without a copy, and one that has none
 — a dropped file, whose only mirror IS the copy — is shown broken and left out,
 so the claim itself is never held up. The **⟳ is real**: the prepared bytes stay
@@ -714,6 +717,7 @@ Recorded because each is easy to make again:
 | 38 | `restore` would put the same exhibit back twice | two rows sharing an id, the argument carrying that exhibit twice, and `fault()` empty — the panel is one-shot only because clearing the note removes the button |
 | 39 | the queue depth counted an operator's own decisions | once anyone had blocked an image by hand, the figure health publishes could never return to zero, so "nothing is waiting" became unreachable |
 | 40 | opening an exhibit while one was open stacked two lightboxes | Escape then closed whichever bound its listener last, and the scroll lock unlocked or did not depending on the order they closed in |
+| 41 | `?ex=1e21` and `?ex=1.5` opened the first exhibit | `parseInt` takes a prefix and shrugs at the rest, so a malformed address landed a reader on a picture instead of the claim |
 
 **A second axis, after the seven situations: the order things are done in.** The
 composer's `add / remove / restore / move / setCaption / seed / retry` all mutate
