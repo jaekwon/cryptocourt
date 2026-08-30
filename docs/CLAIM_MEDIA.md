@@ -629,6 +629,29 @@ ones. Both survived because the two sides had only ever been compared on
 `"x".repeat()`, where a byte and a character are the same thing — the fixture
 chose the one input class that cannot tell them apart.
 
+**The same pattern is realm-wide, and is NOT changed here.** Five user-written
+fields are capped in bytes while the surface that collects them counts
+characters:
+
+| field | realm | what collects it |
+|---|---|---|
+| claim title | `len(title) > 200` | `title.maxLength = 200` (UTF-16 units) |
+| claim body | `len(body) > maxClaimBodyLen` | `body.maxLength = 2000` |
+| board text | `len(text) > maxBoardTextLen` | the board composer |
+| court description | `len(desc) > maxCourtDescLen` | the court form |
+| moderation reason | `len(reason) > maxReasonLen` | the moderation form |
+
+A 200-character Russian claim title is about 370 bytes, so the composer accepts
+it and the chain refuses it — the same abort row 18 describes, on the primary
+fields rather than on a caption. Each is a one-line change of the shape made
+here, and each makes the realm strictly MORE permissive, so no existing claim
+becomes invalid; the cost is that claim text can occupy up to 4x the bytes it
+can today, which the author already pays for through the storage deposit.
+
+Left alone because it is consensus validation spread across `claim.gno`,
+`board.gno`, `court.gno` and `moderation.gno` rather than anything media owns.
+Recorded so the next person to touch those files has the measurement.
+
 Rows 14 and 15 are the pair worth dwelling on: a server-side mechanism complete
 and correct, its client half quietly not using it, and every unit test on both
 sides passing. The doc already recorded that happening twice during the build.
