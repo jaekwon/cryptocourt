@@ -119,6 +119,44 @@ def main():
             "  no /m location in nginx.conf: the archive is unreachable and every "
             "exhibit on every claim page is a broken image")
 
+    # THE WIRE FORMAT HAS A FIFTH IMPLEMENTATION. scenario.py builds the same
+    # eight fields web/media.js builds and realm/r/kourtv2 parses, so a demo can
+    # seed evidence — and a scenario that wrote them differently would seed a
+    # demo the product could not have produced, which is the one thing a demo
+    # must never do.
+    #
+    # The realm's own suite pins these two strings as clientImageLine and
+    # clientVideoLine, and the overlay's suite asserts it still builds them.
+    # This is the third holder.
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "scenario_mod", os.path.join(ROOT, "scripts", "scenario.py"))
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except SystemExit:
+        pass
+    want_img = ("img|1111111111111111111111111111111111111111111111111111111111111111|"
+                "image/webp|800|600|90210|the memo|https://i.imgur.com/abc.webp")
+    want_vid = "vid|||0|0|0|the hearing|https://i.imgur.com/v.mp4"
+    got_img = mod.media_arg([{"sha256": "1" * 64, "mime": "image/webp", "w": 800,
+                              "h": 600, "bytes": 90210, "caption": "the memo",
+                              "mirrors": ["https://i.imgur.com/abc.webp"]}])
+    got_vid = mod.media_arg([{"kind": "vid", "caption": "the hearing",
+                              "mirrors": ["https://i.imgur.com/v.mp4"]}])
+    if got_img != want_img:
+        problems.append("  scenario.py builds an image line the realm does not "
+                        "parse:\n    got  %s\n    want %s" % (got_img, want_img))
+    if got_vid != want_vid:
+        problems.append("  scenario.py builds a video line the realm does not "
+                        "parse:\n    got  %s\n    want %s" % (got_vid, want_vid))
+    # And the strings above must still be the ones the realm suite holds.
+    realm_test = open(os.path.join(ROOT, "realm", "r", "kourtv2", "media_test.gno")).read()
+    if want_vid not in realm_test:
+        problems.append("  the realm suite no longer pins the video line this "
+                        "guard compares against — one of them has moved")
+
     if problems:
         print("check-media-hosts: the three copies of the media host list disagree.",
               file=sys.stderr)
@@ -127,7 +165,8 @@ def main():
         return 1
 
     print("check-media-hosts: %d host(s) and %d suffix(es) agree across the realm, "
-          "the overlay and the page CSP; /m is routed." % (len(gno_exact), len(gno_suffix)))
+          "the overlay and the page CSP; /m is routed; scenario.py builds the "
+          "argument the realm parses." % (len(gno_exact), len(gno_suffix)))
     return 0
 
 

@@ -103,7 +103,7 @@ stdout 'OK!'
 
 
 # --- 2020-03 — and the funding trail, which nobody disputes even in 2020 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaim -args 'covid' -args 'NIH funds reached coronavirus research at the Wuhan Institute of Virology through EcoHealth Alliance subawards before 2020.' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test journo
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenClaimPM -args 'covid' -args 'NIH funds reached coronavirus research at the Wuhan Institute of Virology through EcoHealth Alliance subawards before 2020.' -args '' -args 'img|3f1c000000000000000000000000000000000000000000000000000000000000|image/webp|1200|840|141000|NIH award notice, FY2014, page 1|https://i.imgur.com/notarealimage1.webp' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test journo
 stdout 'OK!'
 
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func Stake -args 'covid' -args '2' -args '0' -args '25000000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test journo

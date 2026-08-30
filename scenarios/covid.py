@@ -142,9 +142,32 @@ s.stake(epi, "covid", LAB20, NO, 18_000_000)
 s.stake(skeptic, "covid", LAB20, NO, 6_000_000)
 
 s.note("2020-03 — and the funding trail, which nobody disputes even in 2020")
+# THE ONE CLAIM IN THIS SCENARIO THAT CARRIES EVIDENCE, because a claim about a
+# paper trail is exactly the kind a person files a screenshot with — and a demo
+# where no claim shows an exhibit demonstrates the feature as if it did not
+# exist.
+#
+# The hashes are of images this demo does not host, so a reader following the
+# archive address gets "not currently available" — which is the honest state for
+# seeded data and, usefully, the state a reader will also meet when a real
+# mirror goes down. Better to show that than to point the demo at somebody
+# else's picture.
 s.claim(journo, "covid",
         "NIH funds reached coronavirus research at the Wuhan Institute of Virology "
-        "through EcoHealth Alliance subawards before 2020.")
+        "through EcoHealth Alliance subawards before 2020.",
+        # ONE EXHIBIT, and not because one is the interesting case. The wire
+        # format separates items with a newline, and a txtar token cannot carry
+        # one — testscript reads it as an unterminated quote, and \r is dropped
+        # by the txtar emitter while the sh emitter keeps it, so the two would
+        # disagree about what reached the chain. A real shell has no such
+        # trouble, so the CLI affordance is unaffected; what is bounded is what a
+        # SCENARIO or a txtar can seed.
+        media=[
+            {"sha256": "3f1c" + "0" * 60, "mime": "image/webp",
+             "w": 1200, "h": 840, "bytes": 141_000,
+             "caption": "NIH award notice, FY2014, page 1",
+             "mirrors": ["https://i.imgur.com/notarealimage1.webp"]},
+        ])
 FUNDING = 2
 s.stake(journo, "covid", FUNDING, YES, 25_000_000)
 s.stake(virology, "covid", FUNDING, YES, 10_000_000)

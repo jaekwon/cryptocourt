@@ -119,6 +119,30 @@ DEPS = [
 ]
 
 
+# The argument OpenClaimPM takes: one line per exhibit,
+# kind|sha256|mime|w|h|bytes|caption|mirror[,mirror...]
+#
+# THE SAME EIGHT FIELDS web/media.js builds and realm/r/kourtv2 parses. A
+# scenario that wrote them differently would seed a demo the product could not
+# have produced, which is the one thing a demo must never do — the whole point
+# of seeding is to show what a person would actually get.
+def media_arg(items):
+    lines = []
+    for it in items:
+        kind = it.get("kind", "img")
+        lines.append("|".join([
+            kind,
+            it.get("sha256", ""),
+            it.get("mime", ""),
+            str(it.get("w", 0)),
+            str(it.get("h", 0)),
+            str(it.get("bytes", 0)),
+            it.get("caption", ""),
+            ",".join(it.get("mirrors", [])),
+        ]))
+    return "\n".join(lines)
+
+
 class Scenario:
     """A story about a chain. Build it, then emit it."""
 
@@ -267,14 +291,33 @@ class Scenario:
     def buy(self, who, slug, ugnot):
         self._call(who, "Buy", [slug], send=f"{ugnot}ugnot")
 
-    def claim(self, who, slug, title, body=None):
-        """OpenClaim, or OpenClaimP when a body is given.
+    def claim(self, who, slug, title, body=None, media=None):
+        """OpenClaim, OpenClaimP with a body, or OpenClaimPM with evidence.
 
-        Two entrypoints rather than one with an empty argument: OpenClaim is what
-        every committed txtar in the tree calls, and passing it a third argument
-        would rewrite all of them for a field most scenarios do not want.
+        Three entrypoints rather than one with empty arguments: OpenClaim is what
+        every committed txtar in the tree calls, and passing it extra arguments
+        would rewrite all of them for fields most scenarios do not want.
+
+        `media` is a list of exhibits, each a dict:
+
+            {"sha256": <64 hex>, "mime": "image/webp", "w": 800, "h": 600,
+             "bytes": 90210, "caption": "the memo", "mirrors": [url, ...]}
+
+        or, for a video, {"kind": "vid", "caption": ..., "mirrors": [url]} — a
+        streaming host serves no stable bytes, so a video carries no hash and is
+        filed as linked rather than verified.
+
+        ONE EXHIBIT PER CLAIM HERE. The format separates items with a newline and
+        _q_txtar refuses one, for the reason it states: testscript reads it as an
+        unterminated quote, and a \r would be dropped by the txtar emitter while
+        the sh emitter kept it, so the two would disagree about what reached the
+        chain. A real shell carries newlines, so gnokey and the overlay's CLI
+        affordance are unaffected — what is bounded is what a scenario or a txtar
+        can express, and therefore what an integration test can cover.
         """
-        if body:
+        if media:
+            self._call(who, "OpenClaimPM", [slug, title, body or "", media_arg(media)])
+        elif body:
             self._call(who, "OpenClaimP", [slug, title, body])
         else:
             self._call(who, "OpenClaim", [slug, title])
