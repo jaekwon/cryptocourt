@@ -81,7 +81,17 @@ ok("the dispute ballot carries the verdict row",
   src.includes('${voteLockLine("verdict","votecommit")}'));
 ok("the quality panel carries the quality row",
   src.includes('voteLockLine("quality","qualcommit")'));
-ok("the quality row renders in the panel", src.includes('${qlock?`<div style="margin-top:8px">${qlock}</div>`:""}'));
+// THE WRAPPER CLASS IS THE ASSERTION, not the div. Every rule for a .line was
+// written as `.ticket .line`, and this panel has no ticket — so the row came out
+// as two bare inline spans reading "what voting commitsCasting commits the
+// weight you vote with…": the label and its prose printed as one word, with no
+// emphasis and no column. Rendering it and reading it is what found that.
+ok("the quality row renders in the panel",
+   src.includes('${qlock?`<div class="qrows" style="margin-top:8px">${qlock}</div>`:""}'));
+ok("...and the reward-pool row beside it, which had the same defect",
+   src.includes('${draw?`<div class="qrows" style="margin-top:8px">${draw}</div>`:""}'));
+ok("...in a context the ticket row styles actually reach",
+   /\.ticket \.line,\.qrows \.line\{display:grid/.test(src));
 ok("the claim page calls the filler", src.includes('fillVoteCommitment(slug,id);'));
 
 // DisposableOf is the figure the realm enforces. SpendableOf is stake-only and

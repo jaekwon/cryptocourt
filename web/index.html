@@ -577,19 +577,28 @@ html.embed #tcbanner{grid-column:1; padding:0}
   position:relative}
 .ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
 .ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
+/* THE SAME ROW, OUTSIDE A TICKET. voteLockLine and the reward-pool row emit a
+   .line, and every rule for one was written as `.ticket .line` — so on the
+   quality panel, which has no ticket, both came out as two bare inline spans:
+   "what voting commitsCasting commits the weight you vote with…", label and
+   prose printed as one word with no emphasis and no column. Added to the
+   selectors rather than restated beneath them, because a second copy of this
+   grid is a second thing to keep in step. Not `.ticket` on the wrapper: that
+   carries a border and 18px of padding, and would put a second box inside a
+   panel that already has one. */
 /* A ticket row is a label and what it says. The label is the bold thing on the
    LEFT and the text reads left-to-right from its own aligned column: two real
    grid tracks with a gutter, because space-between put the emphasis on the
    right, ragged-left, and closed the gap entirely once a row's text filled it. */
-.ticket .line{display:grid; grid-template-columns:minmax(0,20ch) minmax(0,1fr); column-gap:24px;
+.ticket .line,.qrows .line{display:grid; grid-template-columns:minmax(0,20ch) minmax(0,1fr); column-gap:24px;
   align-items:baseline; padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
-.ticket .line:first-of-type{border-top:none}
-.ticket .line>*:first-child{font-weight:600; color:var(--ink)}
-.ticket .line .r{font-weight:400; color:var(--ink-2); text-align:left; font-variant-numeric:tabular-nums}
+.ticket .line:first-of-type,.qrows .line:first-of-type{border-top:none}
+.ticket .line>*:first-child,.qrows .line>*:first-child{font-weight:600; color:var(--ink)}
+.ticket .line .r,.qrows .line .r{font-weight:400; color:var(--ink-2); text-align:left; font-variant-numeric:tabular-nums}
 .ticket .line .r b{color:var(--ink)}
 .ticket .line.spent>*:first-child{color:var(--muted); font-weight:400}
 .ticket .line.spent .r{color:var(--muted)}
-@media (max-width:640px){ .ticket .line{grid-template-columns:minmax(0,1fr); row-gap:2px} }
+@media (max-width:640px){ .ticket .line,.qrows .line{grid-template-columns:minmax(0,1fr); row-gap:2px} }
 /* the clock ladder: what happened on the left, when on the right — the dates
    align in their own column because the grid lives on the container, not the
    row, and the column sits just past the labels rather than at the far edge */
@@ -7064,7 +7073,7 @@ function qualitySection(slug,id,d){
   }
   const draw = d.crystallized&&d.draw? `<div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w,slug)} · author ${cc(d.draw.a,slug)} · answerer ${cc(d.draw.ans,slug)} · voters ${cc(d.draw.carrot,slug)}</span></div>`:"";
   return `<section><div class="sec-h">Quality &amp; rewards</div>
-    <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div style="margin-top:8px">${draw}</div>`:""}${qlock?`<div style="margin-top:8px">${qlock}</div>`:""}
+    <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div class="qrows" style="margin-top:8px">${draw}</div>`:""}${qlock?`<div class="qrows" style="margin-top:8px">${qlock}</div>`:""}
     ${act?`<div class="actions" style="margin-top:12px">${act}</div>`:""}</div></section>`;
 }
 

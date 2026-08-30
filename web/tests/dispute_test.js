@@ -101,11 +101,11 @@ ok("F3: eligibility affirmative hedged",
 
 // ticket rows: label bold on the LEFT, value left-aligned in its own column,
 // with a real gutter (owner report: bold-right, ragged-left, columns touching)
-ok("ticket rows are a two-track grid with a gutter", src.includes(".ticket .line{display:grid; grid-template-columns:minmax(0,20ch) minmax(0,1fr); column-gap:24px"));
-ok("the label is the bold thing", src.includes(".ticket .line>*:first-child{font-weight:600; color:var(--ink)}"));
-ok("values read left-to-right, not right-adjusted", src.includes(".ticket .line .r{font-weight:400; color:var(--ink-2); text-align:left"));
+ok("ticket rows are a two-track grid with a gutter", src.includes(".ticket .line,.qrows .line{display:grid; grid-template-columns:minmax(0,20ch) minmax(0,1fr); column-gap:24px"));
+ok("the label is the bold thing", src.includes(".ticket .line>*:first-child,.qrows .line>*:first-child{font-weight:600; color:var(--ink)}"));
+ok("values read left-to-right, not right-adjusted", src.includes(".ticket .line .r,.qrows .line .r{font-weight:400; color:var(--ink-2); text-align:left"));
 ok("no space-between left in the rule", !src.includes(".ticket .line{display:flex; justify-content:space-between"));
-ok("narrow screens stack the pair", src.includes("@media (max-width:640px){ .ticket .line{grid-template-columns:minmax(0,1fr)"));
+ok("narrow screens stack the pair", src.includes("@media (max-width:640px){ .ticket .line,.qrows .line{grid-template-columns:minmax(0,1fr)"));
 // the helper modal: the long "why" lives one click away, keyboard-reachable
 ok("modal: one dialog, native, labelled", html.includes('<dialog class="helper" id="help-vote" aria-labelledby="help-vote-h">'));
 ok("modal: triggers are BUTTONS (an href-less <a> cannot be tabbed to)", html.includes('<button type="button" class="helplink" data-help="help-vote">') && !html.includes('<a class="helplink"'));
