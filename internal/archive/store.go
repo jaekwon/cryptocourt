@@ -361,7 +361,15 @@ func (s *Store) Stats(ctx context.Context) (Stats, error) {
 		  (SELECT COUNT(*) FROM blobs WHERE promoted = 0),
 		  (SELECT COUNT(*) FROM blobs WHERE promoted = 1),
 		  (SELECT COUNT(*) FROM blobs WHERE blocked = 1),
-		  (SELECT COUNT(*) FROM blob_review WHERE cleared_at IS NULL AND label != 'clean'),
+		  -- AWAITING A PERSON, which is not the same as ever flagged. An
+		  -- operator's own block writes a review row labelled 'operator' and
+		  -- leaves it uncleared on purpose: PendingReview is the only inventory
+		  -- of what is blocked, and the unblock verb takes a hash somebody has
+		  -- to be able to read. Counting those here made this number monotonic --
+		  -- once an operator had ever acted, the figure that answers whether
+		  -- anything needs them could not return to zero.
+		  (SELECT COUNT(*) FROM blob_review
+		    WHERE cleared_at IS NULL AND label != 'clean' AND label != 'operator'),
 		  COALESCE((SELECT v FROM archive_meta WHERE k = 'swept_at'), '0'),
 		  COALESCE((SELECT v FROM archive_meta WHERE k = 'backfill_at'), '0'),
 		  COALESCE((SELECT v FROM archive_meta WHERE k = 'review_at'), '0'),

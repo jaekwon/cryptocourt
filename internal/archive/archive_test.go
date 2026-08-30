@@ -1487,8 +1487,15 @@ func TestHealthCanTellASweepFromASilence(t *testing.T) {
 	if err := st.Promote(ctx, kept); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
-	if err := st.BlockByOperator(ctx, kept, "a face nobody consented to"); err != nil {
-		t.Fatalf("block: %v", err)
+	// A MACHINE'S BLOCK, NOT A PERSON'S, because pending_review counts what is
+	// waiting on a person. This used BlockByOperator, which writes an operator's
+	// own decision — and counting those was what made the figure monotonic, so
+	// the fixture was creating the very state the count is no longer supposed to
+	// report. What an operator wants to see here is the model's work queue.
+	if _, err := st.Review(ctx, kept, ImageVerdict{
+		Label: AutoBlockLabel, Confidence: AutoBlockConfidence,
+		Why: "a face nobody consented to"}); err != nil {
+		t.Fatalf("review: %v", err)
 	}
 
 	h := read()
@@ -1615,8 +1622,12 @@ func TestHealthTellsAStrangerNothingToMeterAgainst(t *testing.T) {
 	ctx := context.Background()
 
 	sum, _ := st.Put(ctx, "image/png", pngBody, "covid")
-	if err := st.BlockByOperator(ctx, sum, "a face nobody consented to"); err != nil {
-		t.Fatalf("block: %v", err)
+	// The model's queue, not a person's own decision — see the sibling health
+	// test for why the two are counted differently.
+	if _, err := st.Review(ctx, sum, ImageVerdict{
+		Label: AutoBlockLabel, Confidence: AutoBlockConfidence,
+		Why: "a face nobody consented to"}); err != nil {
+		t.Fatalf("review: %v", err)
 	}
 	if _, err := st.SweepStaged(ctx, time.Now()); err != nil {
 		t.Fatalf("sweep: %v", err)

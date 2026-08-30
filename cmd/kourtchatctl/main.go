@@ -214,8 +214,19 @@ func cmdImages(ctx context.Context, store *chat.Store, args []string) {
 		fmt.Printf("  %s\n    %-9s %3.0f%%  %-13s %s\n",
 			r.SHA256, r.Label, r.Confidence*100, state, r.Why)
 	}
-	fmt.Printf("\n%d flagged. `unblock SHA256` overrules the model and serves one again.\n",
-		len(rows))
+	// TWO NUMBERS, BECAUSE THEY ANSWER DIFFERENT QUESTIONS. The list is the whole
+	// inventory of what is flagged or blocked — it has to be, since `unblock`
+	// takes a hash and this is the only place to read one. How many of those are
+	// still waiting on a person is the number an operator actually came for, and
+	// it is the one archive health reports.
+	waiting := 0
+	for _, r := range rows {
+		if r.Label != archive.OperatorLabel {
+			waiting++
+		}
+	}
+	fmt.Printf("\n%d flagged, %d awaiting you. `unblock SHA256` overrules the model "+
+		"and serves one again.\n", len(rows), waiting)
 }
 
 // cmdForget destroys bytes, and follows cmdPrune's shape because it is the same
