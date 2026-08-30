@@ -2406,6 +2406,13 @@ function openExhibit(i, from){
    rather than clamped: a stale link to exhibit 5 of a claim that now shows three
    should leave the reader on the claim, not silently on a different picture. */
 function openExhibitFromURL(){
+  // THE WHOLE VALUE MUST BE THE NUMBER. parseInt takes a prefix and shrugs at
+  // the rest, so ?ex=1e21 and ?ex=1.5 both came out as 1 and opened the first
+  // exhibit — somebody handed a malformed address got a picture rather than the
+  // claim. Out of range is already ignored; malformed should be too, for the
+  // same reason. (Nothing was injectable either way: the value is a number long
+  // before it reaches a selector, so ?ex=1"] , [data-ex="0 was only ever 1.)
+  if(!/^[0-9]+$/.test(QP.ex || "")) return;
   const n = parseInt(QP.ex, 10);
   if(!(n >= 1)) return;
   const fig = document.querySelector(`.exhibits [data-ex="${n-1}"]`);

@@ -284,6 +284,66 @@ if (!BASE) { console.log("usage: compose_intake.js <base-url>"); process.exit(2)
   }
   await page.setViewport({width: 1280, height: 900});
 
+  // --- 6. a draft survives a real reload ------------------------------------
+  // §2.5 is the promise that stands between a person and losing a composed
+  // claim, and it had only ever been exercised in memory: mediaSaveDraft and
+  // mediaLoadDraft have unit tests, and the sequence battery calls seed()
+  // directly. Neither crosses a page load, which is the only event the feature
+  // exists for.
+  //
+  // A DIFFERENT COURT, because evaluateOnNewDocument above clears orem's draft
+  // on every document — including the one the reload produces, which would wipe
+  // the very thing under test and report it as lost.
+  await page.evaluate(async () => {
+    localStorage.removeItem(mediaDraftKey("ledger"));
+    const real = window.mediaNewComposer;
+    window.mediaNewComposer = function (o) { const c = real(o); window.__c = c; return c; };
+    const div = document.createElement("div");
+    div.className = "__probe";
+    document.body.appendChild(div);
+    mountCompose(div, "ledger");
+    div.querySelector(".composeopen").click();
+    window.mediaNewComposer = real;
+    const t = div.querySelector(".composetitle"), b = div.querySelector(".composebody");
+    t.value = "Did the memo say that?"; t.dispatchEvent(new Event("input", {bubbles: true}));
+    b.value = "The memo is the whole question."; b.dispatchEvent(new Event("input", {bubbles: true}));
+    window.__c.seed([{id: -9, kind: "img", state: "ready", sha256: "a".repeat(64),
+      mime: "image/webp", w: 240, h: 160, bytes: 5200, caption: "north span rating",
+      mirrors: ["https://i.imgur.com/abc.webp"], preview: ""}]);
+    await new Promise(r => setTimeout(r, 250));
+  });
+
+  await page.reload({waitUntil: "domcontentloaded"});
+  await new Promise(r => setTimeout(r, 700));
+
+  const kept = await page.evaluate(async () => {
+    const real = window.mediaNewComposer;
+    window.mediaNewComposer = function (o) { const c = real(o); window.__c = c; return c; };
+    const div = document.createElement("div");
+    div.className = "__probe";
+    document.body.appendChild(div);
+    mountCompose(div, "ledger");
+    div.querySelector(".composeopen").click();
+    window.mediaNewComposer = real;
+    await new Promise(r => setTimeout(r, 250));
+    const it = window.__c.items[0] || {};
+    return {title: div.querySelector(".composetitle").value,
+            body: div.querySelector(".composebody").value,
+            n: window.__c.items.length, caption: it.caption, state: it.state,
+            fault: window.__c.fault(),
+            lines: window.__c.argument() ? window.__c.argument().split("\n").length : 0};
+  });
+  ok("a reload keeps the title that was typed", kept.title === "Did the memo say that?",
+     JSON.stringify(kept.title));
+  ok("...and the body", kept.body === "The memo is the whole question.");
+  ok("...and the exhibit, with its caption", kept.n === 1 && kept.caption === "north span rating",
+     JSON.stringify(kept));
+  // The state is re-derived from what the item has rather than stored, so this
+  // is the assertion that the derivation still agrees with the rest.
+  ok("...ready, because it has somewhere to be found", kept.state === "ready", kept.state);
+  ok("...and the restored claim can still be signed", kept.fault === "" && kept.lines === 1,
+     JSON.stringify({fault: kept.fault, lines: kept.lines}));
+
   ok("no page errors throughout", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
