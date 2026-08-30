@@ -50,6 +50,16 @@ func mediaDestination(m *mediaItem) string {
 // that silently renumbered the images around it would leave every later exhibit
 // referring to something else than it did yesterday, in the middle of an
 // argument about which one shows what.
+// verifyElsewhere names the surface that CAN check an exhibit, when there is one
+// to name. Built from the same configured domain the archive lives on, so the
+// two can never disagree about where the overlay is.
+func verifyElsewhere() string {
+	if siteDomain == "" || siteDomainFault(siteDomain) != "" {
+		return ""
+	}
+	return " [" + siteDomain + "](https://" + siteDomain + ") checks it."
+}
+
 func writeClaimMedia(b *strings.Builder, c *Court, cs *claimState) {
 	items := claimMediaVisible(c, cs)
 	if len(items) == 0 {
@@ -57,6 +67,15 @@ func writeClaimMedia(b *strings.Builder, c *Court, cs *claimState) {
 	}
 	total := strconv.Itoa(len(items))
 	b.WriteString("## Evidence filed with this claim\n\n")
+	// WHAT THIS PAGE CANNOT TELL YOU, said before the pictures rather than after.
+	//
+	// The whole value of filing a hash is that a swapped image is detectable —
+	// and this surface cannot perform that check, because gnoweb's CSP forbids
+	// fetching a third-party image at all. A reader shown evidence with no
+	// mention of that would reasonably assume the court had vouched for it.
+	// Silence here is not neutral; it is a claim the court cannot support.
+	b.WriteString("_The court recorded a fingerprint of each image when the claim " +
+		"was filed, so a swap can be detected — but not on this page._" + verifyElsewhere() + "\n\n")
 	for i := range items {
 		m := &items[i]
 		pos := strconv.Itoa(i+1) + " of " + total
@@ -85,7 +104,10 @@ func writeClaimMedia(b *strings.Builder, c *Court, cs *claimState) {
 				") _(a link; the court holds no copy and cannot vouch for it)_\n\n")
 			continue
 		}
-		b.WriteString("![Exhibit " + pos + caption + "](" + dest + ")\n\n")
+		// The alt text carries the POSITION only, because the caption is printed
+		// visibly on the next line. Repeating it makes a screen reader say the
+		// same words twice, and makes a broken image show them twice.
+		b.WriteString("![Exhibit " + pos + "](" + dest + ")\n\n")
 		b.WriteString("_Exhibit " + pos + caption + "_\n\n")
 	}
 }

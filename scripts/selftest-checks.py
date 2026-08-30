@@ -1396,9 +1396,17 @@ print("\ncheck-media-hosts")
 control("the realm allows a host the overlay does not", MEDIAGNO,
         '"ipfs.io",', '"ipfs.io",\n\t"drifted.example",',
         "disagree", argv=["python3", MEDIAHOSTS])
+# The plant has to name the img-src copy UNIQUELY. It used to be
+# " https://cloudflare-ipfs.com;", which matched once — until media-src arrived
+# carrying the same host list, and then it matched twice and the arm quietly
+# stopped testing anything. check-control-anchors caught that; the trailing
+# directive name is what makes each copy distinguishable.
 control("the page's CSP drops a host the realm still stores", NGINXCONF,
-        " https://cloudflare-ipfs.com;", ";",
+        " https://cloudflare-ipfs.com; connect-src", "; connect-src",
         "refuses to load", argv=["python3", MEDIAHOSTS])
+control("the page's media-src drops a host the realm still stores", NGINXCONF,
+        " https://cloudflare-ipfs.com; font-src", "; font-src",
+        "refuses to play", argv=["python3", MEDIAHOSTS])
 # Not a host list at all, but the same guard and the same class of silent
 # failure: without the route, every exhibit on every claim page is a broken
 # image, because the realm's markdown points every reader at /m/<sha256>.

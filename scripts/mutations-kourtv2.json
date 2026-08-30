@@ -11844,5 +11844,19 @@
   "replace": "\t\tv := c.claims.Get(beClaimKey(id))\n\t\tif v == nil {\n\t\t\tcontinue\n\t\t}",
   "label": "ClaimMediaPage: a missing claim shifts every later entry",
   "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\tb.WriteString(\"_The court recorded a fingerprint of each image when the claim \" +\n\t\t\"was filed, so a swap can be detected — but not on this page._\" + verifyElsewhere() + \"\\n\\n\")",
+  "replace": "\tb.WriteString(verifyElsewhere() + \"\\n\\n\")",
+  "label": "writeClaimMedia: the page shows evidence without saying it cannot check it",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tb.WriteString(\"![Exhibit \" + pos + \"](\" + dest + \")\\n\\n\")",
+  "replace": "\t\tb.WriteString(\"![Exhibit \" + pos + caption + \"](\" + dest + \")\\n\\n\")",
+  "label": "writeClaimMedia: the alt text repeats the visible caption",
+  "pkg": "kourtv2"
  }
 ]

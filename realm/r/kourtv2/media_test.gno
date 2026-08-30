@@ -384,6 +384,25 @@ func TestEveryExhibitIsNumberedAndKeepsItsPlace(cur realm, t *testing.T) {
 			t.Fatalf("every exhibit is numbered; missing %q", want)
 		}
 	}
+	// WHAT THIS PAGE CANNOT TELL YOU, SAID OUT LOUD. The whole value of filing a
+	// hash is that a swap is detectable, and gnoweb cannot perform that check —
+	// its CSP forbids fetching a third-party image at all. A reader shown
+	// evidence with no mention of that would reasonably take the court to have
+	// vouched for it, so silence here is not neutral: it is a claim the court
+	// cannot support.
+	if !strings.Contains(page, "but not on this page") {
+		t.Fatalf("the page must say it cannot check the evidence it is showing:\n%s", page)
+	}
+	if !strings.Contains(page, "[kourt.xyz](https://kourt.xyz) checks it") {
+		t.Fatalf("...and name the surface that can:\n%s", page)
+	}
+	// The alt text carries the position only: the caption is printed visibly on
+	// the next line, and repeating it makes a screen reader say the same words
+	// twice and a broken image show them twice.
+	if strings.Contains(page, "![Exhibit 1 of 3 — the memo]") {
+		t.Fatalf("the alt text must not repeat the visible caption:\n%s", page)
+	}
+
 	// The archive, not the mirror the filer named.
 	if !strings.Contains(page, "https://kourt.xyz/m/"+okHash) {
 		t.Fatalf("the page must point at the archive:\n%s", page)
@@ -498,5 +517,28 @@ func TestOneReadCarriesAWholeMapsWorthOfEvidence(cur realm, t *testing.T) {
 	// brackets of its own.
 	if n := strings.Count(ClaimMediaPage("mpg", 1, 9999), "],["); n != maxMediaPage-1 {
 		t.Fatalf("the count must clamp to %d entries, saw %d separators", maxMediaPage, n)
+	}
+}
+
+func TestWithNoOverlayThePageStillSaysItCannotCheck(cur realm, t *testing.T) {
+	// The caveat is unconditional; only the pointer to a surface that CAN check
+	// depends on one being configured. A court running without an overlay must
+	// not silently drop the warning along with the link.
+	prev := siteDomain
+	defer func() { siteDomain = prev }()
+
+	var b strings.Builder
+	cs := &claimState{media: parseMediaArg(imgLine("the memo", okMirror))}
+
+	siteDomain = ""
+	out := b.String()
+	b.Reset()
+	writeClaimMedia(&b, &Court{}, cs)
+	out = b.String()
+	if !strings.Contains(out, "but not on this page") {
+		t.Fatalf("the caveat must not depend on an overlay existing:\n%s", out)
+	}
+	if strings.Contains(out, "checks it") {
+		t.Fatalf("with no site configured there is no surface to name:\n%s", out)
 	}
 }
