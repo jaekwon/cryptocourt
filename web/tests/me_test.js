@@ -69,7 +69,13 @@ ok("snapshot only when mefail==0", src.includes("if(mefail===0) store.set(seenKe
 ok("last-visit copy verbatim", src.includes("this browser's memory of your last look") && src.includes("Clear storage and it forgets"));
 ok("senior owed-not-earned copy", src.includes("owed, not earned") && src.includes("paid as budget accrues, the court's pace, not a promise"));
 ok("needs deadline string", src.includes("you may dispute until ≈block"));
-ok("needs sealed-vote honesty", src.includes("a sealed vote is deciding — no close height is published"));
+// HONESTY IS STILL THE POINT, but the honest sentence changed when
+// DisputeVoteCloses shipped: the chain does publish a close now, so claiming it
+// does not was the dishonest version. The row still carries no countdown —
+// reading it here would be a query per row — and it says where to find one.
+ok("needs sealed-vote honesty",
+   src.includes("a sealed vote is deciding — its countdown is on the claim page")
+   && !src.includes("no close height is published"));
 ok("needs sections", src.includes(">Against your side <span") && src.includes(">With your side <span"));
 ok("no cross-court sums", src.includes("coins are per-court, never summed"));
 ok("demo senior sums to seniorOwed", (()=>{ const m=src.match(/amount:700_000, paid:60_000/); return !!m; })());

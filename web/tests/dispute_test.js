@@ -148,6 +148,15 @@ ok("...and stated in the modal in plain words",
    html.includes("more than half the weight voted has to say overturn")
    && html.includes("A tie upholds"));
 ok("sealed = un-summed not secret", html.includes("Sealed means un-summed, not secret"));
+// The modal heading asserted the same false thing the ballot sentence did, in
+// the second person. Removing one and keeping the other would have left the
+// help page telling a reader they cannot do what the paragraph under it
+// explains how to do.
+ok("the modal explains what the PAGE does, not what the reader cannot",
+   html.includes("Why this page does not add them up")
+   && !html.includes("Why you cannot see the count"));
+ok("...and says where the count can be had instead",
+   html.includes("can read it off the chain"));
 ok("no 'secret ballot'", !/secret ballot/i.test(html));
 // Said ONCE now, in the modal. The ballot says who may vote; how the weight is
 // measured is mechanism.
@@ -279,9 +288,19 @@ ok("modal: one dialog, native, labelled", html.includes('<dialog class="helper" 
 ok("modal: triggers are BUTTONS (an href-less <a> cannot be tabbed to)", html.includes('<button type="button" class="helplink" data-help="help-vote">') && !html.includes('<a class="helplink"'));
 // The ballot keeps ONE line of prose and one link. The burn/mint rule used to
 // sit here as well as in the modal, in two different sets of words.
-ok("ballot keeps one line and one link",
-   html.includes("Nobody can see the count until voting closes.")
-   && html.includes("How this vote works →"));
+// "NOBODY CAN SEE THE COUNT UNTIL VOTING CLOSES" IS GONE, and not for brevity:
+// it is false. Every vote is a public transaction and anyone can total them —
+// what is true is that this page will not. The modal has always said so
+// ("Sealed means un-summed, not secret"), so the ballot was contradicting its
+// own help link one line above it.
+ok("the ballot makes no claim about what a reader can see",
+   !/can see the count|cannot see the count|[Nn]obody can see/.test(html));
+// The link moved up beside the clock, which is the only other thing left on the
+// ballot between the question and the buttons.
+ok("the help link rides the hint, not a paragraph of its own",
+   /<div class="hint">[^<]*<button type="button" class="helplink" data-help="help-vote">How this vote works →<\/button><\/div>/.test(html));
+ok("...and no orphan paragraph is left where it used to sit",
+   !/<p class="small muted"[^>]*>\s*<button type="button" class="helplink"/.test(html));
 ok("...and no longer restates the token rule on the ballot",
    !html.includes("forfeits are burned, awards are newly minted"));
 ok("the dense blocks are gone from the ticket body", !html.includes("a running count would make copying the first big voter") && !html.includes("there is no pot to steer"));

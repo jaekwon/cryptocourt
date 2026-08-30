@@ -2290,11 +2290,16 @@ function modBanner(mPurged, mRedacted, mHidden, slug){
     <a class="small" href="#/raw/${esc(slug)}/mod" style="color:var(--accent-2)">who and why — the moderation log →</a></div></div>`;
   return "";
 }
-/* The docket's impersonal clock: only frozen rows have one, and a disputed
-   row NEVER does in either mode — the chain publishes no close height. */
+/* The docket's impersonal clock: only frozen rows have one, and a disputed row
+   still does not get one — but NOT because the chain has nothing to give. It
+   publishes the close now (DisputeVoteCloses); reading it here would be one
+   extra query PER ROW on a page that draws fifty, so the countdown stays on the
+   claim page and the row says only what it knows. The line used to say "no
+   close height is published", which stopped being true the moment that read
+   shipped. */
 function clockLine(nowH, phaseShort, settleAt, escrowUntil){
   if(phaseShort==="in dispute")
-    return "a sealed vote is deciding — no close height is published";
+    return "a sealed vote is deciding — its countdown is on the claim page";
   if(phaseShort==="proposed" && settleAt)
     return nowH!=null? (settleAt>nowH? `settles undisputed at ≈block ${fmtN(settleAt)} — in ${wall(nowH,settleAt)} unless disputed`
                                      : "the settle window has passed — anyone may settle it now")
@@ -4056,8 +4061,8 @@ function voteHelpModal(slug, d){
       <p>The coin you vote with is locked until this round ends. You keep it, it stays in your balance, and you can still stake it.</p>
       <p>What you cannot do with locked coin is back a bond, put down a deposit, or send it to somebody else.</p>
 
-      <h4>Why you cannot see the count</h4>
-      <p>Every vote is a public transaction, so nothing is hidden. This page just will not add them up while voting is still open.</p>
+      <h4>Why this page does not add them up</h4>
+      <p>Every vote is a public transaction, so nothing is hidden. This page just will not total them while voting is still open. Anyone who wants the running count can read it off the chain.</p>
       <p>If you could watch the total, the best move would be to wait and copy whoever voted with the most weight — and the result would be one person's opinion, repeated. So the votes sit un-summed until the vote closes. <b>Sealed means un-summed, not secret.</b></p>
 
       <h4>Who can vote</h4>
@@ -4122,7 +4127,7 @@ function disputeTicket(slug, id, d, nowH){
   // this vote works" now, which is one click and was already the place for
   // them. What is left is the question, the clock, and the buttons.
   return `<div class="ticket" style="margin-top:12px"><h3>Should this answer be overturned?</h3>
-      <div class="hint">${ballotHint(slug, d, nowH)}</div>
+      <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
       <div class="actions" id="voteactions" style="margin-top:10px">
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
@@ -4132,7 +4137,6 @@ function disputeTicket(slug, id, d, nowH){
            still close the round once the window has passed. -->
       <div class="actions" style="margin-top:8px">
         ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div>
-      <p class="small muted" style="margin:10px 0 0">Nobody can see the count until voting closes. <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></p>
       ${voteHelpModal(slug, d)}`;
 }
 /* WHY YOU CANNOT VOTE, SAID WHEN YOU TRY TO — not as a standing paragraph on a
@@ -8203,7 +8207,7 @@ async function needsList(addr,courts){
   const brow = r => `<div class="crow" style="cursor:default">
       <span class="id">#${r.id}</span>
       <span><a class="t" href="#/c/${esc(r.slug)}/${r.id}?at=timeline" style="color:inherit">${safeInline(r.title)}</a>
-        <span class="m" style="display:block">${safeInline(r.name)} · the ballot — overturn the answer? · a sealed vote is deciding — no close height is published</span></span>
+        <span class="m" style="display:block">${safeInline(r.name)} · the ballot — overturn the answer? · a sealed vote is deciding — its countdown is on the claim page</span></span>
       <span class="rt">${statusPill("disputed")}</span></div>`;
   const exrow = r => `<div class="crow" style="cursor:default">
       <span class="id">#${r.id}</span>
@@ -8212,7 +8216,7 @@ async function needsList(addr,courts){
       <span class="rt"><span class="pill void">excluded</span></span></div>`;
   const ballotsSec = (ballots.length||bexcluded.length)
     ? `<div class="sec-h" style="margin-top:14px">Open ballots — courts you hold <span class="count">${ballots.length} · checked ${ballotCourts} court${ballotCourts===1?"":"s"} you hold coin in</span></div>
-       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and no close height is published. Weight is the balance at the hourly snapshot before the round opened — buying now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
+       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and anyone who wants the running count can read it off the chain. Weight is the balance at the hourly snapshot before the round opened — buying now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
        ${ballots.length? `<div class="docket">${ballots.map(brow).join("")}</div>`:""}
        ${bexcluded.length? `<div class="sec-h" style="margin-top:10px">You are excluded from these <span class="count">${bexcluded.length}</span></div><div class="docket">${bexcluded.map(exrow).join("")}</div>`:""}`
     : "";
@@ -8222,7 +8226,7 @@ async function needsList(addr,courts){
   const clock = d => {
     if(d.phase==="answered" && d.settleAt) return {h:d.settleAt, txt: nowH!=null? (d.settleAt>nowH? `you may dispute until ≈block ${fmtN(d.settleAt)} — in ${wall(nowH,d.settleAt)}` : "the settle window has passed — anyone may settle it now") : `you may dispute until ≈block ${fmtN(d.settleAt)}`};
     if(d.phase==="provisional" && d.escrowUntil) return {h:d.escrowUntil, txt: nowH!=null? (d.escrowUntil>nowH? `reopenable until ≈block ${fmtN(d.escrowUntil)} — in ${wall(nowH,d.escrowUntil)}` : "the reopen window has closed — finalizable") : `reopenable until ≈block ${fmtN(d.escrowUntil)}`};
-    if(d.phase==="disputed") return {h:Infinity, txt:"a sealed vote is deciding — no close height is published"};
+    if(d.phase==="disputed") return {h:Infinity, txt:"a sealed vote is deciding — its countdown is on the claim page"};
     return {h:Infinity, txt:""};
   };
   items.forEach(it=>{ it.clk = clock(it.d); });

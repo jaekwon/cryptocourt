@@ -397,8 +397,15 @@ func renderClaim(slug string, id uint64) string {
 		}
 		if cs.disputeOpen {
 			// The sealed-tally rule: an open vote renders NO running count.
+			//
+			// SAID AS WHAT THIS PAGE DOES, not as what a reader cannot have.
+			// "The tally is sealed" reads as "the count is hidden", and it is
+			// not: every ballot is a public transaction and anyone may total
+			// them. What is true is that this realm will not do the addition
+			// while the vote is open, because a running total published here
+			// is the thing that makes copying the largest voter the best move.
 			b.WriteString("- dispute round " + strconv.FormatInt(cs.round, 10) +
-				" vote open — the tally is sealed until the vote closes\n")
+				" vote open — no running total is shown here until it closes\n")
 		} else if cs.verdictAt == 0 {
 			// Disputable: show what contesting the answer costs right now, so a
 			// user can weigh it without simulating the bond formula themselves.
@@ -457,9 +464,9 @@ func renderClaim(slug string, id uint64) string {
 			"nothing**, mid pays the full amount, high pays double\n")
 		switch {
 		case cs.flagOpen:
-			b.WriteString("- flag vote open — the tally is sealed until it closes\n")
+			b.WriteString("- flag vote open — no running total is shown here until it closes\n")
 		case cs.counterOpen:
-			b.WriteString("- counter re-vote open — the tally is sealed until it closes\n")
+			b.WriteString("- counter re-vote open — no running total is shown here until it closes\n")
 		case cs.pendingSlash > 0:
 			b.WriteString("- a slash is escrowed in its counter-flag window\n")
 		case !cs.crystallized && !cs.slotConsumed && !cs.provClose:

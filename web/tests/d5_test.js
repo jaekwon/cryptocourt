@@ -34,7 +34,15 @@ eval(code);
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
 // clockLine table
-ok("disputed = sealed line, mode/height-blind", clockLine(null,"in dispute",null,null)==="a sealed vote is deciding — no close height is published" && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding — no close height is published");
+// The row still has no clock — reading DisputeVoteCloses here would be a query
+// per row on a page that draws fifty — but it no longer says the chain has
+// nothing to give, which stopped being true when that read shipped. It points
+// at the page that does have the countdown.
+ok("disputed = sealed line, mode/height-blind",
+   clockLine(null,"in dispute",null,null)==="a sealed vote is deciding — its countdown is on the claim page"
+   && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding — its countdown is on the claim page");
+ok("...and no surface still claims the chain publishes no close height",
+   !src.includes("no close height is published"));
 ok("proposed ahead", clockLine(100,"proposed",200,null).startsWith("settles undisputed at ≈block 200 — in ") && clockLine(100,"proposed",200,null).endsWith(" unless disputed"));
 ok("proposed past", clockLine(300,"proposed",200,null)==="the settle window has passed — anyone may settle it now");
 ok("proposed, no height read", clockLine(null,"proposed",200,null)==="settles undisputed at ≈block 200");

@@ -62,6 +62,15 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 			t.Fatalf("%s: missing %q in:\n%s", stage, want, out)
 		}
 	}
+	// The negative half. Replacing a sentence needs both: without this, the old
+	// wording could sit beside the new one and every assertion would stay green.
+	mustNotContain := func(stage, unwanted string) {
+		t.Helper()
+		out := Render("rl1/1")
+		if strings.Contains(out, unwanted) {
+			t.Fatalf("%s: %q should be gone, still in:\n%s", stage, unwanted, out)
+		}
+	}
 	mustContain("open", "open — stake YES or NO")
 
 	// Answered: crafted state (the dispute tests exercise the real paths;
@@ -74,7 +83,11 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 
 	cs.disputeOpen, cs.round = true, 1
 	mustContain("disputed", "sealed vote")
-	mustContain("disputed", "sealed until the vote closes")
+	// The RULE, which has not changed: an open round renders no running count.
+	// Its wording has — "the tally is sealed until the vote closes" reads as
+	// "the count is hidden", and every ballot is a public transaction.
+	mustContain("disputed", "no running total is shown here until it closes")
+	mustNotContain("disputed", "the tally is sealed")
 	if strings.Contains(Render("rl1/1"), "yes:") {
 		t.Fatal("an open vote must never render a running tally")
 	}
@@ -111,7 +124,11 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	cs.tier, cs.tierFinal = tierHighX, true
 	mustContain("quality", "quality: high (final)")
 	cs.flagOpen = true
-	mustContain("flagging", "flag vote open — the tally is sealed")
+	// "The tally is sealed" reads as "the count is hidden", which it is not —
+	// every ballot is a public transaction. The rule this pins is unchanged
+	// (an open vote renders NO running count); only the sentence saying so is
+	// honest about whose choice that is.
+	mustContain("flagging", "flag vote open — no running total is shown here")
 	cs.flagOpen = false
 	cs.crystallized, cs.drawWinners, cs.carrotPool = true, 12345, 77
 	mustContain("crystallized", "accuracy 12345")
