@@ -622,6 +622,8 @@ Recorded because each is easy to make again:
 | 17 | the public read served staged bytes | the classifier only ever queues promoted rows, so `POST /m` published unreviewed images on the court's own domain, CORS-open and cached past the sweep |
 | 18 | the realm capped captions in BYTES, the client in code points | an ordinary 82-character Russian caption is 152 bytes: the composer accepted it and the transaction aborted saying "at most 120 characters" about a caption of 82 — every non-Latin script refused at half the stated limit |
 | 19 | "no control characters" checked only the ASCII ones | Unicode direction overrides are three bytes each, so neither side ever saw one; U+202E in a caption makes the rendered exhibit label disagree with the label the chain stores, permanently |
+| 20 | backfill returned on the first court it could not answer | the court hint is client-supplied, so `POST /m?court=does-not-exist` once an hour stopped promotion for everybody and the sweep then deleted the bytes honest claims referenced |
+| 21 | the archive accepted 32-character court hints | the realm's slugs are at most 11, so the archive took names no court could have and asked a node about each one |
 
 Rows 18 and 19 are the same oversight twice: a rule stated in characters and
 implemented in bytes. Row 18 refuses honest captions, row 19 accepts hostile
