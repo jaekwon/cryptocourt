@@ -951,6 +951,11 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    hangs claims off it instead of nesting them inside. The court is the same
    shape one step up: filled, heavier, at the centre. */
 .mfold{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1}
+/* Held back so the heading stays the loudest thing in its own box, and lifted
+   when the box is the one being looked at. */
+.mfimg{opacity:.30; pointer-events:none}
+.mfold-a:hover .mfimg,.mfold-a:focus .mfimg,.mfold-a.selected .mfimg{opacity:.52}
+.mapsvg.far .mfimg{display:none}
 .mfold.pseudo{fill:none; stroke-dasharray:4 3; stroke:var(--muted)}
 .mhdr-t{fill:var(--accent-2); font-weight:600}
 .mcourt{fill:var(--accent); stroke:var(--accent-2); stroke-width:1.5}
@@ -1671,9 +1676,10 @@ const NOW = 4_800_000; // pretend current block height
 const DEMO_OVERLAY = {
   courts:{
     orem:{desc:"Claims of fact from Orem's public record — certifications, inspections, filings. The court decides only what it is asked to decide.", folders:[
-        {name:"Municipal record", claims:[4,5,10], folders:[{name:"Elections", claims:[1]}]},
-        {name:"Infrastructure",   claims:[3,7,11]},
-        {name:"Filings & audits", claims:[6,8,9]},
+        {name:"Municipal record", claims:[4,5,10], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACfElEQVR42u3Y51JTURiF4XUlghRpAyShJCGAiogzdAi916hgQ1GxomJF5aK8Ms81JOfHPuu8M88NfHvN+2frWtc4ADPiCQDHsLsnAJhRXWYSgJko7CkAZlSXnQJgRvW5aQBmorBnAJhRfc8sADO63jsHwAxhA45hN/TNAzCjhv4yADNR2AsAzKgxvwDAjBoLiwDMqLG4FIt/xwPBiutGICnUVFyORchhx3UjkBRqGliJRdBhx3QjkBRqKq3EIuiwY7oRSAo1l1ZjEXLYcd0IJIWaB9diEXTYMd0IJIVuDK0DMEPYgGXYwxsAzKjl5iZqFPL/AuukUxT2FmoUdtgMlEZqubWNGgUdNgOlklpvb6NGIYfNOumk1pEd1CjosBkoldQ2sosahRw266ST2u7sATCjttF9AGbUProPwIza7x4AVQv5fyHNu6h97BCoWtBhp3gXdYxVgKqFHHaad1HHvQpQtaDDTvEuGj66AqoWcthp3oWwQdiEDSARYXeOHwEwQ9iAZdgTxwDMqGvyEQAz6pp6DMAMYQOOYXdPPwFgRt0zTwGYUWbmGQAzysyeADCjzNwJADPKzj0HYEbZ+RcAzChbPgVgRrnyKQAzyi28BGBGucVXAMyoZ+k1ADNR2GcAzKh3+QyAGfWuvAFgJgr7LQAz6lt9B8CM+tbeAzBD2IBj2P3rHwCYUf/GRwBmlN84B2BG+c1zAGaU3/oEwIwKW58BmFFh+wsAMyrsXAAwo+LuBQAzUdhfAZhRce8bADMa2P8OwAxhA45hlw5+ADCj0uFPAGaisH8BMKPByiUAMxq8fwnATBT2bwBmNPTgDwAzGnr4F4AZDR9dATDzH3cZLF060/H1AAAAAElFTkSuQmCC",
+         folders:[{name:"Elections", claims:[1]}]},
+        {name:"Infrastructure",   claims:[3,7,11], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACUElEQVR42u3YaXYUVBSF0TsYCU0AK5VUKqk2ISF9T6KIiIIgCrNzMk7HGsZ7Z+219gjOfd+fVz9MBkCYMgEkhj0dAGFWYW8AYerRbAMIswp7CISpR/MhEKbW5kMgTK0tNoEwtbbcBMLU4+UWEKYe720BYVZhj4Aw9WR/BIQRNkSG/WobCFNPDraBMPX0YAyEqaeHYyDMKuwdIEw9e70DhOk17P/+/dwsr4oGwj7a7VHTYfc5KUlq/Wi3Ry2H3emkJKn140mPmg67z0lJUusnkx41HXafk5Kknp9Me9Ry2J1OSpJ6fjoFwggbEsN+cTYDwgi7Py3/L7hOM2Gfz+lL02E7UBvqxcWcvjQdtgO1oV5eLOhLy2G7TiPq5eWCvjQdtgO1QdjCFnZi2D9eLYEwwobIsK/3gDA1uN6DXrT8v9DUUDW42YdeNB12S0PV4HYfetF02C0NVRu3+9CLlsNuaqjauHsFvWg67JaGquX3B+hFy2E3NZSwIZCwITHs4f0BEKaGD4dAmNp8OATC1OZPr4EwwobEsLd+PgLCCBsiw357BISp0dtjIEyNfjkGwtTo3QkQprbfnQBhavvXUyCMsCEy7PenQJgavz8DwtT4tzMgTI0/nANhaufDORCmdn6/AMIIGxLD3v3jAgizCvsSCFO7Hy+BMDX5eAWEqcmnKyBMTf68BsIIGxLDnn6+BsKswr4BwtT0yw0QpmZfboEwNfvrFghTs693QJiaf70DwtT87zsgzCrsN0CYWvzzBgizCvseCFOLb/dAmFp+fwDC/A9dwAl53ENH0wAAAABJRU5ErkJggg=="},
+        {name:"Filings & audits", claims:[6,8,9], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACQUlEQVR42u3YWXKTVxSF0TMeMMaybElW31jucUeoEEJISEIIYQqZQSaZoaB3q3n92bWq1gBO3V3fy63+swMgTHkCCAx78OwACLMKuwWEqeHzFhBG2JAY9uj5IRCmRnuHQJga77WBMDXZawNhavKiDYSp6YsjIIywITHs2f4xEEbYkBj2fP8YCFOL/Q6w1v///dtY2y+vxcsOsFajw956eZ2+7AJrNTns7ZcLGxLDXh50gbWaHPb2y1dh94C1mh32tsvr7KAHhKmzVg8IU+etEyBMXbROgDB1cdhnpyZ/oliHp+rysM9OTQ7bOjwlbGGTGPZVe8BOTQ7bOjwlbGGTGPZ1e8hOTQ7bOjxVN+0hEKZujoZAmHp1NALCCJsdmvy/YJ2NYd8ej2GLJodtnU2EjbATw747HsMWTQ7bOpvUXWcCWzQ6bANtUPedCWzR5LCts0k9dKZAmHroToEw9didAmFWYc+AMPW6OwPC1OveDAhTP/TmQJh605sDYerNyQIIU1+Xj0AYYYOwge8i7B/7p0CYettfAmHq7WAJhKmfBksgTL0bnAFh6t3wDAhTPw/PgTDChsSw3w/PgTD1fnQBhKlfRhdAmPowugTC1IfxJRCmfh1fAmFWYV8BYeq3yRUQRtiQGPbHyTUQpj5Or4Ew9fv0BghTf0xvgDDChsSw/5y9AsIIGxLD/jS7BcLUp/ktEKb+mt8CYerz/A4IU58Xd0CY+ntxD4QRNiSG/eX0HgizCvsBCFP/nD4AYerr8hEI8w1NLtjoESwDMwAAAABJRU5ErkJggg=="},
       ]},
     annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court."},
     ledger:{desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it."},
@@ -3955,27 +3961,53 @@ async function fillCourtRecord(slug, count, minted){
    be unexposed rather than guessed, and the tally is never summed mid-vote. */
 /* The ballot's fine print, in plain words. Same facts as the realm enforces —
    only the sentences changed. */
+/* EVERYTHING THE BALLOT NO LONGER SAYS, in plain words.
+   
+   The ballot used to carry quorum, threshold, the locking rule and the token
+   flows inline — five dense lines between the question and the buttons. They
+   are rules of the court, not inputs to a decision, so they live here and the
+   ballot links once. Short sentences on purpose: this is read by somebody who
+   has just been asked to judge a stranger's claim, not by somebody studying
+   the mechanism. */
 function voteHelpModal(slug, d){
   const SYM = "KOURT:" + esc(slug).toUpperCase(); // canonical display (MODERATION.md §13.9)
+  // The quorum figure is per-round and this round's own bar is not republished,
+  // so the page says what a NEW dispute would face and says that is what it is.
+  const quorum = d.quorumFloor
+    ? `<p>Today a new dispute would need ${cc(d.quorumFloor,slug)} to be cast. This round's own figure was set when it opened, and the chain does not publish it again.</p>`
+    : "";
   return `<dialog class="helper" id="help-vote" aria-labelledby="help-vote-h">
     <div class="hd"><h3 id="help-vote-h">How this vote works</h3><button type="button" class="pill void" data-close>Close</button></div>
     <div class="bd">
-      <h4>Why you can't see the count yet</h4>
-      <p>Every vote is a public transaction on the chain, so nothing here is hidden. What this page will not do is add the votes up while the vote is still running.</p>
-      <p>The reason is simple: if you could watch a running total, the best move would be to wait and copy whoever voted with the most weight. The result would then be one voter's opinion, repeated. So the count is left un-summed until the vote closes. <b>Sealed means un-summed, not secret.</b></p>
+      <h4>What decides it</h4>
+      <p>To overturn the answer, more than half the weight voted has to say overturn. A tie upholds. If everyone abstains, that upholds too.</p>
+      <p>Enough people also have to turn up. If too little weight is cast, the round decides nothing at all — however the votes leaned.</p>
+      ${quorum}
+      <p>Abstaining is not a third side. It counts towards turnout and towards nothing else.</p>
+
+      <h4>What voting costs you</h4>
+      <p>The coin you vote with is locked until this round ends. You keep it, it stays in your balance, and you can still stake it.</p>
+      <p>What you cannot do with locked coin is back a bond, put down a deposit, or send it to somebody else.</p>
+
+      <h4>Why you cannot see the count</h4>
+      <p>Every vote is a public transaction, so nothing is hidden. This page just will not add them up while voting is still open.</p>
+      <p>If you could watch the total, the best move would be to wait and copy whoever voted with the most weight — and the result would be one person's opinion, repeated. So the votes sit un-summed until the vote closes. <b>Sealed means un-summed, not secret.</b></p>
+
       <h4>Who can vote</h4>
-      <p>Anyone holding ${SYM}, this court's own token. Your weight is your balance as it stood at the last hourly snapshot before this round opened — so buying more coin now adds nothing to this vote.</p>
-      <p>Three people are shut out: whoever wrote the claim, whoever answered it, and anyone who staked on it. Holding ${SYM} on one side of the outcome disqualifies you from judging it, and the court refuses their vote at signing, whatever this page shows.</p>
-      <h4>Where the tokens go</h4>
-      <p><b>Nothing moves from one side to the other.</b> There is no pot to win here, so there is nothing to steer. ${SYM} that is forfeited is burned, and ${SYM} that is owed is newly minted — the two never touch.</p>
+      <p>Anyone holding ${SYM}, this court's token. Your weight is whatever you held at the last hourly snapshot before this round opened, so buying more now adds nothing.</p>
+      <p>Three people cannot: whoever wrote the claim, whoever answered it, and anyone who staked on it. Holding a position on the outcome disqualifies you from judging it. The court refuses those votes when they are signed, whatever this page shows.</p>
+
+      <h4>Where the coin goes</h4>
+      <p><b>Nothing moves from one side to the other.</b> There is no pot to win, so there is nothing to steer. Coin that is forfeited is burned. Coin that is owed is newly made. The two never meet.</p>
       <ul>
-        <li><b>If too few people vote</b> — half the challenger's bond is burned and half returns; the answer's bond stays where it is. A third failed round closes the claim with no decision, and every stake comes back 1×.</li>
-        <li><b>If the answer is overturned</b> — the answer's bond is burned in full. The challenger gets their bond back plus a make-good: newly minted, never more than twice their bond nor more than 80% of what was burned, and paid in turn behind earlier awards.</li>
-        <li><b>If the answer is upheld</b> — the challenger's bond is burned. The answer's bond stays held until the claim is finalised, and the answerer receives the same kind of make-good on the same limits.</li>
+        <li><b>Too few voted</b> — half the challenger's bond burns, half comes back. The answerer's bond is untouched. After a third failed round the claim closes undecided and every stake returns 1×.</li>
+        <li><b>The answer is overturned</b> — the answerer's bond burns in full. The challenger gets their bond back, plus a payment that is newly made: never more than twice their bond, never more than 80% of what burned, and paid after any earlier awards.</li>
+        <li><b>The answer is upheld</b> — the challenger's bond burns. The answerer's bond stays held until the claim is finished, and they get the same kind of payment on the same limits.</li>
       </ul>
-      <p>Whichever way it goes, staked ${SYM} is never touched: it returns 1× to everyone who staked, on both sides.</p>
+      <p>Either way, staked ${SYM} is never touched. It comes back 1× to everyone who staked, on both sides.</p>
     </div></dialog>`;
 }
+
 function disputeTicket(slug, id, d, nowH){
   const posted = d.disputeBondNext? cc(d.disputeBondNext,slug) : null;
   const k = d.round||0;
@@ -3994,23 +4026,27 @@ function disputeTicket(slug, id, d, nowH){
   const closes = d.voteEndsAt
     ? `<div class="line"><span>vote closes</span><span class="r">${closeWhen}</span></div>`
     : `<div class="line"><span>vote closes</span><span class="r">about 7 days from the round's opening — the chain exposes no close height to read; Resolve simply refuses until it has passed</span></div>`;
-  const quorum = d.quorumFloor? `<div class="line"><span>required quorum</span><span class="r">the minimum total weight that must be cast for this round to decide anything — miss it and the round fails no matter which way the votes leaned. A new dispute today would face ${cc(d.quorumFloor,slug)}; this round's own bar was fixed when it opened and is not republished.</span></div>`:"";
+  // THE MECHANISM IS NOT ON THE BALLOT. Quorum, threshold, what a vote locks
+  // and where the coin goes were five dense lines between the question and the
+  // buttons — a reader had to get through the rules of the court to reach the
+  // decision. They are all in "How this vote works" now, which is one click and
+  // was already the place for them. What is left here is what somebody deciding
+  // needs: the question, the two outcomes, the cost, the clock, and whether
+  // they may vote at all.
   const demoExcluded = CFG.mode==="demo" && (()=>{ const p=DEMO.positions[slug+"/"+id]; return !!(p && (p.yes||p.no||p.cy||p.cn)); })();
-  return `<div class="ticket" style="margin-top:12px"><h3>The ballot — overturn the answer?</h3>
-      <div class="hint">One question, one vote per address, no changes: overturn the ${sideName(d.answer)} answer posted by ${shortAddr(d.answerer)}${d.answerBond? `, whose ${cc(d.answerBond,slug)} bond rides on it?` : ` — its bond already burned in an earlier overturned round.`}</div>
-      <div class="line"><span>uphold</span><span class="r">the ${sideName(d.answer)} answer stands provisionally; the disputer's bond burns</span></div>
-      <div class="line"><span>overturn</span><span class="r">the verdict flips to ${sideName(1-d.answer)}${d.answerBond? `; the answer bond burns whole` : ` — no bond is left to burn`}</span></div>
-      ${ladder}${closes}${quorum}
-      <div class="line"><span>threshold</span><span class="r">overturn needs more than half of the yes/no weight cast; ties and all-abstain rounds uphold</span></div>
+  return `<div class="ticket" style="margin-top:12px"><h3>Should this answer be overturned?</h3>
+      <div class="hint">${shortAddr(d.answerer)} answered ${sideName(d.answer)}${d.answerBond? ` and bonded ${cc(d.answerBond,slug)} on it` : ` — its bond already burned in an earlier overturned round`}. One vote per address, and you cannot change it.</div>
+      <div class="line"><span>uphold</span><span class="r">the answer stays ${sideName(d.answer)}${d.answerBond? `. Whoever challenged it loses their bond` : ``}</span></div>
+      <div class="line"><span>overturn</span><span class="r">the answer becomes ${sideName(1-d.answer)}${d.answerBond? `. ${shortAddr(d.answerer)} loses their bond` : ` — no bond is left to burn`}</span></div>
+      ${ladder}${closes}
       ${voteLockLine("verdict","votecommit")}
-      <p class="small muted" style="margin:10px 0 0">The count stays sealed until the vote closes. <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></p>
-      <p class="small muted" style="margin:6px 0 0">Any KOURT:${esc(slug).toUpperCase()} holder may vote, by their balance at the snapshot before this round opened; the claim's author, answerer and stakers are excluded.${demoExcluded? " The sample address is a staker here, so it is excluded — the buttons stay to show the transaction's shape.":""} <button type="button" class="helplink" data-help="help-vote">Who can vote →</button><span id="voteelig"></span></p>
+      <p class="small muted" style="margin:10px 0 0">Any KOURT:${esc(slug).toUpperCase()} holder can vote — except the person who wrote the claim, the person who answered it, and anyone who staked on it.${demoExcluded? " The sample address staked here, so it cannot vote; the buttons stay to show the transaction's shape.":""}<span id="voteelig"></span></p>
       <div class="actions" style="margin-top:10px">
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
         ${btn("Abstain","VoteDispute",{courtSlug:slug,claimID:id,choice:"abstain"},"","counts to turnout only, never to a side")}
         ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div>
-      <p class="small muted" style="margin:10px 0 0">No KOURT:${esc(slug).toUpperCase()} moves between the two sides — forfeits are burned, awards are newly minted. <button type="button" class="helplink" data-help="help-vote">What happens to the tokens →</button></p>
+      <p class="small muted" style="margin:10px 0 0">Nobody can see the count until voting closes. <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></p>
       ${voteHelpModal(slug, d)}`;
 }
 async function fillVoteEligibility(slug, id, d){
@@ -4052,10 +4088,15 @@ async function fillVoteEligibility(slug, id, d){
 function voteLockLine(lane, spanId){
   const until = lane==="quality"
     ? "until this quality question can no longer decide anything — when it closes, or when the claim itself ends if the tally has frozen and later rounds keep voting the same running total"
-    : "until this round resolves";
-  return `<div class="line"><span>what voting commits</span><span class="r">`
-    + `Casting commits the weight you vote with, ${until}. It stays in your balance and keeps voting, and it can still be staked — but it cannot also back a bond, a deposit or a transfer.`
-    + `<span id="${esc(spanId)}"></span></span></div>`;
+    : "until this round ends";
+  // SHORT ON THE BALLOT, because the ballot is where somebody decides. What
+  // locking rules OUT — a bond, a deposit, a transfer — is in "How this vote
+  // works"; what it costs them is here, with their own figures.
+  const body = lane === "quality"
+    ? `Casting commits the weight you vote with, ${until}. It stays in your balance and keeps voting, and it can still be staked — but it cannot also back a bond, a deposit or a transfer.`
+    : `the coin you vote with, ${until}. It stays in your balance, it keeps voting, and it can still be staked.`;
+  return `<div class="line"><span>voting locks</span><span class="r">`
+    + body + `<span id="${esc(spanId)}"></span></span></div>`;
 }
 /* The figures, separately, because they arrive from the chain after the panel
    has rendered and every one of them may be unavailable. A missing read prints
@@ -4506,7 +4547,8 @@ async function chainFolders(slug){
       if(bits.length !== 3) continue;
       const id = parseInt(bits[0],10), parent = parseInt(bits[1],10);
       if(!Number.isInteger(id) || !Number.isInteger(parent)) continue;
-      shape.set(id, {parent, retired: bits[2].includes("r"), purged: bits[2].includes("p")});
+      shape.set(id, {parent, retired: bits[2].includes("r"), purged: bits[2].includes("p"),
+                     hasImage: bits[2].includes("i")});
     }
   }
   // ROW ORDER IS THE CURATOR'S ORDER. FolderTree emits siblings in the order
@@ -4844,6 +4886,7 @@ function mapTree(data, mode){
     // index is what the SVG uses in data-fid — and it is undefined for a
     // curation folder, which has no description to ask for.
     const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[], fid:f.fid,
+      img:f.img,
       count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
       if(!data.claims[id]) continue;
@@ -5140,7 +5183,7 @@ function mapLayout(data, mode){
     n._box = box;
     if(n.kind==="court"){ court={...box, name:n.name}; }
     else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name,
-      count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid,
+      count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid, img:n.img,
       claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
       also:n.also||[],
       subs:n.kids.filter(k=>k.kind==="folder").length})); }
@@ -5406,8 +5449,22 @@ function mapSvg(L, data, slug){
        mode. The tooltip carries the name and the count whether or not the drawn
        label had room for either, and costs the layout nothing. */
     const tip=`<title>${esc(f.name)}${f.count!=null?` · ${f.count}`:""}</title>`;
+    /* A FOLDER'S ONE PICTURE IS THE BOX'S FACE (owner ruling, CLAIM_MEDIA §10).
+       A heading is not a claim: it argues nothing, so it has no numbered exhibit
+       to show and nothing to prove. What it has is a place on the map, and the
+       picture belongs to that place — clipped to the box, under the label, held
+       back so the name stays the loudest thing in it.
+       Archive-only, like a claim's node thumbnail and for the same reason: a map
+       draw is fifty boxes at once, and fanning out to filer-chosen hosts would
+       send every reader's address wherever the filer liked. */
+    const face = f.img
+      ? `<clipPath id="mfi${i}"><rect x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4"/></clipPath>`
+        + `<image class="mfimg" href="${esc(f.img)}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}"`
+        + ` preserveAspectRatio="xMidYMid slice" clip-path="url(#mfi${i})" data-fid="${i}"`
+        + ` referrerpolicy="no-referrer"/>`
+      : "";
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
-      + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
+      + face + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
     if(!f.pseudo && f.path!=null && data.linkFolders)
       out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}${tip}</a>`);
     /* Not a link, so it needs a group of its own — an SVG <title> describes the
@@ -5791,6 +5848,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   // the whole point of a cross-cut: it is a reading order, not a second copy.
   // Dropping the membership here would throw away the fact the spoke needs.
   const filterFolders = fs => (fs||[]).map(f=>({name:f.name, path:f.path, fid:f.fid, chain:f.chain,
+    img:f.img,
     claims:(f.claims||[]).filter(id=>validIds.has(id)),
     folders:filterFolders(f.folders)}));
   const curFolders = cur? filterFolders(cur.folders) : [];

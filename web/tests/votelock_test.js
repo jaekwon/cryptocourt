@@ -32,8 +32,11 @@ function ok(what, cond){ if(cond){ console.log("ok: "+what); } else { fail++; co
 const V = voteLockLine("verdict", "votecommit");
 const Q = voteLockLine("quality", "qualcommit");
 
-ok("the verdict lane releases on its round", /until this round resolves/.test(V));
-ok("the quality lane does NOT reuse the verdict rule", !/until this round resolves/.test(Q));
+// "resolves" became "ends" when the ballot copy was cut to plain words; the
+// property is that the verdict lane names ITS round and the quality lane does
+// not reuse that rule.
+ok("the verdict lane releases on its round", /until this round ends/.test(V));
+ok("the quality lane does NOT reuse the verdict rule", !/until this round ends/.test(Q));
 ok("the quality lane names the claim ending", /the claim itself ends/.test(Q));
 ok("the quality lane names its own question closing", /when it closes/.test(Q));
 // The phrasing that went stale in three documents. A tally is superseded only by a
@@ -45,8 +48,14 @@ ok("neither lane says 'superseded'", !/supersed/i.test(V) && !/supersed/i.test(Q
 // that says otherwise costs a holder a legitimate action.
 ok("both lanes say the coin can still be staked", /can still be staked/.test(V) && /can still be staked/.test(Q));
 ok("both lanes say it keeps voting", /keeps voting/.test(V) && /keeps voting/.test(Q));
-ok("both lanes name what it cannot back", /cannot also back a bond, a deposit or a transfer/.test(V)
-  && /cannot also back a bond, a deposit or a transfer/.test(Q));
+// WHAT IT CANNOT BACK moved to the modal for the verdict lane. The two POSITIVE
+// facts stay on both — omitting those costs a holder an action they actually
+// have, which is the failure this block exists to prevent; omitting the
+// restriction only sends them one click for it.
+ok("the quality lane still names what it cannot back",
+  /cannot also back a bond, a deposit or a transfer/.test(Q));
+ok("the verdict lane sends that to the modal instead",
+  !/cannot also back/.test(V) && /back a bond, put down a deposit, or send it/.test(src));
 // Asserted as the POSITIVE claim rather than a banned-word list: the first version
 // of this banned "frozen", which the quality lane uses correctly of the TALLY.
 ok("both lanes say the coin stays in the balance", /stays in your balance/.test(V) && /stays in your balance/.test(Q));
@@ -79,6 +88,10 @@ ok("all three figures can appear together",
 // ---- the wiring: the row is actually on both panels and fed the right lane ----
 ok("the dispute ballot carries the verdict row",
   src.includes('${voteLockLine("verdict","votecommit")}'));
+// ONE DEFINITION, TWO LANES. The ballot briefly inlined its own shorter copy,
+// which is how the two panels drift apart — the short wording lives in the
+// shared function instead, chosen by lane.
+ok("the verdict lane is the short one, the quality lane is not", V.length < Q.length);
 ok("the quality panel carries the quality row",
   src.includes('voteLockLine("quality","qualcommit")'));
 // THE WRAPPER CLASS IS THE ASSERTION, not the div. Every rule for a .line was

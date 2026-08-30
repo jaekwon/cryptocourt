@@ -41,26 +41,53 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 const d = Object.assign({}, DEMO.claims["orem/3"]);
 const html = disputeTicket("orem", 3, d, NOW);
 
-ok("ballot h3", html.includes("The ballot — overturn the answer?"));
-ok("hint restates answer+answerer+bond", html.includes("overturn the YES answer") && html.includes("80.0 KOURT:OREM bond rides on it"));
-ok("uphold line names YES standing", html.includes("the YES answer stands provisionally"));
-ok("overturn line flips to NO", html.includes("the verdict flips to NO"));
+// THE BALLOT IS THE DECISION; the rules of the court moved into the modal.
+// Quorum, threshold, the locking rule and the token flows were five dense lines
+// between the question and the buttons — a reader had to get through the
+// mechanism to reach the choice.
+ok("ballot h3", html.includes("Should this answer be overturned?"));
+ok("hint names the answerer, the side and the bond",
+   html.includes("answered YES") && html.includes("bonded 80.0 KOURT:OREM on it"));
+ok("uphold line names the side that stays", html.includes("the answer stays YES"));
+ok("overturn line names the side it becomes", html.includes("the answer becomes NO"));
 ok("ladder: spent rounds are struck through and greyed", html.includes('<div class="line spent"><span><s>round 1</s></span>') && html.includes("failed quorum"));
 ok("ladder: the live round is marked", html.includes("<span>\u2713 round 2</span>") && html.includes("voting now"));
 ok("ladder: round 2 voting at 64 KOURT:OREM", html.includes("round 2</span><span class=\"r\">voting now at 64.0 KOURT:OREM"));
 ok("clock: the close reads like the resolution ladder", /vote closes<\/span><span class="r">\u2248 \d+ [A-Z][a-z]{2} \d{4} <small>in 5 days<\/small> <small>\(\u2248block 4,886,400\)<\/small>/.test(html));
-ok("quorum row says what it is, in plain words", html.includes("<span>required quorum</span>") && html.includes("the minimum total weight that must be cast") && html.includes("5,925 KOURT:OREM"));
+// Quorum LEFT the ballot. The rule and the figure are in the modal, where a
+// reader who wants the mechanism can find both — and the ballot no longer
+// spends a row on arithmetic nobody is being asked to do.
+ok("quorum is off the ballot", !html.includes("<span>required quorum</span>"));
+ok("...and in the modal, rule first then figure",
+   html.includes("If too little weight is cast, the round decides nothing at all")
+   && html.includes("5,925 KOURT:OREM"));
 ok("no bare jargon label left", !html.includes("turnout bar"));
-ok("threshold states the rule without the constant aside", html.includes("overturn needs more than half of the yes/no weight cast; ties and all-abstain rounds uphold") && !html.includes("stated here, not read"));
+ok("threshold is off the ballot", !html.includes("<span>threshold</span>"));
+ok("...and stated in the modal in plain words",
+   html.includes("more than half the weight voted has to say overturn")
+   && html.includes("A tie upholds"));
 ok("sealed = un-summed not secret", html.includes("Sealed means un-summed, not secret"));
 ok("no 'secret ballot'", !/secret ballot/i.test(html));
-ok("weight is the pre-round snapshot, said twice over", html.includes("balance at the snapshot before this round opened") && html.includes("as it stood at the last hourly snapshot before this round opened"));
-ok("demo exclusion still taught, in one line", html.includes("The sample address is a staker here, so it is excluded"));
+// Said ONCE now, in the modal. The ballot says who may vote; how the weight is
+// measured is mechanism.
+ok("weight is the pre-round snapshot, said in the modal",
+   html.includes("whatever you held at the last hourly snapshot before this round opened"));
+ok("demo exclusion still taught, in one line",
+   html.includes("The sample address staked here, so it cannot vote"));
 ok("abstain button with turnout-only sub", html.includes("> Abstain") && html.includes("counts to turnout only, never to a side"));
 ok("abstain arg choice=abstain", html.includes('"choice":"abstain"') || html.includes("abstain"));
-ok("who-pays-whom: burn/mint rule, in plain words", html.includes("No KOURT:OREM moves between the two sides \u2014 forfeits are burned, awards are newly minted.") && html.includes("Nothing moves from one side to the other.") && html.includes("no pot to win here"));
-ok("quorum-fail: the answer bond survives, third round closes", html.includes("half the challenger\u2019s bond is burned and half returns; the answer\u2019s bond stays where it is".replace(/\u2019/g,"'")) && html.includes("A third failed round closes the claim with no decision"));
-ok("overturn make-good capped, both limits", html.includes("never more than twice their bond nor more than 80% of what was burned"));
+// The rule is stated ONCE now, in the modal — it was on the ballot and in the
+// modal, in two different sets of words for the same fact.
+ok("who-pays-whom: burn/mint rule, in plain words",
+   html.includes("Nothing moves from one side to the other.")
+   && html.includes("no pot to win")
+   && html.includes("Coin that is forfeited is burned"));
+ok("quorum-fail: the answer bond survives, third round closes",
+   html.includes("half the challenger's bond burns, half comes back")
+   && html.includes("The answerer's bond is untouched")
+   && html.includes("After a third failed round the claim closes undecided"));
+ok("overturn make-good capped, both limits",
+   html.includes("never more than twice their bond, never more than 80% of what burned"));
 ok("no live-tally leak words", !/has voted|votes so far|current tally|leading/i.test(html));
 ok("no banned words", !/backing|redeem\b|profit|APR|share if right/i.test(html));
 
@@ -85,12 +112,15 @@ ok("past close: resolve works now", html3.includes("the window has passed — Re
 
 
 // ---- B4 critic fixes ----
-ok("uphold: bond held to finalise + the same make-good limits", html.includes("The answer's bond stays held until the claim is finalised") && html.includes("the same kind of make-good on the same limits"));
+ok("uphold: bond held to finalise + the same payment limits",
+   html.includes("The answerer's bond stays held until the claim is finished")
+   && html.includes("the same kind of payment on the same limits"));
 const d0 = Object.assign({}, DEMO.claims["orem/3"], {answerBond:0});
 const html0 = disputeTicket("orem", 3, d0, NOW);
 ok("F4: zero-bond hint honest", html0.includes("its bond already burned in an earlier overturned round"));
 ok("F4: zero-bond overturn row honest", html0.includes("no bond is left to burn"));
-ok("F4: nonzero keeps original wording", html.includes("bond rides on it?") && html.includes("the answer bond burns whole"));
+ok("F4: nonzero names the bond and who loses it",
+   html.includes("bonded 80.0 KOURT:OREM on it") && html.includes("loses their bond"));
 const srcF = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
 ok("F1: voteEndsAt in chart domain candidates", /const cands=\[now, d\.settleAt\|\|null, d\.escrowUntil\|\|null, d\.voteEndsAt\|\|null, ansH\]/.test(srcF));
 // The HEDGE is the point — that a clean-looking eligibility read is not the
@@ -109,12 +139,19 @@ ok("narrow screens stack the pair", src.includes("@media (max-width:640px){ .tic
 // the helper modal: the long "why" lives one click away, keyboard-reachable
 ok("modal: one dialog, native, labelled", html.includes('<dialog class="helper" id="help-vote" aria-labelledby="help-vote-h">'));
 ok("modal: triggers are BUTTONS (an href-less <a> cannot be tabbed to)", html.includes('<button type="button" class="helplink" data-help="help-vote">') && !html.includes('<a class="helplink"'));
-ok("ballot keeps only the short lines", html.includes("The count stays sealed until the vote closes.") && html.includes("No KOURT:OREM moves between the two sides"));
+// The ballot keeps ONE line of prose and one link. The burn/mint rule used to
+// sit here as well as in the modal, in two different sets of words.
+ok("ballot keeps one line and one link",
+   html.includes("Nobody can see the count until voting closes.")
+   && html.includes("How this vote works →"));
+ok("...and no longer restates the token rule on the ballot",
+   !html.includes("forfeits are burned, awards are newly minted"));
 ok("the dense blocks are gone from the ticket body", !html.includes("a running count would make copying the first big voter") && !html.includes("there is no pot to steer"));
-ok("plain-English rewrite present", html.includes("if you could watch a running total, the best move would be to wait and copy whoever voted with the most weight"));
+ok("plain-English rewrite present",
+   html.includes("the best move would be to wait and copy whoever voted with the most weight"));
 ok("§7.4 holds in the new copy", !/backing|redeem|APR|profit|return on/i.test(html) && html.includes("staked KOURT:OREM is never touched"));
 ok("the token is named, not \"money\"", html.includes("KOURT:OREM") && !/\bmoney\b/.test(html));
-ok("canonical display is KOURT:SLUG", html.includes("Any KOURT:OREM holder may vote"));
+ok("canonical display is KOURT:SLUG", html.includes("Any KOURT:OREM holder can vote"));
 ok("the word \"money\" appears nowhere in the file", (()=>{ const fs=require("fs");
   return !/\bmoney\b/i.test(fs.readFileSync(require('path').join(__dirname,'..','index.html'),"utf8")); })());
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
