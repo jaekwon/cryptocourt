@@ -198,6 +198,10 @@ other copy. Losing an upload must never lose a draft.
 
 - **Order matters** and the UI must say why: the first item is what the map node
   shows — the row says so, in as many words, on exhibit one.
+- **The last look is shown**, above the sign action: the permanence line, what
+  will actually be filed (numbered, marked when it has no copy or no
+  fingerprint), and what the court cannot vouch for. Only the fileable set — a
+  broken exhibit has no place in a summary of what is about to be signed.
 - **Reordering is ↑ / ↓ buttons, and there is no drag.** This section asked for
   drag "with keyboard equivalents", which puts the accessible path second and
   the pointer path first. The buttons are one control that works identically
@@ -719,10 +723,15 @@ Recorded because each is easy to make again:
 | 40 | opening an exhibit while one was open stacked two lightboxes | Escape then closed whichever bound its listener last, and the scroll lock unlocked or did not depending on the order they closed in |
 | 41 | `?ex=1e21` and `?ex=1.5` opened the first exhibit | `parseInt` takes a prefix and shrugs at the rest, so a malformed address landed a reader on a picture instead of the claim |
 | 42 | `mediaClaimed` was written, exported, tested — and never called | both halves of the promotion handshake had passing tests and nothing connected them, so every uploaded exhibit waited on a backfill pass; after row 17 tightened serving, that became a 404 on a claim just filed |
+| 43 | `mediaReview` was written, exported, tested — and never called | the one piece of friction the design asks for, on the one field with no editor, was the one piece missing |
 
-Row 42 is the sharpest instance of the shape rows 14, 15, 20 and 21 share, and
-the one to remember: **both ends can be correct, and tested, while the call
-between them does not exist.** Nothing fails, because there is no code to fail —
+Rows 42 and 43 are the sharpest instances of the shape rows 14, 15, 20 and 21
+share, and the one to remember: **both ends can be correct, and tested, while the
+call between them does not exist.** Nothing fails, because there is no code to
+fail. It is also SEARCHABLE, which is how row 43 was found rather than stumbled
+on: sweep the module's exports for functions with no caller in production. Two
+real hits out of 45; the rest were constants, which a search for `name(` cannot
+see. Nothing fails, because there is no code to fail —
 the tests exercise two functions that never meet. It also shows how a safety fix
 makes a latent gap bite: serving claimed bytes only was right, and it turned a
 silent ten-minute delay into a visible "not currently available" on a claim
