@@ -47,12 +47,25 @@ const html = disputeTicket("orem", 3, d, NOW);
 ok("ballot h3", html.includes("Should this answer be overturned?"));
 ok("the hint is one line: which round, and when it shuts",
    html.includes('<div class="hint">Round 2 — closes in') && html.includes("One vote per address"));
-// A one-line hint that runs onto a second sentence about mechanism is the thing
-// this replaced, so the LENGTH is asserted, not just the content.
+// A hint that runs onto a third sentence about mechanism is the thing this
+// replaced, so the SHAPE is asserted, not just the content — and against every
+// branch, because the longest one is not the branch the fixture happens to take.
 {
   const h = html.match(/<div class="hint">([^<]*)</)[1];
-  ok("...and it is actually one line", h.length < 90 && !h.includes("\n"));
+  const all = [h,
+    ballotHint("orem", Object.assign({}, d, {voteEndsAt:null}), NOW),
+    ballotHint("orem", d, null),
+    ballotHint("orem", Object.assign({}, d, {voteEndsAt:NOW-1}), NOW)];
+  ok("...and every branch of it is one line, at most two sentences",
+     all.every(x => x.length < 100 && !x.includes("\n")
+                    && x.trim().split(/\.\s+/).length <= 2));
 }
+// The passed-window branch drops the voting rule instead of appending it: it is
+// noise to somebody who can no longer vote, and joining it on made the sentence
+// read "Round 3 — voting has closed — Resolve works now".
+ok("a closed window says only that, and says it without a second dash",
+   ballotHint("orem", Object.assign({}, d, {voteEndsAt:NOW-1}), NOW)
+     === "Round 2 — voting has closed; Resolve works now.");
 ok("no outcome rows: what overturning does to whose bond is modal copy",
    !html.includes("the answer stays YES") && !html.includes("the answer becomes NO"));
 ok("no vote-lock row on the ballot either",
@@ -153,7 +166,7 @@ CFG.mode='demo';
 const d3 = Object.assign({}, DEMO.claims["orem/3"], {voteEndsAt: NOW-100});
 const html3 = disputeTicket("orem", 3, d3, NOW);
 ok("past close: resolve works now",
-   html3.includes("voting has closed — Resolve works now"));
+   html3.includes("voting has closed; Resolve works now"));
 // ...and it replaces the countdown rather than sitting beside it. A ballot that
 // says both "closes in 2 days" and "voting has closed" is worse than either.
 ok("...instead of a countdown, not beside one", !html3.includes("closes in"));

@@ -4042,11 +4042,17 @@ function ballotHint(slug, d, nowH){
   // — the second is the moment Resolve starts working, which is what somebody
   // looking at a stale-looking ballot wants to know. The ladder's own dated
   // "vote closes" row can carry neither.
+  const k = (d.round||0)+1;
+  // Said first and alone, because the voting rule is noise to somebody who can
+  // no longer vote — and because "Round 3 — voting has closed — Resolve works
+  // now" puts two em-dashes in one short sentence, which is how it read when
+  // this branch was folded into the join below.
+  if(d.voteEndsAt && nowH!=null && d.voteEndsAt<=nowH)
+    return `Round ${k} — voting has closed; Resolve works now.`;
   const close = !d.voteEndsAt? "closes about 7 days after it opened"
     : (nowH==null)? `closes at block ${fmtN(d.voteEndsAt)}`
-    : (d.voteEndsAt<=nowH)? "voting has closed — Resolve works now"
     : `closes in ${wall(nowH, d.voteEndsAt)}`;
-  return `Round ${(d.round||0)+1} — ${close}. One vote per address, and you cannot change it.`;
+  return `Round ${k} — ${close}. One vote per address, and you cannot change it.`;
 }
 
 function disputeTicket(slug, id, d, nowH){
