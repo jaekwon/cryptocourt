@@ -965,6 +965,10 @@ function mediaMount(root, composer, opts) {
         type: "text", class: "mediacaption", maxlength: String(MEDIA_MAX_CAPTION),
         placeholder: "Label this exhibit (optional)", value: item.caption || "",
         "aria-label": `Caption for exhibit ${i + 1}`,
+        // Typed in whatever script the person uses, so the box follows what they
+        // type rather than the page's own direction. See the claim page's
+        // caption for the whole reason.
+        dir: "auto",
       });
       input.value = item.caption || "";
       input.addEventListener("input", () => {
@@ -1209,7 +1213,7 @@ function mediaLightbox(items, start, opts) {
     "aria-label": "Exhibit", tabindex: "-1"});
   const fig = mediaEl(doc, "figure", {class: "lbox-fig"});
   const img = mediaEl(doc, "img", {class: "lbox-img", alt: "", referrerpolicy: "no-referrer"});
-  const cap = mediaEl(doc, "figcaption", {class: "lbox-cap"});
+  const cap = mediaEl(doc, "figcaption", {class: "lbox-cap", dir: "auto"});
   const num = mediaEl(doc, "span", {class: "lbox-n"});
   const verdict = mediaEl(doc, "p", {class: "lbox-v", role: "status"});
   const prev = mediaEl(doc, "button", {type: "button", class: "lbox-prev",

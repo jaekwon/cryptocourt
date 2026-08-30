@@ -120,6 +120,32 @@ const MAX_PAGES = 60;
   ok("...and the affordance says what opening one is for",
      /check it against what was filed/.test(lede.aria), JSON.stringify(lede.aria));
   ok("...offered only when something is checkable", lede.vidOnly && lede.purged);
+
+  // --- a caption in a right-to-left script -----------------------------------
+  // The page is lang="en", so its block direction is ltr. An Arabic or Hebrew
+  // caption rendered inside it gets its letters in the right order and its
+  // SENTENCE in the wrong place — left-aligned, trailing punctuation drawn at
+  // the end an ltr reader expects rather than the end the sentence has. Measured
+  // as direction:ltr for a caption that is entirely Arabic. dir="auto" asks the
+  // browser to take direction from the first strong character.
+  const bidi = await page.evaluate(() => {
+    const of = text => {
+      const h = document.createElement("div");
+      h.innerHTML = claimExhibits({media: [{kind: "img", sha256: "a".repeat(64),
+        mime: "image/webp", w: 240, h: 160, bytes: 5200, caption: text,
+        mirrors: ["https://x/m/" + "a".repeat(64)]}]});
+      document.body.appendChild(h);
+      const d = getComputedStyle(h.querySelector(".ex-cap")).direction;
+      h.remove();
+      return d;
+    };
+    return {ar: of("محضر اجتماع المجلس البلدي، صفحة 14."),
+            he: of("מסמך רשמי מהעירייה"),
+            en: of("north span rating, 2025 inspection report")};
+  });
+  ok("an Arabic caption reads right-to-left", bidi.ar === "rtl", bidi.ar);
+  ok("...and a Hebrew one", bidi.he === "rtl", bidi.he);
+  ok("...while an English one is unaffected", bidi.en === "ltr", bidi.en);
   if (opened) {
     await page.mouse.move(500, 400);
     await page.mouse.wheel({deltaY: 400});

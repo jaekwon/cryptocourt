@@ -2318,7 +2318,16 @@ function claimExhibits(c){
      not enough to check anything against. */
   LAST_EXHIBITS = (c && c.media) || [];
   return `<div class="exhibits" role="list">` + items.map(x => {
-    const cap = x.caption ? `<span class="ex-cap">${safeInline(x.caption)}</span>` : "";
+    /* dir="auto" ON EVERY STRING A FILER WROTE. The page is lang="en", so its
+       block direction is ltr, and an Arabic or Hebrew caption rendered inside it
+       gets its letters in the right order and its SENTENCE in the wrong place:
+       left-aligned, with the trailing punctuation drawn at the end an ltr reader
+       would expect rather than the end the sentence actually has. Measured on
+       the claim page as direction:ltr for a caption that is entirely Arabic.
+       "auto" asks the browser to take the direction from the first strong
+       character, which is exactly the question being asked here. */
+    const cap = x.caption
+      ? `<span class="ex-cap" dir="auto">${safeInline(x.caption)}</span>` : "";
     /* An exhibit with nothing to show KEEPS ITS PLACE and says why. A gap that
        silently renumbered the rest would leave every later exhibit meaning
        something different than it did a moment ago, in the middle of an argument
