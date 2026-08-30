@@ -605,7 +605,7 @@ func TestALonePartyRowIsNotAssumedToBeTheAuthors(cur realm, t *testing.T) {
 // CANNOT compute either: BoardNewest clamps its page, so a client counting marks
 // undercounts a long board, and the wire collapses the two hide bits into one
 // `h`, so no client may say which authority acted.
-func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.T) {
+func TestTheHiddenCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.T) {
 	c, id, alice, bob, carol := topFixture(cur, t, "cwh")
 	sup := c.coin.PastTotal(c.coin.Epoch() - 1)
 	for _, w := range []address{bob, carol} {
@@ -622,7 +622,7 @@ func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.
 	testing.SetRealm(testing.NewUserRealm(carol))
 	kid := PostComment(cross(cur), "cwh", id, keep, "a reply its author withdraws")
 
-	uassert.Equal(t, 0, BoardWithheldCount("cwh", id))
+	uassert.Equal(t, 0, BoardHiddenCount("cwh", id))
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	HideOwnComment(cross(cur), "cwh", id, mine, true)
@@ -630,7 +630,7 @@ func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.
 	HideOwnComment(cross(cur), "cwh", id, kid, true)
 	// The reply is hidden and the count has not moved: BoardSize sees four rows,
 	// two of them withheld, and this read reports the ONE the list is short.
-	uassert.Equal(t, 1, BoardWithheldCount("cwh", id))
+	uassert.Equal(t, 1, BoardHiddenCount("cwh", id))
 	uassert.Equal(t, 4, BoardSize("cwh", id))
 
 	// alice created this court, so she moderates it — the same address that
@@ -638,7 +638,7 @@ func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.
 	// and the page below has to name them differently even so.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	HideBoardRow(cross(cur), "cwh", id, theirs, boardCodeOffTopic)
-	uassert.Equal(t, 2, BoardWithheldCount("cwh", id))
+	uassert.Equal(t, 2, BoardHiddenCount("cwh", id))
 
 	// AND A PURGE, which is the third authority and the one row that must NOT be
 	// linked: a hide is a discovery bit and its deep link still serves, but a
@@ -649,23 +649,44 @@ func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.
 	gone := PostComment(cross(cur), "cwh", id, 0, "a row the DAO purges")
 	testing.SetRealm(testing.NewUserRealm(DirectoryAdmin()))
 	PurgeBoardRow(cross(cur), "cwh", id, gone, "dmca")
-	uassert.Equal(t, 3, BoardWithheldCount("cwh", id))
+	uassert.Equal(t, 3, BoardHiddenCount("cwh", id))
 
 	// The page. It reads the two bits directly, so it may say which authority
 	// acted — the one thing the wire deliberately refuses to carry.
-	page := Render("cwh/" + strconv.FormatUint(id, 10) + "/board/withheld")
+	page := Render("cwh/" + strconv.FormatUint(id, 10) + "/board/hidden")
 	if !strings.Contains(page, "Withdrawn from the listing by its author") {
 		t.Fatalf("the author's own withdrawal must be named as theirs:\n%s", page)
 	}
 	if !strings.Contains(page, "Removed from the listing by this court's moderators") {
 		t.Fatalf("a moderator's removal must be named as theirs:\n%s", page)
 	}
-	// AND THE TEXT IS NOT REPUBLISHED. A page that gathered up what was withheld
-	// and printed it would undo every act in this lane at once.
+	// NOWHERE DOES IT SAY "it still reads at its own link". That sentence was on
+	// every stub, and on a board a moderator had just cleared it was the loudest
+	// thing on the page — a line of cruft per griefer comment.
+	if strings.Contains(page, "still reads at its own link") {
+		t.Fatalf("the deep-link footnote is cruft, not copy:\n%s", page)
+	}
+	// The listing itself carries none of them, and links to this page instead.
+	listing := renderBoardPage("cwh", id)
+	if strings.Contains(listing, "Withdrawn from") || strings.Contains(listing, "Removed from") {
+		t.Fatalf("hidden rows leave the listing entirely:\n%s", listing)
+	}
+	if !strings.Contains(listing, "3 hidden comments](") {
+		t.Fatalf("the listing must link to them by count:\n%s", listing)
+	}
+	// THE TEXT IS HERE FOR A HIDE. A hide is a discovery bit — the bytes were
+	// never destroyed and the row's own deep link already serves them — so
+	// withholding them here would hide nothing and only make the record harder
+	// to read than the chain already makes it.
 	for _, txt := range []string{"a row its author withdraws", "a row a moderator removes"} {
-		if strings.Contains(page, txt) {
-			t.Fatalf("the withheld page republished %q:\n%s", txt, page)
+		if !strings.Contains(page, txt) {
+			t.Fatalf("a hidden row's text belongs on this page, %q is missing:\n%s", txt, page)
 		}
+	}
+	// AND NOT FOR A PURGE, which is the opposite case and the one that would be
+	// an act undone: those bytes are gone from the record entirely.
+	if strings.Contains(page, "a row the DAO purges") {
+		t.Fatalf("a purged row has no text to show:\n%s", page)
 	}
 	// The row that stayed is not on this page either — it is not withheld.
 	if strings.Contains(page, "a row that stays") {
@@ -695,10 +716,10 @@ func TestTheWithheldCountIsTopLevelAndTheListSaysWhoActed(cur realm, t *testing.
 	testing.SetRealm(testing.NewUserRealm(alice2))
 	id2 := OpenClaim(cross(cur), "cwi", "a claim nobody has commented on")
 	_ = c2
-	uassert.Equal(t, 0, BoardWithheldCount("cwi", id2))
-	if !strings.Contains(Render("cwi/"+strconv.FormatUint(id2, 10)+"/board/withheld"),
-		"Nothing has been withheld here") {
-		t.Fatal("an untouched board says nothing was withheld")
+	uassert.Equal(t, 0, BoardHiddenCount("cwi", id2))
+	if !strings.Contains(Render("cwi/"+strconv.FormatUint(id2, 10)+"/board/hidden"),
+		"Nothing has been hidden here") {
+		t.Fatal("an untouched board says nothing was hidden")
 	}
 }
 
@@ -845,8 +866,16 @@ func TestTheClaimLinksItsBoardAndRepliesRender(cur realm, t *testing.T) {
 	if strings.Contains(page, "the answer to the point") {
 		t.Fatalf("a withdrawn reply must not render its text:\n%s", page)
 	}
-	if !strings.Contains(page, "Not shown") {
-		t.Fatal("and the page must say a reply is there rather than drop it silently")
+	// AND IT LEAVES THE THREAD ENTIRELY, which is a deliberate reversal: this
+	// used to assert the opposite, that a stub said "Not shown" "rather than
+	// drop it silently". A stub apiece is louder than what it replaced, and a
+	// moderator clearing a griefing run left the griefing intact in the realm's
+	// own voice. Top-level rows get a count and a page; a REPLY gets neither,
+	// because it was never in the list a count is about — so a hidden reply
+	// really does vanish from every rendered surface. The row and its text
+	// survive on chain, and its own deep link still serves them.
+	if strings.Contains(page, "Not shown") {
+		t.Fatalf("a hidden reply is dropped from the thread, not stubbed:\n%s", page)
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
 	HideOwnComment(cross(cur), "wire", id, row+1, false)

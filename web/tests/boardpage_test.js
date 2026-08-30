@@ -66,13 +66,17 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 
   // ---- orem/2: both parties, a tombstone, and a real ranking ---------------
   await boardView("orem", "2", false);
-  ok("orem/2 paints its rows", count(/class="boardrow"/g) === 4);
+  // THREE, not four: the sample's hidden row is dropped from the draw rather
+  // than stubbed. The wire still carries it — boardview_test holds that — and
+  // the header's count is what tells a reader it exists.
+  ok("orem/2 paints only the rows it can show", count(/class="boardrow"/g) === 3);
   ok("...badges BOTH parties", /class="pill">author</.test(painted) && /class="pill">answerer</.test(painted));
-  ok("...renders the withheld row as a tombstone", painted.includes("Hidden from this list"));
-  ok("...and names no actor for it", !/withdrawn|by its author|moderator/i.test(painted));
-  // The tombstone is a DISCOVERY bit: the row still reads at its own route, and
-  // the copy says so, so the link has to be there.
-  ok("...with the link that copy promises", /board\/13"[^>]*>read it/.test(painted));
+  // NOTHING is said about the hidden row here — not a tombstone, not an actor,
+  // not a link. A moderator clearing a griefing run should leave a shorter page,
+  // not a longer one.
+  ok("...says nothing at all about the hidden one",
+     !painted.includes("Hidden from this list") && !/board\/13"/.test(painted));
+  ok("...and names no actor anywhere", !/withdrawn|by its author|moderator/i.test(painted));
 
   // The toggle is offered only because the sample has a nonzero score. On a
   // board nobody upvoted, Top is byte-for-byte Newest and a toggle between two
@@ -134,13 +138,16 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        html.startsWith('<section id="claimcomments">'));
     ok("...heads with the same count and state the chip uses",
        html.includes("7 comments · open for comments"));
+    // Every row it is GIVEN — filtering happens in the fill, before this point,
+    // so a renderer handed a hidden row would still draw it. That is deliberate:
+    // one filter, at one place, rather than a second opinion in the renderer.
     ok("...renders every row it was given, replies included",
        (html.match(/class="boardrow"/g)||[]).length === 4);
     ok("...indents the reply under its parent", html.includes('class="boardkids"'));
     ok("...badges the parties in place",
        /class="pill">author</.test(html) && /class="pill">answerer</.test(html));
-    ok("...tombstones the withheld row rather than dropping it",
-       html.includes("Hidden from this list"));
+    ok("...draws no tombstone for the hidden one",
+       !html.includes("Hidden from this list"));
     // 4 rows on the page against a board of 7 — the tail is the honest
     // difference, and it points at the paged view rather than growing this one.
     ok("...links to the rest when it is not showing all of them",
@@ -152,19 +159,19 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     // page, and a header number that quietly means "of the ones we fetched" is
     // worse than none. So it is passed in, and these assert what is done with it.
     const two = claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 2);
-    ok("the header states the count it was given", two.includes("2 removed comments"));
+    ok("the header states the count it was given", two.includes("2 hidden comments"));
     ok("...and leaves the site for them, because this one hosts no index of "
        + "withheld content", /class="tlink secact"[^>]*href="https?:[^"]*\/board\/withheld"/.test(two));
     ok("...singular at one",
-       claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 1).includes("1 removed comment<"));
+       claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 1).includes("1 hidden comment<"));
     ok("...and says nothing at all when nothing was removed",
-       !claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 0).includes("removed comment"));
+       !claimCommentsHtml("covid", 10, 7, true, rows, kids, {}, 0).includes("hidden comment"));
     // The page renders four rows; the count is about the whole board, so a
     // number larger than anything on the page is exactly what it should print.
     ok("...even when it exceeds what this section shows",
-       claimCommentsHtml("covid", 10, 40, true, rows, kids, {}, 9).includes("9 removed comments"));
+       claimCommentsHtml("covid", 10, 40, true, rows, kids, {}, 9).includes("9 hidden comments"));
     ok("the count is READ, not counted from the rendered rows",
-       /await one\(`BoardWithheldCount\(/.test(src));
+       /await one\(`BoardHiddenCount\(/.test(src));
   }
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

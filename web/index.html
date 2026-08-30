@@ -1566,14 +1566,14 @@ async function boardOpenOf(slug, id){
   }
   return await one(`BoardOpen(${gstr(slug)},${id})`);
 }
-async function boardWithheldOf(slug, id){
+async function boardHiddenOf(slug, id){
   if(!isLive()){
     // The sample carries wire strings, so it counts its own top-level marks —
     // which is exact here because a demo board is never longer than one page.
     const b = demoBoard(slug, id);
     return boardNewestRows((b && b.newest) || "").filter(r => r.mark !== ".").length;
   }
-  return await one(`BoardWithheldCount(${gstr(slug)},${id})`);
+  return await one(`BoardHiddenCount(${gstr(slug)},${id})`);
 }
 async function boardParties(slug, id){
   if(!isLive()){ const b = demoBoard(slug, id); return boardPartyRows((b && b.parties) || ""); }
@@ -1622,7 +1622,10 @@ async function fillBoardChip(slug, id){
   try{
     const n = await boardSize(slug, id);
     if(!(n > 0)){ slot.innerHTML = boardChip(slug, id, 0, await boardOpenOf(slug, id), []); return; }
-    slot.innerHTML = boardChip(slug, id, n, true, await boardParties(slug, id).catch(()=>[]));
+    // Filtered like every other party read: the chip says a party "has replied",
+    // and a party whose only comment is hidden has not, on any surface here.
+    slot.innerHTML = boardChip(slug, id, n, true,
+                               boardVisible(await boardParties(slug, id).catch(()=>[])));
   }catch(_){ /* an unreadable board leaves the tagrow as it was, never a broken chip */ }
 }
 
@@ -2593,7 +2596,7 @@ function confirmAuthored(func, args, bodyKey){
         <button type="button" class="pill void" data-cancel>close</button></div>
       <div class="bd">${rows}
         <p class="small muted">This is what will be signed. A comment cannot be edited or deleted
-          afterwards — you may withdraw it from the list, and it still reads at its own link.</p>
+          afterwards — you may withdraw it from the list, but it is never deleted.</p>
         <div class="actions"><button type="button" class="btn" data-go>Sign it</button>
           <button type="button" class="copybtn" data-cancel>Cancel</button></div></div>`;
     document.body.appendChild(dlg);
@@ -6567,38 +6570,29 @@ function boardText(s){
   return paras.map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
 }
 
-/* THE MARK ALPHABET, AND WHAT THIS SURFACE MAY SAY ABOUT IT.
+/* HIDDEN ROWS ARE NOT DRAWN, on any surface here.
 
-   `h` IS A DISJUNCTION — hiddenByAuthor OR hiddenByMod — collapsed by boardMark
-   on purpose, so the wire does not tell a client which. The realm's own page
-   distinguishes them because it can read the two bits; this one cannot, and
-   "withdrawn by its author" printed over a moderator's act is an assertion about
-   a person that would be false half the time. No actor is named here, and no
-   moderation code either, because no exported read returns one.
+   They used to render as a tombstone apiece — "Hidden from this list. It still
+   reads at its own link." — and on a board a moderator had just cleared of a
+   griefing run, that was the loudest thing on the page: a line of cruft per
+   comment removed, more prominent than the comments had been. The griefing
+   survived its own removal.
 
-   The words for `g` and `x` are the realm's own (boardTextVisible), so a reader
-   who checks the chain's page against this one finds the same sentence.
+   So the wire still CARRIES them, because dropping them there would make paging
+   cost O(offset + hidden) with the hidden count chosen by whoever is hiding —
+   and this layer drops them at the point of drawing instead. The count and the
+   chain's own /board/hidden page are the record of what went; this list is for
+   what was said. */
+const boardVisible = rows => (rows || []).filter(r => r.mark === ".");
 
-   `h` KEEPS ITS LINK because a hide is a DISCOVERY bit: the row still reads at
-   its own route, and copy that says so while linking nowhere would be a promise
-   this page does not keep. */
-const BOARD_TOMB = {
-  h:"Hidden from this list. It still reads at its own link.",
-  g:"Withheld pending a legal determination.",
-  x:"Removed. The text is gone from the record; the row remains."
-};
 const gnowebRow = (slug, id, row) =>
   String(CFG.gnoweb || "").replace(/\/$/, "") + "/r/kourt/kourtv2:" + slug + "/" + id + "/board/" + row;
 
 /* One row. `meta` is what the ORDERING knows about it — a reply count on Newest,
    a score on Top — rendered as the thing it is rather than as a bare number. */
 function boardRowHtml(slug, id, r, meta, role){
-  const tomb = BOARD_TOMB[r.mark];
   const link = esc(gnowebRow(slug, id, r.id));
-  const body = tomb
-    ? `<p class="board-tomb">${esc(tomb)}${r.mark === "h"
-        ? ` <a href="${link}" rel="noopener">read it</a>` : ""}</p>`
-    : boardText(r.text);
+  const body = boardText(r.text);
   return `<article class="boardrow" id="c${esc(String(r.id))}">`
     + `<div class="boardmeta"><span class="mono">${shortAddr(r.author)}</span>`
     + (role ? ` <span class="pill">${esc(role)}</span>` : "")
@@ -6732,8 +6726,8 @@ function composerHtml(slug, id, state, parent){
       <span class="composer-count" id="composer-count">0 of ${fmtN(MAX_COMMENT_BYTES)} bytes</span>
       <button type="button" class="btn composer-post" data-authored="1" disabled>Review and sign</button>
     </div>
-    <p class="composer-note">Comments cannot be edited or deleted. You may withdraw one from the
-      list; it still reads at its own link.</p></section>`;
+    <p class="composer-note">Comments cannot be edited or deleted. You may withdraw one from
+      the list; the row and its text stay on chain.</p></section>`;
 }
 
 /* BYTES, NOT CHARACTERS, because the realm's cap is bytes (maxBoardTextLen) and
@@ -6811,13 +6805,13 @@ const CLAIM_COMMENTS = 4;
    THE COUNT COMES FROM THE CHAIN, not from the rows on the page. Tallying marks
    client-side undercounts the moment a board outgrows one page — and a number in
    a header that quietly means "of the ones we happened to fetch" is worse than
-   no number. BoardWithheldCount walks the claim's top-level index and answers
+   no number. BoardHiddenCount walks the claim's top-level index and answers
    for the whole board; it is a read, so it costs no gas, and the realm takes the
    walk rather than a counter for the reason boardPartyRows gives one level up. */
 function removedLink(slug, id, k){
   if(!(k > 0)) return "";
   return `<a class="tlink secact" rel="noopener" href="${esc(gnowebRow(slug, id, "withheld"))}">`
-    + `${k} removed comment${k === 1 ? "" : "s"}<span aria-hidden="true">↗</span></a>`;
+    + `${k} hidden comment${k === 1 ? "" : "s"}<span aria-hidden="true">↗</span></a>`;
 }
 
 function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld){
@@ -6854,14 +6848,16 @@ async function fillClaimComments(slug, id){
       fillComposer(slug, id, 0);
       return;
     }
-    const rows = await boardNewestOf(slug, id, 0, CLAIM_COMMENTS);
-    const parties = await boardParties(slug, id).catch(()=>[]);
+    // Filtered BEFORE the slice, or a page of hidden rows would render as a
+    // page of nothing while the board had plenty to show.
+    const rows = boardVisible(await boardNewestOf(slug, id, 0, BOARD_PAGE)).slice(0, CLAIM_COMMENTS);
+    const parties = boardVisible(await boardParties(slug, id).catch(()=>[]));
     const roles = {}; parties.forEach(r => { roles[r.id] = r.role; });
     const kids = await Promise.all(rows.map(r =>
       parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).catch(()=>[])
                                   : Promise.resolve([])));
     slot.outerHTML = claimCommentsHtml(slug, id, n, open, rows, kids, roles,
-                                       await boardWithheldOf(slug, id).catch(()=>0));
+                                       await boardHiddenOf(slug, id).catch(()=>0));
     fillComposer(slug, id, 0);
   }catch(_){ /* an unreadable board leaves the rest of the claim page intact */ }
 }
@@ -6904,18 +6900,18 @@ async function boardView(slug, idS, ranked){
     return;
   }
 
-  const rows = ranked ? await boardTopOf(slug, id, 0, BOARD_PAGE)
-                      : await boardNewestOf(slug, id, 0, BOARD_PAGE);
+  const rows = boardVisible(ranked ? await boardTopOf(slug, id, 0, BOARD_PAGE)
+                                   : await boardNewestOf(slug, id, 0, BOARD_PAGE));
   // The parties are badged IN PLACE rather than pinned above the list: this page
   // is the list, and a reserved copy at the top is the duplicate the realm's own
   // render had to grow a `seen` set to stop printing.
-  const parties = await boardParties(slug, id).catch(()=>[]);
+  const parties = boardVisible(await boardParties(slug, id).catch(()=>[]));
   const role = {}; parties.forEach(r => { role[r.id] = r.role; });
 
   // Replies only where the ordering says there are some. Top carries no reply
   // count, so it lists parents alone — the thread reads on the Newest page.
   const kids = ranked ? [] : await Promise.all(rows.map(r =>
-    parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).catch(()=>[]) : Promise.resolve([])));
+    parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).then(boardVisible).catch(()=>[]) : Promise.resolve([])));
 
   const meta = ranked ? boardMetaTop : boardMetaNewest;
   const body = rows.map((r, i) => boardRowHtml(slug, id, r, meta(r), role[r.id] || "")

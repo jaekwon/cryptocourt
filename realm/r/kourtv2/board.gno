@@ -330,7 +330,7 @@ func BoardSize(courtSlug string, claimID uint64) int {
 	return cs.board.Size()
 }
 
-// BoardWithheldCount is how many TOP-LEVEL rows this claim's list is not
+// BoardHiddenCount is how many TOP-LEVEL rows this claim's list is not
 // showing — hidden, legally withheld or purged.
 //
 // TOP-LEVEL ONLY, and that is the whole reason it is not cs.board.Size() minus
@@ -350,7 +350,7 @@ func BoardSize(courtSlug string, claimID uint64) int {
 // It costs no gas either way: this is a read, and a read is a query rather than
 // a transaction. A counter would add gas to every hide and purge in order to
 // speed up something nobody pays for.
-func BoardWithheldCount(courtSlug string, claimID uint64) int {
+func BoardHiddenCount(courtSlug string, claimID uint64) int {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	if cs.boardTop == nil {
 		return 0
@@ -396,6 +396,12 @@ func CommentsWrittenBy(courtSlug string, claimID uint64, who address) int64 {
 // Hidden rows are returned with an empty text and an `h` marker rather than
 // dropped: dropping them would make the page cost O(offset + hidden), with the
 // hidden count chosen by whoever is hiding. The row stays, the text does not.
+//
+// THAT IS THE WIRE'S BARGAIN, NOT THE PAGE'S. A client is handed the marked rows
+// so its paging stays cheap and stable; what it DRAWS is its own choice, and
+// both renderers here drop them from the listing and collect them behind one
+// link. A moderator clearing twenty griefer comments should not leave twenty
+// stubs down the page — the stubs are more prominent than the comments were.
 func BoardNewest(courtSlug string, claimID uint64, offset, count int) string {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	if cs.boardTop == nil || count <= 0 {
@@ -631,7 +637,7 @@ func renderBoardTop(slug string, claimID uint64) string {
 	return renderBoardIn(slug, claimID, true)
 }
 
-// renderBoardWithheld is the page the count links to: the rows this claim's
+// renderBoardHidden is the page the count links to: the rows this claim's
 // list is not showing, and what happened to each.
 //
 // IT SAYS WHICH AUTHORITY ACTED, which no client can. boardMark collapses
@@ -640,20 +646,22 @@ func renderBoardTop(slug string, claimID uint64) string {
 // author" over a moderator's hide is an assertion about a person that would be
 // false half the time. This page reads the two bits directly, so it can.
 //
-// THE TEXT IS NOT HERE. A page that gathered up everything that was withheld and
-// republished it would undo the withholding, which is the one thing every act in
-// this lane has in common. What it gives is the row's id, its author, when it
-// landed and its own link — a hide is a DISCOVERY bit, so the deep link still
-// serves; a purge is not, and its row says so and leads nowhere.
-func renderBoardWithheld(slug string, claimID uint64) string {
+// THE TEXT IS HERE FOR A HIDE, AND ONLY FOR A HIDE. A hide is a DISCOVERY bit:
+// the bytes were never destroyed and the row's own deep link already serves them
+// to anyone who asks, so withholding them on this page would hide nothing and
+// only make the record harder to read than the chain already makes it. A PURGE
+// destroyed the bytes and a GLOBAL withholding is pending a legal
+// determination — reprinting either would be the realm undoing its own act in a
+// tidier format, so those get the reason alone.
+func renderBoardHidden(slug string, claimID uint64) string {
 	c := mustCourt(slug)
 	cs := mustClaim(c, claimID)
 	base := "/r/kourt/kourtv2:" + slug + "/" + strconv.FormatUint(claimID, 10)
 	var b strings.Builder
-	b.WriteString("# Withheld comments on claim " + strconv.FormatUint(claimID, 10) + "\n\n")
+	b.WriteString("# Hidden comments on claim " + strconv.FormatUint(claimID, 10) + "\n\n")
 	b.WriteString("[← the comments](" + base + "/board)\n\n")
 	if cs.boardTop == nil {
-		b.WriteString("_Nothing has been withheld here._\n")
+		b.WriteString("_Nothing has been hidden here._\n")
 		return b.String()
 	}
 	n := 0
@@ -674,6 +682,25 @@ func renderBoardWithheld(slug string, claimID uint64) string {
 			b.WriteString(" · #" + strconv.FormatUint(r.id, 10))
 		}
 		b.WriteString("\n\n")
+		// WHY, AND THEN WHAT WAS SAID — but only where there is something to
+		// say and saying it undoes nothing.
+		//
+		// A PURGE destroyed the bytes; there is no text to show and never will
+		// be. A GLOBAL withholding is pending a legal determination, and this
+		// page reprinting it would be the realm undoing its own act in a tidier
+		// format. Those two get the reason alone.
+		//
+		// A HIDE is different in kind: it is a DISCOVERY bit, the text was never
+		// destroyed, and the row's own deep link serves it to anyone who asks.
+		// Withholding it here would hide nothing and only make the record harder
+		// to read than the chain already makes it.
+		//
+		// THROUGH boardTextVisible, not sanitize.Block, even though the switch
+		// has already established the row is neither purged nor global. That
+		// function is the one place a comment's text becomes output and the one
+		// place the withholding states are decided; reimplementing the decision
+		// here would make this the second place, free to drift. check-render-text
+		// enforces exactly that, and caught this line reading the raw field.
 		switch {
 		case r.purged:
 			b.WriteString("> _Removed on legal grounds. The text is gone from the record; " +
@@ -681,16 +708,16 @@ func renderBoardWithheld(slug string, claimID uint64) string {
 		case r.global:
 			b.WriteString("> _Withheld pending a legal determination._\n\n")
 		case r.hiddenByMod:
-			b.WriteString("> _Removed from the listing by this court's moderators. " +
-				"It still reads at its own link._\n\n")
+			b.WriteString("> _Removed from the listing by this court's moderators._\n\n")
+			b.WriteString(boardTextVisible(r) + "\n\n")
 		default:
-			b.WriteString("> _Withdrawn from the listing by its author. " +
-				"It still reads at its own link._\n\n")
+			b.WriteString("> _Withdrawn from the listing by its author._\n\n")
+			b.WriteString(boardTextVisible(r) + "\n\n")
 		}
 		return false
 	})
 	if n == 0 {
-		b.WriteString("_Nothing has been withheld here._\n")
+		b.WriteString("_Nothing has been hidden here._\n")
 	}
 	return b.String()
 }
@@ -761,11 +788,26 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 	// rendered five comment blocks and — because cold start puts every un-upvoted
 	// row in the score index at score 0 — Top and Newest were byte-identical
 	// lists printed back to back on any board with no upvotes.
+	// HIDDEN ROWS LEAVE THE LISTING, collected behind one link instead of left
+	// as a stub apiece. A moderator clearing twenty griefer comments used to
+	// leave twenty notices down the page, each louder than the comment it
+	// replaced — the griefing survived its own removal, in the realm's voice.
+	// The count and the page are the record; this list is for what was said.
+	if k := BoardHiddenCount(slug, claimID); k > 0 {
+		b.WriteString("[" + strconv.Itoa(k) + " hidden comment" + plural2(k) +
+			"](" + base + "/board/hidden)\n\n")
+	}
+
 	seen := map[uint64]bool{}
 	if parties := boardPartyRows(cs); len(parties) > 0 {
 		b.WriteString("## The parties\n\n")
 		for _, r := range parties {
 			seen[r.id] = true
+			// A party's newest comment may itself be hidden, and a reserved slot
+			// filled with a stub is the same clutter one line higher up.
+			if boardMark(r) != "." {
+				continue
+			}
 			b.WriteString(renderBoardOne(slug, claimID, cs, r, true))
 		}
 		if ranked {
@@ -797,8 +839,8 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 
 	cs.boardTop.ReverseIterateByOffset(0, maxBoardRepliesShown*3, func(_ string, v any) bool {
 		r := v.(*boardRow)
-		if seen[r.id] {
-			return false
+		if seen[r.id] || boardMark(r) != "." {
+			return false // hidden rows are counted and linked above, not stubbed here
 		}
 		b.WriteString(renderBoardOne(slug, claimID, cs, r, true))
 		shown++
@@ -936,15 +978,21 @@ func writeBoardReplies(b *strings.Builder, slug string, claimID uint64, cs *clai
 			return true
 		}
 		r := v.(*boardRow)
+		// A hidden reply leaves the thread for the same reason a hidden
+		// top-level row leaves the list: the stub is louder than what it
+		// replaced. BoardHiddenCount does not count these — a reply is not
+		// missing from a list it was never in — so the link above does not
+		// promise them either.
+		if boardMark(r) != "." {
+			return false
+		}
 		b.WriteString("> **" + sanitize.InlineText(r.author.String()) + "**")
 		for _, badge := range boardBadges(cs, r.author) {
 			b.WriteString(" · " + badge)
 		}
 		b.WriteString(" · [#" + strconv.FormatUint(r.id, 10) + "](/r/kourt/kourtv2:" + slug +
 			"/" + strconv.FormatUint(claimID, 10) + "/board/" + strconv.FormatUint(r.id, 10) + ")\n>\n")
-		if m := boardMark(r); m != "." {
-			b.WriteString("> _Not shown._\n\n")
-		} else {
+		{
 			// The reply's own text, quoted one level. Block-sanitised like every
 			// other comment; the "> " prefix is ours, not the author's.
 			for _, line := range strings.Split(boardTextVisible(r), "\n") {

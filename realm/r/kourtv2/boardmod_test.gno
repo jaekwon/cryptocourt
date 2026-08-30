@@ -625,7 +625,10 @@ func TestAnAuthorCannotReverseAModeratorHide(cur realm, t *testing.T) {
 	// AND THE PAGE MUST SAY WHOSE ACT IT WAS. "Withdrawn from this listing" over
 	// a moderator removal puts the court's act in the author's mouth, which is
 	// an assertion about a person MODERATION §6 forbids this realm from making.
-	listing := renderBoardPage("bmx", id)
+	// The notice lives on the hidden page now — the listing drops hidden rows
+	// rather than stubbing them — but the rule it protects is untouched: a
+	// moderator's act may never be reported as the author's.
+	listing := renderBoardHidden("bmx", id)
 	if !strings.Contains(listing, "by this court's moderators") {
 		t.Fatal("a moderator hide must be reported as one:\n" + listing)
 	}

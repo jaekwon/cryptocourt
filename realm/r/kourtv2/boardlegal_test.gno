@@ -292,13 +292,25 @@ func TestAnAuthorHideAndARedactionAreIndependent(cur realm, t *testing.T) {
 	// false of a redacted row and understates a legal act as a personal choice.
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	GlobalHideRow(cross(cur), "bl5", id, row, "dmca")
+	// THE NOTICE MOVED, THE RULE DID NOT. Hidden rows leave the listing entirely
+	// now — collected behind one link rather than stubbed one apiece — so the
+	// page that has to say the STRONGER state is the hidden page.
 	listing := renderBoardPage("bl5", id)
-	if strings.Contains(listing, "It still reads at its own link") {
-		t.Fatal("a row that is both self-hidden and redacted must not render the " +
-			"author's softer notice: the deep link does NOT still read")
+	if strings.Contains(listing, "Withheld pending") || strings.Contains(listing, "Withdrawn from") {
+		t.Fatal("a hidden row has no stub in the listing at all:\n" + listing)
 	}
-	if !strings.Contains(listing, "Withheld pending a legal determination") {
-		t.Fatal("the listing must carry the redaction notice")
+	held := renderBoardHidden("bl5", id)
+	if strings.Contains(held, "Withdrawn from the listing by its author") {
+		t.Fatal("a row that is both self-hidden and redacted must not render the " +
+			"author's softer notice: a redaction is not a personal choice")
+	}
+	if !strings.Contains(held, "Withheld pending a legal determination") {
+		t.Fatal("the hidden page must carry the redaction notice")
+	}
+	// AND NOT THE TEXT. A global withholding is pending a legal determination;
+	// reprinting it here would be the realm undoing its own act.
+	if strings.Contains(held, "something a notice might name") {
+		t.Fatal("a redacted row's text must not be republished:\n" + held)
 	}
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	GlobalClearRow(cross(cur), "bl5", id, row)

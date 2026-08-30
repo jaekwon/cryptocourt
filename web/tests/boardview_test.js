@@ -18,6 +18,8 @@ function slice(from, to){
 eval(slice('function esc(s){', '\n/* undo the realm'));
 eval(slice('function shortAddr(', '\nfunction wall('));
 eval(slice('function fmtN(', '\n').replace(/^function /, 'function '));
+eval(slice('function wireFields(', '\nconst boardNewestRows'));
+eval(slice('const boardNewestRows', '\n\n').replace(/^const /gm, 'var '));
 const CFG = {gnoweb:"https://gnoweb.example.test/"};
 // `const` inside eval() is block-scoped to the eval and does not reach this
 // file; `function` declarations do. BOARD_TOMB, gnowebRow and the two meta
@@ -54,37 +56,31 @@ const row = o => Object.assign({id:5, author:"g1abcdefghijklmnop", mark:".", at:
   ok("whitespace-only text is empty too", boardText("   \n\n  ").includes("(empty)"));
 }
 
-// ---- tombstones -----------------------------------------------------------
-// The three marks, and what this surface is allowed to say about each.
+// ---- hidden rows are not drawn at all ------------------------------------
+// They used to render a tombstone apiece — "Hidden from this list. It still
+// reads at its own link." — which on a board a moderator had just cleared was
+// the loudest thing on the page: a line of cruft per comment removed. The wire
+// still carries them (dropping them there would make paging cost
+// O(offset + hidden), with the hidden count chosen by whoever is hiding); this
+// layer drops them at the point of drawing.
 {
-  const h = boardRowHtml("covid", 3, row({mark:"h", text:""}), "", "");
-  ok("a hidden row renders its tombstone", h.includes("Hidden from this list"));
-  // `h` is the DISJUNCTION of hiddenByAuthor and hiddenByMod. The wire does not
-  // say which, so neither may this page: "withdrawn by its author" over a
-  // moderator's act is false about a person half the time.
-  ok("...and names no actor", !/author|moderator|withdrawn/i.test(h));
-  // A hide is a DISCOVERY bit — the row still reads at its own route — so copy
-  // that says "it still reads at its own link" has to carry one.
-  ok("...and the link it promises actually exists",
-     h.includes("/r/kourt/kourtv2:covid/3/board/5") && h.includes("read it"));
+  const rows = boardNewestRows(
+    '9|g1a|0|.|770|visible one\n8|g1b|0|h|771|\n7|g1c|0|g|772|\n6|g1d|0|x|773|\n5|g1e|0|.|774|visible two');
+  ok("the parser still returns every row the wire carried", rows.length === 5);
+  const shown = boardVisible(rows);
+  ok("...and only the visible ones survive the draw filter", shown.length === 2);
+  ok("...which are the two with text", shown.map(r => r.text).join("|") === "visible one|visible two");
+  // All three marks go, not just the author/moderator hide: a reader does not
+  // need three different ways to be told nothing is there.
+  ok("h, g and x are all dropped", !shown.some(r => "hgx".includes(r.mark)));
+  ok("an empty list filters to an empty list", boardVisible([]).length === 0);
+  ok("...and so does nothing at all", boardVisible(null).length === 0);
 
-  const g = boardRowHtml("covid", 3, row({mark:"g", text:""}), "", "");
-  ok("a globally withheld row uses the realm's own sentence",
-     g.includes("Withheld pending a legal determination."));
-  const x = boardRowHtml("covid", 3, row({mark:"x", text:""}), "", "");
-  ok("a purged row uses the realm's own sentence",
-     x.includes("Removed. The text is gone from the record; the row remains."));
-  // g and x are NOT reachable, so they get no "read it" link — offering one
-  // would send a reader to a page that withholds the same thing.
-  ok("neither g nor x offers a link to text that is not there",
-     !g.includes("read it") && !x.includes("read it"));
-
-  // A tombstone must not carry the text the realm withheld. The realm packs an
-  // empty text for a marked row, but a client that trusted `text` over `mark`
-  // would print whatever arrived.
-  const forged = boardRowHtml("covid", 3, row({mark:"h", text:"the withheld sentence"}), "", "");
-  ok("a marked row shows its tombstone, not any text that came with it",
-     !forged.includes("the withheld sentence"));
+  // The renderer no longer has a tombstone branch to reach.
+  const r = boardRowHtml("covid", 3, row({text:"a real comment"}), "", "");
+  ok("a visible row still renders its text", r.includes("a real comment"));
+  ok("no tombstone copy survives anywhere in the file",
+     !src.includes("still reads at its own link") && !src.includes("BOARD_TOMB"));
 }
 
 // ---- the row's citation line ---------------------------------------------

@@ -9000,8 +9000,8 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "boardTextFor: withholds every non-readable state",
-  "find": "if boardMark(r) != \".\" {",
-  "replace": "if false {"
+  "find": "func boardTextFor(r *boardRow) string {\n\tif boardMark(r) != \".\" {\n\t\treturn \"\"",
+  "replace": "func boardTextFor(r *boardRow) string {\n\tif false {\n\t\treturn \"\""
  },
  {
   "pkg": "kourtv2",
@@ -9573,9 +9573,9 @@
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "writeBoardReplies: a withheld reply is not shown",
-  "find": "\t\tif m := boardMark(r); m != \".\" {\n\t\t\tb.WriteString(\"> _Not shown._\\n\\n\")\n\t\t} else {",
-  "replace": "\t\tif false {\n\t\t\tb.WriteString(\"> _Not shown._\\n\\n\")\n\t\t} else {"
+  "label": "writeBoardReplies: a hidden reply is drawn instead of dropped",
+  "find": "if boardMark(r) != \".\" {\n\t\t\treturn false\n\t\t}",
+  "replace": "if false {\n\t\t\treturn false\n\t\t}"
  },
  {
   "pkg": "kourtv2",
@@ -9630,8 +9630,8 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "renderBoardIn: Newest does not re-render the parties",
-  "find": "\t\tif seen[r.id] {\n\t\t\treturn false\n\t\t}\n\t\tb.WriteString(renderBoardOne(slug, claimID, cs, r, true))\n\t\tshown++",
-  "replace": "\t\tb.WriteString(renderBoardOne(slug, claimID, cs, r, true))\n\t\tshown++"
+  "find": "\t\tif seen[r.id] || boardMark(r) != \".\" {\n\t\t\treturn false // hidden rows are counted and linked above, not stubbed here\n\t\t}\n\t\tb.WriteString(renderBoardOne(slug, claimID, cs, r, true))\n\t\tshown++",
+  "replace": "\t\tif boardMark(r) != \".\" {\n\t\t\treturn false // hidden rows are counted and linked above, not stubbed here\n\t\t}\n\t\tb.WriteString(renderBoardOne(slug, claimID, cs, r, true))\n\t\tshown++"
  },
  {
   "pkg": "kourtv2",
@@ -11925,35 +11925,35 @@
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "BoardWithheldCount: replies count as missing from the list",
+  "label": "BoardHiddenCount: replies count as missing from the list",
   "find": "\tcs.boardTop.Iterate(\"\", \"\", func(_ string, v any) bool {\n\t\tif boardMark(v.(*boardRow)) != \".\" {",
   "replace": "\tcs.board.Iterate(\"\", \"\", func(_ string, v any) bool {\n\t\tif boardMark(v.(*boardRow)) != \".\" {"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "BoardWithheldCount: a claim with no board reaches for a nil tree",
+  "label": "BoardHiddenCount: a claim with no board reaches for a nil tree",
   "find": "\tif cs.boardTop == nil {\n\t\treturn 0\n\t}\n\tn := 0",
   "replace": "\tn := 0"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "renderBoardWithheld: a moderator's hide is reported as the author's",
-  "find": "\t\tcase r.hiddenByMod:\n\t\t\tb.WriteString(\"> _Removed from the listing by this court's moderators. \" +\n\t\t\t\t\"It still reads at its own link._\\n\\n\")\n\t\tdefault:",
-  "replace": "\t\tdefault:"
+  "label": "renderBoardHidden: a moderator's hide is reported as the author's",
+  "find": "\t\tcase r.hiddenByMod:\n\t\t\tb.WriteString(\"> _Removed from the listing by this court's moderators._\\n\\n\")\n\t\t\tb.WriteString(boardTextVisible(r) + \"\\n\\n\")",
+  "replace": "\t\tcase r.hiddenByMod:\n\t\t\tb.WriteString(\"> _Withdrawn from the listing by its author._\\n\\n\")\n\t\t\tb.WriteString(boardTextVisible(r) + \"\\n\\n\")"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "renderBoardWithheld: the withheld text is republished",
+  "label": "renderBoardHidden: the withheld text is republished",
   "find": "\t\tn++\n\t\tb.WriteString(\"---\\n\\n**\" + sanitize.InlineText(r.author.String()) + \"**\")",
   "replace": "\t\tn++\n\t\tb.WriteString(\"---\\n\\n**\" + sanitize.InlineText(r.author.String()) + \"** \" + r.text)"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
-  "label": "renderBoardWithheld: a purged row is linked to text that is gone",
+  "label": "renderBoardHidden: a purged row is linked to text that is gone",
   "find": "\t\tif m != \"x\" {",
   "replace": "\t\tif true {"
  }
