@@ -209,6 +209,29 @@ const clientImageLine = "img|111111111111111111111111111111111111111111111111111
 
 const clientVideoLine = "vid|||0|0|0|the hearing|https://i.imgur.com/v.mp4"
 
+// THE OTHER HALF OF THE SEAM. web/tests/media_test.js holds this exact string as
+// `fromChain` and asserts the overlay parses it into a card. If encodeMedia's
+// output drifts — a renamed field, a dropped one, whitespace — that suite is
+// what fails, and this is what tells you why.
+func TestWhatTheOverlayReadsIsWhatThisEmits(cur realm, t *testing.T) {
+	items := parseMediaArg(clientImageLine)
+	got := encodeMedia(items)
+	want := `[{"kind":"img","sha256":"1111111111111111111111111111111111111111111111111111111111111111",` +
+		`"mime":"image/webp","w":800,"h":600,"bytes":90210,"caption":"the memo",` +
+		`"mirrors":["https://i.imgur.com/abc.webp"]}]`
+	if got != want {
+		t.Fatalf("the overlay is pinned to a payload this no longer emits:\n got  %s\n want %s", got, want)
+	}
+
+	// The tombstone's shape is pinned too: the page shows a gap rather than
+	// renumbering around it, and it can only do that if it reads this marker.
+	items[0].purged = true
+	items[0].sha256, items[0].mirrors, items[0].caption = "", nil, ""
+	if g := encodeMedia(items); g != `[{"kind":"img","purged":true}]` {
+		t.Fatalf("the tombstone the overlay looks for is not what this writes: %s", g)
+	}
+}
+
 func TestTheOverlaysOwnArgumentParses(cur realm, t *testing.T) {
 	got, fault := parseMediaFault(clientImageLine + "\n" + clientVideoLine)
 	if fault != "" {

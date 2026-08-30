@@ -396,6 +396,37 @@ async function section3() {
   ok("garbage reads as none, never as a broken map", M.mediaParse("{not json").length === 0);
   ok("a real payload parses", M.mediaParse(JSON.stringify([img])).length === 1);
 
+  // THE BYTES A NODE ACTUALLY SENT. Everything above feeds mediaParse an object
+  // this file made and stringified — which checks JSON.parse, not the agreement
+  // between two programs. This payload was captured from the realm answering
+  // ClaimMedia over RPC in gnoland/testdata/kourtv2_media.txtar, and the realm
+  // suite asserts encodeMedia still produces exactly it.
+  const fromChain = '[{"kind":"img","sha256":"' + "1".repeat(64) + '","mime":"image/webp"' +
+    ',"w":800,"h":600,"bytes":90210,"caption":"the memo"' +
+    ',"mirrors":["https://i.imgur.com/abc.webp"]}]';
+  const parsed = M.mediaParse(fromChain);
+  ok("the realm's own output parses", parsed.length === 1);
+  ok("...with every field the page needs",
+     parsed[0].kind === "img" && parsed[0].w === 800 && parsed[0].bytes === 90210 &&
+     parsed[0].caption === "the memo" && parsed[0].mirrors.length === 1,
+     JSON.stringify(parsed[0]));
+  ok("...and reaches the card numbered and captioned",
+     M.mediaCardItems(parsed, "kourt.xyz")[0].label === "1 of 1" &&
+     M.mediaCardItems(parsed, "kourt.xyz")[0].caption === "the memo");
+  ok("...pointing at the archive rather than the filer's mirror",
+     M.mediaNodeThumb(parsed, "kourt.xyz") === "https://kourt.xyz/m/" + "1".repeat(64));
+
+  // A TOMBSTONED SLOT, in the shape the realm writes it. The page must show the
+  // gap rather than renumber around it, and it can only do that if it reads the
+  // marker the realm actually emits.
+  const withGap = M.mediaParse('[{"kind":"img","purged":true},{"kind":"img","sha256":"' +
+    "2".repeat(64) + '","mime":"image/webp","w":8,"h":6,"bytes":9,"caption":"kept","mirrors":[]}]');
+  const gapCards = M.mediaCardItems(withGap, "kourt.xyz");
+  ok("a purged slot keeps its position",
+     gapCards[0].label === "1 of 2" && gapCards[0].note === "taken down");
+  ok("...and the one after it keeps its number",
+     gapCards[1].label === "2 of 2" && gapCards[1].caption === "kept");
+
   // THE MAP MUST NEVER FAN OUT TO FILER-CHOSEN HOSTS. Fifty nodes on one draw
   // is fifty readers' addresses sent wherever an attacker liked.
   ok("a node thumbnail uses the archive", M.mediaNodeThumb([img], SITE) === "https://kourt.xyz/m/" + hash);
@@ -525,7 +556,7 @@ async function section3() {
   await section1();
   await section2();
   await section3();
-  const EXPECTED = 134;
+  const EXPECTED = 140;
   if (EXPECTED && ran !== EXPECTED) {
     fails++;
     console.log(`FAIL only ${ran} of ${EXPECTED} assertions ran`);
