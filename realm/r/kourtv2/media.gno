@@ -423,6 +423,11 @@ func captionFault(s string) string {
 		case '\n', '\r':
 			return "a caption is one line"
 		case '|':
+			// UNREACHABLE THROUGH parseMediaFault, and kept anyway. The caption is
+			// field seven of eight, so a bar in it makes nine fields and the split
+			// refuses the line before this is asked. This stands for a future
+			// caller that sets a caption some other way — and it is documented as
+			// belt and braces so nobody mistakes it for the gate that is holding.
 			return "a caption may not contain a vertical bar"
 		}
 		if s[i] < 0x20 && s[i] != '\t' {

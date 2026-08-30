@@ -261,6 +261,49 @@ func TestRetiringAHostRetractsTheImagesPointingAtIt(cur realm, t *testing.T) {
 	}
 }
 
+func TestTheEntrypointRefusesWhatTheValidatorRefuses(cur realm, t *testing.T) {
+	// EVERY PARSE TEST CALLS parseMediaFault DIRECTLY, which skips the one line
+	// that turns a fault into a refusal — so nothing proved that OpenClaimPM,
+	// the entrypoint a person actually reaches, stops a bad argument at all. A
+	// validator whose caller ignores it is decoration, and this is the caller.
+	alice := testutils.TestAddress("ep-alice")
+	testCourt(cur, "epz", testutils.TestAddress("boot-ep"), 10_000_000_000)
+	postingFixture(cur, "ep", alice, 50_000_000_000)
+
+	for _, bad := range []struct{ arg, want string }{
+		{"img|" + okHash + "|image/webp|800|600", "8 fields"},
+		{"img|nothex|image/webp|800|600|90210||" + okMirror, "sha256"},
+		{imgLine("", "http://i.imgur.com/a.webp"), "https"},
+		{imgLine("", "https://evil.example.com/a.webp"), "will not load"},
+		// A bar in a caption is caught by the FIELD COUNT, not by captionFault:
+		// the caption is field seven, so a bar in it makes nine fields out of
+		// eight. captionFault's own bar rule is therefore unreachable through
+		// this entrypoint — belt and braces behind a split that already refuses
+		// it, which is worth knowing before somebody trusts it as the gate.
+		{imgLine("a|b", okMirror), "8 fields"},
+	} {
+		testing.SetRealm(testing.NewUserRealm(alice))
+		uassert.AbortsContains(t, cur, bad.want, func() {
+			OpenClaimPM(cross(cur), "ep", "a claim", "", bad.arg)
+		})
+	}
+
+	// THE CONTROL: the same entrypoint takes a good one. Without it every arm
+	// above would pass against an entrypoint that refused everything.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaimPM(cross(cur), "ep", "a claim that files", "", imgLine("ok", okMirror))
+	if !strings.Contains(ClaimMedia("ep", id), okHash) {
+		t.Fatal("a well-formed argument must actually be stored")
+	}
+
+	// And a refusal costs nothing: the deposit is not spent on a claim that was
+	// never opened, so the count must not have moved for the five above.
+	if ClaimCount("ep") != id {
+		t.Fatalf("a refused claim must not consume an id: count %d, last id %d",
+			ClaimCount("ep"), id)
+	}
+}
+
 func TestMediaIsGatedByThePurgeThatTheClaimTextIs(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("med-alice")
 	testCourt(cur, "medz", testutils.TestAddress("boot-med"), 10_000_000_000)

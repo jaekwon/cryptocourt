@@ -11900,5 +11900,26 @@
   "replace": "\t\tif false && m.caption != \"\" {",
   "label": "writeClaimMedia: an uncaptioned exhibit carries an empty caption",
   "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\tif fault != \"\" {\n\t\tpanic(\"kourtv2: \" + fault)\n\t}",
+  "replace": "\tif false {\n\t\tpanic(\"kourtv2: \" + fault)\n\t}",
+  "label": "parseMediaArg: the entrypoint accepts what the validator refused",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\tif siteDomain == \"\" || siteDomainFault(siteDomain) != \"\" {\n\t\treturn \"\"\n\t}",
+  "replace": "\tif false {\n\t\treturn \"\"\n\t}",
+  "label": "verifyElsewhere: a court with no overlay still names one",
+  "pkg": "kourtv2"
+ },
+ {
+  "file": "media.gno",
+  "find": "\t\tif (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') {\n\t\t\tcontinue\n\t\t}",
+  "replace": "\t\tif c != 0 {\n\t\t\tcontinue\n\t\t}",
+  "label": "isHexLower: any character passes as hex",
+  "pkg": "kourtv2"
  }
 ]
