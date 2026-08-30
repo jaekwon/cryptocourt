@@ -694,6 +694,8 @@ Recorded because each is easy to make again:
 | 33 | the composer had only ever been rendered on a desktop | at 320px its action bar squeezed rather than wrapped — "try the copy again" 54px across and 44px tall, four words stacked into a column, with nothing overflowing to give it away |
 | 34 | the error colour was a literal behind a `var()` fallback, then half-wired | `var(--bad, #c0564f)` hid a token that did not exist; adding it to two of the palette's four blocks left the composer's error text pale salmon on light grey for anyone whose system is dark and who chose light |
 | 35 | no caption carried `dir="auto"` | the page is `lang="en"`, so an Arabic or Hebrew caption got its letters in the right order and its sentence in the wrong place — left-aligned, trailing punctuation at the ltr end |
+| 36 | ten files became seven exhibits and three silences | the cap message stated the rule and said nothing about the evidence that had just vanished from the form |
+| 37 | a purged slot carried `cursor:zoom-in` with nothing to open | the tombstone that exists so numbering holds also looked like an exhibit you could click |
 
 **The method these last rows came from is worth stating, because it is
 repeatable.** The defects stopped being wrong computations some time ago. Every
@@ -703,7 +705,10 @@ deployment nothing served, a width nothing measured. So the useful question is
 no longer "what does this code do wrong" but "what state can this be in that
 nobody has ever looked at", and then going and looking. Enumerating deployments
 found row 32; enumerating screen sizes found row 33; enumerating themes found
-row 34; enumerating locales found row 35. The dimensions are ordinary and the list is short — deployment, width,
+row 34; enumerating locales found row 35; enumerating exhibit counts at their
+boundary found row 36, and exhibit states found row 37. Six of the seven
+dimensions have now each produced a defect on first render, which is less a
+comment on this feature than on how much a list of situations is worth. The dimensions are ordinary and the list is short — deployment, width,
 theme, locale, exhibit count, exhibit state, claim phase — which is what makes
 it worth writing down rather than rediscovering.
 
