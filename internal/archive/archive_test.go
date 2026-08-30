@@ -1166,3 +1166,118 @@ func (c *countingChain) ClaimHashes(ctx context.Context, court string, id uint64
 	c.asked[id] = true
 	return nil, nil
 }
+
+func TestEveryTypeItClaimsToStoreIsActuallyRecognised(t *testing.T) {
+	// SniffMIME was only ever exercised with PNG, WebP and GIF. The other two
+	// branches never ran — so a wrong JPEG signature would have refused every
+	// JPEG upload, which is the commonest photograph there is, and nothing would
+	// have said why.
+	//
+	// Real leading bytes, not invented ones: JPEG is SOI + APP0, AVIF is an
+	// ISO-BMFF box whose brand sits after "ftyp".
+	jpeg := append([]byte{0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10}, []byte("JFIF\x00")...)
+	avif := append([]byte{0, 0, 0, 0x20}, []byte("ftypavif")...)
+	avis := append([]byte{0, 0, 0, 0x20}, []byte("ftypavis")...)
+
+	for _, tc := range []struct {
+		body []byte
+		want string
+	}{
+		{jpeg, "image/jpeg"},
+		{avif, "image/avif"},
+		{avis, "image/avif"},
+		{pngBody, "image/png"},
+		{webpWith(""), "image/webp"},
+		{[]byte("GIF89a and the rest"), "image/gif"},
+		{[]byte("GIF87a and the rest"), "image/gif"},
+		// A box that is not an image brand must not pass as one.
+		{append([]byte{0, 0, 0, 0x20}, []byte("ftypmp42")...), ""},
+		{[]byte{0xff, 0xd8}, ""}, // truncated SOI
+	} {
+		if got := SniffMIME(tc.body); got != tc.want {
+			t.Fatalf("SniffMIME(%q…) = %q, want %q", tc.body[:min(6, len(tc.body))], got, tc.want)
+		}
+	}
+
+	// And the store accepts a real JPEG end to end, which is the thing a person
+	// actually does.
+	st := testStore(t)
+	if _, err := st.Put(context.Background(), "image/jpeg", jpeg, ""); err != nil {
+		t.Fatalf("a real JPEG was refused: %v", err)
+	}
+	if _, err := st.Put(context.Background(), "image/png", nil, ""); err == nil {
+		t.Fatal("an empty body must be refused")
+	}
+}
+
+func TestTheBrowsersPreflightIsAnswered(t *testing.T) {
+	// A cross-origin POST is preceded by an OPTIONS request, and a browser that
+	// does not like the answer never sends the upload at all. Neither preflight
+	// had ever run: the composer would have failed at its first step with no
+	// error the page could show.
+	srv, st := newTestServer(t)
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	for _, path := range []string{"/m", "/m/claimed"} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodOptions, path, nil))
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("%s preflight returned %d", path, rec.Code)
+		}
+		if rec.Header().Get("Access-Control-Allow-Origin") != "*" {
+			t.Fatalf("%s preflight must allow the page's origin", path)
+		}
+		if !strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), "POST") {
+			t.Fatalf("%s preflight must allow POST: %q", path,
+				rec.Header().Get("Access-Control-Allow-Methods"))
+		}
+	}
+
+	// HEAD is how a client asks whether a blob is there without pulling it —
+	// the cheapest question the archive answers.
+	sum, _ := st.Put(context.Background(), "image/png", pngBody, "")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodHead, "/m/"+sum, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HEAD returned %d", rec.Code)
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("HEAD must send no body, sent %d bytes", rec.Body.Len())
+	}
+	if rec.Header().Get("Content-Type") != "image/png" {
+		t.Fatal("HEAD must still describe what is there")
+	}
+}
+
+func TestAModelsUnitsAreNormalisedRatherThanTrusted(t *testing.T) {
+	// A model answering on 0-100 is not a reason to throw its judgement away,
+	// but neither is one answering -5 or 400 a reason to act on it. Both clamps
+	// were unexercised.
+	for _, tc := range []struct{ in, want float64 }{
+		{0.9, 0.9}, {88, 0.88}, {100, 1}, {0, 0}, {-5, 0}, {400, 1},
+	} {
+		if got := normalizeEyeConfidence(tc.in); got != tc.want {
+			t.Fatalf("normalizeEyeConfidence(%v) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+
+	// clipWhy turns a newline into a space rather than dropping it: the prose is
+	// printed on one line, and joining two sentences without a gap between them
+	// makes a word that was never written.
+	if got := clipWhy("first line\nsecond\tthird"); got != "first line second third" {
+		t.Fatalf("clipWhy folded to %q", got)
+	}
+	// A person's block with no stated reason still records something, or the
+	// queue shows an act with a blank beside it.
+	st := testStore(t)
+	ctx := context.Background()
+	sum, _ := st.Put(ctx, "image/png", pngBody, "")
+	if err := st.BlockByOperator(ctx, sum, ""); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	q, _ := st.PendingReview(ctx, 10)
+	if len(q) != 1 || q[0].Why == "" {
+		t.Fatalf("a reasonless block must still say who did it: %+v", q)
+	}
+}
