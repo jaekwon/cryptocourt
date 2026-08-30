@@ -583,19 +583,49 @@ that actually holds the bytes.
 
 ---
 
-## 12. Gates
+## 12. Gates, and the traps in them
 
-Run `check-mutation-anchors.py` immediately after any wording change and before
-any probe. Gate on the twelve non-web targets. Corpus rows to add:
+`make check` runs everything. The pieces this feature touches, and what each is
+actually protecting:
 
-- `ClaimMedia` answers a purged claim with nothing
-- each reject branch of `mediaItemFault`, the `)` case named separately
-- a malformed sha256 (wrong length, uppercase, non-hex) is refused
-- `PurgeClaimMedia` refuses a non-moderator
-- a tombstoned slot survives the round trip in position
-- render-time revalidation drops a mirror whose host has left the allowlist
+| gate | holds |
+|---|---|
+| `realm-test` | the realm suite, plus the structural censuses — a new purge verb or purged-court gate must be registered, not merely written |
+| `anchors` | every mutation-corpus row still anchors exactly once; run it after ANY wording change and before a probe |
+| `controls` | every selftest plant still applies. A plant that stops matching runs the guard against an unmodified tree and reports SILENT |
+| `guards` | every committed guard is named in `selftest-checks.py`. A guard nobody can break is a guard nobody has tested |
+| `web-test` | 31 harnesses, including the two media suites |
+| `web-constants` | includes `check-media-hosts.py`: the host list in the realm, the overlay and the page's CSP must agree, and `/m` must be routed |
+| `txtar-test` | `kourtv2_media.txtar` files a claim carrying evidence against a real node |
 
-Web tests extend `web/tests/mapclick_test.js` and add a composer suite: paste
-inserts an item, oversized input is downscaled rather than refused, a failed
-upload still permits filing, the draft survives a reload, a hash mismatch
-replaces the image, reorder changes which item the node shows.
+**The traps, all of which cost time here:**
+
+- **`sanitize.InlineText` escapes `-`, `#`, `.`, `_`, `(`, `)`.** A rendered act
+  code reads `media\-purge\#0:csam` on the page, correct to a reader and
+  invisible to a substring match. Assert what the page carries. This has caught
+  three assertions in this feature and once broke a link destination outright.
+- **A mutant that does not compile is not a caught mutant.** `if true { continue }`
+  makes the rest of a loop unreachable and gno refuses it; the probe reports
+  INVALID and reporting that as CAUGHT is a false green. Mutate to something
+  that still builds.
+- **The web harnesses count their own assertions.** Both media suites end with
+  an `EXPECTED` total and fail if fewer ran. That exists because three
+  concurrent async IIFEs with one `process.exit` between them silently skipped a
+  third of the suite while printing ALL PASS. Add assertions, update the count —
+  and if it fires unexpectedly, an edit half-applied.
+- **`testStore` names its database after the test**, so two calls inside one
+  test share it. `namedStore` is for a fixture that must be empty.
+- **`Get` refuses a blocked blob deliberately.** It is the wrong question for
+  "is there anything here", which is what `Held` is for. A correct contract can
+  still be the wrong call at a particular site.
+
+**Where the two implementations are pinned against each other.** Each of these
+holds one literal in two suites, because testing both sides against the spec
+proves the spec is self-consistent and nothing about whether they agree:
+
+| seam | held in |
+|---|---|
+| the argument the overlay builds | `media_test.gno` `clientImageLine` / `media_test.js` |
+| the JSON the realm sends the overlay | `media_test.gno` / `media_test.js` `fromChain` |
+| the JSON the realm sends the archive | `media.gno` / `archive_test.go` `realmPayload` |
+| the calls the overlay makes to the archive | `media_test.js` / `archive_test.go` `clientClaimedPath` |
