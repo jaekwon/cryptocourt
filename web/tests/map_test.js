@@ -756,7 +756,19 @@ const TILES = svg => [...svg.matchAll(
   ok("the sample's exhibits are drawn as a strip, on claim 3",
      t.length===4 && t.every(x=>x.id==="3"));
   ok("every tile is square and the size the layout reserved",
-     t.every(x=>x.w===MAPK.tile.size && x.h===MAPK.tile.size));
+     t.every(x=>x.w===mapTileSize(node.w) && x.h===mapTileSize(node.w)));
+  // THE POINT OF DERIVING THE SIZE: four tiles and their gaps fill the node's
+  // text width. A constant here would drift the first time the node width moved,
+  // and the drift would be invisible — a strip that stopped short still draws.
+  // The only slack allowed is integer rounding: a tile is floor(width/4), so the
+  // strip can fall at most three pixels short and never a pixel long.
+  {
+    const short = (node.x + node.w - MAPK.tpad) - (t[3].x + t[3].w);
+    ok("a full strip spans the node's whole text width", short >= 0 && short < MAPK.tile.max);
+  }
+  // The cap the strip is measured against IS the cap that resolves the tiles.
+  // Two fours in two files is one four too many to keep by hand.
+  ok("the map's cap is media.js's cap", MAPK.tile.max === MED.MEDIA_NODE_TILES);
   ok("the strip starts at the node's left padding, not in a corner", t[0].x === node.x + MAPK.tpad);
   ok("the tiles share one row", t.every(x=>x.y===t[0].y));
   ok("...spaced by the gap the constants name",
@@ -807,7 +819,7 @@ const TILES = svg => [...svg.matchAll(
      i===0 || disjoint({x:x.x,y:x.y,w:x.w,h:x.h}, {x:a[i-1].x,y:a[i-1].y,w:a[i-1].w,h:a[i-1].h})));
   // THE ROW IS RESERVED, NOT BORROWED. A node carrying a strip has to be taller
   // than the same node without one, or the tiles are sitting on the verdict.
-  ok("the strip made its node taller", box(1).h >= box(2).h + MAPK.tile.size);
+  ok("the strip made its node taller", box(1).h >= box(2).h + mapTileSize(box(1).w));
   ok("and every label still sits inside its node", verify(svg, "tilecap"));
   location.protocol=keep.protocol; location.host=keep.host;
 }

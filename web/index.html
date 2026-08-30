@@ -972,19 +972,35 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mcourt{fill:var(--accent); stroke:var(--accent-2); stroke-width:1.5}
 .mcourt-t{fill:var(--surface); font-weight:700}
 .medge{fill:none; stroke:var(--ink-2); stroke-width:1.2}
-/* Containment is the skeleton: quiet, and quieter still one level out, so the
-   eye reads court → folder → claim without the spokes competing with the
-   associations drawn across them. */
-.medge.spoke{stroke:var(--line-2); stroke-width:1.4}
-.medge.spoke.toclaim{stroke-width:1}
+/* CONTAINMENT IS THE SKELETON, AND IT IS DRAWN LIKE ONE. It used to be the
+   faintest thing on the map — hairlines in --line-2 — while a "part of" relation
+   was the boldest, 2px of near-black. That was backwards, and it showed: the
+   court's own structure, the thing that makes the drawing a map rather than a
+   scatter of boxes, was the part a reader had to squint at, while one relation
+   type shouted over it.
+   The old note argued the spokes should not compete with the associations drawn
+   across them. The rank is the other way round. A spoke is where a claim IS; a
+   relation is what somebody says about it, and a court's curation has zero
+   economic weight either way — but the skeleton is what you navigate by.
+   Trunk, then branch, by weight rather than by colour: the same --ink-2 at two
+   widths reads as one structure at two depths, where two different greys read as
+   two different kinds of line. */
+.medge.spoke{stroke:var(--ink-2); stroke-width:2.4}
+.medge.spoke.toclaim{stroke-width:1.6}
 .medge.spoke.also{stroke:var(--muted); stroke-width:1; stroke-dasharray:3 4}
-.medge.part{stroke:var(--ink); stroke-width:2}
+/* A relation, not the skeleton. Solid — it is the structural one of the four —
+   but no longer the heaviest line in the drawing, and it inherits --ink-2 from
+   .medge rather than reaching for the near-black nothing else uses. */
+.medge.part{stroke-width:1.4}
 .medge.bears.yes{stroke:var(--yes); stroke-dasharray:5 4; stroke-width:1.6}
 .medge.bears.no{stroke:var(--contra); stroke-dasharray:5 4; stroke-width:1.6}
 .medge.sup{stroke:var(--muted); stroke-dasharray:2 3; stroke-width:1.6}
 .medge.dim,.marrow.dim{opacity:.35}
-.marrow{fill:var(--ink)}
-.marrow.light{fill:var(--ink-2)}
+/* The head matches its line. "part" used to be the one relation drawn in
+   near-black, and its arrow was given --ink to match; now that the line is
+   --ink-2 like every other relation, an --ink head would be a darker point on a
+   lighter stroke. */
+.marrow{fill:var(--ink-2)}
 .mdot.g{fill:var(--good); stroke:var(--good)}
 .mdot.gn{fill:var(--no); stroke:var(--no)}
 /* decided, side unknown: neither palette, and distinct from the grey
@@ -4805,20 +4821,22 @@ const MAPK = {
   // than a four-line box could ever reach.
   // WIDENED TO 230 BY THE OWNER, which the sweep above already priced: at cap 6
   // it cuts no more titles than 206 does, and the cost is paid in ring
-  // circumference rather than in words. It also buys the room the tile strip
-  // needs — four 28px tiles and their gaps are 121 of the 214 a 230 box has
-  // between its padding, so a claim with evidence is not a box built around its
-  // pictures.
+  // circumference rather than in words. It is also what the tile strip is
+  // measured from — see mapTileSize.
   node:  { titles:{w:230,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
   /* THE EXHIBITS A CLAIM CARRIES, UNDER ITS TITLE. They used to be one badge in
      the top-right corner, which said "there is evidence here" and nothing about
      what or how much. A strip under the title says both, and sits where a
      reader is already looking after they have read the sentence.
-     Bounded by mediaNodeTiles at four — the same four the claim page's grid
-     stops at — so a node's height is set by its sentence, not by how many
-     pictures somebody filed. */
-  tile: {size:28, gap:3, pad:6},
+     Bounded at four — the same four the claim page's grid stops at, and the
+     same four mediaNodeTiles resolves — so a node's height is set by its
+     sentence, not by how many pictures somebody filed.
+     THE SIZE IS NOT A CONSTANT: mapTileSize divides the node's own text width by
+     that four, so a full strip spans the box edge to edge and a tile is as big
+     as the node can make it. A fixed 28 left 93 of 214 unused and read as a row
+     of stamps under the sentence rather than as the evidence. */
+  tile: {gap:3, pad:6, max:4},
   fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder; w is a fallback
   // The range mapFolderSize searches, in 12px steps. The floor is a box that
   // still reads as a container next to a 206 claim; the ceiling stays under the
@@ -4986,13 +5004,25 @@ function mapNodeTiles(claim){
   if(typeof mediaNodeTiles !== "function" || !claim || !claim.media) return [];
   return mediaNodeTiles(claim.media, siteHost());
 }
+/* A TILE IS AS BIG AS THE NODE CAN MAKE IT: the text width, less the gaps,
+   divided by the cap. A full strip therefore spans the box edge to edge, and a
+   claim with one exhibit shows that one exhibit at the same size — the strip is
+   left-aligned, not stretched, because a lone tile grown to fill 214px would be
+   a picture pretending to be four.
+   Derived rather than pinned so it stays right if the node width moves again;
+   the last two times it moved, a constant here would have quietly stopped
+   fitting. */
+function mapTileSize(w){
+  const n = MAPK.tile.max;
+  return Math.floor((w - 2*MAPK.tpad - (n-1)*MAPK.tile.gap) / n);
+}
 function mapClaimSize(title, mode, tiles){
   const base = MAPK.node[mode];
   if(mode!=="titles") return base;
   const lines = mapWrapTitle(String(title||""), base.w-2*MAPK.tpad, MAPK.fs.title, MAPK.maxTitleLines);
   // The strip is one row whatever it holds — mediaNodeTiles caps it — so a claim
   // with four exhibits is no taller than a claim with one.
-  const strip = tiles? MAPK.tile.size + MAPK.tile.pad : 0;
+  const strip = tiles? mapTileSize(base.w) + MAPK.tile.pad : 0;
   return {w:base.w, h:Math.max(base.h, MAPK.head + lines.length*MAPK.lineH + MAPK.tpad + strip)};
 }
 /* Where the centre-to-centre line leaves a's box: half-extent in each axis,
@@ -5550,7 +5580,10 @@ function mapSvg(L, data, slug){
     out.push(`<polyline class="medge ${cls}" points="${e.pts.map(q=>q.join(",")).join(" ")}" data-e="${i}" data-from="${e.from}" data-to="${e.to}"/>`);
     const [px,py]=e.pts[0], [ex,ey]=e.pts[1], len=Math.hypot(ex-px,ey-py)||1;
     const ux=(ex-px)/len, uy=(ey-py)/len, nx=-uy, ny=ux;
-    out.push(`<polygon class="marrow${e.type==="part"?"":" light"}" points="${
+    // ONE ARROW COLOUR. The class used to split on type because "part" was the
+    // one relation drawn in near-black; it is --ink-2 like the rest now, so a
+    // second class would name a difference the styles no longer make.
+    out.push(`<polygon class="marrow" points="${
       [[ex,ey],[ex-7*ux+3.5*nx, ey-7*uy+3.5*ny],[ex-7*ux-3.5*nx, ey-7*uy-3.5*ny]]
         .map(q=>q.map(v=>Math.round(v*10)/10).join(",")).join(" ")}" data-e="${i}"/>`);
   });
@@ -5663,7 +5696,7 @@ function mapSvg(L, data, slug){
          height contributed on a short title. */
       let vy=n.y+16+lines.length*K.lineH;
       if(tiles.length){
-        const ts=K.tile.size, tg=K.tile.gap;
+        const ts=mapTileSize(n.w), tg=K.tile.gap;
         const ty=n.y+16+(lines.length-1)*K.lineH+K.tile.pad;
         tiles.forEach((src,ti)=>{
           const tx=n.x+K.tpad+ti*(ts+tg);
@@ -6037,6 +6070,13 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot v"/></svg> open</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot vd"/></svg> no decision</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot vf"/></svg> never answered</span>`;
+  /* THE SKELETON GETS A KEY, AND IT GOES FIRST. The containment spokes are the
+     heaviest lines on the map now; before they were hairlines, and a hairline
+     that nobody names is background. The heaviest line on a drawing being the
+     one thing the legend does not explain is not a state to leave it in.
+     Always drawn, unlike the relation keys beside it: every claim hangs off
+     something, so there is always a spoke. */
+  const legendSpoke = `<span><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="medge spoke"/></svg> filed under</span>`;
   const legendEdges = (data.relations.length||data.folders.length)? `<span><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="medge part"/></svg> part of →</span>
       <span><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="medge bears yes"/></svg> supports</span>
       <span><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="medge bears no"/></svg> contradicts</span>
@@ -6075,7 +6115,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
        <p class="mapbar-note small muted">${esc(honesty)}</p>${focusNote}
        <div class="maphold"><div class="mapwrap" id="mapbox"></div>
          <div class="mapsel" id="mapsel"></div></div>
-       <div class="mlegend">${legendEdges}${legendDots}
+       <div class="mlegend">${legendSpoke}${legendEdges}${legendDots}
          <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" class="mfold"/></svg> folder</span>
          <span id="mlg-also" hidden><svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" class="medge spoke also"/></svg> also filed here</span>
          <span class="mlegend-h">scroll to zoom · drag to pan · click a node to select it</span></div>
