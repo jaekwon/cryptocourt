@@ -73,7 +73,11 @@ try {
 
 // Only the pass/fail checks run here. render_snapshot.js is a TOOL: it prints a
 // snapshot rather than asserting, so running it in a gate would prove nothing.
-const CHECKS = ["banner_layout.js", "embed_layout.js", "tagrow_layout.js", "route_crawl.js",
+// banner_layout.js went with the test-clock banner in f184247 — "every page
+// renders as production, whatever the node's clock was told". Removed here too,
+// because a runner that requires a harness nobody has fails for a reason that is
+// not about the page.
+const CHECKS = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
                 "rowscope_layout.js", "chat_all.js"];
 let failed = 0;
 for (const f of CHECKS) {
