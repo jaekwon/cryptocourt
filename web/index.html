@@ -2697,7 +2697,10 @@ function mountCompose(host, slug){
       prepare, upload,
       onChange: () => { mounted && mounted.draw(); refresh(); },
     });
-    const mounted = mediaMount(media, composer, {doc: document});
+    /* pasteScope is `el`, the whole panel, so ⌘V lands wherever the cursor is —
+       which after typing a claim is the title, not the drop zone. See the paste
+       handler in media.js for why that was not true until it was measured. */
+    const mounted = mediaMount(media, composer, {doc: document, pasteScope: el});
     if(draft && draft.items.length) composer.seed(draft.items);
     // Named so the sign handler can clear it once a broadcast is confirmed, and
     // only then: a rejected signature must leave the work exactly where it was.

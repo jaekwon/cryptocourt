@@ -47,9 +47,14 @@ func TestComposerAgainstRealArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := filepath.Join(root, "web", "tests", "browser", "compose_upload.js")
-	if _, err := os.Stat(script); err != nil {
-		t.Fatalf("missing harness: %v", err)
+	// Each script gets the same live archive and the same page. Split by subject
+	// rather than by cost: one covers the bytes (resize, encode, upload, verify),
+	// the other covers how a file gets in at all (paste, drop, pick).
+	scripts := []string{"compose_upload.js", "compose_intake.js"}
+	for _, name := range scripts {
+		if _, err := os.Stat(filepath.Join(root, "web", "tests", "browser", name)); err != nil {
+			t.Fatalf("missing harness: %v", err)
+		}
 	}
 
 	store := testStore(t)
@@ -74,16 +79,20 @@ func TestComposerAgainstRealArchive(t *testing.T) {
 	ts := httptest.NewTLSServer(mux)
 	defer ts.Close()
 
-	cmd := exec.Command(node, script, ts.URL)
-	cmd.Dir = root
-	// puppeteer resolves by walking up from the repo, which is why Dir is set.
-	out, err := cmd.CombinedOutput()
-	text := string(out)
-	if strings.Contains(text, "puppeteer not installed") {
-		t.Skip("puppeteer not installed - skipping the browser seam")
-	}
-	t.Log("\n" + text)
-	if err != nil || !strings.Contains(text, "ALL PASS") {
-		t.Fatalf("browser harness failed: %v", err)
+	for _, name := range scripts {
+		t.Run(name, func(t *testing.T) {
+			cmd := exec.Command(node, filepath.Join(root, "web", "tests", "browser", name), ts.URL)
+			cmd.Dir = root
+			// puppeteer resolves by walking up from the repo, hence Dir.
+			out, err := cmd.CombinedOutput()
+			text := string(out)
+			if strings.Contains(text, "puppeteer not installed") {
+				t.Skip("puppeteer not installed - skipping the browser seam")
+			}
+			t.Log("\n" + text)
+			if err != nil || !strings.Contains(text, "ALL PASS") {
+				t.Fatalf("browser harness failed: %v", err)
+			}
+		})
 	}
 }

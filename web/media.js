@@ -819,12 +819,31 @@ function mediaMount(root, composer, opts) {
   // Paste anywhere in the panel, not only on a drop target: a screenshot on the
   // clipboard is the commonest evidence there is, and hunting for the right box
   // to click first is a step nobody should have to learn.
-  drop.addEventListener("paste", ev => {
+  //
+  // AND IT WAS BOUND TO THE DROP ZONE, which is a sibling of the title and body
+  // rather than their ancestor — so the comment above described an intention the
+  // code did not carry out. A paste event goes to the focused element and
+  // bubbles from there, and after typing a claim the cursor is in the title. The
+  // most important intake path in the whole design did nothing from the one
+  // place a person actually is. Only a browser can see that: a unit test can
+  // prove the listener exists, not that anything reaches it.
+  //
+  // pasteScope is the composer's whole panel when mountCompose supplies one, and
+  // the drop zone otherwise, so a caller that mounts this alone still works.
+  const pasteScope = o.pasteScope || drop;
+  pasteScope.addEventListener("paste", ev => {
     const data = ev.clipboardData;
     if (!data) return;
     const files = [...(data.files || [])];
     if (files.length) { ev.preventDefault(); addAll(files); return; }
     const text = data.getData ? data.getData("text") : "";
+    // A TYPED-IN BOX KEEPS ITS PASTE. Adopting a pasted link as an exhibit is
+    // right on the drop zone and wrong in the title or the body: a claim about
+    // a web page has to be able to quote its address. Files are not ambiguous
+    // in the same way — a screenshot cannot be pasted into a text input as
+    // anything — so those are taken from anywhere above.
+    const t = ev.target, tag = t && t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || (t && t.isContentEditable)) return;
     if (text && /^https?:\/\//.test(text.trim())) {
       ev.preventDefault();
       const url = text.trim();
