@@ -430,13 +430,19 @@ func TestAMalformedClaimNeverReachesTheNode(t *testing.T) {
 
 // fakeChain answers backfill without a node.
 type fakeChain struct {
-	count  uint64
-	byID   map[uint64][]string
-	counts int // how many times ClaimCount was asked
+	count   uint64
+	byID    map[uint64][]string
+	counts  int    // how many times ClaimCount was asked
+	unknown string // a court this chain refuses to answer for
 }
 
 func (f *fakeChain) ClaimCount(ctx context.Context, court string) (uint64, error) {
 	f.counts++
+	if f.unknown != "" && court == f.unknown {
+		// What a node really answers for a court that is not there: the realm's
+		// mustCourt panics and qeval returns the abort as an error.
+		return 0, fmt.Errorf("qeval: unknown court %q", court)
+	}
 	return f.count, nil
 }
 func (f *fakeChain) ClaimHashes(ctx context.Context, court string, id uint64) ([]string, error) {
@@ -1793,5 +1799,59 @@ func TestBlockingHidesAndForgettingDestroys(t *testing.T) {
 	// Forgetting something that was never here is not an error, and says so.
 	if gone, err := st.Forget(ctx, strings.Repeat("f", 64)); err != nil || gone {
 		t.Fatalf("forgetting nothing: gone=%v err=%v", gone, err)
+	}
+}
+
+
+func TestOneBogusCourtHintCannotStopEverybodyElsesPromotion(t *testing.T) {
+	// THE CHEAPEST DENIAL OF SERVICE IN THIS PACKAGE, and it costs one upload.
+	//
+	// The court on an upload is a HINT the client supplies, unvalidated, and
+	// backfill walks exactly the courts that have staged bytes. Ask a node about
+	// a court that does not exist and it does not shrug — the realm's mustCourt
+	// panics and qeval returns an error. Backfill treated that the same as an
+	// unreachable node and returned, abandoning every court it had not reached
+	// yet, while the caller logged the error and swept anyway.
+	//
+	// So: POST /m?court=does-not-exist with any small image, once an hour, and
+	// nobody's evidence is ever promoted again. The bytes honest people uploaded
+	// are deleted by the sweep at the TTL — including from claims filed through
+	// gnoweb or the CLI, which have no /m/claimed and rely on this entirely.
+	// "Losing evidence quietly is worse than any missing feature" is the comment
+	// at the top of backfill.go; this was the way it happened.
+	ctx := context.Background()
+	st := testStore(t)
+
+	// THE ATTACKER GOES FIRST, which costs them nothing to arrange and is the
+	// case that matters: StagedCourts has no ORDER BY, so which court a pass
+	// reaches before the abort is not a property anybody controls. Written the
+	// other way round this test passed against the broken code, because the
+	// honest court happened to be promoted before the poison one was reached.
+	if _, err := st.Put(ctx, "image/png", pngWith("attacker"), "nosuchcourt"); err != nil {
+		t.Fatalf("put: %v", err)
+	}
+	filed, err := st.Put(ctx, "image/png", pngWith("real-evidence"), "realcourt")
+	if err != nil {
+		t.Fatalf("put: %v", err)
+	}
+
+	chain := &fakeChain{count: 1, byID: map[uint64][]string{1: {filed}}, unknown: "nosuchcourt"}
+	// The error is still reported — an operator should hear about it — but the
+	// pass must finish the courts that CAN be answered.
+	kept, berr := st.Backfill(ctx, chain)
+	if berr == nil {
+		t.Fatal("a court the node cannot answer for must still be reported")
+	}
+	if kept != 1 {
+		t.Fatalf("the honest court's evidence was not promoted: kept %d", kept)
+	}
+
+	// And it survives the sweep, which is the whole point: promotion is what
+	// stands between a filed exhibit and deletion at the TTL.
+	if _, err := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, _, err := st.Get(ctx, filed); err != nil {
+		t.Fatalf("the evidence a claim references was swept: %v", err)
 	}
 }

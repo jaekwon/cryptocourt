@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -109,5 +111,45 @@ func TestComposerAgainstRealArchive(t *testing.T) {
 				t.Fatalf("browser harness failed: %v", err)
 			}
 		})
+	}
+}
+
+// TestTheCourtHintMatchesTheRealmsSlug pins two programs to one rule.
+//
+// The court on an upload is the only thing that ties staged bytes back to a
+// claim, and backfill turns it straight into a question for a node. The archive
+// accepted 1..32 characters while the realm's mustSlug accepts 1..maxSlugLen,
+// which is 11 — so the archive took hints no court could ever have, and every
+// one of them was a name a node got asked about.
+//
+// Read out of the realm rather than restated, because a constant copied by hand
+// is a constant that drifts. This is the same discipline media_test.js uses when
+// it reads media.gno for the caps and the host lists.
+func TestTheCourtHintMatchesTheRealmsSlug(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "realm", "r", "kourtv2", "court.gno"))
+	if err != nil {
+		t.Fatalf("read court.gno: %v", err)
+	}
+	m := regexp.MustCompile(`maxSlugLen\s*=\s*(\d+)`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal("maxSlugLen is not in court.gno any more; this pin needs rewriting")
+	}
+	max, err := strconv.Atoi(string(m[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !courtRe.MatchString(strings.Repeat("a", max)) {
+		t.Fatalf("the archive refuses a court slug the realm allows (%d chars)", max)
+	}
+	if courtRe.MatchString(strings.Repeat("a", max+1)) {
+		t.Fatalf("the archive accepts a %d-character court hint; the realm caps at %d",
+			max+1, max)
+	}
+	// The character class, too: a hint the realm could not hold is a name this
+	// service would ask a node about for nothing.
+	for _, bad := range []string{"Upper", "has space", "under_score", "dot.dot", ""} {
+		if courtRe.MatchString(bad) {
+			t.Fatalf("the archive accepts %q, which is not a slug", bad)
+		}
 	}
 }

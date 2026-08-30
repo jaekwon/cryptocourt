@@ -16,7 +16,11 @@ var (
 	digestRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	// The realm's own court-slug shape, so a malformed one is refused here
 	// rather than travelling into a chain query.
-	courtRe = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
+	// The realm's own slug rule: mustSlug accepts 1..maxSlugLen of [a-z0-9-],
+	// and maxSlugLen is 11. This said 32, so the archive accepted court hints no
+	// court could ever have — and every one of them is a name backfill then asks
+	// a node about. Pinned to the realm by TestTheCourtHintMatchesTheRealmsSlug.
+	courtRe = regexp.MustCompile(`^[a-z0-9-]{1,11}$`)
 )
 
 type Server struct {

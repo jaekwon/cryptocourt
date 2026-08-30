@@ -112,6 +112,23 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 		return 0, err
 	}
 	kept := 0
+	// ONE COURT'S FAILURE IS NOT EVERY COURT'S. The court on an upload is an
+	// unvalidated hint from the client, and backfill walks exactly the courts
+	// that have staged bytes — so a stranger chooses which names this loop asks
+	// a node about. A court that does not exist is not a shrug: the realm's
+	// mustCourt panics and qeval returns that as an error.
+	//
+	// This used to return on the first such error, abandoning every court it had
+	// not reached, while the caller logged it and ran the sweep anyway. That made
+	// `POST /m?court=does-not-exist`, once an hour with any small image, a
+	// complete stop on promotion for everybody — and the sweep then deleted the
+	// bytes honest claims referenced, which is precisely the loss this file was
+	// written to prevent. Claims filed from gnoweb or the CLI have no /m/claimed
+	// and rely on this alone.
+	//
+	// StagedCourts has no ORDER BY either, so which courts a pass reached before
+	// the abort was not a property anybody controlled.
+	var failed error
 	for _, court := range courts {
 		from, err := s.cursor(ctx, court)
 		if err != nil {
@@ -131,8 +148,13 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 		}
 		if err != nil {
 			// A node that will not answer is a reason to try again later, never a
-			// reason to advance the cursor past claims nobody has read.
-			return kept, fmt.Errorf("archive backfill %s: %w", court, err)
+			// reason to advance the cursor past claims nobody has read — so the
+			// cursor stays put and this court is tried again next pass. Recorded
+			// and skipped rather than returned: the operator still hears about it,
+			// by a message that names the court, and every other court still gets
+			// its evidence promoted.
+			failed = fmt.Errorf("archive backfill %s: %w", court, err)
+			continue
 		}
 		last := total
 		if last > from+backfillBatch {
@@ -158,7 +180,16 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 	// Stamped only on a COMPLETE pass. Every early return above is an error, and
 	// stamping those would make a backfill that fails every time look like one
 	// that runs every time — which is the exact confusion this stamp exists to
-	// prevent.
+	// prevent. A pass that SKIPPED a court is not complete either, for the same
+	// reason: something is wrong and an operator should see it stay wrong.
+	//
+	// That does mean a stranger can hold this stamp red with one upload an hour.
+	// It is the right trade: they can make the health page say "look at me", and
+	// the log names the court to look at, but they can no longer stop anybody's
+	// evidence from being kept — which was the harm.
+	if failed != nil {
+		return kept, failed
+	}
 	if err := s.Stamp(ctx, "backfill", time.Now()); err != nil {
 		return kept, err
 	}
