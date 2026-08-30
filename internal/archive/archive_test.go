@@ -188,6 +188,13 @@ func newTestServer(t *testing.T) (*Server, *Store) {
 func TestTheHandlerServesBytesUncacheablyWrongNever(t *testing.T) {
 	srv, st := newTestServer(t)
 	sum, _ := st.Put(context.Background(), "image/png", pngBody, "")
+	// Promoted, because the public read serves CLAIMED bytes only — staged ones
+	// are never reviewed by anything, so they are never published. See
+	// GetServable. Every test below that fetches over HTTP needs the promotion a
+	// real claim performs.
+	if err := st.Promote(context.Background(), sum); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
 
 	mux := http.NewServeMux()
 	srv.Routes(mux)
@@ -813,7 +820,7 @@ func TestBytesSurviveTheRoundTripThroughHTTP(t *testing.T) {
 	// bytes that come back must hash to what went in — because the page verifies
 	// exactly that, and a single byte lost in the transport would show every
 	// reader "this no longer matches what was filed".
-	srv, _ := newTestServer(t)
+	srv, st := newTestServer(t)
 	mux := http.NewServeMux()
 	srv.Routes(mux)
 
@@ -828,6 +835,22 @@ func TestBytesSurviveTheRoundTripThroughHTTP(t *testing.T) {
 	var up map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &up); err != nil {
 		t.Fatalf("decode: %v", err)
+	}
+
+	// STAGED BYTES ARE NOT PUBLISHED. Nothing reviews an upload no claim
+	// references — the classifier's queue selects promoted rows only — so until
+	// this upload is claimed, serving it would make POST /m a way to publish an
+	// arbitrary picture on this court's domain, unreviewed, with CORS open to
+	// everyone and a year of immutable caching to outlive the sweep.
+	staged := httptest.NewRecorder()
+	mux.ServeHTTP(staged, httptest.NewRequest(http.MethodGet, up["url"], nil))
+	if staged.Code != http.StatusNotFound {
+		t.Fatalf("an unclaimed upload must not be served, got %d", staged.Code)
+	}
+
+	// What a filed claim does, through /m/claimed or Backfill.
+	if err := st.Promote(context.Background(), strings.TrimPrefix(up["url"], "/m/")); err != nil {
+		t.Fatalf("promote: %v", err)
 	}
 
 	get := httptest.NewRecorder()
@@ -1247,6 +1270,9 @@ func TestTheBrowsersPreflightIsAnswered(t *testing.T) {
 	// HEAD is how a client asks whether a blob is there without pulling it —
 	// the cheapest question the archive answers.
 	sum, _ := st.Put(context.Background(), "image/png", pngBody, "")
+	if err := st.Promote(context.Background(), sum); err != nil {
+		t.Fatalf("promote: %v", err)
+	}
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodHead, "/m/"+sum, nil))
 	if rec.Code != http.StatusOK {

@@ -257,6 +257,29 @@ limits, a max staged bytes per address, and the classifier from §3.2 running at
 promotion rather than at upload — there is no point classifying bytes that are
 about to expire.
 
+⚠︎ **That last clause had a hole in it, and the TTL did not cover it.** Classify
+at promotion is right about which bytes are worth the compute. It says nothing
+about which bytes are worth PUBLISHING, and the read path served anything that
+was not blocked — so a staged upload was fetchable by anyone holding its URL,
+with `Access-Control-Allow-Origin: *` and a year of `immutable` caching, while
+the classifier's queue (`WHERE promoted = 1`) structurally never looked at it.
+
+`POST /m` was therefore a way to publish an arbitrary picture on this court's own
+domain, unreviewed, and hand the address out. The TTL bounds how long **we** keep
+those bytes; it does not bound how long a cache serves them, and it never
+bounded who could read them in the meantime.
+
+**The public read now serves claimed bytes only** (`GetServable`). Nothing
+legitimate is lost: the composer previews from a local object URL and never
+fetches its own upload, a restored draft draws no thumbnail at all, and by the
+time any reader has a claim to look at, `/m/claimed` or `Backfill` has promoted
+it. Before that, the only party who knows the address is whoever just uploaded
+it. A staged blob, a blocked one and an absent one all answer 404, for the same
+reason a takedown does not announce itself.
+
+The rule to keep, since it is the one that was missing: **the archive publishes
+what the chain has committed to, and nothing else.**
+
 **The archive is a mirror, never an authority.** It cannot forge: the hash is on
 chain and every client checks. The single question it must answer honestly is
 availability.
@@ -590,6 +613,8 @@ Recorded because each is easy to make again:
 | 13 | the demo sample carried no evidence | a feature that works but is absent from the only build most people run demonstrates itself as missing |
 | 14 | the overlay's site domain read a config key nothing ever set | the archive-first rule off everywhere in the page: no map thumbnails at all, cards falling through to the filer's host, the composer refusing its own upload |
 | 15 | `archiveBase()` returned `""`, leaving the uploaded mirror relative | `mediaMirrorFault` refuses a non-https link, so **no uploaded image could ever be filed** — only pasted ones |
+| 16 | paste bound to the drop zone, a sibling of the title and body | the path §2.1 calls the most important one did nothing from where the cursor actually is — a unit test proved the listener existed, not that anything reached it |
+| 17 | the public read served staged bytes | the classifier only ever queues promoted rows, so `POST /m` published unreviewed images on the court's own domain, CORS-open and cached past the sweep |
 
 Rows 14 and 15 are the pair worth dwelling on: a server-side mechanism complete
 and correct, its client half quietly not using it, and every unit test on both

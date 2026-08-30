@@ -67,6 +67,21 @@ func TestComposerAgainstRealArchive(t *testing.T) {
 	})
 	mux := http.NewServeMux()
 	srv.Routes(mux)
+	// STANDING IN FOR A CHAIN. The public read serves claimed bytes only, and
+	// what normally claims them is /m/claimed or Backfill — both of which need a
+	// node this test does not have. So the harness asks for promotion directly,
+	// which lets it assert the interesting half too: that the very same URL is a
+	// 404 until it is claimed.
+	//
+	// Test scaffolding, mounted here rather than in the package: nothing in
+	// production may promote on request.
+	mux.HandleFunc("/test/promote", func(w http.ResponseWriter, r *http.Request) {
+		if err := store.Promote(r.Context(), r.URL.Query().Get("sha")); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	// The overlay itself, from the working tree. Serving the directory rather
 	// than the one file because index.html loads media.js beside it.
 	mux.Handle("/", http.FileServer(http.Dir(filepath.Join(root, "web"))))

@@ -210,10 +210,14 @@ func (s *Server) blob(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	mime, body, err := s.store.Get(r.Context(), sum)
+	// GetServable, not Get: bytes no claim references have never been reviewed by
+	// anything, so publishing them would make POST /m a way to host an arbitrary
+	// picture on this court's domain. See GetServable for the whole argument.
+	mime, body, err := s.store.GetServable(r.Context(), sum)
 	if err != nil {
-		// A blocked blob and an absent one answer identically: a takedown that
-		// announced itself would be a lookup oracle for what has been taken down.
+		// A blocked blob, a staged one and an absent one all answer identically:
+		// a takedown that announced itself would be a lookup oracle for what has
+		// been taken down.
 		http.NotFound(w, r)
 		return
 	}

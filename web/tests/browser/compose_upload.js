@@ -154,13 +154,30 @@ if (!BASE) { console.log("usage: compose_upload.js <base-url>"); process.exit(2)
   // --- the archive really has the bytes, and the page can prove it ----------
   ok("the exhibit carries the archive's address", (item.mirrors || []).length === 1,
      JSON.stringify(item.mirrors));
-  const verdict = await page.evaluate(async (it) => {
+  // NOT UNTIL A CLAIM REFERENCES IT. Nothing reviews an upload no claim points
+  // at, so the archive does not publish one — which means the exhibit the
+  // composer just made is a 404 at its own address until it is claimed. Asserted
+  // first, because it is the security property and it would otherwise be
+  // invisible: everything below passes either way.
+  const staged = await page.evaluate(async (it) => {
     // siteHost(), not CFG.site — the latter is the field that was never set,
     // which is the bug this harness found.
     const src = mediaSrc(it, siteHost(), true);
     return {src, verdict: await mediaVerify(it, src)};
   }, item);
-  ok("the archive serves back what was filed", verdict.verdict === "matches",
+  ok("an unclaimed upload is not served, even to the page that made it",
+     staged.verdict === "unavailable", `${staged.verdict} from ${staged.src}`);
+
+  // What /m/claimed or Backfill does once the claim is on a chain.
+  await page.evaluate(async (sha) => {
+    await fetch("/test/promote?sha=" + sha, {method: "POST"});
+  }, item.sha256);
+
+  const verdict = await page.evaluate(async (it) => {
+    const src = mediaSrc(it, siteHost(), true);
+    return {src, verdict: await mediaVerify(it, src)};
+  }, item);
+  ok("once claimed, the archive serves back what was filed", verdict.verdict === "matches",
      `${verdict.verdict} from ${verdict.src}`);
 
   // --- and the claim can actually be filed ---------------------------------

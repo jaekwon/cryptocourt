@@ -199,8 +199,35 @@ func (s *Store) Put(ctx context.Context, mime string, body []byte, court string)
 
 // Get returns the bytes for a digest. A blocked blob answers ErrNotFound.
 func (s *Store) Get(ctx context.Context, sum string) (mime string, body []byte, err error) {
-	row := s.db.QueryRowContext(ctx,
-		`SELECT mime, body FROM blobs WHERE sha256 = ? AND blocked = 0`, sum)
+	return s.get(ctx, sum, false)
+}
+
+// GetServable is what the PUBLIC read is allowed to see: claimed bytes only.
+//
+// STAGED BYTES ARE NOT PUBLISHED, and the reason is that nothing ever reviews
+// them. The classifier's queue selects `WHERE promoted = 1`, so an upload that
+// no claim references is never looked at by the model or by an operator — while
+// Get served it to anyone who had the URL, with Access-Control-Allow-Origin *
+// and a year of immutable caching. That made POST /m a way to publish an
+// arbitrary picture on this court's own domain, unreviewed, and hand out the
+// address; the StageTTL bounds how long WE keep it, and not at all how long a
+// cache does.
+//
+// Nothing legitimate is lost. The composer previews from a local object URL and
+// never fetches its own upload — a restored draft draws no thumbnail at all —
+// and by the time any reader has a claim to look at, /m/claimed or Backfill has
+// promoted the bytes. Before that, the only party who knows the address is the
+// one who just uploaded it.
+func (s *Store) GetServable(ctx context.Context, sum string) (mime string, body []byte, err error) {
+	return s.get(ctx, sum, true)
+}
+
+func (s *Store) get(ctx context.Context, sum string, claimedOnly bool) (mime string, body []byte, err error) {
+	q := `SELECT mime, body FROM blobs WHERE sha256 = ? AND blocked = 0`
+	if claimedOnly {
+		q += ` AND promoted = 1`
+	}
+	row := s.db.QueryRowContext(ctx, q, sum)
 	switch err := row.Scan(&mime, &body); {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", nil, ErrNotFound
