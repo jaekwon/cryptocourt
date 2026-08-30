@@ -33,6 +33,15 @@ function slice(from, to){
 }
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 global.CFG = { mode:'demo' };
+/* THE EVIDENCE STRIP IS GEOMETRY, so the real resolver is loaded rather than
+   stubbed: mapClaimSize reserves a row from mediaNodeTiles' COUNT and mapSvg
+   draws from its LIST, and a stub that disagreed with either would let a node
+   come out shorter than what is drawn inside it while every check still passed.
+   file:// on purpose — it is the demo's own case, and the sample exhibit carries
+   its bytes inline, so no host is needed to resolve one. */
+global.location = { protocol:'file:', host:'', origin:'null' };
+const MED = require(require('path').join(__dirname,'..','media.js'));
+global.mediaNodeTiles = MED.mediaNodeTiles;
 global.isLive = ()=> CFG.mode==='live';
 const NOWm = src.match(/const NOW\s*=\s*([0-9_]+)/); global.NOW = Number(NOWm[1].replace(/_/g,''));
 
@@ -51,6 +60,7 @@ function buildCode(patch){
   code += slice('function phaseClass(', 'function docketRow');
   // the real body renderer: mapSelCard shows a claim's body now
   code += slice('function claimBody(', '/* ===');
+  code += slice('function siteHost(', 'const store');
   code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
   if(patch) code = patch(code);
   return code;
@@ -140,7 +150,8 @@ function verify(svg, label){
 
 // demo orem, both modes
 const c0=DEMO.courts.orem;
-const claimsMap={}; c0.claims.forEach(id=>{ const d=DEMO.claims["orem/"+id]; claimsMap[id]={title:d.title, statusText:statusText(d)}; });
+const claimsMap={}; c0.claims.forEach(id=>{ const d=DEMO.claims["orem/"+id];
+  claimsMap[id]={title:d.title, statusText:statusText(d), media:d.media}; });
 const demoData={folders:c0.folders, all:c0.claims, claims:claimsMap, relations:DEMO.relations.orem, linkFolders:true, courtName:"Orem Truth Court"};
 let allpass=true; const svgs={};
 for(const mode of ["titles","ids"]){
@@ -725,6 +736,81 @@ const mapProse = svgs.titles
   .replace(/aria-label="[^"]*"/, '')
   .replace(/<title>[\s\S]*?<\/title>/g, '');
 ok("no amounts/banned words in map output", !/CC\b|µGNOT|GNOT|%|stake|backing|redeem|profit/i.test(mapProse));
+
+// A CLAIM'S EXHIBITS ARE A STRIP UNDER ITS TITLE (owner ruling), where a corner
+// badge used to be. The badge said only "there is evidence here"; the strip says
+// what and how many, in the place a reader arrives at after the sentence.
+//
+// This is GEOMETRY, and the failure it guards is specific: mapClaimSize reserves
+// the row from a COUNT and mapSvg draws from a LIST, so the two can disagree and
+// the layout would still call the map collision-free — it measured the box it
+// decided on, not what went inside it.
+const TILES = svg => [...svg.matchAll(
+  /<image class="mthumb" href="([^"]*)" x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)"[^>]*url\(#mth(\d+)_(\d+)\)/g)]
+  .map(m=>({href:m[1], x:+m[2], y:+m[3], w:+m[4], h:+m[5], id:m[6], i:+m[7]}));
+{
+  const P = parseSVG(svgs.titles);
+  const node = P.rects.filter(r=>r.cls==="mnode").find(r=>r.ref==="3");
+  const t = TILES(svgs.titles);
+  const rect = x => ({x:x.x, y:x.y, w:x.w, h:x.h});
+  ok("the sample's exhibits are drawn as a strip, on claim 3",
+     t.length===4 && t.every(x=>x.id==="3"));
+  ok("every tile is square and the size the layout reserved",
+     t.every(x=>x.w===MAPK.tile.size && x.h===MAPK.tile.size));
+  ok("the strip starts at the node's left padding, not in a corner", t[0].x === node.x + MAPK.tpad);
+  ok("the tiles share one row", t.every(x=>x.y===t[0].y));
+  ok("...spaced by the gap the constants name",
+     t.every((x,i)=>i===0 || x.x - (t[i-1].x + t[i-1].w) === MAPK.tile.gap));
+  ok("no tile in ids mode — a 64px box has no room for one", TILES(svgs.ids).length===0);
+  // Under the last line of the title, above the verdict — the two neighbours the
+  // strip has to stay between, and the reason the row is measured from the last
+  // BASELINE rather than from the bottom of the box.
+  const own = P.texts.filter(x=>x.owner==="c3");
+  ok("every tile is inside its own node", t.every(x=>inside(rect(x), node)));
+  ok("the strip clears every one of its node's labels",
+     t.every(x=>own.every(l=>disjoint(rect(x), l))));
+  // Asked of the phase dot rather than of the verdict text: the dot rides the
+  // verdict row, and parseSVG's text regex only catches the left-adjusted
+  // labels — a right-adjusted one would silently make this assertion vacuous.
+  const vdot = P.circles.find(c=>c.owner==="c3");
+  ok("the verdict row sits below the strip", !!vdot && vdot.y >= t[0].y + t[0].h - 0.51);
+  ok("the strip sits below the last line of the title",
+     t[0].y >= Math.max(...own.map(x=>x.y + x.h)) - 0.51);
+}
+// The cap, the archive rule, and a full strip's geometry — none of which the
+// sample can show, because it carries one exhibit and carries it inline.
+{
+  const keep = {protocol:location.protocol, host:location.host};
+  location.protocol="https:"; location.host="kourt.xyz";
+  const img = n => ({kind:"img", sha256:String(n).repeat(64).slice(0,64), mime:"image/png", w:40, h:40, bytes:99, caption:"", mirrors:[]});
+  const claims={
+    1:{title:"A claim filed with more exhibits than a node will ever show.",
+       statusText:"open — stake YES or NO", media:[img(1),img(2),img(3),img(4),img(5)]},
+    2:{title:"A claim filed with none at all.", statusText:"open — stake YES or NO"},
+    3:{title:"A claim whose only exhibit lives on a host the filer chose.",
+       statusText:"open — stake YES or NO",
+       media:[{kind:"img", sha256:"", mime:"image/png", w:40, h:40, bytes:99, caption:"", mirrors:["https://i.imgur.com/x.png"]}]},
+  };
+  const data={folders:[], all:[1,2,3], claims, relations:[], looseName:"docket", courtName:"Orem Truth Court"};
+  const L=mapLayout(data,"titles"), svg=mapSvg(L,data,"orem");
+  const t=TILES(svg), P=parseSVG(svg);
+  const box=id=>P.rects.filter(r=>r.cls==="mnode").find(r=>r.ref===String(id));
+  ok("five exhibits draw four tiles", t.filter(x=>x.id==="1").length===4);
+  ok("...numbered 0..3 in filing order", t.filter(x=>x.id==="1").map(x=>x.i).join()==="0,1,2,3");
+  ok("every tile points at the archive, never at the filer's host",
+     t.every(x=>x.href.startsWith("https://kourt.xyz/m/")));
+  ok("a mirror-only exhibit draws no tile", !t.some(x=>x.id==="3"));
+  ok("a claim with no exhibits draws no tile", !t.some(x=>x.id==="2"));
+  ok("a full strip stays inside its node", t.filter(x=>x.id==="1")
+     .every(x=>inside({x:x.x,y:x.y,w:x.w,h:x.h}, box(1))));
+  ok("tiles do not overlap each other", t.filter(x=>x.id==="1").every((x,i,a)=>
+     i===0 || disjoint({x:x.x,y:x.y,w:x.w,h:x.h}, {x:a[i-1].x,y:a[i-1].y,w:a[i-1].w,h:a[i-1].h})));
+  // THE ROW IS RESERVED, NOT BORROWED. A node carrying a strip has to be taller
+  // than the same node without one, or the tiles are sitting on the verdict.
+  ok("the strip made its node taller", box(1).h >= box(2).h + MAPK.tile.size);
+  ok("and every label still sits inside its node", verify(svg, "tilecap"));
+  location.protocol=keep.protocol; location.host=keep.host;
+}
 
 // A FOLDER'S ONE PICTURE IS THE BOX'S FACE (owner ruling, CLAIM_MEDIA §10).
 // The three sample folders carry one; the drawn image must sit exactly on its

@@ -849,14 +849,31 @@ function mediaSrc(item, siteDomain, allowMirrors) {
   return "";
 }
 
-/* The one image a map node shows: the first exhibit that is an image and has an
- * archive copy to point at. Never a mirror — see mediaSrc. */
-function mediaNodeThumb(items, siteDomain) {
+/* The images a map node shows, in filing order: every exhibit that is an image
+ * and has an archive copy to point at. Never a mirror — see mediaSrc.
+ *
+ * BOUNDED, and at the same four the claim page's grid stops at. A claim may
+ * carry seven; a node is a box on a map with a title to say, and seven tiles
+ * would make the node taller than the sentence it exists to show. Four is also
+ * what a reader has already met on the claim page, so the two surfaces agree
+ * about how much evidence a summary shows. */
+const MEDIA_NODE_TILES = 4;
+function mediaNodeTiles(items, siteDomain, max) {
+  const cap = max == null ? MEDIA_NODE_TILES : max;
+  const out = [];
   for (const it of items || []) {
+    if (out.length >= cap) break;
     const src = mediaSrc(it, siteDomain, false);
-    if (src) return src;
+    if (src) out.push(src);
   }
-  return "";
+  return out;
+}
+
+/* The one image a folder wears as its face. Same rule, one item — written
+ * through mediaNodeTiles rather than beside it so the archive-only decision
+ * lives in exactly one place. */
+function mediaNodeThumb(items, siteDomain) {
+  return mediaNodeTiles(items, siteDomain, 1)[0] || "";
 }
 
 /* A DECLARED RATIO IS ATTACKER INPUT, and it is used to reserve a box before the
@@ -1417,6 +1434,7 @@ if (typeof module !== "undefined" && module.exports) {
     MEDIA_STATES, mediaFileable, mediaNewComposer, mediaReview,
     mediaHelpLinkFits, MEDIA_HELP_LINK_BUDGET, MEDIA_HELP_LINK_TOO_LONG,
     mediaMount, mediaEl, mediaParse, mediaSrc, mediaNodeThumb,
+    mediaNodeTiles, MEDIA_NODE_TILES,
     mediaCardItems, mediaVerify, MEDIA_VERDICTS, mediaLightbox,
     mediaSaveDraft, mediaLoadDraft, mediaClearDraft, mediaDraftKey, mediaDraftOf,
   };

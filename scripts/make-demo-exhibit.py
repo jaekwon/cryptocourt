@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Build the one exhibit the OFFLINE demo shows, as an inline data: URI.
 
-    scripts/make-demo-exhibit.py           # print the line to paste
-    scripts/make-demo-exhibit.py --check   # verify the page still carries it
+    scripts/make-demo-exhibit.py            # print the first sheet's line
+    scripts/make-demo-exhibit.py --claim3   # the whole media block for orem/3
+    scripts/make-demo-exhibit.py --covers   # the folder faces
+    scripts/make-demo-exhibit.py --check    # verify the page still carries them
 
 WHY THE DEMO NEEDS ITS OWN BYTES. web/README.md promises one self-contained file
 that runs from file:// and makes no network calls in demo mode. A real exhibit
@@ -56,30 +58,54 @@ def png(width, height, pixels):
             + chunk(b"IEND", b""))
 
 
-def exhibit():
-    rows = [[PAPER] * W for _ in range(H)]
+# THE FOUR SHEETS CLAIM 3 CARRIES. One was enough while a map node showed a
+# single corner badge; the strip under a node's title shows up to four, and a
+# sample that files one cannot demonstrate the thing the reader is looking at.
+# They are the same abstract sheet at four sizes, with a different row marked —
+# what a set of pages filed about one bridge rating looks like from too far to
+# read. The sizes differ on purpose: a tile is a centre crop, and a wide sheet
+# and a tall one crop differently.
+#
+# INDEX 0 IS THE ORIGINAL, byte for byte. Its sha256 is quoted in the page, in
+# this file's --check and in the browser harnesses; regenerating it differently
+# would be a silent edit to evidence the sample says was fingerprinted.
+EXHIBITS = [
+    # w,   h,   marked row, caption
+    (240, 160, 3, "north span rating, 2025 inspection report"),
+    (320, 120, 1, "load posting, county maintenance log"),
+    (240, 160, 5, "deck survey, page 2"),
+    (200, 260, 2, "span elevation, filed with the rating"),
+]
+
+
+def exhibit(n=0):
+    w, h, marked, _ = EXHIBITS[n]
+    rows = [[PAPER] * w for _ in range(h)]
 
     def rect(x0, y0, x1, y1, colour):
-        for y in range(max(0, y0), min(H, y1)):
-            for x in range(max(0, x0), min(W, x1)):
+        for y in range(max(0, y0), min(h, y1)):
+            for x in range(max(0, x0), min(w, x1)):
                 rows[y][x] = colour
 
     # the page's own edge, so the sample reads as a sheet rather than a swatch
-    rect(0, 0, W, 1, EDGE)
-    rect(0, H - 1, W, H, EDGE)
-    rect(0, 0, 1, H, EDGE)
-    rect(W - 1, 0, W, H, EDGE)
+    rect(0, 0, w, 1, EDGE)
+    rect(0, h - 1, w, h, EDGE)
+    rect(0, 0, 1, h, EDGE)
+    rect(w - 1, 0, w, h, EDGE)
 
     rect(20, 18, 132, 27, HEAD)          # title
     rect(20, 33, 96, 37, INK)            # subtitle
 
+    # As many table rows as the sheet has room for, so a tall page reads as a
+    # longer document rather than as the same page with white space under it.
+    nrows = min(8, max(3, (h - 56) // 16))
     y = 56                               # a table: label column, value column
-    for i in range(6):
-        rect(20, y, 88, y + 5, MARK if i == 3 else INK)
-        rect(100, y, 100 + (78 if i % 2 else 54), y + 5, MARK if i == 3 else INK)
+    for i in range(nrows):
+        rect(20, y, 88, y + 5, MARK if i == marked else INK)
+        rect(100, y, 100 + (78 if i % 2 else 54), y + 5, MARK if i == marked else INK)
         y += 16
 
-    return png(W, H, rows)
+    return png(w, h, rows)
 
 
 # The faces the demo's folders wear on the map. A folder is a heading, not a
@@ -134,20 +160,47 @@ def line():
     return body, uri
 
 
+def claim3():
+    """The whole DEMO_OVERLAY.media entry for orem/3, ready to paste.
+
+    Printed rather than hand-kept because every sheet carries four numbers the
+    page repeats — w, h, bytes and the sha256 — and four of those hand-copied is
+    four chances to write down a fingerprint that is not the bytes'. The court's
+    whole media design rests on that number meaning something."""
+    out = ['  media:{"orem/3":[']
+    for i, (w, h, _, cap) in enumerate(EXHIBITS):
+        body = exhibit(i)
+        out.append('    {kind:"img", mime:"image/png", w:%d, h:%d, bytes:%d,' % (w, h, len(body)))
+        out.append('     sha256:"%s",' % hashlib.sha256(body).hexdigest())
+        out.append('     caption:"%s",' % cap)
+        out.append('     mirrors:[], purged:false, inline:"data:image/png;base64,%s"}%s'
+                   % (base64.b64encode(body).decode(), "," if i + 1 < len(EXHIBITS) else ""))
+    out.append("  ]},")
+    return "\n".join(out)
+
+
 def main():
     body, uri = line()
     digest = hashlib.sha256(body).hexdigest()
     if "--check" in sys.argv:
         with open(PAGE, encoding="utf-8") as fh:
             page = fh.read()
-        if uri not in page:
-            print("make-demo-exhibit: web/index.html does not carry these bytes.\n"
-                  "Run scripts/make-demo-exhibit.py and paste the inline: field.", file=sys.stderr)
-            return 1
-        if digest not in page:
-            print("make-demo-exhibit: the page carries the bytes but not their sha256 %s"
-                  % digest, file=sys.stderr)
-            return 1
+        # Every sheet, and every sheet's fingerprint. A page carrying bytes whose
+        # sha256 it does not also carry is the one failure this whole design
+        # exists to make impossible, so it is checked per exhibit rather than
+        # once for the first one.
+        for i in range(len(EXHIBITS)):
+            b = exhibit(i)
+            u = "data:image/png;base64," + base64.b64encode(b).decode()
+            if u not in page:
+                print("make-demo-exhibit: web/index.html does not carry exhibit %d's bytes.\n"
+                      "Run scripts/make-demo-exhibit.py --claim3 and paste the block." % i,
+                      file=sys.stderr)
+                return 1
+            if hashlib.sha256(b).hexdigest() not in page:
+                print("make-demo-exhibit: exhibit %d's bytes are in the page but not its sha256 %s"
+                      % (i, hashlib.sha256(b).hexdigest()), file=sys.stderr)
+                return 1
         for i in range(len(COVERS)):
             u = "data:image/png;base64," + base64.b64encode(cover(i)).decode()
             if u not in page:
@@ -155,8 +208,11 @@ def main():
                       "Run scripts/make-demo-exhibit.py --covers and paste it." % i,
                       file=sys.stderr)
                 return 1
-        print("make-demo-exhibit: ok (%d bytes, %s, +%d folder cover(s))"
-              % (len(body), digest[:12], len(COVERS)))
+        print("make-demo-exhibit: ok (%d exhibit(s), first %d bytes / %s, +%d folder cover(s))"
+              % (len(EXHIBITS), len(body), digest[:12], len(COVERS)))
+        return 0
+    if "--claim3" in sys.argv:
+        print(claim3())
         return 0
     if "--covers" in sys.argv:
         for i in range(len(COVERS)):

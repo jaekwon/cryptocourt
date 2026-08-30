@@ -670,11 +670,12 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapwrap{border:1px solid var(--line); border-radius:var(--r); background:var(--inset); overflow:hidden}
 .mapwrap{min-height:0}
 .mapwrap svg{display:block; width:100%; height:100%; cursor:grab; touch-action:none; outline-offset:-2px}
-/* The evidence badge on a node. Dimmed rather than full strength: it is a signal
-   that a claim carries exhibits, and a bright photograph beside a title would
-   compete with the thing the node exists to say. It brightens with the node the
-   reader has selected, which is the moment the picture is worth looking at. */
-.mthumb{opacity:.62}
+/* The evidence strip on a node. Brighter than the corner badge it replaced —
+   .62 was set when the picture sat BESIDE the title and competed with it, and
+   under the sentence it does not. Still short of full strength at rest, and full
+   on the node a reader has selected, which is the moment the pictures are worth
+   looking at rather than counting. */
+.mthumb{opacity:.85}
 /* The lightbox. Dark enough that the exhibit is the only thing lit, because the
    reader opened it to look at one picture. */
 .lbox{position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
@@ -1714,10 +1715,24 @@ const DEMO_OVERLAY = {
      these. mediaVerify answers "sample" for anything carrying them, because
      hashing bytes the page handed itself would print "matches what was filed"
      about an archive that has never seen this. Keyed like voteEndsAt above. */
-  media:{"orem/3":[{kind:"img", mime:"image/png", w:240, h:160, bytes:529,
-    sha256:"18ead64d476a7450297dfd11c44b0cb4d54e80293e7a63687d0333fa6b4b0e0b",
-    caption:"north span rating, 2025 inspection report",
-    mirrors:[], purged:false, inline:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACgCAIAAAC9uXYyAAAB2ElEQVR42u3cwQ1FUBBAUXVpRAN2rxwV2KnDQgNWSrCTaIAaEGHmJOcXYHI33h+vWuYJwqjO376tEICgETQIGgQNgkbQBoGgQdAgaBA0ggZBg6BB0CBoBA1Zgy5tw4MUKWhBI2hBC1rQghY0gha0oBG0oBG0oAUtaEH7pxAEDYJG0IJG0CBo+HjQQ9+FpxJBCxpBCxpBCxovhQgaBA2CBkGDoBE0CBoEDYJG0IJG0CBoEDQIGkGbBYIGQYOg4ZWgs3076AtIQQta0IIWtKAFLWhBC1rQggZBg6BB0AjaIBA0CBoEDYJG0CBosMthl8NOiKAFLWhBC1rQgha0oAUtaKccIGgQNIIGQYOgQdAgaAQNggZBg10OuxzuthO0oAUtaEELWtCCFrSgBe2UAwSNoEHQIGgQNIIWNIIGQYOgQdAI+pqx1GFke9770xC0oAUtaEELWtCCFrSgBZ0+aBA0CBoEjaBB0CBoEDQIGkGDoOHnQbvbzt12gha0oAUtaEELWtCCFrSgnXKAoEHQIGgEDYIGQYOgQdAIGgQNdjnsctgJEbSgBS1oQQta0IIWtKAF7ZQDBA2CRtAgaBA0CBoEjaBB0CBoEDSCNggEDYIGQYOgETTECBrCOADm3OY9Kv4QdAAAAABJRU5ErkJggg=="}]},
+  media:{"orem/3":[
+    {kind:"img", mime:"image/png", w:240, h:160, bytes:529,
+     sha256:"18ead64d476a7450297dfd11c44b0cb4d54e80293e7a63687d0333fa6b4b0e0b",
+     caption:"north span rating, 2025 inspection report",
+     mirrors:[], purged:false, inline:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACgCAIAAAC9uXYyAAAB2ElEQVR42u3cwQ1FUBBAUXVpRAN2rxwV2KnDQgNWSrCTaIAaEGHmJOcXYHI33h+vWuYJwqjO376tEICgETQIGgQNgkbQBoGgQdAgaBA0ggZBg6BB0CBoBA1Zgy5tw4MUKWhBI2hBC1rQghY0gha0oBG0oBG0oAUtaEH7pxAEDYJG0IJG0CBo+HjQQ9+FpxJBCxpBCxpBCxovhQgaBA2CBkGDoBE0CBoEDYJG0IJG0CBoEDQIGkGbBYIGQYOg4ZWgs3076AtIQQta0IIWtKAFLWhBC1rQggZBg6BB0AjaIBA0CBoEDYJG0CBosMthl8NOiKAFLWhBC1rQgha0oAUtaKccIGgQNIIGQYOgQdAgaAQNggZBg10OuxzuthO0oAUtaEELWtCCFrSgBe2UAwSNoEHQIGgQNIIWNIIGQYOgQdAI+pqx1GFke9770xC0oAUtaEELWtCCFrSgBZ0+aBA0CBoEjaBB0CBoEDQIGkGDoOHnQbvbzt12gha0oAUtaEELWtCCFrSgnXKAoEHQIGgEDYIGQYOgQdAIGgQNdjnsctgJEbSgBS1oQQta0IIWtKAF7ZQDBA2CRtAgaBA0CBoEjaBB0CBoEDSCNggEDYIGQYOgETTECBrCOADm3OY9Kv4QdAAAAABJRU5ErkJggg=="},
+    {kind:"img", mime:"image/png", w:320, h:120, bytes:458,
+     sha256:"230fa2292b4ebdee0edad0c42845b86994aaef31d66ce4d069c844f307655220",
+     caption:"load posting, county maintenance log",
+     mirrors:[], purged:false, inline:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAB4CAIAAAAMrLyJAAABkUlEQVR42u3dMQ2AMBBA0erCCAbYKgcFbOhgwAATEthIMAAeytBrX/IQwKV/aZo2nccOBJW+77kvIBwBg4ABAQMCBgEDAgYEDAgYBAwIGBAwCNggQMCAgAEBg4CBdgPO08iPrEgELGAELGABI2AEjIAFDAIWMAIWsIARMAJGwAJGwAYBAgYEDAgYBAwIGKgw4HWZm2eVIGABg4AFDAIWMAIGBAwIGAQMCBgQMCBgEDAgYEDAgIBBwICAAQGDgAEBAwIGBAwCBhoKuLe7r9zghYAFLGAELGABC1jAAkbAAhYwdqEBAYOAAQEDAgYEDAIGBAwIGARsFiBgIFLAWx6a0dv/lk8DAQtYwAhYwAIWsIAFLGABC1jA2IUGBAwCBgQMCBgQMAgYEDAgYBAwIGCg9oC9jeRtJAQsYAEjYAELWMACFjACFrCAsQsNCBgEDAgYEDAgYBAwIGBAwCBgQMCAs9DOQjtTjYAFLGABC1jACFjAAkbAAhawgA0CBAwIGBAwCBgQMCBgQMAgYEDAQGnAQFAvr6myqBoYLJwAAAAASUVORK5CYII="},
+    {kind:"img", mime:"image/png", w:240, h:160, bytes:529,
+     sha256:"be6337f6b993fea018c214de2188aa9a633d45e3848ab1c35164a9935d3db81a",
+     caption:"deck survey, page 2",
+     mirrors:[], purged:false, inline:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACgCAIAAAC9uXYyAAAB2ElEQVR42u3csQ1AUBCAYXNZxAK6N44JdOZQWEBlBJ3EAgygI8Ldl3wG8PI3zlEt8wRhVOe1bysEIGgEDYIGQYOgEbSDQNAgaBA0CBpBg6BB0CBoEDSChqxBl7bhQYoUtKARtKAFLWhBCxpBC1rQCFrQCFrQgha0oL0pBEGDoBG0oBE0CBo+HvTQd+GpRNCCRtCCRtCCxkMhggZBg6BB0CBoBA2CBkGDoBG0oBE0CBoEDYJG0M4CQYOgQdDwStDZvh30BaSgBS1oQQta0IIWtKAFLWhBg6BB0CBoBO0gEDQIGgQNgkbQIGiwy2GXw06IoAUtaEELWtCCFrSgBS1oUw4QNAgaQYOgQdAgaBA0ggZBg6DBLoddDv+2E7SgBS1oQQta0IIWtKAFbcoBgkbQIGgQNAgaQQsaQYOgQdAgaARtlyPb/fq3naAFLWhBC1rQgha0oAUtaFMOTDlA0CBoEDSCFjSCBkGDoEHQCBrsQ9vlsIMhaEELWtCCFrSgBS1oQQvalAMEDYIGQSNoEDQIGgQNgkbQIGj4Z9BjqcPIdr/3T0PQgha0oAUtaEELWtCCFnT6oEHQIGgQNIIGQYOgQdAgaAQNggZBg6BB0AgaBA2CBkHDZdAQxgFxYOY914FaoAAAAABJRU5ErkJggg=="},
+    {kind:"img", mime:"image/png", w:200, h:260, bytes:687,
+     sha256:"9bcb09fe71ee9511b919255751f450b7b7fe0ce582f6caff01bc654003ba2f4b",
+     caption:"span elevation, filed with the rating",
+     mirrors:[], purged:false, inline:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAEECAIAAADiZ+yyAAACdklEQVR42u3cMRGEMBBAUXRhBAN0kYMCOnRQYIAKCXTMYADwsMUmvJl/Au7mFZdsZrtj36TwuvdzX6cUGFgCS2AJLLAElsASWGAJLIElsPwWAktgCSwJLIElsKQcsMo4KDCwwAILLLDAAgsssMACCyywwAILLLDAAsvNu8CSwBJYAksCS1XAWuap+SgBCyywwAILLPnzLrAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYEljy5j3923Yv9MECCyywwAILLLDAciqUU6EElsASWBJYAktgSWAJLIElmRX+ZVaYZOYIFlhggQUWWGCBBVY+WBJYAktgSWAJLIElgSWwBJYEltLDWkvfTG18X7DAAgsssMACCyywwJLAElgCSwJLYAksCSyBJbAksFQrLLsb7G4ACyywwAILLLDAAst+LLlukMASWAJLAktgCSwJLIElsCSzwjZnhWCBBRZYYIEFFlhggSWBJbAElgSWwBJYElgCS2BJYMms0KzQ7gawwAILLLDAAgsssJwK5bpBYElgCSyBJYElsASWBJbAkvdYZoV2N4AFFlhggQUWWGCB5VQo1w0SWAJLYElgCSyBJYElsASWZFZod4OlIGCBBRZYYIEFFlj2Y8mpECyBJbAElh9CYAksgSWBJbAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYElgCS2BJYAksgSWBJbAElgSWwBJYAuuDJYX3AGT5qJVrRV0PAAAAAElFTkSuQmCC"}
+  ]},
 };
 /* ===== BEGIN GENERATED DEMO DATA — scripts/dump-demo.py; do not hand-edit ===== */
 const DEMO_CHAIN = {
@@ -4758,8 +4773,22 @@ const MAPK = {
   // the court. Below 206 the graph keeps shrinking and titles start being cut
   // again, which is the trade the old note described; it just begins further in
   // than a four-line box could ever reach.
-  node:  { titles:{w:206,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
+  // WIDENED TO 230 BY THE OWNER, which the sweep above already priced: at cap 6
+  // it cuts no more titles than 206 does, and the cost is paid in ring
+  // circumference rather than in words. It also buys the room the tile strip
+  // needs — four 28px tiles and their gaps are 121 of the 214 a 230 box has
+  // between its padding, so a claim with evidence is not a box built around its
+  // pictures.
+  node:  { titles:{w:230,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
+  /* THE EXHIBITS A CLAIM CARRIES, UNDER ITS TITLE. They used to be one badge in
+     the top-right corner, which said "there is evidence here" and nothing about
+     what or how much. A strip under the title says both, and sits where a
+     reader is already looking after they have read the sentence.
+     Bounded by mediaNodeTiles at four — the same four the claim page's grid
+     stops at — so a node's height is set by its sentence, not by how many
+     pictures somebody filed. */
+  tile: {size:28, gap:3, pad:6},
   fnode: { titles:{w:164,h:44}, ids:{w:112,h:28} }, // a folder; w is a fallback
   // The range mapFolderSize searches, in 12px steps. The floor is a box that
   // still reads as a container next to a 206 claim; the ceiling stays under the
@@ -4915,11 +4944,26 @@ function mapFolderSize(name, count, mode){
     if(holds(w)) return {w, h: base.h};
   return {w: MAPK.fnodeW[1], h: base.h};   // nothing holds it; wrapFit will trim
 }
-function mapClaimSize(title, mode){
+/* THE TILES A NODE WILL DRAW, asked the same way by the two places that have to
+   agree about them: mapClaimSize reserves the row, mapSvg draws into it. Two
+   implementations of "which exhibits does this node show" is how a box comes out
+   one row shorter than what is inside it — and the layout would still report the
+   map collision-free, because it measured the box it decided on.
+   Archive-only, because mediaNodeTiles is what decides: a map draw is fifty
+   boxes at once, and a filer-chosen mirror would send every reader's address
+   wherever the filer liked. */
+function mapNodeTiles(claim){
+  if(typeof mediaNodeTiles !== "function" || !claim || !claim.media) return [];
+  return mediaNodeTiles(claim.media, siteHost());
+}
+function mapClaimSize(title, mode, tiles){
   const base = MAPK.node[mode];
   if(mode!=="titles") return base;
   const lines = mapWrapTitle(String(title||""), base.w-2*MAPK.tpad, MAPK.fs.title, MAPK.maxTitleLines);
-  return {w:base.w, h:Math.max(base.h, MAPK.head + lines.length*MAPK.lineH + MAPK.tpad)};
+  // The strip is one row whatever it holds — mediaNodeTiles caps it — so a claim
+  // with four exhibits is no taller than a claim with one.
+  const strip = tiles? MAPK.tile.size + MAPK.tile.pad : 0;
+  return {w:base.w, h:Math.max(base.h, MAPK.head + lines.length*MAPK.lineH + MAPK.tpad + strip)};
 }
 /* Where the centre-to-centre line leaves a's box: half-extent in each axis,
    whichever side it reaches first. Written out because a chord that starts at a
@@ -4958,7 +5002,8 @@ function mapTree(data, mode){
       // `also` records it on the folder, so the folder can still say so.
       if(drawn.has(id)){ alsoIn.push({folder:node, id}); (node.also = node.also || []).push(id); }
       else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[],
-             size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode)}); }
+             size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
+                               mapNodeTiles(data.claims[id]).length)}); }
     }
     (f.folders||[]).forEach((g,i)=>node.kids.push(folderNode(g, path==null? null : path+"."+i)));
     return node;
@@ -4978,7 +5023,8 @@ function mapTree(data, mode){
     else for(const id of loose){
       if(!data.claims[id] || drawn.has(id)) continue;
       drawn.add(id);
-      tops.push({kind:"claim", id, kids:[], size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode)});
+      tops.push({kind:"claim", id, kids:[], size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
+                                                               mapNodeTiles(data.claims[id]).length)});
     }
   }
   const courtName = data.courtName||"this court";
@@ -5548,28 +5594,17 @@ function mapSvg(L, data, slug){
     const dot=(cx,cy)=>`<circle class="mdot ${mapDotClass(pc.short, pc.side)}" cx="${cx}" cy="${cy}" r="4" data-owner="c${n.id}"/>`;
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
     out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
-    /* A THUMBNAIL AS A CORNER BADGE, not a full-bleed image. Filling the node
-       would put the title on top of a photograph and make the one thing every
-       node must say unreadable; a badge still says "this claim carries
-       evidence" and costs the label nothing.
-
-       The source is the ARCHIVE or nothing — mediaNodeThumb refuses a mirror,
-       because a listed mirror is a URL the FILER chose and a map draw would
-       fan fifty readers' addresses out to hosts an attacker picked. */
-    if(typeof mediaNodeThumb === "function" && cl.media){
-      const thumb = mediaNodeThumb(cl.media, siteHost());
-      if(thumb){
-        const sz = Math.max(8, Math.min(16, n.h-6));
-        const tx = n.x+n.w-sz-3, ty = n.y+3;
-        out.push(`<clipPath id="mth${n.id}"><rect x="${tx}" y="${ty}" width="${sz}" height="${sz}" rx="2"/></clipPath>`);
-        out.push(`<image class="mthumb" href="${esc(thumb)}" x="${tx}" y="${ty}" width="${sz}" height="${sz}"`
-          + ` clip-path="url(#mth${n.id})" preserveAspectRatio="xMidYMid slice"`
-          // The badge is decoration over a link: it must never eat the click that
-          // opens the claim, and it must not be announced twice to a screen
-          // reader that already has the node's title.
-          + ` pointer-events="none" aria-hidden="true"/>`);
-      }
-    }
+    /* THE EXHIBITS AS A STRIP UNDER THE TITLE, drawn below with the rest of the
+       titles-mode label, because that is the only mode with room for it and the
+       row's position depends on how many lines the title took.
+       It replaced a single thumbnail in the top-right corner. The badge said
+       "there is evidence here" and nothing else — not what, not how many — and
+       it said it in the one corner a reader is not looking at, since the eye
+       goes to the title first. Under the sentence is where a reader arrives
+       next, and a strip answers both questions at once.
+       Never full-bleed: filling the node would put the title on top of a
+       photograph and make the one thing every node must say unreadable. */
+    const tiles = L.mode==="titles" ? mapNodeTiles(cl) : [];
     if(L.mode==="titles"){
       /* "#2 <title>", then the verdict on its own right-adjusted line. The id
          line used to spend a whole row on "#2 · settled YES" — the phase, which
@@ -5591,11 +5626,32 @@ function mapSvg(L, data, slug){
                               est(idTxt+" ", K.fs.title)));
       lines.slice(1).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "mtitle", "c"+n.id)));
+      /* The strip, between the last line of the title and the verdict row. Its
+         top is measured from the LAST BASELINE rather than from the bottom of
+         the box, because mapClaimSize built the box by adding a row to the title
+         — measuring from the other end would drift by whatever the box's floor
+         height contributed on a short title. */
+      let vy=n.y+16+lines.length*K.lineH;
+      if(tiles.length){
+        const ts=K.tile.size, tg=K.tile.gap;
+        const ty=n.y+16+(lines.length-1)*K.lineH+K.tile.pad;
+        tiles.forEach((src,ti)=>{
+          const tx=n.x+K.tpad+ti*(ts+tg);
+          out.push(`<clipPath id="mth${n.id}_${ti}"><rect x="${tx}" y="${ty}" width="${ts}" height="${ts}" rx="2"/></clipPath>`);
+          out.push(`<image class="mthumb" href="${esc(src)}" x="${tx}" y="${ty}" width="${ts}" height="${ts}"`
+            + ` clip-path="url(#mth${n.id}_${ti})" preserveAspectRatio="xMidYMid slice"`
+            // Decoration over a link: it must never eat the click that opens the
+            // claim, and it must not be announced to a screen reader that
+            // already has the node's title — the exhibits are on the claim page,
+            // with the captions that say what they are.
+            + ` pointer-events="none" aria-hidden="true" referrerpolicy="no-referrer"/>`);
+        });
+        vy = ty + ts + K.lineH;
+      }
       /* The dot rides the verdict row rather than the top-right corner: it is the
          verdict's colour now, so it belongs beside the verdict, and moving it
          hands the whole first line back to the title instead of reserving 14px of
          it for a mark that sat on a different subject. */
-      const vy=n.y+16+lines.length*K.lineH;
       out.push(dot(n.x+K.tpad+4, vy-4));
       out.push(rlabel(pc.side? pc.short+": "+pc.side : pc.short,
                       n, K.fs.id, vy, "mverdict", "c"+n.id));
