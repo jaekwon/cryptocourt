@@ -226,6 +226,24 @@ ok("...names the file:// trap, where no extension can ever load",
    src.includes("extensions do not run on") && src.includes("file://"));
 ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
    src.includes("Open in gnoweb") && src.includes("cliBlock(cli)"));
+// ---- the second of silence while the wallet wakes -------------------------
+// Adena is an MV3 extension: the first call after it has been idle cold-starts
+// a suspended service worker, roughly a second in which the button looked
+// ignored. The wait belongs to the extension; the silence was ours.
+ok("the button says it is busy BEFORE the call that waits",
+   src.indexOf("busy(true);") < src.indexOf("await a.GetNetwork()"));
+ok("...and is cleared in finally, so a wallet error does not spin for ever",
+   /finally\{ el\.disabled = false; busy\(false\); \}/.test(src));
+ok("...announced to assistive tech, not only drawn",
+   src.includes('el.setAttribute("aria-busy", on? "true":"false")'));
+ok("the connect button gets the same treatment, for the same reason",
+   /c\.classList\.add\("busy"\)[\s\S]{0,200}await adenaConnect\(\)/.test(src)
+   && /finally\{ c\.disabled = false; c\.classList\.remove\("busy"\)/.test(src));
+// A spinner is decoration. Stillness has to carry the same state.
+ok("reduced motion still shows the state, without moving",
+   /@media \(prefers-reduced-motion: reduce\)\{ \.btn\.busy \.g\{animation:none\} \}/.test(src)
+   && /\.btn\.busy\{opacity:\.75; cursor:progress\}/.test(src));
+
 ok("the copy fallback survives a page with no clipboard API",
    /function cliBlock\(cmd\)/.test(src) && src.includes("no-clipboard")
    && src.includes("Selected — press Ctrl/⌘-C"));

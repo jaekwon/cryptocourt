@@ -342,6 +342,22 @@ a.card:hover{border-color:var(--line-2)}
   text-decoration:none; transition:border-color .12s, background .12s;
 }
 .btn:hover{border-color:var(--accent); background:var(--accent-wash)}
+/* WAKING THE WALLET. Adena is an MV3 extension, so the first call after it has
+   been idle cold-starts a suspended service worker — about a second in which
+   nothing at all happened on screen and the button looked ignored. The wait is
+   the extension's, but the second of silence was ours, so the button says it is
+   busy for exactly as long as we are waiting.
+   The glyph is swapped, not appended, so the label does not reflow mid-press. */
+.btn.busy{opacity:.75; cursor:progress}
+.btn.busy .g{
+  width:11px; height:11px; border-radius:50%; display:inline-block;
+  border:2px solid currentColor; border-right-color:transparent; font-size:0;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* A spinner is decoration; a reader who has asked for stillness gets the state
+   from the cursor and the dimming, which say the same thing without moving. */
+@media (prefers-reduced-motion: reduce){ .btn.busy .g{animation:none} }
 .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
 .btn.primary:hover{background:var(--accent-2)}
 .btn.yes{border-color:var(--yes); color:var(--yes)} .btn.yes:hover{background:var(--yes-wash)}
@@ -885,7 +901,17 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mfold-a{cursor:pointer}
 .mfold-a:hover .mfold,.mfold-a:focus .mfold{stroke-width:2}
 .mfold-a.selected .mfold{stroke:var(--accent-2); stroke-width:3}
-.mnode-a.dim{opacity:.35}
+/* The court answers a click like anything else on the map. Its ring is drawn in
+   --accent-wash rather than a heavier --accent-2: the box is already filled with
+   --accent, so a darker outline on a dark fill is a stroke nobody can see, and
+   the wash is the one accent token that contrasts against it in both themes. */
+.mcourt-a{cursor:pointer}
+.mcourt-a:hover .mcourt,.mcourt-a:focus .mcourt{stroke-width:3}
+.mcourt-a.selected .mcourt{stroke:var(--accent-wash); stroke-width:3.5}
+/* DIMMING COVERS ALL THREE. It covered only claims, which is why selecting a
+   folder appeared to highlight nothing: the folders and the court kept full
+   strength, so there was no contrast for the lit node to stand out against. */
+.mnode-a.dim,.mfold-a.dim,.mcourt-a.dim{opacity:.35}
 /* THE CARD GETS ITS OWN COLUMN, and does not float over the map. It did float,
    at top-right with a z-index, and that made the nodes underneath unclickable —
    on a map with anything in its top-right corner, selecting one of those claims
@@ -937,10 +963,13 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapsel-a{margin-top:10px}
 .mapsel-l{list-style:none; margin:6px 0 0; padding:0; max-height:190px; overflow-y:auto}
 .mapsel-l li{margin:0 0 2px}
-.mapsel-c{display:block; width:100%; text-align:left; background:none; border:0; cursor:pointer;
+/* A row on a card that picks another node instead of leaving the map. Two
+   classes, one look: .mapsel-c selects a claim, .mapsel-f a folder, and the
+   court's card lists both. */
+.mapsel-c,.mapsel-f{display:block; width:100%; text-align:left; background:none; border:0; cursor:pointer;
   font:inherit; font-size:12px; color:var(--ink-2); padding:3px 4px; border-radius:4px}
-.mapsel-c:hover,.mapsel-c:focus{background:var(--inset); color:var(--ink)}
-.mapsel-c .mono{color:var(--accent-2)}
+.mapsel-c:hover,.mapsel-c:focus,.mapsel-f:hover,.mapsel-f:focus{background:var(--inset); color:var(--ink)}
+.mapsel-c .mono,.mapsel-f .mono{color:var(--accent-2)}
 
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
 /* The id heads the title and the verdict closes the node. Both survive the
@@ -2720,9 +2749,18 @@ function signHelp(el){
   const close = ()=>{ try{ dlg.close(); }catch(_){} dlg.remove(); };
   dlg.addEventListener("click", async ev => {
     if(ev.target.closest("[data-cancel]")) return close();
-    if(ev.target.closest("[data-connect]")){
+    const c = ev.target.closest("[data-connect]");
+    if(c){
+      // SAME COLD START, same silence. AddEstablish wakes the service worker
+      // too, so the dialog stays open and busy rather than closing onto a page
+      // where nothing appears to be happening. It closes once the wallet
+      // answers, which is also when the retry can fire.
+      if(c.disabled) return;
+      c.disabled = true;
+      c.classList.add("busy"); c.setAttribute("aria-busy","true");
+      try{ await adenaConnect(); }
+      finally{ c.disabled = false; c.classList.remove("busy"); c.setAttribute("aria-busy","false"); }
       close();
-      await adenaConnect();
       // Only re-fire if the connect actually took. Clicking again on a failed
       // connect would reopen this same dialog in a loop.
       if(CFG.addr) el.click();
@@ -2813,6 +2851,10 @@ function confirmAuthored(func, args, bodyKey){
 async function adenaSign(func, args, el){
   const a = window.adena;
   if(!a){ adenaAbsent(); return; }
+  // BEFORE THE FIRST AWAIT, because the whole delay is on the other side of it:
+  // GetNetwork has to wake Adena's service worker. Setting this after the await
+  // would light the spinner exactly when it was no longer needed.
+  const busy = on => { el.classList.toggle("busy", on); el.setAttribute("aria-busy", on? "true":"false"); };
   const note = (m, ok) => {
     let n = el.parentElement.querySelector(".txnote");
     if(!n){ n = document.createElement("div"); n.className = "txnote"; n.setAttribute("role","status"); el.parentElement.appendChild(n); }
@@ -2820,6 +2862,7 @@ async function adenaSign(func, args, el){
   };
   if(el.disabled) return;
   el.disabled = true;
+  busy(true);
   try{
     const want = CFG.chainid || "dev";
     const net = await a.GetNetwork();
@@ -2909,7 +2952,9 @@ async function adenaSign(func, args, el){
     else if(res.code===3001){ note("Adena's active account is not "+shortAddr(CFG.addr)+" — switch accounts in Adena or reconnect."); }
     else note("Adena: "+(res.message||("code "+res.code)));
   }catch(e){ note("Adena: "+(e.message||e)); }
-  finally{ el.disabled = false; }
+  // Cleared in finally, so a thrown wallet error leaves a button that can be
+  // pressed again rather than one that spins for ever.
+  finally{ el.disabled = false; busy(false); }
 }
 document.addEventListener("click",(ev)=>{
   const d = ev.target.closest("[data-inert]");
@@ -5446,13 +5491,19 @@ function mapLayout(data, mode){
     const cx=n._r*Math.cos(mid), cy=n._r*Math.sin(mid);
     const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
     n._box = box;
-    if(n.kind==="court"){ court={...box, name:n.name}; }
-    else if(n.kind==="folder"){ folders.push(Object.assign(box, {kind:"folder", name:n.name,
+    /* A KEY PER BOX, so a spoke can say what it joins. The layout returns spokes
+       as bare geometry — {kind, pts} — which was enough while selection dimmed
+       every spoke wholesale, and is not enough to light the ones that touch the
+       node a reader just clicked. "court", "f<index in folders>", "c<claim id>":
+       the same strings mapSvg already writes as data-fid and data-id, so the DOM
+       and the layout agree without a second lookup table. */
+    if(n.kind==="court"){ box._key="court"; court={...box, name:n.name}; }
+    else if(n.kind==="folder"){ box._key="f"+folders.length; folders.push(Object.assign(box, {kind:"folder", name:n.name,
       count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid, img:n.img,
       claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
       also:n.also||[],
       subs:n.kids.filter(k=>k.kind==="folder").length})); }
-    else { nodes.push(Object.assign(box, {kind:"claim", id:n.id})); }
+    else { box._key="c"+n.id; nodes.push(Object.assign(box, {kind:"claim", id:n.id})); }
     const tot = n.kids.reduce((t,k)=>t+k._a, 0);
     let a=a0;
     for(const k of n.kids){
@@ -5481,7 +5532,8 @@ function mapLayout(data, mode){
     court: mv(court),
     folders: folders.map(mv),
     nodes: nodes.map(mv),
-    spokes: spokes.map(s=>({kind:s.kind, pts:[mapClip(s.from,s.to), mapClip(s.to,s.from)]
+    spokes: spokes.map(s=>({kind:s.kind, a:s.from._key, b:s.to._key,
+      pts:[mapClip(s.from,s.to), mapClip(s.to,s.from)]
       .map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
     edges: edges.map(e=>Object.assign({}, e, {pts:e.pts.map(([x,y])=>[Math.round((x+ox)*10)/10, Math.round((y+oy)*10)/10])})),
     viewBox:[0,0,Math.round(maxX-minX+2*K.margin), Math.round(maxY-minY+2*K.margin)],
@@ -5621,6 +5673,56 @@ function mapFolderCard(f, data, slug){
         ? `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/f/${f.path}">Open folder page →</a></div>`
         : `<p class="small muted">the map's own bucket — the court has filed no folder for these</p>`);
 }
+/* THE COURT'S OWN CARD. Clicking the centre used to clear the selection, so the
+   node the whole drawing hangs off answered nothing. What it has to say is what
+   hangs off it directly — the top-level folders and any claim nobody filed —
+   which is exactly the set its spokes now light.
+   No "open the court page" button: you are already on this court, and the map IS
+   that page. The rows go where the spokes go instead. */
+function mapCourtCard(data, slug, L){
+  const tops = (L.spokes||[]).filter(s=>s.a==="court");
+  const folders = tops.filter(s=>s.b[0]==="f").map(s=>L.folders[parseInt(s.b.slice(1),10)]).filter(Boolean);
+  const loose = tops.filter(s=>s.b[0]==="c").map(s=>parseInt(s.b.slice(1),10));
+  const frows = folders.slice(0, 12).map((f,i)=>
+    `<li><button type="button" class="mapsel-f" data-go="${L.folders.indexOf(f)}">`
+    + `<span class="mono">folder</span> ${safeInline(f.name)}`
+    + ` <span class="muted">· ${f.count}</span></button></li>`).join("");
+  const crows = loose.slice(0, 12).map(id=>{
+    const t = (data.claims[id]||{}).title || "";
+    return `<li><button type="button" class="mapsel-c" data-go="${id}">`
+      + `<span class="mono">#${id}</span> ${safeInline(t.length>52? t.slice(0,51)+"…" : t)}</button></li>`;
+  }).join("");
+  const n = (data.all||[]).length;
+  return `<div class="mapsel-h"><span class="mono">court</span>`
+    + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
+    + `<p class="mapsel-t">${safeInline(L.court.name||slug)}</p>`
+    + `<p class="small muted">${n} claim${n===1?"":"s"} drawn`
+    + (folders.length? `, under ${folders.length} folder${folders.length===1?"":"s"}` : "")
+    + `</p>`
+    + (frows? `<ul class="mapsel-l">${frows}</ul>` : "")
+    + (crows? `<p class="small muted">filed under no folder</p><ul class="mapsel-l">${crows}</ul>` : "")
+    + (!frows && !crows? `<p class="small muted">nothing hangs off this court yet</p>` : "");
+}
+/* WHAT ONE CLICK LIGHTS, as a pure function of the layout so it can be tested
+   without a DOM. Answers three sets: the node keys to keep lit, the indices into
+   L.spokes of the containment edges that touch the node, and the indices into
+   L.edges of the relations that do.
+   AT MODULE SCOPE ON PURPOSE. It lived inside mountMap, where the only way to
+   check it was to grep the source for a function name — which is how the version
+   before it went three releases with the folder case dimming every edge on the
+   map, including the ones it had just been asked to show. */
+function mapNeighbourhood(L, key){
+  const nodes=new Set([key]), spokes=new Set(), edges=new Set();
+  (L.spokes||[]).forEach((s,i)=>{
+    if(s.a===key){ spokes.add(i); nodes.add(s.b); }
+    else if(s.b===key){ spokes.add(i); nodes.add(s.a); }
+  });
+  (L.edges||[]).forEach((e,i)=>{
+    if("c"+e.from===key){ edges.add(i); nodes.add("c"+e.to); }
+    else if("c"+e.to===key){ edges.add(i); nodes.add("c"+e.from); }
+  });
+  return {nodes, spokes, edges};
+}
 function mapDotClass(short, side){
   // seven phases, pill-family tokens; text is the primary signal, the dot a
   // second non-hue channel (solid / washed / hollow / dashed)
@@ -5705,9 +5807,18 @@ function mapSvg(L, data, slug){
     const y0=box.y+box.h/2 - (lines.length-1)*(fs+2)/2 + fs*0.36;
     return lines.map((ln,i)=>label(ln, box, fs, Math.round((y0+i*(fs+2))*10)/10, cls, owner)).join("");
   };
+  /* THE COURT IS SELECTABLE TOO. It was a bare rect: not a link, and matched by
+     no click handler, so clicking the node the whole drawing hangs off fell
+     through to "clicked the background" and cleared the selection — the one
+     node whose answer to "what is filed here" is the map itself was the one node
+     that could not be asked. It is still not a LINK, because you are already on
+     this court; it is a group the handler can find, which is a different thing.
+     No <title>: the label is the court's whole name, so a tooltip would repeat
+     what is already drawn. */
   const c=L.court;
-  out.push(`<rect class="mcourt" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6"/>`);
-  out.push(wrapMid(c.name, c, K.fs.court, "mcourt-t", "t0"));
+  out.push(`<g class="mcourt-a" data-court="1">`
+    + `<rect class="mcourt" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6"/>`
+    + wrapMid(c.name, c, K.fs.court, "mcourt-t", "t0") + `</g>`);
   L.folders.forEach((f,i)=>{
     /* A FOLDER SAYS ITS WHOLE NAME ON HOVER, which every claim already did and
        no folder did. A box is sized to hold its label, but a label can outrun any
@@ -6367,31 +6478,36 @@ function mountMap(slug, data, focusId, focusPath){
   });
   box.addEventListener("pointerup", ()=>{ drag=null; });
   box.addEventListener("pointercancel", ()=>{ drag=null; });
-  // hover/focus: highlight the node's own edges + neighbors, dim the rest
-  const neighborsOf=id=>{
-    const set=new Set([id]);
-    (data.relations||[]).forEach(r=>{ if(r.from===id) set.add(r.to); if(r.to===id) set.add(r.from); });
-    return set;
-  };
-  function dim(id){
-    const keep=neighborsOf(id);
-    box.querySelectorAll(".mnode-a").forEach(a=>a.classList.toggle("dim", !keep.has(parseInt(a.dataset.id,10))));
-    box.querySelectorAll(".medge,.marrow").forEach(e=>{
-      /* SPOKES ARE .medge TOO, and this line did not know it. When the map was a
-         grid every .medge was a relation and carried data-from/data-to; the
-         radial layout added containment spokes with the same class and a data-s
-         instead, so the lookup below found nothing and dereferenced null. dim()
-         threw, paint() abandoned before it wrote the panel, and the symptom was a
-         folder card that would not go away and a claim card that never came —
-         because dimFolder happens not to touch dataset, so folders worked and
-         claims did not. Structure dims wholesale; only relations are asked which
-         claims they join. */
-      if(e.dataset.e === undefined){ e.classList.add("dim"); return; }
-      const p=box.querySelector(`.medge[data-e="${e.dataset.e}"]`);
-      if(!p){ e.classList.add("dim"); return; }
-      const from=parseInt(p.dataset.from,10), to=parseInt(p.dataset.to,10);
-      e.classList.toggle("dim", !(from===id||to===id));
-    });
+  /* WHAT A CLICK LIGHTS: the node, the edges that touch it, and what is at the
+     far end of those edges. ONE RULE FOR ALL THREE KINDS OF NODE, which is the
+     whole point of rewriting this — the three used to disagree, and the
+     disagreement was visible:
+
+       * a claim lit its relation chords and dimmed every spoke, so the one edge
+         that says where the claim IS FILED went grey along with the rest;
+       * a folder lit the claims filed in it and dimmed EVERY edge, so the folder
+         and its claims floated with nothing drawn between them;
+       * the court matched no handler at all, so clicking it cleared the
+         selection and lit the entire map — the node the whole drawing hangs off
+         was the one node that could not be asked a question.
+
+     The far end stays lit on purpose. Lighting an edge into a greyed box says
+     "something is over there" and makes the reader hunt for it; the edge is
+     drawn to be followed, so it is followed to something legible.
+
+     Keys, not ids: "court", "f<i>", "c<id>". A folder and a claim both number
+     from 1 and a court is neither, so one Set of ids could not hold all three. */
+  function dimTo(key){
+    const N=mapNeighbourhood(L, key);
+    box.querySelectorAll(".mnode-a").forEach(a=>a.classList.toggle("dim", !N.nodes.has("c"+a.dataset.id)));
+    box.querySelectorAll(".mfold-a").forEach(a=>a.classList.toggle("dim", !N.nodes.has("f"+a.dataset.fid)));
+    box.querySelectorAll(".mcourt-a").forEach(a=>a.classList.toggle("dim", !N.nodes.has("court")));
+    // A spoke is indexed by data-s into L.spokes; a relation and its arrowhead
+    // both carry data-e into L.edges. Neither needs the other's lookup.
+    box.querySelectorAll(".medge.spoke").forEach(e=>
+      e.classList.toggle("dim", !N.spokes.has(parseInt(e.dataset.s,10))));
+    box.querySelectorAll(".medge[data-e],.marrow[data-e]").forEach(e=>
+      e.classList.toggle("dim", !N.edges.has(parseInt(e.dataset.e,10))));
   }
   function undim(){ box.querySelectorAll(".dim").forEach(e=>e.classList.remove("dim")); }
   /* SELECTION. A plain click SELECTS rather than leaves: it holds the dim, marks
@@ -6405,20 +6521,14 @@ function mountMap(slug, data, focusId, focusPath){
      and the card's link is the next thing in the tab order, so reaching the page
      costs one extra key rather than being unreachable. */
   const panel = document.getElementById("mapsel");
-  // A selection is a KIND and a key, because a folder and a claim are both
-  // selectable and their ids are separate numbering. `{kind:"claim", id}` or
-  // `{kind:"folder", fid}`; null for nothing selected.
+  // A selection is a KIND and a key, because a folder, a claim and the court are
+  // all selectable and their ids are separate numbering. `{kind:"claim", id}`,
+  // `{kind:"folder", fid}` or `{kind:"court"}`; null for nothing selected.
   let sel = null;
-  /* A folder's neighbourhood is its own subtree, not a relation graph: keep the
-     folder and the claims filed in it, dim everything else. That is the question
-     a folder answers — what is in here — and it is the same gesture as a claim
-     lighting up what bears on it. */
-  function dimFolder(f){
-    const keep = new Set(f.claims||[]);
-    box.querySelectorAll(".mnode-a").forEach(a=>
-      a.classList.toggle("dim", !keep.has(parseInt(a.dataset.id,10))));
-    box.querySelectorAll(".medge,.marrow").forEach(e=>e.classList.add("dim"));
-  }
+  // The key a selection dims to. One string for three kinds, so paint() and the
+  // hover handler ask neighbourhood() the same question.
+  const selKey = x => !x ? null
+    : x.kind==="claim" ? "c"+x.id : x.kind==="folder" ? "f"+x.fid : "court";
   function paint(){
     const selClaim = sel && sel.kind==="claim" ? sel.id : null;
     const selFold = sel && sel.kind==="folder" ? sel.fid : null;
@@ -6426,6 +6536,8 @@ function mountMap(slug, data, focusId, focusPath){
       a.classList.toggle("selected", parseInt(a.dataset.id,10)===selClaim));
     box.querySelectorAll(".mfold-a").forEach(a=>
       a.classList.toggle("selected", parseInt(a.dataset.fid,10)===selFold));
+    box.querySelectorAll(".mcourt-a").forEach(a=>
+      a.classList.toggle("selected", !!sel && sel.kind==="court"));
     if(!sel){
       undim();
       // The empty state is an affordance, not a blank: the map gave no sign it
@@ -6436,15 +6548,20 @@ function mountMap(slug, data, focusId, focusPath){
         + `filed in it. Nothing here leaves the map until you ask it to.</p>`;
       return;
     }
+    // The dim is the same call whatever was picked; only the card differs.
+    dimTo(selKey(sel));
     if(!panel) return;
-    if(selClaim!=null){ dim(selClaim); panel.innerHTML = mapSelCard(selClaim, data, slug, L); }
-    else { const f = L.folders[selFold]; dimFolder(f||{}); panel.innerHTML = mapFolderCard(f, data, slug); }
+    if(sel.kind==="court") panel.innerHTML = mapCourtCard(data, slug, L);
+    else if(selClaim!=null) panel.innerHTML = mapSelCard(selClaim, data, slug, L);
+    else panel.innerHTML = mapFolderCard(L.folders[selFold], data, slug);
     const x = document.getElementById("msel-x");
     if(x) x.addEventListener("click", ()=>{ select(null); });
     // A claim named on a folder card selects it, so the map is browsable in
     // place: folder, its claims, then the claim's own card and its page.
     panel.querySelectorAll(".mapsel-c").forEach(b=>
       b.addEventListener("click", ()=>select({kind:"claim", id:parseInt(b.dataset.go,10)})));
+    panel.querySelectorAll(".mapsel-f").forEach(b=>
+      b.addEventListener("click", ()=>select({kind:"folder", fid:parseInt(b.dataset.go,10)})));
   }
   /* CENTRE ON WHAT WAS SELECTED. Picking a node in the outer ring used to leave
      it wherever it happened to sit — often at the edge, sometimes half off — and
@@ -6453,7 +6570,8 @@ function mountMap(slug, data, focusId, focusPath){
      pointer, and the reader asked for this node, not for a different view. */
   function centreOn(next){
     if(!next) return;
-    const b = next.kind==="claim" ? L.nodes.find(n=>n.id===next.id) : L.folders[next.fid];
+    const b = next.kind==="court" ? L.court
+            : next.kind==="claim" ? L.nodes.find(n=>n.id===next.id) : L.folders[next.fid];
     if(!b) return;
     // At least far enough in for the titles to be above the LOD line, or
     // centring on a claim shows a box with its sentence hidden.
@@ -6479,7 +6597,7 @@ function mountMap(slug, data, focusId, focusPath){
      repaint would draw the CURRENT card again rather than the wrong one. */
   const asked = new Set();
   async function fetchText(next){
-    if(!isLive() || !next) return;
+    if(!isLive() || !next || next.kind==="court") return;   // a court's card is all layout
     const key = next.kind==="claim" ? "c"+next.id : "f"+next.fid;
     if(asked.has(key)) return;
     const same = () => sel && ((sel.kind==="claim" && "c"+sel.id===key)
@@ -6505,19 +6623,29 @@ function mountMap(slug, data, focusId, focusPath){
   box.addEventListener("click", ev=>{
     if(ev.defaultPrevented) return;
     if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button!==0) return; // let the link work
-    const a=ev.target.closest(".mnode-a"), fa=ev.target.closest(".mfold-a");
+    const a=ev.target.closest(".mnode-a"), fa=ev.target.closest(".mfold-a"),
+          ca=ev.target.closest(".mcourt-a");
     // A drag that ends over a node must not select it — the compat click fires
     // on mouseup wherever the pointer landed, so panning across the graph would
     // otherwise pick whatever it stopped on.
     if(dragged){ ev.preventDefault(); return; }
     if(a){ ev.preventDefault(); select({kind:"claim", id:parseInt(a.dataset.id,10)}); }
     else if(fa){ ev.preventDefault(); select({kind:"folder", fid:parseInt(fa.dataset.fid,10)}); }
+    else if(ca){ ev.preventDefault(); select({kind:"court"}); }
     else if(!ev.target.closest(".mapsel")) select(null);
   });
-  // hover: transient, and it must not fight a selection that is already held
-  box.addEventListener("mouseover", ev=>{ if(sel) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
-  box.addEventListener("mouseout", ev=>{ if(sel) return; if(ev.target.closest(".mnode-a")) undim(); });
-  box.addEventListener("focusin", ev=>{ if(sel) return; const a=ev.target.closest(".mnode-a"); if(a) dim(parseInt(a.dataset.id,10)); });
+  /* hover: transient, and it must not fight a selection that is already held.
+     ALL THREE KINDS, because hover is a preview of what a click will do and a
+     preview that covers one of the three teaches the wrong lesson about the
+     other two. */
+  const hoverKey = t => {
+    const a=t.closest(".mnode-a"); if(a) return "c"+a.dataset.id;
+    const fa=t.closest(".mfold-a"); if(fa) return "f"+fa.dataset.fid;
+    return t.closest(".mcourt-a")? "court" : null;
+  };
+  box.addEventListener("mouseover", ev=>{ if(sel) return; const k=hoverKey(ev.target); if(k) dimTo(k); });
+  box.addEventListener("mouseout", ev=>{ if(sel) return; if(hoverKey(ev.target)) undim(); });
+  box.addEventListener("focusin", ev=>{ if(sel) return; const k=hoverKey(ev.target); if(k) dimTo(k); });
   box.addEventListener("focusout", ()=>{ if(!sel) undim(); });
   box.addEventListener("keydown", ev=>{
     const w=fit.w/z, h=fit.h/z;
