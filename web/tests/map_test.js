@@ -338,7 +338,53 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
      (many.match(/data-go=/g)||[]).length===12 && many.includes("and 28 more"));
   ok("clicking a listed claim selects it rather than navigating",
      /\.mapsel-c[\s\S]{0,200}select\(\{kind:"claim"/.test(mount));
-  ok("a selected folder dims to its own subtree", /function dimFolder/.test(mount));
+  /* WHAT ONE CLICK LIGHTS. The rule is the node, the edges that touch it, and
+     what is at the far end — one rule for a claim, a folder and the court, which
+     is the whole reason this is a function and not three.
+     Tested against the real layout rather than by grepping mountMap for a
+     function name, which is what the previous check did and is how the folder
+     case shipped dimming every edge on the map including the ones it had just
+     been asked to show. */
+  {
+    const Lm = mapLayout(demoData, "titles");
+    const N = mapNeighbourhood(Lm, "court");
+    const tops = Lm.spokes.filter(s=>s.a==="court");
+    ok("the court lights every spoke that leaves it",
+       tops.length>0 && [...N.spokes].every(i=>Lm.spokes[i].a==="court") && N.spokes.size===tops.length);
+    ok("...and the nodes at the far end of them",
+       tops.every(s=>N.nodes.has(s.b)) && N.nodes.has("court"));
+    ok("...and no relation, because a court is in none", N.edges.size===0);
+    ok("a claim two rings out is NOT lit by the court",
+       ![...N.nodes].some(k=>k[0]==="c" && Lm.spokes.some(s=>s.b===k && s.a!=="court")));
+
+    // A folder: the spoke that holds it, and the spokes to what it holds. Both
+    // directions, which is what "direct edges" means on a tree.
+    const fk = Lm.spokes.find(s=>s.a==="court" && s.b[0]==="f").b;
+    const F = mapNeighbourhood(Lm, fk);
+    ok("a folder lights the spoke above it and the spokes below",
+       F.spokes.size === Lm.spokes.filter(s=>s.a===fk||s.b===fk).length && F.spokes.size>1);
+    ok("...and it keeps the court lit, not just its own claims", F.nodes.has("court"));
+    ok("a folder lights no edge it does not touch",
+       [...F.spokes].every(i=>Lm.spokes[i].a===fk||Lm.spokes[i].b===fk));
+
+    // A claim: its containment spoke AND its relations. The old rule dropped the
+    // spoke, so the one edge saying where the claim is filed went grey.
+    const rel = Lm.edges[0];
+    const C = mapNeighbourhood(Lm, "c"+rel.from);
+    ok("a claim lights the relation it is an end of", C.edges.has(0) && C.nodes.has("c"+rel.to));
+    ok("...and the spoke that says where it is filed",
+       [...C.spokes].length>0 && [...C.spokes].every(i=>Lm.spokes[i].b==="c"+rel.from||Lm.spokes[i].a==="c"+rel.from));
+    ok("a claim lights no relation it is not an end of",
+       [...C.edges].every(i=>Lm.edges[i].from===rel.from||Lm.edges[i].to===rel.from));
+  }
+  // Every kind goes through the one dim, and the dim covers all three selectors.
+  ok("one rule dims for every kind of node",
+     !/function dimFolder/.test(mount) && (mount.match(/dimTo\(/g)||[]).length>=3);
+  ok("dimming reaches folders and the court, not just claims",
+     /\.mfold-a["'][\s\S]{0,120}dim/.test(mount) && /\.mcourt-a["'][\s\S]{0,120}dim/.test(mount));
+  ok("and the stylesheet actually dims all three",
+     /\.mnode-a\.dim,\.mfold-a\.dim,\.mcourt-a\.dim/.test(src));
+  ok("the court is selectable", /select\(\{kind:"court"\}\)/.test(mount));
 
   /* THE CARD MUST NOT COVER THE MAP. It did: absolutely positioned at top-right
      with a z-index, which made every node under it unclickable — clicking a claim
