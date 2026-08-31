@@ -1057,6 +1057,11 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
   display:flex; flex-direction:column; gap:8px; padding:10px clamp(10px,2vw,20px) 12px}
 .mapbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap; min-height:34px}
 .mapbar-t{font-weight:600}
+.maphome{display:flex; align-items:center; gap:7px; flex:none; text-decoration:none;
+  color:var(--ink); padding-right:12px; margin-right:2px; border-right:1px solid var(--line)}
+.maphome b{font-family:var(--serif); font-size:16px; font-weight:600; letter-spacing:-.01em}
+.maphome:hover{color:var(--accent)}
+.maphome .seat{display:flex}
 .mapbar-n{color:var(--ink-2); margin-left:auto}
 .mapbar-x{margin-left:6px}
 .mapback{white-space:nowrap}
@@ -7516,6 +7521,24 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
      and Escape alone is not an affordance because nothing advertises it. */
   main.innerHTML = `<div class="mapfull">
        <div class="mapbar">
+         <!-- THE MARK COMES WITH YOU. .mapfull is fixed at inset:0, so it covers
+              the rail and with it the only Kourt on the page: a reader who opened
+              the map was looking at an unbranded full-screen diagram with no way
+              home except the court behind them. Same lockup as the rail, first in
+              the bar, and it goes to the directory rather than to this court —
+              the back button beside it already does that. -->
+         <a class="maphome" href="#/" aria-label="Kourt — the directory">
+           <span class="seat" aria-hidden="true"><svg viewBox="3 0 94 100" width="21" height="22" fill="currentColor">
+             <rect x="17" y="0" width="5" height="66"/><rect x="24" y="0" width="5" height="66"/>
+             <rect x="31" y="0" width="5" height="66"/><rect x="64" y="0" width="5" height="66"/>
+             <rect x="71" y="0" width="5" height="66"/><rect x="78" y="0" width="5" height="66"/>
+             <rect x="36" y="8" width="28" height="58"/>
+             <rect x="12" y="66" width="76" height="10"/>
+             <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
+             <rect x="8" y="87" width="84" height="6"/>
+             <rect x="3" y="93" width="94" height="7"/>
+           </svg></span><b>Kourt</b>
+         </a>
          <a class="btn ghost mapback" href="#/c/${esc(slug)}"><span aria-hidden="true">←</span> ${safeInline(cs.name)}</a>
          <span class="mapbar-t"><span class="seal">${esc(slug)}</span> map</span>
          <span class="mapbar-n small mono">${esc(countLine)}</span>

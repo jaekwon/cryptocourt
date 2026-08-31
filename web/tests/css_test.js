@@ -171,15 +171,23 @@ if (mediaDark && themeLight && themeDark) {
   const iconRaw = /<link rel="icon" href="data:image\/svg\+xml,([^"]+)"/.exec(src);
   ok("the favicon is an svg data URI", !!iconRaw);
   const icon = decodeURIComponent((iconRaw ? iconRaw[1] : "").replace(/%23/g, "#"));
-  const rail = shapes(between('<span class="seat" aria-hidden="true">', "</svg>"));
-  const fork = shapes(between('<span class="seat" aria-hidden="true">', "</svg>",
-                              src.indexOf('class="forkme"')));
+  // EVERY copy, not a fixed three: the map bar became a fourth when the
+  // full-screen map turned out to cover the rail, and a harness that counts
+  // copies rather than collecting them goes quiet exactly when one is added.
+  const copies = [];
+  for (let i = src.indexOf('<span class="seat"'); i >= 0;
+           i = src.indexOf('<span class="seat"', i + 1)) {
+    copies.push(shapes(src.slice(i, src.indexOf("</svg>", i))));
+  }
+  const rail = copies[0] || [];
   const ico  = shapes(icon);
-  ok("the rail draws the seat — twelve rectangles, no curves", rail.length === 12);
+  ok(`the page draws the seat in more than one place — found ${copies.length}`,
+     copies.length >= 3);
+  ok("the first is twelve rectangles, no curves", rail.length === 12);
+  ok("every in-page copy is the same twelve, in the same order",
+     copies.every(c => c.length === 12 && c.every((d, i) => d === rail[i])));
   ok("the favicon draws the same twelve, in the same order",
      ico.length === 12 && ico.every((d, i) => d === rail[i]));
-  ok("the ribbon draws the same twelve, in the same order",
-     fork.length === 12 && fork.every((d, i) => d === rail[i]));
   // and the drawing is a solid silhouette: no knocked-out holes, which is what
   // lets one copy serve a light page, a dark page and a browser tab.
   ok("nothing in the mark is stroked or knocked out",
