@@ -127,7 +127,7 @@ func render(path string) string {
 
 func renderDirectory() string {
 	b := strings.Builder{}
-	b.WriteString("# " + platformName + "\n\nStake on claims of fact. Your principal always returns 1×.\n\n")
+	b.WriteString("# " + platformName + "\n\nLet truth be told.\n\n")
 	// THE WAY IN, on the page every stranger lands on first. Read cold, the
 	// lede above is two pieces of vocabulary ("stake", "principal returns 1×")
 	// and then a list of court names — nothing that says what any of it is. The

@@ -63,7 +63,7 @@ const CARD = `<!doctype html><meta charset="utf-8"><style>
 <div class="txt">
   <h1>Kourt</h1>
   <div class="rule"></div>
-  <p>Stake on claims of fact. Your principal always returns 1&times;.</p>
+  <p>Let truth be told.</p>
   <div class="foot"><span>kourt.xyz</span><span class="said">The seat is empty.</span></div>
 </div>`;
 

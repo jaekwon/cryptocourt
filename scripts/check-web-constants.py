@@ -59,6 +59,12 @@ MIRRORS = {
 # offering to sell coin to somebody it cannot help. So the clause is pinned.
 PHRASES = {
     "you had none when this vote started": "realm/r/kourtv2/voteweight.gno",
+    # The platform's own line. It is the first thing on the realm's Render and
+    # the first thing in the overlay's rail, and until this entry existed there
+    # was nothing to notice when one of them was rewritten — which is how a
+    # chain page and the site over it end up introducing the same product with
+    # two different sentences.
+    "Let truth be told.": "realm/r/kourtv2/render.gno",
 }
 
 # web symbol -> (the call the realm counts it with, the call the overlay does)

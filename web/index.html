@@ -1543,7 +1543,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
       </svg></span>
       <span><h1>Kourt</h1></span>
     </a>
-    <div class="tag">Stake on claims of fact. Your principal always returns 1×.</div>
+    <div class="tag">Let truth be told.</div>
   </div>
   <nav class="nav" id="nav">
     <a href="#/" data-k="dir"><span class="g">▤</span> Directory</a>
@@ -10677,7 +10677,7 @@ on(/^\/about$/, async ()=>{
 function demoRender(path){
   const parts = path.split("/");
   if(path===""||path==="/"){
-    let o="# Kourt\n\nStake on claims of fact. Your principal always returns 1×.\n\n## Featured\n\n";
+    let o="# Kourt\n\nLet truth be told.\n\n## Featured\n\n";
     for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===2) o+=`- [${c.name}](/r/kourt/kourtv2:${slug}) · ${slug.toUpperCase()} — ${c.claims.length} claims\n`;
     o+="\n## Courts\n\n";
     for(const [slug,c] of Object.entries(DEMO.courts)) if(c.tier===1) o+=`- [${c.name}](/r/kourt/kourtv2:${slug}) · ${slug.toUpperCase()} — ${c.claims.length} claims\n`;
