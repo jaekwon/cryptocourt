@@ -7026,7 +7026,7 @@ function joinPanel(slug, s){
 }
 /* One read, and it says nothing rather than guessing when it fails: a wrong
    balance here is worse than an absent one, because this is the row somebody
-   checks to find out whether their money arrived. */
+   checks to find out whether their buy arrived. */
 async function fillJoinHeld(slug){
   const row = document.getElementById("joinheld"), val = document.getElementById("joinheldv");
   if(!row || !val || !CFG.addr) return;
