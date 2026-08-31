@@ -214,3 +214,100 @@ func TestTheSpamTallyIsFrozenOnTheDecidingRound(cur realm, t *testing.T) {
 	// which the read above uses cs.decidedPID to fetch.
 	uassert.Equal(t, cs.decidedPID, cs.proposalID)
 }
+
+// THE DISCARD, DRIVEN THROUGH A REAL VOTE — the money and the carrot.
+//
+// THE FIXTURE'S SHAPE IS THE FINDING. Three earlier attempts died on
+// "govern: already voted" with demonstrably distinct voter addresses, and the
+// cause was not the addresses: a voter needs CHECKPOINTED weight at the
+// proposal's epoch, so an epoch has to be sealed (SkipHeights + touch) between
+// minting the voters and opening the dispute. Without that seal the votes go
+// wrong in a way whose error names the wrong thing entirely.
+//
+// It also has to be driven through ResolveDispute rather than by calling
+// spamDiscardClaim: OpenDispute moves the escrow by ZERO while recording a bond
+// — the disputer's coin passes through to the governor as the proposal's own
+// bond and only returns when it settles — so a discard called any earlier tries
+// to refund a bond the escrow does not hold.
+func TestTheSpamDiscardPaysEveryoneButTheAuthor(cur realm, t *testing.T) {
+	author := testutils.TestAddress("sk-author")
+	staker := testutils.TestAddress("sk-staker")
+	flag := testutils.TestAddress("sk-flag")
+	keep := testutils.TestAddress("sk-keep")
+	c := testCourt(cur, "sk", author, 30_000_000_000)
+	c.coin.Mint(staker, 10_000_000_000)
+	// Unequal on purpose: the spam share is WEIGHT, not headcount. 8 against 2
+	// is 80% — past half, so the claim is discarded, and past two thirds, so the
+	// deposit burns as well.
+	c.coin.Mint(flag, 8_000_000_000)
+	c.coin.Mint(keep, 2_000_000_000)
+
+	id := stakeAnswerDispute(cur, "sk", author, staker)
+
+	// SEAL AN EPOCH so the voters have checkpointed weight to vote with.
+	testing.SkipHeights(epochBlocks)
+	touch(c)
+
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "sk", id)
+	cs := mustClaim(c, id)
+	if cs.deposit <= 0 || cs.fee <= 0 || cs.answerBond <= 0 || cs.disputeBond <= 0 {
+		t.Fatalf("the fixture must have all four at stake: dep=%d fee=%d "+
+			"answer=%d dispute=%d", cs.deposit, cs.fee, cs.answerBond, cs.disputeBond)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(flag))
+	VoteDispute(cross(cur), "sk", id, voteSpam)
+	testing.SetRealm(testing.NewUserRealm(keep))
+	VoteDispute(cross(cur), "sk", id, voteNo)
+
+	dep, fee := cs.deposit, cs.fee
+	authorBefore := c.coin.BalanceOf(author)
+	stakerBefore := c.coin.BalanceOf(staker)
+	supplyBefore := c.coin.TotalSupply()
+
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	ResolveDispute(cross(cur), "sk", id)
+
+	if !cs.spamClosed {
+		t.Fatalf("a four-fifths spam vote must discard the claim, got route %q", cs.route)
+	}
+	// THE DISPUTER IS REPAID. They opened the round that found the spam, and
+	// burning their bond would discourage the only path that surfaces it.
+	if c.coin.BalanceOf(staker) <= stakerBefore {
+		t.Fatal("the disputer's bond must return on a discard")
+	}
+	// THE ANSWERER IS REPAID — author and answerer are the same address here, so
+	// this is asserted against the burn below rather than in isolation.
+	if c.coin.BalanceOf(author) <= authorBefore {
+		t.Fatal("the answerer's bond must return on a discard")
+	}
+	// AND EXACTLY THE RIGHT COIN LEFT THE SUPPLY. Asserted as an AMOUNT, not as
+	// "something burned": at four fifths both the deposit and the fee burn, and
+	// a version that refunded the fee would still burn the deposit and still
+	// satisfy `burned > 0` — measured, that ablation survived until this line
+	// named the sum.
+	burned := supplyBefore - c.coin.TotalSupply()
+	uassert.Equal(t, dep+fee, burned)
+	if fee <= 0 || dep <= 0 {
+		t.Fatal("the fixture must have both at stake for that sum to mean anything")
+	}
+
+	// THE CARROT IS POINTED AT THE SPAM SIDE, which is what stops the button
+	// being dominated the way abstain was.
+	uassert.Equal(t, voteSpam, cs.carrotChoice)
+	if cs.carrotDenom != cs.spamW || cs.carrotDenom <= 0 {
+		t.Fatalf("the carrot's denominator must be the spam weight: denom=%d spam=%d",
+			cs.carrotDenom, cs.spamW)
+	}
+	if cs.decidedPID == 0 {
+		t.Fatal("PullCarrot reads the deciding round, so a discard must name one")
+	}
+	// And the flagger's own ballot is on record under the COURT's word, so it
+	// can match carrotChoice at pull time.
+	v := cs.qVoted.Get("d" + beClaimKey(uint64(cs.decidedPID)) + string(flag))
+	if v == nil || v.(string) != voteSpam {
+		t.Fatalf("the spam voter's ballot must be recorded as %q, got %v", voteSpam, v)
+	}
+}

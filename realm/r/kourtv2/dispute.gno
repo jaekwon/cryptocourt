@@ -596,6 +596,23 @@ func spamDiscardClaim(c *Court, cs *claimState, spamW, cast int64) {
 	cs.verdictAtTime = nowTime()
 	cs.route = "spam"
 	cs.spamW, cs.spamTotalW = spamW, cast
+	// THE CARROT PAYS THE SIDE THAT WON, and here that side is spam.
+	//
+	// Without this the spam button is dominated exactly as abstain was — same
+	// coin locked, same turnout added, no upside — and no payoff-maximiser ever
+	// presses it. A flag nobody rationally raises is not a signal, so this line
+	// is what makes the button real rather than decorative.
+	//
+	// It needs no new record. VoteDispute already writes each voter's choice in
+	// the COURT's vocabulary under "d"+pid+addr, and PullCarrot compares that
+	// against carrotChoice — so writing voteSpam here is the whole wiring. That
+	// is the one-character seam step 1 was careful about.
+	//
+	// decidedPID is set for the same reason the verdict arms set it: PullCarrot
+	// reads the DECIDING round's record, and cs.proposalID is overwritten by any
+	// later round. A discarded claim has no later round, but the read is shared
+	// and must not depend on that.
+	cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, voteSpam, spamW
 
 	if cs.answerBond > 0 {
 		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
