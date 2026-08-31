@@ -1347,7 +1347,15 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
    with the unit orphaned below the box. 11ch takes "201.744973", the widest
    value a balance can put in it. 13 rather than 11 because the flash shares the
    box: at 11 the selected value and "ya got none!" met in the middle. */
-.ticket .argrow .sendin{width:13ch; min-width:0; font-family:var(--mono)}
+.ticket .argrow .sendin{width:27ch; min-width:0; font-family:var(--mono)}
+/* The balance, inside the box at the right: "1.5 / 201.7". Clickable to stake
+   all of it, which is why this one is not pointer-events:none like the flash. */
+.amthave{position:absolute; right:7px; top:50%; transform:translateY(-50%);
+  font:11.5px var(--mono); color:var(--muted); cursor:pointer; white-space:nowrap}
+.amthave.none{cursor:default}
+.amthave:hover{color:var(--accent-2)}
+.amthave.none:hover{color:var(--muted)}
+.amtwrap.flash .amthave{visibility:hidden}
 /* The flash, inside the box and right-aligned, behind the value. It goes on its
    own after a moment: a warning that stays becomes part of the furniture, and
    the red border is already the persistent half of this. */
@@ -2393,20 +2401,22 @@ async function fillStakeBalance(slug){
   try{ bal = await balanceOf(slug, CFG.addr); }catch(_){ return; }
   if(bal==null || !isFinite(+bal)) return;
   const micro = +bal;
-  /* "of 201.7", NOT "you hold 201.7 KOURT:COVID". The unit is already on the row,
-     two words in, so repeating it spends a line on a name the reader just read;
-     and "you hold none of this court's coin" was eight words for a figure — the
-     shortest true thing is the figure. Reads as one sentence with the field:
-     amount [1] KOURT:COVID of 201.7. */
-  out.textContent = "";
-  const fig = cc(micro, slug).replace(" "+ccSym(slug), "");
-  if(micro<=0){ out.textContent = "of 0"; return; }
-  const btn = document.createElement("button");
-  btn.type = "button"; btn.className = "helplink";
-  btn.textContent = "of " + fig;
-  btn.title = "Stake all of it";
-  btn.addEventListener("click", ()=>{ f.value = String(micro/1e6); f.focus(); });
-  out.appendChild(btn);
+  /* BOTH NUMBERS IN THE BOX: what you are staking, and out of how much. It read
+     "KOURT:COVID of 201.7" beside the field — the coin's name once as a unit and
+     again inside a figure, six words to assemble — and then wrapped onto a second
+     line the moment the balance was long. In the box it is one glance:
+     1.5 / 201.7, with the unit once after it. Clicking the balance stakes all
+     of it. */
+  /* THE WHOLE ROW IS THE BOX NOW. A label to its left and the coin's name to its
+     right made three elements for one question, and the two of them wrapped the
+     moment the balance grew. Inside: what you are staking, then out of how much,
+     then of what. "0 / 201.7 KOURT:COVID" — one glance, and the unit governs
+     both numbers because it sits after both. */
+  const fig = cc(micro, slug).replace(" " + ccSym(slug), "");
+  out.textContent = "/ " + (micro>0? fig : "0") + " " + ccSym(slug);
+  if(micro<=0){ out.classList.add("none"); return; }
+  out.classList.remove("none");
+  out.addEventListener("click", ()=>{ f.value = String(micro/1e6); f.focus(); });
 }
 async function fillTicketPulls(slug, id, d, p){
   const wraps = [...document.querySelectorAll(".stakewrap .ticket [data-pull]")];
@@ -8780,12 +8790,11 @@ function stakeTicket(slug,id,d){
      page going blank. */
   return `<div class="ticket" id="stake-ticket"><h3>Stake the claim</h3>
     <div class="argrow" style="margin-top:12px">
-      <label for="stakeamt" class="small muted">amount</label>
       <span class="amtwrap" id="stakeamtwrap"><input id="stakeamt" class="sendin" type="text"
-             inputmode="decimal" value="0" autocomplete="off" aria-describedby="stakeamtu"
+             inputmode="decimal" value="0" autocomplete="off" aria-describedby="stakebal"
+             aria-label="amount to stake, in ${esc(ccSym(slug))}"
+             ><span class="amthave" id="stakebal" title="Stake all of it"></span
              ><span class="amtflash" aria-hidden="true">ya got none!</span></span>
-      <span id="stakeamtu" class="small muted mono">${ccSym(slug)}</span>
-      <span id="stakebal" class="small muted"></span>
     </div>
     <div class="actions" style="margin-top:10px">
       ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
