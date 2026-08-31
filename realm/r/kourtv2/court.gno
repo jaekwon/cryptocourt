@@ -288,6 +288,58 @@ func mustInvariants() {
 	// This replaces a check on answerBondBps, and note it contains no bond term at
 	// all: with the bond keyed to the destroyable draw, the thing worth certifying
 	// is the SLASH multiple, not the base.
+	// ---- the draw multiplier's own parameter relationships (tier.gno) ----
+	//
+	// THE ALIGNMENT, and it is the one worth certifying. The multiplier's floor
+	// must bite exactly where a claim stops being ANSWERABLE:
+	//
+	//	tierFloorBps / tierParBps  ==  ordAnswerXFloorBps / tierRefFloorBps
+	//
+	// Left side: the smallest multiplier anything can earn. Right side: the
+	// smallest claim that can legally be answered, as a fraction of the
+	// reference that earns par. Equal, and every answerable claim sits on the
+	// SLOPE — its size actually decides its rate. Unequal in one direction and a
+	// band of answerable claims is stuck on the flat floor with size making no
+	// difference to them; in the other, the floor is unreachable and is dead
+	// code pretending to be a bound.
+	//
+	// This held by arithmetic when the constants were chosen and by nothing
+	// else, which for a relationship spanning two files is how it comes apart:
+	// ordAnswerXFloorBps is an answerability knob and nobody changing it would
+	// think to look at a multiplier. Cross-multiplied to keep it in integers.
+	if tierFloorBps*tierRefFloorBps != tierParBps*ordAnswerXFloorBps {
+		panic("kourtv2: the multiplier's floor no longer meets the answerability floor — " +
+			"a band of answerable claims would have a rate their size cannot move")
+	}
+	// The ceiling is the old HIGH band, and that is what keeps the maximum draw
+	// per claim — and with it every emission bound fitted below — exactly where
+	// it was when the tier was voted. A ceiling above 2x is not a re-keying, it
+	// is a raise.
+	if tierCeilBps != 2*tierParBps {
+		panic("kourtv2: the multiplier ceiling is no longer the old HIGH band — " +
+			"this raises the per-claim draw the emission bounds were fitted to")
+	}
+	// Ordering, and the floor's own job: a reference at or below the
+	// answerability floor cannot bound anything, because the cheapest claim
+	// already sits at it.
+	if tierFloorBps <= 0 || tierFloorBps >= tierParBps || tierParBps >= tierCeilBps {
+		panic("kourtv2: the multiplier clamps are out of order")
+	}
+	if tierRefFloorBps <= ordAnswerXFloorBps {
+		panic("kourtv2: the reference floor must exceed the answerability floor")
+	}
+	// NEGATIVE is what this actually covers, and the `<= 0` is belt over braces.
+	// Zero cannot reach here: tierEMAN is a typed constant, so `x / tierEMAN`
+	// with tierEMAN == 0 is a COMPILE error — measured, at tier.gno's tierRefAt
+	// and observeClaimSize, "invalid operation: division by zero". The compiler
+	// catches that case strictly earlier and harder than a deploy panic could.
+	// A negative one
+	// compiles fine and silently inverts the average, which is what is left for
+	// this line to refuse.
+	if tierEMAN <= 0 {
+		panic("kourtv2: the running average's memory must be positive")
+	}
+
 	// tierMidX is gone; par is tierParBps and this expression wants it in
 	// POINTS, the unit splitCarrot is quoted in. Same number, same certificate.
 	parPoints := tierParBps / 100
