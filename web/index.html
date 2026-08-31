@@ -3598,14 +3598,24 @@ async function adenaSign(func, args, el){
   // GetNetwork has to wake Adena's service worker. Setting this after the await
   // would light the spinner exactly when it was no longer needed.
   const busy = on => { el.classList.toggle("busy", on); el.setAttribute("aria-busy", on? "true":"false"); };
-  const note = (m, ok) => {
+  const note = (m, ok, title) => {
     let n = el.parentElement.querySelector(".txnote");
     if(!n){ n = document.createElement("div"); n.className = "txnote"; n.setAttribute("role","status"); el.parentElement.appendChild(n); }
     n.textContent = m; n.classList.toggle("ok", !!ok);
+    /* THE HASH LIVES IN THE TITLE. Twelve characters of it in the sentence could
+       not be looked up and answered a question nobody asked; the whole of it, on
+       hover, is there for the one reader who wants to check the chain. */
+    if(title) n.title = title; else n.removeAttribute("title");
   };
   if(el.disabled) return;
   el.disabled = true;
   busy(true);
+  /* LANDED IS NOT FINISHED. On success the page waits 7s for the chain to
+     include the transaction and then repaints — and the button used to go idle
+     the instant DoContract returned, so those 7 seconds looked like nothing
+     happening at all, right after the one action a reader most wants confirmed.
+     The spinner stays on until the repaint takes the button with it. */
+  let landed = false;
   try{
     const want = CFG.chainid || "dev";
     /* A REFUSED GetNetwork IS NOT PROOF OF A LOCKED WALLET, and this used to say
@@ -3766,7 +3776,21 @@ async function adenaSign(func, args, el){
       caller: CFG.addr, send, pkg_path: PKG, func, args: vals
     }}], gasFee: GAS_FEE_UGNOT, gasWanted: GAS_WANTED});
     if(res.code===0){
-      note("Sent. tx "+String(res.data&&res.data.hash||"").slice(0,12)+"…", true);
+      /* WHAT CHANGED, NOT WHAT IT WAS CALLED. This said "Sent. tx kI749HHATQkl…"
+         — a hash truncated to twelve characters, which cannot be looked up, is
+         not a link, and answers a question nobody had. What a reader wants after
+         pressing Buy is whether they got the coin, and the panel answers that on
+         the refresh below.
+         NOT "Bought 447.2 KOURT:META" either, tempting as it is: the quote is a
+         quote. buyRowsHtml says so directly — "if someone buys first you'll
+         receive fewer units than shown, never more" — so naming the figure here
+         would promise something the chain has not agreed to yet. It says the
+         thing that IS certain, and points at where the truth will appear. */
+      const hash = String(res.data && res.data.hash || "");
+      const base = func === "Buy"
+        ? "Sent. The coin is on its way — this panel will show what you hold."
+        : "Sent. " + func + " is on its way.";
+      note(base + " Updating in 7s…", true, hash? "tx "+hash : "");
       /* THE DRAFT CLEARS ONLY HERE. A rejected signature, a wallet on the wrong
          chain, a closed prompt — every one of those must leave the work exactly
          where it was, because the alternative is somebody losing what they had
@@ -3800,7 +3824,17 @@ async function adenaSign(func, args, el){
           }, 7000);
         }
       }
-      setTimeout(render, 7000);
+      landed = true;
+      /* A COUNTDOWN, NOT A BARE SPINNER. Seven seconds of a spinning button says
+         "working"; it does not say for how long, and an unbounded spinner is what
+         a stalled page looks like. Counting down says the wait is expected and
+         finite, which is the difference between waiting and wondering. */
+      let left = 7;
+      const tick = setInterval(()=>{
+        left--;
+        if(left > 0) note(base + " Updating in " + left + "s…", true, hash? "tx "+hash : "");
+      }, 1000);
+      setTimeout(()=>{ clearInterval(tick); render(); }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
     else if(res.code===3001){ note("Adena's active account is not "+shortAddr(CFG.addr)+" — switch accounts in Adena or reconnect."); }
@@ -3808,7 +3842,10 @@ async function adenaSign(func, args, el){
   }catch(e){ note("Adena: "+(e.message||e)); }
   // Cleared in finally, so a thrown wallet error leaves a button that can be
   // pressed again rather than one that spins for ever.
-  finally{ el.disabled = false; busy(false); }
+  // Cleared unless the transaction LANDED: a thrown wallet error must leave a
+  // button that can be pressed again, while a successful one must not invite a
+  // second press of something already on its way.
+  finally{ if(!landed){ el.disabled = false; busy(false); } }
 }
 document.addEventListener("click",(ev)=>{
   const d = ev.target.closest("[data-inert]");

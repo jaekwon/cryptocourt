@@ -338,6 +338,45 @@ ok("...and the connect awaits the re-render, or the re-find reads a stale DOM",
 // bare name passed with the markup deleted. Ablated and confirmed.
 ok("...and a failed connect says why, in the dialog that asked",
    /<p class="small" data-connect-why/.test(src) && src.includes("gave no reason"));
+// ---- what a landed transaction says -------------------------------------
+// It said "Sent. tx kI749HHATQkl…" — a hash cut to twelve characters, which
+// cannot be looked up and is not a link. The reader's question after pressing Buy
+// is whether they got the coin, so the message points at where that appears and
+// the whole hash moves to the title for anyone checking the chain.
+{
+  // THE END ANCHOR IS SEARCHED FROM THE START. signHelp is declared BEFORE
+  // adenaSign in this file, so the unanchored form produced a NEGATIVE length --
+  // an empty slice, in which every assertion below is trivially false. Third time
+  // this exact mistake has been made in this suite; the length is asserted now.
+  const a0 = src.indexOf("async function adenaSign(");
+  const sign = src.slice(a0, src.indexOf("\ndocument.addEventListener(\"click", a0));
+  ok("the adenaSign slice is not empty", sign.length > 1000);
+  ok("the receipt does not print a truncated hash",
+     !/hash\s*\|\|\s*""\)\.slice\(0,\s*12\)/.test(sign) && !/tx "\+String\(res\.data/.test(sign));
+  ok("...it says where the result will show", /this panel will show what you hold/.test(sign));
+  // THE SPINNER OUTLIVES THE SUBMIT. The 7s wait for inclusion used to look like
+  // nothing happening, because the button went idle the moment DoContract
+  // returned -- immediately after the one action a reader most wants confirmed.
+  ok("a landed transaction keeps the button busy",
+     /let landed = false;/.test(sign) && /landed = true;/.test(sign)
+     && /if\(!landed\)\{ el\.disabled = false; busy\(false\); \}/.test(sign));
+  ok("...and counts the wait down rather than spinning blind",
+     /Updating in " \+ left \+ "s/.test(sign) && /setInterval/.test(sign));
+  ok("...clearing its timer when the repaint comes",
+     /clearInterval\(tick\); render\(\)/.test(sign));
+  // NOT the quoted figure: buyRowsHtml promises fewer units are possible, so
+  // naming one here would assert something the chain has not agreed to.
+  // COMMENTS STRIPPED. The comment at that spot explains why the quoted figure is
+  // NOT named, and names it to do so — so the bare regex matched the explanation
+  // and failed against correct code. Second time today; an absence claim over
+  // source has to read only the code.
+  const signCode = sign.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\n)\s*\/\/[^\n]*/g, "$1");
+  ok("...and does not name an amount the chain has not confirmed",
+     !/Bought/.test(signCode));
+  ok("...while the full hash stays reachable in the title",
+     /note\(/.test(sign) && /"tx "\+hash/.test(sign) && /if\(title\) n\.title = title/.test(src));
+}
+
 ok("...names the file:// trap, where no extension can ever load",
    src.includes("extensions do not run on") && src.includes("file://"));
 ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
@@ -427,8 +466,13 @@ ok("...and a rejected prompt is not treated as a hard failure",
 // ignored. The wait belongs to the extension; the silence was ours.
 ok("the button says it is busy BEFORE the call that waits",
    src.indexOf("busy(true);") < src.indexOf("await a.GetNetwork()"));
+// CLEARED ON FAILURE, HELD ON SUCCESS. This pinned the bare
+// `finally{ el.disabled = false; busy(false); }`, which cleared it either way —
+// so a landed transaction went idle for the 7s it waits to be included, exactly
+// when a reader most wants to see something happening. The guarantee it existed
+// for is unchanged: a thrown wallet error must leave a pressable button.
 ok("...and is cleared in finally, so a wallet error does not spin for ever",
-   /finally\{ el\.disabled = false; busy\(false\); \}/.test(src));
+   /finally\{ if\(!landed\)\{ el\.disabled = false; busy\(false\); \} \}/.test(src));
 ok("...announced to assistive tech, not only drawn",
    src.includes('el.setAttribute("aria-busy", on? "true":"false")'));
 ok("the connect button gets the same treatment, for the same reason",
