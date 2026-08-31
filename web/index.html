@@ -1388,6 +1388,36 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
    than furniture.
    A flex sibling of .amtwrap in .ticket .argrow, so the row's own gap places it
    and nothing has to be positioned by hand. */
+/* THE ACCOUNT WIDGET. Fixed top-right; the pop is anchored to it and closes on
+   Escape, on an outside click, and on navigation. */
+.acct{position:fixed; top:10px; right:12px; z-index:35}
+.acctbtn{display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  padding:6px 10px; border:1px solid var(--line-2); border-radius:8px;
+  background:var(--surface); color:var(--ink); font:12px var(--sans);
+  box-shadow:var(--shadow-sm)}
+.acctbtn:hover{border-color:var(--accent); color:var(--accent)}
+.acctbtn .g{color:var(--muted)}
+.acctwho{font-family:var(--mono); font-size:11.5px}
+.acctcar{color:var(--muted); font-size:10px}
+.acctpop{position:absolute; top:calc(100% + 6px); right:0; min-width:16rem;
+  max-width:min(22rem, calc(100vw - 24px));
+  padding:10px 12px; border:1px solid var(--line-2); border-radius:10px;
+  background:var(--surface); box-shadow:var(--shadow); font:12px var(--sans)}
+.acctpop[hidden]{display:none}
+.acctpop .arow{display:flex; justify-content:space-between; gap:12px;
+  padding:4px 0; border-bottom:1px solid var(--line)}
+.acctpop .arow:last-of-type{border-bottom:0}
+.acctpop .arow .l{color:var(--muted)}
+.acctpop .arow .r{font-variant-numeric:tabular-nums; text-align:right}
+.acctpop .afull{font-family:var(--mono); font-size:11px; word-break:break-all;
+  color:var(--ink-2); margin:0 0 8px}
+.acctpop .awarn{color:var(--contra); margin:8px 0 0}
+.acctpop .aacts{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap}
+.acctpop .aacts a, .acctpop .aacts button{font:11.5px var(--sans); cursor:pointer;
+  padding:4px 8px; border:1px solid var(--line-2); border-radius:6px;
+  background:var(--surface-2); color:var(--ink); text-decoration:none}
+.acctpop .aacts a:hover, .acctpop .aacts button:hover{border-color:var(--accent); color:var(--accent)}
+@media (max-width:640px){ .acctwho{display:none} }
 .amtget{font:11.5px var(--sans); color:var(--contra); text-decoration:none;
   white-space:nowrap; align-self:center}
 .amtget:hover{color:var(--accent-2); text-decoration:underline}
@@ -1496,6 +1526,20 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   </div>
 </aside>
 
+
+<!-- THE ACCOUNT, TOP RIGHT. Fixed rather than in the rail, because who you are
+     signed in as is context for every screen and the rail scrolls. z-index 35:
+     above page content (1), below the fullscreen map (40) and the lightbox (60),
+     so a modal still covers it. -->
+<div class="acct" id="acct">
+  <button type="button" class="acctbtn" id="acctbtn" aria-haspopup="menu"
+          aria-expanded="false" aria-controls="acctpop">
+    <span class="g" aria-hidden="true">&#9671;</span>
+    <span class="acctwho mono" id="acctwho">Connect</span>
+    <span class="acctcar" id="acctcar" aria-hidden="true" hidden>&#9662;</span>
+  </button>
+  <div class="acctpop" id="acctpop" role="menu" hidden></div>
+</div>
 
 <main class="main" id="main"></main>
 
@@ -2636,6 +2680,15 @@ function cc(n, slug){ const u=n||0, v=u/1e6;
   if(u!==0 && Math.abs(v)<0.01) return fmtN(u)+" µ"+ccSym(slug);
   return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" "+ccSym(slug); }
 function ugnot(n){ return fmtN(n)+" µGNOT"; }
+/* GNOT IN THE SAME SHAPE AS cc(), and for the same reason. fmtN alone ROUNDS: a
+   wallet holding 0.4 GNOT printed as "0 GNOT", which is indistinguishable from
+   the empty wallet that makes Adena grey out its own approve button — and no
+   warning would appear beside it, because that warning keys on the µ figure
+   rather than on the rendered text. Small amounts fall back to µGNOT instead of
+   rounding to a lie. */
+function gnotAmt(micro){ const u=micro||0, v=u/1e6;
+  if(u!==0 && Math.abs(v)<0.01) return fmtN(u)+" µGNOT";
+  return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" GNOT"; }
 function shortAddr(a){ a=String(a||""); return esc(a.length>12? a.slice(0,7)+"…"+a.slice(-4): a); }
 function wall(nowH, targetH){
   const secs=(targetH-nowH)*BLOCK_SECS, past=secs<0, s=Math.abs(secs);
@@ -3743,6 +3796,85 @@ function reflectWallet(){
   const lab = document.getElementById("walletlab"), hint=document.getElementById("wallethint");
   if(CFG.addr){ lab.textContent = shortAddr(CFG.addr)+" · disconnect"; hint.hidden=true; }
   else lab.textContent = "Connect Adena";
+  reflectAccount();
+}
+
+/* ===================== the account widget, top right ====================== */
+/* WHAT IT SHOWS AND WHAT IT DOES NOT. The address, the GNOT that pays fees, and
+   the coin of the court you are looking at. NOT every court's coin: that is
+   meHoldings, which is a paginated per-court scan, and running it to fill a
+   dropdown would put a dozen reads behind every render. The full picture is one
+   click away and says so. */
+/* A DECLARATION, not a const arrow. check-web-dupes protects this file from a
+   silently-shadowed name by counting `function` declarations, and an arrow
+   assigned to a const is invisible to it — so the one shape that guard cannot
+   see is the one shape not to use here. */
+function acctSlug(){ const m=/^#\/c\/([a-z0-9-]+)/.exec(location.hash||""); return m? m[1] : ""; }
+
+/* µGNOT for one address, or null when the read FAILED — which is not zero.
+   Three answers from bank/balances, measured against a gnodev chain:
+     funded          "12345ugnot"   (the payload carries its own quotes)
+     valid, empty    ""             a real zero
+     bad address     query error    caught by the caller
+   A failed read rendered as 0 would tell somebody their coin is gone. */
+async function gnotOf(addr){
+  const raw = await abci("bank/balances/"+String(addr||""), "");
+  const m = /(\d+)\s*ugnot/.exec(String(raw||""));
+  return m? Number(m[1]) : 0;
+}
+
+function reflectAccount(){
+  const who=document.getElementById("acctwho"), car=document.getElementById("acctcar");
+  if(!who) return;
+  who.textContent = CFG.addr? String(CFG.addr).replace(/^(.{7}).*(.{4})$/, "$1…$2") : "Connect";
+  if(car) car.hidden = !CFG.addr;
+  if(!CFG.addr) acctToggle(false);
+}
+
+function acctToggle(open){
+  const pop=document.getElementById("acctpop"), btn=document.getElementById("acctbtn");
+  if(!pop||!btn) return;
+  const show = open===undefined? pop.hidden : !!open;
+  pop.hidden = !show;
+  btn.setAttribute("aria-expanded", show? "true":"false");
+  if(show) acctFill();
+}
+
+/* Rendered twice: once immediately with what is already known, and again when
+   the balances land. Without the first pass the menu opens empty for as long as
+   the node takes, which reads as broken rather than as loading. */
+async function acctFill(){
+  const pop=document.getElementById("acctpop");
+  if(!pop) return;
+  if(!CFG.addr){ pop.innerHTML = `<p class="afull">Not connected.</p>`; return; }
+  const slug = acctSlug();
+  const head = `<p class="afull" id="acctfull">${esc(CFG.addr)}</p>`;
+  const acts = `<div class="aacts"><a href="#/me" data-acctclose>Your positions</a>`
+    + `<button type="button" data-acctcopy>Copy address</button>`
+    + `<button type="button" data-acctoff>Disconnect</button></div>`;
+  const row = (l,r) => `<div class="arow"><span class="l">${l}</span><span class="r">${r}</span></div>`;
+  pop.innerHTML = head + row("GNOT","<span class=\"muted\">reading…</span>")
+    + (slug? row(esc(ccSym(slug)),"<span class=\"muted\">reading…</span>") : "") + acts;
+  if(!isLive()){
+    pop.innerHTML = head + row("GNOT","<span class=\"muted\">demo — no chain</span>")
+      + (slug? row(esc(ccSym(slug)), cc(await balanceOf(slug,CFG.addr), slug)) : "") + acts;
+    return;
+  }
+  /* SETTLED, NOT all-or-nothing: one unreadable balance must not blank the other,
+     and neither may be reported as a number when its read failed. */
+  const [g, c] = await Promise.allSettled([gnotOf(CFG.addr),
+    slug? balanceOf(slug, CFG.addr) : Promise.resolve(null)]);
+  const gtxt = g.status==="fulfilled"
+    ? gnotAmt(g.value)
+    : `<span class="muted">could not read</span>`;
+  const ctxt = c.status==="fulfilled" && c.value!=null
+    ? cc(Number(c.value), slug) : `<span class="muted">could not read</span>`;
+  /* THE ZERO IS THE INTERESTING CASE, and it is the one the reader hits: with no
+     GNOT a wallet cannot pay a fee, so Adena greys out its own approve button and
+     nothing on this page can explain why. Named here, where the number is. */
+  const warn = (g.status==="fulfilled" && g.value===0)
+    ? `<p class="awarn">No GNOT — a wallet cannot pay a transaction fee, so signing will be refused before it reaches the court.</p>` : "";
+  pop.innerHTML = head + row("GNOT", gtxt) + (slug? row(esc(ccSym(slug)), ctxt) : "") + warn + acts;
 }
 
 /* ======================= the claim composer ============================= */
@@ -10393,6 +10525,33 @@ function initControls(){
   reflect();
   const walletbtn=document.getElementById("walletbtn");
   walletbtn.onclick=()=>{ CFG.addr? adenaDisconnect() : adenaConnect(); };
+  /* THE TOP-RIGHT CONTROL. Connects when there is nobody signed in, and
+     otherwise opens the menu — disconnect lives inside it, so a mis-click on the
+     way to reading a balance cannot sign you out. */
+  const acctbtn=document.getElementById("acctbtn");
+  if(acctbtn) acctbtn.onclick=()=>{ CFG.addr? acctToggle() : adenaConnect(); };
+  document.addEventListener("click", ev=>{
+    const t=ev.target;
+    if(t && t.closest && t.closest("[data-acctcopy]")){
+      const w=(navigator.clipboard&&navigator.clipboard.writeText)
+        ? navigator.clipboard.writeText(String(CFG.addr||"")) : Promise.reject();
+      w.then(()=>note("Address copied.", true)).catch(()=>{
+        /* No clipboard on file:// or without permission: select it instead, so
+           the reader can still copy by hand rather than being told nothing. */
+        const el=document.getElementById("acctfull");
+        if(el && window.getSelection){ const r=document.createRange(); r.selectNodeContents(el);
+          const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+        note("Copy blocked here — the address is selected.");
+      });
+      return;
+    }
+    if(t && t.closest && t.closest("[data-acctoff]")){ acctToggle(false); adenaDisconnect(); return; }
+    if(t && t.closest && t.closest("[data-acctclose]")){ acctToggle(false); return; }
+    if(t && t.closest && t.closest("#acct")) return;   // inside: leave it open
+    acctToggle(false);
+  });
+  document.addEventListener("keydown", ev=>{ if(ev.key==="Escape") acctToggle(false); });
+  addEventListener("hashchange", ()=>acctToggle(false));
   reflectWallet();
   const themebtn=document.getElementById("themebtn");
   themebtn.onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme");
