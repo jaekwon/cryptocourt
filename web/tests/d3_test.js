@@ -135,7 +135,29 @@ ok("demo miss note", src.includes('no claim #${mfocus} in the sample court'));
 ok("ring re-applied inside put()", src.includes('if(focusId!=null){ const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.classList.add("focused"); }'));
 ok("focused stroke distinct from hover", src.includes('.mnode-a.focused .mnode{stroke:var(--accent); stroke-width:3}'));
 ok("camera lands once after initial put", src.includes('cx=n.x+n.w/2; cy=n.y+n.h/2;'));
-ok("zoom from the LOD line, clamped", src.includes('z=Math.min(8, Math.max(1, 9*fit.w/(MAPK.fs.title*'));
+ok("zoom from the LOD line, clamped", src.includes('z=Math.min(8, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*'));
+// ONE KNOB, THREE DECISIONS. The opening view, centring on a node and fitting a
+// folder each aim at the same smallest-readable size, and each used to spell it
+// as its own bare 9 — so raising it meant finding all three, and missing one
+// left a map that opened readable and went small the moment you clicked.
+// Counted, not just spot-checked: a fourth site added later must join them.
+ok("the readable floor is one named constant, used by every zoom decision",
+   src.split('MAPK.readPx*fit.w/(MAPK.fs.title*').length - 1 === 3);
+ok("...and no bare 9 is left aiming at it",
+   !src.includes('9*fit.w/(MAPK.fs.title*'));
+// 13, not 9. Asserted as a LITERAL: spelling the expectation as MAPK.readPx
+// would move with the constant and pass at any value, including back at 9.
+ok("...set to a size somebody can actually read", /readPx:13,/.test(src));
+// THE TWO NUMBERS ARE READ OUT AND COMPARED, not asserted separately. A zoom
+// floor at or below lod()'s hide line is the bug that cannot be seen in either
+// constant alone: the view would aim at a size the very next paint erases, and
+// the map opens with labelled boxes that go blank without being touched.
+{
+  const floor = +(src.match(/readPx:([\d.]+),/) || [])[1];
+  const hide  = +(src.match(/!far && px<([\d.]+)\) far=true/) || [])[1];
+  ok("the zoom floor and lod()'s hide line were both found", isFinite(floor) && isFinite(hide));
+  ok(`...and the floor clears the hide line (${floor} > ${hide})`, floor > hide);
+}
 
 // crumbs orientation
 ok("orient line skips directory + about", src.includes('path!=="/" && !path.startsWith("/about") && store.get("cc.intro")!=="1"'));
