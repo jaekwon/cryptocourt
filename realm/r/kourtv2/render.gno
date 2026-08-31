@@ -360,6 +360,14 @@ func renderClaim(slug string, id uint64) string {
 		if total > 0 {
 			b.WriteString("- right now: " + pct(cs.yesStake, total) + " YES\n")
 		}
+		// AND WHAT THAT STAKE IS BUYING, which is live information on an
+		// unanswered claim and nowhere else: the draw multiplier is this
+		// claim's total stake against a typical claim here, fixed at the
+		// answer. So the number a staker moves NOW is the one that will be
+		// frozen, and after the answer it can no longer be moved at all.
+		b.WriteString("- pays: not set until the claim is answered — it is " +
+			"this claim's total stake against a typical claim in this court, " +
+			"so staking now is what sets it\n")
 	}
 	h := heightNow()
 	if yAvg, ym := cs.yes.Average(h, periodBlocks); ym {
@@ -429,39 +437,37 @@ func renderClaim(slug string, id uint64) string {
 		if cs.verdictAt != 0 && !cs.provClose {
 			b.WriteString("- verdict: " + sideName(int(cs.provisional)) + " — " + cs.route + "\n")
 		}
-		// Quality: the tier and the flag slot. The tally itself stays sealed.
+		// WHAT THE CLAIM PAYS, and what set it.
 		//
-		// UNRATED IS NOT LOW, and printing it as low was expensive. cs.tier is
-		// the ZERO VALUE — which is tierLowX — until a settle or a finalize
-		// writes mid, so every answered-but-unsettled claim rendered
-		// "quality: low". And the tier is a payout MULTIPLIER: crystallize
-		// computes `want = tier × midGross`, and tierLowX is 0. So the page told
-		// the answerer and every staker that the claim currently pays NOTHING,
-		// when its actual outcome absent a flag vote is mid — full pay.
+		// This used to print a voted band — low, mid or high — with an offer to
+		// challenge it by posting a bond. Both are gone: the multiplier is the
+		// claim's own size against the court's typical claim (tier.gno), it is
+		// fixed the moment the claim is answered, and no vote can move it. A page
+		// still selling a challenge would be selling a transaction that cannot
+		// change the number it names.
 		//
-		// A genuine low is distinguishable: quality.gno lands a voted tier and
-		// sets slotConsumed in the same block, so low-and-unconsumed can only be
-		// the untouched zero.
-		//
-		// "default" was also the wrong word for the unfinalised case: it reads as
-		// "low is the default" when it means "this rating is not settled yet".
-		var q string
-		switch {
-		case cs.tierFinal:
-			q = "quality: " + tierName(cs.tier) + " (final)"
-		case cs.tier == tierLowX && !cs.slotConsumed:
-			q = "quality: not yet rated — mid unless a quality vote lowers it"
-		default:
-			q = "quality: " + tierName(cs.tier) +
-				" (not final; a quality vote can still change it)"
+		// BEFORE THE ANSWER THERE IS NO MULTIPLIER, and saying one would be worse
+		// than saying none: xBarFrozen is unset, so any figure printed here would
+		// be the floor, i.e. the page would tell a staker their claim currently
+		// pays a quarter when nothing has been decided at all.
+		if cs.tierRef <= 0 {
+			// A CLAIM ANSWERED BEFORE THE SIZE RATING SHIPPED has no reference
+			// recorded, so tierBpsFor reads it as par. Printing the ratio anyway
+			// gave "held 0 against a typical 0" — two figures that are missing,
+			// not zero, presented as if they were measurements. Say which it is.
+			b.WriteString("- pays " + tierText(tierParBps) +
+				" — this claim was answered before ratings were recorded, so it " +
+				"pays the standard amount\n")
+		} else {
+			b.WriteString("- pays " + tierText(tierBpsFor(cs)) +
+				" — this claim held " + strconv.FormatInt(cs.xBarFrozen, 10) +
+				" " + qualifiedSymbol(c) + " against a typical " +
+				strconv.FormatInt(cs.tierRef, 10) + " " + qualifiedSymbol(c) + " here\n")
+			// THE RULE, not just the number, because the number alone reads as an
+			// editorial rating rather than as the difference in what is paid.
+			b.WriteString("- the rating is the money that showed up, not a vote: " +
+				"a claim of typical size pays 1.00×, and it is capped at 0.25× and 2.00×\n")
 		}
-		b.WriteString("- " + q + "\n")
-		// WHAT THE RATING IS FOR, which no surface said. A reader who does not
-		// know the tier multiplies the reward reads "low" as an editorial
-		// opinion of the claim rather than as the difference between being paid
-		// and not.
-		b.WriteString("- the rating sets what this claim pays: **low pays " +
-			"nothing**, mid pays the full amount, high pays double\n")
 		switch {
 		case cs.flagOpen:
 			b.WriteString("- flag vote open — no running total is shown here until it closes\n")
@@ -469,10 +475,12 @@ func renderClaim(slug string, id uint64) string {
 			b.WriteString("- counter re-vote open — no running total is shown here until it closes\n")
 		case cs.pendingSlash > 0:
 			b.WriteString("- a slash is escrowed in its counter-flag window\n")
-		case !cs.crystallized && !cs.slotConsumed && !cs.provClose:
-			b.WriteString("- anyone may challenge that rating once, by posting a " +
-				"bond of " + strconv.FormatInt(flagBondFor(cs), 10) + " " +
-				qualifiedSymbol(c) + " and calling a vote on it\n")
+		// THE CHALLENGE OFFER IS GONE. It invited a bond to "challenge that
+		// rating", and the rating is now the claim's own size — frozen at the
+		// answer, and not something a vote can move. Selling it would be selling
+		// a transaction that cannot do what the sentence beside it says. The
+		// flag entrypoints still exist and are removed with the lane; the page
+		// stops advertising them here.
 		}
 		if cs.crystallized {
 			w, a, ans, carrot := cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
@@ -621,15 +629,22 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 	return b.String()
 }
 
-func tierName(tier int64) string {
-	switch tier {
-	case tierLowX:
-		return "low"
-	case tierHighX:
-		return "high"
-	default:
-		return "mid"
+// tierText renders a bps multiplier as a decimal — 14700 becomes "1.47×".
+//
+// It replaced tierName, which named three voted bands. There are no bands now;
+// the multiplier is continuous, so a name would have to invent boundaries the
+// arithmetic does not have. Two decimals because the clamps are 0.25 and 2.00
+// and one decimal would render a quarter of par as "0.2×".
+func tierText(bps int64) string {
+	if bps < 0 {
+		bps = 0
 	}
+	frac := (bps % tierParBps) / 100
+	out := strconv.FormatInt(bps/tierParBps, 10) + "."
+	if frac < 10 {
+		out += "0"
+	}
+	return out + strconv.FormatInt(frac, 10) + "×"
 }
 
 func sideName(side int) string {

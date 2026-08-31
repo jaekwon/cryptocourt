@@ -119,10 +119,16 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	mustContain("settled YES", "settled YES — every stake withdraws 1×")
 	cs.provisional = int8(sideNO)
 	mustContain("settled", "verdict: NO — vote")
-	mustContain("settled", "quality: mid (not final")
-	mustContain("settled", "anyone may challenge that rating once")
-	cs.tier, cs.tierFinal = tierHighX, true
-	mustContain("quality", "quality: high (final)")
+	// THE RATING IS A RATIO NOW, not a band, and it is fixed at the answer — so
+	// there is no "not final" state and no challenge to offer. The fixture is
+	// answered by this point, so the page reports the number and its reference.
+	cs.xBarFrozen, cs.tierRef = 3_000_000, 2_000_000
+	mustContain("settled", "pays 1.50×")
+	mustContain("settled", "the money that showed up, not a vote")
+	mustNotContain("settled", "anyone may challenge that rating once")
+	// The ceiling reads as the ceiling rather than as "high".
+	cs.xBarFrozen = 9_000_000
+	mustContain("ceiling", "pays 2.00×")
 	cs.flagOpen = true
 	// "The tally is sealed" reads as "the count is hidden", which it is not —
 	// every ballot is a public transaction. The rule this pins is unchanged
@@ -696,14 +702,25 @@ func TestSideAndTierNamesAreNotSwapped(t *testing.T) {
 	if got := sideName(sideNO); got != "NO" {
 		t.Errorf("sideNO renders as %q", got)
 	}
-	if got := tierName(tierLowX); got != "low" {
-		t.Errorf("tierLowX renders as %q", got)
+	// tierName named three voted bands and is gone with them. The multiplier is
+	// continuous now, so a name would have to invent boundaries the arithmetic
+	// does not have; tierText renders the number instead.
+	if got := tierText(tierParBps); got != "1.00×" {
+		t.Errorf("par renders as %q", got)
 	}
-	if got := tierName(tierHighX); got != "high" {
-		t.Errorf("tierHighX renders as %q", got)
+	if got := tierText(tierFloorBps); got != "0.25×" {
+		t.Errorf("the floor renders as %q", got)
 	}
-	if got := tierName(tierMidX); got != "mid" {
-		t.Errorf("tierMidX renders as %q", got)
+	if got := tierText(tierCeilBps); got != "2.00×" {
+		t.Errorf("the ceiling renders as %q", got)
+	}
+	// TWO DECIMALS, and the padding is the point: at one decimal a quarter of par
+	// renders as "0.2×", and 1.07x and 1.7x become indistinguishable in a column.
+	if got := tierText(14_700); got != "1.47×" {
+		t.Errorf("a mid-slope multiplier renders as %q", got)
+	}
+	if got := tierText(10_500); got != "1.05×" {
+		t.Errorf("a small fraction must keep its leading zero, got %q", got)
 	}
 }
 

@@ -343,17 +343,36 @@ func TestTheClaimPageNumbersNameTheirCoin(cur realm, t *testing.T) {
 	cs.answerBond0 = 7000
 	cs.yesStakeAtFreeze = 4_000_000
 	cs.noStakeAtFreeze = 1_000_000
+	// The size rating's two figures, so the ratio line renders and its coin
+	// naming is actually checked. Without them the claim reads as one answered
+	// before ratings existed, which is a real branch — it has its own test —
+	// but not the one this fixture is for.
+	cs.xBarFrozen, cs.tierRef = 5_000_000, 4_000_000
 	answered := Render(path)
 	for _, want := range []string{
 		"- staked when answered: 5000000 " + unit + " (YES 4000000 / NO 1000000)",
 		"- still unwithdrawn: 5000000 " + unit,
 		"(bond 7000 " + unit + ")",
 		"- disputing this answer costs a bond of ",
-		"- anyone may challenge that rating once, by posting a bond of ",
+		// "anyone may challenge that rating once" is gone from this list on
+		// purpose — the rating is the claim's own size now, frozen at the
+		// answer, so the offer named a transaction that could not move the
+		// number beside it. Its absence is asserted below.
+		"- the rating is the money that showed up, not a vote",
 	} {
 		if !strings.Contains(answered, want) {
 			t.Fatalf("an answered claim must render %q:\n%s", want, answered)
 		}
+	}
+	if strings.Contains(answered, "challenge that rating") {
+		t.Fatalf("the rating is set by size and cannot be challenged:\n%s", answered)
+	}
+	// BOTH SIDES OF THE RATIO NAME THE COIN, which is what this test exists for:
+	// a ratio with one unlabelled side is half a number, and the reference was
+	// rendering bare when this line was first written.
+	if strings.Contains(answered, "against a typical") &&
+		!strings.Contains(answered, unit+" here") {
+		t.Fatalf("the reference figure must name the coin too:\n%s", answered)
 	}
 	// The two bond lines and the flag bond all name the coin.
 	if strings.Count(answered, unit) < 5 {
@@ -437,50 +456,76 @@ func TestTheHelpPageQuotesTheRealStatusWords(cur realm, t *testing.T) {
 // And the tier is a payout multiplier: crystallize computes tier × midGross,
 // and low is 0. The page therefore told the answerer and every staker that the
 // claim currently pays nothing, when its outcome absent a flag vote is mid.
-func TestAnUnratedClaimDoesNotReadAsRatedLow(cur realm, t *testing.T) {
+// THE SAME HAZARD, ONE DESIGN LATER. The old failure was that cs.tier's zero
+// value IS tierLowX, so every answered-but-unsettled claim rendered "quality:
+// low" — telling the answerer and every staker the claim paid NOTHING when its
+// actual outcome was mid, i.e. full pay.
+//
+// The tier is derived from size now and has no zero-value trap, but the shape
+// recurs one step earlier: BEFORE the answer, xBarFrozen is unset, so a
+// multiplier printed then would be the 0.25x floor — the page would again tell
+// a staker their claim pays a quarter when nothing has been decided at all.
+// This is that case, and the two assertions after it are the ones the old test
+// carried: say what sets the number, and never sell a challenge that cannot
+// move it.
+func TestAnUnansweredClaimIsNotReportedAtTheFloor(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("hp10-alice")
 	c, id := boardFixture(cur, "hp10", alice)
 	cs := mustClaim(c, id)
 	path := "hp10/" + strconv.FormatUint(id, 10)
 
-	// Answered and not yet settled: tier is untouched, so it is the zero value.
-	cs.frozenAt, cs.answer = 100, int8(sideYES)
-	if cs.tier != tierLowX || cs.slotConsumed || cs.tierFinal {
-		t.Fatal("the fixture must leave the tier at its untouched zero")
+	if cs.frozenAt != 0 {
+		t.Fatal("the fixture must be unanswered")
 	}
 	page := Render(path)
-	if strings.Contains(page, "quality: low") {
-		t.Fatalf("an unrated claim must not be reported as rated low:\n%s", page)
+	if strings.Contains(page, "0.25×") {
+		t.Fatalf("an unanswered claim must not be reported at the floor:\n%s", page)
 	}
-	if !strings.Contains(page, "not yet rated — mid unless a quality vote lowers it") {
-		t.Fatalf("an unrated claim must say so, and say what it defaults to:\n%s", page)
-	}
-	// WHAT THE RATING IS FOR. Without it, "low" reads as an editorial opinion of
-	// the claim rather than as the reward multiplier it is.
-	if !strings.Contains(page, "**low pays nothing**") {
-		t.Fatal("the page must say the rating decides what the claim pays")
+	if !strings.Contains(page, "not set until the claim is answered") {
+		t.Fatalf("an unanswered claim must say the rating is not set yet:\n%s", page)
 	}
 
-	// A GENUINE LOW STILL READS AS LOW. The two are distinguishable because
-	// quality.gno lands a voted tier and sets slotConsumed in the same block —
-	// so low-and-unconsumed is the only shape that means "never rated".
-	cs.slotConsumed = true
-	voted := Render(path)
-	if !strings.Contains(voted, "quality: low (not final") {
-		t.Fatalf("a voted low must still read as low:\n%s", voted)
+	// ANSWERED: the number appears, with the two figures it is a ratio of. A
+	// multiplier without its reference cannot be checked against anything.
+	cs.frozenAt, cs.answer = 100, int8(sideYES)
+	cs.xBarFrozen, cs.tierRef = 3_000_000, 2_000_000
+	rated := Render(path)
+	if !strings.Contains(rated, "pays 1.50×") {
+		t.Fatalf("an answered claim reports its multiplier:\n%s", rated)
 	}
-	if strings.Contains(voted, "not yet rated") {
-		t.Fatal("a voted low must not read as unrated")
+	if !strings.Contains(rated, "3000000") || !strings.Contains(rated, "2000000") {
+		t.Fatalf("the page shows the claim's size and the court's typical:\n%s", rated)
+	}
+	// WHAT THE RATING IS FOR, and where it comes from. Without this it reads as
+	// an editorial opinion of the claim rather than as what it pays.
+	if !strings.Contains(rated, "the money that showed up, not a vote") {
+		t.Fatal("the page must say what sets the rating")
+	}
+	// AND IT MUST NOT SELL A CHALLENGE. A flag can no longer move this number,
+	// so offering one would be offering a transaction that cannot do what the
+	// sentence next to it says.
+	if strings.Contains(rated, "challenge that rating") {
+		t.Fatalf("the rating is not challengeable any more:\n%s", rated)
+	}
+	// The clamps are named, so a reader can tell 2.00x from "the top".
+	if !strings.Contains(rated, "capped at 0.25× and 2.00×") {
+		t.Fatal("the page must name the clamps")
 	}
 
-	// And a finalised tier says final, not "can still change".
-	cs.tier, cs.tierFinal = tierHighX, true
-	final := Render(path)
-	if !strings.Contains(final, "quality: high (final)") {
-		t.Fatal("a finalised tier must say final")
+	// A CLAIM ANSWERED BEFORE RATINGS EXISTED has no reference recorded. The
+	// multiplier falls back to par, which is right — but the PAGE rendered the
+	// ratio anyway and printed "held 0 against a typical 0", two figures that
+	// are MISSING presented as if they were measurements. This is that branch.
+	cs.xBarFrozen, cs.tierRef = 0, 0
+	legacy := Render(path)
+	if strings.Contains(legacy, "against a typical 0") {
+		t.Fatalf("a missing reference must not render as a measured zero:\n%s", legacy)
 	}
-	if strings.Contains(final, "can still change") {
-		t.Fatal("a finalised tier must not invite a challenge")
+	if !strings.Contains(legacy, "answered before ratings were recorded") {
+		t.Fatalf("the legacy case must say why it pays what it pays:\n%s", legacy)
+	}
+	if !strings.Contains(legacy, "pays 1.00×") {
+		t.Fatalf("a claim with no reference pays par, not the floor:\n%s", legacy)
 	}
 }
 
