@@ -6,6 +6,7 @@ package kourtv2
 import (
 	"chain"
 	"strconv"
+	"strings"
 
 	checkpoint "gno.land/p/kourt/checkpoint/v0"
 	twap "gno.land/p/kourt/twap/v0"
@@ -603,6 +604,78 @@ func PoolConviction(courtSlug string, claimID uint64) (yes, no int64) {
 func TrailingYes(courtSlug string, claimID uint64, window int64) (avg int64, mature bool) {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	return cs.yes.Average(heightNow(), window)
+}
+
+// DocketSeries answers, in ONE query, the four reads a docket row needs for each
+// of many claims:
+//
+//	"<id>:<yesStake>:<noStake>:<convYes>:<convNo>:<trailOI>:<oiMature>:<trailYes>:<yesMature>;…"
+//
+// mature flags are "1" or "0". ids is a comma-separated list, in any order; the
+// reply keeps that order and SKIPS an id this court does not have, so a caller
+// matches on the id field rather than on position. At most seriesPageMax ids are
+// answered and the rest are dropped — read the length of what came back.
+//
+// WHY IT EXISTS. The overlay drew a docket of fourteen rows by asking
+// StakePools, PoolConviction, TrailingOI and TrailingYes per row: 56 queries,
+// each one reloading this realm at ~60-90ms, which is most of the four seconds a
+// court page spent reading the chain. Every one of those numbers is already in
+// the claimState this function walks once. Batching at the RPC does not help —
+// gno executes a JSON-RPC array serially — so the batching has to happen HERE,
+// where the realm is loaded once for the whole page.
+//
+// The four single-claim readers stay: a claim page wants one row, and an older
+// overlay is still entitled to ask the old way.
+func DocketSeries(courtSlug string, ids string, window int64) string {
+	c := mustCourt(courtSlug)
+	now := heightNow()
+	out := strings.Builder{}
+	sent := 0
+	for _, part := range strings.Split(ids, ",") {
+		if sent >= seriesPageMax {
+			break
+		}
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			continue
+		}
+		v := c.claims.Get(beClaimKey(id))
+		if v == nil {
+			continue // a claim this court does not have is skipped, never guessed
+		}
+		cs := v.(*claimState)
+		oi, oiMature := cs.oi.Average(now, window)
+		yes, yesMature := cs.yes.Average(now, window)
+		if sent > 0 {
+			out.WriteString(";")
+		}
+		out.WriteString(strconv.FormatUint(id, 10))
+		out.WriteString(":" + strconv.FormatInt(cs.yesStake, 10))
+		out.WriteString(":" + strconv.FormatInt(cs.noStake, 10))
+		out.WriteString(":" + strconv.FormatInt(convToCC(cs.yesConvHi, cs.yesConvLo), 10))
+		out.WriteString(":" + strconv.FormatInt(convToCC(cs.noConvHi, cs.noConvLo), 10))
+		out.WriteString(":" + strconv.FormatInt(oi, 10))
+		out.WriteString(":" + boolDigit(oiMature))
+		out.WriteString(":" + strconv.FormatInt(yes, 10))
+		out.WriteString(":" + boolDigit(yesMature))
+		sent++
+	}
+	return out.String()
+}
+
+// seriesPageMax caps one DocketSeries reply. The overlay pages the docket at 50;
+// this leaves room for that plus the strips above it without a second query.
+const seriesPageMax = 60
+
+func boolDigit(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
 
 func mustClaim(c *Court, id uint64) *claimState {

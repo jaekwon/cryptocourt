@@ -129,10 +129,16 @@ func renderDirectory() string {
 	b := strings.Builder{}
 	b.WriteString("# " + platformName + "\n\nLet truth be told.\n\n")
 	// THE WAY IN, on the page every stranger lands on first. Read cold, the
-	// lede above is two pieces of vocabulary ("stake", "principal returns 1×")
-	// and then a list of court names — nothing that says what any of it is. The
-	// explanation existed only in docs/ and in the overlay, neither of which a
-	// gnoweb reader can reach from here.
+	// motto above says nothing about what happens here, and a list of court
+	// names says less. The explanation existed only in docs/ and in the overlay,
+	// neither of which a gnoweb reader can reach from here.
+	//
+	// AND THE PROMISE STAYS ON THE PAGE. The motto replaced a lede that carried
+	// the one fact that distinguishes this from a betting market — a stake is
+	// returned whole, win or lose. render_test asserts it is here, which is how
+	// its removal was caught; the overlay says it twice more, but a gnoweb reader
+	// has only this page.
+	b.WriteString("Stake on claims of fact. Your principal always returns 1×.\n\n")
 	b.WriteString(helpLink + "\n\n")
 	afterHeader := b.Len()
 	writeTier(&b, "Featured", tierFeatured)

@@ -4945,6 +4945,8 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     const s2=gstr(slug);
     const seq0 = renderSeq; // fills die with their render — never write into a newer paint
     const nowHq = await chainHeight(); // one /status for the whole page's clocks
+    await docketSeriesPreload(s2, claims.slice(0, 60).map(cl=>cl.id));
+    if(renderSeq!==seq0) return;
     inChunks(claims, 6, async cl=>{
       try{
         if(renderSeq!==seq0) return;
@@ -4958,15 +4960,17 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
             if(ce && txt) ce.textContent = txt;
           }).catch(()=>{});
         }
-        const [pools,pconv,toi,tyes] = await Promise.all([
-          tup(`StakePools(${s2},${cl.id})`), tup(`PoolConviction(${s2},${cl.id})`),
-          tup(`TrailingOI(${s2},${cl.id},${WEEK})`), tup(`TrailingYes(${s2},${cl.id},${WEEK})`)]);
-        const ser = claimSeries({yesStake:pools[0],noStake:pools[1],convYes:pconv[0],convNo:pconv[1],
-          trailOI:toi[0],trailOImature:toi[1],trailYesAvg:tyes[0],trailYesMature:tyes[1]});
+        /* srow, not row: six lines down `const row` is the DOM row, declared in
+           the same block, so naming this one `row` put the read of it inside the
+           temporal dead zone — a ReferenceError swallowed by the catch below,
+           and every sparkline silently stopped drawing. */
+        const srow = await docketSeriesRow(s2, cl.id);
+        if(!srow) return;
+        const ser = claimSeries(srow);
         if(renderSeq!==seq0) return;
         const el = document.getElementById(`spk-${slug}-${cl.id}`);
         if(el){
-          const inst = pctYes(pools[0], pools[1]);
+          const inst = pctYes(srow.yesStake, srow.noStake);
           el.innerHTML = docketSignal(ser, inst);
           // The sort key rides the row, and it is the INSTANT ratio either way —
           // keying it off the spark meant a docket of young claims could not be
@@ -9697,6 +9701,47 @@ async function claimIdsFor(slug, depth){
   const lo = depth? Math.max(1, n-depth+1) : 1;
   const ids=[]; for(let i=n;i>=lo;i--) ids.push(i);
   return {ids, total:n};
+}
+/* ONE READ FOR THE WHOLE DOCKET, and four per row as the fallback.
+   A court page drew fourteen rows by asking StakePools, PoolConviction,
+   TrailingOI and TrailingYes for each: 56 queries. Measured against the live
+   node, every qeval reloads the realm at ~60-90ms, so those 56 were most of the
+   four seconds the page spent reading after it had already painted.
+   DocketSeries answers all of them in one query — the realm walks its claims
+   once — and this pre-loads it for the ids about to be drawn.
+   NOT an RPC batch: gno executes a JSON-RPC array serially (forty reads batched
+   took 3.56s against 1.74s for the same forty in parallel), so the saving has to
+   come from asking the REALM once, not from posting once.
+   A chain without the entrypoint answers "name DocketSeries not declared", and
+   then every row reads the old way — this page is served from a static host and
+   has no idea which build of the realm it is pointed at. */
+const DSERIES = new Map();   // "slug\u0000id" -> row, for this render only
+function dseriesKey(s2, id){ return s2 + "\u0000" + id; }
+async function docketSeriesPreload(s2, ids){
+  DSERIES.clear();
+  if(!ids.length) return;
+  let packed;
+  try{ packed = await one(`DocketSeries(${s2},${gstr(ids.join(","))},${WEEK})`); }
+  catch(_){ return; }          // older realm: every row falls back on its own
+  for(const rec of String(packed||"").split(";")){
+    const f = rec.split(":");
+    if(f.length !== 9) continue;
+    const n = i => Number(f[i]);
+    DSERIES.set(dseriesKey(s2, f[0]), {
+      yesStake:n(1), noStake:n(2), convYes:n(3), convNo:n(4),
+      trailOI:n(5), trailOImature:f[6]==="1", trailYesAvg:n(7), trailYesMature:f[8]==="1"});
+  }
+}
+async function docketSeriesRow(s2, id){
+  const hit = DSERIES.get(dseriesKey(s2, id));
+  if(hit) return hit;
+  try{
+    const [pools,pconv,toi,tyes] = await Promise.all([
+      tup(`StakePools(${s2},${id})`), tup(`PoolConviction(${s2},${id})`),
+      tup(`TrailingOI(${s2},${id},${WEEK})`), tup(`TrailingYes(${s2},${id},${WEEK})`)]);
+    return {yesStake:pools[0],noStake:pools[1],convYes:pconv[0],convNo:pconv[1],
+      trailOI:toi[0],trailOImature:toi[1],trailYesAvg:tyes[0],trailYesMature:tyes[1]};
+  }catch(_){ return null; }
 }
 async function inChunks(items, size, fn){
   const out=[];
