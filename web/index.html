@@ -1341,7 +1341,22 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 /* The stake amount, beside its unit. A row rather than a stacked field: it is
    one short number and the coin's name has to sit next to it to mean anything. */
 .ticket .argrow{display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
-.ticket .argrow .sendin{min-width:9ch; font-family:var(--mono)}
+/* SIZED TO WHAT IT HOLDS. It inherited a 12ch min-width from the composer's
+   argrow and rendered 182px — wider than the label, the unit and the balance put
+   together, which pushed the row past the ticket and wrapped it onto two lines
+   with the unit orphaned below the box. 11ch takes "201.744973", the widest
+   value a balance can put in it. 13 rather than 11 because the flash shares the
+   box: at 11 the selected value and "ya got none!" met in the middle. */
+.ticket .argrow .sendin{width:13ch; min-width:0; font-family:var(--mono)}
+/* The flash, inside the box and right-aligned, behind the value. It goes on its
+   own after a moment: a warning that stays becomes part of the furniture, and
+   the red border is already the persistent half of this. */
+.amtwrap{position:relative; display:inline-block}
+.amtflash{position:absolute; right:7px; top:50%; transform:translateY(-50%);
+  font:11px var(--sans); color:var(--contra); pointer-events:none;
+  opacity:0; transition:opacity .12s linear}
+.amtwrap.flash .amtflash{opacity:1}
+@media (prefers-reduced-motion:reduce){ .amtflash{transition:none} }
 /* An amount the court would refuse. Border AND text, so it is not colour alone. */
 /* The focus rule sets border-color too and is declared later, so it won and the
    field went accent-blue at the exact moment it was supposed to read as wrong.
@@ -2992,7 +3007,11 @@ document.addEventListener("mouseleave", (e) => {
    which teaches a reader that the mark means nothing. */
 document.addEventListener("input", (e) => {
   const t = e.target;
-  if(t && t.id === "stakeamt") t.removeAttribute("aria-invalid");
+  if(t && t.id !== "stakeamt") return;
+  if(!t) return;
+  t.removeAttribute("aria-invalid");
+  const w = document.getElementById("stakeamtwrap");
+  if(w){ clearTimeout(w._flash); w.classList.remove("flash"); }
 });
 document.addEventListener("error", (e) => {
   const t = e.target;
@@ -3519,6 +3538,17 @@ async function adenaSign(func, args, el){
         f.focus(); f.select();
         const n = el.parentElement && el.parentElement.querySelector(".txnote");
         if(n) n.remove();
+        /* THE WORDS GO IN THE BOX, right-aligned behind the value. A note under
+           the button is a sentence to read before you can act; this is in the
+           one place the reader is already looking, and it leaves on its own so
+           it never becomes furniture. aria-hidden: aria-invalid above already
+           tells a screen reader, and a flash it cannot see the end of is worse
+           than nothing. */
+        const w = document.getElementById("stakeamtwrap");
+        if(!w) return;
+        w.classList.add("flash");
+        clearTimeout(w._flash);
+        w._flash = setTimeout(()=>w.classList.remove("flash"), 1800);
       };
       if(!raw || !isFinite(coins) || coins<=0){ bad(); return; }
       const micro = Math.round(coins*1e6);
@@ -8751,8 +8781,9 @@ function stakeTicket(slug,id,d){
   return `<div class="ticket" id="stake-ticket"><h3>Stake the claim</h3>
     <div class="argrow" style="margin-top:12px">
       <label for="stakeamt" class="small muted">amount</label>
-      <input id="stakeamt" class="sendin" type="text" inputmode="decimal" value="0"
-             autocomplete="off" aria-describedby="stakeamtu">
+      <span class="amtwrap" id="stakeamtwrap"><input id="stakeamt" class="sendin" type="text"
+             inputmode="decimal" value="0" autocomplete="off" aria-describedby="stakeamtu"
+             ><span class="amtflash" aria-hidden="true">ya got none!</span></span>
       <span id="stakeamtu" class="small muted mono">${ccSym(slug)}</span>
       <span id="stakebal" class="small muted"></span>
     </div>
