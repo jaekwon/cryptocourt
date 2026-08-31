@@ -68,6 +68,25 @@ PROBES = [
     ("ClaimPurged", '("{c}",{i})'), ("HiddenFromListing", '("{c}",{i})'),
     ("TextRedacted", '("{c}",{i})'),
     ("TrailingOI", '("{c}",{i},120960)'), ("TrailingYes", '("{c}",{i},120960)'),
+    # THE MAP AND THE FOLDERS. These were missing, and the map is built out of
+    # them: FolderTree gives the shape, FolderItems the claims in each node, and
+    # the two relation reads the edges between claims. A dead read here empties the
+    # map rather than erroring visibly, which is the worst shape of failure — the
+    # page looks like a court with nothing in it.
+    ("FolderTree", '("{c}")'), ("FolderName", '("{c}",1)', 'FolderCount("{c}")'),
+    ("FolderDesc", '("{c}",1)', 'FolderCount("{c}")'),
+    ("FolderItems", '("{c}",1)', 'FolderCount("{c}")'),
+    ("ClaimAssociations", '("{c}",{i})'), ("ClaimSupersedes", '("{c}",{i})'),
+    # THE CLAIM'S OWN CONTENT, which the detail page cannot render without.
+    ("ClaimBody", '("{c}",{i})'), ("ClaimMedia", '("{c}",{i})'),
+    ("CourtDesc", '("{c}")'), ("DisputeVoteCloses", '("{c}",{i})'),
+    ("AnswerRecord", '("{c}","{a}")'),
+    # THE WALLET PATH. DisposableOf is the figure the realm enforces before a
+    # bond, and the vote quote is what the ballot shows a holder; both are read
+    # only when an address is known, which is why they sit behind no guard here —
+    # the checker always has one.
+    ("ClaimVoteWeightOf", '("{c}","{a}",{i})'), ("DisposableOf", '("{c}","{a}")'),
+    ("CommitmentsOf", '("{c}","{a}")'), ("VoteLockedOf", '("{c}","{a}")'),
     ("StakeOf", '("{c}",{i},0,"{a}")'), ("ConvictionOf", '("{c}",{i},0,"{a}")'),
     ("PullState", '("{c}",{i},"{a}")'),
     # The clock reads are gone with the banner that made them: the overlay no
@@ -147,7 +166,19 @@ def main():
                 bad.append((guard.format(c=court, i=claim, a=addr),
                             f"GUARD itself failed: {gerr}"))
                 continue
-            if "true" not in (g or ""):
+            # A COUNT IS A GUARD TOO. This tested only for "true", so a guard like
+            # FolderCount("covid") — which answers "(6 int)" — read as FALSE and the
+            # probe behind it was silently SKIPPED. Three folder probes were added
+            # with exactly that guard and none of them ever ran; the summary counted
+            # them as skipped-on-purpose and reported a clean scan. Caught by an
+            # ablation that broke FolderItems' argument type and was not detected.
+            #
+            # So: truthy is "true", or a non-zero number. A zero count means the
+            # page would not issue the read either, which is the original intent.
+            gv = (g or "").strip()
+            m = re.match(r"^\((-?\d+)\s", gv)
+            truthy = ("true" in gv) or (m is not None and int(m.group(1)) != 0)
+            if not truthy:
                 skipped += 1   # the page would not issue this read either
                 continue
         expr = name + shape.format(c=court, i=claim, a=addr)
