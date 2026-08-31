@@ -146,6 +146,16 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      /data-crys="1"/.test(clear));
   ok("...the guard is gated on the mirrored window, not a literal",
      /\(nowH - vAt\) < FINALIZE_GRACE/.test(src));
+  /* BOTH HEIGHTS FROM THE SAME CLOCK. chainHeight() asks the RPC for the latest
+     block; a verdict height comes from ClaimTimeline, which the realm answers
+     from heightNow() — chain height PLUS the test skew. On a seeded chain those
+     differ by design, and the first version passed one of each: 3 against
+     23,040. The subtraction went negative, negative is below the grace window,
+     and the guard greyed every claim on the chain forever. ClaimTimeline puts
+     `now` beside `verdict` so a consumer can subtract two heights that mean the
+     same thing. */
+  ok("...and both heights come from the timeline, not one from the RPC",
+     /fillWithdrawSides\(slug, id, d,\s*\n\s*tline && tline\.now\? tline\.now\.h : nowH,/.test(src));
   ok("...it greys only when author, answerer and stake all say no",
      /party\.author!==CFG\.addr && party\.answerer!==CFG\.addr/.test(src)
      && /!\(\+p\.yes > 0\) && !\(\+p\.no > 0\)/.test(src));

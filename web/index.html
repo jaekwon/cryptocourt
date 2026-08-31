@@ -7556,7 +7556,18 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // Unconditional: the board is the one action on this page that needs no
   // address, and the sample answers it offline like everything else here.
   fillBoardChip(slug, id);
-  fillWithdrawSides(slug, id, d, nowH, tline && tline.verdict? tline.verdict.h : null);
+  /* THE REALM'S CLOCK ON BOTH SIDES OF THE COMPARISON. chainHeight() asks the
+     RPC for the latest block; the verdict height comes from ClaimTimeline, which
+     the realm answers from heightNow() — chain height PLUS the test skew. On a
+     seeded chain those are different numbers by design (that is what the
+     testclock marker in the timeline announces), and this passed one of each:
+     3 against 23,040. The subtraction went negative, negative is less than the
+     grace window, and so the guard greyed every claim on the chain forever.
+     ClaimTimeline publishes `now` next to `verdict` precisely so a consumer can
+     subtract two heights from the same clock. */
+  fillWithdrawSides(slug, id, d,
+    tline && tline.now? tline.now.h : nowH,
+    tline && tline.verdict? tline.verdict.h : null);
   fillClaimComments(slug, id);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
