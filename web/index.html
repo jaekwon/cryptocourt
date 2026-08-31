@@ -687,7 +687,7 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
   position:relative}
 .ticket h3{font-family:var(--serif); font-size:17px; margin-bottom:4px}
 .ticket .hint{font-size:12.5px; color:var(--muted); margin-bottom:14px}
-/* THE SAME ROW, OUTSIDE A TICKET. qualityLockLine and the reward-pool row emit a
+/* THE SAME ROW, OUTSIDE A TICKET. voteLockLine and the reward-pool row emit a
    .line, and every rule for one was written as `.ticket .line` — so on the
    quality panel, which has no ticket, both came out as two bare inline spans:
    "what voting commitsCasting commits the weight you vote with…", label and
@@ -2495,13 +2495,16 @@ async function claimDetail(slug,id){
     answered, disputeOpen, settled, provClose, provisional, closed};
   if(answered){
     const answerer = await one(`Answerer(${s},${i})`);
-    const [ans,bond,rec,settleAt,tierT,flagState,flagBond] = await Promise.all([
+    /* THREE READS FEWER. QualityTier, FlagState and FlagBondNext went with the
+       quality lane and no longer exist on chain — every claim page was asking a
+       realm that answers InvalidPkgPathError, and Promise.all means one missing
+       read takes the whole batch with it. The claim's SIZE rating comes from the
+       realm's own Render now (see tierText in render.gno); the page does not
+       recompute it. */
+    const [ans,bond,rec,settleAt] = await Promise.all([
       one(`AnswerVerdict(${s},${i})`), one(`AnswerBond(${s},${i})`), one(`AnswerRecord(${s},${gstr(answerer)})`).catch(()=>0),
-      one(`SettleDeadline(${s},${i})`), tup(`QualityTier(${s},${i})`), one(`FlagState(${s},${i})`),
-      one(`FlagBondNext(${s},${i})`).catch(()=>0)]);
-    Object.assign(d,{answer:ans, answerer, answerBond:bond, record:rec, settleAt, tier:tierT[0], tierFinal:tierT[1], flagState, flagBondNext:flagBond});
-    d.flagOpen = flagState==="voting";
-    d.counterOpen = flagState==="counter-window";
+      one(`SettleDeadline(${s},${i})`)]);
+    Object.assign(d,{answer:ans, answerer, answerBond:bond, record:rec, settleAt});
   }
   if(answered && !settled){
     d.round = await one(`FailedRounds(${s},${i})`).catch(()=>0);
@@ -5251,6 +5254,12 @@ function voteHelpModal(slug, d){
       <p>To overturn the answer, more than half the weight voted has to say overturn. A tie upholds. If everyone flags it as spam, nobody took a side, so the answer stands — unless the spam flags themselves carry it, below.</p>
       <p>Enough people also have to turn up. If too little weight is cast, the round decides nothing at all — however the votes leaned.</p>
       ${quorum}
+      <h4>What casting costs you</h4>
+      <p>Voting commits the weight you vote with, until this round resolves. The
+        coin stays in your balance and keeps voting, and you can still stake it —
+        but it cannot also back a bond, a deposit or a transfer.</p>
+      <p>That is what stops somebody voting with coin and selling it before the
+        round ends.<span id="votecommit"></span></p>
       <h4>Flagging a claim as spam</h4>
       <p>The third button is not a way to sit out. It says the claim was not worth
         asking, and it costs the person who filed it.</p>
@@ -5466,12 +5475,17 @@ async function fillVoteEligibility(slug, id, d){
    deliberately. Saying "your coin is locked" would be false in the direction
    that costs a holder a legitimate action, so the wording is the realm's own:
    it cannot also back a bond, a deposit or a transfer. */
-function qualityLockLine(){
-  const until = "until this quality question can no longer decide anything — when it closes, or when the claim itself ends if the tally has frozen and later rounds keep voting the same running total";
-  return `<div class="line"><span>voting locks</span><span class="r">`
-    + `Casting commits the weight you vote with, ${until}. It stays in your balance and keeps voting, and it can still be staked — but it cannot also back a bond, a deposit or a transfer.`
-    + `<span id="qualcommit"></span></span></div>`;
-}
+/* THE VOTE LOCK IS MODAL COPY, not a row. It was qualityLockLine, printed by
+   qualitySection — which was its only caller and is gone with the quality lane.
+   Moving it onto the ballot was the obvious repair and the wrong one: the ballot
+   was deliberately stripped to the question, the clock and the buttons, and
+   dispute_test.js pins that ("no outcome rows: what overturning does to whose
+   bond is modal copy", "no vote-lock row on the ballot either"). So the sentence
+   lives in "How this vote works" beside the other rules, and #votecommit — the
+   reader's own figures, filled after the paint — goes with it.
+   The frozen-tally clause is dropped: it described a quality tally carrying into
+   later rounds. A dispute round's ballot is applied when that round resolves. */
+
 /* The figures, separately, because they arrive from the chain after the panel
    has rendered and every one of them may be unavailable. A missing read prints
    nothing rather than a zero: "commits 0" is a claim, and a wrong one. */
@@ -5486,7 +5500,7 @@ function voteLockFigures(slug, would, locked, free){
    limit and SpendableOf is NOT — that one is stake-only and over-promises by
    the whole of a vote commitment. */
 async function fillVoteCommitment(slug, id){
-  const qv=document.getElementById("qualcommit");
+  const qv=document.getElementById("votecommit");
   if(!qv || !CFG.addr || !isLive()) return;
   try{
     const [w, locked, free] = await Promise.all([
@@ -8224,7 +8238,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
           ${stakeTicketHasActions(d)? stakeTicket(slug,id,d) : ""}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
-    + qualitySection(slug,id,d)
+    + rewardsSection(slug,id,d)
     + associationSection(slug,id,assocLookup,chainAssocs)
     + `<section id="claimcomments"></section>`;
   // Unconditional: the board is the one action on this page that needs no
@@ -9230,9 +9244,11 @@ function stakeTicket(slug,id,d){
              silently guarded nothing. */
           : `<span data-crys="1">` + btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
                 "",null,null,null,
-                (d.flagOpen||d.counterOpen)
-                  ? "A quality question is still open on this claim. The draw waits until it closes — principal never does."
-                  : null,
+                /* NO QUALITY QUESTION LEFT TO WAIT ON. This passed a reason when a
+                   flag or counter window was open; both are gone, and the only
+                   thing the draw now waits for is the participant week, which the
+                   branch above this one already explains. */
+                null,
                 ICN_CHEST) + `</span>`}</div></div>`;
   }
   if(d.phase!=="open"){
@@ -9527,34 +9543,18 @@ function resolutionSection(slug,id,d,nowH,tl){
   return `<section id="timeline" tabindex="-1"><div class="sec-h">${head}</div>${ladder}${inner}</section>`;
 }
 
-/* Quality lane — the tier and the flag slot, always sealed while a vote runs. */
-function qualitySection(slug,id,d){
-  if(d.phase==="open"||d.phase==="provClose"||d.phase==="closed") return "";
-  const tierName = t=> t===0?"low":t===2?"high":"mid";
-  let line, act="", qlock="";
-  const voteQ = btn("Vote: low","VoteQuality",{courtSlug:slug,claimID:id,bucket:0},"no")
-        + btn("Vote: mid","VoteQuality",{courtSlug:slug,claimID:id,bucket:1})
-        + btn("Vote: high","VoteQuality",{courtSlug:slug,claimID:id,bucket:2},"yes");
-  if(d.phase==="disputed"){ line = "While a dispute is running, the same voters also grade the claim — was it worth asking? — on the same ballot. No separate quality flag can be opened until the dispute ends. Anyone holding KOURT:" + esc(slug).toUpperCase() + " staked on the claim (its author, its answerer, its stakers) is excluded from both questions.";
-    act = voteQ; qlock = qualityLockLine(); }
-  else if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? This page does not add the ballots up until it closes.";
-    act = voteQ + btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id});
-    qlock = qualityLockLine(); }
-  else if(d.counterOpen){ line = "A slash is pending — the answerer may counter-flag to force one re-vote; if the window lapses unchallenged, anyone may close it.";
-    qlock = qualityLockLine();
-    act = voteQ
-        + btn("Counter-flag (answerer)","CounterFlag",{courtSlug:slug,claimID:id})
-        + btn("Resolve counter re-vote","ResolveCounter",{courtSlug:slug,claimID:id},"","if a re-vote ran")
-        + btn("Close lapsed window","ResolveSlashWindow",{courtSlug:slug,claimID:id},"","if unchallenged"); }
-  else {
-    const tn = d.tier!=null? tierName(d.tier):"mid";
-    line = `Quality tier: <b>${tn}</b>${d.tierFinal?" (final)":" (default — the flag lane may re-vote it)"}. A flag questions whether a claim carries information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half.`;
-    if(!d.tierFinal && !d.crystallized) act = btn("Flag as low-information","OpenFlag",{courtSlug:slug,claimID:id}, "", d.flagBondNext?cc(d.flagBondNext,slug)+" bond":"");
-  }
-  const draw = d.crystallized&&d.draw? `<div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w,slug)} · author ${cc(d.draw.a,slug)} · answerer ${cc(d.draw.ans,slug)} · voters ${cc(d.draw.carrot,slug)}</span></div>`:"";
-  return `<section><div class="sec-h">Quality &amp; rewards</div>
-    <div class="panel"><p class="small" style="margin:0 0 6px">${line}</p>${draw?`<div class="qrows" style="margin-top:8px">${draw}</div>`:""}${qlock?`<div class="qrows" style="margin-top:8px">${qlock}</div>`:""}
-    ${act?`<div class="actions" style="margin-top:12px">${act}</div>`:""}</div></section>`;
+/* THE REWARD POOLS, and nothing else. This was qualitySection: a tier line, a
+   flag slot, three "Vote: low/mid/high" buttons and four flag/slash controls.
+   Every entrypoint behind them — VoteQuality, OpenFlag, ResolveFlag, CounterFlag,
+   ResolveCounter, ResolveSlashWindow — was deleted with the quality lane, so the
+   buttons offered transactions the chain would refuse to even parse.
+   What is left is real: a crystallized claim has four pools and they are worth
+   showing. The claim's RATING is the realm's own business now and appears in its
+   Render, so the page does not restate it. */
+function rewardsSection(slug,id,d){
+  if(!d.crystallized || !d.draw) return "";
+  return `<section><div class="sec-h">Rewards</div>
+    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w,slug)} · author ${cc(d.draw.a,slug)} · answerer ${cc(d.draw.ans,slug)} · voters ${cc(d.draw.carrot,slug)}</span></div></div></div></section>`;
 }
 
 /* The four things every participant must understand — nothing hidden here changes

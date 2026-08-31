@@ -86,8 +86,18 @@ ok("a closed window says only that, and says it without a second dash",
      === "Voting has closed; Resolve works now.");
 ok("no outcome rows: what overturning does to whose bond is modal copy",
    !html.includes("the answer stays YES") && !html.includes("the answer becomes NO"));
-ok("no vote-lock row on the ballot either",
-   !html.includes("<span>voting locks</span>") && !html.includes('id="votecommit"'));
+// THE MODAL IS SLICED OFF FIRST. disputeTicket returns the ballot AND
+// voteHelpModal, so asserting over the whole string cannot tell "the ballot is
+// minimal" from "nothing anywhere mentions the lock" — and the lock IS modal copy
+// now, deliberately. Without the slice this assertion started failing the moment
+// the sentence moved into the modal, which is where it was asked to be.
+{
+  const b = html.slice(0, html.indexOf('<dialog'));
+  ok("no vote-lock row on the ballot either",
+     !b.includes("<span>voting locks</span>") && !b.includes('id="votecommit"'));
+  ok("...while the modal does carry it", /What casting costs you/.test(html)
+     && html.includes('id="votecommit"'));
+}
 // The round HISTORY is gone from the page entirely — the notice above the ballot
 // already says "(after 2 failed rounds)", which is the same fact in fewer words.
 ok("the spent-round ladder is gone from the file",

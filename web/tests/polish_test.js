@@ -102,18 +102,19 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
 {
   const settled = {phase:"settled", verdict:0, answer:0, route:"vote", crystallized:false,
                    yesStake:180, noStake:20};
-  const open = stakeTicket("orem", 4, Object.assign({}, settled, {flagOpen:true}));
-  const counter = stakeTicket("orem", 4, Object.assign({}, settled, {counterOpen:true}));
   const clear = stakeTicket("orem", 4, settled);
   const crysOf = h => (h.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Open the rewards[\s\S]*?<\/button>/)||[""])[0];
-  ok("crystallize is greyed while a quality question is open",
-     /data-blocked="[^"]*quality question is still open/.test(crysOf(open))
-     && /data-blocked=/.test(crysOf(counter)));
-  ok("...and says the draw waits, not the principal",
-     /principal never does/.test(crysOf(open)));
-  ok("...and is aria-disabled so it is not just a colour",
-     /aria-disabled="true"/.test(crysOf(open)));
-  ok("it stays live when the page cannot know the answer",
+  /* THE GREYED CASE IS GONE, not weakened. Three assertions here covered
+     Crystallize being blocked while a quality question was open — an open flag
+     vote or a counter window — and named the reason ("the draw waits, not the
+     principal") and its aria-disabled state. Both states went with the quality
+     lane, so there is no longer any reason the page can KNOW that blocks the
+     draw; the remaining wait is the participant week, which the hint explains
+     and which the assertion below covers.
+     Kept: the control must stay LIVE when the page cannot know, because greying
+     something somebody could have used is the worse error. That is the half of
+     this block that still has a subject. */
+  ok("crystallize stays live when the page cannot know the answer",
      !/data-blocked=/.test(crysOf(clear)));
   /* THE RULE MOVED INTO THE HINT, where a sentence fits. "participants first
      week" assumed the reader knew there was a priority window, what a
@@ -191,7 +192,7 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
        stakeTicket("orem", 4, Object.assign({}, settled, {crystallized:true}))));
   // The withdraw buttons beside it are never blocked — principal is never gated.
   ok("withdrawing principal is never blocked",
-     !/data-blocked/.test((open.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Withdraw[\s\S]*?<\/button>/)||[""])[0]));
+     !/data-blocked/.test((clear.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Withdraw[\s\S]*?<\/button>/)||[""])[0]));
 }
 
 /* NOTHING BELOW THIS RUNS. The summary is followed by process.exit, so a block

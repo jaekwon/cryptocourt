@@ -21,7 +21,9 @@ code += slice('function esc(', '\n');
 code += slice('function fmtN(', '\n');
 code += slice('function ccSym(', '\n');
 code += slice('function cc(', 'function ugnot(');
-code += slice('function qualityLockLine(', 'async function fillVoteCommitment(');
+// voteLockFigures came in via the voteLockLine slice, which ended at it; that
+// slice went when the row did, so it is pulled in on its own now.
+code += slice('function voteLockFigures(', 'async function fillVoteCommitment(');
 code += slice('function parseCommitments(', '/* ---------------- the associations');
 eval(code);
 
@@ -34,45 +36,61 @@ function ok(what, cond){ if(cond){ console.log("ok: "+what); } else { fail++; co
 // anywhere, and this harness exists because that obligation was undisclosed for
 // many rounds. So the verdict rule is asserted where it landed rather than
 // deleted along with its row: prose in the modal, figures on the me-page.
-const Q = qualityLockLine();
+// THE ROW BECAME MODAL COPY. qualityLockLine was printed by qualitySection,
+// which went with the quality lane; putting it on the ballot instead would have
+// contradicted dispute_test.js, which pins the ballot down to the question, the
+// clock and the buttons. So the sentence is now inside "How this vote works" and
+// is asserted against the modal's source rather than a function's return.
+const Q = slice('<h4>What casting costs you</h4>', '<h4>Flagging a claim as spam</h4>');
 // The modal, sliced out so "the ballot no longer says it" and "the modal does"
 // are two different subjects. Asserting both against the whole file would pass
 // on either one alone.
 const MODAL = (() => { const a = src.indexOf('id="help-vote"'); return src.slice(a, src.indexOf("</dialog>", a)); })();
 
 ok("the verdict release rule is in the modal", /locked until this round ends/.test(MODAL));
-ok("...and no row renders it any more",
-  !/voteLockLine/.test(src) && !/id="votecommit"/.test(src));
-// The quality lane must not silently inherit the verdict rule now that it is the
-// only row: its release is a different event, and the two were split on purpose.
-ok("the quality row does NOT reuse the verdict rule", !/until this round ends/.test(Q));
-ok("the quality row names the claim ending", /the claim itself ends/.test(Q));
-ok("the quality row names its own question closing", /when it closes/.test(Q));
-// The phrasing that went stale in three documents. A tally is superseded only by a
-// NEW ROUND, and nothing makes a round open, so this sentence promises a release
-// that may never come.
-ok("neither surface says 'superseded'", !/supersed/i.test(Q) && !/supersed/i.test(MODAL));
-
-// Staking is the deliberate exemption — mustStakable ignores the vote lock. Copy
-// that says otherwise costs a holder a legitimate action, which is the failure
-// this block exists to prevent, so BOTH surfaces have to carry it.
-ok("both surfaces say the coin can still be staked",
-  /can still be staked/.test(Q) && /you can still stake it/.test(MODAL));
-ok("both say it keeps voting or stays yours",
-  /keeps voting/.test(Q) && /You keep it, it stays in your balance/.test(MODAL));
-ok("the quality row names what it cannot back",
-  /cannot also back a bond, a deposit or a transfer/.test(Q));
-ok("...and the modal names the same restriction for the verdict lane",
-  /back a bond, put down a deposit, or send it/.test(MODAL));
+ok("...and no row function renders it any more", !/function voteLockLine/.test(src));
+ok("...the figures span lives in the modal, not in a ballot row",
+  /id="votecommit"/.test(MODAL));
+// THE TWO-LANE SPLIT IS GONE, and these two assertions went with it. They existed
+// because the quality row's release was a DIFFERENT event from the verdict row's —
+// a quality tally could freeze and carry into later rounds, so it named "the claim
+// itself ends" while the verdict named "this round ends", and the danger was one
+// silently inheriting the other's wording. With one vote left there is one release
+// event, and asserting that it does not reuse itself is not a check.
+//
+// What replaced them is the assertion above: the sentence is in the modal, and no
+// row form of it survives to drift from the modal's copy.
+ok("the surviving copy names the round, which is when it releases",
+   /until this round resolves/.test(Q));
+// ONE SURFACE NOW, AND THAT IS WHY THIS BLOCK SHRANK. Nine assertions here were
+// of the form "BOTH surfaces say X", pairing the quality ROW against the MODAL —
+// the point being that two copies of one rule must not drift apart. The row went
+// with the quality lane and its sentence moved into the modal, so Q is a slice OF
+// the modal and every "both" assertion compares it to itself: true by
+// construction, and therefore a check of nothing.
+//
+// What survives is each substantive guarantee, asserted once against the copy that
+// exists. These are not stylistic — mustStakable deliberately ignores the vote
+// lock, so copy implying otherwise costs a holder a legitimate action, which is
+// the failure this whole block was written to prevent.
+ok("it says the coin can still be staked", /you can still stake it/.test(MODAL));
+ok("...and that it stays in the balance and keeps voting",
+   /stays in your balance and keeps voting/.test(MODAL));
+ok("...and names exactly what it cannot back",
+   /cannot also back a bond, a deposit or a transfer/.test(MODAL));
+ok("...and says when it releases", /until this round resolves/.test(MODAL));
+ok("...and carries the span its filler writes into", /id="votecommit"/.test(MODAL));
 // Asserted as the POSITIVE claim rather than a banned-word list: the first version
-// of this banned "frozen", which the quality lane uses correctly of the TALLY.
-ok("the row says the coin stays in the balance", /stays in your balance/.test(Q));
-ok("neither surface says the coin leaves or is locked away",
-  !/leaves your balance|locked away|taken from/i.test(Q+MODAL));
-ok("the row carries the span its filler writes into", /id="qualcommit"/.test(Q));
-
+// banned "frozen", which the quality lane used correctly of the TALLY.
+ok("it never says the coin leaves or is locked away",
+   !/leaves your balance|locked away|taken from/i.test(MODAL));
+// The phrasing that went stale in three documents. A tally was superseded only by
+// a NEW ROUND, and nothing makes a round open, so it promised a release that might
+// never come.
+ok("it does not say 'superseded'", !/supersed/i.test(MODAL));
 // House style: §7.4 keeps trading language off these surfaces.
-ok("no banned words in the disclosure", !/backing|redeem\b|profit|APR|odds|price/i.test(Q+MODAL));
+ok("no banned words in the disclosure",
+   !/backing|redeem\b|profit|APR|odds|price/i.test(MODAL));
 
 // ---- the figures: a missing read prints nothing, never a zero ----
 ok("no figures at all renders nothing", voteLockFigures("orem", null, null, null) === "");
@@ -91,7 +109,12 @@ ok("all three figures can appear together",
     (voteLockFigures("orem", 1_000_000, 2_000_000, 3_000_000)));
 
 // ---- the wiring: the row is on the panel that has one ----
-ok("the quality panel carries the quality row", src.includes('qualityLockLine()'));
+// NOT ON THE BALLOT. I wrote this the other way round first — moving the row onto
+// the ballot was the obvious repair when qualitySection went — and dispute_test.js
+// refused it: the ballot is deliberately the question, the clock and the buttons,
+// and the owner asked for it that way. The copy belongs in the modal, asserted
+// above; what is asserted here is that it did NOT land on the ballot.
+ok("the ballot does not carry a vote-lock row", !/voteLockLine\(\)/.test(src));
 // The ballot is the question and the buttons. A lock row reappearing there is
 // the regression this asserts, not a style preference: it was removed WITH the
 // outcome rows and the round ladder, and the modal took over its rule.
@@ -106,10 +129,13 @@ ok("the dispute ballot carries no lock row",
 // as two bare inline spans reading "what voting commitsCasting commits the
 // weight you vote with…": the label and its prose printed as one word, with no
 // emphasis and no column. Rendering it and reading it is what found that.
-ok("the quality row renders in the panel",
-   src.includes('${qlock?`<div class="qrows" style="margin-top:8px">${qlock}</div>`:""}'));
-ok("...and the reward-pool row beside it, which had the same defect",
-   src.includes('${draw?`<div class="qrows" style="margin-top:8px">${draw}</div>`:""}'));
+// THE ROW IS GONE; THE DEFECT IT WAS FOUND BY IS NOT. The vote-lock row moved into
+// the modal, so only the reward-pool row is left in a panel — and it is the one
+// that has to keep its .qrows wrapper, for the reason above: every rule for a .line
+// was written as `.ticket .line`, this panel has no ticket, and without the wrapper
+// the row prints as two bare inline spans running the label into its prose.
+ok("the reward-pool row keeps its .qrows wrapper",
+   /function rewardsSection[\s\S]{0,400}<div class="qrows"><div class="line">/.test(src));
 ok("...in a context the ticket row styles actually reach",
    /\.ticket \.line,\.qrows \.line\{display:grid/.test(src));
 ok("the claim page calls the filler", src.includes('fillVoteCommitment(slug,id);'));
