@@ -1338,6 +1338,10 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 }
 .argrow input:focus{outline:none; border-color:var(--accent)}
 .argrow .sendin{width:auto; min-width:12ch; display:inline-block}
+/* The stake amount, beside its unit. A row rather than a stacked field: it is
+   one short number and the coin's name has to sit next to it to mean anything. */
+.ticket .argrow{display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
+.ticket .argrow .sendin{min-width:9ch; font-family:var(--mono)}
 .helper .err{color:var(--contra)}
 .copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
   border:1px solid var(--line-2); border-radius:var(--r); padding:3px 7px; align-self:center}
@@ -2988,7 +2992,7 @@ function tx(func, args){
    has to replace before it means anything. Two do: StartCourt and StartCourtP
    ship slug:"my-court", name:"My Court". Everything else on this page passes
    arguments the page derived itself, which is why they no longer stop to ask. */
-function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph){
+function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt){
   // In demo mode the data is a sample: an action that links a real network to
   // sample arguments is a trap, so the button is inert and says why.
   // `send` (Buy only): a concrete "<µGNOT>ugnot" from the receipt input — it
@@ -3020,6 +3024,7 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph){
   if(CFG.mode==="demo")
     return `<span class="act"><button class="btn ${cls||""} inert" data-inert="1"`
       + (blocked? ` data-blocked="${esc(blocked)}" aria-disabled="true"` : "")
+      + (amt? ` data-amt="1"` : "")
       + `>${inner}</button></span>`;
   // NOT `disabled` while gated: a disabled button swallows the click, and the
   // click is what prints "tick the acknowledgement first". It stays pressable
@@ -3033,6 +3038,7 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph){
   return `<span class="act"><button class="btn ${cls||""}" data-act="1"`
     + (edit? ` data-edit="1"` : "")
     + (blocked? ` data-blocked="${esc(blocked)}" aria-disabled="true"` : "")
+    + (amt? ` data-amt="1"` : "")
     + (gate? ` data-needack="1" aria-disabled="true"` : "")
     + ` data-func="${esc(func)}" data-args="${esc(JSON.stringify(args||{}))}"`
     + ` data-cli="${esc(cliCmd(func,args,send))}" data-tx="${esc(tx(func,args))}"`
@@ -3375,6 +3381,25 @@ async function adenaSign(func, args, el){
       const sw = await a.SwitchNetwork(want);
       if(sw.code!==0){ note("Adena is on "+net.data.chainId+"; switch it to "+want+" and try again."); return; }
     }
+    /* A MATCHING CHAIN ID IS NOT A MATCHING CHAIN. Two nodes can both call
+       themselves "dev" — a local gnodev and whatever Adena has saved under that
+       name — and the switch above is satisfied by the NAME. Then every read on
+       this page comes from CFG.rpc and the signature lands on the wallet's node,
+       and the realm answers about state the reader has never seen: "no such
+       claim" for a claim plainly on screen, because it exists here and not
+       there. Compared host-to-host, since a trailing slash or 127.0.0.1 against
+       localhost is the same node and should not be an alarm. */
+    const wrpc = net.data && (net.data.rpcUrl || net.data.rpc);
+    if(wrpc && CFG.rpc){
+      const host = u => { try{ const x=new URL(u); return (x.hostname==="localhost"?"127.0.0.1":x.hostname)+":"+(x.port||""); }catch(_){ return null; } };
+      const hw = host(wrpc), hp = host(CFG.rpc);
+      if(hw && hp && hw!==hp){
+        note(`Adena is signing against ${wrpc} and this page is reading ${CFG.rpc}. `
+           + `Both call themselves "${want}", but they are different nodes — point Adena at ${CFG.rpc} `
+           + `or this transaction lands on a chain that does not have what you are looking at.`);
+        return;
+      }
+    }
     // Every argument is confirmed before signing: several buttons carry
     // placeholder text (a claim title, a court name) that must never be
     // signed as-is.
@@ -3421,6 +3446,29 @@ async function adenaSign(func, args, el){
       if(needsSend) send = ok.send;
     } else {
       vals = Object.keys(args||{}).map(k => String(args[k]));
+    }
+    /* THE AMOUNT COMES FROM THE FIELD, in coin, converted here. The realm counts
+       in millionths and a reader should not have to: they type 1.222 and this
+       sends 1222000. Read at CLICK time rather than at render, because the field
+       is edited after the button was drawn — the same reason the wallet check
+       above is not decided at render either.
+       Refused rather than rounded when it is not a number or not positive: a
+       silent fallback to 1 would sign an amount nobody asked for. */
+    if(el.dataset.amt){
+      const f = document.getElementById("stakeamt");
+      const raw = f? String(f.value||"").trim() : "";
+      const coins = Number(raw);
+      if(!raw || !isFinite(coins) || coins<=0){
+        // the court comes from the button's own args: `slug` is a route local
+        // and this handler is delegated from the document.
+        note("Enter how much to stake, in "+ccSym((args||{}).courtSlug)+" — a number above zero.");
+        if(f) f.focus();
+        return;
+      }
+      const micro = Math.round(coins*1e6);
+      if(micro<=0){ note("That is smaller than the smallest unit the court counts."); return; }
+      const keys = Object.keys(args||{});
+      vals = keys.map(k => k==="amount"? String(micro) : String(args[k]));
     }
     note("Waiting for Adena…");
     const res = await a.DoContract({messages:[{type:"/vm.m_call", value:{
@@ -8632,11 +8680,26 @@ function stakeTicket(slug,id,d){
     <div class="line"><span class="l">If your side wins</span><span class="r">1× + accuracy reward</span></div>
     <div class="line"><span class="l">If your side loses</span><span class="r">1×, nothing lost</span></div>
     <div class="never"><b>Reward = conviction, not stake.</b> Staking early and holding earns more than a last-second flood; the number that pays is stake × time, and it survives an honest unstake. Principal is not a wager — it always comes home.</div>
-    <div class="actions" style="margin-top:14px">
-      ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","1 "+ccSym(slug))}
-      ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","1 "+ccSym(slug))}
-      ${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000})}
-      ${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000})}
+    /* HOW MUCH IS THE READER'S TO SAY. Every one of these buttons carried a
+       hardcoded 1000000 — one coin — so the page offered exactly one stake size
+       and the label said "1 KOURT:X" as though that were the product. A reader
+       who wanted 1.222 had no way to ask, and nothing on the card hinted the
+       amount was even a variable.
+       The field is in COIN, because that is what the labels and the balance are
+       in, and it converts to the realm's millionths at the click: a reader
+       typing 1.222 should not have to know the chain counts in micro units.
+       data-amt marks the buttons whose amount comes from it. */
+    <div class="argrow" style="margin-top:14px">
+      <label for="stakeamt" class="small muted">amount</label>
+      <input id="stakeamt" class="sendin" type="text" inputmode="decimal" value="1"
+             autocomplete="off" aria-describedby="stakeamtu">
+      <span id="stakeamtu" class="small muted mono">${ccSym(slug)}</span>
+    </div>
+    <div class="actions" style="margin-top:10px">
+      ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
+      ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","",null,null,null,null,null,true)}
+      ${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"","",null,null,null,null,null,true)}
+      ${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"","",null,null,null,null,null,true)}
     </div></div>`;
 }
 
