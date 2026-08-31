@@ -145,8 +145,19 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 }
 
 // VoteDispute casts a vote on a claim's open dispute — "yes" to overturn the
-// answer, "no" to uphold it, "abstain" for turnout without a side. The
-// governor is the sole roll authority and refuses a second vote.
+// answer, "no" to uphold it, "spam" to say the claim was not worth judging.
+//
+// SPAM REPLACED ABSTAIN, and it is the same bucket underneath. Abstain was
+// strictly dominated: it locked the same coin and added the same turnout as a
+// side vote, while the carrot pays only voters who matched the verdict, so it
+// had every cost and no upside and no payoff-maximiser ever pressed it. The
+// bucket's MECHANICS are exactly what a spam flag wants, though — the governor
+// counts it toward quorum (turnout = yes+no+abstain) and excludes it from the
+// verdict bar (forAndAgainst = yes+no) — so the slot is repurposed rather than
+// a fourth one added.
+//
+// What it now DOES is elsewhere: past half the weight cast, the claim is
+// discarded; below that it discounts the claim's reward in proportion.
 func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -204,7 +215,25 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 		panic("kourtv2: you hold none of this court's coin, and voting weight is " +
 			"the lesser of what you held when the round opened and what you hold now")
 	}
-	c.gov.VoteWithCap(who, cs.proposalID, choice, held)
+	// TWO VOCABULARIES, ONE TRANSLATION POINT. The court says "spam"; the
+	// governor says "abstain", which is its own word for the bucket that counts
+	// toward quorum and not toward a side. The p/ layer's vocabulary is not ours
+	// to rename, so the mapping happens here and nowhere else.
+	//
+	// The literal "abstain" is REFUSED rather than accepted as a synonym. Two
+	// names for one bucket is how a client and a realm come to disagree about
+	// what was cast — and a caller still sending "abstain" is a caller written
+	// against the old meaning, which no longer describes what the vote does.
+	govChoice := choice
+	switch choice {
+	case voteYes, voteNo:
+	case voteSpam:
+		govChoice = govAbstain
+	default:
+		panic("kourtv2: a dispute vote is \"yes\" to overturn, \"no\" to uphold, " +
+			"or \"spam\" to say the claim was not worth judging")
+	}
+	c.gov.VoteWithCap(who, cs.proposalID, govChoice, held)
 	// Court-side record of the choice AND THE WEIGHT: the governor's roll is
 	// reclaimable after resolution (ReleaseRoll is permissionless), so the carrot
 	// must not depend on it.
@@ -221,6 +250,10 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	if cs.qVoted == nil {
 		cs.qVoted = bptree.NewBPTree32()
 	}
+	// THE COURT'S WORD, not the governor's: this record is what PullCarrot
+	// compares against cs.carrotChoice, and that is set in this realm's
+	// vocabulary. Storing govChoice here would make a spam voter's record read
+	// "abstain" and never match the "spam" the discard path records.
 	cs.qVoted.Set("d"+beClaimKey(uint64(cs.proposalID))+string(who), choice)
 	_, dw, ok := c.gov.VoteOf(cs.proposalID, who)
 	if !ok {
@@ -823,6 +856,23 @@ func escrowWindow(c *Court, cs *claimState) int64 {
 	}
 	return c.params.escrowMinBlocks + extraDays*oneDayBlocks
 }
+
+// The dispute ballot's three choices, in the COURT's vocabulary.
+//
+// voteSpam is the governor's abstain bucket under a name that says what it does
+// here. Quoted as constants because the same three strings are compared in
+// VoteDispute, recorded in qVoted and matched by PullCarrot, and a typo in any
+// one of them is a vote that silently never earns its carrot.
+const (
+	voteYes  = "yes"
+	voteNo   = "no"
+	voteSpam = "spam"
+
+	// govAbstain is the p/ layer's word for the same bucket. Named so the one
+	// translation point in VoteDispute reads as a translation rather than as a
+	// magic string, and so nothing else in this realm reaches for it by accident.
+	govAbstain = "abstain"
+)
 
 // oneDayBlocks is a day at the five-second cadence, the escrow window's unit.
 const oneDayBlocks = int64(24) * epochBlocks

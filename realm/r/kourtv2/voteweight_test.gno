@@ -414,7 +414,9 @@ func TestTheCoherenceChainHoldsForARealDisputeWithEveryVoterCapped(cur realm, t 
 	// All four vote, split across the choices so no single arm dominates.
 	for i, v := range voters {
 		testing.SetRealm(testing.NewUserRealm(v))
-		VoteDispute(cross(cur), "coh", id, []string{"yes", "no", "abstain", "yes"}[i])
+		// "spam" is the court's word for the bucket the governor calls abstain;
+		// the literal "abstain" is refused at the boundary now.
+		VoteDispute(cross(cur), "coh", id, []string{voteYes, voteNo, voteSpam, voteYes}[i])
 	}
 
 	yes, no, abstain, total := c.gov.Tally(cs.proposalID)

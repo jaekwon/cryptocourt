@@ -84,3 +84,64 @@ func TestDisputeVoteClosesMatchesTheGate(cur realm, t *testing.T) {
 	// countdown that has already run out on a claim with nothing to vote on.
 	uassert.Equal(t, int64(0), DisputeVoteCloses("dvc", id))
 }
+
+// THE BALLOT'S VOCABULARY, at the boundary where it is translated.
+//
+// The court says "spam"; the governor says "abstain" for the same bucket — the
+// one that counts toward quorum and not toward the verdict bar. One translation
+// point, and the old word is REFUSED rather than aliased: two names for one
+// bucket is how a client and a realm come to disagree about what was cast, and
+// a caller still sending "abstain" was written against a meaning that no longer
+// describes what the vote does.
+func TestTheBallotTakesSpamAndRefusesAbstain(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bv-alice")
+	bob := testutils.TestAddress("bv-bob")
+	carol := testutils.TestAddress("bv-carol")
+	dave := testutils.TestAddress("bv-dave")
+	c := testCourt(cur, "bv", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	c.coin.Mint(dave, 12_000_000_000)
+
+	id := stakeAnswerDispute(cur, "bv", alice, bob)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "bv", id)
+
+	// The word that used to work.
+	testing.SetRealm(testing.NewUserRealm(carol))
+	uassert.AbortsContains(t, cur, "\"spam\" to say the claim was not worth judging", func() {
+		VoteDispute(cross(cur), "bv", id, "abstain")
+	})
+	// And anything else, so the refusal is not specific to one stale word.
+	uassert.AbortsContains(t, cur, "\"spam\" to say the claim was not worth judging", func() {
+		VoteDispute(cross(cur), "bv", id, "maybe")
+	})
+
+	// The word that works, and it lands in the governor's abstain bucket —
+	// counted toward turnout, absent from the verdict bar.
+	cs := mustClaim(c, id)
+	VoteDispute(cross(cur), "bv", id, voteSpam)
+	yes, no, abstain, _ := c.gov.Tally(cs.proposalID)
+	uassert.Equal(t, int64(0), yes)
+	uassert.Equal(t, int64(0), no)
+	if abstain <= 0 {
+		t.Fatalf("a spam vote must land in the quorum-counting bucket, got %d", abstain)
+	}
+
+	// THE COURT'S OWN RECORD KEEPS THE COURT'S WORD. PullCarrot matches this
+	// against cs.carrotChoice, which is written in this realm's vocabulary — a
+	// record saying "abstain" could never match a "spam" payout.
+	v := cs.qVoted.Get("d" + beClaimKey(uint64(cs.proposalID)) + string(carol))
+	if v == nil {
+		t.Fatal("the court must record the vote it just cast")
+	}
+	uassert.Equal(t, voteSpam, v.(string))
+
+	// A side vote still works and still takes a side.
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "bv", id, voteYes)
+	yes2, _, _, _ := c.gov.Tally(cs.proposalID)
+	if yes2 <= 0 {
+		t.Fatal("a yes must still reach the verdict bar")
+	}
+}
