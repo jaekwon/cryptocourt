@@ -116,6 +116,27 @@ fi
 if [ "$RESET" = "--reset" ]; then
     systemctl stop kourtfaucet kourtnode 2>/dev/null || true
     rm -rf "$CHAINDIR/data/db" "$CHAINDIR/genesis.json"
+    # AND THE VALIDATOR'S SIGNING STATE, which is the half this used to miss.
+    #
+    # priv_validator_state.json remembers the highest height this validator has
+    # signed, so that it cannot be tricked into double-signing. A new chain starts
+    # at 1, the file still said 444 from the old one, and the validator refused:
+    #
+    #   Error signing vote  height regression: expected >= 444, got 1
+    #
+    # Consensus then stalled before block 1 — and since the realm ships as genesis
+    # TRANSACTIONS, which execute in block 1, the chain came up with no realm on
+    # it at all. Diagnosed twice: once by hand on kourt-1, and once by the guard
+    # added for it, which is what caught this on the next --reset.
+    #
+    # THE KEY IS KEPT, only the state is zeroed. The genesis validator set names
+    # this key's public half, so replacing it would produce a chain whose only
+    # validator is unknown to its own genesis.
+    if [ -f "$CHAINDIR/data/secrets/priv_validator_state.json" ]; then
+        printf '{"height":"0","round":"0","step":0}\n' \
+            > "$CHAINDIR/data/secrets/priv_validator_state.json"
+        echo "    reset the validator's signing state to height 0"
+    fi
 fi
 
 # Validator + node keys. secrets init writes them to the directory it is GIVEN,
@@ -183,17 +204,38 @@ python3 scripts/genesis-pkgs.py "$WORK/pkgs" --gno "$GNOROOT"
 # not a cache; back it up with the rest of the chain's secrets.
 DEPLOYER_HOME="${DEPLOYER_HOME:-$HOME/.kourt/deployer-$CHAINID}"
 GNOHOME="$DEPLOYER_HOME"; mkdir -p "$GNOHOME"; chmod 700 "$GNOHOME"
-if "$WORK/gnokey-host" list -home "$GNOHOME" 2>/dev/null | grep -q '\bdeployer\b'; then
+# EXISTENCE IS THE ADDRESS BEING READABLE, not a grep over the listing. The first
+# version asked `list | grep -q '\bdeployer\b'`, which came back FALSE here while
+# being true when run by hand, so it fell through to `add` — and `gnokey add` on a
+# name that already exists PROMPTS ("Override the existing name deployer [Y/n]:"),
+# reads the piped password as the answer, aborts, and returns non-zero. With its
+# output sent to /dev/null and set -e in force, chain.sh died between two echoes
+# with no message at all.
+#
+# So: read the address, and treat "I can read it" as "it exists". That is the same
+# fact the rest of the script needs anyway, it needs no pattern to be portable,
+# and it cannot disagree with itself the way two separate probes can.
+deployer_addr() {
+    "$WORK/gnokey-host" list -home "$GNOHOME" 2>/dev/null \
+      | sed -n 's/^[0-9]*\. deployer (.*addr: \(g1[a-z0-9]*\).*/\1/p' | head -1
+}
+DEPLOYER_ADDR="$(deployer_addr)"
+if [ -n "$DEPLOYER_ADDR" ]; then
     echo "    reusing the deployer key in $GNOHOME"
 else
-    "$WORK/gnokey-host" add deployer -home "$GNOHOME" -insecure-password-stdin >/dev/null 2>&1 <<EOF
+    # NOT SILENCED. Suppressing this is what hid the failure above; if it cannot
+    # make the key, the reason is the only useful thing on the screen.
+    if ! "$WORK/gnokey-host" add deployer -home "$GNOHOME" -insecure-password-stdin >/dev/null <<EOF
 kourt-genesis
 kourt-genesis
 EOF
+    then
+        echo "REFUSE: could not create a deployer key in $GNOHOME" >&2
+        exit 1
+    fi
+    DEPLOYER_ADDR="$(deployer_addr)"
     echo "    made a deployer key in $GNOHOME — BACK THIS UP, it owns the realm"
 fi
-DEPLOYER_ADDR="$("$WORK/gnokey-host" list -home "$GNOHOME" 2>/dev/null \
-    | sed -n 's/^[0-9]*\. deployer (.*addr: \(g1[a-z0-9]*\).*/\1/p' | head -1)"
 [ -n "$DEPLOYER_ADDR" ] || { echo "REFUSE: could not read the deployer address back" >&2; exit 1; }
 echo "    deployer $DEPLOYER_ADDR (owns the realm; only it may drive the test clock)"
 "$WORK/gnogenesis-host" generate --chain-id "$CHAINID" --output-path "$WORK/genesis.json" >/dev/null
