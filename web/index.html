@@ -2299,6 +2299,58 @@ async function claimDetail(slug,id){
   d.phase = d.closed?"closed": d.provClose?"provClose": d.settled?"settled": d.disputeOpen?"disputed": (d.provisional>=0?"provisional": d.answered?"answered":"open");
   return d;
 }
+/* WHICH SIDE YOU ACTUALLY HOLD. The ticket offers Withdraw (YES side) and
+   Withdraw (NO side) because the realm withdraws one side at a time — a staker
+   can hold both — and the page had never asked which. So most readers met two
+   buttons, one of which answers "nothing staked on that side", and found out
+   which by pressing.
+
+   AFTER THE RENDER, not before it: the ticket must not wait on a read, and the
+   answer needs an address the reader may not have connected yet. Both buttons
+   stand until the read comes back, because "we do not know" and "you hold
+   nothing" are different answers and only one of them should remove a control.
+
+   Reads nothing new — positionOf is the same pair of StakeOf calls the vote
+   lane and the me page already make. */
+async function fillWithdrawSides(slug, id){
+  if(!CFG.addr) return;
+  /* KEYED ON data-wside, WHICH stakeTicket WRITES, not on the button's own
+     data-func: the demo branch of btn() renders an inert button with none of
+     those attributes, so a selector built on them found nothing in the sample —
+     the one place this behaviour can be seen without a wallet. */
+  const wraps = [...document.querySelectorAll(".stakewrap .ticket [data-wside]")];
+  if(!wraps.length) return;
+  let p;
+  try{ p = await positionOf(slug, id, CFG.addr); }catch(_){ return; }   // unknown: leave both
+  if(!p) return;
+  let shown = 0;
+  for(const w of wraps){
+    const side = +w.getAttribute("data-wside");
+    const amt = side===0? +p.yes : +p.no;
+    if(!(amt > 0)){ w.remove(); continue; }
+    shown++;
+    /* WHAT THIS BUTTON RETURNS, on the button. "Withdraw YES" is a verb with no
+       quantity; a reader deciding whether to bother wants the number, and the
+       number is already in hand from the position read that kept the button. */
+    const lab = w.querySelector(".btn");
+    if(lab && !lab.querySelector("small")){
+      const sm = document.createElement("small");
+      sm.textContent = cc(amt, slug);
+      lab.appendChild(document.createTextNode(" "));
+      lab.appendChild(sm);
+    }
+  }
+  if(shown) return;
+  // Nothing on either side. Say so where the buttons were, rather than leaving
+  // a row that looks like it failed to render.
+  const box = document.querySelector(".stakewrap .ticket .actions");
+  if(box && !box.querySelector(".txnote")){
+    const n = document.createElement("div");
+    n.className = "txnote"; n.setAttribute("role","status");
+    n.textContent = "You have no stake on this claim.";
+    box.appendChild(n);
+  }
+}
 async function positionOf(slug,id,addr){
   if(!isLive()){ const p=DEMO.positions[slug+"/"+id]||{yes:0,no:0,cy:0,cn:0}; return p; }
   const s=gstr(slug), a=gstr(addr);
@@ -7443,6 +7495,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // Unconditional: the board is the one action on this page that needs no
   // address, and the sample answers it offline like everything else here.
   fillBoardChip(slug, id);
+  fillWithdrawSides(slug, id);
   fillClaimComments(slug, id);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
@@ -8369,48 +8422,41 @@ function stakeTicket(slug,id,d){
   }
   if(d.phase==="settled"||d.phase==="provClose"){
     const v = d.verdict!=null? d.verdict : d.answer;
-    /* THE BUTTONS ARE HERE NOW, not two sections down in the resolution notice.
-       This card said "withdraw 1× now" and offered nothing to press; the thing
-       that performs the withdrawal was below the fold on most screens, under a
-       heading about how the claim resolved. A ticket that names an action and
-       does not carry it is a caption. */
+    /* THE HEADING AND THE BUTTONS, AND NOTHING ELSE. This card carried a
+       paragraph explaining that principal returns 1x and a two-row table saying
+       it again in a different shape — for a claim that has finished, where the
+       only question left is "what do I collect". The rules of settlement are
+       true of every claim in every court and are not news to anybody reading
+       this one.
+       WHAT WAS LOST AND WHERE IT WENT: the resolution notice below still names
+       the verdict and its route, and still explains the voter carrot. The one
+       fact this card alone carried — who may open the rewards, and when — moved
+       onto the button that opens them, as its own note.
+
+       data-wside ON THE WITHDRAW PAIR: fillWithdrawSides reads the reader's
+       position after the render, drops the side they do not hold, and writes
+       what that side returns onto the button. It keys on this rather than on
+       data-func, because the demo branch of btn() emits an inert button without
+       those attributes — and the demo is where this is seen without a wallet. */
     return `<div class="ticket"><h3>Staking is closed</h3>
-      <div class="hint">This claim has concluded — every stake withdraws 1×.${d.phase!=="settled"? " No side won or lost; the deposit and fee were refunded."
-        /* WHO CAN PRESS IT AND WHY, in the paragraph rather than in four words
-           under the button. "participants first week" assumed the reader knew
-           there was a priority window, what a participant was, and that anything
-           had to be opened at all — three things a first-time reader has no way
-           to know, in a note too short to say any of them. The hint has room for
-           a sentence; the button gets to be a verb. */
-        : d.crystallized? " The winning side also draws its accuracy reward, below."
-        : " Nothing has paid out yet: the rewards have to be opened first, and for a week after the verdict only people involved in this claim — its author, its answerer, anyone who staked — can do that. After that, anyone can."}</div>
-      <div class="line"><span class="l">Your principal</span><span class="r">withdraw 1× now</span></div>
-      ${d.phase==="settled"?`<div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>`:""}
-      <div class="actions" style="margin-top:14px">
-        ${btn("Withdraw (YES side)","WithdrawStake",{courtSlug:slug,claimID:id,side:0},d.phase==="settled"?"yes":"")}
-        ${btn("Withdraw (NO side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1},d.phase==="settled"?"no":"")}
+      <div class="actions" style="margin-top:12px">
+        <span data-wside="0">${btn("Withdraw YES","WithdrawStake",{courtSlug:slug,claimID:id,side:0},d.phase==="settled"?"yes":"")}</span>
+        <span data-wside="1">${btn("Withdraw NO","WithdrawStake",{courtSlug:slug,claimID:id,side:1},d.phase==="settled"?"no":"")}</span>
         ${d.phase!=="settled"? "" : d.crystallized
           ? btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v})
             +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
             +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
             +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
+          /* WHAT THE REALM WILL REFUSE, said before the signature rather than
+             after it. Crystallize is turned down in four states — an open
+             quality question, the 24h quiet window after the last flag event,
+             and the first week of the verdict for anyone who is not a
+             participant. Only the first is greyed, because it is the only one
+             this page can evaluate; the other two need lastFlagEventAt and the
+             reader's own stake, neither of which is published. Greying a control
+             somebody could have used is worse than offering one they cannot. */
           : btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
-                /* WHAT THE REALM WILL REFUSE, said before the signature rather
-                   than after it. Crystallize was offered on every settled claim
-                   that had not been crystallized, and the realm turns it down in
-                   four states — an open quality question, the 24h quiet window
-                   after the last flag event, and the first week of the verdict
-                   for anyone who is not a participant.
-                   Only the first is greyed, because it is the only one this page
-                   can evaluate: flagOpen and counterOpen are already read for
-                   the quality lane. The quiet window needs lastFlagEventAt and
-                   the participant week needs the reader's stake, and neither is
-                   published — so those get a note that says the rule instead of
-                   a grey that might be wrong about the reader. Greying a control
-                   somebody could have used is worse than offering one they
-                   cannot. */
-                "",
-                null,null,null,
+                "participants first week, then anyone",null,null,null,
                 (d.flagOpen||d.counterOpen)
                   ? "A quality question is still open on this claim. The draw waits until it closes — principal never does."
                   : null)}</div></div>`;

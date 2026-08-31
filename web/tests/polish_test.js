@@ -116,12 +116,24 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      week" assumed the reader knew there was a priority window, what a
      participant is, and that anything had to be opened at all — three things a
      first-time reader cannot know, in a note too short to say any of them. */
-  ok("...and the card explains who may open them, in words",
-     /only people involved in this claim/.test(clear)
-     && /author, its answerer, anyone who staked/.test(clear)
-     && /After that, anyone can/.test(clear));
-  ok("...and the button itself is just the verb",
-     !/participants first week/.test(crysOf(clear)) && /Open the rewards/.test(crysOf(clear)));
+  /* THE CARD IS A HEADING AND BUTTONS. The paragraph explaining that principal
+     returns 1x, and the two-row table saying it again, are gone: they were true
+     of every claim in every court, on a card whose reader has one question left.
+     The one fact this card alone carried — who may open the rewards — rides the
+     button that opens them. */
+  ok("...and the card is down to its heading and its controls",
+     /Staking is closed/.test(clear)
+     && !/<div class="hint">/.test(clear)
+     && !/class="line"/.test(clear));
+  ok("...and no longer claims nothing has paid out, above a live withdraw",
+     !/Nothing has paid out/.test(clear) && !/Your principal is yours now/.test(clear));
+  ok("...with the timing rule on the button it applies to",
+     /participants first week, then anyone/.test(crysOf(clear)));
+  // The withdraw pair is marked for the position read that filters and prices it.
+  ok("...and the withdraw pair is marked for the position read",
+     /data-wside="0"/.test(clear) && /data-wside="1"/.test(clear));
+  ok("...and the button says the verb, with the rule as its note",
+     /Open the rewards/.test(crysOf(clear)));
   // Once they are open the card stops explaining how to open them.
   ok("a crystallized claim does not still describe opening",
      !/have to be opened first/.test(
