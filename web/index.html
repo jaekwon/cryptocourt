@@ -1669,7 +1669,33 @@ const store = {
 };
 let stored = {};
 try{ stored = JSON.parse(store.get("cc.cfg")||"{}"); }catch(_){}
+/* A LOCKED PAGE IGNORES A SAVED CHAIN, and this is a bug fix rather than
+   belt-and-braces. cleanCfg starts from CFG_DEFAULTS and lets stored values
+   override them, so a reader who had ever pointed the repo copy at a node kept
+   that node on the DEPLOYED site — measured on kourt.xyz, which was reading
+   http://127.0.0.1:26657 and printing it into the gnokey command, while the
+   wallet was correctly on the deployed chain and refused to establish.
+   LOCKED hides the source panel, so there was no way to see it or undo it.
+   That is precisely what the LOCKED comment above says the flag exists to
+   prevent — "a way to point a production page at somebody else's node and then
+   read the result as if it were this court" — arriving through localStorage
+   instead of through the panel.
+   THE READER'S OWN PREFERENCES SURVIVE: theme is theirs, and addr is which of
+   their accounts they last used, neither of which names a chain. Only the four
+   fields that decide WHICH CHAIN this is are dropped. */
+if(LOCKED){
+  const keep = {};
+  if(stored && typeof stored==="object"){
+    if(stored.theme==="light"||stored.theme==="dark") keep.theme = stored.theme;
+    if(typeof stored.addr==="string") keep.addr = stored.addr;
+  }
+  stored = keep;
+}
 const CFG = cleanCfg(stored);
+/* AND THE STALE KEY IS REWRITTEN, so the next load does not re-read it. Without
+   this the override is only suppressed in memory and comes back the moment
+   anything calls saveCfg() with a fresh object. */
+if(LOCKED) store.set("cc.cfg", JSON.stringify(CFG));
 /* HIDDEN, NOT REMOVED. The inputs below are read and written by the settings
    wiring; deleting them would leave that code querying null on a deployed page,
    and the failure would land at whatever it touched first rather than here. */
