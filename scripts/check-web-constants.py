@@ -44,6 +44,17 @@ MIRRORS = {
     "MAX_COMMENT_CHARS": ("realm/r/kourtv2/board.gno", "maxBoardTextLen"),
 }
 
+# A PHRASE THE OVERLAY MATCHES ON, and the realm string it has to be found in.
+#
+# noCoinHelp tells "buy some, it counts next time" apart from "buying cannot
+# help this round" by testing the realm's own explanation for one clause. That
+# is prose on both sides of a chain boundary, which is the most silent coupling
+# in this repo: reword whyWeighed and the dialog does not break, it starts
+# offering to sell coin to somebody it cannot help. So the clause is pinned.
+PHRASES = {
+    "you had none when this vote started": "realm/r/kourtv2/voteweight.gno",
+}
+
 # web symbol -> (the call the realm counts it with, the call the overlay does)
 #
 # THE UNIT, NOT ONLY THE NUMBER. maxBoardTextLen went from bytes to characters
@@ -111,8 +122,27 @@ def main():
                   f"stopped short of, or past, the cap the chain applies.",
                   file=sys.stderr)
             bad += 1
+    for phrase, relpath in sorted(PHRASES.items()):
+        src = open(os.path.join(REPO, relpath), encoding="utf-8").read()
+        in_realm = phrase in src
+        in_web = phrase in web
+        if not in_realm:
+            print(f"check-web-constants: {relpath} no longer contains the phrase "
+                  f"{phrase!r}. The overlay matches on it to tell a fixable "
+                  f"refusal from one no purchase can fix; reworded on one side "
+                  f"only, the dialog offers to sell coin to somebody it cannot "
+                  f"help — and nothing else fails. Reword both, or drop the "
+                  f"pairing from PHRASES.", file=sys.stderr)
+            bad += 1
+        if not in_web:
+            print(f"check-web-constants: the overlay no longer matches on "
+                  f"{phrase!r}, which {relpath} still produces. Half a rename is "
+                  f"worse than none.", file=sys.stderr)
+            bad += 1
     if bad:
         return 1
+    print(f"check-web-constants: {len(PHRASES)} mirrored phrase(s) still agree "
+          f"across the boundary.")
     print(f"check-web-constants: {len(MIRRORS)} mirrored constant(s) match the "
           f"realm — " + ", ".join(f"{s}={realm_value(*v)}"
                                   for s, v in sorted(MIRRORS.items())) + ".")

@@ -128,18 +128,27 @@ func VoteWeightWhy(courtSlug string, who address, claimID uint64) (verdict, qual
 
 // whyWeighed is the explanation for ONE epoch. Split out so the two lanes cannot
 // share an answer by accident, which is exactly how the first version went wrong.
+//
+// WRITTEN FOR SOMEBODY WHO HAS NEVER USED THIS. These four sentences are the
+// first thing a newcomer reads when the court turns them away, and they used to
+// be written in the vocabulary of the thing that refused them — "at the epoch
+// this question was frozen at", "there is nothing to weigh", "weighed at the
+// full snapshot". Epoch, snapshot and weigh are all internal words. What a
+// reader needs is when the vote started, what they held then, and whether
+// buying now would help.
+//
+// The first arm's opening — "you had none when this vote started" — is matched
+// by the overlay to tell the fixable case from the hopeless one, so it is
+// pinned by check-web-constants. Reword it and the build says so.
 func whyWeighed(c *Court, who address, at uint32) string {
 	w, snapshot := votingWeight(c, who, at)
 	switch {
 	case snapshot <= 0:
-		return "you held no coin at the epoch this question was frozen at, so " +
-			"there is nothing to weigh; coin bought since counts in later questions"
+		return "you had none when this vote started; coin bought since counts in later votes"
 	case w <= 0:
-		return "you held coin when this question was asked but hold none now, and " +
-			"weight is the lesser of the two"
+		return "you had some when this vote started but have none now, and your say is the smaller of the two"
 	case w < snapshot:
-		return "capped at what you still hold, which is less than you held when " +
-			"this question was asked"
+		return "limited to what you still hold, which is less than when this vote started"
 	}
-	return "weighed at the full snapshot"
+	return "counted in full"
 }

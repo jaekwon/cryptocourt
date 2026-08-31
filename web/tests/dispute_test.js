@@ -101,9 +101,40 @@ ok("...and no bond figure sits beside the word voting",
 ok("eligibility is not a standing paragraph", !html.includes("holder can vote"));
 ok("...the vote buttons are marked for the click-time check",
    html.includes('id="voteactions"'));
-ok("...and Resolve sits outside that block, being no vote at all",
-   html.indexOf("Resolve (after close)") > html.indexOf('id="voteactions"')
-   && html.split('id="voteactions"')[1].indexOf("</div>") < html.split('id="voteactions"')[1].indexOf("Resolve"));
+// THE TWO ACTIONS ARE NEVER BOTH LIVE. Resolve used to sit under the ballot on
+// every disputed claim whichever side of the close it was, where before the
+// close it could only be refused. DisputeVoteCloses makes the state readable,
+// so the panel says which one it is.
+{
+  const save = CFG.mode; CFG.mode = "live";
+  const open   = disputeTicket("orem", 3, d, NOW);                                  // window open
+  const shut   = disputeTicket("orem", 3, Object.assign({}, d, {voteEndsAt:NOW-1}), NOW);
+  const unsure = disputeTicket("orem", 3, Object.assign({}, d, {voteEndsAt:null}), NOW);
+  CFG.mode = save;
+
+  ok("before the close, Resolve is not offered at all", !/>[^<]*Resolve/.test(open));
+  ok("...and the vote buttons are live", !open.includes("data-voteblocked"));
+  ok("after it, Resolve is offered without a parenthesis about the future",
+     shut.includes("Resolve this round") && !shut.includes("(after close)"));
+  ok("...and the whole vote block is marked, not each button",
+     /id="voteactions"[^>]*data-voteblocked="Voting has closed for this round\./.test(shut));
+  // Greyed, not deleted: the question and the two outcomes are still what the
+  // round was about.
+  ok("...with the buttons still there to read",
+     (shut.match(/data-act="1"/g)||[]).length >= 3 && shut.includes("Vote to overturn"));
+  ok("...and dimmed by a rule that fires on the block",
+     src.includes(".actions[data-voteblocked] .btn{opacity:.5; cursor:not-allowed}"));
+  // RESOLVE IS NOT A VOTE, so it stays outside the marked block: somebody who
+  // staked on this claim may not judge it and may still close the round.
+  ok("...while Resolve itself is outside the marked block",
+     shut.split('id="voteactions"')[1].indexOf("</div>")
+       < shut.split('id="voteactions"')[1].indexOf("Resolve"));
+  // UNKNOWN IS ITS OWN CASE: refusing a vote we cannot prove is closed would
+  // take away an action the reader may still have.
+  ok("an unreadable close offers Resolve with its hedge and blocks nothing",
+     unsure.includes("Resolve (once the window has passed)")
+     && !unsure.includes("data-voteblocked"));
+}
 // The DATED close is the resolution ladder's row — it always had one, and the
 // ballot was printing a second copy of it as a labelled row. The hint's clock is
 // a phrase inside a sentence, not a second ladder.
@@ -259,15 +290,33 @@ ok("the click opens help instead of the wallet",
    && src.includes("noCoinHelp(nc.getAttribute(\"data-nocoin\"), nc);"));
 // TWO CASES AND ONLY ONE IS FIXABLE, which is why VoteWeightWhy is read at all.
 ok("...and it splits the fixable case from the one that is not",
-   src.includes("const tooLate = /at the epoch this question was frozen/.test(why || \"\");"));
+   src.includes("const tooLate = /you had none when this vote started/.test(why || \"\");"));
+// PROSE ACROSS A CHAIN BOUNDARY is the most silent coupling here: reword
+// whyWeighed and this does not break, it starts offering to sell coin to
+// somebody it cannot help. check-web-constants pins the clause on both sides.
+ok("...with the clause pinned, so a one-sided rename fails the build",
+   /PHRASES = \{\s*\n\s*"you had none when this vote started"/.test(
+     require("fs").readFileSync(require("path").join(__dirname,"..","..","scripts","check-web-constants.py"),"utf8")));
+// NO BUTTON AT ALL in the hopeless case. There is nothing to press: buying
+// cannot change this round, and a "See the court" link was a second thing to
+// read on a dialog whose whole job is to say "not this one".
 ok("...offering the buy panel only where buying would work",
-   /tooLate\? "See the court" : `Get \$\{sym\}`/.test(src));
+   /tooLate \|\| !slug \? ""/.test(src) && /class="btn primary" href="#\/c\/\$\{esc\(slug\)\}\?at=join">Get/.test(src)
+   && !src.includes("See the court"));
 ok("...and saying plainly that a purchase cannot fix this round",
-   src.includes("Buying now would not change this round"));
-// The court's own sentence, not a paraphrase: it is the text the chain would
-// have refused with, so a reader who meets the panic later recognises it.
-ok("...quoting the realm rather than restating it",
-   src.includes('<p class="small muted">${esc(why || "")}</p>'));
+   src.includes("Buying now counts in the next vote, not this one."));
+// SIMPLE ENGLISH. The first version explained a refusal in the vocabulary of
+// the thing that refused: epoch, snapshot, weigh, frozen at. None of those
+// words survive on either side of the boundary now.
+ok("...in words a newcomer has met before",
+   !/\bepoch\b|\bsnapshot\b|frozen at|nothing to weigh/.test(
+     src.slice(src.indexOf("function noCoinHelp"), src.indexOf("function signHelp"))));
+// The realm's sentence is no longer PRINTED — it was a second, longer
+// explanation under a short one, in the court's own vocabulary. It is still
+// read, because it is what tells the two cases apart.
+ok("...reading the realm's reason without reprinting it",
+   !src.includes('<p class="small muted">${esc(why || "")}</p>')
+   && src.includes("const tooLate = /you had none when this vote started/"));
 
 // ---- a refused handshake reports, it does not diagnose --------------------
 // "Could not read Adena's network — unlock the wallet and retry" named ONE

@@ -77,15 +77,14 @@ func TestTheQuoteMatchesTheCharge(cur realm, t *testing.T) {
 
 	// AND THE EXPLANATION IS THE RIGHT ONE, since a holder acts on it. Per lane,
 	// because with a dispute open there are two live questions at two epochs.
-	capped := "capped at what you still hold, which is less than you held when " +
-		"this question was asked"
+	capped := "limited to what you still hold, which is less than when this vote started"
 	cv, cq := VoteWeightWhy("qmc", carol, id)
 	uassert.Equal(t, capped, cv)
 	uassert.Equal(t, capped, cq)
 	// The bystander: bob held throughout, so he is quoted the full snapshot in both.
 	bv, bq := VoteWeightWhy("qmc", bob, id)
-	uassert.Equal(t, "weighed at the full snapshot", bv)
-	uassert.Equal(t, "weighed at the full snapshot", bq)
+	uassert.Equal(t, "counted in full", bv)
+	uassert.Equal(t, "counted in full", bq)
 }
 
 // THE ELECTION QUOTE REPORTS THE FROZEN FIGURE, not a fresh derivation.
@@ -268,13 +267,13 @@ func TestTheTwoLanesGetSeparateExplanations(cur realm, t *testing.T) {
 	uassert.True(t, verdict > 0)
 
 	vWhy, qWhy := VoteWeightWhy("tls", late, id)
-	uassert.Equal(t, "weighed at the full snapshot", vWhy)
+	uassert.Equal(t, "counted in full", vWhy)
 	if qWhy == vWhy {
 		t.Fatalf("the two lanes disagree for this holder, so their explanations "+
 			"must too — both said %q", qWhy)
 	}
-	uassert.Equal(t, "you held no coin at the epoch this question was frozen at, "+
-		"so there is nothing to weigh; coin bought since counts in later questions",
+	uassert.Equal(t,
+		"you had none when this vote started; coin bought since counts in later votes",
 		qWhy)
 
 	// And the realm agrees with the quality explanation rather than the verdict one.
@@ -513,7 +512,7 @@ func TestVotableCountsAKeylessHolderAndTheCapIsWhy(cur realm, t *testing.T) {
 //
 // whyWeighed is a four-way switch and an operator sweep found its third arm unpinned:
 // widening `case w <= 0` to `< 0` sends a holder whose live balance is ZERO into the
-// capped arm, which tells them they are "capped at what you still hold, which is less
+// capped arm, which tells them they are "limited to what you still hold, which is less
 // than you held when this question was asked". They hold nothing. The sentence implies a
 // residual and there is none, and this is the divested renter — the one holder the whole
 // floor exists to describe, so the one whose sentence is worth being exact about.
@@ -552,8 +551,9 @@ func TestTheDivestedHolderIsNotToldTheyAreCappedAtNothing(cur realm, t *testing.
 			"arm under test does not fire", c.coin.BalanceOf(seller))
 	}
 	verdict, _ := VoteWeightWhy("dw", seller, id)
-	uassert.Equal(t, "you held coin when this question was asked but hold none now, "+
-		"and weight is the lesser of the two", verdict)
+	uassert.Equal(t,
+		"you had some when this vote started but have none now, and your say is the smaller of the two",
+		verdict)
 
 	// THE ARM ABOVE: a holder who never held at all gets its own sentence, not the
 	// divested one.
@@ -561,8 +561,8 @@ func TestTheDivestedHolderIsNotToldTheyAreCappedAtNothing(cur realm, t *testing.
 		t.Fatal("fixture: the newcomer is not a newcomer")
 	}
 	verdict, _ = VoteWeightWhy("dw", newcomer, id)
-	uassert.Equal(t, "you held no coin at the epoch this question was frozen at, so "+
-		"there is nothing to weigh; coin bought since counts in later questions",
+	uassert.Equal(t,
+		"you had none when this vote started; coin bought since counts in later votes",
 		verdict)
 
 	// THE ARM BELOW: an uncapped holder is not told they were capped. The keeper is a
@@ -573,5 +573,5 @@ func TestTheDivestedHolderIsNotToldTheyAreCappedAtNothing(cur realm, t *testing.
 			"stand for the uncapped case", w, snap)
 	}
 	verdict, _ = VoteWeightWhy("dw", keeper, id)
-	uassert.Equal(t, "weighed at the full snapshot", verdict)
+	uassert.Equal(t, "counted in full", verdict)
 }

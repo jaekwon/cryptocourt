@@ -342,6 +342,11 @@ a.card:hover{border-color:var(--line-2)}
   text-decoration:none; transition:border-color .12s, background .12s;
 }
 .btn:hover{border-color:var(--accent); background:var(--accent-wash)}
+/* A block of actions the round has moved past. Dimmed rather than removed, and
+   dimmed at render — the async eligibility marks land on individual buttons
+   after paint, and fading those would flicker. */
+.actions[data-voteblocked] .btn{opacity:.5; cursor:not-allowed}
+.actions[data-voteblocked] .btn:hover{border-color:var(--line-2); background:var(--surface); box-shadow:none}
 /* WAKING THE WALLET. Adena is an MV3 extension, so the first call after it has
    been idle cold-starts a suspended service worker — about a second in which
    nothing at all happened on screen and the button looked ignored. The wait is
@@ -2766,20 +2771,20 @@ function noCoinHelp(why, el){
   let slug = "";
   try{ slug = String(JSON.parse(el.dataset.args||"{}").courtSlug || ""); }catch(_){}
   const sym = "KOURT:" + esc(slug).toUpperCase();
-  // The distinguishing clause is the realm's, from whyWeighed (voteweight.gno):
-  // "you held no coin at the epoch this question was frozen at" is the case no
-  // purchase can fix.
-  const tooLate = /at the epoch this question was frozen/.test(why || "");
+  // THE DISCRIMINATING CLAUSE IS THE REALM'S, from whyWeighed (voteweight.gno),
+  // and check-web-constants pins it: reword it there and the build says so
+  // rather than this quietly offering to sell coin to somebody it cannot help.
+  const tooLate = /you had none when this vote started/.test(why || "");
   const dlg = document.createElement("dialog");
   dlg.className = "helper";
   dlg.innerHTML = `<div class="hd"><h3>You cannot vote on this round</h3>
       <button type="button" class="pill void" data-cancel>close</button></div>
     <div class="bd">
       <p>${tooLate
-        ? `Your weight in a round is whatever you held of ${sym} at the moment the round was frozen, and you held none then. Buying now would not change this round — but it counts in full on every question opened after the purchase.`
-        : `Voting weight is ${sym}, this court's own coin, and you hold none. It is not tradeable elsewhere and it is not an investment — it is the thing that lets you judge here.`}</p>
-      <p class="small muted">${esc(why || "")}</p>
-      ${slug? `<div class="actions"><a class="btn${tooLate?"":" primary"}" href="#/c/${esc(slug)}?at=join">${tooLate? "See the court" : `Get ${sym}`}</a></div>` : ""}
+        ? `You had no ${sym} when this vote started, so you have no say in it. Buying now counts in the next vote, not this one.`
+        : `You need ${sym} to vote here. It is this court's own coin — not an investment, just what gives you a say.`}</p>
+      ${tooLate || !slug ? ""
+        : `<div class="actions"><a class="btn primary" href="#/c/${esc(slug)}?at=join">Get ${sym}</a></div>`}
     </div>`;
   document.body.appendChild(dlg);
   const close = ()=>{ try{ dlg.close(); }catch(_){} dlg.remove(); };
@@ -4395,6 +4400,27 @@ function ballotHint(slug, d, nowH){
 }
 
 function disputeTicket(slug, id, d, nowH){
+  /* THE TWO ACTIONS ARE NEVER BOTH LIVE, and the panel used to show them as if
+     they were: three vote buttons and a "Resolve (after close)" underneath, on
+     every disputed claim, whichever side of the close it was.
+
+     THE CLOSE IS READABLE NOW (DisputeVoteCloses), so the panel can say which
+     one it is. Before the close, Resolve is not offered — it would only be
+     refused. After it, the vote buttons grey out and say why, and Resolve loses
+     its parenthesis because the close is no longer in the future.
+
+     GREYED, NOT REMOVED: the question and the two outcomes are still what the
+     round was about, and a panel that deleted them would leave a reader
+     wondering what they had missed. And greyed at RENDER, unlike the async
+     eligibility marks — this state is known before the panel paints, so there
+     is nothing to flicker.
+
+     UNKNOWN IS ITS OWN CASE. If the close could not be read, neither statement
+     is safe: Resolve is offered with its old hedge and the vote buttons stay
+     live, because refusing a vote we cannot prove is closed would take away an
+     action the reader may still have. */
+  const closed = !!(d.voteEndsAt && nowH != null && d.voteEndsAt <= nowH);
+  const unknownClose = !d.voteEndsAt || nowH == null;
   // THE MECHANISM IS NOT ON THE BALLOT. Quorum, threshold, what a vote locks,
   // what each outcome does to whose bond, and where the coin goes were seven
   // dense lines between the question and the buttons — a reader had to get
@@ -4403,15 +4429,16 @@ function disputeTicket(slug, id, d, nowH){
   // them. What is left is the question, the clock, and the buttons.
   return `<div class="ticket" style="margin-top:12px"><h3>Should this answer be overturned?</h3>
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
-      <div class="actions" id="voteactions" style="margin-top:10px">
+      <div class="actions" id="voteactions" style="margin-top:10px"${
+        closed? ` data-voteblocked="Voting has closed for this round. All that is left is to resolve it."` : ""}>
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
         ${btn("Abstain","VoteDispute",{courtSlug:slug,claimID:id,choice:"abstain"},"","counts to turnout only, never to a side")}</div>
       <!-- RESOLVE IS NOT A VOTE, so it sits outside the block the eligibility
            check marks: somebody who staked on this claim may not judge it and may
            still close the round once the window has passed. -->
-      <div class="actions" style="margin-top:8px">
-        ${btn("Resolve (after close)","ResolveDispute",{courtSlug:slug,claimID:id})}</div>
+      ${closed || unknownClose ? `<div class="actions" style="margin-top:8px">
+        ${btn(closed? "Resolve this round" : "Resolve (once the window has passed)","ResolveDispute",{courtSlug:slug,claimID:id})}</div>` : ""}
       ${voteHelpModal(slug, d)}`;
 }
 /* WHY YOU CANNOT VOTE, SAID WHEN YOU TRY TO — not as a standing paragraph on a
