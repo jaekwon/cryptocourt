@@ -4865,7 +4865,21 @@ const crumbs = parts => {
 /* --- directory --- */
 on(/^\/$/, async ()=>{
   loading();
-  const courts = await listCourts();
+  /* THREE ROUND TRIPS, IN A ROW, BEFORE ANYTHING IS DRAWN — and none of them
+     needed the answer to the one before it. Measured on kourt.xyz: the root
+     render came back at 622ms, ListByTier(1) at 772ms, ListByTier(0) at 860ms,
+     and the rows painted at 981ms. The page had been interactive since 520ms and
+     spent the rest waiting, one query at a time, on a node ~110ms away.
+     They are independent — the render lists the courts, one tier count is the
+     listed total, the other is the hidden count — so they go together. The two
+     counts are asked with .catch here rather than awaited in a try, because
+     Promise.all rejects as a whole and either count failing must cost only its
+     own caption. */
+  const [courts, tierRaw, hiddenRaw] = await Promise.all([
+    listCourts(),
+    isLive()? qeval(`ListByTier(1)`).catch(()=>null) : null,
+    isLive()? qeval(`ListByTier(0)`).catch(()=>null) : null,
+  ]);
   const featured = courts.filter(c=>c.tier===2);
   let listed = courts.filter(c=>c.tier!==2);
   const page = pageOf();
@@ -4877,10 +4891,9 @@ on(/^\/$/, async ()=>{
   // emits no overflow footer, so page 1's parse alone cannot know it.
   let listedTotal = listed.length, dirTotFailed = false;
   if(isLive()){
-    try{
-      const raw = await qeval(`ListByTier(1)`);
-      listedTotal = [...new Set((raw.match(/"[a-z0-9-]+"/g)||[]).map(x=>x.slice(1,-1)))].length;
-    }catch(_){ dirTotFailed = true; /* the caption hedges instead of asserting an unread total */ }
+    // already in flight before this route did any of its own work
+    if(tierRaw==null) dirTotFailed = true; /* the caption hedges instead of asserting an unread total */
+    else listedTotal = [...new Set((tierRaw.match(/"[a-z0-9-]+"/g)||[]).map(x=>x.slice(1,-1)))].length;
     if(page>1){
       try{
         const raw2 = await qeval(`ListedCourtsBy("burn", ${(page-1)*PAGE_N}, ${PAGE_N})`);
@@ -4905,9 +4918,8 @@ on(/^\/$/, async ()=>{
   const claimsSum = loadedWithClaims.reduce((t,c)=>t+c.claims,0);
   // hidden courts: COUNT only — the slugs never enter the DOM, a caption, or a log
   let hiddenN = null;
-  if(isLive()){ try{ const raw0 = await qeval(`ListByTier(0)`);
-      hiddenN = [...new Set((raw0.match(/"[a-z0-9-]+"/g)||[]).map(x=>x.slice(1,-1)))].length;
-    }catch(_){ hiddenN = null; } }
+  if(isLive()) hiddenN = hiddenRaw==null? null
+    : [...new Set((hiddenRaw.match(/"[a-z0-9-]+"/g)||[]).map(x=>x.slice(1,-1)))].length;
   else hiddenN = Object.values(DEMO.courts).filter(c=>c.tier===0).length;
   const hiddenLine = hiddenN==null
     ? "the hidden-court count did not read — whether courts are hidden is unknown right now; reload to retry."
@@ -5006,13 +5018,22 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="yes"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button><button class="pill void" data-sort="yes" aria-pressed="${QP.sort==="yes"}">%YES now</button></span>` : "";
   const docketPager = pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims", undefined, dkChips) + hiddenNote;
   const docketPagerBot = (totalClaims>PAGE_N || page>1)? pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims") : "";
-  const chainF = isLive()? await chainFolders(slug).catch(()=>null) : null;
+  /* TOGETHER, NOT ONE AFTER THE OTHER. The folder tree and the description are
+     independent — nothing in either read decides what the other asks — and
+     awaiting them in sequence put two full round trips on the path to the first
+     paint. Measured on kourt.xyz before this: FolderCount left at 1000ms,
+     CourtDesc at 1080ms, and the page painted at 1178ms, on a node ~110ms away.
+     Each keeps its own .catch, so one failing still costs only its own field:
+     no folders, or a description that falls back to curation. */
   // The court's own description, from the chain. Falls back to curation when the
   // realm has none — an older deployment, or a court whose moderators have not
   // written one — so the field degrades to what it was rather than to nothing.
-  const chainDesc = isLive()
-    ? await one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>"")
-    : "";
+  const [chainF, chainDesc] = isLive()
+    ? await Promise.all([
+        chainFolders(slug).catch(()=>null),
+        one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>""),
+      ])
+    : [null, ""];
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])
     + `<div class="lead-row leadface">${courtFaceHtml(slug, s.name)}<div>
         <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
