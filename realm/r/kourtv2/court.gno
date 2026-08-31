@@ -138,10 +138,10 @@ const (
 const (
 	// answer bond = 6%·X̄ (min 1), capped by params, and the collateralization
 	// floor in PostAnswer raises it toward 1.6× the destroyable draw — which is
-	// where the real pricing now lives. 600 = slashXBps*4/3, HARDCODED rather
-	// than derived: deriving it turns the slashXBps coupling below into `X > X`,
+	// where the real pricing now lives. 600 = bondFloorFlatBps*4/3, HARDCODED rather
+	// than derived: deriving it turns the bondFloorFlatBps coupling below into `X > X`,
 	// and TestEconomicConstantsAreTheCalibratedValues is already the alarm that
-	// fires if slashXBps moves. Why not 450: at exactly slashXBps the settle
+	// fires if bondFloorFlatBps moves. Why not 450: at exactly bondFloorFlatBps the settle
 	// refund is zero (the whole bond is retained as the slash reserve) and at 449
 	// the realm refuses to deploy; 600 returns 25% at settle and leaves margin.
 	answerBondBps = int64(600)
@@ -155,20 +155,46 @@ const (
 	// bond), tier-invariant, senior-queued; the 80% arm FLOORS (v0.20/v0.25).
 	compOwnX, compOfBurnBps = int64(2), int64(8000)
 
-	// Flag lane: bond = max(flagMinCC, 2%·X̄); doubling per SLOT to a frozen
-	// 4×; conclusive-low slash = max(4.5%·X̄ floor, 1.6× the mill's would-be mid
-	// draw), only at the supply-floored full bar on UNDISPUTED answers, escrowed
-	// one counter-flag window (v0.28–v0.31; draw-proportional arm v0.40).
-	flagBondXBps    = int64(200)
-	flagMinCC       = int64(1_000_000) // 1 CC
-	flagFrozenMultX = int64(4) // bond freezes at 4×b₀ = 8%·X̄ after 3 inconclusives
-	// (flagFreezeAfter = 3 stood here and was read by nothing. flagBondFor caps
-	// the EXPONENT at 2, which is the same rule counted from zero, so the
-	// constant was a second spelling of a number it did not supply — and the
-	// two comments naming "3 inconclusives" already carry the intent.)
-	slashXBps       = int64(450)   // 4.5%·X̄ answer-bond slash FLOOR (whale-gated; bounty 2% ≤ 80%×4.5% ✓)
-	slashDrawBps    = int64(16000) // v0.40: draw-proportional arm — slash ≥ 1.6× the winning-pool mid draw (midGross), so a patient mill's punishment tracks its take, not just X̄; floored by slashXBps, clamped to the bond. k=1.6 lands the 12-wk (dead-claim) mill q* on the ~0.22 target and flattens the hold-time curve (three-designer convergence, v0.40)
-	depositFeeBps   = int64(1000)  // 10% of the deposit, conditionally refunded
+	// THE REALM'S "A BODY GETS THIS LONG TO DECIDE" UNIT: 7 days.
+	//
+	// Was flagCooldownBlocks, the per-flag cooldown, and it outlived the flag lane
+	// because two unrelated callers had already borrowed it as a DURATION rather
+	// than as a flag parameter — moderation's m-of-n approval TTL and the election
+	// cooldown, each of which says so at its use. Named for the meaning they were
+	// borrowing instead of the mechanism they were borrowing it from.
+	//
+	// NOT periodBlocks, which is the same 120_960 and means the emission
+	// accounting period. moderation.gno makes exactly this argument against
+	// coupling to reSetWindowBlocks, and it applies here in the same words: tie
+	// two unrelated rules to one constant and one of them eventually gets changed
+	// for the other's reasons.
+	decideWindowBlocks = int64(120_960)
+
+	// THE CARROT CLAMP BASE. Was the flag bond — b₀ = max(1 CC, 2%·X̄) — and the
+	// per-voter carrot clamp was defined against it as b₀/2 − 1, so that an idle
+	// sybil voting to farm the carrot netted strictly negative against the bond it
+	// would have had to post. The flag lane is gone and the clamp is not, so the
+	// two constants are promoted here under their own name rather than left as
+	// orphaned flag parameters. Values unchanged: the clamp does not move.
+	carrotClampXBps  = int64(200)
+	carrotClampMinCC = int64(1_000_000) // 1 CC
+
+	// THE ANSWER BOND'S CONVICTION FLOOR: max(4.5%·X̄, 1.6× a side's mid draw).
+	//
+	// These were bondFloorFlatBps and bondFloorConvBps, sizing the conclusive-low slash, and
+	// the answer bond was floored at the slash so a levy could never clamp from
+	// under its own collateral. The slash went with the quality lane; the floor
+	// stayed, because covering the slash was only one of the three things it did
+	// and the other two are load-bearing (answer.gno states them at the call):
+	// it scales the bond with the claim's CONVICTION rather than its stake alone,
+	// and it is what keeps the dispute bond answerer-independent.
+	//
+	// Renamed rather than re-derived, and the arithmetic is bit-identical, so no
+	// bond anywhere changes price. A floor still named for a penalty that no
+	// longer exists is how the next reader concludes it is dead and deletes it.
+	bondFloorFlatBps = int64(450)   // 4.5%·X̄, the base arm
+	bondFloorConvBps = int64(16000) // 1.6× the side's would-be mid draw, so the bond tracks the take
+	depositFeeBps    = int64(1000)  // 10% of the deposit, conditionally refunded
 
 	// Answer priority (records.gno): difficulty-weighted net record ≥ 3 earns a
 	// 24h priority window; gate off until 3 addresses qualify; one active
@@ -270,9 +296,9 @@ func mustInvariants() {
 	}
 	// THE DRAW CAP MUST BE INERT AT THE ORDINARY TIER. crystallize.gno caps a
 	// claim's draw at answerBond0 minus the carrot, and PostAnswer's floor gives
-	// answerBond0 >= (slashDrawBps/1e4)·mg_max >= (slashDrawBps/1e4)·mg_win, so
-	// capd >= (slashDrawBps/1e4 − splitCarrot/100)·mg_win. Requiring that to cover
-	// tierMidX·mg_win is exactly slashDrawBps >= 10700 — and it is the only
+	// answerBond0 >= (bondFloorConvBps/1e4)·mg_max >= (bondFloorConvBps/1e4)·mg_win, so
+	// capd >= (bondFloorConvBps/1e4 − splitCarrot/100)·mg_win. Requiring that to cover
+	// tierMidX·mg_win is exactly bondFloorConvBps >= 10700 — and it is the only
 	// deploy-time certificate that the published MID rate is a promise rather than
 	// a calibration. Above MID the cap is DESIGNED to bind, which is why the bound
 	// is tierMidX and not tierHighX.
@@ -283,7 +309,7 @@ func mustInvariants() {
 	// true, which is precisely the defect the check below had for years. Constants
 	// only, no runtime term — its premises are unconditional facts in answer.gno
 	// and crystallize.gno, not a falsifiable model. Verified by mutation in this
-	// form: it fires on slashDrawBps AND on splitCarrot.
+	// form: it fires on bondFloorConvBps AND on splitCarrot.
 	//
 	// This replaces a check on answerBondBps, and note it contains no bond term at
 	// all: with the bond keyed to the destroyable draw, the thing worth certifying
@@ -343,7 +369,7 @@ func mustInvariants() {
 	// tierMidX is gone; par is tierParBps and this expression wants it in
 	// POINTS, the unit splitCarrot is quoted in. Same number, same certificate.
 	parPoints := tierParBps / 100
-	if slashDrawBps < (parPoints+splitCarrot)*100 {
+	if bondFloorConvBps < (parPoints+splitCarrot)*100 {
 		panic("kourtv2: the slash multiple does not cover the mid draw plus the carrot — the draw cap would cut the published MID rate")
 	}
 	// The dispute bond's own-answer arm keeps round 1 at q > 1/3 everywhere:
@@ -396,7 +422,7 @@ func mustInvariants() {
 	// It is a premise tripwire rather than a safety bound (it only fires above
 	// 3083 bps, so a revert to 2000 would pass it), and it is deliberately kept as
 	// the one remaining answerBondBps coupling so the constant stays greppable.
-	if slashDrawBps*maxMidGrossBps/10000 <= answerBondBps {
+	if bondFloorConvBps*maxMidGrossBps/10000 <= answerBondBps {
 		panic("kourtv2: the draw arm never reaches the base bond — the collateralization floor is inert and the max-keying prices nothing")
 	}
 	// The worst-case bond in bps of X̄. After the floor became the sizer this is
@@ -406,16 +432,16 @@ func mustInvariants() {
 	// the very incumbency-lock-by-price invariant it exists to hold, reachable on
 	// a small sealed court with a claim aged toward the hot 12-week extremal. At
 	// 5000 bps this was impossible because the floor never exceeded the base.
-	maxBondBps := slashDrawBps * maxMidGrossBps / 10000
+	maxBondBps := bondFloorConvBps * maxMidGrossBps / 10000
 	if maxBondBps < answerBondBps {
 		maxBondBps = answerBondBps
 	}
 	// The flat arm's twin coupling: the base bond must cover the 4.5%·X̄ arm with
-	// MARGIN. The bare `slashXBps > answerBondBps` form passed at exactly 450 —
+	// MARGIN. The bare `bondFloorFlatBps > answerBondBps` form passed at exactly 450 —
 	// which is precisely the value that zeroes the settle refund, since the whole
 	// bond is then retained as the slash reserve. The margined form is what makes
 	// 600 the enforced floor rather than a convention.
-	if slashXBps*4/3 > answerBondBps {
+	if bondFloorFlatBps*4/3 > answerBondBps {
 		panic("kourtv2: the flat slash arm leaves the base answer bond no settle-refund margin")
 	}
 	// The deploy check and the runtime lid must price off the SAME worst case, or
@@ -940,7 +966,7 @@ func effMinDeposit(c *Court) int64 {
 //   - CLAMPED, the v0.14 lesson applied to this lane. The deploy invariant
 //     covers the ratio arm, but no constant can see the dust arm: below ~30 CC
 //     of supply the 1 CC dust floor prices filing above the 5% turnout bar and
-//     inverts the guarantee, exactly as flagMinCC did to the election bond.
+//     inverts the guarantee, exactly as carrotClampMinCC did to the election bond.
 // maxAnswerBondBps is the largest bond PostAnswer can demand, in bps of X̄ — the
 // draw arm at the hot-rate 12-week maximum, or the base arm if that is larger.
 //
@@ -952,7 +978,7 @@ func effMinDeposit(c *Court) int64 {
 func maxAnswerBondBps() int64 {
 	maxRateBpsFP := 255 * (r0WeeklyBps*1_000_000 + budgetBpsFPStart) / 100
 	maxMidGrossBps := maxRateBpsFP * (deadClaimTimeout / periodBlocks) / 1_000_000
-	if arm := slashDrawBps * maxMidGrossBps / 10000; arm > answerBondBps {
+	if arm := bondFloorConvBps * maxMidGrossBps / 10000; arm > answerBondBps {
 		return arm
 	}
 	return answerBondBps

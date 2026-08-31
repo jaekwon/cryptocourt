@@ -51,7 +51,7 @@ const (
 	maxBallotLines = 64
 
 	// electionBondBps is β: the per-candidate bond as a fraction of supply,
-	// floored at flagMinCC. Frozen — never an owner knob. Its ceiling is
+	// floored at carrotClampMinCC. Frozen — never an owner knob. Its ceiling is
 	// checked against the quorum floor at deploy (mustElectionInvariants).
 	electionBondBps = int64(50) // 0.5% of supply, vs the 5% quorum floor
 )
@@ -63,7 +63,7 @@ const (
 //
 // A constant gate can only police the RATIO arm, and only if both sides are
 // measured on the same base. Two runtime terms escape it entirely — the
-// absolute flagMinCC minimum, and (before this fix) a bond quoted on raw
+// absolute carrotClampMinCC minimum, and (before this fix) a bond quoted on raw
 // supply against a floor quoted on votable weight. electionBond now closes
 // both at runtime; see its comment. This gate is the ratio arm alone.
 //
@@ -164,7 +164,7 @@ func votableAt(c *Court, at uint32) int64 {
 //     1/10, so the invariant inverted on any court holding more than 90% of its
 //     CC as stake and bonds — i.e. exactly the mature, active courts whose
 //     electorate most needs the remedy, and only those. Same base now.
-//   - ABSOLUTE FLOOR. flagMinCC (1 CC) is a constant, so on a court with less
+//   - ABSOLUTE FLOOR. carrotClampMinCC (1 CC) is a constant, so on a court with less
 //     than 20 CC votable it is the binding term and exceeds 5% of votable
 //     outright. The clamp lets the floor win: a spam bar priced above winning
 //     the vote is the incumbency-lock-by-price the invariant forbids, and the
@@ -172,8 +172,8 @@ func votableAt(c *Court, at uint32) int64 {
 //     votable each costs 3.2× the court's entire votable weight.
 func electionBond(c *Court, at uint32) int64 {
 	b := mulDiv128(votableAt(c, at), electionBondBps, grc20votes.Bps)
-	if b < flagMinCC {
-		b = flagMinCC
+	if b < carrotClampMinCC {
+		b = carrotClampMinCC
 	}
 	if f := electionFloor(c, at); b > f {
 		b = f
@@ -559,8 +559,8 @@ func ResolveElection(cur realm, courtSlug string) {
 		return
 	}
 	// A fully-failed election starts this court's OWN cooldown slot (the
-	// flagCooldownBlocks DURATION is reused; the per-claim flag field is not).
-	cm.electionCooldownUntil = now + flagCooldownBlocks
+	// decideWindowBlocks DURATION is reused; the per-claim flag field is not).
+	cm.electionCooldownUntil = now + decideWindowBlocks
 }
 
 // installModSet is the shared primitive both peers use to replace a court's

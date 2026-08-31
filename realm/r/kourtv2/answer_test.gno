@@ -126,31 +126,7 @@ func TestPriorityWindowGates(cur realm, t *testing.T) {
 		t.Fatal("past the window the answer slot is first-come")
 	}
 }
-
-func TestQualityEpochPinnedAtAnswer(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("qe-alice")
-	c := testCourt(cur, "qe1", alice, 50_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "qe1", "Epoch pin")
-	matureOI(cur, "qe1", id, alice, 200_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	PostAnswer(cross(cur), "qe1", id, sideYES)
-	cs := mustClaim(c, id)
-	if cs.qualityEpoch != c.coin.Epoch()-1 {
-		t.Fatalf("qualityEpoch must pin the last sealed epoch at the answer: %d vs %d",
-			cs.qualityEpoch, c.coin.Epoch()-1)
-	}
-	if cs.qualityEpoch < 1 {
-		t.Fatal("after three matured buckets the sealed epoch is positive")
-	}
-	// The pin is immutable: epochs advance, the stored value does not.
-	was := cs.qualityEpoch
-	testing.SkipHeights(epochBlocks * 5)
-	touch(c)
-	if cs.qualityEpoch != was {
-		t.Fatal("the quality epoch never moves after the answer")
-	}
-}
+// TestQualityEpochPinnedAtAnswer went with the quality lane: there is no quality epoch to pin
 
 // The F9 drain, pinned. xBarFrozen = max(3h trailing, lifeAvgStake) is what makes
 // `midGross <= 19.27%·X̄frozen` a RUNTIME guarantee rather than a deploy-time
@@ -274,7 +250,7 @@ func TestXBarFrozenTakesTheTrailingArmOnAGrowingClaim(cur realm, t *testing.T) {
 
 // The court's answer-bond cap, found SURVIVING: removing the clamp entirely failed no
 // test. TestBondCollateralizesSlashUnderCourtCap covers the case where the
-// collateralization FLOOR overrides a tiny cap — it asserts `bond >= slashSizeFor` — so
+// collateralization FLOOR overrides a tiny cap — it asserts `bond >= bondFloorFor` — so
 // an uncapped bond (50%·X̄, comfortably above the floor) satisfies it too. The half
 // nothing covered is the cap actually BINDING, which is the knob's whole purpose.
 //
@@ -310,7 +286,7 @@ func TestAnswerBondCapBindsWhenTheFloorIsBelowIt(cur realm, t *testing.T) {
 
 	cs := mustClaim(c, id)
 	uncapped := cs.xBarFrozen * answerBondBps / 10000
-	floor := slashSizeFor(cs)
+	floor := bondFloorFor(cs)
 	if !(floor < c.params.answerBondCapCC && c.params.answerBondCapCC < uncapped) {
 		t.Fatalf("fixture must place the cap strictly between the floor and the "+
 			"uncapped bond: floor=%d cap=%d uncapped=%d",
@@ -366,8 +342,8 @@ func TestAnswerBondFloorIsKeyedToBothSides(cur realm, t *testing.T) {
 	base := cs.xBarFrozen * answerBondBps / 10000
 	ownHi, ownLo := cs.sideConv(int(cs.answer))
 	oppHi, oppLo := cs.sideConv(oppositeSide(int(cs.answer)))
-	ownFloor := slashSizeAt(cs.xBarFrozen, ownHi, ownLo)
-	oppFloor := slashSizeAt(cs.xBarFrozen, oppHi, oppLo)
+	ownFloor := bondFloorAt(cs.xBarFrozen, ownHi, ownLo)
+	oppFloor := bondFloorAt(cs.xBarFrozen, oppHi, oppLo)
 
 	// PRECONDITIONS. Both are required or the assertion is vacuous: the two keyings
 	// must actually disagree, and the opposing arm must actually be the binding one.

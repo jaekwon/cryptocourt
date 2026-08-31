@@ -74,9 +74,6 @@ func ClaimVoteWeightOf(courtSlug string, who address, claimID uint64) (verdict, 
 	if cs.disputeOpen {
 		verdict, _ = votingWeight(c, who, c.gov.EpochOf(cs.proposalID))
 	}
-	if qualityQuestionOpen(cs) {
-		quality, _ = votingWeight(c, who, cs.qualityEpoch)
-	}
 	return verdict, quality
 }
 
@@ -119,10 +116,7 @@ func VoteWeightWhy(courtSlug string, who address, claimID uint64) (verdict, qual
 	if cs.disputeOpen {
 		verdict = whyWeighed(c, who, c.gov.EpochOf(cs.proposalID))
 	}
-	quality = "no quality vote is open on this claim"
-	if qualityQuestionOpen(cs) {
-		quality = whyWeighed(c, who, cs.qualityEpoch)
-	}
+	quality = "the quality vote no longer exists"
 	return verdict, quality
 }
 

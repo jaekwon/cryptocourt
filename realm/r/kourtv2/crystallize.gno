@@ -35,13 +35,14 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	if cs.closed {
 		panic("kourtv2: dead claims have no draw")
 	}
-	if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {
-		panic("kourtv2: a quality question is still open")
-	}
+	// THE 24h QUIET WINDOW STOOD HERE and went with the quality lane. It held the
+	// draw for a day after the last FLAG event so a resolved flag could not be
+	// crystallized out from under a replacement flag. lastFlagEventAt was written
+	// only by the flag lane, so with the lane gone nothing stamps it, the field is
+	// zero on every claim, and the guard would compare against block 0 — a check
+	// that can only fire in the first day of a chain's life. Deleted rather than
+	// left reading a field nobody writes.
 	now := heightNow()
-	if now < cs.lastFlagEventAt+priorityWindowBlocks {
-		panic("kourtv2: the 24h quiet window after the last flag event has not passed")
-	}
 	if now < cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {
 		panic("kourtv2: Crystallize is participant-only for its first week")
 	}
@@ -108,7 +109,7 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// whole. What that costs the attacker is bounded by the bond; what it destroys
 	// is bounded by tier × midGross. So the ratio destroyed/posted — the only
 	// well-defined leverage here, since on every realized path either destruction
-	// or forfeiture is zero — is (tier + carrot)/(slashDrawBps/1e4). That is
+	// or forfeiture is zero — is (tier + carrot)/(bondFloorConvBps/1e4). That is
 	// 1.07/1.6 = 0.669 at MID but 2.07/1.6 = 1.294 at HIGH, i.e. sniping an
 	// exceptional claim PAYS. Measured 1.2937 end to end.
 	//
@@ -135,7 +136,7 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// version of this comment gave only the first and was therefore wrong about the
 	// shipped tree:
 	//
-	//   floor binds (mg_max >= answerBondBps/slashDrawBps·X̄):
+	//   floor binds (mg_max >= answerBondBps/bondFloorConvBps·X̄):
 	//     capd >= (1.60 - 0.07)·mg_win = 1.53·mg_win > want. Carries no X̄, no age,
 	//     no rate, no bond level — this is the post-re-keying guarantee.
 	//   base arm binds (mg_max below that):
@@ -200,40 +201,20 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// standingCatAuthor slot stays in the persisted enum (append-only wire) and
 	// simply stops receiving.
 
-	// The carrot: 7 points of the MID-weight gross, tier-invariant (paid even
-	// at low — F2), senior-lane, per-voter clamped at pull (P2). 128-bit: midGross
-	// is conviction (stake×time), not supply-bounded, so a bare ×7 could wrap and
-	// then panic PullCarrot at extreme scale (math-audit NOTE-2).
+	// The carrot: 7 points of the MID-weight gross, senior-lane, per-voter clamped
+	// at pull (P2). 128-bit: midGross is conviction (stake×time), not
+	// supply-bounded, so a bare ×7 could wrap and then panic PullCarrot at extreme
+	// scale (math-audit NOTE-2).
+	//
+	// NO LONGER WITHHELD ON TURNOUT. A conclusive quality tally below the
+	// supply-floored fullBar used to zero this pot, because such a tally could only
+	// be a LOW, ResolveFlag returned the flag bond WHOLE there, and the result was a
+	// mint against ~1.1 CC of burn on never-escrowed weight — v0.25's A21 faucet
+	// arriving through the carrot. Both halves of that vector are gone: there is no
+	// quality tally to go conclusive below a bar, and no flag bond to return whole.
+	// The carrot now pays only the deciding DISPUTE round's with-verdict voters, who
+	// reached it by someone posting a dispute bond.
 	cs.carrotTotal = mulDiv128(midGross, splitCarrot, 100)
-	// TIER-invariant, but not TURNOUT-invariant (v0.55). A conclusive tally BELOW the
-	// supply-floored fullBar can only be a LOW — mid and high both gate on the bar —
-	// and there ResolveFlag returns the flag bond WHOLE. So the pot minted ~1.35%·X̄
-	// against 1.1 CC of burn, on never-escrowed weight that voting does not consume and
-	// that services every claim with X̄ <= 4W in parallel: v0.25's A21 faucet at 0.675×
-	// the bounty flow that closed it, same reachable bar, arriving through the carrot —
-	// the one leg the per-event burn invariant never reached. It also made the whole
-	// band [demotionBar, fullBar) pay EVERY ballot only if low wins, since mid and high
-	// cannot go conclusive there and an inconclusive tally sets no conclusiveSeq: a
-	// structural demotion cartel for the entire electorate, which is F2/A11's forbidden
-	// tier-contingency arriving through the turnout door.
-	//
-	// P2's clamp does not bound this: it is per-VOTER against a shared pot, so two
-	// addresses each take carrotTotal/2, stay under b0/2-1, and collect the whole
-	// 7%·midGross. Withholding the pot is the only lever that survives — excluding the
-	// flagger's own address is defeated by one extra wallet (OpenFlag and VoteQuality
-	// take separate callers), and half-burning the sub-bar bond leaves a bloc at
-	// +0.175·b0 while pricing a CORRECT dust flag at 2%·X̄, which is v0.29/T1's
-	// cheap-when-right property and the F3 asymmetry the v0.54 ratchet leans on.
-	//
-	// F2 survives because this keys on TURNOUT, not tier: above the bar a conclusive
-	// low still draws the full tier-invariant 7%·midGross, and below it a voter's only
-	// alternative is an inconclusive tally, which v0.25 already pays nothing. Withheld,
-	// never redirected — strictly ceiling-safer.
-	if cs.decidedPID == 0 && cs.conclusiveSeq != 0 {
-		if _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {
-			cs.carrotTotal = 0
-		}
-	}
 	cs.carrotPool = cs.carrotTotal
 
 	// N1 lands here: the deposit refunds unless a conclusive low already
@@ -443,7 +424,7 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 	if isParticipant(cs, who) {
 		panic("kourtv2: participants take their own slices, never the carrot")
 	}
-	if cs.qVoted == nil {
+	if cs.voted == nil {
 		panic("kourtv2: nobody voted on this claim")
 	}
 	// THE CARROT PAYS THE WEIGHT THAT WAS TALLIED, read back from THIS REALM's own
@@ -460,42 +441,40 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 	// had not pulled yet would be refused a carrot they had earned. dispute.gno
 	// has said so since the choice record was added; an earlier version of this
 	// block ignored it and called VoteOf directly.
-	var w, denom int64
-	switch {
-	case cs.decidedPID != 0:
-		v := cs.qVoted.Get("d" + beClaimKey(uint64(cs.decidedPID)) + string(who))
-		if v == nil || v.(string) != cs.carrotChoice {
-			panic("kourtv2: the carrot pays with-verdict voters of the deciding round")
-		}
-		vw := cs.qVoted.Get("dw" + beClaimKey(uint64(cs.decidedPID)) + string(who))
-		if vw == nil {
-			panic("kourtv2: no recorded weight for that voter on the deciding round")
-		}
-		w = vw.(int64)
-		denom = cs.carrotDenom
-	case cs.conclusiveSeq != 0:
-		v := cs.qVoted.Get(beClaimKey(cs.conclusiveSeq) + string(who))
-		if v == nil {
-			panic("kourtv2: the carrot pays the conclusive quality tally's voters")
-		}
-		w = v.(int64)
-		denom = cs.conclusiveTurnout
-	default:
+	if cs.decidedPID == 0 {
 		panic("kourtv2: no vote resolved this claim; there is no carrot")
 	}
-	claimedKey := "c" + beClaimKey(cs.conclusiveSeq) + string(who)
-	if cs.qVoted.Has(claimedKey) {
+	v := cs.voted.Get("d" + beClaimKey(uint64(cs.decidedPID)) + string(who))
+	if v == nil || v.(string) != cs.carrotChoice {
+		panic("kourtv2: the carrot pays with-verdict voters of the deciding round")
+	}
+	vw := cs.voted.Get("dw" + beClaimKey(uint64(cs.decidedPID)) + string(who))
+	if vw == nil {
+		panic("kourtv2: no recorded weight for that voter on the deciding round")
+	}
+	w, denom := vw.(int64), cs.carrotDenom
+	// KEYED ON THE DECIDING ROUND, and this line is the one to get right: it is
+	// the only thing standing between a voter and pulling the carrot twice.
+	//
+	// It used to key on cs.conclusiveSeq, which was the QUALITY tally's sequence
+	// number. On a dispute-decided claim that field was 0, so the key was "c" +
+	// eight zero bytes + the address — a correct per-address latch by accident of
+	// the constant rather than by design. conclusiveSeq is gone with the quality
+	// lane, so the latch is re-keyed deliberately onto the round that actually
+	// paid, which is the same round the weight above was read from.
+	claimedKey := "c" + beClaimKey(uint64(cs.decidedPID)) + string(who)
+	if cs.voted.Has(claimedKey) {
 		panic("kourtv2: carrot already claimed")
 	}
-	cs.qVoted.Set(claimedKey, true)
+	cs.voted.Set(claimedKey, true)
 	if w <= 0 || denom <= 0 {
 		return 0
 	}
 	touch(c)
 	share := mulDiv128(cs.carrotTotal, w, denom)
-	b0 := cs.xBarFrozen * flagBondXBps / 10000
-	if b0 < flagMinCC {
-		b0 = flagMinCC
+	b0 := cs.xBarFrozen * carrotClampXBps / 10000
+	if b0 < carrotClampMinCC {
+		b0 = carrotClampMinCC
 	}
 	if clamp := b0/2 - 1; share > clamp {
 		share = clamp // P2: the sybil-margin invariant, per voter

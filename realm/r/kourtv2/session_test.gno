@@ -39,12 +39,13 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 	if !Settled("se1", id) || Verdict("se1", id) != sideYES || VerdictRoute("se1", id) != "undisputed" {
 		t.Fatal("the verdict must record with its route")
 	}
-	// Settle returns the bond MINUS a slash-sized reserve held through the
-	// quality slot (M3-HIGH-1); the reserve returns at crystallize if unslashed.
-	reserve := XBarFrozen("se1", id) * slashXBps / 10000
-	if c.coin.BalanceOf(alice) != beforeBond+bond-reserve {
-		t.Fatalf("settle returns bond minus the slash reserve: got %d want %d",
-			c.coin.BalanceOf(alice)-beforeBond, bond-reserve)
+	// Settle returns the bond IN FULL. It used to return the bond minus a
+	// slash-sized reserve held through the quality slot (M3-HIGH-1), with the
+	// remainder following at crystallize if no flag landed; with no lane to levy a
+	// slash there is nothing to reserve against.
+	if c.coin.BalanceOf(alice) != beforeBond+bond {
+		t.Fatalf("settle returns the whole bond: got %d want %d",
+			c.coin.BalanceOf(alice)-beforeBond, bond)
 	}
 	// Double settle refused; bond cannot double-return.
 	testing.SetRealm(testing.NewUserRealm(bob))
@@ -80,16 +81,20 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "nothing staked", func() {
 		WithdrawStake(cross(cur), "se1", id, sideNO)
 	})
-	// Escrow now holds the claim's deposit+fee AND the retained slash reserve
-	// (crystallize owns their disposition) — every stake and the freed bond
-	// are out.
+	// Escrow now holds the claim's deposit+fee and nothing else — crystallize owns
+	// their disposition. Every stake and the whole bond are out; the retained slash
+	// reserve that used to be a third term here no longer exists.
 	dep := c.params.minClaimDepositCC
-	if got := c.coin.BalanceOf(c.escrow); got != dep+dep*depositFeeBps/10000+reserve {
-		t.Fatalf("escrow must drain to deposit+fee+reserve: %d", got)
+	if got := c.coin.BalanceOf(c.escrow); got != dep+dep*depositFeeBps/10000 {
+		t.Fatalf("escrow must drain to deposit+fee: %d", got)
 	}
-	// Conviction survives withdrawal (the reward draws read it later).
+	// Alice still HOLDS her stake here — WithdrawStake released the lock rather
+	// than moving coin — so her conviction is intact. This used to be asserted as
+	// "conviction survives withdrawal", which is no longer the general rule: a
+	// withdrawal that reduces the position forfeits credit in proportion
+	// (TestPartialExitForfeitsInProportion). Release is not reduction.
 	if ConvictionOf("se1", id, sideYES, alice) <= 0 {
-		t.Fatal("conviction records must survive principal withdrawal")
+		t.Fatal("a lock release must not forfeit conviction")
 	}
 }
 

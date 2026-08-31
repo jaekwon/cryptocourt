@@ -92,15 +92,19 @@ REALM = ROOT / "realm" / "r" / "kourtv2"
 # here, which means deciding which test covers it — that decision being forced is
 # the point of this file.
 #
-# The first six are the `// PATH n` arms of TestLockedStakeCannotBeSpentTwice,
-# which stakes a whole balance and then tries to commit it six ways and ends on
+# The first five are the `// PATH n` arms of TestLockedStakeCannotBeSpentTwice,
+# which stakes a whole balance and then tries to commit it five ways and ends on
 # the supply-conservation assertion. The last two are holder-to-holder and are
 # proved separately, one test per lock, because a transfer is refused by the
 # stake lock and the vote lock independently.
+#
+# SIX BECAME FIVE with the quality lane: OpenFlag posted a flag bond out of the
+# flagger's own balance and was PATH 4. The arms in that test are renumbered
+# rather than left with a hole, because a missing number reads as a case somebody
+# forgot to write.
 SPEND_PATHS = {
     ("claim.gno", "openClaim"): "TestLockedStakeCannotBeSpentTwice",
     ("answer.gno", "PostAnswer"): "TestLockedStakeCannotBeSpentTwice",
-    ("quality.gno", "OpenFlag"): "TestLockedStakeCannotBeSpentTwice",
     ("dispute.gno", "OpenDispute"): "TestLockedStakeCannotBeSpentTwice",
     ("modvote.gno", "addNomination"): "TestLockedStakeCannotBeSpentTwice",
     ("stake.gno", "Stake"): "TestLockedStakeCannotBeSpentTwice",

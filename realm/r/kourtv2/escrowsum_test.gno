@@ -17,17 +17,23 @@ import (
 // per-operation delta (`escrow0 - dep - fee`); none of them says the escrow holds exactly
 // the sum of what is recorded against it.
 //
-// THE OBLIGATION SET IS CLOSED, which is what makes the assertion possible at all. Five
+// THE OBLIGATION SET IS CLOSED, which is what makes the assertion possible at all. Four
 // transfers put coin into the escrow — the deposit+fee at OpenClaim, the answer bond, the
-// dispute bond, the flag bond, and a nomination bond in the election lane — and lock.gno
+// dispute bond, and a nomination bond in the election lane — and lock.gno
 // refuses the escrow as a transfer endpoint in all three of its user-facing paths
 // ("the court escrow is not a transfer endpoint"), so no other path can add or remove a
 // coin. That refusal is what bounds this sum; without it the list would be open-ended.
 //
-// pendingSlash IS ADDED ALONGSIDE answerBond, not folded into it: a slash reserve is
-// carved OUT of the bond (`cs.answerBond == ab - slash` once reserved), so the escrow
-// physically holds both halves and a sum that used only answerBond would come up short by
-// exactly the reserve.
+// RE-DERIVED FROM SIX PER-CLAIM TERMS TO FOUR when the quality lane went. The two that
+// left were flagBond and pendingSlash, and the count is re-derived rather than decremented:
+// the sum is now deposit + fee + answerBond + disputeBond, and the argument that each of
+// the four is REACHED by the fixture below has to hold for the shorter list on its own.
+//
+// pendingSlash needed its own paragraph here, because a reserve was carved OUT of the
+// answer bond — `cs.answerBond == ab - slash` once reserved — so the escrow physically
+// held both halves and a sum using only answerBond came up short by exactly the reserve.
+// settleAnswerBond no longer carves anything, so answerBond alone is now the whole
+// obligation and that subtlety is gone with it.
 func escrowObligations(c *Court) int64 {
 	total := int64(0)
 	for id := uint64(1); id <= c.nextID; id++ {
@@ -36,8 +42,6 @@ func escrowObligations(c *Court) int64 {
 		total = mustAdd(total, cs.fee)
 		total = mustAdd(total, cs.answerBond)
 		total = mustAdd(total, cs.disputeBond)
-		total = mustAdd(total, cs.flagBond)
-		total = mustAdd(total, cs.pendingSlash)
 	}
 	// The election lane's per-candidate bonds. A court holds at most one open ballot,
 	// and each line records the bond its poster put up.
@@ -110,8 +114,8 @@ func TestTheEscrowHoldsExactlyWhatItOwes(cur realm, t *testing.T) {
 	ResolveDispute(cross(cur), "esum", id)
 	mustReconcile(t, c, "after ResolveDispute disposes the dispute bond")
 
-	// Finalize returns most of the answer bond and may retain a slash reserve, which is
-	// the case that needs pendingSlash counted alongside answerBond.
+	// Finalize returns the answer bond in full — it used to retain a slash reserve,
+	// which was the case that needed pendingSlash counted alongside answerBond.
 	if now := heightNow(); now < cs.escrowUntil {
 		testing.SkipHeights(cs.escrowUntil - now + 1)
 	}
@@ -119,37 +123,13 @@ func TestTheEscrowHoldsExactlyWhatItOwes(cur realm, t *testing.T) {
 	Finalize(cross(cur), "esum", id)
 	mustReconcile(t, c, "after Finalize settles the answer bond")
 
-	// THE FLAG LANE, because without it the flagBond term of the sum is decorative:
-	// measured by dropping that term, the test still passed. A quality flag escrows a
-	// fifth kind of obligation, and crystallize refuses while one is open, so it opens
-	// and resolves here — before the draw.
-	testing.SetRealm(testing.NewUserRealm(bob))
-	OpenFlag(cross(cur), "esum", id)
-	if cs.flagBond == 0 {
-		t.Fatal("setup: OpenFlag must escrow a bond, or the flagBond term is untested")
-	}
-	mustReconcile(t, c, "after OpenFlag escrows the flag bond")
-
-	// A CONCLUSIVE LOW, not a mid, and that is the whole point of choosing it: a low
-	// reserves a slash, and pendingSlash is the one term whose placement in the sum
-	// needed an argument rather than a reading — it is carved OUT of answerBond, so the
-	// escrow holds both halves. Measured with a mid vote first, dropping the
-	// pendingSlash term left the test PASSING, which made that argument untested.
-	testing.SetRealm(testing.NewUserRealm(carol))
-	VoteQuality(cross(cur), "esum", id, qualityLow)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "esum", id)
-	if cs.pendingSlash == 0 {
-		t.Fatal("setup: a conclusive low must reserve a slash, or the pendingSlash " +
-			"term is untested")
-	}
-	mustReconcile(t, c, "after ResolveFlag reserves a slash out of the bond")
-
-	// The counter window closes and the reserve burns: the escrow loses coin and the
-	// field clears together.
-	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
-	ResolveSlashWindow(cross(cur), "esum", id)
-	mustReconcile(t, c, "after ResolveSlashWindow burns the reserve")
+	// THE FLAG LANE STOOD HERE, and it was load-bearing for this test rather than
+	// incidental: it existed because dropping the flagBond term left the test PASSING,
+	// and a conclusive LOW was chosen over a mid for the same measured reason about
+	// pendingSlash. Both terms are gone from the sum, so both halves of that fixture go
+	// with them — but the lesson does not. Each of the four remaining terms should be
+	// ablatable to a FAILURE by this fixture, and if one is not, the fixture is short a
+	// state rather than the sum being short a term.
 
 	// And the whole way out: crystallize releases the deposit and fee, and the escrow
 	// must end owing exactly what it holds — which for this claim is nothing.
@@ -260,13 +240,16 @@ func TestTheEscrowHoldsExactlyWhatItOwesOnTheOtherTerminalPaths(cur realm, t *te
 
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "esum3", id)
-	mustReconcile(t, c, "after SettleUndisputed returns the bond less its reserve")
+	mustReconcile(t, c, "after SettleUndisputed returns the whole bond")
 
-	// Its retention is real, or the checkpoint above proves nothing about a reserve.
+	// The bond is fully OUT, which is what the reconciliation above has to see: this
+	// path used to exercise a PARTIAL return, and the assertion here was that the
+	// retention was real or the checkpoint proved nothing about a reserve. There is
+	// no reserve now, so the same checkpoint is testing the complementary thing —
+	// that the term left the sum entirely rather than being half-counted.
 	cs := mustClaim(c, id)
-	if cs.answerBond == 0 {
-		t.Fatal("setup: SettleUndisputed must retain a slash reserve here, or this " +
-			"path never exercises a partial bond return")
+	if cs.answerBond != 0 {
+		t.Fatalf("SettleUndisputed must zero the bond, got %d", cs.answerBond)
 	}
 
 	testing.SkipHeights(priorityWindowBlocks + 1)

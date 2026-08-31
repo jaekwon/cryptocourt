@@ -161,18 +161,15 @@ func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "lk1", id, sideYES)
 
-	// PATH 4 — a quality flag bond.
-	testing.SetRealm(testing.NewUserRealm(bob))
-	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
-		OpenFlag(cross(cur), "lk1", id)
-	})
-	// PATH 5 — a dispute bond.
+	// PATH 4 — a dispute bond. (The quality flag bond was a path here too, and it is
+	// gone with the lane; the paths are renumbered rather than left with a hole,
+	// because a missing number reads as a case somebody forgot to write.)
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "not enough unstaked CC", func() {
 		OpenDispute(cross(cur), "lk1", id)
 	})
 
-	// PATH 6 — the election bond, which addNomination posts out of the nominator's
+	// PATH 5 — the election bond, which addNomination posts out of the nominator's
 	// own CC. Alice registers the candidate (that costs nothing); bob cannot open
 	// the ballot, because opening it is a commitment like any other.
 	cand := testutils.TestAddress("lk-cand")
@@ -183,7 +180,7 @@ func TestLockedStakeCannotBeSpentTwice(cur realm, t *testing.T) {
 		OpenElection(cross(cur), "lk1", candID)
 	})
 
-	// PATH 7 — the association bond (association.gno). bob authored neither endpoint
+	// PATH 6 — the association bond (association.gno). bob authored neither endpoint
 	// and moderates nothing, so attaching an edge prices him, and the price has to
 	// come out of SPENDABLE CC like every other commitment here. A second claim is
 	// needed only because an edge cannot point at itself.

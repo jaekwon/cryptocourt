@@ -102,26 +102,6 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 		panic("kourtv2: the escrow window has passed; Finalize the verdict")
 	}
 	touch(c)
-	// A dispute outranks the quality lane (audit M3-LOW-1): an open flag VOIDS
-	// (bond returned, slot unconsumed — the dispute's own tally carries quality).
-	//
-	// A pending slash does NOT (v0.47). Opening a round is not adjudicating one:
-	// this used to unslash unconditionally, right here, before a single vote — so
-	// a zero-weight FAILED-QUORUM dispute permanently destroyed an already
-	// adjudicated full-bar ⅔-low slash, and slotConsumed was already latched so no
-	// replacement flag could ever re-arm it. Only a round's OUTCOME disposes the
-	// reserve now: an overturn burns it with the bond (A19), an upheld round is
-	// scored on its own ride, and a round that decided nothing re-arms it.
-	//
-	// A LIVE counter re-vote still closes here — the round's own ride replaces it —
-	// but it is no longer un-SPENT (v0.51). Clearing counterUsed re-minted the
-	// one-shot Q5 challenge on demand: an answerer facing a settle could counter,
-	// self-dispute to cancel it, and counter again, indefinitely inside the escrow
-	// window. What the answerer is owed is the TIME, which rearmSlashWindow returns
-	// by reopening the lane itself on any round that adjudicated nothing.
-	voidFlag(c, cs)
-	cs.counterOpen = false
-	reaskQualityTally(cs)
 
 	// Bond: min(20%·X̄frozen, 40% × the actual answer bond) — the v0.25 arm
 	// keeps round 1 at q > 1/3 on every claim including bond-capped courts —
@@ -247,19 +227,19 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	// was capped. What was defensive when written is load-bearing now. Read back
 	// from the governor here, where the roll is certainly intact because this line
 	// just voted.
-	if cs.qVoted == nil {
-		cs.qVoted = bptree.NewBPTree32()
+	if cs.voted == nil {
+		cs.voted = bptree.NewBPTree32()
 	}
 	// THE COURT'S WORD, not the governor's: this record is what PullCarrot
 	// compares against cs.carrotChoice, and that is set in this realm's
 	// vocabulary. Storing govChoice here would make a spam voter's record read
 	// "abstain" and never match the "spam" the discard path records.
-	cs.qVoted.Set("d"+beClaimKey(uint64(cs.proposalID))+string(who), choice)
+	cs.voted.Set("d"+beClaimKey(uint64(cs.proposalID))+string(who), choice)
 	_, dw, ok := c.gov.VoteOf(cs.proposalID, who)
 	if !ok {
 		panic("kourtv2: the governor did not record the vote it just accepted")
 	}
-	cs.qVoted.Set("dw"+beClaimKey(uint64(cs.proposalID))+string(who), dw)
+	cs.voted.Set("dw"+beClaimKey(uint64(cs.proposalID))+string(who), dw)
 	// AND THE COIN IS COMMITTED UNTIL THIS ROUND RESOLVES. The floor above stops a
 	// renter voting weight they have already handed back; this stops them handing
 	// it back the moment after. Measured on the floor alone: the rental survived as
@@ -317,20 +297,6 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// unconditional ResolveSlashWindow — a below-bar ride still re-arms, which is
 		// the v0.47 behavior verbatim.
 		//
-		// Scores the RESERVE only, deliberately not the TIER: this branch does not
-		// call resolveQualityRide, so an identical full-bar non-⅔-low ride refunds
-		// here while leaving cs.tier LOW, where a DECIDED round would promote it to
-		// MID. That asymmetry errs conservative in both directions it can err (it
-		// cannot promote a tier on a round nobody carried, and it cannot burn a
-		// reserve the electorate just rescued), and widening it moves draw money, so
-		// it stays until it has its own econ vet.
-		//
-		// Runs BEFORE provCloseClaim so a refund rejoins answerBond and leaves on the
-		// ordinary bond exit. Note the reverse order would ALSO be safe — refundSlash
-		// has a provClose arm that pays the answerer directly — so this ordering is a
-		// preference for the common path, not a strand guard. (An earlier version of
-		// this comment claimed it was a strand guard; it is not.)
-		disposeSlashOnRide(c, cs)
 		// Only the FIRST failed round defaults the verdict to the answer; a
 		// failed reopen leaves a standing decided verdict untouched.
 		if firstResolution {
@@ -354,10 +320,6 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// senior-queued, capped by both arms (v0.20). A reopen after a prior
 		// overturn finds answerBond already zero — comp's 80% arm is then 0
 		// and nothing mints (no burn happened this round to anchor it).
-		// A pending slash refunds INTO the bond first (a decided round
-		// supersedes it — never slashable once disputed) so the forfeiture
-		// burns the whole posted bond, slash reserve included.
-		unslash(c, cs)
 		posted := cs.disputeBond // the disputer's own risk, captured pre-zeroing
 		burned := cs.answerBond
 		if burned > 0 {
@@ -391,7 +353,6 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// bar was measured against, so the discount is a fraction of the turnout
 		// that actually decided the claim.
 		cs.spamW, cs.spamTotalW = spamW, cast
-		resolveQualityRide(c, cs)
 	default:
 		// UPHOLD (tie, all-abstain, or a sub-threshold split, quorum met):
 		// the disputer's bond BURNS in full; the answerer is comped against
@@ -447,20 +408,6 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// bar was measured against, so the discount is a fraction of the turnout
 		// that actually decided the claim.
 		cs.spamW, cs.spamTotalW = spamW, cast
-		// Captured BEFORE the ride, which may now ORIGINATE a reserve (v0.50).
-		// disposeSlashOnRide scores a reserve this round INHERITED; one this round's
-		// own ride just levied gets its counter-flag window instead. Running both on
-		// the SAME tally would settle the slash in the very call that levied it —
-		// burned with no window and no Q5 challenge for the answerer.
-		hadSlash := cs.pendingSlash > 0
-		resolveQualityRide(c, cs)
-		// The VERDICT question is not the QUALITY question: winning the dispute
-		// does not lift an adjudicated slash. Only this round's ride can, and only
-		// on ResolveCounter's own terms — it asks the slash's question at the same
-		// bars before the same electorate, so it is scored as one (v0.47).
-		if hadSlash {
-			disposeSlashOnRide(c, cs)
-		}
 	}
 
 	// The escrow clock is set ONCE, at the first resolution, and never
@@ -851,12 +798,6 @@ func QuorumFloorOf(courtSlug string, claimID uint64) int64 {
 	return quorumFloor(c, cs.xBarFrozen)
 }
 
-// QualityBarsOf quotes the demotion and full bars this claim is judged against.
-func QualityBarsOf(courtSlug string, claimID uint64) (demotionBar, fullBar int64) {
-	c := mustCourt(courtSlug)
-	return qualityBars(c, mustClaim(c, claimID))
-}
-
 // isParticipant: the claim's author, answerer, or any address with a staker
 // record (records persist across withdrawal — conviction holders count).
 func isParticipant(cs *claimState, who address) bool {
@@ -984,7 +925,7 @@ func escrowWindow(c *Court, cs *claimState) int64 {
 //
 // voteSpam is the governor's abstain bucket under a name that says what it does
 // here. Quoted as constants because the same three strings are compared in
-// VoteDispute, recorded in qVoted and matched by PullCarrot, and a typo in any
+// VoteDispute, recorded in voted and matched by PullCarrot, and a typo in any
 // one of them is a vote that silently never earns its carrot.
 const (
 	voteYes  = "yes"

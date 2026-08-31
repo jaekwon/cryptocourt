@@ -20,6 +20,42 @@ func stakeAnswerDispute(cur realm, slug string, alice, bob address) uint64 {
 	return id
 }
 
+// upholdByVote carries the claim to an UPHELD dispute verdict on `voter`'s
+// weight, then resolves the round.
+//
+// THIS IS NOW THE ONLY ROUTE TO AN ADJUDICATED CLAIM, which is why it is a
+// helper. Several tests in other files used to reach that state through the
+// quality lane — OpenFlag, VoteQuality, ResolveFlag — because a conclusive flag
+// consumed the claim's slot and funded a carrot without anyone having to post a
+// dispute bond. With the lane gone, a decided dispute round is the only thing
+// that sets decidedPID, and decidedPID is what crystallize and the carrot read.
+//
+// "no" UPHOLDS. ResolveDispute overturns only on yes >= threshold of yes+no, so
+// a lone "no" lands in the default arm and the answer stands. The uphold arm is
+// the one that records carrotChoice = "no".
+func upholdByVote(cur realm, slug string, id uint64, c *Court, disputer, voter address) {
+	testing.SetRealm(testing.NewUserRealm(disputer))
+	OpenDispute(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), slug, id, "no")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), slug, id)
+	// FINALIZE, not SettleUndisputed. A disputed claim is refused by
+	// SettleUndisputed ("settles by vote"), and the escrow window has to run
+	// first — a decided verdict is still at stake for reopens until it closes.
+	//
+	// AS THE ANSWERER, read off the claim. Finalize is participant-only for its
+	// first week and isParticipant is the author, the answerer or a staker — the
+	// DISPUTER is none of those, so finalizing as them aborts with "Finalize is
+	// participant-only for its first week". That is a real guard firing on a
+	// fixture mistake rather than a reason to skip the grace, and taking the
+	// answerer from state keeps every caller from having to pass one in.
+	cs := mustClaim(c, id)
+	testing.SkipHeights(escrowWindow(c, cs) + 1)
+	testing.SetRealm(testing.NewUserRealm(cs.answerer))
+	Finalize(cross(cur), slug, id)
+}
+
 func TestDisputeUpholdPath(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("dp1-alice")
 	bob := testutils.TestAddress("dp1-bob")
@@ -113,22 +149,22 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 	if !Settled("dp1", id) || Verdict("dp1", id) != sideYES || VerdictRoute("dp1", id) != "vote" {
 		t.Fatal("the finalized verdict must record with the vote route")
 	}
-	// v0.47: an upheld round no longer confers slash immunity, so Finalize
-	// retains the slash-sized reserve exactly as SettleUndisputed does — the
-	// bond returns MINUS that reserve, and the remainder follows at crystallize
-	// if no conclusive-low flag lands. (Before v0.47 a decided round returned
-	// the bond whole, which is what made the immunity purchasable.)
+	// An upheld round returns the answer bond IN FULL.
+	//
+	// The history is worth keeping, because this number moved twice. Before v0.47 a
+	// decided round returned the bond whole, which made slash immunity purchasable;
+	// v0.47 made Finalize retain the slash-sized reserve exactly as SettleUndisputed
+	// did, so the remainder followed at crystallize if no conclusive-low flag
+	// landed. With the quality lane gone there is no flag, no slash and nothing to
+	// stay collateralized against — so the bond returns whole again, for a
+	// different reason than it did the first time.
 	cs := mustClaim(c, id)
-	reserve := slashSizeFor(cs)
-	if reserve > ab {
-		reserve = ab
+	if c.coin.BalanceOf(alice) != aliceBefore+ab {
+		t.Fatalf("the upheld bond returns whole: got %d want %d",
+			c.coin.BalanceOf(alice), aliceBefore+ab)
 	}
-	if c.coin.BalanceOf(alice) != aliceBefore+ab-reserve {
-		t.Fatalf("the upheld bond returns less the slash reserve: got %d want %d",
-			c.coin.BalanceOf(alice), aliceBefore+ab-reserve)
-	}
-	if cs.answerBond != reserve {
-		t.Fatalf("the reserve stays collateralized: answerBond=%d want %d", cs.answerBond, reserve)
+	if cs.answerBond != 0 {
+		t.Fatalf("a settled bond is zeroed, not retained: answerBond=%d", cs.answerBond)
 	}
 	if AnswerRecord("dp1", alice) != 1 {
 		t.Fatal("contested-and-upheld must credit the difficulty record")
@@ -816,69 +852,9 @@ func TestFinalizeCreditsNothingForAQuorumlessDefault(cur realm, t *testing.T) {
 	}
 }
 
-// The flag bond's floor and its capped re-flag multiplier, neither of which was
-// held. flagBondFor is a pure function of the claim, so it is called directly:
-// driving three re-flag cycles through the machine would test the machine.
-func TestFlagBondIsFlooredAndCapped(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("fb-alice")
-	c := testCourt(cur, "fb1", alice, 20_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "fb1", "flag bond sizing")
-	cs := mustClaim(c, id)
+// TestFlagBondIsFlooredAndCapped went with the quality lane: there is no flag bond
 
-	// A dust X̄ floors at flagMinCC. Without the floor, flagging a drained claim
-	// costs ~nothing, and the flag lane is what a slash is adjudicated through.
-	cs.xBarFrozen, cs.flagCycles = 1, 0
-	if got := flagBondFor(cs); got != flagMinCC {
-		t.Errorf("a dust claim's flag bond is %d, want the %d floor", got, flagMinCC)
-	}
-	// Above the floor the bond is the X̄ share, un-multiplied on the first cycle.
-	big := int64(1_000_000_000)
-	cs.xBarFrozen = big
-	want := big * flagBondXBps / 10000
-	if want <= flagMinCC {
-		t.Fatalf("setup: %d must exceed the floor for this arm to mean anything", want)
-	}
-	if got := flagBondFor(cs); got != want {
-		t.Errorf("the first-cycle bond is %d, want %d", got, want)
-	}
-	// The multiplier doubles per cycle and STOPS at 4×: the frozen bound. Stated
-	// as 1/2/4/4/4 outright rather than as 1<<exp, so a wider cap cannot move the
-	// expectation with it.
-	for _, tc := range []struct {
-		cycles, mult int64
-	}{{0, 1}, {1, 2}, {2, 4}, {3, 4}, {9, 4}} {
-		cs.flagCycles = tc.cycles
-		if got := flagBondFor(cs); got != want*tc.mult {
-			t.Errorf("after %d cycles the bond is %d, want %dx = %d",
-				tc.cycles, got, tc.mult, want*tc.mult)
-		}
-	}
-}
-
-// bountyFor is bounded by BOTH the burn it is a share of and the bond it is paid
-// from, and floored at zero. Only the burn share was held.
-//
-// The bond bound is what stops a payout exceeding what was posted; the zero floor
-// is what stops a negative burn paying a negative bounty, which in a Transfer is a
-// withdrawal from the recipient.
-func TestTheBountyIsBoundedByBothTheBurnAndTheBond(t *testing.T) {
-	// The ordinary case: a share of what burned, well under the bond.
-	if got, want := bountyFor(1_000_000, 100_000), int64(100_000*compOfBurnBps/10000); got != want {
-		t.Errorf("the bounty is %d, want the %d share of the burn", got, want)
-	}
-	// Clamped by the bond when the burn's share would exceed it.
-	if got := bountyFor(7, 1_000_000); got != 7 {
-		t.Errorf("the bounty is %d, want it clamped to the 7 that was posted", got)
-	}
-	// And never negative, whichever input is.
-	if got := bountyFor(1_000_000, -1_000_000); got != 0 {
-		t.Errorf("a negative burn paid a bounty of %d, want 0", got)
-	}
-	if got := bountyFor(-5, 1_000_000); got != 0 {
-		t.Errorf("a negative bond paid a bounty of %d, want 0", got)
-	}
-}
+// TestTheBountyIsBoundedByBothTheBurnAndTheBond went with the quality lane: bountyFor paid the flagger
 
 // credWeightFloor IS QUOTED ON RAW SUPPLY, AND THAT IS THE SAFE DIRECTION.
 //

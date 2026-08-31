@@ -91,116 +91,7 @@ func TestCrystallizeMidHappyPathDrainsEscrow(cur realm, t *testing.T) {
 		t.Fatalf("escrow must drain to zero: %d", got)
 	}
 }
-
-func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("cz2-alice")
-	eve := testutils.TestAddress("cz2-eve")
-	c := testCourt(cur, "cz2", alice, 50_000_000_000)
-	c.coin.Mint(eve, 1_000_000_000) // dust-low weight: >= X̄/4, < the 5% full bar
-
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "cz2", "A junk claim")
-	matureOI(cur, "cz2", id, alice, 200_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	PostAnswer(cross(cur), "cz2", id, sideYES)
-	// A second wallet flags; eve's 1000 CC lands a DUST low (>= quarter-bar,
-	// below the full bar → no slash).
-	flagger := testutils.TestAddress("cz2-flagger")
-	c.coin.Mint(flagger, 1_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "cz2", id)
-	testing.SetRealm(testing.NewUserRealm(eve))
-	VoteQuality(cross(cur), "cz2", id, qualityLow)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "cz2", id)
-	tier, final := QualityTier("cz2", id)
-	if tier != qualityLow || !final {
-		t.Fatal("a quarter-bar low without the full bar is a final dust low")
-	}
-	// Settle AFTER the low: the verdict must not overwrite the final tier.
-	SettleUndisputed(cross(cur), "cz2", id)
-	if tier, _ := QualityTier("cz2", id); tier != qualityLow {
-		t.Fatal("settle must not overwrite a final tier")
-	}
-	// The reopen-relative rule: 24h quiet after the flag-vote close.
-	testing.SkipHeights(priorityWindowBlocks + 1)
-	authorBefore := c.coin.BalanceOf(alice)
-	supplyBefore := c.coin.TotalSupply()
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cz2", id)
-	// The burned deposit and fee stay burned. Asserting the FIELDS is not enough —
-	// Crystallize zeroes them after paying, so a resurrected refund would be
-	// invisible there (v0.45). The author's balance is what discriminates: a
-	// refund would come out of escrow, i.e. out of staked principal.
-	//
-	// THE DRAW IS NO LONGER ZERO HERE, and that is the change rather than a
-	// regression: the multiplier comes from the claim's SIZE now, and a
-	// conclusive-low vote has no say in it. What this test is actually for
-	// survives untouched — a burned deposit stays burned, and nothing mints into
-	// the author's balance at crystallize.
-	if got := c.coin.BalanceOf(alice); got != authorBefore {
-		t.Fatalf("no coin may reach the author on a burned-deposit claim: %d vs %d", got, authorBefore)
-	}
-	if got := c.coin.TotalSupply(); got != supplyBefore {
-		t.Fatalf("crystallize itself mints nothing; the slices mint at pull: %d vs %d", got, supplyBefore)
-	}
-	w, a, ans, carrot := DrawSlices("cz2", id)
-	if w <= 0 || a <= 0 || ans <= 0 {
-		t.Fatalf("every slice is drawn now that size sets the multiplier: %d/%d/%d", w, a, ans)
-	}
-	// v0.55: the carrot is TIER-invariant, not TURNOUT-invariant. This tally is a
-	// DUST low — conclusive at the supply-floorless demotionBar, below the full bar —
-	// where the flag bond returns WHOLE, so paying an X̄-scaled pot here was v0.25's
-	// A21 faucet arriving through the carrot. Tier-invariance is pinned above the bar
-	// by TestFullBarLowStillPaysTheTierInvariantCarrot.
-	if carrot != 0 {
-		t.Fatalf("a sub-full-bar tally pays no carrot: %d", carrot)
-	}
-	// THE WINNER PULL IS NO LONGER ZERO. It was, because tierLowX made the cap
-	// zero; with the multiplier floored at 0.25x there is no zero cap left, so a
-	// winner on a conclusive-low claim draws a reduced reward rather than none.
-	// What is still asserted is that the pull SUCCEEDS rather than reverting —
-	// the property the original line was protecting, stated without leaning on a
-	// zero that no longer occurs.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	if got := WithdrawBonus(cross(cur), "cz2", id, sideYES); got <= 0 {
-		t.Fatal("low tier pays zero accuracy reward")
-	}
-	// Eve (non-participant conclusive voter) pulls, and gets NOTHING (v0.55): the
-	// tally was sub-full-bar, so there is no pot. The pull is a zero rather than a
-	// revert, and it reserves no accrual — SeniorOwed must not move, since a senior
-	// entitlement here would advance the monotone reservedTail against a mint that
-	// never happens.
-	owedBefore := SeniorOwed("cz2")
-	testing.SetRealm(testing.NewUserRealm(eve))
-	if share := PullCarrot(cross(cur), "cz2", id); share != 0 {
-		t.Fatalf("a sub-full-bar tally pulls nothing: %d", share)
-	}
-	if SeniorOwed("cz2") != owedBefore {
-		t.Fatalf("a zero pull must reserve no accrual: %d vs %d",
-			SeniorOwed("cz2"), owedBefore)
-	}
-	uassert.AbortsContains(t, cur, "already claimed", func() {
-		PullCarrot(cross(cur), "cz2", id)
-	})
-	// Participants never take the carrot.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "never the carrot", func() {
-		PullCarrot(cross(cur), "cz2", id)
-	})
-	// The burned deposit stays burned: no refund arrived at crystallize.
-	cs := mustClaim(c, id)
-	if cs.deposit != 0 || cs.fee != 0 {
-		t.Fatal("low-slashed deposit/fee must not resurrect")
-	}
-	// Conservation: once the only stake is withdrawn, escrow is empty — the burned
-	// deposit/fee left no phantom balance and the flag bond went back to its poster.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	WithdrawStake(cross(cur), "cz2", id, sideYES)
-	if got := c.coin.BalanceOf(c.escrow); got != 0 {
-		t.Fatalf("escrow must drain to zero: %d", got)
-	}
-}
+// TestCrystallizeLowTierZeroDrawCarrotStillPays went with the quality lane: a LOW tier no longer zeroes the draw; size rates a small claim 0.25x
 
 // F9 headroom probe (v0.45 gap 1). The flash-proof cap is
 // bound = tier·(positionRaw/openBlocks)/2, i.e. HALF the position's
@@ -275,7 +166,7 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 }
 
 // P2 per-voter carrot clamp probe (v0.45 gap 4). The clamp is b0/2 - 1 where
-// b0 = max(flagMinCC, 2%·X̄frozen), so it bites a SOLE voter (w == denom, share ==
+// b0 = max(carrotClampMinCC, 2%·X̄frozen), so it bites a SOLE voter (w == denom, share ==
 // carrotTotal) exactly when carrotTotal = 7%·midGross exceeds 1%·X̄, i.e. when
 // midGross > 14.3%·X̄. midGross/X̄ = rate·T, so unlike the F9 cap (which needs ~91
 // weeks and is unreachable) this one needs ~9 weeks at the hot rate — inside the
@@ -302,26 +193,22 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "p2c", id, sideYES)
 
-	// A conclusive MID flag: consumes the slot, sets the tally the carrot pays.
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "p2c", id)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	VoteQuality(cross(cur), "p2c", id, qualityMid)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "p2c", id)
-	if tier, _ := QualityTier("p2c", id); tier != qualityMid {
-		t.Fatalf("setup: need a conclusive MID tally, got tier=%d", tier)
+	// An upheld dispute round carried by the sole voter: that is what sets
+	// decidedPID and funds the carrot the clamp is measured against. It used to be
+	// a conclusive MID flag, which did the same two jobs without a bond.
+	upholdByVote(cur, "p2c", id, c, flagger, voter)
+	if cs := mustClaim(c, id); cs.decidedPID == 0 {
+		t.Fatal("setup: need a decided round for the carrot to pay from")
 	}
-	SettleUndisputed(cross(cur), "p2c", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "p2c", id)
 
 	cs := mustClaim(c, id)
-	b0 := cs.xBarFrozen * flagBondXBps / 10000
-	if b0 < flagMinCC {
-		b0 = flagMinCC
+	b0 := cs.xBarFrozen * carrotClampXBps / 10000
+	if b0 < carrotClampMinCC {
+		b0 = carrotClampMinCC
 	}
 	clamp := b0/2 - 1
 	uncapped := cs.carrotTotal // sole voter: w == denom, so share == carrotTotal
@@ -357,224 +244,11 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 	}
 }
 
-// The other side of v0.55: tier-invariance is real ABOVE the bar. F2/A11 argues a
-// conclusive LOW must still pay its electorate the same 7%·midGross a mid or high
-// would — what v0.55 withholds is only the SUB-BAR pot, where the flag bond returns
-// whole and the pot was an X̄-scaled mint against 1.1 CC of burn. This drives a
-// full-bar low in the T2 band (low share in [1/2, 2/3), so no slash reserves and
-// Crystallize is reachable) and requires the carrot to be paid in full.
-func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("cz5-alice")
-	flagger := testutils.TestAddress("cz5-flagger")
-	eve := testutils.TestAddress("cz5-eve")     // 3 CC low
-	frank := testutils.TestAddress("cz5-frank") // 2.5 CC mid -> low share 6/11
-	c := testCourt(cur, "cz5", alice, 50_000_000_000)
-	c.coin.Mint(flagger, 1_000_000_000)
-	c.coin.Mint(eve, 3_000_000_000)
-	c.coin.Mint(frank, 2_500_000_000)
+// TestFullBarLowStillPaysTheTierInvariantCarrot went with the quality lane: there is no full bar and no conclusive low
 
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "cz5", "A full-bar low still pays its voters")
-	matureOI(cur, "cz5", id, alice, 200_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	PostAnswer(cross(cur), "cz5", id, sideYES)
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "cz5", id)
-	testing.SetRealm(testing.NewUserRealm(eve))
-	VoteQuality(cross(cur), "cz5", id, qualityLow)
-	testing.SetRealm(testing.NewUserRealm(frank))
-	VoteQuality(cross(cur), "cz5", id, qualityMid)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "cz5", id)
-	cs := mustClaim(c, id)
-	_, fullBar := qualityBars(c, cs)
-	if cs.conclusiveTurnout < fullBar || cs.tier != tierLowX || cs.pendingSlash != 0 {
-		t.Fatalf("setup: need a full-bar T2 low with no reserve: turnout=%d bar=%d "+
-			"tier=%d pending=%d", cs.conclusiveTurnout, fullBar, cs.tier, cs.pendingSlash)
-	}
-	SettleUndisputed(cross(cur), "cz5", id)
-	testing.SkipHeights(priorityWindowBlocks + 1)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cz5", id)
-	// Same inversion as cz2: the tally no longer reaches the draw, so a full-bar
-	// low draws like any other claim of its size. The carrot's TIER-INVARIANCE is
-	// what this test is named for and it is unaffected — it was invariant to the
-	// voted tier and is invariant to the derived one.
-	w, a, ans, carrot := DrawSlices("cz5", id)
-	if w <= 0 || a <= 0 || ans <= 0 {
-		t.Fatalf("every slice is drawn now that size sets the multiplier: %d/%d/%d", w, a, ans)
-	}
-	if carrot <= 0 {
-		t.Fatal("above the full bar the carrot is tier-invariant and must be paid")
-	}
+// TestDecidedRoundCarrotSurvivesAStaleSubBarTally went with the quality lane: the stale tally it outranked was the quality tally
 
-	// Two guards on the STANDALONE branch, both found surviving. This is the fixture
-	// that has a live pot to take, so it is where they belong.
-	//
-	// First: the electorate is the tally's own voters. A complete non-voter is refused.
-	gus := testutils.TestAddress("cz5-gus") // never voted on anything
-	testing.SetRealm(testing.NewUserRealm(gus))
-	uassert.AbortsContains(t, cur, "conclusive quality tally", func() {
-		PullCarrot(cross(cur), "cz5", id)
-	})
-
-	// Second: the carrot is a POT, not a per-voter entitlement. That is not a detail —
-	// it is the invariant the item-4 econ vet's NO-CHANGE verdict rested on ("the WHOLE
-	// electorate together is paid less than one flagger's own bond"), and it had no test.
-	// Eve takes her pro-rata share, then the pot is left holding a single unit and
-	// Frank — whose own share is of the same order as Eve's — must take only that unit.
-	testing.SetRealm(testing.NewUserRealm(eve))
-	evesShare := PullCarrot(cross(cur), "cz5", id)
-	if evesShare <= 1 {
-		t.Fatalf("setup: shares here must exceed a single unit for the clamp arm below "+
-			"to mean anything: %d", evesShare)
-	}
-	cs.carrotPool = 1
-	testing.SetRealm(testing.NewUserRealm(frank))
-	if share := PullCarrot(cross(cur), "cz5", id); share != 1 {
-		t.Fatalf("a share must be clamped to what is left in the pot, not paid in "+
-			"full: got %d want 1", share)
-	}
-	if cs.carrotPool != 0 {
-		t.Fatalf("and the pot must be empty afterwards, not negative: %d", cs.carrotPool)
-	}
-}
-
-// The `decidedPID == 0` clause of v0.55's withholding, pinned. On a DECIDED claim the
-// carrot's electorate is the verdict round's with-verdict voters (PullCarrot's first
-// branch), who never cast the quality tally at all — so a stale sub-bar
-// conclusiveTurnout left over from an earlier dust-low flag must not withhold THEIR
-// pot. Reachable exactly as built here: a dust-low flag sets conclusiveTurnout below
-// the bar, then a decided round whose ride nobody votes leaves it there while setting
-// decidedPID. Without the clause the verdict lane is silently unpaid, and no other
-// fixture notices.
-func TestDecidedRoundCarrotSurvivesAStaleSubBarTally(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("cz6-alice") // author + answerer + staker
-	flagger := testutils.TestAddress("cz6-flag")
-	eve := testutils.TestAddress("cz6-eve")     // dust low: >= demotionBar, < fullBar
-	bob := testutils.TestAddress("cz6-bob")     // disputer
-	carol := testutils.TestAddress("cz6-carol") // with-verdict voter, clears quorum
-	c := testCourt(cur, "cz6", alice, 50_000_000_000)
-	c.coin.Mint(flagger, 1_000_000_000)
-	c.coin.Mint(eve, 1_000_000_000)
-	c.coin.Mint(bob, 1_000_000_000)
-	c.coin.Mint(carol, 5_000_000_000)
-
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "cz6", "a decided round pays its own voters")
-	matureOI(cur, "cz6", id, alice, 200_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	PostAnswer(cross(cur), "cz6", id, sideYES)
-	c.params.escrowMinBlocks = 900_000
-	c.params.escrowMaxBlocks = 900_000
-
-	// Round 1 fails quorum: opens the escrow window for the decided round below.
-	testing.SetRealm(testing.NewUserRealm(bob))
-	OpenDispute(cross(cur), "cz6", id)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveDispute(cross(cur), "cz6", id)
-
-	// A DUST low leaves conclusiveTurnout below the bar (and levies no slash).
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "cz6", id)
-	testing.SetRealm(testing.NewUserRealm(eve))
-	VoteQuality(cross(cur), "cz6", id, qualityLow)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "cz6", id)
-	cs := mustClaim(c, id)
-	_, fullBar := qualityBars(c, cs)
-	if cs.conclusiveSeq == 0 || cs.conclusiveTurnout >= fullBar || cs.pendingSlash != 0 {
-		t.Fatalf("setup: need a stale SUB-BAR conclusive tally and no reserve: seq=%d "+
-			"turnout=%d bar=%d pending=%d", cs.conclusiveSeq, cs.conclusiveTurnout,
-			fullBar, cs.pendingSlash)
-	}
-
-	// A decided round whose quality ride nobody votes: decidedPID lands, the stale
-	// sub-bar conclusiveTurnout stays.
-	testing.SetRealm(testing.NewUserRealm(bob))
-	OpenDispute(cross(cur), "cz6", id)
-	testing.SetRealm(testing.NewUserRealm(carol))
-	VoteDispute(cross(cur), "cz6", id, "no")
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveDispute(cross(cur), "cz6", id)
-	if cs.decidedPID == 0 || cs.conclusiveTurnout >= fullBar {
-		t.Fatalf("setup: need a decided round over a stale sub-bar tally: pid=%d turnout=%d",
-			cs.decidedPID, cs.conclusiveTurnout)
-	}
-
-	testing.SkipHeights(EscrowUntil("cz6", id) - heightNow())
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Finalize(cross(cur), "cz6", id)
-	testing.SkipHeights(priorityWindowBlocks + 1)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cz6", id)
-
-	if _, _, _, carrot := DrawSlices("cz6", id); carrot <= 0 {
-		t.Fatalf("a decided round's carrot must survive a stale sub-bar quality tally: %d",
-			carrot)
-	}
-	// And the verdict voter can actually take it.
-	testing.SetRealm(testing.NewUserRealm(carol))
-	if share := PullCarrot(cross(cur), "cz6", id); share <= 0 {
-		t.Fatalf("the with-verdict voter must be paid: %d", share)
-	}
-}
-
-// The 24h quiet window (Q6), found SURVIVING by the mutation harness: replacing
-// `now < cs.lastFlagEventAt+priorityWindowBlocks` with `if false` failed no test.
-// The window exists so Crystallize cannot RACE a flag event — every flag close,
-// reopen and void restamps lastFlagEventAt precisely so the draw cannot be frozen
-// in the same breath as a quality outcome that a party has not had time to react to.
-// Nothing pinned it, so nothing objected to removing the reaction period entirely.
-func TestCrystallizeWaitsOutTheQuietWindow(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("qw-alice")
-	flagger := testutils.TestAddress("qw-flag")
-	voter := testutils.TestAddress("qw-voter")
-	c := testCourt(cur, "qwin", alice, 50_000_000_000)
-	c.coin.Mint(flagger, 10_000_000_000)
-	c.coin.Mint(voter, 20_000_000_000)
-
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "qwin", "the draw waits for the reaction period")
-	matureOI(cur, "qwin", id, alice, 200_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	PostAnswer(cross(cur), "qwin", id, sideYES)
-
-	// A conclusive MID flag: consumes the slot, restamps lastFlagEventAt at its close.
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "qwin", id)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	VoteQuality(cross(cur), "qwin", id, qualityMid)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "qwin", id)
-	SettleUndisputed(cross(cur), "qwin", id)
-
-	cs := mustClaim(c, id)
-	if cs.lastFlagEventAt == 0 {
-		t.Fatal("setup: the flag close must restamp the quiet-window anchor")
-	}
-	// Inside the window: refused, even for a participant with everything else ready.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "24h quiet window", func() {
-		Crystallize(cross(cur), "qwin", id)
-	})
-	if cs.crystallized {
-		t.Fatal("a refused Crystallize must not have crystallized")
-	}
-	// One block short is still short — the boundary, not just the middle.
-	testing.SkipHeights(priorityWindowBlocks - 1)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "24h quiet window", func() {
-		Crystallize(cross(cur), "qwin", id)
-	})
-	// And once it passes, the same call succeeds — so the guard is a delay, not a bar.
-	testing.SkipHeights(2)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "qwin", id)
-	if !cs.crystallized {
-		t.Fatal("past the quiet window the draw must crystallize")
-	}
-}
+// TestCrystallizeWaitsOutTheQuietWindow went with the quality lane: the 24h quiet window was anchored on lastFlagEventAt, which only the flag lane ever stamped; crystallize.gno records why the guard went with it
 
 // capBonus's F9 bound, found SURVIVING: multiplying it by 1000 failed no test, because
 // TestF9CapHeadroomAtTheExtreme establishes the cap is UNREACHABLE by natural flow
@@ -654,14 +328,8 @@ func TestP7SplitTakesEightyOfNinetyThreeForWinners(cur realm, t *testing.T) {
 	matureOI(cur, "p7s", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "p7s", id, sideYES)
-	// A conclusive MID keeps the tier at 1 so D > 0 and every slice is payable.
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "p7s", id)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	VoteQuality(cross(cur), "p7s", id, qualityMid)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "p7s", id)
-	SettleUndisputed(cross(cur), "p7s", id)
+	// An upheld round so the answer stands and D > 0, making every slice payable.
+	upholdByVote(cur, "p7s", id, c, flagger, voter)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "p7s", id)

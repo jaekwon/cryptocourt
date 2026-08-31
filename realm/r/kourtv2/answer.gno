@@ -120,80 +120,55 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	if c.params.answerBondCapCC > 0 && bond > c.params.answerBondCapCC {
 		bond = c.params.answerBondCapCC
 	}
-	// COLLATERALIZATION FLOOR (audit round 2). The bond must cover the slash it
-	// may later owe, or the clamp at ResolveFlag silently voids the deterrent.
-	// The slash's draw arm is 1.6× the answered side's FROZEN CONVICTION, while
-	// the bond is sized off the 3-HOUR trailing X̄. When Unstake still kept
-	// conviction, a mill could bank it with a large stake, drain to minAnswerX two
-	// hours before answering, and post a bond 224× smaller than the slash it had
-	// earned: caught in full, it paid ~51 CC against a 11_220 CC exposure. The
-	// forfeit in stake.gno closes that gap at its source — the drained coin no
-	// longer carries frozen conviction into the slash base — and the floor is kept
-	// because it is the belt to that braces: it binds on conviction genuinely held
-	// through the answer, which is the ordinary case and not an attack. For a roughly constant pool the two arms both scale with
-	// X̄, and the floor is now EXPECTED TO BIND on any claim carrying real
-	// conviction — the draw arm reaches 30.8%·X̄ against a 6% base, and the deploy
-	// check asserts it can (it used to assert the opposite). This paragraph
-	// previously said the floor was a no-op off the drain path; that was true at a
-	// 50% base and is now backwards. It is applied after the
-	// court cap deliberately: an uncollateralized slash is worse than an
-	// over-large bond, and the cap must not re-open the hole.
-	// Floors on the WHOLE sizer, not just the draw arm: the flat arm (4.5%·X̄)
-	// is covered today only because answerBondCapCC is 0 everywhere, so a
-	// draw-arm-only floor is a trap armed the day that knob is wired.
+	// THE CONVICTION FLOOR. The 6% base above prices an answer off the claim's
+	// STAKE; this floor prices it off the claim's CONVICTION, and takes whichever
+	// is larger. It is applied after the court cap deliberately — the cap must not
+	// be able to buy a cheap answer on a heavily-converted claim.
 	//
-	// WHAT ELSE DEPENDS ON THIS FLOOR. Three guards in other functions are
-	// unreachable BECAUSE of it, each verified by mutation (they survive, and the
-	// measurement in each case shows this floor is why):
+	// IT USED TO BE THE SLASH'S COLLATERAL, and that is no longer why it is here.
+	// The conclusive-low slash drew 1.6× the answered side's frozen conviction
+	// while the bond was sized off a 3-hour trailing X̄, so without a floor a mill
+	// could bank conviction, drain two hours before answering, and post a bond
+	// 224× smaller than the slash it had earned — measured at ~51 CC against
+	// 11_220 CC of exposure. The quality lane took the slash with it, and the
+	// forfeit in stake.gno closed the drain at its source besides.
 	//
-	//   originateSlash's `slash > answerBond` clamp (quality.gno) — the floor sizes
-	//     the bond to cover slashSizeFor, so the clamp never fires. Its own comment
-	//     says so and warns against deleting it on the strength of the survivor
-	//     report.
-	//   SettleUndisputed's and Finalize's `reserve > answerBond` clamps — same
-	//     reason, stated there as "no clamp-from-under-retention".
-	//   OpenDispute's `base < 1` bond floor (dispute.gno) — because this floor
-	//     overrides the court cap, an answered claim's bond cannot be small enough
-	//     for 40% of it to round to zero. Setting answerBondCapCC = 1 does NOT
-	//     produce a bond of 1; measured, it produced 18_000_000.
+	// TWO REASONS IT STAYED ANYWAY, both of which outlive the slash:
 	//
-	// So weakening this floor does not merely restore one exploit: it makes three
-	// guards elsewhere live at once, in three files, none of which has a fixture
-	// that can reach them today. If this is ever relaxed, mutate those three first.
+	//   1. The bond tracks the TAKE. An answer on a claim carrying real conviction
+	//      is worth more to get wrong, and 6%·X̄ does not see conviction at all.
+	//   2. It is what keeps the DISPUTE bond answerer-independent. That bond is
+	//      min(20%·X̄, 40%·this). At a 6% base the answer arm binds on every claim,
+	//      so without the floor a defender's price would depend on which side the
+	//      attacker chose to declare — measured 1.86× apart. With it they match.
+	//
+	// Deleting it with the slash would therefore have re-priced every answer by
+	// roughly 5× and reopened that spread, neither of which has anything to do
+	// with quality. The arithmetic is unchanged; only the name and the reason are
+	// (bondFloorAt, answerbond.gno).
+	//
 	// MAX OVER BOTH SIDES, and this is the change that makes a 6% base safe.
-	//
-	// Keyed to the ANSWERED side alone, a dust answer was exempt from the floor
-	// exactly where it did the most damage: stake a token amount on one side,
-	// declare it, let 72h of silence settle, and the large opposing pool's whole
-	// draw is annihilated while the bond returns whole — priced at the flat base,
-	// because the answerer's own conviction is ~0. Measured at 11 weeks, the
-	// sniper paid 45 CC where the honest majority answerer on the same claim paid
-	// 101. Today's keying taxed the person declaring the well-funded side and
-	// exempted the one declaring dust.
+	// Keyed to the ANSWERED side alone, a dust answer was exempt exactly where it
+	// did the most damage: stake a token amount on one side, declare it, let 72h
+	// of silence settle, and the large opposing pool's whole draw is annihilated
+	// while the bond returns whole — priced at the flat base, because the
+	// answerer's own conviction is ~0. Measured at 11 weeks, the sniper paid 45 CC
+	// where the honest majority answerer on the same claim paid 101.
 	//
 	// max() is the SAME TAX WITH THE EXEMPTION REMOVED, not a new one. For an
 	// answerer on the larger pool it is bit-identical (measured: 11 of 14 rows
 	// unchanged to the unit; the three that move are the dust snipe and the aged
 	// contrarian). An honest contrarian pays ~6× LESS than at the old 50% base.
 	//
-	// It is also what keeps the DISPUTE bond answerer-independent. That bond is
-	// min(20%·X̄, 40%·this), and at 5000 bps the X̄ arm always bound so the
-	// answerer's own sizing never showed through. At 600 the answer arm binds on
-	// every claim — so without max() a defender's price would depend on which side
-	// the attacker chose to declare (measured 1.86× apart), and with it they match.
-	//
-	// The SIZER (slashSizeFor) stays answered-keyed deliberately. It defines what
-	// the slash IS — 1.6× the answered side's forgone draw — and its risk window
-	// runs to crystallize, so the retained reserve must equal it. This max-keyed
-	// excess is an anti-snipe PREMIUM whose window is the 72h dispute, where the
-	// whole bond burns on an overturn; releasing it at settle is correct
-	// disposition, not a leak. Re-keying the sizer too would withhold 100% of the
-	// bond until crystallize on the modal path and contradict the slash's own
-	// definition.
+	// STILL LOAD-BEARING ELSEWHERE. OpenDispute's `base < 1` bond floor
+	// (dispute.gno) is unreachable BECAUSE of this floor: an answered claim's bond
+	// cannot be small enough for 40% of it to round to zero. Setting
+	// answerBondCapCC = 1 does NOT produce a bond of 1; measured, it produced
+	// 18_000_000. If this is ever relaxed, mutate that guard first.
 	convHi, convLo := cs.sideConv(verdict)
-	floor := slashSizeAt(xbar, convHi, convLo)
+	floor := bondFloorAt(xbar, convHi, convLo)
 	oppHi, oppLo := cs.sideConv(oppositeSide(verdict))
-	if opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {
+	if opp := bondFloorAt(xbar, oppHi, oppLo); opp > floor {
 		floor = opp
 	}
 	if floor > bond {

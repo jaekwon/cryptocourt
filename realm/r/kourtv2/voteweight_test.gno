@@ -42,11 +42,13 @@ func TestTheQuoteMatchesTheCharge(cur realm, t *testing.T) {
 			"be more than an identity on the snapshot")
 	}
 
-	// VERDICT LANE.
-	qVerdict, qQuality := ClaimVoteWeightOf("qmc", carol, id)
-	if qVerdict <= 0 || qQuality <= 0 {
-		t.Fatalf("fixture is vacuous: both quotes must be positive, got %d and %d",
-			qVerdict, qQuality)
+	// VERDICT LANE. The second return is the retired quality lane's and is now
+	// always zero; the read keeps its pair shape only because the overlay
+	// destructures it, so this asserts the ONE quote that means anything and says
+	// so rather than checking a constant.
+	qVerdict, _ := ClaimVoteWeightOf("qmc", carol, id)
+	if qVerdict <= 0 {
+		t.Fatalf("fixture is vacuous: the verdict quote must be positive, got %d", qVerdict)
 	}
 	uassert.Equal(t, c.coin.BalanceOf(carol), qVerdict) // capped, not the snapshot
 	testing.SetRealm(testing.NewUserRealm(carol))
@@ -66,25 +68,10 @@ func TestTheQuoteMatchesTheCharge(cur realm, t *testing.T) {
 	// rather than one it recomputes, and that structure was unpinned.
 	uassert.Equal(t, qVerdict, VoteLockedOf("qmc", carol))
 
-	// QUALITY LANE.
-	testing.SetRealm(testing.NewUserRealm(carol))
-	VoteQuality(cross(cur), "qmc", id, qualityMid)
-	rec := cs.qVoted.Get(beClaimKey(cs.qVoteSeq) + string(carol))
-	if rec == nil {
-		t.Fatal("fixture is vacuous: the quality weight was never recorded")
-	}
-	uassert.Equal(t, qQuality, rec.(int64))
+	// THE QUALITY LANE STOOD HERE and is gone. What it added was a SECOND lane whose
+	// quote had to match its own charge independently; with one lane the assertion
+	// above is the whole property.
 
-	// AND THE EXPLANATION IS THE RIGHT ONE, since a holder acts on it. Per lane,
-	// because with a dispute open there are two live questions at two epochs.
-	capped := "limited to what you still hold, which is less than when this vote started"
-	cv, cq := VoteWeightWhy("qmc", carol, id)
-	uassert.Equal(t, capped, cv)
-	uassert.Equal(t, capped, cq)
-	// The bystander: bob held throughout, so he is quoted the full snapshot in both.
-	bv, bq := VoteWeightWhy("qmc", bob, id)
-	uassert.Equal(t, "counted in full", bv)
-	uassert.Equal(t, "counted in full", bq)
 }
 
 // THE ELECTION QUOTE REPORTS THE FROZEN FIGURE, not a fresh derivation.
@@ -219,120 +206,9 @@ func TestPastVotesSumToPastTotal(cur realm, t *testing.T) {
 	}
 }
 
-// THE TWO LANES CAN DISAGREE, AND THE EXPLAINER MUST NOT AVERAGE THEM.
-//
-// With a dispute open, BOTH questions are live — VoteQuality accepts votes while
-// cs.disputeOpen — at DIFFERENT epochs: the verdict at the proposal's, the quality
-// ride at the answer's. So a holder who bought AFTER the answer but BEFORE the
-// dispute opened has nothing at the quality epoch and a full position at the
-// dispute's.
-//
-// The first VoteWeightWhy returned one string and picked the dispute's epoch whenever
-// a dispute was open. Measured, this exact holder was told "weighed at the full
-// snapshot" while VoteQuality was about to refuse them for having no checkpointed
-// weight at all. The reader was not merely incomplete, it was wrong in the direction
-// that makes a holder act.
-func TestTheTwoLanesGetSeparateExplanations(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("tls-alice")
-	whale := testutils.TestAddress("tls-whale")
-	late := testutils.TestAddress("tls-late")
-	c := testCourt(cur, "tls", alice, 40_000_000_000)
-	c.coin.Mint(whale, 60_000_000_000)
+// TestTheTwoLanesGetSeparateExplanations went with the quality lane: there is one lane, so there are no two explanations to keep apart
 
-	// Answered while `late` holds nothing: the quality epoch sees zero.
-	id := stakeAnswerDispute(cur, "tls", alice, whale)
-	cs := mustClaim(c, id)
-	testing.SkipHeights(epochBlocks * 2)
-	touch(c)
-
-	// THEN they acquire, and it seals, so the dispute's epoch will see them.
-	testing.SetRealm(testing.NewUserRealm(whale))
-	TransferCC(cross(cur), "tls", late, 10_000_000_000)
-	testing.SkipHeights(epochBlocks * 2)
-	touch(c)
-	testing.SetRealm(testing.NewUserRealm(whale))
-	OpenDispute(cross(cur), "tls", id)
-
-	// The instrument's own precondition: the two epochs must actually disagree, or
-	// this test is asserting nothing that a single-string version would fail.
-	qSnap := c.coin.PastVotes(late, cs.qualityEpoch)
-	dSnap := c.coin.PastVotes(late, c.gov.EpochOf(cs.proposalID))
-	if qSnap != 0 || dSnap <= 0 {
-		t.Fatalf("fixture is vacuous: need a zero quality snapshot and a positive "+
-			"dispute one, got %d and %d", qSnap, dSnap)
-	}
-
-	verdict, quality := ClaimVoteWeightOf("tls", late, id)
-	uassert.Equal(t, int64(0), quality)
-	uassert.True(t, verdict > 0)
-
-	vWhy, qWhy := VoteWeightWhy("tls", late, id)
-	uassert.Equal(t, "counted in full", vWhy)
-	if qWhy == vWhy {
-		t.Fatalf("the two lanes disagree for this holder, so their explanations "+
-			"must too — both said %q", qWhy)
-	}
-	uassert.Equal(t,
-		"you had none when this vote started; coin bought since counts in later votes",
-		qWhy)
-
-	// And the realm agrees with the quality explanation rather than the verdict one.
-	testing.SetRealm(testing.NewUserRealm(late))
-	uassert.AbortsContains(t, cur, "no checkpointed weight at the claim's quality "+
-		"epoch", func() { VoteQuality(cross(cur), "tls", id, qualityMid) })
-}
-
-// THE READERS MUST SEE A COUNTER POLL, and the quote they give must be the charge.
-//
-// The counter re-vote is the one quality question neither reader was ever tested
-// against: mutating the counterOpen term out of qualityQuestionOpen survived the whole
-// suite, both before and after that predicate was consolidated, which means nothing
-// asked either reader what it says while a counter poll is open. The consequence would
-// not be a crash — it is a holder told "no quality vote is open on this claim" and
-// quoted zero weight, on a question they can vote in right now.
-//
-// Paired both ways round: with nothing open the readers must SAY nothing is open, or
-// this test would pass on a reader that answers "you have weight" unconditionally.
-func TestTheReadersSeeACounterPollAndQuoteWhatItCharges(cur realm, t *testing.T) {
-	c, id, alice, _, carol, _, _ := slashSetup(cur, t, "cqr")
-	cs := mustClaim(c, id)
-
-	// THE BYSTANDER: the flag that created the slash has resolved, so no quality
-	// question is open and both readers must say exactly that.
-	if qualityQuestionOpen(cs) {
-		t.Fatal("fixture: a question is already open, so the negative half of " +
-			"this test is vacuous")
-	}
-	if _, q := ClaimVoteWeightOf("cqr", carol, id); q != 0 {
-		t.Fatalf("quoted %d quality weight with no quality question open", q)
-	}
-	_, why := VoteWeightWhy("cqr", carol, id)
-	uassert.Equal(t, "no quality vote is open on this claim", why)
-
-	// The answerer opens their one counter re-vote.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	CounterFlag(cross(cur), "cqr", id)
-	if !cs.counterOpen {
-		t.Fatal("fixture: the counter poll did not open")
-	}
-
-	_, quoted := ClaimVoteWeightOf("cqr", carol, id)
-	if quoted <= 0 {
-		t.Fatal("a counter poll is open and carol holds coin, so the reader must " +
-			"quote a quality weight — a zero here is the reader failing to see " +
-			"the counter lane at all")
-	}
-	_, why = VoteWeightWhy("cqr", carol, id)
-	if why == "no quality vote is open on this claim" {
-		t.Fatal("the explainer denies a counter poll that IS open")
-	}
-
-	// AND THE QUOTE IS THE CHARGE. This is the property the split readers exist for:
-	// what the elector is told, and what the vote actually commits, are one number.
-	testing.SetRealm(testing.NewUserRealm(carol))
-	VoteQuality(cross(cur), "cqr", id, qualityMid)
-	uassert.Equal(t, quoted, VoteLockedOf("cqr", carol))
-}
+// TestTheReadersSeeACounterPollAndQuoteWhatItCharges went with the quality lane: there is no counter poll
 
 // THE COHERENCE CHAIN, END TO END IN A REAL COURT.
 //

@@ -233,7 +233,7 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 // Sixteen constants were mutated and TEN survived: the P7 carrot split, both comp arms,
 // the flag bond floor and its frozen multiple, both slash arms, the deposit fee, the
 // settle delay, the priority window, and the reservoir's cap in periods. Every one is a
-// number somebody calibrated — slashDrawBps carries "k=1.6 lands the 12-wk mill q* on the
+// number somebody calibrated — bondFloorConvBps carries "k=1.6 lands the 12-wk mill q* on the
 // ~0.22 target (three-designer convergence)" — and none of them was pinned.
 //
 // They survived for one reason, and it is the reason this fixture uses LITERALS on the
@@ -263,16 +263,15 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 		{"splitAuthor", splitAuthor, 8, "the author's share"},
 		{"splitAnswerer", splitAnswerer, 5, "the answerer's share"},
 		{"splitCarrot", splitCarrot, 7, "policing pay's share"},
-		{"answerBondBps", answerBondBps, 600, "the answer bond BASE is 6% of X-bar = slashXBps*4/3; the collateralization floor in PostAnswer is what actually prices it, at 1.6x the destroyable draw over BOTH sides"},
+		{"answerBondBps", answerBondBps, 600, "the answer bond BASE is 6% of X-bar = bondFloorFlatBps*4/3; the collateralization floor in PostAnswer is what actually prices it, at 1.6x the destroyable draw over BOTH sides"},
 		{"disputeBondXBps", disputeBondXBps, 2000, "a dispute bond is 20% of X-bar"},
 		{"disputeBondOfAnswerBps", disputeBondOfAnswerBps, 4000, "or 40% of the answer bond, whichever is less"},
 		{"compOwnX", compOwnX, 2, "comp is capped at twice the disputer's own bond"},
 		{"compOfBurnBps", compOfBurnBps, 8000, "and at 80% of what burned"},
-		{"flagBondXBps", flagBondXBps, 200, "a flag bond is 2% of X-bar"},
-		{"flagMinCC", flagMinCC, 1_000_000, "with a floor of 1 CC — flagging must never be nearly free"},
-		{"flagFrozenMultX", flagFrozenMultX, 4, "the bond freezes at 4x b0 after three inconclusives"},
-		{"slashXBps", slashXBps, 450, "the slash floor is 4.5% of X-bar"},
-		{"slashDrawBps", slashDrawBps, 16000, "and its draw arm is 1.6x midGross (k=1.6, v0.40)"},
+		{"carrotClampXBps", carrotClampXBps, 200, "the carrot clamp base is 2% of X-bar — was the flag bond"},
+		{"carrotClampMinCC", carrotClampMinCC, 1_000_000, "with a floor of 1 CC, so the per-voter clamp never collapses on a small court"},
+		{"bondFloorFlatBps", bondFloorFlatBps, 450, "the answer bond's conviction floor is 4.5% of X-bar"},
+		{"bondFloorConvBps", bondFloorConvBps, 16000, "and its conviction arm is 1.6x a side's mid draw (k=1.6, v0.40)"},
 		{"depositFeeBps", depositFeeBps, 1000, "the claim fee is 10% of the deposit"},
 		{"quorumSupplyBps", quorumSupplyBps, 500, "the full bar's supply floor is 5%"},
 		{"settleDelay", settleDelay, 51_840, "72h before an undisputed answer settles"},
@@ -333,18 +332,14 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 			standingUnadjudicatedBps)
 	}
 
-	// court.gno's own claim beside slashXBps: "bounty 2% <= 80% x 4.5%". The flag bond is
+	// court.gno's own claim beside bondFloorFlatBps: "bounty 2% <= 80% x 4.5%". The flag bond is
 	// the bounty's own arm, so the slash floor must cover it at the comp ratio.
-	if flagBondXBps*10000 > slashXBps*compOfBurnBps {
-		t.Errorf("a flag bond (%d bps of X-bar) must stay inside 80%% of the slash floor "+
-			"(%d bps), or flagging pays more than the slash it earns",
-			flagBondXBps, slashXBps)
-	}
-	// The frozen flag bond is 4x b0 = 8% of X-bar, which the comment states outright.
-	if flagFrozenMultX*flagBondXBps != 800 {
-		t.Errorf("the frozen flag bond must be 8%% of X-bar: %d x %d bps",
-			flagFrozenMultX, flagBondXBps)
-	}
+	// The two relations that used to be checked here priced FLAGGING — a flag bond
+	// inside 80% of the slash floor so flagging could not pay more than the slash
+	// it earned, and a frozen bond at 4x b0. Both compared a bond that no longer
+	// exists against a slash that no longer exists, so neither survives the
+	// quality lane. carrotClampXBps keeps its value and its own row above; what it
+	// no longer has is a second quantity to be calibrated AGAINST.
 }
 
 // The other half of the calibration: defaultParams(), the PER-COURT knobs. Distinct from

@@ -249,7 +249,7 @@ type claimState struct {
 	qLowW           int64 // the SEALED tally: no read ever exposes these live
 	qMidW           int64
 	qHighW          int64
-	qVoted          *bptree.BPTree // seq|addr -> true (one vote per tally)
+	voted          *bptree.BPTree // seq|addr -> true (one vote per tally)
 	// The slash escrow (Q5): reserved from the answer bond at a slash-low,
 	// disposed exactly once at the counter-flag window's close.
 	pendingSlash      int64

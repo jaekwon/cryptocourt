@@ -360,7 +360,7 @@ func TestElectionZeroApprovalCandidateCannotInstall(cur realm, t *testing.T) {
 // the ballot is never harder than winning the vote". Both are checked here.
 func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
 	// ARM 1 — the absolute floor. A court with 10 CC votable has a 0.5 CC
-	// election floor, but flagMinCC pins the bond at 1 CC: without the clamp
+	// election floor, but carrotClampMinCC pins the bond at 1 CC: without the clamp
 	// the ballot costs twice what winning the vote does, and the electorate's
 	// own remedy is priced out of reach on precisely the youngest courts.
 	creator := testutils.TestAddress("eb1-creator")
@@ -376,7 +376,7 @@ func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
 	floor1, bond1 := ElectionFloorOf("ebond1"), ElectionBondOf("ebond1")
 	uassert.Equal(t, int64(500_000), floor1, "a twentieth of 10 CC votable")
 	if bond1 > floor1 {
-		t.Fatalf("the absolute flagMinCC arm escaped the clamp: bond %d > floor %d", bond1, floor1)
+		t.Fatalf("the absolute carrotClampMinCC arm escaped the clamp: bond %d > floor %d", bond1, floor1)
 	}
 	uassert.Equal(t, floor1, bond1, "on a small court the floor is the binding term")
 
@@ -384,7 +384,7 @@ func TestElectionBondNeverExceedsTheFloor(cur realm, t *testing.T) {
 	// bonds, which is ordinary for a mature court. Quoted on RAW supply the
 	// bond here would be 500 CC against a 50 CC floor: a tenfold inversion
 	// produced by nothing but the two terms disagreeing about a denominator.
-	// The sizes are deliberately well above flagMinCC so this arm tests the
+	// The sizes are deliberately well above carrotClampMinCC so this arm tests the
 	// base and not the clamp.
 	creator2 := testutils.TestAddress("eb2-creator")
 	holder2 := testutils.TestAddress("eb2-holder")
@@ -993,7 +993,7 @@ func TestElectionWeightIsFrozenAtFirstApproval(cur realm, t *testing.T) {
 // balance for the escrow, so their own approval is now worth floor-bond and cannot
 // carry the line alone. Holding floor+bond, it can. Measured across court sizes the
 // requirement is 110% of the floor on any ordinary court and at most 200% on one
-// small enough for the flagMinCC clamp to bind — mustElectionInvariants pins
+// small enough for the carrotClampMinCC clamp to bind — mustElectionInvariants pins
 // electionBondBps < quorumSupplyBps and the clamp pins bond <= floor, so 2x is a
 // hard ceiling, not an observation.
 //

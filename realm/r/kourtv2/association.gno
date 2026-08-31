@@ -82,7 +82,7 @@ const (
 // never unpriced; a court's own moderators may override it, because a small
 // trusted docket should not need a realm upgrade to make association free, and a
 // court under attack should not have to wait for one to make it dear.
-const assocBondDefaultInit = int64(1_000_000) // 1 CC, the flagMinCC scale
+const assocBondDefaultInit = int64(1_000_000) // 1 CC, the carrotClampMinCC scale
 
 var assocBondDefault = assocBondDefaultInit
 

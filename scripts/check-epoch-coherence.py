@@ -298,7 +298,7 @@ LOCKVOTE_CALL = re.compile(r"lockVote\(c, ([A-Za-z_][A-Za-z0-9_.]*),")
 WHO_BIND = re.compile(r"^\s*who\s*:?=\s*(.+?)\s*$", re.M)
 WHO_PARAM_FN = re.compile(r"^func ([a-zA-Z_][A-Za-z0-9_]*)\(who address", re.M)
 CALLER_DERIVED = "cur.Previous().Address()"
-LOCKVOTE_CALLS_N = 3  # dispute.gno, modvote.gno, quality.gno — one per lane
+LOCKVOTE_CALLS_N = 2  # dispute.gno, modvote.gno — one per lane (quality.gno went)
 
 # ARM 9 — no comment may present SpendableOf as what a holder can MOVE.
 #
@@ -336,8 +336,6 @@ DOC_MOVABLE = re.compile(r"^\s*//.*\bSpendableOf\b.*(?:min\(| minus )|"
 # "simplified" into one. So: exactly two such lines, the definition carries all three
 # flags, and the other carries pendingSlash, which is what makes it a different question
 # rather than a partial copy of this one. A third line fails closed.
-QOPEN_FLAGS = ("cs.flagOpen", "cs.disputeOpen", "cs.counterOpen")
-QOPEN_LINES_N = 2
 
 # ARM 11 — the release rule says the same thing in the code and in the handoff spec.
 #
@@ -412,7 +410,13 @@ COIN_OUT = re.compile(r"^(?!\s*//).*\b" + RECV + r"\.coin\.(?:Transfer|TransferF
 # would start counting as a holder outflow.
 ESCROW_SRC = re.compile(RECV + r"\.coin\.(?:Transfer|Burn)\(" + RECV + r"\.escrow")
 GATE = re.compile(r"must(?:Spendable|Stakable)\(")
-COIN_OUT_N = 9  # see the audit above
+COIN_OUT_N = 8  # see the audit above
+# 9 -> 8: OpenFlag's flag bond. It moved a flagger's own CC into the escrow behind
+# mustSpendable, and it went with the quality lane. RE-DERIVED by listing the eight
+# that remain rather than by decrementing: deposit+fee at OpenClaim, the answer bond,
+# the dispute bond, the association bond, the nomination bond, and the three exits.
+# A decrement would have been satisfied by any one path disappearing, including one
+# that disappeared by accident.
 # 7 -> 8: association.gno's association bond. AddAssociation moves a stranger's CC into
 # the escrow, so it is a user-sourced outflow like every claim deposit and answer
 # bond, and it is gated by mustSpendable on the line above the move. The count is
@@ -578,7 +582,11 @@ CREDIT_HOOKS = re.compile(
 # when a hook is genuinely added or removed, and the removal is named here so
 # the next reader can tell a decision from a drift. The money lane is untouched
 # — AuthorBonus was never tier-gated.
-CREDIT_HOOK_CALLS_N = 3
+#
+# 3 -> 2: the quality lane's credit hook. Two lanes now charge vote weight and
+# quote it to the elector — the verdict lane and the election lane — and each has
+# exactly one hook, which is the property this arm holds.
+CREDIT_HOOK_CALLS_N = 2
 
 PURGED_GATE = re.compile(r"courtIsPurged\(c\)")
 PURGED_GATE_ENTRY = {
@@ -781,37 +789,21 @@ def main() -> int:
                         f"{n} time(s), expected {want}: it {how}. Code and spec "
                         f"move together or not at all")
 
-    # Arm 10, over kourtv2 only: the liveness disjunction has one definition.
-    qopen = []
-    for q in sorted(KOURTV2.glob("*.gno")):
-        if q.name.endswith("_test.gno"):
-            continue
-        for i, line in enumerate(q.read_text().splitlines()):
-            if line.lstrip().startswith("//"):
-                continue
-            n = sum(f in line for f in QOPEN_FLAGS)
-            if n >= 2 and "||" in line:
-                qopen.append((q.name, i + 1, line.strip(), n))
-    if len(qopen) != QOPEN_LINES_N:
-        hits.append(f"[qopen-copy] {len(qopen)} line(s) disjoin two or more of the "
-                    f"quality-question flags, expected {QOPEN_LINES_N}: "
-                    f"{', '.join(f'{f}:{ln}' for f, ln, _, _ in qopen)}. "
-                    f"`a quality question is open` has ONE definition, "
-                    f"qualityQuestionOpen, because a copy that reaches the weight "
-                    f"readers but not the vote lock frees coin whose vote can still "
-                    f"be counted")
-    else:
-        defs = [r for r in qopen if r[3] == 3]
-        other = [r for r in qopen if r[3] != 3]
-        if len(defs) != 1:
-            hits.append(f"[qopen-copy] {len(defs)} line(s) carry all three "
-                        f"quality-question flags, expected exactly 1 (the "
-                        f"qualityQuestionOpen definition)")
-        elif "pendingSlash" not in other[0][2]:
-            hits.append(f"[qopen-copy] {other[0][0]}:{other[0][1]} disjoins the "
-                        f"quality-question flags without pendingSlash, so it is a "
-                        f"partial COPY of qualityQuestionOpen rather than "
-                        f"crystallize's own question: {other[0][2][:70]}")
+    # ARM 10 IS GONE, and this is the note rather than a weakened check.
+    #
+    # It asserted that "a quality question is open" had exactly ONE definition —
+    # qualityQuestionOpen — because a copy that reached the weight readers but not
+    # the vote lock would free coin whose vote could still be counted. Both the
+    # function and the three flags it disjoined (cs.flagOpen, cs.counterOpen, and
+    # pendingSlash on crystallize's own variant) went with the quality lane, so the
+    # arm now has no subject: there is one question, and cs.disputeOpen is it.
+    #
+    # NOT re-pointed at cs.disputeOpen alone. The hazard this guarded was a
+    # DISJUNCTION drifting between two readers, which needs two or more flags to
+    # exist before it can happen. Re-aiming it at a single flag would leave a check
+    # that passes for a reason unrelated to the one it was written for — the kind of
+    # green this file exists to refuse. If a second liveness flag is ever added,
+    # restore this arm from git history rather than writing a new one.
 
     # PER DIRECTORY, not a total. A total of 20+ is satisfied by kourtv2 alone, so
     # ccwrap could move away and this arm would quietly stop watching the realm where
@@ -1174,7 +1166,7 @@ def main() -> int:
                    "so a new way for a claim to END leaves those votes locked "
                    "forever and silently — read votelock.gno's voteLockQuality arm"
                    if key.endswith("_w") else
-                   "vote weight is charged by three lanes and QUOTED to the "
+                   "vote weight is charged by two lanes and QUOTED to the "
                    "elector, so a second copy is a quote that can drift from the "
                    "charge")
             hits.append(f"[{tag}] {arm4[key]} {what}, expected "
@@ -1203,7 +1195,7 @@ def main() -> int:
           f"{arm4['purged_gate']} purged-court gate(s) all on entry verbs, "
           f"{arm4['credit_hooks']} money-to-standing write(s) and no reads back, "
           f"{arm4['ent_new']} entitlement placement site(s), "
-          f"one quality-question definition, {len(trims)} stake-series trim(s) and "
+          f"{len(trims)} stake-series trim(s) and "
           f"no coin-archive trim, release clause in "
           f"{'+'.join(f'{k.split(chr(47))[-1]} {v}' for k, v in rule_counts.items())}, "
           f"{doc_scanned} file(s) clear of SpendableOf arithmetic "

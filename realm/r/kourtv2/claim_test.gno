@@ -247,18 +247,21 @@ func TestCourtDepositLedgerAcrossDrawAndBurn(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "cdl2", junk, sideYES)
 
-	// The junk claim first: a conclusive low burns the deposit AND the fee.
+	// The junk claim first. This used to be a conclusive-low FLAG, which burned
+	// the deposit and the fee together; the route to the same disposition is now a
+	// dispute round the electorate flags as spam past two thirds, which burns the
+	// deposit as well as the always-burned fee.
 	testing.SetRealm(testing.NewUserRealm(bob))
-	OpenFlag(cross(cur), "cdl2", junk)
+	OpenDispute(cross(cur), "cdl2", junk)
 	testing.SetRealm(testing.NewUserRealm(carol))
-	VoteQuality(cross(cur), "cdl2", junk, qualityLow)
+	VoteDispute(cross(cur), "cdl2", junk, "spam")
 	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "cdl2", junk)
+	ResolveDispute(cross(cur), "cdl2", junk)
 	if jcs := mustClaim(c, junk); jcs.deposit != 0 || jcs.fee != 0 {
-		t.Fatalf("setup: a conclusive low must burn the deposit and fee: %d/%d",
+		t.Fatalf("setup: a supermajority spam discard must burn the deposit and fee: %d/%d",
 			jcs.deposit, jcs.fee)
 	}
-	ledgerMatchesClaims(t, c, "after a conclusive low burned a deposit and fee")
+	ledgerMatchesClaims(t, c, "after a spam discard burned a deposit and fee")
 
 	// Then the drawn claim through settle and crystallize.
 	SettleUndisputed(cross(cur), "cdl2", drawn)

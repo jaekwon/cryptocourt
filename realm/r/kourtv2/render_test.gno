@@ -333,13 +333,7 @@ func TestNoRenderPathLeaksTheForbiddenTerms(cur realm, t *testing.T) {
 	matureOI(cur, "s74", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "s74", id, sideYES)
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "s74", id)
-	testing.SetRealm(testing.NewUserRealm(voter))
-	VoteQuality(cross(cur), "s74", id, qualityMid)
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveFlag(cross(cur), "s74", id)
-	SettleUndisputed(cross(cur), "s74", id)
+	upholdByVote(cur, "s74", id, c, flagger, voter)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "s74", id)
@@ -724,27 +718,7 @@ func TestSideAndTierNamesAreNotSwapped(t *testing.T) {
 	}
 }
 
-// An escrowed slash is announced, found surviving. Without the line the page falls
-// through to the flag-slot row and OFFERS a slot whose bond is already committed
-// elsewhere — it invites a user to pay for something the claim is not in a state
-// to sell.
-func TestAnEscrowedSlashIsAnnounced(cur realm, t *testing.T) {
-	who := testutils.TestAddress("esl-a")
-	c := testCourt(cur, "esl1", who, 50_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(who))
-	id := OpenClaim(cross(cur), "esl1", "an escrowed slash")
-	cs := mustClaim(c, id)
-	cs.frozenAt, cs.answerHeight, cs.answerBond0 = 100, 100, 1000
-	cs.pendingSlash = 500
-
-	page := Render("esl1/" + strconv.FormatUint(id, 10))
-	if !strings.Contains(page, "slash is escrowed") {
-		t.Errorf("the page does not mention the escrowed slash:\n%s", page)
-	}
-	if strings.Contains(page, "anyone may challenge that rating") {
-		t.Errorf("the page offers a quality challenge while a slash is escrowed:\n%s", page)
-	}
-}
+// TestAnEscrowedSlashIsAnnounced went with the quality lane: no slash is ever escrowed
 
 // The DIRECTORY's N3 page bound, which was unheld while its twin on the claims
 // list was already covered by TestRenderCourtPaginatesClaims.
@@ -825,26 +799,7 @@ func TestTheDirectoryListIsBounded(t *testing.T) {
 	}
 }
 
-// An OPEN counter re-vote is announced and its tally sealed, found surviving —
-// the flag-vote line beside it was held and this one was not. Same failure: the
-// page falls through and offers a flag slot while a re-vote is running.
-func TestAnOpenCounterReVoteIsAnnounced(cur realm, t *testing.T) {
-	who := testutils.TestAddress("ocr-a")
-	c := testCourt(cur, "ocr1", who, 50_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(who))
-	id := OpenClaim(cross(cur), "ocr1", "an open counter re-vote")
-	cs := mustClaim(c, id)
-	cs.frozenAt, cs.answerHeight, cs.answerBond0 = 100, 100, 1000
-	cs.counterOpen = true
-
-	page := Render("ocr1/" + strconv.FormatUint(id, 10))
-	if !strings.Contains(page, "counter re-vote open") {
-		t.Errorf("the page does not announce the open counter re-vote:\n%s", page)
-	}
-	if strings.Contains(page, "flag slot open") {
-		t.Errorf("the page offers a flag slot during a counter re-vote:\n%s", page)
-	}
-}
+// TestAnOpenCounterReVoteIsAnnounced went with the quality lane: there is no counter re-vote
 
 // Render's path handling: the shapes it accepts and the ones it must refuse.
 //

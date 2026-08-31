@@ -131,7 +131,7 @@ func TestTheBallotTakesSpamAndRefusesAbstain(cur realm, t *testing.T) {
 	// THE COURT'S OWN RECORD KEEPS THE COURT'S WORD. PullCarrot matches this
 	// against cs.carrotChoice, which is written in this realm's vocabulary — a
 	// record saying "abstain" could never match a "spam" payout.
-	v := cs.qVoted.Get("d" + beClaimKey(uint64(cs.proposalID)) + string(carol))
+	v := cs.voted.Get("d" + beClaimKey(uint64(cs.proposalID)) + string(carol))
 	if v == nil {
 		t.Fatal("the court must record the vote it just cast")
 	}
@@ -306,7 +306,7 @@ func TestTheSpamDiscardPaysEveryoneButTheAuthor(cur realm, t *testing.T) {
 	}
 	// And the flagger's own ballot is on record under the COURT's word, so it
 	// can match carrotChoice at pull time.
-	v := cs.qVoted.Get("d" + beClaimKey(uint64(cs.decidedPID)) + string(flag))
+	v := cs.voted.Get("d" + beClaimKey(uint64(cs.decidedPID)) + string(flag))
 	if v == nil || v.(string) != voteSpam {
 		t.Fatalf("the spam voter's ballot must be recorded as %q, got %v", voteSpam, v)
 	}

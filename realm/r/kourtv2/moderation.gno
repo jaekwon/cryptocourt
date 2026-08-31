@@ -330,8 +330,8 @@ type modAct struct {
 }
 
 // pendingTTLBlocks is how long an unfired m-of-n approval stays valid: 7 days,
-// the same duration as flagCooldownBlocks and the default votingBlocks. This
-// realm's unit for "a body gets this long to decide" — and a set of at most 32
+// the same duration as the default votingBlocks. This is decideWindowBlocks,
+// the realm's unit for "a body gets this long to decide" — and a set of at most 32
 // self-selected moderators should not get longer than a whole court electorate
 // gets for a dispute. §3.2's own runbook targets an m-of-n purge "within 72h",
 // so a week is already 2.3× the operating target.
@@ -340,7 +340,7 @@ type modAct struct {
 // counter-notice period, an external statutory clock that counsel must be able
 // to retune alone. Coupling an internal quorum rule to it means one of the two
 // eventually gets changed for the other's reasons.
-const pendingTTLBlocks = flagCooldownBlocks
+const pendingTTLBlocks = decideWindowBlocks
 
 // approval accumulates distinct-member approvals for an m-of-n action.
 //

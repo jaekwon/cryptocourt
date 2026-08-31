@@ -256,7 +256,7 @@ func TestTheCarrotSurvivesRollReclamation(cur realm, t *testing.T) {
 	// A non-participant votes with the verdict, which is who the carrot pays.
 	testing.SetRealm(testing.NewUserRealm(voter))
 	VoteDispute(cross(cur), "rntw6", id, "no") // uphold
-	recorded := cs.qVoted.Get("dw" + beClaimKey(uint64(pid)) + string(voter))
+	recorded := cs.voted.Get("dw" + beClaimKey(uint64(pid)) + string(voter))
 	if recorded == nil {
 		t.Fatal("fixture is vacuous: no court-side weight was recorded, so " +
 			"nothing is being shown to survive")
@@ -301,96 +301,5 @@ func drainForCarrot(cur realm, slug string, cs *claimState) {
 	panic("fixture is vacuous: the reservoir never covered the draw")
 }
 
-// THE QUALITY LANE, which this file never covered and which votelock.gno calls "the
-// hardest lane to rent into regardless, because the anchor is the ANSWERER's".
-//
-// That claim was true and unenforced. The other two lanes let the actor pin their own
-// anchor — OpenDispute and OpenElection both do — so the rental there is a solo move.
-// Quality is anchored at cs.qualityEpoch, set inside PostAnswer, and the answerer is
-// barred from voting their own claim's quality by Q2. So renting this lane takes TWO
-// parties: an answerer who pins the epoch and a second address that votes it. That is a
-// higher bar, and it is not a wall, so the floor and the lock still have to hold.
-//
-// Both orderings, because the first fix stopped one and left the other at 599x:
-// sell-then-vote is refused by the FLOOR, and vote-then-sell by the LOCK.
-func TestRentedWeightCannotVoteQualityEitherWayRound(cur realm, t *testing.T) {
-	author := testutils.TestAddress("rwq-author")
-	whale := testutils.TestAddress("rwq-whale")
-	renter := testutils.TestAddress("rwq-renter")
-	keeper := testutils.TestAddress("rwq-keeper")
-	flagger := testutils.TestAddress("rwq-flagger")
-	c := testCourt(cur, "rwq", author, 60_000_000_000)
-	c.coin.Mint(whale, 300_000_000_000)
-	c.coin.Mint(flagger, 5_000_000_000)
+// TestRentedWeightCannotVoteQualityEitherWayRound went with the quality lane: the quality ballot is gone; the dispute ballot's own rented-weight rule is pinned separately
 
-	testing.SetRealm(testing.NewUserRealm(author))
-	id := OpenClaim(cross(cur), "rwq", "A claim whose quality can be rented?")
-	matureOI(cur, "rwq", id, author, 2_000_000_000)
-
-	// The rental is taken BEFORE the answer, because the answer is what pins the
-	// epoch this lane weighs at. Two parties by construction: the author answers.
-	testing.SetRealm(testing.NewUserRealm(whale))
-	TransferCC(cross(cur), "rwq", renter, 200_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(whale))
-	TransferCC(cross(cur), "rwq", keeper, 20_000_000_000)
-	testing.SkipHeights(epochBlocks * 2)
-	touch(c)
-
-	testing.SetRealm(testing.NewUserRealm(author))
-	PostAnswer(cross(cur), "rwq", id, sideYES)
-	cs := mustClaim(c, id)
-	pinned := c.coin.PastVotes(renter, cs.qualityEpoch)
-	if pinned <= 0 {
-		t.Fatal("fixture: the rental is not checkpointed at the quality epoch, so " +
-			"there is nothing for the floor to refuse")
-	}
-
-	// A quality question, opened by a fourth party so the renter stays a
-	// non-participant and Q2 does not do the refusing for us.
-	testing.SetRealm(testing.NewUserRealm(flagger))
-	OpenFlag(cross(cur), "rwq", id)
-	if !qualityQuestionOpen(cs) {
-		t.Fatal("fixture: no quality question is open")
-	}
-	_, fullBar := qualityBars(c, cs)
-	if fullBar <= 0 || pinned/fullBar < 10 {
-		t.Fatalf("fixture is vacuous: a rental worth %d against a full bar of %d "+
-			"is not the attack this test exists to refuse", pinned, fullBar)
-	}
-	t.Logf("the rental stands at %dx the quality full bar (%d against %d)",
-		pinned/fullBar, pinned, fullBar)
-
-	// ORDERING ONE — SELL THEN VOTE. Repay first, then try to vote the checkpoint.
-	// The checkpoint is untouched and the floor is what refuses.
-	testing.SetRealm(testing.NewUserRealm(renter))
-	TransferCC(cross(cur), "rwq", whale, DisposableOf("rwq", renter))
-	uassert.Equal(t, pinned, c.coin.PastVotes(renter, cs.qualityEpoch))
-	testing.SetRealm(testing.NewUserRealm(renter))
-	uassert.AbortsContains(t, cur, "no longer hold", func() {
-		VoteQuality(cross(cur), "rwq", id, qualityHigh)
-	})
-
-	// THE PAIR: the keeper held throughout and votes its full pinned weight. Without
-	// this the floor could be a wall refusing everybody and the test would not know.
-	keeperPinned := c.coin.PastVotes(keeper, cs.qualityEpoch)
-	if keeperPinned <= 0 {
-		t.Fatal("fixture is vacuous: the keeper has no pinned weight")
-	}
-	testing.SetRealm(testing.NewUserRealm(keeper))
-	VoteQuality(cross(cur), "rwq", id, qualityMid)
-	rec := cs.qVoted.Get(beClaimKey(cs.qVoteSeq) + string(keeper))
-	if rec == nil {
-		t.Fatal("the keeper's quality vote was not recorded")
-	}
-	uassert.Equal(t, keeperPinned, rec.(int64))
-
-	// ORDERING TWO — VOTE THEN SELL, which the floor alone left open at 599x on the
-	// verdict lane. The keeper has now voted, so its own repayment is what must be
-	// refused, and by the LOCK rather than the floor.
-	testing.SetRealm(testing.NewUserRealm(keeper))
-	uassert.AbortsContains(t, cur, "not enough uncommitted CC", func() {
-		TransferCC(cross(cur), "rwq", whale, keeperPinned)
-	})
-	uassert.Equal(t, keeperPinned, VoteLockedOf("rwq", keeper))
-	uassert.Equal(t, int64(0), disposable(c, keeper))
-}

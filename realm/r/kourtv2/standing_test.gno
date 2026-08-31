@@ -91,25 +91,7 @@ func TestOverturnCreditsTheDisputerWithoutACredEligibleGate(cur realm, t *testin
 	uassert.Equal(t, int64(0), Standing("sg4", mallory))
 	uassert.Equal(t, before+want, Standing("sg4", bob))
 }
-
-func TestFlagStandingScalesWithWhatTheSlashDestroyed(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("sg5-alice")
-	c, _, _ := standingFixture(cur, "sg5", alice)
-
-	// The base is what BURNED, not the bond. On the slashGrade branch the bond
-	// comes back whole (the half-burn arm requires !slashGrade), and
-	// flagBondFor multiplies by flagCycles, which an inconclusive-LOW advances
-	// while ALSO returning the bond whole — so a bond base was both unrisked
-	// and free to quadruple.
-	const burned = int64(19_100_000)
-	creditFlagSlash(c, alice, burned)
-	uassert.Equal(t, burned*standingFlagBps/10000, Standing("sg5", alice))
-
-	// A rescued slash burns nothing, so it credits nothing.
-	bob := testutils.TestAddress("sg5-bob")
-	creditFlagSlash(c, bob, 0)
-	uassert.Equal(t, int64(0), Standing("sg5", bob))
-}
+// TestFlagStandingScalesWithWhatTheSlashDestroyed went with the quality lane: the flag standing category is dormant and nothing credits it
 
 // ------------------------------------------------- the splitting invariant --
 
@@ -370,35 +352,7 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	uassert.False(t, adjudicated(&claimState{slotConsumed: true}))
 }
 
-// ---------------------------------------------------- the hooks, end to end --
-//
-// THESE PIN THE CALL SITES, WHICH NOTHING ELSE DID. Every other test in this
-// file calls a credit function directly, so it pins the RULE and not the WIRING:
-// measured, three of the four hooks could be deleted from quality.gno,
-// dispute.gno and crystallize.gno with the whole suite still green, and the
-// `cs.overturnBy` stamp that fixes the headline bug in the log could be reverted
-// wholesale. A rule nothing calls is not a defence.
-
-func TestTheFlagHookFiresAtSettlementAndPaysTheOriginationFlagger(cur realm, t *testing.T) {
-	c, id, _, bob, _, slash, _ := slashSetup(cur, t, "sh1")
-
-	// The slash is only RESERVED at ResolveFlag, and ResolveCounter can still
-	// rescue it — so nothing may be credited yet. This half of the assertion is
-	// what stops the credit drifting back to the reservation, which is where it
-	// was written first and where it survived a repudiation the money reverses.
-	uassert.Equal(t, int64(0), Standing("sh1", bob))
-
-	cs := mustClaim(c, id)
-	testing.SkipHeights(cs.pendingSlashUntil - heightNow() + 1)
-	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("sh1-x")))
-	ResolveSlashWindow(cross(cur), "sh1", id)
-
-	want := (cs.dustBurns + slash) * standingFlagBps / 10000
-	uassert.Equal(t, want, Standing("sh1", bob))
-	if want <= 0 {
-		t.Fatalf("a settled slash must credit its flagger: %d", want)
-	}
-}
+// TestTheFlagHookFiresAtSettlementAndPaysTheOriginationFlagger went with the quality lane: there is no flagger to pay
 
 func TestTheDisputeHookFiresAtFinalizeAndPaysTheOverturner(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("sh2-alice")

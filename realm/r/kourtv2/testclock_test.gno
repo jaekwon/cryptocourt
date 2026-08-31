@@ -569,10 +569,13 @@ func TestBannerNamesTheBlocks(cur realm, t *testing.T) {
 }
 
 // THE ACCEPTANCE TEST for the whole height override: a claim walked from open
-// to crystallized WITHOUT MINING A SINGLE BLOCK. Before this, the same journey
-// cost ~17,280 real blocks — about two hours of a machine doing nothing else —
-// because Crystallize is barred until that height and heights could not be
-// moved. Now it is four transactions.
+// to crystallized WITHOUT MINING A SINGLE BLOCK, in four transactions.
+//
+// The ~17,280-block cost this was built to remove was Crystallize's quiet window,
+// which is gone with the quality lane — so the journey is now cheap for two
+// independent reasons. The override still earns its keep on the emission path
+// (third acceptance test below), where the barrier is 120,960 blocks and is not
+// going anywhere.
 func TestClaimReachesCrystallizeWithoutMining(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("acc-a")
 	bob := testutils.TestAddress("acc-b")
@@ -618,11 +621,16 @@ func TestClaimReachesCrystallizeWithoutMining(cur realm, t *testing.T) {
 		t.Fatal("the claim should have settled")
 	}
 
-	// Crystallize is barred until priorityWindowBlocks of HEIGHT — the gate
-	// that used to cost two hours of mining.
-	uassert.AbortsContains(t, cur, "quiet window", func() {
-		Crystallize(cross(cur), "acc1", id)
-	})
+	// THE HEIGHT GATE THIS TEST WAS BUILT AROUND IS GONE. Crystallize was barred
+	// until priorityWindowBlocks past the last flag event, and on a young chain
+	// that anchor was block 0, so the journey cost ~17,280 real blocks. The quality
+	// lane took the anchor with it (crystallize.gno records why), so crystallize is
+	// reachable here with no height advance at all.
+	//
+	// The advance stays, and deliberately: the override is still the thing under
+	// test, the third acceptance test below still needs it for EMISSION, and a
+	// height advance that crystallize no longer requires must not START failing.
+	// What is no longer asserted is a refusal, because there is no longer a refusal.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AdvanceTestHeight(cross(cur), priorityWindowBlocks+1)
 	Crystallize(cross(cur), "acc1", id)
@@ -728,52 +736,7 @@ func TestWorstCaseTouchAfterTheFullHeightBudget(cur realm, t *testing.T) {
 	}
 }
 
-// MEDIUM-1's closure, proven rather than assumed. An audit noted that a LIVE
-// height skew cannot express a boundary: a scenario advancing to one block
-// short of a gate races real block production, so it passes on a fast machine
-// and fails on a slow one, and the failure reads as a realm bug. That is the
-// same defect the file's "FROZEN, NOT SKEWED" note records for time.
-//
-// With the height frozen (round 40), the boundary is exact and stays exact no
-// matter how many blocks the chain produces underneath. This test asserts BOTH
-// sides of the gate and skips real blocks in between — with a live skew those
-// blocks would carry the claim over the line and the refusal below would fail.
-func TestAHeightBoundaryIsExactUnderRealBlockProduction(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("bd-a")
-	resetTestClock(alice)
-	defer resetTestClock(alice)
-	tcArmed, tcEverArmed, tcBase, tcFloor = true, true, testingTime(), testingTime()
-	tcHeightBase, tcHeightFloor = testingHeight(), testingHeight()
-	c := testCourt(cur, "bd1", alice, 50_000_000_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "bd1", "Is a height boundary exact?")
-	Stake(cross(cur), "bd1", id, sideYES, 9_000_000_000)
-	cs := mustClaim(c, id)
-	cs.verdictAt = heightNow() // settled, so only the quiet window stands between
-	cs.answer = sideYES
-	cs.answerer = alice
-
-	// One block SHORT of the quiet window. The gate is `now < lastFlagEventAt +
-	// priorityWindowBlocks` and lastFlagEventAt is 0 on an unflagged claim, so
-	// it is an ABSOLUTE height — advancing by the window from a non-zero base
-	// would sail straight past it, which is how the first draft of this test
-	// crystallized on the call that was supposed to be refused.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	AdvanceTestHeight(cross(cur), priorityWindowBlocks-1-heightNow())
-	testing.SkipHeights(500) // real blocks, which must not move the gate
-	uassert.AbortsContains(t, cur, "quiet window", func() {
-		Crystallize(cross(cur), "bd1", id)
-	})
-
-	// Exactly one more, by the override.
-	testing.SetRealm(testing.NewUserRealm(alice))
-	AdvanceTestHeight(cross(cur), 1)
-	testing.SkipHeights(500)
-	Crystallize(cross(cur), "bd1", id)
-	if !cs.crystallized {
-		t.Fatal("one block past the window must clear the gate, exactly")
-	}
-}
+// TestAHeightBoundaryIsExactUnderRealBlockProduction went with the quality lane: its whole subject was the quiet window's exact boundary — refused one block short, cleared one block past — and that gate is gone. The property it really pinned, that AdvanceTestHeight moves an ABSOLUTE height while mined blocks do not move an override-relative gate, now has no absolute-height gate in the realm to demonstrate it against; if one is ever added, this is the test to bring back
 
 // MEDIUM-4: an emitted event carries the realm's height, which on a fabricated
 // chain disagrees with the height the CHAIN stamps on the same transaction. An
