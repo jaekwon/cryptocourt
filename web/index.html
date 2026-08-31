@@ -1342,6 +1342,14 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
    one short number and the coin's name has to sit next to it to mean anything. */
 .ticket .argrow{display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
 .ticket .argrow .sendin{min-width:9ch; font-family:var(--mono)}
+/* An amount the court would refuse. Border AND text, so it is not colour alone. */
+/* The focus rule sets border-color too and is declared later, so it won and the
+   field went accent-blue at the exact moment it was supposed to read as wrong.
+   The invalid state has to beat focus, because it is always focused when it is
+   set — that is the point of setting it. */
+.sendin[aria-invalid="true"],
+.sendin[aria-invalid="true"]:focus{border-color:var(--contra); color:var(--contra);
+  outline-color:var(--contra)}
 .helper .err{color:var(--contra)}
 .copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
   border:1px solid var(--line-2); border-radius:var(--r); padding:3px 7px; align-self:center}
@@ -2980,6 +2988,12 @@ document.addEventListener("mouseleave", (e) => {
   const t = e.target;
   if(t && t.matches && t.matches(".bigchart svg")) chartHoverShow(t, null);
 }, true);
+/* A CORRECTED FIELD STOPS BEING WRONG. Without this the red survives the fix,
+   which teaches a reader that the mark means nothing. */
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if(t && t.id === "stakeamt") t.removeAttribute("aria-invalid");
+});
 document.addEventListener("error", (e) => {
   const t = e.target;
   if (!t || !t.classList) return;
@@ -3492,15 +3506,23 @@ async function adenaSign(func, args, el){
       const f = document.getElementById("stakeamt");
       const raw = f? String(f.value||"").trim() : "";
       const coins = Number(raw);
-      if(!raw || !isFinite(coins) || coins<=0){
-        // the court comes from the button's own args: `slug` is a route local
-        // and this handler is delegated from the document.
-        note("Enter how much to stake, in "+ccSym((args||{}).courtSlug)+" — a number above zero.");
-        if(f) f.focus();
-        return;
-      }
+      /* THE FIELD SAYS IT, NOT A SENTENCE UNDER THE BUTTON. A note explaining
+         that an amount must be a number above zero is a paragraph about the
+         control the reader is already looking at; marking the control and
+         putting the cursor in it says the same thing in the place they have to
+         go anyway. aria-invalid as well as the colour, because a red border is
+         nothing to a screen reader. Cleared on the next keystroke — see the
+         input listener below. */
+      const bad = () => {
+        if(!f) return;
+        f.setAttribute("aria-invalid","true");
+        f.focus(); f.select();
+        const n = el.parentElement && el.parentElement.querySelector(".txnote");
+        if(n) n.remove();
+      };
+      if(!raw || !isFinite(coins) || coins<=0){ bad(); return; }
       const micro = Math.round(coins*1e6);
-      if(micro<=0){ note("That is smaller than the smallest unit the court counts."); return; }
+      if(micro<=0){ bad(); return; }   // under the smallest unit the court counts
       const keys = Object.keys(args||{});
       vals = keys.map(k => k==="amount"? String(micro) : String(args[k]));
     }
