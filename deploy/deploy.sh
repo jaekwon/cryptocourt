@@ -106,6 +106,23 @@ for f in $LOCAL_SCRIPTS; do
 	media.js
 	LIST
 done
+# THE PREVIEW IMAGE MUST EXIST, and at the URL the tags claim. A card that 404s
+# is worse than no card: X and Slack cache the miss for days, so the fix does not
+# show up when you make it. The page names https://<host>/og.png absolutely
+# because no crawler follows a data: URI.
+say "checking the link-preview image"
+OG=$(grep -oE '<meta property="og:image" content="[^"]+"' web/index.html |
+     sed 's/.*content="//;s/"//' | head -1)
+if [ -n "$OG" ]; then
+	OGFILE="web/$(basename "$OG")"
+	[ -f "$OGFILE" ] || { echo "the overlay claims og:image $OG but $OGFILE does not exist" >&2; exit 1; }
+	# and it is the card the source draws, not a stale export
+	if command -v node >/dev/null 2>&1; then
+		node scripts/make-og-card.js --check || exit 1
+	fi
+	echo "    $OGFILE  $(wc -c < "$OGFILE" | tr -d ' ') bytes  →  $OG"
+fi
+
 say "stamping the overlay's chain config"
 # THE SHIPPED PAGE MUST NOT OPEN IN DEMO. web/index.html defaults to
 # {mode:"demo", rpc:"http://127.0.0.1:26657", chainid:"dev"} because that is the
@@ -198,6 +215,11 @@ say "uploading"
 "${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html.new"
 "${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js.new"
 "${SCP[@]}" web/media.js "$HOST:$WEBROOT/media.js.new"
+# `[ ... ] && cmd` would abort the whole script under `set -e` when the test is
+# false, which is the ordinary case of a page with no card.
+if [ -n "${OGFILE:-}" ]; then
+	"${SCP[@]}" "$OGFILE" "$HOST:$WEBROOT/$(basename "$OGFILE").new"
+fi
 "${SCP[@]}" deploy/kourtchat.service "$HOST:/tmp/kourtchat.service"
 
 say "installing"
@@ -214,6 +236,9 @@ say "installing"
   chmod 0644 $WEBROOT/chat.js
   mv $WEBROOT/media.js.new $WEBROOT/media.js
   chmod 0644 $WEBROOT/media.js
+  # the link-preview card, before index.html — so the page never names a file
+  # that is not there yet
+  if [ -f $WEBROOT/og.png.new ]; then mv $WEBROOT/og.png.new $WEBROOT/og.png; chmod 0644 $WEBROOT/og.png; fi
   mv $WEBROOT/index.html.new $WEBROOT/index.html
   chmod 0644 $WEBROOT/index.html
 

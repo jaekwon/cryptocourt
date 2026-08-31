@@ -10,20 +10,37 @@
      this one file and never runs its JavaScript, so #/c/orem/1 and #/ are the
      same document to it — a per-claim og:title is not something a hash-routed
      static page can express, and faking one would show every claim the same
-     preview. There is no og:image for the same reason: a data: URI is ignored by
-     every major crawler, and a fixed hosted image would be a picture of a claim
-     that is not the one being shared. The share panel's downloadable card is the
-     answer instead: the sharer attaches a picture of the actual claim, which is
-     what Polymarket's per-market card achieves through a server this page does
-     not have. web/README.md records what a server would need to do. -->
+     preview. The share panel's downloadable card is the answer for a specific
+     claim: the sharer attaches a picture of the actual claim, which is what
+     Polymarket's per-market card achieves through a server this page does not
+     have. web/README.md records what a server would need to do.
+
+     THE IMAGE IS THE SITE'S OWN FACE, which is the one picture that is true of
+     every URL here. This used to carry no og:image at all, on the grounds that a
+     fixed image would misrepresent whichever claim was being shared — right about
+     a claim, wrong as a reason to have none, because the sir is not a claim. A
+     data: URI still cannot be used (no major crawler follows one), so og.png is a
+     real file shipped beside this one and named absolutely, and deploy.sh will
+     refuse to ship a page whose og:image it is not also uploading. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Kourt">
+<meta property="og:url" content="https://kourt.xyz/">
 <meta property="og:title" content="Kourt — the ledger of record">
 <meta property="og:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://kourt.xyz/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A monocled gentleman raising a glass, over the word Kourt.">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Kourt — the ledger of record">
 <meta name="twitter:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<meta name="twitter:image" content="https://kourt.xyz/og.png">
+<meta name="twitter:image:alt" content="A monocled gentleman raising a glass, over the word Kourt.">
+<!-- The tab icon is the same drawing as the rail's mark, and follows the
+     browser theme: an SVG favicon carries its own stylesheet, so
+     prefers-color-scheme works inside it. Was ⚖️, which every platform
+     draws differently. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='32 8 136 136'%3E%3Cstyle%3E*{fill:%23111;stroke:none}circle.m{fill:none;stroke:%23111;stroke-width:9}@media(prefers-color-scheme:dark){*{fill:%23e6edf2}circle.m{stroke:%23e6edf2}}%3C/style%3E%3Cpath d='M70 16 L130 16 L130 54 L70 54 Z'/%3E%3Cpath d='M40 58 C68 49 132 49 160 58 C132 67 68 67 40 58 Z'/%3E%3Ccircle class='m' cx='118' cy='94' r='18'/%3E%3Ccircle cx='118' cy='94' r='6'/%3E%3Ccircle cx='82' cy='96' r='6'/%3E%3Cpath d='M100 124 C89 110 65 107 54 118 C65 120 71 125 75 131 C83 141 94 138 100 130 C106 138 117 141 125 131 C129 125 135 120 146 118 C135 107 111 110 100 124 Z'/%3E%3C/svg%3E">
 <style>
 /* ============================================================================
    Kourt overlay — a presentation layer over the r/kourt/kourtv2 realm.
@@ -172,6 +189,8 @@ code,.mono{font-family:var(--mono)}
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
 .brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
 .brand .scale{font-size:26px; filter:grayscale(.2)}
+.brand .sir{display:flex; flex:none; color:var(--ink)}
+.brand .mark:hover .sir{color:var(--accent)}
 .brand h1{font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.05}
 .brand .tag{color:var(--muted); font-size:12.5px; margin-top:6px; letter-spacing:.02em}
 .nav{padding:14px 12px; display:flex; flex-direction:column; gap:2px}
@@ -1391,6 +1410,27 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 /* THE ACCOUNT WIDGET. Fixed top-right; the pop is anchored to it and closes on
    Escape, on an outside click, and on navigation. */
 .acct{position:fixed; top:10px; right:12px; z-index:35}
+.forkme{position:fixed; bottom:0; right:0; z-index:34; width:172px; height:172px;
+  overflow:hidden; pointer-events:none}
+.forkme>*{pointer-events:auto}
+/* THE BAND IS A REAL ELEMENT, not a ::before with the text in `content`. The sir
+   has to ride inside the band, and an absolutely-placed glyph over a rotated
+   pseudo-element lands wherever the rotation origin puts it — it came out
+   clipped past the end of the stripe. One rotated flex row carries both. */
+/* MEASURED, not guessed. At 230px wide sitting 31px up, the mark hung 16px below
+   the viewport and got clipped — the band's ENDS are meant to be cut by the
+   corner, its content is not. 200/48/-34 is the first geometry where the glyph's
+   box is fully on screen at every width the ribbon shows at. */
+.forkme .band{position:absolute; bottom:48px; right:-34px; width:200px; padding:7px 0;
+  transform:rotate(-45deg); pointer-events:auto;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  background:var(--accent); color:var(--accent-ink);
+  font-family:var(--mono); font-size:11.5px; font-weight:700; letter-spacing:.09em;
+  text-transform:uppercase; box-shadow:0 1px 8px rgba(0,0,0,.28)}
+.forkme .sir{display:flex; flex:none; color:currentColor}
+.forkme:hover .band{background:var(--accent-2)}
+.forkme:focus-visible .band{outline:2px solid var(--ink); outline-offset:2px}
+@media(max-width:900px){ .forkme{display:none} }
 .acctbtn{display:inline-flex; align-items:center; gap:7px; cursor:pointer;
   padding:6px 10px; border:1px solid var(--line-2); border-radius:8px;
   background:var(--surface); color:var(--ink); font:12px var(--sans);
@@ -1481,7 +1521,23 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 <aside class="rail">
   <div class="brand">
     <a class="mark" href="#/">
-      <span class="scale">⚖️</span>
+      <!-- THE SIR. Monocle, top hat, waxed moustache — the mark is drawn, not
+           an emoji, because ⚖️ renders as a different picture on every platform
+           and a site's own face should not be one of those. Hat and moustache
+           are filled and the monocle is stroked, all in currentColor, so the
+           whole thing inverts with the theme instead of needing a second copy.
+           Everything smaller than the head is left out on purpose: at 16px in a
+           browser tab, a chin line and a wine glass are noise. The full figure —
+           glass raised, "Gentlemen." — is the share card, where there is room.
+           The same paths are in the favicon above; favicon_test compares them. -->
+      <span class="sir" aria-hidden="true"><svg viewBox="32 8 136 136" width="30" height="30">
+        <path fill="currentColor" d="M70 16 L130 16 L130 54 L70 54 Z"/>
+        <path fill="currentColor" d="M40 58 C68 49 132 49 160 58 C132 67 68 67 40 58 Z"/>
+        <circle cx="118" cy="94" r="18" fill="none" stroke="currentColor" stroke-width="9"/>
+        <circle cx="118" cy="94" r="6" fill="currentColor"/>
+        <circle cx="82" cy="96" r="6" fill="currentColor"/>
+        <path fill="currentColor" d="M100 124 C89 110 65 107 54 118 C65 120 71 125 75 131 C83 141 94 138 100 130 C106 138 117 141 125 131 C129 125 135 120 146 118 C135 107 111 110 100 124 Z"/>
+      </svg></span>
       <span><h1>Kourt</h1></span>
     </a>
     <div class="tag">Stake on claims of fact. Your principal always returns 1×.</div>
@@ -10765,5 +10821,22 @@ applyTheme(CFG.theme);
 initControls();
 render().then(()=>{ const t=atTarget(); if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); } });
 </script>
+<!-- FORK ME. Bottom-right, because top-right is taken: .acct is fixed there and
+     a ribbon over it would cover the reader's own address. Below the map's
+     z-index too, so opening a map covers the ribbon rather than the ribbon
+     sitting on the map. Gone under 900px, where a corner band is 20% of the
+     screen. rel="noopener" is not decoration — deploy.sh refuses to ship a page
+     with an unmarked external href, which is how a page stays self-contained. -->
+<a class="forkme" href="https://github.com/jaekwon/cryptocourt" target="_blank" rel="noopener"
+   aria-label="Fork Kourt on GitHub">
+  <span class="band"><span class="sir" aria-hidden="true"><svg viewBox="32 8 136 136" width="17" height="17">
+    <path fill="currentColor" d="M70 16 L130 16 L130 54 L70 54 Z"/>
+    <path fill="currentColor" d="M40 58 C68 49 132 49 160 58 C132 67 68 67 40 58 Z"/>
+    <circle cx="118" cy="94" r="18" fill="none" stroke="currentColor" stroke-width="11"/>
+    <circle cx="118" cy="94" r="7" fill="currentColor"/>
+    <circle cx="82" cy="96" r="7" fill="currentColor"/>
+    <path fill="currentColor" d="M100 124 C89 110 65 107 54 118 C65 120 71 125 75 131 C83 141 94 138 100 130 C106 138 117 141 125 131 C129 125 135 120 146 118 C135 107 111 110 100 124 Z"/>
+  </svg></span>Fork me on GitHub</span>
+</a>
 </body>
 </html>

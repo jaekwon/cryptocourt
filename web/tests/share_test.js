@@ -484,12 +484,42 @@ ok("the clip is handed the note, the address, the series and the timeline",
 
 // --- link previews, and the promise not to fake one ------------------------
 ok("site-level og tags exist", src.includes('property="og:title"') && src.includes('property="og:description"'));
-ok("twitter card declared", src.includes('name="twitter:card" content="summary"'));
-// summary_large_image without an image renders as a bare card; and a per-claim
-// og:image is not something a hash-routed static file can mint. The comment is
-// the deliverable — it stops the next person adding a fixed image that shows
-// the wrong claim.
-ok("no og:image is claimed", !/property="og:image"/.test(src) && !/name="twitter:image"/.test(src));
+// A large-image card, because there is now an image worth showing: the site's
+// own drawing, which is true of every URL here in a way a claim picture is not.
+ok("twitter card declared", src.includes('name="twitter:card" content="summary_large_image"'));
+ok("both preview images name an absolute https URL — a crawler follows no data: URI",
+   src.includes('property="og:image" content="https://kourt.xyz/og.png"')
+   && src.includes('name="twitter:image" content="https://kourt.xyz/og.png"'));
+ok("the card declares its size and its alt text",
+   src.includes('property="og:image:width" content="1200"')
+   && src.includes('property="og:image:height" content="630"')
+   && src.includes('property="og:image:alt"') && src.includes('name="twitter:image:alt"'));
+{
+  // and the file exists, at the size the tags claim. A card that 404s is worse
+  // than no card: the platforms cache the miss.
+  const p = require("path").join(__dirname, "..", "og.png");
+  const b = require("fs").existsSync(p) ? require("fs").readFileSync(p) : null;
+  ok("web/og.png exists", !!b && b.length > 2000);
+  // PNG IHDR: width and height are big-endian uint32 at bytes 16 and 20.
+  ok("web/og.png really is 1200x630",
+     !!b && b.readUInt32BE(16) === 1200 && b.readUInt32BE(20) === 630);
+  ok("and it is small enough for a link unfurl", !!b && b.length < 300000);
+}
+// WHAT MAY NOT HAPPEN, now that there IS an image. A per-claim og:image is not
+// something a hash-routed static file can mint: the crawler never runs the
+// router, so every claim would unfurl as whichever one was baked in. The site's
+// own drawing is the one picture true of every URL here. So: exactly one image,
+// never interpolated, and shipped by the same script that ships the page — a
+// card that 404s is worse than no card, because the platforms cache the miss.
+{
+  const imgs = src.match(/(?:property="og:image"|name="twitter:image")\s+content="[^"]*"/g) || [];
+  ok("exactly one preview image, declared twice (og + twitter)", imgs.length === 2);
+  ok("the image is never interpolated per route", !imgs.some(t => t.includes("${")));
+  ok("and is a file, not a data: URI", !imgs.some(t => t.includes("data:")));
+  const dep = require("fs").readFileSync(
+    require("path").join(__dirname, "..", "..", "deploy", "deploy.sh"), "utf8");
+  ok("deploy.sh uploads the file the tags name", dep.includes("og.png"));
+}
 ok("the reason is written down where the tags are", /a per-claim og:title is not something/.test(src));
 ok("README records what a server would need", fs.readFileSync(
    require('path').join(__dirname,'..','README.md'), 'utf8').includes("og:image"));

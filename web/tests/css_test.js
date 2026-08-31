@@ -150,5 +150,40 @@ if (mediaDark && themeLight && themeDark) {
   ok("court stats: no second strip above the columns", !header.includes('grid stats'));
 }
 
+// THE MARK IS DRAWN IN THREE PLACES and must be one drawing: the rail, the
+// favicon, and the fork-me ribbon. Nothing in a browser can tell you they have
+// drifted — the tab icon is 16px and nobody compares it to the sidebar — so the
+// paths are compared here. The favicon cannot share a variable with the DOM (it
+// is an attribute in <head>, read before any script runs), which is exactly the
+// situation that produces two copies of one shape.
+{
+  const paths = where => {
+    const seg = src.slice(where.a, where.b);
+    return (seg.match(/d=['"]([^'"]+)['"]/g) || []).map(t =>
+      t.replace(/^d=['"]/, "").replace(/['"]$/, "").replace(/\s+/g, " ").trim());
+  };
+  const iconRaw = /<link rel="icon" href="data:image\/svg\+xml,([^"]+)"/.exec(src);
+  ok("the favicon is an svg data URI", !!iconRaw);
+  const icon = decodeURIComponent((iconRaw ? iconRaw[1] : "").replace(/%23/g, "#"))
+    .replace(/\s+/g, " ");
+  const iconPaths = (icon.match(/d='([^']+)'/g) || [])
+    .map(t => t.slice(3, -1).replace(/\s+/g, " ").trim());
+  const railA = src.indexOf('<span class="sir" aria-hidden="true">');
+  const rail = paths({a: railA, b: src.indexOf("</svg>", railA)});
+  const forkA = src.indexOf('class="forkme"');
+  const fork = paths({a: forkA, b: src.indexOf("</svg>", forkA)});
+  ok("the rail draws the hat, the brim and the moustache", rail.length === 3);
+  ok("the favicon draws the same three paths, in the same order",
+     iconPaths.length === 3 && iconPaths.every((d, i) => d === rail[i]));
+  ok("the ribbon draws the same three paths, in the same order",
+     fork.length === 3 && fork.every((d, i) => d === rail[i]));
+  // and the favicon must not smuggle a second stylesheet into this file: a
+  // literal <style> inside that attribute is what every tool slicing this file
+  // on "<style>" would find first — this harness did, and started checking the
+  // favicon's four rules instead of the page's thousand.
+  ok("the favicon's markup is percent-encoded, so the page has ONE <style>",
+     (src.match(/<style>/g) || []).length === 1);
+}
+
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);
