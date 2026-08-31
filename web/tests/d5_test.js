@@ -94,7 +94,18 @@ ok("unlisted court line", src.includes("unlisted — hidden from the directory b
 ok("docket short-window note (hedged per critic F1)", src.includes("hidden or unreadable claim") && src.includes("a hidden claim's page still answers by id."));
 
 // opened-by + answer record
-ok("opened-by reads once, claim route only", (src.match(/ClaimAuthor\(/g)||[]).length===3);
+/* FOUR CALL SITES, AND THE CLAIM ROUTE STILL READS IT ONCE. The fourth is
+   claimParties' fallback, which exists because the participant guard on "Open
+   the rewards" needs the author and cannot trust that its caller supplied one —
+   the route used to read it into a LOCAL and never put it on `d`, so the guard
+   bailed silently and a reader met the panic in their wallet instead. The route
+   sets d.author now, which is what keeps the fallback from ever firing there:
+   that assignment is asserted below, and it is the thing that makes "reads
+   once" still true. */
+ok("opened-by has one read per caller that needs it",
+   (src.match(/ClaimAuthor\(/g)||[]).length===4);
+ok("...and the claim route puts it on d, so the fallback never fires there",
+   src.includes("if(author) d.author = author;"));
 // "opened by" is prose and sets in the sans; the address is a machine string
 // and is the only mono in the row. The whole span used to be mono, which is
 // why it read as a fourth typeface in a six-item row.

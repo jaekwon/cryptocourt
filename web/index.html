@@ -1994,7 +1994,7 @@ const DEMO_CHAIN = {
     "orem/4":{ timeline:"opened:1785554400:4500000;answered:1786454400:4680000;verdict:1786754400:4740000;now:1787054400:4800000", title:"Q3 city revenue exceeded the June forecast.",
       author:"g1youdemoholder0000000000000000000000000",
       yesStake:180_000_000, noStake:20_000_000, convYes:1707589, convNo:189732, trailYes:90,
-      phase:"settled", verdict:0, answer:1, route:"vote", tier:2, tierFinal:true, record:3,
+      phase:"settled", verdict:0, answer:1, answerer:"g1answerkeeper00000000000000000000000000", route:"vote", tier:2, tierFinal:true, record:3,
       crystallized:true, draw:{w:1_644_800, a:164_480, ans:0, carrot:12_320},
       pulls:{winnerPaid:false, authorPaid:false, answererPaid:false} },
     // provClose — three failed rounds, everyone 1×
@@ -2320,6 +2320,26 @@ async function claimDetail(slug,id){
 
    Reads nothing new — positionOf is the same pair of StakeOf calls the vote
    lane and the me page already make. */
+/* WHO THE CLAIM'S PARTIES ARE, asked rather than assumed. The participant guard
+   needs the author and the answerer, and its first version read them off `d` —
+   where the claim route had never put the author (it read it into a local, for
+   one line of "opened by") and the sample had never carried the answerer on its
+   settled claim. Both absences made the guard bail silently, which is how a
+   reader still met the panic in their wallet after the guard shipped.
+   A control that decides whether to grey itself has to fetch its own inputs. */
+async function claimParties(slug, id, d){
+  let a2 = (d && d.author) || null, b2 = (d && d.answerer) || null;
+  if(a2 && b2) return {author:a2, answerer:b2};
+  if(!isLive()){
+    const c = DEMO.claims[slug+"/"+id] || {};
+    return {author: a2 || c.author || null, answerer: b2 || c.answerer || null};
+  }
+  const s2 = gstr(slug);
+  const [ra, rb] = await Promise.all([
+    a2? Promise.resolve(a2) : one(`ClaimAuthor(${s2},${id})`).catch(()=>null),
+    b2? Promise.resolve(b2) : one(`Answerer(${s2},${id})`).catch(()=>null)]);
+  return {author: ra, answerer: rb};
+}
 async function fillWithdrawSides(slug, id, d, nowH, vAt){
   if(!CFG.addr) return;
   /* KEYED ON data-wside, WHICH stakeTicket WRITES, not on the button's own
@@ -2343,10 +2363,11 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
      button stands, because withholding a control from somebody who could have
      used it is the worse error. */
   const crys = document.querySelector(".stakewrap .ticket [data-crys] .btn");
+  const party = crys? await claimParties(slug, id, d) : null;
   if(crys && !crys.getAttribute("data-blocked") && vAt && nowH!=null
      && (nowH - vAt) < FINALIZE_GRACE
-     && d && d.author!=null && d.answerer!=null
-     && d.author!==CFG.addr && d.answerer!==CFG.addr
+     && party && party.author!=null && party.answerer!=null
+     && party.author!==CFG.addr && party.answerer!==CFG.addr
      && !(+p.yes > 0) && !(+p.no > 0)){
     crys.setAttribute("data-blocked",
       "Only this claim's author, its answerer and its stakers can open the rewards in the first week after the verdict. Anyone can after that.");
@@ -7427,6 +7448,13 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // opened-by: a file names who opened it — one read, claim page only
   const author = isLive()? await one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null)
                          : ((DEMO.claims[slug+"/"+id]||{}).author||null);
+  /* ONTO d, not just into a local. This read existed only to print "opened by"
+     and stayed a local variable, so every later question about who the author
+     is answered undefined — including the participant guard on Open the
+     rewards, which requires author, answerer and stake to all say no and
+     therefore never fired at all. It greyed nothing, and a reader pressed the
+     button and met the panic in their wallet. */
+  if(author) d.author = author;
   // shortAddr() elides the middle — g1oremf…0000 — and the full address appears
   // nowhere else on this route, so reading the page aloud gave an address that
   // cannot be used. The elision is for the eye; the value is for everyone.

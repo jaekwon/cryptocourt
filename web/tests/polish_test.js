@@ -147,10 +147,19 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
   ok("...the guard is gated on the mirrored window, not a literal",
      /\(nowH - vAt\) < FINALIZE_GRACE/.test(src));
   ok("...it greys only when author, answerer and stake all say no",
-     /d\.author!==CFG\.addr && d\.answerer!==CFG\.addr/.test(src)
+     /party\.author!==CFG\.addr && party\.answerer!==CFG\.addr/.test(src)
      && /!\(\+p\.yes > 0\) && !\(\+p\.no > 0\)/.test(src));
   ok("...and stands whenever any of them is unknown",
-     /vAt && nowH!=null/.test(src) && /d\.author!=null && d\.answerer!=null/.test(src));
+     /vAt && nowH!=null/.test(src) && /party\.author!=null && party\.answerer!=null/.test(src));
+  /* AND IT FETCHES ITS OWN INPUTS. The first version read the parties off `d`,
+     where the route had never put the author and the sample had never carried
+     the answerer on its settled claim — so it bailed silently and shipped
+     greying nothing at all. A control deciding whether to grey itself cannot
+     trust that its caller populated the fields. */
+  ok("...and reads the parties rather than trusting the caller",
+     /async function claimParties\(slug, id, d\)/.test(src)
+     && /one\(`ClaimAuthor\(\$\{s2\},\$\{id\}\)`\)/.test(src)
+     && /one\(`Answerer\(\$\{s2\},\$\{id\}\)`\)/.test(src));
   ok("...saying who may, in the page's own words",
      /author, its answerer and its stakers can open the rewards in the first week/.test(src));
   // The chest: this button collects rather than signs a statement.
