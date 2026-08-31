@@ -124,5 +124,31 @@ if (mediaDark && themeLight && themeDark) {
      onlyLight.length === 0 && onlyDark.length === 0);
 }
 
+// THE COURT'S FIGURE STRIP: two columns, and the edges follow from that count.
+// The strip is drawn as one ruled instrument — vertical rules between cells, no
+// outer edges — which only works if CSS knows which cell starts a row. It moved
+// from full width into the left column, where four cells no longer fit, and the
+// first two attempts to rule the wrapped grid were both wrong: at 820 the third
+// cell lost its left edge, at 420 the second row lost its top one. A fixed two
+// columns is the fact these three rules depend on, so assert it is not overridden
+// anywhere below — a breakpoint that re-wraps the strip silently un-rules it.
+{
+  const stat = src.match(/\.courtstats \.grid\.stats\{([^}]*)\}/g) || [];
+  ok("court stats: exactly one grid-template-columns for the in-column strip", stat.length === 1);
+  ok("court stats: two columns", /repeat\(2,\s*minmax\(0,1fr\)\)/.test(stat[0] || ""));
+  ok("court stats: row-start cells drop the left rule",
+     /\.courtstats \.grid\.stats>div:nth-child\(2n\+1\)\{border-left:0\}/.test(src));
+  ok("court stats: the second row gains a top rule",
+     /\.courtstats \.grid\.stats>div:nth-child\(n\+3\)\{border-top:1px solid var\(--rule\)\}/.test(src));
+  // and the strip is inside the left column, which is what puts the Join panel
+  // at the top of the page instead of 200px below the header rule.
+  const cols = src.indexOf('return `<div class="cols"><div id="qscope">`');
+  const call = src.indexOf("+ courtStatsHtml(slug, s)", cols);
+  ok("court stats: rendered as the head of the left column", cols > 0 && call > cols && call - cols < 120);
+  const hs = src.indexOf('main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])');
+  const header = src.slice(hs, src.indexOf("+ courtBody(slug, s,", hs));
+  ok("court stats: no second strip above the columns", !header.includes('grid stats'));
+}
+
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);

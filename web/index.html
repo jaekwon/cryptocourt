@@ -256,6 +256,16 @@ section{margin-top:34px}
   background:transparent; border:1px solid var(--rule)}
 .grid.stats>div{border-left:1px solid var(--rule); border-radius:0}
 .grid.stats>div:first-child{border-left:0}
+/* IN THE COLUMN THE STRIP IS A 2x2 BLOCK, at every width. auto-fit gave three
+   across and one orphan on a second row, with the rules still drawn as if it
+   were one line — the orphan carried a left edge and no top edge. Fixing that
+   per breakpoint went wrong twice, because which cell starts a row is exactly
+   what auto-fit will not tell CSS: at 820 the third cell lost its left edge, at
+   420 the second row lost its top one. Two columns always, and the edges follow
+   from the count. */
+.courtstats .grid.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.courtstats .grid.stats>div:nth-child(2n+1){border-left:0}
+.courtstats .grid.stats>div:nth-child(n+3){border-top:1px solid var(--rule)}
 .card{
   background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
   padding:18px; box-shadow:var(--shadow-sm); text-decoration:none; color:inherit; display:block;
@@ -743,6 +753,12 @@ button.helplink:hover{color:var(--accent)}
 /* buy receipt — reuses the ticket's row token inside the join panel */
 .buyrcpt{padding:12px 14px; margin:0 0 4px; background:var(--inset)}
 .buyrcpt .line{font-size:13px; grid-template-columns:minmax(0,1fr); row-gap:3px; column-gap:0}
+/* THE HALF ABOVE THE BUTTON IS A CONTROL, NOT A RECEIPT. Stacked, its two rows
+   ran 190px and pushed the button that far down the panel; side by side they
+   are half that and the button rides near the top. The receipt below keeps the
+   stacked form — it is read, not operated. */
+.buyrcpt.compact .line{grid-template-columns:max-content minmax(0,1fr); column-gap:10px; align-items:baseline}
+.buyrcpt.compact .line .r{text-align:right}
 /* The receipt lives in the 288px join rail, where the ticket's 20ch label track
    leaves the value ~100px and "185.2 KOURT:OREM / 185,241,936 units" wraps into
    a ragged stack. Label above value instead — the rail is too narrow for two
@@ -4564,12 +4580,6 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
           ${s.tier===0? `<span class="tfact">unlisted — hidden from the directory by moderation; this page is reachable by direct link only.</span>`:""}</div>
        </div>
        </div>`
-    + `<section><div class="grid stats">
-        <div class="stat"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
-        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply,slug)}</div><div class="sub">${cc(s.emitted,slug)} of it earned as rewards</div></div>
-        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims settling and paying out</div></div>
-        <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
-       </div></section>`
     + courtBody(slug, s, claims, docketPager, chainF, allRows, docketPagerBot,
         {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0})
     + `<div id="courtchat"></div>`;
@@ -6732,7 +6742,7 @@ function joinPanel(slug, s){
   }else{
     BUYCTX = {slug, minted, supply:s.supply, price:s.price};
     const q = BUYQ = curveQuote(minted, s.supply, 100000000n);
-    body = `<div class="ticket buyrcpt">
+    body = `<div class="ticket buyrcpt compact">
           <div class="line"><span class="l"><label for="buyamt">You send</label></span>
             <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="100" autocomplete="off" aria-describedby="buynote"> GNOT
               <small id="buyugnot">= ${fmtN(1e8)} µGNOT</small></span></div>
@@ -6752,7 +6762,6 @@ function joinPanel(slug, s){
      the button carries the one fact that must be read before pressing; the rest
      is true and belongs under it. */
   return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
-        <p class="small" style="margin:0 0 10px"><b>${sym} cannot be sold back.</b> The GNOT is burned.</p>
         ${body}
         <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
        </div>`;
@@ -6780,6 +6789,19 @@ function refreshBuyActions(){
 }
 document.addEventListener("input", ev=>{ if(ev.target && ev.target.id==="buyamt") recomputeBuy(); });
 document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack") refreshBuyActions(); });
+/* THE FIGURES SIT IN THE LEFT COLUMN, not above both. Full width they pushed the
+   whole two-column body — and the Join panel heading the right column — 200px
+   down the page, so a reader who came to buy met four reference numbers first
+   and had to scroll for the button. In the column they are 2x2 and level with
+   the docket. */
+function courtStatsHtml(slug, s){
+  return `<section class="courtstats"><div class="grid stats">
+        <div class="stat"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
+        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply,slug)}</div><div class="sub">${cc(s.emitted,slug)} of it earned as rewards</div></div>
+        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims settling and paying out</div></div>
+        <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
+       </div></section>`;
+}
 function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pendQ){
   const cur0 = foldersFor(slug, chainF);
   // chain folders reference real ids by construction; curation is filtered
@@ -6799,6 +6821,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id])).join("");
   const idleCap = qCaption({mode:"idle", demo:!isLive(), kind:"claim titles", loaded:rowsAll.length, total:(isLive()&&s.claims!=null)? s.claims : rowsAll.length});
   return `<div class="cols"><div id="qscope">`
+    + courtStatsHtml(slug, s)
     + foldersSec
     + (pager||"")
     + qBarHtml("title or #id", idleCap)
