@@ -7430,7 +7430,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        moment you are actually pointing at instead of five fixed ones. The
        section below keeps the ladder for what a hover cannot carry: a dateless
        failed round, a verdict, the events with no point on the line. */
-    + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
+    + `<section><div class="sec-h">The signal${d.phase==="open"? ` <span class="count">staking live</span>`
+            : d.phase==="closed"? ` <span class="count">claim died unanswered</span>` : ""}</div>
         <div class="stakewrap${stakeTicketHasActions(d)?"":" solo"}">
           <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
           ${stakeTicketHasActions(d)? stakeTicket(slug,id,d) : ""}
@@ -8374,7 +8375,15 @@ function stakeTicket(slug,id,d){
        heading about how the claim resolved. A ticket that names an action and
        does not carry it is a caption. */
     return `<div class="ticket"><h3>Staking is closed</h3>
-      <div class="hint">This claim has concluded — every stake withdraws 1×.${d.phase==="settled"?" The winning side also draws its accuracy reward, once somebody opens them.":" No side won or lost; the deposit and fee were refunded."}</div>
+      <div class="hint">This claim has concluded — every stake withdraws 1×.${d.phase!=="settled"? " No side won or lost; the deposit and fee were refunded."
+        /* WHO CAN PRESS IT AND WHY, in the paragraph rather than in four words
+           under the button. "participants first week" assumed the reader knew
+           there was a priority window, what a participant was, and that anything
+           had to be opened at all — three things a first-time reader has no way
+           to know, in a note too short to say any of them. The hint has room for
+           a sentence; the button gets to be a verb. */
+        : d.crystallized? " The winning side also draws its accuracy reward, below."
+        : " Nothing has paid out yet: the rewards have to be opened first, and for a week after the verdict only people involved in this claim — its author, its answerer, anyone who staked — can do that. After that, anyone can."}</div>
       <div class="line"><span class="l">Your principal</span><span class="r">withdraw 1× now</span></div>
       ${d.phase==="settled"?`<div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>`:""}
       <div class="actions" style="margin-top:14px">
@@ -8400,7 +8409,7 @@ function stakeTicket(slug,id,d){
                    a grey that might be wrong about the reader. Greying a control
                    somebody could have used is worse than offering one they
                    cannot. */
-                (d.flagOpen||d.counterOpen)? "" : "participants first week",
+                "",
                 null,null,null,
                 (d.flagOpen||d.counterOpen)
                   ? "A quality question is still open on this claim. The draw waits until it closes — principal never does."

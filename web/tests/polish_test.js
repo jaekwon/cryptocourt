@@ -112,12 +112,20 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      /aria-disabled="true"/.test(crysOf(open)));
   ok("it stays live when the page cannot know the answer",
      !/data-blocked=/.test(crysOf(clear)));
-  // ONE rule in the note, not two. "participants first week, once flags are
-  // quiet 24h" was longer than the button it sat under; the quiet window is an
-  // edge that only bites in the hours after a flag closes, and the greyed
-  // reason covers the flag itself.
-  ok("...and states the rule it cannot check",
-     /participants first week/.test(crysOf(clear)));
+  /* THE RULE MOVED INTO THE HINT, where a sentence fits. "participants first
+     week" assumed the reader knew there was a priority window, what a
+     participant is, and that anything had to be opened at all — three things a
+     first-time reader cannot know, in a note too short to say any of them. */
+  ok("...and the card explains who may open them, in words",
+     /only people involved in this claim/.test(clear)
+     && /author, its answerer, anyone who staked/.test(clear)
+     && /After that, anyone can/.test(clear));
+  ok("...and the button itself is just the verb",
+     !/participants first week/.test(crysOf(clear)) && /Open the rewards/.test(crysOf(clear)));
+  // Once they are open the card stops explaining how to open them.
+  ok("a crystallized claim does not still describe opening",
+     !/have to be opened first/.test(
+       stakeTicket("orem", 4, Object.assign({}, settled, {crystallized:true}))));
   // The withdraw buttons beside it are never blocked — principal is never gated.
   ok("withdrawing principal is never blocked",
      !/data-blocked/.test((open.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Withdraw[\s\S]*?<\/button>/)||[""])[0]));
