@@ -1363,11 +1363,19 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .amtflash{position:absolute; right:7px; top:50%; transform:translateY(-50%);
   font:11px var(--sans); color:var(--contra); pointer-events:none;
   opacity:0; transition:opacity .12s linear}
-/* "get some →" is a way out, so it has to be reachable — the rest of the flash
-   stays inert so it never eats a click meant for the field. */
-.amtwrap.flash .amtflash a{color:var(--contra); pointer-events:auto}
-.amtwrap.flash .amtflash a:hover{color:var(--accent-2)}
 .amtwrap.flash .amtflash{opacity:1}
+/* "GET SOME" LIVES OUTSIDE THE BOX AND STAYS. It used to be injected into the
+   flash — inside the field, right-aligned behind the value, gone after 1800ms —
+   which put the only way out of "you hold none" on a timer, and behind the
+   reader's own cursor. It is the one piece of this row that is not a warning:
+   a warning that stays becomes furniture, but a way out that vanishes is worse
+   than furniture.
+   A flex sibling of .amtwrap in .ticket .argrow, so the row's own gap places it
+   and nothing has to be positioned by hand. */
+.amtget{font:11.5px var(--sans); color:var(--contra); text-decoration:none;
+  white-space:nowrap; align-self:center}
+.amtget:hover{color:var(--accent-2); text-decoration:underline}
+.amtget[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){ .amtflash{transition:none} }
 /* An amount the court would refuse. Border AND text, so it is not colour alone. */
 /* The focus rule sets border-color too and is declared later, so it won and the
@@ -2422,6 +2430,11 @@ async function fillStakeBalance(slug){
   // decides what a refused amount should SAY, and that is decided at the press.
   const w = document.getElementById("stakeamtwrap");
   if(w) w.dataset.held = String(micro);
+  /* SHOWN ON THE BALANCE, NOT ON A REFUSED CLICK. A reader holding none learns it
+     from the row rather than by pressing a button and being told no — and it is
+     the same fact either way, known here as soon as the balance is read. */
+  const g = document.getElementById("stakeget");
+  if(g) g.hidden = micro > 0;
   if(micro<=0){ out.classList.add("none"); return; }
   out.classList.remove("none");
   out.addEventListener("click", ()=>{ f.value = String(micro/1e6); f.focus(); });
@@ -3571,17 +3584,10 @@ async function adenaSign(func, args, el){
            from having typed nothing, and only one of them has somewhere to go. */
         const fl = w.querySelector(".amtflash");
         const held = +(w.dataset.held || "-1");
-        if(fl){
-          fl.textContent = "";
-          if(held === 0){
-            const a2 = document.createElement("a");
-            a2.href = "#/c/" + encodeURIComponent((args||{}).courtSlug || "") + "?at=join";
-            a2.textContent = "get some →";
-            fl.appendChild(a2);
-          } else {
-            fl.textContent = "how much?";
-          }
-        }
+        /* THE FLASH NAMES THE PROBLEM; THE LINK BESIDE THE FIELD IS THE WAY OUT,
+           and it is already on screen before this click — so this no longer has to
+           build one, and the flash goes back to being purely a warning. */
+        if(fl) fl.textContent = held === 0? "you hold none" : "how much?";
         w.classList.add("flash");
         clearTimeout(w._flash);
         w._flash = setTimeout(()=>w.classList.remove("flash"), 1800);
@@ -8842,7 +8848,8 @@ function stakeTicket(slug,id,d){
              inputmode="decimal" value="0" autocomplete="off" aria-describedby="stakebal"
              aria-label="amount to stake, in ${esc(ccSym(slug))}"
              ><span class="amthave" id="stakebal" title="Stake all of it"></span
-             ><span class="amtflash" aria-hidden="true"></span></span>
+             ><span class="amtflash" aria-hidden="true"></span></span
+      ><a class="amtget" id="stakeget" href="${esc("#/c/" + encodeURIComponent(slug) + "?at=join")}" hidden>get some <span aria-hidden="true">&rarr;</span></a>
     </div>
     <div class="actions" style="margin-top:10px">
       ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
