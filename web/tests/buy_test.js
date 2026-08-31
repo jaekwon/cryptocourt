@@ -181,14 +181,16 @@ CFG.mode='demo';
 
 // ---- round 62: the tx has to carry a ceiling a Buy fits inside ----
 //
-// Adena greyed out Approve and said nothing. DoContract was called with
-// `messages` alone, so the wallet supplied its own gas ceiling, simulated,
-// hit out-of-gas and disabled the button — no error, no reason on screen.
-// Measured on a live node, `Buy` on a 20-claim court costs 27,954,243 gas
+// Measured on a live node, no write to this realm fits inside the 10,000,000-gas
+// ceiling this page printed: SetCourtDesc, one string field, costs 20,087,222,
+// and `Buy` costs 27,954,243 plus a 217,500ugnot storage deposit
 // (`gnokey maketx call -func Buy -args covid -send 100000000ugnot
-//  -simulate only -broadcast`), against the 10,000,000 both Adena's default
-// and this page's printed command were offering. Every other call fits in 10M,
-// which is why staking and voting worked and only buying did not.
+//  -gas-wanted 900000000 -simulate only -broadcast`). ~20M is the fixed cost of
+// loading the realm. The command could not execute anything.
+//
+// It is NOT why Adena greys out Approve: Adena honours a dApp-supplied fee only
+// for session messages and simulates every /vm.m_call itself. The fields are
+// still sent, because a wallet that does honour them must not get 10M.
 const BUY_GAS_MEASURED = 27954243;
 // the eval'd slice declares these with const, which does not escape its own
 // eval scope — so read the same two lines out of the source directly.
