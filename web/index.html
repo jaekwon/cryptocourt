@@ -3365,7 +3365,8 @@ function signHelp(el){
     <div class="bd">
       ${hasWallet
         ? `<p>Adena is installed but this page is not connected to it yet. Connect once and the action continues — you will still see the transaction before you approve it.</p>
-           <div class="actions"><button type="button" class="btn" data-connect>Connect Adena</button></div>`
+           <div class="actions"><button type="button" class="btn" data-connect>Connect Adena</button></div>
+           <p class="small" data-connect-why role="alert" hidden></p>`
         : `<p>${fileTrap
              ? "No wallet found — and extensions do not run on <span class=\"mono\">file://</span> pages at all. Serve this folder (<span class=\"mono\">python3 -m http.server</span>) and reload, then install Adena from adena.app."
              : "No wallet found. Install the Adena extension from adena.app, then press the button again."}</p>`}
@@ -3388,12 +3389,21 @@ function signHelp(el){
       if(c.disabled) return;
       c.disabled = true;
       c.classList.add("busy"); c.setAttribute("aria-busy","true");
-      try{ await adenaConnect(); }
+      let why = null;
+      try{ why = await adenaConnect(); }
       finally{ c.disabled = false; c.classList.remove("busy"); c.setAttribute("aria-busy","false"); }
+      /* A FAILED CONNECT KEEPS THE DIALOG AND SAYS WHY, HERE. Closing on failure
+         was indistinguishable from the button doing nothing at all — which is
+         how it was reported. The reason was already being written to the rail
+         hint, behind this modal. */
+      if(!CFG.addr){
+        const slot = dlg.querySelector("[data-connect-why]");
+        const msg = why || "Adena did not connect, and gave no reason.";
+        if(slot){ slot.textContent = msg; slot.hidden = false; }
+        return;
+      }
       close();
-      // Only re-fire if the connect actually took. Clicking again on a failed
-      // connect would reopen this same dialog in a loop.
-      if(CFG.addr) el.click();
+      el.click();
     }
   });
   dlg.addEventListener("close", ()=> dlg.remove());
@@ -3412,9 +3422,18 @@ function adenaAbsent(){
     ? "No wallet found. Extensions do not run on file:// pages — serve this folder (python3 -m http.server) and reload, or install Adena from adena.app."
     : "No wallet found. Install the Adena extension (adena.app), then click again.";
 }
+/* RETURNS THE FAILURE, and that return value is the fix for a bug the owner hit
+   on the live site: "clicking the popup connect button doesn't do anything".
+   It did do something — it failed, and it wrote WHY into #wallethint, which sits
+   at the foot of the LEFT RAIL. That is behind the modal doing the asking. So
+   the dialog closed, CFG.addr was still unset, nothing re-fired, and the only
+   account of what happened was parked in a corner of the page the reader had no
+   reason to look at.
+   The rail hint stays, because the rail's own button has no better place to put
+   it. What is new is that callers WITH a better place can now get the string. */
 async function adenaConnect(){
   const a = window.adena;
-  if(!a){ adenaAbsent(); return; }
+  if(!a){ adenaAbsent(); return "No wallet found."; }
   try{
     const est = await a.AddEstablish("Kourt");
     if(est.code!==0 && est.code!==4001){ throw new Error(est.message||("code "+est.code)); }
@@ -3423,9 +3442,12 @@ async function adenaConnect(){
     CFG.addr = acct.data.address; saveCfg();
     reflectWallet();
     render();
+    return null;
   }catch(e){
+    const why = "Adena: "+(e.message||e);
     const hint = document.getElementById("wallethint");
-    hint.hidden=false; hint.textContent = "Adena: "+(e.message||e);
+    if(hint){ hint.hidden=false; hint.textContent = why; }
+    return why;
   }
 }
 function adenaDisconnect(){ delete CFG.addr; saveCfg(); reflectWallet(); render(); }

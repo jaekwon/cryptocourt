@@ -281,10 +281,41 @@ ok("no wallet connected opens help rather than a silent new tab",
    /function signHelp\(el\)/.test(src));
 ok("...offering Connect when the extension is there",
    src.includes("data-connect") && src.includes("Connect Adena"));
+// THE SHAPE CHANGED, THE TWO GUARANTEES DID NOT. This used to pin the literal
+// `if(CFG.addr) el.click();`. The handler now takes the failure branch first, so
+// that a connect that did NOT take can say why in the dialog instead of closing
+// it — closing on failure was reported as "the connect button does nothing",
+// because the only account of the failure went to the rail hint behind the modal.
 ok("...and the interrupted action retries itself once connected",
-   /await adenaConnect\(\);[\s\S]{0,300}if\(CFG\.addr\) el\.click\(\);/.test(src));
-// A failed connect must not reopen the same dialog forever.
-ok("...but only if the connect actually took", src.includes("if(CFG.addr) el.click();"));
+   /await adenaConnect\(\);[\s\S]{0,1200}close\(\);\s*\n\s*el\.click\(\);/.test(src));
+// A failed connect must neither retry nor reopen: it returns, leaving the dialog
+// standing with the reason in it.
+// BY ORDER WITHIN THE HANDLER, not by the presence of the guard. The first
+// version matched the `if(!CFG.addr){...return;}` block and passed happily with
+// a `close()` inserted ABOVE it -- which is the entire bug, so it was testing
+// nothing. Sliced and ordered instead.
+{
+  // The END anchor is searched FROM the start anchor: confirmArgs builds a
+  // dialog earlier in the file and has its own close listener, so an unanchored
+  // indexOf found that one and produced a zero-length slice -- in which every
+  // ordering assertion below is trivially false. Caught by them failing.
+  const a = src.indexOf("let why = null;");
+  const h = src.slice(a, src.indexOf('dlg.addEventListener("close"', a));
+  // EVERY indexOf IS CHECKED FOR PRESENCE FIRST. Without the >= 0 guards, a
+  // DELETED `return;` gives -1, and -1 < indexOf("close();") is true -- so
+  // removing the guard that stops a failed connect retrying passed this
+  // assertion. Ablated, survived, fixed.
+  const at = k => { const i = h.indexOf(k); return i >= 0 ? i : Infinity; };
+  ok("...but only if the connect actually took",
+     at("if(!CFG.addr)") < Infinity && at("return;") < at("close();"));
+  ok("...and the dialog is not closed before the failure is reported",
+     at("data-connect-why") < at("close();"));
+}
+// THE MARKUP, not the selector. `data-connect-why` appears twice -- once in the
+// dialog HTML and once in the querySelector reading it -- so includes() on the
+// bare name passed with the markup deleted. Ablated and confirmed.
+ok("...and a failed connect says why, in the dialog that asked",
+   /<p class="small" data-connect-why/.test(src) && src.includes("gave no reason"));
 ok("...names the file:// trap, where no extension can ever load",
    src.includes("extensions do not run on") && src.includes("file://"));
 ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
