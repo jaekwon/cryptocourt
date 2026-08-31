@@ -88,9 +88,13 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// punishment — this bond, the slash flat arm, the flag bond, the P2 carrot
 	// clamp, both quality bars, the dispute bond, the quorum floor, the escrow
 	// window — and each of those guards a quantity set by CONVICTION, a lifetime
-	// integral. Unstake is free and KEEPS conviction (F9), so a pool that banked 11
-	// weeks at 100k CC and drained to 100 CC two hours before the answer still
-	// carries a 100k-CC prize while the 3h arm reads 100 CC, mis-pricing every
+	// integral. Unstake now forfeits conviction in proportion (stake.gno), which
+	// removes the prize half of this attack — but NOT the pricing half, which is
+	// what this paragraph is about and why it still stands: X̄frozen is the base
+	// for every BAR here, and a drained claim must not become cheap to attack
+	// merely because it was drained. Historically the two compounded: a pool that
+	// banked 11 weeks at 100k CC and drained to 100 CC two hours before the answer
+	// still carried a 100k-CC prize while the 3h arm read 100 CC, mis-pricing every
 	// consumer by the whole drain factor: a 25 CC demotion bar that lets 25 CC of
 	// weight force a conclusive LOW and zero a 7_012 CC draw at a PROFIT (the flag
 	// bond returns whole below the full bar), a 20 CC dispute bond, and a ~1 CC
@@ -119,11 +123,14 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// COLLATERALIZATION FLOOR (audit round 2). The bond must cover the slash it
 	// may later owe, or the clamp at ResolveFlag silently voids the deterrent.
 	// The slash's draw arm is 1.6× the answered side's FROZEN CONVICTION, while
-	// the bond is sized off the 3-HOUR trailing X̄ — and Unstake keeps conviction
-	// by design (F9, no-loss). So a mill could bank conviction with a large stake,
-	// drain to minAnswerX two hours before answering, and post a bond 224× smaller
-	// than the slash it had earned: caught in full, it paid ~51 CC against a
-	// 11_220 CC exposure. For a roughly constant pool the two arms both scale with
+	// the bond is sized off the 3-HOUR trailing X̄. When Unstake still kept
+	// conviction, a mill could bank it with a large stake, drain to minAnswerX two
+	// hours before answering, and post a bond 224× smaller than the slash it had
+	// earned: caught in full, it paid ~51 CC against a 11_220 CC exposure. The
+	// forfeit in stake.gno closes that gap at its source — the drained coin no
+	// longer carries frozen conviction into the slash base — and the floor is kept
+	// because it is the belt to that braces: it binds on conviction genuinely held
+	// through the answer, which is the ordinary case and not an attack. For a roughly constant pool the two arms both scale with
 	// X̄, and the floor is now EXPECTED TO BIND on any claim carrying real
 	// conviction — the draw arm reaches 30.8%·X̄ against a 6% base, and the deploy
 	// check asserts it can (it used to assert the opposite). This paragraph

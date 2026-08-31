@@ -114,14 +114,27 @@ somebody who posted no bond.** That is why it needs a supermajority rather than
 the bare majority that merely deletes the claim; the two thresholds are
 deliberately asymmetric.
 
-**Nothing in the size lane closes the drain path.** `Unstake` keeps conviction by
-design (F9, no-loss), while the answerability gate reads a 3-hour trailing
-average — so capital can be banked into the integral and drained before the
-answer. `answer.gno` records the measured attack (a bond 224× smaller than the
-slash it had earned). What deterred it was the slash, which is being removed with
-the quality lane. Size cuts AGAINST the attack — a drained claim rates small —
-but does not close it, and the bond-collateralization floor that exists to cover
-it now guards a slash that will not be there.
+**The drain path needed a separate fix, and got one.** Size cut against it — a
+drained claim rates small — but did not close it, and the deterrent that did was
+the quality lane's slash, which this change removes. `Unstake` now forfeits
+conviction **in proportion to the coin withdrawn**: you must still be holding
+when the claim is judged to be paid for it, and holding longer still pays more.
+That reverses F9's capital conservation. Principal is untouched, so no-loss is
+unaffected — it was always a promise about principal.
+
+Two things about the shape are deliberate:
+
+- **Proportional, not a flag.** "Did this position ever exit" is defeated by
+  staking 1,000, withdrawing 999 and leaving 1: the flag never fires and the
+  position keeps every unit the 1,000 earned. `TestPartialExitForfeitsInProportion`
+  IS that attack, and it is the only test that fails an all-or-nothing forfeit.
+- **Conviction only — the raw integral is spared.** Conviction is what the coin
+  EARNED and it follows the coin; the raw integral is what the claim WAS, and it
+  prices every bar in the system (the answer bond, the dispute bond, the quorum
+  floor, the tier reference). If withdrawing shrank it, draining would make a
+  claim *cheaper* to answer and to dispute — the same attack pointed the other
+  way. Scaling it broke `TestDrainedClaimPricesBarsOffLifetimeStake` on the first
+  attempt, which is what that test is for.
 
 ## Findings worth keeping
 

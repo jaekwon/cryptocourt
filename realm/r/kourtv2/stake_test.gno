@@ -260,19 +260,74 @@ func TestConvictionAccruesExactly(cur realm, t *testing.T) {
 		t.Fatalf("one week of conviction on %d = %d CC-units, want %d", S, got, want)
 	}
 
-	// Unstake keeps history; the removed stake stops earning.
+	// WITHDRAWING GIVES THE CREDIT BACK. This assertion used to read the other
+	// way — "conviction must persist after unstake" — which was F9. Unstake in
+	// stake.gno records the attack that reversed it and why principal is
+	// untouched by the change.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Unstake(cross(cur), "cv1", id, sideYES, S)
 	testing.SkipHeights(periodBlocks)
-	if after := ConvictionOf("cv1", id, sideYES, alice); after != got {
-		t.Fatalf("conviction must persist after unstake and stop growing: %d vs %d", after, got)
+	if after := ConvictionOf("cv1", id, sideYES, alice); after != 0 {
+		t.Fatalf("a full exit must forfeit every unit of conviction, got %d", after)
 	}
-	// Restake resumes accrual.
+	// Restaking accrues again, but FROM ZERO. Asserting only "resumed > 0" would
+	// pass just as well if the forfeited credit had been handed back on the way
+	// in, so the upper bound is the half of this that is worth writing.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Stake(cross(cur), "cv1", id, sideYES, S)
 	testing.SkipHeights(100)
-	if resumed := ConvictionOf("cv1", id, sideYES, alice); resumed <= got {
+	resumed := ConvictionOf("cv1", id, sideYES, alice)
+	if resumed <= 0 {
 		t.Fatal("restake must resume accrual")
+	}
+	if resumed >= got {
+		t.Fatalf("restake must start over, not restore: %d against the forfeited %d", resumed, got)
+	}
+}
+
+// A PARTIAL exit forfeits the same fraction of the conviction as of the stake.
+// This is the assertion that makes the rule real rather than decorative: the
+// cheap way to implement "you must still be holding" is a boolean — did this
+// position ever withdraw — and a boolean is defeated by staking 1,000, taking
+// 999 back and leaving 1 behind. The flag never fires, the position keeps every
+// unit of credit the full 1,000 earned, and the drain is back.
+//
+// So the fixture IS that attack: a 999/1000 exit, which a flag cannot tell apart
+// from a 1/1000 exit. Only proportionality distinguishes them.
+func TestPartialExitForfeitsInProportion(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("pf-alice")
+	testCourt(cur, "pf1", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "pf1", "Proportional forfeit")
+
+	const S = int64(1_000_000_000) // 1,000 CC
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Stake(cross(cur), "pf1", id, sideYES, S)
+	testing.SkipHeights(periodBlocks)
+	before := ConvictionOf("pf1", id, sideYES, alice)
+	if before <= 0 {
+		t.Fatal("fixture is vacuous: no conviction accrued, so there is " +
+			"nothing for a partial exit to forfeit a fraction OF")
+	}
+
+	// Withdraw 999 of the 1,000, keeping a live position.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Unstake(cross(cur), "pf1", id, sideYES, S-S/1000)
+	after := ConvictionOf("pf1", id, sideYES, alice)
+
+	// A thousandth of the stake keeps a thousandth of the credit. Compared with
+	// a tolerance rather than an equality because the forfeit divides per-unit
+	// before it multiplies, and the floor of that divide stays with the position
+	// on purpose — rounding must never leave the side pool short.
+	want := before / 1000
+	if slack := want / 100; after < want-slack || after > want+slack {
+		t.Fatalf("999/1000 exit left %d of %d conviction, want about %d",
+			after, before, want)
+	}
+	// And the bound that catches the boolean: had a flag been the mechanism,
+	// "after" would still be the whole of "before".
+	if after >= before {
+		t.Fatalf("a partial exit forfeited nothing: %d of %d", after, before)
 	}
 }
 

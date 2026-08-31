@@ -95,12 +95,19 @@ func TestConvictionDoesNotTravelWithTheCoin(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Stake(cross(cur), "tx3", id, sideYES, 5_000_000_000)
 
-	// Let the integral accumulate, then leave the position. Unstake is free and
-	// KEEPS conviction — that is F9, and it is about the integral rather than
-	// about principal — so alice's accrued conviction is real and still hers.
+	// Let the integral accumulate. Alice keeps the position and sells coin she did
+	// NOT stake, so the transfer is the only event between the two conviction
+	// reads and nothing else can explain a difference.
+	//
+	// 1,000 CC and not the whole unstaked half: staking is a LIEN and not an
+	// escrow move — the coin stays in the balance and keeps voting — so her free
+	// balance is the mint less the stake AND less the claim's deposit and fee.
+	// Selling the full half overdraws it (mustSpendable, lock.gno).
+	//
+	// This fixture used to unstake here, back when unstaking kept conviction. It
+	// cannot any more: a full exit now forfeits the credit, which would leave
+	// nothing to show not travelling. The test says so itself, below.
 	testing.SkipHeights(1_000)
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Unstake(cross(cur), "tx3", id, sideYES, 5_000_000_000)
 
 	accrued := ConvictionOf("tx3", id, sideYES, alice)
 	if accrued <= 0 {
@@ -109,10 +116,10 @@ func TestConvictionDoesNotTravelWithTheCoin(cur realm, t *testing.T) {
 	}
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	TransferCC(cross(cur), "tx3", bob, 5_000_000_000)
+	TransferCC(cross(cur), "tx3", bob, 1_000_000_000)
 
 	// Bob has the coins and none of the history, on either side.
-	uassert.Equal(t, int64(5_000_000_000), CoinBalanceOf("tx3", bob))
+	uassert.Equal(t, int64(1_000_000_000), CoinBalanceOf("tx3", bob))
 	uassert.Equal(t, int64(0), ConvictionOf("tx3", id, sideYES, bob))
 	uassert.Equal(t, int64(0), ConvictionOf("tx3", id, sideNO, bob))
 	// And alice did not lose hers by selling.

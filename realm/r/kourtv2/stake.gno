@@ -2,8 +2,11 @@
 // freely until an answer freezes the claim; principal always returns 1×. The
 // reward weight is CONVICTION: the exact integral ∫ rate(t)·stake·dt, held per
 // (staker, side) in 128 bits — rate-weighted (V2-8), so no rate snapshot exists
-// anywhere and step-downs cannot be raced; capital-conserving (unstake stops
-// accrual, history is kept, restake resumes, nothing resets — F9).
+// anywhere and step-downs cannot be raced. Unstaking FORFEITS the credit the
+// withdrawn coin earned, in proportion — you must still be holding when the
+// claim is judged to be paid for it. That reverses F9's capital conservation and
+// the reason is in Unstake. Principal is untouched: no-loss is a promise about
+// principal, and it still holds exactly.
 
 package kourtv2
 
@@ -183,9 +186,9 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	recordPools(c, cs)
 }
 
-// Unstake withdraws principal from a live claim. Accrued conviction is kept —
-// capital conservation makes the integral game-proof (F9) — but the removed
-// portion stops earning.
+// Unstake withdraws principal from a live claim, and the withdrawn coin gives
+// back the conviction it earned. See the block below for the attack that forced
+// this and for why the RAW integral is deliberately not touched.
 func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -208,6 +211,66 @@ func Unstake(cur realm, courtSlug string, claimID uint64, side int, amount int64
 		panic("kourtv2: unstaking more than is staked")
 	}
 	accrue(c, cs, p, side)
+	// WITHDRAWING GIVES BACK THE CREDIT THE WITHDRAWN COIN EARNED.
+	//
+	// This reverses F9's "unstake keeps conviction", and the reason is an attack
+	// answer.gno measured and priced: conviction is stake x time and used to
+	// survive a withdrawal, while the answer bond is sized off a THREE-HOUR
+	// trailing average of what is staked now. So a mill could bank conviction
+	// with a large stake, drain to the floor two hours before answering, and post
+	// a bond 224x smaller than the penalty it had earned — ~51 CC against 11,220
+	// CC of exposure. What made that unprofitable was the quality lane's slash,
+	// which is being removed.
+	//
+	// Rather than re-pricing the bond, the mismatch is closed at its source: the
+	// reward is priced on history and the bond on the present, so history stops
+	// counting coin that is no longer present. You must be holding when the claim
+	// is judged to earn anything, and holding longer is worth more — which is
+	// also the rule a reader would guess.
+	//
+	// PROPORTIONAL, not all-or-nothing, and that is not politeness. A flag for
+	// "did you ever exit" would be a fake fix: stake 1000, unstake 999, keep 1,
+	// and an exit flag never fires while the position keeps every unit of credit
+	// the 1000 earned. The credit has to follow the coin.
+	//
+	// NO-LOSS IS UNTOUCHED. Principal comes back 1x exactly as before; what is
+	// forfeited is the REWARD the withdrawn coin was accruing. No-loss has always
+	// been a promise about principal.
+	//
+	// CONVICTION ONLY — NOT THE RAW INTEGRAL, and the asymmetry is the design.
+	// A pre-existing test names it: X̄frozen is "the drain-resistant lifetime
+	// base". The raw integral prices every %-of-X̄ bar in the system — the answer
+	// bond, the dispute bond, the quorum floor, the tier reference — and if
+	// withdrawing shrank it, draining would make a claim CHEAPER to answer and
+	// cheaper to dispute. That is the attack pointing the other way. Scaling it
+	// here broke that test on the first pass, which is what the test is for.
+	//
+	//	conviction  = what the coin EARNED, and it follows the coin
+	//	raw integral = what the claim WAS, and history cannot be withdrawn
+	//
+	// THE SIDE POOL TOO. Position conviction and the side pool advance
+	// independently — the pool from cs.yesStake, the position from p.stake — so
+	// "the side equals the sum of its positions" only survives if the forfeit
+	// comes out of both. Left in the side, the pot would be sized on conviction
+	// no position can claim and every honest staker's share diluted by a ghost.
+	if amount > 0 && p.stake > 0 {
+		keep := p.stake - amount
+		// Per-unit first, then rebuild: conviction is stake x (accumulator
+		// delta), so dividing by the stake leaves the delta — an int64 quantity
+		// well inside div128's guard. Scaling the 128-bit product directly would
+		// need a 192-bit intermediate.
+		convPer := div128(p.convHi, p.convLo, p.stake)
+		nCHi, nCLo := bits.Mul64(uint64(convPer), uint64(keep))
+		// The floor of the per-unit divide stays with the POSITION and is never
+		// handed to the pool: rounding must not be able to leave the side short.
+		dCHi, dCLo := sub128(p.convHi, p.convLo, nCHi, nCLo)
+		p.convHi, p.convLo = nCHi, nCLo
+		if side == sideYES {
+			cs.yesConvHi, cs.yesConvLo = sub128(cs.yesConvHi, cs.yesConvLo, dCHi, dCLo)
+		} else {
+			cs.noConvHi, cs.noConvLo = sub128(cs.noConvHi, cs.noConvLo, dCHi, dCLo)
+		}
+	}
 	p.stake -= amount
 	releaseStake(c, who, amount)
 	if side == sideYES {
@@ -367,6 +430,21 @@ func mustAdd(a, b int64) int64 {
 
 // add128 adds two u128s, panicking on 128-bit overflow (unreachable at our
 // bounded magnitudes; checked anyway — the V1 discipline).
+// sub128 removes b from a. Underflow is a bug, not a clamp: every caller is
+// taking back conviction it can prove was added, so a borrow out of the top word
+// means the side accumulator and its positions have already disagreed.
+func sub128(aHi, aLo, bHi, bLo uint64) (hi, lo uint64) {
+	if aHi < bHi || (aHi == bHi && aLo < bLo) {
+		panic("kourtv2: 128-bit conviction underflow")
+	}
+	lo = aLo - bLo
+	hi = aHi - bHi
+	if aLo < bLo {
+		hi--
+	}
+	return hi, lo
+}
+
 func add128(aHi, aLo, bHi, bLo uint64) (hi, lo uint64) {
 	lo = aLo + bLo
 	carry := uint64(0)
