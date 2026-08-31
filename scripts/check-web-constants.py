@@ -151,6 +151,59 @@ def main():
                   f"{phrase!r}, which {relpath} still produces. Half a rename is "
                   f"worse than none.", file=sys.stderr)
             bad += 1
+    # THE FOLDERTREE WIRE FORMAT, both sides of it.
+    #
+    # FolderTree answers one string for the whole court, "id:parent:flags" per
+    # folder, comma-joined — and the overlay parses it with
+    #
+    #     if(bits.length !== 3) continue;
+    #
+    # so a FOURTH field added realm-side makes every row fail that test, the shape
+    # map comes out empty, and the map draws a court with no folders in it. No
+    # error, no console warning: the page just looks like an empty court, which is
+    # the worst shape a failure can take because nothing suggests where to look.
+    # Verified against kourt.xyz, which answers "1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,6:0:-".
+    #
+    # Counted on both sides rather than pattern-matched on one: the realm builds
+    # the row with two ":" writes, the overlay demands three parts, and 3 == 2 + 1
+    # is the whole agreement.
+    fpath = "realm/r/kourtv2/folders.gno"
+    try:
+        fol = open(fpath, encoding="utf-8").read()
+    except OSError:
+        print(f"check-web-constants: cannot read {fpath}", file=sys.stderr)
+        bad += 1
+        fol = ""
+    if fol:
+        m = re.search(r"func FolderTree\(courtSlug string\) string \{(.*?)\n\}", fol, re.S)
+        if not m:
+            print("check-web-constants: FolderTree is no longer declared the way "
+                  "this guard reads it, so the wire format it pins is unchecked.",
+                  file=sys.stderr)
+            bad += 1
+        else:
+            seps = m.group(1).count('+ ":" +')
+            # ANCHORED AT THE FolderTree READ. The overlay has three
+            # `bits.length !== N` checks — two `!== 2` for other row formats — and
+            # an unanchored search took the first one, so this guard reported the
+            # realm and the overlay disagreeing when they agree. The parser that
+            # matters is the one right after the read.
+            at = web.find("FolderTree(${s2})")
+            want = re.search(r"if\(bits\.length !== (\d+)\) continue;",
+                             web[at:] if at >= 0 else "")
+            if not want:
+                print("check-web-constants: the overlay no longer checks "
+                      "bits.length on the FolderTree rows — a malformed row would "
+                      "be parsed instead of skipped.", file=sys.stderr)
+                bad += 1
+            elif seps + 1 != int(want.group(1)):
+                print(f"check-web-constants: FolderTree writes {seps + 1} "
+                      f"colon-separated field(s) per row and the overlay requires "
+                      f"{want.group(1)}. Every row would fail bits.length, the "
+                      f"shape map would come out empty, and the map would draw a "
+                      f"court with no folders and no error.", file=sys.stderr)
+                bad += 1
+
     if bad:
         return 1
     print(f"check-web-constants: {len(PHRASES)} mirrored phrase(s) still agree "
