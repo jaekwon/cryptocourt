@@ -609,6 +609,20 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .bigchart .end{fill:none; stroke:var(--mark); stroke-width:1.75px; r:5px; filter:var(--ring)}
 .bigchart .endL{font:600 12px var(--mono); fill:var(--accent)}
 .bigchart .endS{font:9.5px var(--sans); fill:var(--muted)}
+/* The scale reading the end readout sits on top of. Hidden while the readout is
+   there to be read instead; the mobile rules, which drop the readout, bring it
+   back rather than leaving the scale a number short. */
+.bigchart .tickL.covered{display:none}
+/* The chart's statement of absolute time: where the window starts, where it
+   ends. HTML rather than text in the plot, so the two ends cannot be placed on
+   top of each other — see the note in signalChart. */
+.chartzone{display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  font:10.5px var(--mono); letter-spacing:.04em; text-transform:uppercase;
+  color:var(--muted); margin:2px 0 0}
+.chartzone span:last-child{text-align:right}
+/* The seam: where the hourly week meets the daily tail. In the plot because it
+   marks a place on the axis. */
+.bigchart .seamL{font:9.5px var(--mono); fill:var(--muted); letter-spacing:.04em}
 .srcnote{font-size:10.5px; color:var(--muted); margin:6px 0 0}
 .chartchips{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; font-family:var(--mono); font-size:11.5px; color:var(--ink-2)}
 .chartchips span{border:1px solid var(--line-2); border-radius:2px; padding:3px 7px; background:var(--surface)}
@@ -1257,9 +1271,19 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 @media(max-width:820px){
   body{grid-template-columns:1fr}
   .cols{grid-template-columns:1fr}
-  .bigchart .tickL,.bigchart .zone,.bigchart .evtL,.bigchart .note{font-size:20px}
-  .bigchart .endS{font-size:18px}
-  .bigchart .endL{font-size:26px}
+  /* .zone is not in the plot any more — .chartzone is real text below it and
+     needs no user-unit compensation. */
+  .bigchart .tickL,.bigchart .evtL,.bigchart .note,.bigchart .seamL{font-size:20px}
+  .chartzone{font-size:11px}
+  /* THE END READOUT COMES OFF ON A SMALL SCREEN. At the mobile size it is the
+     widest thing in the plot and it lives in a gutter 34 units deep, so it
+     reached back across the drawing and sat on whatever event label was nearest
+     the right — "now" among them. It is also the one number on the chart that is
+     restated immediately below it, in full, by the stake bar; and any point's
+     share is a hover away. The dot stays: that is the reading, and it is where
+     the line ends. */
+  .bigchart .endL,.bigchart .endS{display:none}
+  .bigchart .tickL.covered{display:inline}
   body{grid-template-rows:none}
   .rail,.main{grid-row:auto; grid-column:auto}
   .docket a.crow{grid-template-columns:44px minmax(0,1fr) auto}
@@ -7979,7 +8003,23 @@ function signalChart(slug,id,d,nowH,ser,tl){
      the series is drawn so it cannot drift from the shape: one loop, one truth. */
   const hov=[];
   const endY = Number.isFinite(r.inst)? y(r.inst) : null;
-  [[100,y(100)],[50,y(50)],[0,Y0]].forEach(([t,ty])=>{ if(endY==null || Math.abs(ty-endY)>=11) g+=`<text class="tickL" x="610" y="${ty+3}">${t}</text>`; });
+  /* RIGHT-ANCHORED, so the gutter holds them at any font size. Left-anchored at
+     610 they ran past the 640-unit viewBox the moment the mobile rules scaled
+     them up, and stayed visible only because the svg does not clip — one
+     ancestor with overflow:hidden and the readings would have vanished. */
+  /* The top tick's baseline has a floor. ty+3 puts "100" three units under the
+     100% line, which fits a 12-unit font and not the 20-unit one the mobile
+     rules apply — there its cap height reached above the viewBox, and only the
+     svg's lack of clipping kept it on screen. */
+  /* A TICK BEHIND THE END READOUT IS MARKED, NOT DROPPED. It used to be omitted
+     outright when the readout would sit on it — which was right while the
+     readout was always drawn, and became a hole the moment the mobile rules
+     hid the readout: the scale lost its top number to make room for something
+     that was not there. The emitter says "this one is covered"; the breakpoint
+     that uncovers it puts it back. */
+  [[100,y(100)],[50,y(50)],[0,Y0]].forEach(([t,ty])=>{
+    const covered = endY!=null && Math.abs(ty-endY)<11;
+    g+=`<text class="tickL${covered?" covered":""}" x="638" y="${Math.max(ty+3,19)}" text-anchor="end">${t}</text>`; });
   // washes (under marks): 72h window, escrow reopenable, scheduled future
   if(now<d1) g+=`<rect class="washf" x="${X(now)}" y="${Y100}" width="${(X(d1)-X(now)).toFixed(1)}" height="${Y0-Y100}"></rect>`;
   if(ansH!=null && d.settleAt) g+=`<rect class="wash" x="${X(ansH)}" y="${Y100}" width="${(X(Math.min(d.settleAt,d1))-X(ansH)).toFixed(1)}" height="${Y0-Y100}"></rect>`;
@@ -8011,12 +8051,15 @@ function signalChart(slug,id,d,nowH,ser,tl){
     // seam: the hourly window's left edge, when older points exist
     if(real.pts.some(p2=>p2[0]<hs) && hs>d0){
       g+=`<line class="seam" x1="${X(hs)}" y1="${Y100}" x2="${X(hs)}" y2="${Y0}"></line>`;
-      const sxm=X(hs); if(sxm>=190 && sxm<=430) g+=`<text class="zone" x="${sxm+4}" y="140">−7d · hourly</text>`;
+      // The seam label stays in the plot — it marks a POSITION on the axis, not
+      // an end of the window — so it keeps its own class now that .zone has
+      // left, and sits under the axis rather than on the row the strip used.
+      const sxm=X(hs); if(sxm>=190 && sxm<=430) g+=`<text class="seamL" x="${sxm+4}" y="139">−7d · hourly</text>`;
     }
     const endShare = (!frozen && Number.isFinite(r.inst))? r.inst : lastShare;
     if(endShare!=null){
       g+=`<circle class="end" cx="${X(endH)}" cy="${y(endShare)}" r="4"></circle>
-<text class="endL" x="612" y="${y(endShare)+4}">${endShare}%</text><text class="endS" x="612" y="${y(endShare)+16}">${d.phase!=="open"?"frozen":"YES now"}</text>`;
+<text class="endL" x="638" text-anchor="end" y="${y(endShare)+4}">${endShare}%</text><text class="endS" x="638" text-anchor="end" y="${y(endShare)+18}">${d.phase!=="open"?"frozen":"YES now"}</text>`;
     }
   } else if(demo && ds){
     const sx=f=>X(ds.x0+f*ds.span);
@@ -8025,13 +8068,13 @@ function signalChart(slug,id,d,nowH,ser,tl){
     g+=`<path class="ar" d="M ${sx(0)} ${Y0} L ${P.split(" ").join(" L ")} L ${sx(1)} ${Y0} Z"></path>`;
     g+=`<polyline class="ln" points="${P}"></polyline>`;
     g+=`<circle class="end" cx="${sx(1)}" cy="${y(r.inst)}" r="4"></circle>
-<text class="endL" x="612" y="${y(r.inst)+4}">${r.inst}%</text><text class="endS" x="612" y="${y(r.inst)+16}">${d.phase!=="open"?"frozen":"YES now"}</text>`;
+<text class="endL" x="638" text-anchor="end" y="${y(r.inst)+4}">${r.inst}%</text><text class="endS" x="638" text-anchor="end" y="${y(r.inst)+18}">${d.phase!=="open"?"frozen":"YES now"}</text>`;
   } else if(!demo){
     if(Number.isFinite(r.life)) g+=`<g><line class="ref" x1="${PL}" y1="${y(r.life)}" x2="${PR}" y2="${y(r.life)}"></line><circle class="hit" cx="${(PL+PR)/2}" cy="${y(r.life)}" r="10"><title>Lifetime conviction ratio ${r.life}% YES — stake × time over the claim's whole history.</title></circle><circle class="evtDot" cx="${(PL+PR)/2}" cy="${y(r.life)}" r="0"></circle><text class="evtL" x="${PL+2}" y="${y(r.life)-5}">lifetime ${r.life}%</text></g>`;
     if(Number.isFinite(r.week)) g+=`<g><line class="band" x1="${X(Math.max(now-WEEK,d0))}" y1="${y(r.week)}" x2="${X(now)}" y2="${y(r.week)}"></line><circle class="hit" cx="${X(now-WEEK/2)}" cy="${y(r.week)}" r="10"><title>Trailing-week average ${r.week}% YES over the last ≈7 days.</title></circle><circle class="evtDot" cx="${X(now-WEEK/2)}" cy="${y(r.week)}" r="0"></circle></g>`;
     else g+=`<text class="note" x="${(PL+PR)/2}" y="${y(50)-8}" text-anchor="middle">trailing week — not enough history</text>`;
     if(Number.isFinite(r.inst)) g+=`<circle class="end" cx="${X(now)}" cy="${y(r.inst)}" r="4"></circle>
-<text class="endL" x="612" y="${y(r.inst)+4}">${r.inst}%</text><text class="endS" x="612" y="${y(r.inst)+16}">${d.phase!=="open"?"frozen":"YES now"}</text>`;
+<text class="endL" x="638" text-anchor="end" y="${y(r.inst)+4}">${r.inst}%</text><text class="endS" x="638" text-anchor="end" y="${y(r.inst)+18}">${d.phase!=="open"?"frozen":"YES now"}</text>`;
   }
   // event markers (shared anatomy); labels alternate above/below
   const evts=[];
@@ -8052,11 +8095,21 @@ function signalChart(slug,id,d,nowH,ser,tl){
        height rule rather than a stub, a ringed dot on the axis, and a label in
        the accent rather than the muted grey the other events share. */
     const isNow = e[0]===now;
+    /* A LABEL THAT WOULD RUN OFF THE PLOT GROWS THE OTHER WAY. These were always
+       start-anchored and clamped to x=560, which is a guess that holds only at
+       the desktop font: at the mobile size "settle deadline" is 128 units wide
+       and ran to 688 in a 640-unit box, saved from disappearing only by the svg
+       not clipping. The width is estimated at the LARGEST font the stylesheet
+       ever applies, so the flip is decided for the worst case rather than for
+       the one the emitter happens to imagine. */
+    const wide = e[1].length*12;
+    const flip = x + 4 + wide > PR;
     g+=`<g class="${isNow?"evNow":"ev"}"><line class="${isNow?"evtnow":"evt"}" x1="${x}" y1="${isNow?Y100:(above?ly+3:Y100)}" x2="${x}" y2="${isNow?Y0:(above?Y0:ly-9)}"></line>`
       + `<circle class="hit" cx="${x}" cy="${Y0}" r="10"><title>${esc(e[2])}</title></circle>`
       + (isNow? `<circle class="nowHalo" cx="${x}" cy="${Y0}" r="6"></circle><circle class="nowDot" cx="${x}" cy="${Y0}" r="3.2"></circle>`
               : `<circle class="evtDot" cx="${x}" cy="${Y0}" r="3"></circle>`)
-      + `<text class="${isNow?"evtL nowL":"evtL"}" x="${Math.min(x+4,560)}" y="${ly}">${esc(e[1])}</text></g>`;
+      + `<text class="${isNow?"evtL nowL":"evtL"}" x="${flip? Math.max(x-4,PL+2) : Math.min(x+4,560)}"`
+      + `${flip?` text-anchor="end"`:""} y="${ly}">${esc(e[1])}</text></g>`;
   });
   // zone strip
   // THE STRIP UNDER THE PLOT SAYS WHEN, NOT WHICH BLOCK. It read "block
@@ -8079,7 +8132,16 @@ function signalChart(slug,id,d,nowH,ser,tl){
      nothing scheduled and a claim with a vote still to close. */
   const xEnd = Math.round(x1);
   const zr = (demo && !real)? ago(xEnd) : `${stamp(xEnd)} · ${ago(xEnd)}`;
-  g+=`<text class="zone" x="${PL}" y="140">${esc(zl)}</text><text class="zone" x="${PR}" y="140" text-anchor="end">${esc(zr)}</text>`;
+  /* THE STRIP IS HTML NOW, NOT TEXT IN THE PLOT. Inside the svg its two ends
+     were absolutely placed at PL and PR, which holds only while they are short:
+     the mobile rules scale chart text to 20 units in a 640-unit viewBox — the
+     right call for legibility on a narrow screen — and at that size "12 Aug 2026
+     · ≈5.8d ago · sample" and "19 Aug 2026 · in ≈0.5d" ran straight through each
+     other. Nothing caught it because the enlarged size was never measured.
+     As a flex row under the plot it cannot collide at any size: it wraps, the
+     ends stay apart, and the font is ordinary CSS instead of a user-unit guess
+     that has to be re-tuned per breakpoint. */
+  const zstrip = `<div class="chartzone"><span>${esc(zl)}</span><span>${esc(zr)}</span></div>`;
   const capR=[["now",r.inst],["week",r.week],["lifetime",r.life]].map(([k,v])=>`${k} ${Number.isFinite(v)?v+"%":"—"}`).join(" · ");
   const aria = real
     ? `${demo? "Sample data in the chain's real form — ":""}YES-share of stakes, recorded history: ${ser.pts.length} change points since block ${fmtN(real.firstH)}; ${capR}; events at real block heights.`
@@ -8124,7 +8186,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
       + `<text class="xht" x="0" y="0"></text></g></g>` : "";
   return `<figure class="bigchart">
 <svg viewBox="0 0 640 150" role="img" aria-label="${esc(aria)}"${hovAttr}>${g}${layer}</svg>
-${srcnote? `<div class="srcnote">${srcnote}</div>`:""}</figure>`;
+${zstrip}${srcnote? `<div class="srcnote">${srcnote}</div>`:""}</figure>`;
 }
 /* The stake split, as one bar the width of the chart above it. Two numbers side
    by side made the reader do the division; the bar IS the division, and it is

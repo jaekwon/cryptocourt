@@ -175,8 +175,11 @@ for(const k of Object.keys(claims)){
    Asked of the RIGHT label against the FURTHEST event, not against a fixed
    string, so it holds for a claim with nothing scheduled too. */
 {
-  const zoneOf = h => (h.match(/<text class="zone"[^>]*>([^<]*)<\/text>/g)||[])
-    .map(t=>t.replace(/<[^>]*>/g,""));
+  // The strip is HTML under the plot now, not text inside it — placing its two
+  // ends absolutely only held while they were short, and the mobile font sizes
+  // are not short. Same two readings, read from where they live.
+  const zoneOf = h => (h.match(/<div class="chartzone">([\s\S]*?)<\/div>/)||["",""])[1]
+    .split(/<\/?span>/).map(t=>t.trim()).filter(Boolean);
   // orem/3 is disputed: a vote close sits days past now.
   const disp = signalChart("orem",3,claims["orem/3"],NOW,null);
   const zd = zoneOf(disp);
@@ -214,8 +217,8 @@ for(const k of Object.keys(claims)){
   const c={title:"T", yesStake:10, noStake:3, statusText:"answered", phase:"answered",
            answer:0, settleAt:5000+51840-10, yesConv:10, noConv:3};
   const SER={pts:[[4900,60],[4950,62]], firstH:4900};
-  const zone = h => (h.match(/<text class="zone"[^>]*>([^<]*)<\/text>/g)||[])
-    .map(t=>t.replace(/<[^>]*>/g,""));
+  const zone = h => (h.match(/<div class="chartzone">([\s\S]*?)<\/div>/)||["",""])[1]
+    .split(/<\/?span>/).map(t=>t.trim()).filter(Boolean);
   LIVE=true;
   const withTl = zone(signalChart("orem",9,c,5000,SER,TL));
   const noTl   = zone(signalChart("orem",9,c,5000,SER,null));
@@ -253,8 +256,8 @@ for(const k of Object.keys(claims)){
   LIVE=true;
   const chart = signalChart("orem",9,c,NOWH,{pts:[[4900,60],[4950,62]], firstH:4900},TL);
   LIVE=false;
-  const zones = (chart.match(/<text class="zone"[^>]*>([^<]*)<\/text>/g)||[])
-    .map(t=>t.replace(/<[^>]*>/g,""));
+  const zones = (chart.match(/<div class="chartzone">([\s\S]*?)<\/div>/)||["",""])[1]
+    .split(/<\/?span>/).map(t=>t.trim()).filter(Boolean);
   const ladder = resolutionLadder(c, NOWH, TL, false, false);
   // The furthest thing on the plot is the vote close, and the ladder has a row
   // for it. Both spell a date; they must spell the same one.
@@ -306,6 +309,61 @@ for(const k of Object.keys(claims)){
   ok("P8e and reads out nothing beyond the series",
      chartHoverAt(svg, 400)===null && chartHoverAt(svg, 0)===null);
   ok("P8e no points, no reading", chartHoverAt({getAttribute:()=>null}, 10)===null);
+}
+
+/* P8f: THE PLOT STAYS INSIDE ITS OWN BOX AT EVERY FONT SIZE. The stylesheet
+   scales chart text to 20 units in a 640-unit viewBox on a narrow screen — the
+   right call for legibility, and never measured: at that size the two ends of
+   the axis strip ran through each other, event labels reached 688 in a 640-wide
+   box, and the top tick's cap height went above the top edge. All of it stayed
+   on screen only because an svg does not clip by default, which is luck, not
+   layout. web/tests/browser measures the rendered boxes; these pin the emitter
+   decisions those measurements forced. */
+{
+  const DAY=86400;
+  const TL={ opened:{t:1600000000,h:1000}, answered:{t:1600000000+1500*DAY,h:3000},
+             now:{t:1600000000+1800*DAY,h:5000} };
+  const c={title:"T",yesStake:10,noStake:3,statusText:"answered",phase:"answered",
+           answer:0,settleAt:5000+51840};
+  LIVE=true;
+  const h=signalChart("orem",9,c,5000,{pts:[[4900,60],[4990,64]],firstH:4900},TL);
+  LIVE=false;
+  ok("P8f the axis strip is html, so its ends cannot be placed on each other",
+     h.includes('<div class="chartzone">') && !/text class="zone"/.test(h));
+  // Right-anchored at 638: the gutter holds a reading at any size.
+  ok("P8f the scale is anchored to the inside edge, not started at 610",
+     !/class="tickL[^"]*" x="61[02]"/.test(h)
+     && (h.match(/<text class="tickL[^"]*" x="638" y="\d+" text-anchor="end">/g)||[]).length===3);
+  ok("P8f ...and so is the end readout, which used to start at 612",
+     !/class="end[LS]" x="612"/.test(h)
+     && /<text class="endL" x="638" text-anchor="end"/.test(h));
+  // An event label near the right grows leftwards instead of off the edge. The
+  // estimate is taken at the LARGEST font the stylesheet applies, so the flip is
+  // decided for the worst case rather than the emitter's imagined one.
+  const labels=[...h.matchAll(/<text class="evtL[^"]*" x="([\d.]+)"( text-anchor="end")? y=/g)]
+    .map(m=>({x:+m[1], end:!!m[2]}));
+  ok("P8f every event label is inside the plot at the mobile size",
+     labels.length>0 && labels.every(l=>l.end? l.x<=606 : l.x+2*12*20<=700));
+  ok("P8f ...and at least one of them had to be flipped to stay there",
+     labels.some(l=>l.end));
+  // The top tick's baseline has a floor for the same reason.
+  const top=(h.match(/<text class="tickL[^"]*" x="638" y="(\d+)"/)||[])[1];
+  ok("P8f the top tick sits low enough for a 20-unit cap height", +top>=19);
+  // A tick behind the readout is marked, not dropped — the breakpoint that hides
+  // the readout is the one that brings the tick back.
+  /* A tick behind the readout is MARKED, not omitted — asked of the emitter and
+     the stylesheet together, because the pair is the whole mechanism: whether a
+     given claim happens to cover a tick depends on where its share lands, and
+     what must hold is that a covered one can come back. */
+  ok("P8f a covered tick is marked rather than omitted",
+     /class="tickL\$\{covered\?" covered":""\}"/.test(src)
+     && src.includes(".bigchart .tickL.covered{display:none}")
+     && /max-width:820px\)\{[\s\S]*?\.bigchart \.tickL\.covered\{display:inline\}/.test(src));
+  // and the case itself renders: a claim whose end share sits on the top tick
+  const near=signalChart("orem",9,{title:"T",yesStake:99,noStake:1,statusText:"answered",
+                                   phase:"answered",answer:0,settleAt:5000+51840},5000,null,TL);
+  ok("P8f ...and a claim that covers one actually marks it",
+     /class="tickL covered"/.test(near));
 }
 
 // P9: labels + §7.4
