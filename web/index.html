@@ -1138,6 +1138,16 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    enough that boxes are 112px of label: at that size an image is texture, and
    texture at fifty boxes is noise. */
 .mfimg{opacity:.42; pointer-events:none}
+/* The drawn stand-in for a folder with no picture. Quieter than a real one —
+   it is a pictogram this page chose, not something a moderator filed. */
+.mfglyph{fill:var(--accent); opacity:.30; pointer-events:none}
+/* The court node is already the accent colour, so its watermark is the ink of
+   the label instead — the same drawing, legible on a filled box. */
+.mcglyph{fill:var(--accent-ink); opacity:.26; pointer-events:none}
+.mcourt-a:hover .mcglyph,.mcourt-a:focus .mcglyph{opacity:.42}
+.mapsvg.far .mcglyph{display:none}
+.mfold-a:hover .mfglyph,.mfold-a:focus .mfglyph,.mfold-a.selected .mfglyph{opacity:.52}
+.mapsvg.far .mfglyph{display:none}
 .mfold-a:hover .mfimg,.mfold-a:focus .mfimg,.mfold-a.selected .mfimg{opacity:.68}
 .mapsvg.far .mfimg{display:none}
 /* The same picture on the folder's own page, where it is the subject rather
@@ -4887,7 +4897,7 @@ on(/^\/$/, async ()=>{
       <div class="stat"><div class="k">claims filed</div><div class="v tnum">${fmtN(claimsSum)}</div><div class="sub">across the ${loadedWithClaims.length} court${loadedWithClaims.length===1?"":"s"} on this page — filings, not judgments</div></div>
     </div><p class="small muted" style="margin:8px 0 0">${hiddenLine}</p></section>`;
   const card = (c,i) => `<a class="crow courtrow" data-rank="${i}"${c.claims!=null?` data-claims="${c.claims}"`:""} data-q="${esc("/"+c.slug+" "+c.name)}" href="#/c/${esc(c.slug)}">
-      ${courtFaceHtml(c.slug)}
+      ${courtFaceHtml(c.slug, c.name)}
       <span class="id">${ICN_COURT}/${esc(c.slug)}</span>
       <span><span class="t" id="cn-${esc(c.slug)}">${safeInline(c.name)}</span><span class="m" style="display:block" id="cm-${esc(c.slug)}">${c.claims!=null? `${c.claims} claim${c.claims===1?"":"s"}`:"…"}</span></span>
       <span class="px" id="cp-${esc(c.slug)}"><small>reading…</small></span>
@@ -4981,7 +4991,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     ? await one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>"")
     : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])
-    + `<div class="lead-row leadface">${courtFaceHtml(slug)}<div>
+    + `<div class="lead-row leadface">${courtFaceHtml(slug, s.name)}<div>
         <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
         ${(()=>{
           // The chain first: it stores a description now, so copy saying it
@@ -7058,8 +7068,17 @@ function mapSvg(L, data, slug){
      No <title>: the label is the court's whole name, so a tooltip would repeat
      what is already drawn. */
   const c=L.court;
+  /* The court wears its own subject too, on the same terms as its folders: a
+     watermark at the right edge, under the name. Asked WITHOUT the person
+     fallback — a court named for one word is named for a topic, not a face. */
+  const cg = subjectGlyph(c.name);
+  const cgPad = 5, cgSide = Math.max(0, c.h - cgPad*2);
   out.push(`<g class="mcourt-a" data-court="1">`
     + `<rect class="mcourt" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6"/>`
+    + (cg && cgSide >= 14
+        ? `<g class="mcglyph" transform="translate(${(c.x + c.w - cgSide - cgPad).toFixed(1)} `
+          + `${(c.y + cgPad).toFixed(1)}) scale(${(cgSide/100).toFixed(4)})">${cg}</g>`
+        : "")
     + wrapMid(c.name, c, K.fs.court, "mcourt-t", "t0") + `</g>`);
   L.folders.forEach((f,i)=>{
     /* A FOLDER SAYS ITS WHOLE NAME ON HOVER, which every claim already did and
@@ -7083,7 +7102,16 @@ function mapSvg(L, data, slug){
         + `<image class="mfimg" href="${esc(f.img)}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}"`
         + ` preserveAspectRatio="xMidYMid slice" clip-path="url(#mfi${i})" data-fid="${i}"`
         + ` referrerpolicy="no-referrer"/>`
-      : "";
+      /* NO PICTURE, SO DRAW WHAT IT IS ABOUT. Square, at the box's height, held
+         to the right edge — a watermark under the name rather than a thing
+         competing with it. The label is wrapped to the box's own width and
+         starts at the left, so the two do not fight for the same pixels. */
+      : (()=>{ const g = subjectGlyph(f.name, true); if(!g) return "";
+          const pad = 3, side = Math.max(0, f.h - pad*2), k = side/100;
+          if(side < 12) return "";   // too small to read: draw nothing
+          return `<g class="mfglyph" data-fid="${i}" transform="translate(`
+            + `${(f.x + f.w - side - pad).toFixed(1)} ${(f.y + pad).toFixed(1)}) scale(${k.toFixed(4)})">`
+            + g + `</g>`; })();
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
       + face + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
     if(!f.pseudo && f.path!=null && data.linkFolders)
@@ -8810,6 +8838,76 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board\/top$/, async (slug,id)=> boardView(slug, i
    history: a dashed lifetime reference, a trailing-week band, a "now" dot,
    and real event heights. One accent hue owns the series; events are ink
    and words (CVD-safe). */
+/* WHAT A FOLDER IS ABOUT, DRAWN. A folder can carry a real picture, and most
+   never will: setting one means uploading bytes to the archive and a moderator
+   transaction, for a heading. So a folder with no picture gets a glyph chosen
+   from its own name — a virus over "Origins", a syringe over "Vaccine safety
+   claims", a page over "The iPhone texts".
+
+   KEYWORDS, NOT A LOOKUP OF THIS DATASET. Hard-coding "covid → virus" would
+   decorate one court and no other; the table below is subject words, so a court
+   about anything gets the same treatment for free. Order matters and the
+   specific wins: "Proximal Origin" is a PAPER and must not take the virus that
+   "Origins" takes, so the document words are tested first.
+
+   A one-word name that matches nothing is drawn as a person. In a docket that is
+   nearly always what it is — somebody's name over the folder of claims about
+   them — and being wrong costs a wrong pictogram behind a label that still says
+   what the folder is. */
+const SUBJECT_WORDS = [
+  ["syringe", /vaccin|dose|jab|immunis|immuniz|booster/],
+  ["doc",     /text|e-?mail|memo|letter|paper|preprint|proximal|record|document|transcript|filing|report/],
+  ["flask",   /gain-of-function|\bgof\b|laborator|\blab\b|research|experiment|funding|grant/],
+  ["virus",   /covid|sars|cov-?2|virus|viral|pathogen|outbreak|origin|zoonot|pandemic/],
+];
+/* Drawn in a 0..100 box, one colour, no knockouts — so each works as a map
+   watermark, as a cover, at any size and in either theme. */
+const SUBJECT_GLYPHS = {
+  virus: `<circle cx="50" cy="50" r="21"/><circle cx="42" cy="45" r="4" fill-opacity=".45"/>`
+    + `<circle cx="56" cy="55" r="3" fill-opacity=".45"/><circle cx="55" cy="42" r="2.5" fill-opacity=".45"/>`
+    + [0,45,90,135,180,225,270,315].map(a=>{
+        const r=(a*Math.PI)/180, c=Math.cos(r), s2=Math.sin(r);
+        return `<rect x="${(50+c*20-2.2).toFixed(1)}" y="${(50+s2*20-2.2).toFixed(1)}" width="4.4" height="4.4"`
+             + ` transform="rotate(${a} ${(50+c*20).toFixed(1)} ${(50+s2*20).toFixed(1)})"/>`
+             + `<circle cx="${(50+c*30).toFixed(1)}" cy="${(50+s2*30).toFixed(1)}" r="5"/>`;
+      }).join(""),
+  // A bust with spectacles: enough to say "a person", short of a caricature.
+  person: `<circle cx="50" cy="33" r="15"/>`
+    + `<path d="M35 30 C36 18 64 18 65 29 C60 24 54 27 50 25 C45 27 40 26 35 30 Z"/>`
+    + `<path d="M22 84 C22 63 34 53 50 53 C66 53 78 63 78 84 Z"/>`
+    + `<g fill="none" stroke="currentColor" stroke-width="2.6">`
+    + `<circle cx="43" cy="34" r="6"/><circle cx="59" cy="34" r="6"/>`
+    + `<path d="M49 34 L53 34 M37 33 L33 32 M65 33 L69 32"/></g>`,
+  syringe: `<g transform="rotate(-38 50 50)">`
+    + `<rect x="36" y="24" width="28" height="10" rx="2"/>`
+    + `<rect x="44" y="34" width="12" height="34"/>`
+    + `<rect x="46.5" y="68" width="7" height="8"/>`
+    + `<rect x="48.5" y="76" width="3" height="12"/>`
+    + `<rect x="42" y="40" width="16" height="3" fill-opacity=".45"/>`
+    + `<rect x="42" y="48" width="16" height="3" fill-opacity=".45"/></g>`,
+  doc: `<path d="M28 16 L60 16 L74 30 L74 86 L28 86 Z"/>`
+    + `<path d="M60 16 L74 30 L60 30 Z" fill-opacity=".45"/>`
+    + `<g fill-opacity=".45"><rect x="37" y="44" width="28" height="4"/>`
+    + `<rect x="37" y="55" width="28" height="4"/><rect x="37" y="66" width="18" height="4"/></g>`,
+  flask: `<path d="M42 16 L58 16 L58 42 L74 78 C76 83 73 88 68 88 L32 88 C27 88 24 83 26 78 L42 42 Z"/>`
+    + `<path d="M33 66 L67 66 L74 78 C76 83 73 88 68 88 L32 88 C27 88 24 83 26 78 Z" fill-opacity=".4"/>`
+    + `<rect x="38" y="12" width="24" height="5" rx="2"/>`,
+};
+/* The glyph a name asks for, or null when nothing does.
+
+   THE PERSON FALLBACK IS FOR FOLDERS ONLY. Inside a docket, a one-word heading
+   is nearly always somebody's name — "Fauci" over the claims about him. A COURT
+   slug is one word by convention ("orem", "covid"), so the same rule there would
+   put a face on every court that failed to mention its own subject. Courts ask
+   without it and fall back to their initials. */
+function subjectGlyph(name, personFallback){
+  const n = String(name||"").toLowerCase().trim();
+  if(!n) return null;
+  for(const [key, re] of SUBJECT_WORDS) if(re.test(n)) return SUBJECT_GLYPHS[key];
+  if(personFallback && /^[a-z][a-z.'-]*$/.test(n)) return SUBJECT_GLYPHS.person;
+  return null;
+}
+
 /* A COURT'S FACE. Every court looked the same above the fold — a name, a seal
    chip, the same four figures — so the directory read as one long undifferentiated
    list. A court can now carry a picture (SetCourtImage), but most will not, and a
@@ -8822,22 +8920,31 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board\/top$/, async (slug,id)=> boardView(slug, i
 
    The hue is the ONLY colour on the page not from the palette, which is the point:
    it is the one thing that has to differ court by court. */
-function courtCover(slug){
+function courtCover(slug, name){
   const h = fnv1a(String(slug||"?"));
   const hue = h % 360, hue2 = (hue + 28 + (h>>>9) % 40) % 360;
   const ini = String(slug||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase() || "?";
+  /* THE SUBJECT WHERE THE NAME SAYS ONE, initials where it does not. A court
+     called "covid" gets the virus rather than the letters CO — the same table
+     the map draws folders from, so a court and its folders are drawn in one
+     vocabulary instead of two. */
+  const g = subjectGlyph(name!=null? name : slug);
   return `<svg viewBox="0 0 40 40" aria-hidden="true">`
     + `<rect width="40" height="40" fill="hsl(${hue} 32% 46%)"/>`
     + `<path d="M0 40 L40 0 L40 16 L16 40 Z" fill="hsl(${hue2} 34% 58%)"/>`
     + `<path d="M0 22 L22 0 L30 0 L0 30 Z" fill="hsl(${hue} 30% 38%)" opacity=".55"/>`
-    + `<text x="20" y="20" text-anchor="middle" dominant-baseline="central"`
-    + ` font-family="Georgia,serif" font-size="17" font-weight="600" fill="#fff"`
-    + ` fill-opacity=".92">${esc(ini)}</text></svg>`;
+    + (g
+      ? `<g transform="translate(6.5 6.5) scale(0.27)" fill="#fff" fill-opacity=".93"`
+        + ` color="hsl(${hue} 32% 46%)">${g}</g>`
+      : `<text x="20" y="20" text-anchor="middle" dominant-baseline="central"`
+        + ` font-family="Georgia,serif" font-size="17" font-weight="600" fill="#fff"`
+        + ` fill-opacity=".92">${esc(ini)}</text>`)
+    + `</svg>`;
 }
 /* The face slot: the drawn cover until a real picture arrives, and the same box
    either way so nothing reflows when it does. */
-function courtFaceHtml(slug){
-  return `<span class="courtface" id="cf-${esc(slug)}">${courtCover(slug)}</span>`;
+function courtFaceHtml(slug, name){
+  return `<span class="courtface" id="cf-${esc(slug)}">${courtCover(slug, name)}</span>`;
 }
 /* Fills the real pictures in, for a whole page of courts in ONE read. Courts with
    no picture are not in the reply at all, so their drawn cover simply stays.

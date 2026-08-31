@@ -47,6 +47,9 @@ const NOWm = src.match(/const NOW\s*=\s*([0-9_]+)/); global.NOW = Number(NOWm[1]
 
 function buildCode(patch){
   let code = '';
+// the subject glyphs the map draws on a folder with no picture — sliced,
+// so a change to the real table is a change to what these tests exercise
+  code += slice('const SUBJECT_WORDS', "/* A COURT'S FACE.");
   code += slice('function esc(', '\n');
   code += slice('function fmtN(', 'function ugnot(');
   code += 'var NOW='+global.NOW+';\n';

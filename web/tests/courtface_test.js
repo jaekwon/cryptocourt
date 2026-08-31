@@ -30,7 +30,9 @@ global.one = async e => { asked.push(e); return ONE(e); };
 const DOM = new Map();
 global.document = { getElementById: id => DOM.get(id) || null };
 
-eval(slice("function courtCover(", "function fnv1a("));
+// the glyph table the cover now draws from — sliced with it, so the two cannot
+// be tested against different vocabularies
+eval(slice("const SUBJECT_WORDS", "function fnv1a("));
 eval(slice("function fnv1a(", "function mulberry32("));
 
 (async () => {
@@ -43,7 +45,11 @@ eval(slice("function fnv1a(", "function mulberry32("));
   const body = slice("function courtCover(", "\n}");
   ok("nothing in the cover depends on the clock or on chance",
      !/Date|Math\.random|performance\./.test(body));
-  ok("it carries the court's initials", courtCover("covid").includes(">CO<"));
+  // "covid" names a subject, so it gets the virus rather than the letters; a
+  // slug that names nothing still falls back to initials.
+  ok("a court whose name says its subject gets the subject",
+     !courtCover("covid").includes(">CO<") && courtCover("covid").includes("<circle"));
+  ok("and one that does not gets its initials", courtCover("zzqq").includes(">ZZ<"));
   ok("and survives a slug with nothing to initial", /<text/.test(courtCover("-")));
   ok("the slug is escaped where it reaches the markup",
      !courtCover('"><script>').includes("<script"));

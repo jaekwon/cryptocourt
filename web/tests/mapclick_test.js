@@ -115,6 +115,9 @@ global.safeInline = s => global.esc(s);
 // THE REAL phaseClass AND statusPill, not a stub. mapSelCard renders the shared
 // pill now, and a stub here would let the card and the pill drift with no harness
 // noticing — which is how the card came to drop the verdict side in the first place.
+// the subject glyphs the map draws on a folder with no picture — sliced,
+// so a change to the real table is a change to what these tests exercise
+eval(slice('const SUBJECT_WORDS', "/* A COURT'S FACE."));
 eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
 // ...and the real body renderer, for the same reason: the card renders it.
