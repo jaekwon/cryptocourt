@@ -345,6 +345,11 @@ a.card:hover{border-color:var(--line-2)}
 /* A block of actions the round has moved past. Dimmed rather than removed, and
    dimmed at render — the async eligibility marks land on individual buttons
    after paint, and fading those would flicker. */
+/* A single control the chain would refuse right now. Same treatment as a
+   blocked ballot, one button at a time — it stays pressable so the press can
+   say why. */
+.btn[data-blocked]{opacity:.5; cursor:not-allowed}
+.btn[data-blocked]:hover{border-color:var(--line-2); background:var(--surface); box-shadow:none}
 .actions[data-voteblocked] .btn{opacity:.5; cursor:not-allowed}
 .actions[data-voteblocked] .btn:hover{border-color:var(--line-2); background:var(--surface); box-shadow:none}
 /* WAKING THE WALLET. Adena is an MV3 extension, so the first call after it has
@@ -2822,7 +2827,7 @@ function tx(func, args){
    has to replace before it means anything. Two do: StartCourt and StartCourtP
    ship slug:"my-court", name:"My Court". Everything else on this page passes
    arguments the page derived itself, which is why they no longer stop to ask. */
-function btn(label, func, args, cls, sub, send, gate, edit){
+function btn(label, func, args, cls, sub, send, gate, edit, blocked){
   // In demo mode the data is a sample: an action that links a real network to
   // sample arguments is a trap, so the button is inert and says why.
   // `send` (Buy only): a concrete "<µGNOT>ugnot" from the receipt input — it
@@ -2846,13 +2851,26 @@ function btn(label, func, args, cls, sub, send, gate, edit){
   // toggle — the dialog shows it, copyable, for anyone without a wallet — and
   // keeping it in the markup means buy_test's --send assertions still see it.
   const inner = `<span class="g">${CFG.mode==="demo"?"↗":"✍"}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
+  /* The demo carries `blocked` too. It exists to show what the live page looks
+     like, and a control the chain would refuse is part of that — the click
+     still answers "demo data", because the inert branch is tested first, but
+     the grey is on screen where a reader can see the state exists at all. */
   if(CFG.mode==="demo")
-    return `<span class="act"><button class="btn ${cls||""} inert" data-inert="1">${inner}</button></span>`;
+    return `<span class="act"><button class="btn ${cls||""} inert" data-inert="1"`
+      + (blocked? ` data-blocked="${esc(blocked)}" aria-disabled="true"` : "")
+      + `>${inner}</button></span>`;
   // NOT `disabled` while gated: a disabled button swallows the click, and the
   // click is what prints "tick the acknowledgement first". It stays pressable
   // and the handler refuses, so the refusal can explain itself.
+  /* `blocked` — the realm WOULD refuse this right now, and we know why. Greyed
+     and still pressable, for the reason the acknowledgement gate above is: a
+     disabled button swallows the click, and the click is what prints the
+     reason. Only ever passed a condition the page can actually evaluate; a
+     guess here is worse than no guess, because it withholds a control from
+     somebody who could have used it. */
   return `<span class="act"><button class="btn ${cls||""}" data-act="1"`
     + (edit? ` data-edit="1"` : "")
+    + (blocked? ` data-blocked="${esc(blocked)}" aria-disabled="true"` : "")
     + (gate? ` data-needack="1" aria-disabled="true"` : "")
     + ` data-func="${esc(func)}" data-args="${esc(JSON.stringify(args||{}))}"`
     + ` data-cli="${esc(cliCmd(func,args,send))}" data-tx="${esc(tx(func,args))}"`
@@ -3298,6 +3316,12 @@ document.addEventListener("click",(ev)=>{
     n.textContent="Demo data — actions work on a live node. Switch Source in the left rail."; return; }
   const nc = ev.target.closest("[data-nocoin]");
   if(nc){ ev.preventDefault(); noCoinHelp(nc.getAttribute("data-nocoin"), nc); return; }
+  const bl = ev.target.closest("[data-blocked]");
+  if(bl){ ev.preventDefault();
+    const box = bl.closest(".actions") || bl.parentElement;
+    let n=box.querySelector(".txnote");
+    if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); box.appendChild(n); }
+    n.textContent=bl.getAttribute("data-blocked"); return; }
   const vb = ev.target.closest("[data-voteblocked]");
   if(vb){ ev.preventDefault(); let n=vb.closest(".actions").querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); vb.closest(".actions").appendChild(n); }
@@ -8361,7 +8385,26 @@ function stakeTicket(slug,id,d){
             +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
             +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
             +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
-          : btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id})}</div></div>`;
+          : btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id},"",
+                /* WHAT THE REALM WILL REFUSE, said before the signature rather
+                   than after it. Crystallize was offered on every settled claim
+                   that had not been crystallized, and the realm turns it down in
+                   four states — an open quality question, the 24h quiet window
+                   after the last flag event, and the first week of the verdict
+                   for anyone who is not a participant.
+                   Only the first is greyed, because it is the only one this page
+                   can evaluate: flagOpen and counterOpen are already read for
+                   the quality lane. The quiet window needs lastFlagEventAt and
+                   the participant week needs the reader's stake, and neither is
+                   published — so those get a note that says the rule instead of
+                   a grey that might be wrong about the reader. Greying a control
+                   somebody could have used is worse than offering one they
+                   cannot. */
+                (d.flagOpen||d.counterOpen)? "" : "participants first week, once flags are quiet 24h",
+                null,null,null,
+                (d.flagOpen||d.counterOpen)
+                  ? "A quality question is still open on this claim. The draw waits until it closes — principal never does."
+                  : null)}</div></div>`;
   }
   if(d.phase!=="open"){
     return `<div class="ticket"><h3>Staking is frozen</h3>

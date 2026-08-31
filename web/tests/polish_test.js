@@ -24,6 +24,17 @@ global.isLive = ()=> CFG.mode==='live';
 let code = '';
 code += slice('function esc(', '\n');
 code += slice('function tx(', 'function btn(');
+// btn and stakeTicket, for the blocked-control block at the end: a greyed
+// button is a decision btn() makes from an argument stakeTicket() computes, and
+// asserting on either alone would miss the wiring between them.
+code += "const PKG='gno.land/r/kourt/kourtv2';\n";
+code += slice('const shq =', 'function cliCmd(');
+code += slice('function cliCmd(', '/* A copyable command block');
+code += slice('function btn(', '/* SHELL-QUOTED');
+code += slice('function ccSym(', 'function cc(');
+code += slice('function cc(', 'function ugnot(');   // cc is two lines, not one
+code += slice('function fmtN(', 'function ugnot(');
+code += slice('function stakeTicketHasActions(', 'function focusStakeSide(');
 code += slice('function polishLink(', '\nfunction modBanner(');
 eval(code);
 
@@ -73,5 +84,44 @@ ok("gone when the court has no polish window", polishLink("orem",7,open,null,nul
 ok("gone when the realm cannot say", polishLink("orem",7,open,null,null,null)==="");
 ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1).includes("fix the title"));
 
+
+/* A CONTROL THE CHAIN WOULD REFUSE SAYS SO BEFORE THE SIGNATURE. Crystallize was
+   offered on every settled, un-crystallized claim, and the realm turns it down in
+   four states (crystallize.gno): an open quality question, the 24h quiet window
+   after the last flag event, and the first week of the verdict for anyone who is
+   not a participant.
+   Only the first is greyed, because it is the only one this page can evaluate —
+   flagOpen and counterOpen are already read for the quality lane, while the
+   quiet window needs lastFlagEventAt and the participant week needs the reader's
+   own stake, and neither is published. Those get a note stating the rule.
+   GREYING A CONTROL SOMEBODY COULD HAVE USED is worse than offering one they
+   cannot, so the unknown cases stay live. */
+{
+  const settled = {phase:"settled", verdict:0, answer:0, route:"vote", crystallized:false,
+                   yesStake:180, noStake:20};
+  const open = stakeTicket("orem", 4, Object.assign({}, settled, {flagOpen:true}));
+  const counter = stakeTicket("orem", 4, Object.assign({}, settled, {counterOpen:true}));
+  const clear = stakeTicket("orem", 4, settled);
+  const crysOf = h => (h.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Crystallize[\s\S]*?<\/button>/)||[""])[0];
+  ok("crystallize is greyed while a quality question is open",
+     /data-blocked="[^"]*quality question is still open/.test(crysOf(open))
+     && /data-blocked=/.test(crysOf(counter)));
+  ok("...and says the draw waits, not the principal",
+     /principal never does/.test(crysOf(open)));
+  ok("...and is aria-disabled so it is not just a colour",
+     /aria-disabled="true"/.test(crysOf(open)));
+  ok("it stays live when the page cannot know the answer",
+     !/data-blocked=/.test(crysOf(clear)));
+  ok("...and states the two rules it cannot check",
+     /participants first week/.test(crysOf(clear)) && /quiet 24h/.test(crysOf(clear)));
+  // The withdraw buttons beside it are never blocked — principal is never gated.
+  ok("withdrawing principal is never blocked",
+     !/data-blocked/.test((open.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Withdraw[\s\S]*?<\/button>/)||[""])[0]));
+}
+
+/* NOTHING BELOW THIS RUNS. The summary is followed by process.exit, so a block
+   appended to the end of this file is dead code that reports ALL PASS — which
+   is exactly what happened to the block above the first time it was written
+   here. New cases go ABOVE this line. */
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);
