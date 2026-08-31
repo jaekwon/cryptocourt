@@ -39,7 +39,7 @@ code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code+=slice('function demoSeries(','async function fetchStakeSeries(');
 code+=slice('function chartHoverAt(','document.addEventListener("mousemove"');
-code+=slice('const MON=','function resolutionLadder(');  // stampDate + sinceWords
+code+=slice('function parseTimeline(','function resolutionLadder(');  // + MON, stampDate, sinceWords
 code+=slice('function resolutionLadder(','function resolutionSection(');
 code+=slice('function signalChart(','function chartChips(');
 let code2='';
@@ -298,17 +298,39 @@ for(const k of Object.keys(claims)){
      +last[2] === Math.round(zdt(SER.pts[SER.pts.length-1][0])));
   ok("P8e ...and its share is the share that was plotted",
      +last[3] === SER.pts[SER.pts.length-1][1]);
-  ok("P8e a chart with no points carries no layer to hover",
-     !/data-hov=/.test(bare) && !bare.includes('class="xh"'));
+  /* A CHART WITH NO SERIES STILL HAS MARKERS. An open claim on a live court
+     draws opened and now and nothing between them; before, that chart had no
+     hover layer at all, so the two things on it answered nothing. It carries a
+     layer with an empty point list and a populated event list. */
+  ok("P8e a chart with no series still offers its markers",
+     /data-hov=""/.test(bare) && /data-hovev="[^"]+"/.test(bare) && bare.includes('class="xh"'));
 
-  // chartHoverAt: nearest by x, and nothing at all past the line.
-  const svg={ getAttribute:k=> k==="data-hov"? "100,50,111,60;200,40,222,62" : "1",
-              getBoundingClientRect:()=>({left:0, width:640}) };
+  // chartHoverAt: nearest by x, events first, and nothing at all past both.
+  const fake = (pts, evs) => ({ getAttribute:k=> k==="data-hov"? pts
+                                : k==="data-hovev"? (evs||"") : "1",
+                                getBoundingClientRect:()=>({left:0, width:640}) });
+  const svg = fake("100,50,111,60;200,40,222,62");
   ok("P8e picks the point nearest the pointer",
      chartHoverAt(svg, 110).t===111 && chartHoverAt(svg, 190).t===222);
   ok("P8e and reads out nothing beyond the series",
      chartHoverAt(svg, 400)===null && chartHoverAt(svg, 0)===null);
-  ok("P8e no points, no reading", chartHoverAt({getAttribute:()=>null}, 10)===null);
+  ok("P8e no points and no events, no reading",
+     chartHoverAt(fake("",""), 10)===null);
+  // A MARKER ANSWERS WHERE IT IS, and wins over the line when you are on it —
+  // "settle deadline" and "now" are the two marks a reader points AT, and they
+  // used to give a native tooltip while the line beside them gave a date.
+  const withEv = fake("100,50,111,60;200,40,222,62", "300,777,settle deadline;480,888,now");
+  ok("P8e a marker names itself and its date",
+     chartHoverAt(withEv, 300).label==="settle deadline"
+     && chartHoverAt(withEv, 300).t===777
+     && chartHoverAt(withEv, 480).label==="now");
+  ok("P8e ...on the axis, not on the line", chartHoverAt(withEv, 480).y===124);
+  ok("P8e a point still wins where the line is and no marker is near",
+     chartHoverAt(withEv, 200).share===62);
+  ok("P8e ...and the marker wins when the pointer is on it",
+     chartHoverAt(fake("300,50,111,60", "300,777,settle deadline"), 300).label==="settle deadline");
+  ok("P8e still nothing in the empty stretches",
+     chartHoverAt(withEv, 620)===null);
 }
 
 /* P8f: THE PLOT STAYS INSIDE ITS OWN BOX AT EVERY FONT SIZE. The stylesheet
@@ -380,6 +402,69 @@ for(const k of Object.keys(claims)){
      /\.bigchart text\{paint-order:stroke fill; stroke:var\(--paper\); stroke-width:3px;/.test(src));
   ok("P8g ...and the hover pill is exempt, being reversed out of its own plate",
      src.includes(".bigchart .xht{stroke:none}"));
+}
+
+/* P8h: THE CHART'S MARKERS AND THE LADDER'S ROWS ARE THE SAME EVENTS. P8d
+   compared the axis strip to the ladder; the markers were never compared to
+   anything, and hovering them turned up two disagreements at once:
+
+     * the chart marked a settle deadline on a DISPUTED claim, which the ladder
+       drops on purpose — it is the date an undisputed answer would settle on,
+       and the realm keeps publishing it after a dispute takes over;
+     * "opened" on a synthesized chart was the SAMPLE WINDOW's left edge, which
+       demoSeries picks as now minus a randomised week or two. It had been the
+       wrong label all along and only became visible when a hover made it say
+       a date, four days off what the ladder said.
+
+   Both were invisible while the markers had nothing but a block height in a
+   native tooltip. */
+{
+  const DAY=86400;
+  const TL={ opened:{t:1600000000,h:1000}, answered:{t:1600000000+1500*DAY,h:3000},
+             now:{t:1600000000+1800*DAY,h:5000} };
+  const NOWH=5000, SER={pts:[[4900,60],[4990,64]], firstH:4900};
+  const marks = h => (( h.match(/data-hovev="([^"]*)"/)||["",""])[1])
+    .split(";").filter(Boolean).map(q=>{ const i=q.indexOf(","), j=q.indexOf(",",i+1);
+      return { t:+q.slice(i+1,j), label:q.slice(j+1) }; });
+  const day = t => stampDate(t);
+  const base = {title:"T", yesStake:10, noStake:3, answer:0, yesConv:10, noConv:3};
+
+  LIVE=true;
+  // The ladder's settle row comes from the TIMELINE's settle entry, which
+  // clock.gno emits only while an answer is standing undisputed — the same
+  // condition the chart now gates its marker on. Both need it to compare.
+  const TLA = Object.assign({}, TL, {settle:{t:TL.now.t+2000*5, h:NOWH+2000}});
+  const ans = Object.assign({}, base, {statusText:"answered", phase:"answered", settleAt:NOWH+2000});
+  const dis = Object.assign({}, base, {statusText:"disputed", phase:"disputed",
+                                       settleAt:NOWH+2000, round:1, voteEndsAt:NOWH+4000});
+  const mAns = marks(signalChart("orem",9,ans,NOWH,SER,TLA));
+  const mDis = marks(signalChart("orem",9,dis,NOWH,SER,TL));
+  LIVE=false;
+  const lAns = resolutionLadder(ans, NOWH, TLA, false, false);
+  const lDis = resolutionLadder(dis, NOWH, TL, false, false);
+
+  ok("P8h an answered claim marks its settle deadline, and the ladder rows it",
+     mAns.some(m=>m.label==="settle deadline") && lAns.includes("settle deadline"));
+  ok("P8h a disputed claim marks neither — the deadline stopped being the clock",
+     !mDis.some(m=>m.label==="settle deadline") && !lDis.includes("settle deadline"));
+  ok("P8h ...and it still marks what IS its clock", mDis.some(m=>m.label==="vote closes"));
+  // The day each names for the same event.
+  const mNow = mAns.find(m=>m.label==="now");
+  ok("P8h the chart's now and the ladder's now are the same day",
+     !!mNow && lAns.includes(day(mNow.t)));
+  const mAnsE = mAns.find(m=>m.label.indexOf("answered")===0);
+  ok("P8h ...and so is the answer", !!mAnsE && day(mAnsE.t)===day(TL.answered.t));
+
+  // A synthesized chart never calls its window's edge the claim's opening.
+  LIVE=false;
+  const synth = marks(signalChart("orem",4,DEMO.claims["orem/4"],NOW,null,
+                                  parseTimeline(DEMO.claims["orem/4"].timeline)));
+  ok("P8h a synthesized window says window start, not opened",
+     synth.some(m=>m.label==="window start"));
+  const op = synth.find(m=>m.label==="opened");
+  const tl4 = parseTimeline(DEMO.claims["orem/4"].timeline);
+  ok("P8h ...and any opened mark it does draw is the chain's own opening",
+     !op || (tl4 && tl4.opened && day(op.t)===day(tl4.opened.t)));
 }
 
 // P9: labels + §7.4

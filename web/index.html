@@ -611,6 +611,10 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .bigchart .xh.on{opacity:1}
 .bigchart .xhl{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:2 3}
 .bigchart .xhd{fill:var(--surface); stroke:var(--data); stroke-width:2.25}
+/* On a marker rather than on the line: the mark's own colour, so the readout
+   reads as pointing at the event and not at a reading of the series. */
+.bigchart .xh.onev .xhd{stroke:var(--accent); r:5}
+.bigchart .xh.onev .xhl{stroke:var(--accent); stroke-dasharray:none; opacity:.5}
 .bigchart .xhbox rect{fill:var(--ink); opacity:.92}
 .bigchart .xht{font:600 10px var(--mono); fill:var(--surface)}
 @media (prefers-reduced-motion:reduce){ .bigchart .xh{transition:none} }
@@ -2693,11 +2697,23 @@ function claimEvidenceNote(c){
    "what was it around here", which is a question about the horizontal axis, and
    nearest-in-2D would jump to a far point that happens to share a y. */
 function chartHoverAt(svg, clientX){
-  const raw = svg.getAttribute("data-hov"); if(!raw) return null;
   const box = svg.getBoundingClientRect(); if(!box.width) return null;
   const vx = (clientX - box.left) / box.width * 640;   // the viewBox is 640 wide
+  /* AN EVENT WINS WHEN YOU ARE ON IT. A marker is a thing a reader points AT —
+     "when does this settle", "where is now" — so within a few units of one, that
+     is the question being asked, even where the series also has points. Outside
+     that the line answers. */
+  let ev=null, ed=Infinity;
+  for(const q of (svg.getAttribute("data-hovev")||"").split(";")){
+    if(!q) continue;
+    const i=q.indexOf(","), j=q.indexOf(",", i+1);
+    const ex=+q.slice(0,i), d2=Math.abs(ex-vx);
+    if(d2<ed){ ed=d2; ev={x:ex, y:124, t:+q.slice(i+1,j), label:q.slice(j+1)}; }
+  }
+  if(ev && ed<=10) return ev;
   let best=null, bd=Infinity;
-  for(const q of raw.split(";")){
+  for(const q of (svg.getAttribute("data-hov")||"").split(";")){
+    if(!q) continue;
     const p2=q.split(",");
     const d2=Math.abs(+p2[0]-vx);
     if(d2<bd){ bd=d2; best={x:+p2[0], y:+p2[1], t:+p2[2], share:+p2[3]}; }
@@ -2707,19 +2723,29 @@ function chartHoverAt(svg, clientX){
      with no bound answered every one of them with the last real point, snapping
      the crosshair a third of the width away while the pointer sat over a date
      the series never reached. Beyond this the answer is "no reading here",
-     which is the honest one. */
-  return (best && bd <= 36)? best : null;
+     which is the honest one — unless a marker is within reach, which is why the
+     events are tried first and on a looser bound than this one. */
+  if(best && bd <= 36) return best;
+  return (ev && ed<=26)? ev : null;
 }
 function chartHoverShow(svg, hit){
   const xh = svg.querySelector(".xh"); if(!xh) return;
   if(!hit){ xh.classList.remove("on"); return; }
   const dated = svg.getAttribute("data-hovdated")==="1";
-  const label = (dated? stampDate(hit.t) + " · " : "") + hit.share.toFixed(1) + "% YES";
+  // An event names itself and its date; a point on the line names its date and
+  // what the share was. Both start from the same dater, so they cannot disagree.
+  const when = dated && hit.t? stampDate(hit.t) : "";
+  const label = hit.label!=null
+    ? hit.label + (when? " · " + when : "")
+    : (when? when + " · " : "") + hit.share.toFixed(1) + "% YES";
   xh.classList.add("on");
   xh.querySelector(".xhl").setAttribute("x1", hit.x);
   xh.querySelector(".xhl").setAttribute("x2", hit.x);
   const dot = xh.querySelector(".xhd");
   dot.setAttribute("cx", hit.x); dot.setAttribute("cy", hit.y);
+  // A marker's dot rides the axis where the marker's own dot is, so the readout
+  // points at the mark rather than hovering above it on the series' line.
+  xh.classList.toggle("onev", hit.label!=null);
   const t = xh.querySelector(".xht");
   t.textContent = label;
   // Measured, then placed: the box has to hold whatever the label came out as,
@@ -4489,10 +4515,24 @@ function voteHelpModal(slug, d){
     <div class="hd"><h3 id="help-vote-h">How this vote works</h3><button type="button" class="pill void" data-close>Close</button></div>
     <div class="bd">
       <h4>What decides it</h4>
-      <p>To overturn the answer, more than half the weight voted has to say overturn. A tie upholds. If everyone abstains, that upholds too.</p>
+      <p>To overturn the answer, more than half the weight voted has to say overturn. A tie upholds. If everyone flags it as spam, nobody took a side, so the answer stands — unless the spam flags themselves carry it, below.</p>
       <p>Enough people also have to turn up. If too little weight is cast, the round decides nothing at all — however the votes leaned.</p>
       ${quorum}
-      <p>Abstaining is not a third side. It counts towards turnout and towards nothing else.</p>
+      <h4>Flagging a claim as spam</h4>
+      <p>The third button is not a way to sit out. It says the claim was not worth
+        asking, and it costs the people who filed and answered it real money.</p>
+      <p>It never counts towards either side of the verdict. What it does is
+        <b>cut the reward the claim pays</b>, in proportion: a tenth of the weight
+        flagging it takes a fifth off, a quarter takes half off, and at half the
+        claim pays nothing at all.</p>
+      <p>Past half, <b>the claim is deleted</b>. Everyone's stake comes back in
+        full, on both sides. The person who answered it and the person who
+        disputed it get their bonds back — neither of them wrote it. The author
+        loses the fee they paid to file. If two thirds or more flag it, they lose
+        their deposit as well.</p>
+      <p>And flagging pays, when it wins: if the claim is deleted, the reward for
+        voting goes to the people who flagged it, exactly as it would go to the
+        winning side of an ordinary vote.</p>
 
       <h4>What voting costs you</h4>
       <p>The coin you vote with is locked until this round ends. You keep it, it stays in your balance, and you can still stake it.</p>
@@ -4590,7 +4630,7 @@ function disputeTicket(slug, id, d, nowH){
         closed? ` data-voteblocked="Voting has closed for this round. All that is left is to resolve it."` : ""}>
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
-        ${btn("Abstain","VoteDispute",{courtSlug:slug,claimID:id,choice:"abstain"},"","counts to turnout only, never to a side")}</div>
+        ${btn("Flag as spam","VoteDispute",{courtSlug:slug,claimID:id,choice:"spam"},"no","cuts the reward; past half, deletes the claim")}</div>
       <!-- RESOLVE IS NOT A VOTE, so it sits outside the block the eligibility
            check marks: somebody who staked on this claim may not judge it and may
            still close the round once the window has passed. -->
@@ -8018,7 +8058,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
      x,y,height,share — the readout names the moment the pointer is on rather
      than the five fixed ones a ladder under the plot could list. Collected while
      the series is drawn so it cannot drift from the shape: one loop, one truth. */
-  const hov=[];
+  const hov=[], hovev=[];
   const endY = Number.isFinite(r.inst)? y(r.inst) : null;
   /* RIGHT-ANCHORED, so the gutter holds them at any font size. Left-anchored at
      610 they ran past the 640-unit viewBox the moment the mobile rules scaled
@@ -8096,9 +8136,29 @@ function signalChart(slug,id,d,nowH,ser,tl){
   // event markers (shared anatomy); labels alternate above/below
   const evts=[];
   if(real){ if(!real.capped) evts.push([real.firstH,"records begin","The chain's stake record for this claim begins at ≈block "+fmtN(real.firstH)+" ("+ago(real.firstH)+")."]); }
-  else if(demo && ds) evts.push([ds.x0,"opened","Sample window start — the synthesized shape begins at the oldest anchor (lifetime conviction)."]);
+  /* THE WINDOW'S START IS NOT THE CLAIM'S OPENING, and this marker called it
+     "opened" for as long as nothing made it say WHEN. demoSeries picks x0 as
+     now minus a randomised one-to-two-week span — the shape's own left edge,
+     the oldest of the three anchors it is drawn from — and the claim was
+     opened whenever the chain says it was, which on the sample's claim 3 is
+     four days earlier. The hover readout printed both and the ladder printed
+     the other one, which is how a label that had been wrong all along became
+     visible. It says what it is now; the real opening gets its own mark when it
+     falls inside the window, and honestly does not appear when it does not. */
+  else if(demo && ds){
+    evts.push([ds.x0,"window start","Where the synthesized shape begins — the oldest of the three anchors it is drawn from, not the claim's opening."]);
+    if(tl && tl.opened && tl.opened.h>ds.x0 && tl.opened.h<now)
+      evts.push([tl.opened.h,"opened","The claim was opened at ≈block "+fmtN(tl.opened.h)+" ("+ago(tl.opened.h)+")."]);
+  }
   if(ansH!=null && ansH>=d0) evts.push([ansH,"answered"+(d.answer!=null?" "+sideName(d.answer).toLowerCase():""),"An answer was posted at ≈block "+fmtN(ansH)+"; the 72-hour window runs from here."]);
-  if(d.settleAt) evts.push([d.settleAt,"settle deadline","An undisputed answer settles at ≈block "+fmtN(d.settleAt)+" ("+ago(d.settleAt)+")."]);
+  /* ONLY WHILE IT IS THE OPERATIVE CLOCK, which is the rule the ladder follows
+     and the chart did not. SettleDeadline is the date an UNDISPUTED answer
+     would settle on, and the realm keeps publishing it after a dispute has
+     taken over — so a disputed claim carried a marker for a deadline that
+     stopped meaning anything the moment somebody disputed, while the ladder
+     under it had already dropped that row. Two surfaces, one claim, different
+     answers about what its clock is. */
+  if(d.settleAt && d.phase==="answered") evts.push([d.settleAt,"settle deadline","An undisputed answer settles at ≈block "+fmtN(d.settleAt)+" ("+ago(d.settleAt)+")."]);
   if(d.escrowUntil) evts.push([d.escrowUntil,"reopen closes","The reopen window closes at ≈block "+fmtN(d.escrowUntil)+" ("+ago(d.escrowUntil)+")."]);
   if(d.voteEndsAt) evts.push([d.voteEndsAt,"vote closes","The dispute vote's scheduled close at ≈block "+fmtN(d.voteEndsAt)+" ("+ago(d.voteEndsAt)+")."]);
   evts.push([now,"now","Chain height ≈"+fmtN(now)+"."]);
@@ -8121,6 +8181,16 @@ function signalChart(slug,id,d,nowH,ser,tl){
        the one the emitter happens to imagine. */
     const wide = e[1].length*12;
     const flip = x + 4 + wide > PR;
+    /* THE EVENTS ARE HOVERABLE TOO. The readout began as a thing for the series
+       and left every marker answering only through a native <title> — so
+       pointing at "settle deadline" or at "now", the two marks a reader is most
+       likely to point AT, gave a slow grey tooltip with a block height in it
+       while the line beside them gave a date. Same surface, two manners.
+       The drawn x, so the target is where the mark actually is (an event past
+       the domain is clamped, and the hit has to follow it there); the event's
+       own height for the date, so the readout names when it happens rather than
+       where it had to be drawn. */
+    hovev.push([x, zdt? Math.round(zdt(e[0])) : 0, e[1]]);
     g+=`<g class="${isNow?"evNow":"ev"}"><line class="${isNow?"evtnow":"evt"}" x1="${x}" y1="${isNow?Y100:(above?ly+3:Y100)}" x2="${x}" y2="${isNow?Y0:(above?Y0:ly-9)}"></line>`
       + `<circle class="hit" cx="${x}" cy="${Y0}" r="10"><title>${esc(e[2])}</title></circle>`
       + (isNow? `<circle class="nowHalo" cx="${x}" cy="${Y0}" r="6"></circle><circle class="nowDot" cx="${x}" cy="${Y0}" r="3.2"></circle>`
@@ -8192,11 +8262,12 @@ function signalChart(slug,id,d,nowH,ser,tl){
      had three times.
      Hidden until a pointer arrives, and never when there is nothing to read:
      the live fallback with no series has no points and gets no layer. */
-  const hovAttr = hov.length
+  const hovAttr = (hov.length||hovev.length)
     ? ` data-hov="${hov.map(q=>q[0]+","+q[1]+","+(zdt? Math.round(zdt(q[2])) : 0)+","+q[3]).join(";")}"`
+      + ` data-hovev="${esc(hovev.map(q=>q[0]+","+q[1]+","+String(q[2]).replace(/[;,]/g,"")).join(";"))}"`
       + ` data-hovdated="${zdt?1:0}"`
     : "";
-  const layer = hov.length? `<g class="xh" aria-hidden="true">`
+  const layer = (hov.length||hovev.length)? `<g class="xh" aria-hidden="true">`
       + `<line class="xhl" x1="0" y1="${Y100}" x2="0" y2="${Y0}"></line>`
       + `<circle class="xhd" cx="0" cy="0" r="4"></circle>`
       + `<g class="xhbox"><rect rx="2" x="0" y="0" width="0" height="17"></rect>`
