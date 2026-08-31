@@ -366,6 +366,22 @@ for(const k of Object.keys(claims)){
      /class="tickL covered"/.test(near));
 }
 
+/* P8g: LABELS ARE HALOED, because the chart draws lines through the space it
+   writes in. The lifetime reference spans the full width at whatever height
+   that ratio lands on — on a claim near 93% it went through the middle of
+   "records begin" — the now rule is full height by design and crossed "settle
+   deadline", and gridlines cross the ticks. Packing labels away from every line
+   has no solution on a 640x150 plot; a stroke the colour of the ground, painted
+   under the glyph, costs no layout at all.
+   Verified computed in a browser besides: every text class reports paintOrder
+   stroke with a 3px stroke, and .xht reports none. */
+{
+  ok("P8g every chart label is stroked under its glyphs",
+     /\.bigchart text\{paint-order:stroke fill; stroke:var\(--paper\); stroke-width:3px;/.test(src));
+  ok("P8g ...and the hover pill is exempt, being reversed out of its own plate",
+     src.includes(".bigchart .xht{stroke:none}"));
+}
+
 // P9: labels + §7.4
 ok("P9 demo real srcnote", h1.includes("a sample series in the chain's real form"));
 // NO FIGCAPTION. It named the axis, then the three series, then printed the

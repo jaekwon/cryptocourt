@@ -577,6 +577,23 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .bigchart .tickL{font:10px var(--mono); fill:var(--mark); opacity:.7}
 .bigchart .zone{font:9.5px var(--sans); fill:var(--muted); letter-spacing:.08em; text-transform:uppercase}
 .bigchart .evt{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:2 2}
+/* EVERY LABEL IS HALOED, because the chart draws lines through the same space
+   it writes in and had no answer for it. The lifetime reference runs the full
+   width at whatever height that ratio lands on, and on a claim near 93% it went
+   straight through "records begin"; the now rule is full height by design and
+   crossed "settle deadline"; gridlines cross the ticks. Moving labels out of
+   the way is a packing problem with no solution on a 640x150 plot — a stroke
+   the colour of the ground, painted under the glyph, is the standard answer and
+   costs no layout at all.
+   --paper, not --surface: the plot's ground is the page. Over the two washes
+   the halo does read as a faint outline rather than vanishing — a real cost,
+   and a small one next to a reference line drawn through the middle of a
+   word. */
+.bigchart text{paint-order:stroke fill; stroke:var(--paper); stroke-width:3px;
+  stroke-linejoin:round; stroke-linecap:round}
+/* The hover readout writes on its own plate, so it wants no halo — the stroke
+   would eat into the pill it is deliberately reversed out of. */
+.bigchart .xht{stroke:none}
 .bigchart .evtDot{fill:var(--ink-2)}
 /* NOW, LOUDER THAN THE REST. It divides what happened from what is scheduled,
    and it was drawn as one more 3px dot among the deadlines. A rule the full
