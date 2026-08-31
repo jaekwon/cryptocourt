@@ -201,10 +201,53 @@ install -m 0644 /tmp/nginx-zones.conf /etc/nginx/conf.d/kourt-zones.conf
 # plain reinstall would put the HTTP-only version back and drop TLS silently,
 # while refusing to touch a COMBINED file made it impossible to add a new name at
 # all. Per-name files give both: TLS is preserved, new names still arrive.
+# LEFT UNTOUCHED IS NOT THE SAME AS UP TO DATE, and saying only the first is how a
+# fix to a vhost in this repo sat unshipped while `RESET=--config-only` reported
+# success. Observed: nginx-rpc.conf gained proxy_hide_header directives to stop a
+# duplicated Access-Control-Allow-Origin breaking every browser read, --config-only
+# was run, it printed "left untouched", and the live file was unchanged. The header
+# stayed duplicated and the site stayed broken.
+#
+# So a skipped file is DIFFED against the repo copy, ignoring the lines certbot owns
+# — those differ by design and are the reason for skipping. Anything else is drift,
+# and drift is printed as the exact lines plus the command to apply them, because
+# "these differ" is a diagnosis and the operator needs the fix.
+drift=0
 for n in rpc faucet gnoweb; do
     dst="/etc/nginx/sites-available/kourt-$n"
     if grep -q ssl_certificate "$dst" 2>/dev/null; then
-        echo "    nginx: kourt-$n carries certbot's TLS edits — left untouched"
+        # DIRECTIVES ONLY — not comments, not blank lines, not indentation. The first
+        # version of this compared the files as text and reported all three as drifted,
+        # because a comment reworded by hand on the box differs from the repo's prose
+        # while the config is identical. A drift check that cries wolf gets ignored,
+        # which would leave it no better than the silence it replaced.
+        #
+        # Certbot's own lines go too: it rewrites the listeners (moving :80 into a
+        # redirect block of its own), adds the cert paths and its include. Those differ
+        # BY DESIGN on every file this branch touches — they are why we are skipping.
+        #
+        # AND THE STRUCTURAL TOKENS, because certbot appends an ENTIRE extra server
+        # block for the HTTP->HTTPS redirect, which after the filtering above reduces
+        # to a bare `server {`, a server_name and a `}` — and that was reported as
+        # drift on all three files when it is just certbot doing its job. Dropping
+        # them leaves the DIRECTIVES, which is what a drift check is for; nginx -t
+        # validates the structure and this does not need to.
+        strip() {
+            grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$1" \
+              | grep -vE 'ssl_certificate|ssl_(protocols|ciphers|session|dhparam|prefer)|managed by Certbot|include /etc/letsencrypt|listen |return 301|if \(\$host =' \
+              | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
+              | grep -vE '^(server \{|server_name |\}$)'
+        }
+        if diff -q <(strip "$dst") <(strip "/tmp/nginx-$n.conf") >/dev/null 2>&1; then
+            echo "    nginx: kourt-$n carries certbot's TLS edits — left untouched, and matches the repo"
+        else
+            drift=1
+            echo "    nginx: kourt-$n DRIFTED — left untouched, and it does NOT match the repo:"
+            diff <(strip "$dst") <(strip "/tmp/nginx-$n.conf") | sed 's/^/        /' | head -40
+            echo "        (< live, > repo).  This file was NOT updated. To apply the repo copy"
+            echo "        while keeping certbot's TLS, edit /etc/nginx/sites-available/kourt-$n"
+            echo "        by hand, then: nginx -t && systemctl reload nginx"
+        fi
     else
         install -m 0644 "/tmp/nginx-$n.conf" "$dst"
         echo "    nginx: kourt-$n installed"
@@ -212,6 +255,16 @@ for n in rpc faucet gnoweb; do
     ln -sf "$dst" "/etc/nginx/sites-enabled/kourt-$n"
     rm -f "/tmp/nginx-$n.conf"
 done
+
+# DRIFT IS A FAILURE FOR --config-only, whose ENTIRE job is to ship config. Left
+# exit-0 it reported success having changed nothing, which is the shape of the bug
+# this whole block exists for. A full run still proceeds: the chain is the point
+# there, and a drifted vhost is a warning beside a working deploy.
+if [ "$drift" = 1 ] && [ -n "${CONFIG_ONLY:-}" ]; then
+    echo "FAIL: --config-only shipped no vhost change — every file it would have written" >&2
+    echo "      is held by certbot's TLS edits and has drifted from the repo. See above." >&2
+    exit 1
+fi
 # The old combined site, if a previous run installed one: its names now live in
 # the per-name files, and leaving it enabled would declare each server_name twice.
 if [ -e /etc/nginx/sites-enabled/kourt-chain ]; then
@@ -286,11 +339,71 @@ fi
 nginx -t && systemctl reload nginx
 REMOTE
 
+# VERIFYING MEANS FAILING WHEN IT FAILS. This step used to curl the realm and pipe
+# the answer to `head -c 200`: it PRINTED the response and never looked at it, so a
+# deploy where nothing landed printed vm.InvalidPkgPathError and then the "Chain is
+# up" banner, and exited 0. That is how a chain with no realm on it was reported as
+# deployed.
+#
+# TWO THINGS, IN ORDER, because the second cannot pass while the first is broken:
+#
+#   1. BLOCKS. The realm ships as genesis TRANSACTIONS, which execute in block 1 —
+#      so a chain stuck at height 0 has no realm no matter how well the genesis was
+#      built. Observed: --reset wipes the chain but NOT the validator's signing
+#      state, so the validator refused to sign at height 1 ("height regression:
+#      expected >= 444, got 1"), consensus stalled before block 1, and the packages
+#      never ran. The remedy is named in the failure rather than left to be
+#      rediscovered.
+#   2. THE REALM. A qeval that returns an Error field is a failure even though the
+#      HTTP status is 200 — which is exactly why piping to head hid it.
+echo "==> verifying the chain is producing blocks"
+h=""
+for _ in $(seq 1 30); do
+    h="$("${SSH[@]}" "$HOST" 'curl -s -X POST http://127.0.0.1:26657 -H "Content-Type: application/json" \
+      -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"status\",\"params\":{}}"' \
+      | sed -n 's/.*"latest_block_height": *"\([0-9]*\)".*/\1/p' | head -1)"
+    [ -n "$h" ] && [ "$h" -ge 1 ] 2>/dev/null && break
+    sleep 2
+done
+if [ -z "$h" ] || ! [ "$h" -ge 1 ] 2>/dev/null; then
+    echo "FAIL: the chain is at height ${h:-unknown} after 60s — it is not committing blocks," >&2
+    echo "      so the genesis transactions that carry the realm have not run." >&2
+    echo "      FIRST THING TO CHECK, because --reset does not do it:" >&2
+    echo "        journalctl -u kourtnode -n 50 | grep -i 'height regression'" >&2
+    echo "      A hit there means the validator still remembers signing a HIGHER height" >&2
+    echo "      on the previous chain and will not sign this one. Keep the key, zero the" >&2
+    echo "      state:" >&2
+    echo "        systemctl stop kourtnode" >&2
+    echo "        printf '{\"height\":\"0\",\"round\":\"0\",\"step\":0}' \\" >&2
+    echo "          > $CHAINDIR/data/secrets/priv_validator_state.json" >&2
+    echo "        systemctl start kourtnode" >&2
+    exit 1
+fi
+echo "    height $h"
+
 echo "==> verifying the realm answers on the chain"
-"${SSH[@]}" "$HOST" 'curl -s -X POST http://127.0.0.1:26657 -H "Content-Type: application/json" \
-  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"abci_query\",\"params\":{\"path\":\"vm/qrender\",\"data\":\"$(printf "gno.land/r/kourt/kourtv2:" | base64)\",\"height\":\"0\",\"prove\":false}}" \
-  | head -c 200'
-echo
+out="$("${SSH[@]}" "$HOST" 'curl -s -X POST http://127.0.0.1:26657 -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"abci_query\",\"params\":{\"path\":\"vm/qrender\",\"data\":\"$(printf "gno.land/r/kourt/kourtv2:" | base64)\",\"height\":\"0\",\"prove\":false}}"')"
+case "$out" in
+    *InvalidPkgPathError*|*InvalidPackageError*)
+        echo "FAIL: the realm is not on the chain — the genesis packages did not install." >&2
+        echo "      The chain IS committing blocks (height $h), so this is not the validator" >&2
+        echo "      state; look at the genesis build above and at:" >&2
+        echo "        journalctl -u kourtnode -n 200 | grep -iE 'genesis|addpkg|panic'" >&2
+        exit 1 ;;
+esac
+# A POSITIVE CHECK, because the obvious negative one is vacuous: ResponseBase
+# carries "Error": null on SUCCESS, so matching '"Error"' matched every response
+# ever and this step failed against a realm that was demonstrably rendering.
+# Data is null on any failure and holds base64 markdown on success, so requiring
+# Data is the assertion that distinguishes them.
+case "$out" in
+    *'"Data": "'*|*'"Data":"'*) echo "    the realm renders" ;;
+    "") echo "FAIL: the realm read returned nothing at all." >&2; exit 1 ;;
+    *)  echo "FAIL: the realm read returned no data:" >&2
+        printf '      %s\n' "$(printf '%s' "$out" | tr -d '\n' | head -c 400)" >&2
+        exit 1 ;;
+esac
 cat <<EOF
 
 Chain is up as $CHAINID.
