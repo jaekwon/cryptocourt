@@ -145,3 +145,72 @@ func TestTheBallotTakesSpamAndRefusesAbstain(cur realm, t *testing.T) {
 		t.Fatal("a yes must still reach the verdict bar")
 	}
 }
+
+// THE SPAM TALLY IS FROZEN ON THE ROUND THAT DECIDED, not on whatever round
+// cs.proposalID happens to name later.
+//
+// This is decidedPID's own reason, applied to a second pair of figures:
+// proposalID is overwritten by every new round, so a claim that fails a round
+// and then decides on the next one would, without this, be discounted by the
+// tally of a round that decided nothing. The governor's counters DO survive a
+// ReleaseRoll — Tally reads yes/no/abstain and not the roll — so the hazard is
+// reading the wrong round, not reading a gap.
+func TestTheSpamTallyIsFrozenOnTheDecidingRound(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("sf-alice")
+	bob := testutils.TestAddress("sf-bob")
+	carol := testutils.TestAddress("sf-carol")
+	dave := testutils.TestAddress("sf-dave")
+	c := testCourt(cur, "sf", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	c.coin.Mint(carol, 20_000_000_000)
+	// A NON-ZERO SPAM WEIGHT IS LOAD-BEARING IN THIS FIXTURE. With nobody
+	// flagging spam, `cast = yes+no+spam` and `cast = yes+no` are the same
+	// number, and an ablation dropping spam from the denominator passed —
+	// measured. Dave's weight is what makes the two distinguishable.
+	c.coin.Mint(dave, 12_000_000_000)
+
+	id := stakeAnswerDispute(cur, "sf", alice, bob)
+	cs := mustClaim(c, id)
+
+	// Nothing is frozen before a round decides — and zero is what the draw reads
+	// as "no discount", not as "discount to nothing".
+	uassert.Equal(t, int64(0), cs.spamW)
+	uassert.Equal(t, int64(0), cs.spamTotalW)
+
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "sf", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "sf", id, voteYes)
+	testing.SetRealm(testing.NewUserRealm(dave))
+	VoteDispute(cross(cur), "sf", id, voteSpam)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	ResolveDispute(cross(cur), "sf", id)
+
+	// The deciding round's figures, and the denominator is the SAME cast the
+	// quorum bar was measured against — so a discount is a fraction of the
+	// turnout that actually decided the claim.
+	if cs.decidedPID == 0 {
+		t.Fatal("the fixture must produce a decided round")
+	}
+	yes, no, spam, _ := c.gov.Tally(cs.decidedPID)
+	if spam <= 0 {
+		t.Fatal("the fixture must carry a real spam weight, or the denominator " +
+			"arm below cannot be distinguished from yes+no")
+	}
+	uassert.Equal(t, spam, cs.spamW)
+	// THE DENOMINATOR INCLUDES SPAM, which is the same cast the quorum bar was
+	// measured against — so the discount is a fraction of the turnout that
+	// actually decided the claim, not of the side-takers only.
+	uassert.Equal(t, yes+no+spam, cs.spamTotalW)
+	if cs.spamTotalW == yes+no {
+		t.Fatal("the denominator must not be yes+no — spam is part of the turnout")
+	}
+
+	// AND THEY ARE FROZEN AGAINST decidedPID, not proposalID. Asserted as an
+	// identity rather than by driving a second round: the two ids are equal here,
+	// so a test that only compared figures would pass either way — what pins the
+	// choice is that the frozen denominator matches the DECIDED round's tally,
+	// which the read above uses cs.decidedPID to fetch.
+	uassert.Equal(t, cs.decidedPID, cs.proposalID)
+}

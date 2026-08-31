@@ -288,8 +288,11 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 	}
 	touch(c)
 
-	yes, no, abstain, _ := c.gov.Tally(cs.proposalID)
-	cast := yes + no + abstain
+	// spamW, not "abstain": the governor's third bucket is the court's spam flag
+	// (VoteDispute translates at the boundary), and calling it by the p/ layer's
+	// name here is how the two meanings drift apart again.
+	yes, no, spamW, _ := c.gov.Tally(cs.proposalID)
+	cast := yes + no + spamW
 	floor := c.gov.QuorumFloor(cs.proposalID)
 	firstResolution := cs.provisional < 0 // capture BEFORE the switch mutates it
 
@@ -375,6 +378,11 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.failedRounds = 0
 		cs.decidedRounds++
 		cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, "yes", yes
+		// The spam share of THIS round, frozen with the rest of the deciding
+		// round's record. cast is yes+no+spam — the same denominator the quorum
+		// bar was measured against, so the discount is a fraction of the turnout
+		// that actually decided the claim.
+		cs.spamW, cs.spamTotalW = spamW, cast
 		resolveQualityRide(c, cs)
 	default:
 		// UPHOLD (tie, all-abstain, or a sub-threshold split, quorum met):
@@ -426,6 +434,11 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		cs.failedRounds = 0
 		cs.decidedRounds++
 		cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, "no", no
+		// The spam share of THIS round, frozen with the rest of the deciding
+		// round's record. cast is yes+no+spam — the same denominator the quorum
+		// bar was measured against, so the discount is a fraction of the turnout
+		// that actually decided the claim.
+		cs.spamW, cs.spamTotalW = spamW, cast
 		// Captured BEFORE the ride, which may now ORIGINATE a reserve (v0.50).
 		// disposeSlashOnRide scores a reserve this round INHERITED; one this round's
 		// own ride just levied gets its counter-flag window instead. Running both on

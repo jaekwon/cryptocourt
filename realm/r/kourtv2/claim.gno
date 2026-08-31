@@ -308,6 +308,21 @@ type claimState struct {
 	carrotChoice  string
 	carrotDenom   int64
 	decidedPID    int64
+	// The deciding round's spam tally, frozen beside decidedPID and for exactly
+	// its reason: cs.proposalID is OVERWRITTEN by every later round, so by
+	// Crystallize it may name a round that did not decide anything. The
+	// governor's counters do survive a ReleaseRoll — Tally reads yes/no/abstain,
+	// not the roll — so this is not about the figures disappearing; it is about
+	// reading the WRONG round's figures.
+	//
+	// BOTH numbers, not the ratio: a discount whose denominator is gone cannot
+	// be checked against anything, and a reader given only "0.8x" cannot tell a
+	// 1-of-5 round from a 20-of-100 one.
+	//
+	// Zero on any claim decided before this shipped, which the draw reads as
+	// "no discount" rather than as "discount to nothing".
+	spamW      int64
+	spamTotalW int64
 	authorPaid    bool
 	answererPaid  bool
 }
