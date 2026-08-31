@@ -175,8 +175,27 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
   // Buy's spend was a FOURTH prompt after the others had been answered. It is a
   // field in the same dialog now, and a bad amount is refused in place rather
   // than ending the signature and sending the reader back to the button.
-  ok("the spend is a field in the same dialog",
-     src.includes('func==="Buy" ? ((el.dataset.send||"").replace(/ugnot$/,"") || "1000000") : null')
+  // THE DIALOG IS THE EXCEPTION NOW, not the rule. Every button used to stop and
+  // ask; nothing was earned by it, because the arguments on a claim page are
+  // derived by the page and Adena's own approval popup shows the call before
+  // anything is signed. What survives is the case it was built for: an argument
+  // the reader must REPLACE.
+  ok("a derived-argument button signs straight through",
+     /\} else \{\s*\n\s*vals = Object\.keys\(args\|\|\{\}\)\.map\(k => String\(args\[k\]\)\);/.test(src));
+  ok("...and the dialog is reached only by the three that need it",
+     src.includes("if(el.dataset.edit || el.dataset.authored || needsSend){"));
+  // The two buttons that ship literal placeholders. Signing these through would
+  // create a court called "My Court".
+  ok("the placeholder buttons are marked, and they are the only ones",
+     (src.match(/,false,true\)/g)||[]).length === 2
+     && /StartCourt",\{slug:"my-court",name:"My Court"\},"primary",null,null,false,true\)/.test(src)
+     && src.includes('data-edit="1"'));
+  // A concrete amount comes from the receipt input the reader typed into; the
+  // no-quote fallback ships the literal "AMOUNTugnot", a placeholder like any
+  // other, and that one still has to be asked for.
+  ok("a real spend is taken as typed, a placeholder one is asked for",
+     src.includes('const sendOk = /^[1-9][0-9]*ugnot$/.test(sendRaw);')
+     && src.includes('const needsSend = func === "Buy" && !sendOk;')
      && src.includes("This is burned. Treat it as spent."));
   ok("...and a bad amount is refused without closing it",
      /e\.hidden = false; e\.textContent = "A whole, non-zero ugnot amount\.";\s*\n\s*return;/.test(src));

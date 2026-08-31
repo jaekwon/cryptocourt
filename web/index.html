@@ -2630,7 +2630,11 @@ function tx(func, args){
   const q = Object.entries(args||{}).map(([k,v])=>"&"+k+"="+encodeURIComponent(v)).join("");
   return CFG.gnoweb.replace(/\/$/,"")+"/r/kourt/kourtv2$help&func="+func+q;
 }
-function btn(label, func, args, cls, sub, send, gate){
+/* `edit` marks the buttons whose ARGUMENTS ARE PLACEHOLDERS — text the reader
+   has to replace before it means anything. Two do: StartCourt and StartCourtP
+   ship slug:"my-court", name:"My Court". Everything else on this page passes
+   arguments the page derived itself, which is why they no longer stop to ask. */
+function btn(label, func, args, cls, sub, send, gate, edit){
   // In demo mode the data is a sample: an action that links a real network to
   // sample arguments is a trap, so the button is inert and says why.
   // `send` (Buy only): a concrete "<µGNOT>ugnot" from the receipt input — it
@@ -2660,6 +2664,7 @@ function btn(label, func, args, cls, sub, send, gate){
   // click is what prints "tick the acknowledgement first". It stays pressable
   // and the handler refuses, so the refusal can explain itself.
   return `<span class="act"><button class="btn ${cls||""}" data-act="1"`
+    + (edit? ` data-edit="1"` : "")
     + (gate? ` data-needack="1" aria-disabled="true"` : "")
     + ` data-func="${esc(func)}" data-args="${esc(JSON.stringify(args||{}))}"`
     + ` data-cli="${esc(cliCmd(func,args,send))}" data-tx="${esc(tx(func,args))}"`
@@ -2965,14 +2970,43 @@ async function adenaSign(func, args, el){
     // a 2000-byte multi-line comment cannot be typed into a single-line prompt at
     // all. So a control marked data-authored is confirmed as a whole, in a dialog
     // that can hold what it is confirming. Every other button keeps its prompt.
-    // ONE DIALOG, every argument at once, and the spend with them. This was a
-    // loop of window.prompt() — one native box per argument, so a vote asked
-    // three — plus a fourth for Buy's amount after they had all been answered.
-    const ok = await confirmArgs(func, args||{},
-      el.dataset.authored ? (el.dataset.bodykey || "text") : null,
-      func==="Buy" ? ((el.dataset.send||"").replace(/ugnot$/,"") || "1000000") : null);
-    if(!ok){ note("Cancelled — nothing was signed."); return; }
-    const vals = ok.vals, send = ok.send;
+    /* CONFIRM WHAT NEEDS EDITING, AND NOTHING ELSE.
+
+       Every button used to stop and ask, first as one native prompt per
+       argument and then as a dialog listing them all. Neither was earning its
+       place: pressing "Vote to overturn" on a claim page passes a slug, an id
+       and a side that the page derived — there is nothing for a reader to check
+       that clicking the button did not already say. And ADENA CONFIRMS ANYWAY.
+       Its approval popup shows the call and the amount before anything is
+       signed, so our dialog was a second confirmation of the same bytes.
+
+       It survives for the case it was actually built for: an argument the
+       reader must REPLACE before it means anything.
+
+         data-edit    StartCourt / StartCourtP, which ship slug:"my-court",
+                      name:"My Court" — sign those through and you have created
+                      a court called My Court.
+         data-authored  the composer, whose body is shown whole against the
+                      chain's character cap and whose warning is about
+                      permanence, not about content.
+         Buy with no concrete amount  the no-quote fallback carries the literal
+                      "AMOUNTugnot", which is a placeholder like any other. A
+                      real amount comes from the receipt input, where the reader
+                      typed it. */
+    const sendRaw = el.dataset.send || "";
+    const sendOk = /^[1-9][0-9]*ugnot$/.test(sendRaw);
+    const needsSend = func === "Buy" && !sendOk;
+    let vals, send = func === "Buy" && sendOk ? sendRaw : "";
+    if(el.dataset.edit || el.dataset.authored || needsSend){
+      const ok = await confirmArgs(func, args||{},
+        el.dataset.authored ? (el.dataset.bodykey || "text") : null,
+        needsSend ? "1000000" : null);
+      if(!ok){ note("Cancelled — nothing was signed."); return; }
+      vals = ok.vals;
+      if(needsSend) send = ok.send;
+    } else {
+      vals = Object.keys(args||{}).map(k => String(args[k]));
+    }
     note("Waiting for Adena…");
     const res = await a.DoContract({messages:[{type:"/vm.m_call", value:{
       caller: CFG.addr, send, pkg_path: PKG, func, args: vals
@@ -3834,8 +3868,8 @@ on(/^\/$/, async ()=>{
     + introStrip()
     + `<div class="lead-row"><div><h1 class="page-h">Courts of record</h1>
        <p class="page-sub">Each court runs its own coin and its own docket of claims of fact. Stake on YES or NO; your staked coin always returns 1×, and conviction — stake × time held — earns the reward when the verdict goes your way. Pick the court whose judgment you trust.</p></div>
-       ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary")}
-       ${btn("Start a court with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one hour before staking opens, so an author can fix the wording")}</div>`
+       ${btn("Start a court","StartCourt",{slug:"my-court",name:"My Court"},"primary",null,null,false,true)}
+       ${btn("Start a court with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one hour before staking opens, so an author can fix the wording",null,false,true)}</div>`
     + statsStrip
     + `<div id="qscope">`
     + qBarHtml("court name or orem/7", qCaption({mode:"idle", demo:!isLive(), kind:"court names", loaded:(page===1?featured.length:0)+listed.length, total:listedTotal+(page===1?featured.length:0)}))
