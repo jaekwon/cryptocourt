@@ -319,12 +319,19 @@ const MAX_PAGES = 60;
      bad.length === 0,
      bad.slice(0, 4).map(b => `${b.route} [${b.display}] "${b.text}"`).join(" | "));
 
-  // THE TRIPWIRE. A crawl that found four rows proves nothing, and this harness
-  // would go green on a page where every row had stopped rendering at all —
-  // which is the failure it would most want to report. Pinned below the count
-  // observed when it was written (104 across 60 routes), loose enough that
-  // adding or removing a panel does not fail the build for the wrong reason.
-  ok("the crawl actually reached the pages with rows on them", rows >= 60, `saw ${rows}`);
+  /* THE TRIPWIRE. A crawl that found four rows proves nothing, and this harness
+     would go green on a page where every row had stopped rendering at all —
+     which is the failure it would most want to report. Pinned below the count
+     actually observed, loose enough that adding or removing a panel does not
+     fail the build for the wrong reason.
+     104 when written; 45 now, and the drop is deliberate. Both stake cards were
+     reduced to a heading and their controls: the settled one lost "Your
+     principal / withdraw 1x now" and "Winning side / 1x + accuracy reward", the
+     open one lost three rows restating that principal returns 1x either way.
+     Those rows were true of every claim in every court, above the one control
+     the reader came for. The floor moves with them — a stale floor is a
+     tripwire that fails for the wrong reason. */
+  ok("the crawl actually reached the pages with rows on them", rows >= 35, `saw ${rows}`);
   ok("no page threw while being measured", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");

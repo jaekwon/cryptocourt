@@ -2356,6 +2356,29 @@ async function claimParties(slug, id, d){
    is. What is new is only the amount and the removal.
    PullState is per address and one read. A failed read leaves every pull
    standing rather than removing one somebody could have taken. */
+/* HOW MUCH THERE IS TO STAKE, beside the field that asks for an amount. The
+   card asked "amount" and named the coin and said nothing about how much of it
+   the reader holds — so the only way to find the ceiling was to guess, sign, and
+   read the refusal. One read, the same CoinBalanceOf the court page makes.
+   Pressing it fills the field: a reader who wants all of it should not have to
+   retype a number the page already knows. */
+async function fillStakeBalance(slug){
+  const out = document.getElementById("stakebal");
+  const f = document.getElementById("stakeamt");
+  if(!out || !f || !CFG.addr) return;
+  let bal;
+  try{ bal = await balanceOf(slug, CFG.addr); }catch(_){ return; }
+  if(bal==null || !isFinite(+bal)) return;
+  const micro = +bal;
+  out.textContent = "";
+  if(micro<=0){ out.textContent = "you hold none of this court's coin"; return; }
+  const btn = document.createElement("button");
+  btn.type = "button"; btn.className = "helplink";
+  btn.textContent = "you hold " + cc(micro, slug);
+  btn.title = "Put all of it in the amount field";
+  btn.addEventListener("click", ()=>{ f.value = String(micro/1e6); f.focus(); });
+  out.appendChild(btn);
+}
 async function fillTicketPulls(slug, id, d, p){
   const wraps = [...document.querySelectorAll(".stakewrap .ticket [data-pull]")];
   if(!wraps.length || !d || !d.crystallized) return;
@@ -7672,6 +7695,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
      grace window, and so the guard greyed every claim on the chain forever.
      ClaimTimeline publishes `now` next to `verdict` precisely so a consumer can
      subtract two heights from the same clock. */
+  fillStakeBalance(slug);
   fillWithdrawSides(slug, id, d,
     tline && tline.now? tline.now.h : nowH,
     tline && tline.verdict? tline.verdict.h : null);
@@ -8674,26 +8698,30 @@ function stakeTicket(slug,id,d){
       <div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>
       <div class="line"><span class="l">Losing side</span><span class="r">1×, loses nothing</span></div></div>`;
   }
+  /* THE HEADING, THE AMOUNT, THE BUTTONS. This card carried a paragraph on
+     conviction, three rows restating that principal returns 1x, and a boxed
+     aside repeating the paragraph — all of it true of every claim in every
+     court, above the one control the reader came for. The rules live in
+     how-it-works; this is a place to act.
+
+     The amount is in COIN, because that is what the balance and the labels are
+     in, and converts to the realm's millionths at the click: a reader typing
+     1.222 should not have to know the chain counts in micro units. data-amt
+     marks the buttons that read it.
+
+     AND THIS COMMENT IS OUT HERE. The last version sat inside the template
+     literal, so the page printed it: forty words of implementation note
+     rendered as body text under the buttons, because a block comment inside
+     backticks is just characters. Writing the delimiters into the prose then
+     closed this comment early and broke the file — twice caught, once by the
+     page going blank. */
   return `<div class="ticket" id="stake-ticket"><h3>Stake the claim</h3>
-    <div class="hint">Take the side you believe. Free to unstake until an answer posts — then it locks and your <b>conviction</b> (stake × time held) becomes your reward weight.</div>
-    <div class="line"><span class="l">Your principal</span><span class="r">returns 1×, either way</span></div>
-    <div class="line"><span class="l">If your side wins</span><span class="r">1× + accuracy reward</span></div>
-    <div class="line"><span class="l">If your side loses</span><span class="r">1×, nothing lost</span></div>
-    <div class="never"><b>Reward = conviction, not stake.</b> Staking early and holding earns more than a last-second flood; the number that pays is stake × time, and it survives an honest unstake. Principal is not a wager — it always comes home.</div>
-    /* HOW MUCH IS THE READER'S TO SAY. Every one of these buttons carried a
-       hardcoded 1000000 — one coin — so the page offered exactly one stake size
-       and the label said "1 KOURT:X" as though that were the product. A reader
-       who wanted 1.222 had no way to ask, and nothing on the card hinted the
-       amount was even a variable.
-       The field is in COIN, because that is what the labels and the balance are
-       in, and it converts to the realm's millionths at the click: a reader
-       typing 1.222 should not have to know the chain counts in micro units.
-       data-amt marks the buttons whose amount comes from it. */
-    <div class="argrow" style="margin-top:14px">
+    <div class="argrow" style="margin-top:12px">
       <label for="stakeamt" class="small muted">amount</label>
       <input id="stakeamt" class="sendin" type="text" inputmode="decimal" value="1"
              autocomplete="off" aria-describedby="stakeamtu">
       <span id="stakeamtu" class="small muted mono">${ccSym(slug)}</span>
+      <span id="stakebal" class="small muted"></span>
     </div>
     <div class="actions" style="margin-top:10px">
       ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
