@@ -631,6 +631,15 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .ticket .clockrows .ev small{display:block; margin-top:1px}
 @media (max-width:640px){ .ticket .clockrows{grid-template-columns:minmax(0,1fr) max-content; column-gap:14px}
   .ticket .clockrows .dt{white-space:normal} }
+/* THE LADDER BESIDE THE CHART. Half the width, so the fixed 30ch label column
+   no longer fits with a date next to it and the browser breaks the LABEL —
+   "vote closes · round 2" came out four lines, one word each. Both columns
+   flex here and the date is the one allowed to wrap: a date breaks cleanly
+   after its comma, and "1 failed round" has nowhere to break that still reads
+   as one event. */
+.ticket.clocknarrow .clockrows{grid-template-columns:minmax(0,1fr) minmax(0,auto); column-gap:12px}
+.ticket.clocknarrow .clockrows>*{font-size:13px; padding:7px 0}
+.ticket.clocknarrow .clockrows .dt{white-space:normal; text-align:right}
 /* Helper modals: the long "why" lives one click away, so a ballot reads as a
    ballot. Native <dialog> — Escape, the backdrop and focus come with it. */
 dialog.helper{border:1px solid var(--line-2); border-radius:var(--r); padding:0;
@@ -1902,7 +1911,7 @@ const DEMO_CHAIN = {
     "orem/5":{ timeline:"opened:1785054400:4400000;answered:1786054400:4600000;verdict:1786554400:4700000;now:1787054400:4800000", title:"The mayor privately opposed the rezoning before the vote.",
       yesStake:26_000_000, noStake:24_000_000, convYes:274058, convNo:252976, trailYes:52,
       author:"g1oremfiler0000000000000000000000000000", phase:"provClose", failedRounds:3 },
-    // flagged — a quality flag vote is open (tally sealed)
+    // flagged — a quality flag vote is open
     "orem/6":{ timeline:"opened:1786304400:4650000;answered:1786784200:4745960;settle:1787043400:4797800;now:1787054400:4800000", title:"The vendor's audit found zero critical findings.",
       yesStake:110_000_000, noStake:8_000_000, convYes:556316, convNo:40459, trailYes:92,
       author:"g1oremfiler0000000000000000000000000000", phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
@@ -7199,7 +7208,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap">
           <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
-          ${stakeTicket(slug,id,d)}
+          ${ladderTakesTheTicket(d)? resolutionLadder(d,nowH,tline,true) : stakeTicket(slug,id,d)}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
@@ -7909,6 +7918,22 @@ function chartChips(d, slug){
   return `<div class="chartchips">${chips}</div>`;
 }
 
+/* WHEN THE TICKET IS RULES RATHER THAN AN ACTION, THE TIMELINE TAKES ITS PLACE.
+   Beside the chart, in the phases between an answer and a settlement, the ticket
+   said "Staking is frozen" and then spent four lines restating the one rule that
+   never changes: principal returns 1x. Nothing to press, nothing that is not
+   true of every claim in every court — and it held the best column on the page,
+   level with the chart, while the ladder of what has actually happened to THIS
+   claim sat further down.
+   Open and closed keep their ticket: both have buttons in it, and a column of
+   buttons is not boilerplate. Settled and provClose keep theirs too — those
+   read "Staking is closed" and are equally ruleslike, but their withdraw
+   buttons live in the notice directly below, so moving the ladder up would put
+   it between the reader and the thing to press. */
+function ladderTakesTheTicket(d){
+  return d.phase!=="open" && d.phase!=="closed"
+      && d.phase!=="settled" && d.phase!=="provClose";
+}
 /* The stake ticket — replaces the V1 order ticket. Principal is never at risk;
    the reward is conviction (stake × time held until the answer). */
 function stakeTicket(slug,id,d){
@@ -7965,7 +7990,14 @@ function focusStakeSide(side){
 function verdictBanner(d){
   if(d.phase==="provClose") return `<span class="pill void">closed · no decision</span>`;
   if(d.phase==="settled"){ const v=(d.verdict!=null?d.verdict:d.answer); return `<span class="pill good">✓ settled ${sideName(v)}${d.route?" · "+esc(d.route):""}</span>`; }
-  if(d.phase==="disputed") return `<span class="pill escrow">⚖ dispute under way · tally sealed</span>`;
+  /* NO "tally sealed". The pill asserted a property the chain does not have: the
+     ballots are on chain and anyone can add them up, so the only thing that is
+     true is that THIS PAGE does not sum them mid-vote. A status chip is the
+     wrong place to make that distinction — it has room for a state, not for a
+     caveat — and the state is that a dispute is running. Where the difference
+     actually matters (the ballot, the ballots page) the prose says it in full,
+     including that the running count is readable off the chain. */
+  if(d.phase==="disputed") return `<span class="pill escrow">⚖ dispute under way</span>`;
   if(d.phase==="provisional") return `<span class="pill escrow">provisional ${sideName(d.provisional)} · reopenable</span>`;
   if(d.phase==="answered") return `<span class="pill open">answered ${sideName(d.answer)}</span>`;
   return d.phase==="closed"? `<span class="pill void">closed · never answered</span>` : `<span class="pill void">open · no answer yet</span>`;
@@ -8007,20 +8039,36 @@ function sinceWords(nowT, t){
   const q = d? d+(d===1?" day":" days") : h? h+(h===1?" hour":" hours") : Math.max(1,m)+" min";
   return past? q+" ago" : "in "+q;
 }
-function resolutionLadder(d, nowH, tl){
+/* `narrow` when the ladder is drawn beside the chart rather than under the page:
+   it has about half the width there, and the grid that is right at full width
+   turns the label column into one word per line at half. */
+function resolutionLadder(d, nowH, tl, narrow){
   const rows=[];
   if(tl){
     // The chain's own record: each row is a stamped date, its height kept for
     // reference in the row's title. Only rows the realm has not reached yet
     // are projections, and they say so.
     const nowT = tl.now.t;
+    /* NO GLOSS UNDER THE LABEL. Every row carried one — "opened / the claim was
+       filed", "verdict / the court's conclusion" — which is the label again in
+       a smaller type. A ladder is read by scanning the left column, and a
+       second line per row halves how much of it fits on a screen while adding
+       nothing to any of them.
+       The rows that keep a second line are the two whose label genuinely does
+       not carry the fact: a failed round says what it COST, and that is not
+       inferable from the word "failed". */
     const R=(k,what,sub)=>{ const e=tl[k]; if(!e) return;
       rows.push({t:e.t, h:e.h, what, sub, future:e.t>nowT}); };
-    R("opened","opened","the claim was filed");
-    R("answered","answered"+(d.answer!=null?" "+sideName(d.answer):""),"an answer was posted with a bond");
-    R("verdict","verdict"+(d.route?" · "+d.route:""),"the court's conclusion");
-    R("settle","settle deadline","an undisputed answer settles here");
-    R("reopen","reopen closes","escrow ends; finalizable");
+    R("opened","opened");
+    R("answered","answered"+(d.answer!=null?" "+sideName(d.answer):""));
+    R("verdict","verdict"+(d.route?" · "+d.route:""));
+    /* THE SETTLE DEADLINE ONLY WHILE IT IS THE CLOCK. It is the date an
+       UNDISPUTED answer would settle on, and the realm keeps publishing it
+       after a dispute has taken over — so a disputed or settled claim listed a
+       deadline that stopped meaning anything the moment somebody disputed. The
+       flat branch below already got this right; this one did not. */
+    if(d.phase==="answered") R("settle","settle deadline");
+    R("reopen","reopen closes");
     // THE ROUNDS ARE EVENTS, so they belong on the timeline with the other
     // events — but ClaimTimeline (clock.gno:118) publishes no stamp for a
     // round's opening, so they cannot be dated. They are rendered with an
@@ -8030,18 +8078,22 @@ function resolutionLadder(d, nowH, tl){
     // ONE ROW FOR ALL THE FAILED ROUNDS, not one apiece. With no dates to tell
     // them apart, N identical rows are N copies of the same sentence.
     if(d.round) rows.push({t:nowT-0.5, nodate:true,
-      what:`${d.round} failed round${d.round>1?"s":""}`,
-      sub:"quorum was not met — half each disputer's bond burned, half returned"});
+      what:`${d.round} failed round${d.round>1?"s":""}`});
     if(d.voteEndsAt && nowH!=null) rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
-      what:`vote closes · round ${(d.round||0)+1}`, sub:"the round's scheduled close", future:true, est:true});
-    rows.push({t:nowT, h:tl.now.h, what:"now", sub:"", now:true});
+      what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
+    rows.push({t:nowT, h:tl.now.h, what:"now", now:true});
     rows.sort((a,b)=>a.t-b.t);
     const body = rows.map(r=>{
       const known = r.t>0;
+      /* NO TIME OF DAY BESIDE THE CHART. "6 Aug 2026, 22:13 UTC" plus "11 days
+         ago" does not fit half a column and wrapped mid-date; the minute a
+         claim was filed is not what a reader scanning a ladder wants, and the
+         row's title still carries the block it happened at. Under the page,
+         where there is room, the stamp stays whole. */
       const when = r.nodate? "—"
         : !known? `≈block ${fmtN(r.h)}`
-        : r.now? stampDate(r.t,true)
-        : (r.future? (r.est?"≈ ":"")+stampDate(r.t,false) : stampDate(r.t,true));
+        : r.now? stampDate(r.t,!narrow)
+        : (r.future? (r.est?"≈ ":"")+stampDate(r.t,false) : stampDate(r.t,!narrow));
       // The nodate row's t is a SORT KEY, not a time — glossing it would print
       // "just now" about rounds that may have run for weeks.
       const gloss = known && !r.now && !r.nodate? sinceWords(nowT, r.t) : "";
@@ -8059,18 +8111,22 @@ function resolutionLadder(d, nowH, tl){
     else if(d.phase==="closed") fut2="closed — never answered";
     // NO h3. The section heading directly above already says "Timeline"; a
     // ticket heading here printed the same word twice down the page.
-    return `<div class="ticket" style="margin-bottom:12px">
-      <div class="clockrows">${body}${fut2?`<div class="ev">${esc(fut2)}</div><div class="dt">—</div>`:""}</div>
-      <p class="small muted" style="margin:10px 0 0">Dates are the chain's own record; hover a row for its block. A date marked ≈ is projected from the current pace.</p></div>`;
+    /* NO FOOTNOTE. It explained three things the rows already say: that the
+       dates come from the chain (every row's title carries its block), that
+       hovering shows the block (that is what a title attribute is), and what ≈
+       means (a projection, in front of a date that has not happened yet). Three
+       lines of instructions under a ladder that is six lines long. */
+    return `<div class="ticket${narrow?" clocknarrow":""}" style="margin-bottom:12px">
+      <div class="clockrows">${body}${fut2?`<div class="ev">${esc(fut2)}</div><div class="dt">—</div>`:""}</div></div>`;
   }
-  if(d.answered && d.settleAt) rows.push([d.settleAt-51840, "answered"+(d.answer!=null?" "+sideName(d.answer):""), "derived: settle deadline − 72h"]);
+  if(d.answered && d.settleAt) rows.push([d.settleAt-51840, "answered"+(d.answer!=null?" "+sideName(d.answer):""), "derived: settle deadline − 72h"]);   // kept: this row's height is NOT the chain's
   // SettleDeadline persists after freeze, but once a dispute/vote decided the
   // claim the old deadline is history that never happened — show it only
   // while it is the operative clock.
-  if(d.settleAt && d.phase==="answered") rows.push([d.settleAt, "settle deadline", "an undisputed answer settles here"]);
-  if(d.voteEndsAt) rows.push([d.voteEndsAt, `vote closes · round ${(d.round||0)+1}`, "the round's scheduled close"]);
-  if(d.escrowUntil) rows.push([d.escrowUntil, "reopen closes", "escrow ends; finalizable"]);
-  if(nowH!=null) rows.push([nowH, "now", "chain height"]);
+  if(d.settleAt && d.phase==="answered") rows.push([d.settleAt, "settle deadline"]);
+  if(d.voteEndsAt) rows.push([d.voteEndsAt, `vote closes · round ${(d.round||0)+1}`]);
+  if(d.escrowUntil) rows.push([d.escrowUntil, "reopen closes"]);
+  if(nowH!=null) rows.push([nowH, "now"]);
   // SORTED INTO PLACE, not appended. Rendered after the body it came out below
   // "now" and below "vote closes", reading as something still to come — and
   // failed rounds are the most recent thing that already happened. The height
@@ -8097,14 +8153,19 @@ function resolutionLadder(d, nowH, tl){
 }
 function resolutionSection(slug,id,d,nowH,tl){
   let inner="";
-  const ladder = resolutionLadder(d, nowH, tl);
+  // Drawn here only when the signal column did not take it — one ladder per
+  // page. The heading follows the content: a section titled "Timeline" holding
+  // no timeline is worse than a section named for what it actually has.
+  const moved = ladderTakesTheTicket(d);
+  const ladder = moved? "" : resolutionLadder(d, nowH, tl);
+  const head = moved? "Resolution" : "Timeline";
   if(d.phase==="closed"){
     // No notice here. It used to repeat the stake ticket almost verbatim —
     // both opened "Closed — never answered" and both ended "stakes were never
     // frozen, unstake freely". The two facts it alone carried (deposit
     // refunded, fee burned) now live in the ticket, next to the buttons they
     // describe; the ladder already carries the dates.
-    return `<section id="timeline" tabindex="-1"><div class="sec-h">Timeline</div>${ladder}</section>`;
+    return `<section id="timeline" tabindex="-1"><div class="sec-h">${head}</div>${ladder}</section>`;
   }
   if(d.phase==="provClose"){
     inner = `<div class="notice void"><span class="g">◌</span><div><b>Closed without a decision.</b>
@@ -8156,7 +8217,7 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${btn("Answer NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}
         ${btn("Close dead claim","CloseDeadClaim",{courtSlug:slug,claimID:id},"","if its timeout passed")}</div></div></div>`;
   }
-  return `<section id="timeline" tabindex="-1"><div class="sec-h">Timeline</div>${ladder}${inner}</section>`;
+  return `<section id="timeline" tabindex="-1"><div class="sec-h">${head}</div>${ladder}${inner}</section>`;
 }
 
 /* Quality lane — the tier and the flag slot, always sealed while a vote runs. */
@@ -8167,9 +8228,9 @@ function qualitySection(slug,id,d){
   const voteQ = btn("Vote: low","VoteQuality",{courtSlug:slug,claimID:id,bucket:0},"no")
         + btn("Vote: mid","VoteQuality",{courtSlug:slug,claimID:id,bucket:1})
         + btn("Vote: high","VoteQuality",{courtSlug:slug,claimID:id,bucket:2},"yes");
-  if(d.phase==="disputed"){ line = "While a dispute is running, the same voters also grade the claim — was it worth asking? — on the same ballot, sealed until the vote closes. No separate quality flag can be opened until the dispute ends. Anyone holding KOURT:" + esc(slug).toUpperCase() + " staked on the claim (its author, its answerer, its stakers) is excluded from both questions.";
+  if(d.phase==="disputed"){ line = "While a dispute is running, the same voters also grade the claim — was it worth asking? — on the same ballot. No separate quality flag can be opened until the dispute ends. Anyone holding KOURT:" + esc(slug).toUpperCase() + " staked on the claim (its author, its answerer, its stakers) is excluded from both questions.";
     act = voteQ; qlock = qualityLockLine(); }
-  else if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? The tally is <b>sealed</b> until it closes.";
+  else if(d.flagOpen){ line = "A quality flag vote is open — was this claim low-information? This page does not add the ballots up until it closes.";
     act = voteQ + btn("Resolve flag (after close)","ResolveFlag",{courtSlug:slug,claimID:id});
     qlock = qualityLockLine(); }
   else if(d.counterOpen){ line = "A slash is pending — the answerer may counter-flag to force one re-vote; if the window lapses unchallenged, anyone may close it.";
@@ -8199,7 +8260,7 @@ function aboutTour(){
   const rows = [
     [1,"Open — on the docket with no answer on file; stake YES or NO, and unstake freely until an answer posts."],
     [2,"Answered — a YES answer is on file with a bond behind it; staking is frozen, and the answer settles undisputed when its 72-hour window ends."],
-    [3,"Disputed — a sealed vote is deciding whether the posted YES answer stands; the tally is not summed until the vote closes."],
+    [3,"Disputed — a vote is deciding whether the posted YES answer stands; this page does not add the ballots up until it closes."],
     [7,"Provisional — a NO verdict stands in escrow after two failed dispute rounds; a new dispute may reopen it, and the side it runs against may withdraw 1× now."],
     [5,"Closed without a decision — three dispute rounds failed quorum, so no answer stands; everyone withdraws 1×, deposit and fee refunded."],
     [4,"Settled YES by vote — the court's conclusion, its route on record; the posted NO answer was overturned. Every stake withdraws 1×; the winning side also draws its accuracy reward."],

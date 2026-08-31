@@ -153,9 +153,13 @@ ok("...and the failed ones are counted, not listed one per line",
 // The legacy branch renders "now <small>chain height</small>", NOT ">now<" —
 // that is the dated branch's markup, and searching for it here returned -1,
 // which made the comparison true for the wrong reason.
+// The "now" row lost its <small>chain height</small> gloss with every other
+// row's — the label already says what it is — so the order is read off the
+// label itself. Anchored to the row's own markup so a "now" inside some other
+// sentence cannot satisfy it.
 ok("...sorted in before now, not appended after the future rows",
-   L3.includes("now <small>chain height")
-   && L3.indexOf("failed round") < L3.indexOf("now <small>chain height")
+   /class="r">now<\/span>/.test(L3)
+   && L3.indexOf("failed round") < L3.search(/class="r">now<\/span>/)
    && L3.indexOf("failed round") < L3.indexOf("vote closes"));
 ok("...and its sort key never reaches the page as a height",
    /class="l tnum">—<\/span><span class="r">1 failed round/.test(L3)
@@ -182,15 +186,20 @@ ok("the unexposed-close note names its round too", L3n.includes("round 2 is voti
   const D = Object.assign({}, d3l, {round:2, phase:"disputed", voteEndsAt:NOW+70000});
   const L = resolutionLadder(D, NOW, tl);
   ok("dated ladder: the close row names the round", L.includes("vote closes · round 3"));
+  // The gloss went with every other row's. What the round COST is still on the
+  // page — the notice above the ballot names the failed rounds and the ballot
+  // itself quotes the next bond — and the ladder is a ladder of WHEN, not a
+  // place to explain the rules of quorum in six point type.
   ok("dated ladder: the failed rounds are one dateless row",
-     L.includes("2 failed rounds") && L.includes("quorum was not met"));
+     L.includes("2 failed rounds") && !L.includes("quorum was not met"));
   // The row's t is a SORT KEY (nowT - 0.5), not a time. Glossed, sinceWords
   // renders it as "1 min ago" — a precise, confident lie about rounds that may
   // have run for weeks. THE DATE CELL IS ASSERTED WHOLE: the first version of
   // this banned the words "just now" and "minutes ago", neither of which
   // sinceWords produces, so the ablation that restored the gloss walked past it.
+  // No <small> to skip past any more — the label is the whole cell.
   ok("dated ladder: the dateless row's date cell is an em-dash and nothing else",
-     /failed rounds<small>[\s\S]*?<\/small><\/div><div class="dt"[^>]*>—<\/div>/.test(L));
+     /failed rounds<\/div><div class="dt"[^>]*>—<\/div>/.test(L));
   ok("dated ladder: it sorts before now, not after",
      L.indexOf("failed rounds") < L.indexOf(">now<"));
   ok("dated ladder: and it says why it has no date",

@@ -44,7 +44,11 @@ for(const [id,phase] of Object.entries(want)){
 ok("tour titles verbatim from DEMO", tour.includes(esc(DEMO.claims["orem/4"].title)));
 ok("tour labeled sample thrice", (tour.match(/sample/g)||[]).length>=3);
 ok("settled row names its route", tour.includes("by vote") && tour.includes("conclusion"));
-ok("disputed row keeps the tally sealed", tour.includes("not summed until the vote closes"));
+// NO "SEALED", ANYWHERE A READER MEETS IT AS A CLAIM ABOUT THE CHAIN. The
+// ballots are on chain and anyone can add them up; the only true statement is
+// that this page does not, and the tour says exactly that.
+ok("the disputed row says who is not summing, not that it cannot be",
+   tour.includes("this page does not add the ballots up") && !/sealed/i.test(tour));
 ok("no finalize-ready promise on orem", !/finalize/i.test(tour));
 CFG.mode='live';
 const tourL = aboutTour();
@@ -85,7 +89,14 @@ ok("atTarget uses getElementById (no selector injection)", src.includes('AT_OK.h
 ok("hashchange prefers the at-target", src.includes('const t = atTarget();\n  if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); return; }'));
 ok("hashchange yields to route-landed focus", src.includes('main.contains(document.activeElement)) return;'));
 ok("boot render mirrors the at-scroll", src.includes('render().then(()=>{ const t=atTarget();'));
-ok("timeline anchor on both returns", (src.match(/<section id="timeline" tabindex="-1"><div class="sec-h">Timeline/g)||[]).length===2);
+// The anchor is on both returns; the HEADING is not a literal any more. It is
+// "Timeline" when the section holds the ladder and "Resolution" when the signal
+// column took it — a section titled Timeline holding no timeline is worse than
+// one named for what it has.
+ok("timeline anchor on both returns",
+   (src.match(/<section id="timeline" tabindex="-1"><div class="sec-h">\$\{head\}/g)||[]).length===2);
+ok("...and the heading follows the ladder",
+   src.includes('const head = moved? "Resolution" : "Timeline";'));
 // The focus-ring rule was written against the old id; a renamed section with an
 // orphaned CSS rule gets a browser outline nobody asked for.
 ok("...and the focus-ring rule followed it", src.includes("#timeline:focus,#timeline:focus-visible"));
