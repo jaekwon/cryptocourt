@@ -7731,9 +7731,18 @@ function mergeStakeSeries(hp,dp,nowHeight){
 
    ClaimTimeline publishes a (unix, height) pair for each of opened, answered,
    verdict and now, so the map is piecewise-linear through the points the chain
-   actually reached and exact at every one of them. Outside the range it
-   continues at the nearest segment's own observed rate rather than at a
-   constant nobody promised.
+   actually reached and exact at every one of them. Before the first anchor it
+   continues at the first segment's own rate — that is still history.
+
+   PAST THE LAST ANCHOR IT USES BLOCK_SECS, and that asymmetry is the point. An
+   observed rate describes what a chain DID; it does not predict what it will
+   do. Carrying it forward off a chain that had been down for most of its life
+   turned a vote closing in five days into "25 Mar 2032 · in ≈1927.2d", because
+   the seconds-per-block between the answer and now were hundreds of times the
+   nominal and the extrapolation inherited all of it. Ahead of now the only
+   honest number is the cadence the chain is trying to keep, which is also what
+   the ladder beside the chart projects with — so the two now agree instead of
+   disagreeing by six years.
 
    settle and reopen are deliberately NOT anchors. clock.gno computes their
    times forward from a deadline (deadlineTime), so they are projections; using
@@ -7755,7 +7764,7 @@ function heightDater(tl){
     for(let i=1;i<A.length;i++)
       if(h<=A[i].h) return A[i-1].t + (h-A[i-1].h)*rate(A[i-1],A[i]);
     const n=A.length-1;
-    return A[n].t + (h-A[n].h)*rate(A[n-1],A[n]);
+    return A[n].t + (h-A[n].h)*BLOCK_SECS;
   };
 }
 /* WHAT HAS HAPPENED TO THIS CLAIM, dated — the lane the claim page devotes a

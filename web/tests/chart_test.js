@@ -38,7 +38,8 @@ code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const D
 code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code+=slice('function demoSeries(','async function fetchStakeSeries(');
-code+=slice('const MON=','function sinceWords(');   // stampDate, for the zone strip
+code+=slice('const MON=','function resolutionLadder(');  // stampDate + sinceWords
+code+=slice('function resolutionLadder(','function resolutionSection(');
 code+=slice('function signalChart(','function chartChips(');
 let code2='';
 eval(code);
@@ -135,10 +136,23 @@ for(const k of Object.keys(claims)){
   const flat = TL.now.t + (TL.opened.h-TL.now.h)*5;
   ok("P8a and does not walk back at the nominal interval",
      Math.abs(zdt(TL.opened.h)-flat) > 1000*DAY);
-  // Before the first anchor it continues on the first segment's own rate.
+  // Before the first anchor it continues on the first segment's own rate —
+  // that is still history.
   const r0=(TL.answered.t-TL.opened.t)/(TL.answered.h-TL.opened.h);
-  ok("P8a extrapolates on the nearest segment's rate",
+  ok("P8a extrapolates backwards on the nearest segment's rate",
      Math.abs(zdt(TL.opened.h-100) - (TL.opened.t-100*r0)) < 1);
+  /* AHEAD OF NOW IT USES THE NOMINAL CADENCE, and that asymmetry is the fix. An
+     observed rate says what the chain DID; it does not predict. This chain
+     averaged ~39s a block, so carrying that forward turned a deadline a few
+     thousand blocks out into years — "25 Mar 2032 · in ≈1927.2d" over a vote
+     that closes in five days. The ladder projects the future at BLOCK_SECS, so
+     the chart must too or the two contradict each other on the same screen. */
+  const ahead = 86400/5;      // one nominal day of blocks past now
+  ok("P8a projects forward at the nominal interval, not at the past's rate",
+     zdt(TL.now.h+ahead) === TL.now.t + ahead*5);
+  const pastRate=(TL.now.t-TL.answered.t)/(TL.now.h-TL.answered.h);
+  ok("P8a ...which the observed rate would have called years",
+     Math.abs(zdt(TL.now.h+ahead) - (TL.now.t+ahead*pastRate)) > 300*DAY);
   // settle and reopen are deadlines the realm computed FORWARD. Anchoring on one
   // would feed a projection back in as evidence, so a wild value must not move
   // any date that came from a block the chain actually reached.
@@ -216,6 +230,42 @@ for(const k of Object.keys(claims)){
   // all a realm too old to publish a timeline can offer.
   ok("P8c without a timeline it still draws, on the derived height",
      /^block /.test(noTl[0]), noTl[0]);
+}
+
+/* P8d: THE TWO SURFACES NAME THE SAME DAY. The chart's axis strip and the
+   ladder under it describe the same claim, and three separate bugs in a row
+   were the same shape — one of them dated an event and the other dated it
+   differently, on the same screen, and every check passed because each was only
+   ever asked about itself.
+   So: render both from one claim and one timeline, on a chain whose observed
+   cadence is nothing like the nominal one, and compare the DAYS they print. */
+{
+  const DAY=86400;
+  // a chain that stalled: 1800 days of wall clock across 4000 blocks
+  const TL={ opened:{t:1600000000, h:1000},
+             answered:{t:1600000000+1500*DAY, h:3000},
+             now:{t:1600000000+1800*DAY, h:5000} };
+  const NOWH=5000;
+  const c={title:"T", yesStake:10, noStake:3, statusText:"disputed", phase:"disputed",
+           answer:0, round:1, voteEndsAt:NOWH+86400/5*5,   // five nominal days out
+           yesConv:10, noConv:3};
+  LIVE=true;
+  const chart = signalChart("orem",9,c,NOWH,{pts:[[4900,60],[4950,62]], firstH:4900},TL);
+  LIVE=false;
+  const zones = (chart.match(/<text class="zone"[^>]*>([^<]*)<\/text>/g)||[])
+    .map(t=>t.replace(/<[^>]*>/g,""));
+  const ladder = resolutionLadder(c, NOWH, TL, false, false);
+  // The furthest thing on the plot is the vote close, and the ladder has a row
+  // for it. Both spell a date; they must spell the same one.
+  const dayOf = str => (str.match(/\d{1,2} [A-Z][a-z]{2} \d{4}/)||[])[0];
+  const chartEnd = dayOf(zones[1]);
+  const ladderVote = dayOf((ladder.match(/vote closes[\s\S]{0,220}?<\/div>/)||[""])[0]
+                     + (ladder.split("vote closes")[1]||"").slice(0,200));
+  ok("P8d the chart's right edge and the ladder's vote row agree",
+     !!chartEnd && chartEnd===ladderVote, `chart=${chartEnd} ladder=${ladderVote}`);
+  // And it is five days out, not five days scaled by a stalled chain's history.
+  ok("P8d ...and it is the five days the vote actually has",
+     /in ≈5(\.\d)?d/.test(zones[1]), zones[1]);
 }
 
 // P9: labels + §7.4
