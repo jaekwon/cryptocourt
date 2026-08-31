@@ -412,8 +412,12 @@ ok("...and a failed connect says why, in the dialog that asked",
      /note\(/.test(sign) && /"tx "\+hash/.test(sign) && /if\(title\) n\.title = title/.test(src));
 }
 
+// Matched on the fact, not the sentence: the wording changed when "No wallet
+// found. Install the extension" became "this page cannot see a wallet" — which
+// was the point of that change, since the old line asserted something it had not
+// established. What must survive is that file:// is named as hopeless.
 ok("...names the file:// trap, where no extension can ever load",
-   src.includes("extensions do not run on") && src.includes("file://"));
+   src.includes("file://") && /extensions do not run/i.test(src));
 ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
    src.includes("Open in gnoweb") && src.includes("cliBlock(cli)"));
 // ---- no voting weight, answered before the wallet is opened ---------------
