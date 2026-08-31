@@ -136,15 +136,50 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
 // The signing exception is exactly one button wide, and the button has to be the
 // one that carries it.
 {
-  ok("the sign path has an authored branch", src.includes("if(el.dataset.authored){"));
+  // THE EXCEPTION SURVIVED ITS OWN GENERALISATION. Every button confirms in a
+  // dialog now, not just this one — but the composer's body still gets the
+  // treatment the others do not: shown whole, read-only, and passed through
+  // UNTRIMMED, because signing something other than what was displayed is the
+  // failure this path exists to prevent.
+  ok("the sign path still knows an authored body from a prefilled argument",
+     src.includes('el.dataset.authored ? (el.dataset.bodykey || "text") : null'));
+  // THE INTENT, stated directly. This was a proximity regex — no `func ===`
+  // within 80 characters of `dataset.authored` — and it now trips on the NEXT
+  // argument, where `func==="Buy"` legitimately selects the spend field. What
+  // must not happen is the authored body being chosen by function name.
   ok("...gated on the dataset flag, not on the function name",
-     !/dataset\.authored[\s\S]{0,80}func\s*===/.test(src));
-  ok("...and every other button still prompts per argument",
-     /\} else \{\s*\n\s*for\(const k of keys\)\{\s*\n\s*const v = window\.prompt\(/.test(src));
+     !/bodyKey\s*=\s*func\s*===/.test(src)
+     && !/func\s*===\s*"PostComment"/.test(src));
+  ok("...and the body is the one field the dialog does not trim",
+     /if\(k === bodyKey\) return String\(args\[k\]\);\s*\/\/ untrimmed/.test(src));
+  ok("...while every other field is trimmed", src.includes("inp.value.trim()"));
+  ok("...and shown read-only, with its length against the chain's cap",
+     /if\(k === bodyKey\)\{[\s\S]{0,300}<pre class="cliblock mono">/.test(src)
+     && src.includes("of ${fmtN(MAX_COMMENT_CHARS)} characters"));
   ok("the composer's post button is the one marked authored",
      src.includes('class="btn composer-post" data-authored="1"'));
-  ok("the confirmation is a real dialog, not a prompt",
-     src.includes("function confirmAuthored(") && src.includes("dlg.showModal()"));
+  // NO NATIVE PROMPTS LEFT ANYWHERE. A loop of window.prompt() asked one box per
+  // argument — three to cast a vote — and Chrome suppresses repeated prompt()
+  // calls, returning null with nothing drawn, which surfaced as "Cancelled —
+  // nothing was signed" for a cancellation nobody made. A <dialog> cannot be
+  // suppressed.
+  ok("the confirmation is a real dialog, and the only one",
+     src.includes("function confirmArgs(") && src.includes("dlg.showModal()")
+     && !src.includes("confirmAuthored"));
+  // CODE, not prose. The comment above confirmArgs names window.prompt() in
+  // order to say why it is gone; a file-wide ban would ban the explanation —
+  // the same trap votelock_test hit with SpendableOf.
+  ok("...with no window.prompt CALL left anywhere",
+     !src.split("\n").some(l => /window\.prompt\(/.test(l)
+        && !/^\s*(\/\/|\*|\/\*)/.test(l)));
+  // Buy's spend was a FOURTH prompt after the others had been answered. It is a
+  // field in the same dialog now, and a bad amount is refused in place rather
+  // than ending the signature and sending the reader back to the button.
+  ok("the spend is a field in the same dialog",
+     src.includes('func==="Buy" ? ((el.dataset.send||"").replace(/ugnot$/,"") || "1000000") : null')
+     && src.includes("This is burned. Treat it as spent."));
+  ok("...and a bad amount is refused without closing it",
+     /e\.hidden = false; e\.textContent = "A whole, non-zero ugnot amount\.";\s*\n\s*return;/.test(src));
   // BOTH call sites, named separately. Asserting `includes("fillComposer(")`
   // once is satisfied by either, so deleting the list-page call passed while the
   // composer had vanished from every board that has comments.

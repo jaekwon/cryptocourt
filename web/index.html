@@ -1231,6 +1231,18 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;
   box-shadow:var(--glow-a)}
 .act{display:inline-flex; align-items:flex-start; gap:6px; flex-wrap:wrap; position:relative; max-width:100%; min-width:0}
+/* The signing dialog's fields. Monospaced because most of them are chain
+   identifiers — a slug, a claim id, a side — where a transposed character has to
+   be visible, and full width because a truncated value cannot be checked. */
+.argrow{margin:8px 0}
+.argrow input{
+  width:100%; box-sizing:border-box; margin-top:3px; padding:6px 8px;
+  border-radius:var(--r-sm); border:1px solid var(--line-2);
+  background:var(--surface); color:var(--ink); font-size:13px;
+}
+.argrow input:focus{outline:none; border-color:var(--accent)}
+.argrow .sendin{width:auto; min-width:12ch; display:inline-block}
+.helper .err{color:var(--contra)}
 .copybtn{font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; color:var(--muted);
   border:1px solid var(--line-2); border-radius:var(--r); padding:3px 7px; align-self:center}
 .copybtn:hover{color:var(--accent-2); border-color:var(--accent-2)}
@@ -2810,40 +2822,89 @@ function adenaDisconnect(){ delete CFG.addr; saveCfg(); reflectWallet(); render(
    reason the page never showed.
 
    Escape and the backdrop both fire `close`, and both mean no. */
-function confirmAuthored(func, args, bodyKey){
+/* ONE DIALOG FOR EVERY SIGNATURE, replacing a loop of window.prompt().
+
+   THE INVARIANT IS UNCHANGED: no argument is signed without being shown. A few
+   buttons carry placeholder text — a claim title, a court name — that must never
+   go to the chain as-is, and that is why arguments are confirmed at all.
+
+   WHAT WAS WRONG WAS THE INSTRUMENT. It asked one native prompt PER ARGUMENT, so
+   voting popped three of them — "VoteDispute — courtSlug:", "— claimID:",
+   "— choice:" — asking a reader to retype values the page had just derived
+   itself. Escape on any one aborted the whole signature, and Chrome suppresses
+   repeated prompt() calls outright: once suppressed it returns null with nothing
+   drawn, which arrived as "Cancelled — nothing was signed" for a cancellation
+   nobody made. A modal <dialog> cannot be suppressed and shows everything at
+   once, which is also the only way to see the arguments as a SET.
+
+   bodyKey is the composer's exception, unchanged: a 2000-character comment is
+   shown whole and read-only, because it was authored rather than prefilled, and
+   it is passed through UNTRIMMED — signing something other than what was
+   displayed is the failure this path exists to prevent.
+
+   send is Buy's: a spend folded in here rather than left as one last prompt
+   after the dialog closed.
+
+   Resolves null on cancel, or {vals, send}. */
+function confirmArgs(func, args, bodyKey, sendPre){
   return new Promise(resolve => {
+    const keys = Object.keys(args || {});
     const dlg = document.createElement("dialog");
     dlg.className = "helper";
-    const rows = Object.keys(args).map(k => {
+    const rows = keys.map(k => {
       const v = String(args[k]);
-      if(k !== bodyKey)
-        return `<p class="small"><b>${esc(k)}</b> <span class="mono">${esc(v)}</span></p>`;
-      const n = commentChars(v);
-      return `<h4>${esc(k)}</h4><pre class="cliblock mono">${esc(v)}</pre>`
-        + `<p class="small" style="color:${n > MAX_COMMENT_CHARS ? "var(--contra)" : "var(--muted)"}">`
-        + `${fmtN(n)} of ${fmtN(MAX_COMMENT_CHARS)} characters`
-        + (n > MAX_COMMENT_CHARS ? " — the chain will refuse this." : "") + `</p>`;
+      if(k === bodyKey){
+        const n = commentChars(v);
+        return `<h4>${esc(k)}</h4><pre class="cliblock mono">${esc(v)}</pre>`
+          + `<p class="small" style="color:${n > MAX_COMMENT_CHARS ? "var(--contra)" : "var(--muted)"}">`
+          + `${fmtN(n)} of ${fmtN(MAX_COMMENT_CHARS)} characters`
+          + (n > MAX_COMMENT_CHARS ? " — the chain will refuse this." : "") + `</p>`;
+      }
+      return `<p class="small argrow"><b>${esc(k)}</b><br>`
+        + `<input class="argin mono" data-k="${esc(k)}" value="${esc(v)}" spellcheck="false"></p>`;
     }).join("");
+    const sendRow = sendPre==null ? "" :
+      `<h4>GNOT to spend</h4>
+       <p class="small argrow"><input class="sendin mono" value="${esc(String(sendPre))}" spellcheck="false"> ugnot</p>
+       <p class="small" style="color:var(--contra)">This is burned. Treat it as spent.</p>`;
     dlg.innerHTML = `<div class="hd"><h3>Sign ${esc(func)}</h3>
         <button type="button" class="pill void" data-cancel>close</button></div>
-      <div class="bd">${rows}
-        <p class="small muted">This is what will be signed. A comment cannot be edited or deleted
-          afterwards — you may withdraw it from the list, but it is never deleted.</p>
+      <div class="bd">${rows}${sendRow}
+        <p class="small muted">This is what will be signed.${bodyKey? " A comment cannot be edited or deleted afterwards — you may withdraw it from the list, but it is never deleted." : ""}</p>
+        <p class="small muted err" data-err hidden></p>
         <div class="actions"><button type="button" class="btn" data-go>Sign it</button>
           <button type="button" class="copybtn" data-cancel>Cancel</button></div></div>`;
     document.body.appendChild(dlg);
     let settled = false;
     const done = v => {
       if(settled) return;            // data-go closes the dialog, which fires
-      settled = true;                // `close`, which would resolve false after
-      try{ dlg.close(); }catch(_){}  // it had already resolved true.
+      settled = true;                // `close`, which would resolve null after
+      try{ dlg.close(); }catch(_){}  // it had already resolved a value.
       dlg.remove(); resolve(v);
     };
     dlg.addEventListener("click", ev => {
-      if(ev.target.closest("[data-go]")) done(true);
-      else if(ev.target.closest("[data-cancel]")) done(false);
+      if(ev.target.closest("[data-cancel]")) return done(null);
+      if(!ev.target.closest("[data-go]")) return;
+      const vals = keys.map(k => {
+        if(k === bodyKey) return String(args[k]);          // untrimmed, deliberately
+        const inp = dlg.querySelector(`.argin[data-k="${CSS.escape(k)}"]`);
+        return inp ? inp.value.trim() : String(args[k]);
+      });
+      let send = "";
+      if(sendPre != null){
+        const amt = (dlg.querySelector(".sendin").value || "").trim();
+        // REFUSED IN PLACE, not by closing. A rejected amount used to end the
+        // whole signature and make the reader start again from the button.
+        if(!/^[1-9][0-9]*$/.test(amt)){
+          const e = dlg.querySelector("[data-err]");
+          e.hidden = false; e.textContent = "A whole, non-zero ugnot amount.";
+          return;
+        }
+        send = amt + "ugnot";
+      }
+      done({vals, send});
     });
-    dlg.addEventListener("close", () => done(false));
+    dlg.addEventListener("close", () => done(null));
     dlg.showModal();
   });
 }
@@ -2904,32 +2965,14 @@ async function adenaSign(func, args, el){
     // a 2000-byte multi-line comment cannot be typed into a single-line prompt at
     // all. So a control marked data-authored is confirmed as a whole, in a dialog
     // that can hold what it is confirming. Every other button keeps its prompt.
-    const keys = Object.keys(args||{});
-    const vals = [];
-    if(el.dataset.authored){
-      if(!await confirmAuthored(func, args||{}, el.dataset.bodykey || "text")){
-        note("Cancelled — nothing was signed."); return; }
-      // NOT trimmed here: the dialog showed these exact bytes, and signing
-      // something other than what was shown is the failure this path exists to
-      // avoid. The composer trims before it builds the arguments.
-      for(const k of keys) vals.push(String(args[k]));
-    } else {
-      for(const k of keys){
-        const v = window.prompt(func+" — "+k+":", String(args[k]));
-        if(v===null){ note("Cancelled — nothing was signed."); return; }
-        vals.push(v.trim());
-      }
-    }
-    let send = "";
-    if(func==="Buy"){
-      // The receipt input prefills the amount; the confirm prompt stays — a
-      // spend is the one argument that must never go unconfirmed.
-      const pre = (el.dataset.send||"").replace(/ugnot$/,"") || "1000000";
-      const amt = window.prompt("GNOT to spend, in ugnot (this is burned — treat it as spent):", pre);
-      if(amt===null){ note("Cancelled — nothing was signed."); return; }
-      if(!/^[1-9][0-9]*$/.test(amt.trim())){ note("A whole, non-zero ugnot amount."); return; }
-      send = amt.trim()+"ugnot";
-    }
+    // ONE DIALOG, every argument at once, and the spend with them. This was a
+    // loop of window.prompt() — one native box per argument, so a vote asked
+    // three — plus a fourth for Buy's amount after they had all been answered.
+    const ok = await confirmArgs(func, args||{},
+      el.dataset.authored ? (el.dataset.bodykey || "text") : null,
+      func==="Buy" ? ((el.dataset.send||"").replace(/ugnot$/,"") || "1000000") : null);
+    if(!ok){ note("Cancelled — nothing was signed."); return; }
+    const vals = ok.vals, send = ok.send;
     note("Waiting for Adena…");
     const res = await a.DoContract({messages:[{type:"/vm.m_call", value:{
       caller: CFG.addr, send, pkg_path: PKG, func, args: vals
