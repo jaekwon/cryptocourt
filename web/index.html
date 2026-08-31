@@ -2340,6 +2340,57 @@ async function claimParties(slug, id, d){
     b2? Promise.resolve(b2) : one(`Answerer(${s2},${id})`).catch(()=>null)]);
   return {author: ra, answerer: rb};
 }
+/* WHICH OF THE FOUR PULLS ARE ACTUALLY YOURS, and what they are worth.
+   All four were offered to everybody and none said an amount: the author's
+   slice to readers who did not file the claim, the answerer's to readers who
+   did not answer it, a voter reward to people who never voted. Each one is a
+   signature away from a panic, which is the same fault the withdraw pair had
+   and the same fix — ask, then remove what is not theirs.
+   THE RULES ARE claimables()'s, deliberately. That function already decides
+   which draws an address may take, and the me page has been using it; a second
+   opinion here is how the two surfaces start disagreeing about whose draw it
+   is. What is new is only the amount and the removal.
+   PullState is per address and one read. A failed read leaves every pull
+   standing rather than removing one somebody could have taken. */
+async function fillTicketPulls(slug, id, d, p){
+  const wraps = [...document.querySelectorAll(".stakewrap .ticket [data-pull]")];
+  if(!wraps.length || !d || !d.crystallized) return;
+  const addr = CFG.addr;
+  let pulls = d.pulls || null;
+  if(!pulls && isLive()){
+    const ps = await tup(`PullState(${gstr(slug)},${id},${gstr(addr)})`).catch(()=>null);
+    pulls = ps? {winnerPaid:!!ps[0], authorPaid:!!ps[1], answererPaid:!!ps[2]} : null;
+  }
+  if(!pulls) return;                       // unread: leave them all
+  const party = await claimParties(slug, id, d);
+  const v = (d.verdict!=null && d.verdict>=0)? d.verdict : (d.route==="vote"? null : d.answer);
+  const mine = {
+    winner:  v!=null && !pulls.winnerPaid && ((v===0 && (+p.cy||0)>0) || (v===1 && (+p.cn||0)>0)),
+    author:  !pulls.authorPaid && party.author===addr && !d.seeded,
+    answerer:!pulls.answererPaid && party.answerer===addr && !(d.draw && d.draw.ans===0),
+    // The carrot excludes every participant, and only the court knows whether
+    // this address voted with the verdict — so it is offered to a non-
+    // participant and labelled as conditional rather than promised.
+    carrot:  d.route==="vote" && d.draw && d.draw.carrot>0
+             && party.author!==addr && party.answerer!==addr
+             && !(+p.yes>0) && !(+p.no>0) && !(+p.cy>0) && !(+p.cn>0),
+  };
+  for(const w of wraps){
+    const k = w.getAttribute("data-pull");
+    const pool = +w.getAttribute("data-pool") || 0;
+    // A slice of nothing is not a control. claimables already says this about
+    // the overturned answerer ("draws nothing"); it is true of any empty slice.
+    if(!mine[k] || pool<=0){ w.remove(); continue; }
+    const el = w.querySelector(".btn");
+    if(!el || el.querySelector("small")) continue;
+    // The author's and the answerer's slices are the WHOLE slice, so they can be
+    // stated. Accuracy and the carrot are shared out, so they name the pool.
+    const sm = document.createElement("small");
+    sm.textContent = (k==="author"||k==="answerer")? cc(pool, slug) : "of "+cc(pool, slug);
+    el.appendChild(document.createTextNode(" "));
+    el.appendChild(sm);
+  }
+}
 async function fillWithdrawSides(slug, id, d, nowH, vAt){
   if(!CFG.addr) return;
   /* KEYED ON data-wside, WHICH stakeTicket WRITES, not on the button's own
@@ -2373,6 +2424,7 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
       "Only this claim's author, its answerer and its stakers can open the rewards in the first week after the verdict. Anyone can after that.");
     crys.setAttribute("aria-disabled","true");
   }
+  await fillTicketPulls(slug, id, d, p);
   let shown = 0;
   for(const w of wraps){
     const side = +w.getAttribute("data-wside");
@@ -2471,7 +2523,14 @@ function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court 
    named CC_DEC constant used to sit up with the other globals and was never read
    by anything, here or elsewhere, from the courtv2 port onward; the knowledge is
    kept where the division happens instead of where it was declared. */
-function cc(n, slug){ const v=(n||0)/1e6;
+/* A FIGURE THAT ROUNDS TO NOTHING SAYS SO IN THE UNIT THE CHAIN USES. Two
+   decimals is right for the amounts a reader stakes and wrong for the ones the
+   emission curve produces: a claim's whole author slice on a young court is 101
+   µCC, and "0.00 KOURT:COVID" on a button is a page telling somebody their
+   reward is nothing. Under a hundredth it switches to the micro unit, which is
+   what the realm counts in and what ugnot() already does for GNOT. */
+function cc(n, slug){ const u=n||0, v=u/1e6;
+  if(u!==0 && Math.abs(v)<0.01) return fmtN(u)+" µ"+ccSym(slug);
   return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" "+ccSym(slug); }
 function ugnot(n){ return fmtN(n)+" µGNOT"; }
 function shortAddr(a){ a=String(a||""); return esc(a.length>12? a.slice(0,7)+"…"+a.slice(-4): a); }
@@ -8515,10 +8574,24 @@ function stakeTicket(slug,id,d){
         <span data-wside="0">${btn("Withdraw YES","WithdrawStake",{courtSlug:slug,claimID:id,side:0},d.phase==="settled"?"yes":"")}</span>
         <span data-wside="1">${btn("Withdraw NO","WithdrawStake",{courtSlug:slug,claimID:id,side:1},d.phase==="settled"?"no":"")}</span>
         ${d.phase!=="settled"? "" : d.crystallized
-          ? btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v})
-            +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
-            +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
-            +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
+          /* FOUR PULLS, AND AT MOST ONE OR TWO ARE YOURS. They were all four
+             offered to everybody, unpriced: the author's slice to readers who
+             did not file the claim, the answerer's to readers who did not
+             answer it, "deciding-round voters" to people who never voted. Each
+             is one signature away from a panic.
+             data-pull marks them for fillTicketPulls, which reads PullState and
+             the reader's conviction and removes the ones that are not theirs.
+             The slice sizes come from DrawSlices, already in hand: the author's
+             and the answerer's are the WHOLE slice and can be stated exactly;
+             the accuracy and voter pools are shared, so those name the pool. */
+          ? `<span data-pull="winner" data-pool="${(d.draw&&d.draw.w)||0}">`
+              + btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v}) + `</span>`
+            +`<span data-pull="author" data-pool="${(d.draw&&d.draw.a)||0}">`
+              + btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id}) + `</span>`
+            +`<span data-pull="answerer" data-pool="${(d.draw&&d.draw.ans)||0}">`
+              + btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id}) + `</span>`
+            +`<span data-pull="carrot" data-pool="${(d.draw&&d.draw.carrot)||0}">`
+              + btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","if you voted with the verdict") + `</span>`
           /* WHAT THE REALM WILL REFUSE, said before the signature rather than
              after it. Crystallize is turned down in four states — an open
              quality question, the 24h quiet window after the last flag event,
