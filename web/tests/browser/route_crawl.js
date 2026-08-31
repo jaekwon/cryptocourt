@@ -129,7 +129,7 @@ const NOT_FOUND = () => {
   const corner = await page.evaluate(() => {
     const f = document.querySelector('.forkme');
     if (!f) return {missing: true};
-    const g = f.querySelector('.sir svg'), band = f.querySelector('.band');
+    const g = f.querySelector('.seat svg'), band = f.querySelector('.band');
     if (!g || !band) return {noParts: true};
     const gr = g.getBoundingClientRect(), br = band.getBoundingClientRect();
     const mid = document.elementFromPoint(Math.round(br.left + br.width / 2),

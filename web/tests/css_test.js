@@ -153,34 +153,38 @@ if (mediaDark && themeLight && themeDark) {
 // THE MARK IS DRAWN IN THREE PLACES and must be one drawing: the rail, the
 // favicon, and the fork-me ribbon. Nothing in a browser can tell you they have
 // drifted — the tab icon is 16px and nobody compares it to the sidebar — so the
-// paths are compared here. The favicon cannot share a variable with the DOM (it
+// shapes are compared here. The favicon cannot share a variable with the DOM (it
 // is an attribute in <head>, read before any script runs), which is exactly the
-// situation that produces two copies of one shape.
+// situation that produces three copies of one shape and then two of them.
 {
-  const paths = where => {
-    const seg = src.slice(where.a, where.b);
-    return (seg.match(/d=['"]([^'"]+)['"]/g) || []).map(t =>
-      t.replace(/^d=['"]/, "").replace(/['"]$/, "").replace(/\s+/g, " ").trim());
+  // every <rect>/<circle>/<path>, reduced to its geometry and nothing else, so
+  // a change of colour, size or class does not read as a change of drawing.
+  // quote style is normalised: the favicon is single-quoted because it lives
+  // inside a double-quoted href, and that is not a difference in the drawing.
+  const shapes = svg => (svg.match(/<(rect|circle|path)\b[^>]*>/g) || []).map(t =>
+    (t.match(/\b(?:d|x|y|width|height|cx|cy|r)=['"][^'"]*['"]/g) || [])
+      .map(kv => kv.replace(/'/g, '"')).join(" "));
+  const between = (from, to, at) => {
+    const a = src.indexOf(from, at || 0);
+    return a < 0 ? "" : src.slice(a, src.indexOf(to, a));
   };
   const iconRaw = /<link rel="icon" href="data:image\/svg\+xml,([^"]+)"/.exec(src);
   ok("the favicon is an svg data URI", !!iconRaw);
-  const icon = decodeURIComponent((iconRaw ? iconRaw[1] : "").replace(/%23/g, "#"))
-    .replace(/\s+/g, " ");
-  const iconPaths = (icon.match(/d='([^']+)'/g) || [])
-    .map(t => t.slice(3, -1).replace(/\s+/g, " ").trim());
-  const railA = src.indexOf('<span class="sir" aria-hidden="true">');
-  const rail = paths({a: railA, b: src.indexOf("</svg>", railA)});
-  const forkA = src.indexOf('class="forkme"');
-  const fork = paths({a: forkA, b: src.indexOf("</svg>", forkA)});
-  ok("the rail draws the hat, the brim and the moustache", rail.length === 3);
-  ok("the favicon draws the same three paths, in the same order",
-     iconPaths.length === 3 && iconPaths.every((d, i) => d === rail[i]));
-  ok("the ribbon draws the same three paths, in the same order",
-     fork.length === 3 && fork.every((d, i) => d === rail[i]));
-  // and the favicon must not smuggle a second stylesheet into this file: a
-  // literal <style> inside that attribute is what every tool slicing this file
-  // on "<style>" would find first — this harness did, and started checking the
-  // favicon's four rules instead of the page's thousand.
+  const icon = decodeURIComponent((iconRaw ? iconRaw[1] : "").replace(/%23/g, "#"));
+  const rail = shapes(between('<span class="seat" aria-hidden="true">', "</svg>"));
+  const fork = shapes(between('<span class="seat" aria-hidden="true">', "</svg>",
+                              src.indexOf('class="forkme"')));
+  const ico  = shapes(icon);
+  ok("the rail draws the seat — twelve rectangles, no curves", rail.length === 12);
+  ok("the favicon draws the same twelve, in the same order",
+     ico.length === 12 && ico.every((d, i) => d === rail[i]));
+  ok("the ribbon draws the same twelve, in the same order",
+     fork.length === 12 && fork.every((d, i) => d === rail[i]));
+  // and the drawing is a solid silhouette: no knocked-out holes, which is what
+  // lets one copy serve a light page, a dark page and a browser tab.
+  ok("nothing in the mark is stroked or knocked out",
+     !/stroke=|fill-rule|fill="var|fill='#(?!111|e6edf2)/.test(
+        between('<span class="seat" aria-hidden="true">', "</svg>")));
   ok("the favicon's markup is percent-encoded, so the page has ONE <style>",
      (src.match(/<style>/g) || []).length === 1);
 }

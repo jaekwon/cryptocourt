@@ -18,7 +18,7 @@
      THE IMAGE IS THE SITE'S OWN FACE, which is the one picture that is true of
      every URL here. This used to carry no og:image at all, on the grounds that a
      fixed image would misrepresent whichever claim was being shared — right about
-     a claim, wrong as a reason to have none, because the sir is not a claim. A
+     a claim, wrong as a reason to have none, because the seat is not a claim. A
      data: URI still cannot be used (no major crawler follows one), so og.png is a
      real file shipped beside this one and named absolutely, and deploy.sh will
      refuse to ship a page whose og:image it is not also uploading. -->
@@ -30,17 +30,17 @@
 <meta property="og:image" content="https://kourt.xyz/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A monocled gentleman raising a glass, over the word Kourt.">
+<meta property="og:image:alt" content="An empty stone seat of judgment, over the word Kourt.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Kourt — the ledger of record">
 <meta name="twitter:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
 <meta name="twitter:image" content="https://kourt.xyz/og.png">
-<meta name="twitter:image:alt" content="A monocled gentleman raising a glass, over the word Kourt.">
+<meta name="twitter:image:alt" content="An empty stone seat of judgment, over the word Kourt.">
 <!-- The tab icon is the same drawing as the rail's mark, and follows the
      browser theme: an SVG favicon carries its own stylesheet, so
      prefers-color-scheme works inside it. Was ⚖️, which every platform
      draws differently. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='32 8 136 136'%3E%3Cstyle%3E*{fill:%23111;stroke:none}circle.m{fill:none;stroke:%23111;stroke-width:9}@media(prefers-color-scheme:dark){*{fill:%23e6edf2}circle.m{stroke:%23e6edf2}}%3C/style%3E%3Cpath d='M70 16 L130 16 L130 54 L70 54 Z'/%3E%3Cpath d='M40 58 C68 49 132 49 160 58 C132 67 68 67 40 58 Z'/%3E%3Ccircle class='m' cx='118' cy='94' r='18'/%3E%3Ccircle cx='118' cy='94' r='6'/%3E%3Ccircle cx='82' cy='96' r='6'/%3E%3Cpath d='M100 124 C89 110 65 107 54 118 C65 120 71 125 75 131 C83 141 94 138 100 130 C106 138 117 141 125 131 C129 125 135 120 146 118 C135 107 111 110 100 124 Z'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='3 0 94 100'%3E%3Cstyle%3Erect{fill:%23111}@media(prefers-color-scheme:dark){rect{fill:%23e6edf2}}%3C/style%3E%3Crect x='17' y='0' width='5' height='66'/%3E%3Crect x='24' y='0' width='5' height='66'/%3E%3Crect x='31' y='0' width='5' height='66'/%3E%3Crect x='64' y='0' width='5' height='66'/%3E%3Crect x='71' y='0' width='5' height='66'/%3E%3Crect x='78' y='0' width='5' height='66'/%3E%3Crect x='36' y='8' width='28' height='58'/%3E%3Crect x='12' y='66' width='76' height='10'/%3E%3Crect x='20' y='76' width='10' height='11'/%3E%3Crect x='70' y='76' width='10' height='11'/%3E%3Crect x='8' y='87' width='84' height='6'/%3E%3Crect x='3' y='93' width='94' height='7'/%3E%3C/svg%3E">
 <style>
 /* ============================================================================
    Kourt overlay — a presentation layer over the r/kourt/kourtv2 realm.
@@ -189,8 +189,8 @@ code,.mono{font-family:var(--mono)}
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
 .brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
 .brand .scale{font-size:26px; filter:grayscale(.2)}
-.brand .sir{display:flex; flex:none; color:var(--ink)}
-.brand .mark:hover .sir{color:var(--accent)}
+.brand .seat{display:flex; flex:none; color:var(--ink)}
+.brand .mark:hover .seat{color:var(--accent)}
 .brand h1{font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.05}
 .brand .tag{color:var(--muted); font-size:12.5px; margin-top:6px; letter-spacing:.02em}
 .nav{padding:14px 12px; display:flex; flex-direction:column; gap:2px}
@@ -1427,7 +1427,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   background:var(--accent); color:var(--accent-ink);
   font-family:var(--mono); font-size:11.5px; font-weight:700; letter-spacing:.09em;
   text-transform:uppercase; box-shadow:0 1px 8px rgba(0,0,0,.28)}
-.forkme .sir{display:flex; flex:none; color:currentColor}
+.forkme .seat{display:flex; flex:none; color:currentColor}
 .forkme:hover .band{background:var(--accent-2)}
 .forkme:focus-visible .band{outline:2px solid var(--ink); outline-offset:2px}
 @media(max-width:900px){ .forkme{display:none} }
@@ -1521,22 +1521,25 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 <aside class="rail">
   <div class="brand">
     <a class="mark" href="#/">
-      <!-- THE SIR. Monocle, top hat, waxed moustache — the mark is drawn, not
-           an emoji, because ⚖️ renders as a different picture on every platform
-           and a site's own face should not be one of those. Hat and moustache
-           are filled and the monocle is stroked, all in currentColor, so the
-           whole thing inverts with the theme instead of needing a second copy.
-           Everything smaller than the head is left out on purpose: at 16px in a
-           browser tab, a chin line and a wine glass are noise. The full figure —
-           glass raised, "Gentlemen." — is the share card, where there is room.
-           The same paths are in the favicon above; favicon_test compares them. -->
-      <span class="sir" aria-hidden="true"><svg viewBox="32 8 136 136" width="30" height="30">
-        <path fill="currentColor" d="M70 16 L130 16 L130 54 L70 54 Z"/>
-        <path fill="currentColor" d="M40 58 C68 49 132 49 160 58 C132 67 68 67 40 58 Z"/>
-        <circle cx="118" cy="94" r="18" fill="none" stroke="currentColor" stroke-width="9"/>
-        <circle cx="118" cy="94" r="6" fill="currentColor"/>
-        <circle cx="82" cy="96" r="6" fill="currentColor"/>
-        <path fill="currentColor" d="M100 124 C89 110 65 107 54 118 C65 120 71 125 75 131 C83 141 94 138 100 130 C106 138 117 141 125 131 C129 125 135 120 146 118 C135 107 111 110 100 124 Z"/>
+      <!-- THE SEAT. Lincoln's chair: two colonnades of bundled rods with the
+           back raised between them, a deep seat, a plinth of two courses —
+           drawn EMPTY, which is the whole of it. Nobody presides over this
+           court; the record decides, and the old icon painters had a name for
+           a throne made ready with no one on it. Twelve rectangles, no curves,
+           no knocked-out holes: it inverts with the theme, prints, and shrinks
+           to a 16px tab icon without a second drawing. Was a monocled gentleman
+           with a wine glass, which was funnier and said nothing.
+           The same twelve are in the favicon above and in the ribbon at the
+           foot of the page; css_test compares all three. -->
+      <span class="seat" aria-hidden="true"><svg viewBox="3 0 94 100" width="30" height="32" fill="currentColor">
+        <rect x="17" y="0" width="5" height="66"/><rect x="24" y="0" width="5" height="66"/>
+        <rect x="31" y="0" width="5" height="66"/><rect x="64" y="0" width="5" height="66"/>
+        <rect x="71" y="0" width="5" height="66"/><rect x="78" y="0" width="5" height="66"/>
+        <rect x="36" y="8" width="28" height="58"/>
+        <rect x="12" y="66" width="76" height="10"/>
+        <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
+        <rect x="8" y="87" width="84" height="6"/>
+        <rect x="3" y="93" width="94" height="7"/>
       </svg></span>
       <span><h1>Kourt</h1></span>
     </a>
@@ -10829,13 +10832,15 @@ render().then(()=>{ const t=atTarget(); if(t){ t.focus({preventScroll:true}); t.
      with an unmarked external href, which is how a page stays self-contained. -->
 <a class="forkme" href="https://github.com/jaekwon/cryptocourt" target="_blank" rel="noopener"
    aria-label="Fork Kourt on GitHub">
-  <span class="band"><span class="sir" aria-hidden="true"><svg viewBox="32 8 136 136" width="17" height="17">
-    <path fill="currentColor" d="M70 16 L130 16 L130 54 L70 54 Z"/>
-    <path fill="currentColor" d="M40 58 C68 49 132 49 160 58 C132 67 68 67 40 58 Z"/>
-    <circle cx="118" cy="94" r="18" fill="none" stroke="currentColor" stroke-width="11"/>
-    <circle cx="118" cy="94" r="7" fill="currentColor"/>
-    <circle cx="82" cy="96" r="7" fill="currentColor"/>
-    <path fill="currentColor" d="M100 124 C89 110 65 107 54 118 C65 120 71 125 75 131 C83 141 94 138 100 130 C106 138 117 141 125 131 C129 125 135 120 146 118 C135 107 111 110 100 124 Z"/>
+  <span class="band"><span class="seat" aria-hidden="true"><svg viewBox="3 0 94 100" width="15" height="16" fill="currentColor">
+    <rect x="17" y="0" width="5" height="66"/><rect x="24" y="0" width="5" height="66"/>
+    <rect x="31" y="0" width="5" height="66"/><rect x="64" y="0" width="5" height="66"/>
+    <rect x="71" y="0" width="5" height="66"/><rect x="78" y="0" width="5" height="66"/>
+    <rect x="36" y="8" width="28" height="58"/>
+    <rect x="12" y="66" width="76" height="10"/>
+    <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
+    <rect x="8" y="87" width="84" height="6"/>
+    <rect x="3" y="93" width="94" height="7"/>
   </svg></span>Fork me on GitHub</span>
 </a>
 </body>

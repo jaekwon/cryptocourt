@@ -7,17 +7,11 @@
 // byte-for-byte the same, so `--check` can verify the shipped card is the card
 // this source describes.
 //
-// WHY THE FULL FIGURE. The rail's mark drops everything below the moustache
-// because it renders at 30px. A card is 1200 wide and shown at a few hundred:
-// there is room for the glass, which is the whole joke, so the card carries the
-// figure the mark is an abbreviation of.
+// WHY THE CARD IS NOT JUST THE FAVICON SCALED UP. The mark is twelve rectangles
+// because it has to survive 16px. A card is 1200 wide and shown at a few
+// hundred, so it can afford the courses of the plinth and the air around them —
+// same seat, drawn with room.
 //
-//   node scripts/make-og-card.js            write web/og.png
-//   node scripts/make-og-card.js --check    fail if web/og.png is out of date
-//
-// Needs puppeteer, like the browser harnesses. With no node or no puppeteer this
-// exits 0 and says so: the card in the tree is already correct, and a laptop
-// without a headless Chrome must not fail the build over a file it cannot draw.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -33,36 +27,18 @@ catch (_) {
   process.exit(0);
 }
 
-// The figure, at card scale. Same character as the rail's mark; the mark is this
-// drawing with the head, glass and collar taken off. Solid fills are safe here
-// because a card has one fixed ground, unlike the page.
-const SIR = `
-<svg viewBox="20 8 220 226" width="430" height="442" aria-hidden="true">
-  <g fill="none" stroke="#12100c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <path fill="#12100c" stroke="none" d="M94 20 L174 20 L174 72 L94 72 Z"/>
-    <path fill="#12100c" stroke="none" d="M72 74 C102 66 166 66 196 74 C166 82 102 82 72 74 Z"/>
-    <path d="M94 58 L174 58" stroke="#f7f4ec" stroke-width="6"/>
-    <path d="M98 76 C98 120 108 150 134 155 C160 150 170 120 170 76"/>
-    <path d="M108 96 C116 90 126 90 132 95"/>
-    <circle cx="120" cy="108" r="4.5" fill="#12100c" stroke="none"/>
-    <circle cx="156" cy="106" r="19"/>
-    <circle cx="156" cy="106" r="4.5" fill="#12100c" stroke="none"/>
-    <path d="M172 116 C186 132 184 156 164 166" stroke-width="5"/>
-    <path d="M138 112 C134 122 137 128 143 129" stroke-width="5"/>
-    <path fill="#12100c" stroke="none" d="M136 140 C124 126 98 122 86 134 C98 136 104 141 108 147
-      C116 157 128 154 136 146 C144 154 156 157 164 147 C168 141 174 136 186 134
-      C174 122 148 126 136 140 Z"/>
-    <path d="M120 158 C128 164 142 164 150 157"/>
-    <path d="M112 168 C120 180 128 186 135 188 C142 186 150 180 158 168"/>
-    <path d="M135 188 L135 212" stroke-width="5"/>
-    <path d="M86 232 C90 202 98 180 112 168 M184 232 C180 202 172 180 158 168"/>
-    <g transform="translate(48 126) rotate(-14)">
-      <path fill="#12100c" fill-opacity=".22" stroke="none"
-            d="M-15 8 C-15 26 -8 35 0 37 C8 35 15 26 15 8 Z"/>
-      <path d="M-17 4 C-17 24 -9 35 0 37 C9 35 17 24 17 4 Z"/>
-      <path d="M-17 4 L17 4 M0 37 L0 60 M-12 62 L12 62"/>
-    </g>
-  </g>
+// The seat, at card scale: the same twelve rectangles the mark is made of,
+// scaled up and given the space to read as stone rather than as an icon.
+const SEAT = `
+<svg viewBox="3 0 94 100" width="330" height="351" aria-hidden="true" fill="#12100c">
+  <rect x="17" y="0" width="5" height="66"/><rect x="24" y="0" width="5" height="66"/>
+  <rect x="31" y="0" width="5" height="66"/><rect x="64" y="0" width="5" height="66"/>
+  <rect x="71" y="0" width="5" height="66"/><rect x="78" y="0" width="5" height="66"/>
+  <rect x="36" y="8" width="28" height="58"/>
+  <rect x="12" y="66" width="76" height="10"/>
+  <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
+  <rect x="8" y="87" width="84" height="6"/>
+  <rect x="3" y="93" width="94" height="7"/>
 </svg>`;
 
 // No webfont: a card that waits on a font download renders in a fallback and
@@ -83,12 +59,12 @@ const CARD = `<!doctype html><meta charset="utf-8"><style>
   .said{font-family:Georgia,serif;font-size:25px;letter-spacing:0;text-transform:none;
         color:#12100c;font-style:italic}
 </style>
-<div class="fig">${SIR}</div>
+<div class="fig">${SEAT}</div>
 <div class="txt">
   <h1>Kourt</h1>
   <div class="rule"></div>
   <p>Stake on claims of fact. Your principal always returns 1&times;.</p>
-  <div class="foot"><span>kourt.xyz</span><span class="said">&ldquo;Gentlemen.&rdquo;</span></div>
+  <div class="foot"><span>kourt.xyz</span><span class="said">The seat is empty.</span></div>
 </div>`;
 
 (async () => {
