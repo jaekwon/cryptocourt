@@ -77,6 +77,22 @@ const before = JSON.stringify(BUYFORM);
 rememberBuyAmt({value:"9"});
 ok("an edit with no panel context changes nothing", JSON.stringify(BUYFORM) === before);
 
+// ---------------------------------------- the BUTTON agrees with the CHECKBOX
+// The bug this closes: the checkbox was drawn from BUYFORM and the button's gate
+// was read from the live DOM, which does not exist while joinPanel is building a
+// string. So a re-render drew a ticked box beside a gated button, and pressing it
+// complained about a tick that was plainly on screen. One source of truth, or they
+// disagree exactly when it matters -- right after a transaction lands.
+{
+  const acts = slice('function buyActionsHtml(slug, q){', '\n/* ---------------- the court record');
+  ok("the gate reads the remembered form", /const acked = !!buyFormFor\(slug\)\.ack;/.test(acts));
+  ok("...and never the live checkbox", !/getElementById\("buyack"\)/.test(acts));
+  // Both must come from the same place, which is what makes them agree.
+  const panel0 = slice('function joinPanel(slug, s){', '\nfunction recomputeBuy(');
+  ok("the checkbox reads it too", /const ackAttr = form\.ack\?/.test(panel0)
+     && /const form = buyFormFor\(slug\)/.test(panel0));
+}
+
 // ------------------------------------------------------- the panel restores them
 // Source-level, because joinPanel builds a template string rather than a DOM.
 // Both are asserted on the ATTRIBUTE, not on the variable name, so deleting the

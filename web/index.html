@@ -5014,7 +5014,19 @@ function buyFormFor(slug){
 }
 function buyActionsHtml(slug, q){
   const ok = !!(q && q.units>0n);
-  const acked = !!(document.getElementById("buyack")||{}).checked;
+  /* THE REMEMBERED FORM, NOT THE DOM. Reported: "when i click buy it says i need
+     to check the checkbox even though i already checked it."
+     This read the live checkbox, which does not exist at the moment it is asked.
+     joinPanel builds its markup as a STRING, so during a re-render — the one
+     adenaSign schedules after a transaction lands — the new checkbox has not been
+     inserted yet and the old one is already gone with the previous paint. `acked`
+     came back false, the button was drawn GATED, and the very same markup drew
+     the checkbox CHECKED beside it. Pressing it then printed "tick the
+     acknowledgement first" about a tick plainly on screen.
+     BUYFORM is the same state the checkbox is drawn from (see the ackAttr above),
+     so the button and the box can no longer disagree. The live path is unaffected:
+     rememberBuyAck writes BUYFORM before calling refreshBuyActions. */
+  const acked = !!buyFormFor(slug).ack;
   const noquote = !!(BUYCTX && BUYCTX.noquote);
   const send = ok? q.x.toString()+"ugnot" : null;
   // no quote ⇒ buying stays possible (the chain computes the true amount),
