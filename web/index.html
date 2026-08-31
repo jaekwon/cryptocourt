@@ -1789,7 +1789,11 @@ if(LOCKED) store.set("cc.cfg", JSON.stringify(CFG));
    wiring; deleting them would leave that code querying null on a deployed page,
    and the failure would land at whatever it touched first rather than here. */
 if(LOCKED){ const nodeBox = document.querySelector(".foot .node"); if(nodeBox) nodeBox.hidden = true; }
-const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", JSON.stringify(CFG)); };
+const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", JSON.stringify(CFG));
+  // A cached answer is an answer from A NODE. Changing which node this page reads
+  // must not serve the previous one's replies — and two local gnodevs that both
+  // call themselves "dev" are exactly how that would go unnoticed.
+  if(typeof chainCacheClear === "function") chainCacheClear(); };
 
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
 const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
@@ -1830,7 +1834,51 @@ async function chainHeight(){
     return isFinite(h)? h : null;
   }catch(e){ return null; }
 }
-async function abci(path, data){
+/* ONE ANSWER PER QUESTION, FOR A FEW SECONDS.
+   Measured on the live site: a court page asks 122 questions and 121 of them are
+   DISTINCT, so this saves nothing on a first paint — and it was never meant to.
+   What it saves is the second visit. Opening a claim and pressing back re-asked
+   all 122, because every render starts from nothing; each of those costs the node
+   a realm load (~60-90ms), so the way back was as slow as the way in.
+
+   NOT batching, which is the idea this replaced: gno executes a JSON-RPC array
+   serially, so posting the page's reads together was measurably slower than
+   letting the browser run them in parallel.
+
+   A promise is cached, not a value, so two callers asking the same question in
+   the same tick share one request — and a failure is evicted rather than
+   remembered, because a node that was briefly unreachable must not answer for
+   the next half minute.
+
+   HOW LONG, measured rather than guessed. At five seconds this saved nothing
+   worth having — a reader spends longer than that on a claim page, so coming
+   back cost 70 of the 80 reads over again. At thirty it costs ONE. That number
+   is the whole value of this cache.
+
+   Thirty seconds of staleness is the price, and it is affordable because nothing
+   is DECIDED from a cached figure: every action goes through the wallet and is
+   evaluated by the chain at execution, never against what this page last drew.
+   The buy panel already says so in as many words — quoted just now, fewer units
+   if somebody buys first, never more — and a stale supply errs in that same
+   direction. Anything this reader WRITES clears the cache outright, so only
+   other people's activity can be up to half a minute old, which is what any
+   painted render is anyway. */
+const RPC_TTL_MS = 30000;
+const RPCC = new Map();          // "path\0data" -> {t, p}
+function chainCacheClear(){ RPCC.clear(); }
+function abci(path, data){
+  const k = path + "\u0000" + data;
+  const hit = RPCC.get(k);
+  const now = Date.now();
+  if(hit && now - hit.t < RPC_TTL_MS) return hit.p;
+  const p = abciFetch(path, data);
+  RPCC.set(k, {t:now, p});
+  // A refusal is not an answer. Evict it so the next ask is a real one, and
+  // swallow nothing — the caller still sees the rejection it was handed.
+  p.catch(()=>{ const c = RPCC.get(k); if(c && c.p === p) RPCC.delete(k); });
+  return p;
+}
+async function abciFetch(path, data){
   const body = {jsonrpc:"2.0", id:"cc", method:"abci_query",
     params:{path, data:b64(data), height:"0", prove:false}};
   const res = await fetch(CFG.rpc, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
@@ -3926,7 +3974,15 @@ async function adenaSign(func, args, el){
         left--;
         if(left > 0) note(base + " Updating in " + left + "s…", true, hash? "tx "+hash : "");
       }, 1000);
-      setTimeout(()=>{ clearInterval(tick); render(); }, 7000);
+      /* EVERY CACHED ANSWER IS FROM BEFORE THIS TRANSACTION, and the re-render
+         below is the reader watching for their own action to land — which is
+         exactly the moment a five-second-old answer is a lie. Cleared now AND
+         at the re-render: now, because fills already in flight would otherwise
+         seed the cache from the old state; then, because the seven seconds are
+         longer than the cache holds anything anyway and the cost of being sure
+         is one Map.clear(). */
+      chainCacheClear();
+      setTimeout(()=>{ clearInterval(tick); chainCacheClear(); render(); }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
     else if(res.code===3001){ note("Adena's active account is not "+shortAddr(CFG.addr)+" — switch accounts in Adena or reconnect."); }

@@ -394,8 +394,11 @@ ok("...and a failed connect says why, in the dialog that asked",
      && /if\(!landed\)\{ el\.disabled = false; busy\(false\); \}/.test(sign));
   ok("...and counts the wait down rather than spinning blind",
      /Updating in " \+ left \+ "s/.test(sign) && /setInterval/.test(sign));
+  // The two statements need not be adjacent — the post-transaction cache clear
+  // sits between them — but the timer must still be cleared in the same callback
+  // that repaints, or a countdown ticks on over a page that has already updated.
   ok("...clearing its timer when the repaint comes",
-     /clearInterval\(tick\); render\(\)/.test(sign));
+     /clearInterval\(tick\);[\s\S]{0,80}render\(\)/.test(sign));
   // NOT the quoted figure: buyRowsHtml promises fewer units are possible, so
   // naming one here would assert something the chain has not agreed to.
   // COMMENTS STRIPPED. The comment at that spot explains why the quoted figure is
