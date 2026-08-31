@@ -179,6 +179,33 @@ print("    const LOCKED = true;   (source panel hidden)")
 PYEOF
 grep -q "mode:\"$SITE_MODE\"" "$STAMPED" || { echo "deploy: the stamp did not apply" >&2; exit 1; }
 grep -q 'const LOCKED = true;' "$STAMPED" || { echo "deploy: the lock did not apply" >&2; exit 1; }
+
+# ------------------------------------------------------------ strip the prose
+# This file argues with itself in comments, and that prose is why it is
+# maintainable — 41% of its bytes. The repo keeps every word; a reader
+# downloading it does not need them, and neither does their parser. Done to the
+# STAMPED COPY, like everything else here, so the tree is never touched.
+#
+# The stripper is a scanner, not a regular expression, because this file is full
+# of "https://" inside strings, /* inside template literals and regex literals
+# containing comment openers — see scripts/strip-comments.js. It verifies its own
+# output (every literal preserved in order, the result parses) and refuses rather
+# than shipping something it is unsure of, so a failure here stops the deploy.
+if command -v node >/dev/null 2>&1; then
+	say "stripping comments from the shipped copy"
+	BEFORE=$(wc -c < "$STAMPED" | tr -d ' ')
+	node scripts/strip-comments.js "$STAMPED" "$STAMPED.min" || {
+		echo "deploy: the comment stripper refused — shipping is stopped, not the comments" >&2; exit 1; }
+	mv "$STAMPED.min" "$STAMPED"
+	AFTER=$(wc -c < "$STAMPED" | tr -d ' ')
+	echo "    $BEFORE -> $AFTER bytes"
+	# and the stripped copy must still be a page. The stripper already refuses
+	# unless its output parses and every literal survived in order; this re-checks
+	# the file that is actually about to be uploaded, which is not the same object.
+	python3 scripts/check-web-dupes.py "$STAMPED" >/dev/null 2>&1 \
+		|| python3 scripts/check-web-dupes.py >/dev/null \
+		|| { echo "deploy: the stripped overlay lost or duplicated a name" >&2; exit 1; }
+fi
 if [ -z "$SITE_GNOWEB" ]; then
 	echo "    NOTE: gnoweb left at the repo default — action buttons link to a chain"
 	echo "          that does not carry this realm. Set SITE_GNOWEB= to fix."
