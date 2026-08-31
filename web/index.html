@@ -7715,16 +7715,48 @@ function mergeStakeSeries(hp,dp,nowHeight){
    the embed need the same thing without those pieces, and must not each grow
    their own version of the live/demo split. */
 /* HEIGHTS ARE WHAT THE CHAIN RECORDS; DATES ARE WHAT A READER CAN CHECK.
-   The chart was drawn entirely in block heights, so it showed a shape with no
-   when — a reader could not tell whether the line covered a day or a season.
-   ClaimTimeline carries both for the same instant ("now:<unix>:<height>"), so
-   one anchor plus the block interval dates every sample without another read.
+   The chart is drawn in block heights, so without this it shows a shape with no
+   when — a reader cannot tell whether the line covers a day or a season.
    Returns null rather than guessing when there is no anchor: an undated axis is
-   better than a wrong one. */
+   better than a wrong one.
+
+   EVERY ANCHOR THE CHAIN GIVES, NOT ONE. This took tl.now alone and walked
+   backwards at a flat BLOCK_SECS, which assumes a chain that has never paused,
+   never been restarted and never had its clock moved. Any of those and the
+   error compounds with distance: on a seeded chain the ladder read the answer
+   at "11 Nov 2021, 1860 days ago" — the block's own stamp — while the chart
+   dated the same region four days back, because 5s a block over that span is
+   hundreds of times more blocks than the chain actually produced. Two surfaces,
+   one event, five years apart.
+
+   ClaimTimeline publishes a (unix, height) pair for each of opened, answered,
+   verdict and now, so the map is piecewise-linear through the points the chain
+   actually reached and exact at every one of them. Outside the range it
+   continues at the nearest segment's own observed rate rather than at a
+   constant nobody promised.
+
+   settle and reopen are deliberately NOT anchors. clock.gno computes their
+   times forward from a deadline (deadlineTime), so they are projections; using
+   one to date the past would feed the page's own guess back in as evidence. */
 function heightDater(tl){
   if(!tl || !tl.now) return null;
-  const aT = tl.now.t, aH = tl.now.h;
-  return h => aT + (h - aH) * BLOCK_SECS;
+  const A = ["opened","answered","verdict","now"]
+    .map(k=>tl[k])
+    .filter(e=>e && e.t>0 && isFinite(e.h))
+    .sort((a,b)=>a.h-b.h)
+    .filter((e,i,all)=>i===0 || e.h!==all[i-1].h);
+  if(!A.length) return null;
+  // A rate needs two heights that differ; anything else falls back to the
+  // nominal interval, which is what this function did everywhere before.
+  const rate=(p,q)=>{ const r=(q.t-p.t)/(q.h-p.h); return isFinite(r)&&r>0? r : BLOCK_SECS; };
+  if(A.length===1) return h => A[0].t + (h-A[0].h)*BLOCK_SECS;
+  return h => {
+    if(h<=A[0].h) return A[0].t + (h-A[0].h)*rate(A[0],A[1]);
+    for(let i=1;i<A.length;i++)
+      if(h<=A[i].h) return A[i-1].t + (h-A[i-1].h)*rate(A[i-1],A[i]);
+    const n=A.length-1;
+    return A[n].t + (h-A[n].h)*rate(A[n-1],A[n]);
+  };
 }
 /* WHAT HAS HAPPENED TO THIS CLAIM, dated — the lane the claim page devotes a
    whole section to, compressed to one line.
@@ -7783,7 +7815,16 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const y=p=>+(Y0-(p/100)*(Y0-Y100)).toFixed(1);
   const ds = demo? demoSeries(slug,id,r) : null;
   // domain in block heights
-  const ansH = d.settleAt? d.settleAt-51840 : null;
+  /* THE HEIGHT THE CHAIN ANSWERED AT, when the chain says so. This was always
+     settleAt−51840 — the 72-hour window counted backwards in blocks — which is
+     a derivation, and the ladder beside it uses the realm's own answered stamp.
+     Where the two disagree the same event appears twice on one page at two
+     different moments, which is what a reader noticed: an "answered yes" marker
+     near the left edge of a chart whose window began years after the ladder
+     said the answer was posted. The derived height stays as the fallback for a
+     realm too old to publish a timeline. */
+  const ansH = (tl && tl.answered && isFinite(tl.answered.h))? tl.answered.h
+             : (d.settleAt? d.settleAt-51840 : null);
   const cands=[now, d.settleAt||null, d.escrowUntil||null, d.voteEndsAt||null, ansH].filter(v=>v!=null&&isFinite(v));
   if(now==null || !cands.length) return "";
   const real = ser && ser.pts && ser.pts.length? ser : null;
@@ -7810,7 +7851,16 @@ function signalChart(slug,id,d,nowH,ser,tl){
         return h<=hs? +(PL+(h-d0)/(hs-d0)*(Xs-PL)).toFixed(1)
                     : +(Xs+(h-hs)/(d1-hs)*(PR-Xs)).toFixed(1); }
     : h=>+(PL+(h-d0)/(d1-d0)*(PR-PL)).toFixed(1);
-  const days=h=>Math.round(Math.abs(now-h)*BLOCK_SECS/86400*10)/10;
+  /* HOW FAR OFF, BY THE CHAIN'S CLOCK. This multiplied a height difference by
+     BLOCK_SECS — the same flat-cadence assumption heightDater used to make, and
+     wrong in the same direction: the strip read "≈3.8d ago" over a first record
+     the ladder dated five years back. The dater already knows what the chain
+     did between two heights, so ask it, and keep the nominal interval only for
+     a realm that publishes no timeline to ask. */
+  const zdt = heightDater(tl);
+  const days=h=> zdt
+    ? Math.round(Math.abs(zdt(now)-zdt(h))/86400*10)/10
+    : Math.round(Math.abs(now-h)*BLOCK_SECS/86400*10)/10;
   const ago=h=> h===now? "now" : (h<now? "≈"+days(h)+"d ago" : "in ≈"+days(h)+"d");
   // frame
   let g=`<line class="grid" x1="${PL}" y1="${y(100)}" x2="${PR}" y2="${y(100)}"></line>
@@ -7891,7 +7941,6 @@ function signalChart(slug,id,d,nowH,ser,tl){
   // index, and this strip is the chart's only statement of absolute time. Date
   // first, distance second; the height is still on every event's own tooltip for
   // anyone who wants it, and is still the fallback with no anchor to date from.
-  const zdt = heightDater(tl);
   const stamp = h => zdt? stampDate(zdt(h)) : `block ${fmtN(Math.round(h))}`;
   const zl = real? `${stamp(Math.round(x0))} · ${ago(Math.round(x0))}${demo?" · sample":""}`
     : demo? `sample window ≈${Math.round((ds?ds.span:WEEK)*BLOCK_SECS/86400)}d · synthesized shape` : `${stamp(Math.round(x0))} · ${ago(Math.round(x0))}`;

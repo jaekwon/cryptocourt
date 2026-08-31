@@ -2,9 +2,19 @@
 // copy had drifted). Pins: the real-record branch (step-after geometry, seam,
 // knee, freeze, snap, labels), the parser/merge, and the two fallbacks
 // byte-compatible with the pre-series build.
-const _log=console.log; let BAD=false;
+const _log=console.log; let BAD=false, DONE=false;
 console.log=(...a)=>{ if(/BROKEN|\(BAD\)|NaN!|missing-note|unexpected:|no-ref|no-band|FAIL:/.test(a.join(" "))) BAD=true; _log(...a); };
-process.on('exit',()=>{ _log(BAD?"FAILURES":"ALL PASS"); process.exitCode=BAD?1:0; });
+/* A CRASH IS NOT A PASS. The exit hook printed ALL PASS from `BAD` alone, and
+   `BAD` only ever sees assertions that RAN — so a throw partway down the file
+   ended the run, skipped every check after it, and reported green, with the
+   stack trace scrolling past underneath. It did exactly that: a missing
+   stampDate in the slice killed the last block and the harness said ALL PASS.
+   DONE is set on the last line; anything that stops the file before then is a
+   failure whether or not an assertion noticed. */
+process.on('uncaughtException', e=>{ BAD=true; _log("FAIL: uncaught —", (e&&e.stack)||e); });
+process.on('exit',()=>{ if(!DONE) BAD=true;
+  _log(BAD?"FAILURES":"ALL PASS"); process.exitCode=BAD?1:0;
+  if(!DONE) _log("(the harness did not reach its end)"); });
 
 const fs=require('fs');
 const src=fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
@@ -28,6 +38,7 @@ code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const D
 code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code+=slice('function demoSeries(','async function fetchStakeSeries(');
+code+=slice('const MON=','function sinceWords(');   // stampDate, for the zone strip
 code+=slice('function signalChart(','function chartChips(');
 let code2='';
 eval(code);
@@ -97,6 +108,49 @@ for(const k of Object.keys(claims)){
   if(d.phase!=="open" && d.settleAt) ok("P8 "+k+" pre-freeze", last[0]<=d.settleAt-51840);
 }
 
+/* P8a: DATES COME FROM THE CHAIN'S ANCHORS, NOT FROM A NOMINAL BLOCK RATE.
+   heightDater took tl.now alone and walked backwards at BLOCK_SECS, which is
+   right only on a chain that never paused, restarted, or had its clock moved.
+   Nothing caught it because every fixture in this repo was BUILT on that
+   assumption — share_test's says so in as many words ("every t/h pair here sits
+   on the same 5s-per-block line through now"). So this fixture deliberately
+   does not: it is a chain that produced blocks far slower than nominal early on
+   and at the nominal rate lately, which is what a seeded or restarted chain
+   looks like, and is the shape that put the ladder's answer five years from the
+   chart's. */
+{
+  const HOUR=3600, DAY=86400;
+  // opened: 4,000,000 blocks before now but 1800 days ago — ~39s a block, not 5.
+  const TL={ opened:{t:1600000000, h:1000},
+             answered:{t:1600000000+1500*DAY, h:3000},
+             now:{t:1600000000+1800*DAY, h:5000} };
+  const zdt=heightDater(TL);
+  ok("P8a exact at every anchor the chain published",
+     zdt(TL.opened.h)===TL.opened.t && zdt(TL.answered.h)===TL.answered.t && zdt(TL.now.h)===TL.now.t);
+  // Halfway between two anchors in HEIGHT is halfway between them in TIME.
+  const midH=(TL.opened.h+TL.answered.h)/2, midT=(TL.opened.t+TL.answered.t)/2;
+  ok("P8a interpolates between them", Math.abs(zdt(midH)-midT) < 1);
+  // The flat-rate version would put opened 4,000 blocks × 5s = 5.8 hours before
+  // now. The chain says 1,800 days. That gap IS the bug.
+  const flat = TL.now.t + (TL.opened.h-TL.now.h)*5;
+  ok("P8a and does not walk back at the nominal interval",
+     Math.abs(zdt(TL.opened.h)-flat) > 1000*DAY);
+  // Before the first anchor it continues on the first segment's own rate.
+  const r0=(TL.answered.t-TL.opened.t)/(TL.answered.h-TL.opened.h);
+  ok("P8a extrapolates on the nearest segment's rate",
+     Math.abs(zdt(TL.opened.h-100) - (TL.opened.t-100*r0)) < 1);
+  // settle and reopen are deadlines the realm computed FORWARD. Anchoring on one
+  // would feed a projection back in as evidence, so a wild value must not move
+  // any date that came from a block the chain actually reached.
+  const withSettle=heightDater(Object.assign({}, TL, {settle:{t:1, h:4000}, reopen:{t:2, h:4500}}));
+  ok("P8a a projected deadline is not an anchor",
+     withSettle(TL.answered.h)===TL.answered.t && withSettle(midH)===zdt(midH));
+  // One anchor is all a pre-timeline realm gives: fall back, do not crash.
+  const lone=heightDater({now:{t:1000, h:50}});
+  ok("P8a one anchor still dates, at the nominal interval", lone(40)===1000-50);
+  ok("P8a no anchors at all, no dater", heightDater(null)===null && heightDater({})===null);
+}
+
 /* P8b: THE AXIS STRIP AGREES WITH THE PLOT. The domain runs to the furthest
    event — a settle deadline, a reopen close, a vote close — but the right-hand
    label was hardcoded to `now`, so on any claim with something scheduled ahead
@@ -127,6 +181,41 @@ for(const k of Object.keys(claims)){
   const ans = zoneOf(signalChart("orem",2,claims["orem/2"],NOW,serOf("orem/2")));
   ok("P8b a dated strip stamps the edge, not now",
      / · in ≈/.test(ans[1]) && !/ · now$/.test(ans[1]));
+}
+
+/* P8c: THE MARKER SITS WHERE THE CHAIN SAYS, NOT WHERE THE PAGE DERIVED. The
+   answered height was always settleAt−51840 — the 72-hour window counted back
+   in blocks — while the ladder next to it uses the realm's own answered stamp.
+   On a chain where those disagree the same event is on one page twice, at two
+   moments; the reader saw an "answered yes" marker near the left edge of a
+   window that began long after the ladder said the answer was posted. */
+{
+  const DAY=86400;
+  const TL={ opened:{t:1600000000, h:1000},
+             answered:{t:1600000000+1500*DAY, h:3000},
+             now:{t:1600000000+1800*DAY, h:5000} };
+  // The chain answered at 3,000 — 300 days back on its own clock. settleAt−51840
+  // lands at 4,990, ten blocks before now: the same event, a year apart.
+  const c={title:"T", yesStake:10, noStake:3, statusText:"answered", phase:"answered",
+           answer:0, settleAt:5000+51840-10, yesConv:10, noConv:3};
+  const SER={pts:[[4900,60],[4950,62]], firstH:4900};
+  const zone = h => (h.match(/<text class="zone"[^>]*>([^<]*)<\/text>/g)||[])
+    .map(t=>t.replace(/<[^>]*>/g,""));
+  LIVE=true;
+  const withTl = zone(signalChart("orem",9,c,5000,SER,TL));
+  const noTl   = zone(signalChart("orem",9,c,5000,SER,null));
+  LIVE=false;
+  // x0 = min(firstH, ansH). With the chain's answer height that is 3,000, so
+  // the window opens on the answer and the strip says how long ago the CHAIN
+  // says that was — not 100 blocks × 5s.
+  ok("P8c the window opens on the chain's own answer height, dated by the chain",
+     /≈300d ago/.test(withTl[0]), withTl[0]);
+  ok("P8c ...which the nominal interval would have called under a day",
+     !/≈0(\.\d)?d ago/.test(withTl[0]), withTl[0]);
+  // No timeline: no dater, so heights — and the derived answer height, which is
+  // all a realm too old to publish a timeline can offer.
+  ok("P8c without a timeline it still draws, on the derived height",
+     /^block /.test(noTl[0]), noTl[0]);
 }
 
 // P9: labels + §7.4
@@ -165,3 +254,4 @@ ok("every demo claim with a timeline parses", Object.entries(DEMO.claims).filter
 ok("no claim is stamped in the future", Object.values(DEMO.claims).filter(d=>d.timeline).every(d=>{
   const t=parseTimeline(d.timeline); return t.opened.t<=t.now.t && (!t.answered||t.answered.t<=t.now.t) && (!t.verdict||t.verdict.t<=t.now.t);}));
 console.log(fail? fail+" FAILURES":"ok all "+"chart pins");
+DONE = true;
