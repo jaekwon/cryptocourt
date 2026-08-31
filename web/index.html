@@ -9520,11 +9520,26 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
       ${fut?`<div class="line"><span class="l tnum">—</span><span class="r">${esc(fut)}</span></div>`:""}</div>`;
 }
 function resolutionSection(slug,id,d,nowH,tl){
+  /* ONE HEIGHT SPACE, and this whole function was in the wrong one.
+     nowH is the RPC's latest_block_height. Every value compared against it here
+     — voteEndsAt, settleAt, escrowUntil, the ladder's rows — is a REALM height,
+     and on a test-clock chain those are different numbers by a wide margin.
+     Measured on kourt.xyz: the realm's own now is 88,562, the RPC's is 529, and
+     DisputeVoteCloses(covid,10) is 180,722 — so the ballot said the vote closes
+     in 10.4 days when the realm puts it 5.3 days out, nearly 2x wrong.
+     WORSE THAN A WRONG COUNTDOWN: four of these comparisons gate BUTTONS —
+     Reopen, Finalize, Dispute this answer, Settle — so the page could hide an
+     action that works or offer one that panics in the wallet.
+     The claim's timeline already carries the realm's height for the same instant
+     ("now:<unix>:<height>"), which is how the stake chart was fixed for exactly
+     this reason; the ballot and the ladder were left behind. On an ordinary chain
+     tl.now.h equals nowH and nothing changes. */
+  const rH = (tl && tl.now && tl.now.h != null)? tl.now.h : nowH;
   let inner="";
   // Drawn here only when the signal column did not take it — one ladder per
   // page. The heading follows the content: a section titled "Timeline" holding
   // no timeline is worse than a section named for what it actually has.
-  const ladder = resolutionLadder(d, nowH, tl);
+  const ladder = resolutionLadder(d, rH, tl);
   const head = "Timeline";
   if(d.phase==="closed"){
     // No notice here. It used to repeat the stake ticket almost verbatim —
@@ -9546,29 +9561,29 @@ function resolutionSection(slug,id,d,nowH,tl){
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.</div></div>`
-      + disputeTicket(slug, id, d, nowH);
+      + disputeTicket(slug, id, d, rH);
   } else if(d.phase==="provisional"){
     const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext,slug)+" (it doubles each failed round).":"";
-    const when = d.escrowUntil? (nowH==null? " Reopenable until block "+fmtN(d.escrowUntil)+"."
-      : (d.escrowUntil>nowH? " Reopenable until block "+fmtN(d.escrowUntil)+" (in "+wall(nowH,d.escrowUntil)+")."
+    const when = d.escrowUntil? (rH==null? " Reopenable until block "+fmtN(d.escrowUntil)+"."
+      : (d.escrowUntil>rH? " Reopenable until block "+fmtN(d.escrowUntil)+" (in "+wall(rH,d.escrowUntil)+")."
         : " The reopen window has closed — participants may finalize now; anyone may after a week.")):"";
     inner = `<div class="notice warn"><span class="g">⏳</span><div><b>Provisional ${sideName(d.provisional)}, in escrow.</b>
       A new dispute can still reopen it before it locks.${when}${cost} The side it runs against may withdraw 1× now — their outcome can't improve.
       <div class="actions" style="margin-top:10px">
-        ${(nowH!=null && d.escrowUntil && d.escrowUntil<=nowH)? "" : btn("Reopen (dispute again)","OpenDispute",{courtSlug:slug,claimID:id},"no")}
-        ${(nowH!=null && d.escrowUntil && d.escrowUntil>nowH)? "" : btn("Finalize","Finalize",{courtSlug:slug,claimID:id},"","participants first week")}
+        ${(rH!=null && d.escrowUntil && d.escrowUntil<=rH)? "" : btn("Reopen (dispute again)","OpenDispute",{courtSlug:slug,claimID:id},"no")}
+        ${(rH!=null && d.escrowUntil && d.escrowUntil>rH)? "" : btn("Finalize","Finalize",{courtSlug:slug,claimID:id},"","participants first week")}
         ${btn("Withdraw (losing side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1-d.provisional})}</div></div></div>`;
   } else if(d.phase==="answered"){
     const bondt = d.answerBond!=null? " backed by a bond of "+cc(d.answerBond,slug)+" that burns if the answer is overturned":"";
     const rec = d.record? " The answerer's contested-and-upheld record here is "+d.record+".":"";
-    const when = d.settleAt? (nowH==null? ""
-      : (d.settleAt>nowH? " It settles undisputed in "+wall(nowH,d.settleAt)+" if nobody disputes it."
+    const when = d.settleAt? (rH==null? ""
+      : (d.settleAt>rH? " It settles undisputed in "+wall(rH,d.settleAt)+" if nobody disputes it."
         : " Its 72-hour window has passed — the next touch settles it.")):"";
     const cost = d.disputeBondNext? " Disputing now costs "+cc(d.disputeBondNext,slug)+".":"";
     inner = `<div class="notice warn"><span class="g">◷</span><div><b>Answered ${sideName(d.answer)}</b> by ${shortAddr(d.answerer)}${bondt}.${when}${cost}${rec}
       <div class="actions" style="margin-top:10px">
-        ${(nowH!=null && d.settleAt && d.settleAt<=nowH)? "" : btn("Dispute this answer","OpenDispute",{courtSlug:slug,claimID:id},"no")}
-        ${(nowH!=null && d.settleAt && d.settleAt>nowH)? "" : btn("Settle (aged & undisputed)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
+        ${(rH!=null && d.settleAt && d.settleAt<=rH)? "" : btn("Dispute this answer","OpenDispute",{courtSlug:slug,claimID:id},"no")}
+        ${(rH!=null && d.settleAt && d.settleAt>rH)? "" : btn("Settle (aged & undisputed)","SettleUndisputed",{courtSlug:slug,claimID:id})}</div></div></div>`;
   } else {
     inner = `<div class="notice warn"><span class="g">◔</span><div><b>No answer yet.</b> Once the claim's trailing total stake passes this court's minimum, an answer may be posted with a bond sized so lying does not pay. In a court that already has answerers with a track record, they hold the first day; a young court opens to anyone at once. A claim nobody ever answers dies at its timeout — anyone may close it then. Posting freezes staking; an undisputed answer settles 72 hours later.
       <div class="actions" style="margin-top:10px">

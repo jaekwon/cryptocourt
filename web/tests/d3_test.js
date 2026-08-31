@@ -95,8 +95,18 @@ ok("boot render mirrors the at-scroll", src.includes('render().then(()=>{ const 
 ok("timeline anchor on both returns",
    (src.match(/<section id="timeline" tabindex="-1"><div class="sec-h">\$\{head\}/g)||[]).length===2);
 ok("...and the section that is called Timeline holds one",
-   src.includes('const ladder = resolutionLadder(d, nowH, tl);')
+   src.includes('const ladder = resolutionLadder(d, rH, tl);')
    && src.includes('const head = "Timeline";'));
+// rH, NOT nowH, and that is the whole point of the argument. nowH is the RPC's
+// block height; every height the ladder plots — and every height the ballot and
+// the reopen/finalize/settle guards compare — is a REALM height, which on a
+// test-clock chain is a different number by a wide margin. Measured on kourt.xyz:
+// realm 88,562 against RPC 529. The stake chart was fixed for exactly this and
+// the ladder was left behind, so the parameter name is load-bearing here.
+ok("...reading the realm's height, not the RPC's",
+   /const rH = \(tl && tl\.now && tl\.now\.h != null\)\? tl\.now\.h : nowH;/.test(src));
+ok("...and nothing in that section still compares against the RPC height",
+   !/function resolutionSection[\s\S]{0,6000}?[^r]nowH[><=]/.test(src));
 // The focus-ring rule was written against the old id; a renamed section with an
 // orphaned CSS rule gets a browser outline nobody asked for.
 ok("...and the focus-ring rule followed it", src.includes("#timeline:focus,#timeline:focus-visible"));
