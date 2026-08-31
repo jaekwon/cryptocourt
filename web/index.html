@@ -346,6 +346,15 @@ a.card:hover{border-color:var(--line-2)}
 .docket a.crow .t{font-family:var(--serif); font-size:15.5px; font-weight:600}
 .docket .id{font-family:var(--mono); font-size:12px; color:var(--muted); white-space:nowrap; display:flex; align-items:center; gap:6px}
 .icn{width:14px; height:12px; flex:none}
+/* THE THIRD BALLOT BUTTON IS NOT A THIRD CHOICE. Overturn and uphold are the
+   question; spam says the question should not have been asked. Sized to match
+   that: an icon and one word, beside two full-width verbs, rather than a control
+   as loud as them carrying a subtitle longer than either. Reported as "comically
+   big" — it was, because it was the only one with a <small> explanation on it,
+   and that explanation now lives in "How this vote works" where the rest of the
+   spam rules already are. */
+.btn.mini{padding:5px 9px; font-size:12px; letter-spacing:0}
+.btn.mini .icn{width:12px; height:11px}
 .courtrow .icn{color:var(--escrow)}
 .cols{display:grid; grid-template-columns:minmax(0,1fr) 288px; gap:22px; margin-top:20px; align-items:start}
 .panel h4{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
@@ -4991,6 +5000,9 @@ const ICN_FOLDER = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><pat
 /* "Open the rewards" is the one button on this page that is not about signing a
    statement, it is about collecting — so it gets the object, not the pen. */
 const ICN_CHEST = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1.3 1h11.4a.6.6 0 0 1 .6.6v2.1H.7V1.6A.6.6 0 0 1 1.3 1zM.7 4.7h5.1v1.1h2.4V4.7h5.1v5.7a.6.6 0 0 1-.6.6H1.3a.6.6 0 0 1-.6-.6zM6.3 2.2h1.4v2.4H6.3z" fill="currentColor"/></svg>`;
+/* A BIN, for the spam flag. Same 14x12 box as the rest so it sits on the text
+   baseline the way ICN_CHEST and ICN_COURT do. Lid, body, two staves. */
+const ICN_BIN = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1zM2.6 3.5h8.8l-.6 7.6a.9.9 0 0 1-.9.9H4.1a.9.9 0 0 1-.9-.9zM5.4 5h1.1v5H5.4zm2.7 0h1.1v5H8.1z" fill="currentColor"/></svg>`;
 const ICN_COURT = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z" fill="currentColor"/></svg>`;
 /* Folders ARE on-chain (folders.gno) and LIVE courts now read them —
    chainFolders() fetches the flat chain shape and foldersFor() composes one
@@ -5390,7 +5402,7 @@ function disputeTicket(slug, id, d, nowH){
         closed? ` data-voteblocked="Voting has closed for this round. All that is left is to resolve it."` : ""}>
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
-        ${btn("Flag as spam","VoteDispute",{courtSlug:slug,claimID:id,choice:"spam"},"no","cuts the reward; past half, deletes the claim")}</div>
+        ${btn("Spam","VoteDispute",{courtSlug:slug,claimID:id,choice:"spam"},"no mini","",null,null,null,null,ICN_BIN)}</div>
       <!-- RESOLVE IS NOT A VOTE, so it sits outside the block the eligibility
            check marks: somebody who staked on this claim may not judge it and may
            still close the round once the window has passed. -->

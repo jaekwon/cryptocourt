@@ -29,6 +29,9 @@ code += slice('const DEMO_OVERLAY = {', '/* ===== BEGIN GENERATED').replace('con
 code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const DEMO_CHAIN = {','var DEMO_CHAIN = {') + '\n';
 code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
+// The ballot's spam control is an icon button now, so the constant has to be in
+// scope — btn() interpolates it directly.
+code += slice('const ICN_BIN =', 'const ICN_COURT =');
 code += slice('function tx(func', 'document.addEventListener("click"');
 code += slice('const MON=', 'function resolutionLadder(');
 // This slice carries ballotHint too — it sits between the modal and the ticket.
@@ -216,9 +219,28 @@ ok("no eligibility prose survives on the ballot",
 // button now DOES something: it cuts the reward in proportion, and past half it
 // deletes the claim.
 ok("the third choice is a spam flag, not an abstention",
-   html.includes("> Flag as spam") && !html.includes("> Abstain"));
-ok("...and it says what it does, not merely what it does not do",
-   html.includes("cuts the reward; past half, deletes the claim")
+   html.includes("> Spam") && !html.includes("> Abstain"));
+// SIZED LIKE A THIRD THING, not a third choice. Overturn and uphold are the
+// question; spam says the question should not have been asked. It carried a
+// <small> subtitle longer than either verb, which made it the loudest control on
+// the ballot — reported as "comically big". Icon plus one word now.
+// SPECIFIC TO THE BIN, and to the compact class. The first version of this
+// asserted `viewBox="0 0 14 12"`, which every icon in the file shares, plus
+// `includes("ICN") === false`, which tests nothing at all — the constant is
+// interpolated, so its NAME was never going to appear. And it matched
+// `class="btn no mini"` with a closing quote, which demo mode breaks by appending
+// ` inert`. The bin's own path data is the thing that identifies the bin.
+ok("...and it is the compact one, with a bin on it",
+   /class="btn no mini/.test(html) && html.includes("M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1z"));
+// THE EXPLANATION MOVED, IT DID NOT GO. What the flag DOES is the thing a reader
+// must be able to learn — abstain's replacement is only meaningful if its effect
+// is discoverable — so this asserts the modal carries it now that the button does
+// not. Both halves, or "it says what it does" passes on a button with no subtitle
+// and a modal that never mentions the effect either.
+ok("...and the modal says what it does, in proportion",
+   /cut the reward the claim pays/.test(html) && /the claim is deleted/.test(html));
+ok("...while the button itself no longer carries that subtitle",
+   !html.includes("cuts the reward; past half, deletes the claim")
    && !html.includes("counts to turnout only, never to a side"));
 // THE WIRE WORD MATTERS: the realm refuses the literal "abstain" now, so a
 // button still sending it would panic at signing rather than fail quietly.
