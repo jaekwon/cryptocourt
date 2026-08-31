@@ -83,7 +83,15 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// and it worsens every mill break-even q*). Do NOT "fix" toward §3.5 — it
 	// would inflate every draw 16%. Consequence, accepted: the honest sole-staker
 	// break-even is p ≈ 0.68, not the 0.59 an un-split rate would give.
-	want := mustMul(cs.tier, midGross)
+	// THE MULTIPLIER IS THE CLAIM'S OWN SIZE now, not a voted band (tier.gno).
+	// It was `mustMul(cs.tier, midGross)` with tier in {0,1,2}; it is a
+	// continuous bps multiplier over the same range, read from xBarFrozen.
+	//
+	// mulDiv128, not mustMul: midGross is CONVICTION — stake × time, not
+	// supply-bounded — and the same warning the carrot's ×7 carries applies to a
+	// ×2 here at extreme scale.
+	tierBps := tierBpsFor(cs)
+	want := mulDiv128(midGross, tierBps, tierParBps)
 	// DRAW CAP: the claim may not mint more than the answer bond collateralized.
 	//
 	// WHY. A sniper stakes dust on one side, declares it, and lets 72h of silence
@@ -171,14 +179,17 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	if cs.seeded {
 		cs.drawAuthor = 0
 	}
-	// The author's STANDING credit (standing.gno) lands here rather than at the
-	// AuthorBonus pull, so it does not depend on the author ever bothering to
-	// draw. HIGH only — a default MID is what an unlooked-at claim gets, and
-	// crediting that is the author-mill's habitat (PLAN §3.4 F1). Seeded claims
-	// earn zero, which is I5 applied to the record instead of to the money: the
-	// addresses that can seed are the ones that will hold the board's moderator
-	// powers, so without this gate seeding is a standing faucet for the set.
-	creditAuthorHigh(c, cs, cs.tier)
+	// THE AUTHOR'S STANDING CREDIT IS GONE, and it is worth saying why rather
+	// than leaving a hole. It paid only at tier HIGH — "a default MID is what an
+	// unlooked-at claim gets, and crediting that is the author-mill's habitat"
+	// (PLAN §3.4 F1) — so with no tier there is no non-mill population left to
+	// pay it to. Crediting every author instead would be the mill faucet the
+	// gate existed to close, so the row is dropped rather than widened.
+	//
+	// The MONEY lane is untouched: AuthorBonus was never tier-gated, and an
+	// author still draws cs.drawAuthor. What is gone is the standing ROW; the
+	// standingCatAuthor slot stays in the persisted enum (append-only wire) and
+	// simply stops receiving.
 
 	// The carrot: 7 points of the MID-weight gross, tier-invariant (paid even
 	// at low — F2), senior-lane, per-voter clamped at pull (P2). 128-bit: midGross
@@ -265,7 +276,12 @@ func WithdrawBonus(cur realm, courtSlug string, claimID uint64, side int) int64 
 		panic("kourtv2: this position's bonus was already drawn")
 	}
 	touch(c)
-	accrue(c, cs, p, side) // settle to the freeze pin
+	// SETTLE TO THE FREEZE PIN, and it is load-bearing twice over: the draw below
+	// reads p.convHi/convLo, and creditWinConviction reads p.rawHi/rawLo. Neither
+	// accrues for itself. advancePools settles the SIDE integrals only, so
+	// without this line both read a figure stale as of this position's last stake
+	// event — measured at ~7.9x understatement when that was last found.
+	accrue(c, cs, p, side)
 	p.bonusPaid = true
 
 	convCC := convToCC(p.convHi, p.convLo)
@@ -351,7 +367,11 @@ func AnswererBonus(cur realm, courtSlug string, claimID uint64) int64 {
 	touch(c)
 	cs.answererPaid = true
 	pay := cs.drawAnswerer
-	if bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {
+	// tier/2 × the bond, as it always was — now a bps multiplier. Both operands
+	// are plain int64 here (a bond, not an integral), but mulDiv128 keeps the
+	// rounding identical to the old `mustMul(...) / 2`: multiply first, halve
+	// once, floor once.
+	if bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps); pay > bound {
 		pay = bound
 	}
 	mintEmission(c, who, pay)
@@ -384,7 +404,8 @@ func timeAvgStake(cs *claimState, rawHi, rawLo uint64) int64 {
 
 func capBonus(cs *claimState, gross int64, rawHi, rawLo uint64) int64 {
 	rawAvg := timeAvgStake(cs, rawHi, rawLo)
-	bound := mustMul(cs.tier, rawAvg) / 2
+	// Was `mustMul(cs.tier, rawAvg) / 2` — the F9/Q7 cap, in bps now.
+	bound := mulDiv128(rawAvg, tierBpsFor(cs), 2*tierParBps)
 	if gross > bound {
 		gross = bound
 	}

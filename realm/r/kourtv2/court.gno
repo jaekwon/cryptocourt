@@ -56,9 +56,77 @@ const (
 	stepDownPeriods = int64(104)
 	rMaxPeriods     = int64(4) // the reservoir banks at most 4 quiet weeks
 
-	// Tier multipliers (×1 units): low pays nothing tier-scaled, mid is par,
-	// high doubles. The winner/author/answerer caps are tier/2 × their base.
+	// THE DRAW MULTIPLIER, in bps of 1×, derived from the claim's own size
+	// (tier.gno). It replaced three voted bands; these three constants replace
+	// tierLowX/MidX/HighX = 0/1/2.
+	//
+	// tierCeilBps IS THE OLD HIGH, unchanged: 2×. The maximum draw per claim,
+	// and therefore the emission ceiling every deploy invariant is fitted to, is
+	// exactly where it was. What moved is which claims reach the top — a ⅔ vote
+	// mandate before, a size now.
+	//
+	// tierRefBps IS THE SIZE THAT EARNS PAR, 0.40% of the court's own supply,
+	// and it is chosen to sit in the middle of the only window where a
+	// multiplier does anything at all:
+	//
+	//   below ordAnswerXFloorBps (10 bps)  the claim cannot be answered, so a
+	//                                      reference there would never be read
+	//   above ~100 bps                     `want > curPeriodBudget` clamps the
+	//                                      draw, so the multiplier is inert —
+	//                                      the budget is 38 bps of supply and a
+	//                                      12-week hot claim reaches it there
+	//
+	// 40 bps puts par at 4× the answerability floor and leaves the ceiling
+	// reachable at 80 bps, inside the clamp. The whole usable range is one
+	// decade wide and is bounded above by an emission clamp rather than by
+	// anything about claims, which is why par is not a free parameter.
+	//
+	// tierFloorBps IS NOT ZERO, deliberately. The old tierLowX was, because a
+	// VOTE saying "worthless" is a judgement that can justify paying nothing.
+	// Size cannot: a claim that reaches this function already cleared
+	// effMinAnswerX, which is the same measure certifying it was worth
+	// resolving. Zero here would have two thresholds on one quantity
+	// contradicting each other, and would leave an answerer who posted a bond
+	// drawing nothing on a claim the court let them answer.
+	// The voted bands, still written by the quality lane and still read by its
+	// display. They no longer reach the money: every economic site reads
+	// tierBpsFor (tier.gno). They go when the lane does.
 	tierLowX, tierMidX, tierHighX = int64(0), int64(1), int64(2)
+
+	// tierRefFloorBps FLOORS the reference — it is not the reference. The
+	// reference is the court's own running average claim size (tier.gno); this
+	// is the smallest it may be, which is what makes a brand-new court behave
+	// sensibly and what stops a run of dust claims dragging the average down to
+	// lift everybody's multiplier.
+	//
+	// 40 bps, and the number is MEASURED rather than chosen. The suite's own
+	// fixtures stake 200 CC on a 50,000 CC court — 40 bps — and at a 20 bps
+	// floor every one of those ordinary claims landed on the 2x ceiling, which
+	// the draw-cap tests caught by reporting exactly double their expected
+	// winners' slice. A reference that calls the typical claim exceptional is
+	// the wrong reference.
+	//
+	// It also sits where it has to: 4x ordAnswerXFloorBps, so the smallest
+	// ANSWERABLE claim (10 bps) lands exactly on the 0.25x multiplier floor and
+	// no answerable claim is wasted on the flat part of the curve. That
+	// alignment is tierFloorBps/tierParBps == ordAnswerXFloorBps/tierRefFloorBps
+	// and it is worth keeping deliberately rather than by luck.
+	tierRefFloorBps = int64(40)
+	tierFloorBps    = int64(2500)  // 0.25× — floor of the multiplier itself
+	tierCeilBps     = int64(20000) // 2× — the old HIGH, unchanged
+	tierRefDustCC   = int64(1_000_000)
+
+	// tierEMAN is the running average's memory, in answered claims. Sixteen is
+	// long enough that one outsized claim moves the reference by ~6% and short
+	// enough that a court which changes character re-centres within a season of
+	// claims. It is also the divisor of an accumulator, so it must be a positive
+	// int; see observeClaimSize for why the accumulator exists at all.
+	tierEMAN = int64(16)
+
+	// tierParBps is 1× and is not a policy knob: it is the unit the other three
+	// are quoted in. Named so the arithmetic reads as a multiplier rather than
+	// as a bare 10000 that could be mistaken for grc20votes.Bps.
+	tierParBps = int64(10000)
 
 	// The split, in points of a claim's draw: winners 80, author 8, answerer 5
 	// (tier-scaled, from the main reservoir); the voter carrot is 7 points of
@@ -220,7 +288,10 @@ func mustInvariants() {
 	// This replaces a check on answerBondBps, and note it contains no bond term at
 	// all: with the bond keyed to the destroyable draw, the thing worth certifying
 	// is the SLASH multiple, not the base.
-	if slashDrawBps < (tierMidX*100+splitCarrot)*100 {
+	// tierMidX is gone; par is tierParBps and this expression wants it in
+	// POINTS, the unit splitCarrot is quoted in. Same number, same certificate.
+	parPoints := tierParBps / 100
+	if slashDrawBps < (parPoints+splitCarrot)*100 {
 		panic("kourtv2: the slash multiple does not cover the mid draw plus the carrot — the draw cap would cut the published MID rate")
 	}
 	// The dispute bond's own-answer arm keeps round 1 at q > 1/3 everywhere:
@@ -405,6 +476,12 @@ func (p Params) mustSane() Params {
 // a /p/ pointer (borrow rule #2). Emission state lives on the court so each
 // coin's reservoir is isolated with its ledger.
 type Court struct {
+	// xBarAcc is tierEMAN × the running average of answered claims' xBarFrozen —
+	// the court's typical claim size, which tier.gno divides a claim's own size
+	// by. Held pre-multiplied because the obvious integer EMA truncates its own
+	// increment to zero and sticks; observeClaimSize has the arithmetic.
+	xBarAcc int64
+
 	id   string
 	name string
 	// One paragraph saying what this court is for and what it will not take.

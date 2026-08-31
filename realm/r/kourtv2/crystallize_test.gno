@@ -130,18 +130,23 @@ func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
 	Crystallize(cross(cur), "cz2", id)
 	// The burned deposit and fee stay burned. Asserting the FIELDS is not enough —
 	// Crystallize zeroes them after paying, so a resurrected refund would be
-	// invisible there (v0.45). The author's balance is what discriminates: a refund
-	// would come out of escrow, i.e. out of staked principal. Nothing mints either,
-	// since tier low means D = 0 (the carrot mints later, at pull).
+	// invisible there (v0.45). The author's balance is what discriminates: a
+	// refund would come out of escrow, i.e. out of staked principal.
+	//
+	// THE DRAW IS NO LONGER ZERO HERE, and that is the change rather than a
+	// regression: the multiplier comes from the claim's SIZE now, and a
+	// conclusive-low vote has no say in it. What this test is actually for
+	// survives untouched — a burned deposit stays burned, and nothing mints into
+	// the author's balance at crystallize.
 	if got := c.coin.BalanceOf(alice); got != authorBefore {
 		t.Fatalf("no coin may reach the author on a burned-deposit claim: %d vs %d", got, authorBefore)
 	}
 	if got := c.coin.TotalSupply(); got != supplyBefore {
-		t.Fatalf("tier low mints nothing at crystallize: %d vs %d", got, supplyBefore)
+		t.Fatalf("crystallize itself mints nothing; the slices mint at pull: %d vs %d", got, supplyBefore)
 	}
 	w, a, ans, carrot := DrawSlices("cz2", id)
-	if w != 0 || a != 0 || ans != 0 {
-		t.Fatalf("tier low draws nothing: %d/%d/%d", w, a, ans)
+	if w <= 0 || a <= 0 || ans <= 0 {
+		t.Fatalf("every slice is drawn now that size sets the multiplier: %d/%d/%d", w, a, ans)
 	}
 	// v0.55: the carrot is TIER-invariant, not TURNOUT-invariant. This tally is a
 	// DUST low — conclusive at the supply-floorless demotionBar, below the full bar —
@@ -151,9 +156,14 @@ func TestCrystallizeLowTierZeroDrawCarrotStillPays(cur realm, t *testing.T) {
 	if carrot != 0 {
 		t.Fatalf("a sub-full-bar tally pays no carrot: %d", carrot)
 	}
-	// The winner pull is a zero, not a revert (cap = 0 at tier 0).
+	// THE WINNER PULL IS NO LONGER ZERO. It was, because tierLowX made the cap
+	// zero; with the multiplier floored at 0.25x there is no zero cap left, so a
+	// winner on a conclusive-low claim draws a reduced reward rather than none.
+	// What is still asserted is that the pull SUCCEEDS rather than reverting —
+	// the property the original line was protecting, stated without leaning on a
+	// zero that no longer occurs.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	if got := WithdrawBonus(cross(cur), "cz2", id, sideYES); got != 0 {
+	if got := WithdrawBonus(cross(cur), "cz2", id, sideYES); got <= 0 {
 		t.Fatal("low tier pays zero accuracy reward")
 	}
 	// Eve (non-participant conclusive voter) pulls, and gets NOTHING (v0.55): the
@@ -244,7 +254,7 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 	convCC := convToCC(p.convHi, p.convLo)
 	gross := mulDiv128(cs.drawWinners, convCC, cs.winPoolConvCC)
 	rawAvg := div128(p.rawHi, p.rawLo, cs.openBlocks)
-	bound := mustMul(cs.tier, rawAvg) / 2
+	bound := mulDiv128(rawAvg, tierBpsFor(cs), 2*tierParBps)
 
 	if pay != gross {
 		t.Fatalf("THE F9 CAP BINDS HERE — it is reachable after all, so build the "+
@@ -386,9 +396,13 @@ func TestFullBarLowStillPaysTheTierInvariantCarrot(cur realm, t *testing.T) {
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "cz5", id)
+	// Same inversion as cz2: the tally no longer reaches the draw, so a full-bar
+	// low draws like any other claim of its size. The carrot's TIER-INVARIANCE is
+	// what this test is named for and it is unaffected — it was invariant to the
+	// voted tier and is invariant to the derived one.
 	w, a, ans, carrot := DrawSlices("cz5", id)
-	if w != 0 || a != 0 || ans != 0 {
-		t.Fatalf("tier low still draws nothing: %d/%d/%d", w, a, ans)
+	if w <= 0 || a <= 0 || ans <= 0 {
+		t.Fatalf("every slice is drawn now that size sets the multiplier: %d/%d/%d", w, a, ans)
 	}
 	if carrot <= 0 {
 		t.Fatal("above the full bar the carrot is tier-invariant and must be paid")
@@ -568,8 +582,13 @@ func TestCrystallizeWaitsOutTheQuietWindow(cur realm, t *testing.T) {
 // capBonus is a pure function taking its inputs as arguments, so the clamp itself is
 // testable directly without crafting protocol state the design forbids.
 func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
-	cs := &claimState{tier: tierMidX, openBlocks: 1}
-	// rawAvg = 100, tier 1 -> bound = 50.
+	// The multiplier reads only FROZEN claim state — the claim's own size and
+	// the court's typical claim as of its answer — so a bare claimState is the
+	// whole fixture. That is the property that lets Crystallize be permissionless
+	// without letting its caller choose the number.
+	const ref = int64(1_000_000)
+	cs := &claimState{openBlocks: 1, tierRef: ref, xBarFrozen: ref}
+	// rawAvg = 100 at par -> bound = 50.
 	if got := capBonus(cs, 1_000, 0, 100); got != 50 {
 		t.Fatalf("gross above the bound must clamp to (tier x rawAvg)/2: got %d want 50", got)
 	}
@@ -577,19 +596,34 @@ func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
 	if got := capBonus(cs, 10, 0, 100); got != 10 {
 		t.Fatalf("gross below the bound is unchanged: got %d want 10", got)
 	}
-	// The bound scales with the tier: HIGH doubles it.
-	cs.tier = tierHighX
+	// Twice the court's typical claim doubles it — the old HIGH, reached by size
+	// instead of by a two-thirds mandate.
+	cs.xBarFrozen = 2 * ref
 	if got := capBonus(cs, 1_000, 0, 100); got != 100 {
 		t.Fatalf("the bound is tier-scaled: got %d want 100", got)
 	}
-	// At tier LOW the bound is zero, so nothing is payable — the same reason a low
-	// tier zeroes the draw.
-	cs.tier = tierLowX
-	if got := capBonus(cs, 1_000, 0, 100); got != 0 {
-		t.Fatalf("tier LOW bounds the bonus to zero: got %d", got)
+	// ...and it stops there. Ten times the typical claim draws the same multiple
+	// as twice it; the ceiling is what keeps the emission ceiling where every
+	// deploy invariant was fitted to it.
+	cs.xBarFrozen = 10 * ref
+	if got := capBonus(cs, 1_000, 0, 100); got != 100 {
+		t.Fatalf("the ceiling clamps: got %d want 100", got)
 	}
-	// And the floor: a negative gross never becomes a payout.
-	cs.tier = tierMidX
+	// THE SMALLEST CLAIM STILL PAYS SOMETHING. Under the vote a LOW bounded this
+	// to zero; under size there is no "worthless" verdict to justify that, so the
+	// floor is 0.25x: 100 * 2500 / 20000 = 12.
+	cs.xBarFrozen = 0
+	if got := capBonus(cs, 1_000, 0, 100); got != 12 {
+		t.Fatalf("the floor is 0.25x, not zero: got %d want 12", got)
+	}
+	// A claim frozen before this shipped carries no reference, and reads as par
+	// rather than as zero — the alternative would retroactively zero every
+	// pre-existing claim's caps.
+	if got := capBonus(&claimState{openBlocks: 1}, 1_000, 0, 100); got != 50 {
+		t.Fatalf("no reference reads as par: got %d want 50", got)
+	}
+	// And the floor on the OTHER end: a negative gross never becomes a payout.
+	cs.xBarFrozen = ref
 	if got := capBonus(cs, -5, 0, 100); got != 0 {
 		t.Fatalf("a negative gross floors at zero: got %d", got)
 	}
@@ -698,22 +732,30 @@ func TestAnswererBonusGuardsItsSliceAndItsCap(cur realm, t *testing.T) {
 		t.Fatalf("setup: this claim must have a live answerer slice, got %d", ans)
 	}
 	cs := mustClaim(c, id)
-	if cs.tier <= 0 {
-		t.Fatalf("setup: an undisputed mid claim must carry a positive tier, got %d",
-			cs.tier)
+	if tierBpsFor(cs) <= 0 {
+		t.Fatalf("setup: an answered claim must carry a positive multiplier, got %d",
+			tierBpsFor(cs))
 	}
-	// The bound is tier x b0 / 2 and the natural fixture sits UNDER it, exactly as
-	// the happy path asserts. So drive the bound down to half the slice instead of
-	// driving the slice up past the bound: clamping DOWN keeps the mint smaller
-	// than one the reservoir has already funded, whereas an inflated draw would
-	// test the cap against the emission budget as much as against the cap.
-	if natural := cs.tier * cs.answerBond0 / 2; ans > natural {
+	// The bound is multiplier x b0 / 2 and the natural fixture sits UNDER it,
+	// exactly as the happy path asserts. So drive the bound down to half the
+	// slice instead of driving the slice up past the bound: clamping DOWN keeps
+	// the mint smaller than one the reservoir has already funded, whereas an
+	// inflated draw would test the cap against the emission budget as much as
+	// against the cap.
+	if natural := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps); ans > natural {
 		t.Fatalf("this fixture assumes the cap is slack (slice %d, bound %d); it now "+
 			"binds on its own, so assert the natural value instead of squeezing it",
 			ans, natural)
 	}
-	cs.answerBond0 = ans / cs.tier
-	want := cs.tier * cs.answerBond0 / 2
+	// THE SQUEEZE INVERTS THE BOUND, so it has to invert the SAME multiplier the
+	// bound uses. Dividing by cs.tier — the old voted band — left the bound equal
+	// to the slice and the clamp untested: the failure read "bound 2448, slice
+	// 2448", which is a test that no longer bites rather than a broken cap.
+	cs.answerBond0 = mulDiv128(ans, tierParBps, tierBpsFor(cs))
+	// The bound reads the ACTUAL multiplier. This test is about the answerer's
+	// CAP, not about what sets the tier — pinning a mid here would make it fail
+	// on any claim the size derivation rates differently, which is every claim.
+	want := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps)
 	if want <= 0 || want >= ans {
 		t.Fatalf("the squeeze must land strictly between 0 and the slice: "+
 			"bound %d, slice %d", want, ans)

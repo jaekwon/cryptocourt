@@ -92,7 +92,11 @@ func TestDrawCapIsInertOnAnOrdinaryMidClaim(cur realm, t *testing.T) {
 	if w <= 0 || a <= 0 || ct <= 0 {
 		t.Fatalf("the mid draw must be live: %d/%d/%d/%d", w, a, ans, ct)
 	}
-	uncapped := mustMul(cs.tier, mg)
+	// THE ACTUAL MULTIPLIER, not an assumed MID. This test is about the draw
+	// CAP, so it must not also assert what the multiplier is — that moved to a
+	// size derivation (tier.gno) and is pinned by tier_test.gno. Reading it here
+	// keeps this test measuring the one thing it is named for.
+	uncapped := mulDiv128(mg, tierBpsFor(cs), tierParBps)
 	if uncapped > c.curPeriodBudget {
 		t.Fatalf("this fixture measures the cap, but the period budget is tighter "+
 			"(want %d, budget %d) — re-scale it", uncapped, c.curPeriodBudget)
@@ -131,10 +135,10 @@ func TestDrawCapBindsWhenTheBondDidNotCoverTheDraw(cur realm, t *testing.T) {
 
 	// Assert the cap is slack BEFORE squeezing, so a future change that makes it
 	// bind naturally turns this into a loud failure rather than a silent pass.
-	if cs.answerBond0-carrot <= mustMul(cs.tier, mg) {
+	if cs.answerBond0-carrot <= mulDiv128(mg, tierBpsFor(cs), tierParBps) {
 		t.Fatalf("this fixture assumes the cap is slack and squeezes it; it now binds "+
 			"on its own (bond0 %d, carrot %d, want %d). Assert the natural value "+
-			"instead of squeezing.", cs.answerBond0, carrot, mustMul(cs.tier, mg))
+			"instead of squeezing.", cs.answerBond0, carrot, mulDiv128(mg, tierBpsFor(cs), tierParBps))
 	}
 
 	// Squeeze: a bond that collateralized only HALF the mid draw. This is the
@@ -142,9 +146,9 @@ func TestDrawCapBindsWhenTheBondDidNotCoverTheDraw(cur realm, t *testing.T) {
 	// directly on the one field the cap reads.
 	cs.answerBond0 = mg/2 + carrot
 	wantCapped := cs.answerBond0 - carrot
-	if wantCapped <= 0 || wantCapped >= mustMul(cs.tier, mg) {
+	if wantCapped <= 0 || wantCapped >= mulDiv128(mg, tierBpsFor(cs), tierParBps) {
 		t.Fatalf("the squeeze must land strictly between 0 and the uncapped draw: "+
-			"capped %d, uncapped %d", wantCapped, mustMul(cs.tier, mg))
+			"capped %d, uncapped %d", wantCapped, mulDiv128(mg, tierBpsFor(cs), tierParBps))
 	}
 
 	testing.SkipHeights(100_000)
@@ -156,7 +160,7 @@ func TestDrawCapBindsWhenTheBondDidNotCoverTheDraw(cur realm, t *testing.T) {
 	if got > wantCapped {
 		t.Fatalf("the cap must hold the whole draw at or under what the bond "+
 			"collateralized: drew %d, cap %d (uncapped would be %d)",
-			got, wantCapped, mustMul(cs.tier, mg))
+			got, wantCapped, mulDiv128(mg, tierBpsFor(cs), tierParBps))
 	}
 	if got <= 0 {
 		t.Fatalf("the cap must bound the draw, not destroy it: drew %d", got)
@@ -229,7 +233,11 @@ func TestDrawCapDoesNotTouchAnOverturnedClaim(cur realm, t *testing.T) {
 	if mg <= 0 {
 		t.Fatalf("precondition: the vindicated pool must carry conviction, got %d", mg)
 	}
-	uncapped := mustMul(cs.tier, mg)
+	// THE ACTUAL MULTIPLIER, not an assumed MID. This test is about the draw
+	// CAP, so it must not also assert what the multiplier is — that moved to a
+	// size derivation (tier.gno) and is pinned by tier_test.gno. Reading it here
+	// keeps this test measuring the one thing it is named for.
+	uncapped := mulDiv128(mg, tierBpsFor(cs), tierParBps)
 	carrot := mulDiv128(mg, splitCarrot, 100)
 
 	// SQUEEZE, exactly as the binding fixture does. On the shipped tree the cap

@@ -620,63 +620,28 @@ func creditDisputeResolved(c *Court, cs *claimState) {
 	}
 }
 
-// creditAuthorHigh pays the author of a claim the court adjudicated HIGH.
-//
-// SEEDED CLAIMS EARN ZERO, mirroring I5 word for word. OpenClaimSeeded waives
-// the deposit and the fee for exactly the addresses that will hold the board's
-// moderator powers, so without this gate seeding is a standing faucet for the
-// moderator set — the same provenance argument that already zeroes the seeded
-// author's draw in crystallize.gno, applied to the record instead of the money.
-func creditAuthorHigh(c *Court, cs *claimState, tier int64) {
-	if cs.seeded || tier != tierHighX {
-		return
-	}
-	// An author with no position on the winning side earns nothing, which
-	// matches the money lane exactly: AuthorBonus already pays its slice only
-	// against that position.
-	v := cs.stakers.Get(posKey(cs.author, int(cs.provisional)))
-	if v == nil {
-		return
-	}
-	p := v.(*stakePos)
-	// ACCRUE FIRST. Crystallize has called advancePools, which settles the SIDE
-	// integrals only — it never touches a per-position rawHi/rawLo — so reading
-	// p.rawHi here without this line gets a figure stale as of the author's last
-	// stake event. Measured, the understatement is ~7.9x. AuthorBonus does the
-	// same accrue for the same reason before reading the same fields; this is a
-	// write path, so the call is legal here.
-	accrue(c, cs, p, int(cs.provisional))
-	creditStanding(c, cs.author,
-		scaleBps(timeAvgStake(cs, p.rawHi, p.rawLo), creditRatesFor(c).authorHigh), standingCatAuthor)
-}
 
 // creditWinConviction pays a winning staker in proportion to the conviction they
 // actually drew on — linear, uncapped, and taken from the same convCC the draw
 // itself is computed from, so the two can never disagree about what was held.
 //
-// GATED ON THE ADJUDICATED TIER, and it was not until review measured what that
-// cost. This was the one row in the table inheriting no gate at all: a claim the
-// court adjudicated LOW pays a zero draw — tier 0 multiplies the whole winners'
-// slice to nothing — and yet every winning staker was still credited in full.
-// Measured against the mill's total money punishment on that branch (the deposit
-// and fee, and nothing else), the standing take was 4.5× the burn on a young
-// court and 22.7× on a mature one. So the flag lane's entire deterrent reached
-// the money and left the record untouched, which is A18's lesson — an
-// unadjudicated stand earns nothing — unapplied to the newer ledger.
-//
 // TWO RATES, NOT A GATE. The rate turns on whether the COURT decided this claim
 // or a deadline did; see standingUnadjudicatedBps and `adjudicated` below.
 //
-// The tier arm is the real refusal, and it is the one that matters: `cs.tier = tierMidX` is what an
-// UNADJUDICATED claim is stamped with — provCloseClaim and the settle path both
-// write it under `!cs.tierFinal && !cs.slotConsumed`, i.e. mid is the default a
-// claim nobody looked at receives. So a gate reading `tier >= tierMidX` admits
-// exactly the author-mill's habitat: open a claim, self-answer it, self-stake
-// the answered side, settle undisputed, collect on a default nobody voted for.
+// THE TIER ARM IS GONE WITH THE TIER, and what it did is worth keeping on the
+// record because it is the deterrent this row no longer has. It refused a claim
+// the court had adjudicated LOW: tier 0 multiplied the winners' slice to
+// nothing, and before the arm existed every winning staker was still credited in
+// full anyway. Measured against the mill's total money punishment on that branch
+// — the deposit and the fee, and nothing else — the standing take was 4.5× the
+// burn on a young court and 22.7× on a mature one. So the flag lane's entire
+// deterrent reached the money and left the record untouched, which was A18's
+// lesson unapplied to the newer ledger.
 //
-// The tier arm stays beside it because a CONCLUSIVE low is adjudicated and still
-// pays nothing: tierLowX is zero, so the draw is zero, and the record follows
-// the money.
+// With no tier there is no LOW to refuse, so every winning staker is credited
+// and the adjudicated rate is the only thing that still varies. The 4.5×/22.7×
+// figures above are what that costs on the mill branch, and they are the reason
+// this paragraph is a record rather than a deletion.
 //
 // provClose needs no arm of its own, and the arm it once had was wrong.
 // crystallize says it plainly — "provClose now DRAWS. Only a dead claim has no
@@ -686,9 +651,10 @@ func creditAuthorHigh(c *Court, cs *claimState, tier int64) {
 // tier and slotConsumed it ended up with, and is rated on those like anything
 // else.
 func creditWinConviction(c *Court, cs *claimState, who address, p *stakePos) {
-	if cs.tier < tierMidX {
-		return
-	}
+	// The tier arm is gone with the tier. It refused a conclusive LOW, which
+	// drew nothing — "the record follows the money" — and with no tier there is
+	// no low to refuse. Every winning staker is credited; the adjudicated rate
+	// below is the only thing that still varies.
 	r := creditRatesFor(c)
 	bps := r.conviction
 	if !adjudicated(cs) {

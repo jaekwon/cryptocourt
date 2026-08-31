@@ -517,8 +517,22 @@ BOARD_READS = re.compile(
     r"claimBoardFrozen|boardSupply|boardMark|boardWroteBy|mustBoardWritable|"
     r"mustSpendPost|boardOpen|PostsAvailable|HoldsPass)\b")
 CREDIT_HOOKS = re.compile(
-    r"\b(creditFlagSlash|creditDisputeResolved|creditAuthorHigh|creditWinConviction)\(")
-CREDIT_HOOK_CALLS_N = 4
+    r"\b(creditFlagSlash|creditDisputeResolved|creditWinConviction)\(")
+# THREE, NOT FOUR: creditAuthorHigh is gone with the quality tier.
+#
+# It paid the author's RECORD only at tier HIGH, and the reasoning was that MID
+# is what an unlooked-at claim gets by default, so crediting it is the
+# author-mill's habitat. The tier is derived from the claim's stake size now
+# (realm/r/kourtv2/tier.gno), so there is no "the court judged this
+# exceptional" left to gate on — and gating the record on SIZE would pay
+# standing for volume, which is the same faucet reached by a different route.
+# The row was dropped rather than re-keyed.
+#
+# RE-DERIVED, NOT RELAXED: the count is the point of this arm, so it moves only
+# when a hook is genuinely added or removed, and the removal is named here so
+# the next reader can tell a decision from a drift. The money lane is untouched
+# — AuthorBonus was never tier-gated.
+CREDIT_HOOK_CALLS_N = 3
 
 PURGED_GATE = re.compile(r"courtIsPurged\(c\)")
 PURGED_GATE_ENTRY = {

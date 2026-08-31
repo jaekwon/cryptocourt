@@ -202,6 +202,11 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	cs.frozenAt = now
 	cs.rateAccAtFreeze = c.rateAccFP
 	cs.xBarFrozen = xbar // P6: the one base for every later %-of-X̄ quantity
+	// THE REFERENCE IS TAKEN BEFORE THE OBSERVATION, so a claim is never
+	// measured against an average it is itself in. Both land on the claim at the
+	// same instant, which is what makes the multiplier immutable afterwards.
+	cs.tierRef = tierRefAt(c)
+	observeClaimSize(c, xbar)
 	// The per-side record, pinned here and never revised: the live counters below
 	// drain to zero as principal goes home.
 	cs.yesStakeAtFreeze, cs.noStakeAtFreeze = cs.yesStake, cs.noStake

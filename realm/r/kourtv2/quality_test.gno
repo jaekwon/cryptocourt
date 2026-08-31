@@ -576,8 +576,12 @@ func TestConclusiveLowSurvivesLateSettle(cur realm, t *testing.T) {
 	testing.SkipHeights(periodBlocks)             // a budget to draw from, if any
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "cl1", id)
-	if w, a, ans, _ := DrawSlices("cl1", id); w != 0 || a != 0 || ans != 0 {
-		t.Fatalf("a conclusive-low claim must draw nothing: %d/%d/%d", w, a, ans)
+	// THE TALLY NO LONGER REACHES THE DRAW. What this test is named for — that a
+	// LATE SettleUndisputed does not clobber a tally already decided — is
+	// unaffected and asserted above. The draw is now a function of the claim's
+	// size, so a conclusive low draws like any other claim of its size.
+	if w, a, ans, _ := DrawSlices("cl1", id); w <= 0 || a <= 0 || ans <= 0 {
+		t.Fatalf("size sets the draw now, so every slice pays: %d/%d/%d", w, a, ans)
 	}
 }
 
@@ -646,8 +650,10 @@ func TestConclusiveLowSurvivesLateFinalize(cur realm, t *testing.T) {
 	testing.SkipHeights(periodBlocks)             // a budget to draw from, if any
 	testing.SetRealm(testing.NewUserRealm(alice))
 	Crystallize(cross(cur), "cf1", id)
-	if w, a, ans, _ := DrawSlices("cf1", id); w != 0 || a != 0 || ans != 0 {
-		t.Fatalf("a conclusive-low claim must draw nothing after Finalize: %d/%d/%d", w, a, ans)
+	// Same inversion as the settle path above, and for the same reason: the
+	// surviving subject is that a late Finalize does not clobber the tally.
+	if w, a, ans, _ := DrawSlices("cf1", id); w <= 0 || a <= 0 || ans <= 0 {
+		t.Fatalf("size sets the draw now, so every slice pays: %d/%d/%d", w, a, ans)
 	}
 }
 

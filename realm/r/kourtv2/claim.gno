@@ -164,6 +164,14 @@ type claimState struct {
 	// VERDICT_FINAL (P4): set by SettleUndisputed, Finalize, or provClose.
 	verdictAt int64  // 0 = no verdict yet
 	route     string // "undisputed" | "vote" | "closed"
+	// tierRef is the court's typical claim size AS OF THIS CLAIM'S ANSWER — the
+	// size that would have earned exactly 1x here (tier.gno). Frozen beside
+	// xBarFrozen and for the same reason: the multiplier is the ratio of the
+	// two, and a live denominator would let whoever calls the permissionless
+	// Crystallize choose it. Zero on any claim frozen before this shipped, which
+	// tierBpsFor reads as par.
+	tierRef int64
+
 	// Quality (quality.gno finalizes; mid is the undisputed default).
 	tier      int64
 	tierFinal bool

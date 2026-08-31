@@ -22,50 +22,14 @@ func standingFixture(cur realm, slug string, who address) (*Court, *claimState, 
 
 // ------------------------------------------------------------- the gates --
 
-func TestAuthorStandingIsHighOnlyAndNeverSeeded(cur realm, t *testing.T) {
-	alice := testutils.TestAddress("sg1-alice")
-	c, cs, _ := standingFixture(cur, "sg1", alice)
-	// The author's OWN winning-side position is the base now, not the claim's
-	// X-bar. stake:0 makes accrue a no-op, so the figure below is exact.
-	cs.xBarFrozen, cs.provisional, cs.openBlocks = 1_000_000_000, int8(sideYES), 1_000
-	cs.stakers.Set(posKey(alice, sideYES), &stakePos{rawLo: 500_000_000})
-	avg := int64(500_000)
-
-	// MID is what an UNLOOKED-AT claim gets by default, so crediting it is the
-	// author-mill's habitat — the same correction A18 already made for the
-	// answer record. Low is likewise nothing.
-	creditAuthorHigh(c, cs, tierMidX)
-	creditAuthorHigh(c, cs, tierLowX)
-	uassert.Equal(t, int64(0), Standing("sg1", alice))
-
-	creditAuthorHigh(c, cs, tierHighX)
-	want := avg * standingAuthorHighBps / 10000
-	uassert.Equal(t, want, Standing("sg1", alice))
-	// The base really is the author's own capital and not the crowd's: X-bar is
-	// 2000x the position here, so the two figures cannot be confused.
-	if want == cs.xBarFrozen*standingAuthorHighBps/10000 {
-		t.Fatal("the author row must scale on the author's own stake, not X-bar")
-	}
-
-	// An author with NO position on the winning side earns nothing, matching the
-	// money lane: AuthorBonus pays its slice only against that position.
-	loner := testutils.TestAddress("sg1-loner")
-	cs.author = loner
-	creditAuthorHigh(c, cs, tierHighX)
-	uassert.Equal(t, int64(0), Standing("sg1", loner))
-	cs.author = alice
-
-	// I5 applied to the record: seeding waives the deposit and the fee for
-	// exactly the addresses that will hold the board's moderator powers, so a
-	// seeded HIGH must earn nothing or seeding is a standing faucet for the set.
-	bob := testutils.TestAddress("sg1-bob")
-	c2, cs2, _ := standingFixture(cur, "sg2", bob)
-	cs2.xBarFrozen, cs2.provisional, cs2.openBlocks = 1_000_000_000, int8(sideYES), 1_000
-	cs2.stakers.Set(posKey(bob, sideYES), &stakePos{rawLo: 500_000_000})
-	cs2.seeded = true
-	creditAuthorHigh(c2, cs2, tierHighX)
-	uassert.Equal(t, int64(0), Standing("sg2", bob))
-}
+// TestAuthorStandingIsHighOnlyAndNeverSeeded is gone with creditAuthorHigh.
+// It paid the author's RECORD only at tier HIGH, on the reasoning that MID is
+// what an unlooked-at claim gets by default and crediting that is the
+// author-mill's habitat. With the tier derived from stake size there is no
+// "the court judged this exceptional" left to gate on, and gating on SIZE would
+// pay the record for volume — which is the same faucet, reached differently. So
+// the row is dropped rather than re-keyed. The money lane is untouched:
+// AuthorBonus was never tier-gated.
 
 func TestDisputeStandingNeedsCredEligibleOnAnUphold(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("sg3-alice")
@@ -370,15 +334,12 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, half, Standing("sg13", alice))
 
-	// A CONCLUSIVE LOW earns nothing — adjudicated junk, tierLowX is zero, the
-	// draw is zero, the record follows the money. Asserted as UNCHANGED rather
-	// than as zero, because standing accumulates: a gate that pays nothing and a
-	// gate that pays into an empty row are indistinguishable at zero, which is
-	// how the earlier version of this test hid the case it was written for.
-	before := Standing("sg13", alice)
-	cs.tier, cs.decidedPID = tierLowX, 7
-	creditWinConviction(c, cs, alice, p)
-	uassert.Equal(t, before, Standing("sg13", alice))
+	// THE TIER ARM IS GONE WITH THE TIER. It refused a claim the court had
+	// adjudicated LOW, on the reasoning that a zero draw should carry a zero
+	// record. With the multiplier derived from size there is no "the court
+	// judged this worthless" left to refuse on — a small claim draws less, not
+	// nothing, so the record follows it down rather than off. What still varies
+	// is the adjudicated rate, which the two arms below pin.
 
 	// AN ADJUDICATED MID EARNS FULL — same tier value as the first case, double
 	// the credit, which is the whole point of reading the adjudication and not
@@ -486,60 +447,13 @@ func TestTheDisputeHookFiresAtFinalizeAndPaysTheOverturner(cur realm, t *testing
 	uassert.Equal(t, int64(0), Standing("sh2", alice))
 }
 
-func TestTheAuthorHookFiresAtCrystallizeAndOnlyAtHigh(cur realm, t *testing.T) {
-	c, id, alice, bob, carol, dust := qfSetup(cur, t, "sh3")
-
-	// Drive quality to HIGH the only way it gets there: a dispute arrives
-	// mid-flag, voiding it, and the round's own ride carries 2/3 at the full bar.
-	testing.SetRealm(testing.NewUserRealm(dust))
-	OpenFlag(cross(cur), "sh3", id)
-	testing.SetRealm(testing.NewUserRealm(bob))
-	OpenDispute(cross(cur), "sh3", id)
-	testing.SetRealm(testing.NewUserRealm(carol))
-	VoteQuality(cross(cur), "sh3", id, qualityHigh)
-	VoteDispute(cross(cur), "sh3", id, "no") // uphold, with quorum
-	testing.SkipHeights(c.params.votingBlocks + 1)
-	ResolveDispute(cross(cur), "sh3", id)
-	if tier, final := QualityTier("sh3", id); tier != qualityHigh || !final {
-		t.Fatalf("setup: need a final HIGH, got tier=%d final=%v", tier, final)
-	}
-
-	// The verdict is decided but nothing has crystallized, so the author slice
-	// has not been struck and the record must not have moved either.
-	authorOf := func() int64 {
-		if r := lookupStanding(c, alice); r != nil {
-			return r.from[standingCatAuthor]
-		}
-		return 0
-	}
-	uassert.Equal(t, int64(0), authorOf())
-
-	testing.SkipHeights(EscrowUntil("sh3", id) - heightNow())
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Finalize(cross(cur), "sh3", id)
-	uassert.Equal(t, int64(0), authorOf())
-
-	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "sh3", id)
-
-	// Asserted on the SUBTOTAL, not the score: alice is author, answerer and a
-	// winning staker on this claim, so the total sums four lanes and would stay
-	// green with the author hook deleted. The subtotals exist for exactly this.
-	// Recomputed from SETTLED STATE, not from the formula: fetch the author's
-	// own position after crystallize and scale it the way the row says it is
-	// scaled. That pins the BASE, which is the thing that changed.
-	cs := mustClaim(c, id)
-	ap := cs.stakers.Get(posKey(alice, int(cs.provisional))).(*stakePos)
-	want := timeAvgStake(cs, ap.rawHi, ap.rawLo) * standingAuthorHighBps / 10000
-	uassert.Equal(t, want, authorOf())
-	if want <= 0 {
-		t.Fatalf("a HIGH claim must credit its author: %d", want)
-	}
-	// And it is not the old X-bar base, which would be a different number.
-	if want == cs.xBarFrozen*standingAuthorHighBps/10000 {
-		t.Fatal("the author row must scale on the author's own stake, not X-bar")
-	}
-}
+// TestTheAuthorHookFiresAtCrystallizeAndOnlyAtHigh went with creditAuthorHigh.
+// It pinned that the author's STANDING credit fires from Crystallize (not from
+// the AuthorBonus pull, so it does not depend on the author bothering to draw)
+// and only at tier HIGH. With the multiplier derived from stake size there is no
+// HIGH to gate on, and gating the record on size would pay standing for volume —
+// the author-mill faucet the gate existed to close. The money lane is untouched:
+// AuthorBonus was never tier-gated and still pays cs.drawAuthor.
 
 func TestHighWaterTracksTheMaxAndSurvivesASlash(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("sg14-alice")
@@ -617,31 +531,42 @@ func TestLookupStandingToleratesACourtBuiltByHand(cur realm, t *testing.T) {
 	}
 }
 
-func TestTheAuthorCreditAccruesTheAuthorsOwnPositionFirst(cur realm, t *testing.T) {
+// THE 7.9x TRAP, kept on the credit that survived it.
+//
+// Crystallize calls advancePools, which settles the SIDE integrals and never a
+// per-position rawHi/rawLo — so a position whose last stake predates the freeze
+// carries a stale integral, and a credit that reads it without accruing first
+// under-counts every block between the two. Measured at ~7.9x when this was
+// found.
+//
+// creditAuthorHigh accrued INTERNALLY and this test drove it directly.
+// creditWinConviction does not: its caller accrues (crystallize.gno, "settle to
+// the freeze pin") and then credits. So what is pinned here is the DEPENDENCE —
+// that the credit reads the accrued integral and is worth ~stake x held once it
+// has been accrued, and near nothing before. A caller that dropped its accrue
+// would produce the second number, and this says what that number looks like.
+func TestWinConvictionCreditReadsTheAccruedIntegral(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("sg16-alice")
 	c, cs, _ := standingFixture(cur, "sg16", alice)
 
-	// THE 7.9x TRAP, made reachable. Crystallize calls advancePools, which
-	// settles the SIDE integrals and never a per-position rawHi/rawLo — so an
-	// author whose last stake predates the freeze carries a stale integral, and
-	// a credit that reads it without accruing first under-counts every block
-	// between the two. The lifecycle test upstream CANNOT see this: matureOI's
-	// last stake lands in the same block as the answer, so there is no
-	// un-accrued time and deleting the accrue changes nothing there.
-	//
-	// Here there is: the position holds 1,000 stake across 400 un-accrued
-	// blocks, so accrue must add 400,000 to a base that starts at zero.
+	// The position holds 1,000 stake across 400 un-accrued blocks, so accrue
+	// must add 400,000 to a base that starts at zero.
 	const stake, held = int64(1_000), int64(400)
 	cs.provisional, cs.openBlocks = int8(sideYES), 1_000
 	cs.frozenAt = heightNow()
+	cs.decidedPID = 7 // adjudicated, so the rate is not the halved one
 	p := &stakePos{stake: stake, lastRawAt: cs.frozenAt - held}
 	cs.stakers.Set(posKey(alice, sideYES), p)
 
-	creditAuthorHigh(c, cs, tierHighX)
+	// BEFORE the accrue: rawLo is 0, so the credit is zero. This is the number a
+	// caller that forgot to accrue would produce.
+	creditWinConviction(c, cs, alice, p)
+	uassert.Equal(t, int64(0), Standing("sg16", alice))
 
-	// rawLo is 0 before accrue and stake*held after, so the credit is zero if
-	// the accrue is missing and this figure if it is not.
-	want := (stake * held / cs.openBlocks) * standingAuthorHighBps / 10000
+	// AFTER it: stake x held, which is what the draw is computed from.
+	accrue(c, cs, p, sideYES)
+	creditWinConviction(c, cs, alice, p)
+	want := (stake * held / cs.openBlocks) * standingConvictionBps / 10000
 	uassert.Equal(t, want, Standing("sg16", alice))
 	if want <= 0 {
 		t.Fatalf("the fixture must produce a live credit: %d", want)
