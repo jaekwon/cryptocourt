@@ -102,7 +102,7 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
   const open = stakeTicket("orem", 4, Object.assign({}, settled, {flagOpen:true}));
   const counter = stakeTicket("orem", 4, Object.assign({}, settled, {counterOpen:true}));
   const clear = stakeTicket("orem", 4, settled);
-  const crysOf = h => (h.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Crystallize[\s\S]*?<\/button>/)||[""])[0];
+  const crysOf = h => (h.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Open the rewards[\s\S]*?<\/button>/)||[""])[0];
   ok("crystallize is greyed while a quality question is open",
      /data-blocked="[^"]*quality question is still open/.test(crysOf(open))
      && /data-blocked=/.test(crysOf(counter)));
@@ -112,8 +112,12 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      /aria-disabled="true"/.test(crysOf(open)));
   ok("it stays live when the page cannot know the answer",
      !/data-blocked=/.test(crysOf(clear)));
-  ok("...and states the two rules it cannot check",
-     /participants first week/.test(crysOf(clear)) && /quiet 24h/.test(crysOf(clear)));
+  // ONE rule in the note, not two. "participants first week, once flags are
+  // quiet 24h" was longer than the button it sat under; the quiet window is an
+  // edge that only bites in the hours after a flag closes, and the greyed
+  // reason covers the flag itself.
+  ok("...and states the rule it cannot check",
+     /participants first week/.test(crysOf(clear)));
   // The withdraw buttons beside it are never blocked — principal is never gated.
   ok("withdrawing principal is never blocked",
      !/data-blocked/.test((open.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Withdraw[\s\S]*?<\/button>/)||[""])[0]));

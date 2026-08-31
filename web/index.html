@@ -4229,7 +4229,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     + `<section><div class="grid stats">
         <div class="stat"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
         <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply,slug)}</div><div class="sub">${cc(s.emitted,slug)} of it earned as rewards</div></div>
-        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims crystallizing — settling and paying out</div></div>
+        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims settling and paying out</div></div>
         <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
        </div></section>`
     + courtBody(slug, s, claims, docketPager, chainF, allRows, docketPagerBot,
@@ -8324,7 +8324,7 @@ function chartChips(d, slug){
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
-    d.crystallized? "crystallized":null,
+    d.crystallized? "rewards open":null,
   ].filter(Boolean).map(t=>`<span>${t}</span>`).join("");
   return `<div class="chartchips">${chips}</div>`;
 }
@@ -8374,7 +8374,7 @@ function stakeTicket(slug,id,d){
        heading about how the claim resolved. A ticket that names an action and
        does not carry it is a caption. */
     return `<div class="ticket"><h3>Staking is closed</h3>
-      <div class="hint">This claim has concluded — every stake withdraws 1×.${d.phase==="settled"?" The winning side also draws its accuracy reward once the claim crystallizes.":" No side won or lost; the deposit and fee were refunded."}</div>
+      <div class="hint">This claim has concluded — every stake withdraws 1×.${d.phase==="settled"?" The winning side also draws its accuracy reward, once somebody opens them.":" No side won or lost; the deposit and fee were refunded."}</div>
       <div class="line"><span class="l">Your principal</span><span class="r">withdraw 1× now</span></div>
       ${d.phase==="settled"?`<div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>`:""}
       <div class="actions" style="margin-top:14px">
@@ -8385,7 +8385,7 @@ function stakeTicket(slug,id,d){
             +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
             +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
             +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
-          : btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id},"",
+          : btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
                 /* WHAT THE REALM WILL REFUSE, said before the signature rather
                    than after it. Crystallize was offered on every settled claim
                    that had not been crystallized, and the realm turns it down in
@@ -8400,7 +8400,7 @@ function stakeTicket(slug,id,d){
                    a grey that might be wrong about the reader. Greying a control
                    somebody could have used is worse than offering one they
                    cannot. */
-                (d.flagOpen||d.counterOpen)? "" : "participants first week, once flags are quiet 24h",
+                (d.flagOpen||d.counterOpen)? "" : "participants first week",
                 null,null,null,
                 (d.flagOpen||d.counterOpen)
                   ? "A quality question is still open on this claim. The draw waits until it closes — principal never does."
@@ -8640,7 +8640,7 @@ function resolutionSection(slug,id,d,nowH,tl){
   } else if(d.phase==="settled"){
     const v=(d.verdict!=null?d.verdict:d.answer);
     inner = `<div class="notice good"><span class="g">✓</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
-      Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the claim crystallizes.
+      Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
       ${d.crystallized && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped below half a flag bond, queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
