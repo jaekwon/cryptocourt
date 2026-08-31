@@ -7407,9 +7407,9 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        section below keeps the ladder for what a hover cannot carry: a dateless
        failed round, a verdict, the events with no point on the line. */
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
-        <div class="stakewrap${ladderTakesTheTicket(d)?" solo":""}">
+        <div class="stakewrap${stakeTicketHasActions(d)?"":" solo"}">
           <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
-          ${ladderTakesTheTicket(d)? "" : stakeTicket(slug,id,d)}
+          ${stakeTicketHasActions(d)? stakeTicket(slug,id,d) : ""}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
@@ -8305,21 +8305,30 @@ function chartChips(d, slug){
   return `<div class="chartchips">${chips}</div>`;
 }
 
-/* WHEN THE TICKET IS RULES RATHER THAN AN ACTION, THE TIMELINE TAKES ITS PLACE.
-   Beside the chart, in the phases between an answer and a settlement, the ticket
-   said "Staking is frozen" and then spent four lines restating the one rule that
-   never changes: principal returns 1x. Nothing to press, nothing that is not
-   true of every claim in every court — and it held the best column on the page,
-   level with the chart, while the ladder of what has actually happened to THIS
-   claim sat further down.
-   Open and closed keep their ticket: both have buttons in it, and a column of
-   buttons is not boilerplate. Settled and provClose keep theirs too — those
-   read "Staking is closed" and are equally ruleslike, but their withdraw
-   buttons live in the notice directly below, so moving the ladder up would put
-   it between the reader and the thing to press. */
-function ladderTakesTheTicket(d){
-  return d.phase!=="open" && d.phase!=="closed"
-      && d.phase!=="settled" && d.phase!=="provClose";
+/* DOES THE TICKET HOLD AN ACTION, OR ONLY RULES? That is the whole question, and
+   naming it that way settles every phase at once instead of listing them.
+
+   Open has Stake YES/NO and Unstake; closed has Unstake. Those are columns of
+   buttons and they earn the space beside the chart. Every other phase renders a
+   heading and three or four lines restating the rule that never changes —
+   principal returns 1x — with nothing to press: "Staking is frozen" between an
+   answer and a settlement, "Staking is closed" once one has been reached. Both
+   held the best column on the page, level with the chart, to say something true
+   of every claim in every court.
+
+   Settled and provClose keep theirs, and their withdraw buttons MOVED INTO it:
+   the ticket is where a reader acts on their stake, so a phase whose stake
+   action lived in the resolution notice had the ticket describing a withdrawal
+   two sections above the button that performs it.
+
+   Provisional is the deliberate exception. One side may withdraw early there,
+   so by this rule it would earn a ticket — but that button sits beside Reopen
+   and Finalize, which are resolution actions, and a reader in that phase is
+   choosing BETWEEN the three. Splitting them across two columns to satisfy a
+   rule would cost more than the rule is worth. */
+function stakeTicketHasActions(d){
+  return d.phase==="open" || d.phase==="closed"
+      || d.phase==="settled" || d.phase==="provClose";
 }
 /* The stake ticket — replaces the V1 order ticket. Principal is never at risk;
    the reward is conviction (stake × time held until the answer). */
@@ -8334,10 +8343,25 @@ function stakeTicket(slug,id,d){
       </div></div>`;
   }
   if(d.phase==="settled"||d.phase==="provClose"){
+    const v = d.verdict!=null? d.verdict : d.answer;
+    /* THE BUTTONS ARE HERE NOW, not two sections down in the resolution notice.
+       This card said "withdraw 1× now" and offered nothing to press; the thing
+       that performs the withdrawal was below the fold on most screens, under a
+       heading about how the claim resolved. A ticket that names an action and
+       does not carry it is a caption. */
     return `<div class="ticket"><h3>Staking is closed</h3>
       <div class="hint">This claim has concluded — every stake withdraws 1×.${d.phase==="settled"?" The winning side also draws its accuracy reward once the claim crystallizes.":" No side won or lost; the deposit and fee were refunded."}</div>
       <div class="line"><span class="l">Your principal</span><span class="r">withdraw 1× now</span></div>
-      ${d.phase==="settled"?`<div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>`:""}</div>`;
+      ${d.phase==="settled"?`<div class="line"><span class="l">Winning side</span><span class="r">1× + accuracy reward</span></div>`:""}
+      <div class="actions" style="margin-top:14px">
+        ${btn("Withdraw (YES side)","WithdrawStake",{courtSlug:slug,claimID:id,side:0},d.phase==="settled"?"yes":"")}
+        ${btn("Withdraw (NO side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1},d.phase==="settled"?"no":"")}
+        ${d.phase!=="settled"? "" : d.crystallized
+          ? btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v})
+            +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
+            +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
+            +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
+          : btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id})}</div></div>`;
   }
   if(d.phase!=="open"){
     return `<div class="ticket"><h3>Staking is frozen</h3>
@@ -8569,19 +8593,11 @@ function resolutionSection(slug,id,d,nowH,tl){
   if(d.phase==="provClose"){
     inner = `<div class="notice void"><span class="g">◌</span><div><b>Closed without a decision.</b>
       Three dispute rounds failed to reach quorum, so nobody's answer stands. Everyone withdraws their principal 1×; the deposit and fee refund. No reward is drawn.
-      <div class="actions" style="margin-top:10px">${btn("Withdraw (YES side)","WithdrawStake",{courtSlug:slug,claimID:id,side:0})} ${btn("Withdraw (NO side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1})}</div></div></div>`;
+      </div></div>`;   // the buttons are in the ticket beside the chart, with the sentence that describes them
   } else if(d.phase==="settled"){
     const v=(d.verdict!=null?d.verdict:d.answer);
     inner = `<div class="notice good"><span class="g">✓</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the claim crystallizes.
-      <div class="actions" style="margin-top:10px">
-        ${btn("Withdraw (YES side)","WithdrawStake",{courtSlug:slug,claimID:id,side:0},"yes")}
-        ${btn("Withdraw (NO side)","WithdrawStake",{courtSlug:slug,claimID:id,side:1},"no")}
-        ${d.crystallized?btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v})
-          +btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id},"","author only")
-          +btn("Pull answerer bonus","AnswererBonus",{courtSlug:slug,claimID:id},"","answerer only")
-          +btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","deciding-round voters")
-          :btn("Crystallize the draw","Crystallize",{courtSlug:slug,claimID:id})}</div>
       ${d.crystallized && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped below half a flag bond, queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
