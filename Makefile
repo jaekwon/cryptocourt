@@ -148,11 +148,21 @@ height-shim:
 # The browser half: real layout measurement, needs puppeteer. NOT in `check` —
 # it wants a headless Chrome, and the gate must not. It caught a grid rule that
 # put the whole page body below the sidebar, which reading the CSS did not.
+#
+# EVERY HARNESS DRIVES A REAL BROWSER, so none is cheap: about two minutes for
+# the five (chat_all 34s, embed_layout 23s, rowscope_layout 23s, route_crawl
+# 21s, tagrow_layout 14s). That is the right cost before a commit and the wrong
+# one after every edit. ONLY takes a substring so you can run the one that
+# covers what you touched:
+#
+#   make web-visual ONLY=rowscope      # rows on every route
+#   make web-visual ONLY=route_crawl   # every internal link resolves
+#   make web-visual                    # all five, before a commit
 web-visual:
 	@if ! command -v node >/dev/null 2>&1; then \
 		echo "node not installed - skipping browser checks"; exit 0; \
 	fi; \
-	node web/tests/browser/run.js
+	ONLY="$(ONLY)" node web/tests/browser/run.js
 
 web-test:
 	@if ! command -v node >/dev/null 2>&1; then \

@@ -77,8 +77,27 @@ try {
 // renders as production, whatever the node's clock was told". Removed here too,
 // because a runner that requires a harness nobody has fails for a reason that is
 // not about the page.
-const CHECKS = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
-                "rowscope_layout.js", "chat_all.js"];
+/* RUN ONE OF THESE, OR ALL OF THEM. Each harness launches its own headless
+   Chrome and drives real pages, so none is cheap and the total is around two
+   minutes — measured: chat_all 34s, embed_layout 23s, rowscope_layout 23s,
+   route_crawl 21s, tagrow_layout 14s.
+   That is the right cost before a commit and the wrong one after every edit,
+   where it means either waiting or (what actually happens) not running it and
+   finding the layout bug from a screenshot three changes later. So a filter:
+   ONLY=rowscope runs the one harness that covers what you just touched. It is a
+   substring, matched against the file name.
+   The default is still everything — a filter you have to remember to widen is a
+   suite that quietly stops covering things. */
+const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
+             "rowscope_layout.js", "chat_all.js"];
+const only = (process.env.ONLY || process.argv.slice(2).join(",") || "").trim();
+const CHECKS = only
+  ? ALL.filter(f => only.split(",").some(k => k && f.includes(k.trim())))
+  : ALL;
+if(only && !CHECKS.length){
+  console.log(`web-visual: ONLY="${only}" matched none of: ${ALL.join(" ")}`);
+  process.exit(2);
+}
 let failed = 0;
 for (const f of CHECKS) {
   const p = path.join(__dirname, f);
@@ -103,5 +122,7 @@ for (const f of CHECKS) {
     console.log(`FAIL  ${f}  ${why}`);
   }
 }
-console.log(failed ? `\nweb-visual: ${failed} failing` : `\nweb-visual: ${CHECKS.length} browser check(s) pass.`);
+console.log(failed ? `\nweb-visual: ${failed} failing`
+  : `\nweb-visual: ${CHECKS.length} browser check(s) pass.`
+    + (only? `  (filtered by ONLY="${only}" — ${ALL.length - CHECKS.length} not run)` : ""));
 process.exit(failed ? 1 : 0);
