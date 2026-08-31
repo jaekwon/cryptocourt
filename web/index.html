@@ -382,6 +382,9 @@ a.card:hover{border-color:var(--line-2)}
 
 /* stake panel + ratio series */
 .stakewrap{display:grid; grid-template-columns:1.3fr 1fr; gap:16px}
+/* One column when the timeline moved inside the chart's panel: there is no
+   second thing to sit beside, and the chart takes the width back. */
+.stakewrap.solo{grid-template-columns:1fr}
 /* ---- embed mode -------------------------------------------------------
    Polymarket serves embeds from a separate host (embed.polymarket.com/market
    ?market=<slug>&theme=&features=) at a default 400x400 in a <figure>. This
@@ -637,6 +640,16 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    flex here and the date is the one allowed to wrap: a date breaks cleanly
    after its comma, and "1 failed round" has nowhere to break that still reads
    as one event. */
+/* THE LADDER INSIDE THE CHART'S PANEL. No border and no padding of its own —
+   the panel already draws both, and a bordered box inside a bordered box reads
+   as two things rather than one. Its first row keeps the rule that separates it
+   from the chips above. */
+.ticket.clockbare{border:0; padding:0; margin-bottom:0}
+.ticket.clockbare .clockrows>*:nth-child(-n+2){border-top:1px dashed var(--line)}
+/* The ladder's own name, inside the panel. Quieter than a section heading —
+   it labels a block, it does not open one. */
+.subh{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); margin:16px 0 2px}
 .ticket.clocknarrow .clockrows{grid-template-columns:minmax(0,1fr) minmax(0,auto); column-gap:12px}
 .ticket.clocknarrow .clockrows>*{font-size:13px; padding:7px 0}
 .ticket.clocknarrow .clockrows .dt{white-space:normal; text-align:right}
@@ -7205,10 +7218,20 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
     + modBanner(mPurged, mRedacted, mHidden, slug)
+    /* THE CHART AND THE LADDER ARE ONE PANEL when the ticket beside them was
+       boilerplate. They were saying the same thing in two boxes: the chart
+       already draws opened / answered / settle deadline / vote closes / now as
+       marked verticals, and the ladder gives those same events their dates. Side
+       by side that is a redundancy AND a squeeze — the chart had 1.3 of 2.3
+       columns to plot a week of movement in. Stacked, the chart is the full
+       width of the section and the ladder reads as its axis spelled out.
+       The ladder keeps a heading here. It had one when it was its own section;
+       an unlabelled block of dates under a chart is a legend nobody named. */
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
-        <div class="stakewrap">
-          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
-          ${ladderTakesTheTicket(d)? resolutionLadder(d,nowH,tline,true) : stakeTicket(slug,id,d)}
+        <div class="stakewrap${ladderTakesTheTicket(d)?" solo":""}">
+          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}${
+            ladderTakesTheTicket(d)? `<div class="subh">Timeline</div>${resolutionLadder(d,nowH,tline,false,true)}` : ""}</div>
+          ${ladderTakesTheTicket(d)? "" : stakeTicket(slug,id,d)}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
     + qualitySection(slug,id,d)
@@ -7880,12 +7903,22 @@ function signalChart(slug,id,d,nowH,ser,tl){
     : demo
     ? `Sample data: synthesized YES-share shape anchored to lifetime ${r.life}%, trailing week ${r.week}%, now ${r.inst}%.`
     : `YES-share of stakes: ${capR}; events at real block heights.`;
-  const fcap = real? `YES-share of stakes — <b>the recorded path · lifetime · now</b>` : `YES-share of stakes — <b>lifetime · trailing week · now</b>`;
-  const srcnote = real
-    ? (demo? `sample data — a sample series in the chain's real form (hourly for a week, daily beyond; a flat run means the pools did not change). YES-share of stakes, not a price.`
-           : `the chain's own record — hourly points for the last week, daily beyond; a flat run means the pools did not change. YES-share of stakes, not a price.`)
-    : (demo? `sample data — a synthesized shape anchored to the claim’s three real ratios (lifetime conviction · trailing week · now). YES-share of stakes, not a price. This shape is illustrative — the chain records only those three numbers for this claim.` : "");
-  return `<figure class="bigchart"><figcaption><span>${fcap}</span><span>${capR}</span></figcaption>
+  /* NO CAPTION ROW. It named the axis ("YES-share of stakes"), the three series
+     the chart already draws, and then printed the three ratios a second time —
+     over a chart whose own axis is labelled, above a bar that states the split
+     in the same numbers, under a section heading that says THE SIGNAL. Nothing
+     is lost to a screen reader: the aria-label above still carries the ratios,
+     the change-point count and the first block, which is more than the caption
+     ever said.
+
+     THE SOURCE NOTE SURVIVES ONLY WHERE IT IS A DISCLOSURE. On a live claim it
+     was trivia about the sampling interval; in demo mode it is the sentence
+     that stops a reader mistaking sample data for a court's record, and that is
+     not decoration. */
+  const srcnote = !demo? ""
+    : real? `sample data — a sample series in the chain's real form (hourly for a week, daily beyond; a flat run means the pools did not change). YES-share of stakes, not a price.`
+    : `sample data — a synthesized shape anchored to the claim’s three real ratios (lifetime conviction · trailing week · now). YES-share of stakes, not a price. This shape is illustrative — the chain records only those three numbers for this claim.`;
+  return `<figure class="bigchart">
 <svg viewBox="0 0 640 150" role="img" aria-label="${esc(aria)}">${g}</svg>
 ${srcnote? `<div class="srcnote">${srcnote}</div>`:""}</figure>`;
 }
@@ -8042,7 +8075,7 @@ function sinceWords(nowT, t){
 /* `narrow` when the ladder is drawn beside the chart rather than under the page:
    it has about half the width there, and the grid that is right at full width
    turns the label column into one word per line at half. */
-function resolutionLadder(d, nowH, tl, narrow){
+function resolutionLadder(d, nowH, tl, narrow, bare){
   const rows=[];
   if(tl){
     // The chain's own record: each row is a stamped date, its height kept for
@@ -8116,7 +8149,7 @@ function resolutionLadder(d, nowH, tl, narrow){
        hovering shows the block (that is what a title attribute is), and what ≈
        means (a projection, in front of a date that has not happened yet). Three
        lines of instructions under a ladder that is six lines long. */
-    return `<div class="ticket${narrow?" clocknarrow":""}" style="margin-bottom:12px">
+    return `<div class="ticket${narrow?" clocknarrow":""}${bare?" clockbare":""}" style="margin-bottom:12px">
       <div class="clockrows">${body}${fut2?`<div class="ev">${esc(fut2)}</div><div class="dt">—</div>`:""}</div></div>`;
   }
   if(d.answered && d.settleAt) rows.push([d.settleAt-51840, "answered"+(d.answer!=null?" "+sideName(d.answer):""), "derived: settle deadline − 72h"]);   // kept: this row's height is NOT the chain's

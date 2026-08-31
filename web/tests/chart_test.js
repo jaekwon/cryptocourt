@@ -76,7 +76,14 @@ LIVE=true;
 const lh=signalChart("orem",2,claims["orem/2"],5000000,null);
 ok("P7 live fallback: ref+band, no line", lh.includes('class="ref"') && lh.includes('class="band"') && !lh.includes('class="ln"'));
 const lhReal=signalChart("orem",2,claims["orem/2"],4800000,serOf("orem/2"));
-ok("P7 live real: the chain's-own-record note", lhReal.includes("the chain's own record — hourly points"));
+// THE SOURCE NOTE IS A DISCLOSURE, NOT A LEGEND. On a live claim it described
+// the sampling interval — trivia under a chart whose axis already says what it
+// plots. In demo mode it is the sentence that stops a reader taking sample data
+// for a court's record, so that is the one that stays.
+ok("P7 live real: no source note under a real chart", !lhReal.includes("srcnote"));
+ok("P7 demo real: still says it is a sample", (()=>{ LIVE=false;
+  const dr=signalChart("orem",2,claims["orem/2"],4800000,serOf("orem/2"));
+  LIVE=true; return dr.includes("srcnote") && dr.includes("sample data"); })());
 LIVE=false;
 
 // P8: every DEMO series is self-consistent
@@ -92,7 +99,13 @@ for(const k of Object.keys(claims)){
 
 // P9: labels + §7.4
 ok("P9 demo real srcnote", h1.includes("a sample series in the chain's real form"));
-ok("P9 figcaption recorded path", h1.includes("the recorded path · lifetime · now"));
+// NO FIGCAPTION. It named the axis, then the three series, then printed the
+// three ratios again — over a labelled chart, above a bar that states the same
+// split. The aria-label still carries every number it did, so the check moves
+// to the description a screen reader actually gets.
+ok("P9 no caption row over the chart", !h1.includes("<figcaption"));
+ok("P9 the ratios survive where they are read aloud",
+   /aria-label="[^"]*lifetime/.test(h1) && /aria-label="[^"]*now /.test(h1));
 ok("P9 aria recorded history", h1.includes("recorded history"));
 ok("P9 §7.4 sweep", ![h1,h2,hl,noSer,lhReal].some(x=>/backing|redeem|APR|profit|return on|price rises/i.test(x)));
 

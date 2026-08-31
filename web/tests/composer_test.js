@@ -186,8 +186,11 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
      src.includes("if(el.dataset.edit || el.dataset.authored || needsSend){"));
   // The two buttons that ship literal placeholders. Signing these through would
   // create a court called "My Court".
+  // COUNTED ON btn( CALLS, not on the argument shape alone. ",false,true)" is a
+  // positional tail any function can end with, and one did — a fourth-and-fifth
+  // argument on an unrelated call made this read "three placeholder buttons".
   ok("the placeholder buttons are marked, and they are the only ones",
-     (src.match(/,false,true\)/g)||[]).length === 2
+     (src.match(/btn\([^\n]*,false,true\)/g)||[]).length === 2
      && /StartCourt",\{slug:"my-court",name:"My Court"\},"primary",null,null,false,true\)/.test(src)
      && src.includes('data-edit="1"'));
   // A concrete amount comes from the receipt input the reader typed into; the
